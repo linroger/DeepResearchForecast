@@ -374,7 +374,7 @@ class OasisProfileGenerator:
         
         try:
             # 并行执行edges和nodes搜索
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
                 edge_future = executor.submit(search_edges)
                 node_future = executor.submit(search_nodes)
                 

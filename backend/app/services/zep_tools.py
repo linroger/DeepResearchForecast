@@ -468,7 +468,7 @@ class ZepToolsService:
                         f"{sleep_for:.1f}秒后重试..."
                     )
                     time.sleep(sleep_for)
-                    delay *= 2
+                    delay = min(delay * 2, 30)
                 else:
                     logger.error(f"Zep {operation_name} 在 {max_retries} 次尝试后仍失败: {str(e)}")
 

@@ -225,7 +225,7 @@ class ZepGraphMemoryUpdater:
     SEND_INTERVAL = 0.5
     
     # 重试配置
-    MAX_RETRIES = 3
+    MAX_RETRIES = Config.ZEP_MAX_RETRIES
     RETRY_DELAY = 2  # 秒
     
     def __init__(self, graph_id: str, api_key: Optional[str] = None):
@@ -358,6 +358,8 @@ class ZepGraphMemoryUpdater:
     
     def _worker_loop(self):
         """后台工作循环 - 按平台批量发送活动到Zep"""
+        last_flush_time = time.time()
+
         while self._running or not self._activity_queue.empty():
             try:
                 # 尝试从队列获取活动（超时1秒）
@@ -366,6 +368,7 @@ class ZepGraphMemoryUpdater:
                     
                     # 将活动添加到对应平台的缓冲区
                     platform = activity.platform.lower()
+                    batch_to_send = None
                     with self._buffer_lock:
                         if platform not in self._platform_buffers:
                             self._platform_buffers[platform] = []
@@ -373,15 +376,21 @@ class ZepGraphMemoryUpdater:
                         
                         # 检查该平台是否达到批量大小
                         if len(self._platform_buffers[platform]) >= self.BATCH_SIZE:
-                            batch = self._platform_buffers[platform][:self.BATCH_SIZE]
+                            batch_to_send = self._platform_buffers[platform][:self.BATCH_SIZE]
                             self._platform_buffers[platform] = self._platform_buffers[platform][self.BATCH_SIZE:]
-                            # 释放锁后再发送
-                            self._send_batch_activities(batch, platform)
-                            # 发送间隔，避免请求过快
-                            time.sleep(self.SEND_INTERVAL)
+
+                    if batch_to_send:
+                        # 释放锁后再发送
+                        self._send_batch_activities(batch_to_send, platform)
+                        last_flush_time = time.time()
+                        # 发送间隔，避免请求过快
+                        time.sleep(self.SEND_INTERVAL)
                     
                 except Empty:
-                    pass
+                    # 如果队列为空，且距离上次发送超过5秒，且有残留数据，则强制发送
+                    if time.time() - last_flush_time > 5.0:
+                        self._flush_remaining()
+                        last_flush_time = time.time()
                     
             except Exception as e:
                 logger.error(f"工作循环异常: {e}")
@@ -441,15 +450,19 @@ class ZepGraphMemoryUpdater:
                 break
         
         # 然后发送各平台缓冲区中剩余的活动（即使不足BATCH_SIZE条）
+        buffers_to_send = {}
         with self._buffer_lock:
             for platform, buffer in self._platform_buffers.items():
                 if buffer:
-                    display_name = self._get_platform_display_name(platform)
-                    logger.info(f"发送{display_name}平台剩余的 {len(buffer)} 条活动")
-                    self._send_batch_activities(buffer, platform)
+                    buffers_to_send[platform] = buffer
             # 清空所有缓冲区
             for platform in self._platform_buffers:
                 self._platform_buffers[platform] = []
+
+        for platform, buffer in buffers_to_send.items():
+            display_name = self._get_platform_display_name(platform)
+            logger.info(f"发送{display_name}平台剩余的 {len(buffer)} 条活动")
+            self._send_batch_activities(buffer, platform)
     
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
