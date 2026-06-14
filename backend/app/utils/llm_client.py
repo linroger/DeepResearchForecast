@@ -101,7 +101,7 @@ class LLMClient:
             except RuntimeError as exc:
                 last_error = exc
                 if attempt < MAX_RETRIES - 1:
-                    delay = RETRY_BASE_DELAY * (2 ** attempt)
+                    delay = min(RETRY_BASE_DELAY * (2 ** attempt), 30)
                     logger.warning(
                         f"LLM 调用失败 (第 {attempt + 1}/{MAX_RETRIES} 次)，{delay}s 后重试: {exc}"
                     )

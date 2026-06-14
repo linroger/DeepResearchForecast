@@ -1136,7 +1136,7 @@ class PipelineOrchestrator:
 
                 # batch_size 10：Zep graph.add 按 episode 异步处理，批量提交吞吐近似线性；
                 # 3 是早期保守值，研究报告动辄上百 chunk 时建图要多等数分钟。
-                uuids = builder.add_text_batches(graph_id, chunks, batch_size=10, progress_callback=add_cb)
+                uuids = builder.add_text_batches(graph_id, chunks, batch_size=20, progress_callback=add_cb)
 
                 def wait_cb(msg: str, ratio: float):
                     upd(int(65 + ratio * 33), msg)
@@ -1225,7 +1225,10 @@ class PipelineOrchestrator:
                         break
                     if rs.runner_status in (RunnerStatus.FAILED, RunnerStatus.STOPPED):
                         raise RuntimeError(f"模拟未正常结束: {rs.runner_status} {getattr(rs, 'error', '') or ''}")
-                    time.sleep(5)
+                    if cancel_ev is not None:
+                        cancel_ev.wait(5)
+                    else:
+                        time.sleep(5)
                 # 同步 SimulationManager 状态
                 try:
                     ss = sim_manager.get_simulation(sim_state.simulation_id)
