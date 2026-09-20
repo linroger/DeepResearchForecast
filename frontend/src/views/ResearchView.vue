@@ -2,7 +2,7 @@
   <div class="research-container">
     <!-- 顶部导航 -->
     <nav class="navbar">
-      <div class="nav-brand" @click="goHome" style="cursor:pointer">DeepResearch<span class="brand-accent">Forecast</span></div>
+      <div class="nav-brand">DeepResearch<span class="brand-accent">Forecast</span></div>
       <div class="nav-links">
         <span class="nav-tag">{{ L('STEP 0 · 深度研究 → 模拟 → 预测', 'STEP 0 · Research → Simulate → Forecast') }}</span>
         <button class="nav-icon-btn" :title="L('界面语言','Language')" @click="toggleLocale">{{ locale === 'en' ? '中' : 'EN' }}</button>
@@ -228,7 +228,6 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { runPipeline, cancelPipeline, resumePipeline, getPipelineStatus, getProgressLog, getDossier, continuePipeline, getPreflight } from '../api/research'
 import { getGraphData } from '../api/graph'
 import { locale, setLocale, L } from '../i18n'
@@ -248,7 +247,6 @@ import SettingsMenu from '../components/research/SettingsMenu.vue'
 import ConfirmDialog from '../components/research/ConfirmDialog.vue'
 import GraphPanel from '../components/GraphPanel.vue'
 
-const router = useRouter()
 const ACTIVE_PIPELINE_KEY = 'drf_active_pipeline'
 // One-time migration: earlier builds persisted under the old MiroFish key.
 const LEGACY_PIPELINE_KEY = 'mirofish_active_pipeline'
@@ -780,8 +778,6 @@ function selectPipeline(id) {
   showHistory.value = false
   beginPipeline(id)
 }
-
-function goHome() { router.push({ name: 'Home' }) }
 
 // —— 管线 ID：截断显示 + 点击复制完整 ID ——
 const pidCopied = ref(false)

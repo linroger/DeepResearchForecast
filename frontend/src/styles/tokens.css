@@ -3,11 +3,11 @@
  *
  * This file is imported FIRST in src/main.js so every component (scoped or not)
  * can rely on these custom properties. It replaces the accidental global
- * `:root` block that used to live inside Home.vue's <style scoped> (Vue emits
- * `:root` selectors un-scoped, so the whole app was depending on it).
+ * `:root` block that used to live inside the deleted legacy MiroFish Home view
+ * (Vue emits `:root` selectors un-scoped, so the whole app was depending on it).
  */
 :root {
-  /* —— Legacy tokens (moved verbatim from Home.vue) —— */
+  /* —— Base tokens (inherited verbatim from the legacy MiroFish UI) —— */
   --black: #000000;
   --white: #FFFFFF;
   --orange: #FF4500;

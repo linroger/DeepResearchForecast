@@ -226,3 +226,14 @@ This repository implements a six-stage forecast workflow: DeerFlow 2 research, o
 - **Landed:** viz_manifest.json provenance block (canonical-JSON sha256 per input artifact + policy descriptor hash; additive, unserializable keys honestly listed); .env.example exhaustiveness restored (11 loop-era knobs documented; check_env_drift.py fully green); BinaryForecastTable in ForecastReport (agent F3 — sealed forecast payload, zero new requests, bilingual, per-cell degradation, market-influence badge surviving anchor ejection; 13 new tests, 73→86); resolution-monitor UI trigger in SettingsMenu Maintenance (202/409/error inline notes).
 - **Tests:** full backend suite exit 0 zero failures (scratchpad/full_suite_i9.log); provenance 4 + manifest API 7; env-drift 18; frontend 86/86 build green +2,692 gzip bytes, dist served.
 - **Loop state:** every LOOP-017 defect cluster now closed or owner-gated. Remaining items ALL need the owner: sudo port-80 script run, RESOLUTION_MONITOR_AUTORUN_HOURS enablement, paid prompt-cache verification run, disk cleanup (1.57GB identified), legacy-tree deletion, visual browser QA (Chrome extension), confidence-chip tone unification (preference).
+
+
+### 2026-09-07T15:05:20+00:00 — ASTRA documentation audit
+
+- Scope: User-requested ASTRA-RECOMMENDATIONS.md and the session's recurring-workflow review.
+- Outcome: Current architecture map, historical accounting reconciliation, 20 prioritized recommendations, validation criteria, and a single narrow forensic skill.
+- Evidence: docs/research/astra-evidence.json; focused continuity record docs/handoff/astra-recommendations/handoff.md.
+- Validation: 138 local link occurrences checked, 56 cited files hashed, Markdown parsed, skill validator passed, independent frontend/operations document review and raw-artifact skill forward test completed. No application build/test run was needed or claimed.
+- Files: ASTRA-RECOMMENDATIONS.md; evidence JSON; versioned skill source; focused handoff; this progress entry. Root ignored handoff received append-only notes.
+- Remaining: ASTRA-01 through ASTRA-20 are recommendations, not implemented features. Next session should rebaseline and plan ASTRA-01/02 with evidence-preservation and summary-provenance tests before coding.
+- Delivery: audit artifacts committed on codex/astra-workflow-review-2026-09-07 using an isolated worktree. Push to origin was rejected for invalid GitHub credentials. Runtime/source changes were not included; remote publication awaits authentication repair.

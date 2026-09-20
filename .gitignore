@@ -99,3 +99,5 @@ handoff.md
 
 # Foglamp codebase scan state (the lock file contains a private edit token)
 .foglamp/
+# linear-engine / search-tool runtime caches
+deerflow_bridge/.cache/

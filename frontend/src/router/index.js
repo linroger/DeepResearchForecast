@@ -13,43 +13,8 @@ const routes = [
     redirect: '/'
   },
   {
-    // Legacy marketing page. Keeps the route name 'Home' because
-    // ResearchView.goHome() navigates via { name: 'Home' }.
-    path: '/legacy',
-    name: 'Home',
-    component: () => import('../views/Home.vue')
-  },
-  {
-    path: '/process/:projectId',
-    name: 'Process',
-    component: () => import('../views/MainView.vue'),
-    props: true
-  },
-  {
-    path: '/simulation/:simulationId',
-    name: 'Simulation',
-    component: () => import('../views/SimulationView.vue'),
-    props: true
-  },
-  {
-    path: '/simulation/:simulationId/start',
-    name: 'SimulationRun',
-    component: () => import('../views/SimulationRunView.vue'),
-    props: true
-  },
-  {
-    path: '/report/:reportId',
-    name: 'Report',
-    component: () => import('../views/ReportView.vue'),
-    props: true
-  },
-  {
-    path: '/interaction/:reportId',
-    name: 'Interaction',
-    component: () => import('../views/InteractionView.vue'),
-    props: true
-  },
-  {
+    // Removed legacy MiroFish routes (/legacy, /process, /simulation,
+    // /report, /interaction) fall through to the research flow here.
     path: '/:pathMatch(.*)*',
     redirect: '/'
   }
