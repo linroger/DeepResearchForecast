@@ -35,6 +35,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -1322,6 +1323,51 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 ))
 
 
+# deerflow_bridge/extensions_config.json 是模板：MCP server 的 command / PYTHONPATH 依赖本机
+# 检出位置，源文件只写占位符，部署时由 _render_bridge_extensions_config 替换成真实路径。
+# （此前源文件写死 /Users/<dev>/… 绝对路径，换一台机器 fork/continue/resume 的 KG MCP 就起不来。）
+_EXTENSIONS_REPO_ROOT_TOKEN = "{{DRF_REPO_ROOT}}"
+_EXTENSIONS_PYTHON_TOKEN = "{{DRF_BACKEND_PYTHON}}"
+
+
+def _mcp_backend_python(repo_root: str) -> str:
+    """MCP server 用的解释器：优先当前后端解释器（它必然装齐了 app.* 依赖），缺失时退回约定 venv。"""
+    if sys.executable:
+        return sys.executable
+    return os.path.join(repo_root, "backend", ".venv", "bin", "python")
+
+
+def _render_bridge_extensions_config(src: str, repo_root: str) -> bytes:
+    """把 extensions_config.json 模板里的占位符替换为本机路径，返回待部署的字节。
+
+    在解析后的 JSON 值上替换（而非原始文本），路径里的反斜杠/引号不会破坏 JSON。
+    渲染结果若仍残留 ``{{…}}`` 占位符则抛错——宁可跳过部署，也不给 harness 一个起不来的 command。
+    """
+    with open(src, encoding="utf-8") as fh:
+        data = json.load(fh)
+    replacements = {
+        _EXTENSIONS_REPO_ROOT_TOKEN: repo_root,
+        _EXTENSIONS_PYTHON_TOKEN: _mcp_backend_python(repo_root),
+    }
+
+    def _sub(value: Any) -> Any:
+        if isinstance(value, str):
+            for token, real in replacements.items():
+                value = value.replace(token, real)
+            return value
+        if isinstance(value, dict):
+            return {key: _sub(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [_sub(item) for item in value]
+        return value
+
+    rendered = json.dumps(_sub(data), ensure_ascii=False, indent=2) + "\n"
+    leftover = re.search(r"\{\{[A-Z_]+\}\}", rendered)
+    if leftover:
+        raise ValueError(f"unknown placeholder {leftover.group(0)} in {src}")
+    return rendered.encode("utf-8")
+
+
 def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
     """启动研究子进程前的漂移防护（2026-07-03 live-surfaced）。
 
@@ -1436,10 +1482,31 @@ def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
         # W9-9：MCP 扩展注册文件也同步到部署目录。该文件是 OPT-IN 的（harness 仅在
         # DEER_FLOW_EXTENSIONS_CONFIG_PATH 指向它时才加载），部署副本本身惰性无副作用；
         # DeerFlowResearchRunner 在「图谱已存在」的路径把该 env 指向此部署副本。
+        # 源文件是模板（见 _render_bridge_extensions_config），部署的是渲染后的内容而非逐字节拷贝。
         _ext_src = os.path.join(bridge_dir, "extensions_config.json")
-        if os.path.isfile(_ext_src):
-            pairs.append((_ext_src, os.path.join(deerflow_dir, "extensions_config.json")))
+        _ext_dst = os.path.join(deerflow_dir, "extensions_config.json")
         synced = []
+        _ext_rendered = None
+        if os.path.isfile(_ext_src):
+            try:
+                _ext_rendered = _render_bridge_extensions_config(_ext_src, repo_root)
+            except (OSError, ValueError) as ext_err:
+                # 模板坏了只影响可选的 KG MCP 接线：撤掉旧部署副本（研究侧据此跳过接线），
+                # 不能让它中断下面 deerflow_research.py 等必需文件的同步。
+                logger.warning("extensions_config.json 模板渲染失败，本次跳过 KG MCP 接线: %s", ext_err)
+                if os.path.isfile(_ext_dst):
+                    os.remove(_ext_dst)
+        if _ext_rendered is not None:
+            _ext_current = None
+            if os.path.isfile(_ext_dst):
+                with open(_ext_dst, "rb") as fh:
+                    _ext_current = fh.read()
+            if _ext_current != _ext_rendered:
+                _ext_tmp = f"{_ext_dst}.tmp.{os.getpid()}"
+                with open(_ext_tmp, "wb") as fh:
+                    fh.write(_ext_rendered)
+                os.replace(_ext_tmp, _ext_dst)
+                synced.append("extensions_config.json")
         for src, dst in pairs:
             if os.path.isfile(dst) and _digest(src) == _digest(dst):
                 continue
