@@ -15809,6 +15809,43 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
 # ---------------------------------------------------------------------------
 
 
+def _research_engine_is_linear() -> bool:
+    """True when ``RESEARCH_ENGINE=linear`` selects ``linear_research.py``.
+
+    The backend orchestrator mirrors this exact test
+    (``pipeline_orchestrator.research_engine_is_linear``) to launch the linear
+    engine as one full-mode lane; keep the two selectors identical.
+    """
+    return os.environ.get("RESEARCH_ENGINE", "").strip().lower() == "linear"
+
+
+def _linear_engine_unsupported_mode(args: argparse.Namespace) -> str | None:
+    """Return why this invocation cannot run on the linear engine, else None.
+
+    The linear engine implements exactly one workflow: a single full-mode run
+    (research, report, structured extraction) into ``--out-dir``. It has no
+    evidence-only lane export (``evidence_pack.md`` plus the lane source ledger
+    and shared actor dossier that the evidence manifest seals), and it cannot
+    consume a ``--synthesis-manifest`` of sealed lane packs. Dispatching either
+    mode into it would publish a full report where the orchestrator expects a
+    lane pack, or re-research from scratch instead of synthesizing the sealed
+    lanes. Both must fail closed with an actionable message instead.
+    """
+    if getattr(args, "evidence_only", False):
+        mode = "--evidence-only (parallel evidence-lane mode)"
+    elif getattr(args, "synthesis_manifest", None):
+        mode = "--synthesis-manifest (global synthesis over sealed lane packs)"
+    else:
+        return None
+    return (
+        f"RESEARCH_ENGINE=linear does not implement {mode}; the linear engine "
+        "runs only as a single full-mode research lane. Use "
+        "RESEARCH_PARALLEL_TRACKS=1 (the backend orchestrator forces this "
+        "automatically when RESEARCH_ENGINE=linear), or unset RESEARCH_ENGINE "
+        "to use the default multi-lane engine."
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="DeerFlow deep-research bridge for MiroFish.")
     src = parser.add_mutually_exclusive_group(required=True)
@@ -16034,9 +16071,22 @@ def main() -> int:
     # ~30 stateless LLM calls and a hard prompt-token ledger, vs 46.6M prompt
     # tokens / 1771 tool calls / 22 from-zero restarts measured on one question).
     # Interface contract (report/actors/sources/timeline/meta + exit code) is
-    # unchanged, so every downstream stage consumes it unmodified.
-    if (os.environ.get("RESEARCH_ENGINE", "").strip().lower() == "linear"
-            and not getattr(args, "extract_only", False)):
+    # unchanged, so every downstream stage consumes it unmodified — but only
+    # for a single full-mode run. The engine has no evidence-only lane mode and
+    # no --synthesis-manifest global synthesis, so those invocations (the
+    # default three-lane topology) fail closed here, before any research,
+    # rather than writing a report where a lane pack is expected. The backend
+    # orchestrator avoids them by forcing one full-mode lane for this engine.
+    if _research_engine_is_linear() and not getattr(args, "extract_only", False):
+        _linear_conflict = _linear_engine_unsupported_mode(args)
+        if _linear_conflict:
+            meta.update(status="failed", error=_linear_conflict,
+                        finished_at=_utcnow())
+            write_meta()
+            plog.write("error", _linear_conflict)
+            plog.close()
+            print(f"ERROR: {_linear_conflict}", file=sys.stderr)
+            return 3
         try:
             import linear_research
             return linear_research.run(question, out_dir, args, meta, plog, write_meta)

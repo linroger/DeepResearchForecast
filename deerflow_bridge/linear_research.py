@@ -52,7 +52,7 @@ meta.json in ``out_dir``, exit 0 on success.
 
 from __future__ import annotations
 
-import hashlib
+import asyncio
 import json
 import os
 import re
@@ -417,6 +417,53 @@ class _KiqMemory:
         return _clip("\n".join(rows), cap)
 
 
+def _run_coroutine_sync(coro):
+    """Drive one coroutine to completion from the engine's synchronous code.
+
+    Mini-agents run on plain ThreadPoolExecutor workers and the planner on the
+    main thread; none of them owns an event loop, so ``asyncio.run`` is the
+    normal path. If a loop is already running on the calling thread, run the
+    coroutine on a private thread instead of raising.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
+def _fetch_page_text(url: str) -> str:
+    """Fetch one page through the bridge's cached ``web_fetch`` tool.
+
+    ``cached_fetch.web_fetch_tool`` is a LangChain ``StructuredTool`` built by
+    ``@tool`` over an ``async def``. It is not callable (langchain-core 1.x has
+    no ``BaseTool.__call__``) and has no sync implementation (``.invoke``
+    raises NotImplementedError), so ``web_fetch_tool(url)`` always raised and
+    every linear-engine fetch failed. Drive it the way the harness and
+    ``cached_fetch._jina_delegate_fetch`` do: ``ainvoke`` with a dict input.
+    The cache, source policy and shared fetch budget then apply unchanged.
+    """
+    from cached_fetch import web_fetch_tool
+    if web_fetch_tool is None:  # cached_fetch sets None when langchain is absent
+        raise RuntimeError("cached_fetch.web_fetch_tool is unavailable")
+    return str(_run_coroutine_sync(web_fetch_tool.ainvoke({"url": url})) or "")
+
+
+def _is_page_text(text: str) -> bool:
+    """True only for real page content, not a failure or control result.
+
+    ``web_fetch`` reports failures as text: ``Error: ...`` sentinels, JSON
+    envelopes for budget denials, source-policy rejections and repeat fetches,
+    and provider error pages. Some of these exceed 200 characters, so a bare
+    length check would cite them as fetched sources. Apply the same tests the
+    fetch cache (``cached_fetch._is_cacheable``) and the legacy engine's source
+    ledger (``_dr._is_dead_fetch``) use.
+    """
+    from cached_fetch import _is_cacheable
+    return _is_cacheable(text) and not _dr._is_dead_fetch(text)
+
+
 class _AgentTools:
     """The two tools every mini-agent gets. Results are compacted on injection."""
 
@@ -467,7 +514,6 @@ class _AgentTools:
             return json.dumps({"error": f"search failed: {type(exc).__name__}"})
 
     def fetch(self, url: str) -> str:
-        from cached_fetch import web_fetch_tool
         with self._lock:
             self.fetch_calls += 1
         row = self.ledger.register(url, url, "fetch")
@@ -475,10 +521,10 @@ class _AgentTools:
             return '{"error": "fetch ledger at cap; cite the search snippet instead"}'
         if not row.get("fetched"):
             try:
-                text = str(web_fetch_tool(row["url"]) or "")
+                text = _fetch_page_text(row["url"])
             except Exception as exc:  # noqa: BLE001
                 return json.dumps({"error": f"fetch failed: {type(exc).__name__}"})
-            if len(text) > 200:
+            if _is_page_text(text):
                 row["fetched_text_chars"] = len(text)
                 self.ledger.mark_fetched(row["id"])
                 return f"[S{row['id']}] {row['title']}\n" + _clip(

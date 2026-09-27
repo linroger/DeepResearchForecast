@@ -589,11 +589,17 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
   #     (resolve_variable -> import_module) imports these by bare name — they MUST
   #     sit next to config.yaml in deer-flow/ or web_search/web_fetch/prediction_market
   #     tools fail to load. Deploy all four so the wiring is reproducible.
-  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py; do
+  #   - linear_research.py is the opt-in RESEARCH_ENGINE=linear engine, which
+  #     deerflow_research.py imports by bare name from the same directory. The
+  #     backend's bridge sync guard copies it too; deploy it here as well so a
+  #     standalone bridge run works right after ./setup.sh.
+  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py; do
     if [ -f "$BRIDGE_DIR/$_tool_mod" ]; then
       cp "$BRIDGE_DIR/$_tool_mod" "$DEERFLOW_DIR/$_tool_mod"
       if [ "$_tool_mod" = "runtime_skill_sync.py" ]; then
         ok "Installed runtime_skill_sync.py (runtime bundle verifier)"
+      elif [ "$_tool_mod" = "linear_research.py" ]; then
+        ok "Installed linear_research.py (opt-in RESEARCH_ENGINE=linear engine)"
       else
         ok "Installed $_tool_mod (config-reflected bridge tool)"
       fi

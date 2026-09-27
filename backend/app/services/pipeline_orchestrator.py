@@ -5677,6 +5677,21 @@ _RESEARCH_TRACK_ANGLES: list[tuple[str, str, str]] = [
 ]
 
 
+def research_engine_is_linear(environ: Optional[dict[str, str]] = None) -> bool:
+    """True when Stage 1 children will dispatch into ``linear_research.py``.
+
+    Mirrors the bridge selector ``deerflow_research._research_engine_is_linear``
+    (``RESEARCH_ENGINE=linear``). DeerFlowResearchRunner forwards this process's
+    environment to the child unchanged, so both sides see the same value. The
+    linear engine implements only one full-mode run: no ``--evidence-only``
+    lanes and no ``--synthesis-manifest`` global synthesis. The research stage
+    therefore launches it as a single full-mode lane regardless of
+    RESEARCH_PARALLEL_TRACKS (the bridge refuses lane modes for this engine).
+    """
+    env = os.environ if environ is None else environ
+    return str(env.get("RESEARCH_ENGINE", "") or "").strip().lower() == "linear"
+
+
 def research_subagent_cap_per_track(n_tracks: int, global_cap: int,
                                     per_track_max: int = 5) -> int:
     """Allocate one fixed harness-concurrency envelope across outer tracks."""
@@ -11714,6 +11729,17 @@ class PipelineOrchestrator:
                         _n_tracks = max(1, int(getattr(Config, "RESEARCH_PARALLEL_TRACKS", 3) or 3))
                     except (TypeError, ValueError):
                         _n_tracks = 3
+                    if _n_tracks > 1 and research_engine_is_linear():
+                        # The linear engine has no evidence-only lane mode or
+                        # global synthesis; run it as one full-mode lane.
+                        logger.warning(
+                            "[%s] RESEARCH_ENGINE=linear runs only as a single "
+                            "full-mode lane; ignoring RESEARCH_PARALLEL_TRACKS=%d",
+                            state.pipeline_id, _n_tracks,
+                        )
+                        upd(1, "线性研究引擎（RESEARCH_ENGINE=linear）仅支持单轨完整模式，"
+                               f"已忽略 RESEARCH_PARALLEL_TRACKS={_n_tracks}")
+                        _n_tracks = 1
                     if _n_tracks > 1:
                         research = self._run_parallel_research_tracks(
                             state, handoff_dir, upd, _n_tracks)
