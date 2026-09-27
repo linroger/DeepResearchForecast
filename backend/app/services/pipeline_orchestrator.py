@@ -1368,6 +1368,37 @@ def _render_bridge_extensions_config(src: str, repo_root: str) -> bytes:
     return rendered.encode("utf-8")
 
 
+def _deploy_rendered_extensions_config(rendered: bytes, dst: str) -> bool:
+    """Atomically install rendered extensions_config.json bytes; True when written.
+
+    Pipelines run as threads of one backend process, so concurrent first syncs
+    can race here.  Each call stages into its own ``mkstemp`` file (a PID-derived
+    name was shared between threads: one thread's ``os.replace`` consumed the
+    other's staging file and aborted that research launch).  Identical bytes are
+    left untouched.
+    """
+    try:
+        with open(dst, "rb") as fh:
+            if fh.read() == rendered:
+                return False
+    except FileNotFoundError:
+        pass
+    fd, tmp = tempfile.mkstemp(
+        prefix=".extensions_config.", suffix=".tmp", dir=os.path.dirname(dst))
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(rendered)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, dst)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    return True
+
+
 def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
     """启动研究子进程前的漂移防护（2026-07-03 live-surfaced）。
 
@@ -1494,19 +1525,13 @@ def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
                 # 模板坏了只影响可选的 KG MCP 接线：撤掉旧部署副本（研究侧据此跳过接线），
                 # 不能让它中断下面 deerflow_research.py 等必需文件的同步。
                 logger.warning("extensions_config.json 模板渲染失败，本次跳过 KG MCP 接线: %s", ext_err)
-                if os.path.isfile(_ext_dst):
+                try:
                     os.remove(_ext_dst)
-        if _ext_rendered is not None:
-            _ext_current = None
-            if os.path.isfile(_ext_dst):
-                with open(_ext_dst, "rb") as fh:
-                    _ext_current = fh.read()
-            if _ext_current != _ext_rendered:
-                _ext_tmp = f"{_ext_dst}.tmp.{os.getpid()}"
-                with open(_ext_tmp, "wb") as fh:
-                    fh.write(_ext_rendered)
-                os.replace(_ext_tmp, _ext_dst)
-                synced.append("extensions_config.json")
+                except FileNotFoundError:
+                    pass  # 并发管线已撤掉，或本就没有部署副本
+        if _ext_rendered is not None and _deploy_rendered_extensions_config(
+                _ext_rendered, _ext_dst):
+            synced.append("extensions_config.json")
         for src, dst in pairs:
             if os.path.isfile(dst) and _digest(src) == _digest(dst):
                 continue

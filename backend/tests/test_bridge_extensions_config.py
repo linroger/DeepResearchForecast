@@ -112,3 +112,62 @@ def test_broken_template_skips_mcp_but_still_syncs_bridge(tmp_path, monkeypatch)
 
     assert not (deployed / "extensions_config.json").exists()
     assert (deployed / "deerflow_research.py").read_text(encoding="utf-8") == "NEW\n"
+
+
+def test_interleaved_deploys_do_not_share_a_staging_file(tmp_path, monkeypatch):
+    """Pipelines are threads of one process: a second deploy that runs between the
+    first one's staging write and its rename must not consume the first one's
+    staging file (a PID-derived name made the first os.replace fail)."""
+    import app.services.pipeline_orchestrator as po
+
+    dst = tmp_path / "extensions_config.json"
+    real_replace = po.os.replace
+    nested = {"done": False}
+
+    def interleaving_replace(src, target):
+        if not nested["done"]:
+            nested["done"] = True
+            assert po._deploy_rendered_extensions_config(b'{"b": 1}\n', str(dst))
+        return real_replace(src, target)
+
+    monkeypatch.setattr(po.os, "replace", interleaving_replace)
+    assert po._deploy_rendered_extensions_config(b'{"a": 1}\n', str(dst))
+    assert nested["done"]
+    assert dst.read_bytes() == b'{"a": 1}\n'
+    assert [p.name for p in tmp_path.iterdir()] == ["extensions_config.json"]
+
+
+def test_concurrent_deploys_all_succeed(tmp_path):
+    import threading
+
+    from app.services.pipeline_orchestrator import _deploy_rendered_extensions_config
+
+    dst = tmp_path / "extensions_config.json"
+    payloads = [f'{{"n": {i}}}\n'.encode() for i in range(16)]
+    errors = []
+    start = threading.Barrier(len(payloads))
+
+    def deploy(payload):
+        try:
+            start.wait()
+            for _ in range(20):
+                _deploy_rendered_extensions_config(payload, str(dst))
+        except Exception as exc:  # noqa: BLE001 — collected and asserted below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=deploy, args=(p,)) for p in payloads]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert dst.read_bytes() in payloads
+    assert [p.name for p in tmp_path.iterdir()] == ["extensions_config.json"]
+
+
+def test_unchanged_config_is_not_rewritten(tmp_path):
+    from app.services.pipeline_orchestrator import _deploy_rendered_extensions_config
+
+    dst = tmp_path / "extensions_config.json"
+    assert _deploy_rendered_extensions_config(b"{}\n", str(dst)) is True
+    assert _deploy_rendered_extensions_config(b"{}\n", str(dst)) is False
