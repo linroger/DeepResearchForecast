@@ -60,9 +60,10 @@
             @click="onPdfClick"
           >{{ L('下载 PDF', 'Download PDF') }}</a>
         </span>
-        <!-- T5.4: 编辑入口（仅可编辑时显示） -->
+        <!-- T5.4: 编辑入口（仅可编辑时显示；封存的研究只读，编辑会在「继续」时被重跑覆盖） -->
         <span v-if="editable && hasReport" class="edit-actions">
-          <button v-if="!editing" type="button" class="edit-btn" @click="startEdit">✎ {{ L('编辑', 'Edit') }}</button>
+          <span v-if="sealed" class="edit-sealed" :title="L('该研究已被校验和清单与 judge/actor 血缘封存。直接编辑会在「继续」时被判定为篡改并重跑综合，因此不可编辑。如需修改，请用修订后的问题重新发起研究。', 'This research is sealed by a checksum manifest and judge/actor lineage. An in-place edit would be rejected on Continue and synthesis would re-run over it, so editing is disabled. To change it, start a new research run with a refined question.')">🔒 {{ L('已封存 · 只读', 'Sealed · read-only') }}</span>
+          <button v-else-if="!editing" type="button" class="edit-btn" @click="startEdit">✎ {{ L('编辑', 'Edit') }}</button>
           <template v-else>
             <button type="button" class="edit-btn ghost" @click="cancelEdit" :disabled="saving">{{ L('取消', 'Cancel') }}</button>
             <button type="button" class="edit-btn primary" @click="saveAndContinue" :disabled="saving">
@@ -295,6 +296,9 @@ const targetLang = computed(() =>
 )
 
 // ---- T5.4: edit-and-continue ----
+// Sealed research (research_contract_manifest.json) is read-only: the backend
+// refuses the edit, because Continue would otherwise re-run synthesis over it.
+const sealed = computed(() => !!(props.dossier && props.dossier.sealed))
 const editing = ref(false)
 const editReport = ref('')
 const saving = ref(false)
@@ -1083,6 +1087,14 @@ function formatUsd(value) {
 .edit-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.edit-sealed {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #666;
+  padding: 4px 0;
+  cursor: help;
 }
 
 .edit-hint {

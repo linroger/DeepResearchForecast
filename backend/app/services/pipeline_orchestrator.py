@@ -3292,6 +3292,56 @@ def _validate_research_contract(handoff_dir: str) -> bool:
     return not _research_contract_validation_errors(handoff_dir)
 
 
+def research_dossier_is_sealed(handoff_dir: str) -> bool:
+    """Whether Stage-1 output is cryptographically bound and so not hand-editable.
+
+    Multi-lane research is sealed by the manifest-last research contract, and
+    depending on the run by the report-judge prose binding.  Independently, an
+    ``actors.json`` carrying an ``actor_intelligence_contract`` (or its lineage
+    file) binds the report/actors hashes that actor reception, actor-context and
+    role prompts re-verify downstream.  A direct human edit breaks those seals:
+    Continue/resume would either re-run synthesis over the edit or fail actor
+    reception.  The dossier-edit API therefore refuses sealed research instead
+    of accepting an edit that cannot survive.
+    """
+    if os.path.exists(_research_contract_path(handoff_dir)):
+        return True
+    if os.path.exists(os.path.join(handoff_dir, ACTOR_INTELLIGENCE_LINEAGE_FILENAME)):
+        return True
+    actors = _read_json(os.path.join(handoff_dir, "actors.json"))
+    return isinstance(actors, dict) and isinstance(
+        actors.get("actor_intelligence_contract"), dict)
+
+
+def refresh_research_artifact_manifest(
+    pipeline_id: str, handoff_dir: str, filenames: list[str],
+) -> list[str]:
+    """Re-record human-edited *unsealed* research artifacts in handoff/manifest.json.
+
+    Legacy (pre-contract) research is reused on resume via ``_validate_reuse``,
+    which compares each registered artifact's sha256/bytes with this manifest.
+    Refreshing the edited entries makes that check accept the edit rather than
+    rebuild research over it.  Returns the artifact names that were refreshed.
+    """
+    manifest = PipelineManager.load_artifact_manifest(pipeline_id)
+    if not manifest:
+        return []  # 无清单：复用走存在性检查，编辑天然保留
+    probe = PipelineState(pipeline_id=pipeline_id, prompt="", handoff_dir=handoff_dir)
+    wanted = {os.path.realpath(os.path.join(handoff_dir, name)) for name in filenames}
+    refreshed: list[str] = []
+    for name, path in PipelineOrchestrator._stage_artifact_specs(probe, STAGE_RESEARCH):
+        if os.path.realpath(path) not in wanted:
+            continue
+        entry = _manifest_entry_for(name, path, STAGE_RESEARCH)
+        if entry is not None:
+            entry["human_edited_at"] = entry["produced_at"]
+            manifest[name] = entry
+            refreshed.append(name)
+    if refreshed:
+        PipelineManager.write_artifact_manifest(pipeline_id, manifest)
+    return refreshed
+
+
 def _research_report_is_judge_bound(handoff_dir: str) -> bool:
     """Return whether the current manifest seals an exact report-judge binding."""
     manifest = _read_json(_research_contract_path(handoff_dir))
