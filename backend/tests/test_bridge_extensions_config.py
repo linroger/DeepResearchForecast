@@ -69,10 +69,13 @@ def test_render_keeps_json_valid_for_awkward_paths(tmp_path):
     assert rendered["mcpServers"]["drf-simulation"]["env"]["PYTHONPATH"].startswith(root)
 
 
-def test_render_rejects_unknown_placeholders(tmp_path):
+@pytest.mark.parametrize("token", [
+    "{{DRF_TYPO}}", "{{DRF_REPO_ROOT2}}", "{{drf_repo_root}}", "{{ DRF_REPO_ROOT }}",
+])
+def test_render_rejects_unknown_placeholders(tmp_path, token):
     src = tmp_path / "ext.json"
-    src.write_text(json.dumps({"mcpServers": {"x": {"command": "{{DRF_TYPO}}"}}}), encoding="utf-8")
-    with pytest.raises(ValueError, match="DRF_TYPO"):
+    src.write_text(json.dumps({"mcpServers": {"x": {"command": token}}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="unknown placeholder"):
         _render_bridge_extensions_config(str(src), str(tmp_path))
 
 

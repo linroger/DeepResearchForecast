@@ -1362,7 +1362,7 @@ def _render_bridge_extensions_config(src: str, repo_root: str) -> bytes:
         return value
 
     rendered = json.dumps(_sub(data), ensure_ascii=False, indent=2) + "\n"
-    leftover = re.search(r"\{\{[A-Z_]+\}\}", rendered)
+    leftover = re.search(r"\{\{[^{}]*\}\}", rendered)
     if leftover:
         raise ValueError(f"unknown placeholder {leftover.group(0)} in {src}")
     return rendered.encode("utf-8")
@@ -3359,7 +3359,11 @@ def refresh_research_artifact_manifest(
             continue
         entry = _manifest_entry_for(name, path, STAGE_RESEARCH)
         if entry is not None:
-            entry["human_edited_at"] = entry["produced_at"]
+            # Keep when research produced the artifact; stamp the edit separately.
+            previous = manifest.get(name)
+            if isinstance(previous, dict) and previous.get("produced_at"):
+                entry["produced_at"] = previous["produced_at"]
+            entry["human_edited_at"] = _utcnow()
             manifest[name] = entry
             refreshed.append(name)
     if refreshed:

@@ -116,6 +116,9 @@ def test_dossier_payload_reports_sealed_state(pipeline, client):
 
 def test_legacy_edit_survives_resume_reuse_check(pipeline, client):
     _record_research_manifest(pipeline)
+    manifest = PipelineManager.load_artifact_manifest(PID)
+    manifest["report"]["produced_at"] = "2026-01-01T00:00:00+00:00"
+    PipelineManager.write_artifact_manifest(PID, manifest)
     assert _reuse_accepted()
 
     resp = client.put(f"/api/research/{PID}/dossier", json={"report": EDITED})
@@ -124,7 +127,9 @@ def test_legacy_edit_survives_resume_reuse_check(pipeline, client):
     assert (pipeline / "research_report.md").read_text(encoding="utf-8") == EDITED
     entry = PipelineManager.load_artifact_manifest(PID)["report"]
     assert entry["sha256"] == hashlib.sha256(EDITED.encode("utf-8")).hexdigest()
-    assert entry["human_edited_at"]
+    # When research produced it is kept; the edit gets its own (current) stamp.
+    assert entry["produced_at"] == "2026-01-01T00:00:00+00:00"
+    assert entry["human_edited_at"] > entry["produced_at"]
     # Continue/resume reuses the edited research instead of re-running it.
     assert _reuse_accepted()
 
