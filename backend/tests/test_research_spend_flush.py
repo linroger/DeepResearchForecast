@@ -251,3 +251,115 @@ def test_resume_none_telemetry_keeps_prior_flushed_spend(
     assert research["calls"] == 1
     assert research["prompt_tokens"] == 1000
     assert "research_telemetry" not in state.options
+
+
+# ------------------------------- engine v3：[usage] 行可选 cached= 字段
+V3_USAGE_LINES = [
+    "2026-09-27T00:00:00+00:00 [stage] research:v3:plan start\n",
+    "2026-09-27T00:00:01+00:00 [usage] tokens in=9000 out=700 total=9700 "
+    "phase=plan:scope cached=0 cache_write=0 reasoning=300\n",
+    "2026-09-27T00:00:02+00:00 [usage] tokens in=12000 out=900 total=12900 "
+    "phase=gather:K1:step2 cached=8000 cache_write=0 reasoning=410\n",
+    "2026-09-27T00:00:03+00:00 [usage] tokens in=4000 out=100 total=4100 "
+    "phase=gather:K2:step1 cached=0 cache_write=0 reasoning=0 estimated=1\n",
+    "2026-09-27T00:00:04+00:00 [usage] tokens in=11000 out=2000 total=13000 "
+    "phase=synthesize:group1 cached=6500 cache_write=120 reasoning=900\n",
+]
+
+
+@pytest.mark.parametrize("line, expected", [
+    # full v3 line → cache reads summed; cache_write/reasoning never mistaken for it
+    ("[usage] tokens in=12000 out=900 total=12900 phase=gather:K1 cached=8000 "
+     "cache_write=77 reasoning=410", 8000),
+    # legacy line without the optional field → backward compatible 0
+    ("[usage] tokens in=12000 out=3400 total=15400", 0),
+    ("[usage] tokens in=5 out=None total=None", 0),
+    # only cache_write present → not a cache read
+    ("[usage] tokens in=100 out=5 total=105 cache_write=90", 0),
+    # a prefixed or non-numeric field is not the standalone cached= field
+    ("[usage] tokens in=100 out=5 total=105 prompt_cached=90 cached=None", 0),
+    # cached= before the tokens triple (e.g. inside other text) does not count
+    ("[usage] cached=999 tokens in=100 out=5 total=105", 0),
+    # not a usage line at all
+    ("[tool] web_search cached=5", 0),
+])
+def test_parse_usage_cached_tokens(line, expected):
+    assert po._parse_usage_cached_tokens(line) == expected
+
+
+def test_parse_usage_line_contract_unchanged_for_v3_lines():
+    """The (in, out, total) contract is untouched by the trailing v3 fields."""
+    assert po._parse_usage_line(V3_USAGE_LINES[2]) == (12000, 900, 12900)
+    assert po._parse_usage_line(USAGE_LINES[1]) == (12000, 3400, 15400)
+
+
+def test_success_path_sums_v3_cached_tokens_into_telemetry(
+        monkeypatch, tmp_path, meter_run):
+    run_id = meter_run("pipe_spendv3cached")
+    handoff = _wire_fake_subprocess(
+        monkeypatch, tmp_path,
+        V3_USAGE_LINES + ["2026-09-27T00:00:05+00:00 [done] research complete (v3)\n"],
+        returncode=0,
+    )
+    (handoff / "research_report.md").write_text(
+        "research evidence " * 60, encoding="utf-8")
+
+    res = po.DeerFlowResearchRunner.run(
+        "Will X happen?", str(handoff),
+        on_progress=lambda _p, _m: None,
+        timeout=10, model="glm", budget_run_id=run_id,
+    )
+
+    tel = res["research_telemetry"]
+    assert tel["tokens_in"] == 36000
+    assert tel["tokens_out"] == 3700
+    assert tel["tokens_total"] == 39700
+    assert tel["tokens_cached"] == 14500
+
+
+def test_legacy_usage_lines_report_zero_cached_tokens(
+        monkeypatch, tmp_path, meter_run):
+    run_id = meter_run("pipe_spendlegacycached")
+    handoff = _wire_fake_subprocess(
+        monkeypatch, tmp_path, USAGE_LINES + ["[done] research complete\n"],
+        returncode=0,
+    )
+    (handoff / "research_report.md").write_text(
+        "research evidence " * 60, encoding="utf-8")
+
+    tel = po.DeerFlowResearchRunner.run(
+        "Q", str(handoff), on_progress=lambda _p, _m: None,
+        timeout=10, model="claude", budget_run_id=run_id,
+    )["research_telemetry"]
+
+    assert (tel["tokens_in"], tel["tokens_out"], tel["tokens_total"]) == (22000, 6000, 28000)
+    assert tel["tokens_cached"] == 0
+
+
+def test_failed_v3_attempt_flushes_once_and_keeps_cached_tally(
+        monkeypatch, tmp_path, meter_run):
+    run_id = meter_run("pipe_spendv3fail")
+    handoff = _wire_fake_subprocess(
+        monkeypatch, tmp_path,
+        V3_USAGE_LINES + ["[error] provider_unavailable: 1113 余额不足\n"],
+        returncode=2,
+    )
+    captured = {}
+    real_flush = po._flush_failed_research_attempt_spend
+
+    def spy(spend, status, run_id=None):
+        captured.update(spend)
+        return real_flush(spend, status, run_id=run_id)
+
+    monkeypatch.setattr(po, "_flush_failed_research_attempt_spend", spy)
+    with pytest.raises(RuntimeError, match="研究子进程失败"):
+        po.DeerFlowResearchRunner.run(
+            "Q", str(handoff), on_progress=lambda _p, _m: None,
+            timeout=10, model="glm", budget_run_id=run_id,
+        )
+
+    assert captured["tokens_cached"] == 14500
+    research = LLMMeter.snapshot(run_id)["by_stage"]["research"]
+    assert research["calls"] == 1
+    assert research["prompt_tokens"] == 36000
+    assert research["completion_tokens"] == 3700

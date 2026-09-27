@@ -130,6 +130,55 @@ def test_penalty_from_low_tier_sources():
     assert "source_tier_mix" not in comp2 and pen2 == 0.0
 
 
+def _producer_tiers(**counts):
+    """meta.source_tiers exactly as every producer emits it (bridge
+    source_tier_histogram / orchestrator _source_tier_histogram)."""
+    hist = {"s1_count": 0, "s2_count": 0, "s3_count": 0, "s4_count": 0, "s_unknown": 0}
+    hist.update(counts)
+    return hist
+
+
+def test_penalty_reads_producer_source_tier_shape():
+    """IF-10: the producer keys ('s1_count'…'s_unknown') used to miss the weight
+    table, so ANY run with sources paid a constant 0.08 tier penalty."""
+    pen, comp = PipelineOrchestrator._compute_forecast_confidence_penalty(
+        {"source_tiers": _producer_tiers(s1_count=5)}, None)
+    assert "source_tier_mix" not in comp and pen == 0.0
+
+    _, comp = PipelineOrchestrator._compute_forecast_confidence_penalty(
+        {"source_tiers": _producer_tiers(s3_count=4)}, None)
+    assert comp["source_tier_mix"] == 0.06          # (1-0.4)*0.1, as for {"S3": 4}
+
+    _, comp = PipelineOrchestrator._compute_forecast_confidence_penalty(
+        {"source_tiers": _producer_tiers(s1_count=3, s3_count=3)}, None)
+    assert comp["source_tier_mix"] == 0.03          # mean weight (1.0+0.4)/2 = 0.7
+
+
+def test_penalty_producer_shape_matches_legacy_shape():
+    for legacy, producer in (
+        ({"S1": 3, "S2": 2}, _producer_tiers(s1_count=3, s2_count=2)),
+        ({"s3": 4}, _producer_tiers(s3_count=4)),
+        ({"S1": 1, "S3": 3}, {"S1_count": 1, "s3_count": 3}),
+    ):
+        assert (PipelineOrchestrator._compute_forecast_confidence_penalty(
+            {"source_tiers": legacy}, None)
+            == PipelineOrchestrator._compute_forecast_confidence_penalty(
+                {"source_tiers": producer}, None))
+
+
+def test_penalty_reject_tier_and_unknown_sources_keep_fallback_weight():
+    # S4 (reject tier) and untiered sources keep the historical 0.2 weight.
+    for tiers in (_producer_tiers(s4_count=4), _producer_tiers(s_unknown=4),
+                  {"mystery": 4}):
+        _, comp = PipelineOrchestrator._compute_forecast_confidence_penalty(
+            {"source_tiers": tiers}, None)
+        assert comp["source_tier_mix"] == 0.08, tiers
+    # Non-numeric / non-positive counts are ignored, never raise.
+    pen, comp = PipelineOrchestrator._compute_forecast_confidence_penalty(
+        {"source_tiers": {"s1_count": "x", "s3_count": -2, "s_unknown": None}}, None)
+    assert pen == 0.0 and comp == {}
+
+
 def test_penalty_from_weak_dossier_coverage():
     cov = {"n_actors": 5, "pct_actors_with_incentives": 0.1,
            "n_relationships": 3, "pct_edges_valenced": 0.0}
@@ -1457,3 +1506,433 @@ def test_report_agent_accepts_charts_manifest_kwarg():
     assert "charts_manifest" in sig.parameters
     assert sig.parameters["charts_manifest"].default is None
     del agent, manifest
+
+
+# ── Engine v3: engine selection, outer-lane topology, child env ─────────────
+
+class _RecordingLogger:
+    """Stand-in for the orchestrator's non-propagating logger (caplog cannot
+    see ``mirofish.*`` records); keeps (level, rendered message) pairs."""
+
+    def __init__(self):
+        self.records = []
+
+    def _log(self, level, msg, *args, **_kwargs):
+        self.records.append((level, msg % args if args else msg))
+
+    def debug(self, msg, *args, **kwargs):
+        self._log("debug", msg, *args, **kwargs)
+
+    def info(self, msg, *args, **kwargs):
+        self._log("info", msg, *args, **kwargs)
+
+    def warning(self, msg, *args, **kwargs):
+        self._log("warning", msg, *args, **kwargs)
+
+    def error(self, msg, *args, **kwargs):
+        self._log("error", msg, *args, **kwargs)
+
+    def exception(self, msg, *args, **kwargs):
+        self._log("error", msg, *args, **kwargs)
+
+    def of(self, level):
+        return [text for lvl, text in self.records if lvl == level]
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("v3", "v3"),
+    (" V3 ", "v3"),
+    ("linear", "v3"),        # historical .env spelling → v3 alias
+    ("LINEAR", "v3"),
+    ("legacy", "legacy"),
+    ("Legacy\n", "legacy"),
+    ("deerflow", "legacy"),  # bridge-side legacy aliases resolve identically
+    ("agentic", "legacy"),
+    ("", "v3"),              # empty = unset → default
+])
+def test_resolve_research_engine_normalizes_aliases(raw, expected):
+    assert _po.resolve_research_engine(raw) == expected
+
+
+def test_engine_aliases_select_the_same_engine_in_parent_and_bridge(monkeypatch):
+    """The parent passes its normalized value to the child, but operators and
+    direct CLI runs set RESEARCH_ENGINE themselves: every spelling the parent
+    accepts must mean the same engine to the bridge's own resolver."""
+    import importlib
+    import sys
+
+    bridge_dir = str(Path(__file__).resolve().parents[2] / "deerflow_bridge")
+    if bridge_dir not in sys.path:
+        sys.path.insert(0, bridge_dir)
+    bridge = importlib.import_module("deerflow_research")
+    for spelling, engine in _po._RESEARCH_ENGINE_ALIASES.items():
+        monkeypatch.setenv("RESEARCH_ENGINE", spelling)
+        assert bridge._resolve_research_engine(None) == engine, spelling
+        assert _po.resolve_research_engine(spelling) == engine, spelling
+
+
+def test_resolve_research_engine_reads_config_by_default(monkeypatch):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "linear", raising=False)
+    assert _po.resolve_research_engine() == "v3"
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "legacy", raising=False)
+    assert _po.resolve_research_engine() == "legacy"
+
+
+def test_unknown_research_engine_falls_back_to_v3_with_one_warning(monkeypatch):
+    log = _RecordingLogger()
+    monkeypatch.setattr(_po, "logger", log)
+    monkeypatch.setattr(_po, "_UNKNOWN_RESEARCH_ENGINES_WARNED", set())
+
+    assert _po.resolve_research_engine("langgraph-v9") == "v3"
+    assert _po.resolve_research_engine("LangGraph-V9") == "v3"   # same value, normalized
+    assert _po.resolve_research_engine("other") == "v3"
+
+    warnings = log.of("warning")
+    assert len(warnings) == 2
+    assert "langgraph-v9" in warnings[0] and "other" in warnings[1]
+
+
+@pytest.mark.parametrize("configured, expected", [
+    (3, 3), (2, 2), (1, 1), (0, 3), (None, 3), ("x", 3), ("2", 2),
+])
+def test_legacy_engine_keeps_todays_outer_track_rule(configured, expected):
+    assert _po.research_outer_track_count(configured, "legacy") == expected
+
+
+def test_v3_engine_forces_single_outer_track_and_logs_once(monkeypatch):
+    log = _RecordingLogger()
+    monkeypatch.setattr(_po, "logger", log)
+
+    assert _po.research_outer_track_count(3, "v3", pipeline_id="pipe_v3") == 1
+    infos = log.of("info")
+    assert len(infos) == 1
+    assert "pipe_v3" in infos[0] and "RESEARCH_PARALLEL_TRACKS=3" in infos[0]
+
+    # Nothing to disable → no override log.
+    assert _po.research_outer_track_count(1, "v3") == 1
+    assert len(log.of("info")) == 1
+    # Unset/garbage means the legacy default of 3 lanes, which v3 also overrides.
+    assert _po.research_outer_track_count(None, "v3") == 1
+    assert len(log.of("info")) == 2
+
+
+def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options=None):
+    """Run the real ``_run`` state machine for a fresh research-only pipeline
+    with the research subprocess layer faked; return which topology ran (and,
+    for a single lane, the engine the stage asked the runner for)."""
+    monkeypatch.setattr(_po.Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"),
+                        raising=False)
+    monkeypatch.setattr(_po.Config, "UPLOAD_FOLDER", str(tmp_path / "uploads"),
+                        raising=False)
+    for name, value in {
+        "RESEARCH_ENGINE": engine,
+        "RESEARCH_PARALLEL_TRACKS": tracks,
+        "REPORT_LINT": False,
+        "CAST_RECONCILE": False,
+        "EMBED_WARM_AT_RESEARCH": False,
+        "PIPELINE_VIZ_ARTIFACTS": False,
+    }.items():
+        monkeypatch.setattr(_po.Config, name, value, raising=False)
+    for name, replacement in {
+        "_start_heartbeat": lambda self, state: None,
+        "_init_telemetry_flush": lambda self, state: None,
+        "_write_run_manifest": lambda self, state: None,
+        "_update_manifest": lambda self, state, stage, **kwargs: None,
+        "_record_research_telemetry": lambda self, state, value: None,
+        "_maybe_warm_embedder": lambda self, state, actors: None,
+        "_surface_research_quality": lambda self, state, handoff_dir: {},
+        "_surface_forecast_confidence_penalty": lambda self, state, handoff_dir: None,
+        "_flush_run_telemetry": lambda self, state, **kwargs: None,
+    }.items():
+        monkeypatch.setattr(_po.PipelineOrchestrator, name, replacement)
+    monkeypatch.setattr(_po, "_finalize_research_contract", lambda *a, **k: None)
+
+    calls = []
+    engines = []
+    report = "Evidence-backed research report with citations [S1]. " * 20
+
+    def fake_single(prompt, handoff_dir, **kwargs):
+        calls.append(("single", kwargs.get("budget_lane_id")))
+        engines.append(kwargs.get("research_engine"))
+        with open(os.path.join(handoff_dir, "research_report.md"), "w",
+                  encoding="utf-8") as fh:
+            fh.write(report)
+        return {
+            "report": report,
+            "report_path": os.path.join(handoff_dir, "research_report.md"),
+            "evidence_pack": None, "actor_dossier": "", "actors": None,
+            "sources": None, "timeline": None, "exit_code": 0,
+            "research_telemetry": {"tokens_in": 0, "tokens_out": 0},
+        }
+
+    def fake_parallel(self, state, handoff_dir, upd, n_tracks):
+        calls.append(("parallel", n_tracks))
+        return fake_single(state.prompt, handoff_dir)
+
+    monkeypatch.setattr(_po.DeerFlowResearchRunner, "run", staticmethod(fake_single))
+    monkeypatch.setattr(
+        _po.PipelineOrchestrator, "_run_parallel_research_tracks", fake_parallel)
+
+    pid = f"pipe_topology_{engine}_{tracks}"
+    _po.PipelineManager.ensure_dirs(pid)
+    state = _po.PipelineState(
+        pipeline_id=pid, prompt="Will X happen by 2030?",
+        mode="research_only", status="running", options=dict(options or {}),
+    )
+    state.handoff_dir = _po.PipelineManager.handoff_dir(pid)
+    os.makedirs(state.handoff_dir, exist_ok=True)
+    _po.PipelineOrchestrator._run(state)
+    assert state.status == "completed", state.error
+    if options is not None:
+        return calls, engines
+    return calls
+
+
+def test_research_stage_runs_one_outer_lane_for_v3_even_with_parallel_tracks(
+        monkeypatch, tmp_path):
+    calls = _drive_research_only_stage(monkeypatch, tmp_path, engine="v3", tracks=3)
+    assert calls == [("single", "outer-track-1")]
+
+
+def test_research_stage_keeps_parallel_lanes_for_legacy_engine(monkeypatch, tmp_path):
+    calls = _drive_research_only_stage(monkeypatch, tmp_path, engine="legacy", tracks=3)
+    assert calls[0] == ("parallel", 3)
+
+
+class _FakeResearchProc:
+    def __init__(self):
+        self.pid = 4242
+        self.stdout = ["2026-09-27T00:00:00+00:00 [done] research complete\n"]
+
+    def poll(self):
+        return 0
+
+    def wait(self, timeout=None):
+        return 0
+
+
+def _launch_capturing_child(monkeypatch, tmp_path, **run_kwargs):
+    """Launch the real runner against a fake Popen; return the child cmd/env."""
+    deerflow_dir = tmp_path / "deer-flow"
+    deerflow_dir.mkdir()
+    (deerflow_dir / "deerflow_research.py").write_text("# entry\n", encoding="utf-8")
+    handoff = tmp_path / "handoff"
+    handoff.mkdir()
+    artifact = "evidence_pack.md" if run_kwargs.get("evidence_only") else "research_report.md"
+    (handoff / artifact).write_text(
+        "Evidence: the regulator published the 2026 capacity figures [S1]. " * 12,
+        encoding="utf-8")
+    monkeypatch.setattr(_po.Config, "DEERFLOW_DIR", str(deerflow_dir))
+    monkeypatch.setattr(_po.Config, "UPLOAD_FOLDER", str(tmp_path / "uploads"))
+    monkeypatch.setattr(_po, "_sync_deerflow_bridge_if_stale", lambda _p: None)
+    captured = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = list(cmd)
+        captured["env"] = dict(kwargs["env"])
+        return _FakeResearchProc()
+
+    monkeypatch.setattr(_po.subprocess, "Popen", fake_popen)
+    _po.DeerFlowResearchRunner.run(
+        "Will X happen?", str(handoff), on_progress=lambda _p, _m: None, **run_kwargs)
+    return captured
+
+
+def test_runner_passes_v3_engine_and_watchdog_budget_explicitly(monkeypatch, tmp_path):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    # Ambient env must never decide the child's engine: the parent is authoritative.
+    monkeypatch.setenv("RESEARCH_ENGINE", "legacy")
+    monkeypatch.setenv("DEERFLOW_RESEARCH_TIMEOUT", "14400")
+
+    child = _launch_capturing_child(monkeypatch, tmp_path, timeout=900)
+
+    assert child["env"]["RESEARCH_ENGINE"] == "v3"
+    # v3 plans against the watchdog that will actually kill it (explicit timeout).
+    assert child["env"]["DEERFLOW_RESEARCH_TIMEOUT"] == "900"
+
+
+def test_runner_hands_v3_the_depth_tier_watchdog_budget(monkeypatch, tmp_path):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "linear", raising=False)
+    monkeypatch.delenv("DEERFLOW_RESEARCH_TIMEOUT", raising=False)
+
+    child = _launch_capturing_child(monkeypatch, tmp_path, depth="quick")
+
+    assert child["env"]["RESEARCH_ENGINE"] == "v3"
+    assert child["env"]["DEERFLOW_RESEARCH_TIMEOUT"] == str(
+        int(_po.Config.deerflow_depth_budget("quick")))
+
+
+def test_runner_passes_legacy_engine_without_touching_its_env(monkeypatch, tmp_path):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "legacy", raising=False)
+    monkeypatch.delenv("DEERFLOW_RESEARCH_TIMEOUT", raising=False)
+
+    child = _launch_capturing_child(monkeypatch, tmp_path, timeout=900)
+
+    assert child["env"]["RESEARCH_ENGINE"] == "legacy"
+    assert "DEERFLOW_RESEARCH_TIMEOUT" not in child["env"]
+
+
+def test_runner_unknown_engine_launches_v3(monkeypatch, tmp_path):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "gpt-researcher", raising=False)
+    monkeypatch.setattr(_po, "logger", _RecordingLogger())
+
+    child = _launch_capturing_child(monkeypatch, tmp_path, timeout=900)
+
+    assert child["env"]["RESEARCH_ENGINE"] == "v3"
+
+
+@pytest.mark.parametrize("lane_kwargs, flag", [
+    ({"evidence_only": True}, "--evidence-only"),
+    ({"synthesis_manifest_path": "/tmp/evidence_synthesis_manifest.json"},
+     "--synthesis-manifest"),
+])
+def test_lane_contract_invocations_always_declare_legacy_engine(
+        monkeypatch, tmp_path, lane_kwargs, flag):
+    """Evidence lanes / global synthesis are legacy-only contracts (IF-1): even
+    with RESEARCH_ENGINE=v3 the child is told to run the engine that honours them."""
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    monkeypatch.delenv("DEERFLOW_RESEARCH_TIMEOUT", raising=False)
+
+    child = _launch_capturing_child(monkeypatch, tmp_path, timeout=900, **lane_kwargs)
+
+    assert flag in child["cmd"]
+    assert child["env"]["RESEARCH_ENGINE"] == "legacy"
+    assert "DEERFLOW_RESEARCH_TIMEOUT" not in child["env"]
+
+
+@pytest.mark.parametrize("engine, dual_track, required, reason", [
+    ("v3", True, False, _po.ACTOR_PLANE_UNSUPPORTED_BY_V3),
+    ("linear", True, False, _po.ACTOR_PLANE_UNSUPPORTED_BY_V3),
+    ("legacy", True, True, None),
+    ("v3", False, False, None),
+    ("legacy", False, False, None),
+])
+def test_admission_actor_policy_follows_research_engine(
+        monkeypatch, engine, dual_track, required, reason):
+    """IF-2: v3 never produces the sealed actor-intelligence/v1 plane, so a
+    dual-track admission must not pin it as required (reception would fail every
+    full run after the research spend); legacy admissions are unchanged."""
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", engine, raising=False)
+    monkeypatch.setattr(_po.Config, "DEERFLOW_DUAL_TRACK", dual_track, raising=False)
+
+    policy = _po.admission_actor_intelligence_policy_v1()
+
+    assert policy["origin"] == "admission"
+    assert policy["required"] is required
+    assert policy["research_engine"] == _po.resolve_research_engine(engine)
+    assert policy.get("not_required_reason") == reason
+    assert policy["version"] == _po.ACTOR_INTELLIGENCE_POLICY_VERSION
+    assert policy["schema_version"] == _po.ACTOR_INTELLIGENCE_SCHEMA_VERSION
+
+
+def test_pipeline_start_pins_engine_aware_actor_policy(monkeypatch, tmp_path):
+    monkeypatch.setattr(_po.Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"),
+                        raising=False)
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    monkeypatch.setattr(_po.Config, "DEERFLOW_DUAL_TRACK", True, raising=False)
+    # The admission record is what matters; the background run is a no-op.
+    monkeypatch.setattr(_po.PipelineOrchestrator, "_run", classmethod(lambda cls, state: None))
+
+    state = _po.PipelineOrchestrator.start("Will X happen by 2030?", mode="full")
+    try:
+        _po.PipelineOrchestrator._threads[state.pipeline_id].join(timeout=5)
+        persisted = _po.PipelineManager.load(state.pipeline_id)
+        policy = persisted["options"]["actor_intelligence_policy_v1"]
+        assert policy["required"] is False
+        assert policy["research_engine"] == "v3"
+        assert policy["not_required_reason"] == _po.ACTOR_PLANE_UNSUPPORTED_BY_V3
+    finally:
+        _po.PipelineOrchestrator._threads.pop(state.pipeline_id, None)
+        _po.PipelineOrchestrator._cancel_events.pop(state.pipeline_id, None)
+
+
+def test_v3_pinned_policy_admits_unsealed_actors_with_disclosed_reason(monkeypatch):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    monkeypatch.setattr(_po.Config, "DEERFLOW_DUAL_TRACK", True, raising=False)
+    state = _po.PipelineState(
+        pipeline_id="pipe_v3_reception", prompt="forecast",
+        options={"actor_intelligence_policy_v1":
+                 _po.admission_actor_intelligence_policy_v1()},
+    )
+    unsealed = {"actors": [{"name": "Regulator", "type": "Government"}]}
+
+    _po._enforce_actor_intelligence_reception(
+        state, unsealed, report="report", dossier="", sources=[])
+
+    assert state.options["actor_intelligence_reception"] == {
+        "required": False,
+        "passed": True,
+        "reason": _po.ACTOR_PLANE_UNSUPPORTED_BY_V3,
+    }
+
+
+# ── F20: a pipeline admitted before v3 keeps the engine its pinned policy needs ──
+
+def _pre_upgrade_policy(monkeypatch):
+    """What admission pinned before the v3 change: dual-track on (the default),
+    so ``required=True`` and no ``research_engine`` key."""
+    monkeypatch.setattr(_po.Config, "DEERFLOW_DUAL_TRACK", True, raising=False)
+    policy = _po.capture_actor_intelligence_policy_v1("admission")
+    assert policy["required"] is True and "research_engine" not in policy
+    return policy
+
+
+def test_research_engine_for_run_honours_a_policy_that_requires_the_sealed_plane(monkeypatch):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    pre_upgrade = _pre_upgrade_policy(monkeypatch)
+    assert _po.research_engine_for_run({"actor_intelligence_policy_v1": pre_upgrade}) == "legacy"
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "legacy", raising=False)
+    legacy_admission = _po.admission_actor_intelligence_policy_v1()
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    assert legacy_admission["required"] is True
+    assert _po.research_engine_for_run({"actor_intelligence_policy_v1": legacy_admission}) == "legacy"
+    v3_admission = _po.admission_actor_intelligence_policy_v1()
+    assert _po.research_engine_for_run({"actor_intelligence_policy_v1": v3_admission}) == "v3"
+    assert _po.research_engine_for_run({}) == "v3"          # pre-policy run: configured engine
+    assert _po.research_engine_for_run(None) == "v3"
+    disabled = _po.capture_actor_intelligence_policy_v1("admission", required=False)
+    assert _po.research_engine_for_run({"actor_intelligence_policy_v1": disabled}) == "v3"
+
+
+def test_pre_upgrade_pipeline_resumes_on_the_legacy_engine(monkeypatch, tmp_path):
+    """F20: the stage used Config (v3) for such a run, which then wrote unsealed
+    actors and failed reception after the whole research spend."""
+    policy = _pre_upgrade_policy(monkeypatch)
+    calls, engines = _drive_research_only_stage(
+        monkeypatch, tmp_path, engine="v3", tracks=1,
+        options={"actor_intelligence_policy_v1": policy})
+    assert calls == [("single", "outer-track-1")] and engines == ["legacy"]
+
+
+def test_pre_upgrade_pipeline_keeps_legacy_parallel_lanes(monkeypatch, tmp_path):
+    policy = _pre_upgrade_policy(monkeypatch)
+    calls, _ = _drive_research_only_stage(
+        monkeypatch, tmp_path, engine="v3", tracks=3,
+        options={"actor_intelligence_policy_v1": policy})
+    assert calls[0] == ("parallel", 3)
+
+
+def test_v3_admitted_pipeline_still_runs_v3(monkeypatch, tmp_path):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    monkeypatch.setattr(_po.Config, "DEERFLOW_DUAL_TRACK", True, raising=False)
+    policy = _po.admission_actor_intelligence_policy_v1()
+    calls, engines = _drive_research_only_stage(
+        monkeypatch, tmp_path, engine="v3", tracks=3,
+        options={"actor_intelligence_policy_v1": policy})
+    assert calls == [("single", "outer-track-1")] and engines == ["v3"]
+
+
+def test_runner_launches_the_engine_the_stage_selected(monkeypatch, tmp_path):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    monkeypatch.delenv("DEERFLOW_RESEARCH_TIMEOUT", raising=False)
+
+    child = _launch_capturing_child(monkeypatch, tmp_path, timeout=900, research_engine="legacy")
+
+    assert child["env"]["RESEARCH_ENGINE"] == "legacy"
+    assert "DEERFLOW_RESEARCH_TIMEOUT" not in child["env"]
+
+
+def test_judge_bound_probe_is_false_without_a_contract_manifest(tmp_path):
+    """Single-lane runs publish no research contract manifest; the probe must
+    answer False instead of raising (the AttributeError skipped research lint)."""
+    assert _po._research_report_is_judge_bound(str(tmp_path)) is False

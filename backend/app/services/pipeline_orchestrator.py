@@ -823,6 +823,34 @@ def capture_actor_intelligence_policy_v1(
     }
 
 
+# Disclosed on the pinned policy (and echoed by reception) when dual-track was
+# requested but the selected research engine cannot produce the sealed plane.
+ACTOR_PLANE_UNSUPPORTED_BY_V3 = "research_engine_v3_emits_unsealed_actor_plane"
+
+
+def admission_actor_intelligence_policy_v1() -> dict[str, Any]:
+    """Pin a new pipeline's actor-plane policy for the research engine it will run.
+
+    The sealed actor-intelligence/v1 plane (Track-B dossier, coverage/lineage
+    sidecars, contract manifest) is produced only by the legacy engine; the v3
+    engine by design writes an unsealed, report-grounded ``actors.json``.
+    Pinning ``required=True`` for a v3 run (``DEERFLOW_DUAL_TRACK`` defaults to
+    true) would fail every full pipeline at reception, after the research
+    spend (IF-2).  v3 admissions therefore pin ``required=False`` and record
+    the engine plus the disclosed reason; legacy admissions are unchanged.
+    """
+    engine = resolve_research_engine()
+    dual_track = bool(getattr(Config, "DEERFLOW_DUAL_TRACK", True))
+    policy = capture_actor_intelligence_policy_v1(
+        "admission",
+        required=dual_track and engine == RESEARCH_ENGINE_LEGACY,
+    )
+    policy["research_engine"] = engine
+    if dual_track and engine != RESEARCH_ENGINE_LEGACY:
+        policy["not_required_reason"] = ACTOR_PLANE_UNSUPPORTED_BY_V3
+    return policy
+
+
 # ---------------------------------------------------------------------------
 # 管线状态持久化（file-backed，沿用 MiroFish 的目录约定）
 # ---------------------------------------------------------------------------
@@ -1321,6 +1349,17 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
     os.path.dirname(__file__), "../../../deerflow_bridge/runtime_skill_sync.py"
 ))
 
+# Bridge modules imported by BARE name from the deployed deer-flow/ directory
+# (deerflow_research.py runs with sys.path[0]==deer-flow/): the config-reflected
+# tools (`use: market_tools:...` / `search_tools:...` / `cached_fetch:...`), the
+# LOOP-007 budget control plane they share, and the deep-research engine v3
+# (linear_research.py phases + research_gateway.py LLM gateway/research tools).
+# setup.sh deploys the same set; test_deerflow_bridge_sync_guard pins the parity.
+_DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
+    "market_tools.py", "search_tools.py", "cached_fetch.py",
+    "research_budget.py", "linear_research.py", "research_gateway.py",
+)
+
 
 def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
     """启动研究子进程前的漂移防护（2026-07-03 live-surfaced）。
@@ -1411,10 +1450,10 @@ def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
         # deployed script or web_search/web_fetch/prediction_market tools fail to load.
         # setup.sh copies them, but a bridge-only edit (no ./setup.sh rerun) would
         # otherwise drift exactly like deerflow_research.py did; mirror that guard here.
-        for _tool_mod in (
-            "market_tools.py", "search_tools.py", "cached_fetch.py",
-            "research_budget.py", "linear_research.py"
-        ):
+        # Engine v3 is imported by bare name the same way: linear_research.py (the
+        # phases) and research_gateway.py (LLM gateway + research tools) must both
+        # sit next to the deployed script or the v3 dispatch raises ImportError.
+        for _tool_mod in _DEPLOYED_BRIDGE_MODULES:
             _tool_src = os.path.join(bridge_dir, _tool_mod)
             if os.path.isfile(_tool_src):
                 pairs.append((_tool_src, os.path.join(deerflow_dir, _tool_mod)))
@@ -1925,6 +1964,11 @@ def _flush_failed_research_attempt_spend(spend: Optional[dict[str, Any]],
     if not bool(getattr(Config, "LLM_TELEMETRY_ENABLED", True)):
         return False
     try:
+        # 仅用于审计日志（LLMMeter 无 prompt-cache 字段位）；脏值绝不影响入账本身。
+        t_cached = max(0, int(spend.get("tokens_cached") or 0))
+    except (TypeError, ValueError):
+        t_cached = 0
+    try:
         from ..utils.telemetry import LLMMeter
         model = str(spend.get("model") or getattr(Config, "DEERFLOW_MODEL", "claude"))
         # 与 _record_research_telemetry 相同的计价 provider 映射：CLI 订阅类（claude/
@@ -1945,9 +1989,9 @@ def _flush_failed_research_attempt_spend(spend: Optional[dict[str, Any]],
             run_id=str(run_id) if run_id else None,  # None → contextvar/单活跃 run 回退
         )
         logger.warning(
-            "研究 attempt 以 %s 终止，已消耗 tokens in=%d out=%d（model=%s）——"
+            "研究 attempt 以 %s 终止，已消耗 tokens in=%d out=%d cached=%d（model=%s）——"
             "已计入 stage='research' 合成计量，不再随失败丢账",
-            attempt_status, t_in, t_out, model,
+            attempt_status, t_in, t_out, t_cached, model,
         )
         return True
     except Exception as exc:  # noqa: BLE001 — 计量是观测增益，绝不放大原始失败
@@ -1981,7 +2025,7 @@ class DeerFlowResearchRunner:
         _record_research_telemetry 入账），故成功路径逐字节不变、绝无双计。
         """
         spend: dict[str, Any] = {
-            "tokens_in": 0, "tokens_out": 0, "tokens_total": 0,
+            "tokens_in": 0, "tokens_out": 0, "tokens_total": 0, "tokens_cached": 0,
             "t_start": time.time(),
             "model": model or Config.DEERFLOW_MODEL,
             "flushed": False,
@@ -2026,6 +2070,7 @@ class DeerFlowResearchRunner:
         shared_actor_track: Optional[bool] = None,
         evidence_only: bool = False,
         synthesis_manifest_path: Optional[str] = None,
+        research_engine: Optional[str] = None,
         _spend: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """运行研究子进程，阻塞直到结束。返回 handoff 摘要。
@@ -2045,6 +2090,11 @@ class DeerFlowResearchRunner:
         a later explicit pipeline task.  They let the strict bridge reuse only
         the exact prior thread/pass checkpoint without weakening its run,
         question, lane, attempt, or checkpoint-identity checks.
+
+        ``research_engine``: the engine the run's research stage selected
+        (:func:`research_engine_for_run`); ``None`` means
+        ``Config.RESEARCH_ENGINE``.  Lane-contract invocations (evidence-only,
+        synthesis manifest) always run the legacy engine regardless.
 
         W9-9 ``kg_graph_id``：非空且 RESEARCH_MCP_KG 开启时，把 DEER_FLOW_EXTENSIONS_CONFIG_PATH
         指向部署目录的 extensions_config.json 并注入 DRF_MCP_KG_GRAPH_ID——研究子进程可经 MCP
@@ -2121,11 +2171,43 @@ class DeerFlowResearchRunner:
         if synthesis_manifest_path:
             cmd += ["--synthesis-manifest", str(synthesis_manifest_path)]
 
+        # 看门狗预算按研究深度缩放：deep 是多轮研究协议（source map →
+        # primary evidence → actors → contradictions → forecast implications →
+        # synthesis），在固定 2400s 下经常被无差别 SIGKILL。优先级（T6.6）：显式 timeout 参数 >
+        # 用户在 .env 里显式设置的 DEERFLOW_RESEARCH_TIMEOUT > Config.deerflow_depth_budget() 档位默认值
+        # （CONF-1：档位值在双轨/子代理/扇出开启时 ×1.5，避免并行模式下更重的协议被无差别 SIGKILL）。
+        # 在构造子进程 env 之前算出，使 v3 引擎能按同一预算规划各阶段（见下方 RESEARCH_ENGINE）。
+        effective_depth = (depth or Config.DEERFLOW_RESEARCH_DEPTH or "standard").lower()
+        if timeout:
+            budget = timeout
+        elif os.environ.get("DEERFLOW_RESEARCH_TIMEOUT", "").strip():
+            budget = Config.DEERFLOW_RESEARCH_TIMEOUT
+        else:
+            budget = Config.deerflow_depth_budget(effective_depth)
+
         env = dict(os.environ)
         env.setdefault("PYTHONUNBUFFERED", "1")
         # Checkpoint identity is parent-owned per launch; never inherit an
         # ambient value from the backend process into a different handoff.
         env.pop("RESEARCH_CHECKPOINT_ID", None)
+        # Engine v3: the parent — never ambient env inheritance — decides which
+        # research engine the child runs, using the same resolver as the
+        # outer-lane topology so the two cannot disagree.  Evidence lanes and
+        # global synthesis are lane contracts only the legacy engine implements,
+        # so those invocations always declare it explicitly.
+        research_engine = (
+            RESEARCH_ENGINE_LEGACY
+            if (evidence_only or synthesis_manifest_path)
+            else (resolve_research_engine(research_engine) if research_engine
+                  else resolve_research_engine())
+        )
+        env["RESEARCH_ENGINE"] = research_engine
+        if research_engine == RESEARCH_ENGINE_V3:
+            # v3 caps its own wall-clock plan at 0.85 × this value so it writes
+            # research_report.md before the watchdog's SIGKILL; hand it the
+            # effective watchdog budget (explicit timeout / .env / depth tier)
+            # rather than only an operator-set .env value it may not match.
+            env["DEERFLOW_RESEARCH_TIMEOUT"] = str(max(1, int(budget)))
         if isinstance(skill_sync_result, dict):
             # The child re-hashes the exact live directories before constructing
             # a research client.  This binds source/deployed manifest identities,
@@ -2263,18 +2345,7 @@ class DeerFlowResearchRunner:
             except Exception:  # noqa: BLE001 — PID 持久化失败不影响研究本身
                 logger.warning("研究子进程 PID 持久化失败", exc_info=True)
 
-        # 看门狗预算按研究深度缩放：deep 是多轮研究协议（source map →
-        # primary evidence → actors → contradictions → forecast implications →
-        # synthesis），在固定 2400s 下经常被无差别 SIGKILL。优先级（T6.6）：显式 timeout 参数 >
-        # 用户在 .env 里显式设置的 DEERFLOW_RESEARCH_TIMEOUT > Config.deerflow_depth_budget() 档位默认值
-        # （CONF-1：档位值在双轨/子代理/扇出开启时 ×1.5，避免并行模式下更重的协议被无差别 SIGKILL）。
-        effective_depth = (depth or Config.DEERFLOW_RESEARCH_DEPTH or "standard").lower()
-        if timeout:
-            budget = timeout
-        elif os.environ.get("DEERFLOW_RESEARCH_TIMEOUT", "").strip():
-            budget = Config.DEERFLOW_RESEARCH_TIMEOUT
-        else:
-            budget = Config.deerflow_depth_budget(effective_depth)
+        # 看门狗截止时刻从子进程真正启动起算（budget 已在构造 env 前按深度/显式值算好）。
         deadline = time.time() + budget
         # 看门狗：即使子进程长时间无输出（模型思考），也能在超时后被杀掉。
         timed_out = {"hit": False}
@@ -2313,6 +2384,9 @@ class DeerFlowResearchRunner:
         # I-5-7: 结构化研究阶段遥测（token/工具量/壁钟）。bridge 已在 stdout 发出 [usage] 行，
         # 此前只用于推进进度启发，token 数字被丢弃；这里顺带累加，使最贵的研究阶段也进入统一计量。
         _tok_in = _tok_out = _tok_total = 0
+        # Engine v3: provider prompt-cache reads (subset of tokens_in) from the
+        # optional ``cached=`` usage field; stays 0 for engines that omit it.
+        _tok_cached = 0
         _result_events = 0
         _t_start = time.time()
         if _spend is not None:
@@ -2345,11 +2419,13 @@ class DeerFlowResearchRunner:
                         _tok_in += _i
                         _tok_out += _o
                         _tok_total += (_t if _t else _i + _o)
+                        _tok_cached += _parse_usage_cached_tokens(line)
                         if _spend is not None:
                             # DEFECT-2：同步进 attempt 级共享 tally，异常出口不丢账。
                             _spend["tokens_in"] = _tok_in
                             _spend["tokens_out"] = _tok_out
                             _spend["tokens_total"] = _tok_total
+                            _spend["tokens_cached"] = _tok_cached
                 elif "[ok]" in line or "[done]" in line:
                     on_progress(local, _tail(line))
                 elif "[error]" in line:
@@ -2500,6 +2576,7 @@ class DeerFlowResearchRunner:
             "tokens_in": _tok_in,
             "tokens_out": _tok_out,
             "tokens_total": _tok_total or (_tok_in + _tok_out),
+            "tokens_cached": _tok_cached,
             "tool_calls": tool_events,
             "results": _result_events,
             "wall_s": round(time.time() - _t_start, 1),
@@ -2539,6 +2616,27 @@ def _parse_usage_line(line: str) -> Optional[tuple[int, int, int]]:
         return int(s) if s and s.isdigit() else 0
 
     return _num(m.group("in")), _num(m.group("out")), _num(m.group("total"))
+
+
+# Engine v3 appends provider prompt-cache reads to every [usage] line
+# (``… total=N phase=gather:K1 cached=C cache_write=W reasoning=R``).  Only a
+# whitespace-delimited ``cached=<digits>`` field AFTER the ``tokens in=… total=…``
+# triple counts, so ``cache_write=`` / ``prompt_cached=``-style fields never match.
+_USAGE_CACHED_RE = re.compile(r"(?:^|\s)cached=(?P<cached>\d+)(?!\S)")
+
+
+def _parse_usage_cached_tokens(line: str) -> int:
+    """Return the prompt-cache-read token count of one [usage] line (0 if absent).
+
+    A sibling of :func:`_parse_usage_line` rather than a fourth tuple element so
+    that function's ``(in, out, total)`` contract stays unchanged for existing
+    callers; lines without the optional field (legacy engine) contribute 0.
+    """
+    m = _USAGE_RE.search(line)
+    if not m:
+        return 0
+    cached = _USAGE_CACHED_RE.search(line, m.end())
+    return int(cached.group("cached")) if cached else 0
 
 
 def _tail(s: str, limit: int = 160) -> str:
@@ -3228,7 +3326,11 @@ def _validate_research_contract(handoff_dir: str) -> bool:
 def _research_report_is_judge_bound(handoff_dir: str) -> bool:
     """Return whether the current manifest seals an exact report-judge binding."""
     manifest = _read_json(_research_contract_path(handoff_dir))
-    entries = manifest.get("files") if isinstance(manifest, dict) else None
+    if not isinstance(manifest, dict):
+        # Single-lane runs (every v3 run) publish no contract manifest; this
+        # used to raise AttributeError, which silently skipped research lint.
+        return False
+    entries = manifest.get("files")
     return bool(
         manifest.get("version") == 1
         and isinstance(entries, dict)
@@ -5444,7 +5546,12 @@ def _enforce_actor_intelligence_reception(
         state.options["actor_intelligence_reception"] = {
             "required": False,
             "passed": True,
-            "reason": "actor_track_explicitly_disabled_at_admission",
+            # A pinned engine limitation is disclosed verbatim; otherwise the
+            # actor track was switched off by configuration at admission.
+            "reason": (
+                str(policy.get("not_required_reason") or "")
+                or "actor_track_explicitly_disabled_at_admission"
+            ),
         }
         return
 
@@ -5622,6 +5729,105 @@ def research_dual_track_for_outer_lane(
         return bool(enabled) and int(lane_index) == 0
     except (TypeError, ValueError):
         return False
+
+
+# ---------------------------------------------------------------------------
+# Deep-research engine selection (engine v3)
+# ---------------------------------------------------------------------------
+RESEARCH_ENGINE_V3 = "v3"
+RESEARCH_ENGINE_LEGACY = "legacy"
+# Accepted spellings → canonical child contract; the SAME alias sets as the
+# bridge's own resolver (deerflow_research._V3_ENGINE_NAMES / _LEGACY_ENGINE_NAMES)
+# so one operator value can never mean different engines in parent and child.
+# ``linear`` is the historical name of the engine v3 rewrote in place (same
+# deployed linear_research.py), so ``.env`` files pinning it keep selecting v3.
+_RESEARCH_ENGINE_ALIASES: dict[str, str] = {
+    "v3": RESEARCH_ENGINE_V3,
+    "linear": RESEARCH_ENGINE_V3,
+    "legacy": RESEARCH_ENGINE_LEGACY,
+    "deerflow": RESEARCH_ENGINE_LEGACY,
+    "agentic": RESEARCH_ENGINE_LEGACY,
+}
+_UNKNOWN_RESEARCH_ENGINES_WARNED: set[str] = set()
+_UNKNOWN_RESEARCH_ENGINES_LOCK = threading.Lock()
+
+
+def resolve_research_engine(raw: Any = None) -> str:
+    """Normalize a RESEARCH_ENGINE value to ``"v3"`` or ``"legacy"``.
+
+    The parent is the single authority for which engine a research subprocess
+    runs: the runner passes this value to the child explicitly (never relying on
+    ambient env inheritance) and the research stage uses the same value to pick
+    the outer-lane topology, so the two can never disagree.  ``raw=None`` reads
+    ``Config.RESEARCH_ENGINE``; an empty value means "unset" → the v3 default.
+
+    An unknown value must neither fail a run at launch nor silently select the
+    legacy engine (a typo would otherwise flip the whole research topology), so
+    it falls back to v3 with one warning per distinct value per process.
+    """
+    value = getattr(Config, "RESEARCH_ENGINE", RESEARCH_ENGINE_V3) if raw is None else raw
+    text = str(value or "").strip().lower()
+    if not text:
+        return RESEARCH_ENGINE_V3
+    engine = _RESEARCH_ENGINE_ALIASES.get(text)
+    if engine is not None:
+        return engine
+    with _UNKNOWN_RESEARCH_ENGINES_LOCK:
+        first_sighting = text not in _UNKNOWN_RESEARCH_ENGINES_WARNED
+        _UNKNOWN_RESEARCH_ENGINES_WARNED.add(text)
+    if first_sighting:
+        logger.warning(
+            "RESEARCH_ENGINE=%r 未知（可选 v3 | linear | legacy | deerflow | agentic）——按默认 v3 引擎运行",
+            text[:64],
+        )
+    return RESEARCH_ENGINE_V3
+
+
+def research_engine_for_run(options: Any) -> str:
+    """The research engine a pipeline runs: ``Config.RESEARCH_ENGINE`` unless
+    its pinned actor-intelligence policy requires the sealed actor plane.
+
+    Only the legacy engine produces that plane, and a policy requiring it was
+    pinned by a legacy admission — including every pipeline admitted before
+    the v3 engine existed (``DEERFLOW_DUAL_TRACK`` defaults to true).
+    Resuming such a run under a later v3 default would fail reception only
+    after the whole research spend, so the pinned contract selects the engine
+    that can honour it.  Runs without a pinned policy, or whose policy does
+    not require the plane, follow the configured engine.
+    """
+    policy = options.get("actor_intelligence_policy_v1") if isinstance(options, dict) else None
+    if isinstance(policy, dict) and policy.get("required") is True:
+        return RESEARCH_ENGINE_LEGACY
+    return resolve_research_engine()
+
+
+def research_outer_track_count(
+        configured_tracks: Any, engine: str, *, pipeline_id: str = "") -> int:
+    """Return how many outer research lanes the research stage launches.
+
+    Legacy engine: exactly today's rule (``RESEARCH_PARALLEL_TRACKS``, ≥1, an
+    unparsable value → 3).  v3: always 1.  The v3 engine already fans out
+    internally (bounded per-KIQ agents sharing one source ledger, query dedup
+    and prompt-cache prefix); outer angle lanes would multiply evidence spend
+    for duplicate coverage and depend on the ``--evidence-only`` /
+    ``--synthesis-manifest`` lane contracts that only the legacy engine
+    implements.  The override is logged once per research stage when it
+    actually disables configured lanes.
+    """
+    try:
+        tracks = max(1, int(configured_tracks or 3))
+    except (TypeError, ValueError):
+        tracks = 3
+    if engine != RESEARCH_ENGINE_V3:
+        return tracks
+    if tracks > 1:
+        logger.info(
+            "[%s] RESEARCH_ENGINE=v3 在引擎内部执行有界并行扇出（按 KIQ 的并行子代理共享"
+            "来源台账/查询去重/提示缓存前缀）——外层研究轨已禁用"
+            "（RESEARCH_PARALLEL_TRACKS=%d 按 1 执行）",
+            pipeline_id or "-", tracks,
+        )
+    return 1
 
 
 def _track_tier_rank(tier: Any) -> int:
@@ -6144,6 +6350,29 @@ def _source_tier_histogram(sources: Any) -> dict[str, int]:
         r = _track_tier_rank(s.get("tier")) if isinstance(s, dict) else 9
         hist[f"s{r}_count" if 1 <= r <= 4 else "s_unknown"] += 1
     return hist
+
+
+# R2-RES-3 source-tier quality weights for the advisory confidence penalty.
+# S4 (reject-tier), ``s_unknown`` and any unrecognized key keep the historical
+# 0.2 fallback weight.
+_SOURCE_TIER_PENALTY_WEIGHTS = {"s1": 1.0, "s2": 0.7, "s3": 0.4}
+_SOURCE_TIER_PENALTY_FALLBACK_WEIGHT = 0.2
+_SOURCE_TIER_KEY_RE = re.compile(r"^(s[1-4])(?:_count)?$")
+
+
+def _source_tier_penalty_weight(key: Any) -> float:
+    """IF-10: weight of one ``meta.source_tiers`` key, whatever its producer shape.
+
+    Every producer (bridge ``source_tier_histogram``, :func:`_source_tier_histogram`)
+    emits ``{s1_count, s2_count, s3_count, s4_count, s_unknown}``, while the
+    penalty was keyed on bare ``S1``/``s1``.  Every tier then fell through to
+    the fallback weight, so any run with sources paid a constant 0.08
+    ``source_tier_mix`` penalty regardless of quality.  Both shapes normalize
+    to ``s1``..``s4`` here.
+    """
+    match = _SOURCE_TIER_KEY_RE.match(str(key).strip().lower())
+    tier = match.group(1) if match else ""
+    return _SOURCE_TIER_PENALTY_WEIGHTS.get(tier, _SOURCE_TIER_PENALTY_FALLBACK_WEIGHT)
 
 
 def pick_freshest_markets(track_markets: list[Any]) -> Optional[dict]:
@@ -7580,7 +7809,7 @@ class PipelineOrchestrator:
             "research_model": model or None,
         })
         state.options["actor_intelligence_policy_v1"] = (
-            capture_actor_intelligence_policy_v1("admission")
+            admission_actor_intelligence_policy_v1()
         )
         # Foglamp WP1 (1B)：新管线在准入时钉住安全政策快照——服务重载/环境变量漂移
         # 不得让一条已准入的运行悄悄改变图谱反馈/种子/extremize/模拟影响语义。
@@ -10301,7 +10530,6 @@ class PipelineOrchestrator:
 
         tiers = meta.get("source_tiers")
         if isinstance(tiers, dict) and tiers:
-            _w = {"s1": 1.0, "s2": 0.7, "s3": 0.4}
             tot = 0
             wsum = 0.0
             for t, n in tiers.items():
@@ -10311,7 +10539,7 @@ class PipelineOrchestrator:
                     continue
                 if cnt <= 0:
                     continue
-                wsum += _w.get(str(t).strip().lower(), 0.2) * cnt
+                wsum += _source_tier_penalty_weight(t) * cnt
                 tot += cnt
             if tot > 0:
                 c = round(max(0.0, 1.0 - (wsum / tot)) * 0.1, 3)
@@ -10697,6 +10925,8 @@ class PipelineOrchestrator:
         cls = type(self)
         angles = _RESEARCH_TRACK_ANGLES[:max(1, n_tracks)]
         n = len(angles)
+        # Full-research lanes (no global synthesis) run the run's own engine.
+        research_engine = research_engine_for_run(state.options)
         global_synthesis = bool(
             n > 1 and getattr(Config, "RESEARCH_GLOBAL_SYNTHESIS", True))
         global_subagent_cap = getattr(Config, "RESEARCH_GLOBAL_SUBAGENT_CAP", 9)
@@ -10848,6 +11078,7 @@ class PipelineOrchestrator:
                 # baseline Track-B lane fails.
                 shared_actor_track=False,
                 evidence_only=global_synthesis,
+                research_engine=research_engine,
             )
             if int(res.get("exit_code") or 0) != 0:
                 raise RuntimeError(
@@ -11224,6 +11455,7 @@ class PipelineOrchestrator:
                 "tokens_out": _sum_tel("tokens_out"),
                 "tokens_total": _sum_tel("tokens_total") or (
                     _sum_tel("tokens_in") + _sum_tel("tokens_out")),
+                "tokens_cached": _sum_tel("tokens_cached"),
                 "tool_calls": _sum_tel("tool_calls"),
                 "results": _sum_tel("results"),
                 # Research lanes overlap; the one global synthesis follows them.
@@ -11420,6 +11652,7 @@ class PipelineOrchestrator:
             "tokens_in": _sum("tokens_in"),
             "tokens_out": _sum("tokens_out"),
             "tokens_total": _sum("tokens_total") or (_sum("tokens_in") + _sum("tokens_out")),
+            "tokens_cached": _sum("tokens_cached"),
             "tool_calls": _sum("tool_calls"),
             "results": _sum("results"),
             "wall_s": max((float(t.get("wall_s") or 0.0) for t in tels), default=0.0),
@@ -11593,10 +11826,15 @@ class PipelineOrchestrator:
                 # PAR-2：多角度并行研究轨。>1 时并行跑 K 个研究子进程（每轨角度特化）后
                 # 确定性合并回 handoff/；=1 时走今日单轨路径（下方 else 逐字节不变）。
                 else:
-                    try:
-                        _n_tracks = max(1, int(getattr(Config, "RESEARCH_PARALLEL_TRACKS", 3) or 3))
-                    except (TypeError, ValueError):
-                        _n_tracks = 3
+                    # Engine v3 fans out internally → exactly one outer lane; the
+                    # legacy engine keeps today's RESEARCH_PARALLEL_TRACKS rule.
+                    # The run's pinned actor policy may require the legacy engine.
+                    _research_engine = research_engine_for_run(state.options)
+                    _n_tracks = research_outer_track_count(
+                        getattr(Config, "RESEARCH_PARALLEL_TRACKS", 3),
+                        _research_engine,
+                        pipeline_id=state.pipeline_id,
+                    )
                     if _n_tracks > 1:
                         research = self._run_parallel_research_tracks(
                             state, handoff_dir, upd, _n_tracks)
@@ -11682,6 +11920,7 @@ class PipelineOrchestrator:
                                 and _single_subagent_cap > 0),
                             max_concurrent_subagents=max(1, _single_subagent_cap),
                             model_concurrency_global=_single_model_concurrency,
+                            research_engine=_research_engine,
                         )
                 state.research_pid = None  # 子进程已结束，清掉以免 reconcile 误杀复用 PID
                 # PAR-2：并行轨 PID 清单也一并清空（研究阶段已结束，避免 reconcile 误杀复用 PID）。
@@ -11689,12 +11928,23 @@ class PipelineOrchestrator:
             report_md: str = research["report"]
             # W9-11: 研究卷宗定稿后跑确定性编辑 lint（report_lint 由报告链工作流并行落地；
             # 模块缺失 → ImportError → 静默跳过）。清理 [citation:...] 残渣、pass/working-notes
-            # 叙述泄漏等机器语法；清洗结果写回 handoff 的 research_report.md（下游/resume 同源）。
+            # 叙述泄漏等机器语法；只有 manifest-owned（多轨）卷宗采纳清洗结果，由下方
+            # _finalize_research_contract 在私有 generation 中封存；其余一律 audit-only。
             if bool(getattr(Config, "REPORT_LINT", True)):
                 try:
                     from .report_lint import lint_report
                     _judge_bound_report = _research_report_is_judge_bound(
                         handoff_dir
+                    )
+                    # Single-lane reports (every v3 run, legacy with one lane)
+                    # publish no contract manifest: the bridge already
+                    # finalized their citations, References and positional
+                    # sources.json (v3 also QA'd those exact bytes), and lint
+                    # rewrites would delete cited claims or mint citations
+                    # after that validation.  Lint is an audit there, exactly
+                    # like the judge-bound case.
+                    _lint_audit_only = _judge_bound_report or not os.path.exists(
+                        _research_contract_path(handoff_dir)
                     )
                     _lint_lang = (state.options.get("research_language")
                                   or getattr(Config, "DEERFLOW_RESEARCH_LANGUAGE", None))
@@ -11720,36 +11970,26 @@ class PipelineOrchestrator:
                             if isinstance(_lint_rep, dict):
                                 _lint_rep = dict(_lint_rep)
                                 _lint_rep["post_judge_mutation_suppressed"] = True
+                        elif _lint_audit_only:
+                            logger.info(
+                                "[%s] 研究卷宗 lint 提议了单轨卷宗字节变更；"
+                                "已保留 bridge 定稿原文（audit-only）",
+                                state.pipeline_id,
+                            )
                         else:
+                            # A manifest-owned report is finalized in a private
+                            # generation below; writing it here would invalidate
+                            # the still-published producer contract before an
+                            # atomic replacement is ready.
                             report_md = _cleaned
                             research["report"] = _cleaned
-                        # A manifest-owned report is finalized in a private
-                        # generation below. Writing it here would invalidate
-                        # the still-published producer contract before an
-                        # atomic replacement is ready. Judge-bound manifests
-                        # never adopt the proposal at all.
-                        if (
-                            not _judge_bound_report
-                            and not os.path.exists(
-                                _research_contract_path(handoff_dir)
-                            )
-                        ):
-                            try:
-                                from ..utils.atomic import write_text_atomic
-                                write_text_atomic(
-                                    os.path.join(handoff_dir, "research_report.md"),
-                                    _cleaned,
-                                )
-                            except Exception as _lw:  # noqa: BLE001 — legacy best-effort path
-                                logger.warning(
-                                    "[%s] lint 后写回 research_report.md 失败: %s",
-                                    state.pipeline_id, _lw,
-                                )
                     if isinstance(_lint_rep, dict):
-                        state.options["research_lint"] = {
+                        _lint_record = {
                             k: v for k, v in _lint_rep.items()
                             if isinstance(v, (int, float, str, bool))
                         }
+                        _lint_record["audit_only"] = _lint_audit_only
+                        state.options["research_lint"] = _lint_record
                 except ImportError:
                     logger.debug("report_lint 未部署，跳过研究卷宗 lint")
                 except Exception as _lint_err:  # noqa: BLE001 — lint 是增强，失败保留原文

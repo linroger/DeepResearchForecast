@@ -2685,8 +2685,11 @@ _MD_BOLD_LIST_ITEM_RE = re.compile(r"^\s*[-*+]\s*\*\*(?P<bold>.+?)\*\*(?P<rest>.
 # ② 中英「概率/probability + 小数」如 "概率 0.35"；③ 单点百分数 "(45%)"。
 _PROB_RANGE_RE = re.compile(
     r"\d{1,3}(?:\.\d+)?\s*%?\s*[-–—~～至到]\s*\d{1,3}(?:\.\d+)?\s*%")
+# 小数必须是完整数字：其后不得再跟数字/小数点/百分号。旧式只否定紧随的 "%"，
+# 「概率 15%」会先匹配到 "1"（后跟 "5"）而被读成概率 1.0，使 10–19% 的中文情景
+# 分布整体被判为合计越界而丢弃（world-state 种子因此为空）。
 _PROB_DECIMAL_RE = re.compile(
-    r"(?:概率|probability)\s*[:：=为约]?\s*(?:of\s+)?(0?\.\d+|1(?:\.0+)?)(?!\s*%)", re.I)
+    r"(?:概率|probability)\s*[:：=为约]?\s*(?:of\s+)?(0?\.\d+|1(?:\.0+)?)(?![\d.]|\s*%)", re.I)
 _PROB_PERCENT_RE = re.compile(r"\d{1,3}(?:\.\d+)?\s*%")
 
 

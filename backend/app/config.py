@@ -11,7 +11,13 @@ from dotenv import load_dotenv
 # 路径: MiroFish/.env (相对于 backend/app/config.py)
 project_root_env = os.path.join(os.path.dirname(__file__), '../../.env')
 
-if os.path.exists(project_root_env):
+# 测试隔离：backend/tests/conftest.py 在导入 app 之前设置 DRF_TEST_PROCESS=1。开发者本机的
+# 根 .env 以 override=True 加载，会把生产旋钮（如 RESEARCH_ENGINE、REPORT_PUBLISH_GATE_*、
+# SIM_RESUME）泄漏进 pytest 进程，使测试结果随本机配置漂移。测试进程一律不加载 .env，
+# 各旋钮取代码默认值，需要特定值的测试显式 monkeypatch。
+if os.environ.get('DRF_TEST_PROCESS') == '1':
+    pass
+elif os.path.exists(project_root_env):
     load_dotenv(project_root_env, override=True)
 else:
     # 如果根目录没有 .env，尝试加载环境变量（用于生产环境）
@@ -1130,6 +1136,19 @@ class Config:
     RESEARCH_DEEP_FANOUT = os.environ.get('RESEARCH_DEEP_FANOUT', 'true').strip().lower() == 'true'
     # 扇出宽度上限（并行子调查数）；防止子代理把工具/LLM 预算放大失控。CONF-1：4→8 与扇出默认开配套。
     RESEARCH_FANOUT_WIDTH = int(os.environ.get('RESEARCH_FANOUT_WIDTH', '8') or '8')
+    # 研究引擎选择（deep-research engine v3）。编排器把规范化后的值经 env RESEARCH_ENGINE
+    # 显式下发给研究子进程（不再依赖子进程继承的环境），取值：
+    #   v3     —— 默认。线性有界引擎（deerflow_bridge/linear_research.py + research_gateway.py）：
+    #             plan → 按 KIQ 有界并行采集 → gap → 分节综合 → 确定性 QA → 定稿/结构化抽取；
+    #             引擎内部自带有界并行扇出，故编排器对 v3 强制单条外层研究轨（忽略
+    #             RESEARCH_PARALLEL_TRACKS>1，避免重复的证据开销与 --evidence-only 契约不兼容）。
+    #             v3 不产出 Track B 卷宗/封印的 actor-intelligence 平面：准入时 actor 策略对 v3
+    #             钉为非必需并披露原因（DEERFLOW_DUAL_TRACK 仅对 legacy 生效）。
+    #   linear —— v3 的别名（兼容历史 .env 里的 RESEARCH_ENGINE=linear）。
+    #   legacy —— 旧 LangGraph 多 pass 引擎（外层多轨/全局综合/--evidence-only 等行为与今日逐字节一致）；
+    #             deerflow / agentic 为其别名（与 bridge 侧解析器的别名集合一致）。
+    # 未知值按 v3 处理并告警一次；空值 = 默认 v3。引擎自身旋钮见 .env.example 的 RESEARCH_LINEAR_*。
+    RESEARCH_ENGINE = os.environ.get('RESEARCH_ENGINE', 'v3').strip().lower()
     # PAR-2：编排器级「多角度并行研究轨」。>1 时研究阶段并行跑 K 个 DeerFlowResearchRunner
     # 子进程，每个带角度特化前缀（轨1=基线证据扫描，即原始 brief 逐字；轨2=基率/参照类/历史
     # 类比；轨3=行为者激励+反面证伪+市场定价），各写入 handoff/track_<k>/，随后确定性合并回

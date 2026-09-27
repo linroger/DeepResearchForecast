@@ -181,6 +181,60 @@ def test_syncs_config_reflected_tool_modules(tmp_path, monkeypatch):
     assert (deployed_dir / "research_budget.py").read_text() == "# research_budget body\n"
 
 
+def test_syncs_research_engine_v3_modules(tmp_path, monkeypatch):
+    """Engine v3 = linear_research.py (phases) + research_gateway.py (gateway and
+    research tools), both imported by bare name from the deployed dir.  A missing
+    or stale copy would make the default RESEARCH_ENGINE=v3 dispatch fail with
+    ImportError (or silently run old engine code) after a bridge-only edit."""
+    repo_root = tmp_path
+    bridge_dir = repo_root / "deerflow_bridge"
+    deployed_dir = repo_root / "deer-flow"
+    _write(bridge_dir / "deerflow_research.py", "same\n")
+    _write(deployed_dir / "deerflow_research.py", "same\n")
+    # linear_research.py deployed but stale; research_gateway.py never deployed.
+    _write(bridge_dir / "linear_research.py", "# NEW v3 engine phases\n")
+    _write(deployed_dir / "linear_research.py", "# OLD linear v2 engine\n")
+    _write(bridge_dir / "research_gateway.py", "# v3 gateway + research tools\n")
+
+    monkeypatch.setattr(
+        "app.services.pipeline_orchestrator.__file__",
+        str(repo_root / "backend" / "app" / "services" / "pipeline_orchestrator.py"),
+    )
+
+    _sync_deerflow_bridge_if_stale(str(deployed_dir))
+
+    assert (deployed_dir / "linear_research.py").read_text() == "# NEW v3 engine phases\n"
+    assert (deployed_dir / "research_gateway.py").read_text() == (
+        "# v3 gateway + research tools\n")
+    assert _digest(bridge_dir / "research_gateway.py") == _digest(
+        deployed_dir / "research_gateway.py")
+
+
+def _setup_sh_bridge_module_list() -> list[str]:
+    """The module list of setup.sh's bridge-overlay copy loop."""
+    setup_sh = Path(__file__).resolve().parents[2] / "setup.sh"
+    loops = [
+        line.strip() for line in setup_sh.read_text(encoding="utf-8").splitlines()
+        if line.strip().startswith("for _tool_mod in ")
+    ]
+    assert len(loops) == 1, f"expected exactly one bridge copy loop in setup.sh, got {loops}"
+    return loops[0][len("for _tool_mod in "):].split(";", 1)[0].split()
+
+
+def test_setup_sh_deploys_every_bare_imported_bridge_module():
+    """setup.sh (fresh install) and the launch-time drift guard must deploy the
+    same bare-imported modules; RT-15: setup.sh once omitted linear_research.py,
+    so a standalone run after ./setup.sh hit ImportError."""
+    from app.services.pipeline_orchestrator import _DEPLOYED_BRIDGE_MODULES
+
+    setup_modules = _setup_sh_bridge_module_list()
+    assert "linear_research.py" in setup_modules
+    assert "research_gateway.py" in setup_modules
+    assert {"linear_research.py", "research_gateway.py"} <= set(_DEPLOYED_BRIDGE_MODULES)
+    missing = sorted(set(_DEPLOYED_BRIDGE_MODULES) - set(setup_modules))
+    assert not missing, f"setup.sh does not deploy drift-guarded modules: {missing}"
+
+
 def test_syncs_tracked_middleware_overlay(tmp_path, monkeypatch):
     repo_root = tmp_path
     bridge_dir = repo_root / "deerflow_bridge"

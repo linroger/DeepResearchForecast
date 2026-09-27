@@ -76,6 +76,21 @@ def _no_ambient_firecrawl_key(monkeypatch):
     monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _no_ambient_research_engine_selection(monkeypatch):
+    """Research-engine dispatch is explicit in tests.
+
+    ``app.config`` no longer loads the developer ``.env`` under DRF_TEST_PROCESS,
+    but simulation scripts imported by some tests call ``load_dotenv`` themselves
+    (without override), which would still inject ``RESEARCH_ENGINE`` /
+    ``RESEARCH_LINEAR_MODE`` into ``os.environ`` for the rest of the session and
+    silently reroute ``deerflow_research.main()``.  Tests that exercise a specific
+    engine set the variable explicitly with ``monkeypatch.setenv``.
+    """
+    for name in ("RESEARCH_ENGINE", "RESEARCH_LINEAR_MODE"):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def fake_llm():
     """Factory: fake_llm(responses=[...], json_responses=[...]) -> FakeLLMClient."""

@@ -2,9 +2,11 @@
 
 The DeerFlow bridge already emits a rich append-only event stream, but its events
 do not carry numeric percentages.  This module keeps the numeric estimate tied to
-explicit research milestones and only uses tool/result activity for small movement
-*inside* the current milestone band.  It also exposes the active outer-track logs
-without reading multi-megabyte files in full on every frontend poll.  A separate
+explicit research milestones and only uses tool/result activity (plus, for engine
+v3, announced work-unit completions) for movement *inside* the current milestone
+band; the legacy and v3 milestone vocabularies are disjoint.  It also exposes the
+active outer-track logs without reading multi-megabyte files in full on every
+frontend poll.  A separate
 explicit full-history snapshot is available for one-time hydration, completed-run
 audits, and static publication; it never silently degrades into a tail.
 """
@@ -25,6 +27,42 @@ _LEADING_EVENT_RE = re.compile(
 )
 _ADAPTIVE_GAP_RE = re.compile(r"research:deep-adaptive-gap-(\d+)", re.I)
 _COVERAGE_TOPUP_RE = re.compile(r"research:deep-coverage-topup-(\d+)", re.I)
+
+# Deep-research engine v3 lifecycle lines (V3_SPEC §3.3), e.g.
+# ``<iso> [stage] research:v3:gather start (7 KIQs, workers=4)``.  The phase token
+# must open the message, and legacy lines never contain ``research:v3:``, so the
+# two milestone vocabularies cannot collide.
+_V3_EVENT_RE = re.compile(
+    r"^(?:\d{4}-\d\d-\d\dT\S+\s+)?\[(?P<kind>[A-Za-z_-]+)\]\s+"
+    r"research:v3:(?P<phase>[a-z_]+)(?P<detail>.*)$",
+    re.I,
+)
+# Phase-start lines that announce how many work units the phase will complete.
+_V3_UNIT_COUNT_RE = re.compile(r"\((\d+)\s+(?:kiqs?|groups?)\b", re.I)
+_V3_GAP_ROUND_RE = re.compile(r"^round\s+(\d+)", re.I)
+# A unit id such as ``K3`` / ``G1F2`` identifies re-emitted completions.
+_V3_UNIT_ID_RE = re.compile(r"^[A-Za-z]{1,3}\d+[A-Za-z0-9]*$")
+_V3_ENTER_KINDS = frozenset({"stage", "resume"})
+_V3_FINISH_KINDS = frozenset({"ok", "done"})
+_LIFECYCLE_KINDS = frozenset({"init", "stage", "ok", "done", "resume"})
+
+# v3 phase bands.  The shared finalize milestones (``wrote research_report.md``
+# 91 … ``research complete`` 99) are handled by the common rules below.
+_V3_PLAN_BAND = (6, 10)
+_V3_PLAN_DONE_BAND = (9, 10)
+_V3_GATHER_BAND = (10, 60)
+_V3_GAP_FIRST_FLOOR = 60
+_V3_GAP_SLOT = 4          # round 1 → 60..64, round ≥2 → 64..68
+_V3_GAP_CEILING = 68
+_V3_SYNTHESIZE_BAND = (70, 86)
+_V3_SYNTHESIZE_DONE_BAND = (86, 88)
+_V3_QA_BAND = (88, 90)
+_V3_QA_DONE_BAND = (89, 90)
+_V3_FINALIZE_BAND = (90, 91)
+# v3 writes sources.json right after research_report.md and BEFORE structured
+# extraction (legacy writes it last), so it gets the slot below actors.json.
+_V3_SOURCES_BAND = (92, 93)
+_LEGACY_SOURCES_BAND = (95, 96)
 
 MAX_PROGRESS_TRACKS = 16
 MAX_PROGRESS_ATTEMPTS = 16
@@ -47,6 +85,65 @@ class ProgressTail:
     truncated: bool
 
 
+@dataclass(frozen=True)
+class _V3Event:
+    """One bridge-authored engine-v3 lifecycle line, lower-cased."""
+
+    kind: str
+    phase: str
+    detail: str
+
+
+def _parse_v3_event(line: str) -> _V3Event | None:
+    """Parse a v3 lifecycle line; tool/result/usage/warn lines never qualify."""
+    match = _V3_EVENT_RE.match(str(line or ""))
+    if match is None or match.group("kind").lower() not in _LIFECYCLE_KINDS:
+        return None
+    return _V3Event(
+        kind=match.group("kind").lower(),
+        phase=match.group("phase").lower(),
+        detail=match.group("detail").strip().lower(),
+    )
+
+
+def _v3_milestone(event: _V3Event) -> tuple[int, int] | None:
+    """Map one v3 lifecycle event to its band, or None when it is not a boundary.
+
+    Per-unit completions (``[ok] research:v3:gather K3 …``) are deliberately not
+    boundaries: they move progress *inside* the gather band (see
+    ``ResearchProgressEstimator``).  Unknown phases/shapes return None rather
+    than falling through to the legacy vocabulary.
+    """
+    entering = event.kind in _V3_ENTER_KINDS
+    finished = event.kind in _V3_FINISH_KINDS
+    is_done = event.detail.startswith("done")
+    if event.phase == "plan":
+        if entering:
+            return _V3_PLAN_BAND
+        return _V3_PLAN_DONE_BAND if finished and is_done else None
+    if event.phase == "gather":
+        return _V3_GATHER_BAND if entering else None
+    if event.phase == "gap":
+        if not entering:
+            return None
+        round_match = _V3_GAP_ROUND_RE.match(event.detail)
+        round_no = max(1, int(round_match.group(1))) if round_match else 1
+        floor = min(_V3_GAP_CEILING - _V3_GAP_SLOT,
+                    _V3_GAP_FIRST_FLOOR + _V3_GAP_SLOT * (round_no - 1))
+        return floor, floor + _V3_GAP_SLOT
+    if event.phase == "synthesize":
+        if entering:
+            return _V3_SYNTHESIZE_BAND
+        return _V3_SYNTHESIZE_DONE_BAND if finished and is_done else None
+    if event.phase == "qa":
+        if entering:
+            return _V3_QA_BAND
+        return _V3_QA_DONE_BAND if finished else None
+    if event.phase == "finalize":
+        return _V3_FINALIZE_BAND if entering else None
+    return None
+
+
 class ResearchProgressEstimator:
     """Monotonic, phase-bounded estimate for one DeerFlow research process.
 
@@ -55,6 +152,11 @@ class ResearchProgressEstimator:
     estimator instead advances through observable bridge milestones.  Tool/result
     events provide smooth movement within the current band but asymptotically stop
     below its ceiling, so activity can never masquerade as phase completion.
+
+    Engine v3 phases additionally announce their unit count
+    (``[stage] research:v3:gather start (7 KIQs, …)``); each distinct unit
+    completion (``[ok] research:v3:gather K3 …``) then advances progress by its
+    share of the band, again keeping one point in reserve for the next milestone.
     """
 
     _ACTIVITY_SCALE = 80.0
@@ -64,33 +166,77 @@ class ResearchProgressEstimator:
         self._phase_floor = 2
         self._phase_ceiling = 4
         self._phase_events = 0
+        # Engine v3 state: whether this stream is a v3 run (affects only the
+        # shared sources.json slot) and the unit ledger of the current band.
+        self._v3_seen = False
+        self._unit_phase: str | None = None
+        self._units_total = 0
+        self._units_done: set[str] = set()
 
     @property
     def progress(self) -> int:
         return self._progress
 
-    def _advance_phase(self, floor: int, ceiling: int) -> None:
+    def _advance_phase(self, floor: int, ceiling: int) -> bool:
+        """Apply a milestone band; return True when it opened a NEW band."""
         floor = max(2, min(99, int(floor)))
         ceiling = max(floor, min(99, int(ceiling)))
+        opened = False
         if floor > self._phase_floor:
             self._phase_floor = floor
             self._phase_ceiling = ceiling
             self._phase_events = 0
+            # Units belong to the band that announced them.
+            self._unit_phase = None
+            self._units_total = 0
+            self._units_done = set()
+            opened = True
         elif floor == self._phase_floor:
             self._phase_ceiling = max(self._phase_ceiling, ceiling)
         self._progress = max(self._progress, floor)
+        return opened
+
+    def _arm_v3_units(self, event: _V3Event) -> None:
+        """Start a unit ledger when a newly opened v3 band announces its size."""
+        count = _V3_UNIT_COUNT_RE.search(event.detail)
+        if event.kind in _V3_ENTER_KINDS and count and int(count.group(1)) > 0:
+            self._unit_phase = event.phase
+            self._units_total = int(count.group(1))
+
+    def _record_v3_unit(self, event: _V3Event) -> None:
+        """Advance within the current band for one distinct unit completion."""
+        if (event.kind != "ok" or event.phase != self._unit_phase
+                or self._units_total <= 0 or not event.detail
+                or event.detail.startswith("done")):
+            return
+        tokens = event.detail.split()
+        key = tokens[0] if _V3_UNIT_ID_RE.match(tokens[0]) else event.detail
+        self._units_done.add(key)
+        span = self._phase_ceiling - self._phase_floor
+        if span <= 1:
+            return
+        fraction = min(1.0, len(self._units_done) / self._units_total)
+        step = min(span - 1, int((span - 1) * fraction))
+        self._progress = max(self._progress, self._phase_floor + step)
 
     @staticmethod
-    def _milestone(line: str) -> tuple[int, int] | None:
+    def _milestone(line: str, *, v3: bool = False) -> tuple[int, int] | None:
+        """Classify one line into a ``(floor, ceiling)`` band, or None.
+
+        ``v3`` marks a stream already identified as an engine-v3 run; it only
+        moves the shared ``wrote sources.json`` milestone to v3's earlier slot.
+        """
         text = line.lower()
         # Tool/result previews contain untrusted web and model text.  A page can
         # literally say "research complete" or mention an output filename; only
         # bridge-authored lifecycle events are allowed to cross phase boundaries.
         event = _LEADING_EVENT_RE.match(str(line or ""))
-        if event is None or event.group("kind").lower() not in {
-            "init", "stage", "ok", "done", "resume",
-        }:
+        if event is None or event.group("kind").lower() not in _LIFECYCLE_KINDS:
             return None
+        # Engine v3 lines are classified only by the v3 vocabulary.
+        v3_event = _parse_v3_event(line)
+        if v3_event is not None:
+            return _v3_milestone(v3_event)
 
         # Terminal and post-processing milestones (most specific first).
         if "research complete" in text:
@@ -108,8 +254,10 @@ class ResearchProgressEstimator:
             return 97, 98
         if "triangulation top-up: verifying" in text:
             return 95, 97
-        if "research_quality=" in text or "wrote sources.json" in text:
+        if "research_quality=" in text:
             return 95, 96
+        if "wrote sources.json" in text:
+            return _V3_SOURCES_BAND if v3 else _LEGACY_SOURCES_BAND
         if "wrote timeline.json" in text or "wrote quantitative.json" in text:
             return 94, 95
         if "wrote actors.json" in text:
@@ -197,9 +345,15 @@ class ResearchProgressEstimator:
     def observe(self, line: str) -> int:
         """Consume one stdout/progress-log line and return a monotonic integer."""
         raw = str(line or "")
-        milestone = self._milestone(raw)
+        v3_event = _parse_v3_event(raw)
+        if v3_event is not None:
+            self._v3_seen = True
+        milestone = self._milestone(raw, v3=self._v3_seen)
         if milestone is not None:
-            self._advance_phase(*milestone)
+            if self._advance_phase(*milestone) and v3_event is not None:
+                self._arm_v3_units(v3_event)
+        elif v3_event is not None:
+            self._record_v3_unit(v3_event)
 
         if "[tool]" in raw or "[result]" in raw:
             self._phase_events += 1

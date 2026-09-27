@@ -87,3 +87,29 @@ def test_prefers_canonical_global_section_over_earlier_valid_subsection():
     scenarios = fi.get("scenarios") or []
     assert [row["probability"] for row in scenarios] == [0.47, 0.29, 0.18, 0.06]
     assert "High growth" in scenarios[0]["name"]
+
+
+def test_chinese_probability_prefix_with_teen_percentages_is_not_read_as_one():
+    """「概率 15%」曾被小数正则读成概率 1.0（先匹配到 "1"），整节合计越界被丢弃。"""
+    md = """
+## 情景与概率
+
+### 情景概率分布
+- **基准情景（概率 45%）**：需求按趋势增长。
+- **电力受限（概率 30%）**：并网与供电约束压低新增容量。
+- **财务紧缩（概率 15%）**：资本开支放缓。
+- **上行超预期（概率 10%）**：AI 负载超预期。
+"""
+    fi = A.forecast_inputs_from_report_markdown(md)
+    scs = fi.get("scenarios") or []
+    assert len(scs) == 4
+    probs = [A._parse_probability_value(s.get("probability_band") or s.get("probability")) for s in scs]
+    assert probs == [0.45, 0.30, 0.15, 0.10]
+
+
+def test_probability_decimal_forms_still_parse():
+    assert A._extract_probability_text("基准情景（概率 0.35）") == "0.35"
+    assert A._extract_probability_text("Base case (probability 0.5)") == "0.5"
+    assert A._extract_probability_text("Certain (probability 1.0)") == "1.0"
+    assert A._extract_probability_text("概率 15%") == "15%"
+    assert A._extract_probability_text("概率 0.35%") == "0.35%"

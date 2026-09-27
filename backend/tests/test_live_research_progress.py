@@ -115,6 +115,119 @@ def test_deep_coverage_topups_advance_in_bounded_slots_before_synthesis():
     ) == 78
 
 
+_TS = "2026-09-27T00:00:00+00:00"
+
+
+def _feed(estimator, line):
+    return estimator.observe(f"{_TS} {line}")
+
+
+def test_v3_lifecycle_follows_spec_bands_end_to_end():
+    """Engine v3 (V3_SPEC §3.3): each phase line lands in its band and the run
+    stays monotonic from the plan through the shared finalize milestones."""
+    estimator = ResearchProgressEstimator()
+    expected = [
+        ("[init] client ready", 4),
+        ("[stage] research:v3:plan start", 6),
+        ("[ok] research:v3:plan done (7 KIQs, 10 sections)", 9),
+        ("[stage] research:v3:gather start (7 KIQs, workers=4)", 10),
+        ("[stage] research:v3:gap round 1", 60),
+        ("[stage] research:v3:gap round 2", 64),
+        ("[stage] research:v3:synthesize start (8 groups)", 70),
+        ("[ok] research:v3:synthesize done", 86),
+        ("[stage] research:v3:qa start", 88),
+        ("[ok] research:v3:qa passed=True failures=0 repaired=1", 89),
+        ("[stage] research:v3:finalize start", 90),
+        ("[ok] wrote research_report.md (61234 chars)", 91),
+        # v3 publishes sources.json before extraction → below actors.json.
+        ("[ok] wrote sources.json (42 sources)", 92),
+        ("[ok] wrote actors.json (12 actors)", 93),
+        ("[ok] wrote timeline.json (9 events)", 94),
+        ("[ok] wrote quantitative.json (20 facts)", 94),
+        ("[ok] wrote charts.json (4 charts) + charts/ files", 98),
+        ("[done] research complete (v3: 7 KIQs, 42 sources)", 99),
+    ]
+    observed = [_feed(estimator, line) for line, _ in expected]
+    assert observed == [value for _, value in expected]
+
+
+def test_v3_gather_tool_activity_moves_inside_band_but_never_crosses_it():
+    estimator = ResearchProgressEstimator()
+    assert _feed(estimator, "[stage] research:v3:gather start (10 KIQs, workers=4)") == 10
+    observed = []
+    for i in range(1500):
+        kind = "tool" if i % 2 == 0 else "result"
+        observed.append(_feed(estimator, f"[{kind}] web_search query {i}"))
+    assert observed == sorted(observed)
+    assert 30 < observed[-1] < 60
+    assert _feed(estimator, "[stage] research:v3:gap round 1") == 60
+
+
+def test_v3_kiq_completions_advance_proportionally_deduped_with_reserve():
+    estimator = ResearchProgressEstimator()
+    _feed(estimator, "[stage] research:v3:gather start (5 KIQs, workers=4)")
+    # 49 usable points (one reserved) / 5 KIQs.
+    assert _feed(estimator, "[ok] research:v3:gather K1 facts=6 verified=4 sources=5") == 19
+    # A re-emitted completion of the same KIQ is not a new unit.
+    assert _feed(estimator, "[ok] research:v3:gather K1 facts=7 verified=4 sources=5") == 19
+    # Warnings, untrusted results and usage lines are never unit completions.
+    assert _feed(estimator, "[warn] research:v3:gather K2 content filtered; fallback notes") == 19
+    assert _feed(estimator, "[result] research:v3:gather K3 facts=9") == 19
+    assert _feed(estimator, "[usage] tokens in=10 out=5 total=15 phase=gather:K2 cached=0") == 19
+    for kiq in ("K2", "K3", "K4", "K5"):
+        _feed(estimator, f"[ok] research:v3:gather {kiq} facts=3 verified=1 sources=2")
+    # All units done → floor + span - 1: the gap/synthesize boundary stays explicit.
+    assert estimator.progress == 59
+
+
+def test_v3_follow_up_gathering_inside_gap_neither_regresses_nor_rearms():
+    estimator = ResearchProgressEstimator()
+    _feed(estimator, "[stage] research:v3:gather start (4 KIQs, workers=4)")
+    assert _feed(estimator, "[stage] research:v3:gap round 1") == 60
+    # Gap follow-ups reuse the gather machinery; a repeated gather start must not
+    # pull the band back to 10, and its completions belong to no armed ledger.
+    assert _feed(estimator, "[stage] research:v3:gather start (3 KIQs, workers=4)") == 60
+    assert _feed(estimator, "[ok] research:v3:gather G1F1 facts=2 verified=1 sources=2") == 60
+    assert _feed(estimator, "[ok] research:v3:gather G1F2 facts=2 verified=1 sources=2") == 60
+    # Rounds beyond the preset maximum share the last gap slot.
+    assert _feed(estimator, "[stage] research:v3:gap round 5") == 64
+    assert _feed(estimator, "[stage] research:v3:synthesize start (6 groups)") == 70
+
+
+def test_v3_lines_never_fall_through_to_legacy_milestones():
+    """A v3 line is classified only by the v3 vocabulary: unknown v3 phases or
+    shapes are inert even when they contain legacy milestone substrings."""
+    for line in (
+        "[ok] research:v3:synthesize: produced 90000 chars",   # legacy 87
+        "[stage] research:v3:extract: starting agent turn",   # legacy 92
+        "[stage] research:v3:brief research: starting agent turn",  # legacy 10
+        "[ok] research:v3:plan scout digest (6 queries)",      # not 'done'
+        "[init] research:v3:gather start (7 KIQs)",           # init never enters
+    ):
+        estimator = ResearchProgressEstimator()
+        assert _feed(estimator, line) == 2, line
+
+
+def test_legacy_streams_are_untouched_by_v3_rules():
+    """Legacy lines never contain ``research:v3:``; their bands (including the
+    late sources.json slot) are unchanged, and untrusted previews that merely
+    mention v3 lines cannot cross boundaries."""
+    for line, expected in (
+        ("[stage] research:deep-opening: starting agent turn", 8),
+        ("[stage] synthesize/multipart: requesting section outline", 78),
+        ("[ok] wrote research_report.md (1000 chars)", 91),
+        ("[ok] wrote sources.json (30 sources; tiers={})", 95),
+        ("[ok] research_quality=0.71 (components={})", 95),
+        ("[stage] research: starting agent turn", 10),
+    ):
+        assert _feed(ResearchProgressEstimator(), line) == expected, line
+
+    estimator = ResearchProgressEstimator()
+    _feed(estimator, "[stage] research: starting agent turn")
+    assert _feed(estimator, "[result] page says [ok] research:v3:synthesize done") < 62
+    assert _feed(estimator, "[tool] web_search research:v3:qa start") < 62
+
+
 def test_merged_tail_reads_active_tracks_orders_deduplicates_and_bounds(tmp_path):
     track1 = tmp_path / "track_1"
     track2 = tmp_path / "track_2"

@@ -589,14 +589,22 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
   #     (resolve_variable -> import_module) imports these by bare name — they MUST
   #     sit next to config.yaml in deer-flow/ or web_search/web_fetch/prediction_market
   #     tools fail to load. Deploy all four so the wiring is reproducible.
-  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py; do
+  #   - linear_research.py + research_gateway.py are the deep-research engine v3
+  #     (RESEARCH_ENGINE=v3, the default). deerflow_research.py imports them by
+  #     bare name, so they must be colocated too or the v3 dispatch hits ImportError.
+  #     Keep this list in sync with _sync_deerflow_bridge_if_stale in
+  #     backend/app/services/pipeline_orchestrator.py (the launch-time drift guard).
+  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py; do
     if [ -f "$BRIDGE_DIR/$_tool_mod" ]; then
       cp "$BRIDGE_DIR/$_tool_mod" "$DEERFLOW_DIR/$_tool_mod"
-      if [ "$_tool_mod" = "runtime_skill_sync.py" ]; then
-        ok "Installed runtime_skill_sync.py (runtime bundle verifier)"
-      else
-        ok "Installed $_tool_mod (config-reflected bridge tool)"
-      fi
+      case "$_tool_mod" in
+        runtime_skill_sync.py)
+          ok "Installed runtime_skill_sync.py (runtime bundle verifier)" ;;
+        linear_research.py|research_gateway.py)
+          ok "Installed $_tool_mod (deep-research engine v3)" ;;
+        *)
+          ok "Installed $_tool_mod (config-reflected bridge tool)" ;;
+      esac
     fi
   done
 

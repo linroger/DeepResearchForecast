@@ -158,5 +158,18 @@
       "Record exact results and decide the next single improvement slice from measured residual bottlenecks."
     ],
     "passes": false
+  },
+  {
+    "id": "feature_research_engine_v3",
+    "category": "performance-quality",
+    "description": "Deep-research engine v3 (RESEARCH_ENGINE=v3, default): bounded agentic KIQ research with provider prompt caching, verified citations/numbers, canonical scenario frame, resumable phases and honest exit codes, accepted unchanged by the parent pipeline.",
+    "steps": [
+      "Run the engine offline with the test fakes (English and Chinese, quick/standard/deep) and verify rc 0, a report >= 400 chars, positional [S#] == sources.json == References, and the canonical scenario block parsed by forecast_inputs_from_report_markdown.",
+      "Verify byte-identical [ENGINE_CORE][RUN BRIEF][shared context] prefixes across sibling calls and agent steps, prime() before each fan-out, one [usage] line per provider call with cached= tokens, and unchanged GLM request bodies.",
+      "Fault-inject provider outage, quota, content filter, deadline, budget, empty/unparseable replies and tool outages in every phase; verify deterministic degradation with research_quality.degraded events, or a resumable exit 2 for outages/no model output/no evidence, and correct resume.",
+      "Drive the real PipelineOrchestrator research stage with a child process and verify acceptance, reception of the unsealed actor plane, audit-only lint, telemetry and reuse on a second run.",
+      "Owner-gated: one live GLM-5.3 run confirming cache hits and provider acceptance of the thinking/reasoning_effort/max_tokens parameters."
+    ],
+    "passes": false
   }
 ]

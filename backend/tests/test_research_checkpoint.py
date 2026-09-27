@@ -513,3 +513,47 @@ def test_runner_uses_prior_checkpoint_identity_with_fresh_budget_database(
         captured["env"]["RESEARCH_CHECKPOINT_ID"]
         == "checkpoint_parent_validated"
     )
+
+
+def test_extract_only_salvage_of_a_v3_handoff_keeps_its_meta(tmp_path, monkeypatch):
+    """The parent salvages a watchdog-killed v3 run with the legacy extract-only
+    path; the v3 provenance and research_quality block must survive it."""
+    (tmp_path / dr.REPORT_FILENAME).write_text("x" * 1000, encoding="utf-8")
+    prior = {"status": "running", "research_engine": "v3", "error": "stale",
+             "research_quality": {"score": 0.61, "degraded": True,
+                                  "degradation": ["1 section(s) cut by the output cap and trimmed: X"]},
+             "v3_preset": {"depth": "standard"}}
+    (tmp_path / "meta.json").write_text(json.dumps(prior), encoding="utf-8")
+    monkeypatch.setenv("MINIMAX_API_KEY", "test-key-not-used")
+    seen = {}
+
+    def _fake_extract_only(question, out_dir, args, meta, plog, write_meta):
+        seen["meta"] = dict(meta)
+        plog.close()
+        return 0
+
+    monkeypatch.setattr(dr, "run_extract_only", _fake_extract_only)
+    rc = _run_main(["--extract-only", "--model", "minimax", "--out-dir", str(tmp_path), "--prompt", "Q1"],
+                   monkeypatch)
+    assert rc == 0
+    meta = seen["meta"]
+    assert meta["research_engine"] == "v3" and meta["salvage"]["mode"] == "extract_only"
+    assert meta["research_quality"] == prior["research_quality"] and meta["v3_preset"] == {"depth": "standard"}
+    assert meta["status"] == "running" and "error" not in meta  # lifecycle keys are the salvage run's own
+
+
+def test_extract_only_of_a_legacy_handoff_starts_a_fresh_meta(tmp_path, monkeypatch):
+    (tmp_path / dr.REPORT_FILENAME).write_text("x" * 1000, encoding="utf-8")
+    (tmp_path / "meta.json").write_text(json.dumps({"research_engine": "legacy", "custom": 1}), encoding="utf-8")
+    monkeypatch.setenv("MINIMAX_API_KEY", "test-key-not-used")
+    seen = {}
+
+    def _fake_extract_only(question, out_dir, args, meta, plog, write_meta):
+        seen["meta"] = dict(meta)
+        plog.close()
+        return 0
+
+    monkeypatch.setattr(dr, "run_extract_only", _fake_extract_only)
+    assert _run_main(["--extract-only", "--model", "minimax", "--out-dir", str(tmp_path), "--prompt", "Q"],
+                     monkeypatch) == 0
+    assert "custom" not in seen["meta"] and "salvage" not in seen["meta"]

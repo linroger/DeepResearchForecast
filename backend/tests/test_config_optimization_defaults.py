@@ -64,6 +64,8 @@ EXPECTED = {
     "FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE": 0.6,
     # Research
     "RESEARCH_QUALITY_FLOOR": 0.45,  # R2-RES-1
+    # Deep-research engine v3 is the shipped default (legacy stays opt-in).
+    "RESEARCH_ENGINE": "v3",
 }
 
 # Child program: neutralize .env, strip flag keys, import Config, dump values.

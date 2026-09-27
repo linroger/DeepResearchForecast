@@ -25,13 +25,20 @@ Design notes
 * Actor-enabled runs require ``research_report.md``, a source-grounded actor dossier,
   and a readable nonempty ``actors.json`` sealed as ``actor-intelligence/v1``.  The
   explicit ``--no-actors`` compatibility mode retains the report-only boundary.
+* Engine selection: ``RESEARCH_ENGINE=v3`` (alias ``linear``) routes full runs to
+  ``linear_research.run`` after env hygiene and the credential preflight;
+  ``legacy`` (or unset) keeps this module's DeerFlow/LangGraph engine, which also
+  serves every ``--extract-only`` / ``--evidence-only`` / ``--synthesis-manifest``
+  invocation.
 
 Exit codes:
     0 = report produced.
     2 = required report or actor-intelligence output was not produced — includes
         runtime, import, extraction/finalization, and unexpected caught errors.
-    3 = usage/config error before research starts — empty question, or a missing/expired
-        Claude credential caught by the pre-flight check.
+    3 = usage/config error before research starts — empty question, a missing
+        provider key or missing/expired Claude credential caught by the
+        pre-flight check, an extract-only run without a usable report, or a
+        rejected runtime skill deployment.
 """
 
 from __future__ import annotations
@@ -50,6 +57,7 @@ import tempfile
 import threading
 import time
 import traceback
+import types
 import unicodedata
 import uuid
 from contextlib import nullcontext
@@ -372,21 +380,42 @@ def delimit_untrusted_evidence_data(
     )
 
 
+# Trusted user turn sent when a tool-free call carries no evidence block.
+# GLM rejects a request whose only message is a SystemMessage (HTTP 400, code
+# 1214 "messages 参数非法"), and Anthropic rejects an empty message list, so every
+# stage-1 request must end with a user turn.  The text is a constant so the
+# request prefix stays byte-stable for provider prompt caching.
+STAGE1_PROCEED_INSTRUCTION = "Follow the instructions above and respond now."
+
+
 def _stage1_model_messages(
     governing_instructions: str,
     evidence_label: str,
     evidence: Any,
 ) -> list[Any]:
-    """Keep immutable instructions separate from non-executable evidence data."""
+    """Keep immutable instructions separate from non-executable evidence data.
+
+    Returns ``[SystemMessage(governing), HumanMessage(evidence or proceed)]``.
+    The list never consists of a system message alone: when the evidence block
+    is empty (plain-string prompts such as prediction-market query derivation
+    or relevance scoring) the trusted :data:`STAGE1_PROCEED_INSTRUCTION` turn is
+    appended instead.  When ``langchain_core`` exposes no ``SystemMessage``
+    (minimal compatibility stubs) the instructions and evidence are folded into
+    one ``HumanMessage``.
+    """
     evidence_block = delimit_untrusted_evidence_data(evidence_label, evidence)
     try:
         from langchain_core.messages import HumanMessage
     except ImportError:  # backend's stdlib-only unit-test environment
         class HumanMessage:  # type: ignore[no-redef]
+            type = "human"
+
             def __init__(self, content):
                 self.content = content
 
         class SystemMessage:  # type: ignore[no-redef]
+            type = "system"
+
             def __init__(self, content):
                 self.content = content
     else:
@@ -397,15 +426,10 @@ def _stage1_model_messages(
                 str(governing_instructions).rstrip()
                 + ("\n\n" + evidence_block if evidence_block else "")
             ))]
-    if "SystemMessage" not in locals():
-        return [HumanMessage(content=(
-            str(governing_instructions).rstrip()
-            + ("\n\n" + evidence_block if evidence_block else "")
-        ))]
-    messages: list[Any] = [SystemMessage(content=str(governing_instructions))]
-    if evidence_block:
-        messages.append(HumanMessage(content=evidence_block))
-    return messages
+    return [
+        SystemMessage(content=str(governing_instructions)),
+        HumanMessage(content=evidence_block or STAGE1_PROCEED_INSTRUCTION),
+    ]
 
 
 class Stage1ModelPrompt(str):
@@ -2216,6 +2240,43 @@ def _env_flag(name: str, default: bool) -> bool:
     if raw is None or not str(raw).strip():
         return default
     return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_int(
+    name: str,
+    default: int,
+    *,
+    minimum: int | None = None,
+    plog: "ProgressLog | None" = None,
+) -> int:
+    """Read an integer knob from the environment without ever raising.
+
+    Operators edit these values by hand in ``.env``; a typo such as
+    ``DEERFLOW_DEEP_OPENING_RECURSION_LIMIT=300s`` used to escape ``main()`` as
+    an uncaught ``ValueError`` (exit 1, traceback, stale meta).  Unset/blank
+    → ``default`` silently; unparsable or below ``minimum`` → ``default`` with
+    one ``[warn]`` line so the misconfiguration is visible in the run log.
+    """
+    raw = os.environ.get(name)
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        value = int(str(raw).strip())
+    except ValueError:
+        if plog is not None:
+            plog.write(
+                "warn",
+                f"{name}={str(raw).strip()!r} is not an integer; using default {default}",
+            )
+        return default
+    if minimum is not None and value < minimum:
+        if plog is not None:
+            plog.write(
+                "warn",
+                f"{name}={value} is below the minimum {minimum}; using default {default}",
+            )
+        return default
+    return value
 
 
 def _should_run_actor_track(*, evidence_only: bool) -> bool:
@@ -4369,20 +4430,58 @@ class ProgressLog:
         # that all call write() concurrently. Serialize the write→flush→print sequence
         # so log lines never interleave/corrupt. Single-threaded callers are unaffected.
         self._lock = threading.Lock()
+        self._closed = False
+
+    @staticmethod
+    def _format_line(kind: str, message: Any) -> str:
+        """Render one protocol line ``<iso> [kind] message``.
+
+        The parent parses stdout line by line and keys on the ``[kind]``
+        prefix, so an embedded newline (a traceback, a multi-line provider
+        error) would otherwise emit orphan continuation lines without a
+        timestamp or kind.  Collapse every line break into `` | ``; single-line
+        messages are emitted verbatim.
+        """
+        text = str(message)
+        parts = text.splitlines()
+        if len(parts) > 1:
+            text = " | ".join(part.strip() for part in parts if part.strip())
+        return f"{_utcnow()} [{kind}] {text}".rstrip()
 
     def write(self, kind: str, message: str) -> None:
-        line = f"{_utcnow()} [{kind}] {message}".rstrip()
+        line = self._format_line(kind, message)
         with self._lock:
-            self._fh.write(line + "\n")
-            self._fh.flush()
+            if not self._closed:
+                try:
+                    self._fh.write(line + "\n")
+                    self._fh.flush()
+                except (OSError, ValueError):
+                    # Disk full / closed underneath us: the stdout echo below
+                    # still reaches the parent, which is the authoritative reader.
+                    pass
             # Also echo to stdout so a Popen reader without the file still sees it.
-            print(line, flush=True)
+            # After close() (an engine or helper finished while a late worker
+            # still logs) the stdout echo is the only sink; a vanished parent
+            # pipe must never turn a log line into a crash.
+            try:
+                print(line, flush=True)
+            except (BrokenPipeError, ValueError, OSError):
+                pass
 
     def close(self) -> None:
-        try:
-            self._fh.close()
-        except Exception:
-            pass
+        """Close the file sink exactly once; later ``write`` calls go to stdout only."""
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            try:
+                self._fh.close()
+            except Exception:  # noqa: BLE001 — closing a log must never mask the run result
+                pass
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
 
 
 def _truncate(text: str, limit: int = 280) -> str:
@@ -6131,6 +6230,108 @@ def _model_response_usage(response: Any) -> "tuple[int, int, int] | None":
     return None
 
 
+def _usage_count(value: Any) -> int | None:
+    """Coerce one provider usage counter to a non-negative int (None if absent)."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return None
+    return count if count >= 0 else None
+
+
+def _first_usage_count(*values: Any) -> int | None:
+    """First positive counter among ``values``; else the first explicit 0; else None.
+
+    Providers report the same quantity under several shapes (LangChain
+    ``usage_metadata`` details, raw OpenAI-compatible ``prompt_tokens_details``,
+    DeepSeek ``prompt_cache_hit_tokens``, Anthropic ``cache_read_input_tokens``).
+    A shape that is present but zero must not hide a sibling shape that
+    carries the real number, hence "first positive wins".
+    """
+    counts = [c for c in (_usage_count(v) for v in values) if c is not None]
+    for count in counts:
+        if count > 0:
+            return count
+    return counts[0] if counts else None
+
+
+def _usage_cache_details(usage_dicts: "list[Any]") -> dict[str, int | None]:
+    """Extract cache/reasoning counters from a list of usage mappings.
+
+    ``None`` means the provider did not report that counter at all (callers
+    use this to decide whether a detail suffix is meaningful).
+    """
+    cached: list[Any] = []
+    cache_write: list[Any] = []
+    reasoning: list[Any] = []
+    for usage in usage_dicts:
+        if not isinstance(usage, dict):
+            continue
+        input_details = usage.get("input_token_details")
+        if isinstance(input_details, dict):
+            cached.append(input_details.get("cache_read"))
+            cache_write.append(input_details.get("cache_creation"))
+        output_details = usage.get("output_token_details")
+        if isinstance(output_details, dict):
+            reasoning.append(output_details.get("reasoning"))
+        prompt_details = usage.get("prompt_tokens_details")
+        if isinstance(prompt_details, dict):
+            cached.append(prompt_details.get("cached_tokens"))
+            cache_write.append(prompt_details.get("cache_creation_input_tokens"))
+            cache_write.append(prompt_details.get("cache_write_tokens"))
+        completion_details = usage.get("completion_tokens_details")
+        if isinstance(completion_details, dict):
+            reasoning.append(completion_details.get("reasoning_tokens"))
+        # DeepSeek reports prefix-cache hits at the top level of ``usage``.
+        cached.append(usage.get("prompt_cache_hit_tokens"))
+        # Anthropic raw usage block.
+        cached.append(usage.get("cache_read_input_tokens"))
+        cache_write.append(usage.get("cache_creation_input_tokens"))
+        cache_write.append(usage.get("cache_write_tokens"))
+    return {
+        "cached": _first_usage_count(*cached),
+        "cache_write": _first_usage_count(*cache_write),
+        "reasoning": _first_usage_count(*reasoning),
+    }
+
+
+def _response_usage_dicts(response: Any) -> list[Any]:
+    """Every usage mapping a LangChain response may carry, most normalized first."""
+    dicts: list[Any] = [getattr(response, "usage_metadata", None)]
+    response_meta = getattr(response, "response_metadata", None)
+    if isinstance(response_meta, dict):
+        dicts.extend([response_meta.get("token_usage"), response_meta.get("usage")])
+    return dicts
+
+
+def _model_response_cache_usage(response: Any) -> dict[str, int]:
+    """Normalize prompt-cache and reasoning counters of one model response.
+
+    Returns ``{"cached", "cache_write", "reasoning"}`` as ints (0 when the
+    provider did not report the counter).  ``cached`` is the prompt-token
+    count served from the provider's prefix cache and is already INCLUDED in
+    the ``tokens in=`` total of :func:`_model_response_usage` (the input total
+    stays cache-inclusive by contract).
+    """
+    details = _usage_cache_details(_response_usage_dicts(response))
+    return {key: int(value or 0) for key, value in details.items()}
+
+
+def _usage_detail_suffix(details: "dict[str, int | None]") -> str:
+    """`` cached=N cache_write=N reasoning=N`` appended after ``total=``/``phase=``.
+
+    The orchestrator's ``_USAGE_RE`` is a ``re.search`` for
+    ``tokens in=.. out=.. total=..``, so trailing fields never break parsing.
+    """
+    return (
+        f" cached={int(details.get('cached') or 0)}"
+        f" cache_write={int(details.get('cache_write') or 0)}"
+        f" reasoning={int(details.get('reasoning') or 0)}"
+    )
+
+
 def _log_model_response_usage(
         plog: "ProgressLog | None", label: str, response: Any) -> None:
     if plog is None:
@@ -6146,7 +6347,8 @@ def _log_model_response_usage(
     plog.write(
         "usage",
         f"tokens in={tokens_in} out={tokens_out} total={tokens_total} "
-        f"phase={label}",
+        f"phase={label}"
+        + _usage_detail_suffix(_model_response_cache_usage(response)),
     )
 
 
@@ -6275,16 +6477,41 @@ def _build_tool_free_model(model_name: str, max_output_tokens: int | None):
     return model
 
 
+def _set_model_failover_circuit(key: tuple[str, str], *, open_circuit: bool) -> None:
+    """Open (or extend) the primary→fallback circuit, or clear it."""
+    with _MODEL_FAILOVER_LOCK:
+        if open_circuit:
+            _MODEL_FAILOVER_UNTIL[key] = (
+                time.monotonic() + _model_failover_cooldown_seconds())
+        else:
+            _MODEL_FAILOVER_UNTIL.pop(key, None)
+
+
 def _invoke_tool_free_model(
         model_name: str, messages: list, *, max_output_tokens: int | None,
         plog: "ProgressLog | None", label: str):
-    """Invoke MiniMax first, then the explicit DeerFlow fallback when warranted.
+    """Invoke the primary model, then the explicit DeerFlow fallback when warranted.
 
     The provider SDK performs its own bounded retries.  Once a quota/content/
-    transport error survives those retries, a process-local circuit routes the
-    remaining parallel section calls directly to the fallback for 15 minutes.
-    This avoids paying the same doomed MiniMax retry delay 10-20 times while
-    still probing MiniMax first on every new synthesis process.
+    transport error survives those retries the call fails over to
+    ``DEERFLOW_FALLBACK_MODEL``.  Circuit policy (process-local, per
+    primary/fallback pair):
+
+    * The circuit opens — or is extended — ONLY when the fallback actually
+      served a call.  While it is open the remaining parallel calls go straight
+      to the working fallback instead of paying the doomed primary retry delay
+      10-20 times.
+    * When the fallback fails the circuit is cleared, so the next call probes
+      the primary again.  A dead fallback must never pin every later call to
+      itself for the whole cooldown (forensics 2026-09: a stopped local proxy
+      turned one transient GLM connection error into a 15-minute outage for
+      extraction recovery and prediction-market derivation).
+    * When the circuit is open and the fallback fails, the primary is tried
+      once more (half-open probe) before the call raises.
+
+    Returns ``(response, served_model_name)``.  Raises the primary error
+    unchanged when it is not failover-eligible (programming errors are never
+    masked) and :class:`ModelProvidersUnavailable` when both models failed.
     """
     fallback = _configured_model_fallback(model_name)
     key = (model_name, fallback)
@@ -6293,29 +6520,23 @@ def _invoke_tool_free_model(
         primary_circuit_open = bool(
             fallback and _MODEL_FAILOVER_UNTIL.get(key, 0.0) > now)
 
+    def _call_primary():
+        return _invoke_model(
+            _build_tool_free_model(model_name, max_output_tokens), messages)
+
     primary_error: BaseException | None = None
     if not primary_circuit_open:
         try:
-            return (
-                _invoke_model(
-                    _build_tool_free_model(model_name, max_output_tokens),
-                    messages,
-                ),
-                model_name,
-            )
+            return _call_primary(), model_name
         except Exception as exc:  # noqa: BLE001 — typed below before failover
             primary_error = exc
             if not fallback or not _model_error_allows_failover(exc):
                 raise
-            with _MODEL_FAILOVER_LOCK:
-                _MODEL_FAILOVER_UNTIL[key] = (
-                    time.monotonic() + _model_failover_cooldown_seconds())
             if plog is not None:
                 plog.write(
                     "warn",
                     f"{label}: primary model {model_name} exhausted bounded retries "
-                    f"({type(exc).__name__}); opening provider circuit and trying "
-                    f"{fallback}",
+                    f"({type(exc).__name__}); trying fallback {fallback}",
                 )
     elif plog is not None:
         plog.write(
@@ -6327,21 +6548,54 @@ def _invoke_tool_free_model(
         response = _invoke_model(
             _build_tool_free_model(fallback, max_output_tokens), messages)
     except Exception as fallback_error:  # noqa: BLE001 — preserve both causes
+        _set_model_failover_circuit(key, open_circuit=False)
         if plog is not None:
             plog.write(
                 "error",
                 f"{label}: fallback model {fallback} failed "
-                f"({type(fallback_error).__name__}: {fallback_error})",
+                f"({type(fallback_error).__name__}: {fallback_error}); "
+                "provider circuit cleared",
             )
         if primary_error is None:
-            raise
+            # Half-open probe: the circuit routed this call away from the
+            # primary, but the fallback is down — the primary may well have
+            # recovered since the circuit opened.
+            if plog is not None:
+                plog.write(
+                    "stage",
+                    f"{label}: probing primary model {model_name} once after "
+                    "fallback failure",
+                )
+            try:
+                response = _call_primary()
+            except Exception as probe_error:  # noqa: BLE001 — typed below
+                if not _model_error_allows_failover(probe_error):
+                    raise
+                raise ModelProvidersUnavailable(
+                    f"fallback model {fallback} failed "
+                    f"({type(fallback_error).__name__}); half-open probe of "
+                    f"primary model {model_name} also failed "
+                    f"({type(probe_error).__name__})"
+                ) from probe_error
+            if plog is not None:
+                plog.write(
+                    "ok",
+                    f"{label}: primary model {model_name} recovered "
+                    "(half-open probe served the call)",
+                )
+            return response, model_name
         raise ModelProvidersUnavailable(
             f"primary model {model_name} failed ({type(primary_error).__name__}); "
             f"fallback model {fallback} also failed "
             f"({type(fallback_error).__name__})"
         ) from fallback_error
+    _set_model_failover_circuit(key, open_circuit=True)
     if plog is not None:
-        plog.write("ok", f"{label}: fallback model {fallback} served the call")
+        plog.write(
+            "ok",
+            f"{label}: fallback model {fallback} served the call; provider "
+            f"circuit open for {_model_failover_cooldown_seconds():.0f}s",
+        )
     return response, fallback
 
 
@@ -7903,14 +8157,34 @@ def synthesize_from_thread(client, thread_id: str, question: str, target_languag
 
 
 class StructuredExtractionText(str):
-    """String-compatible model output carrying completion-integrity metadata."""
+    """String-compatible model output carrying completion-integrity metadata.
+
+    ``provider_error`` is the exception class name when the model call itself
+    raised (transport outage, quota, both providers down); the text is then
+    empty by construction.  Keeping that distinct from "the model answered with
+    unparseable JSON" matters: a provider outage must not trigger the compact
+    recovery against the same dead provider, and it must not be persisted as a
+    0-byte "unparseable" artifact.
+    """
 
     def __new__(cls, value: str, *, finish_reason: str = "",
-                truncated: bool = False):
+                truncated: bool = False, provider_error: str = "",
+                provider_error_message: str = ""):
         obj = super().__new__(cls, value or "")
         obj.finish_reason = str(finish_reason or "")
         obj.truncated = bool(truncated)
+        obj.provider_error = str(provider_error or "")
+        obj.provider_error_message = str(provider_error_message or "")[:500]
         return obj
+
+    @classmethod
+    def from_exception(cls, exc: BaseException) -> "StructuredExtractionText":
+        """Empty extraction text tagged with the failing call's exception."""
+        return cls(
+            "",
+            provider_error=type(exc).__name__,
+            provider_error_message=" ".join(str(exc).split()),
+        )
 
 
 def extract_structured_tool_free(report: str, target_language: str | None, model_name: str, depth: str, plog: "ProgressLog") -> StructuredExtractionText:
@@ -7921,7 +8195,10 @@ def extract_structured_tool_free(report: str, target_language: str | None, model
     the JSON object, so the turn ends with prose/tool-calls that don't parse. Mirroring
     ``synthesize_from_thread``, we call the BARE model (no tools) with the extraction
     prompt + the already-written report, so the model has no choice but to emit JSON.
-    Returns the raw model text ('' on failure) for ``extract_json_object`` to parse.
+    Returns the raw model text for ``extract_json_object`` to parse.  A failed
+    call returns empty text tagged with ``provider_error`` (see
+    :class:`StructuredExtractionText`) so callers can tell an outage from a
+    malformed answer.
     """
     try:
         # RESEARCH-5: a master "light extraction" switch drops the heaviest OPTIONAL
@@ -7973,9 +8250,9 @@ def extract_structured_tool_free(report: str, target_language: str | None, model
             finish_reason=finish_reason,
             truncated=_model_output_was_truncated(resp, max_output_tokens),
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 — classified by the caller via provider_error
         plog.write("warn", f"extract (tool-free) model call failed ({type(e).__name__}: {e})")
-        return StructuredExtractionText("")
+        return StructuredExtractionText.from_exception(e)
 
 
 def _structured_extraction_max_tokens(*, recovery: bool) -> int:
@@ -8097,7 +8374,7 @@ def extract_structured_recovery_tool_free(
             "extract (tool-free recovery) failed "
             f"({type(exc).__name__}: {exc})",
         )
-        return StructuredExtractionText("")
+        return StructuredExtractionText.from_exception(exc)
 
 
 def preserve_unparseable_extraction(out_dir: Path, raw: str) -> str:
@@ -8115,27 +8392,52 @@ def persist_structured_extraction_failures(
         meta: dict,
         write_meta,
 ) -> list[dict]:
-    """Persist every rejected extraction candidate with exact-byte diagnostics."""
+    """Persist every rejected extraction candidate with exact-byte diagnostics.
+
+    Only candidates that actually carry bytes are written to disk.  A failed
+    provider call or an empty completion has nothing to diagnose; writing it
+    produced the forensic dead end ``structured_extraction_unparseable_
+    e3b0c44298fc.txt`` (0 bytes, shared by every empty phase).  Such records
+    keep ``artifact=None`` and carry the exception class/message instead.
+    """
     records: list[dict] = []
     for phase, raw, reason in failures:
-        artifact = preserve_unparseable_extraction(out_dir, raw)
         payload = str(raw or "")
-        records.append({
+        record: dict[str, Any] = {
             "phase": phase,
             "reason": reason,
-            "artifact": artifact,
+            "artifact": (
+                preserve_unparseable_extraction(out_dir, payload)
+                if payload.strip() else None
+            ),
             "chars": len(payload),
             "sha256": hashlib.sha256(payload.encode("utf-8")).hexdigest(),
             "finish_reason": str(
                 getattr(raw, "finish_reason", "") or ""),
             "truncated": bool(getattr(raw, "truncated", False)),
-        })
+        }
+        provider_error = str(getattr(raw, "provider_error", "") or "")
+        if provider_error:
+            record["provider_error"] = provider_error
+            record["provider_error_message"] = str(
+                getattr(raw, "provider_error_message", "") or "")
+        records.append(record)
     if records:
         # Preserve the original compatibility field while exposing all attempts.
         meta["structured_extraction_failure"] = dict(records[0])
         meta["structured_extraction_failures"] = records
         write_meta()
     return records
+
+
+def _describe_extraction_failures(records: list[dict]) -> str:
+    """One log-line summary of persisted extraction failure records."""
+    parts = []
+    for row in records:
+        where = row.get("artifact") or (
+            f"<no artifact: {row.get('provider_error') or 'empty output'}>")
+        parts.append(f"{row.get('phase')}={where} ({row.get('reason')})")
+    return ", ".join(parts)
 
 
 def _extraction_report_excerpt(report: str) -> str:
@@ -8561,29 +8863,88 @@ _EXPECTED_EXTRACTION_KEYS = (
 )
 
 
+def _strip_trailing_commas(text: str) -> str:
+    """Remove JSON trailing commas (``,`` directly before ``}``/``]``) OUTSIDE strings.
+
+    The previous regex also rewrote ``", }"`` inside string values, silently
+    altering extracted prose.  This scanner tracks string state so only
+    structural commas are dropped.
+    """
+    out: list[str] = []
+    in_str = False
+    escaped = False
+    pending_comma: int | None = None  # index in ``out`` of an unconfirmed comma
+    for ch in text:
+        if in_str:
+            out.append(ch)
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+            pending_comma = None
+        elif ch == ",":
+            pending_comma = len(out)
+        elif ch in "}]":
+            if pending_comma is not None:
+                out[pending_comma] = ""
+            pending_comma = None
+        elif not ch.isspace():
+            pending_comma = None
+        out.append(ch)
+    return "".join(out)
+
+
 def _lenient_json_loads(cand: str) -> "dict | None":
-    """json.loads，失败则容错重试：剥去 ``}``/``]`` 前的尾逗号后再解析。"""
+    """Parse one JSON object candidate with increasing leniency.
+
+    Order: strict ``json.loads`` → ``strict=False`` (raw newlines/tabs inside
+    strings, the most common LLM JSON defect in multi-line descriptions) →
+    string-aware trailing-comma repair.  Only dicts are accepted.
+    """
     cand = (cand or "").strip()
     if not cand:
         return None
     try:
         obj = json.loads(cand)
         return obj if isinstance(obj, dict) else None
-    except json.JSONDecodeError:
+    except (ValueError, RecursionError):
         pass
-    repaired = re.sub(r",(\s*[}\]])", r"\1", cand)  # 尾逗号
+    try:
+        obj = json.loads(cand, strict=False)
+        return obj if isinstance(obj, dict) else None
+    except (ValueError, RecursionError):
+        pass
+    repaired = _strip_trailing_commas(cand)
     if repaired != cand:
         try:
-            obj = json.loads(repaired)
+            obj = json.loads(repaired, strict=False)
             return obj if isinstance(obj, dict) else None
-        except json.JSONDecodeError:
+        except (ValueError, RecursionError):
             return None
     return None
 
 
+# Upper bound on scans that run to end-of-text unbalanced before the scanner
+# gives up; each costs O(remaining text), so this keeps pathological prose
+# (many stray ``{``) linear-ish while still reaching JSON after a stray brace.
+_JSON_SCAN_UNBALANCED_RESTARTS = 64
+
+
 def _iter_balanced_json_objects(text: str):
-    """产出 text 中每个顶层平衡 ``{...}`` 片段（string-aware，braces-in-strings 安全）。"""
+    """产出 text 中每个顶层平衡 ``{...}`` 片段（string-aware，braces-in-strings 安全）。
+
+    A scan that starts at a stray ``{`` in prose (``"my analysis {of the
+    situation"``) runs to end-of-text unbalanced; the scan then resumes at the
+    NEXT character instead of giving up, so a well-formed object after the
+    stray brace is still found (bounded by ``_JSON_SCAN_UNBALANCED_RESTARTS``).
+    """
     i, n = 0, len(text)
+    unbalanced_restarts = 0
     while i < n:
         if text[i] != "{":
             i += 1
@@ -8592,6 +8953,7 @@ def _iter_balanced_json_objects(text: str):
         in_str = False
         escaped = False
         j = i
+        balanced = False
         while j < n:
             ch = text[j]
             if in_str:
@@ -8609,15 +8971,28 @@ def _iter_balanced_json_objects(text: str):
                 depth -= 1
                 if depth == 0:
                     yield text[i : j + 1]
+                    balanced = True
                     break
             j += 1
-        i = (j + 1) if j > i else (i + 1)
+        if balanced:
+            i = j + 1
+            continue
+        unbalanced_restarts += 1
+        if unbalanced_restarts > _JSON_SCAN_UNBALANCED_RESTARTS:
+            return
+        i += 1
 
 
 def _repair_truncated_json(text: str) -> "str | None":
     """抢救**被输出上限截断**的 JSON（MiniMax 在超大报告上的结构化抽取常触发）：从首个
     ``{`` 起 string-aware 扫描，记录括号栈；到文本末仍未闭合时，丢掉尾部残缺的
-    ``"key": <partial>`` 片段、去尾逗号，并按栈逆序补齐 ``]``/``}``，得到可解析的最长前缀。"""
+    ``"key": <partial>`` 片段、去尾逗号，并按「最后一个完整值边界处」的栈逆序补齐
+    ``]``/``}``，得到可解析的最长前缀。
+
+    The closers must come from the stack AS IT WAS at that boundary: output cut
+    right after a new container opened (``"goals": ["a``) has extra openers on
+    the end-of-text stack that are not part of the kept prefix.
+    """
     start = text.find("{")
     if start == -1:
         return None
@@ -8625,6 +9000,9 @@ def _repair_truncated_json(text: str) -> "str | None":
     in_str = False
     escaped = False
     last_complete = -1  # 最近一个「值边界」位置（栈深回落或字符串闭合后的分隔符处）
+    # Only openers can follow the last boundary (any comma or closer would move
+    # it), so the boundary stack is a prefix of the end stack: its depth suffices.
+    depth_at_last_complete = 0
     i = start
     n = len(text)
     while i < n:
@@ -8645,15 +9023,17 @@ def _repair_truncated_json(text: str) -> "str | None":
                 if stack:
                     stack.pop()
                 last_complete = i
+                depth_at_last_complete = len(stack)
             elif ch == "," and stack:
                 last_complete = i - 1  # 逗号前是一个完整值
+                depth_at_last_complete = len(stack)
         i += 1
     if not stack:
         return None  # 未截断（或已平衡）——交给常规路径
     if last_complete <= start:
         return None
     frag = text[start : last_complete + 1].rstrip().rstrip(",")
-    frag += "".join(reversed(stack))
+    frag += "".join(reversed(stack[:depth_at_last_complete]))
     return frag
 
 
@@ -8696,6 +9076,9 @@ def extract_json_object(text: str) -> dict | None:
 def _structured_extraction_incomplete_reason(
         raw: str, obj: Any) -> "str | None":
     """Return why a parsed extraction cannot be promoted to canonical artifacts."""
+    provider_error = str(getattr(raw, "provider_error", "") or "").strip()
+    if provider_error:
+        return f"provider_unavailable:{provider_error}"
     if bool(getattr(raw, "truncated", False)):
         finish_reason = str(getattr(raw, "finish_reason", "") or "").strip()
         return "provider_truncated_output" + (
@@ -8713,9 +9096,26 @@ def _structured_extraction_incomplete_reason(
     return None
 
 
+def _extraction_provider_retry_seconds() -> float:
+    """Backoff before re-trying a primary extraction whose provider call failed.
+
+    ``RESEARCH_EXTRACTION_PROVIDER_RETRY_SECONDS`` (default 10s, clamped to
+    [0, 120]) — long enough to ride out a connection blip, short enough to fit
+    the orchestrator's 600s extract-only salvage budget.
+    """
+    try:
+        configured = float(os.environ.get(
+            "RESEARCH_EXTRACTION_PROVIDER_RETRY_SECONDS", "10") or "10")
+    except ValueError:
+        return 10.0
+    if not math.isfinite(configured):
+        return 10.0
+    return min(120.0, max(0.0, configured))
+
+
 def extract_complete_structured_tool_free(
         report: str, target_language: str | None, model_name: str, depth: str,
-        plog: "ProgressLog",
+        plog: "ProgressLog", *, sleep=time.sleep,
 ) -> "tuple[StructuredExtractionText, dict | None, list[tuple[str, StructuredExtractionText, str]], bool]":
     """Run one rich extraction and at most one compact recovery.
 
@@ -8723,6 +9123,13 @@ def extract_complete_structured_tool_free(
     the provider says it was truncated. Likewise an empty actor shell cannot
     suppress recovery merely because it parses as a dict. Failed candidates are
     returned byte-for-byte so the caller can persist them by content hash.
+
+    A PRIMARY call that failed at the provider (``provider_unavailable:*``)
+    is not a model-quality problem: the compact recovery would hit the same
+    dead endpoint and burn a second full-report prefill if it came back.  The
+    primary is instead retried once after a short backoff (``sleep`` is
+    injectable for tests); only if that retry produced a real answer that is
+    incomplete does the compact recovery run.
     """
     raw = extract_structured_tool_free(
         report, target_language, model_name, depth, plog)
@@ -8732,6 +9139,31 @@ def extract_complete_structured_tool_free(
         return raw, obj, [], False
 
     failed = [("primary", raw, reason)]
+    if reason.startswith("provider_unavailable:"):
+        backoff_s = _extraction_provider_retry_seconds()
+        plog.write(
+            "warn",
+            f"primary structured extraction failed at the provider ({reason}); "
+            f"retrying the primary once after {backoff_s:.0f}s instead of the "
+            "compact recovery",
+        )
+        if backoff_s > 0:
+            sleep(backoff_s)
+        raw = extract_structured_tool_free(
+            report, target_language, model_name, depth, plog)
+        obj = extract_json_object(raw)
+        reason = _structured_extraction_incomplete_reason(raw, obj)
+        if reason is None:
+            return raw, obj, failed, False
+        failed.append(("primary_retry", raw, reason))
+        if reason.startswith("provider_unavailable:"):
+            plog.write(
+                "warn",
+                "structured extraction provider still unavailable after one "
+                f"retry ({reason}); skipping the compact recovery",
+            )
+            return raw, None, failed, False
+
     plog.write(
         "warn",
         "primary structured extraction incomplete "
@@ -9627,6 +10059,7 @@ def _is_degraded_artifact(text: str, min_chars: int) -> bool:
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 _DANGLING_THINK_RE = re.compile(r"<think>.*\Z", re.DOTALL | re.IGNORECASE)
+_THINK_CLOSE_RE = re.compile(r"</think>", re.IGNORECASE)
 # DeerFlow's loop-detection middleware appends "[FORCED STOP] …" / "[LOOP
 # DETECTED] …" sentences to the assistant text when it intervenes. They are
 # harness control-flow notices, not research content — strip them so they
@@ -9640,11 +10073,19 @@ def strip_think(text: str) -> str:
     Reasoning models reachable via the OpenAI-compatible endpoint (notably
     MiniMax-M3) inline their chain-of-thought into ``content`` as ``<think>``
     tags. Strip them so the research report / extraction JSON is clean. Also
-    drops a dangling unclosed ``<think>`` (truncated reasoning) to end-of-text.
+    drops a dangling unclosed ``<think>`` (truncated reasoning) to end-of-text,
+    and — for chat templates that inject the opening ``<think>`` themselves
+    (DeepSeek-R1 / MiniMax / GLM variants) — everything up to and including an
+    orphan closing ``</think>`` that has no opening tag before it.
     """
     if not text:
         return text
     cleaned = _THINK_RE.sub("", text)
+    # Paired blocks are gone, so any remaining ``</think>`` is an orphan whose
+    # opening tag lived in the prompt template; the text before it is reasoning.
+    orphan_closers = list(_THINK_CLOSE_RE.finditer(cleaned))
+    if orphan_closers:
+        cleaned = cleaned[orphan_closers[-1].end():]
     cleaned = _DANGLING_THINK_RE.sub("", cleaned)
     cleaned = _HARNESS_MARKER_RE.sub("", cleaned)
     return cleaned.strip()
@@ -9724,6 +10165,26 @@ def _budget_denial_break_at() -> int:
         return int(raw) if raw else 3
     except ValueError:
         return 3
+
+
+def _stream_end_usage_line(usage: Any) -> str:
+    """``[usage]`` text for a streamed agent turn's cumulative ``end`` event.
+
+    The ``tokens in=.. out=.. total=..`` prefix is kept byte-compatible with
+    the orchestrator's ``_USAGE_RE`` (missing counters stay ``None``).  The
+    cache/reasoning suffix is appended only when the harness actually reported
+    such details — today's DeerFlow client sums only the three totals, and a
+    fabricated ``cached=0`` would read as a measured cache miss.
+    """
+    usage = usage if isinstance(usage, dict) else {}
+    line = (
+        f"tokens in={usage.get('input_tokens')} "
+        f"out={usage.get('output_tokens')} total={usage.get('total_tokens')}"
+    )
+    details = _usage_cache_details([usage])
+    if any(value is not None for value in details.values()):
+        line += _usage_detail_suffix(details)
+    return line
 
 
 def run_streamed_turn(client, message: str, thread_id: str, recursion_limit: int, plog: ProgressLog, label: str) -> str:
@@ -9838,7 +10299,7 @@ def run_streamed_turn(client, message: str, thread_id: str, recursion_limit: int
                     plog.write("custom", _truncate(json.dumps(data, ensure_ascii=False)))
                 elif etype == "end":
                     usage = data.get("usage", {})
-                    plog.write("usage", f"tokens in={usage.get('input_tokens')} out={usage.get('output_tokens')} total={usage.get('total_tokens')}")
+                    plog.write("usage", _stream_end_usage_line(usage))
             if _corrective_pending and not _corrective_sent:
                 _corrective_pending = False
                 _corrective_sent = True
@@ -12011,7 +12472,8 @@ def run_research_stage(client, question: str, depth: str, target_language: str |
     )
     # SCALE-2: 开场默认 220→300（环境覆盖照旧生效）——开场负责铺源图/定 KIQ，预算与
     # 各 pass 的 ×1.5 扩容保持同一比例。
-    opening_limit = int(os.environ.get("DEERFLOW_DEEP_OPENING_RECURSION_LIMIT", "300"))
+    opening_limit = _env_int(
+        "DEERFLOW_DEEP_OPENING_RECURSION_LIMIT", 300, minimum=1, plog=plog)
     if should_run_pass("deep-opening", _resume_done, _resume):
         opening = run_streamed_turn(
             client,
@@ -13700,9 +14162,13 @@ def run_actor_ontology_stage(client, question: str, depth: str, target_language:
             except OSError:
                 pass
     if depth == "deep":
-        research_limit = int(
-            (os.environ.get("DEERFLOW_TRACKB_RECURSION_LIMIT", "") or "").strip()
-            or os.environ.get("DEERFLOW_DEEP_OPENING_RECURSION_LIMIT", "300")
+        # Track B defaults to the opening budget; both knobs parse safely.
+        research_limit = _env_int(
+            "DEERFLOW_TRACKB_RECURSION_LIMIT",
+            _env_int("DEERFLOW_DEEP_OPENING_RECURSION_LIMIT", 300,
+                     minimum=1, plog=plog),
+            minimum=1,
+            plog=plog,
         )
     else:
         research_limit = int(preset["recursion_limit"])
@@ -14718,10 +15184,43 @@ def _pm_snapshot(queries: list[str], per_query: int = 8, max_total: int = 20,
     return _pm_cap_per_event(ranked, max_per_event, max_total)
 
 
+_PM_SECTION_HEADING = "Prediction Market Signals"
+
+
+def _strip_markdown_h2_section(report: str, title: str) -> str:
+    """Remove every ``## <title>`` block, up to the next ``#``/``##`` heading or EOF.
+
+    Used to upsert machine-owned report sections idempotently.  Deeper
+    headings (``### …``) inside the block belong to it and are removed too;
+    fenced code blocks are respected so a ``## `` line inside a fence neither
+    starts nor ends a block.
+    """
+    heading_re = re.compile(rf"^##[ \t]+{re.escape(title)}[ \t]*$")
+    boundary_re = re.compile(r"^#{1,2}[ \t]")
+    kept: list[str] = []
+    skipping = False
+    in_fence = False
+    for line in str(report or "").split("\n"):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            if not skipping:
+                kept.append(line)
+            continue
+        if not in_fence:
+            if heading_re.match(line.rstrip()):
+                skipping = True
+                continue
+            if skipping and boundary_re.match(line):
+                skipping = False
+        if not skipping:
+            kept.append(line)
+    return "\n".join(kept)
+
+
 def _pm_render_section(markets: list[dict], as_of: str) -> str:
     """确定性渲染追加到 research_report.md 的「预测市场信号」markdown 节。"""
     lines = [
-        "## Prediction Market Signals",
+        f"## {_PM_SECTION_HEADING}",
         "",
         (f"> Machine-fetched from Polymarket (public Gamma API) as of {as_of}. "
          "Market-implied probabilities are **calibration anchors, not ground truth** — "
@@ -15207,8 +15706,12 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
     _atomic_write_text(out_dir / PREDICTION_MARKETS_FILENAME,
                        json.dumps(payload, ensure_ascii=False, indent=2))
     # 追加确定性 markdown 节到已落盘的 research_report.md（下游合成/报告阶段读文件即得）。
+    # Upsert, not append: a report re-read from disk (extract-only salvage,
+    # resumed engines) may already carry an earlier machine-owned PM section;
+    # appending again would leave a stale table with outdated prices above it.
     section = _pm_render_section(markets, as_of)
-    new_report = report.rstrip() + "\n\n" + section + "\n"
+    base_report = _strip_markdown_h2_section(report, _PM_SECTION_HEADING)
+    new_report = base_report.rstrip() + "\n\n" + section + "\n"
     _atomic_write_text(out_dir / REPORT_FILENAME, new_report)
     # 注册进 meta（与 sources_count/quantitative_count 同一「artifact 登记」模式）。
     meta["report_chars"] = len(new_report)
@@ -15524,6 +16027,39 @@ def _render_research_charts(
 # ---------------------------------------------------------------------------
 
 
+def _withhold_unsealed_actor_intelligence(obj: dict, plog: "ProgressLog") -> None:
+    """Strip model-emitted actor-intelligence markers from a report-only cast.
+
+    LINEAR-RESEARCH 2026-09-18: the extraction prompt asks for a bare
+    ``actor_intelligence_contract`` marker and per-actor ``intelligence``
+    blocks, but the contract is only real once dossier-bound sealing writes
+    the full hashed version.  An unsealed actors.json carrying either marker
+    makes the parent's graph/prepare stages treat it as sealed v1 and fail
+    closed on a projection that does not exist.  Only for the report-only
+    (no dossier) mode: with a dossier the rows must stay intact, because the
+    sealer projects them against the dossier ledger (stripping them caused
+    "claim projection mismatch between dossier Plan A and actors.json Plan B").
+    """
+    if "actor_intelligence_contract" in obj:
+        obj.pop("actor_intelligence_contract", None)
+        plog.write(
+            "stage",
+            "extract-only: withholding model-emitted actor-intelligence "
+            "marker (not sealed; report-only cast)",
+        )
+    stripped_rows = 0
+    for row in (obj.get("actors") or []):
+        if isinstance(row, dict) and isinstance(row.get("intelligence"), dict):
+            row.pop("intelligence", None)
+            stripped_rows += 1
+    if stripped_rows:
+        plog.write(
+            "stage",
+            "extract-only: withheld unsealed per-actor intelligence payloads "
+            f"from {stripped_rows} rows",
+        )
+
+
 def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "ProgressLog",
                      write_meta) -> int:
     """ITEM-14：跳过所有研究阶段，只对既存 research_report.md 跑结构化抽取 + 预测市场。
@@ -15538,17 +16074,38 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
     但故意省去依赖「本 run 现场抓取」的增强（来源 grounding、research_quality 记分牌）——本进程没有
     发起过抓取，那些信号不适用。启用 actor 时，抽取或最终 actor-intelligence 封存失败会返回非零；
     只有显式 ``--no-actors`` 保留报告-only 兼容路径。报告缺失/过小已在 main 拦截。
+
+    Contract modes (actors enabled):
+
+    * sealed — an actor dossier exists: the recorded actor-artifact lineage
+      MUST validate (missing/stale lineage → exit 2 before any model call),
+      the extracted rows keep their ``intelligence`` blocks, and the final
+      actor-intelligence/v1 seal must succeed after the chart stage.
+    * report-only — no dossier and no recorded lineage: a fresh extraction
+      whose cast ships without unsealed intelligence markers
+      (``meta.actor_contract_mode="report-only"``).
+
+    In both modes a failed structured extraction (no parseable actor cast)
+    fails closed with exit 2 and ``meta.status="failed"``.  Model-cited
+    sources are never promoted to fetched provenance.  An existing
+    ``sources.json`` is kept byte-for-byte: its row positions are the report's
+    ``[S#]`` contract, so model-extracted rows (marked ``cited``) are written
+    only when no ledger exists.  The function closes ``plog`` before returning
+    (``ProgressLog.close`` is idempotent).
     """
     report_path = out_dir / REPORT_FILENAME
     report = report_path.read_text(encoding="utf-8") if report_path.exists() else ""
     dossier_path = out_dir / ACTOR_DOSSIER_FILENAME
     dossier = dossier_path.read_text(encoding="utf-8") if dossier_path.exists() else ""
-    if not args.no_actors and (out_dir / ACTOR_INTELLIGENCE_LINEAGE_FILENAME).is_file():
-        # LINEAR-RESEARCH 2026-09-18: the lineage file exists only after a
-        # previous extraction recorded it. A FIRST extraction has nothing to
-        # reuse and nothing to go stale — validating (and failing) here made
-        # every dossier-less extract-only run unreachable. Validate only when
-        # there is actually a lineage to check.
+    # Contract mode is decided up front.  A dossier (or a recorded lineage)
+    # means this salvage would REUSE prior-run actor evidence for dossier-bound
+    # sealing, so that lineage must exist and match this question/depth/run —
+    # fail closed otherwise.  With neither, this is a fresh report-only
+    # extraction (e.g. salvage of a v3/linear run): nothing is reused, so
+    # there is nothing to validate.
+    sealed_contract_mode = bool(dossier.strip())
+    lineage_recorded = (out_dir / ACTOR_INTELLIGENCE_LINEAGE_FILENAME).is_file()
+    if not args.no_actors and (sealed_contract_mode or lineage_recorded):
         try:
             validate_actor_artifact_lineage(
                 out_dir,
@@ -15568,28 +16125,30 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
     elif not args.no_actors:
         plog.write(
             "stage",
-            "extract-only: no prior actor-artifact lineage (fresh extraction); "
-            "nothing to validate for reuse",
+            "extract-only: no actor dossier and no prior actor-artifact lineage "
+            "(fresh report-only extraction); nothing to validate for reuse",
         )
-    # Extract-only performs no web fetches.  It may reuse producer-owned fetched
-    # provenance already sealed in this output directory, but it must never
-    # promote model-reconstructed citations from the report into fetched facts.
-    prior_fetched_sources: list[dict[str, Any]] = []
+    # Extract-only performs no web fetches and never filters or rewrites an
+    # existing source ledger: both engines mix fetched rows with snippet/model
+    # "cited" rows, and [S#] indexes row positions downstream (v3 writes the
+    # ledger in the report's citation order), so dropping or replacing a row
+    # would silently re-point every later citation.  Only a run with no ledger
+    # gets the model-extracted rows, and those are never promoted to fetched
+    # facts.
     prior_sources_path = out_dir / SOURCES_FILENAME
-    if prior_sources_path.is_file():
+    keep_prior_sources = prior_sources_path.is_file()
+    prior_sources: Any = None
+    if keep_prior_sources:
         try:
             prior_sources = json.loads(
                 prior_sources_path.read_text(encoding="utf-8"))
-            prior_fetched_sources = [
-                dict(row) for row in (prior_sources or [])
-                if isinstance(row, dict) and _source_is_fetched(row)
-            ]
         except (OSError, UnicodeDecodeError, ValueError, TypeError):
-            prior_fetched_sources = []
+            prior_sources = None
     meta["extract_only"] = True
     plog.write("stage", f"extract-only: 跳过研究，仅对既存 {REPORT_FILENAME} 跑结构化抽取 + 预测市场")
 
     actor_extraction_sha256 = ""
+    extraction_failure = ""
     if not args.no_actors:
         try:
             # 卷宗（若有）作为 actor 抽取「主」输入，报告作为附加上下文（与正常 Stage 2 一致）。
@@ -15610,49 +16169,15 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
                     plog,
                 )
             )
-            # LINEAR-RESEARCH 2026-09-18: the extraction prompt tells the model
-            # to emit a bare ``actor_intelligence_contract`` marker, but the
-            # contract is only real once the dossier-bound sealing writes the
-            # full hashed version. An unsealed actors.json carrying the marker
-            # makes the parent's graph stage treat it as sealed v1 and fail
-            # closed on a projection that does not exist. Withhold the marker
-            # until sealing actually happens (persist_final_actor_intelligence_
-            # contract re-adds the complete contract when a dossier is sealed).
-            if isinstance(obj, dict) and "actor_intelligence_contract" in obj:
-                obj.pop("actor_intelligence_contract", None)
-                plog.write(
-                    "stage",
-                    "extract-only: withholding model-emitted actor-intelligence "
-                    "marker (not sealed; report-only cast)",
-                )
-            if isinstance(obj, dict):
-                # Same false-claim problem one level down: per-actor
-                # ``intelligence: {schema_version: v1}`` blocks emitted per the
-                # extraction prompt make the parent's prepare stage demand a
-                # sealed top-level contract. Without dossier-bound sealing there
-                # is none, so the rows must ship in the legacy cast shape.
-                _stripped_rows = 0
-                for _row in (obj.get("actors") or []):
-                    if (isinstance(_row, dict)
-                            and isinstance(_row.get("intelligence"), dict)):
-                        _row.pop("intelligence", None)
-                        _stripped_rows += 1
-                if _stripped_rows:
-                    plog.write(
-                        "stage",
-                        f"extract-only: withheld unsealed per-actor "
-                        f"intelligence payloads from {_stripped_rows} rows",
-                    )
+            if isinstance(obj, dict) and not sealed_contract_mode:
+                _withhold_unsealed_actor_intelligence(obj, plog)
             persisted_failures = persist_structured_extraction_failures(
                 out_dir, failed_candidates, meta, write_meta)
             if persisted_failures:
                 plog.write(
                     "warn",
-                    "extract-only: preserved rejected extraction candidate(s): "
-                    + ", ".join(
-                        f"{row['phase']}={row['artifact']} ({row['reason']})"
-                        for row in persisted_failures
-                    ),
+                    "extract-only: rejected extraction candidate(s): "
+                    + _describe_extraction_failures(persisted_failures),
                 )
             if obj is not None and recovery_used:
                 meta["structured_extraction_recovery"] = {
@@ -15661,16 +16186,35 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
                 }
                 write_meta()
             if obj is None:
-                plog.write("warn", "extract-only: 紧凑结构化恢复失败；actors.json/sources.json 跳过")
+                last_reason = (
+                    failed_candidates[-1][2] if failed_candidates else "no_output")
+                extraction_failure = (
+                    "extract-only: structured actor extraction failed "
+                    f"({last_reason}); actors are required"
+                )
+                plog.write(
+                    "warn",
+                    f"extract-only: 结构化抽取未产出可用 actor 阵容（{last_reason}）；"
+                    "actors.json/sources.json 跳过",
+                )
             else:
                 extracted_sources = obj.pop("sources", None)
-                if prior_fetched_sources:
-                    sources = prior_fetched_sources
-                    plog.write(
-                        "ok",
-                        "extract-only: reusing prior fetched-source provenance "
-                        f"({len(sources)} receipts)",
-                    )
+                sources: list[dict[str, Any]] = []
+                if keep_prior_sources:
+                    if isinstance(prior_sources, list):
+                        meta["sources_count"] = len(prior_sources)
+                        meta["source_tiers"] = source_tier_histogram(prior_sources)
+                        plog.write(
+                            "ok",
+                            f"extract-only: kept the existing {SOURCES_FILENAME} "
+                            f"verbatim ({len(prior_sources)} positional [S#] rows)",
+                        )
+                    else:
+                        plog.write(
+                            "warn",
+                            f"extract-only: existing {SOURCES_FILENAME} is not a "
+                            "JSON list; left untouched",
+                        )
                 else:
                     sources = [
                         dict(row) for row in (extracted_sources or [])
@@ -15727,12 +16271,20 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
                     meta["sources_count"] = len(sources)
                     meta["source_tiers"] = source_tier_histogram(sources)
                     plog.write("ok", f"extract-only: wrote {SOURCES_FILENAME} ({len(sources)} sources; tiers={meta['source_tiers']})")
-        except Exception as _e:  # noqa: BLE001 — final boundary converts this to a nonzero result
-            plog.write(
-                "warn",
-                "extract-only: structured extraction failed; required actor "
-                f"finalization will fail closed ({_e})",
+        except Exception as _e:  # noqa: BLE001 — converted to a fail-closed result below
+            extraction_failure = (
+                "extract-only: structured actor extraction failed "
+                f"({type(_e).__name__}: {_e}); actors are required"
             )
+    if extraction_failure:
+        # Actors are required (no --no-actors) and none were extracted: fail
+        # closed BEFORE markets/charts, which would otherwise spend calls and
+        # re-render charts from whatever stale structured files are on disk.
+        meta.update(status="failed", error=extraction_failure, finished_at=_utcnow())
+        write_meta()
+        plog.write("error", extraction_failure)
+        plog.close()
+        return 2
 
     # 预测市场（与正常 Stage 3 一致的可选锚点；失败一行日志跳过）。
     try:
@@ -15757,7 +16309,7 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
         if report_path.is_file() else report
     )
     if not args.no_actors:
-        if not dossier.strip():
+        if not sealed_contract_mode:
             # LINEAR-RESEARCH 2026-09-18: the sealed actor-intelligence/v1
             # contract is definitionally dossier-bound (its coverage audit
             # requires the dossier's ledger). A dossier-less run — e.g. the
@@ -15765,6 +16317,7 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
             # actors/sources/timeline above are still real extractions, so
             # complete honestly with a report-only contract instead of failing
             # closed after the artifacts were already written.
+            meta["actor_contract_mode"] = "report-only"
             plog.write(
                 "warn",
                 "extract-only: no actor dossier — skipping dossier-bound "
@@ -15782,6 +16335,7 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
                     require_current_extraction=True,
                     expected_unsealed_actors_sha256=actor_extraction_sha256,
                 )
+                meta["actor_contract_mode"] = "sealed"
             except ActorIntelligenceFinalizationError as exc:
                 meta.update(
                     status="failed",
@@ -15802,6 +16356,210 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
     plog.write("done", "extract-only complete")
     plog.close()
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Engine selection, provider env hygiene and engine dispatch
+# ---------------------------------------------------------------------------
+
+# Provider-key env var per selectable model (credential preflight + hygiene).
+_PROVIDER_KEY_ENVS: dict[str, str] = {
+    "minimax": "MINIMAX_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+    "qwen": "DASHSCOPE_API_KEY",
+    "glm": "ZHIPUAI_API_KEY",
+    "kimi": "KIMI_API_KEY",
+}
+
+_V3_ENGINE_NAMES = frozenset({"v3", "linear"})
+_LEGACY_ENGINE_NAMES = frozenset({"legacy", "deerflow", "agentic"})
+
+# A ``$VAR`` / ``${VAR}`` reference inside DeerFlow's config.yaml.
+_CONFIG_ENV_REF_RE = re.compile(r"\$\{?([A-Z_][A-Z0-9_]*)\}?")
+
+
+def _resolve_research_engine(plog: "ProgressLog | None" = None) -> str:
+    """Map ``RESEARCH_ENGINE`` to ``"v3"`` or ``"legacy"``.
+
+    ``v3``/``linear`` → v3; ``legacy``/``deerflow``/``agentic`` → legacy.
+    Unset/empty → legacy, which keeps direct CLI runs and tests backward
+    compatible (production always sets the value explicitly through the
+    orchestrator).  An unknown value logs one ``[warn]`` and uses legacy.
+    """
+    raw = (os.environ.get("RESEARCH_ENGINE") or "").strip().lower()
+    if not raw or raw in _LEGACY_ENGINE_NAMES:
+        return "legacy"
+    if raw in _V3_ENGINE_NAMES:
+        return "v3"
+    if plog is not None:
+        plog.write(
+            "warn",
+            f"RESEARCH_ENGINE={raw[:64]!r} is not recognized (expected v3, linear, "
+            "legacy, deerflow or agentic); using the legacy engine",
+        )
+    return "legacy"
+
+
+def _legacy_only_mode(args: Any) -> str:
+    """CLI flag of a lane contract only the legacy engine implements ('' if none).
+
+    ``--extract-only`` (salvage tail), ``--evidence-only`` (evidence lane pack)
+    and ``--synthesis-manifest`` (global synthesis) stay on the legacy paths.
+    """
+    if getattr(args, "extract_only", False):
+        return "--extract-only"
+    if getattr(args, "evidence_only", False):
+        return "--evidence-only"
+    if getattr(args, "synthesis_manifest", None):
+        return "--synthesis-manifest"
+    return ""
+
+
+# Lifecycle keys of a previous meta.json that a salvage run must not inherit.
+_SALVAGE_VOLATILE_META_KEYS = frozenset({"status", "error", "traceback", "finished_at"})
+
+
+def _prior_v3_meta(out_dir: Path) -> dict[str, Any] | None:
+    """The existing meta.json of ``out_dir`` when a v3 run wrote it, else None."""
+    try:
+        prior = json.loads((out_dir / META_FILENAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if isinstance(prior, dict) and prior.get("research_engine") == "v3":
+        return prior
+    return None
+
+
+def _deerflow_config_candidates(config_arg: "str | None") -> list[Path]:
+    """config.yaml paths the DeerFlow harness may load, mirroring its priority.
+
+    ``AppConfig.resolve_config_path``: explicit ``--config`` → env
+    ``DEER_FLOW_CONFIG_PATH`` → the project root (``DEER_FLOW_PROJECT_ROOT`` or
+    the cwd).  The bridge is deployed next to its config.yaml, so that file is
+    included too.  When nothing is pinned every existing candidate is scanned,
+    because presetting an extra empty default is harmless while missing one
+    crashes the config load.
+    """
+    if config_arg:
+        return [Path(config_arg).expanduser()]
+    env_path = (os.environ.get("DEER_FLOW_CONFIG_PATH") or "").strip()
+    if env_path:
+        return [Path(env_path).expanduser()]
+    roots: list[Path] = []
+    project_root = (os.environ.get("DEER_FLOW_PROJECT_ROOT") or "").strip()
+    if project_root:
+        roots.append(Path(project_root).expanduser())
+    roots.extend([Path(__file__).resolve().parent, Path.cwd()])
+    candidates: list[Path] = []
+    for root in roots:
+        candidate = root / "config.yaml"
+        if candidate not in candidates:
+            candidates.append(candidate)
+    return candidates
+
+
+def _config_env_references(path: Path) -> set[str]:
+    """``$VAR`` names referenced by the effective (non-comment) YAML of ``path``.
+
+    Comment text is skipped: the loader only resolves values, and presetting
+    names that appear solely in commented examples (``$OPENAI_API_KEY``,
+    ``$ANTHROPIC_API_KEY``) to '' could change how unrelated SDKs read them.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return set()
+    names: set[str] = set()
+    for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        effective = re.split(r"\s#", line, maxsplit=1)[0]
+        names.update(_CONFIG_ENV_REF_RE.findall(effective))
+    return names
+
+
+def _preset_provider_env_defaults(config_arg: "str | None") -> list[str]:
+    """``os.environ.setdefault(name, '')`` for every config-referenced variable.
+
+    DeerFlow's ``AppConfig.resolve_env_variables`` raises on ANY unset
+    ``$VAR`` — including stanzas of models that are not selected — so one
+    absent key would crash every engine's model construction.  Covers the
+    explicit provider-key list plus every reference found in the config that
+    will be loaded.  Returns the names that were newly defaulted.
+    """
+    names = set(_PROVIDER_KEY_ENVS.values())
+    for candidate in _deerflow_config_candidates(config_arg):
+        if candidate.is_file():
+            names |= _config_env_references(candidate)
+    preset = sorted(name for name in names if name not in os.environ)
+    for name in preset:
+        os.environ.setdefault(name, "")
+    return preset
+
+
+def _bridge_module() -> Any:
+    """This module object, for engines that call back into bridge helpers.
+
+    ``sys.modules[__name__]`` is the running module both as a script
+    (``__main__``) and after a normal import.  A harness that loaded this file
+    via ``importlib.util.module_from_spec`` without registering it gets a
+    module snapshot of the current globals instead of a KeyError.
+    """
+    module = sys.modules.get(__name__)
+    if module is not None and getattr(module, "main", None) is main:
+        return module
+    snapshot = types.ModuleType(__name__)
+    snapshot.__dict__.update(globals())
+    return snapshot
+
+
+def _dispatch_v3_engine(question: str, out_dir: Path, args: Any, meta: dict,
+                        plog: "ProgressLog", write_meta) -> int:
+    """Run the v3 engine inside the failure boundary; close ``plog`` exactly once.
+
+    Any exception (including an import failure of ``linear_research``) or a
+    non-int return becomes ``meta.status="failed"`` + exit 2.  An engine that
+    returns without a terminal meta status gets one derived from its exit code,
+    so meta.json never stays ``running``.
+    """
+    try:
+        import linear_research
+
+        rc = linear_research.run(
+            question, out_dir, args, meta, plog, write_meta,
+            bridge=_bridge_module(),
+        )
+        if isinstance(rc, bool) or not isinstance(rc, int):
+            raise TypeError(
+                f"linear_research.run returned {type(rc).__name__}, expected int")
+    except Exception as exc:  # noqa: BLE001 — engine failure boundary
+        message = f"v3 engine failed: {type(exc).__name__}: {exc}"
+        meta.update(status="failed", error=message,
+                    traceback=traceback.format_exc(), finished_at=_utcnow())
+        write_meta()
+        plog.write("error", message)
+        rc = 2
+    except BaseException as exc:
+        # KeyboardInterrupt / SystemExit: record a terminal status, then let
+        # the interpreter-level signal propagate unchanged.  The engine's own
+        # record wins (a SIGTERM it turned into an unwind is "terminated").
+        if meta.get("status") != "failed":
+            meta.update(status="failed",
+                        error=f"v3 engine interrupted: {type(exc).__name__}",
+                        finished_at=_utcnow())
+        write_meta()
+        raise
+    else:
+        if meta.get("status") not in ("completed", "failed"):
+            meta.update(status="completed" if rc == 0 else "failed",
+                        finished_at=_utcnow())
+            if rc != 0:
+                meta.setdefault(
+                    "error", f"v3 engine exited {rc} without a terminal status")
+            write_meta()
+    finally:
+        plog.close()
+    return rc
 
 
 # ---------------------------------------------------------------------------
@@ -15915,8 +16673,27 @@ def main() -> int:
             "runtime skill bundle is not orchestrator-verified "
             f"(outcome={runtime_skill_sync.get('outcome')})",
         )
+    # Engine selection is a pure env decision made before any work so that the
+    # meta, the resume planner and the dispatch below all agree on it.
+    requested_engine = _resolve_research_engine(plog)
+    legacy_only_mode = _legacy_only_mode(args)
+    use_v3_engine = requested_engine == "v3" and not legacy_only_mode
+    if requested_engine == "v3" and legacy_only_mode:
+        plog.write(
+            "stage",
+            f"research engine: v3 requested but {legacy_only_mode} is a "
+            "legacy-engine lane contract; routing this run to the legacy engine",
+        )
+    elif use_v3_engine:
+        plog.write("stage", "research engine: v3 (linear_research)")
     activation_telemetry = skill_activation_estimate()
-    if args.extract_only:
+    if use_v3_engine:
+        activation_telemetry.update({
+            "activated": False,
+            "mode": "none",
+            "reason": "v3 engine uses its own static system prompt; no slash skill activation",
+        })
+    elif args.extract_only:
         activation_telemetry.update({
             "activated": False,
             "mode": "none",
@@ -15961,7 +16738,13 @@ def main() -> int:
     resume_completed: set[str] = set()
     resume_info: dict[str, Any] = {}
     resume_evidence_pack = ""
-    if getattr(args, "resume", False) and not getattr(args, "extract_only", False) and _checkpoint_enabled():
+    if getattr(args, "resume", False) and use_v3_engine:
+        plog.write(
+            "resume",
+            "--resume: the v3 engine resumes from its own identity-bound phase "
+            "state; the legacy LangGraph checkpoint is not consulted",
+        )
+    elif getattr(args, "resume", False) and not getattr(args, "extract_only", False) and _checkpoint_enabled():
         _ckpt = load_research_checkpoint(out_dir)
         _lineage = _current_research_lineage()
         _plan = plan_research_resume(
@@ -16009,14 +16792,27 @@ def main() -> int:
             "evidence_only" if args.evidence_only else
             "global_synthesis" if args.synthesis_manifest else "full"
         ),
+        "research_engine": "v3" if use_v3_engine else "legacy",
     }
     if resume_info:
         meta["resume"] = resume_info
-    if args.depth == "deep":
+    if getattr(args, "extract_only", False):
+        prior_v3_meta = _prior_v3_meta(out_dir)
+        if prior_v3_meta:
+            # The parent salvages a v3 handoff (watchdog kill after the report
+            # was written) with this legacy extract-only path.  Keep the v3
+            # run's provenance, telemetry and research_quality/degradation
+            # block instead of replacing them with a blank legacy meta.
+            meta = {**{key: value for key, value in prior_v3_meta.items()
+                       if key not in _SALVAGE_VOLATILE_META_KEYS},
+                    **meta, "research_engine": "v3",
+                    "salvage": {"mode": "extract_only", "engine": "legacy", "started_at": started_at}}
+    if args.depth == "deep" and not use_v3_engine:
         meta["deep_research_phases"] = [
             # SCALE-2: 与 run_research_stage 的实际读值保持一致（开场默认 300；各 pass
             # 经 _phase_budget 应用 RESEARCH_PHASE_BUDGET_MULT）。
-            {"label": "deep-opening", "recursion_limit": int(os.environ.get("DEERFLOW_DEEP_OPENING_RECURSION_LIMIT", "300"))},
+            {"label": "deep-opening", "recursion_limit": _env_int(
+                "DEERFLOW_DEEP_OPENING_RECURSION_LIMIT", 300, minimum=1, plog=plog)},
             *[
                 {"label": str(phase["label"]), "recursion_limit": _phase_budget(int(phase["recursion_limit"]))}
                 for phase in DEEP_RESEARCH_PHASES
@@ -16028,49 +16824,16 @@ def main() -> int:
 
     write_meta()
 
-    # LINEAR-ENGINE DISPATCH (2026-09-18 rearchitecture). RESEARCH_ENGINE=linear
-    # replaces the multi-pass agentic loop with a strictly linear, phase-artifact
-    # pipeline (see linear_research.py for the design rationale and budget math:
-    # ~30 stateless LLM calls and a hard prompt-token ledger, vs 46.6M prompt
-    # tokens / 1771 tool calls / 22 from-zero restarts measured on one question).
-    # Interface contract (report/actors/sources/timeline/meta + exit code) is
-    # unchanged, so every downstream stage consumes it unmodified.
-    if (os.environ.get("RESEARCH_ENGINE", "").strip().lower() == "linear"
-            and not getattr(args, "extract_only", False)):
-        try:
-            import linear_research
-            return linear_research.run(question, out_dir, args, meta, plog, write_meta)
-        except Exception as _lin_exc:  # noqa: BLE001
-            meta.update(status="failed",
-                        error=f"linear engine failed: {type(_lin_exc).__name__}: {_lin_exc}",
-                        traceback=traceback.format_exc(),
-                        finished_at=_utcnow())
-            write_meta()
-            try:  # plog may already be closed by a nested helper — never mask the real error
-                plog.write("error", f"linear engine failed: {type(_lin_exc).__name__}: {_lin_exc}")
-                plog.close()
-            except Exception:  # noqa: BLE001
-                pass
-            return 2
-
     # Quiet DeerFlow's verbose import-time logging on stderr; keep warnings.
     logging.basicConfig(level=logging.WARNING)
 
-    # --- Provider-key env hygiene (BEFORE the config is loaded) ---
+    # --- Provider-key env hygiene (BEFORE any engine dispatch / config load) ---
     # DeerFlow's config loader greedily resolves every $VAR in config.yaml; a single
-    # unset variable crashes the whole load even when that stanza isn't selected.
-    # MiroFish's backend presets empty defaults before spawning this script, but a
-    # STANDALONE run (the documented smoke test) doesn't inherit them — preset here
-    # too so the default claude path never dies on an unrelated provider's key.
-    _PROVIDER_KEY_ENVS = {
-        "minimax": "MINIMAX_API_KEY",
-        "deepseek": "DEEPSEEK_API_KEY",
-        "qwen": "DASHSCOPE_API_KEY",
-        "glm": "ZHIPUAI_API_KEY",
-        "kimi": "KIMI_API_KEY",
-    }
-    for _env_name in _PROVIDER_KEY_ENVS.values():
-        os.environ.setdefault(_env_name, "")
+    # unset variable crashes the whole load even when that stanza isn't selected
+    # (e.g. $DASHSCOPE_API_KEY or $LLM_FALLBACK_API_KEY absent from .env).  Every
+    # engine builds models through that loader, so preset empty defaults for every
+    # reference in the config that will be loaded, plus the known provider keys.
+    _preset_provider_env_defaults(args.config)
 
     def _preflight_fail(msg: str, error: str) -> int:
         meta.update(status="failed", error=error, finished_at=_utcnow())
@@ -16131,6 +16894,13 @@ def main() -> int:
                 "未找到有效的 Codex 凭据：运行 `codex` 并用 ChatGPT 账号登录以生成 ~/.codex/auth.json。",
                 "missing Codex credential",
             )
+
+    # ENGINE DISPATCH (deep-research engine v3).  Runs only after env hygiene and
+    # the credential preflight above, so a missing key is an actionable exit 3
+    # rather than an opaque engine failure after paid work.  The engine owns
+    # every artifact and the meta lifecycle; main owns the progress log.
+    if use_v3_engine:
+        return _dispatch_v3_engine(question, out_dir, args, meta, plog, write_meta)
 
     try:
         # ITEM-14：只抽取路径不构造研究客户端、不发起研究 turn（抽取/市场各自用裸模型）。
@@ -16845,11 +17615,8 @@ def main() -> int:
                 if persisted_failures:
                     plog.write(
                         "warn",
-                        "preserved rejected structured extraction candidate(s): "
-                        + ", ".join(
-                            f"{row['phase']}={row['artifact']} ({row['reason']})"
-                            for row in persisted_failures
-                        ),
+                        "rejected structured extraction candidate(s): "
+                        + _describe_extraction_failures(persisted_failures),
                     )
                 if obj is not None and recovery_used:
                     meta["structured_extraction_recovery"] = {
