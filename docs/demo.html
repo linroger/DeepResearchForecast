@@ -50,7 +50,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/force-graph@1.49.4/dist/force-graph.min.js"></script>
-<script src="i18n.js?v=20260713c"></script>
+<script src="i18n.js?v=20260927a"></script>
 <script>
 (function () {
   var RUN_KEYS = { 'us-ai-2030': 'run.ai.title', 'ev-2035': 'run.ev.title', 'russia-ukraine': 'run.ru.title', 'semiconductors-2030': 'run.semi.title', 'memory-semi-2030': 'run.mem.title', 'china-storage-2035': 'run.ess.title', 'us-iran-2026': 'run.iran.title', 'storage-semi-2028': 'run.storage.title', 'cloud-2030': 'run.cloud.title', 'collision-decade-2031': 'run.collision.title', 'us-midterms-2026': 'run.midterms.title', 'us-trade-2028': 'run.trade.title', 'grid-storage-2040': 'run.grid.title', 'datacenter-2030': 'run.dc.title' };
@@ -194,8 +194,26 @@
     return PALETTE[h % PALETTE.length];
   }
 
+  // graph.json -> { nodes, links, graph_id }, or null when it lacks the node/link
+  // arrays the canvas needs. Links whose endpoints are not in the node set are
+  // dropped (force-graph throws on them).
+  function normalizeGraph(g) {
+    if (!g || !Array.isArray(g.nodes) || !Array.isArray(g.links)) return null;
+    var ids = Object.create(null);
+    var nodes = g.nodes.filter(function (n) { return n && n.id != null; });
+    if (!nodes.length) return null;
+    nodes.forEach(function (n) { ids[n.id] = true; });
+    var links = g.links.filter(function (l) { return l && ids[l.source] && ids[l.target]; });
+    return { nodes: nodes, links: links, graph_id: g.graph_id };
+  }
+  function graphUnavailable() {
+    return '<p class="md-loading">' + esc(drfT('graph.unavailable')) + '</p>';
+  }
+
   function renderGraphTab() {
-    return fetchJSON('graph.json').then(function (g) {
+    // a missing / unparsable / malformed graph.json degrades to a notice instead of a load error
+    return fetchJSON('graph.json').then(normalizeGraph, function () { return null; }).then(function (g) {
+      if (!g) return graphUnavailable();
       var html = '<div class="graph-stats">' + g.nodes.length + ' ' + esc(drfT('graph.nodes')) + ' · ' +
         g.links.length + ' ' + esc(drfT('graph.edges')) +
         (String(g.graph_id || '').indexOf('demo_') === 0 ? ' · <span class="graph-note">' + esc(drfT('graph.rebuilt')) + '</span>' : '') +
@@ -205,9 +223,11 @@
   }
 
   function mountGraph() {
-    fetchJSON('graph.json').then(function (g) {
+    if (!document.getElementById('graph-canvas')) return; // "graph unavailable" notice rendered instead
+    fetchJSON('graph.json').then(function (raw) {
+      var g = normalizeGraph(raw);
       var el = document.getElementById('graph-canvas');
-      if (!el) return;
+      if (!g || !el) return;
       // clone data: force-graph mutates node objects (x/y/vx/vy)
       var data = JSON.parse(JSON.stringify({ nodes: g.nodes, links: g.links }));
       graphInstance = ForceGraph()(el)
@@ -238,18 +258,24 @@
           return '<div class="g-tip"><strong>' + esc(l.name) + '</strong>' + (l.fact ? '<br>' + esc(l.fact) : '') + '</div>';
         })
         .graphData(data);
-    }).catch(function () { /* stats row already rendered; canvas just stays empty */ });
+    }).catch(function () {
+      // stats row already rendered; say so in the canvas instead of leaving it blank
+      var el = document.getElementById('graph-canvas');
+      if (el && !el.firstChild) el.innerHTML = graphUnavailable();
+    });
   }
 
   function renderForum() {
     return fetchJSON('forum.json').then(function (f) {
       var plat = renderForum._plat || 'twitter';
-      var rows = f[plat] || [];
+      var rows = (f && Array.isArray(f[plat]) ? f[plat] : []).filter(function (r) { return r && typeof r.type === 'string'; });
       var posts = 0, comments = 0, likes = 0;
       rows.forEach(function (r) {
         if (r.type === 'CREATE_POST') posts++;
         else if (r.type === 'CREATE_COMMENT') comments++;
         else if (r.type.indexOf('LIKE') === 0) likes++;
+        // calendar-simulation feeds record likes as a per-post counter, not LIKE_* rows
+        if (typeof r.likes === 'number') likes += r.likes;
       });
       var html = '<div class="forum-bar">' +
         '<span class="forum-switch">' +
@@ -262,9 +288,10 @@
       rows.forEach(function (r) {
         if (!r.content || (r.type !== 'CREATE_POST' && r.type !== 'CREATE_COMMENT')) return;
         var isComment = r.type === 'CREATE_COMMENT';
+        var agent = String(r.agent == null ? '' : r.agent);
         html += '<div class="feed-item' + (isComment ? ' feed-comment' : '') + '">' +
-          '<div class="feed-head"><span class="feed-avatar" style="background:' + colorFor(r.agent) + '">' + esc(r.agent.slice(0, 1).toUpperCase()) + '</span>' +
-          '<strong>' + esc(r.agent) + '</strong>' +
+          '<div class="feed-head"><span class="feed-avatar" style="background:' + colorFor(agent) + '">' + esc(agent.slice(0, 1).toUpperCase()) + '</span>' +
+          '<strong>' + esc(agent) + '</strong>' +
           (isComment ? '<span class="feed-kind">↪ ' + esc(drfT('forum.comment')) + '</span>' : '') +
           '<span class="feed-round">' + esc(drfT('forum.round')) + ' ' + (r.round == null ? '—' : r.round) + '</span></div>' +
           '<p class="feed-content">' + esc(r.content) + '</p></div>';

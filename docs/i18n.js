@@ -106,6 +106,7 @@
     'graph.nodes':      { en: 'entities', zh: '个实体' },
     'graph.edges':      { en: 'relations', zh: '条关系' },
     'graph.rebuilt':    { en: 'Rebuilt from the run’s saved dossier + ontology.', zh: '由该次运行保存的研究档案 + 本体重建。' },
+    'graph.unavailable': { en: 'The knowledge graph for this run is unavailable.', zh: '该次运行的知识图谱暂不可用。' },
 
     'forum.intro':      { en: 'Stage 5: digital personas post, reply and vote on a simulated Twitter + Reddit. This is the raw action feed of the run.', zh: '阶段 5：数字人格在模拟的 Twitter + Reddit 上发帖、回复、点赞。下面是这次运行的原始动作流。' },
     'forum.posts':      { en: 'posts', zh: '帖子' },
@@ -133,7 +134,7 @@
     'run.dc.title': { en: 'Global data centers to 2030 — the US–China compute race', zh: '2030 年前全球数据中心市场 —— 中美算力竞赛' },
     'card.grid.title': { en: 'Global grid-scale energy storage through 2040', zh: '2040 年前全球电网级储能产业' },
     'card.dc.title': { en: 'Global data centers to 2030 — the US–China compute race', zh: '2030 年前全球数据中心市场 —— 中美算力竞赛' },
-    'card.grid.meta': { en: '29-round calendar simulation · 19 personas · 183-node knowledge graph · 11 binary forecasts & 5 scenarios — LFP vs. sodium-ion, flow, thermal, CAES & long-duration routes across 8 regions, with an additive decision-channel simulation that moved the base case to LDES-Diversified', zh: '29 轮日历模拟 · 19 位人格 · 183 节点知识图谱 · 11 条二元预测与 5 个情景 —— 磷酸铁锂对钠离子、液流、热储、压缩空气与长时储能路线，覆盖 8 大区域；决策通道模拟真实改变了预测，将基准情景移至「长时储能多元化」' }
+    'card.grid.meta': { en: '29-round calendar simulation · 19 personas · 183-node knowledge graph · 11 binary forecasts & 5 scenarios — LFP vs. sodium-ion, flow, thermal, CAES & long-duration routes across 8 regions, with an additive decision-channel simulation that moved the base case to LDES-Diversified', zh: '29 轮日历模拟 · 19 位人格 · 183 节点知识图谱 · 11 条二元预测与 5 个情景 —— 磷酸铁锂对钠离子、液流、热储、压缩空气与长时储能路线，覆盖 8 大区域；决策通道模拟真实改变了预测，将基准情景移至「长时储能多元化」' },
     'card.dc.meta': { en: '17-round calendar simulation · 18 personas · 107-node knowledge graph · 14 binary forecasts & 5 scenarios — revenue/CAGR & IT-capacity outlook, colocation/hyperscale/enterprise/edge split, power & cooling constraints, and the US–China compute race, run end-to-end on GLM-5.3', zh: '17 轮日历模拟 · 18 人格 · 107 节点知识图谱 · 14 条二元预测与 5 情景 —— 营收/CAGR 与 IT 装机容量展望、托管/超大规模/企业级/边缘细分、电力与散热约束、中美算力竞赛，全程由 GLM-5.3 线性研究引擎完成' },
   };
 
