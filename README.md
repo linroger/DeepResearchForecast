@@ -586,7 +586,7 @@ A cell with no support becomes a **typed gap**, not an invented fact.
 | `web_search` | Serper → Tavily → Firecrawl v2 `/search` → keyless DuckDuckGo, depending on which key is set | Results cached for 6 h (200 MB) |
 | `web_fetch` | Firecrawl v2 `/scrape` (if keyed) → Jina Reader → Exa (if keyed) → direct HTTP (opt-in) | Circuit breaker (5 failures → 120 s pause); cached 72 h (500 MB); Firecrawl reuses pages up to 48 h old |
 | `prediction_market_search` | Polymarket Gamma API (no key) | Relevance-gated market candidates, recorded per lane |
-| Knowledge-graph MCP | The backend graph over stdio MCP | Only when a research run starts with an existing graph (fork / continue / resume) and `RESEARCH_MCP_KG=true` |
+| Knowledge-graph MCP | The backend graph over stdio MCP | Only when a research run starts with an existing graph (fork / continue / resume) and `RESEARCH_MCP_KG=true`. The server registration (`deerflow_bridge/extensions_config.json`) is a template: the orchestrator fills in this checkout's paths and the backend's Python when it deploys the file to `deer-flow/`. |
 
 - **Tool-budget ledger.** A SQLite ledger shared by all lanes caps each attempt (an "epoch") at 1,800 tool attempts, 900 searches (360 per lane) and 450 fetches (180 per lane). A pipeline gets at most 3 epochs.
 - **Machine-wide leases.** A second SQLite table caps concurrent research model streams (12) and harness sub-agents (9) across every pipeline on the machine.
@@ -626,13 +626,12 @@ A cell with no support becomes a **typed gap**, not an invented fact.
 | `track_<k>/` | Each lane's evidence pack, sources, checkpoint and log |
 | `research_progress.log` · `meta.json` · `research_budget.json` | Live log · status and metadata · budget telemetry |
 
-> **Experimental: linear research engine v2.** `deerflow_bridge/linear_research.py` is an opt-in replacement for the multi-pass agent loop. It is enabled with `RESEARCH_ENGINE=linear`, which is not documented in `.env.example` yet.
+> **Experimental: linear research engine v2.** `deerflow_bridge/linear_research.py` is an opt-in alternative to the multi-pass agent loop. Select it by setting `RESEARCH_ENGINE=linear` in the backend's environment (it is not documented in `.env.example` yet).
 > - **Phases.** It runs a fixed sequence: plan (up to 10 key intelligence questions) → seed search → per-question mini-agents (5 in parallel) → up to 3 gap rounds → parallel synthesis → mechanical QA with bounded repair → structured extraction.
-> - **Budget and resume.** It works under a hard 4M prompt-token ledger and saves every phase under `linear/`, so it can resume.
-> - **Limitations.**
->   - It bypasses the DeerFlow harness: no skills, no middleware, no Track B.
->   - It does not fit the default three-lane topology. Use it with `RESEARCH_PARALLEL_TRACKS=1`, or in `RESEARCH_LINEAR_MODE=salvage`, which finishes a run from a report already on disk.
->   - It has known defects and is not ready for general use.
+> - **Budget and resume.** It works under a hard 4M prompt-token ledger and saves every phase under `linear/`, so it can resume. `RESEARCH_LINEAR_MODE=salvage` finishes a run from a report already on disk.
+> - **One lane only.** When it is selected, the orchestrator ignores `RESEARCH_PARALLEL_TRACKS` and launches a single full-mode lane instead of three evidence lanes plus global synthesis. The bridge refuses `--evidence-only` and `--synthesis-manifest` invocations with a clear error, so resuming a multi-lane run under this engine fails fast; unset `RESEARCH_ENGINE` to finish such a run.
+> - **Fetching.** Pages go through the same cached `web_fetch` tool as the main engine, so the cache, source policy and shared fetch budget apply. Failed fetches, budget denials and error pages are never cited as sources.
+> - **Limitations.** It bypasses the DeerFlow harness: no skills, no middleware and no Track B actor dossier, so its cast is not a sealed `actor-intelligence/v1` contract. It is still experimental.
 >
 > The GLM-5.3 data-center demo was completed in salvage mode.
 
@@ -992,7 +991,7 @@ Visual Annex (charts no section claimed) · How to Verify · References
 - **PDF**, built with pandoc + XeLaTeX with the CJK font auto-detected, and cached by content. It returns `409` if the report is not publishable and `503` if PDF export is disabled or fails.
 - An **executive brief** and a **digest**, both deterministic with no LLM.
 
-Every export is served only through the publication gate.
+Every export is served only through the publication gate. The agent log (`/agent-log`, `/agent-log/stream`) follows the same rule: once a report has finished without passing the gate, its draft section text, raw LLM responses and ReACT thoughts are withheld (`draft_withheld: true`); while it is still generating, the log streams live.
 
 ### After the run: ensembles, ledgers and monitoring
 
@@ -1389,7 +1388,7 @@ These are the routes the dashboard uses. The complete list follows in a collapsi
 | `POST` | `/<id>/scenario` | Forks a what-if run from a completed graph. API only; the UI has no button for it. |
 | `DELETE` | `/<id>` | Deletes a finished run. Returns `409` if the run is still running or if forks depend on it (unless `?force=true`). |
 | `POST` | `/clean` | Bulk-deletes failed and cancelled runs (body `{statuses?}`) |
-| `GET` · `PUT` | `/<id>/dossier` | Reads the dossier, actors, sources, timeline, quantitative and contested claims, markets and charts. `PUT` edits the dossier (only for completed research-only runs, or runs that failed before the graph stage). |
+| `GET` · `PUT` | `/<id>/dossier` | Reads the dossier, actors, sources, timeline, quantitative and contested claims, markets and charts, plus `sealed`. `PUT` edits the dossier (only for completed research-only runs, or runs that failed before the graph stage). Sealed research is read-only: `PUT` returns `409` with `sealed: true`. |
 | `POST` · `GET` | `/<id>/dossier/translations/<lang>` | Start, or read, an audited EN ↔ ZH translation of the research report |
 | `GET` | `/<id>/dossier/pdf` | The research report as a PDF |
 | `GET` | `/<id>/artifact/<name>` | A named stage artifact |
@@ -1566,9 +1565,8 @@ Run the backend scripts from `backend/` with `uv run python scripts/<name>.py --
   - Request logs redact secrets, and `run.json` stores no credentials.
   - Provider settings are sanitized before being written to `.env`.
   - Custom base URLs are validated. `APP_BLOCK_PRIVATE_URLS=true` additionally rejects private and loopback targets.
-- ⚠️ **The dev server is reachable from your network.** `npm start` and `npm run dev` run Vite with `--host`, so it listens on **all** network interfaces. Its proxy reaches Flask over loopback, which Flask trusts. As a result, anyone who can reach port 3000 on your network can use the whole API without a token. On untrusted networks:
-  - block port 3000 with a firewall, **or**
-  - use single-port mode: `npm run build` plus the backend alone, which keeps everything on `127.0.0.1:5001`.
+- **The dev server is loopback-only too.** `npm start` and `npm run dev` bind Vite to `localhost:3000`. Its `/api` proxy reaches Flask over loopback and forwards the browser's address in `X-Forwarded-For`. Flask trusts a loopback caller only if every forwarded address (`X-Forwarded-For`, `X-Real-IP`, `Forwarded`) is loopback too, so a request proxied for another machine is treated as remote. Forwarding headers can only lower trust, never raise it.
+  - To open the dev server to your network, start it with `FRONTEND_HOST=0.0.0.0 npm run dev` (a shell variable; Vite does not read the root `.env`). Remote browsers then get `403` from `/api` unless you configure `APP_API_TOKEN`, and the SPA does not send the token, so put an authenticating reverse proxy in front for real remote use.
 - **Exposing the backend deliberately.** Set `FLASK_HOST=0.0.0.0` **and** `APP_API_TOKEN`. The SPA does not send the token, so for browser access put an authenticating reverse proxy in front.
 
 ---
@@ -1578,7 +1576,7 @@ Run the backend scripts from `backend/` with `uv run python scripts/<name>.py --
 | What | Command | Notes |
 |---|---|---|
 | Backend tests | `npm test` | About 2,800 offline tests in ~155 modules. No network or LLM spend. Needs the backend venv (`npm run setup:backend`). |
-| Frontend unit tests | `cd frontend && npm run test:unit` | `node:test` over `src/utils` (69 tests) |
+| Frontend unit tests | `cd frontend && npm run test:unit` | `node:test` over `src/utils` and the dev-server config (72 tests) |
 | Lint | `npm run lint` | Ruff. CI also lints `backend/scripts` and `deerflow_bridge`. |
 | Config drift | `npm run check:env` | Every setting `config.py` reads must be documented in `.env.example` |
 | Stage-contract smoke test | `npm run smoke` | Stub LLM, deterministic, $0 |
@@ -1734,7 +1732,7 @@ Generated and gitignored: `.env`, `deer-flow/`, `deer-flow-2.0.0/`, `backend/upl
 | **Resume returns `409` right after a crash or restart** | The run still looks owned: its heartbeat is less than 120 s old. Wait two minutes and resume again. |
 | **The report is FAILED / "not publishable"** | `GET /api/report/<id>` lists the publication issues, and `final_audit.json` has the details. Resume the pipeline to regenerate the report. |
 | **The PDF download returns `503`** | PDF export is disabled (`REPORT_PDF_EXPORT=false`), or pandoc / XeLaTeX / a CJK font is missing. Install pandoc and a TeX distribution with `xelatex`. |
-| **Dossier edits vanished after "Continue"** | A known limitation: editing the dossier changes files covered by the sealed research contract. Continue and resume treat that as tampering and re-run synthesis. Keep a copy of important edits. |
+| **The dossier shows "Sealed · read-only" and can't be edited** | The report's exact bytes are bound elsewhere: by the multi-lane research contract (`research_contract_manifest.json` and the judge's prose binding) or by a sealed `actor-intelligence/v1` cast. An in-place edit would make Continue re-run synthesis over it or fail actor reception, so the Edit button is replaced by this badge and `PUT /dossier` returns `409`. To change the research, start a new run with a refined question. Edits to unsealed runs are kept: saving refreshes `handoff/manifest.json`, so Continue reuses the edited research. |
 | **I need to stop a long run** | Click **Cancel** or call `POST /api/research/<id>/cancel`. Research subprocesses stop within about 1 s and the simulation within about 5 s. |
 
 ---

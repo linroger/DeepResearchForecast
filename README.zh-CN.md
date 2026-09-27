@@ -586,7 +586,7 @@ flowchart LR
 | `web_search` | Serper → Tavily → Firecrawl v2 `/search` → 免 Key 的 DuckDuckGo，取决于配置了哪个 Key | 结果缓存 6 小时（200 MB） |
 | `web_fetch` | Firecrawl v2 `/scrape`（有 Key 时）→ Jina Reader → Exa（有 Key 时）→ 直连 HTTP（需显式开启） | 熔断器（连续失败 5 次 → 暂停 120 秒）；缓存 72 小时（500 MB）；Firecrawl 复用 48 小时内的页面 |
 | `prediction_market_search` | Polymarket Gamma API（无需 Key） | 经相关性门过滤的候选市场，按证据轨分别记录 |
-| 知识图谱 MCP | 通过 stdio MCP 访问后端图谱 | 仅当研究启动时已存在图谱（分叉 / 继续 / 恢复），且 `RESEARCH_MCP_KG=true` |
+| 知识图谱 MCP | 通过 stdio MCP 访问后端图谱 | 仅当研究启动时已存在图谱（分叉 / 继续 / 恢复），且 `RESEARCH_MCP_KG=true`。服务注册文件（`deerflow_bridge/extensions_config.json`）是模板：编排器把它部署到 `deer-flow/` 时，会填入本机检出路径与后端所用的 Python。 |
 
 - **工具预算账本。** 所有证据轨共享一个 SQLite 账本，为每次尝试（一个「纪元」）设上限：工具调用 1,800 次、搜索 900 次（每轨 360 次）、抓取 450 次（每轨 180 次）。每条管线最多 3 个纪元。
 - **整机租约。** 另一张 SQLite 表为本机所有管线合计限制并发：研究模型流最多 12 路，harness 子智能体最多 9 个。
@@ -626,13 +626,12 @@ flowchart LR
 | `track_<k>/` | 每条证据轨的证据包、来源、检查点与日志 |
 | `research_progress.log` · `meta.json` · `research_budget.json` | 实时日志 · 状态与元数据 · 预算遥测 |
 
-> **实验性功能：线性研究引擎 v2。** `deerflow_bridge/linear_research.py` 是多轮智能体循环的可选替代方案，通过 `RESEARCH_ENGINE=linear` 启用（尚未写入 `.env.example`）。
+> **实验性功能：线性研究引擎 v2。** `deerflow_bridge/linear_research.py` 是多轮智能体循环的可选替代方案，在后端环境中设置 `RESEARCH_ENGINE=linear` 即可选用（尚未写入 `.env.example`）。
 > - **阶段。** 它按固定顺序运行：规划（至多 10 个关键情报问题）→ 种子搜索 → 按问题分派的迷你智能体（5 个并行）→ 至多 3 轮补缺 → 并行综合 → 带有限修复的机械质检 → 结构化抽取。
-> - **预算与恢复。** 它在 400 万提示 token 的硬性账本内运行，并把每个阶段的结果保存在 `linear/` 下，因此可以续跑。
-> - **局限。**
->   - 它绕过了 DeerFlow harness：没有技能、没有中间件、没有 Track B。
->   - 它与默认的三证据轨拓扑不兼容。请配合 `RESEARCH_PARALLEL_TRACKS=1` 使用，或使用 `RESEARCH_LINEAR_MODE=salvage` 模式，从磁盘上已有的报告收尾完成一次运行。
->   - 它有已知缺陷，尚不适合通用。
+> - **预算与恢复。** 它在 400 万提示 token 的硬性账本内运行，并把每个阶段的结果保存在 `linear/` 下，因此可以续跑。`RESEARCH_LINEAR_MODE=salvage` 模式会从磁盘上已有的报告收尾完成一次运行。
+> - **只跑单轨。** 选用它时，编排器会忽略 `RESEARCH_PARALLEL_TRACKS`，只启动一条完整模式的研究轨，而不是三条证据轨加全局综合。bridge 收到 `--evidence-only` 或 `--synthesis-manifest` 调用时会给出明确错误并拒绝执行，因此用该引擎恢复一次多轨运行会立即失败；要完成这类运行，请取消设置 `RESEARCH_ENGINE`。
+> - **网页抓取。** 网页经由与主引擎相同的带缓存 `web_fetch` 工具抓取，缓存、来源策略与共享抓取预算同样生效。抓取失败、预算拒绝与错误页面都不会被当作来源引用。
+> - **局限。** 它绕过了 DeerFlow harness：没有技能、没有中间件、没有 Track B 行动者档案，因此它产出的角色阵容不是封存的 `actor-intelligence/v1` 契约。它仍属实验性功能。
 >
 > GLM-5.3 数据中心那次演示，就是以抢救模式收尾完成的。
 
@@ -992,7 +991,7 @@ flowchart LR
 - **PDF**：使用 pandoc + XeLaTeX 构建，自动探测 CJK 字体，并按内容缓存。报告未通过发布门时返回 `409`；PDF 导出被关闭或构建失败时返回 `503`。
 - **执行简报**与**摘要**：均为确定性生成，不调用 LLM。
 
-所有导出都只能经发布门获取。
+所有导出都只能经发布门获取。智能体日志（`/agent-log`、`/agent-log/stream`）遵循同样的规则：报告生成结束但未通过发布门时，其中的章节草稿正文、LLM 原始响应与 ReACT 思考会被隐去（`draft_withheld: true`）；报告仍在生成时，日志照常实时推送。
 
 ### 运行结束之后：集成、账本与监测
 
@@ -1389,7 +1388,7 @@ FIRECRAWL_API_KEY=fc-...         # 可选，但推荐
 | `POST` | `/<id>/scenario` | 从已完成的图谱分叉出一次假设推演。仅限 API，界面上没有对应按钮。 |
 | `DELETE` | `/<id>` | 删除一次已结束的运行。运行仍在进行，或有分叉依赖它时返回 `409`（除非带 `?force=true`）。 |
 | `POST` | `/clean` | 批量删除失败与已取消的运行（请求体 `{statuses?}`） |
-| `GET` · `PUT` | `/<id>/dossier` | 读取研究档案、行动者、来源、时间线、数值与争议主张、预测市场与图表。`PUT` 用于编辑档案（仅限已完成的仅研究运行，或在图谱阶段之前失败的运行）。 |
+| `GET` · `PUT` | `/<id>/dossier` | 读取研究档案、行动者、来源、时间线、数值与争议主张、预测市场与图表，以及 `sealed`。`PUT` 用于编辑档案（仅限已完成的仅研究运行，或在图谱阶段之前失败的运行）。已封存的研究只读：`PUT` 返回 `409` 与 `sealed: true`。 |
 | `POST` · `GET` | `/<id>/dossier/translations/<lang>` | 发起或读取研究报告经审计的中↔英翻译 |
 | `GET` | `/<id>/dossier/pdf` | 研究报告的 PDF |
 | `GET` | `/<id>/artifact/<name>` | 按名称获取某个阶段产物 |
@@ -1566,9 +1565,8 @@ flowchart LR
   - 请求日志会对凭据脱敏，`run.json` 不保存任何凭据。
   - 提供方设置在写入 `.env` 前会被清洗。
   - 自定义 Base URL 会被校验；设置 `APP_BLOCK_PRIVATE_URLS=true` 还会拒绝私有地址与环回地址。
-- ⚠️ **开发服务器可以从你的网络访问。** `npm start` 与 `npm run dev` 以 `--host` 参数运行 Vite，因此它监听**所有**网卡。它的代理经由环回地址访问 Flask，而 Flask 信任环回地址。结果是：网络中任何能访问 3000 端口的人，都可以不带 token 使用全部 API。在不可信的网络中：
-  - 用防火墙封锁 3000 端口，**或**
-  - 使用单端口模式：`npm run build` 后只运行后端，一切都保持在 `127.0.0.1:5001` 上。
+- **开发服务器同样只监听环回地址。** `npm start` 与 `npm run dev` 把 Vite 绑定在 `localhost:3000`。它的 `/api` 代理经由环回地址访问 Flask，并在 `X-Forwarded-For` 中转发浏览器的地址。只有当所有转发地址（`X-Forwarded-For`、`X-Real-IP`、`Forwarded`）也都是环回地址时，Flask 才信任这个环回调用方；替其他机器代理过来的请求一律按远程请求处理。转发头只会降低信任，绝不会提升信任。
+  - 若要让网络中的其他设备访问开发服务器，请用 `FRONTEND_HOST=0.0.0.0 npm run dev` 启动（这是 shell 变量，Vite 不会读取根目录的 `.env`）。此时远程浏览器访问 `/api` 会得到 `403`，除非配置了 `APP_API_TOKEN`；而 SPA 不会发送 token，因此真正的远程使用请在前面放一个负责鉴权的反向代理。
 - **有意对外暴露后端时。** 请同时设置 `FLASK_HOST=0.0.0.0` **和** `APP_API_TOKEN`。SPA 不会发送 token，因此需要浏览器访问时，请在前面放一个负责鉴权的反向代理。
 
 ---
@@ -1578,7 +1576,7 @@ flowchart LR
 | 内容 | 命令 | 说明 |
 |---|---|---|
 | 后端测试 | `npm test` | 约 2,800 个离线测试，分布在约 155 个模块中。不访问网络、不消耗 LLM。需要先构建后端 venv（`npm run setup:backend`）。 |
-| 前端单元测试 | `cd frontend && npm run test:unit` | 基于 `node:test`，覆盖 `src/utils`（69 个测试） |
+| 前端单元测试 | `cd frontend && npm run test:unit` | 基于 `node:test`，覆盖 `src/utils` 与开发服务器配置（72 个测试） |
 | Lint | `npm run lint` | Ruff。CI 还会检查 `backend/scripts` 与 `deerflow_bridge`。 |
 | 配置漂移 | `npm run check:env` | `config.py` 读取的每一项设置都必须在 `.env.example` 中有说明 |
 | 阶段契约冒烟测试 | `npm run smoke` | 桩 LLM、确定性、零成本 |
@@ -1734,7 +1732,7 @@ DeepAgentForecast/                   # 仓库：linroger/DeepResearchForecast
 | **崩溃或重启后立即恢复，却返回 `409`** | 这次运行看起来仍有归属：它的心跳还不到 120 秒。等待两分钟再恢复。 |
 | **报告为 FAILED /「不可发布」** | `GET /api/report/<id>` 会列出发布问题，`final_audit.json` 中有详情。恢复这条管线即可重新生成报告。 |
 | **下载 PDF 返回 `503`** | PDF 导出被关闭（`REPORT_PDF_EXPORT=false`），或缺少 pandoc / XeLaTeX / CJK 字体。请安装 pandoc 与带 `xelatex` 的 TeX 发行版。 |
-| **点击「继续完整管线」后，对研究档案的修改不见了** | 这是已知限制：编辑研究档案会改动受封存研究契约保护的文件，继续与恢复都会把它视为篡改，从而重新运行综合。重要的修改请另存一份。 |
+| **研究档案显示「已封存 · 只读」，无法编辑** | 报告的确切字节已在别处被绑定：多轨研究契约（`research_contract_manifest.json` 及评审对正文的绑定），或封存的 `actor-intelligence/v1` 角色阵容。原地编辑会让「继续」在其上重新运行综合，或在行动者接收校验处失败，因此「编辑」按钮被这个标记取代，`PUT /dossier` 也会返回 `409`。如需修改研究，请用修订后的问题重新发起一次运行。未封存运行的修改会被保留：保存时会刷新 `handoff/manifest.json`，「继续」会复用修改后的研究。 |
 | **需要停止一次长时间运行** | 点击**取消**，或调用 `POST /api/research/<id>/cancel`。研究子进程约 1 秒内停止，模拟约 5 秒内停止。 |
 
 ---
