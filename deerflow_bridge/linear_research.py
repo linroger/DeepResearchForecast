@@ -76,7 +76,7 @@ from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Callable, Iterator, Mapping, MutableMapping, Sequence
+from typing import Any, Callable, Iterable, Iterator, Mapping, MutableMapping, Sequence
 
 import research_gateway as rg
 
@@ -2011,6 +2011,103 @@ _SCALE_EXPONENTS = {
     "tn": 12, "trn": 12, "k": 3, "m": 6, "b": 9, "t": 12,
     "万亿": 12, "千亿": 11, "百亿": 10, "十亿": 9, "亿": 8, "千万": 7, "百万": 6, "万": 4,
 }
+# Percentages.  A fact's percentage ("15%") is verified only by a page number
+# that is a percentage: written as one (incl. wrapped lines, split table cells,
+# "2.8-percent", "1.5 pts", "4.1pc"), the lower bound of a percentage range, or
+# a number in a percent-marked table or header block.  A bare "15" elsewhere (a
+# day of the month, a count, a footnote) is a different quantity.
+_PERCENT_WORD = (r"(?:percent(?:age[\s-]+points?)?\b|per[\s-]+cent\b|pct\b|pp\b|ppts?\b|pts\b|p\.p\."
+                 r"|pc\b|个?百分点)")
+_PERCENT_UNIT = r"(?:%|" + _PERCENT_WORD.removeprefix("(?:")
+# "15%", "15 %", "15\n%" (a wrapped line), "| 15 | % |" (a split table cell),
+# "15 percent", "15-per-cent", "1.5 pts", "4.1pc", "3个百分点".
+_PERCENT_NUMBER_RE = re.compile(
+    r"(?<![\d.,])(\d++(?:[.,]\d++)*+)"
+    r"(?:[^\S\n]*+(?:\n[^\S\n]*+)?+(?:\|[^\S\n]*+)?+%"
+    r"|(?:[^\S\n]*+(?:\n[^\S\n]*+)?+|-)" + _PERCENT_WORD + ")", re.I)
+# The lower bound of a percentage range ("10-15%", "10 to 15 percent", "10至15%").
+_PERCENT_RANGE_LOW_RE = re.compile(
+    r"(?<![\d.,])(\d++(?:[.,]\d++)*+)[^\S\n]*+(?:[-–—~]|to\b|and\b|至|到)[^\S\n]*+"
+    r"(?=\d++(?:[.,]\d++)*+[^\S\n]*+-?" + _PERCENT_UNIT + ")", re.I)
+# A table header row (one of a table's first rows, or the caption line right
+# above it) marking its columns as percentages: "Share %", "% Change",
+# "Percent change from preceding year", "比重".
+_PERCENT_TABLE_HEADER_RE = re.compile(r"%|\bpercent(?:age)?s?\b|\bper\s+cent\b|\bpct\b|占比|比重|比例|百分比",
+                                      re.I)
+# A label marking the numbers of its own row, or of the lines under a
+# non-table header line up to the next blank line: "Market share (%)",
+# "in percent", "（%）", "占比".
+_PERCENT_HEADER_RE = re.compile(r"[(（][^\S\n]*+%[^\S\n]*+[)）]|\bin\s+(?:%|percent\b)|占比", re.I)
+_TABLE_HEADER_ROWS = 3
+
+
+def _canonical_numbers(raws: Iterable[str]) -> set[str]:
+    found: set[str] = set()
+    for raw in raws:
+        if "," in raw and not _THOUSANDS_RE.match(raw):
+            continue
+        number = _canonical_number(raw.replace(",", ""))
+        if number:
+            found.add(number)
+    return found
+
+
+def _percent_numbers(value: str) -> set[str]:
+    """Canonical numbers written as percentages in ``value`` (see
+    :data:`_PERCENT_NUMBER_RE`); a comma list that is no thousands grouping
+    ("3,4%") is skipped."""
+    return _canonical_numbers(match.group(1) for match in _PERCENT_NUMBER_RE.finditer(value))
+
+
+def _percent_context_numbers(value: str) -> set[str]:
+    """Numbers of percent-marked tables and header blocks: the rows under a
+    table header row (one of its first :data:`_TABLE_HEADER_ROWS` rows, or its
+    caption line) that marks percentages, every table row labelled as one
+    ("Growth (%)"), and the lines under a percent-marked non-table header line
+    up to the next blank line (a flattened table)."""
+    found: set[str] = set()
+    lines = value.split("\n")
+    index = 0
+    header_active = False
+    while index < len(lines):
+        line = lines[index]
+        if line.lstrip().startswith("|"):
+            end = index
+            while end < len(lines) and lines[end].lstrip().startswith("|"):
+                end += 1
+            caption = lines[index - 1] if index and lines[index - 1].strip() else ""
+            header = index - 1 if (header_active or _PERCENT_TABLE_HEADER_RE.search(caption)) else next(
+                (row for row in range(index, min(end, index + _TABLE_HEADER_ROWS))
+                 if _PERCENT_TABLE_HEADER_RE.search(lines[row])), None)
+            for row in range(index, end):
+                if (header is not None and row > header) or _PERCENT_HEADER_RE.search(lines[row]):
+                    found.update(_numbers_in(lines[row]))
+            header_active = False
+            index = end
+            continue
+        if not line.strip():
+            header_active = False
+        elif header_active:
+            found.update(_numbers_in(line))
+        elif _PERCENT_HEADER_RE.search(line):
+            found.update(_numbers_in(line))
+            header_active = True
+        index += 1
+    return found
+
+
+def _page_percent_numbers(value: str) -> set[str]:
+    """Every page number that may verify a fact's percentage."""
+    return (_percent_numbers(value) | _percent_context_numbers(value)
+            | _canonical_numbers(match.group(1) for match in _PERCENT_RANGE_LOW_RE.finditer(value)))
+
+
+def fact_percent_tokens(text: str) -> frozenset[str]:
+    """The numbers a fact states as percentages (verified against page
+    percentages only; see :func:`page_number_set`)."""
+    return frozenset(_percent_numbers(_number_text(text, strip_dates=True)))
+
+
 # Sentence ends: a Latin terminator before a space, or a CJK terminator (no
 # space follows one in Chinese text).
 _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|(?<=[。！？])\s*")
@@ -2217,9 +2314,12 @@ def page_number_set(text: str) -> frozenset[str]:
     """Every number of a page as written (a fact token matches one of these
     literally, as before) plus the full value of every number (``"="`` +
     value: grouped digits joined, scaled numbers at full scale), which only
-    the full values of a fact's numbers are compared with."""
+    the full values of a fact's numbers are compared with, plus every
+    percentage (``"%"`` + number: see :func:`_page_percent_numbers`), which
+    only a fact's percentages are compared with."""
     value = _number_text(text, strip_dates=False)
-    return frozenset(set(_numbers_in(value)) | {full for _, full in _number_values(_join_digit_groups(value))})
+    return frozenset(set(_numbers_in(value)) | {full for _, full in _number_values(_join_digit_groups(value))}
+                     | {"%" + number for number in _page_percent_numbers(value)})
 
 
 def _note_heading(line: str) -> str | None:
@@ -2417,8 +2517,10 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
                     for sid in fetched:
                         available |= page_numbers(sid) or frozenset()
                     values = fact_number_values(text)
+                    percents = fact_percent_tokens(text)
                     missing = [t for t in tokens
-                               if t not in available and not values.get(t, frozenset()) & available]
+                               if (("%" + t) not in available if t in percents
+                                   else t not in available and not values.get(t, frozenset()) & available)]
                     fact["verified_numbers"] = not missing
                     if missing:
                         fact["tag"] = "UNVERIFIED"
@@ -5228,12 +5330,15 @@ class _Engine:
                 self.state.set_phase("finalize", "failed", "report too short")
                 raise _EngineFailure(f"report_too_short: {len(report.strip())} chars < {MIN_REPORT_CHARS}")
             report_name = self._filename("REPORT_FILENAME", "research_report.md")
-            self.write_text(self.out_dir / report_name, report)
-            self.log("ok", f"wrote {report_name} ({len(report)} chars)")
             order = [int(sid) for sid in self.qa.get("citation_order") or []]
             sources = self._source_rows(order)
             sources_name = self._filename("SOURCES_FILENAME", "sources.json")
+            # sources.json first: the report's [S#] are positional into it, and
+            # the parent salvages a killed run whenever a fresh report exists —
+            # a report must never be on disk without its sources.
             self.write_json(self.out_dir / sources_name, sources, internal=False)
+            self.write_text(self.out_dir / report_name, report)
+            self.log("ok", f"wrote {report_name} ({len(report)} chars)")
             self.log("ok", f"wrote {sources_name} ({len(sources)} sources)")
             actors_raw, facts_raw = self._structured(strip_references(report), deadline)
             counts = self._write_structured(actors_raw, facts_raw, sources)
@@ -5502,6 +5607,17 @@ class _Engine:
         if self.plan is not None and self.plan.fallback.get(PLAN_OUTAGE_KEY):
             events.append("research plan built from the deterministic templates: the model was unavailable "
                           "during planning")
+        elif self.plan is not None and self.plan.fallback.get("plan"):
+            # The planning call failed (or returned nothing parseable) without an outage.
+            events.append("research plan built from the deterministic templates: the planning call returned "
+                          "no usable plan")
+        elif self.plan is not None:
+            # The planner answered, but unusably: its gaps were filled from templates.
+            if self.plan.fallback.get("kiqs"):
+                events.append("research questions filled from the deterministic templates: the planner's "
+                              "answer had fewer than two usable questions")
+            if self.plan.fallback.get("scenarios"):
+                events.append("scenario frame is the default template: the planner gave no usable scenarios")
         if self.refused_calls:
             events.append(f"the provider's content filter refused every model call ({self.refused_calls} "
                           "refused); the report is built from the deterministic fallbacks")

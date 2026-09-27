@@ -245,3 +245,10 @@ This repository implements a six-stage forecast workflow: DeerFlow 2 research, o
 - **Verification:** 3 adversarial review rounds (22 + 15 + 46 confirmed findings, all fixed or documented as deliberate partials); every fix has a regression test that fails on the pre-fix code; full backend suite green (see docs/handoff/research-engine-v3/handoff.md §8/§10 — the file is gitignored and stays local); offline E2E under the deer-flow venv rc 0; real parent-pipeline acceptance with a child process; GLM wire bodies unchanged; ruff clean; env drift strict rc 0.
 - **Also fixed:** test hermeticity (.env no longer leaks into pytest), the backend Chinese probability parser ("概率 15%" read as 1.0), parent research lint never running on single-lane runs (now audit-only there), legacy extract-only salvage corrupting positional sources.json / v3 meta.
 - **Next:** owner-gated live GLM run to confirm cache hits and A1/A2 (see handoff §9); follow-ups outside v3 scope: report_lint issues on manifest-owned multi-lane legacy runs, position-aware number verification.
+
+### 2026-09-28T06:45:00+08:00 (CST) — branch `feat/research-engine-v3`
+
+- **Feature:** `feature_research_engine_v3` residual fixes after the v3 commit.
+- **Changes:** percent-aware number verification (a fact's "15%" needs a page percentage — written as one, a range bound, or a number in a percent-marked table/row/header block — not any bare 15); degradation events for template plans from an unusable/failed planner answer; finalize writes sources.json before research_report.md.
+- **Verification:** backend/tests/test_research_engine_v3_residuals.py (fails on the committed engine); adversarial measurement on 4,775 real cached pages + 27 real reports: 0 real-layout regressions, 98.1% of coincidental percentage matches removed, 6 report flips all correct removals; regexes linear; full backend suite re-run (see handoff §10).
+- **Next:** unchanged — owner-gated live GLM run; push after GitHub re-authentication.

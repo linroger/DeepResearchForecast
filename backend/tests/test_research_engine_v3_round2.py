@@ -763,11 +763,15 @@ def test_r2_degradation_events_reach_research_quality(tmp_path, bridge):
 
     _, junk, _, _, _ = v3.run_engine(tmp_path / "junk", bridge, v3.JunkWorld(), depth="quick")
     events = junk["research_quality"]["degradation"]
-    assert events[0].startswith(f"{len(junk['synthesis_fallback_sections'])} section(s) written by the "
+    # JunkWorld's planner answers junk, so the whole plan is the template
+    # (review round 3, C5 case D).
+    assert events[0] == ("research plan built from the deterministic templates: the planning call returned "
+                         "no usable plan")
+    assert events[1].startswith(f"{len(junk['synthesis_fallback_sections'])} section(s) written by the "
                                 "deterministic fallback: ")
     # JunkWorld's template plan names no actors (review round 3, C3: an empty
     # actor list is its own event).
-    assert events[1:] == ["executive summary written by the deterministic fallback",
+    assert events[2:] == ["executive summary written by the deterministic fallback",
                           "actor extraction failed and the plan names no actors: the actor list is empty",
                           "fact extraction failed; timeline, quantitative and contested facts are empty"]
 
