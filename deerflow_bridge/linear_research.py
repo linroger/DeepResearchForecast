@@ -2109,6 +2109,168 @@ def fact_percent_tokens(text: str) -> frozenset[str]:
     return frozenset(_percent_numbers(_number_text(text, strip_dates=True)))
 
 
+# Unit-bearing figures.  A fact's power (W family: "176 GW", "300-megawatt",
+# "176万千瓦"), energy (Wh family: "307 GWh", "亿千瓦时") or money figure ("$55",
+# "RMB 100 billion", "5亿元") is verified only by the same number on the page
+# in the same unit class: written with such a unit (also across a KPI card's
+# line breaks, "158\n\nGW"), either bound of such a range ("between 40 and
+# 55 GW", "$115-135 billion"), or a number in a table or header block marking
+# that unit.  A "176" in "176 pages", "176%", a URL or an image hash is a
+# different quantity.  Numbers without a unit (and years) are verified as
+# before.
+_UNIT_NUMBER = r"(?<![\d.,])(\d++(?:[.,]\d++)*+)"
+# A one-letter scale never runs into a capital: "20 BkWh" is 20 billion kWh,
+# "30,000 BMW" is no power figure.
+_UNIT_SCALE = (r"(?:(?i:thousand|million|billion|trillion|mn|mln|bn|bln|tn|trn)|[kmbKMB](?![A-Z])"
+               r"|万亿|千亿|百亿|十亿|亿|億|千万|百万|十万|万|萬|千)")
+_UNIT_WORDS = {
+    "power": (r"(?i:[kmgt]w(?:p|ac|dc|el|e|th)?s?)(?![A-Za-z·⋅])"
+              r"|(?i:(?:kilo|mega|giga|tera|peta)?watts?)\b(?![-\s]?(?i:hours?))"
+              r"|万千瓦(?!时)|千瓦(?!时)|兆瓦(?!时)|吉瓦(?!时)"),
+    "energy": (r"(?i:[kmgtp]w[·⋅.]?hs?)(?![A-Za-z])|(?i:(?:kilo|mega|giga|tera|peta)?watt[-\s]?hours?)\b"
+               r"|千瓦时|千瓦小时|兆瓦时|吉瓦时|太瓦时|度电"),
+    "currency": (r"(?i:(?:(?:u\.?s\.?|nt|hk|new[^\S\n]taiwan|hong[^\S\n]kong|australian|canadian|singapore)"
+                 r"[^\S\n]?)?dollars?|euros?|yuan|renminbi|yen|rupees?)\b"
+                 r"|(?<![A-Za-z])(?i:usd|eur|gbp|jpy|rmb|cny|hkd|aud|cad|inr|krw|twd|sgd|chf)(?![A-Za-z])"
+                 r"|美元|欧元|日元|港元|英镑|人民币|人民幣|元"),
+}
+# "Rs 76,000 crore" (rupees): case-sensitive, so "RS-485" is no price.
+_UNIT_CURRENCY_PREFIX = (r"(?:(?i:us|hk|au|a|c|nt|r|s)?\$|[€£¥₹₩]"
+                         r"|(?<![A-Za-z])(?i:usd|eur|gbp|jpy|rmb|cny|hkd|aud|cad|inr|krw|twd|sgd|chf)(?![A-Za-z])"
+                         r"|(?<![A-Za-z])Rs\.?(?![A-Za-z])|人民币|人民幣)")
+# Spaces within a line (zero-width spaces included), and a gap of up to two
+# line breaks (a KPI card's "158\n\nGW", "USD\n\n140.35").
+_UNIT_SPACE = r"(?:[^\S\n]|[\u200b-\u200d\u2060\ufeff])*+"
+_UNIT_LINES = _UNIT_SPACE + r"(?:\n" + _UNIT_SPACE + r"){0,2}+"
+# Number, then a unit: after spaces, line breaks, a "+" or "多" ("50+ MW",
+# "7800多亿元") or a hyphen ("300-megawatt"), optionally through a scale word
+# ("5亿元", "1.2 billion dollars", "20 BkWh").
+_UNIT_GAP = r"(?:[+多余]?" + _UNIT_LINES + r"|-)"
+_UNIT_AFTER = r"(?:" + _UNIT_SCALE + r"(?:" + _UNIT_SPACE + r"|-))?"
+_UNIT_SUFFIX_RES = {unit: re.compile(_UNIT_NUMBER + _UNIT_GAP + _UNIT_AFTER + "(?:" + words + ")")
+                    for unit, words in _UNIT_WORDS.items()}
+# "$55", "US$ 1.2 billion", "$**0.48**", "CNY -8.3 billion", "人民币762亿元".
+_UNIT_PREFIX_RE = re.compile(_UNIT_CURRENCY_PREFIX + _UNIT_LINES + r"(?:[*_]++" + _UNIT_SPACE + r")?(?:[-−–]"
+                             + _UNIT_SPACE + r")?" + _UNIT_NUMBER)
+# The lower bound of a range whose upper bound carries the unit: "10-15 GW",
+# "between 40 and 55 GW", "22-to-24 billion euro", "10至15万千瓦".
+_UNIT_RANGE_LOW_RES = {
+    unit: re.compile(_UNIT_NUMBER + r"[^\S\n]*+(?:[-–—~]|-?to\b-?|and\b|至|到)[^\S\n]*+(?:"
+                     + _UNIT_CURRENCY_PREFIX + r"[^\S\n]*+)?(?=\d++(?:[.,]\d++)*+" + _UNIT_GAP + _UNIT_AFTER
+                     + "(?:" + words + "))")
+    for unit, words in _UNIT_WORDS.items()}
+# Page side only: the upper bound of a range whose lower bound carries a
+# currency sign or code ("$115-135 billion", "$1.3bn–1.4bn", "$130,000 to
+# 140,000", "CNY430-960 per kWh"; never "$5-10%"), and a number followed by a
+# currency sign ("14,000 €/kWp", "5,900$"; not "5 $10", the sign of the next
+# number).
+_UNIT_RANGE_HIGH_RE = re.compile(
+    _UNIT_CURRENCY_PREFIX + _UNIT_SPACE + r"\d++(?:[.,]\d++)*+(?:" + _UNIT_SPACE + _UNIT_SCALE + r")?+"
+    r"[^\S\n]*+(?:[-–—~]|-?to\b-?|and\b|至|到)[^\S\n]*+" + _UNIT_NUMBER + r"(?![^\S\n]*+%)")
+_UNIT_SIGN_AFTER_RE = re.compile(_UNIT_NUMBER + _UNIT_SPACE + r"[$€£¥₹₩](?!" + _UNIT_SPACE + r"\d)")
+# A unit named anywhere in a line (a table caption or row), and a line that
+# labels its numbers with a unit: "Capacity (GW)", "(Billions of U.S.
+# Dollars)", "（万千瓦）", "in MW", "单位：亿元", or a short line of no
+# digits naming one ("USD Million", "人民币百万元(特别说明除外)").
+_UNIT_MARKS = {unit: r"(?<![A-Za-z])(?:" + words + ("|" + _UNIT_CURRENCY_PREFIX if unit == "currency" else "") + ")"
+               for unit, words in _UNIT_WORDS.items()}
+_UNIT_MARK_RES = {unit: re.compile(mark) for unit, mark in _UNIT_MARKS.items()}
+_UNIT_LABEL_RES = {
+    unit: re.compile(r"(?:[(（\[][^()（）\[\]\n]{0,40}|(?i:\bin|\bunits?:?)[^\S\n]*+"
+                     r"(?:(?i:thousands|millions|billions|trillions)[^\S\n]++(?i:of)[^\S\n]++)?|单位[:：]?[^\S\n]*+)"
+                     + mark)
+    for unit, mark in _UNIT_MARKS.items()}
+_UNIT_LABEL_LINE_MAX = 30
+# A table's caption: its nearest non-blank, non-table lines above, at most
+# this many and never across a blank run longer than one line.
+_UNIT_CAPTION_LINES = 3
+
+
+def _unit_context_lines(lines: Sequence[str], unit: str) -> set[int]:
+    """Indexes of the lines whose numbers are stated in ``unit``: every row
+    of a pipe table whose caption (its :data:`_UNIT_CAPTION_LINES` nearest
+    non-blank lines above) or any row names the unit, and a line labelling
+    its numbers with the unit plus the lines under it up to the next blank
+    line (a flattened table)."""
+    mark, label = _UNIT_MARK_RES[unit], _UNIT_LABEL_RES[unit]
+    found: set[int] = set()
+    index = 0
+    header_active = False
+    while index < len(lines):
+        line = lines[index]
+        if line.lstrip().startswith("|"):
+            end = index
+            while end < len(lines) and lines[end].lstrip().startswith("|"):
+                end += 1
+            caption: list[str] = []
+            above = index - 1
+            while above >= 0 and len(caption) < _UNIT_CAPTION_LINES and not lines[above].lstrip().startswith("|"):
+                if lines[above].strip():
+                    caption.append(lines[above])
+                elif above and not lines[above - 1].strip():
+                    break
+                above -= 1
+            if (header_active or any(mark.search(text) for text in caption)
+                    or any(mark.search(lines[row]) for row in range(index, end))):
+                found.update(range(index, end))
+            header_active = False
+            index = end
+            continue
+        if not line.strip():
+            header_active = False
+        elif header_active:
+            found.add(index)
+        elif label.search(line) or (len(line.strip()) <= _UNIT_LABEL_LINE_MAX and mark.search(line)
+                                    and not any(char.isdigit() for char in line)):
+            found.add(index)
+            header_active = True
+        index += 1
+    return found
+
+
+def _page_unit_numbers(value: str) -> set[str]:
+    """``unit + ":" + number`` and ``unit + ":=" + full value`` of every number
+    of ``value`` (grouped digits already joined) stated in a unit class (see
+    :data:`_UNIT_WORDS`)."""
+    lines = value.split("\n")
+    line_starts, offset = [], 0
+    for line in lines:
+        line_starts.append(offset)
+        offset += len(line) + 1
+    tagged: dict[str, tuple[set[int], set[int]]] = {}
+    for unit in _UNIT_WORDS:
+        starts = {match.start(1) for match in _UNIT_SUFFIX_RES[unit].finditer(value)}
+        starts.update(match.start(1) for match in _UNIT_RANGE_LOW_RES[unit].finditer(value))
+        if unit == "currency":
+            for pattern in (_UNIT_PREFIX_RE, _UNIT_RANGE_HIGH_RE, _UNIT_SIGN_AFTER_RE):
+                starts.update(match.start(1) for match in pattern.finditer(value))
+        tagged[unit] = (starts, _unit_context_lines(lines, unit))
+    found: set[str] = set()
+    for start, number, full in _number_values_at(value):
+        line = bisect.bisect_right(line_starts, start) - 1
+        for unit, (starts, context) in tagged.items():
+            if start in starts or line in context:
+                found.update((f"{unit}:{number}", f"{unit}:{full}"))
+    return found
+
+
+def fact_unit_tokens(text: str) -> dict[str, frozenset[str]]:
+    """The unit classes (see :data:`_UNIT_WORDS`) each number of a fact is
+    written with: ``"176 GW and $55"`` → ``{"176": {"power"}, "55":
+    {"currency"}}``.  A number without a unit is absent: it is verified as
+    before (see :func:`page_number_set`)."""
+    value = _join_digit_groups(_number_text(text, strip_dates=True))
+    found: dict[str, set[str]] = {}
+    for unit, pattern in _UNIT_SUFFIX_RES.items():
+        for match in pattern.finditer(value):
+            for number in _canonical_numbers([match.group(1)]):
+                found.setdefault(number, set()).add(unit)
+    for match in _UNIT_PREFIX_RE.finditer(value):
+        for number in _canonical_numbers([match.group(1)]):
+            found.setdefault(number, set()).add("currency")
+    return {number: frozenset(units) for number, units in found.items()}
+
+
 # Sentence ends: a Latin terminator before a space, or a CJK terminator (no
 # space follows one in Chinese text).
 _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|(?<=[。！？])\s*")
@@ -2272,7 +2434,13 @@ def _numbers_in(value: str) -> list[str]:
 
 
 def _number_values(value: str) -> list[tuple[str, str]]:
-    """``(number token, "=" + full value)`` of every number of ``value``
+    """``(number token, "=" + full value)`` of every number of ``value``; see
+    :func:`_number_values_at`."""
+    return [(number, full) for _, number, full in _number_values_at(value)]
+
+
+def _number_values_at(value: str) -> list[tuple[int, str, str]]:
+    """``(offset, number token, "=" + full value)`` of every number of ``value``
     (grouped digits already joined).  A scaled number's value is its full
     value: ``1.2 trillion`` → ``("1.2", "=1200000000000")``, ``1,200 billion``
     → ``("1200", "=1200000000000")``, ``1.2万亿`` → ``("1.2",
@@ -2291,12 +2459,12 @@ def _number_values(value: str) -> list[tuple[str, str]]:
         except (InvalidOperation, KeyError):
             continue
         scaled[match.start("num")] = (number, "=" + format(full.normalize(), "f"))
-    out: list[tuple[str, str]] = []
+    out: list[tuple[int, str, str]] = []
     for match in _NUMBER_RE.finditer(value):
         if match.start() in scaled:
-            out.append(scaled[match.start()])
+            out.append((match.start(), *scaled[match.start()]))
         else:
-            out += [(number, "=" + number) for number in _number_pieces(match.group(0))]
+            out += [(match.start(), number, "=" + number) for number in _number_pieces(match.group(0))]
     return out
 
 
@@ -2328,10 +2496,29 @@ def page_number_set(text: str) -> frozenset[str]:
     value: grouped digits joined, scaled numbers at full scale), which only
     the full values of a fact's numbers are compared with, plus every
     percentage (``"%"`` + number: see :func:`_page_percent_numbers`), which
-    only a fact's percentages are compared with."""
+    only a fact's percentages are compared with, plus every number stated in
+    a unit class (``"power:176"``, ``"currency:=1200000000000"``: see
+    :func:`_page_unit_numbers`), which only a fact's numbers written with
+    that unit are compared with."""
     value = _number_text(text, strip_dates=False)
-    return frozenset(set(_numbers_in(value)) | {full for _, full in _number_values(_join_digit_groups(value))}
-                     | {"%" + number for number in _page_percent_numbers(value)})
+    joined = _join_digit_groups(value)
+    return frozenset(set(_numbers_in(value)) | {full for _, full in _number_values(joined)}
+                     | {"%" + number for number in _page_percent_numbers(value)} | _page_unit_numbers(joined))
+
+
+def _number_on_pages(token: str, available: frozenset[str] | set[str], values: frozenset[str], *,
+                     percent: bool, units: frozenset[str]) -> bool:
+    """Whether a fact's number ``token`` is on its pages (``available``: the
+    union of their :func:`page_number_set`): a percentage as a page
+    percentage; a number written with a unit as a page number in that unit
+    class, as written or at the same full value (``values``); any other
+    number as any page number, as written or at the same full value."""
+    if percent:
+        return "%" + token in available
+    if units:
+        return any(f"{unit}:{token}" in available or any(f"{unit}:{full}" in available for full in values)
+                   for unit in units)
+    return token in available or bool(values & available)
 
 
 def _note_heading(line: str) -> str | None:
@@ -2493,7 +2680,9 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
       under ``unsourced`` (never in the digest or a report section);
     * VERIFIED requires a cited FETCHED page (otherwise REPORTED), and every
       number token of the fact (>= 2 digits or decimal) must appear on one of
-      those pages, otherwise the fact is kept but tagged UNVERIFIED.
+      those pages (a percentage as a percentage, a number with a power,
+      energy or currency unit in that unit class: see ``_number_on_pages``),
+      otherwise the fact is kept but tagged UNVERIFIED.
     Returns ``(cleaned_notes_markdown, parts)`` with facts, unsourced
     findings, conflicts, open questions and discovered leads.
     """
@@ -2530,9 +2719,10 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
                         available |= page_numbers(sid) or frozenset()
                     values = fact_number_values(text)
                     percents = fact_percent_tokens(text)
+                    units = fact_unit_tokens(text)
                     missing = [t for t in tokens
-                               if (("%" + t) not in available if t in percents
-                                   else t not in available and not values.get(t, frozenset()) & available)]
+                               if not _number_on_pages(t, available, values.get(t, frozenset()),
+                                                       percent=t in percents, units=units.get(t, frozenset()))]
                     fact["verified_numbers"] = not missing
                     if missing:
                         fact["tag"] = "UNVERIFIED"

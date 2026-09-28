@@ -259,7 +259,7 @@ _FACT_B = "Demand grows 12% per year through 2027"
 def test_r3_findings_without_dash_bullets_are_facts(findings):
     rows = {1: {"sid": 1, "fetched": True}}
     _, parts = lr.postprocess_notes("K1", "## Findings\n" + findings + _TAIL, rows.get,
-                                    lambda sid: frozenset({"176", "2023"}))
+                                    lambda sid: lr.page_number_set(_FACT_A))
     assert [(f["tag"], f["text"].rstrip(".")) for f in parts["facts"]] == [
         ("VERIFIED", f"{_FACT_A} [S1]"), ("REPORTED", f"{_FACT_B} [S1]")]
     assert parts["unsourced"] == [] and parts["open_questions"] == ["2025 capacity"]

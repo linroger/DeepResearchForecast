@@ -13,11 +13,15 @@
   * 旧版模拟标签「模拟代理人「X」推演：」/「Simulation Agent「X」Deduction/Reasoning:」
     → 新专家小组转述规范（情景推演专家视角——「X」： / Analytical perspective — X
     (scenario panel):）；
-  * 引文被删后孤悬的归因行（以 :/： 结尾、后接标题/普通段落）→ 删除；
+  * 引文被删后孤悬的归因行（以 :/： 结尾、后接标题/普通段落）→ 删除（research 模式带引用的行保留）；
   * [simulation_outcomes] 等原始工具名引用记号 → 删除；
-  * 流水线 pass 叙述（[Pass 2 working notes] 等括注）→ 删除；散文中的提及 → 仅标记；
-  * 引用记号变体（【S1】/[S1-a]/[S1 / fact 8]）→ 规整为 [S1]；
-  * 重复整句（跨章节逐字重复的长句）→ 去重（保首删后）。
+  * 流水线 pass 叙述（[Pass 2 working notes] 等括注）→ 删除（带引用/S<n> 的括注不删）；
+    散文中的提及 → 仅标记；
+  * 引用记号变体（【S1】/[S1-a]/[S1 / fact 8]；成稿另含 (S1)）→ 规整为 [S1]；
+  * 重复整句（跨章节逐字重复且引用集合相同的长句；执行摘要与正文分域）→ 去重（保首删后）。
+
+research 模式引用不变量：lint 绝不删除或凭空生成 [S#]——任何改写若改变正文被引来源的
+集合或首次出现顺序，整条规则回退（见 lint_report）。
 
 检测类别（只记数/采样，不改写——修复责任在上游翻译/重写通道）：
   * 跨语言污染行（英文稿中的 CJK 行 / 中文稿中的长英文散文行）；
@@ -28,6 +32,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -88,19 +93,55 @@ _SIM_LABEL_ZH_STATEMENT_RE = re.compile(
 )
 _SIM_LABEL_GARBLE_RE = re.compile(r"模拟\s*Deduction(?:\s*/\s*Reasoning)?")
 
-# pass 叙述：括注/方括号内含 Pass N / working notes → 可安全删除
+# pass 叙述：括注/方括号内含 Pass N / working notes → 可安全删除。
+# 引用安全（C41）：括注内容不得含任何括号字符——匹配既不能在 [S#] 引用的 ']' 上收口，也
+# 不能跨过引用吞掉整段带引用的括注；"Pass N" 只认首字母大写/全大写的流水线标签，小写
+# "pass N" 须由介词引出（"cited in pass 4"）——散文里的动词用法 "(Congress must pass 12
+# appropriations bills)" 不是叙述；内容含 S<n> 记号的括注可能本身就是引用，由
+# strip_pass_narration 原样保留。
+_PASS_BRACKET_INNER = r"[^\[\]【】()（）\n]"
 _PASS_BRACKET_RE = re.compile(
-    r"[\[（(【]\s*[^\]\n）)】]{0,80}?(?:\bPass\s*\d+\b|working notes|工作笔记)[^\]\n）)】]{0,80}?[\]）)】]",
-    re.I)
+    r"[\[（(【](?P<inner>" + _PASS_BRACKET_INNER + r"{0,80}?"
+    r"(?:\b(?:Pass|PASS)\s*\d+\b"
+    r"|(?i:\b(?:in|per|from|via|during|see|after)\s+(?:the\s+)?(?:research\s+)?)pass\s*\d+\b"
+    r"|(?i:working notes)|工作笔记)"
+    + _PASS_BRACKET_INNER + r"{0,80}?)[\]）)】]")
 _PASS_PROSE_RE = re.compile(r"\bPass\s+\d+\b|working notes|工作笔记", re.I)
 
-# 引用记号变体 → [S{n}]
+# 引用记号（[S1]/[S1, S3]/[S2/S3]/[S1-a]/【S1】/占位 [S?]）与其中的来源编号（GS2024 之类不算）。
+_CITE_MARKER_RE = re.compile(r"[\[【]\s*S[\d?#][^\]】]*[\]】]")
+_CITE_NUMBER_RE = re.compile(r"(?<![A-Za-z0-9])S(\d+)")
+# A source number, optionally the start of a range whose end may drop the S
+# ("S3-5", "S3–S5"): ranges expand to every id in between (bounded).
+_CITE_ID_RANGE_RE = re.compile(r"(?<![A-Za-z0-9])S(\d+)(?:[ \t]*+[-–—~][ \t]*+S?(\d+))?")
+_CITE_RANGE_MAX = 20
+
+
+def _citation_ids(token: str) -> List[str]:
+    """Source numbers of one citation marker in order, ranges expanded
+    ("[S3-5]" → 3, 4, 5); a reversed or implausibly long range keeps its two ends."""
+    ids: List[str] = []
+    for m in _CITE_ID_RANGE_RE.finditer(token or ""):
+        start, end = int(m.group(1)), int(m.group(2)) if m.group(2) else None
+        if end is not None and start < end <= start + _CITE_RANGE_MAX:
+            nums = [str(n) for n in range(start, end + 1)]
+        else:
+            nums = [m.group(1)] + ([m.group(2)] if m.group(2) else [])
+        for num in nums:
+            if num not in ids:
+                ids.append(num)
+    return ids
+
+# 引用记号变体 → [S{n}]（记号内的每个来源编号都保留：[S2/S3] → [S2][S3]）
 _CITE_VARIANT_RES: List[re.Pattern] = [
     re.compile(r"【\s*S(\d+)[^】]*】"),                 # 【S1】/【S1-a】
     re.compile(r"\[\s*S(\d+)-[A-Za-z0-9]+\s*\]"),      # [S1-a]
     re.compile(r"\[\s*S(\d+)\s*/[^\]]*\]"),            # [S1 / fact 8]
-    re.compile(r"\(\s*S(\d+)\s*\)"),                  # (S1)
+    re.compile(r"\[\s*S(\d+)[ \t]*+[–—~][ \t]*+S?\d+\s*\]"),  # [S3–S5] / [S3—5]（区间，展开）
 ]
+# 圆括号 (S1)：成稿里是引用变体；研究档案里是旧版提示词教的来源分级标签
+# （"primary (S1) and high-quality secondary (S2) sources"）——research 模式不当引用规整（C44）。
+_CITE_PAREN_VARIANT_RE = re.compile(r"\(\s*S(\d+)\s*\)")
 
 # CJK 字符类（与 report_agent._CJK_CHAR 同源）
 _CJK_CHAR = r"一-鿿㐀-䶿぀-ヿ가-힯"
@@ -378,10 +419,11 @@ _ATTRIBUTION_CUE_RE = re.compile(
     r"|according to|pushes? back|contend|assert|warn|observ|\bagent\b", re.I)
 
 
-def remove_dangling_attributions(md: str) -> Tuple[str, int]:
+def remove_dangling_attributions(md: str, keep_cited: bool = False) -> Tuple[str, int]:
     """删除孤悬的引文归因行：以 :/： 结尾、含归因线索、其后（隔空行）不是引用块/列表/表格。
 
-    典型成因：引文接地修复删掉了 blockquote，留下「X pushes back …:」的空引子。"""
+    典型成因：引文接地修复删掉了 blockquote，留下「X pushes back …:」的空引子。
+    keep_cited=True（research 模式）：带 [S#] 引用的行是有出处的论断，保留——lint 不删引用。"""
     lines = (md or "").split("\n")
     mask = _fence_mask(lines)
     delete: set = set()
@@ -392,6 +434,8 @@ def remove_dangling_attributions(md: str) -> Tuple[str, int]:
         if not s or not s.endswith((":", "：")):
             continue
         if s.startswith(("#", ">", "|", "-", "*", "```", "~~~")) or re.match(r"^\d+[.、)]", s):
+            continue
+        if keep_cited and _has_citation(s):
             continue
         if not _ATTRIBUTION_CUE_RE.search(s):
             continue
@@ -414,38 +458,68 @@ def remove_dangling_attributions(md: str) -> Tuple[str, int]:
     return txt, len(delete)
 
 
+def _strip_pass_brackets(line: str) -> Tuple[str, int]:
+    """删除一行内的 pass 叙述括注；内容含 S<n> 记号的括注原样保留。返回 (新行, 删除数)。"""
+    removed = 0
+
+    def _repl(m: re.Match) -> str:
+        nonlocal removed
+        if _CITE_NUMBER_RE.search(m.group("inner")):
+            return m.group(0)
+        removed += 1
+        return ""
+
+    return _PASS_BRACKET_RE.sub(_repl, line), removed
+
+
 def strip_pass_narration(md: str) -> Tuple[str, int, int]:
-    """括注式 pass 叙述（[Pass 2 working notes] 等）→ 删除；散文提及 → 仅计数。"""
+    """括注式 pass 叙述（[Pass 2 working notes] 等）→ 删除；散文提及 → 仅计数。
+
+    引用安全：含 S<n> 记号的括注（如 [S37 Pass 4]）可能本身就是引用，原样保留、只计入
+    flagged——lint 绝不删除 [S#] 记号。"""
     stripped = 0
     lines = (md or "").split("\n")
     mask = _fence_mask(lines)
     for i, ln in enumerate(lines):
         if mask[i]:
             continue
-        new_ln, k = _PASS_BRACKET_RE.subn("", ln)
+        new_ln, k = _strip_pass_brackets(ln)
         if k:
             lines[i] = re.sub(r"[ \t]{2,}", " ", new_ln).rstrip()
             stripped += k
     txt = "\n".join(lines)
-    flagged = 0
-    mask2 = _fence_mask(lines)
-    for i, ln in enumerate(lines):
-        if not mask2[i]:
-            flagged += len(_PASS_PROSE_RE.findall(ln))
-    return txt, stripped, flagged
+    return txt, stripped, _count_pass_mentions(txt)
 
 
-def normalize_citation_variants(md: str) -> Tuple[str, int]:
-    """引用记号变体（【S1】/[S1-a]/[S1 / fact 8]）→ 规整为 [S1]。"""
+def _count_pass_mentions(md: str) -> int:
+    """围栏外的 pass 叙述提及数（只标记不改写）。"""
+    lines = (md or "").split("\n")
+    mask = _fence_mask(lines)
+    return sum(len(_PASS_PROSE_RE.findall(ln)) for i, ln in enumerate(lines) if not mask[i])
+
+
+def _canonical_citation(m: re.Match) -> str:
+    """变体记号 → 规范 [S{n}]；记号内出现的每个来源编号按序保留（[S2/S3] → [S2][S3]，
+    区间展开：[S3-5] → [S3][S4][S5]），只丢注释（-a / fact 8 / -context），绝不丢引用。"""
+    nums = _citation_ids(m.group(0)) or [m.group(1)]
+    return "".join(f"[S{num}]" for num in nums)
+
+
+def normalize_citation_variants(md: str, paren_labels: bool = True) -> Tuple[str, int]:
+    """引用记号变体（【S1】/[S1-a]/[S1 / fact 8]，以及 paren_labels=True 时的 (S1)）→ 规整为 [S1]。
+
+    paren_labels=False（research 模式）：圆括号 (S1) 是来源分级标签而非引用，原样保留——
+    否则会在 bridge 校验完引用之后凭空生成引用/悬空引用。"""
     n = 0
+    patterns = _CITE_VARIANT_RES + ([_CITE_PAREN_VARIANT_RE] if paren_labels else [])
     lines = (md or "").split("\n")
     mask = _fence_mask(lines)
     for i, ln in enumerate(lines):
         if mask[i]:
             continue
         new_ln = ln
-        for pat in _CITE_VARIANT_RES:
-            new_ln, k = pat.subn(r"[S\1]", new_ln)
+        for pat in patterns:
+            new_ln, k = pat.subn(_canonical_citation, new_ln)
             n += k
         if new_ln != ln:
             lines[i] = new_ln
@@ -520,8 +594,8 @@ def _split_sentences(text: str) -> List[str]:
     English sentence terminals retain the historical whitespace/end-of-text
     boundary rule (so decimals and dotted identifiers are not split). Chinese
     terminals are boundaries even when the next sentence has no whitespace.
-    A citation immediately following terminal punctuation belongs to the
-    preceding sentence, as do closing quotation marks.
+    A citation following terminal punctuation (directly or after spaces)
+    belongs to the preceding sentence, as do closing quotation marks.
     """
     value = str(text or "")
     if not value:
@@ -537,10 +611,15 @@ def _split_sentences(text: str) -> List[str]:
         cursor = index + 1
         while cursor < len(value) and value[cursor] in _SENTENCE_CLOSERS:
             cursor += 1
-        # Citations occasionally follow punctuation ("claim.[S2]"); preserve
-        # them with the claim instead of leaving an orphan fragment.
+        # Citations follow terminal punctuation ("claim.[S2]", "claim. [S2]");
+        # keep them with the claim instead of opening the next sentence with an
+        # orphan marker (a later duplicate of that fragment would take the
+        # citation away from its own claim).
         while True:
-            citation = _CITATION_SUFFIX_RE.match(value, cursor)
+            probe = cursor
+            while probe < len(value) and value[probe] in " \t":
+                probe += 1
+            citation = _CITATION_SUFFIX_RE.match(value, probe)
             if citation is None:
                 break
             cursor = citation.end()
@@ -564,23 +643,116 @@ def _split_sentences(text: str) -> List[str]:
     return parts
 
 
+# 研究档案/成稿末尾的参考来源节标题——引用守卫只看它之前的正文。
+_REFERENCES_HEADING_RE = re.compile(
+    r"^\s{0,3}#{1,6}\s*(?:\d+[.、)]\s*)?(?:references|sources|bibliography|works cited|citations|"
+    r"source list|sources and references|references and sources|"
+    r"参考来源|参考文献|参考资料|资料来源|引用来源|来源)\s*$", re.I)
+_MD_HEADING_RE = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
+# 执行摘要类标题（有界别名 + "executive summary"/"执行摘要" 子串；不做模糊匹配）。
+_SUMMARY_HEADING_ALIASES = frozenset({
+    "summary", "abstract", "key takeaways", "key findings", "key findings summary",
+    "bottom line", "tl dr", "tldr", "executive overview", "management summary",
+    "summary of findings", "research summary", "overview and summary",
+    "摘要", "执行概要", "研究摘要", "核心摘要", "内容摘要", "概要", "摘要与核心结论",
+    "核心结论", "关键结论",
+})
+
+
 def _norm_sentence(s: str) -> str:
-    t = re.sub(r"[\[【]\s*S[\d?#][^\]】]*[\]】]", "", s)
+    t = _CITE_MARKER_RE.sub("", s)
     t = re.sub(r"[*_`\"'“”‘’「」『』\s]+", "", t)
     return t.lower()
+
+
+def _has_citation(s: str) -> bool:
+    """文本是否含指向具体来源编号的引用记号（[S1]/[S1, S3]/【S1】…；(S1) 不算）。"""
+    return any(_CITE_NUMBER_RE.search(tok) for tok in _CITE_MARKER_RE.findall(s))
+
+
+def _citation_signature(s: str) -> frozenset:
+    """句子引用的来源集合（[S1][S3] 与 [S1, S3] 等价；占位记号按原文比较）。"""
+    ids: set = set()
+    for tok in _CITE_MARKER_RE.findall(s):
+        nums = _citation_ids(tok)
+        ids.update(nums if nums else [re.sub(r"\s+", "", tok)])
+    return frozenset(ids)
+
+
+def _is_summary_heading(title: str) -> bool:
+    """标题是否为执行摘要类小节（容忍前导编号与强调记号）。"""
+    t = re.sub(r"[*_`]", "", title or "")
+    t = re.sub(r"^\s*(?:\d+(?:\.\d+)*[.、)]?|[一二三四五六七八九十]+[、.．]|[IVX]+\.)\s*", "", t)
+    key = re.sub(r"[\s\-–—_:：/|'’（）()&;；,，]+", " ", t).strip(" .!?！？。").lower()
+    compact = key.replace(" ", "")
+    return (key in _SUMMARY_HEADING_ALIASES or compact in _SUMMARY_HEADING_ALIASES
+            or "executive summary" in key or "exec summary" in key
+            or "执行摘要" in compact or "执行概要" in compact)
+
+
+def _body_citations(md: str) -> List[str]:
+    """正文（围栏外、末个参考来源节本身之外）每个引用记号的来源编号，按出现顺序、含重复。
+
+    参考来源节 = 末个参考来源标题到下一个同级或更高级标题（或文末）；其后的正文照常计入。"""
+    lines = (md or "").split("\n")
+    mask = _fence_mask(lines)
+    ref_start, ref_end = len(lines), len(lines)
+    for i, ln in enumerate(lines):
+        if not mask[i] and _REFERENCES_HEADING_RE.match(ln):
+            ref_start = i
+    if ref_start < len(lines):
+        level = len(re.match(r"^\s{0,3}(#{1,6})", lines[ref_start]).group(1))
+        for j in range(ref_start + 1, len(lines)):
+            heading = _MD_HEADING_RE.match(lines[j])
+            if not mask[j] and heading and len(heading.group(1)) <= level:
+                ref_end = j
+                break
+    ids: List[str] = []
+    for i, ln in enumerate(lines):
+        if mask[i] or ref_start <= i < ref_end:
+            continue
+        for tok in _CITE_MARKER_RE.findall(ln):
+            ids.extend(_citation_ids(tok))
+    return ids
+
+
+def _cited_sequence(md: str) -> List[str]:
+    """正文所引来源编号的首次出现顺序（见 _body_citations）。
+
+    [S#] 在下游按位置索引 sources.json、References 须等于被引集合——research 模式的引用
+    守卫要求任何改写都不改变这个序列（既不删除也不凭空生成引用）。"""
+    return list(dict.fromkeys(_body_citations(md)))
 
 
 def dedup_duplicate_sentences(md: str, min_chars: int = 60) -> Tuple[str, int]:
     """跨章节逐字重复的长句去重（保留首次出现，删除后续重复）。
 
     仅作用于散文段落行（跳过标题/引用/列表/表格/围栏），归一化后 >= min_chars 的
-    整句重复才判定——短句/套话不动，避免误伤。"""
-    seen: set = set()
+    整句重复才判定——短句/套话不动，避免误伤。
+
+    引用安全（C16/C42）：
+      * 重复键 = 归一化正文 + 引用来源集合——同句引用不同来源时两份都保留（删掉后一份会让
+        只在那里被引用的来源孤悬、References 与被引集合失配）；
+      * 执行摘要与正文分域去重：摘要写在最后却排在最前（由各节首句写成），正文章节的首句
+        绝不因摘要先复述过而被删，摘要也不因正文而被删。
+    因此被删的只可能是同域内、与更早保留句引用集合完全相同的副本——被引集合与首次出现
+    顺序都不变。"""
+    seen: Dict[bool, set] = {True: set(), False: set()}   # in_summary → 已见 (正文, 引用集合)
+    in_summary = False
+    summary_level = 0
     removed = 0
     lines = (md or "").split("\n")
     mask = _fence_mask(lines)
     for i, ln in enumerate(lines):
         if mask[i]:
+            continue
+        heading = _MD_HEADING_RE.match(ln)
+        if heading:
+            level = len(heading.group(1))
+            if _is_summary_heading(heading.group(2)):
+                in_summary, summary_level = True, level
+            elif in_summary and level <= max(summary_level, 2):
+                in_summary = False          # 同级/更高级（或任一 H1/H2）标题结束摘要节
             continue
         s = ln.strip()
         if not s or s.startswith(("#", ">", "|", "-", "*", "!")) or re.match(r"^\d+[.、)]", s):
@@ -588,16 +760,18 @@ def dedup_duplicate_sentences(md: str, min_chars: int = 60) -> Tuple[str, int]:
         sentences = _split_sentences(ln)
         if len(sentences) <= 0:
             continue
+        scope = seen[in_summary]
         kept: List[str] = []
         changed = False
         for sent in sentences:
             key = _norm_sentence(sent)
             if len(key) >= min_chars:
-                if key in seen:
+                ident = (key, _citation_signature(sent))
+                if ident in scope:
                     removed += 1
                     changed = True
                     continue
-                seen.add(key)
+                scope.add(ident)
             kept.append(sent)
         if changed:
             lines[i] = "".join(x for x in kept if x.strip()).strip()
@@ -1362,16 +1536,41 @@ def lint_report(md: str, lang: str, mode: str = "final",
         spine: 可选预测骨架 dict（{"scenarios": [{name, probability}...]}）——传入时做
             情景概率交叉核对（只记数不改写）。
 
+    research 模式的引用不变量：研究档案的 [S#] 已由 bridge 定稿（按位置索引 sources.json，
+    References = 被引集合），lint 绝不删除或凭空生成引用——(S1) 分级标签不当引用规整、
+    带引用的归因行保留；每条改写规则之后核对正文被引来源的首次出现顺序与（去重以外的规则）
+    每个来源的引用次数，若被改变则整条规则回退并记入 citation_guard_rules（兜底守卫）。
+
     Returns:
         (cleaned_md, report_dict)：清理后的 markdown + 逐类别命中/动作报告。
     """
     text = md or ""
     rep: Dict[str, Any] = {"mode": mode, "lang": str(lang or "")}
+    research = mode != "final"
+    guard_rules: List[str] = []
 
-    text, rep["citation_residue"] = strip_citation_residue(text)
-    text, rep["edge_dumps"], rep["dangling_edge_intros"] = rewrite_edge_dumps(text, lang)
-    text, rep["legacy_sim_labels"] = rewrite_sim_labels(text, lang)
-    text, rep["tool_tokens"] = strip_tool_tokens(text)
+    def _adopt(rule: str, result: Tuple[Any, ...]) -> Tuple[Any, ...]:
+        """采纳一条改写规则的 (new_text, *counts)；research 模式下若改变了正文被引来源的
+        首次出现顺序，或（去重以外的规则）改变了任一来源的引用次数，则回退该规则（计数归零）。
+        去重只删除引用集合完全相同的整句重复，故只核对顺序。返回 counts。"""
+        nonlocal text
+        new_text, counts = result[0], tuple(result[1:])
+        if research and new_text != text:
+            before, after = _body_citations(text), _body_citations(new_text)
+            changed = list(dict.fromkeys(before)) != list(dict.fromkeys(after))
+            if not changed and rule != "duplicate_sentences":
+                changed = Counter(before) != Counter(after)
+            if changed:
+                guard_rules.append(rule)
+                return tuple(0 for _ in counts)
+        text = new_text
+        return counts
+
+    rep["citation_residue"] = _adopt("citation_residue", strip_citation_residue(text))[0]
+    rep["edge_dumps"], rep["dangling_edge_intros"] = _adopt(
+        "edge_dumps", rewrite_edge_dumps(text, lang))
+    rep["legacy_sim_labels"] = _adopt("legacy_sim_labels", rewrite_sim_labels(text, lang))[0]
+    rep["tool_tokens"] = _adopt("tool_tokens", strip_tool_tokens(text))[0]
     if mode == "final":
         text, rep["generation_failure_placeholders"] = strip_generation_failure_placeholders(text)
         text, rep["internal_telemetry_appendices"] = strip_internal_telemetry_appendices(text)
@@ -1392,11 +1591,18 @@ def lint_report(md: str, lang: str, mode: str = "final",
         rep["standalone_citation_lines"] = 0
         rep["corrupted_mixed_punctuation_lines"] = 0
         rep["empty_tables"] = 0
-    text, rep["dangling_attributions"] = remove_dangling_attributions(text)
-    text, _pn_stripped, _pn_flagged = strip_pass_narration(text)
+    rep["dangling_attributions"] = _adopt(
+        "dangling_attributions", remove_dangling_attributions(text, keep_cited=research))[0]
+    _pn_stripped, _pn_flagged = _adopt("pass_narration", strip_pass_narration(text))
+    if "pass_narration" in guard_rules:
+        _pn_flagged = _count_pass_mentions(text)
     rep["pass_narration"] = {"stripped": _pn_stripped, "flagged": _pn_flagged}
-    text, rep["citation_variants"] = normalize_citation_variants(text)
-    text, rep["duplicate_sentences_removed"] = dedup_duplicate_sentences(text)
+    rep["citation_variants"] = _adopt(
+        "citation_variants", normalize_citation_variants(text, paren_labels=not research))[0]
+    rep["duplicate_sentences_removed"] = _adopt(
+        "duplicate_sentences", dedup_duplicate_sentences(text))[0]
+    rep["citation_guard_rules"] = guard_rules
+    rep["citation_guard_reverts"] = len(guard_rules)
     if mode == "final":
         text, rep["simulation_mechanics"] = scrub_simulation_mechanics(text, lang)
         text, rep["malformed_prose_repairs"] = repair_malformed_report_prose(text)

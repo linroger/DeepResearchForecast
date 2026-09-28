@@ -470,6 +470,9 @@ def test_r3_sigint_during_a_fan_out_starts_no_queued_kiq_and_no_new_call(tmp_pat
     proc, result = _child(tmp_path, """
         import atexit
         SIGNAL = signal.SIGINT
+        # A child of a background job starts with SIGINT ignored; install Python's
+        # default handler so the test does not depend on how pytest was launched.
+        signal.signal(signal.SIGINT, signal.default_int_handler)
         result = {}
 
         def report():  # at exit: after every worker thread has finished

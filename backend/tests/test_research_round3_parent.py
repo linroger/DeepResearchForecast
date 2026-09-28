@@ -9,7 +9,9 @@ with its ``[S#]`` (C16/C42), cut ``(... pass 12 ... [S3])`` parentheticals down
 to a dangling ``)`` (C41) and turned legacy ``(S1)`` tier labels into citation
 markers (C44).  Without a manifest lint is audit-only now, like the judge-bound
 case; a manifest-owned (multi-lane) generation still adopts the cleaned text in
-memory for its private finalization.
+memory for its private finalization.  report_lint itself no longer makes those
+citation-corrupting rewrites (tests/test_report_lint_citations.py); the fixtures
+keep genuine pass narration so lint still proposes a change to adopt or audit.
 
 Offline and deterministic: the research child is faked, no network or LLM.
 """
@@ -31,7 +33,8 @@ _LEAD = ("Installed data-centre capacity reached 176 GW at the end of 2023 "
 
 # v3 shape: the executive summary (written last, placed first) restates the
 # Market Baseline lead with a different marker, and a cited parenthetical
-# carries "pass <number>" legislative wording.
+# carries "pass <number>" legislative wording.  "(Pass 2)" is genuine pass
+# narration that lint legitimately strips.
 V3_REPORT = f"""# Will global data-centre capacity exceed 250 GW by the end of 2027?
 
 ## Executive Summary
@@ -44,7 +47,7 @@ V3_REPORT = f"""# Will global data-centre capacity exceed 250 GW by the end of 2
 
 ## Grid Constraints
 
-Connection queues now exceed 40 months in several regions, which caps near-term additions [S2]. Utilities have filed for accelerated transmission upgrades in the most congested regions [S1].
+Connection queues now exceed 40 months in several regions, which caps near-term additions [S2]. Utilities have filed for accelerated transmission upgrades (Pass 2) in the most congested regions [S1].
 
 ## References
 
@@ -55,6 +58,7 @@ Connection queues now exceed 40 months in several regions, which caps near-term 
 
 # Legacy shape: the legacy prompts teach "primary (S1) ... secondary (S2)" tier
 # wording, which finalize_report_citations (validates only [S<n>]) leaves alone.
+# "[Pass 2 working notes]" is genuine pass narration that lint legitimately strips.
 LEGACY_REPORT = """# Research report
 
 ## Evidence quality
@@ -63,7 +67,7 @@ The evidence base is dominated by primary (S1) filings; secondary (S2) press cov
 
 ## Outlook
 
-Operators expect a further 40 GW of additions by 2026, driven by hyperscaler campus expansions [S1]. Grid connection queues remain the binding constraint on the pace of additions [S2]. Regulators are reviewing interconnection rules that could shorten the queues [S1].
+Operators expect a further 40 GW of additions [Pass 2 working notes] by 2026, driven by hyperscaler campus expansions [S1]. Grid connection queues remain the binding constraint on the pace of additions [S2]. Regulators are reviewing interconnection rules that could shorten the queues [S1].
 
 ## References
 
@@ -144,15 +148,20 @@ def _drive_research_stage(monkeypatch, tmp_path, *, engine, tracks, report, mani
 
 
 def test_lint_would_rewrite_both_fixture_reports():
-    """Guard the fixtures: each exercises the lint rewrites the parent must not
-    adopt on a single-lane report."""
+    """Guard the fixtures: lint still proposes a rewrite of each (genuine pass
+    narration), which the parent must not adopt on a single-lane report, and it
+    no longer touches their citations (C16/C41/C42/C44)."""
     v3_cleaned, v3_rep = lint_report(V3_REPORT, "English", mode="research")
-    assert v3_rep["duplicate_sentences_removed"] == 1
-    assert "appropriations" not in v3_cleaned and "[S3]" not in _markers(v3_cleaned)
-    assert v3_cleaned.count(_LEAD) == 1  # the Market Baseline lead is gone
+    assert v3_rep["changed"] is True and v3_rep["pass_narration"]["stripped"] == 1
+    assert v3_rep["duplicate_sentences_removed"] == 0
+    assert "appropriations" in v3_cleaned and "(Pass 2)" not in v3_cleaned
+    assert _markers(v3_cleaned) == _markers(V3_REPORT)
+    assert v3_cleaned.count(_LEAD) == 2  # the Market Baseline lead survives
     legacy_cleaned, legacy_rep = lint_report(LEGACY_REPORT, "English", mode="research")
-    assert legacy_rep["citation_variants"] == 3
-    assert _markers(legacy_cleaned) == ["[S1]", "[S2]", "[S4]", "[S3]", "[S1]", "[S2]", "[S1]"]
+    assert legacy_rep["changed"] is True and legacy_rep["pass_narration"]["stripped"] == 1
+    assert legacy_rep["citation_variants"] == 0 and "primary (S1) filings" in legacy_cleaned
+    assert _markers(legacy_cleaned) == _markers(LEGACY_REPORT) == [
+        "[S3]", "[S1]", "[S2]", "[S1]"]
 
 
 @pytest.mark.parametrize("engine,tracks,report", [

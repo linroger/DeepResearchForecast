@@ -259,3 +259,8 @@ This repository implements a six-stage forecast workflow: DeerFlow 2 research, o
 - **Live run:** quick depth, GLM-5.3, real DeerFlowResearchRunner → exit 0 in 543 s; 40 provider calls; 222k input / 78k output tokens; 78.4% of input served from provider cache; parameters accepted (no 400, no degrade); 4 KIQ agents stopped on their own (no fallbacks); QA 9/9; 28k-char report, 25 sources, 13 actors. (Last legacy run: ~20 h, 46.8M input tokens.)
 - **Follow-ups applied:** fiscal-year ranges not verified as quantities; writers prefer fetched sources; unusable JSON replies quoted in their warning line.
 - **Next:** push after GitHub re-authentication; optionally drop the obsolete RESEARCH_LINEAR_MODE=salvage from .env.
+
+### 2026-09-28T14:40:00+08:00 (CST) — branch `feat/research-engine-v3`
+
+- **Follow-ups:** unit-aware number verification in v3 (power/energy/currency; 54/425 real-report coincidences removed, 0 real regressions); report_lint never deletes, invents or truncates [S#] (pass brackets, citation-aware dedup, ranges, per-source guard); test fixes (fabricated page-number fixture, SIGINT handler independence).
+- **Verification:** independent skeptics per change (their residual findings fixed and pinned by tests); new tests fail on the previous code; full backend suite (see handoff §10); ruff clean.
