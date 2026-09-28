@@ -280,3 +280,10 @@ This repository implements a six-stage forecast workflow: DeerFlow 2 research, o
 - **Merge:** 4 conflicts resolved to v3 (the PR patched the replaced v2 engine); its v2 tests retired with their intents ported to v3 tests; review follow-up: an OSError deploying the optional MCP config no longer skips syncing required bridge modules. READMEs updated for v3 in both languages.
 - **Verification:** PR #2 reviewed by 4 area reviewers + skeptics and its own suite (no PR-caused defects); main: backend 4,255 passed / 0 failed / 11 skipped, frontend 72/72.
 - **Follow-ups (pre-existing, not PR regressions):** unpublishable-report drafts still visible via outline.sections[].content on GET /api/report/<id>, /list, /by-simulation; section endpoints fail open when meta.json is unreadable; the agent-log in-progress exemption never expires for crashed reports; Vite dev server with host 'localhost' binds ::1 only on this Mac (http://127.0.0.1:3000 refused).
+  → all fixed in 3d36ef4 (see the next entry).
+
+### 2026-09-28T21:05:00+08:00 (CST) — branch `main`
+
+- **Fixed and pushed (3d36ef4):** unaudited report drafts are withheld on every endpoint — outline section content on GET /api/report/<id>, /list, /by-simulation; one fail-closed gate for /sections, /sections-partial, /section/<n>, /agent-log(/stream) (missing, unreadable or non-object meta.json, or a publication check that raises); the in-progress exemption expires after 30 min without generator activity; /console-log(/stream) redact quoted draft excerpts while keeping summaries. Vite defaults to 127.0.0.1 (both http://127.0.0.1:3000 and http://localhost:3000 work, loopback only).
+- **Verification:** independent skeptic audited every report route (found the console-log leak and the non-object meta.json 500, both fixed); new tests fail on the previous code; backend 4,283 passed / 0 failed, frontend 73/73.
+- **Operational note:** a dev stack started at 17:48 from pre-merge code (vite --host on *:3000, backend without the forwarded-header gate) must be restarted on current main to close LAN/Tailscale access.
