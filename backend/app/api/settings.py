@@ -175,8 +175,7 @@ def test_llm_settings():
             api_key = (data.get('api_key') or '').strip()
             if not api_key and provider == Config.LLM_PROVIDER:
                 api_key = Config.LLM_API_KEY or ''
-            base_url = (data.get('base_url') or '').strip() or meta.get('default_base') or 'https://api.openai.com/v1'
-            model = (data.get('model') or '').strip() or meta.get('default_model') or 'gpt-4o-mini'
+            base_url, model = Config.resolve_endpoint(provider, data.get('base_url'), data.get('model'))
             result = _test_openai_compat_provider(provider, api_key, base_url, model)
 
         result["provider"] = provider

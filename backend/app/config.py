@@ -875,11 +875,29 @@ class Config:
         }
 
     @classmethod
+    def resolve_endpoint(cls, provider, base_url=None, model=None):
+        """解析 OpenAI 兼容提供方的 (base_url, model)：显式值 > 当前已配置值 > 提供方默认值。
+
+        「当前已配置值」只在 provider 就是当前提供方时沿用（与 API Key 的留空沿用语义一致）：
+        否则设置页对已配置提供方点「测试/保存」且字段留空时，会改用 PROVIDER_META 的默认
+        端点/模型——例如 GLM Coding Plan（open.bigmodel.cn/api/coding/paas/v4 + glm-5.3）
+        被测成 api.z.ai + glm-4.6，得到 1113「余额不足」的假 429，保存则把默认值写回 .env。
+        """
+        meta = cls.PROVIDER_META.get(provider, {})
+        same = provider == cls.LLM_PROVIDER
+        url = ((base_url or '').strip() or (same and (cls.LLM_BASE_URL or '').strip())
+               or meta.get('default_base') or 'https://api.openai.com/v1')
+        name = ((model or '').strip() or (same and (cls.LLM_MODEL_NAME or '').strip())
+                or meta.get('default_model') or 'gpt-4o-mini')
+        return url, name
+
+    @classmethod
     def apply_provider(cls, provider, api_key=None, base_url=None, model=None):
         """在运行时切换 LLM 提供方（对**新发起**的管线生效，无需重启）。
 
         更新 Config 类属性 + os.environ（DeerFlow 子进程继承环境变量），并持久化到 .env。
-        OpenAI 兼容提供方(openai/kimi/minimax)未显式传 base_url/model 时回退到各自默认值。
+        OpenAI 兼容提供方未显式传 base_url/model 时：重新保存当前提供方沿用已配置的值，
+        切换到其他提供方才回退到该提供方默认值（见 resolve_endpoint）。
         """
         provider = (provider or '').strip().lower()
         if provider not in cls.SUPPORTED_LLM_PROVIDERS:
@@ -907,6 +925,8 @@ class Config:
 
         # 在锁内完成「改类属性 + 改 os.environ + 写 .env」整段读改写（F-8-4）。
         with cls._provider_lock:
+            # 必须在改写 LLM_PROVIDER 之前解析：「沿用已配置值」只对重新保存当前提供方成立。
+            endpoint = cls.resolve_endpoint(provider, base_url, model)
             cls.LLM_PROVIDER = provider
             cls._is_kimi = provider == 'kimi'
             cls._is_minimax = provider == 'minimax'
@@ -917,8 +937,7 @@ class Config:
 
             env_updates = {'LLM_PROVIDER': provider, 'DEERFLOW_MODEL': cls.DEERFLOW_MODEL}
             if is_openai_compat:
-                cls.LLM_BASE_URL = (base_url or '').strip() or meta.get('default_base') or 'https://api.openai.com/v1'
-                cls.LLM_MODEL_NAME = (model or '').strip() or meta.get('default_model') or 'gpt-4o-mini'
+                cls.LLM_BASE_URL, cls.LLM_MODEL_NAME = endpoint
                 _key = (api_key or '').strip()
                 if _key:
                     cls.LLM_API_KEY = _key
