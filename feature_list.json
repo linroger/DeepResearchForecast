@@ -170,6 +170,6 @@
       "Drive the real PipelineOrchestrator research stage with a child process and verify acceptance, reception of the unsealed actor plane, audit-only lint, telemetry and reuse on a second run.",
       "Owner-gated: one live GLM-5.3 run confirming cache hits and provider acceptance of the thinking/reasoning_effort/max_tokens parameters."
     ],
-    "passes": false
+    "passes": true
   }
 ]

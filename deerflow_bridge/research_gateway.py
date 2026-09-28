@@ -1106,6 +1106,8 @@ _FALLBACK_CATEGORIES = frozenset({"transient", "unknown", "quota", "auth"})
 # Output cap of a cache-priming call: the reply is discarded, only the
 # provider's prefill (which writes the prefix cache) matters.
 PRIME_MAX_TOKENS = 16
+# Characters of an unusable JSON reply quoted in its warning line.
+JSON_FAILURE_EXCERPT_CHARS = 160
 
 
 @dataclass
@@ -1906,8 +1908,11 @@ class ModelGateway:
                     return parsed
                 last_error = _describe_json_failure(text, required, truncated)
             retry_note = _json_retry_note(last_error, required)
+            # A short, single-line excerpt makes an unusable reply diagnosable from
+            # the progress log alone (the reply itself is not persisted).
+            excerpt = _collapse(text, JSON_FAILURE_EXCERPT_CHARS) if text else ""
             self._log("warn", f"gateway: {_log_token(label)}: JSON attempt {attempt} unusable "
-                              f"({last_error})")
+                              f"({last_error})" + (f"; reply began: {excerpt!r}" if excerpt else ""))
         raise JsonUnparseable(f"{label}: {last_error}")
 
     def prime(self, messages: Sequence[Any], *, kind: str, label: str,

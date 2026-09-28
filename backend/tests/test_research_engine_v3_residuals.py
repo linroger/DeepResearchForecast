@@ -152,3 +152,14 @@ def test_finalize_writes_sources_before_the_report(tmp_path, bridge, monkeypatch
     rc, meta, _, _, _ = v3.run_engine(tmp_path, bridge, v3.World())
     assert rc == 0, meta.get("error")
     assert order.index("sources.json") < order.index("research_report.md")
+
+
+def test_fiscal_year_ranges_are_years_not_quantities():
+    """Live run: "schedule risk to 2026-27" left "27" to verify (not on the page)."""
+    assert lr.fact_number_tokens("risk to 2026-27 and FY2025/26 loads of 176 GW") == ["176"]
+    # A range that is not next-year shorthand stays a pair of numbers.
+    assert lr.fact_number_tokens("between 2026-30 there were 45 sites") == ["2026", "30", "45"]
+
+
+def test_writers_are_told_to_prefer_fetched_sources():
+    assert "cite the ones marked fetched in the SOURCE INDEX" in lr._SECTION_RULES

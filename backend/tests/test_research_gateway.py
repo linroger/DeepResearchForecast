@@ -3149,3 +3149,14 @@ def test_r3_transient_fetch_failures_get_one_more_attempt(tmp_path):
     assert tools.fetch(other, agent_id="K2").startswith("[S")
     assert tools.fetch(other, agent_id="K3").startswith("[S")
     assert fetch_fn.calls.count(other) == 2
+
+
+def test_unusable_json_reply_warning_quotes_a_short_excerpt():
+    """Live-run diagnosis: the warning shows how an unusable reply began (one
+    line, capped), since the reply itself is not persisted."""
+    model = FakeModel([ai("Sure! Here is my plan:\n" + "x" * 400), ai('{"kiqs": [], "sections": []}')])
+    gw, plog = gateway(model)
+    gw.json(lambda note: msgs(f"task {note or ''}"), label="plan", required_keys=("kiqs", "sections"))
+    warning = next(line for line in plog.of("warn") if "JSON attempt 1 unusable" in line)
+    assert "reply began: 'Sure! Here is my plan: xxx" in warning and "\n" not in warning
+    assert len(warning) < 400

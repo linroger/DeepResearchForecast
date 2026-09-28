@@ -495,6 +495,7 @@ _SECTION_RULES = """Rules:
 - Use the research evidence above. Cite with the [S<n>] markers exactly as they appear in its SOURCE INDEX, right after each claim; never invent markers, sources, URLs or numbers.
 - Every paragraph that states numbers or specific facts carries at least one marker.
 - Evidence tags: state (VERIFIED) findings plainly, attribute (REPORTED) ones to their source, and never state an (UNVERIFIED) figure as fact: omit it or say explicitly that it is unconfirmed. Do not copy the tags into the text.
+- When several sources support a claim, cite the ones marked fetched in the SOURCE INDEX; cite a snippet-only source only for a claim no fetched source supports.
 - Restate scenario names and probabilities only exactly as in the brief's canonical scenario frame.
 - Do not write an executive summary, a report-wide introduction or conclusion, or a references or sources list.
 - Use "###" for sub-headings inside a section; use "##" only for the headings listed above.
@@ -2234,12 +2235,23 @@ def _canonical_number(piece: str) -> str:
     return piece.lstrip("0") or "0"
 
 
+# A fiscal/season year range written with a two-digit end year ("2026-27",
+# "FY2025/26"): the "27" is a year, not a quantity to verify.
+_YEAR_RANGE_RE = re.compile(r"(?<![\d.,])((?:19|20)\d{2})[-–/](\d{2})(?![\d]|[.,]\d)")
+
+
+def _strip_year_ranges(value: str) -> str:
+    return _YEAR_RANGE_RE.sub(
+        lambda m: " " if int(m.group(2)) == (int(m.group(1)) + 1) % 100 else m.group(0), value)
+
+
 def _number_text(text: str, *, strip_dates: bool) -> str:
     """``text`` as number verification reads it: NFKC (full-width digits and
-    no-break/thin spaces become ASCII), markers and (optionally) dates out."""
+    no-break/thin spaces become ASCII), markers and (optionally) dates and
+    year ranges out."""
     value = unicodedata.normalize("NFKC", str(text or ""))
     value = _CITE_RE.sub(" ", value)
-    return _DATE_LIKE_RE.sub(" ", value) if strip_dates else value
+    return _strip_year_ranges(_DATE_LIKE_RE.sub(" ", value)) if strip_dates else value
 
 
 def _join_digit_groups(value: str) -> str:

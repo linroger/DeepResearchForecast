@@ -252,3 +252,10 @@ This repository implements a six-stage forecast workflow: DeerFlow 2 research, o
 - **Changes:** percent-aware number verification (a fact's "15%" needs a page percentage — written as one, a range bound, or a number in a percent-marked table/row/header block — not any bare 15); degradation events for template plans from an unusable/failed planner answer; finalize writes sources.json before research_report.md.
 - **Verification:** backend/tests/test_research_engine_v3_residuals.py (fails on the committed engine); adversarial measurement on 4,775 real cached pages + 27 real reports: 0 real-layout regressions, 98.1% of coincidental percentage matches removed, 6 report flips all correct removals; regexes linear; full backend suite re-run (see handoff §10).
 - **Next:** unchanged — owner-gated live GLM run; push after GitHub re-authentication.
+
+### 2026-09-28T13:10:00+08:00 (CST) — branch `feat/research-engine-v3`
+
+- **Feature:** `feature_research_engine_v3` — owner-approved live validation (now `passes: true`).
+- **Live run:** quick depth, GLM-5.3, real DeerFlowResearchRunner → exit 0 in 543 s; 40 provider calls; 222k input / 78k output tokens; 78.4% of input served from provider cache; parameters accepted (no 400, no degrade); 4 KIQ agents stopped on their own (no fallbacks); QA 9/9; 28k-char report, 25 sources, 13 actors. (Last legacy run: ~20 h, 46.8M input tokens.)
+- **Follow-ups applied:** fiscal-year ranges not verified as quantities; writers prefer fetched sources; unusable JSON replies quoted in their warning line.
+- **Next:** push after GitHub re-authentication; optionally drop the obsolete RESEARCH_LINEAR_MODE=salvage from .env.
