@@ -1,16 +1,16 @@
 {
-  "_comment": "ITEM 4 — 把后端 KG 检索与模拟采访以 MCP (stdio, 官方 mcp SDK/FastMCP) 暴露给 deer-flow 2.0 harness。此文件是 OPT-IN 注册：harness 通过 DEER_FLOW_EXTENSIONS_CONFIG_PATH 指向它才会加载（否则走各自默认 extensions_config.json，互不影响）。DEGRADE-SAFETY: bridge 深度研究常在任何图谱/模拟存在之前就跑，故两台服务器都被设计成启动与 tools/list 绝不触碰 FalkorDB/Graphiti/模拟 IPC，工具在图谱/存储缺失时返回结构化错误 {ok:false,error} 且绝不 hang——即便被提早拉起也不会拖垮研究。推荐由编排层只在图谱/模拟已就绪时把 DEER_FLOW_EXTENSIONS_CONFIG_PATH 指向本文件（并按需用 DRF_MCP_KG_GRAPH_ID / DRF_MCP_SIM_ID 注入默认 id）。command 用 backend venv 的 python，PYTHONPATH 指向 backend 使 `python -m app.mcp.*` 能解析 `app` 包（-m 只把 CWD 加 sys.path，harness 可能把 stdio 子进程 cwd 定到 thread workspace）。",
+  "_comment": "ITEM 4 — 把后端 KG 检索与模拟采访以 MCP (stdio, 官方 mcp SDK/FastMCP) 暴露给 deer-flow 2.0 harness。此文件是 OPT-IN 注册：harness 通过 DEER_FLOW_EXTENSIONS_CONFIG_PATH 指向它才会加载（否则走各自默认 extensions_config.json，互不影响）。DEGRADE-SAFETY: bridge 深度研究常在任何图谱/模拟存在之前就跑，故两台服务器都被设计成启动与 tools/list 绝不触碰 FalkorDB/Graphiti/模拟 IPC，工具在图谱/存储缺失时返回结构化错误 {ok:false,error} 且绝不 hang——即便被提早拉起也不会拖垮研究。推荐由编排层只在图谱/模拟已就绪时把 DEER_FLOW_EXTENSIONS_CONFIG_PATH 指向本文件（并按需用 DRF_MCP_KG_GRAPH_ID / DRF_MCP_SIM_ID 注入默认 id）。本文件是模板：command / PYTHONPATH 里的双花括号占位符 DRF_BACKEND_PYTHON（运行后端的解释器）与 DRF_REPO_ROOT（本机仓库根）由编排层 _sync_deerflow_bridge_if_stale 部署到 deer-flow/ 时替换为真实路径，勿写死本机绝对路径。command 用 backend venv 的 python，PYTHONPATH 指向 backend 使 `python -m app.mcp.*` 能解析 `app` 包（-m 只把 CWD 加 sys.path，harness 可能把 stdio 子进程 cwd 定到 thread workspace）。",
   "mcpServers": {
     "drf-kg": {
       "enabled": true,
       "type": "stdio",
-      "command": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+      "command": "{{DRF_BACKEND_PYTHON}}",
       "args": [
         "-m",
         "app.mcp.kg_server"
       ],
       "env": {
-        "PYTHONPATH": "/Users/rogerlin/Downloads/DeepResearchForecast/backend:/Users/rogerlin/Downloads/DeepResearchForecast",
+        "PYTHONPATH": "{{DRF_REPO_ROOT}}/backend:{{DRF_REPO_ROOT}}",
         "DRF_MCP_KG_GRAPH_ID": "$DRF_MCP_KG_GRAPH_ID",
         "DRF_MCP_KG_TIMEOUT": "$DRF_MCP_KG_TIMEOUT",
         "FALKORDB_HOST": "$FALKORDB_HOST",
@@ -23,13 +23,13 @@
     "drf-simulation": {
       "enabled": true,
       "type": "stdio",
-      "command": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+      "command": "{{DRF_BACKEND_PYTHON}}",
       "args": [
         "-m",
         "app.mcp.sim_server"
       ],
       "env": {
-        "PYTHONPATH": "/Users/rogerlin/Downloads/DeepResearchForecast/backend:/Users/rogerlin/Downloads/DeepResearchForecast",
+        "PYTHONPATH": "{{DRF_REPO_ROOT}}/backend:{{DRF_REPO_ROOT}}",
         "DRF_MCP_SIM_ID": "$DRF_MCP_SIM_ID",
         "DRF_MCP_SIM_TIMEOUT": "$DRF_MCP_SIM_TIMEOUT",
         "MINIMAX_API_KEY": "$MINIMAX_API_KEY"

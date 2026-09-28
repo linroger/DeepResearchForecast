@@ -830,8 +830,6 @@ class Config:
         return cls.reasoning_extra_body()
 
     # —— 运行时模型提供方切换（供 /api/settings 使用）——
-    # 每个提供方的展示元数据：是否需要 API Key、对应的 DeerFlow 研究模型（deer-flow/config.yaml
-    # 当前仅定义了 claude + minimax 两个研究模型，故其余提供方的深度研究回退到 claude/OAuth）。
     # 每个提供方的展示与路由元数据：
     #   label          前端显示名
     #   needs_key      是否需要用户填写 API Key（CLI/订阅类为 False）
@@ -870,7 +868,8 @@ class Config:
             'base_url': cls.LLM_BASE_URL,
             'model_name': cls.LLM_MODEL_NAME,
             'providers': [
-                {'id': pid, 'label': meta['label'], 'needs_key': meta['needs_key']}
+                {'id': pid, 'label': meta['label'], 'needs_key': meta['needs_key'],
+                 'deerflow_model': meta.get('deerflow_model', 'claude')}
                 for pid, meta in cls.PROVIDER_META.items()
             ],
         }

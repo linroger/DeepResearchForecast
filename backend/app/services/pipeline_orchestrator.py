@@ -35,6 +35,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -1361,6 +1362,82 @@ _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
 )
 
 
+# deerflow_bridge/extensions_config.json 是模板：MCP server 的 command / PYTHONPATH 依赖本机
+# 检出位置，源文件只写占位符，部署时由 _render_bridge_extensions_config 替换成真实路径。
+# （此前源文件写死 /Users/<dev>/… 绝对路径，换一台机器 fork/continue/resume 的 KG MCP 就起不来。）
+_EXTENSIONS_REPO_ROOT_TOKEN = "{{DRF_REPO_ROOT}}"
+_EXTENSIONS_PYTHON_TOKEN = "{{DRF_BACKEND_PYTHON}}"
+
+
+def _mcp_backend_python(repo_root: str) -> str:
+    """MCP server 用的解释器：优先当前后端解释器（它必然装齐了 app.* 依赖），缺失时退回约定 venv。"""
+    if sys.executable:
+        return sys.executable
+    return os.path.join(repo_root, "backend", ".venv", "bin", "python")
+
+
+def _render_bridge_extensions_config(src: str, repo_root: str) -> bytes:
+    """把 extensions_config.json 模板里的占位符替换为本机路径，返回待部署的字节。
+
+    在解析后的 JSON 值上替换（而非原始文本），路径里的反斜杠/引号不会破坏 JSON。
+    渲染结果若仍残留 ``{{…}}`` 占位符则抛错——宁可跳过部署，也不给 harness 一个起不来的 command。
+    """
+    with open(src, encoding="utf-8") as fh:
+        data = json.load(fh)
+    replacements = {
+        _EXTENSIONS_REPO_ROOT_TOKEN: repo_root,
+        _EXTENSIONS_PYTHON_TOKEN: _mcp_backend_python(repo_root),
+    }
+
+    def _sub(value: Any) -> Any:
+        if isinstance(value, str):
+            for token, real in replacements.items():
+                value = value.replace(token, real)
+            return value
+        if isinstance(value, dict):
+            return {key: _sub(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [_sub(item) for item in value]
+        return value
+
+    rendered = json.dumps(_sub(data), ensure_ascii=False, indent=2) + "\n"
+    leftover = re.search(r"\{\{[^{}]*\}\}", rendered)
+    if leftover:
+        raise ValueError(f"unknown placeholder {leftover.group(0)} in {src}")
+    return rendered.encode("utf-8")
+
+
+def _deploy_rendered_extensions_config(rendered: bytes, dst: str) -> bool:
+    """Atomically install rendered extensions_config.json bytes; True when written.
+
+    Pipelines run as threads of one backend process, so concurrent first syncs
+    can race here.  Each call stages into its own ``mkstemp`` file (a PID-derived
+    name was shared between threads: one thread's ``os.replace`` consumed the
+    other's staging file and aborted that research launch).  Identical bytes are
+    left untouched.
+    """
+    try:
+        with open(dst, "rb") as fh:
+            if fh.read() == rendered:
+                return False
+    except FileNotFoundError:
+        pass
+    fd, tmp = tempfile.mkstemp(
+        prefix=".extensions_config.", suffix=".tmp", dir=os.path.dirname(dst))
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(rendered)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, dst)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    return True
+
+
 def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
     """启动研究子进程前的漂移防护（2026-07-03 live-surfaced）。
 
@@ -1475,10 +1552,30 @@ def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
         # W9-9：MCP 扩展注册文件也同步到部署目录。该文件是 OPT-IN 的（harness 仅在
         # DEER_FLOW_EXTENSIONS_CONFIG_PATH 指向它时才加载），部署副本本身惰性无副作用；
         # DeerFlowResearchRunner 在「图谱已存在」的路径把该 env 指向此部署副本。
+        # 源文件是模板（见 _render_bridge_extensions_config），部署的是渲染后的内容而非逐字节拷贝。
         _ext_src = os.path.join(bridge_dir, "extensions_config.json")
-        if os.path.isfile(_ext_src):
-            pairs.append((_ext_src, os.path.join(deerflow_dir, "extensions_config.json")))
+        _ext_dst = os.path.join(deerflow_dir, "extensions_config.json")
         synced = []
+        _ext_rendered = None
+        if os.path.isfile(_ext_src):
+            try:
+                _ext_rendered = _render_bridge_extensions_config(_ext_src, repo_root)
+            except (OSError, ValueError) as ext_err:
+                # 模板坏了只影响可选的 KG MCP 接线：撤掉旧部署副本（研究侧据此跳过接线），
+                # 不能让它中断下面 deerflow_research.py 等必需文件的同步。
+                logger.warning("extensions_config.json 模板渲染失败，本次跳过 KG MCP 接线: %s", ext_err)
+                try:
+                    os.remove(_ext_dst)
+                except FileNotFoundError:
+                    pass  # 并发管线已撤掉，或本就没有部署副本
+        if _ext_rendered is not None:
+            # 可选的 KG MCP 接线部署失败（磁盘/权限）不能中断下面必需模块
+            # （deerflow_research.py、v3 引擎 linear_research.py / research_gateway.py…）的同步。
+            try:
+                if _deploy_rendered_extensions_config(_ext_rendered, _ext_dst):
+                    synced.append("extensions_config.json")
+            except OSError as ext_err:
+                logger.warning("extensions_config.json 部署失败，本次跳过 KG MCP 接线: %s", ext_err)
         for src, dst in pairs:
             if os.path.isfile(dst) and _digest(src) == _digest(dst):
                 continue
@@ -3321,6 +3418,60 @@ def _research_contract_validation_errors(handoff_dir: str) -> list[str]:
 def _validate_research_contract(handoff_dir: str) -> bool:
     """Validate the manifest-last root contract before any research reuse."""
     return not _research_contract_validation_errors(handoff_dir)
+
+
+def research_dossier_is_sealed(handoff_dir: str) -> bool:
+    """Whether Stage-1 output is cryptographically bound and so not hand-editable.
+
+    Multi-lane research is sealed by the manifest-last research contract, and
+    depending on the run by the report-judge prose binding.  Independently, an
+    ``actors.json`` carrying an ``actor_intelligence_contract`` (or its lineage
+    file) binds the report/actors hashes that actor reception, actor-context and
+    role prompts re-verify downstream.  A direct human edit breaks those seals:
+    Continue/resume would either re-run synthesis over the edit or fail actor
+    reception.  The dossier-edit API therefore refuses sealed research instead
+    of accepting an edit that cannot survive.
+    """
+    if os.path.exists(_research_contract_path(handoff_dir)):
+        return True
+    if os.path.exists(os.path.join(handoff_dir, ACTOR_INTELLIGENCE_LINEAGE_FILENAME)):
+        return True
+    actors = _read_json(os.path.join(handoff_dir, "actors.json"))
+    return isinstance(actors, dict) and isinstance(
+        actors.get("actor_intelligence_contract"), dict)
+
+
+def refresh_research_artifact_manifest(
+    pipeline_id: str, handoff_dir: str, filenames: list[str],
+) -> list[str]:
+    """Re-record human-edited *unsealed* research artifacts in handoff/manifest.json.
+
+    Legacy (pre-contract) research is reused on resume via ``_validate_reuse``,
+    which compares each registered artifact's sha256/bytes with this manifest.
+    Refreshing the edited entries makes that check accept the edit rather than
+    rebuild research over it.  Returns the artifact names that were refreshed.
+    """
+    manifest = PipelineManager.load_artifact_manifest(pipeline_id)
+    if not manifest:
+        return []  # 无清单：复用走存在性检查，编辑天然保留
+    probe = PipelineState(pipeline_id=pipeline_id, prompt="", handoff_dir=handoff_dir)
+    wanted = {os.path.realpath(os.path.join(handoff_dir, name)) for name in filenames}
+    refreshed: list[str] = []
+    for name, path in PipelineOrchestrator._stage_artifact_specs(probe, STAGE_RESEARCH):
+        if os.path.realpath(path) not in wanted:
+            continue
+        entry = _manifest_entry_for(name, path, STAGE_RESEARCH)
+        if entry is not None:
+            # Keep when research produced the artifact; stamp the edit separately.
+            previous = manifest.get(name)
+            if isinstance(previous, dict) and previous.get("produced_at"):
+                entry["produced_at"] = previous["produced_at"]
+            entry["human_edited_at"] = _utcnow()
+            manifest[name] = entry
+            refreshed.append(name)
+    if refreshed:
+        PipelineManager.write_artifact_manifest(pipeline_id, manifest)
+    return refreshed
 
 
 def _research_report_is_judge_bound(handoff_dir: str) -> bool:

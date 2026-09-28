@@ -26,6 +26,8 @@ from ..services.pipeline_orchestrator import (
     PipelineOrchestrator,
     PipelineState,
     preflight_pipeline,
+    refresh_research_artifact_manifest,
+    research_dossier_is_sealed,
 )
 from ..services.research_progress import (
     ResearchProgressLimitError,
@@ -433,6 +435,8 @@ def get_dossier(pipeline_id: str):
             "prediction_markets": _decode(markets_raw),
             "charts": _decode(charts_raw),
             "has_report": report is not None,
+            # 封存的研究不可编辑（见 edit_dossier）；前端据此隐藏「编辑」入口。
+            "sealed": research_dossier_is_sealed(handoff),
         },
     })
 
@@ -678,6 +682,11 @@ def edit_dossier(pipeline_id: str):
 
     仅当 status==completed && mode==research_only（或失败于建图之前）时允许，避免改动已下游消费的档案。
     原子写（tmp + os.replace）。body: {report?: str, actors?: object}。
+
+    已封存的研究一律拒绝（409, sealed=true，判定见 research_dossier_is_sealed）：
+    报告/actors 字节被研究 contract 清单、judge 文本绑定或 actor-intelligence 契约/血缘封存，
+    直接改写会让下一次「继续/恢复」重跑综合覆盖编辑，或在 actor 接收校验处失败。
+    未封存（旧版）研究的编辑会同步刷新 handoff/manifest.json 中对应条目，使复用校验接受编辑。
     """
     import json as _json
     data = PipelineManager.load(pipeline_id)
@@ -697,6 +706,19 @@ def edit_dossier(pipeline_id: str):
     handoff = PipelineManager.resolve_handoff_dir(pipeline_id)
     if not os.path.isdir(handoff):
         return jsonify({"success": False, "error": "管线产物目录不存在"}), 404
+    if research_dossier_is_sealed(handoff):
+        return jsonify({
+            "success": False,
+            "sealed": True,
+            "error": (
+                "该研究已封存（研究 contract 清单 / judge 绑定 / actor-intelligence 血缘），不能直接编辑："
+                "改动会让「继续」重跑综合覆盖编辑，或在 actor 接收校验处失败。请用修订后的问题重新发起研究。"
+                " This research is sealed (research contract, judge binding or actor-intelligence"
+                " lineage), so it cannot be edited in place: Continue would re-run synthesis over"
+                " the edit or fail the actor-lineage check. Start a new research run with a"
+                " refined question instead."
+            ),
+        }), 409
 
     # B2: 写入前质量门。若提交了 report，去空白后须 >= MIN_DOSSIER_CHARS，否则硬拒绝（400），
     # 杜绝空/过短报告被原子写入后悄悄退化下游本体/图谱/模拟。actors/sources 为可选，缺失不拦。
@@ -730,6 +752,14 @@ def edit_dossier(pipeline_id: str):
         return jsonify({"success": False, "error": str(e)}), 500
     if not wrote:
         return jsonify({"success": False, "error": "未提供 report 或 actors"}), 400
+    try:
+        refresh_research_artifact_manifest(pipeline_id, handoff, wrote)
+    except Exception as e:  # noqa: BLE001 — 清单刷新失败会让「继续」重跑研究，必须显式报错
+        logger.error(f"编辑档案后刷新产物清单失败: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": f"档案已写入，但产物清单刷新失败，继续时编辑可能被重跑覆盖: {e}",
+        }), 500
     return jsonify({"success": True, "data": {"updated": wrote}})
 
 

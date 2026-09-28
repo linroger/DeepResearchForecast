@@ -56,6 +56,57 @@ def _publication_rejection(report_id: str, lang=None):
     }), 409
 
 
+# agent_log.jsonl 中承载报告正文草稿的字段。报告仍在生成时照常实时下发（与
+# sections-partial 的渐进发布一致）；一旦生成结束却未通过发布审计，这些字段一律隐去，
+# 只保留事件骨架（action/stage/章节标题/长度/遥测），与 sections/section 端点同一闸门。
+_AGENT_LOG_DRAFT_FIELDS = {
+    "section_content": ("content",),
+    "section_complete": ("content",),
+    "llm_response": ("response",),
+    "react_thought": ("thought",),
+}
+_REPORT_IN_PROGRESS = (ReportStatus.PENDING, ReportStatus.PLANNING, ReportStatus.GENERATING)
+
+
+def _agent_log_publication(report_id: str):
+    """Return (withhold_drafts, publication) for the agent-log endpoints.
+
+    Fail closed: a missing report or any status other than an in-flight one
+    applies the publication gate.
+    """
+    report = ReportManager.get_report(report_id)
+    publication = ReportManager.publication_status(report_id)
+    in_progress = report is not None and report.status in _REPORT_IN_PROGRESS
+    withhold = not in_progress and not publication.get("publishable")
+    return withhold, publication
+
+
+def _withhold_agent_log_drafts(logs):
+    """Drop draft prose from agent-log entries, keeping the event skeleton."""
+    result = []
+    for entry in logs:
+        fields = _AGENT_LOG_DRAFT_FIELDS.get(entry.get("action")) if isinstance(entry, dict) else None
+        details = entry.get("details") if fields else None
+        if isinstance(details, dict) and any(name in details for name in fields):
+            details = {k: v for k, v in details.items() if k not in fields}
+            details["draft_withheld"] = True
+            entry = {**entry, "details": details}
+        result.append(entry)
+    return result
+
+
+def _gate_agent_log(report_id: str, logs):
+    """Apply the publication gate to agent-log entries; returns (logs, gate fields)."""
+    withhold, publication = _agent_log_publication(report_id)
+    if withhold:
+        logs = _withhold_agent_log_drafts(logs)
+    return logs, {
+        "publishable": bool(publication.get("publishable")),
+        "publication_issues": list(publication.get("reasons") or []),
+        "draft_withheld": withhold,
+    }
+
+
 def _active_translation_task(report_id: str, lang: str):
     """Return the newest in-flight task for exactly one report/language pair."""
     for task in TaskManager().list_tasks(task_type="report_translate"):
@@ -1657,6 +1708,9 @@ def get_agent_log(report_id: str):
     - 每个章节的开始、工具调用、LLM响应、完成
     - 报告完成或失败
     
+    发布闸门：报告生成结束（completed/failed）但未通过发布审计时，章节正文草稿、LLM 原始
+    响应与 ReACT 思考字段被隐去（draft_withheld=true，条目骨架保留）；生成中照常实时下发。
+
     Query参数：
         from_line: 从第几行开始读取（可选，默认0，用于增量获取）
     
@@ -1683,7 +1737,10 @@ def get_agent_log(report_id: str):
                 ],
                 "total_lines": 25,
                 "from_line": 0,
-                "has_more": false
+                "has_more": false,
+                "publishable": false,
+                "publication_issues": [...],
+                "draft_withheld": false
             }
         }
     """
@@ -1691,7 +1748,9 @@ def get_agent_log(report_id: str):
         from_line = request.args.get('from_line', 0, type=int)
         
         log_data = ReportManager.get_agent_log(report_id, from_line=from_line)
-        
+        log_data["logs"], gate = _gate_agent_log(report_id, log_data.get("logs") or [])
+        log_data.update(gate)
+
         return jsonify({
             "success": True,
             "data": log_data
@@ -1709,7 +1768,7 @@ def get_agent_log(report_id: str):
 @report_bp.route('/<report_id>/agent-log/stream', methods=['GET'])
 def stream_agent_log(report_id: str):
     """
-    获取完整的 Agent 日志（一次性获取全部）
+    获取完整的 Agent 日志（一次性获取全部；与 /agent-log 同一发布闸门）
     
     返回：
         {
@@ -1721,13 +1780,14 @@ def stream_agent_log(report_id: str):
         }
     """
     try:
-        logs = ReportManager.get_agent_log_stream(report_id)
-        
+        logs, gate = _gate_agent_log(report_id, ReportManager.get_agent_log_stream(report_id))
+
         return jsonify({
             "success": True,
             "data": {
                 "logs": logs,
-                "count": len(logs)
+                "count": len(logs),
+                **gate,
             }
         })
         

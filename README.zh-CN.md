@@ -3,13 +3,119 @@
 [English](README.md) | **简体中文**
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/linroger/DeepAgentForecast)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB.svg)](backend/.python-version)
+[![Node ≥ 20.19](https://img.shields.io/badge/node-%E2%89%A5%2020.19-339933.svg)](package.json)
 
-> 📖 **文档：**[全系统架构图谱](docs/architecture/DEEPRESEARCHFORECAST_SYSTEM_ATLAS.md) · [可编辑的全系统 tldraw 架构图](docs/architecture/deepresearchforecast-system-architecture.tldr) · [行动者智能架构](docs/architecture/ACTOR_INTELLIGENCE_ARCHITECTURE.md) · [全部模型调用族](docs/architecture/llm-call-inventory.json) · [全部数据流与 Flask 接口](docs/architecture/dataflow-inventory.json) · [DeerFlow 2 Stage-1 深入图谱](docs/architecture/deerflow2/DEERFLOW_2_ARCHITECTURE.md) · [DeepWiki](https://deepwiki.com/linroger/DeepAgentForecast)。
+> **问一个关于未来的问题，得到一份经过研究、模拟与审计的预测。**
 
-> **一句话提问，自动产出预测。**
-> 输入一个问题，它会自动联网研究、构建高保真的平行世界、运行多智能体群体模拟，并生成一份可交互的预测报告。
+DeepAgentForecast 是一个在你自己机器上运行的预测引擎。你输入一个问题，例如「2030 年谁会赢得美国 AI 竞赛？」，它会：
 
-**DeepAgentForecast** 是一个自主的「一句话 → 预测」引擎。你只需键入一个问题，系统便会自动联网调研、把调研成果沉淀为一个高保真的平行数字世界、让当前 `actor-intelligence/v1` 阵容中的每位合格且身份匹配的 Tier-1/2 行动者进入群体模拟，最后由报告 Agent 综合产出一份分章节、可深度交互的预测报告。
+1. 用 DeerFlow 2 研究智能体检索公开网络，并研究每一个关键行动者；
+2. 把研究所得沉淀为时序知识图谱；
+3. 让真实世界的行动者以 LLM 智能体的身份，在模拟的 Twitter 与 Reddit 上活动，每一轮推进一个日历时段；
+4. 写出一份分章节的预测报告，内含情景概率、至少 10 条可事后核验的是/否预测、图表，以及与预测市场的交叉核对。
+
+报告必须通过严格的引用与一致性审计才会对外提供。运行过程中，一个仪表盘实时展示每个阶段。
+
+```mermaid
+flowchart TB
+    Q(["你的问题"]):::io --> ROW1
+    subgraph ROW1["理解世界"]
+        direction LR
+        subgraph S1["1 · 研究 RESEARCH"]
+            direction TB
+            R["DeerFlow 2<br/>研究智能体<br/>搜索 · 阅读 · 评审"]:::llm --> A1[("研究档案 · 行动者<br/>来源 · 预测市场")]:::store
+        end
+        subgraph S2["2 · 本体 ONTOLOGY"]
+            direction TB
+            O["LLM 设计<br/>实体与关系类型"]:::llm --> A2[("ontology.json")]:::store
+        end
+        subgraph S3["3 · 图谱 GRAPH"]
+            direction TB
+            G["先写入行动者种子<br/>再灌入研究档案"]:::proc --> A3[("时序知识图谱<br/>Graphiti · FalkorDB")]:::store
+        end
+        S1 --> S2 --> S3
+    end
+    subgraph ROW2["向前模拟，然后预测"]
+        direction LR
+        subgraph S4["4 · 准备 PREPARE"]
+            direction TB
+            P["行动者 → 智能体<br/>判定日 → 回合"]:::det --> A4[("人格档案 +<br/>模拟配置")]:::store
+        end
+        subgraph S5["5 · 运行 RUN"]
+            direction TB
+            S["OASIS Twitter + Reddit<br/>每轮一个日历时段"]:::llm --> A5[("行为日志 +<br/>世界态")]:::store
+        end
+        subgraph S6["6 · 报告 REPORT"]
+            direction TB
+            F["撰写 · 预测<br/>审计 · 发布"]:::llm --> A6[("full_report.md<br/>forecast.json")]:::store
+        end
+        S4 --> S5 --> S6
+    end
+    ROW1 --> ROW2
+    ROW2 --> OUT(["可交互的预测报告"]):::io
+    classDef io fill:#f1f5f9,stroke:#475569,color:#0f172a
+    classDef proc fill:#dbeafe,stroke:#2563eb,color:#0b1b3a
+    classDef llm fill:#ede9fe,stroke:#7c3aed,color:#1e0b3a
+    classDef det fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef store fill:#fef3c7,stroke:#b45309,color:#3b2303
+```
+
+<sub>本文流程图的配色约定：**蓝** = 组件或进程 · **紫** = 由 LLM 驱动的步骤 · **绿** = 确定性步骤（不调用 LLM）· **红** = 门控或判断 · **琥珀** = 持久化产物或存储 · **灰色虚线框** = 外部服务。</sub>
+
+### 亮点
+
+- **一个问题，六个阶段。** 研究 → 本体 → 图谱 → 准备 → 运行 → 报告，作为一条可取消、可恢复的管线运行，无需在阶段之间手动搬运文件。
+- **快速、有界、高缓存命中的研究。** 默认的研究引擎（v3）把问题拆成若干关键情报问题，为每个问题派出一个有界的"搜索—阅读"智能体，在工具预算内补齐缺口，并写出带引用的研究档案。它的提示词按提供方的提示缓存来编排，约 80% 的输入 token 由缓存提供。一次 deep 运行约 40 分钟、145 万输入 token，而此前的多轮循环约需 20 小时、4,680 万输入 token。证据中的每个数字都会与其引用的页面核对。
+- **深入且并行的研究（旧版引擎）。** 设置 `RESEARCH_ENGINE=legacy` 时，三条相互隔离的 DeerFlow 2 研究证据轨从不同角度切入问题：
+  - 基础证据；
+  - 基率与历史参照；
+  - 激励、反面观点与市场。
+
+  其中一条还会为每位关键行动者建立 17 个维度的研究档案，每条主张都绑定到具体来源。随后，一个独立的综合步骤写出 1.5–2.2 万词的研究档案，并且必须通过 7 维质量评审。
+- **无需自建托管的知识图谱。** 采用 [Graphiti](https://github.com/getzep/graphiti) + 内嵌 FalkorDB，并在本地计算多语言向量：没有图谱服务、没有 Docker，也不需要图谱 API Key。
+- **以日历时间推演。** 问题中的预测判定日（「到 2030 年」「未来 18 个月」「2035年底」）会被切分为一串日历回合，每个回合是一天、一周、半个月、一个月、一个季度或半年。调研得到的真实事件在其实际发生的时段触发，共享的世界态在回合之间演化。
+- **为可评分而设计的预测。**
+  - 在写任何正文之前先确定情景概率。
+  - 每份报告至少包含 10 条二元预测，每条都附概率与客观判定标准。
+  - 若 Polymarket 上存在判定标准相同的市场，就用它对预测做交叉核对。
+- **杜绝虚假成功。** 草稿要到达读者，必须依次通过 SHA-256 清单、封存的行动者契约、只读终审与发布门。只要存在无依据的引用、与正文矛盾的概率，或缺少兜底的「剩余」情景，报告就不会对外提供。
+- **易于运行与观察。**
+  - 实时阶段时间线与「运行体征」：已用时间、预计剩余、存活状态与花费。
+  - 取消、恢复与继续。
+  - 中英双语界面与报告，并支持 PDF 导出。
+  - 可切换的 LLM 后端：本地 `claude` / `codex` CLI，或六个 OpenAI 兼容 API 之一。
+
+📖 **更深入的文档：** [全系统架构图谱](docs/architecture/DEEPRESEARCHFORECAST_SYSTEM_ATLAS.md) · [行动者智能架构](docs/architecture/ACTOR_INTELLIGENCE_ARCHITECTURE.md) · [DeerFlow 2（阶段 1）深入解析](docs/architecture/deerflow2/DEERFLOW_2_ARCHITECTURE.md) · [DeepWiki](https://deepwiki.com/linroger/DeepAgentForecast)。各文档分别涵盖什么，见[延伸文档](#延伸文档)。
+
+---
+
+## 目录
+
+- [快速上手](#快速上手)
+- [演示](#演示)
+- [工作原理](#工作原理)
+- [架构](#架构)
+  - [运行时拓扑](#运行时拓扑) · [请求生命周期](#请求生命周期) · [管线生命周期、状态与恢复](#管线生命周期状态与恢复) · [各阶段读取什么](#各阶段读取什么) · [代码地图](#代码地图)
+- [逐阶段深入解析](#逐阶段深入解析)
+  - [1 · 研究](#阶段-1--研究deerflow-2) · [2 · 本体](#阶段-2--本体) · [3 · 知识图谱](#阶段-3--知识图谱) · [4 · 准备](#阶段-4--准备) · [5 · 模拟](#阶段-5--模拟) · [6 · 报告与发布](#阶段-6--报告与发布) · [运行结束之后](#运行结束之后集成账本与监测)
+- [可信度与质量保障](#可信度与质量保障)
+- [环境要求](#环境要求)
+- [安装与配置](#安装与配置)
+- [模型提供方](#模型提供方)
+- [配置（`.env`）](#配置env)
+- [API 参考](#api-参考)
+- [仪表盘](#仪表盘)
+- [运维与工具](#运维与工具)
+- [安全](#安全)
+- [开发与测试](#开发与测试)
+- [DeerFlow 2 集成与 DRF2 目标](#deerflow-2-集成与-drf2-目标)
+- [项目结构](#项目结构)
+- [故障排查](#故障排查)
+- [术语表](#术语表)
+- [延伸文档](#延伸文档)
+- [致谢](#致谢) · [许可证](#许可证)
 
 ---
 
@@ -18,759 +124,1763 @@
 ```bash
 git clone https://github.com/linroger/DeepAgentForecast.git
 cd DeepAgentForecast
-./setup.sh        # 交互式：选择你的 LLM 提供方并一键安装全部依赖
-npm run doctor    # 数秒内检查基础依赖与导入
-npm start         # 后端 :5001 + 前端 :3000；流式日志 + 阶段标记
+./setup.sh        # 交互式：选择 LLM 提供方、安装全部依赖、装配 DeerFlow
+npm run doctor    # 快速、离线地检查依赖与导入
+npm start         # 后端 :5001 + 前端 :3000；跟随日志并打印阶段变化
 ```
 
-随后打开 **<http://localhost:3000/research>**，输入问题，点击 **运行研究 + 模拟 + 预测**。
+打开 **<http://localhost:3000>**，输入问题，点击 **启动 研究 + 模拟 + 预测**。
 
-**无需自建图数据库。** 时序知识图谱在**本地**运行（内嵌 Graphiti + FalkorDB —— 无需账号、无需 Docker、无需 API Key）。你唯一需要的凭据是**一个 LLM**：要么使用本地 `claude` / `codex` CLI 登录（零 Key），要么为某个在线提供方（`openai`、`kimi`、`minimax`、`deepseek`、`qwen`、`glm`）填入 API Key。`setup.sh` 会引导你选择并对 Key 做实时校验。
+- **无需托管任何服务。** 知识图谱运行在内嵌的 FalkorDB 上：`falkordblite` 包会自行启动一个私有的 Redis + FalkorDB 子进程。无需 Docker、账号或图谱 API Key。
+- **一个 LLM 就够。** 二选一：
+  - 已登录的本地 `claude` 或 `codex` CLI（无需 API Key）；
+  - `openai`、`kimi`、`minimax`、`deepseek`、`qwen` 或 `glm` 中任意一家的 API Key。
 
-完整步骤见 [环境要求](#环境要求) 与 [快速开始](#快速开始)，每个配置项见 [`.env` 配置参考](#env-配置参考)。
+  `setup.sh` 会让你选择，用一次单 token 调用实测 Key 是否可用，并把研究阶段指向对应的模型。
+- **为长时间运行做好准备。** 默认的 `deep` 深度详尽但缓慢：仅研究看门狗就允许阶段 1 运行最长 9 小时。第一次端到端试跑时，请在表单中选择 **quick** 深度。
+- **推荐：** 配置 [Firecrawl](https://firecrawl.dev) Key（`FIRECRAWL_API_KEY`），网页搜索与正文抽取会更可靠。
+
+完整步骤见[环境要求](#环境要求)、[安装与配置](#安装与配置)与[配置（`.env`）](#配置env)。
 
 ---
 
 ## 演示
 
-🔗 **[在线演示站](https://linroger.github.io/DeepAgentForecast/)**（中英双语）—— 走完真实端到端运行的**每一个阶段**：深度研究控制台日志、含行动者与来源的研究档案、生成的本体、可交互知识图谱、模拟的 Twitter/Reddit 论坛，以及最终预测报告（2026–2031 现代重商主义 × AI、2027–2028 存储半导体、2030 全球云计算、2030 美国 AI 竞赛、2035 全球电动汽车产业、俄乌战争终局、2030 全球半导体产业、2030 全球存储芯片、2035 中国储能与电池市场、2026 美伊战争终局）。
+🔗 **[在线演示站](https://linroger.github.io/DeepAgentForecast/)**（中英双语）带你走完真实端到端运行的**每一个阶段**：
+- 深度研究控制台日志；
+- 含行动者与来源的研究档案；
+- 自动生成的本体；
+- 可交互的知识图谱；
+- 模拟的 Twitter/Reddit 论坛；
+- 最终的预测报告。
 
-一句提示词 —— *“Who wins the US AI race by 2030?”*（谁会在 2030 年赢得美国 AI 竞赛？）—— 从提问到可交互预测的全过程（研究 → 知识图谱 → 40 轮群体模拟 → 报告）：
+下面是一个提示词「Who wins the US AI race by 2030?」（2030 年谁会赢得美国 AI 竞赛？）从提问到可交互预测的全过程（研究 → 知识图谱 → 群体模拟 → 报告）：
 
 ![演示：一句话到预测](docs/media/demo-preview.gif)
 
 ▶ **[观看完整演示视频（47 秒，MP4）](docs/media/demo.mp4)**
 
-### 最新运行 —— 碰撞的十年：现代重商主义 × AI（2026–2031）
+### 特色运行：碰撞的十年（现代重商主义 × AI，2026–2031）
 
-最新的特色运行完整回应了一份桥水（Bridgewater）风格的挑战简报：以深度模式对「现代重商主义与 AI 的碰撞」开展英文调研，产出 14 位核心行动者的角色档案（美国行政当局、中国、欧盟、英伟达、台积电、超大规模云厂商、美联储……）及其带类型、带极性的关系网，运行 **80 人格双平台模拟**，最终写出三部分结构的预测简报 —— 含 **13 条二元预测**（每条附概率与客观可裁决的判定标准）与 **4 个带概率权重的情景**。
+这次运行完整回应了一份桥水（Bridgewater）风格的挑战简报：
+- 以深度模式对「现代重商主义与 AI 的碰撞」开展英文研究；
+- 14 位核心行动者的研究档案（美国行政当局、中国、欧盟、英伟达、台积电、超大规模云厂商、美联储……），附带类型化、分正负向的关系；
+- **80 个人格的双平台模拟**；
+- 一份三部分结构的预测简报，含 **13 条二元预测**（每条附概率与客观判定标准）与 **4 个带概率权重的情景**。
 
 🔗 **[在线浏览这次运行](https://linroger.github.io/DeepAgentForecast/demo.html?run=collision-decade-2031)**
 
-### 展示运行 —— 2030 年前全球半导体产业
+### 展示运行：2030 年前的全球半导体产业
 
-早前的一次展示运行：深度模式调研覆盖半导体全产业链（存储 / HBM / 逻辑 / 代工，17 家具名企业），构建 285 节点知识图谱，**115 个数字人格**进行 **40 轮双平台模拟**，最终产出分章节预测报告。
+- 以深度模式研究半导体全产业链：存储、HBM、逻辑与代工，覆盖 17 家具名企业。
+- 285 个节点的知识图谱。
+- **115 个人格**，进行 **40 轮双平台模拟**。
+- 一份分章节的预测报告。
 
-▶ **[观看半导体运行全程视频（42 秒，4 倍速，MP4）](docs/media/demo-semiconductors.mp4)** · 🔗 **[在线浏览这次运行](https://linroger.github.io/DeepAgentForecast/demo.html?run=semiconductors-2030)**
+▶ **[观看半导体运行全程（42 秒，4 倍速，MP4）](docs/media/demo-semiconductors.mp4)** · 🔗 **[在线浏览这次运行](https://linroger.github.io/DeepAgentForecast/demo.html?run=semiconductors-2030)**
 
 | | |
 |---|---|
-| ![深度研究控制台](docs/media/09-semis-research-console.jpg) <br/>*阶段 1 —— 深度研究控制台：多轮研究协议中的每一次搜索、抓取与写作* | ![研究档案](docs/media/10-semis-research-dossier.jpg) <br/>*完成的研究档案 —— 对 2030 年半导体行业的循证深度研究* |
-| ![调研提取的核心行动者](docs/media/11-semis-key-actors.jpg) <br/>*调研提取的核心行动者 —— CEO、分析师与企业，立场与影响力均来自调研* | ![引用的网络来源](docs/media/12-semis-cited-sources.jpg) <br/>*支撑档案论断的网络来源引用* |
-| ![半导体知识图谱](docs/media/13-semis-knowledge-graph.jpg) <br/>*285 实体知识图谱与 10 个自动生成的实体类型* | ![40/40 轮的模拟信息流](docs/media/14-semis-simulation-feed.jpg) <br/>*模拟完成 —— 115 个人格、40/40 轮，完整 Twitter 信息流* |
-| ![最终预测报告](docs/media/15-semis-forecast-report.jpg) <br/>*带可导航目录的最终预测报告* | |
+| ![深度研究控制台](docs/media/09-semis-research-console.jpg) <br/>*阶段 1：深度研究控制台记录每一次搜索、抓取与写作* | ![研究档案](docs/media/10-semis-research-dossier.jpg) <br/>*完成的研究档案：对 2030 年半导体产业的循证深度研究* |
+| ![研究提取的关键行动者](docs/media/11-semis-key-actors.jpg) <br/>*研究提取的关键行动者：CEO、分析师与企业，各附经研究的立场与影响力* | ![引用的网络来源](docs/media/12-semis-cited-sources.jpg) <br/>*支撑档案论断的网络来源* |
+| ![半导体知识图谱](docs/media/13-semis-knowledge-graph.jpg) <br/>*285 个实体的知识图谱，以及自动生成的 10 个实体类型* | ![第 40/40 轮的模拟信息流](docs/media/14-semis-simulation-feed.jpg) <br/>*跑完 40/40 轮后的模拟：115 个人格与完整的 Twitter 信息流* |
+| ![最终预测报告](docs/media/15-semis-forecast-report.jpg) <br/>*带可点击目录的最终预测报告* | |
+
+### 全部演示运行
+
+演示站收录了 14 次完整运行，下表按从新到旧排列。各次规模不同，是因为默认设置随时间变化过：早期运行的阵容更大，有些还使用了旧式的新闻周期模拟模式。按当前默认设置，一次运行最多模拟 20 位研究所得的行动者，通常为 7–36 个日历回合。
+
+| 运行 | 日期 | 研究模型 | 模拟 |
+|---|---|---|---|
+| [2030 年前全球数据中心市场：中美算力竞赛](https://linroger.github.io/DeepAgentForecast/demo.html?run=datacenter-2030) | 2026-09 | GLM-5.3（由实验性线性引擎收尾完成） | 17 轮 · 18 个人格 |
+| [2040 年前全球电网级储能产业](https://linroger.github.io/DeepAgentForecast/demo.html?run=grid-storage-2040) | 2026-07 | MiniMax | 29 轮 · 19 个人格 |
+| [2035 年前全球电动汽车产业](https://linroger.github.io/DeepAgentForecast/demo.html?run=ev-2035) | 2026-07 | MiniMax | 19 轮 · 12 个人格 |
+| [2026 年美国中期选举：参众两院控制权情景](https://linroger.github.io/DeepAgentForecast/demo.html?run=us-midterms-2026) | 2026-07 | MiniMax | 36 轮 · 14 个人格 |
+| [2028 年美国贸易体系：关税、供应链回流与 AI 生产力竞赛](https://linroger.github.io/DeepAgentForecast/demo.html?run=us-trade-2028) | 2026-07 | MiniMax | 36 轮 · 20 个人格 |
+| [碰撞的十年：现代重商主义 × AI（2026–2031）](https://linroger.github.io/DeepAgentForecast/demo.html?run=collision-decade-2031) | 2026-07 | Claude | 24 轮 · 80 个人格 |
+| [2030 年全球云计算竞争格局推演](https://linroger.github.io/DeepAgentForecast/demo.html?run=cloud-2030) | 2026-06 | MiniMax | 120 轮 · 80 个人格 |
+| [2027—2028 年存储半导体前景预判](https://linroger.github.io/DeepAgentForecast/demo.html?run=storage-semi-2028) | 2026-06 | MiniMax | 96 轮 · 80 个人格 |
+| [2030 年前全球存储半导体市场](https://linroger.github.io/DeepAgentForecast/demo.html?run=memory-semi-2030) | 2026-06 | — | 4 轮 · 80 个人格 |
+| [2026 年美伊战争如何收场？](https://linroger.github.io/DeepAgentForecast/demo.html?run=us-iran-2026) | 2026-06 | MiniMax | 40 轮 · 135 个人格 |
+| [2035 年中国储能与电池市场](https://linroger.github.io/DeepAgentForecast/demo.html?run=china-storage-2035) | 2026-06 | MiniMax | 40 轮 · 94 个人格 |
+| [2030 年前全球半导体产业](https://linroger.github.io/DeepAgentForecast/demo.html?run=semiconductors-2030) | 2026-06 | MiniMax | 40 轮 · 115 个人格 |
+| [2030 年谁主导美国 AI？](https://linroger.github.io/DeepAgentForecast/demo.html?run=us-ai-2030) | 2026-06 | MiniMax | 40 轮 · 42 个人格 |
+| [俄乌战争如何终结、何时终结？](https://linroger.github.io/DeepAgentForecast/demo.html?run=russia-ukraine) | 2026-06 | MiniMax | 3 轮 · 36 个人格 |
 
 ### 截图
 
+以下截图展示统一仪表盘在实际运行中的样子。截图摄于 2026 年 6 月，当时运行体征条与二元预测表尚未加入。
+
 | | |
 |---|---|
-| ![基于研究档案构建的知识图谱](docs/media/01-pipeline-knowledge-graph.jpg) <br/>*阶段 4 —— 基于研究档案构建的时序知识图谱* | ![带来源引用的研究档案](docs/media/02-research-dossier-sources.jpg) <br/>*研究档案标签页 —— 每条论断都有网络来源引用支撑* |
-| ![生成的智能体人格](docs/media/03-agent-personas.jpg) <br/>*界面中的行动者档案；当前 v1 从已封存、来源绑定的证据中确定性编译每个可执行角色* | ![实时模拟控制台](docs/media/04-simulation-console.jpg) <br/>*实时模拟控制台，流式呈现智能体的每个动作* |
-| ![图谱节点详情](docs/media/05-graph-node-details.jpg) <br/>*模拟进行中查看某个图谱实体的详情* | ![模拟社交信息流](docs/media/06-simulation-feed.jpg) <br/>*第 20/40 轮时的模拟 Twitter/Reddit 信息流* |
-| ![模拟帖子](docs/media/07-simulation-posts.jpg) <br/>*智能体人格之间自然涌现的讨论串* | ![智能体详情面板](docs/media/08-simulation-agent-detail.jpg) <br/>*第 33/40 轮的帖子与智能体详情面板（管线进度 88%）* |
+| ![知识图谱标签页](docs/media/01-pipeline-knowledge-graph.jpg) <br/>***知识图谱**标签页：阶段 3 构建的时序知识图谱，截于阶段 4 运行期间* | ![档案来源](docs/media/02-research-dossier-sources.jpg) <br/>***研究档案 → 信息来源**：研究报告引用的全部网络来源* |
+| ![档案关键行动者](docs/media/03-agent-personas.jpg) <br/>***研究档案 → 关键参与者**：经研究的核心行动者档案* | ![实时研究控制台](docs/media/04-simulation-console.jpg) <br/>***实时日志**标签页：模拟运行期间仍可查看 DeerFlow 研究控制台* |
+| ![图谱节点详情](docs/media/05-graph-node-details.jpg) <br/>*在**知识图谱**标签页中查看某个实体的属性与摘要* | ![第 20 轮的模拟信息流](docs/media/06-simulation-feed.jpg) <br/>*第 20/40 轮的**群体模拟**标签页：人格卡片与模拟的 Twitter 信息流* |
+| ![模拟帖子](docs/media/07-simulation-posts.jpg) <br/>*第 21/40 轮：智能体以各自的角色发帖与互动* | ![第 33 轮的模拟](docs/media/08-simulation-agent-detail.jpg) <br/>*第 33/40 轮的**群体模拟**标签页，此时管线已完成 88%* |
 
 ---
 
-## 目录
+## 工作原理
 
-- [快速上手](#快速上手)
-- [演示](#演示)
-- [它能做什么](#它能做什么)
-- [架构总览](#架构总览)
-- [当前实际运行的六阶段管线](#当前实际运行的六阶段管线)
-- [功能特性](#功能特性)
-- [环境要求](#环境要求)
-- [快速开始](#快速开始)
-- [模型提供方与切换方式](#模型提供方与切换方式)
-- [`.env` 配置参考](#env-配置参考)
-- [API 一览](#api-一览)
-- [前端统一面板](#前端统一面板)
-- [关键工程要点](#关键工程要点)
-- [架构与最新增强](#架构与最新增强)
-- [DeerFlow 2 集成模式与 DRF2 目标](#deerflow-2-集成模式与-drf2-目标)
-- [项目结构](#项目结构)
-- [故障排查](#故障排查)
-- [致谢](#致谢)
-- [许可证](#许可证)
+系统的一次运行称为一条**管线**（pipeline），ID 形如 `pipe_1ee2fae33f8c`。`PipelineOrchestrator` 在后台线程中依次执行六个阶段，并把每个产物连同其 SHA-256 哈希记入清单。因此，失败或被取消的运行可以从第一个产物校验不通过的阶段**恢复**。
+
+| # | 阶段 | 进度区间¹ | 发生了什么 | 主要产物 |
+|---|---|---|---|---|
+| 1 | **研究** | 0–30% | 默认引擎（v3）规划关键情报问题，为每个问题并行运行一个有界的"搜索—阅读"智能体，补齐缺口，写出并检查带引用的研究档案，再抽取结构化数据：行动者、时间线、数值、争议主张与预测市场。旧版引擎（`RESEARCH_ENGINE=legacy`）则运行三条 DeerFlow 2 证据轨，外加一次经评审的全局综合。 | `research_report.md`、`actor_dossier.md`、`actors.json`、`sources.json`、`timeline.json`、`prediction_markets.json` |
+| 2 | **本体** | 30–40% | 一次 LLM 调用为该问题设计至多 10 个实体类型与 10 个关系类型，并以研究所得的行动者类型为种子。随后由确定性后处理标注原型、关系族与正负向。 | `ontology.json` |
+| 3 | **图谱** | 40–60% | 先以确定性方式把研究所得的行动者及其关系写入本地时序知识图谱，再把研究档案作为 Graphiti episode 灌入（LLM 抽取 + 本地向量）。之后合并重复实体，并围绕阵容剪枝。 | 图谱 `mirofish_<id>`、`graph_priors.json` |
+| 4 | **准备** | 60–72% | 每位研究所得的行动者成为一个智能体。它的封存上下文包把公开事实与行动者自身所知严格分开，角色提示词则以确定性方式编译而成。系统从问题中解析出预测判定日，并切分为日历回合。 | `simulation_config.json`、Twitter/Reddit 人格档案、封存清单 |
+| 5 | **运行** | 72–92% | OASIS 让 Twitter 与 Reddit 并行运行，每轮一个日历时段。每一轮都有「世界时钟」（当前的模拟日期）、落在该时段内的真实事件，以及持续演化的共享世界态。 | `actions.jsonl`、`world_state_trajectory.json`、`run_summary.json` |
+| 6 | **报告** | 92–100% | ReportAgent 依次：<br/>• 先确定情景概率；<br/>• 借助图谱检索工具撰写各章节；<br/>• 抽取至少 10 条二元预测；<br/>• 与预测市场交叉核对；<br/>• 渲染图表；<br/>• 在发布前运行 lint、引用与审计门控。 | `full_report.md`、`forecast.json`、`charts/`、`final_audit.json` |
+
+¹ 这些是静态区间。一旦知道图谱的分块数与模拟的回合数，编排器会按预期工作量重新划分 40–100% 的区间，因此报告阶段通常从 78% 左右开始。
+
+**两种运行模式：**
+- **完整管线**：全部六个阶段。
+- **仅研究**：只运行阶段 1，由它占满整个进度条。已完成的仅研究运行可以**继续**为完整管线，复用其已封存的研究成果。
 
 ---
 
-## 它能做什么
+## 架构
 
-把一个开放性问题（例如「2035 年电动车市场会怎样演化？」）交给 DeepAgentForecast，它会：
+### 运行时拓扑
 
-- **自动联网研究每个关键行动者（规模化）**：当前默认路径并行运行**三条相互隔离的 Track-A 多角度 evidence-only 证据轨**（基础证据 · 基率与参照类 · 激励/反面/市场），并只在广义基础轨运行**一条共享的 Track-B 行动者智能平面**。Track B 对每位第 1/2 层行动者研究 17 个带来源与时间边界的维度——历史、价值观、激励、动机、能力、约束、已显露的偏好/厌恶、联盟、竞争者、决策权/触发器、当前行动、未来计划、投资、历史记录、可能行动、红线和知识状态——再把经校验和绑定的角色档案送入唯一的全局报告/抽取命名空间。每条 Track-A 轨执行分阶段多轮协议，并且每次只启用一种广度机制：默认 harness scoped 子代理（三轨共享上限 9，每轨至多 3 个），或在 harness 未接管时启用旧桥接扇出。深度综合目标为 **1.5–2.2 万词**，并带 S1–S4 来源分级、三角验证、Polymarket 校准、十维行动者评审与确定性的「行动者 × 维度」来源覆盖审计。
-- **构建高保真平行世界**：把研究成果蒸馏进一张带**分层、行为画像丰富的本体**的时序知识图谱（GraphRAG）。当前 v1 会为所有合格且身份匹配的 Tier-1/2 行动者确定性编译来源绑定的运行时角色与配置；图谱显著度不能截断封存的研究阵容，也不能用不匹配实体替代行动者。
-- **以日历时间模拟未来演化**：系统会从你的问题中**自动抽取预测判定日**（「到 2030 年」「未来 18 个月」「2035 年底」……），把研究基准日到判定日之间的时间跨度切分为**每轮一个整日历单位**（日 / 周 / 半月 / 月 / 季度 / 半年）的回合 —— 轮数随判定日**动态伸缩**（问到 2035 的轮数多于问到 2029 的），单位也始终与问题匹配：「到 2030 年」→ 18 个季度轮，「三周内」→ 21 个单日轮。每一轮，LLM 人格都在**世界时钟**下扮演真实行动者**在整个时段内**会做的事 —— 决策、公告、结盟或战略性按兵不动；调研得到的真实事件会在其实际日期所在的回合触发；**世界态**在轮与轮之间演化（日历尺度惯性 + 基率熵底），并把「上一时段发生了什么」的定性摘要回灌给智能体。可选的**多种子敏感性侧车**会重跑模拟+报告并写入 `ensemble_forecast.json`，但不会改写已封存的主预测。
-- **产出可交互预测报告**：由报告 Agent 在图谱与模拟之上做工具增强的检索，综合写出一份分章节的预测报告 —— 内嵌**预测数据图表**（交互式 Plotly，HTML + PNG 成对输出：情景概率、二元预测点图、指标轨迹、模型 vs 市场）；只有在找到并接受完全 / 近似判定等价的市场匹配时，预测才会获得 **Polymarket 锚点**；同时支持一键 **PDF 导出**。
+所有组件都运行在同一台机器上。
+- **前端与 API。** Vue 单页应用只与一个 Flask 进程通信。这个进程是以多线程模式运行的 Werkzeug 开发服务器，绑定在 `127.0.0.1:5001`。
+- **耗时工作不占用请求线程：**
+  - 每条管线独占一个守护线程，另有一个每 30 秒跳动一次的心跳线程；
+  - 阶段 1（研究）与阶段 5（模拟）以子进程运行；
+  - 知识图谱存放在内嵌 FalkorDB 中，由一个 asyncio 线程驱动。
+- **状态。** 所有持久化状态都是 `backend/uploads/` 下的普通文件。
 
-整条链路由 **一个提示词（one prompt）** 触发，全程自动衔接，无需人工在各阶段之间手动搬运中间产物。
-
----
-
-## 架构总览
-
-DeepAgentForecast 是一套本地六阶段应用，而不是一个独立的研究 Agent。Vue 与 Flask 接收运行请求；`PipelineOrchestrator` 依次推进 **research → ontology → graph → prepare → run → report**；持久化状态与 manifest 哈希决定能否复用；Graphiti 保存时序知识图谱；OASIS/CAMEL 运行社会模拟；`ReportAgent` 与发布门共同产出最终预测。**DeerFlow 2 是这条全流程中完整的 Stage-1 研究子系统。**
-
-![包含 DeerFlow 2 Stage 1 的 DeepResearchForecast 全流程](docs/architecture/deepresearchforecast-system-architecture.png)
-
-[全系统架构图谱](docs/architecture/DEEPRESEARCHFORECAST_SYSTEM_ATLAS.md)逐项追踪所有输入、输出、进程/线程边界、阶段迁移、pass、接收方、持久化存储、失败/重试分支、发布侧车与运行后回路。其[可编辑 tldraw 画布](docs/architecture/deepresearchforecast-system-architecture.tldr)、[SVG](docs/architecture/deepresearchforecast-system-architecture.svg)、[95 条数据流 / 101 条路由清单](docs/architecture/dataflow-inventory.json)与归一化的[100 个模型调用族清单](docs/architecture/llm-call-inventory.json)提供可机械验证的配套证据。
-
-在 Stage 1 内部，DeerFlow 2 把模型、工具、技能、子智能体、线程状态、沙箱 / MCP 能力与一条有严格顺序的中间件策略链装配成 LangChain agent。每个研究回合都是动态的 **模型 → 工具 → 接收结果 → 再次调用模型** 循环，并带检查点与流式事件。本架构图不包含 DeerFlow 1.x 的原始研究图。
-
-仓库里有三层与 DeerFlow 2 相关的代码，其运行状态不能混为一谈：
-
-| 层 | 用途 | 状态 |
-|---|---|---|
-| `deer-flow-2.0.0/` | 用户另行放置时可用的本地 DeerFlow 2.0 源码包，作为全新装配输入 | **已忽略的本地参考**；普通 clone 回退到上游提交 `799bef6d…`，该提交早于本次审计使用的公开 `v2.0.0` 标签 |
-| `deerflow_bridge/` → `deer-flow/` | 把受版本控制的研究驱动 / 配置 / 工具 / 技能 / 补丁装配进隔离运行时 | **当前 Stage 1 实际运行路径** |
-| `drf2/` | 自定义智能体与技能、KG / 模拟 MCP 服务，以及确定性的 Runs API 驱动器 | **可选、受门控、尚未切换** |
-
-![DeepAgentForecast 中的 DeerFlow 2.0 架构](docs/architecture/deerflow2/deerflow2-architecture.png)
-
-[DeerFlow 2.0 完整架构图谱](docs/architecture/deerflow2/DEERFLOW_2_ARCHITECTURE.md)按源码逐项追踪入口、中间件钩子、所有模型调用族、工具 / 子智能体 / MCP / 沙箱边界、流事件、检查点、Stage-1 每一轮 pass、产物交接与 DRF2 目标契约。底图可直接在 [tldraw](docs/architecture/deerflow2/deerflow2-architecture.tldr) 中编辑；同时提供 [SVG](docs/architecture/deerflow2/deerflow2-architecture.svg)、[PNG](docs/architecture/deerflow2/deerflow2-architecture.png)、[LLM 调用清单 JSON](docs/architecture/deerflow2/deerflow2-call-inventory.json) 与[接口清单 JSON](docs/architecture/deerflow2/deerflow2-interface-inventory.json)。
-
-### Stage 1 内部的 DeerFlow 2 执行模型
-
-当前 Stage 1 子进程走的是**内嵌 `DeerFlowClient`**。原生 Gateway / Runs API 已在 DeerFlow 2 中实现，也是切换前 DRF2 确定性驱动器选定的传输面。
-
-```text
-当前：Flask 编排器 → 1..N 个隔离子进程证据轨 → 内嵌 DeerFlowClient
-      → 主模型 1..N 次 ↔ 工具 0..N 次
-      → 可选子智能体循环 + 条件式上下文摘要
-      → 证据包 → 全局综合 / 评审 / 抽取 → 封存的研究契约
-
-原生：客户端 → FastAPI thread/run 服务 → RunManager / worker
-      → 同一套主智能体装配 → checkpoint / store / journal → SSE 重放 / end
-
-目标 A：聊天原生主智能体 + 四个自定义智能体 ↔ KG / 模拟 stdio MCP
-        （尚未切换）
-
-目标 B：确定性驱动器 → 持久 Runs API 斜杠技能主智能体运行
-        → 通过技能访问 KG MCP；暂行模拟 HTTP 客户端尚无匹配服务端适配器（尚未切换）
+```mermaid
+flowchart TB
+    UI["浏览器<br/>Vue 3 仪表盘"]:::proc
+    subgraph MACHINE["你的机器"]
+        subgraph FLASK["Flask 进程 · 127.0.0.1:5001"]
+            API["REST API<br/>5 个蓝图"]:::proc --> ORCH["PipelineOrchestrator<br/>每条管线一个线程"]:::proc
+            ORCH --> INP["本体 · 图谱<br/>准备 · 报告<br/>（进程内运行）"]:::proc
+        end
+        DF["阶段 1 · DeerFlow 2<br/>研究子进程<br/>（独立 venv）"]:::proc
+        OA["阶段 5 · OASIS<br/>模拟子进程"]:::proc
+        FDB[("Graphiti +<br/>内嵌 FalkorDB")]:::store
+        FS[("backend/uploads/<br/>状态 + 产物")]:::store
+    end
+    subgraph NET["互联网"]
+        LLM["LLM 提供方<br/>CLI 或 HTTP API"]:::ext
+        WEB["搜索 + 抓取<br/>API"]:::ext
+        PM["Polymarket<br/>Gamma + CLOB"]:::ext
+    end
+    UI -- "HTTP 轮询<br/>（开发时经 Vite :3000）" --> API
+    ORCH --> DF
+    ORCH --> OA
+    INP --> FDB
+    ORCH -. "原子写入状态" .-> FS
+    INP --> LLM
+    DF --> LLM
+    OA --> LLM
+    DF --> WEB
+    DF --> PM
+    classDef proc fill:#dbeafe,stroke:#2563eb,color:#0b1b3a
+    classDef store fill:#fef3c7,stroke:#b45309,color:#3b2303
+    classDef ext fill:#f3f4f6,stroke:#6b7280,color:#111827,stroke-dasharray: 4 3
 ```
 
-原生 DeerFlow 2 还支持标题生成与长期记忆。当前研究桥接关闭标题生成，是因为无界面的单次研究不会显示标题，多做一次只会产生未使用的 LLM 调用；关闭持久记忆则是为了防止跨运行污染与后台模型调用。上下文摘要仍处于启用状态，但只在上下文达到 8 万 token 时触发：保留最近 1.6 万 token，对被丢弃的完整区段做摘要；未单独指定摘要模型时继承当前运行模型。模型调用次数没有诚实的固定值：每个主智能体或子智能体 pass 本身都是 agent loop，而综合章节、评审、恢复、市场、重试、外层证据轨与恢复位置都会增加条件调用。
+**端口。** 开发时，浏览器访问 `:3000` 上的 Vite 开发服务器，由它把 `/api` 代理给 Flask。执行 `npm run build` 之后，Flask 会自行托管构建好的界面，一切都在 `http://localhost:5001` 上。
 
-DeerFlow 封存 Stage-1 契约后，当前实际运行系统由以下组件继续接收：
+**谁调用 LLM。** 模型调用通过三条互相独立的通道离开本机：
+- DeerFlow 的模型工厂，用于研究；
+- 后端的 `LLMClient`，用于本体、图谱抽取、事件配置与报告；
+- OASIS 的模型适配层，用于模拟中的智能体。
 
-| 组件 | 作用 |
+**市场调用。** 报告阶段还会重新拉取 Polymarket 报价。
+
+| 组件 | 技术栈 | 代码位置 | 职责 |
+|---|---|---|---|
+| 仪表盘 | Vue 3.5 · Vite 7 · vue-router · d3 · axios | `frontend/src/` | 位于 `/` 的单一视图：提问表单、阶段时间线、运行体征、五个结果标签页、运行历史与设置。通过轮询访问 API。 |
+| API 与编排 | Flask（多线程）· Python 3.12 · uv | `backend/app/api/` · `backend/app/services/pipeline_orchestrator.py` | 准入与预检；六阶段状态机；取消、恢复、继续与分叉；产物清单；健康门 |
+| 研究 | DeerFlow 2 超级智能体 harness（LangChain / LangGraph），独立 venv | `deerflow_bridge/` → 装配为 `deer-flow/` | 阶段 1：证据轨、行动者档案、综合、评审、结构化抽取、搜索/抓取/市场工具、技能 |
+| 知识图谱 | graphiti-core 0.29.2 · falkordblite（内嵌 FalkorDB）· sentence-transformers `paraphrase-multilingual-MiniLM-L12-v2` | `backend/app/services/graph_builder.py` · `backend/app/services/graphiti_client/` | 阶段 2–3；为阶段 4 与阶段 6 提供检索 |
+| 模拟 | [OASIS](https://github.com/camel-ai/oasis)（CAMEL-AI） | `backend/app/services/simulation_*.py` · `backend/scripts/run_parallel_simulation.py` | 阶段 4–5：阵容、角色、配置与双平台运行 |
+| 报告 | ReportAgent · 预测抽取器 · 报告 lint · 可视化（Plotly + kaleido、matplotlib）· pandoc + XeLaTeX | `backend/app/services/report_agent.py` · `forecast_extractor.py` · `report_lint.py` · `report_visualizer.py` | 阶段 6、发布门与导出 |
+| LLM 接入 | `LLMClient`（CLI 或 OpenAI 兼容 HTTP）· DeerFlow 模型工厂 · OASIS 模型适配层 | `backend/app/utils/llm_client.py` · `deerflow_bridge/config.yaml` · `backend/app/utils/oasis_llm.py` | 重试、熔断、可选的备用提供方、token 与费用计量 |
+
+> **命名的历史渊源。** 本代码库脱胎于 [MiroFish](https://github.com/666ghj/MiroFish)，当年它把图谱存放在 Zep Cloud。`zep_tools.py`、各项 `ZEP_*` 设置，以及 `mirofish_<id>` 形式的图谱 ID，都是那个时期的遗留命名。如今它们都指向本地的 Graphiti 图谱。
+
+### 请求生命周期
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as 你
+    participant UI as 仪表盘
+    participant API as Flask API
+    participant O as 管线线程
+    participant W as 各阶段执行者
+    participant FS as uploads/
+    U->>UI: 问题 · 模式 · 深度
+    UI->>API: POST /api/research/run
+    API->>API: 校验 + 预检
+    API->>O: 启动守护线程
+    O->>FS: pipeline_state.json
+    API-->>UI: pipeline_id
+    par 每 2.5–12 秒轮询
+        UI->>API: GET status + progress
+        API->>FS: 读取状态与日志
+        API-->>UI: 阶段 · 运行体征 · 日志尾部
+    and 按顺序执行六个阶段
+        O->>W: 运行阶段
+        W->>FS: 写入产物
+        O->>FS: SHA-256 清单
+    end
+    O->>O: 健康门
+    O->>FS: completed · 100%
+    UI->>API: GET /api/report/{id}
+    API->>FS: 发布门
+    API-->>UI: 报告 · 预测 · 图表
+```
+
+1. **准入。** `POST /api/research/run` 校验请求体：`prompt`、`mode`（`full` 或 `research_only`）、`depth`（`quick`、`standard` 或 `deep`）、`max_rounds`、`language` 与 `model`。随后执行一次**离线预检**，检查：
+   - 图谱后端可以导入；
+   - 提供方的 Key 或 CLI 已就绪；
+   - DeerFlow 运行时与研究模型的凭据都存在。
+
+   任何问题都会以 `400` 返回一份修复清单，此时还没有产生任何花费。
+2. **启动。** 编排器会：
+   - 创建 `pipe_<12 位十六进制>`，并以原子方式写入 `pipeline_state.json`；
+   - 固定本次运行的策略，例如行动者智能契约、种子数量，以及模拟能否影响概率；
+   - 启动一个守护线程。
+
+   返回 `{success, data: {pipeline_id, task_id, mode, status}}`。并发运行数量不设上限，每条管线各占一个线程。
+3. **观测。** 仪表盘轮询两个接口，没有 WebSocket，也没有服务端推送（SSE）。
+   - `GET /api/research/status/<id>` 返回管线状态，外加一个计算出的 `live` 块：已用时间、预计剩余、心跳时长、所属进程是否存活、花费与预算。
+   - `GET /api/research/<id>/progress` 返回合并后的研究日志。
+
+   轮询从每 2.5 秒一次开始；状态无变化时按 ×1.5 退避，最长 12 秒；浏览器标签页隐藏时暂停。
+4. **执行。** 管线线程按顺序运行各阶段。每一次进度更新同时也是一个取消检查点和一个提供方故障检查点。阶段完成时，其产物的哈希会写入 `handoff/manifest.json`。
+5. **完成。** 报告写完后，先运行可选的多种子集成，再由[健康门](#可信度与质量保障)决定这次运行能否标记为 `completed`。
+6. **交付。** 报告、预测、图表、Markdown 与 PDF 只能经**发布门**获取；每次读取时，发布门都会重新核对审计过的 SHA-256 哈希。
+
+### 管线生命周期、状态与恢复
+
+```mermaid
+stateDiagram-v2
+    [*] --> running: POST /run · POST /scenario（分叉）
+    running --> completed: 六个阶段完成 + 健康门通过
+    running --> failed: 阶段出错 · 门控失败 · 提供方故障
+    running --> cancelled: 取消
+    failed --> running: 恢复
+    cancelled --> running: 恢复
+    completed --> running: 继续（research_only → full）
+    completed --> running: 强制恢复（仅限降级的报告）
+    completed --> [*]: 删除
+    failed --> [*]: 删除 · 清理失败运行
+    cancelled --> [*]: 删除 · 清理失败运行
+```
+
+| 操作 | 入口 | 效果 |
+|---|---|---|
+| **取消** | 界面「取消」按钮 · `POST /api/research/<id>/cancel` | 设置本次运行的取消事件。研究子进程组约 1 秒内被终止；模拟在下一次 5 秒轮询时停止（先 SIGTERM，10 秒后 SIGKILL）。已完成的阶段保持完成状态。 |
+| **恢复** | 界面「继续」按钮 · `POST /api/research/<id>/resume` | 沿用同一个管线 ID 与路径，并重新预检。只有通过下表检查的阶段才会被复用；否则从那个阶段重新开始。 |
+| **继续** | 界面「继续完整管线 →」按钮 · `POST /api/research/<id>/continue` | 把已完成的仅研究运行转为完整管线。只要研究成果的封存契约仍然有效，就复用它。 |
+| **分叉（假设推演）** | 仅限 API · `POST /api/research/<id>/scenario` | 新建一条管线，共享基线运行的研究、本体与图谱，在「准备」阶段叠加情景假设，然后重新运行模拟与报告。 |
+| **删除 / 清理** | 历史抽屉 · `DELETE /api/research/<id>` · `POST /api/research/clean` | 删除 `uploads/pipelines/<id>/`。项目、模拟与报告会保留；不再被任何运行引用的图谱会被回收（始终保留最新的 5 个）。清理只删除失败与已取消的运行，但会跳过被分叉依赖的运行。 |
+
+**恢复时可以复用什么：**
+
+| 阶段 | 满足以下条件时复用 | 否则 |
+|---|---|---|
+| 研究 | v3：复用 `handoff/v3/` 下的各阶段，从停下的地方继续。旧版引擎：封存的研究契约（`research_contract_manifest.json`）逐字节一致，且报告评审通过 | 旧版引擎：若存在已封存的证据轨证据（`evidence_synthesis_manifest.json`），只重跑全局综合。否则重跑各证据轨，每条都从自己的检查点续跑。每条管线最多 3 个工具预算「纪元」（epoch，即恢复尝试）。 |
+| 本体 | 项目中已有本体 | 重新生成 |
+| 图谱 | 阶段产物与哈希一致、行动者种子回读仍然匹配，且图谱中有实体 | 以新的图谱 ID 重建 |
+| 准备 | 清单哈希一致，且封存的模拟配置校验通过 | 新建一个模拟 ID |
+| 运行 | 「准备」被复用，且旧的模拟已完整结束：每个平台都有结束标记、`run_summary.json` 有效、配置封印一致 | 重新运行模拟 |
+| 报告 | 旧报告不是 FAILED 状态，其清单与图表校验通过，且管线健康状况允许复用 | 重新撰写报告 |
+
+**持久化状态**（均位于 `backend/uploads/` 下）：
+
+| 路径 | 内容 |
 |---|---|
-| **DeerFlow 2.0 Stage 1** | 默认三条隔离的 Track-A evidence-only 证据轨，加上恰好一条由基础轨拥有的共享 Track-B 行动者平面，之后由唯一的全局综合 / 评审 / 抽取流程接管。Track B 产出来源绑定的行动者档案与可问责的 17 维覆盖台账；manifest v3 在全局综合前把它与三条证据轨一起封存。`deep-research`、`actor-ontology-research`、`prediction-markets` 与 `forecast-visuals` 四个技能按工作流激活。 |
-| **MiroFish / OASIS** | 基于 CAMEL-AI OASIS 的群体模拟引擎。当前 `actor-intelligence/v1` 会保留所有合格且身份匹配的 Tier-1/2 行动者，不受旧式上限截断，并为每位行动者确定性编译同一角色到模拟 Twitter + Reddit；只有显式配置时才添加程序化受众填充者。 |
-| **本地 Graphiti KG** | 运行在嵌入式 FalkorDB 上的时序知识图谱（GraphRAG）；档案在此灌入，实体 / 关系由配置的 `LLM_PROVIDER` 抽取，向量由本地多语言 sentence-transformers 模型计算。无需 Docker、独立服务或图数据库 Key。 |
-| **ReportAgent** | 按章节运行工具增强循环：有能力的提供方使用原生函数/工具调用，其余路径回退 ReAct 文本协议；通过 `insight_forge` 检索图谱与明确标注的模拟诊断，再封存预测报告。 |
-| **前端** | Vue 3 + Vite 组合式双语仪表盘，展示六阶段状态、日志与所有阶段产物。 |
+| `pipelines/<pipe_id>/pipeline_state.json` | 权威的运行记录：状态、各阶段、各类 ID、选项、固定的策略、心跳。以原子方式写入。 |
+| `pipelines/<pipe_id>/run.json` | 复现快照：git SHA、DeerFlow 版本，以及每个阶段实际使用的模型（凭据已脱敏） |
+| `pipelines/<pipe_id>/handoff/` | 阶段 1 输出与各阶段间的产物、`manifest.json`（每个产物的 SHA-256）、`research_contract_manifest.json` |
+| `pipelines/<pipe_id>/run_telemetry.json` | token 与费用统计，跨多次尝试累计 |
+| `projects/<project_id>/` | 项目记录：本体与 `graph_id` |
+| `graphiti_db/` | 内嵌 FalkorDB（`falkor.db`）与向量缓存 |
+| `simulations/<sim_id>/` | 人格档案、配置与封印、行为日志、SQLite 数据库、世界态轨迹、`run_summary.json` |
+| `reports/<report_id>/` | `full_report.md`、`forecast.json`、`final_audit.json`、`charts/`、语言版本、PDF |
+| `pipelines/_forecast_ledger/` | 预测账本与市场判定记录 |
 
-当前还有一条条件式 MCP 边界：在 fork / continue / resume-with-graph 路径中，如果已有 `state.graph_id` 且 `RESEARCH_MCP_KG=true`，编排器会通过 stdio MCP 把现有后端 KG 暴露给 Stage-1 DeerFlow 2 子进程。普通首跑此时尚未建图，因此这条边界不存在。它是当前只读/查询反馈路径，不等同于尚未切换的 DRF2「KG + 模拟」MCP 目标设计。
+**崩溃恢复。** 后端启动时，会清点上一个进程留下的 `running` 状态运行：
+- 若所属进程已不存在（依据心跳判断），该运行标记为 `failed`；若其报告此前已写完，则改为标记 `completed`，健康状况为*降级*。
+- 残留的研究进程会被终止。
+- 最后一次心跳在 120 秒以内的运行会保持 `running`，直到心跳过期。崩溃后请等待两分钟再恢复。
 
-### 行动者真实感的权威链
+### 各阶段读取什么
 
-行动者真实感不是把人格提示词写得更长，而是一条跨阶段封存的数据链。当前契约如下：
+| 产物 | 写入者 | 读取者 |
+|---|---|---|
+| `handoff/research_report.md` | 阶段 1（v3 的分节写作，或旧版引擎的全局综合） | 本体 · 图谱（没有研究档案或 `GRAPH_CHUNK_SOURCE=both` 时）· 准备 · 报告 |
+| `handoff/actor_dossier.md` | 阶段 1 Track B（仅旧版引擎） | 本体 · 图谱（默认的分块来源） |
+| `handoff/actors.json`（旧版引擎下为封存的 `actor-intelligence/v1`；v3 下为基于报告、未封存的版本） | 阶段 1 抽取 | 本体（有界投影）· 图谱（确定性种子、分块过滤、剪枝核心）· 准备（阵容、上下文、角色）· 报告 |
+| `handoff/sources.json` | 阶段 1 | 准备（与来源绑定的公共世界）· 报告（`[S#]` 引用） |
+| `handoff/timeline.json` | 阶段 1 抽取 | 准备（带日期的事件）· 报告（大事记、时间线图） |
+| `handoff/quantitative.json` · `contested.json` | 阶段 1 抽取 | 报告（指标轨迹、争议主张） |
+| `handoff/prediction_markets.json` · `market_price_history.json` | 阶段 1 | 报告（市场信息包、锚定、价格历史图） |
+| `handoff/ontology.json` | 阶段 2 | 图谱 |
+| 图谱 `mirofish_<id>` · `handoff/graph_priors.json` | 阶段 3 | 准备（实体匹配、核心智能体排序）· 报告（检索工具） |
+| `simulations/<sim_id>/…` | 阶段 4–5 | 报告（诊断信号包、模拟工具、世界态图） |
 
-| 边界 | 当前 v1 的权威数据与接收规则 |
+### 代码地图
+
+| 路径 | 职责 |
 |---|---|
-| **阶段 1：研究与抽取** | 恰好一条共享 Track-B 平面以同一套有序 17 维度深研所有 Tier-1/2 行动者：身份/历史、价值观/世界观、激励、动机、能力、约束、行动偏好与喜恶、联盟、对手/竞争者、决策权/流程/触发器、当前行动、未来计划、投资/资本配置、历史表现、可能行动、红线、知识状态。每条主张必须携带时间、认知状态、置信度、依赖、矛盾、限定条件，以及精确绑定已抓取来源的证据；没有证据的单元格写成类型化缺口，不得编造。行动者档案同时是全局研究报告的证据，因此各行动者的计划、激励、行动与投资会同时进入下游报告与模拟。 |
-| **阶段 1：父进程接收** | 父进程重新计算搜索结果收据、精确引文/区间/内容哈希、确定性 claim ID，以及五类行为就绪投影——身份/历史、激励/动机/价值、能力/约束、行动/计划/投资、决策/可能行动/红线——再加上档案覆盖率、行动者阵容/顺序与报告/档案/来源/血缘哈希。对已固定 `actor-intelligence/v1` 策略的当前运行，只要任一收据、主张、行为族、覆盖率、报告、档案、阵容或血缘封印无法闭合，就会在进入 ONTOLOGY / GRAPH 之前失败。 |
-| **阶段 2：本体** | 本体 LLM 只接收一份有界的规范投影：行动者 ID、别名、层级，以及已封存、绑定收据的主张。当前 v1 行动者不能回退到旧式扁平 `role`、`stance`、`brief` 或 topic 字段。 |
-| **阶段 3：图谱** | 灌入研究正文之前，`actor-graph-seed-manifest/v1` 已确定规范行动者/类型/别名节点、关系、UUID、claim 哈希与因果属性。系统在种子写入后，以及正文抽取、实体消歧、剪枝或图谱复用之后，严格校验物理 `actor-graph-seed-readback/v1`。正文可以丰富图谱，但不能悄然替换规范行动者身份或已封存关系。 |
-| **阶段 4：上下文与配置** | 每个入选行动者都有一份 `actor-context/v1`，严格区分共享公开证据、关于行动者的文献证据、行动者自身信念/知识、公开争议证据、分析师推断、未知，以及六字段类型化缺口审计（`reason`、`attempted_queries`、`receipt_ids`、`result_ids`、`attempt_count`、`exhausted`）。规范行动者配置只从已封存的行为投影确定性生成；公共世界只接纳明确公开且绑定来源的证据。分析师推断和缺口审计为问责而封存，但不会变成行动者知识或行为配置 token。 |
-| **阶段 4→5：运行时字节** | `actor-role/v2` 是唯一行为档案权威。Twitter 的 `user_char` 等于该角色内容，仅做有文档约定的换行归一化；Reddit 的 `persona` 也是该角色，旧式人口统计字段只是空的加载器占位。真正交给 Reddit 模型的 system message，是确定性的纯角色包装，再加上 `simulation_config.json` 中可选且已封存的 `world_brief` 与日历词汇。父 runner 先重验角色、上下文、阵容、档案与 `simulation-config-manifest/v1` 封印；子进程再复验配置/档案，重建 Reddit 实际消息，并在首次模型行动前证明其最终字节。 |
-| **调用与兼容性** | Track B 之后的加固在已审计清单之外**不增加新的 LLM 调用族**：主张/收据/血缘/行为族/报告接收、本体投影、图谱种子/回读、上下文选择、角色编译、公共世界/配置投影与全部封印均为确定性操作。它加深既有 Track-B 研究/补全/综合/评审调用族；当前规范配置还会跳过旧式 activity-config LLM 批调用。agent loop 内的实际调用次数仍由数据决定。按 v1 策略准入的运行 fail closed；显式关闭该策略或策略固定机制出现前的运行保留有文档说明的旧路径，旧 `actor-role/v1` 只能按原字节复用，绝不静默重编译或升级。原生 Gateway 与两个 `drf2/` 拓扑仍处于切换前状态。 |
-
-**端口约定**
-
-| 服务 | 地址 |
-|------|------|
-| 后端（Flask） | `http://localhost:5001` |
-| 前端（Vue 3 + Vite） | `http://localhost:3000`（将 `/api` 代理到 `5001`） |
+| `backend/run.py` | 入口：校验配置，在 `127.0.0.1:5001` 启动 Flask，并按需启动判定监测调度器 |
+| `backend/app/__init__.py` | 应用工厂：CORS、鉴权门、脱敏的请求日志、蓝图、托管已构建的 SPA、启动时清点 |
+| `backend/app/config.py` | 全部设置（来自 `.env`，其优先级高于 shell 环境变量）与提供方目录 |
+| `backend/app/api/` | 蓝图：`research.py`（管线）、`graph.py`、`simulation.py`、`report.py`、`settings.py`，以及 `sdk.py`（可选的 `/api/v1`） |
+| `backend/app/services/pipeline_orchestrator.py` | 六阶段状态机、研究启动器、复用与恢复逻辑、健康门、多种子集成 |
+| `backend/app/services/ontology_generator.py` | 阶段 2 |
+| `backend/app/services/graph_builder.py` · `graphiti_client/` · `graph_pruner.py` · `zep_entity_resolver.py` | 阶段 3：在 Graphiti + FalkorDB 上构建图谱 |
+| `backend/app/services/zep_tools.py` · `zep_entity_reader.py` | 为 ReportAgent 与「准备」阶段提供图谱检索 |
+| `backend/app/services/actor_context.py` · `actor_role_prompt.py` · `oasis_profile_generator.py` · `simulation_config_generator.py` · `simulation_manager.py` | 阶段 4 |
+| `backend/app/services/simulation_runner.py` · `simulation_ipc.py` · `worldstate.py` · `decision_channel.py` · `agent_dynamics.py` · `backend/scripts/run_parallel_simulation.py` | 阶段 5 |
+| `backend/app/services/report_agent.py` · `forecast_extractor.py` · `report_lint.py` · `report_visualizer.py` · `exec_brief.py` | 阶段 6 |
+| `backend/app/services/ensemble.py` · `backtest.py` · `forecast_ledger.py` · `resolution_autorun.py` | 多种子汇总、评分、预测账本、判定监测调度 |
+| `backend/app/utils/` | `llm_client.py` · `oasis_llm.py` · `sim_timeline.py` · `actors.py` · `prediction_markets.py` · `telemetry.py` · `atomic.py` · `security.py` … |
+| `backend/app/mcp/` | 供 DeerFlow 调用的 stdio MCP 服务（`kg_server.py`、`sim_server.py`） |
+| `deerflow_bridge/` | 阶段 1 驱动 `deerflow_research.py`、研究引擎 v3（`linear_research.py` + `research_gateway.py`）、搜索/抓取/市场工具、预算账本、技能、补丁与 `config.yaml` |
+| `frontend/src/` | `views/ResearchView.vue` · `components/research/*` · `components/GraphPanel.vue` · `api/*` · `utils/*` · `i18n.js` |
+| `drf2/` | 可选、尚未上线（「切换前」）的 DeerFlow 2 原生重构方案（[详情](#deerflow-2-集成与-drf2-目标)） |
 
 ---
 
-## 当前实际运行的六阶段管线
+## 逐阶段深入解析
 
-一条「管线（pipeline）」对应一次提示词运行（one prompt run）。整条管线按以下六个阶段顺序执行：
+### 阶段 1 · 研究（DeerFlow 2）
+
+阶段 1 把你的问题变成一份封存的**研究契约**：一份长篇研究档案，外加后续所有阶段都要用到的结构化数据。
+- 这是唯一会访问网络的阶段。
+- 它也曾是成本最高的阶段：项目自己的成本取证显示，在旧版引擎下约 96% 的 token 花费都用在研究上（见[研究阶段优化笔记](docs/RESEARCH_STAGE_OPTIMIZATION.md)）。研究引擎 v3 正是为解决这个问题而写的。
+
+阶段 1 有两个引擎。编排器为每条管线选定一个，并显式传给研究子进程。
+
+| 引擎 | 选择方式 | 形态 |
+|---|---|---|
+| **v3**（默认） | `RESEARCH_ENGINE=v3` 或不设置（`linear` 是其别名） | 一条有界、可续跑的研究轨：规划 → 按问题分派的智能体 → 补缺轮 → 分节写作 → 检查 → 结构化抽取。代码为 `deerflow_bridge/linear_research.py` + `deerflow_bridge/research_gateway.py`。 |
+| **legacy** | `RESEARCH_ENGINE=legacy`（别名 `deerflow`、`agentic`） | DeerFlow 2 多轮智能体循环：三条证据轨、Track B 行动者档案与经评审的全局综合（详见[下文](#旧版引擎-research_enginelegacy)）。 |
+
+证据轨、全局综合与仅抽取（extract-only）调用始终使用旧版引擎。如果某条管线固定下来的行动者策略要求封存的 `actor-intelligence/v1` 平面（例如在 v3 出现之前准入的管线），它也会使用旧版引擎；v3 写出的是基于报告、未封存的 `actors.json`，v3 准入时会把行动者平面固定为"非必需"。
+
+#### 研究引擎 v3（默认）
+
+```mermaid
+flowchart TB
+    P["规划<br/>范围 → 侦察搜索 → 规划<br/>关键问题 · 章节 · 情景框架"]:::llm --> G
+    subgraph G["采集 · 每个问题一个有界智能体 · 4 个并行"]
+        A1["web_search / web_fetch<br/>每步至多 3 次工具调用<br/>步数 · 新颖度 · 截止时间 · 预算停止"]:::llm
+    end
+    G --> GAP{{"补缺评审<br/>后续问题<br/>时间与工具预算允许时"}}:::gate
+    GAP -- 后续问题 --> G
+    GAP -- 完成 --> S["综合<br/>分节写作共享同一份证据摘要<br/>→ 执行摘要"]:::llm
+    S --> Q{{"质检 · 9 项确定性检查<br/>+ 批判性改写（deep）"}}:::gate
+    Q --> F["定稿<br/>sources.json → research_report.md<br/>→ 行动者 · 时间线 · 数值 · 争议<br/>→ 市场 · 图表"]:::det
+    F --> NEXT(["阶段 2 · 本体"]):::io
+    classDef io fill:#f1f5f9,stroke:#475569,color:#0f172a
+    classDef llm fill:#ede9fe,stroke:#7c3aed,color:#1e0b3a
+    classDef det fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef gate fill:#fee2e2,stroke:#dc2626,color:#450a0a
+```
+
+**工作方式**
+- **规划。** 一次范围调用和几次侦察搜索为一次规划调用提供输入。规划返回关键情报问题（KIQ）、报告大纲、规范情景框架（名称与权重）以及具名行动者。如果模型不可用，会先采用确定性的模板规划，在采集前再尝试一次有界的重新规划，并把本次运行标记为降级。
+- **采集。** 每个 KIQ 都有自己的工具智能体，以搜索结果为种子，可调用 `web_search` 与 `web_fetch`。智能体在以下情况停止：写出笔记、用完步数、连续两步没有新来源、临近阶段截止时间（为最后的笔记调用预留时间），或触及预算保留额。抓取的网页只存一次，并按关注点返回排序后的段落。
+- **补缺轮。** 一次评审调用针对仍然缺失的内容提出后续问题。只有剩余时间和工具预算足以支撑时，才会运行这一轮。
+- **综合。** 分节写作按组进行，共享同一份证据摘要，最后写执行摘要。被输出上限截断的回复会以更大的上限重试一次，否则只保留其完整段落。
+- **检查。** 每份报告都要通过 9 项确定性检查：章节顺序、最短长度、引用密度、规范情景块、情景权重、陈旧引用、被删除的章节、错误标记与章节完整性。在 deep 深度下，还有一轮批判性审阅，会改写存在实质问题的章节。
+- **定稿。** 先写 `sources.json`，再写 `research_report.md`，然后抽取行动者、时间线、数值与争议事实，最后是预测市场与图表。
+
+**提示缓存与 token 效率**
+- 每次模型调用都按 `[固定系统提示][运行简报][共享上下文][任务]` 排列，因此同类调用共享逐字节相同的前缀。智能体对话只追加不改写，每次调用都绑定同一份工具定义；每次并行扇出之前，还会用一次很小的预热调用写入提供方缓存。
+- 使用 GLM（默认模型）时，缓存是隐式的。每次调用都会设置 thinking、`reasoning_effort`（智能体与 JSON 调用为 low，写作为 high）以及输出上限（6k / 16k / 20k token；抽取为 32k）。
+- 使用 Claude 时，会用一个简短的确认轮次收尾共享上下文，使缓存断点正好落在其上。
+- 用量以 `[usage] tokens in=… out=… cached=…` 行报告，管线的遥测与花费记录会读取这些行。
+
+**准确性**
+- **证据标签。** 只有当一条发现中的每个数字都出现在它所引用的页面上时，它才标为 **VERIFIED**；其中百分比只与百分比匹配，功率、能量与货币数值只与同一单位类别匹配。**REPORTED** 表示该发现依据的是搜索摘要或未抓取的来源。**UNVERIFIED** 表示某个数字不在所引用的页面上，写作时不得把它当作事实陈述。
+- **引用。** 智能体只能引用它见过的来源。`[S#]` 标记会按位置重新编号，与 `sources.json` 一一对应，参考文献恰好等于被引用的集合。
+- **情景。** 规范情景块由代码按预测解析器读取的格式渲染；正文中复述或凭空增加的概率会被修正或标记。
+- **不可信文本。** 网络文本放在 `BEGIN/END UNTRUSTED EVIDENCE DATA` 分隔符内传递，并由一个精确、线性时间的过滤器删去针对模型的指令。
+
+**可靠性**
+- 各阶段保存在 `handoff/v3/` 下，并与本次运行的身份绑定，因此续跑会从停下的地方继续。因截止时间、预算或无法使用的回复而中断的问题，续跑时会重新研究。
+- 每次提供方调用都有按截止时间裁剪的超时。网关对瞬时错误做退避重试，遇到配额错误后切换到备用模型，并关闭 SDK 自身的重试，只保留一套重试策略。
+- 退出码：`0` 表示已写出报告，任何降级都列在 `meta.json` 的 `research_quality.degradation` 中；`2` 表示可续跑的失败：提供方始终没有应答、没有找到有来源的证据，或一次故障导致已研究的问题不到计划的一半；`3` 表示预检失败。
+
+**预设**
+
+| 深度 | 关键问题 | 补缺轮 × 后续问题 | 智能体步数 | 搜索 / 抓取（整次运行） | 时间规划 |
+|---|---|---|---|---|---|
+| `quick` | 4 | 无 | 5 | 30 / 24 | 20 分钟 |
+| `standard` | 7 | 1 × 3 | 7 | 70 / 50 | 45 分钟 |
+| `deep` | 10 | 2 × 4 | 9 | 140 / 110 | 90 分钟 |
+
+v3 的时间规划取预设时间与看门狗预算 × 0.85 中较小的一个，因此总能在看门狗触发前完成。所有预设值都可以用 `.env.example` 中记载的 `RESEARCH_LINEAR_*` 设置修改。
+
+**实跑验证**（GLM-5.3，2026 年 9 月，同一个问题在三种深度下各跑一次）
+
+| 深度 | 耗时 | 模型调用 | 输入 / 输出 token | 缓存命中 | 问题数 | 事实（已核实） | 来源 | 质量分 |
+|---|---|---|---|---|---|---|---|---|
+| quick | 9 分钟 | 40 | 22.2 万 / 7.8 万 | 78% | 4 | 48（22） | 25 | 0.64 |
+| standard | 31 分钟 | 94 | 69.3 万 / 12.3 万 | 81% | 10 | 116（69） | 34 | 0.69 |
+| deep | 39 分钟 | 155 | 145 万 / 24.4 万 | 81% | 17 | 194（106） | 65 | 0.73 |
+
+#### 旧版引擎 (`RESEARCH_ENGINE=legacy`)
+
+```mermaid
+flowchart TB
+    DEC{{"封存契约有效<br/>且评审通过？"}}:::gate
+    DEC -- "是 → 复用" --> NEXT
+    DEC -- "否 · 已有 manifest v3" --> GS
+    DEC -- 否 --> SYNC["同步桥接层 → deer-flow/<br/>开启工具预算纪元"]:::det
+    SYNC --> L1
+    SYNC --> L2
+    SYNC --> L3
+    subgraph LANES["3 条证据轨 · 各占一个子进程 · 并行"]
+        L1["证据轨 1<br/>基础证据<br/>Track A ∥ Track B"]:::llm
+        L2["证据轨 2<br/>基率 + 参照类<br/>Track A"]:::llm
+        L3["证据轨 3<br/>激励 · 反面 · 市场<br/>Track A"]:::llm
+    end
+    L1 --> MAN
+    L2 --> MAN
+    L3 --> MAN
+    MAN[("manifest v3<br/>3 个证据包<br/>+ 1 份档案<br/>SHA-256 封存")]:::store
+    MAN --> GS["全局综合<br/>最多 2 次尝试<br/>大纲 → 分节并行<br/>→ 1.5–2.2 万词"]:::llm
+    GS --> J{{"7 维评审<br/>不通过 → 1 次修补<br/>仍不通过 → 终止"}}:::gate
+    J -- 通过 --> EX["结构化抽取 · 市场<br/>图表 · 封存<br/>actor-intelligence/v1"]:::llm
+    EX --> PROM["提升研究契约<br/>暂存区交换<br/>清单最后写入"]:::det
+    PROM --> NEXT(["阶段 2 · 本体"]):::io
+    classDef io fill:#f1f5f9,stroke:#475569,color:#0f172a
+    classDef llm fill:#ede9fe,stroke:#7c3aed,color:#1e0b3a
+    classDef det fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef gate fill:#fee2e2,stroke:#dc2626,color:#450a0a
+    classDef store fill:#fef3c7,stroke:#b45309,color:#3b2303
+```
+
+**旧版引擎的一次运行如何组织**
+
+- **隔离。**
+  - DeerFlow 运行在自己的 Python 3.12 虚拟环境（`deer-flow/backend/.venv`）里，以子进程方式执行，每个子进程自成一个进程组。因此它的 LangChain/LangGraph 依赖永远不会和后端的依赖混在一起。
+  - 问题通过一个私有临时文件（权限 0600）传入，不会出现在进程列表中。
+  - 每次研究开始前，编排器会把有变化的桥接层文件同步进 `deer-flow/`，以内容哈希比对。技能同步失败即关闭（fail-closed）。
+- **三条证据轨**（`RESEARCH_PARALLEL_TRACKS=3`）。
+  - **证据轨 1** 原样接收你的问题，搜集基础证据。
+  - **证据轨 2** 寻找基率、参照类与历史类比。
+  - **证据轨 3** 关注行动者激励、反面论证与市场定价。
+
+  每条证据轨都是只收集证据的子进程，把 `evidence_pack.md` 与 `sources.json` 写入 `handoff/track_<k>/`。证据轨 2、3 失败不会中断本阶段；证据轨 1 则是必需的。
+- **一个共享的行动者平面**（Track B，`DEERFLOW_DUAL_TRACK=true`）。它只在证据轨 1 内运行，与该轨的证据收集（Track A）并行，分五步：
+  1. 绘制行动者全景；
+  2. 按下文的 17 个维度，对全体阵容做一轮补全；
+  3. 在不调用工具的情况下综合出研究档案；
+  4. 经过 10 维评审，最多允许 2 轮修订；
+  5. 运行一次确定性审计，检查每条主张都绑定了来源。
+
+  档案不合格，本阶段就失败，绝不会退回使用未经审计的阵容。
+- **封存。** `evidence_synthesis_manifest.json`（v3）记录三个证据包、各自的来源台账，以及唯一的一份行动者档案（连同覆盖率与评审文件），全部附带 SHA-256 哈希。
+- **全局综合。** 一个全新的子进程（不使用子智能体，最多尝试 2 次）依次：
+  1. 写出大纲；
+  2. 由最多 4 个写作者并行起草各章节；
+  3. 拼接各章节并补上执行摘要；
+  4. 执行 1.5–2.2 万词的篇幅门（过短就扩写，超过硬上限就失败）；
+  5. 定稿引用；
+  6. 运行 **7 维报告评审**。判定为不通过且列出了缺口时，做一次定向修补再重评；明确判定为不通过则终止本阶段。
+- **收尾。** 同一个子进程随后：
+  - 抽取结构化数据（`actors.json`、`timeline.json`、`quantitative.json`、`contested.json`）；
+  - 刷新 Polymarket 快照及其 90 天价格历史；
+  - 渲染研究图表；
+  - 封存行动者契约。
+- **提升（promotion）。** 契约文件先复制到暂存目录，再换入 `handoff/`，同时保留一份回滚副本；`research_contract_manifest.json` **最后**写入。随后父进程会重新计算每一个行动者收据、主张与血缘哈希（「接收」），之后阶段 2 才能开始。
 
 ```mermaid
 flowchart LR
-    A["1 · research<br/>三条 Track-A 证据轨 + 一条共享 Track-B 行动者平面<br/>→ 唯一的全局综合 / 抽取流程"] --> B["2 · ontology<br/>从有界规范行动者主张生成本体"]
-    B --> C["3 · graph<br/>确定性行动者种子 + 严格回读<br/>再做正文抽取 / 消歧 / 剪枝"]
-    C --> D["4 · prepare<br/>封存认知上下文 + 类型化缺口<br/>规范角色 / 配置 / 公共世界"]
-    D --> E["5 · run<br/>群体模拟（日历时间<br/>每轮一个时间单位）"]
-    E --> F["6 · report<br/>预测报告"]
+    subgraph TRB["Track B · 仅证据轨 1 · 共享行动者平面"]
+        direction LR
+        B0["行动者<br/>全景"]:::llm --> B1["全阵容补全<br/>17 个维度"]:::llm --> B2["无工具<br/>档案综合"]:::llm --> B3{{"10 维评审<br/>最多 2 轮修订"}}:::gate --> B4["确定性<br/>覆盖审计"]:::det --> B5[("actor_dossier.md<br/>覆盖率 + 评审")]:::store
+    end
+    subgraph TRA["Track A · 每条证据轨 · 仅收集证据"]
+        direction LR
+        A0["开篇<br/>KIQ + 来源地图"]:::llm --> A1["界定范围<br/>（缺口已明确<br/>时跳过）"]:::llm
+        A1 --> A2["一手证据"]:::llm
+        A1 --> A3["行动者<br/>与激励"]:::llm
+        A1 --> A4["矛盾<br/>与风险"]:::llm
+        A2 --> A5
+        A3 --> A5
+        A4 --> A5
+        A5["对预测的<br/>含义"]:::llm --> A6["至多 1 轮<br/>自适应补缺"]:::llm --> A7[("evidence_pack.md<br/>sources.json")]:::store
+    end
+    classDef llm fill:#ede9fe,stroke:#7c3aed,color:#1e0b3a
+    classDef det fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef gate fill:#fee2e2,stroke:#dc2626,color:#450a0a
+    classDef store fill:#fef3c7,stroke:#b45309,color:#3b2303
 ```
 
-若你的环境暂不支持 Mermaid 渲染，以下 ASCII 流程图等价：
+**一条证据轨的内部。** 每条证据轨按分阶段的多轮协议推进：
+1. **开篇。** 拟出关键情报问题（KIQ）与来源地图。
+2. **界定范围。** 若开篇已给出完整的缺口台账，则跳过这一步。
+3. **三路并行：** 一手证据；行动者与激励；矛盾与风险。
+4. **对预测的含义。**
+5. **至多一轮自适应补缺。**
 
-```
- ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
- │ 1 research│ → │2 ontology│ → │ 3 graph  │ → │4 prepare │ → │  5 run   │ → │ 6 report │
- │ 深度研究  │   │ 本体生成 │   │ 图谱构建 │   │ 环境搭建 │   │ 群体模拟 │   │ 预测报告 │
- └──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘
-```
+补缺与行动者研究由限定范围的子智能体（`scoped-researcher`）完成：每条证据轨最多 3 个，整台机器合计最多 9 个。
 
-### 全流程精细视图
+**17 个行动者维度。**
+- **行动者是谁：** 身份与历史 · 价值观与世界观 · 激励 · 动机 · 能力 · 约束 · 行事偏好。
+- **与谁打交道：** 盟友 · 对手与竞争者。
+- **如何决策与行动：** 决策权、流程与触发条件 · 当前行动 · 未来计划 · 投资与资本配置。
+- **可以预期什么：** 过往记录 · 可能行动 · 红线 · 知识状态。
 
-下图中的每个方框都对应一条真实代码路径——阶段进入条件、阶段内部步骤、质量门与每一步读写的持久化产物。实线为主路径；judge 的 FAIL 边与虚线的状态/图谱边是恢复与持久化路径。完整拓扑、状态限定与 `file:line` 引用见当前源码版[全系统架构图谱](docs/architecture/DEEPRESEARCHFORECAST_SYSTEM_ATLAS.md)。
+每条主张都带有：
+- 它适用的时间；
+- 认知状态与置信度；
+- 依赖、矛盾与限定条件；
+- 来自已抓取来源的精确引文或区间。
+
+没有依据的格子会记为一个**类型化缺口**，而不是编造的事实。
+
+**DeerFlow harness。** 每个子进程把模型、工具、四个技能与一条有顺序的中间件栈装配成一个 LangChain 智能体。四个技能是 `deep-research`、`actor-ontology-research`、`prediction-markets` 与 `forecast-visuals`。
+- 上下文达到 8 万 token 时触发摘要，保留最近的 1.6 万 token。
+- 标题生成与长期记忆均已关闭：无界面运行从不显示标题，而长期记忆会在不同运行之间串味。
+- 研究模型启用了 Claude 提示缓存；设置 `DEERFLOW_CLAUDE_PROMPT_CACHE=0` 可关闭。
+- 打过补丁的中间件会在每次运行开始时重置工具调用计数，后面的研究轮次因此不会被饿死。
+
+**工具、来源与预算**
+
+| 工具 | 后端（按优先级） | 说明 |
+|---|---|---|
+| `web_search` | Serper → Tavily → Firecrawl v2 `/search` → 免 Key 的 DuckDuckGo，取决于配置了哪个 Key | 结果缓存 6 小时（200 MB） |
+| `web_fetch` | Firecrawl v2 `/scrape`（有 Key 时）→ Jina Reader → Exa（有 Key 时）→ 直连 HTTP（需显式开启） | 熔断器（连续失败 5 次 → 暂停 120 秒）；缓存 72 小时（500 MB）；Firecrawl 复用 48 小时内的页面 |
+| `prediction_market_search` | Polymarket Gamma API（无需 Key） | 经相关性门过滤的候选市场，按证据轨分别记录 |
+| 知识图谱 MCP | 通过 stdio MCP 访问后端图谱 | 仅当研究启动时已存在图谱（分叉 / 继续 / 恢复），且 `RESEARCH_MCP_KG=true`。服务注册文件（`deerflow_bridge/extensions_config.json`）是模板：编排器把它部署到 `deer-flow/` 时，会填入本机检出路径与后端所用的 Python。 |
+
+- **工具预算账本。** 所有证据轨共享一个 SQLite 账本，为每次尝试（一个「纪元」）设上限：工具调用 1,800 次、搜索 900 次（每轨 360 次）、抓取 450 次（每轨 180 次）。每条管线最多 3 个纪元。
+- **整机租约。** 另一张 SQLite 表为本机所有管线合计限制并发：研究模型流最多 12 路，harness 子智能体最多 9 个。
+- **Firecrawl 限额。** Firecrawl 调用有限速和每进程上限：每次搜索 5 条结果，每个进程最多 300 次搜索、400 次抓取，并在收到 HTTP 429 时退避。
+
+**深度与时间预算**
+
+| 深度 | 做什么 | 看门狗预算¹ |
+|---|---|---|
+| `quick` | 精简协议，适合端到端试跑 | 900 秒 × 1.5 ≈ 23 分钟 |
+| `standard` | 折中 | 7,200 秒 × 1.5 = 3 小时 |
+| `deep`（默认） | 上文完整的多轮协议 + 分节综合（1.5–2.2 万词） | 21,600 秒 × 1.5 = 9 小时 |
+
+¹ 只要启用了双轨、子智能体或扇出中的任意一项，就会乘以 1.5；这三项默认都是开启的。可用 `DEERFLOW_RESEARCH_TIMEOUT` 覆盖该预算。v3 引擎把同一个看门狗预算作为上限，但会规划一个短得多的自身时间（见上文的预设）。
+
+**出问题时会怎样**
+
+- **看门狗。** 某条证据轨的预算耗尽时，看门狗会终止它的进程组。超时的证据轨 2 或 3，只要已写出证据包就会被抢救回来；证据轨 1 超时则本阶段失败。
+- **综合重试。** 全局综合会在一个干净目录中重试一次。失败尝试的日志保留在 `handoff/research_attempts/`。
+- **错误防护。** 拒收 LLM 错误文本和过短的报告。`deep` 综合宁可失败，也不会把各轮笔记直接拼接成报告。
+- **故障熔断。** 提供方故障会计入运行级熔断器。连续失败 10 次后，本次运行立即失败，提供方恢复后可以恢复运行。
+- **恢复。** 恢复时优先复用封存契约；做不到时只重跑全局综合，再不行则从各证据轨自己的检查点重跑（[详情](#管线生命周期状态与恢复)）。
+
+**研究契约**（`backend/uploads/pipelines/<id>/handoff/`）
+
+| 文件 | 内容 |
+|---|---|
+| `research_report.md` | 通过评审的研究档案，后附市场章节与可视化附录 |
+| `research_report_judge.json` | 7 维评分表，与报告的精确字节绑定 |
+| `actor_dossier.md` · `actor_dossier_coverage.json` · `actor_dossier_judge.json` | Track B 行动者档案、17 维覆盖台账、评审结论 |
+| `actors.json` · `actor_intelligence_lineage.json` | 结构化阵容（`actor-intelligence/v1`）及其血缘哈希 |
+| `sources.json` | 已抓取来源的台账（URL、S1–S4 分级、收据） |
+| `timeline.json` · `quantitative.json` · `contested.json` | 带日期的事件 · 数值主张与轨迹 · 争议主张 |
+| `prediction_markets.json` · `market_price_history.json` | Polymarket 快照 · 近 90 天的日度价格序列 |
+| `charts.json` · `charts/` | 研究图表 |
+| `evidence_synthesis_manifest.json` · `research_contract_manifest.json` | 各证据轨的封存索引 · 最终契约（最后写入） |
+| `track_<k>/` | 每条证据轨的证据包、来源、检查点与日志 |
+| `research_progress.log` · `meta.json` · `research_budget.json` | 实时日志 · 状态与元数据 · 预算遥测 |
+
+> **v3 下的研究契约。** v3 运行会写出相同的顶层文件（`research_report.md`、`sources.json`、`actors.json`、`timeline.json`、`quantitative.json`、`contested.json`、`prediction_markets.json`、`charts.json`、`meta.json`、`research_progress.log`），并把可续跑的阶段状态保存在 `v3/` 下。它不写 Track B 档案、证据轨包、评审计分卡或契约清单。在单轨运行中，管线的研究 lint 只做报告，从不改写研究档案，因此引用始终保持按位置对应。
+>
+> 早先的实验性线性引擎 v2 已于 2026 年 9 月被 v3 取代；`RESEARCH_ENGINE=linear` 现在选用 v3，`RESEARCH_LINEAR_MODE=salvage` 会被忽略并给出警告。GLM-5.3 数据中心那次演示由 v2 以抢救模式完成。
+
+### 阶段 2 · 本体
+
+阶段 2 为这个具体问题设计知识图谱的词汇表。
+
+- **输入：**
+  - 行动者档案与研究报告：经过清洗，作为不可信数据包裹，并采样到最多 12 万字符；
+  - 你的问题；
+  - 封存阵容的有界投影：最多 25 位行动者，每位附 ID、名称、类型、层级、别名以及每个维度一条绑定来源的主张，总计不超过 1.2 万字符；
+  - 一段「种子块」，列出要保留的研究所得行动者类型与关系名称。
+- **一次 LLM 调用**，返回 JSON。
+  - 一个中英双语关键词测试决定使用 `social_opinion` 还是 `general_forecast` 模板。
+  - JSON 无效时，以更低温度重试一次。
+  - 只有第一次调用没产出任何实体类型时，才会有第二次调用。
+- **确定性后处理：**
+  - 实体类型与关系类型各不超过 10 个；
+  - 重命名保留属性名；
+  - 为每个实体类型标注原型（并请求一个模拟层级），为每个关系类型标注关系族与正负向；
+  - 校正关系的两端类型；
+  - 在阵容需要时补上 Person/Organization 兜底类型。
+- **输出：** `project.json` 与 `handoff/ontology.json`。恢复时，已有的本体原样复用。
+
+### 阶段 3 · 知识图谱
+
+阶段 3 为本次运行构建一张时序知识图谱。它使用 [Graphiti](https://github.com/getzep/graphiti)（`graphiti-core` 0.29.2），底层是内嵌的 FalkorDB（`falkordblite`）。存储与向量计算都在本地完成；只有实体与关系的*抽取*会调用你配置的 LLM 提供方。
 
 ```mermaid
-flowchart TD
-    U([用户提示词]) --> API["POST /api/research/run<br/>预检 → pipe_&lt;id&gt; + 任务<br/>守护线程 · 30 秒心跳 · 恢复/分叉/取消"]
-    API --> SYNC
-
-    subgraph S1["阶段 1 · 深度研究（0–30%）— DeerFlow 2 子进程 · 独立 venv"]
-        SYNC["运行时技能 + 桥接同步<br/>与已部署 deer-flow/ 做 SHA-256 比对（漂移即拒绝）"] --> EPOCH
-        EPOCH["工具预算纪元（SQLite 台账）<br/>尝试 1800 · 搜索 900 · 抓取 450<br/>每条管线至多 3 个纪元"] --> LANES
-        subgraph LANES["3 条并行 evidence-only 证据轨（各有专属视角）"]
-            direction LR
-            L1["轨 1 · 基础证据<br/>Track A + 共享 Track-B 行动者平面"]
-            L2["轨 2 · 基率与历史类比"]
-            L3["轨 3 · 激励 · 反面 · 市场"]
-        end
-        LANES --> LOOP["每轨 Track-A 深度循环<br/>开局 → 划界 → 3 个限定阶段并行 → 预测启示<br/>+ 单一广度面：harness 子代理（全局上限 9；默认每轨 ≤3）<br/>或桥接层每 KIQ 扇出（宽度 ≤8）<br/>+ 自适应补缺轮（平台期即停）<br/>工具：web_search · web_fetch（带缓存）· prediction_market_search"]
-        L1 --> ACTOR["共享 Track B<br/>行动者版图 → 全阵容 17 维补全<br/>→ 档案综合 → 十维评审/精修<br/>→ 确定性的来源绑定覆盖审计"]
-        LOOP --> PACKS["三组 evidence_pack.md + sources.json<br/>+ 一份行动者档案 / 覆盖审计 / 可选评审<br/>封存进 evidence_synthesis_manifest.json v3"]
-        ACTOR --> PACKS
-        PACKS --> GS["全局综合子进程<br/>大纲 → 多段章节 → 合并<br/>≤ 2 次尝试 · 恢复时仅重跑综合"]
-        GS --> JUDGE{"七维报告评审<br/>记分牌与字节绑定"}
-        JUDGE -- 通过 --> EXTRACT["唯一的结构化抽取流程<br/>带 actor-intelligence/v1 的 actors.json · timeline.json<br/>quantitative.json · contested.json · 市场 · charts/"]
-        JUDGE -- 不通过 --> GS
-        EXTRACT --> CONTRACT["研究契约晋升<br/>manifest 最后落盘 · 可回滚<br/>research_report.md 封存"]
+flowchart LR
+    subgraph G1["① 写入阵容种子"]
+        direction TB
+        C1["切分研究档案<br/>2,500 字符 · 重叠 250"]:::det --> C2["创建图谱 mirofish_‹id›<br/>注册本体类型"]:::det
+        C2 --> C3["先写入研究所得行动者<br/>确定性 UUID · 不调用 LLM"]:::det
+        C3 --> V1{{"严格回读<br/>不一致 → 失败"}}:::gate
     end
-
-    CONTRACT --> ONT
-    subgraph S2["阶段 2 · 本体生成（30–40%）"]
-        ONT["LLM 从有界的规范行动者 ID + 封存主张投影<br/>推导实体 + 关系类型<br/>实体原型/层级 · 关系族/极性 → ontology.json"]
+    subgraph G2["② 灌入正文"]
+        direction TB
+        C4["跳过未提及任何<br/>阵容成员的分块"]:::det --> C5["Graphiti episode<br/>每批 10 个 · 4 路并发"]:::llm
+        C5 --> C6["LLM 抽取 +<br/>本地 384 维向量"]:::llm
     end
-    ONT --> GB
-    subgraph S3["阶段 3 · 图谱构建（40–60%）— 本地 Graphiti 时序知识图谱"]
-        GB["actor-graph-seed-manifest/v1<br/>确定性的行动者/类型/别名/关系 UUID + 属性"] --> GR["严格物理回读<br/>种子写入后与每次变更/复用后均校验"]
-        GR --> GI["选定正文分块 → 批量 Graphiti 情节<br/>已配置提供方抽取 + 本地 MiniLM 嵌入<br/>嵌入式 FalkorDB（无服务进程、无 Key）"]
-        GI --> GP["可选社区检测（默认关闭）<br/>→ 实体消歧 → 剪枝（≤ 400 节点）<br/>→ 重验种子契约 → graph_priors.json"]
+    subgraph G3["③ 清理与评分"]
+        direction TB
+        C7["实体消歧<br/>不调用 LLM · 余弦 ≥ 0.88"]:::det --> C8["剪枝到阵容 2 跳邻域<br/>上限 max(400, 阵容)"]:::det
+        C8 --> V2{{"严格回读<br/>不一致 → 失败"}}:::gate
+        V2 --> C9[("graph_priors.json<br/>度中心性")]:::store
     end
-    GP --> CAST
-    subgraph S4["阶段 4 · 环境搭建（60–72%）"]
-        CAST["当前 v1：所有合格且身份匹配的 Tier-1/2 行动者<br/>旧式上限不能丢弃已调研行动者<br/>actor-context/v1：认知切分 + 类型化缺口 + 封印"] --> PERS["actor-role/v2 是唯一行为权威<br/>17 维证据、计划、投资<br/>+ 来源绑定的公开关系"]
-        PERS --> SIMCFG["仅用规范数据确定性生成 simulation_config.json<br/>来源绑定的公共世界 + temporal_config<br/>情景/WorldState 变更 → 授权重封印"]
-    end
-    SIMCFG --> OASIS
-    subgraph S5["阶段 5 · 群体模拟（72–92%）— OASIS 子进程"]
-        OASIS["Twitter + Reddit 双平台模拟<br/>重验 Twitter user_char 与 Reddit 最终 system 字节<br/>1 轮 = 1 个日历单位（日 … 半年）<br/>世界时钟 · 日期事件 · 世界态增量"] --> RS["持久化模拟目录 + simulation_id<br/>平台/动作/决策/WorldState 工件<br/>run_summary.json 是独立诊断/API 汇总"]
-    end
-    RS -->|simulation_id| RX
-    subgraph S6["阶段 6 · 预测报告（92–100%）"]
-        RX["报告准入 + 证据/市场上下文"] --> SPINE["正文前情景概率脊柱<br/>K 次抽样（默认 1）+ 默认自我批判<br/>diagnostic_only 排除模拟概率输入"]
-        SPINE --> RA["大纲 + ReportAgent 逐章循环<br/>支持时用原生调用，否则回退 ReAct<br/>批判/修订/修复 · 图谱 + 有标签模拟诊断"]
-        RA --> ASM0["首次汇编已接受章节"]
-        ASM0 --> FX["预测定稿<br/>复用固定情景；缺失时才从正文回退抽取<br/>创建二元契约 + 概率抽样<br/>模型辅助市场评审 → 确定性验证"]
-        FX --> PRESENT["成品装配<br/>Part I 二元表 + 确定性可视化<br/>Part II 综合 + Part III + 判定/语言扫描"]
-        PRESENT --> GATES["编辑 lint → 引用 → 只读硬审计<br/>→ 封存 full_report.md + forecast.json + charts<br/>→ 自动尝试符合语言条件的变体"]
-        GATES -.->|N_FORECAST_SEEDS > 1| ENS["可选多种子敏感性轨<br/>逐种子重跑 prepare→run→report<br/>→ ensemble_forecast.json 侧车"]
-        GATES --> HEALTH{"主交付物健康门"}
-        ENS -.->|侧车结果| HEALTH
-        HEALTH --> DONE(["PipelineState completed · 进度 100<br/>TaskManager 终态结果 + report_id"])
-    end
-
-    GATES --> PUB{"发布门<br/>精确绑定报告/预测/审计哈希"}
-    PUB --> OUT(["承载答案的报告 / 预测 / 可视化 API<br/>交互报告 · Markdown · 图表"])
-    PUB -.->|按需| DERIV["惰性 PDF · 高管简报 · digest<br/>内容寻址且受发布门约束"]
-
-    KG[("Graphiti 时序知识图谱<br/>嵌入式 FalkorDB")]
-    GB -.种子写入.-> KG
-    GI -.正文灌入.-> KG
-    PERS -.读取.-> KG
-    RA -.insight_forge.-> KG
-
-    STATE[("pipeline_state.json · run.json<br/>handoff/manifest.json（SHA-256）<br/>按产物恢复 · 孤儿对账")]
-    S1 -.检查点.-> STATE
-    S3 -.-> STATE
-    S5 -.-> STATE
-    S6 -.-> STATE
-    DONE -.->|终态| STATE
+    G1 --> G2 --> G3
+    classDef llm fill:#ede9fe,stroke:#7c3aed,color:#1e0b3a
+    classDef det fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef gate fill:#fee2e2,stroke:#dc2626,color:#450a0a
+    classDef store fill:#fef3c7,stroke:#b45309,color:#3b2303
 ```
 
-| 阶段 | 名称 | 说明 |
-|------|------|------|
-| 1 | **research（多角度 · 行动者深研 · manifest 路由 · 规模化）** | 默认编排器扇出**三条 Track-A evidence-only 子进程**（基础证据 · 基率与参照类 · 激励/反面/市场）。广义基础轨同时独占**一条共享 Track-B 行动者平面**；其它轨不得产出竞争档案。Track B 执行动作者版图、全阵容 17 个 `actor-intelligence/v1` 维度补全、免工具档案综合、十维评审/精修与确定性的已抓取来源覆盖审计。manifest v3 把三组证据/来源包和这一份行动者档案、覆盖侧车、基础轨来源与可选评审封存后，再由全新的子进程统一完成唯一的大纲、多段综合、报告评审、结构化抽取、市场对账、图表收尾与契约晋升。其它契约包括 `research_report.md`、`actors.json`、`sources.json`、`prediction_requirement.txt`、`timeline.json`、`meta.json`、`research_progress.log` 与 `market_price_history.json`。 |
-| 2 | **ontology（本体生成）** | LLM 依据封存研究材料、预测问题，以及一份只含规范行动者 ID/别名/层级与收据绑定主张的有界当前 v1 投影，推导实体类型和关系类型；每个实体带**原型（archetype）+ 模拟层级（tier）**，每条关系带**族（family）+ 极性（valence）**。旧式扁平 role/stance/brief 字段不是当前 v1 的备用输入。 |
-| 3 | **graph（图谱构建）** | 系统先把结构化行动者智能转换为 `actor-graph-seed-manifest/v1`：使用稳定 UUID、claim 哈希、极性/方向/符号、强度/等级、有效期与时滞，确定规范行动者/类型/别名节点及来源绑定关系。物理写入后必须通过严格 `actor-graph-seed-readback/v1`；正文抽取、实体消歧、剪枝与复用后会再次校验同一契约。随后才把选定研究正文分块灌入本地 Graphiti，正文不得覆盖规范行动者身份。`GRAPH_CHUNK_SOURCE=dossier_only` 优先使用 `actor_dossier.md`，不存在时使用封存报告；`both` 才同时灌入。FalkorDB 存储和 sentence-transformers 嵌入在本地完成，Graphiti 抽取复用 `LLM_PROVIDER`。 |
-| 4 | **prepare（环境搭建）** | 当前 `actor-intelligence/v1` 会保留**所有合格且身份匹配的 Tier-1/2 行动者**，不受 `ACTOR_CAST_MAX` 影响；不匹配的图节点和通用回退会被拒绝。任何可执行角色编译前，封存的 `actor-context/v1` 都会区分公共局势证据、关于行动者的文献事实、行动者知识/信念、公开争议证据、分析师推断、未知与类型化研究缺口。当前 v1 的角色与每行动者配置均为确定性生成，只使用封存的规范行为投影与明确公开且绑定来源的世界事实；不会调用人格/配置 LLM，也绝不回退到扁平 role/stance/influence/memory/incentive 字段。`actor-role/v2` 是唯一行为档案权威：Twitter `user_char` 是该角色的换行归一化结果；Reddit `persona` 是该角色，人口统计字段为空占位。`simulation-config-manifest/v1` 封住精确配置字节及全部阵容/上下文/角色/档案绑定。若编排器随后应用获授权的情景覆盖或 WorldState 种子，会以幂等方式更新配置、重建封印，并在 RUN 前立即校验。已完成的只读复用会校验现有的状态绑定封印，但不会改写或重封；子进程在封印校验后还会哈希自己真正载入的精确字节，从而关闭校验/使用间隙。时间线由判定日确定性推导。 |
-| 5 | **run（群体模拟）** | OASIS 以**日历时间**运行 Twitter + Reddit 双平台模拟。首次行动前，父 runner 与子进程会重验阵容、上下文、角色、档案和配置封印。Twitter 消费已封存 `user_char`；Reddit 真正的模型 system message 由纯角色包装加上配置中可选且已封存的世界简报与日历词汇确定性重建，并再次证明最终字节。每轮对应基准日与判定日之间的一个整日历单位（日 / 周 / 半月 / 月 / 季度 / 半年）——「到 2030 年」→ 18 个季度轮，「到 2035 年」→ 19 个半年轮。真实事件按日期入轮，主角级行动者每轮行动，世界态轨迹逐轮演化且不向智能体暴露数值份额。旧新闻周期模式仍可经 `SIM_TEMPORAL_MODE=hours` 启用。 |
-| 6 | **report（预测报告）** | ReportAgent 在提供方支持时使用原生函数/工具调用，其余路径回退 ReAct 文本协议；通过 `insight_forge` 从图谱与模拟诊断中检索，写出分章节预测报告。输出采用桥水式三部分骨架（二元预测表 · 框架综合 · 附录）、**完全 / 近似判定等价的 Polymarket 匹配**（10pp 分歧说明规则仅适用于已接受的锚点）、确定性**可视化层**（交互式 Plotly 图表，HTML + PNG 成对输出，matplotlib 兜底），并支持一键 **PDF 导出**。图表槽位**只放预测数据**：情景概率、二元预测点图、模型 vs 市场分歧、研究抽取的**指标轨迹**（成本曲线、部署路径）、事件时间线与角色网络——来源构成、影响力代理值等**管线元数据图默认关闭、仅可显式开启**，绝不挤占预测图表。若 `N_FORECAST_SEEDS>1`，额外 prepare→run→report 轨在主报告之后生成独立的 `ensemble_forecast.json` 敏感性侧车；主报告、主预测与审计字节不会被改写。 |
+1. **分块。** 源文本被切成每块 2,500 字符、相邻重叠 250 字符的分块。内嵌图片会被剥离，每个分块都作为不可信数据包裹起来。`GRAPH_CHUNK_SOURCE` 决定源文本：
+   - `dossier_only`（默认）：行动者档案；没有档案时退回研究报告；
+   - `report_only`；
+   - `both`。
+2. **创建。** 图谱 ID 为 `mirofish_<16 位十六进制>`，它既是 FalkorDB 中的图名，也是 Graphiti 的 `group_id`。本体会注册为带类型的 Pydantic 模型。
+3. **先写入阵容，再写正文。** 对于已封存的 `actor-intelligence/v1` 阵容，一份确定性计划（`actor-graph-seed-manifest/v1`）会写入每位行动者、每个别名与每条研究所得的关系，全程不调用 LLM。每条记录都带有：
+   - UUIDv5 身份；
+   - 主张哈希；
+   - 因果属性：方向、强度、时滞与有效期。
+
+   写入后，严格的物理回读（`actor-graph-seed-readback/v1`）必须与计划完全一致。
+4. **灌入正文。**
+   - 没有提及任何阵容成员的分块会被跳过。
+   - 其余分块作为 Graphiti episode 写入，每批 10 个、4 路并发，时间戳都记为研究基准日。
+   - Graphiti 用你的 LLM 抽取并消解实体与事实，再用多语言 MiniLM 模型（384 维）在本地计算向量。
+   - 超过 30% 的分块失败时，图谱会被标记为*降级*。
+5. **清理。**
+   - **实体消歧**合并重复实体：它们须有相同标签、名称或别名匹配，且向量余弦 ≥ 0.88。消歧绝不会合并两位研究所得的行动者。
+   - **剪枝**保留阵容及其 2 跳邻域，节点上限为 max(400, 阵容规模)。
+   - 社区发现已实现，但默认关闭。
+6. **校验与评分。** 以上所有改动完成后，种子回读会再运行一次。随后写出按别名折叠的度中心性先验，存入 `graph_priors.json`。
+
+**后续阶段如何查询图谱。** ReportAgent 拥有以下检索工具：
+
+| 工具 | 作用 |
+|---|---|
+| `insight_forge` | 把问题拆成最多 5 个子问题，运行 BM25 + 向量混合检索，返回带事实 ID 的关系链，可选按时间点过滤 |
+| `panorama_search` | 区分当前有效的事实与已过期、已成为历史的事实 |
+| `quick_search` | 一次快速的边检索 |
+| `trace_cascade` | 两个实体之间的因果路径（最多 6 跳），或某个实体的邻域（最多 4 跳），附方向、强度与时滞 |
+| `simulation_outcomes` · `coalition_map` · `opinion_shift` | 对模拟日志做确定性汇总 |
+| `interview_agents` · `faction_brief` · `scenario_diff` | 条件性工具，分别需要：模拟环境仍在运行、开启社区发现、假设推演报告 |
+
+- **重排序。** 检索默认用倒数排名融合（RRF）合并排名；设置 `GRAPHITI_RERANKER=bge` 可改用本地 BGE 交叉编码器。
+- **MCP 访问。** 同一张图谱也以 stdio MCP 服务（`backend/app/mcp/kg_server.py`）的形式提供给 DeerFlow，工具有 `kg_search`、`kg_trace_cascade`、`kg_entity_summary`、`kg_get_entities`、`kg_centrality_priors` 与 `kg_graph_statistics`。
+- **成本控制。** 抽取是图谱阶段唯一的 LLM 成本。默认设置通过以下方式控制它：只灌入研究档案、2,500 字符的分块、阵容过滤、每个分块最多 2 次完整尝试、每项操作 900 秒超时，以及向量缓存。
+- **默认不把模拟写回图谱。** 写入图谱的模拟活动，日后可能被当作真实观测到的事实检索出来。如果你开启回写（`SIM_GRAPH_FEEDBACK=true`），写入失败的内容会进入死信队列，可用 `backend/scripts/replay_zep_dead_letters.py` 重放。
+
+### 阶段 4 · 准备
+
+阶段 4 把研究所得的行动者变成模拟智能体，把问题中的判定日变成一条时间线。除了一次事件设计调用之外，整个阶段都是确定性的。
+
+```mermaid
+flowchart TB
+    IN[("图谱实体 · actors.json<br/>研究报告 · 来源")]:::store --> CAST
+    CAST["阵容选择<br/>每位合格且匹配的<br/>Tier-1/2 行动者"]:::det --> CTX
+    CTX["actor-context/v1<br/>每人一份<br/>公开 · 有文献记载<br/>自身所知 · 争议<br/>推断 · 未知 · 缺口"]:::det --> ROLE
+    ROLE["actor-role/v2<br/>确定性角色提示词"]:::det --> TW["Twitter 档案<br/>user_char = 角色"]:::det
+    ROLE --> RD["Reddit 档案<br/>persona = 角色"]:::det
+    TL["日历时间线<br/>判定日 → 回合"]:::det --> CFG
+    EV["事件配置<br/>1 次 LLM 调用：<br/>话题 + 开场帖子"]:::llm --> CFG
+    CTX --> CFG
+    CFG["simulation_config.json<br/>世界简报 · 带日期事件<br/>关注关系 · 核心智能体"]:::store
+    TW --> SEAL
+    RD --> SEAL
+    CFG --> SEAL
+    SEAL{{"封存全部字节<br/>simulation-config-<br/>manifest/v1 → READY"}}:::gate --> WS["加入世界态种子<br/>（+ 分叉叠加）→ 重新封存"]:::det --> RUN(["阶段 5 · 运行"]):::io
+    classDef io fill:#f1f5f9,stroke:#475569,color:#0f172a
+    classDef llm fill:#ede9fe,stroke:#7c3aed,color:#1e0b3a
+    classDef det fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef gate fill:#fee2e2,stroke:#dc2626,color:#450a0a
+    classDef store fill:#fef3c7,stroke:#b45309,color:#3b2303
+```
+
+- **阵容。** 每位能与图谱实体匹配、且合格的 Tier-1/2 研究所得行动者都会成为智能体，一个行动者 ID 对应一个。
+  - 与任何研究所得行动者都不匹配的图谱实体，永远不会进入阵容。
+  - 图谱丢失的合格行动者，会根据研究档案补回。
+  - 研究阶段本身就用 `ACTOR_CAST_MAX`（20）限制阵容，并把媒体机构降为背景，所以默认一次运行最多模拟 20 位行动者。
+  - 按规则生成的「受众」智能体默认关闭（`SIM_AUDIENCE_AGENTS=0`）。
+- **上下文包**（`actor-context/v1`）。每位行动者的上下文包把以下内容分开：
+  - 共享的公开证据；
+  - *关于*该行动者的文献证据；
+  - 行动者自己的知识与信念；
+  - 该行动者能看到的争议信息；
+  - 分析师推断；
+  - 未知事项；
+  - 一份六字段的类型化缺口审计：`reason`、`attempted_queries`、`receipt_ids`、`result_ids`、`attempt_count`、`exhausted`。
+
+  只有明确公开、绑定来源的证据才会进入共享世界。分析师推断与缺口审计会为问责而封存，但永远不会成为智能体的知识。
+- **角色**（`actor-role/v2`）。每个角色提示词都由封存的证据以确定性方式编译而成，篇幅预算 6,000 字符，涵盖：
+  - 身份与激励；
+  - 能力与约束；
+  - 计划与投资；
+  - 决策流程、可能行动与红线。
+
+  两个平台拿到的是同一个角色：
+  - Twitter 档案字段 `user_char` 就是这个角色（换行已规范化）。
+  - Reddit 的 `persona` 也是这个角色，旧式的人口统计字段留空。
+- **模拟配置。**
+  - 一次 LLM 调用设计开场的事件配置：热门话题、叙事走向与初始帖子。失败时退回确定性的种子帖子。
+  - 其余全部是确定性的：
+    - 一份公开的世界简报；
+    - 中性的智能体活跃度设置；
+    - 关注关系；
+    - 把研究所得的事件排进其日期所在的回合；
+    - 指定哪些智能体是**核心智能体**（principal），即每一轮都会行动。
+- **封存。** `simulation-config-manifest/v1` 绑定配置、人格档案、角色清单、上下文包与阵容的精确字节。之后编排器会：
+  - 加入世界态种子；若是分叉运行，还会叠加情景假设；
+  - 在进入阶段 5 之前重新封存并重新校验。
+
+  被复用的「准备」阶段只做只读校验。
+
+> 没有封存行动者契约的运行（较早的运行，或显式关闭了契约的运行）走**旧路径**：按排名截断到 `ACTOR_CAST_MAX` 的阵容、由 LLM 撰写的人格，以及由 LLM 生成的活跃度配置。
+
+### 阶段 5 · 模拟
+
+阶段 5 在一个子进程中运行 [OASIS](https://github.com/camel-ai/oasis)。这个进程同时驱动 Twitter 与 Reddit（一个事件循环里的两个 asyncio 任务），每个回合对应一个日历时段。
+
+**从问题到回合**
+
+```mermaid
+flowchart LR
+    Q["问题<br/>文本"]:::io --> H{{"判定日<br/>解析器"}}:::gate
+    H -- 命中 --> HD["判定日"]:::det
+    H -. "未命中" .-> FB["LLM 兜底，<br/>否则 12 个月"]:::llm -.-> HD
+    HD --> U["选出约 16 个<br/>回合的单位<br/>（8–36）"]:::det --> G["与日历对齐<br/>的回合"]:::det
+    classDef io fill:#f1f5f9,stroke:#475569,color:#0f172a
+    classDef llm fill:#ede9fe,stroke:#7c3aed,color:#1e0b3a
+    classDef det fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef gate fill:#fee2e2,stroke:#dc2626,color:#450a0a
+```
+
+- **判定日。** 解析器依次尝试：
+  1. 明确日期；
+  2. 锚定时段：「end of 2030」「Q3 2027」「H2 2027」「March 2027」「2035年底」；
+  3. 相对时长：「in / within / next N days … years」「未来两年」；
+  4. 裸年份：「by 2030」即 2030 年 12 月 31 日。
+
+  都未命中时，交给 LLM 兜底；仍不成功，就默认 12 个月。
+- **单位。** 可选的单位有日、周、半月、月、季度、半年。
+  - 在能产生 8 到 36 个回合的单位中，系统选回合数最接近 16 的那个（上限还受 `OASIS_DEFAULT_MAX_ROUNDS` 与你设置的任何回合上限约束）。并列时选更细的单位。
+  - 判定日在 48 天以内时，使用按日推进的回合，最多 48 个。
+  - 判定日超过约 18 年时，每个回合代表一年（即以两个半年为步长）。
+  - 显式设置回合上限，只会让单位变粗，绝不会截短预测期。
+
+以下示例假设研究基准日为 2026-09-27：
+
+| 问题中写的是… | 判定日 | 单位 | 回合数 |
+|---|---|---|---|
+| 「in the next 3 weeks」 | 2026-10-18 | 日 | 21 |
+| 「by end of 2026」 | 2026-12-31 | 周 | 14 |
+| 「next 18 months」 | 2028-03-27 | 月 | 18 |
+| 「by 2030」 | 2030-12-31 | 季度 | 17 |
+| 「by 2031」 | 2031-12-31 | 半年 | 11 |
+| 「by 2035」·「2035年底」 | 2035-12-31 | 半年 | 19 |
+| 「by 2050」 | 2050-12-31 | 半年 × 2 | 24 |
+
+回合数并不总随预测期的延长而增加，因为单位会在阈值处切换。所以「by 2031」得到的回合反而比「by 2030」更少，但每个回合更长。
+
+**每个平台上的一个回合**
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as 平台循环
+    participant E as OASIS 环境
+    participant A as 智能体（LLM）
+    participant W as 世界态
+    participant L as actions.jsonl
+    P->>E: 发布本时段内带日期的事件
+    P->>P: 选出核心智能体 + 抽样的其他智能体
+    P->>A: 世界时钟提示
+    P->>E: env.step(LLMAction)
+    E->>A: 推荐信息流
+    A-->>E: 发帖 · 评论 · 点赞 · 关注 …
+    P->>L: 记录自发行为
+    P->>W: 提交第 i 轮
+    Note over W: 两个平台都提交后 →<br/>1 次承诺调用 → 推进一步
+    W-->>P: 「发生了什么变化」摘要
+    P->>L: round_end + 检查点
+```
+
+- **智能体知道什么。** 每个智能体的系统提示词由三部分组成：它的封存角色、共享的世界简报、日历词汇。对 Reddit，最终的提示词字节会在第一次行动前重新验证。每一轮，智能体还会收到一条**世界时钟**提示，内容包括：
+  - 本时段的标签与起止日期；
+  - 第 *i* 轮 / 共 *N* 轮，判定日，以及还剩几个时段；
+  - 本时段内已确认的事件；
+  - 一份定性的「上一时段发生了什么变化」摘要：已触发的事件、影响力最大的五条帖子、主导趋势的方向。世界态的具体数值份额从不展示。
+- **谁会行动。**
+  - 每个核心智能体每一轮都会行动。
+  - 其他智能体按活跃度与影响力计算出的概率抽样；上一轮行动过的，更可能再次行动。
+  - 在当前中性的配置下，所有行动者的影响力相同，于是按规则挑选核心智能体：n 个智能体中取 max(4, ⌈n/2⌉) 个；n ≤ 4 时全部都是核心智能体。
+- **智能体能做什么。**
+  - 在 Twitter 上：发帖、点赞、转发、引用、评论、关注、搜索帖子、查看趋势、什么都不做。
+  - 在 Reddit 上：发帖、评论、给帖子点赞或点踩、给评论点赞或点踩、搜索帖子、搜索用户、查看趋势、刷新、关注、屏蔽、什么都不做。
+  - 信息流由免模型的推荐器生成，不产生额外的 LLM 调用。
+- **世界态。** 共享的 WorldState 每对齐一轮前进一次。两个平台都提交第 *i* 轮之后：
+  - 一次批量 LLM 调用读取智能体的承诺；
+  - 世界态随之推进一步，其惯性按日历单位缩放，并设有基率熵下限。
+
+  轨迹保存在 `world_state_trajectory.json`，并在报告中绘成图表。
+- **监控与完成判定。**
+  - 后端的一个监控线程每 2 秒把行为日志汇总进 `run_state.json`。
+  - 管线每 5 秒轮询一次；连续 30 分钟没有回合进展的模拟会被停止。
+  - 判定完成，需要每个平台都有结束标记，并且 `run_summary.json` 有效（其中记录自发行为与种子行为的数量、各平台健康状况、日历覆盖情况）。仅凭退出码为 0 不足以判定完成。
+  - 每一轮结束都会写入检查点。从中途恢复模拟需要显式开启（`SIM_RESUME=true`），重建的智能体不保留之前的对话记忆。
+  - 结束之后，子进程会再存活最多 60 分钟空闲时间，通过基于文件的 IPC 信箱响应采访请求。
+- **对预测的影响。** 默认设置下（`SIMULATION_FORECAST_EFFECT=diagnostic_only`），模拟只作为明确标注的情景分析为报告提供参考，**绝不**参与概率计算。若模拟「空转」，即有智能体却没有自发活动，管线健康状况会被标记为*降级*。
+
+输出位于 `backend/uploads/simulations/<sim_id>/`：
+- `state.json`、阵容清单与 `actor_context/` 上下文包；
+- `twitter_profiles.csv`、`reddit_profiles.json` 及各自的角色清单；
+- `simulation_config.json` 及其封印；
+- `twitter/actions.jsonl` 与 `reddit/actions.jsonl`，以及两个平台的 SQLite 数据库；
+- `world_state_trajectory.json` 与 `decisions.jsonl`；
+- `run_summary.json` 与 `simulation.log`。
+
+设置 `SIM_TEMPORAL_MODE=hours` 可恢复旧式的新闻周期模式，由 LLM 选定 24–168 个模拟小时。
+
+### 阶段 6 · 报告与发布
+
+阶段 6 写出预测，然后在任何人读到之前，尽力把它推翻一遍。
+
+```mermaid
+flowchart LR
+    subgraph P1["① 写正文之前"]
+        direction TB
+        A["LLM 预检<br/>生成 report_id"]:::det --> B["上下文信息包<br/>模拟信号 · 市场"]:::det
+        B --> C["情景骨架<br/>1 次抽样<br/>+ 红队批评"]:::llm
+    end
+    subgraph P2["② 撰写"]
+        direction TB
+        D["大纲<br/>4–14 个章节"]:::llm --> E["章节并行撰写<br/>最多 6 路<br/>使用图谱工具"]:::llm
+        E --> F["批评 →<br/>每节至多 1 次修订"]:::llm
+    end
+    subgraph P3["③ 预测 + 呈现"]
+        direction TB
+        G["forecast.json<br/>二元预测<br/>市场锚点"]:::llm --> H["第一部分表格<br/>图表<br/>第二、三部分"]:::llm
+        H --> I["如何核验<br/>语言纯度检查"]:::llm
+    end
+    subgraph P4["④ 发布"]
+        direction TB
+        J["Lint + 发布<br/>稳定器"]:::det --> K{{"终审 + 发布门<br/>任何问题 → FAILED"}}:::gate
+        K --> L["中英语言版本<br/>单独审计"]:::llm
+    end
+    P1 --> P2 --> P3 --> P4
+    classDef llm fill:#ede9fe,stroke:#7c3aed,color:#1e0b3a
+    classDef det fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef gate fill:#fee2e2,stroke:#dc2626,color:#450a0a
+```
+
+1. **准入与上下文。**
+   - 一次预检调用确认 LLM 可以应答，并生成 `report_<12 位十六进制>` ID。
+   - 构建**信号包**：对模拟的确定性汇总，标注为内部情景分析。
+   - 构建**市场包**：研究时的 Polymarket 快照，按实时价格重新报价，并附价格变化。
+2. **在写正文之前先定情景骨架。**
+   - 一次 LLM 抽样提出情景（`REPORT_SPINE_SELFCONSISTENCY_K=1`）。
+   - 一次红队式自我批评随后补上兜底的「剩余」情景、压低过度自信的峰值概率，并强制情景数为 2–5 个。
+   - 概率下限为 3%，之后重新归一化。
+   - 情景骨架会钉进之后的每一个提示词，因此正文不会偏离这些数字。
+3. **大纲与章节。**
+   - 大纲有 4–14 个章节，最多 6 个并行撰写，每节约有 12 次图谱工具调用的预算。
+   - OpenAI 兼容提供方（MiniMax 除外）使用原生工具调用；CLI 提供方（包括默认的 `claude-cli`）使用 ReAct 文本协议。
+   - 每个章节接受一次批评，最多修订一次。
+   - 仍然失败的章节会变成占位符，之后会阻止发布。
+   - 前文章节、人格上下文与世界简报等上下文切片，会按当前提供方的上下文窗口调整大小（`ADAPTIVE_CONTEXT=true`），大窗口模型能看到更多内容。
+4. **定稿预测**（`forecast.json`）。
+   - 复用情景骨架，并从**研究档案**中抽取至少 10 条二元预测。若概率全都挤在一起，会再补一组反向的预测。
+   - 重新报价市场。一次 LLM 调用把二元预测与市场匹配，只接受判定标准**完全或近似等价**的匹配。
+   - 若已锚定的预测与其市场相差超过 10 个百分点且未加以说明，会尝试修订一次，剩余的差距会被公开披露。
+   - 确定性的对账让二元预测与情景划分保持一致，并剔除不完整的市场锚点。
+   - 预测会追加写入账本。
+5. **呈现。** 依次加入：第一部分（二元预测表 + 市场交叉核对）、图表、第二部分（一次 LLM 综合）、第三部分（详细章节）、附有各情景判定标准的「如何核验」章节，最后做一次语言纯度检查。
+6. **发布。** 以下四步必须全部通过：
+   1. 编辑 lint。
+   2. 发布稳定器：最多 6 轮，直到文本不再变化。每一轮会：
+      - 定稿引用与参考文献；
+      - 限制任何来源被引用超过 20 次；
+      - 删去缺乏支撑的数值句，直到引用覆盖率达到 75% 以上；
+      - 重新核对引文。
+   3. 只读终审，写入 `final_audit.json`。
+   4. 发布门。
+
+   **只要仍有任何问题**，报告就会被标记为 FAILED；管线本身仍可恢复。
+7. **语言版本。** 主报告通过后，会逐章节翻译出一份中↔英版本并单独审计。主报告本身不会被修改。
+
+**报告结构**
+
+```text
+# 标题
+第一部分   二元预测：概率 · 判定标准 · 市场锚点
+          + 市场交叉核对（模型 vs 市场，附偏离结论）
+> 执行摘要
+第二部分   框架与整体综合
+第三部分   详细分析章节（图表内嵌在对应章节中）
+可视化附录（未被任何章节认领的图表）· 如何核验 · 参考文献
+```
+
+**`forecast.json`** 包含：
+- 标题结论、判定日、置信度与关键不确定性；
+- `scenarios[]`：每项含名称、概率、驱动因素、判定标准、基率锚点与调整理由；
+- `binary_forecasts[]`：每项含命题、概率（0.02–0.98）、判定标准与判定来源、所属情景、`market_anchor` 与 `market_influence`；
+- 质量相关的各块，包括引用审计、二元预测质量评分表与最终门控结果。
+
+**图表。** 图表的渲染完全不调用 LLM，输出到 `reports/<id>/charts/`，并附 `viz_manifest.json` 索引。每张图都是一个可交互的 Plotly HTML 文件，外加一张 PNG，并以 matplotlib 兜底。图表在沙箱（CSP）中提供，并放在它所说明的章节下方。
+
+| 默认渲染（有数据时） | 可选或按条件渲染 |
+|---|---|
+| 情景概率 · 二元预测点图 · 模型 vs 市场 · 事件时间线 · 指标轨迹 · 技术份额 · 区域对比 · 可比预测基准 · 预测修订 · 世界态轨迹 · 市场价格历史（仅限已锚定的市场） | `REPORT_META_CHARTS=1`：行动者网络、来源构成旭日图 · 假设推演报告：基线 vs 情景对比 |
+
+**导出。**
+- Markdown 下载。
+- 另一种语言的版本。
+- **PDF**：使用 pandoc + XeLaTeX 构建，自动探测 CJK 字体，并按内容缓存。报告未通过发布门时返回 `409`；PDF 导出被关闭或构建失败时返回 `503`。
+- **执行简报**与**摘要**：均为确定性生成，不调用 LLM。
+
+所有导出都只能经发布门获取。智能体日志（`/agent-log`、`/agent-log/stream`）遵循同样的规则：报告生成结束但未通过发布门时，其中的章节草稿正文、LLM 原始响应与 ReACT 思考会被隐去（`draft_withheld: true`）；报告仍在生成时，日志照常实时推送。
+
+### 运行结束之后：集成、账本与监测
+
+```mermaid
+flowchart LR
+    FJ[("forecast.json")]:::store --> LED[("预测账本<br/>ledger.jsonl")]:::store
+    FJ --> MON["判定监测<br/>手动触发或<br/>每 N 小时一次"]:::det
+    MON --> PT[("price_track.jsonl<br/>市场漂移")]:::store
+    MON --> RES[("resolutions.jsonl<br/>Brier 分数")]:::store
+    MON --> MR[("monitor_report.md")]:::store
+    LED -. "尚未自动关联" .-> CAL["后续预测中的<br/>historical_calibration"]:::det
+    RES -. "尚未自动关联" .-> CAL
+    SCH["scheduled_rerun.py<br/>命令行 · 默认关闭"]:::det --> NEW["新管线<br/>同一个问题"]:::proc --> DRIFT["与上次预测比较漂移<br/>→ webhook"]:::det
+    ENS["N_FORECAST_SEEDS > 1"]:::proc --> EF[("ensemble_forecast.json<br/>敏感性侧车")]:::store
+    classDef proc fill:#dbeafe,stroke:#2563eb,color:#0b1b3a
+    classDef det fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef store fill:#fef3c7,stroke:#b45309,color:#3b2303
+```
+
+- **多种子敏感性分析**（实验性，默认关闭）。设置 `N_FORECAST_SEEDS` > 1 即可启用。
+  - 系统会额外运行 N−1 条「准备 → 运行 → 报告」支线，种子为 `SIM_SEED + 7919·k`，同时最多运行 `ENSEMBLE_SEED_CONCURRENCY`（默认 2）条。每条支线都产出一份完整、经过门控的报告。
+  - 各支线的情景概率在对数几率空间中汇总，连同离散度与一致性评分写入 `ensemble_forecast.json`。
+  - 主报告与主预测不会被改写。
+- **预测账本。** 每一份定稿的预测都会把它的情景追加到 `uploads/pipelines/_forecast_ledger/ledger.jsonl`。
+- **判定监测**（`backend/scripts/resolution_monitor.py`）。针对最近的 10 份报告，它会：
+  - 重新报价已锚定的市场，写入 `price_track.jsonl`，并标记 5 个百分点及以上的变动；
+  - 把市场判定结果连同 Brier 分数记入 `resolutions.jsonl`；
+  - 列出需要人工判定的二元预测；
+  - 写出 `monitor_report.md`。
+
+  你可以通过**设置 → 维护**、`POST /api/research/resolution-monitor/run` 或命令行运行它，也可以设置 `RESOLUTION_MONITOR_AUTORUN_HOURS` 让它每 N 小时运行一次（0 = 关闭）。
+- **校准工具。**
+  - `backend/app/services/backtest.py` 提供 Brier 分数、对数损失、校准分箱与 Murphy 分解。
+  - `backend/scripts/golden_eval.py` 用已判定的「黄金问题」打分。
+  - 把判定结果回填进账本，是让后续报告显示 `historical_calibration` 的前提，但这一步**尚未自动化**。
+- **定时重跑**（`backend/scripts/scheduled_rerun.py daemon|tick`，默认关闭）。它会重跑保存过的问题，记录 15 个百分点及以上的概率漂移，并可 POST 到 webhook。`scheduled_rerun.py diff <pipe_a> <pipe_b>` 可以比较两次运行。
 
 ---
 
-## 功能特性
+## 可信度与质量保障
 
-- **一句话 → 完整预测**：单个问题端到端驱动「研究 → 模拟 → 报告」整条管线，无需在阶段间手动搬运中间产物。
-- **规模化自主深度研究**：**三条并行的多角度 Track-A 证据轨**执行联网搜索与全文抓取，将封存证据包交给一个全局综合命名空间。选择 `deep` 深度时，DeerFlow 会执行分阶段多轮协议（来源版图、原始证据、行动者/激励、矛盾/风险、预测输入、最终长文综合），使用一种有界广度机制（默认 harness 子代理，或桥接扇出）、**研究 judge→refine 环**、通用 **S1–S4 来源分级**与三角验证，再以**多段并行综合**产出 **1.5–2.2 万词**深度档案。
-- **预测市场锚定（Polymarket）**：研究阶段通过 LLM 生成的**市场化检索词**+**相关性门控**，从 Polymarket 官方 **Gamma + CLOB** API **无需 Key** 拉取隐含概率，注入为研究前**校准锚点**。报告阶段会逐条评估是否存在完全 / 近似判定等价的市场；只有接受的匹配才写入 `market_anchor` 并应用 10pp 分歧说明规则。已锚定预测可做**双时态重报价**（研究期价 vs 现价 + Δ）并渲染 **90 天价格历史**；没有合适市场或网络失败时会安全降级为不锚定。
-- **确定性报告可视化 + PDF**：一个免 LLM 的可视化层渲染**交互式 Plotly 图表**（HTML + PNG 成对输出，matplotlib 兜底）并内嵌进报告——默认槽位只放**预测数据**（情景概率含集成误差带、二元预测点图、模型 vs 市场哑铃、研究抽取的指标轨迹、跨版本预测修订、事件时间线、角色网络、世界态轨迹、市场价格历史），来源构成 sunburst、影响力/显著度代理值等元数据诊断图**默认关闭、仅可显式开启**；可按需 **PDF 导出**（pandoc / XeLaTeX，中文安全）。
-- **多种子敏感性侧车 & 自适应上下文**：显式开启后，额外的模拟+报告轨会汇总到 `ensemble_forecast.json`，但不改写已审计的主预测；上下文切片（前序章节、人设、世界简报）会**按提供方上下文窗口预算化**。
-- **DeerFlow harness 技能**：四个技能 —— `deep-research`、`actor-ontology-research`、`prediction-markets`、`forecast-visuals` —— 已部署并列入 DeerFlow 2.0 超级智能体 harness 白名单，再按工作流激活；并非每条证据轨都会调用全部技能。
-- **行动者深研 → 封存运行时角色**：结构化 `actor-intelligence/v1` 为每位真实世界行动者覆盖 17 个维度，逐条保留 claim 收据、精确来源区间、时间、认知状态、置信度、依赖、矛盾、限定条件、行为族覆盖与类型化缺口。同一批计划、投资、激励、当前行动、能力、约束、联盟、竞争者、可能行动与红线既进入研究报告，也进入该行动者的相关封存上下文。PREPARE 保持「公开 / 文献记录 / 行动者已知 / 推断 / 争议 / 未知」边界，将 `actor-role/v2` 编译为唯一行为权威，只从规范数据生成配置与公共世界，并同时封存平台档案字段及 Reddit 最终生效的 system message。这些下游门控均为确定性操作，不增加 LLM 调用族。详见[行动者智能架构](docs/architecture/ACTOR_INTELLIGENCE_ARCHITECTURE.md)。
-- **时序知识图谱（GraphRAG）**：研究成果灌入嵌入式 FalkorDB，向量由本地嵌入模型建立索引；这两部分不需要图数据库云账号或 Key。实体/关系的结构化抽取则复用应用 `LLM_PROVIDER`，可能走本机 CLI，也可能走需要 Key 的托管 API。
-- **日历时间模拟（以真实时间单位推演未来）**：预测判定日自动从提示词抽取（显式日期、「2030 年底」、「未来 18 个月」、裸年份 —— 中英文皆可），确定性时间线模块把基准日→判定日的跨度切分为每轮一个整日历单位（日 / 周 / 半月 / 月 / 季度 / 半年）、目标约 16 轮：判定日越远轮数越多；显式轮数上限只会**粗化时间粒度，绝不截断预测期**。每轮携带世界时钟、按日期注入的真实事件、主角级行动节奏，以及带基率熵底的世界态演化轨迹。
-- **多智能体群体模拟**：当前 v1 默认准入所有合格且身份匹配的 Tier-1/2 经调研行动者，受众填充数为 0；旧式 `ACTOR_CAST_MAX=20` 不会截断规范阵容。同一精确角色跨模拟 Twitter + Reddit 复用。每轮即一个日历单位，涌现动态作为明确标注的诊断材料保留，而不会直接调整概率。
-- **工具增强的预测综合**：ReportAgent 在支持时使用原生工具调用，其余路径回退 ReAct，同时检索知识图谱与带标签的模拟诊断后再撰写报告。
-- **统一仪表盘**：实时日志、研究档案、知识图谱、模拟信息流与预测报告，全部收纳在一个带吸顶六阶段时间线的视图里。
-- **运行时可切换 LLM 提供方**：在设置菜单中即可在本机 CLI 与托管 API 之间切换，对**新发起的运行**生效。内置**「测试连接」**按钮，一键验证 API Key（或本机 CLI）可用后再应用。
-- **可取消的运行**：运行中的管线可在任意阶段从 UI 中止 —— 研究子进程组被杀掉、OASIS 模拟被停止，被取消的运行会立即停止消耗配额。
-- **可恢复的运行**：失败或被取消的管线可以原地恢复（**继续**按钮，或 `POST /api/research/<id>/resume`）。已完成阶段只有在 manifest 哈希、schema、身份与该阶段健康检查全部重新通过后才会复用；无效或损坏的交付物会重新生成，显式 `force` 也可重新审视终态工作。其他情况下，管线从第一个仍需处理的阶段继续。
-- **秒级预检（fail-fast）**：`npm run doctor` 几秒内检查基础文件 / 目录、导入与提供方前置条件；`POST /api/research/run` 会在产生任何花费之前校验 Key / 凭据 / DeerFlow 检出。
-- **双语界面**：English + 中文，可在设置菜单一键切换。
-- **运行历史**：抽屉中列出历史管线运行，便于快速回看。
-- **为韧性而设计**：错误守卫、无工具的综合兜底网、随深度自适应且可抢救报告的研究看门狗、逐章优雅降级、原子化状态写入，以及跨重启的孤儿对账（包括滞留的研究进程）。
+整条管线的设计目标，是让一次「完成」的运行真正可信。这主要由四套机制支撑。
+
+### 1. 行动者真实感链条
+
+行动者的真实感不是靠更长的人格提示词，而是靠一条从研究一直延伸到模拟智能体的封存数据链：
+
+```mermaid
+flowchart TB
+    subgraph R1["研究 · 阶段 1"]
+        direction LR
+        R["Track B 研究<br/>每位行动者<br/>17 个维度"]:::llm --> AI[("actors.json<br/>actor-intelligence/v1")]:::store --> REC{{"父进程接收<br/>重新计算<br/>每一个封印"}}:::gate
+    end
+    subgraph R2["知识 · 阶段 2–3"]
+        direction LR
+        ON["本体只看到<br/>有界投影"]:::llm --> GS["图谱种子清单<br/>+ 严格回读"]:::det
+    end
+    subgraph R3["模拟 · 阶段 4–5"]
+        direction LR
+        CX["actor-context/v1<br/>认知分层<br/>+ 类型化缺口"]:::det --> RL["actor-role/v2<br/>确定性<br/>角色提示词"]:::det --> SC{{"按精确字节<br/>封存配置"}}:::gate --> RT{{"运行时字节<br/>重验 + 证明"}}:::gate
+    end
+    subgraph R4["报告 · 阶段 6"]
+        direction LR
+        RP["模拟只作为<br/>带标注的诊断被引用"]:::llm
+    end
+    R1 --> R2 --> R3 --> R4
+    classDef llm fill:#ede9fe,stroke:#7c3aed,color:#1e0b3a
+    classDef det fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef gate fill:#fee2e2,stroke:#dc2626,color:#450a0a
+    classDef store fill:#fef3c7,stroke:#b45309,color:#3b2303
+```
+
+| 边界 | 契约 | 强制执行的内容 |
+|---|---|---|
+| 研究 → 父进程 | `actor-intelligence/v1` | 每条主张都绑定一个已抓取的来源：收据、精确引文或区间，以及内容哈希。父进程会重新计算收据、主张 ID、五个行为族、覆盖率、阵容与血缘哈希。只要有一处不一致，运行就会在阶段 2 开始前失败。 |
+| 本体 | 有界投影 | 本体 LLM 只能看到规范的行动者 ID、别名、层级与绑定收据的主张，看不到自由格式的角色、立场或简介字段。 |
+| 图谱 | `actor-graph-seed-manifest/v1` + `actor-graph-seed-readback/v1` | 行动者及其关系在任何正文之前以确定性方式写入。正文可以丰富图谱，但不能替换它们。写入种子后、之后所有改动之后、以及每次复用图谱时都会检查。 |
+| 上下文 | `actor-context/v1` | 把公开、有文献记载、行动者私有、有争议、推断与未知的信息分开。只有公开且绑定来源的证据进入共享世界。 |
+| 角色 | `actor-role/v2` | 每个智能体行为的唯一来源，编译时不调用 LLM。 |
+| 运行时 | `simulation-config-manifest/v1` | 配置、人格档案、角色、上下文与阵容按精确字节封存。父进程与模拟子进程都会在第一次行动前重新校验；Reddit 最终的系统消息会被证明未经改动。 |
+| 报告 | `diagnostic_only` | 模拟输出只作为带标注的情景分析被引用，从不被当作证据，也不作为概率输入。 |
+
+以上这些下游检查全部是确定性的，不会增加任何 LLM 调用。没有封存契约的旧运行会走有文档说明的旧路径。完整规范见[行动者智能架构](docs/architecture/ACTOR_INTELLIGENCE_ARCHITECTURE.md)。
+
+### 2. 杜绝虚假成功
+
+管线只有通过**健康门**才会进入 `completed`。
+- **硬性失败**会让运行失败（仍可恢复）：
+  - 报告缺失，或所有章节都是占位符；
+  - `forecast.json` 中缺少情景或二元预测；
+  - 报告小于 2 KB；
+  - `final_audit.json` 缺失、已过期，或与磁盘上文件的 SHA-256 不一致。
+- **较轻的问题**只会把运行标记为*降级*，运行仍然完成：
+  - 模拟空转或被截断；
+  - 图谱中超过 30% 的分块被跳过；
+  - 剪枝失败；
+  - 模拟回写失败的内容进入了死信队列。
+
+更早的硬性门同样生效：研究契约、行动者接收，以及模拟的完成证据。
+
+### 3. 只发布通过审计的内容
+
+| 门控 | 检查内容 | 不通过时 |
+|---|---|---|
+| 研究报告评审 | 针对研究档案精确字节的 7 个质量维度 | 做一次定向修补；仍不通过则阶段失败 |
+| 行动者档案评审 + 覆盖审计 | 10 个维度，外加每位行动者 × 每个维度的主张与来源覆盖 | 阶段失败 |
+| 图谱 / 准备 / 运行封印 | 字节级精确的清单与回读 | 阶段失败 |
+| 发布稳定器 | 引用都能对应到来源；至少 75% 的主张有引用；没有来源被引用超过 20 次；引文逐字一致；lint 稳定 | 报告为 FAILED |
+| 终审 + 发布门 | 见下文 | 报告为 FAILED |
+| API 发布状态 | 每次读取时都重新核对 `full_report.md` 与 `forecast.json` 审计过的 SHA-256 哈希 | 返回 `409` 并附原因 |
+| 管线健康门 | 见[杜绝虚假成功](#2-杜绝虚假成功) | 管线失败或*降级* |
+
+终审与发布门检查：
+- **情景契约：** 2–5 个情景，概率之和为 1 ± 0.015，含一个剩余情景，并附判定标准；
+- **一致性：** 正文与 `forecast.json` 一致，每条二元预测都与情景一致；
+- **泄漏：** 模拟内容没有渗入事实性陈述，也没有语言混杂；
+- **完整性：** 没有失败的章节；
+- **市场锚点：** 每个市场锚点都完整无误。
+
+在默认的 `REPORT_PUBLISH_GATE=true` 下，除了硬性错误之外，*认知类*问题同样会阻止发布，例如引用覆盖率低于 75%。
+
+### 4. 由证据决定，模拟与市场只提供参考
+
+- **模拟。** 在默认的 `SIMULATION_FORECAST_EFFECT=diagnostic_only` 下，模拟与世界态的输出只以带标注的分析形式出现，永远不会进入情景骨架或二元预测的概率。
+- **市场。** 只有存在判定标准完全或近似等价的市场时，Polymarket 价格才会附到某条预测上。否则这条预测保持未锚定状态，不会拿一个问的其实是别的问题的市场来对比。
+- **不可信文本。** 网络内容与研究正文在进入任何下游模型调用之前都会被清洗，并包裹在明确的不可信数据分隔符中。测试套件会检查这些边界（`backend/tests/test_prompt_injection_boundaries.py`）。
+- **可复现性。** `run.json` 记录 git SHA、DeerFlow 版本以及每个阶段实际使用的模型。与安全相关的策略在运行准入时就固定下来。
+
+### 5. 数字与引用的核对（研究引擎 v3）
+
+- **数字。** 只有当一条研究发现中的每个数字都出现在它所引用的已抓取页面上时，它才会被标为 VERIFIED。百分比必须与百分比匹配，功率、能量与货币数值必须与同一单位类别匹配，因此"15%"不会因为某个日期里的 15 而被确认，"176 GW"也不会因为"176 页"而被确认。缺少数字支撑的发现标为 UNVERIFIED，永远不会被当作事实陈述。
+- **引用。** `[S#]` 标记与 `sources.json` 按位置对应；智能体只能引用它见过的来源，研究 lint 也绝不会删除、凭空生成或截短任何标记。
+- **如实降级。** 模板规划、确定性的兜底章节、被截断的回复与失败的抽取都会列入 `research_quality.degradation`；如果一次运行没有任何模型输出或没有任何有来源的证据，它会以可续跑的失败退出，而不是发布报告。
 
 ---
 
 ## 环境要求
 
-| 组件 | 要求 |
-|------|------|
-| **Node.js ≥ 20.19** | 前端（Vue 3 + Vite 7）需要。 |
-| **Python 3.12** | 后端需要 —— `backend/pyproject.toml` 要求 ≥3.12，而 `camel-ai`/`camel-oasis` 又限制上界，因此后端 venv 精确固定为 **3.12**（`backend/.python-version` + `uv sync --python 3.12`）。 |
-| **Python 3.12** | DeerFlow 深度研究引擎运行在**自己独立的 venv** 中（DeerFlow 2.0 固定使用 Python 3.12）。 |
-| **uv** | 两套 venv 共用的 Python 包管理器。安装：`curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| **git** | 普通 clone 必需，用于让 `setup.sh` 获取固定的 DeerFlow 上游版本。只有已存在装配运行时，或用户另行放置了本地 `deer-flow-2.0.0/` 源码包时才可不依赖 git。 |
-| **知识图谱** | 无需任何账号或 API Key。时序知识图谱由开源 **Graphiti** 在**嵌入式 FalkorDB**（`falkordblite`）上本地运行 —— 无需 Docker、无需服务进程。首次建图会自动下载一次本地嵌入模型（约 470MB）并缓存。 |
-| **LLM** | 默认使用本机 `claude` 或 `codex` CLI（无需 API Key）；`openai` / `kimi` / `minimax` / `deepseek` / `qwen` / `glm` 等 OpenAI 兼容 API 提供方需要 `LLM_API_KEY`。建图阶段复用同一个 `LLM_PROVIDER`，连免 Key 的 CLI 提供方也能用。 |
+| 要求 | 说明 |
+|---|---|
+| **macOS 或 Linux** | `setup.sh`、`npm start` 与各运维脚本都是 bash 脚本。`npm start`/`npm stop` 还需要 `curl`、`lsof`、`ps` 与 `tail`。 |
+| **Node.js ≥ 20.19** | 前端所需。Vite 7 需要 Node ^20.19 或 ≥ 22.12。 |
+| **Python 3.12** | 后端 venv 与 DeerFlow 的独立 venv 都固定为 3.12（`backend/.python-version`、`uv sync --python 3.12`），因为 `camel-ai`/`camel-oasis` 依赖栈限制了版本上限。 |
+| **[uv](https://docs.astral.sh/uv/)** | 管理两个 Python venv。安装：`curl -LsSf https://astral.sh/uv/install.sh \| sh`。 |
+| **git** | 供 `setup.sh` 拉取固定版本的上游 DeerFlow。若已有装配好的 `deer-flow/` 或本地 `deer-flow-2.0.0/` 源码包，则不需要。 |
+| **一个 LLM** | 已登录的本地 `claude` 或 `codex` CLI，或 `openai`、`kimi`、`minimax`、`deepseek`、`qwen`、`glm` 其中之一的 API Key。见[模型提供方](#模型提供方)。 |
+| **磁盘空间** | 需要几 GB，用于两个 venv、约 470 MB 的多语言向量模型（首次构建图谱时下载）以及运行产物。`npm run doctor -- --deep` 在剩余空间低于 2 GB 时报错，低于 5 GB 时警告。 |
+| **可选：搜索/抓取 Key** | `FIRECRAWL_API_KEY`（推荐）、`SERPER_API_KEY`、`TAVILY_API_KEY`、`EXA_API_KEY`。都不配置时，研究使用免 Key 的 DuckDuckGo 搜索与 Jina Reader。 |
+| **可选：pandoc + XeLaTeX** | PDF 导出需要。中文 PDF 还需要 CJK 字体，例如 Noto Sans CJK SC、Source Han Sans SC 或 PingFang SC。 |
 
 ---
 
-## 快速开始
+## 安装与配置
 
-三步走：**安装 → 配置 → 运行**。DeerFlow 位于仓库内由脚本生成且已被 gitignore 的 `deer-flow/` 目录，使 LangChain/LangGraph 依赖与后端隔离。若用户另行放置本地 2.0 源码包，`setup.sh` 可用它装配；普通 clone 则使用固定的上游版本。运行时 venv 位于 `deer-flow/backend/.venv`。
+步骤是：**安装 → 配置 → 运行**。
 
 ### 1. 安装
-
-**路径 A —— `setup.sh`（推荐）**。一个脚本自动完成全部安装：
 
 ```bash
 ./setup.sh
 ```
 
-它会检查前置条件，然后进入**交互式提供方选择器**：在本机 `claude` / `codex` CLI（零配置、无需 API Key——检测到的 CLI 会被预选为默认项）与六个托管 API 提供方（OpenAI 兼容 / Kimi / MiniMax / DeepSeek / Qwen / GLM）之间选择。选择 API 提供方时会提示你输入 **API Key**（静默输入、绝不回显），并用一次 1-token 补全**实时验证该 Key**。随后它会生成 `.env`、安装依赖并构建后端 venv，然后自动装配 DeerFlow：若存在用户另行放置的本地 `deer-flow-2.0.0/` 源码包就使用它；普通 clone 则从 <https://github.com/bytedance/deer-flow> 获取固定版本。脚本裁剪基础代码，应用 `deerflow_bridge/` 中受版本控制的代码 / 工具 / 技能 / 中间件覆盖层，并构建隔离 venv。重复运行会保留既有基础代码与 `deer-flow/config.yaml`，同时刷新适用的受版本控制集成代码；它不会静默替换基础代码或配置。
+`setup.sh` 自动完成全部安装：
 
-如需覆盖默认值，可通过环境变量：`DEERFLOW_DIR`（位置）、`DEERFLOW_REPO`（克隆地址）、`DEERFLOW_REF`（固定提交；设为 `=main` 可跟踪 HEAD）、`SETUP_NONINTERACTIVE=1`（跳过选择器、走自动探测——CI / 管道运行会自动如此）。它们由 `setup.sh` 从 **shell 环境**读取（不是 `.env` 配置项），例如 `DEERFLOW_REF=main ./setup.sh`。重复运行是幂等的：选择器默认选中你当前 `.env` 里的提供方，直接回车绝不会覆盖既有配置。
+1. **检查前置条件：** Node、uv、git 与 Python 3.12。
+2. **选择提供方。** 可选本地 `claude` / `codex` CLI（检测到的 CLI 会预先选中），或六个 API 提供方之一。
+   - 选 API 提供方时，它会请你输入 Key（输入不回显），并用一次单 token 补全**实时校验**。输错的 Key 几秒钟内就会暴露，而不是在运行数小时之后。
+   - 它会写入 `LLM_PROVIDER` 及对应的研究模型 `DEERFLOW_MODEL`。
+   - 重新运行时默认沿用当前的提供方，直接回车不会覆盖已有配置。
+3. **写入 `.env`。** `.env` 不存在时，从 `.env.example` 生成，并记录你的选择。
+4. **安装 npm 包**，包括根目录与前端。
+5. **构建后端 venv**，基于 Python 3.12，包含本地 Graphiti + FalkorDB 依赖栈。
+6. **把 DeerFlow 装配进 `deer-flow/`**（自动生成，已被 gitignore）：
+   - 若存在另行放置的本地 `deer-flow-2.0.0/` 源码包就使用它，否则按固定提交克隆 `bytedance/deer-flow`；
+   - 精简检出内容，并应用受版本控制的 `deerflow_bridge/` 覆盖层：驱动、工具、技能、中间件与提供方补丁；
+   - **仅在不存在时**才复制 `config.yaml`；
+   - 构建 DeerFlow 自己的 Python 3.12 venv。
 
-**手动装配：**请把 `setup.sh` 当作可执行规范。真实集成不只是复制研究驱动与一个技能，还会安装桥接工具、权威技能包、运行时校验器、模型 / 提供方适配以及中间件安全覆盖层；简短的 `cp` 清单并不等价。自定义打包环境时请阅读 [`setup.sh`](setup.sh) 与 [DeerFlow 2 架构图谱中的装配说明](docs/architecture/deerflow2/DEERFLOW_2_ARCHITECTURE.md#2-the-three-deerflow-2-layers-in-this-repository)。
+   重新运行时会保留已有的底座与 `config.yaml`，只刷新受版本控制的覆盖层。
+
+以下 shell 变量可以改变安装行为。它们不是 `.env` 的配置项。
+
+| 变量 | 作用 |
+|---|---|
+| `DEERFLOW_DIR` | 运行时的装配位置（默认 `./deer-flow`） |
+| `DEERFLOW_REPO` / `DEERFLOW_REF` | 上游仓库地址与提交，例如 `DEERFLOW_REF=main ./setup.sh` 跟踪上游最新版本 |
+| `SETUP_NONINTERACTIVE=1` | 跳过选择器，自动检测。CI 与管道运行会自动这样做。 |
+| `SETUP_DRF2=1` | 同时安装可选的 [DRF2](#deerflow-2-集成与-drf2-目标) 预览依赖 |
+
+如需手工打包自定义环境，请把 [`setup.sh`](setup.sh) 当作规范来看：这套集成不只是复制一个驱动文件那么简单。
 
 ### 2. 配置
 
-默认配置开箱即用 —— 知识图谱在本地运行，无需任何 Key。仅当选择了托管提供方时，才需在 `.env` 中填入相应的 API Key —— 详见下文的 [`.env` 配置参考](#env-配置参考)。如果使用 `claude` 或 `codex` CLI，确保所选 CLI 已登录即可（分别运行一次 `claude` 或 `codex`）。
+1. **凭据。** 使用 API 提供方时，在 `.env` 中填写它的 Key（见[配置（`.env`）](#配置env)）。使用 CLI 提供方时，确认 CLI 已登录：运行一次 `claude` 或 `codex` 即可。
+2. **检查环境：**
 
-然后体检**当前已装配的管线**——工具版本、两套 venv、DeerFlow 覆盖层与所选提供方的凭据：
+   ```bash
+   npm run doctor                     # 离线、免费、即时：工具、两个 venv、DeerFlow 覆盖层、.env、提供方前置条件
+   npm run doctor -- --deep           # 另加：一次真实的单 token 补全、向量模型缓存检查、磁盘空间检查
+   npm run doctor -- --deep --pull    # 另加：向量模型缺失时预先下载
+   ```
 
-```bash
-npm run doctor
-```
-
-逐项修复它报告的 ✗ 项并重新运行，直到输出 `All checks passed`。doctor 只是当前 `deer-flow/` 路径的基础依赖 / 文件存在 / 导入检查；它不证明覆盖层新鲜度或驱动 / 配置一致性，也不代表 DRF2 Runs API / MCP 已完成实跑切换。
+   修复所有标 ✗ 的项目，直到输出 `All checks passed`。退出码：0 表示可以运行，1 表示有阻塞问题，2 表示只有 `--deep` 探测给出了警告。
 
 ### 3. 运行
 
 ```bash
-npm start          # 后端 :5001 + 前端 :3000；实时日志 + 阶段标记
+npm start                 # 以脱离终端的方式启动后端 + 前端，等两者都能应答后打开浏览器，
+                          # 然后跟随两份日志，并在阶段变化时打印 ▶/✓/✕ 标记
+npm start -- --detach     # 同上，但就绪检查完成后立即返回
+npm start -- --no-open    # 不打开浏览器
+npm stop                  # 停止由 npm start 启动的服务
+npm run dev               # 另一种方式：在前台同时运行两者（Ctrl-C 同时停止）
 ```
 
-打开 **<http://localhost:3000/research>**，输入你的问题，点击 **Run research + simulate + forecast**。后端会在发起运行时对配置做预检（preflight）—— 配置有误会在几秒内被报告，而不是等一场 40 分钟的研究跑完才发现。
+在 `npm start` 期间按 Ctrl-C 只会停止日志流，服务会继续运行，直到你执行 `npm stop`。日志写入 `logs/backend.out.log` 与 `logs/frontend.out.log`。
 
-`npm start` 仍以可持久运行的方式启动两个服务，同时在当前终端跟随前后端日志，并在每个持久化工作流阶段变化时输出简洁的 `▶/✓/✕` 标记。按 **Ctrl-C 只停止日志流**；使用 `npm stop` 停止服务。若只需完成就绪检查后立即返回，可运行 `npm start -- --detach`。传统的前台开发启动方式 `npm run dev` 仍然保留。
-
----
-
-## 模型提供方与切换方式
-
-报告 + 模拟阶段共支持 8 个 `LLM_PROVIDER` 取值（均可在**运行时**切换，切换对**新发起的运行**生效）：
-
-| 提供方 | 说明 | 是否需要 API Key |
-|--------|------|------------------|
-| **`claude-cli`** | **默认**。使用本机 `claude` CLI / Claude Code 订阅。 | 否 |
-| `codex-cli` | 使用本机 `codex` CLI / Codex（ChatGPT）订阅。 | 否 |
-| `openai` | 任意 OpenAI 兼容 API（需 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL_NAME`）。 | 是 |
-| `kimi` | Kimi-for-coding（`api.kimi.com/coding`；OpenAI 兼容 + coding-agent User-Agent 网关）。 | 是 |
-| `minimax` | MiniMax-M3（`https://api.minimaxi.com/v1`；推理模型）。 | 是 |
-| `deepseek` | DeepSeek（`https://api.deepseek.com/v1`，默认模型 `deepseek-chat`；**研究阶段**改用旗舰 `deepseek-v4-pro`，百万 token 上下文）。 | 是 |
-| `qwen` | Qwen（`https://dashscope-intl.aliyuncs.com/compatible-mode/v1`，默认模型 `qwen-plus`；**研究阶段**改用旗舰 `qwen3.7-max`，百万 token 上下文）。 | 是 |
-| `glm` | GLM-4.6（`https://api.z.ai/api/paas/v4`，模型 `glm-4.6`）。 | 是 |
-
-> `openai` / `kimi` / `minimax` / `deepseek` / `qwen` / `glm` 都属于「OpenAI 兼容 API」提供方，均需 `LLM_API_KEY`；其中 `kimi` / `minimax` / `deepseek` / `qwen` / `glm` 已内置合理的默认 `LLM_BASE_URL` / `LLM_MODEL_NAME`，因此通常只需填入 `LLM_API_KEY`。
-
-深度研究阶段由 `DEERFLOW_MODEL` **单独**驱动（8 个取值）：
-
-| 研究模型 | 说明 |
+| 服务 | 地址 |
 |---|---|
-| **`claude`**（默认） | 使用 Claude Code OAuth —— 无需 API Key。`openai` 提供方映射到此配置。 |
-| **`codex`** | Codex（ChatGPT）OAuth —— 无需 API Key。本机只装了 `codex` CLI 时自动选用。 |
-| **`kimi`** | Kimi-for-coding。需要 `KIMI_API_KEY`。在设置中切换到 kimi 提供方时自动同步。 |
-| **`minimax`** | 需要 `MINIMAX_API_KEY`。 |
-| **`deepseek`** | 需要 `DEEPSEEK_API_KEY`。 |
-| **`qwen`** | 需要 `DASHSCOPE_API_KEY`。 |
-| **`glm`** | 需要 `ZHIPUAI_API_KEY`。 |
-| **`antigravity`** | 本地 OpenAI 兼容 VibeProxy 路由；使用已配置的本地代理与占位 Key，无需提供方 API Key 环境变量。 |
+| 前端（Vite 开发服务器） | <http://localhost:3000>，把 `/api` 代理到 `:5001` |
+| 后端（Flask） | <http://localhost:5001>，健康检查：`GET /health` |
+| 单端口模式 | 先执行 `npm run build`，再只启动后端（`npm run backend`），然后打开 <http://localhost:5001>。由 Flask 托管构建好的界面。 |
 
-> **关于深度研究阶段**：研究阶段通过 `DEERFLOW_MODEL` 独立于 `LLM_PROVIDER` 进行配置。它按提供方区分的 Key 会镜像给 deer-flow（如 `KIMI_API_KEY`、`MINIMAX_API_KEY`、`DEEPSEEK_API_KEY`、`DASHSCOPE_API_KEY`、`ZHIPUAI_API_KEY`），且仅当 `DEERFLOW_MODEL` 实际运行在该提供方上时才需要。默认 `claude` 使用 Claude Code OAuth；`antigravity` 使用已配置的本地代理；两者都不需要提供方 API Key 环境变量。`POST /api/research/run` 与 `deerflow_research.py` 都会预检所选模型的前置条件，缺失时快速失败并给出可操作的报错。
-
-### 四种切换方式
-
-1. **UI 设置菜单**（推荐）：在 `/research` 页面右上角的「设置」菜单中选择模型提供方（以及 EN / 中文 界面语言）。需要 Key 的提供方可在此填写 Key（及可选的 base URL / model 高级项）。**「测试连接」**按钮可在应用前先验证配置：API 提供方会向其端点发起一次真实的 1-token 补全（精确报出失败原因——401 Key 无效、404 端点/模型名错误、429 配额耗尽），CLI 提供方则检查 PATH 与版本。测试不会持久化任何配置。
-2. **`setup.sh`**：随时重新运行交互式选择器；它会把当前提供方作为默认选项。
-3. **`.env` 文件**：设置 `LLM_PROVIDER`（及按需设置 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL_NAME`）。
-4. **API**：`POST /api/settings/llm`，请求体为 `{provider, api_key?, base_url?, model?}`。这是运行时切换，更新进程内配置 + 环境变量（供 DeerFlow 子进程继承）并 upsert 进 `.env`；已在运行中的管线不受影响。可用 `GET /api/settings/llm` 读取当前设置；`POST /api/settings/llm/test` 接受相同请求体，只测试候选配置而**不持久化**。
+每次启动运行时，后端都会重新预检；配置错误几秒钟内就会报告，此时还没有消耗任何 token。
 
 ---
 
-## `.env` 配置参考
+## 模型提供方
 
-在项目根目录创建 `.env` 文件（`setup.sh` 会从 `.env.example` 自动生成）。
+两项设置决定使用哪些模型：
 
-### 关键配置
+- **`LLM_PROVIDER`** 驱动后端自己的 LLM 调用（本体、图谱抽取、事件设计、报告）以及模拟中的智能体。
+- **`DEERFLOW_MODEL`** 驱动研究阶段。它是单独配置的，但在设置中切换提供方时也会随之切换（见下文）。
 
-大多数行为旋钮都有 degrade-safe 默认值。先由 `setup.sh` 完成运行时 / 依赖装配，并确保所选提供方已安装且完成认证；此后 `.env` 通常只需补充该提供方适用的凭据或配置。下面是最值得了解的 ~15 个旋钮；完整清单见 [`.env.example`](.env.example)。
+| `LLM_PROVIDER` | 通道 | 默认端点 · 模型 | 对应的研究模型 | 凭据 |
+|---|---|---|---|---|
+| `claude-cli`（默认） | 本地 `claude` CLI（Claude Code 订阅） | — | `claude` | CLI 登录，无需 Key |
+| `codex-cli` | 本地 `codex` CLI（ChatGPT 订阅） | — | `codex` | CLI 登录，无需 Key |
+| `openai` | OpenAI 兼容 HTTP | `https://api.openai.com/v1` · `gpt-4o-mini` | `claude` | `LLM_API_KEY` |
+| `kimi` | OpenAI 兼容 HTTP（Kimi for Coding） | `https://api.kimi.com/coding/v1` · `kimi-k2.7` | `kimi` | `LLM_API_KEY`（同步到 `KIMI_API_KEY`） |
+| `minimax` | OpenAI 兼容 HTTP | `https://api.minimaxi.com/v1` · `MiniMax-M3` | `minimax` | `LLM_API_KEY`（同步到 `MINIMAX_API_KEY`） |
+| `deepseek` | OpenAI 兼容 HTTP | `https://api.deepseek.com/v1` · `deepseek-chat` | `deepseek` | `LLM_API_KEY`（同步到 `DEEPSEEK_API_KEY`） |
+| `qwen` | OpenAI 兼容 HTTP | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` · `qwen-plus` | `qwen` | `LLM_API_KEY`（同步到 `DASHSCOPE_API_KEY`） |
+| `glm` | OpenAI 兼容 HTTP | `https://api.z.ai/api/paas/v4` · `glm-4.6` | `glm` | `LLM_API_KEY`（同步到 `ZHIPUAI_API_KEY`） |
 
-| 旋钮 | 默认值 | 用途 |
+所有在线提供方都使用 `LLM_API_KEY`；`LLM_BASE_URL` 与 `LLM_MODEL_NAME` 可覆盖上表中的默认值。
+
+研究模型（`DEERFLOW_MODEL`）由 `deerflow_bridge/config.yaml` 中的配置段定义：
+
+| `DEERFLOW_MODEL` | 模型 | 凭据 |
 |---|---|---|
-| `LLM_PROVIDER` | `claude-cli` | 报告 + 模拟阶段的当前提供方（也驱动本地图谱抽取）。 |
-| `DEERFLOW_MODEL` | `claude` | 深度研究阶段的模型（独立于 `LLM_PROVIDER` 配置）。 |
-| `DEERFLOW_RESEARCH_DEPTH` | `deep` | `quick` / `standard` / `deep`；`deep` 跑完整多轮协议。 |
-| `RESEARCH_PARALLEL_TRACKS` | `3` | 并行多角度 Track-A 证据轨（基础证据 / 基率 / 激励-市场）。 |
-| `RESEARCH_GLOBAL_SYNTHESIS` | `true` | 多于一轨时，把三份 evidence-only 证据包与基础轨唯一的行动者档案一起封存进 manifest v3，再启动一个全新的全局综合 / 评审 / 抽取子进程。 |
-| `DEERFLOW_DUAL_TRACK` | `true` | 启用共享 Track-B 行动者平面。在默认三轨拓扑中，它只在广义基础轨运行一次，而不是每个证据角度运行一次。 |
-| `RESEARCH_MULTIPART_SYNTHESIS` | *（空 → 仅 deep）* | 大纲 → 并行分节撰写 → 缝合 → 长度门，产出 1.5–2.2 万词档案。 |
-| `RESEARCH_FANOUT_WIDTH` | `8` | 旧桥接 per-KIQ/per-actor 扇出宽度上限；harness delegation 接管广度面时被抑制。 |
-| `DEERFLOW_SUBAGENTS` / `RESEARCH_GLOBAL_SUBAGENT_CAP` | `true` / `9` | 在一个全局上限下启用 harness scoped workers；默认三轨推导为每轨至多三个子代理。 |
-| `RESEARCH_MCP_KG` | `true` | fork / continue / resume 时通过 stdio MCP 暴露已有后端图谱；首跑无 `graph_id` 时无操作。 |
-| `FIRECRAWL_API_KEY` | *（空）* | **推荐配置。**配置 [Firecrawl](https://firecrawl.dev) key 后：`web_fetch` 以 Firecrawl v2 `/scrape` 为**主抓**（托管渲染抓取，匿名 Jina 降为回退）；未配 `SERPER_API_KEY`/`TAVILY_API_KEY` 时 `web_search` 以 v2 `/search` 为后端（取代零 key 的社区 DDG）。留空 → 保持原 Jina/DDG 行为。花费护栏：`RESEARCH_FIRECRAWL_SEARCH_LIMIT`（默认 5）钳制单次搜索计费结果条数，`RESEARCH_FIRECRAWL_MAX_AGE_SECONDS`（默认 172800）让未变页面吃 Firecrawl 端缓存而非全新计费抓取，`RESEARCH_FIRECRAWL_MAX_FETCH_CALLS_PER_PROCESS`/`RESEARCH_FIRECRAWL_MAX_SEARCH_CALLS_PER_PROCESS`（400/300）为单研究子进程计费调用硬上限。 |
-| `PREDICTION_MARKETS_ENABLED` | `true` | 拉取无 Key 的 Polymarket 先验并注入为校准锚。 |
-| `FORECAST_MARKET_ANCHORING` | `true` | 先执行一次有界的模型辅助完全 / 近似判定等价评审，再以确定性代码校验 ID/排序并构造锚点；失败或未验证匹配会被删除，10pp 分歧说明规则只作用于已接受锚点。 |
-| `REPORT_VISUALIZER` | `true` | 把预测数据图表（Plotly HTML + PNG 成对输出，matplotlib 兜底）渲染进 `reports/{id}/charts/` + `viz_manifest.json`；来源构成、影响力代理值等管线元数据诊断图默认关闭、仅可显式开启。 |
-| `REPORT_PDF_EXPORT` | `true` | 启用 `/pdf` 端点（pandoc + XeLaTeX，中文安全）。 |
-| `REPORT_OUTPUT_LANGUAGE` | *（空 → 自动侦测）* | 强制报告语言（如 `English` / `Chinese`）；否则从 brief 侦测。 |
-| `SIM_TEMPORAL_MODE` | `calendar` | 日历时间模拟：每轮 = 研究基准日到问题判定日之间的一个整日历单位；`hours` 恢复旧的新闻周期模式。 |
-| `SIM_CALENDAR_TARGET_MAX_ROUNDS` | `36` | 日历单位选择的软轮数预算（目标约 16 轮，硬上限 48；显式 `max_rounds` 只粗化粒度、绝不截断判定期）。 |
-| `N_FORECAST_SEEDS` | `1` | 多种子敏感性侧车默认关闭；设为大于 1 时会运行 `N-1` 条额外 prepare→run→report 轨，并写独立的 `ensemble_forecast.json`，不改变封存的主预测。各种子的原始预测在各自发布门之前即可被接收，因此仍应视为实验性能力。 |
-| `ADAPTIVE_CONTEXT` | `true` | 按提供方上下文窗口预算化上下文切片（大窗口携带全量前文）。 |
-| `ACTOR_CAST_MAX` | `20` | 仅供无版本/旧式档案使用的兼容上限。当前 `actor-intelligence/v1` 阵容忽略该上限，并保留所有合格且身份匹配的 Tier-1/2 行动者；不匹配图实体和通用替身仍被排除。 |
-| `OASIS_SEMAPHORE` | `24` | 模拟期间 API 提供方的 LLM 并发上限（CLI 用 `OASIS_CLI_SEMAPHORE`，默认 `8`）。 |
+| `claude`（默认） | `claude-opus-4-8` | Claude Code OAuth 登录，无需 API Key |
+| `codex` | `gpt-5.5` | Codex / ChatGPT 登录 |
+| `kimi` | `kimi-k2.7` | `KIMI_API_KEY` |
+| `minimax` | `MiniMax-M3` | `MINIMAX_API_KEY` |
+| `deepseek` | `deepseek-v4-pro` | `DEEPSEEK_API_KEY` |
+| `qwen` | `qwen3.7-max` | `DASHSCOPE_API_KEY` |
+| `glm` | `glm-5.3` | `ZHIPUAI_API_KEY` |
+| `antigravity` | `gemini-3-flash-preview`，经由本地 OpenAI 兼容代理 | `LLM_FALLBACK_API_KEY` + `LLM_FALLBACK_BASE_URL`；需要本地代理正在运行 |
 
-下方的参考表按分组完整记录每个旋钮。
+`deer-flow/config.yaml` 只在不存在时才会生成，因此较早装配的运行时可能仍带着旧的配置段。升级后请与 `deerflow_bridge/config.yaml` 对照。你也可以为单次运行指定研究模型：在表单的**高级**区域中设置，或在 `POST /api/research/run` 的 `model` 字段中指定。
+
+### 如何切换
+
+- **设置菜单（最简单）。** 选择提供方，按需填写 Key、Base URL 与模型。
+  - **测试连接**在不保存任何内容的前提下验证你的选择。API 提供方会做一次真实的单 token 补全，能准确报告 401（Key 无效）、404（端点或模型错误）或 429（配额耗尽）；CLI 提供方会检查 PATH 与 `--version`。
+  - **应用**把选择保存到 `.env`。
+- **`setup.sh`。** 重新运行即可使用交互式选择器。
+- **`.env`。** 设置 `LLM_PROVIDER`、凭据与 `DEERFLOW_MODEL`。
+- **API。** `GET /api/settings/llm` 读取当前设置。`POST /api/settings/llm`（请求体为 `{provider, api_key?, base_url?, model?}`）执行切换。`POST /api/settings/llm/test`（请求体相同）只测试、不保存。
+
+> ⚠️ **切换立即生效，并且会同时改写 `DEERFLOW_MODEL`。** 它作用于切换之后启动的一切，包括正在进行中的运行的后续阶段。想让一次运行始终用同一个提供方，请在两次运行之间再切换。
+
+### 可靠性机制
+
+- **重试与超时。** HTTP 调用最多尝试 3 次，采用指数退避，遵循 `Retry-After`（最长 30 秒），每次调用 600 秒超时。CLI 调用 180 秒超时（`LLM_CLI_TIMEOUT`）。
+- **熔断器。** 针对内容过滤（422）与配额（429）错误的熔断器始终处于启用状态。
+- **故障转移（默认关闭）。** 设置 `LLM_FALLBACK_PROVIDER`；HTTP 类的备用提供方还需要 `LLM_FALLBACK_MODEL`。可选：`LLM_FALLBACK_BASE_URL`、`LLM_FALLBACK_API_KEY`。
+- **故障熔断。** 提供方连续失败 10 次后（`LLM_OUTAGE_HALT_CONSECUTIVE`），本次运行立即失败，而不是白白消耗时间。提供方恢复后即可恢复运行。
+- **`claude-cli` 隔离。** CLI 运行时会禁用你个人的 Claude Code hooks。环境中残留的 `ANTHROPIC_API_KEY` 会被自动剔除，使计费继续走订阅；若需保留，请设置 `LLM_CLI_USE_API_KEY=true`。
+- **关闭推理模式。** 对 kimi、minimax、deepseek、qwen 与 glm，后端会关闭推理（thinking）模式以节省 token。
+- **单次运行预算上限（默认关闭）。** `LLM_RUN_BUDGET_TOKENS` / `LLM_RUN_BUDGET_USD`。
+
+---
+
+## 配置（`.env`）
+
+- **位置。** `.env` 位于仓库根目录。`setup.sh` 会从 [`.env.example`](.env.example) 生成它；该文件记录了全部约 490 项设置，按主题分组，注释以中文为主。
+- **优先级。** `.env` 中的值会**覆盖** shell 中导出的同名环境变量。
+- **默认值可用。** 几乎每一项都有可用的默认值。通常你只需要配置一个提供方及其凭据。
+- **漂移检查。** `npm run check:env` 检查 `.env.example` 与 `backend/app/config.py` 是否一致。
+
+**提供方**
+
+| 设置 | 默认值 | 作用 |
+|---|---|---|
+| `LLM_PROVIDER` | `claude-cli` | 后端与模拟使用的提供方（见[模型提供方](#模型提供方)） |
+| `LLM_API_KEY` · `LLM_BASE_URL` · `LLM_MODEL_NAME` | — | 在线提供方的凭据与覆盖项 |
+| `DEERFLOW_MODEL` | `claude` | 研究模型 |
+| `LLM_FALLBACK_PROVIDER`（+ `_MODEL`、`_BASE_URL`、`_API_KEY`） | 未设置 | 一次性故障转移的备用提供方 |
+
+**研究（阶段 1）**
+
+| 设置 | 默认值 | 作用 |
+|---|---|---|
+| `DEERFLOW_RESEARCH_DEPTH` | `deep` | `quick` / `standard` / `deep`（表单可按次覆盖） |
+| `DEERFLOW_RESEARCH_LANGUAGE` | （自动） | 强制输出 `Chinese` 或 `English`；否则根据问题自动判断 |
+| `DEERFLOW_RESEARCH_TIMEOUT` | （随深度而定） | 看门狗时长覆盖值，单位为秒 |
+| `RESEARCH_ENGINE` | `v3` | `v3`（别名 `linear`）或 `legacy`（别名 `deerflow`、`agentic`） |
+| `RESEARCH_LINEAR_*` | （按深度） | v3 引擎的限额：问题数、智能体步数、搜索、抓取、并行数、时间、输出上限、GLM 推理强度（见 `.env.example`） |
+| `RESEARCH_PARALLEL_TRACKS` | `3` | 并行证据轨的数量（仅旧版引擎；v3 只跑一条轨） |
+| `RESEARCH_GLOBAL_SYNTHESIS` | `true` | 封存各证据轨，并只运行一次全局综合 |
+| `DEERFLOW_DUAL_TRACK` | `true` | 共享的 Track B 行动者平面 |
+| `DEERFLOW_SUBAGENTS` · `RESEARCH_GLOBAL_SUBAGENT_CAP` | `true` · `9` | harness 子智能体，以及整机上限 |
+| `RESEARCH_MCP_KG` | `true` | 让分叉/继续/恢复的研究可以访问已有的图谱 |
+| `FIRECRAWL_API_KEY` · `SERPER_API_KEY` · `TAVILY_API_KEY` · `EXA_API_KEY` | — | 搜索与抓取后端（推荐 Firecrawl） |
+| `PREDICTION_MARKETS_ENABLED` | `true` | 在研究与报告阶段免 Key 查询 Polymarket |
+
+**知识图谱（阶段 2–3）**
+
+| 设置 | 默认值 | 作用 |
+|---|---|---|
+| `GRAPH_BACKEND` | `auto` | `auto`：设置了 `FALKORDB_HOST` 时用外部 FalkorDB，否则用内嵌 `falkordblite`，再否则用 Kùzu |
+| `GRAPHITI_DATA_DIR` | `backend/uploads/graphiti_db` | 图数据库的存放位置 |
+| `GRAPHITI_EMBED_MODEL` · `GRAPHITI_EMBED_DIM` | `paraphrase-multilingual-MiniLM-L12-v2` · `384` | 本地向量模型；维度必须与模型一致 |
+| `GRAPHITI_RERANKER` | `rrf` | 或 `bge`，使用本地交叉编码器 |
+| `GRAPH_CHUNK_SOURCE` | `dossier_only` | `dossier_only` / `report_only` / `both` |
+| `GRAPH_MAX_ENTITIES` | `400` | 剪枝上限（不会低于阵容规模） |
+| `GRAPH_BUILD_COMMUNITIES` | `false` | 社区发现 |
+| `FALKORDB_HOST` · `FALKORDB_PORT` | 未设置 · `6379` | 使用外部 FalkorDB 服务器，代替内嵌实例 |
+
+**模拟（阶段 4–5）**
+
+| 设置 | 默认值 | 作用 |
+|---|---|---|
+| `SIM_TEMPORAL_MODE` | `calendar` | `calendar`，或旧式的 `hours` |
+| `SIM_CALENDAR_TARGET_MAX_ROUNDS` · `OASIS_DEFAULT_MAX_ROUNDS` | `36` · `36` | 选择日历单位时使用的回合预算 |
+| `ACTOR_CAST_MAX` | `20` | 研究阵容的最大规模 |
+| `SIM_AUDIENCE_AGENTS` | `0` | 额外按规则生成的受众智能体数量 |
+| `OASIS_SEMAPHORE` · `OASIS_CLI_SEMAPHORE` | `30`¹ · `8` | API / CLI 提供方下智能体并发 LLM 调用数，由两个平台平分 |
+| `SIMULATION_FORECAST_EFFECT` | `diagnostic_only` | 不让模拟影响概率 |
+| `SIM_GRAPH_FEEDBACK` | `false` | 把模拟活动写回图谱 |
+
+¹ 这是该变量未设置时，模拟子进程采用的默认值。
+
+**报告（阶段 6）**
+
+| 设置 | 默认值 | 作用 |
+|---|---|---|
+| `REPORT_OUTPUT_LANGUAGE` | （自动） | 强制报告语言；否则根据问题自动判断 |
+| `REPORT_BILINGUAL` | `true` | 同时生成另一种语言（中↔英）的版本 |
+| `REPORT_PUBLISH_GATE` | `true` | 审计发现任何问题都阻止发布 |
+| `FORECAST_MARKET_ANCHORING` | `true` | 把二元预测与判定标准等价的 Polymarket 市场匹配 |
+| `REPORT_VISUALIZER` | `true` | 渲染图表 |
+| `REPORT_PDF_EXPORT` | `true` | 启用 PDF 接口 |
+| `N_FORECAST_SEEDS` · `ENSEMBLE_SEED_CONCURRENCY` | `1` · `2` | 多种子敏感性侧车 |
+
+**服务与运维**
+
+| 设置 | 默认值 | 作用 |
+|---|---|---|
+| `FLASK_HOST` · `FLASK_PORT` | `127.0.0.1` · `5001` | 监听地址（见[安全](#安全)） |
+| `APP_API_TOKEN` | — | 非环回的 API 客户端须以 `X-API-Token` 提供 |
+| `FLASK_DEBUG` | `false` | Werkzeug 调试器与自动重载（重载会杀掉进行中的运行） |
+| `API_V1_ENABLED` | `false` | 挂载可选的 `/api/v1` 路由 |
+| `RESOLUTION_MONITOR_AUTORUN_HOURS` | `0` | 每 N 小时运行一次判定监测（0 = 关闭） |
+| `LLM_RUN_BUDGET_TOKENS` · `LLM_RUN_BUDGET_USD` | `0` | 单次运行的花费上限（0 = 关闭） |
+| `LOG_LEVEL` | `INFO` | `backend/logs/` 的日志级别（按天滚动，保留 30 天） |
+
+使用在线提供方时，一份最小的 `.env`：
 
 ```bash
-LLM_PROVIDER=claude-cli      # claude-cli | codex-cli | openai | kimi | minimax | deepseek | qwen | glm
-
-# 仅 openai / kimi / minimax / deepseek / qwen / glm 需要：
-LLM_API_KEY=...
-LLM_BASE_URL=...             # kimi/minimax/deepseek/qwen/glm 已内置合理默认值
-LLM_MODEL_NAME=...           # kimi/minimax/deepseek/qwen/glm 已内置合理默认值
-
-# 本地知识图谱 / Graphiti（可选 —— 全部有合理默认值，开箱即用、无需任何 Key）：
-GRAPH_BACKEND=auto               # auto（→ 嵌入式 FalkorDB）| falkordblite | kuzu | falkordb
-GRAPHITI_DATA_DIR=...            # 本地图数据持久化目录（默认 backend/uploads/graphiti_db）
-GRAPHITI_EMBED_MODEL=...         # 本地嵌入模型（默认 paraphrase-multilingual-MiniLM-L12-v2，384 维，中英文）
-GRAPHITI_EMBED_DIM=...           # 嵌入维度（需与模型匹配；默认 384）
-GRAPHITI_RERANKER=rrf            # 检索重排：rrf（默认）| bge（本地交叉编码器）
-FALKORDB_HOST=...                # 指向外部 FalkorDB 服务时使用（不设则用嵌入式）
-FALKORDB_PORT=...                # 同上
-
-# DeerFlow 深度研究（可选 —— 全部有合理默认值）：
-DEERFLOW_DIR=...                 # deer-flow 检出目录的路径（默认 ./deer-flow）
-DEERFLOW_PYTHON=...              # DeerFlow venv 的 python 解释器（自动探测）
-DEERFLOW_MODEL=...               # claude | minimax | deepseek | qwen | glm | codex | kimi | antigravity
-DEERFLOW_RESEARCH_DEPTH=...      # quick | standard | deep
-DEERFLOW_RESEARCH_LANGUAGE=...   # 默认留空：按 brief 自动检测；设 Chinese/English 可强制
-DEERFLOW_RESEARCH_TIMEOUT=...    # 研究看门狗超时覆盖；不设置 = 随深度自适应
-                                 #   （quick 900s / standard 7200s / deep 21600s；
-                                 #    开启双轨、子代理或桥接扇出时 ×1.5）
-
-# DeerFlow 按提供方区分的 Key（仅当 DEERFLOW_MODEL 运行在该提供方上时需要）：
-KIMI_API_KEY=...                 # DEERFLOW_MODEL=kimi
-MINIMAX_API_KEY=...              # DEERFLOW_MODEL=minimax
-DEEPSEEK_API_KEY=...             # DEERFLOW_MODEL=deepseek
-DASHSCOPE_API_KEY=...            # DEERFLOW_MODEL=qwen
-ZHIPUAI_API_KEY=...              # DEERFLOW_MODEL=glm
-
-# 调优（可选）：
-OASIS_SEMAPHORE=24               # 模拟期间 API 提供方的 LLM 并发调用上限
-OASIS_CLI_SEMAPHORE=8            # CLI 提供方的 LLM 并发调用上限
-ZEP_MAX_RETRIES=2                 # 本地图谱读取瞬态错误的重试次数（保留旧变量名）
-ZEP_RATE_LIMIT_MAX_SLEEP_SECONDS=90  # 重试之间的最大等待秒数（本地运行不再有限流）
-FLASK_DEBUG=false                # 仅限开发：暴露 Werkzeug 调试器 + 自动重载
+LLM_PROVIDER=deepseek
+LLM_API_KEY=sk-...
+DEERFLOW_MODEL=deepseek
+DEEPSEEK_API_KEY=sk-...          # 研究阶段读取的是提供方专属的变量
+FIRECRAWL_API_KEY=fc-...         # 可选，但推荐
 ```
 
-> `DEERFLOW_REPO` / `DEERFLOW_REF` 是 `setup.sh` 在安装时从 **shell** 环境读取的变量（例如 `DEERFLOW_REF=main ./setup.sh`），不是 `.env` 配置项。
+---
 
-| 变量 | 必填 | 用途 |
+## API 参考
+
+**约定**
+- **基础地址。** 后端监听 `http://localhost:5001`，所有产品路由都在 `/api` 之下。开发时也可以经 Vite 代理访问 `http://localhost:3000/api`。
+- **响应格式。** JSON 响应统一使用 `{ "success": bool, "data": …, "error": … }` 信封格式。
+- **健康检查。** `GET /health` 无需鉴权。
+- **鉴权。** 环回地址的客户端默认受信任，其他客户端需要提供 `X-API-Token`（见[安全](#安全)）。
+
+以下是仪表盘用到的路由，完整清单放在后面的折叠块中。
+
+**研究与管线（`/api/research`）**
+
+| 方法 | 路径 | 用途 |
 |---|---|---|
-| `LLM_PROVIDER` | 是 | 选择当前生效的提供方。取值之一：`claude-cli`、`codex-cli`、`openai`、`kimi`、`minimax`、`deepseek`、`qwen`、`glm`。建图阶段复用此提供方在本地抽取实体/关系，与具体提供方无关。 |
-| `LLM_API_KEY` | openai/kimi/minimax/deepseek/qwen/glm | 托管提供方的 API Key。 |
-| `LLM_BASE_URL` | openai/kimi/minimax/deepseek/qwen/glm | OpenAI 兼容端点的 Base URL（kimi/minimax/deepseek/qwen/glm 已内置默认值）。 |
-| `LLM_MODEL_NAME` | openai/kimi/minimax/deepseek/qwen/glm | 请求的模型名（kimi/minimax/deepseek/qwen/glm 已内置默认值）。 |
-| `GRAPH_BACKEND` | 否 | 本地知识图谱后端。默认 `auto`（→ 嵌入式 FalkorDB，无需 Docker / 服务进程）；其它取值 `falkordblite` / `kuzu` / `falkordb`。 |
-| `GRAPHITI_DATA_DIR` | 否 | 本地图数据的持久化目录（默认 `backend/uploads/graphiti_db`）。 |
-| `GRAPHITI_EMBED_MODEL` | 否 | 本地 sentence-transformers 嵌入模型（默认 `paraphrase-multilingual-MiniLM-L12-v2`，覆盖中英文；首次建图自动下载约 470MB 并缓存）。 |
-| `GRAPHITI_EMBED_DIM` | 否 | 嵌入向量维度（需与 `GRAPHITI_EMBED_MODEL` 匹配；默认 `384`）。 |
-| `GRAPHITI_RERANKER` | 否 | 检索结果重排方式：`rrf`（默认，倒数排名融合）或 `bge`（本地交叉编码器）。 |
-| `FALKORDB_HOST` / `FALKORDB_PORT` | 否 | 指向外部 FalkorDB 服务（而非嵌入式）时设置；不设置则使用嵌入式 `falkordblite`。 |
-| `DEERFLOW_DIR` | 否 | `deer-flow` 检出目录的位置（默认仓库内 `./deer-flow`）。 |
-| `DEERFLOW_PYTHON` | 否 | DeerFlow 隔离 venv 的 Python 解释器（自动探测 `deer-flow/backend/.venv`）。 |
-| `DEERFLOW_MODEL` | 否 | 研究模型：`claude`、`minimax`、`deepseek`、`qwen`、`glm`、`codex`、`kimi` 或 `antigravity`。 |
-| `KIMI_API_KEY` | DEERFLOW_MODEL=kimi | 研究阶段运行 Kimi-for-coding 时的 DeerFlow Key。 |
-| `MINIMAX_API_KEY` | DEERFLOW_MODEL=minimax | 研究阶段运行 MiniMax 时的 DeerFlow Key。 |
-| `DEEPSEEK_API_KEY` | DEERFLOW_MODEL=deepseek | 研究阶段运行 DeepSeek 时的 DeerFlow Key。 |
-| `DASHSCOPE_API_KEY` | DEERFLOW_MODEL=qwen | 研究阶段运行 Qwen 时的 DeerFlow Key。 |
-| `ZHIPUAI_API_KEY` | DEERFLOW_MODEL=glm | 研究阶段运行 GLM 时的 DeerFlow Key。 |
-| `DEERFLOW_RESEARCH_DEPTH` | 否 | 研究阶段的深度：`quick` / `standard` / `deep`。`deep` 会先运行多轮分主题调研，再做最终长文综合。 |
-| `DEERFLOW_RESEARCH_LANGUAGE` | 否 | 研究产出的语言。 |
-| `DEERFLOW_RESEARCH_TIMEOUT` | 否 | 研究看门狗超时覆盖（秒）。不设置时基础预算为 quick 900 / standard 7200 / deep 21600；开启双轨、子代理或桥接扇出时再乘 1.5。若看门狗触发时报告其实已经写完，该次运行会被抢救回来而不是丢弃。 |
-| `OASIS_SEMAPHORE` / `OASIS_CLI_SEMAPHORE` | 否 | 模拟期间的 LLM 并发调用上限（API 提供方 / CLI 提供方）。双平台并行运行时每个平台各分一半，因此该上限是真正的全局在途上限。 |
-| `ZEP_MAX_RETRIES` / `ZEP_RATE_LIMIT_MAX_SLEEP_SECONDS` | 否 | 本地图谱读取遇到瞬态错误时的重试预算与最大等待秒数（保留旧变量名；本地运行不再有 429 / 限流）。默认分别为 `2` 和 `90`。 |
-| `LLM_CLI_USE_API_KEY` | 否 | `claude-cli` 默认会从子进程环境中剥除多余的 `ANTHROPIC_API_KEY`（否则会悄悄把计费从订阅切到 API）。设为 `true` 可保留。 |
-| `FLASK_DEBUG` | 否 | 仅限开发（默认 `false`）：开启 Werkzeug 调试器 + 自动重载（重载会杀掉运行中的管线）。 |
+| `POST` | `/run` | 启动一条管线。请求体为 `{prompt, mode: full \| research_only, depth: quick \| standard \| deep, max_rounds?, language?: Chinese \| English \| auto, model?, project_name?}`。`language` 也接受别名 `research_language`，`model` 可为本次运行覆盖研究模型。返回 `{pipeline_id, task_id, mode, status}`；预检发现问题时返回 `400` 并附 `preflight_errors`。 |
+| `GET` | `/preflight?mode=` | 不启动运行，只检查是否就绪。加上 `format=full&deep=1` 可获得详细报告。 |
+| `GET` | `/status/<id>` | 管线状态，外加 `live` 块：已用时间、预计剩余、心跳、所属进程是否存活、花费与预算 |
+| `GET` | `/<id>/progress?lines=&scope=full\|tail` | 合并后的研究控制台日志 |
+| `GET` | `/list` | 运行历史 |
+| `POST` | `/<id>/cancel` · `/<id>/resume`（`{force?}`）· `/<id>/continue` | 生命周期控制（见[管线生命周期](#管线生命周期状态与恢复)） |
+| `POST` | `/<id>/scenario` | 从已完成的图谱分叉出一次假设推演。仅限 API，界面上没有对应按钮。 |
+| `DELETE` | `/<id>` | 删除一次已结束的运行。运行仍在进行，或有分叉依赖它时返回 `409`（除非带 `?force=true`）。 |
+| `POST` | `/clean` | 批量删除失败与已取消的运行（请求体 `{statuses?}`） |
+| `GET` · `PUT` | `/<id>/dossier` | 读取研究档案、行动者、来源、时间线、数值与争议主张、预测市场与图表，以及 `sealed`。`PUT` 用于编辑档案（仅限已完成的仅研究运行，或图谱阶段尚未完成的失败/已取消运行）。已封存的研究只读：`PUT` 返回 `409` 与 `sealed: true`。 |
+| `POST` · `GET` | `/<id>/dossier/translations/<lang>` | 发起或读取研究报告经审计的中↔英翻译 |
+| `GET` | `/<id>/dossier/pdf` | 研究报告的 PDF |
+| `GET` | `/<id>/artifact/<name>` | 按名称获取某个阶段产物 |
+| `POST` | `/resolution-monitor/run` | 启动一轮判定监测。返回 `202`；已有一轮在运行时返回 `409`。 |
 
----
+**知识图谱（`/api/graph`）**
 
-## API 一览
-
-所有产品 API 接口均挂载于 `/api` 前缀之下；无需鉴权的服务健康探针是 `GET /health`。
-
-### 研究 / 管线（`/api/research`）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `POST` | `/research/run` | 触发一次运行。请求体 `{prompt, mode(full\|research_only), depth(quick\|standard\|deep), max_rounds?, project_name?, language?, research_language?, model?}` → `{pipeline_id}`。`language` 是规范字段，`research_language` 是兼容别名；`model` 可逐次覆盖 DeerFlow 模型。路由会先做整套配置预检，有问题时返回可操作的 `400`。 |
-| `POST` | `/research/<id>/cancel` | **取消一条运行中的管线** —— 杀掉研究子进程组 / 停止 OASIS 模拟；其余阶段在下一个检查点退出。 |
-| `POST` | `/research/<id>/resume` | **恢复失败/被取消的管线** —— 先做配置预检，再重新校验已完成阶段的 manifest / 健康状态，只复用健康交付物，并从第一个仍需处理的阶段继续。 |
-| `DELETE` | `/research/<id>` | **删除一条已结束的运行记录**（含 handoff 产物）。运行中的管线须先取消（返回 `409`）。 |
-| `POST` | `/research/clean` | **批量清理失败/已取消的运行**。请求体 `{statuses?: ["failed","cancelled"]}`；`running`/`completed` 永不触碰。 |
-| `GET` | `/research/status/<id>` | 查询管线状态（终态：`completed` / `failed` / `cancelled`）。 |
-| `GET` | `/research/list` | 列出历史管线。 |
-| `GET` | `/research/<id>/dossier` | 获取研究档案。 |
-| `GET` | `/research/<id>/progress` | 获取研究进度日志（DeerFlow 控制台）。 |
-
-### 知识图谱（`/api/graph`）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/graph/data/<graph_id>` | 返回图谱数据 `{nodes, edges}`。 |
-
-### 群体模拟（`/api/simulation`）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/simulation/<sim_id>/profiles/realtime?platform=` | 实时人格列表（按平台过滤）。 |
-| `GET` | `/simulation/<sim_id>/posts?platform=` | 帖子流（按平台过滤）。 |
-| `GET` | `/simulation/<sim_id>/agent-stats` | 智能体统计。 |
-
-### 报告（`/api/report`）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/report/<report_id>` | 返回报告元数据、翻译状态与发布状态；只有当前报告可发布时才返回正文，否则 `markdown_content` 为空并附门控原因。 |
-| `GET` | `/report/<report_id>/download` | 下载报告 **Markdown**（`full_report.md`）。 |
-| `GET` | `/report/<report_id>/full_report.<lang>.md` | 下载已经生成的语言变体 Markdown 侧车。 |
-| `POST` | `/report/<report_id>/translations/<lang>` | 启动或复用一项受发布门约束的翻译任务。 |
-| `GET` | `/report/<report_id>/translations/<lang>/status` | 读取持久化翻译/审计状态及实时任务进度。 |
-| `GET` | `/report/<report_id>/pdf` | 受发布门约束的 **PDF 导出**：经 pandoc + XeLaTeX 构建（中文安全、`--toc`；失败回退 PyMuPDF），以 Markdown、审计、引用、图表、字体与渲染器配置做内容寻址。功能关闭或构建失败返回 `503`；报告不存在返回 `404`。 |
-| `GET` | `/report/<report_id>/charts/<file>` | 服务受发布门约束且后缀为 `.png`、`.svg`、`.jpg`、`.jpeg`、`.gif`、`.webp` 或 `.html` 的可视化产物；防目录穿越。 |
-| `GET` | `/report/<report_id>/viz-manifest` | **可视化清单** → `[{path, type, source, caption, placement_hint}]`（无图表时返回空列表）。 |
-
-### 导出与可视化
-
-报告阶段会在 `full_report.md` 之外同时产出 **charts/** 目录（交互式 Plotly `.html` + `.png` 成对文件）与描述工件的 **`viz_manifest.json`**。主报告以选定输出语言撰写，并经纯度扫描保持单一语言。在默认 `REPORT_BILINGUAL=true` 下，符合语言条件且已定稿的英文/中文主报告会在主审计之后自动尝试生成另一种语言的 `full_report.<lang>.md` 侧车，即使主审计尚未达到可发布状态也会尝试。变体对外暴露仍要求主报告门和变体门同时通过。后续手动生成端点更严格，要求主报告已经可发布；读取只返回经审计且与发布状态绑定的侧车。Markdown 与 PDF 读取都可选择已有语言变体。图表生成、正文注入、PDF 导出与双语生成仍可分别配置。
-
-### 设置（`/api/settings`）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/settings/llm` | 当前提供方 + 受支持提供方清单。 |
-| `POST` | `/settings/llm` | 运行时切换提供方 `{provider, api_key?, base_url?, model?}`（对新发起的运行生效）。 |
-| `POST` | `/settings/llm/test` | 测试一个提供方配置（同样的请求体），**不持久化任何配置**。API 提供方：真实的 1-token 补全（返回 ok/延迟/模型，或失败原因——401 Key 无效、404 端点/模型错误、429 配额）。CLI 提供方：PATH + 版本检查。 |
-
----
-
-## 前端统一面板
-
-前端主视图为 `/research`：一个**组合式仪表盘**，把提示词输入 + 参数、一条吸顶的六阶段时间线，以及一组标签页整合在同一页面。此外还有一个运行历史抽屉与一个设置菜单（模型提供方 + 一键「测试连接」+ EN/中文 语言切换）。界面为双语（English + 中文）。
-
-**标签页：**
-
-| 标签页 | 内容 |
-|--------|------|
-| **实时日志 · Live log** | DeerFlow 控制台的实时输出。 |
-| **研究档案 · Dossier** | 渲染后的 Markdown 研究档案 + 关键行动者卡片 + 来源列表。 |
-| **知识图谱 · Knowledge graph** | 基于 d3 的力导向图（force graph）。 |
-| **群体模拟 · Simulation** | 人格列表 + Twitter/Reddit 信息流 + 统计。 |
-| **预测报告 · Forecast** | 渲染后的预测报告。 |
-
----
-
-## 关键工程要点
-
-- **基于文件的交接契约**：DeerFlow 与后端之间通过运行在子进程之上的「基于文件的交接契约」通信，实现依赖隔离。
-- **结构化行动者智能端到端贯通**：DeerFlow 2 的最终 `actors.json` 携带 `actor-intelligence/v1`：17 个带来源/时间/认知状态的维度、明确缺口与生产者哈希。本体只接收有界投影，图谱和 PREPARE 则保留完整权威产物。PREPARE 生成哈希绑定的 `actor-context/v1`、经过消毒的 `actor-role/v2`、有界配置投影与平台角色 manifest。运行器在启动前校验阵容、报告、actors、上下文、角色片段、完整档案字段和平台 manifest；删除状态或把计数伪装为零也不能把已研究角色降级成通用人格。旧 `actor-role/v1` 只能经逐字节、无上下文的封存兼容路径恢复。
-- **研究产物错误守卫**：一道错误守卫会防止「LLM 报错 / 降级提示」被误当作真实研究报告（快速失败，不污染下游）。
-- **无工具的「综合兜底网」**：若研究 Agent 在动笔前就把步数预算耗在工具调用上，或在最终写作时遭遇提供方的结构性错误，系统会直接基于已采集（已检查点保存）的研究材料，用一次干净的单轮调用综合产出报告。
-- **报告 Agent 逐章优雅降级**：单个章节的 LLM 错误只会变成该章节的占位内容，其余章节仍可产出，得到一份部分完成的报告。
-- **健壮的状态与进程治理**：原子化状态写入 + 进程组清理 + 重启后的孤儿进程对账。
-
----
-
-## 架构与最新增强
-
-上文的六阶段管线是骨架；近期的版本既把它的每一个关节都加固了一遍，**又**把研究与报告阶段做了一次阶跃式扩容。以下改动是架构性的而非零敲碎打 —— 有些改变的是系统*拒绝做什么*（伪造成功、编造叙事、对冲预测），有些则成倍放大它能做什么（1.5–2.2 万词档案、并行研究、内嵌图表、市场锚定）。后端测试套件现已覆盖 **1074 个测试**。
-
-### 规模化深度研究
-
-- **多段并行合成**：不再用单次补全（其长度就是档案的物理天花板），合成阶段先推导大纲，**并行**撰写各分节（各带关键词分片上下文），确定性缝合，并在 **1.5–2.2 万词**总档案边界内，为大纲、分节初稿、截断重试、扩写和摘要共用一个输出 token 账本（`RESEARCH_MULTIPART_SYNTHESIS`、`RESEARCH_SYNTHESIS_MIN_WORDS`、`RESEARCH_SYNTHESIS_MAX_WORDS`）。深研合成失败会保留证据并失败关闭，不会把 pass notes 冒充报告。
-- **并行证据、共享行动者智能**：默认编排器同时运行**三个 evidence-only Track-A** 研究子进程——基础证据、基率/参照类、激励/反面/市场——并只让广义基础轨运行 Track B。它把三份证据包与一份来源绑定的行动者档案封入 manifest v3，再启动一个全新的全局 synthesis/judge/extraction 子进程（`RESEARCH_GLOBAL_SYNTHESIS=true`）；默认路径既不合并三份可发布报告，也不产生三套竞争阵容。关闭全局综合才进入旧的兼容合并路径。
-- **单一有界广度面**：开场 scope pass 后默认由 harness 原生 scoped 子代理承担广度；只要 harness 已接管，桥接层的 per-KIQ/per-actor 扇出（`RESEARCH_DEEP_FANOUT`、`RESEARCH_FANOUT_WIDTH`，宽度至多 8）就会被抑制。默认三条外轨共享全局子代理上限 9，推导为每轨至多 3 个；深度协议 phase 2–4 仍可并行（`RESEARCH_PARALLEL_PHASES`）。
-- **两道独立 judge→refine 门**：共享 Track-B 档案先执行十维评审，再通过强制的「阵容 × 17 维」已抓取来源覆盖审计；随后，统一 Track-A 报告再执行自己的报告评审/精修。行动者最终明确 `FAIL` 或覆盖审计失败时，不得为报告或模拟提供种子（`RESEARCH_REPORT_JUDGE`、`ACTOR_DOSSIER_JUDGE`）。
-- **通用来源分级 + 三角验证**：每个已抓取来源都拿到 S1–S4 分级（域名表与模型都命不中时给基线分级），最强的单源载重声明在最终合成前跑一次专门的三角验证 pass（`RESEARCH_UNIVERSAL_TIERING`、`RESEARCH_TRIANGULATION_TOPUP`）。
-
-### 预测市场锚定（Polymarket，无需 Key）
-
-- **无 Key 的 Gamma + CLOB**：隐含概率从 Polymarket 官方 **Gamma** API 与 **CLOB** 价格历史端点拉取，**无需 API Key**；任何网络失败都 degrade-safe（一行日志后跳过）（`PREDICTION_MARKETS_ENABLED`）。
-- **LLM 市场化检索词 + 相关性门**：检索短语由 LLM 从真实预测生成（而非朴素关键词切片），候选市场经**相关性打分**并门控，把离题市场剔除，而非只按成交量排序（`PREDICTION_MARKETS_MIN_RELEVANCE`）。
-- **研究前先验 → 合格预测锚定**：市场快照注入研究作为校准锚；报告阶段会对每条二元预测执行一次有界的模型辅助完全 / 近似判定等价评审，随后由确定性代码校验 ID/排序并构造锚点。失败或未验证的匹配会在最终输出前删除。只有接受的匹配才携带丰富的 `market_anchor`，且已锚定预测的模型 vs 市场差距 **> 10pp** 时必须引用市场或论证分歧（`FORECAST_MARKET_ANCHORING`、`FORECAST_MARKET_DIVERGENCE_REVISION`）。无市场、开关关闭、相关性 / 匹配失败、仅松散匹配或网络故障时保持不锚定，而不会虚构可比性。
-- **双时态重报价 + 价格历史**：快照在报告阶段重报价（研究期价 → 现价 + Δ）（`PREDICTION_MARKETS_REQUOTE`），并为被锚定市场抓取 **90 天价格历史**序列渲染成图（`PREDICTION_MARKETS_PRICE_HISTORY`）。
-
-### 报告可视化、PDF 与语言
-
-- **确定性可视化层**：`report_visualizer.py` 渲染**交互式 Plotly 图表**（HTML + kaleido PNG 成对输出，matplotlib 兜底），**不产生任何 LLM 调用**，落 `reports/{id}/charts/` + `viz_manifest.json`；图表注入 `full_report.md` 的 Visual Annex（`REPORT_VISUALIZER`、`REPORT_VIZ_*`、`REPORT_VISUALIZATIONS`）。默认槽位**只放预测数据**：情景概率（含集成误差带）、二元预测点图、模型 vs 市场哑铃、研究抽取的**指标轨迹**（成本曲线、部署路径）、跨版本预测修订、事件时间线、角色网络、世界态轨迹与市场价格历史；来源构成 sunburst、影响力/显著度代理值、争议声量权重、关键词 tornado 等元数据诊断图**一律降级为显式开启**，绝不挤占预测图表槽位。
-- **PDF 导出**：`GET /api/report/{id}/pdf` 经 **pandoc + XeLaTeX** 构建受发布门约束的 PDF（图表路径绝对化、`CJKmainfont=PingFang SC`、`--toc`；失败回退 PyMuPDF）。复用键覆盖 Markdown、审计、引用、图表、字体与渲染器配置，不只依赖报告 mtime（`REPORT_PDF_EXPORT`）。
-- **原生语言报告（EN ↔ ZH）**：报告以 brief 的语言**原生撰写** —— 自动侦测，或经 `REPORT_OUTPUT_LANGUAGE` 强制 —— 写完后一道**语言纯度扫描**内联翻译零散的 CJK / 非 CJK 片段，使成稿保持单一语言（`REPORT_LANGUAGE_PURITY`）。仪表盘 UI 与演示站均为双语（English + 中文）。
-
-### 多种子敏感性与上下文预算
-
-- **并行种子敏感性侧车**：当 `N_FORECAST_SEEDS > 1` 时，同一知识图谱会供 `N-1` 条额外 prepare→模拟→报告轨使用；有效的原始输出汇总到独立的 `ensemble_forecast.json`，不会改写已封存的主报告、主预测、图表或审计。额外轨在隔离的模拟目录中以 1–3 的有界并发运行（默认 2），时序位于主报告之后、最终主流程健康门之前（`N_FORECAST_SEEDS`、`ENSEMBLE_SEED_CONCURRENCY`）。
-- **自适应上下文预算**：上下文切片（前序章节、人设、世界简报）按当前提供方的上下文窗口定尺 —— 大窗口（MiniMax 512K、DeepSeek 1M）携带全量前文，小窗口守下限（`ADAPTIVE_CONTEXT`）。
-
-### 管线加固 —— 杜绝虚假成功
-
-- **完成度健康门**：管线只有在每个阶段的交付物真实存在并通过校验时才会报告 `completed` —— 一次没有真实模拟或报告却勉强跑到终点的运行，再也无法伪装成成功。
-- **引用溯源墙**：报告中的引语必须能回溯到真实的调研或模拟产物；无法溯源的引语会被拒绝，而不是照单放行。
-- **诚实的模拟记账**：运行摘要将智能体的**自发（organic）**动作与**种子（seed）**动作分开统计，并记录有活动的轮次数，因此「空心」模拟（智能体在场却沉默）会被检测并标记，而不是靠数字注水蒙混过关。
-- **反编造**：ReportAgent 绝不为一场死掉的模拟编造叙事：若模拟没有产生自发信号，报告会如实说明并仅基于调研推理，而不是虚构「智能体们逐渐达成共识……」之类的文字。
-- **逐章重试 + 提前中止**：失败的报告章节会带退避地重试；系统性失败会让报告提前中止，而不是在注定失败的运行上继续烧配额。
-- **经交付物校验的报告复用**：恢复运行时，只有在已写出的报告的交付物重新通过校验后才会被复用 —— 半成品或占位的报告会被重新生成，而不是被盲目信任。
-
-### 模拟真实感
-
-- **主角色阵容纪律（actor-cast discipline）**：当前 `actor-intelligence/v1` 以封存的研究阵容为身份权威；所有合格且身份匹配的 Tier-1/2 行动者都会进入模拟，即使 `ACTOR_CAST_MAX` 为 `0`、很小、默认值或很大也不会被截断。不匹配图实体、非模拟行动者和通用人格替身不得进入。可配置上限与「全被阻挡」回退只保留在明确的无版本兼容路径；免 LLM 受众填充另行配置且默认关闭。
-- **证据驱动的种子帖与有界回退**：当前 v1 的共享事件/话题生成只能看到明确公开且绑定来源的世界证据；不得读取原始报告/图谱正文、行动者局部知识、分析师推断、争议/未知行或私有缺口审计。无版本旧路径保留原有 LLM/回退行为。空心运行检测仍是最终护栏，而不是保证每位行动者都会发帖。
-- **有认知边界的世界简报**：每位行动者只接收其精确封存角色与明确公开的世界/日历上下文。某行动者的局部来源事实只留给其本人；其他行动者的私有知识、建模者推断、争议/未知证据、原始报告/图谱正文、研究查询与 receipt ID 都不会被提升为共享运行时知识。
-- **来源绑定的确定性角色**：当前 v1 直接从可见性许可的规范主张编译 `actor-role/v2` 与每行动者配置，缺证据时保持中性/未知并失败闭合，不再调用旧式八字段人格设计 LLM。旧式无版本档案才保留原兼容提炼路径。
-- **运行时控制**：可配置的模拟起始时刻、免模型的推荐系统默认值（推荐循环内不再产生额外 LLM 调用），以及带开关的模拟中途检查点 / 恢复能力（用于长时间运行）。
-
-### 预测质量
-
-- **二元预测契约**：每份报告的 Part 1 必须包含 **10 条以上二元预测**，每条一句话、附概率与客观判定标准（指标 · 阈值 · 日期 · 数据源）—— 由结构强制约束，而非仅靠文风要求。
-- **逆向重构 + 信念门**：默认情景主干会接受一次全局红队 / 自我批判；二元预测集合则接受逆向框架与离散度 / 信念门，把全体约 50% 的对冲式分布推向明确判断。这是集合 / 主干级控制，并非对每条二元预测分别调用一次“最强反方”测试。
-- **模拟诊断不形成循环概率权威**：默认 `SIMULATION_FORECAST_EFFECT=diagnostic_only` 下，模拟与 WorldState 只能进入明确标注来源的分析文字，不能进入概率生成。除非未来另有经过验证并显式启用的晋升政策，否则证据主干与市场校准的预测路径仍是概率权威。
-- **正文 ↔ `forecast.json` 一致性审计**：机器可读的预测对象与书面报告会交叉核对，杜绝数字写着 82% 而正文却在论证 60% 的情况。
-- **桥水式三部分骨架**：Part 1（预测表）/ Part 2（框架与整体综合）/ Part 3（分析附录）—— 即特色运行「碰撞的十年」所采用的结构。
-- **预测市场锚定**：只有通过完全 / 近似判定等价匹配并被接受的预测，才会对照 **Polymarket**（无 Key 的 Gamma + CLOB）校准 —— 详见上文 [预测市场锚定](#预测市场锚定polymarket无需-key)。10pp 分歧说明规则只适用于这些已锚定预测；市场缺失、关闭、不适用或不可用时，预测保持不锚定。
-
-### 提供方架构
-
-提供方由配置决定。随仓库发布的默认值是：报告/模拟使用 `claude-cli`，DeerFlow 研究使用 `claude`；MiniMax-M3 可选，但不是默认。只有显式设置 `LLM_FALLBACK_PROVIDER` 和/或单独的 DeerFlow fallback 配置后，故障转移才启用。启用后，422 内容过滤与 429 配额失败会进入熔断/故障转移处理，而不会被静默当作成功。CLI 提供方以钩子隔离方式运行，用户本机的 Claude/Codex 钩子不会干扰管线子进程。
-
-### 知识图谱
-
-本地 Graphiti + FalkorDB 图谱新增了**因果边**（随标准本体一同抽取的带类型因果关系）、**多跳因果遍历**（供 ReportAgent 使用的因果路径 / n 跳子图查询与级联追溯）、**中心性先验**（为人格遴选中的行动者显著度排序提供输入）与**语义查询压缩**（让图检索调用保持在 token 预算之内）。此外，默认关闭的「模拟→图谱」反馈写入器带有独立死信队列：失败的反馈活动写入会被保留，并可由运维脚本手动重放。普通研究 / Graphiti 情节灌入使用自己的有界重试与可见记账路径，不属于该死信队列。
-
----
-
-## DeerFlow 2 集成模式与 DRF2 目标
-
-上文当前实际运行的管线**不是原版 DeerFlow**：Stage 1 已经在隔离子进程证据轨中，通过内嵌客户端使用 DeerFlow 2.0 harness。`drf2/` 是更广泛、可选且**尚未切换**的架构目标：它计划把更多知识形态的编排迁入原生 DeerFlow 2 技能、自定义智能体、Runs API 与 MCP 工具，同时把确定性质量门留在 LLM 之外。
-
-当前源码中同时存在两种不同的目标路径：
-
-| 目标路径 | 形态 | 当前源码状态 |
+| 方法 | 路径 | 用途 |
 |---|---|---|
-| **对话原生** | DeerFlow 2 lead + `researcher`、`ontology-builder`、`sim-configurer`、`forecaster` 四个自定义智能体；KG 与模拟以 stdio MCP 服务暴露 | 已配置，但不是当前仪表盘的权威管线 |
-| **确定性驱动器** | 轻量六阶段驱动器；五个技能驱动阶段共用一个持久 Runs API 线程；manifest、哈希、质量门、恢复决策、卡死处理与顺序多种子聚合均在模型之外确定性执行 | 已离线测试且尚未切换；实跑所需的驱动器 / 模拟 / KG 契约不完整，恢复与集成质量门仍有已记录缺口 |
+| `GET` | `/data/<graph_id>?top_k=&slim=&full=` | 节点与边，附计数、截断标记与布局坐标 |
+| `GET` | `/data/<graph_id>/node/<uuid>` · `/edge/<uuid>` · `/neighbors/<uuid>?depth=` | 单个节点或边的详情，以及邻域展开（深度 ≤ 3） |
 
-当前切换边界包括：随附配置缺少 `driver.harness.base_url`；驱动器使用临时 HTTP 模拟客户端，而实现的模拟服务是 stdio MCP；KG 工具面没有建图 / 默认图选择或应用本体的操作；部署配置含本机绝对路径；也没有端到端实跑证据。驱动器还没有持久化正在执行的 gateway `run_id`，因此自身进程重启后无法重连；空 manifest 会允许仅依赖状态的复用，不检查预期文件；顺序集成种子也漏掉了单运行路径的必需 `run_summary.json` 与二元信念质量门。`SETUP_DRF2=1 ./setup.sh` 只安装可选预览依赖并打印命令，不会替换当前工作管线。详见 [`drf2/README.md`](drf2/README.md) 与[基于源码的架构对比](docs/architecture/deerflow2/DEERFLOW_2_ARCHITECTURE.md#17-drf2-pre-cutover-target-in-detail)。
+**模拟（`/api/simulation`）**
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| `GET` | `/<sim_id>/run-status` | 实时运行状态 |
+| `GET` | `/<sim_id>/profiles/realtime?platform=` | 智能体档案 |
+| `GET` | `/<sim_id>/posts?platform=&limit=` · `/<sim_id>/comments` | 模拟的帖子与回复 |
+| `GET` | `/<sim_id>/agent-stats` | 智能体汇总统计 |
+| `GET` | `/<sim_id>/actions` · `/<sim_id>/timeline` · `/<sim_id>/trajectory` | 行为日志、回合时间线与世界态轨迹 |
+
+**报告（`/api/report`）**
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| `GET` | `/<report_id>` | 元数据、翻译状态与发布状态。只有报告可发布时才包含 Markdown 正文。 |
+| `GET` | `/<report_id>/sections-partial` | 已完成的章节（仪表盘在生成期间轮询它） |
+| `GET` | `/<report_id>/forecast` | `forecast.json`（受发布门约束） |
+| `GET` | `/<report_id>/download` · `/<report_id>/full_report.<lang>.md` | 主报告或某个语言版本的 Markdown（受发布门约束） |
+| `POST` · `GET` | `/<report_id>/translations/<lang>` · `…/status` | 生成语言版本（需要主报告可发布），或查询其状态 |
+| `GET` | `/<report_id>/pdf?lang=` | 报告的 PDF。不可发布时返回 `409`；导出被关闭或失败时返回 `503`。 |
+| `GET` | `/<report_id>/charts/<file>` · `/<report_id>/viz-manifest` | 图表资源（在沙箱中提供）及其清单 |
+| `GET` | `/<report_id>/exec-brief` · `/exec-brief.pdf` · `/digest` | 执行简报与摘要（确定性生成，受发布门约束） |
+
+**设置（`/api/settings`）：** `GET /llm` · `POST /llm` · `POST /llm/test`（见[如何切换](#如何切换)）。
+
+<details>
+<summary><b>全部路由</b>（102 个蓝图路由 + <code>/health</code>）</summary>
+
+| 蓝图 | 上文之外的其余路由 |
+|---|---|
+| `/api/graph`（14） | `GET /project/<id>` · `GET /project/list` · `DELETE /project/<id>` · `POST /project/<id>/reset` · `POST /ontology/generate` · `POST /build` · `GET /task/<task_id>` · `GET /tasks` · `POST /gc` · `DELETE /delete/<graph_id>` |
+| `/api/simulation`（32） | `GET /entities/<graph_id>` · `GET /entities/<graph_id>/<uuid>` · `GET /entities/<graph_id>/by-type/<type>` · `POST /create` · `POST /prepare` · `POST /prepare/status` · `GET /<sim_id>` · `GET /list` · `GET /history` · `GET /<sim_id>/profiles` · `GET /<sim_id>/config` · `GET /<sim_id>/config/realtime` · `GET /<sim_id>/config/download` · `GET /script/<name>/download` · `POST /generate-profiles` · `POST /start` · `POST /stop` · `GET /<sim_id>/run-status/detail` · `POST /interview` · `POST /interview/batch` · `POST /interview/all` · `POST /interview/history` · `POST /env-status` · `POST /close-env` |
+| `/api/report`（29） | `POST /generate` · `POST /generate/status` · `GET /by-simulation/<sim_id>` · `GET /list` · `DELETE /<report_id>` · `POST /chat` · `GET /<report_id>/progress` · `GET /<report_id>/sections` · `GET /<report_id>/section/<n>` · `GET /check/<sim_id>` · `GET /<report_id>/agent-log` · `GET /<report_id>/agent-log/stream` · `GET /<report_id>/console-log` · `GET /<report_id>/console-log/stream` · `POST /tools/search` · `POST /tools/statistics` |
+| `/api/v1`（6，仅当 `API_V1_ENABLED=true`） | `POST /run` · `GET /status/<pipeline_id>` · `GET /list` · `GET /dossier/<pipeline_id>` · `GET /forecast/<report_id>` · `POST /resolve/<report_id>` |
+
+许多额外的图谱、模拟与报告路由早于统一仪表盘出现，至今仍可用于脚本调用。处理函数位于 [`backend/app/api/`](backend/app/api/)。
+
+</details>
+
+---
+
+## 仪表盘
+
+前端是一个在 `/` 提供服务的 Vue 3 单一视图（`/research` 会重定向到这里）。它有两种状态：
+- **未选择运行时。** 显示提问表单：示例问题、**完整管线**或**仅研究**、深度、回合上限，以及**高级**选项（研究语言、研究模型）。开始之前，一条预检横幅会提示配置问题。
+- **运行进行中：**
+  - 页头显示管线 ID、状态标题与**运行体征**条（已用时间、预计剩余、存活状态、token 与费用、预算）；
+  - 原始问题；
+  - 一条吸顶的**阶段时间线**（01–06），显示每个阶段的状态、子进度、最新消息与耗时；
+  - 五个标签页，各自在对应产物生成后解锁。
+
+```mermaid
+flowchart LR
+    subgraph SPA["frontend/src · 单一视图，位于 /"]
+        RV["ResearchView<br/>表单 · 运行页头 · 标签页"]:::proc
+        TL["StageTimeline<br/>RunVitals"]:::proc
+        LOG["实时日志<br/>ResearchConsole"]:::proc
+        DOS["研究档案<br/>DossierViewer"]:::proc
+        GRA["知识图谱<br/>GraphPanel（d3）"]:::proc
+        SIM["群体模拟<br/>SimulationView"]:::proc
+        FOR["预测报告<br/>ForecastReport +<br/>BinaryForecastTable"]:::proc
+        SET["SettingsMenu ·<br/>PipelineHistory"]:::proc
+    end
+    subgraph BE["Flask 蓝图 · /api"]
+        BR["/research"]:::proc
+        BG["/graph"]:::proc
+        BS["/simulation"]:::proc
+        BP["/report"]:::proc
+        BX["/settings"]:::proc
+    end
+    RV -- "run · status · progress<br/>cancel · resume · continue" --> BR
+    RV --> TL
+    RV --> LOG
+    DOS -- "dossier · translations · PDF" --> BR
+    GRA -- "data · node · edge · neighbors" --> BG
+    SIM -- "profiles · posts · comments<br/>agent-stats · run-status" --> BS
+    FOR -- "report · sections · forecast<br/>viz-manifest · charts · PDF" --> BP
+    SET -- "llm · llm/test" --> BX
+    SET -- "list · delete · clean<br/>resolution-monitor/run" --> BR
+    classDef proc fill:#dbeafe,stroke:#2563eb,color:#0b1b3a
+```
+
+| 标签页 | 展示内容 |
+|---|---|
+| **实时日志** | DeerFlow 研究控制台，按颜色区分，带「全部 / 工具 / 结果 / 错误」过滤与工具调用计数 |
+| **研究档案** | 研究报告，可切换原文与译文，可下载 PDF。子标签：**研究报告**、**关键参与者**、**局势简报**、**关系网**、**预测市场**（有数据时）、**信息来源**。 |
+| **知识图谱** | 以交互式 d3 力导向布局展示知识图谱：搜索、基于 `valid_at` 的时间滑块、类型图例，以及标记研究所得行动者的圆环。还有节点/边详情、聚焦模式（≤ 400 个节点，点击展开）与「加载完整图谱」。 |
+| **群体模拟** | Twitter/Reddit 切换、回合与状态卡片、人格卡片，以及带嵌套回复的信息流。模拟运行期间每 10 秒刷新一次。 |
+| **预测报告** | 各章节完成后陆续出现。全部完成后，标签页显示：<br/>• **目录**；<br/>• **预测仪表盘**：情景概率、置信度、集成一致性与市场偏离；<br/>• **二元预测**表：概率与区间、置信度、市场锚点及其差值 Δ；<br/>• **图表**画廊：PNG 图片与可交互版本；<br/>• 语言切换；<br/>• Markdown/PDF 下载与「复制 Markdown」。 |
+
+**操作：**
+- **取消**：运行进行中时显示。
+- **继续**（即恢复）：运行失败或被取消后显示。
+- **继续完整管线 →**：已完成的仅研究运行显示此按钮。
+- **＋ 新建**：回到表单。
+- **历史推演**（右侧抽屉）：列出过往运行，每条都可取消或删除，另有**清理失败**。
+- **设置**：界面语言、带**测试连接**的提供方切换，以及**维护 → 市场判定监测**。
+- 界面支持中英双语，可通过导航栏的切换按钮或在设置中切换；选择会保存在浏览器中。
+
+**实时更新。**
+- 仪表盘只使用轮询，没有 WebSocket，也没有 SSE。
+- 主循环轮询 `status` + `progress`：起始间隔 2.5 秒，状态无变化时逐步放慢到 12 秒，标签页隐藏时暂停。
+- 群体模拟标签页每 10 秒刷新一次；预测报告标签页在生成期间每 3 秒刷新一次。
+- 连续 4 次轮询失败后，会显示「连接中断」横幅，同时继续重试。
+
+---
+
+## 运维与工具
+
+**npm 脚本（在仓库根目录运行）**
+
+| 命令 | 作用 |
+|---|---|
+| `npm run setup` · `npm run setup:backend` · `npm run setup:all` | 安装 npm 依赖 · 构建后端 venv（`uv sync --python 3.12`）· 两者都做 |
+| `npm run doctor` | 环境健康检查（见[配置](#2-配置)） |
+| `npm run smoke` | 离线冒烟测试，用桩 LLM 检查各阶段之间的契约，约 60 秒以内。设置 `SMOKE_GRAPH=1` 可使用真实的本地图谱，`SMOKE_FULL=1` 可额外运行一个 OASIS 微型模拟。 |
+| `npm start` · `npm stop` | 以脱离终端的方式启动服务并跟随日志 · 停止服务 |
+| `npm run dev` | 在前台同时运行后端 + 前端 |
+| `npm run backend` · `npm run frontend` | 只启动其中一个服务 |
+| `npm run build` | 把 SPA 构建到 `frontend/dist`（之后由 Flask 托管） |
+| `npm test` | 后端测试套件（`cd backend && uv run pytest`） |
+| `npm run lint` | 对 `backend/app` 运行 `ruff check` |
+| `npm run check:env` | 检查 `.env.example` 与 `config.py` 是否一致 |
+
+**辅助脚本**
+
+| 脚本 | 作用 |
+|---|---|
+| `scripts/watch_pipeline_progress.py` | 从持久化状态文件流式输出阶段变化（`npm start` 会用到） |
+| `scripts/salvage_orphaned_pipelines.py` | 把报告其实已完整写出的失败运行改标为 `completed`（*降级*）。默认只演练，加 `--apply` 才真正写入。 |
+| `scripts/setup_port80.sh` | 仅限 macOS：设置环回 pf 重定向，使 `http://localhost/` 指向 `:5001` 上的后端 |
+| `backend/scripts/resolution_monitor.py` | 重新报价已锚定的市场、记录判定结果、写出 `monitor_report.md` |
+| `backend/scripts/scheduled_rerun.py` | 定时重跑已保存的问题并检测漂移；`diff <pipe_a> <pipe_b>` 可以比较两次运行 |
+| `backend/scripts/batch_runs.py` | 一组相关问题：研究、本体与图谱只运行一次，再为每个问题分叉出一条「准备/运行/报告」支线 |
+| `backend/scripts/model_comparison.py` | 用多个提供方回答同一个问题，并排比较 |
+| `backend/scripts/forecast_tools.py` | 对 `forecast.json` 文件做集成汇总与回测 |
+| `backend/scripts/golden_eval.py` · `eval_forecast_quality.py` | 黄金问题评分 · 评分量规式 LLM 裁判（需显式开启） |
+| `backend/scripts/export_demo_site_data.py` | 把运行导出到 `docs/demos/<run>/`，供演示站使用 |
+| `backend/scripts/backfill_report_visuals.py` | 离线为已有报告重建图表与引用（加 `--apply` 才写入） |
+| `backend/scripts/replay_zep_dead_letters.py` | 重放失败的模拟 → 图谱回写 |
+| `backend/scripts/disk_usage_report.py` · `reclaim_report_space.py` | 只读的磁盘占用报告 · 回收旧的报告备份（默认只演练） |
+| `backend/scripts/preflight.py` · `check_env_drift.py` | `doctor --deep` 背后的预检引擎 · `.env` 漂移检查 |
+
+后端脚本请在 `backend/` 下运行：`uv run python scripts/<name>.py --help`。
+
+**演示站。** 静态站点位于 `docs/`（`index.html`、`demo.html`），由 GitHub Pages 提供服务。每次运行都是 `docs/demos/<key>/` 下的一个数据包：`meta.json`、`report.md`、`dossier.md`、`actors.json`、`sources.json`、`ontology.json`、`graph.json`、`forum.json`、`research_log.txt`，以及可选的 `charts/`。新增一次运行：
+1. 用 `export_demo_site_data.py` 导出它；
+2. 在 `docs/demo.html` 的 `RUN_KEYS` 中登记它的键；
+3. 在 `docs/i18n.js` 中加上标题；
+4. 在 `docs/index.html` 中加一张卡片。
+
+---
+
+## 安全
+
+- **默认只监听环回地址。** Flask 绑定在 `127.0.0.1`。
+  - 环回地址的客户端受信任。
+  - 其他客户端调用 `/api/*` 时：未设置 `APP_API_TOKEN` 则返回 `403`；已设置但没有携带匹配的 `X-API-Token` 请求头则返回 `401`（常数时间比较）。
+- **CORS** 仅允许 `localhost`/`127.0.0.1` 的 3000 与 5001 端口（`APP_CORS_ORIGINS`）。
+- **不泄漏堆栈与凭据。**
+  - 除非 `FLASK_DEBUG=true`，错误响应不包含 Python 堆栈。
+  - 请求日志会对凭据脱敏，`run.json` 不保存任何凭据。
+  - 提供方设置在写入 `.env` 前会被清洗。
+  - 自定义 Base URL 会被校验；设置 `APP_BLOCK_PRIVATE_URLS=true` 还会拒绝私有地址与环回地址。
+- **开发服务器同样只监听环回地址。** `npm start` 与 `npm run dev` 把 Vite 绑定在 `localhost:3000`。它的 `/api` 代理经由环回地址访问 Flask，并在 `X-Forwarded-For` 中转发浏览器的地址。只有当所有转发地址（`X-Forwarded-For`、`X-Real-IP`、`Forwarded`）也都是环回地址时，Flask 才信任这个环回调用方；替其他机器代理过来的请求一律按远程请求处理。转发头只会降低信任，绝不会提升信任。
+  - 若要让网络中的其他设备访问开发服务器，请用 `FRONTEND_HOST=0.0.0.0 npm run dev` 启动（这是 shell 变量，Vite 不会读取根目录的 `.env`）。此时远程浏览器访问 `/api` 会得到 `403`，除非配置了 `APP_API_TOKEN`；而 SPA 不会发送 token，因此真正的远程使用请在前面放一个负责鉴权的反向代理。
+- **有意对外暴露后端时。** 请同时设置 `FLASK_HOST=0.0.0.0` **和** `APP_API_TOKEN`。SPA 不会发送 token，因此需要浏览器访问时，请在前面放一个负责鉴权的反向代理。
+
+---
+
+## 开发与测试
+
+| 内容 | 命令 | 说明 |
+|---|---|---|
+| 后端测试 | `npm test` | 约 4,300 个离线测试，分布在约 170 个模块中。不访问网络、不消耗 LLM。需要先构建后端 venv（`npm run setup:backend`）。 |
+| 前端单元测试 | `cd frontend && npm run test:unit` | 基于 `node:test`，覆盖 `src/utils` 与开发服务器配置（72 个测试） |
+| Lint | `npm run lint` | Ruff。CI 还会检查 `backend/scripts` 与 `deerflow_bridge`。 |
+| 配置漂移 | `npm run check:env` | `config.py` 读取的每一项设置都必须在 `.env.example` 中有说明 |
+| 阶段契约冒烟测试 | `npm run smoke` | 桩 LLM、确定性、零成本 |
+| 预测质量评估 | `backend/scripts/golden_eval.py`、`eval_forecast_quality.py` | 评估预测质量本身，而不只是代码形态 |
+
+**CI**（`.github/workflows/ci.yml`）在推送到 `main` 与提交 Pull Request 时运行三个离线任务：
+- Ruff lint 加上环境变量漂移门；
+- 后端测试套件；
+- 对全部后端与桥接代码做字节编译检查。
+
+CI 不运行前端单元测试。
+
+DeerFlow 覆盖层有自己的测试，位于 `deerflow_bridge/patches/tests/`，需要针对装配好的 `deer-flow/` 运行时运行。
+
+---
+
+## DeerFlow 2 集成与 DRF2 目标
+
+线上管线的阶段 1 已经在使用 **DeerFlow 2** harness：在隔离的子进程中通过内嵌的 `DeerFlowClient` 调用，而不是原始的 DeerFlow 1.x 研究图。仓库中有三层与 DeerFlow 2 相关的代码：
+
+| 层 | 是什么 | 状态 |
+|---|---|---|
+| `deer-flow-2.0.0/` | 可选的本地 DeerFlow 2.0 源码包，存在时作为全新装配的底座 | 已被 gitignore 的本地参考。普通克隆会改用上游提交 `799bef6d…`，该提交早于公开的 `v2.0.0` 标签。 |
+| `deerflow_bridge/` → `deer-flow/` | 受版本控制的驱动、工具、技能、补丁与配置，装配进一个隔离的运行时 | **当前线上的阶段 1 路径** |
+| `drf2/` | 自定义智能体与技能、知识图谱与模拟的 MCP 服务，以及一个确定性的 Runs API 驱动器 | 可选，**尚未切换**（还不是线上路径） |
+
+```mermaid
+flowchart LR
+    UP["上游 DeerFlow 2<br/>固定提交 799bef6d"]:::ext --> SETUP
+    LOCAL["可选的本地源码包<br/>deer-flow-2.0.0/"]:::ext -.-> SETUP
+    BR["deerflow_bridge/ · 受版本控制<br/>驱动 · 工具 · 技能<br/>补丁 · config.yaml"]:::proc --> SETUP
+    SETUP["setup.sh<br/>精简底座 · 应用覆盖层<br/>Python 3.12 venv"]:::det --> RT[("deer-flow/ · 已忽略<br/>装配好的运行时")]:::store
+    ORCH["PipelineOrchestrator"]:::proc -- "每次运行前同步<br/>有变化的桥接文件" --> RT
+    ORCH -- "启动研究<br/>子进程" --> RT
+    DRF2["drf2/ · 可选<br/>尚未切换的设计"]:::ext -.-> NOTE["不在线上<br/>路径中"]:::io
+    classDef io fill:#f1f5f9,stroke:#475569,color:#0f172a
+    classDef proc fill:#dbeafe,stroke:#2563eb,color:#0b1b3a
+    classDef det fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef store fill:#fef3c7,stroke:#b45309,color:#3b2303
+    classDef ext fill:#f3f4f6,stroke:#6b7280,color:#111827,stroke-dasharray: 4 3
+```
+
+```text
+当前     Flask 编排器 → 隔离的研究子进程 → 内嵌 DeerFlowClient
+         → 主模型 ↔ 工具（搜索 · 抓取 · 市场 · 可选的知识图谱 MCP）→ 限定范围的子智能体
+         → 证据包 → 全局综合 / 评审 / 抽取 → 封存的研究契约
+
+原生     客户端 → DeerFlow 2 FastAPI 网关（threads / runs）→ RunManager → 同一套智能体装配
+         → 检查点 / 存储 → SSE 回放            （上游已实现；线上管线未使用）
+
+目标 A   聊天原生的主智能体 + 4 个自定义智能体 ↔ 知识图谱与模拟的 stdio MCP      （尚未切换）
+目标 B   确定性驱动器 → 在持久的 Runs API 线程上执行斜杠技能                    （尚未切换）
+```
+
+**DRF2 是什么。** DRF2 会把更多知识型工作交给原生 DeerFlow 2，同时把确定性门控保留在模型之外：
+- 方法论变成 7 个自定义技能：`deep-research`、`actor-ontology-research`、`ontology-generation`、`kg-construction`、`simulation-design`、`forecast-report`、`prediction-markets`；
+- 图谱与模拟变成 stdio MCP 引擎；
+- 一个轻量驱动器负责清单、门控、恢复与多种子运行。
+
+**离线试用。** 先执行 `SETUP_DRF2=1 ./setup.sh` 安装预览依赖，然后运行：
+
+```bash
+PYTHONPATH=. backend/.venv/bin/python -m drf2.driver.cli run --question "…" --dry-run --base-dir /tmp/drf2
+```
+
+它的测试：`cd backend && uv run pytest tests/test_drf2_*.py`。
+
+**切换前的已知缺口：**
+- 随附的配置中没有 `driver:` 段，所以真实运行会以「driver.harness.base_url missing」退出。
+- 驱动器的 HTTP 模拟客户端没有对应的服务端；模拟引擎只支持 stdio。
+- 没有任何知识图谱工具能创建或选择图谱，也不能应用本体。
+- 配置中的路径与具体机器绑定。
+- 驱动器不保存进行中的 run ID，因此重启后无法重新接上。
+- 空清单也会被允许复用。
+- 顺序执行的集成会跳过两个单次运行才有的门控。
+- 目前还没有真实的端到端验证。
+
+详见 [`drf2/README.md`](drf2/README.md) 与 [DeerFlow 2 图谱 §17](docs/architecture/deerflow2/DEERFLOW_2_ARCHITECTURE.md#17-drf2-pre-cutover-target-in-detail)。
 
 ---
 
 ## 项目结构
 
-```
-DeepAgentForecast/
-├── setup.sh                  # 一键安装 / 快速开始脚本（交互式提供方选择 + Key 验证）
-├── package.json              # 根脚本：setup:all / dev / backend / frontend / build
-├── .env.example              # 环境变量参考
-├── backend/                  # Flask 后端（:5001）
-│   ├── run.py
-│   └── app/
-│       ├── __init__.py       # 蓝图注册（/api/graph、/simulation、/report、/research、/settings）
-│       ├── config.py         # 提供方配置与运行时切换
-│       ├── api/              # research / graph / simulation / report / settings 路由
-│       ├── services/         # 各阶段编排与引擎适配
-│       ├── models/
-│       └── utils/
-├── frontend/                 # Vue 3 + Vite 前端（:3000）
-│   └── src/
-│       ├── views/            # ResearchView.vue 等
-│       ├── components/research/  # StageTimeline / ResearchConsole / DossierViewer
-│       │                         # / SimulationView / ForecastReport / SettingsMenu …
-│       ├── router/
-│       └── i18n.js           # 双语（EN / 中文）
-├── deer-flow-2.0.0/          # 可选、本地专用、已忽略；普通 clone 不包含
-├── deerflow_bridge/          # 当前 Stage-1 DeerFlow 2 的受版本控制覆盖层
-│   ├── deerflow_research.py  #   研究驱动 / 入口
-│   ├── skills/               #   研究、行动者、本体、市场与图表技能
-│   ├── patches/              #   提供方、模型与中间件适配
-│   ├── market_tools.py       #   当前预测市场工具边界
-│   ├── search_tools.py       #   搜索 / 抓取集成与提供方路由
-│   └── config.yaml           #   当前研究运行时配置输入
-├── deer-flow/                # setup.sh 生成、gitignored、Stage 1 实际导入的运行时
-│   └── backend/.venv/        #   隔离 LangGraph venv（Python 3.12）
-├── drf2/                     # 可选、尚未切换的自定义智能体 / MCP / 驱动器架构
-├── scripts/doctor.sh         # `npm run doctor` 使用的环境体检脚本
-└── docs/                     # 演示 / 媒体以及基于源码的架构文档
-    └── architecture/deerflow2/ # tldraw 底图、静态图、报告与调用 / 接口 JSON
-        └── tldraw-generator/   # 固定版本的 tldraw/React/Vite 源码与结构校验器
+```text
+DeepAgentForecast/                   # 仓库：linroger/DeepAgentForecast
+├── backend/                         # Flask API + 界面托管，端口 :5001（uv，Python 3.12）
+│   ├── app/
+│   │   ├── api/                     #   research · graph · simulation · report · settings · sdk（/api/v1）
+│   │   ├── services/                #   编排器、本体、图谱、准备、模拟、报告、集成……
+│   │   │   └── graphiti_client/     #   Graphiti + FalkorDB 门面（沿用 Zep 风格的旧命名）
+│   │   ├── utils/                   #   llm_client、oasis_llm、sim_timeline、actors、prediction_markets……
+│   │   ├── mcp/                     #   stdio MCP 服务（知识图谱、模拟）
+│   │   └── models/                  #   项目模型 + 内存中的任务模型
+│   ├── scripts/                     #   OASIS 运行脚本、判定监测、重跑、导出、评估
+│   ├── tests/                       #   离线 pytest 套件（+ tests/eval 黄金场景）
+│   ├── run.py                       #   入口
+│   └── uploads/                     #   [已忽略] pipelines/ projects/ simulations/ reports/ graphiti_db/
+├── frontend/                        # Vue 3 + Vite 7 SPA（开发端口 :3000，把 /api 代理到 :5001）
+│   ├── src/views/ResearchView.vue   #   唯一的仪表盘视图（/ ；/research → /）
+│   ├── src/components/              #   GraphPanel（d3）+ research/* 面板
+│   ├── src/api/ · src/utils/        #   axios 客户端 · 纯函数工具（有单元测试）
+│   ├── src/i18n.js                  #   中英文案
+│   └── tests/                       #   node:test 单元测试
+├── deerflow_bridge/                 # 受版本控制的阶段 1 DeerFlow 2 覆盖层
+│   ├── deerflow_research.py         #   研究驱动（证据轨、双轨、综合、抽取）
+│   ├── linear_research.py           #   研究引擎 v3（默认；RESEARCH_ENGINE=v3）
+│   ├── research_gateway.py          #   v3 模型网关、提示缓存编排、工具与核验
+│   ├── search_tools.py · cached_fetch.py · market_tools.py
+│   ├── research_budget.py           #   跨进程工具预算 + 模型租约
+│   ├── runtime_skill_sync.py        #   校验部署的技能与受版本控制的技能包一致
+│   ├── skills/                      #   deep-research · actor-ontology-research · prediction-markets · forecast-visuals
+│   ├── patches/                     #   模型/提供方修复 + 中间件覆盖层（+ 测试）
+│   └── config.yaml                  #   研究模型配置段（仅在不存在时复制）
+├── deer-flow/                       # [已忽略] 装配好的 DeerFlow 2 运行时 + 独立 venv
+├── drf2/                            # 可选、尚未切换的 DeerFlow 2 原生设计
+├── docs/                            # GitHub Pages 演示站 + 文档
+│   ├── index.html · demo.html       #   运行画廊 + 单次运行演练（i18n.js、site.css）
+│   ├── demos/<run>/                 #   导出的运行数据包
+│   ├── architecture/                #   系统图谱、DeerFlow 2 图谱、清单、tldraw 生成器
+│   ├── media/                       #   截图与演示视频
+│   └── adr/ · research/ · foglamp/ · loop_evidence/ · workflows/
+├── scripts/                         # start.sh · doctor.sh · smoke.sh · 监视/抢救辅助脚本 · setup_port80.sh
+├── .github/workflows/ci.yml         # lint + 环境漂移 · 离线测试 · 字节编译
+├── setup.sh                         # 交互式安装脚本
+├── package.json                     # 根目录 npm 脚本
+├── .env.example                     # 全部设置及说明（复制为 .env）
+├── README.md · README.zh-CN.md      # 本文件（English / 中文）
+├── ARCHITECTURE.md · DRF_ARCHITECTURE.md   # 旧引擎说明 · 代码级地图（2026 年 7 月）
+├── init.sh · agent-progress.txt · feature_list.json   # 智能体 harness 冒烟检查与记录
+└── LICENSE                          # AGPL-3.0
 ```
 
-> 全新装配时，`setup.sh` 会优先使用用户另行放置的 `deer-flow-2.0.0/`；普通 clone 则获取固定上游版本，随后裁剪并应用 `deerflow_bridge/` 覆盖层。重复运行会保留已有运行时基础代码与配置并刷新适用的受版本控制集成代码，因此上游源码、可选本地源码包、受版本控制覆盖层与装配运行时是不同的权威边界。
+自动生成且已被 gitignore 的内容：`.env`、`deer-flow/`、`deer-flow-2.0.0/`、`backend/uploads/`、`backend/logs/`、`logs/`、`frontend/dist/`、`node_modules/` 以及各个 venv。
 
 ---
 
 ## 故障排查
 
-**第一步先运行 `npm run doctor`。** 它的快速离线模式检查基础文件 / 目录、Python 导入与提供方前置条件；它不证明覆盖层新鲜度、基础代码精确来源、驱动 / 配置一致性或 DRF2 Runs API / MCP 已具备实跑条件。需要脚本内置的实时 Key、模型缓存与磁盘探测时，可运行 `npm run doctor -- --deep`。
+**第一步：** 运行 `npm run doctor`；如果问题涉及 Key、向量模型或磁盘空间，再运行 `npm run doctor -- --deep`。
 
-| 问题 | 排查方向 |
-|------|----------|
-| 图谱构建（stage 3）报本地图谱后端不可用 / 找不到 `graphiti` / `falkordblite` | 知识图谱依赖（`graphiti-core`、`falkordblite`、sentence-transformers）随后端 venv 一起安装。重新运行 `./setup.sh`（或在 `backend/` 下 `uv sync`）即可补齐。注意首次建图会自动下载一次本地嵌入模型（约 470MB），请保证网络与磁盘空间充足并耐心等待。 |
-| 图谱构建很慢或卡在下载 | 这通常是首次建图在下载本地嵌入模型（默认 `paraphrase-multilingual-MiniLM-L12-v2`，约 470MB），下载完成后会缓存，后续运行无需再次下载。如需换用更小或更大的模型，设置 `GRAPHITI_EMBED_MODEL` 并相应调整 `GRAPHITI_EMBED_DIM`。 |
-| 后端安装因 camel-ai / tiktoken 构建错误而失败 | 后端 venv 必须使用 **Python 3.12**。运行 `( cd backend && uv sync --python 3.12 )`；`setup.sh`、`backend/pyproject.toml` 与 `backend/.python-version` 都执行这一精确解释器契约。 |
-| 研究阶段（stage 1）无法运行 | DeerFlow 需存在于仓库内的 `deer-flow/`、已应用 `deerflow_bridge/` 覆盖层并构建独立 Python 3.12 venv。重新运行 `./setup.sh` 会用固定上游版本（或用户另行放置的本地源码包）完成全新装配；若运行时已存在，则保留基础代码 / 配置并刷新适用集成文件。获取不同基础版本属于单独的显式操作。也可用 `DEERFLOW_DIR` 指向既有运行时。 |
-| 选了需要 Key 的提供方（`openai`/`kimi`/`minimax`/`deepseek`/`qwen`/`glm`）却报鉴权失败 | 这些 OpenAI 兼容提供方需要 `LLM_API_KEY`（以及按需的 `LLM_BASE_URL` / `LLM_MODEL_NAME`）。可在 `.env`、UI 设置菜单或 `POST /api/settings/llm` 中配置。 |
-| `claude-cli` 返回 401，或没有走订阅却产生 API 计费 | 环境中可能残留 `ANTHROPIC_API_KEY`。CLI 子进程会自动移除它；运行一次 `claude` 刷新 OAuth 登录。只有确实要使用 API-Key 计费时才设置 `LLM_CLI_USE_API_KEY=true`。 |
-| 切换了模型提供方但当前运行没变化 | 提供方切换只对**新发起的运行**生效；已在运行中的管线沿用其启动时读取的配置。请重新发起一次运行。 |
-| 切换提供方后研究阶段仍走 Claude | 研究模型由 `DEERFLOW_MODEL` 单独配置，支持 `claude`（默认）/ `codex` / `minimax` / `deepseek` / `qwen` / `glm` / `kimi` / `antigravity`。运行时 Settings 会把受支持的 `LLM_PROVIDER` 映射到相应研究模型；通用 `openai` 提供方映射到 `claude` 研究 stanza。需要其他研究路由时请显式设置 `DEERFLOW_MODEL` 与所需 Key；逐次运行的非法模型名会在启动前被拒绝。 |
-| 后端起来了但前端 `/api` 请求 404 | 确认后端在 `:5001` 运行，且前端开发服务器（`:3000`）已将 `/api` 代理至 `5001`；用 `npm run dev` 同时启动两端最为稳妥。 |
-| `git` / `uv` / `node` 缺失或版本过旧 | 满足环境要求：普通 clone 需要 `git` 获取固定 DeerFlow 基础版本，Node.js ≥ 20.19，后端与 DeerFlow 2.0 都使用 Python 3.12，并安装最新版 `uv`。`./setup.sh` 会就缺失项给出告警与安装提示。 |
-| 想停止一次长时间运行 | 点击运行头部的**取消**按钮（或 `POST /api/research/<id>/cancel`）。研究/模拟子进程会被立即终止，停止消耗配额。 |
-| 运行中途失败（或被取消） | 点击运行头部的**继续**按钮（或 `POST /api/research/<id>/resume`）。已完成的研究、图谱、模拟与报告交付物只有在 manifest / 哈希 / schema 与阶段健康检查重新通过后才会复用；无效或损坏的产物会重新生成。管线从第一个仍需处理的阶段继续，后端中断恢复也遵循同一规则。 |
-| 深度研究从第 2 轮起反复出现 `[FORCED STOP] Tool web_search called N times` | 上游 DeerFlow 的循环检测按线程累计同一工具的调用次数，会饿死后续研究轮次。重新运行 `./setup.sh` 应用桥接中间件补丁（计数按轮次重置），并获取 `deerflow_bridge/config.yaml` 中面向研究的 `web_search`/`web_fetch` 上限（若你维护自己的 `deer-flow/config.yaml`，请手动合并 `loop_detection.tool_freq_overrides` 段）。 |
-| 研究阶段超时 | 看门狗基础预算按深度分级（quick 900s / standard 7200s / deep 21600s）；开启双轨、子代理或桥接扇出时乘 1.5。deep 模式刻意运行多轮研究因此更慢；可用 `DEERFLOW_RESEARCH_TIMEOUT` 覆盖或调低研究 `depth`。若看门狗触发时报告已写出，本次运行会打捞报告并继续。 |
-| 报告某个章节显示占位提示 | 这是逐节降级：单个章节的 LLM 错误会留下明确占位提示，其他章节仍继续生成。需要完整版本时可重新运行。 |
+| 现象 | 可能原因与解决办法 |
+|---|---|
+| **`POST /api/research/run` 返回一串预检错误** | 这正是快速失败检查在起作用，此时还没有产生任何花费。每一项都指明了缺失的环节（图谱后端、提供方 Key、CLI 登录、DeerFlow 运行时）以及修复方法。 |
+| **图谱阶段：无法导入本地图谱后端** | 重新运行 `./setup.sh`，或执行 `( cd backend && uv sync --python 3.12 )`。 |
+| **首次构建图谱很慢，或似乎卡在下载上** | 约 470 MB 的向量模型会在首次使用时下载一次。可用 `npm run doctor -- --deep --pull` 预先下载。在防火墙之后时，把 `GRAPHITI_EMBED_MODEL` 指向本地已缓存的模型，并让 `GRAPHITI_EMBED_DIM` 与之匹配。 |
+| **后端安装失败（camel-ai / tiktoken 构建错误）** | venv 必须使用 Python 3.12：`( cd backend && uv sync --python 3.12 )`。 |
+| **明明选了别的提供方，研究阶段却在用 Claude** | 研究使用的是 `DEERFLOW_MODEL`。设置菜单与 `setup.sh` 会替你设置它，但手工编辑 `.env` 时必须显式设置它（以及对应的提供方 Key）。通用的 `openai` 提供方对应的研究模型是 `claude`。 |
+| **研究阶段无法启动** | 确认 DeerFlow 的 venv 是用 Python 3.12 构建的：`UV_PROJECT_ENVIRONMENT=deer-flow/backend/.venv uv sync --project deer-flow/backend --python 3.12`，或重新运行 `./setup.sh`。`DEERFLOW_DIR` / `DEERFLOW_PYTHON` 可指向一个已有的运行时。 |
+| **从第二轮起日志出现 `[FORCED STOP] Tool web_search called N times`** | 运行时缺少桥接层的循环检测补丁（每次运行重置计数）或研究级的限额。重新运行 `./setup.sh`。如果你保留了自己的 `deer-flow/config.yaml`，请把 `deerflow_bridge/config.yaml` 中的 `loop_detection.tool_freq_overrides` 段手工合并进去。 |
+| **`claude-cli` 返回 401，或计费走了 API 而不是订阅** | 运行一次 `claude` 重新登录。环境中残留的 `ANTHROPIC_API_KEY` 会自动从 CLI 环境中剔除；若你*确实*想走 API 计费，请设置 `LLM_CLI_USE_API_KEY=true`。 |
+| **切换提供方影响了一次正在进行的运行** | 切换立即生效，包括进行中运行的后续阶段。请在两次运行之间再切换。 |
+| **界面显示「连接中断」** | 后端停止了响应。查看 `logs/backend.out.log`，然后重新执行 `npm start`。轮询会自动恢复。 |
+| **研究阶段超时** | 预算随深度而定（quick 约 23 分钟，standard 3 小时，deep 9 小时）。可调大 `DEERFLOW_RESEARCH_TIMEOUT` 或降低深度。超时的证据轨 2 或 3 会被抢救回来；证据轨 1 超时则本阶段失败，请恢复运行。 |
+| **崩溃或重启后立即恢复，却返回 `409`** | 这次运行看起来仍有归属：它的心跳还不到 120 秒。等待两分钟再恢复。 |
+| **报告为 FAILED /「不可发布」** | `GET /api/report/<id>` 会列出发布问题，`final_audit.json` 中有详情。恢复这条管线即可重新生成报告。 |
+| **下载 PDF 返回 `503`** | PDF 导出被关闭（`REPORT_PDF_EXPORT=false`），或缺少 pandoc / XeLaTeX / CJK 字体。请安装 pandoc 与带 `xelatex` 的 TeX 发行版。 |
+| **研究档案显示「已封存 · 只读」，无法编辑** | 报告的确切字节已在别处被绑定：多轨研究契约（`research_contract_manifest.json` 及评审对正文的绑定），或封存的 `actor-intelligence/v1` 角色阵容。原地编辑会让「继续」在其上重新运行综合，或在行动者接收校验处失败，因此「编辑」按钮被这个标记取代，`PUT /dossier` 也会返回 `409`。如需修改研究，请用修订后的问题重新发起一次运行。未封存运行的修改会被保留：保存时会刷新 `handoff/manifest.json`，「继续」会复用修改后的研究。 |
+| **需要停止一次长时间运行** | 点击**取消**，或调用 `POST /api/research/<id>/cancel`。研究子进程约 1 秒内停止，模拟约 5 秒内停止。 |
+
+---
+
+## 术语表
+
+| 术语 | 含义 |
+|---|---|
+| **管线**（pipeline，一次运行） | 一个问题走完六个阶段的全过程，ID 形如 `pipe_…` |
+| **阶段** | 研究、本体、图谱、准备、运行、报告之一 |
+| **研究契约** / **交接**（handoff） | 阶段 1 提升进 `handoff/`、供后续阶段使用的文件；旧版多轨运行由 `research_contract_manifest.json` 封存 |
+| **证据轨**（lane） | 一个隔离的研究子进程，从自己的角度切入问题 |
+| **Track A / Track B** | 证据收集（每条证据轨都有）/ 共享的行动者智能平面（仅证据轨 1） |
+| **KIQ** | 关键情报问题，即研究必须回答的子问题 |
+| **证据包** | 一条证据轨的研究产出（`evidence_pack.md` + `sources.json`） |
+| **manifest v3** | `evidence_synthesis_manifest.json`，在全局综合之前封存各证据包与行动者档案 |
+| **封印** / **清单** | 对精确字节的 SHA-256 记录；不一致就意味着「不要信任、不要复用」 |
+| **纪元**（epoch） | 一次研究尝试的工具预算额度（每条管线最多 3 个） |
+| **`actor-intelligence/v1`** | `actors.json` 的结构：每位行动者 17 个维度，主张绑定来源，附类型化缺口 |
+| **Tier-1/2 行动者** | 核心行动者，有资格成为智能体。更低层级的行动者与媒体机构只作为背景。 |
+| **类型化缺口** | 明确记录的「未知」，附上尝试过的查询，而不是编造的事实 |
+| **上下文包** / **角色** | `actor-context/v1` / `actor-role/v2`：智能体的封存知识，以及它的确定性角色提示词 |
+| **核心智能体**（principal） | 每一轮都会行动的智能体 |
+| **回合** / **日历单位** | 一个模拟时段：一天、一周、半个月、一个月、一个季度或半年 |
+| **世界时钟** | 每轮发给智能体的提示，告诉它们当前的模拟日期与时段，以及刚刚发生了什么 |
+| **世界态**（WorldState） | 一个共享状态，每轮根据智能体的承诺推进一次 |
+| **空转模拟** | 智能体没有产生任何自发活动的模拟 |
+| **情景骨架**（spine） | 在写任何正文之前就确定下来的情景概率 |
+| **二元预测** | 一个附概率与客观判定标准的是/否命题 |
+| **市场锚点** | 为某条二元预测接受的、判定标准等价的 Polymarket 匹配 |
+| **发布门** | 报告对外提供之前必须通过的检查，每次读取时都会重新核验 |
+| **侧车**（sidecar） | 写在封存产物旁边、不改动它的附加产物，例如语言版本或集成预测 |
+| **降级**（degraded） | 已完成，但记录了一个非致命的健康问题 |
+| **尚未切换**（pre-cutover） | 已构建并纳入版本控制，但尚未作为线上路径启用 |
+| **DRF2** | `drf2/` 中可选、尚未切换的 DeerFlow 2 原生重构方案 |
+
+---
+
+## 延伸文档
+
+| 文档 | 涵盖内容 |
+|---|---|
+| [全系统架构图谱](docs/architecture/DEEPRESEARCHFORECAST_SYSTEM_ATLAS.md) | 一份附源码引用、详尽无遗的地图：每一个输入、输出、进程边界、模型调用、存储与失败路径。它是提交 `fcf7378`（2026 年 7 月）的快照，早于线性研究引擎与前端整合。 |
+| [全系统画布](docs/architecture/deepresearchforecast-system-architecture.tldr)（[SVG](docs/architecture/deepresearchforecast-system-architecture.svg) · [PNG](docs/architecture/deepresearchforecast-system-architecture.png)） | 以可编辑的 tldraw 图呈现的架构图谱（同一快照） |
+| [模型调用清单](docs/architecture/llm-call-inventory.json) · [数据流与路由清单](docs/architecture/dataflow-inventory.json) | 架构图谱的机器可读配套文件 |
+| [行动者智能架构](docs/architecture/ACTOR_INTELLIGENCE_ARCHITECTURE.md) | 逐阶段说明封存的行动者契约链 |
+| [DeerFlow 2 架构](docs/architecture/deerflow2/DEERFLOW_2_ARCHITECTURE.md)（[画布](docs/architecture/deerflow2/deerflow2-architecture.tldr) · [PNG](docs/architecture/deerflow2/deerflow2-architecture.png)） | 阶段 1 所用的 DeerFlow 2 内部机制，以及 DRF2 目标 |
+| [研究阶段优化](docs/RESEARCH_STAGE_OPTIMIZATION.md) | 研究阶段的 token 取证与降本手段 |
+| [ADR 0001](docs/adr/0001-workflow-authority.md) · [ADR 0002](docs/adr/0002-forecast-evidence-publication-authority.md) | 关于工作流权威与证据权威的决策（已接受，尚未实现） |
+| [DRF_ARCHITECTURE.md](DRF_ARCHITECTURE.md) | 截至 2026 年 7 月的代码级系统地图（部分内容已过时） |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | 原 MiroFish 模拟引擎的说明（旧版） |
+| [deerflow_bridge/README.md](deerflow_bridge/README.md) · [drf2/README.md](drf2/README.md) | 各组件的 README |
+| [DeepWiki](https://deepwiki.com/linroger/DeepAgentForecast) | 基于本仓库的 AI 问答 |
+
+**重新生成 tldraw 画布。** 图的内容定义在各生成器的 `src/main.jsx` 中。
+1. 执行 `cd docs/architecture/tldraw-generator && npm ci && npm run render`。
+2. 在真实浏览器中打开它提供的本地页面；渲染需要浏览器画布。
+3. 执行 `npm run validate`。
+
+DeerFlow 2 的画布有自己的生成器，位于 `docs/architecture/deerflow2/tldraw-generator/`。
 
 ---
 
 ## 致谢
 
-- **[OASIS](https://github.com/camel-ai/oasis)**（CAMEL-AI）驱动多智能体社会模拟引擎 —— 诚挚感谢 CAMEL-AI 团队的开源工作。
-- **[DeerFlow](https://github.com/bytedance/deer-flow)**（字节跳动）驱动深度研究阶段。
-- **[Graphiti](https://github.com/getzep/graphiti)**（getzep 开源）驱动本地运行的时序知识图谱（GraphRAG）—— 诚挚感谢 Graphiti 团队的开源工作。
-- 基于 **[MiroFish](https://github.com/666ghj/MiroFish)** —— 原版群体模拟预测引擎 —— 构建。
+- **[OASIS](https://github.com/camel-ai/oasis)**（CAMEL-AI）为多智能体社会模拟提供引擎。衷心感谢 CAMEL-AI 团队的开源工作。
+- **[DeerFlow](https://github.com/bytedance/deer-flow)**（字节跳动）为深度研究阶段提供支持。
+- **[Graphiti](https://github.com/getzep/graphiti)** 提供内嵌的时序知识图谱，无需图谱云服务，也无需图谱 Key；结构化抽取仍通过你配置的 LLM 完成。
+- 构建于 **[MiroFish](https://github.com/666ghj/MiroFish)** 之上，它是最早的群体模拟预测引擎。
 
 ## 许可证
 

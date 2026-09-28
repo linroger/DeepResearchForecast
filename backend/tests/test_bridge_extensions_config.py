@@ -1,0 +1,196 @@
+"""deerflow_bridge/extensions_config.json is a template rendered at deploy time.
+
+The tracked file used to hard-code one developer's absolute paths
+(/Users/<dev>/…/backend/.venv/bin/python), so the KG MCP server that fork,
+continue and resume runs attach could not start on any other checkout. The
+source now carries placeholders that _sync_deerflow_bridge_if_stale replaces
+with this checkout's paths when it deploys the file into deer-flow/.
+"""
+
+import json
+import re
+import sys
+from pathlib import Path
+
+import pytest
+
+from app.services.pipeline_orchestrator import (
+    _render_bridge_extensions_config,
+    _sync_deerflow_bridge_if_stale,
+)
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+TRACKED = REPO_ROOT / "deerflow_bridge" / "extensions_config.json"
+
+
+def _isolated_repo(tmp_path, monkeypatch, ext_config_text):
+    bridge = tmp_path / "deerflow_bridge"
+    deployed = tmp_path / "deer-flow"
+    for d in (bridge, deployed):
+        d.mkdir(parents=True)
+    (bridge / "deerflow_research.py").write_text("same\n", encoding="utf-8")
+    (deployed / "deerflow_research.py").write_text("same\n", encoding="utf-8")
+    (deployed / "skills").mkdir()
+    for skill in ("actor-ontology-research", "deep-research", "forecast-visuals", "prediction-markets"):
+        f = bridge / "skills" / skill / "SKILL.md"
+        f.parent.mkdir(parents=True)
+        f.write_text(f"---\nname: {skill}\n---\n", encoding="utf-8")
+    (bridge / "extensions_config.json").write_text(ext_config_text, encoding="utf-8")
+    monkeypatch.setattr(
+        "app.services.pipeline_orchestrator.__file__",
+        str(tmp_path / "backend" / "app" / "services" / "pipeline_orchestrator.py"),
+    )
+    return deployed
+
+
+def test_tracked_template_has_no_machine_specific_paths():
+    text = TRACKED.read_text(encoding="utf-8")
+    assert not re.search(r"/Users/|/home/[^/\s\"]+/|[A-Za-z]:\\\\", text)
+    servers = json.loads(text)["mcpServers"]
+    for name in ("drf-kg", "drf-simulation"):
+        assert servers[name]["command"] == "{{DRF_BACKEND_PYTHON}}"
+        assert "{{DRF_REPO_ROOT}}/backend" in servers[name]["env"]["PYTHONPATH"]
+
+
+def test_render_uses_this_checkout_and_backend_interpreter(tmp_path):
+    rendered = json.loads(_render_bridge_extensions_config(str(TRACKED), str(tmp_path)))
+    kg = rendered["mcpServers"]["drf-kg"]
+    assert kg["command"] == sys.executable
+    assert kg["env"]["PYTHONPATH"] == f"{tmp_path}/backend:{tmp_path}"
+    assert kg["args"] == ["-m", "app.mcp.kg_server"]
+    # $VAR passthroughs are resolved by the harness at spawn time, not by us.
+    assert kg["env"]["DRF_MCP_KG_GRAPH_ID"] == "$DRF_MCP_KG_GRAPH_ID"
+    assert "{{" not in json.dumps(rendered)
+
+
+def test_render_keeps_json_valid_for_awkward_paths(tmp_path):
+    root = str(tmp_path / 'we"ird\\dir')
+    rendered = json.loads(_render_bridge_extensions_config(str(TRACKED), root))
+    assert rendered["mcpServers"]["drf-simulation"]["env"]["PYTHONPATH"].startswith(root)
+
+
+@pytest.mark.parametrize("token", [
+    "{{DRF_TYPO}}", "{{DRF_REPO_ROOT2}}", "{{drf_repo_root}}", "{{ DRF_REPO_ROOT }}",
+])
+def test_render_rejects_unknown_placeholders(tmp_path, token):
+    src = tmp_path / "ext.json"
+    src.write_text(json.dumps({"mcpServers": {"x": {"command": token}}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="unknown placeholder"):
+        _render_bridge_extensions_config(str(src), str(tmp_path))
+
+
+def test_sync_deploys_rendered_config_and_is_idempotent(tmp_path, monkeypatch):
+    deployed = _isolated_repo(tmp_path, monkeypatch, TRACKED.read_text(encoding="utf-8"))
+
+    _sync_deerflow_bridge_if_stale(str(deployed))
+    first = (deployed / "extensions_config.json").read_bytes()
+    kg = json.loads(first)["mcpServers"]["drf-kg"]
+    assert kg["command"] == sys.executable
+    assert kg["env"]["PYTHONPATH"] == f"{tmp_path}/backend:{tmp_path}"
+
+    mtime = (deployed / "extensions_config.json").stat().st_mtime_ns
+    _sync_deerflow_bridge_if_stale(str(deployed))
+    assert (deployed / "extensions_config.json").read_bytes() == first
+    assert (deployed / "extensions_config.json").stat().st_mtime_ns == mtime
+
+
+def test_sync_replaces_stale_hardcoded_deployment(tmp_path, monkeypatch):
+    deployed = _isolated_repo(tmp_path, monkeypatch, TRACKED.read_text(encoding="utf-8"))
+    stale = json.loads(TRACKED.read_text(encoding="utf-8"))
+    stale["mcpServers"]["drf-kg"]["command"] = "/Users/someone/elsewhere/backend/.venv/bin/python"
+    (deployed / "extensions_config.json").write_text(json.dumps(stale), encoding="utf-8")
+
+    _sync_deerflow_bridge_if_stale(str(deployed))
+
+    kg = json.loads((deployed / "extensions_config.json").read_text(encoding="utf-8"))["mcpServers"]["drf-kg"]
+    assert kg["command"] == sys.executable
+
+
+def test_broken_template_skips_mcp_but_still_syncs_bridge(tmp_path, monkeypatch):
+    deployed = _isolated_repo(tmp_path, monkeypatch, "{not json")
+    (deployed / "extensions_config.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "deerflow_bridge" / "deerflow_research.py").write_text("NEW\n", encoding="utf-8")
+
+    _sync_deerflow_bridge_if_stale(str(deployed))
+
+    assert not (deployed / "extensions_config.json").exists()
+    assert (deployed / "deerflow_research.py").read_text(encoding="utf-8") == "NEW\n"
+
+
+def test_interleaved_deploys_do_not_share_a_staging_file(tmp_path, monkeypatch):
+    """Pipelines are threads of one process: a second deploy that runs between the
+    first one's staging write and its rename must not consume the first one's
+    staging file (a PID-derived name made the first os.replace fail)."""
+    import app.services.pipeline_orchestrator as po
+
+    dst = tmp_path / "extensions_config.json"
+    real_replace = po.os.replace
+    nested = {"done": False}
+
+    def interleaving_replace(src, target):
+        if not nested["done"]:
+            nested["done"] = True
+            assert po._deploy_rendered_extensions_config(b'{"b": 1}\n', str(dst))
+        return real_replace(src, target)
+
+    monkeypatch.setattr(po.os, "replace", interleaving_replace)
+    assert po._deploy_rendered_extensions_config(b'{"a": 1}\n', str(dst))
+    assert nested["done"]
+    assert dst.read_bytes() == b'{"a": 1}\n'
+    assert [p.name for p in tmp_path.iterdir()] == ["extensions_config.json"]
+
+
+def test_concurrent_deploys_all_succeed(tmp_path):
+    import threading
+
+    from app.services.pipeline_orchestrator import _deploy_rendered_extensions_config
+
+    dst = tmp_path / "extensions_config.json"
+    payloads = [f'{{"n": {i}}}\n'.encode() for i in range(16)]
+    errors = []
+    start = threading.Barrier(len(payloads))
+
+    def deploy(payload):
+        try:
+            start.wait()
+            for _ in range(20):
+                _deploy_rendered_extensions_config(payload, str(dst))
+        except Exception as exc:  # noqa: BLE001 — collected and asserted below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=deploy, args=(p,)) for p in payloads]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert dst.read_bytes() in payloads
+    assert [p.name for p in tmp_path.iterdir()] == ["extensions_config.json"]
+
+
+def test_unchanged_config_is_not_rewritten(tmp_path):
+    from app.services.pipeline_orchestrator import _deploy_rendered_extensions_config
+
+    dst = tmp_path / "extensions_config.json"
+    assert _deploy_rendered_extensions_config(b"{}\n", str(dst)) is True
+    assert _deploy_rendered_extensions_config(b"{}\n", str(dst)) is False
+
+
+def test_a_failed_extensions_deploy_does_not_skip_the_required_bridge_modules(tmp_path, monkeypatch):
+    """Review of PR #2: an OSError while deploying the optional MCP config must
+    not abort the sync of the required bridge modules (incl. the v3 engine)."""
+    deployed = _isolated_repo(tmp_path, monkeypatch, TRACKED.read_text(encoding="utf-8"))
+    bridge = tmp_path / "deerflow_bridge"
+    (bridge / "deerflow_research.py").write_text("NEW\n", encoding="utf-8")
+    for name in ("linear_research.py", "research_gateway.py"):
+        (bridge / name).write_text(f"# {name}\n", encoding="utf-8")
+
+    def _broken_deploy(rendered, dst):
+        raise PermissionError("read-only deploy directory")
+
+    monkeypatch.setattr("app.services.pipeline_orchestrator._deploy_rendered_extensions_config", _broken_deploy)
+    _sync_deerflow_bridge_if_stale(str(deployed))
+
+    assert (deployed / "deerflow_research.py").read_text(encoding="utf-8") == "NEW\n"
+    for name in ("linear_research.py", "research_gateway.py"):
+        assert (deployed / name).read_text(encoding="utf-8") == f"# {name}\n"

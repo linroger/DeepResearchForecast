@@ -20,8 +20,8 @@
         <section class="block">
           <div class="block-label">{{ L('模型提供方', 'Model provider') }}</div>
           <p class="hint">
-            {{ L('切换对新发起的推演生效（运行中的不受影响）。Claude / Codex / MiniMax / DeepSeek / 通义千问 / GLM 都有各自的深度研究模型；OpenAI/Kimi 的研究阶段回退至 Claude。',
-                 'Applies to new runs (in-flight runs are unaffected). Claude, Codex, MiniMax, DeepSeek, Qwen and GLM each drive their own deep-research model; OpenAI/Kimi fall back to Claude for the research stage.') }}
+            {{ L('切换对新发起的推演生效（运行中的不受影响）。Claude / Codex / Kimi / MiniMax / DeepSeek / 通义千问 / GLM 都有各自的深度研究模型；OpenAI 兼容 API 的研究阶段回退至 Claude。',
+                 'Applies to new runs (in-flight runs are unaffected). Claude, Codex, Kimi, MiniMax, DeepSeek, Qwen and GLM each drive their own deep-research model; the OpenAI-compatible provider falls back to Claude for the research stage.') }}
           </p>
 
           <div v-if="loadingInfo" class="loading">{{ L('加载中…', 'Loading…') }}</div>
@@ -35,7 +35,7 @@
                 </div>
                 <div class="provider-sub">
                   {{ p.needs_key ? L('需要 API Key', 'Requires API key') : L('使用本机 CLI 订阅，无需 Key', 'Uses local CLI subscription, no key') }}
-                  · {{ L('研究', 'research') }}: {{ deerflowModelFor(p.id) }}
+                  · {{ L('研究', 'research') }}: {{ deerflowModelFor(p) }}
                 </div>
               </div>
             </label>
@@ -124,8 +124,10 @@ const okMsg = ref('')
 const testing = ref(false)
 const testResult = ref(null)
 
+// 研究模型以后端 PROVIDER_META.deerflow_model 为准（/api/settings 随 providers 下发）；
+// 本表只在旧后端未下发该字段时兜底，须与 backend/app/config.py 保持一致。
 const DEERFLOW_MAP = {
-  'claude-cli': 'claude', 'codex-cli': 'codex', openai: 'claude', kimi: 'claude',
+  'claude-cli': 'claude', 'codex-cli': 'codex', openai: 'claude', kimi: 'kimi',
   minimax: 'minimax', deepseek: 'deepseek', qwen: 'qwen', glm: 'glm'
 }
 const DEFAULTS = {
@@ -136,7 +138,7 @@ const DEFAULTS = {
   qwen: { base: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus', ph: 'sk-…' },
   glm: { base: 'https://api.z.ai/api/paas/v4', model: 'glm-4.6', ph: '••••.••••' }
 }
-function deerflowModelFor(id) { return DEERFLOW_MAP[id] || 'claude' }
+function deerflowModelFor(p) { return (p && p.deerflow_model) || DEERFLOW_MAP[p && p.id] || 'claude' }
 
 const selectedMeta = computed(() => providers.value.find(p => p.id === selected.value) || {})
 const selectedNeedsKey = computed(() => !!selectedMeta.value.needs_key)

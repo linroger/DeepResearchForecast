@@ -3,6 +3,7 @@ MiroFish Backend - Flask应用工厂
 """
 
 import hmac
+import ipaddress
 import json
 import os
 import warnings
@@ -30,6 +31,54 @@ def _frontend_dist_dir() -> str:
         return os.path.abspath(override)
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     return os.path.join(repo_root, 'frontend', 'dist')
+
+
+def _strip_addr_port(value: str) -> str:
+    """去掉地址里的端口/方括号：'[::1]:80' → '::1'，'10.0.0.5:80' → '10.0.0.5'。"""
+    value = value.strip().strip('"')
+    if value.startswith('['):
+        return value[1:].split(']', 1)[0]
+    if value.count(':') == 1:
+        return value.split(':', 1)[0]
+    return value
+
+
+def _is_loopback_addr(addr) -> bool:
+    """环回地址判定（含 IPv4-mapped IPv6 '::ffff:127.0.0.1'）；空值/无法解析一律视为非环回。"""
+    value = _strip_addr_port(addr or '')
+    if not value:
+        return False
+    if value.lower() == 'localhost':
+        return True
+    try:
+        ip = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    if ip.version == 6 and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return ip.is_loopback
+
+
+def _forwarded_client_addrs(headers) -> list:
+    """代理转发头里声明的全部客户端地址（X-Forwarded-For / X-Real-IP / RFC 7239 Forwarded）。"""
+    addrs = []
+    for name in ('X-Forwarded-For', 'X-Real-IP'):
+        for raw in headers.getlist(name):
+            addrs.extend(part.strip() for part in raw.split(','))
+    for raw in headers.getlist('Forwarded'):
+        for element in raw.split(','):
+            for pair in element.split(';'):
+                key, _, val = pair.partition('=')
+                if key.strip().lower() == 'for':
+                    addrs.append(val.strip())
+    return [a for a in addrs if a]
+
+
+def _has_forwarded_remote_client(headers=None) -> bool:
+    """转发头里是否出现非环回客户端（无法解析的值按非环回处理，fail-closed）。"""
+    if headers is None:
+        headers = request.headers
+    return any(not _is_loopback_addr(a) for a in _forwarded_client_addrs(headers))
 
 
 def create_app(config_class=Config):
@@ -97,6 +146,9 @@ def create_app(config_class=Config):
     
     # 鉴权/暴露面闸门（EXECPLAN2 F-13-0）：
     #   - 环回来源（本机前端经 vite 代理而来）一律放行，保持本地工作流不变；
+    #   - 但环回连接若带着转发头（X-Forwarded-For / X-Real-IP / Forwarded）且其中任一客户端地址
+    #     不是环回，说明请求是代理替局域网客户端转来的（vite 以 FRONTEND_HOST 对外监听时，
+    #     /api 代理以 xfwd 写入真实来源），按非环回处理。转发头只会降低信任、绝不提升；
     #   - 非环回来源：未配置 APP_API_TOKEN 时 fail-closed 拒绝；配置后需带正确的
     #     X-API-Token 头（常量时间比较）。/health 与 CORS 预检放行。
     @app.before_request
@@ -106,8 +158,7 @@ def create_app(config_class=Config):
         path = request.path
         if path == '/health' or not path.startswith('/api/'):
             return None
-        remote = request.remote_addr or ''
-        if remote in ('127.0.0.1', '::1', 'localhost') or remote.startswith('127.'):
+        if _is_loopback_addr(request.remote_addr) and not _has_forwarded_remote_client():
             return None
         token = Config.APP_API_TOKEN
         if not token:

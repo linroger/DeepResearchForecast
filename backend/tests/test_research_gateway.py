@@ -3160,3 +3160,38 @@ def test_unusable_json_reply_warning_quotes_a_short_excerpt():
     warning = next(line for line in plog.of("warn") if "JSON attempt 1 unusable" in line)
     assert "reply began: 'Sure! Here is my plan: xxx" in warning and "\n" not in warning
     assert len(warning) < 400
+
+
+# ---------------------------------------------------------------------------
+# Intents carried over from PR #2's linear-engine tests (the v2 engine they
+# covered was replaced by v3; the behaviours they protected still apply)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("reply", [
+    "Error: Jina primary failed: ReadTimeout: upstream timed out " + "upstream timed out " * 20,
+    json.dumps({"error": "research_budget_exhausted", "tool": "web_fetch", "url": "https://example.org/report",
+                "message": "The shared fetch allowance for this run is exhausted. " * 4}),
+    json.dumps({"status": "already_available", "artifact_id": "fetch-123",
+                "message": "This exact page was already returned in full earlier. " * 4}),
+    "404 Not Found. " + "The requested page could not be located. " * 10,
+    "too short",
+    "",
+])
+def test_fetch_never_cites_a_failure_or_control_reply_as_a_page(tmp_path, reply):
+    ledger = rg.SourceLedger(tmp_path / "ledger.json")
+    tools = rg.ResearchTools(ledger, tmp_path / "pages", search_fn=lambda q, n: "{}", fetch_fn=lambda url: reply)
+    out = tools.fetch("https://example.org/report", focus="capacity", agent_id="K1")
+    assert out.startswith(("FETCH_FAILED", "FETCH_BUDGET_EXHAUSTED"))
+    assert not any(row.get("fetched") for row in ledger.rows())
+
+
+def test_coroutine_runner_works_when_the_caller_thread_runs_an_event_loop():
+    async def page():
+        await asyncio.sleep(0)
+        return "page text"
+
+    async def inside_a_running_loop():
+        return rg._run_coroutine_blocking(lambda: page())
+
+    assert asyncio.run(inside_a_running_loop()) == "page text"
+    assert rg._run_coroutine_blocking(lambda: page()) == "page text"

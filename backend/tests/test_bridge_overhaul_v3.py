@@ -987,3 +987,16 @@ def test_extract_only_keeps_an_existing_positional_sources_json_verbatim(
     assert [row["name"] for row in actors["actors"]] == ["IEA"] and "sources" not in actors
     assert json.loads((tmp_path / dr.TIMELINE_FILENAME).read_text(encoding="utf-8")) == obj["key_events"]
     assert meta["sources_count"] == 3 and meta["source_tiers"]["s1_count"] == 2
+
+
+@pytest.mark.parametrize("raw", [None, "", "v3", "linear", " Linear ", "LINEAR", "legacy", "deerflow", "agentic",
+                                 "linear-v2"])
+def test_the_bridge_runs_the_engine_the_orchestrator_selected(raw, monkeypatch):
+    """PR #2 intent (selectors must agree), under the v3 contract: the parent
+    normalises RESEARCH_ENGINE (default v3, unknown -> v3) and passes the
+    canonical value to the child, which must resolve it to the same engine."""
+    from app.services import pipeline_orchestrator as po
+
+    engine = po.resolve_research_engine(raw)
+    monkeypatch.setenv("RESEARCH_ENGINE", engine)
+    assert dr._resolve_research_engine() == engine
