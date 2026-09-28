@@ -14,6 +14,7 @@ import json
 import math
 import os
 import random
+import re
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -361,6 +362,10 @@ class SimulationParameters:
     # （小时制 / SIM_TEMPORAL_MODE=hours 时配置 JSON 与今日逐字节一致）。
     temporal_config: Optional[Dict[str, Any]] = None
 
+    # 模拟内容的输出语言（English / Chinese）。运行脚本据此要求 agent 用该语言发帖与回应，
+    # 世界简报用对应语言的标题。空串 → to_dict() 省略字段（旧配置逐字节不变）。
+    output_language: str = ""
+
     # 生成元数据
     generated_at: str = field(default_factory=lambda: datetime.now().isoformat())
     generation_reasoning: str = ""  # LLM的推理说明
@@ -393,6 +398,8 @@ class SimulationParameters:
         # 永不改义）。None → 省略字段，运行侧据此走小时制旧路径（字节不变）。
         if self.temporal_config:
             data["temporal_config"] = self.temporal_config
+        if self.output_language:
+            data["output_language"] = self.output_language
         return data
     
     def to_json(self, indent: int = 2) -> str:
@@ -504,6 +511,12 @@ class SimulationConfigGenerator:
                 and not str(os.environ.get("SIM_ACTIVITY_PROFILE", "") or "").strip()):
             self._profile_override = "global_market"
             logger.info("活动画像: research_language=English 且未显式配置 SIM_ACTIVITY_PROFILE → global_market")
+        # 模拟内容语言：事件配置（热点/种子帖）、世界简报标题与运行期发帖语言都跟随它。
+        # 此前事件配置提示是中文且不指定输出语言，英文运行也会产出中文种子帖与热点话题。
+        self._output_language = self._resolve_output_language(
+            research_language, simulation_requirement
+        )
+        logger.info(f"模拟输出语言: {self._output_language or '未判定（沿用旧行为）'}")
         
         # 计算总步骤数
         num_batches = math.ceil(len(entities) / self.AGENTS_PER_BATCH)
@@ -777,6 +790,7 @@ class SimulationConfigGenerator:
             reddit_config=reddit_config,
             as_of_date=(str((actors or {}).get("as_of_date")) if isinstance(actors, dict) and actors.get("as_of_date") else None),
             world_brief=world_brief,
+            output_language=getattr(self, "_output_language", "") or "",
             # TEMPORAL spec §3: beyond_horizon_events/warnings 已在 _build_scheduled_events
             # 中回填到 timeline，此处一次性序列化（None → to_dict 省略字段）。
             temporal_config=(asdict(temporal_timeline) if temporal_timeline is not None else None),
@@ -1724,6 +1738,7 @@ class SimulationConfigGenerator:
         actors: Optional[Dict[str, Any]],
         actor_context_packs: Optional[Dict[str, Dict[str, Any]]],
         max_chars: int,
+        english: bool = False,
     ) -> str:
         public_rows = cls._canonical_public_world_rows(actors, actor_context_packs)
         if not public_rows:
@@ -1735,9 +1750,10 @@ class SimulationConfigGenerator:
                 question, cls.WORLD_BRIEF_QUESTION_CHARS
             )
             parts.append(
-                "## 核心预测问题（这个世界正在争论什么）\n" + question
+                ("## Forecast question (what this world is debating)\n" if english
+                 else "## 核心预测问题（这个世界正在争论什么）\n") + question
             )
-        header = "## 公开且来源绑定的共同事实"
+        header = "## Public, source-bound shared facts" if english else "## 公开且来源绑定的共同事实"
         evidence_lines: List[str] = []
         for row in public_rows:
             uncertainty = ""
@@ -1759,6 +1775,27 @@ class SimulationConfigGenerator:
             return ""
         parts.append(header + "\n" + "\n".join(evidence_lines))
         return "\n\n".join(parts).strip()
+
+    @staticmethod
+    def _resolve_output_language(research_language: Optional[str], simulation_requirement: str) -> str:
+        """模拟内容语言：显式 English/Chinese 优先；auto/未传 → 预测问题本身的语言（与研究
+        阶段 CONF-1 一致：英文问题 → 英文报告）。一个汉字约抵三个拉丁字母。判不出 → ""。"""
+        raw = str(research_language or "").strip()
+        low = raw.lower()
+        if low.startswith("en"):
+            return "English"
+        if low.startswith(("zh", "chinese")) or "中文" in raw:
+            return "Chinese"
+        text = str(simulation_requirement or "")
+        cjk = len(re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff]", text))
+        latin = len(re.findall(r"[A-Za-z]", text))
+        if not cjk and not latin:
+            return ""
+        return "Chinese" if cjk * 3 >= latin else "English"
+
+    def _english_output(self) -> bool:
+        """本次配置的 agent 可见内容是否用英文（未判定语言 → False，沿用历史中文标题）。"""
+        return getattr(self, "_output_language", "") == "English"
 
     def _build_market_pricing_block(
         self, prediction_markets: Optional[List[Dict[str, Any]]]
@@ -1787,15 +1824,21 @@ class SimulationConfigGenerator:
             prob = m.get("implied_yes_prob")
             if not q or not isinstance(prob, (int, float)) or isinstance(prob, bool):
                 continue
-            lines.append(f"- 「{q[:160]}」：{float(prob) * 100:.0f}%")
+            if self._english_output():
+                lines.append(f'- "{q[:160]}": {float(prob) * 100:.0f}%')
+            else:
+                lines.append(f"- 「{q[:160]}」：{float(prob) * 100:.0f}%")
             if len(lines) >= self.MARKET_PRIORS_TOP_N:
                 break
         if not lines:
             return ""
-        return (
-            "## 市场定价（预测市场隐含概率——可引用/可争论的校准先验，非真值）\n"
-            + "\n".join(lines)
+        header = (
+            "## Market pricing (prediction-market implied probabilities: citable, debatable "
+            "calibration priors, not ground truth)"
+            if self._english_output()
+            else "## 市场定价（预测市场隐含概率——可引用/可争论的校准先验，非真值）"
         )
+        return header + "\n" + "\n".join(lines)
 
     def _build_world_brief(
         self,
@@ -1837,22 +1880,26 @@ class SimulationConfigGenerator:
                 actors,
                 actor_context_packs,
                 max_chars,
+                english=self._english_output(),
             )
 
+        english = self._english_output()
         parts: List[str] = []
         question = " ".join(str(simulation_requirement or "").split()).strip()
         if question:
-            parts.append("## 核心预测问题（这个世界正在争论什么）\n"
+            parts.append(("## Forecast question (what this world is debating)\n" if english
+                          else "## 核心预测问题（这个世界正在争论什么）\n")
                          + question[:self.WORLD_BRIEF_QUESTION_CHARS])
         try:
-            brief_block = situation_brief_block(actors)
+            brief_block = situation_brief_block(actors, english=english)
         except Exception:  # noqa: BLE001 — 局势简报渲染失败绝不阻断配置生成
             brief_block = ""
         if brief_block:
             parts.append(brief_block)
         topics = [str(t).strip() for t in (hot_topics or []) if str(t).strip()]
         if topics:
-            parts.append("## 热点话题\n" + "、".join(topics[:8]))
+            parts.append(("## Hot topics\n" + "; ".join(topics[:8])) if english
+                         else ("## 热点话题\n" + "、".join(topics[:8])))
 
         # ITEM 11: 市场定价块（top 5 相关市场）——仅当开关开且传入非空市场；否则整体跳过，
         # 与今日逐字节一致（degrade-safe）。
@@ -2411,6 +2458,18 @@ class SimulationConfigGenerator:
     ],
     "reasoning": "<简要说明>"
 }}"""
+        # 输出语言：热点话题、舆论方向与种子帖会原样进入 agent 的世界简报与第 0 轮帖子流，
+        # 必须与本次模拟语言一致（此前英文运行也产出中文种子帖，带偏整场模拟的发帖语言）。
+        output_language = getattr(self, "_output_language", "")
+        if output_language == "English":
+            prompt += (
+                "\n\n**Output language: English.** Write every text value — hot_topics, "
+                "narrative_direction, each initial_posts[].content and reasoning — in English, "
+                "even though these instructions are in Chinese. poster_type and poster_name must "
+                "still exactly match the available types and names listed above."
+            )
+        elif output_language == "Chinese":
+            prompt += "\n\n**输出语言：中文。** hot_topics、narrative_direction、initial_posts[].content 与 reasoning 一律用中文。"
 
         system_prompt = "你是舆论分析专家。返回纯JSON格式。注意 poster_type 必须精确匹配可用实体类型。"
 

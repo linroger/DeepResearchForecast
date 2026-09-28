@@ -760,23 +760,33 @@ def extract_relationship_rows(actors: Optional[Any]) -> List[Dict[str, Any]]:
     return out
 
 
-def situation_brief_block(actors: Optional[Any]) -> str:
-    """把 situation_brief 渲染为紧凑的中文提示块；缺失返回空串。"""
+def situation_brief_block(actors: Optional[Any], english: bool = False) -> str:
+    """把 situation_brief 渲染为紧凑的提示块（默认中文标题；english=True 用英文标题，
+    供英文模拟的 agent 可见世界简报使用）；缺失返回空串。"""
     sb = actors.get("situation_brief") if isinstance(actors, dict) else None
     if not isinstance(sb, dict):
         return ""
+    if english:
+        prose = (("Current situation", "current_situation"), ("Background", "context"),
+                 ("Tensions and dynamics", "dynamics"))
+        lists = (("Fault lines", "fault_lines"), ("Potential triggers", "catalysts"))
+        title = "## Situation brief (deep-research evidence, authoritative background)"
+    else:
+        prose = (("当前态势", "current_situation"), ("来龙去脉", "context"), ("张力/动态", "dynamics"))
+        lists = (("争议断层", "fault_lines"), ("潜在触发", "catalysts"))
+        title = "## 局势简报（深度研究实证，作为权威背景）"
     parts: List[str] = []
-    for label, key in (("当前态势", "current_situation"), ("来龙去脉", "context"), ("张力/动态", "dynamics")):
+    for label, key in prose:
         v = str(sb.get(key, "") or "").strip()
         if v:
             parts.append(f"### {label}\n{v}")
-    for label, key in (("争议断层", "fault_lines"), ("潜在触发", "catalysts")):
+    for label, key in lists:
         lst = sb.get(key)
         if isinstance(lst, list) and lst:
             parts.append(f"### {label}\n" + "\n".join(f"- {x}" for x in lst[:6]))
     if not parts:
         return ""
-    return "## 局势简报（深度研究实证，作为权威背景）\n" + "\n".join(parts)
+    return title + "\n" + "\n".join(parts)
 
 
 def relationship_briefing(actor_name: str, actors: Optional[Any], max_edges: int = 6) -> str:

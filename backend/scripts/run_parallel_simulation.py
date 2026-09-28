@@ -77,6 +77,7 @@ import json
 import logging
 import multiprocessing
 import random
+import re
 import shutil
 import signal
 import sqlite3
@@ -649,7 +650,7 @@ def _attest_canonical_reddit_system_messages(
         expected = str(row["base_system_message"])
         composition = ["canonical_role_only_base"]
         if _world_brief_enabled() and brief:
-            expected += "\n\n# WORLD BRIEF（共同世界背景）\n" + brief
+            expected += "\n\n" + _world_brief_header(config) + "\n" + brief
             composition.append("sealed_world_brief")
         if calendar and calendar_unit:
             expected += "\n\n" + _CALENDAR_ACTION_VOCAB_TEMPLATE.format(
@@ -735,7 +736,18 @@ def _inject_calendar_vocabulary(agent_graph, temporal_config, log_info) -> None:
     log_info(f"日历动作词汇已注入 {injected}/{total} 个 Agent（unit={unit}）")
 
 
-def _inject_world_brief(agent_graph, world_brief, log_info) -> None:
+_WORLD_BRIEF_HEADER = "# WORLD BRIEF（共同世界背景）"
+_WORLD_BRIEF_HEADER_EN = "# WORLD BRIEF (shared world background)"
+
+
+def _world_brief_header(config: Dict[str, Any]) -> str:
+    """世界简报块标题：英文模拟用英文标题，其余保持历史中文标题（逐字节不变）。
+    注入（_inject_world_brief）与 Reddit 封印复核（_attest_...）必须用同一函数取标题。"""
+    return _WORLD_BRIEF_HEADER_EN if _sim_output_language(config) == "English" else _WORLD_BRIEF_HEADER
+
+
+def _inject_world_brief(agent_graph, world_brief, log_info,
+                        header: str = _WORLD_BRIEF_HEADER) -> None:
     """NEXTSTEPS SIM_WORLD_BRIEF: 把 config.world_brief（核心预测问题 + 局势简报 + 热点话题）
     作为共同世界背景追加进每个 Agent 的 system prompt。
 
@@ -746,7 +758,7 @@ def _inject_world_brief(agent_graph, world_brief, log_info) -> None:
     brief = str(world_brief or "").strip()
     if agent_graph is None or not brief:
         return
-    block = "# WORLD BRIEF（共同世界背景）\n" + brief
+    block = header + "\n" + brief
     try:
         agents = agent_graph.get_agents()
     except Exception as e:  # noqa: BLE001
@@ -1926,7 +1938,8 @@ def _observe_agent_dynamics(tracker, actual_actions, name_to_id):
 
 
 def _inject_period_context(env, active_ids, round_num, period, timeline,
-                           fired_events, world_delta) -> None:
+                           fired_events, world_delta, response_step: bool = False,
+                           language: str = "") -> None:
     """CAL-TEMPORAL: env.step 前给每个活跃 agent 追加一条本轮「世界时钟」记忆。
 
     以 USER 角色写入（关键）：camel-ai 0.2.78 的 ScoreBasedContextCreator 只保留
@@ -1980,6 +1993,14 @@ def _inject_period_context(env, active_ids, round_num, period, timeline,
         "consequential public action you take this period — a decision, announcement, launch, deal,",
         "alliance, investment, or policy move — not minute-by-minute chatter. Reacting to another",
         "actor's move is a strategic response. Doing nothing is a legitimate strategic choice.",
+    ]
+    # SIM-REACT: 回应阶段开启时告知本次动作是「自己的一步」，回应他人另有专门一步。
+    if response_step:
+        lines.append("After every actor has moved, you get a separate response step to answer other "
+                     "actors' posts, so use this action for your own move.")
+    if language:
+        lines.append(f"Write all of your posts and replies in {language}.")
+    lines += [
         "## CONFIRMED EVENTS THIS PERIOD",
         events_block,
     ]
@@ -3802,8 +3823,16 @@ def _step_failure_limit() -> int:
 # 注入 env + 记录动作三件副作用。全部 env 门控、默认开、降级安全（任何异常 → 0，不中断模拟）。
 # ============================================================================
 def _engagement_sampler_enabled() -> bool:
-    """SIM_ENGAGEMENT_SAMPLER：每轮有机动作后补一层被动点赞（默认开）。"""
-    return _flag_true("SIM_ENGAGEMENT_SAMPLER", "true")
+    """SIM_ENGAGEMENT_SAMPLER：每轮有机动作后补一层被动点赞。
+
+    默认 auto：回应阶段（SIM_REACTION_PHASE）开启时关闭——采样赞是随机的「背书」，会让
+    出口管制机构给被管制方点赞这类与角色矛盾的互动混进数据；回应阶段里点赞由 agent 自己
+    按身份决定。回应阶段关闭时照旧开启。显式 true/false 永远优先。
+    """
+    raw = _cfg_flag("SIM_ENGAGEMENT_SAMPLER", "auto").strip().lower()
+    if raw in ("", "auto"):
+        return not _reaction_phase_enabled()
+    return raw in ("true", "1", "yes", "on")
 
 
 def _engagement_rate() -> float:
@@ -3965,6 +3994,629 @@ async def inject_engagement_likes(
         return 0, last_rowid
 
 
+# ============================================================================
+# SIM-REACT: 每轮「回应阶段」——让 agent 真正回应彼此的帖子。
+# ----------------------------------------------------------------------------
+# 取证（pipe_6c4190b31f0b / sim_0170a91d15a3，GLM-5.3，日历模式半年/轮）：OASIS 给每个
+# SocialAgent 设 max_iteration=1，即每个活跃 agent 每轮只有一次模型调用；世界时钟又把这次
+# 调用定性为「本时段最重要的公开动作」。前 19 轮 Twitter 有机动作 200 帖 : 9 评论，Reddit
+# 190 帖 : 37 评论——agent 各发各的通告，几乎从不回应彼此。
+#
+# 方案：有机发帖 step 落账后，本轮活跃 agent 各做一次「回应」调用：
+#   * 候选帖 = 本轮 + 上轮的他人帖子（及别人刚回复了你的自己的帖子），按与该 agent 的
+#     相关性排序取 ≤3 条（点名提到你 / 别人回复了你 / 你关注作者 / 话题与你的利益重合 /
+#     较新），并对同一帖的回应者数量做分散惩罚，避免全员挤在一条帖子下；
+#   * 提示要求：针对主帖的具体主张/决定/数字作答，补充主帖没说的信息，以该角色公开发声的
+#     方式、按与作者的关系（盟友/竞争者/监管者）表态，并写成本次模拟的输出语言；
+#   * 调用在一个无状态的辅助 ChatAgent 里进行：沿用该 agent 的 system prompt、模型与已绑定
+#     其身份的动作工具，但只给回复与背书工具（create_comment / like_post / like_comment；
+#     没有 create_post，也没有 quote_post——实测 GLM 在 Twitter 上 11/13 选了引用转发，
+#     引用会变成新的顶层帖子而非帖子下的回复，正是要修的「只发帖不回复」）。不把回应提示写进 agent 的长期记忆——camel 对本模型
+#     的上下文上限按 999,999,999 token 计，每轮追加的候选帖会让之后每次调用的输入线性膨胀；
+#     只回写一条简短的「你本期的回应」记录，保证后续轮次的连续性。
+# 可降级：任何异常只跳过该 agent / 本阶段，绝不中断轮循环。SIM_REACTION_PHASE=false 关闭。
+# ============================================================================
+_REACTION_TOOL_NAMES = ("create_comment", "like_post", "like_comment")
+_REACTION_REPLY_TOOLS = ("create_comment",)
+_REACTION_MAX_CANDIDATES = 3
+_REACTION_WINDOW_POSTS = 60
+_REACTION_POST_CHARS = 700
+_REACTION_QUOTED_CHARS = 240
+_REACTION_REPLY_CHARS = 240
+_REACTION_THREAD_REPLIES = 3
+_REACTION_MAX_WORDS = 90
+_REACTION_STEP_TIMEOUT_S = 240.0
+_REACTION_NOTE_CHARS = 320
+
+_CJK_RUN_RE = re.compile(r"[㐀-䶿一-鿿]+")
+_LATIN_LETTER_RE = re.compile(r"[A-Za-z]")
+_TOPIC_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9\-]{3,}")
+_ACRONYM_RE = re.compile(r"\b[A-Z][A-Z0-9&]{1,9}\b")
+_TOPIC_STOPWORDS = frozenset({
+    "about", "after", "against", "also", "because", "been", "before", "being", "between",
+    "both", "could", "does", "each", "from", "have", "into", "just", "like", "many", "more",
+    "most", "much", "must", "only", "other", "over", "period", "post", "posts", "should",
+    "some", "such", "than", "that", "their", "them", "then", "there", "these", "they",
+    "this", "those", "through", "under", "until", "very", "what", "when", "where",
+    "which", "while", "will", "with", "within", "without", "would", "year", "years", "your",
+})
+# 多词机构名的首词若是这些泛称，不能单独作为「点名」别名（"Chinese" ≠ 点名中国政府）。
+_ALIAS_GENERIC_WORDS = frozenset({
+    "academy", "agency", "american", "board", "bureau", "central", "chinese", "commission",
+    "council", "department", "european", "federal", "global", "government", "institute",
+    "international", "ministry", "national", "office", "people", "state", "states",
+    "united", "white",
+})
+
+
+def _reaction_phase_enabled() -> bool:
+    """SIM_REACTION_PHASE：每轮发帖后的回应阶段（默认开）。"""
+    return _flag_true("SIM_REACTION_PHASE", "true")
+
+
+def _reaction_share() -> float:
+    """SIM_REACTION_SHARE：本轮活跃 agent 中参与回应的比例（clamp 到 [0,1]，默认 1.0）。"""
+    try:
+        share = float(_cfg_flag("SIM_REACTION_SHARE", "1.0"))
+    except (TypeError, ValueError):
+        return 1.0
+    return min(1.0, max(0.0, share))
+
+
+def _normalize_output_language(raw: Any) -> str:
+    """把配置/环境里的语言值归一成 English / Chinese（auto/空 → ""）。"""
+    text = str(raw or "").strip()
+    low = text.lower()
+    if not low or low == "auto":
+        return ""
+    if low.startswith("en"):
+        return "English"
+    if low.startswith(("zh", "chinese", "cn")) or "中文" in text or "汉语" in text:
+        return "Chinese"
+    return text[:40]
+
+
+def _sim_output_language(config: Dict[str, Any]) -> str:
+    """本次模拟的输出语言：SIM_OUTPUT_LANGUAGE 覆盖 → config.output_language → 按预测问题
+    的文字判定（一个汉字约抵三个拉丁字母）。都判不出 → ""（提示里不加语言要求）。"""
+    cfg = config if isinstance(config, dict) else {}
+    for raw in (_cfg_flag("SIM_OUTPUT_LANGUAGE", ""), cfg.get("output_language")):
+        lang = _normalize_output_language(raw)
+        if lang:
+            return lang
+    text = str(cfg.get("simulation_requirement") or "")
+    cjk = sum(len(run) for run in _CJK_RUN_RE.findall(text))
+    latin = len(_LATIN_LETTER_RE.findall(text))
+    if not cjk and not latin:
+        return ""
+    return "Chinese" if cjk * 3 >= latin else "English"
+
+
+def _reaction_topic_tokens(text: Any) -> set:
+    """相关性打分用的词集合：拉丁词（≥4 字符、去停用词、小写）+ 汉字串内的二元组。"""
+    s = str(text or "")
+    tokens = {w.lower() for w in _TOPIC_WORD_RE.findall(s)} - _TOPIC_STOPWORDS
+    for run in _CJK_RUN_RE.findall(s):
+        tokens.update(run[i:i + 2] for i in range(len(run) - 1))
+    return tokens
+
+
+def _reaction_name_aliases(name: Any) -> List[Tuple[str, bool]]:
+    """机构名 → 用于识别「点名」的别名 [(alias, case_sensitive)]。
+
+    "US Department of Commerce / BIS" → 全名、各分段、缩写 BIS（大小写敏感，避免 "most"
+    命中 MOST）；"Google Quantum AI" → 全名 + 首词 Google；泛称首词（Chinese/White…）不单列。
+    """
+    full = str(name or "").strip()
+    if not full:
+        return []
+    out: List[Tuple[str, bool]] = []
+
+    def add(alias: str, case_sensitive: bool) -> None:
+        alias = alias.strip()
+        if alias and (alias, case_sensitive) not in out:
+            out.append((alias, case_sensitive))
+
+    segments = [full] + [s.strip() for s in re.split(r"[/()（）,，]", full) if s.strip()]
+    for seg in segments:
+        if _CJK_RUN_RE.search(seg):
+            if len(seg) >= 2:
+                add(seg, True)
+            continue
+        if re.fullmatch(r"[A-Z][A-Z0-9&]{1,9}", seg):
+            add(seg, True)
+            continue
+        if len(seg) >= 4:
+            add(seg, False)
+        for acronym in _ACRONYM_RE.findall(seg):
+            if len(acronym) >= 3:
+                add(acronym, True)
+        words = seg.split()
+        if len(words) > 1:
+            first = words[0]
+            if len(first) >= 4 and first[0].isupper() and first.lower() not in _ALIAS_GENERIC_WORDS:
+                add(first, False)
+    return out
+
+
+def _text_mentions(text: str, aliases: List[Tuple[str, bool]]) -> bool:
+    """text 是否点名了某个别名（拉丁别名按词边界匹配；汉字别名按子串匹配）。"""
+    if not text:
+        return False
+    for alias, case_sensitive in aliases:
+        if _CJK_RUN_RE.search(alias):
+            if alias in text:
+                return True
+            continue
+        pattern = r"(?<![A-Za-z0-9])" + re.escape(alias) + r"(?![A-Za-z0-9])"
+        if re.search(pattern, text, 0 if case_sensitive else re.IGNORECASE):
+            return True
+    return False
+
+
+def _truncate_text(text: Any, limit: int) -> str:
+    s = " ".join(str(text or "").split())
+    return s if len(s) <= limit else s[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _build_reaction_profiles(config: Dict[str, Any]) -> Dict[int, Dict[str, Any]]:
+    """agent_configs → {agent_id: {name, stance, aliases, tokens}}（相关性打分的角色画像）。"""
+    profiles: Dict[int, Dict[str, Any]] = {}
+    for row in (config or {}).get("agent_configs", []) or []:
+        if not isinstance(row, dict) or row.get("agent_id") is None:
+            continue
+        try:
+            aid = int(row["agent_id"])
+        except (TypeError, ValueError):
+            continue
+        name = str(row.get("entity_name") or "").strip()
+        topics = row.get("interested_topics") or []
+        if not isinstance(topics, list):
+            topics = [topics]
+        interest_text = " ".join(
+            [str(t) for t in topics] + [str(row.get("gains_if") or ""), str(row.get("loses_if") or "")]
+        )
+        profiles[aid] = {
+            "name": name,
+            "stance": str(row.get("stance") or "").strip().lower(),
+            "aliases": _reaction_name_aliases(name),
+            "tokens": _reaction_topic_tokens(interest_text),
+        }
+    return profiles
+
+
+def _fetch_reaction_threads(
+    db_path: str, since_post_id: int, recent_after_post_id: int,
+    limit: int = _REACTION_WINDOW_POSTS,
+) -> Dict[int, Dict[str, Any]]:
+    """取 post_id > since_post_id 的帖子（最新的 limit 条）及其全部评论。
+
+    原帖取 content；引用帖取 quote_content（被引原文进 quoted）；纯转发（有 original_post_id
+    且无 quote_content）不是可回应的新发言，跳过。recent=post_id > recent_after_post_id（本轮新帖）。
+    缺表/缺列/任何 sqlite 异常 → {}（本轮不回应，degrade-safe）。
+    """
+    threads: Dict[int, Dict[str, Any]] = {}
+    if not os.path.exists(db_path):
+        return threads
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT p.post_id, u.agent_id, p.content, p.quote_content,
+                       p.original_post_id, ou.agent_id
+                FROM post p
+                LEFT JOIN user u ON p.user_id = u.user_id
+                LEFT JOIN post op ON p.original_post_id = op.post_id
+                LEFT JOIN user ou ON op.user_id = ou.user_id
+                WHERE p.post_id > ?
+                ORDER BY p.post_id DESC
+                LIMIT ?
+                """,
+                (int(since_post_id or 0), int(limit)),
+            )
+            for post_id, agent_id, content, quote_content, original_post_id, orig_agent in cur.fetchall():
+                if post_id is None or agent_id is None:
+                    continue
+                quote_text = str(quote_content or "").strip()
+                if original_post_id is not None and not quote_text:
+                    continue  # 纯转发
+                text = quote_text if quote_text else str(content or "").strip()
+                if not text:
+                    continue
+                threads[int(post_id)] = {
+                    "post_id": int(post_id),
+                    "author_id": int(agent_id),
+                    "content": text,
+                    "quoted": str(content or "").strip() if quote_text else "",
+                    "quoted_author_id": int(orig_agent) if (quote_text and orig_agent is not None) else None,
+                    "recent": int(post_id) > int(recent_after_post_id or 0),
+                    "comments": [],
+                }
+            if threads:
+                ids = sorted(threads)
+                placeholders = ",".join("?" for _ in ids)
+                cur.execute(
+                    f"""
+                    SELECT c.comment_id, c.post_id, u.agent_id, c.content
+                    FROM comment c LEFT JOIN user u ON c.user_id = u.user_id
+                    WHERE c.post_id IN ({placeholders})
+                    ORDER BY c.comment_id
+                    """,
+                    ids,
+                )
+                for comment_id, post_id, agent_id, content in cur.fetchall():
+                    thread = threads.get(int(post_id)) if post_id is not None else None
+                    if thread is None:
+                        continue
+                    thread["comments"].append({
+                        "comment_id": int(comment_id),
+                        "author_id": int(agent_id) if agent_id is not None else -1,
+                        "content": str(content or "").strip(),
+                    })
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001 — 取帖失败即本轮不回应（degrade-safe）
+        return {}
+    return threads
+
+
+def _fetch_follow_edges(db_path: str) -> set:
+    """follow 表 → {(follower_agent_id, followee_agent_id)}；缺表/异常 → 空集。"""
+    edges: set = set()
+    if not os.path.exists(db_path):
+        return edges
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT uf.agent_id, ut.agent_id
+                FROM follow f
+                JOIN user uf ON f.follower_id = uf.user_id
+                JOIN user ut ON f.followee_id = ut.user_id
+                """
+            )
+            for follower, followee in cur.fetchall():
+                if follower is not None and followee is not None:
+                    edges.add((int(follower), int(followee)))
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001
+        return set()
+    return edges
+
+
+def select_reaction_candidates(
+    reactor_id: int,
+    threads: Dict[int, Dict[str, Any]],
+    profiles: Dict[int, Dict[str, Any]],
+    follows: set,
+    assigned: Dict[int, int],
+    max_candidates: int = _REACTION_MAX_CANDIDATES,
+    rng: Optional["random.Random"] = None,
+) -> List[Dict[str, Any]]:
+    """为一个回应者挑选 ≤max_candidates 条最值得它回应的帖子（纯函数，rng 只用于打破平局）。
+
+    规则：
+      * 自己的帖子只有在别人回复了且自己尚未再回应时才入选（回应对方）；
+      * 自己已回应过、之后无人再接话的帖子不入选（不重复自己）；
+      * 加分：点名提到自己 +3、别人回复了自己的帖子 +3、自己参与的讨论有新回复 +2、
+        话题与自己利益重合（每个重合词 +0.5，上限 +2）、关注作者 +1 / 被作者关注 +0.5、
+        立场不同 +0.5 / 相同 +0.25、本轮新帖 +1（上轮 +0.3）；
+      * 分散：本轮已分配给其他回应者的次数 −0.75/次，已有评论 −0.2/条（封顶 10 条）。
+    返回候选 dict（帖子字段 + score + reasons），按分数降序；同分新帖优先。
+    """
+    me = profiles.get(int(reactor_id)) or {}
+    aliases = me.get("aliases") or []
+    my_tokens = me.get("tokens") or set()
+    my_stance = me.get("stance") or ""
+    scored: List[Tuple[float, int, List[str]]] = []
+    for pid in sorted(threads):
+        thread = threads[pid]
+        author = thread.get("author_id")
+        comments = thread.get("comments") or []
+        my_last = -1
+        for idx, comment in enumerate(comments):
+            if comment.get("author_id") == reactor_id:
+                my_last = idx
+        newer_from_others = [
+            c for c in comments[my_last + 1:]
+            if c.get("author_id") not in (reactor_id, -1, None)
+        ]
+        reasons: List[str] = []
+        score = 0.0
+        if author == reactor_id:
+            if not newer_from_others:
+                continue
+            score += 3.0
+            reasons.append("other actors replied to your post")
+        else:
+            if my_last >= 0:
+                if not newer_from_others:
+                    continue
+                score += 2.0
+                reasons.append("new replies in a discussion you joined")
+            # 只看别人的话：自己早先的评论里出现自己的名字不算「被点名」。
+            discussion = " ".join(
+                [str(thread.get("content") or ""), str(thread.get("quoted") or "")]
+                + [str(c.get("content") or "") for c in comments
+                   if c.get("author_id") != reactor_id]
+            )
+            if _text_mentions(discussion, aliases):
+                score += 3.0
+                reasons.append("it mentions you")
+            overlap = my_tokens & _reaction_topic_tokens(
+                str(thread.get("content") or "") + " " + str(thread.get("quoted") or "")
+            )
+            if overlap:
+                score += min(2.0, 0.5 * len(overlap))
+                reasons.append("it touches your priorities (" + ", ".join(sorted(overlap)[:4]) + ")")
+            if (reactor_id, author) in follows:
+                score += 1.0
+                reasons.append("you follow the author")
+            if (author, reactor_id) in follows:
+                score += 0.5
+            author_stance = (profiles.get(author) or {}).get("stance") or ""
+            if my_stance and author_stance:
+                score += 0.5 if author_stance != my_stance else 0.25
+        score += 1.0 if thread.get("recent") else 0.3
+        score -= 0.75 * float(assigned.get(pid, 0))
+        score -= 0.2 * min(len(comments), 10)
+        if rng is not None:
+            score += rng.random() * 0.05
+        scored.append((score, pid, reasons))
+    scored.sort(key=lambda item: (-item[0], -item[1]))
+    out: List[Dict[str, Any]] = []
+    for score, pid, reasons in scored[:max(0, int(max_candidates))]:
+        out.append({**threads[pid], "score": round(score, 3), "reasons": reasons})
+    return out
+
+
+def build_reaction_prompt(
+    reactor_id: int,
+    reactor_name: str,
+    candidates: List[Dict[str, Any]],
+    agent_names: Dict[int, str],
+    platform: str,
+    period_label: str = "",
+    language: str = "",
+) -> str:
+    """回应阶段的用户提示：候选帖（含已有回复与相关原因）+ 作答要求。"""
+    def who(aid: Any) -> str:
+        try:
+            return agent_names.get(int(aid), f"Agent_{int(aid)}")
+        except (TypeError, ValueError):
+            return "Unknown"
+
+    reddit = platform == "reddit"
+    lines = [
+        f"# RESPONSE ROUND — {period_label}" if period_label else "# RESPONSE ROUND",
+        "The other actors have made their moves for this period. Respond now as "
+        f"{reactor_name}: choose the ONE post below where {reactor_name} has the most at stake "
+        "or the most to add, and answer it directly.",
+        "",
+    ]
+    for idx, cand in enumerate(candidates, start=1):
+        own = cand.get("author_id") == reactor_id
+        author = "you" if own else who(cand.get("author_id"))
+        lines.append(f"[{idx}] post_id={cand['post_id']} — {author} wrote:")
+        lines.append('"' + _truncate_text(cand.get("content"), _REACTION_POST_CHARS) + '"')
+        if cand.get("quoted"):
+            quoted_by = cand.get("quoted_author_id")
+            source = who(quoted_by) if quoted_by is not None else "another post"
+            lines.append(
+                f'  (quoting {source}: "' + _truncate_text(cand["quoted"], _REACTION_QUOTED_CHARS) + '")'
+            )
+        comments = cand.get("comments") or []
+        if comments:
+            lines.append(f"  Replies so far ({len(comments)}):")
+            for comment in comments[-_REACTION_THREAD_REPLIES:]:
+                ref = f"[comment_id={comment['comment_id']}] " if reddit else ""
+                lines.append(
+                    f"  - {ref}{who(comment.get('author_id'))}: \""
+                    + _truncate_text(comment.get("content"), _REACTION_REPLY_CHARS) + '"'
+                )
+        if cand.get("reasons"):
+            lines.append("  Why it may concern you: " + "; ".join(cand["reasons"]))
+        lines.append("")
+    endorse = "like_post on a listed post"
+    if reddit:
+        endorse += " or like_comment on a listed reply"
+    language_clause = f", written in {language}" if language else ""
+    lines += [
+        "How to respond:",
+        "1. Reply with create_comment(post_id, content), using the post_id of the post you answer.",
+        "2. Answer that post's specific claim, decision or number: agree, dispute or qualify it, "
+        "or state the concrete counter-move you are making in response. If others have already "
+        "replied, engage with their points instead of repeating them.",
+        "3. Add something the post does not already say: a fact, figure, date, program, capability, "
+        f"constraint or consequence that {reactor_name} knows from its own position. Do not restate "
+        "the post and do not recycle your own announcement from this period.",
+        f"4. Speak exactly as {reactor_name} would speak in public, consistent with its mandate, "
+        "interests and relationship to the author: allies build on each other, competitors and "
+        "rivals challenge with evidence, regulators and funders set conditions.",
+        f"5. Keep it to 1-3 sentences (at most {_REACTION_MAX_WORDS} words){language_clause}.",
+        f"6. In the same turn, also call {endorse} only if {reactor_name} would publicly endorse "
+        "it; never like your own post.",
+        "You cannot publish a new standalone post in this step.",
+    ]
+    return "\n".join(lines).strip()
+
+
+def _make_reaction_agent(agent, tools: List[Any]):
+    """无状态回应调用的辅助 ChatAgent：同一 system prompt / 模型 / 已绑定身份的动作工具，
+    独立记忆，max_iteration=1（一次模型调用，执行其返回的全部工具调用）。"""
+    from camel.agents import ChatAgent
+
+    system_message = getattr(agent, "system_message", None) or getattr(agent, "_system_message", None)
+    return ChatAgent(
+        system_message=system_message,
+        model=agent.model_backend,
+        tools=tools,
+        max_iteration=1,
+        step_timeout=_REACTION_STEP_TIMEOUT_S,
+    )
+
+
+def _reaction_memory_note(
+    agent_id: int, actions: List[Dict[str, Any]], agent_names: Dict[int, str]
+) -> str:
+    """把某 agent 本阶段的回应动作压成一条简短记忆（供后续轮次保持连续性）。"""
+    parts: List[str] = []
+    for action in actions:
+        if action.get("agent_id") != agent_id:
+            continue
+        kind = action.get("action_type")
+        args = action.get("action_args") or {}
+        target = args.get("post_author_name") or args.get("comment_author_name") or "another actor"
+        if kind == "CREATE_COMMENT":
+            text = _truncate_text(args.get("content"), _REACTION_NOTE_CHARS)
+            parts.append(f"You replied to {target}'s post: \"{text}\"")
+        elif kind == "LIKE_POST":
+            parts.append(f"You endorsed (liked) {target}'s post.")
+        elif kind == "LIKE_COMMENT":
+            parts.append(f"You endorsed (liked) {target}'s reply.")
+    if not parts:
+        return ""
+    return "# YOUR RESPONSES THIS PERIOD\n" + "\n".join(parts)
+
+
+async def run_reaction_phase(
+    env,
+    db_path: str,
+    active_agents: List[Tuple[int, Any]],
+    config: Dict[str, Any],
+    round_num: int,
+    period_label: str,
+    platform: str,
+    agent_names: Dict[int, str],
+    reaction_state: Dict[str, Any],
+    last_rowid: int,
+    action_logger,
+    rng,
+    log_info,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """SIM-REACT：本轮活跃 agent 回应他人帖子。返回 (本阶段落账的动作, 新 last_rowid)。
+
+    reaction_state 由调用方每个平台持有一份：{"window_start": 上轮起点水位, "round_start":
+    本轮起点水位, "profiles": 角色画像缓存}；水位由 _advance_reaction_window 在有机 step 前推进。
+    任何异常 → ([], 原 last_rowid)，绝不中断轮循环。
+    """
+    try:
+        if not active_agents:
+            return [], last_rowid
+        threads = _fetch_reaction_threads(
+            db_path,
+            int(reaction_state.get("window_start", 0) or 0),
+            int(reaction_state.get("round_start", 0) or 0),
+        )
+        if not threads:
+            return [], last_rowid
+        profiles = reaction_state.get("profiles")
+        if profiles is None:
+            profiles = _build_reaction_profiles(config)
+            reaction_state["profiles"] = profiles
+        follows = _fetch_follow_edges(db_path)
+        language = reaction_state.get("language")
+        if language is None:
+            language = _sim_output_language(config)
+            reaction_state["language"] = language
+
+        reactors = sorted(active_agents, key=lambda item: int(item[0]))
+        share = _reaction_share()
+        if share < 1.0:
+            keep = int(round(len(reactors) * share))
+            reactors = sorted(rng.sample(reactors, keep), key=lambda item: int(item[0])) if keep else []
+        rng.shuffle(reactors)  # 分散惩罚按分配顺序累积——打乱顺序避免永远偏向低 id
+
+        assigned: Dict[int, int] = {}
+        plans: List[Tuple[int, Any, str]] = []
+        for aid, agent in reactors:
+            candidates = select_reaction_candidates(
+                int(aid), threads, profiles, follows, assigned, rng=rng
+            )
+            if not candidates:
+                continue
+            assigned[candidates[0]["post_id"]] = assigned.get(candidates[0]["post_id"], 0) + 1
+            name = agent_names.get(int(aid)) or (profiles.get(int(aid)) or {}).get("name") or f"Agent_{aid}"
+            prompt = build_reaction_prompt(
+                int(aid), name, candidates, agent_names, platform, period_label, language
+            )
+            plans.append((int(aid), agent, prompt))
+        if not plans:
+            return [], last_rowid
+
+        semaphore = getattr(env, "llm_semaphore", None)
+        if semaphore is None:
+            semaphore = asyncio.Semaphore(4)
+        from camel.messages import BaseMessage
+
+        async def _respond(aid: int, agent, prompt: str) -> bool:
+            internal = getattr(agent, "_internal_tools", None)
+            if not isinstance(internal, dict) or getattr(agent, "model_backend", None) is None:
+                return False
+            tools = [internal[name] for name in _REACTION_TOOL_NAMES if name in internal]
+            if not any(name in internal for name in _REACTION_REPLY_TOOLS):
+                return False
+            helper = _make_reaction_agent(agent, tools)
+            message = BaseMessage.make_user_message(role_name="User", content=prompt)
+            try:
+                async with semaphore:
+                    await helper.astep(message)
+                return True
+            except Exception as exc:  # noqa: BLE001 — 单个 agent 失败不影响其余
+                log_info(f"回应阶段 agent {aid} 调用失败（已跳过）: {type(exc).__name__}: {exc}")
+                return False
+
+        results = await asyncio.gather(*(_respond(aid, agent, prompt) for aid, agent, prompt in plans))
+        responded = sum(1 for ok in results if ok)
+
+        actions, last_rowid = fetch_new_actions_from_db(db_path, last_rowid, agent_names)
+        if action_logger:
+            for action in actions:
+                action_logger.log_action(
+                    round_num=round_num + 1,
+                    agent_id=action["agent_id"],
+                    agent_name=action["agent_name"],
+                    action_type=action["action_type"],
+                    action_args=action["action_args"],
+                )
+
+        # 连续性：把各自的回应压成一条 USER 记忆（SYSTEM 记录会被 camel 上下文构造器丢弃）。
+        try:
+            from camel.types import OpenAIBackendRole
+            for aid, agent, _prompt in plans:
+                note = _reaction_memory_note(aid, actions, agent_names)
+                if note and hasattr(agent, "update_memory"):
+                    agent.update_memory(
+                        BaseMessage.make_user_message(role_name="ResponseLog", content=note),
+                        OpenAIBackendRole.USER,
+                    )
+        except Exception as exc:  # noqa: BLE001
+            log_info(f"回应记忆回写失败（不影响模拟）: {exc}")
+
+        counts: Dict[str, int] = {}
+        for action in actions:
+            counts[action["action_type"]] = counts.get(action["action_type"], 0) + 1
+        log_info(
+            f"第 {round_num + 1} 轮回应阶段: {responded}/{len(plans)} 个 agent 完成回应，动作 {counts or '{}'}"
+        )
+        return actions, last_rowid
+    except Exception as exc:  # noqa: BLE001 — 回应阶段是附加层，失败绝不中断模拟
+        log_info(f"回应阶段失败，跳过本轮（不中断模拟）: {type(exc).__name__}: {exc}")
+        return [], last_rowid
+
+
+def _advance_reaction_window(reaction_state: Dict[str, Any], db_path: str) -> None:
+    """有机 step 前推进候选窗口：上轮起点 ← 本轮起点，本轮起点 ← 当前最大 post_id。
+    候选 = post_id > 上轮起点（上轮 + 本轮的帖子；首轮含种子帖）。"""
+    reaction_state["window_start"] = int(reaction_state.get("round_start", 0) or 0)
+    reaction_state["round_start"] = _max_post_id(db_path)
+
+
 async def run_twitter_simulation(
     config: Dict[str, Any],
     simulation_dir: str,
@@ -4033,7 +4685,8 @@ async def run_twitter_simulation(
     # env.reset() 之前注入；config 无 world_brief 字段（旧配置）→ no-op。
     if _world_brief_enabled():
         try:
-            _inject_world_brief(result.agent_graph, config.get("world_brief"), log_info)
+            _inject_world_brief(result.agent_graph, config.get("world_brief"), log_info,
+                                header=_world_brief_header(config))
         except Exception as _wb_err:  # noqa: BLE001
             log_info(f"世界简报注入失败（已隔离，系统提示保持原样）: {_wb_err}")
 
@@ -4241,6 +4894,13 @@ async def run_twitter_simulation(
     _engagement_rate_val = _engagement_rate()
     _engagement_state = {"last_post_id": _max_post_id(db_path) if _engagement_on else 0}
 
+    # SIM-REACT: 每轮发帖后的回应阶段（默认开）；候选窗口水位在每轮有机 step 前推进。
+    _reaction_on = _reaction_phase_enabled()
+    _reaction_state: Dict[str, Any] = {}
+    _sim_language = _sim_output_language(config)
+    if _reaction_on:
+        log_info(f"回应阶段已启用（每轮发帖后回应他人帖子；输出语言={_sim_language or '未指定'}）")
+
     # RUN-7: 每轮结束后落轮级检查点（SIM_CHECKPOINT 默认开）；续跑则跳过已完成的轮次。
     _ckpt_platform = "reddit" if os.path.basename(db_path).startswith("reddit") else "twitter"
     _cfg_hash = _config_hash(config)  # ITEM 3: 每轮检查点写入配置指纹，供续跑前校验（只算一次）
@@ -4349,10 +5009,14 @@ async def run_twitter_simulation(
                     _period, temporal_config,
                     _scheduled_events_due(event_config, round_num),
                     world_delta_text,
+                    response_step=_reaction_on,
+                    language=_sim_language,
                 )
             except Exception as _pc_err:  # noqa: BLE001
                 log_info(f"世界时钟注入失败，跳过（不中断模拟）: {_pc_err}")
 
+        if _reaction_on:
+            _advance_reaction_window(_reaction_state, db_path)
         actions = {agent: LLMAction() for _, agent in active_agents}
         # 健壮性：单次 env.step 内的某个 agent LLM 调用失败（超时/降级/异常）不应中断整场模拟。
         # 记录并跳过本轮，让模拟继续，保住此前所有轮次的进度。
@@ -4402,6 +5066,20 @@ async def run_twitter_simulation(
                 )
                 total_actions += 1
                 round_action_count += 1
+
+        # SIM-REACT: 回应阶段——本轮活跃 agent 回应他人帖子（评论/引用/背书）。其动作并入
+        # actual_actions，供下方情感动态、参与度权重与 in-band 世界演化一并消费。
+        if _reaction_on:
+            _reaction_actions, last_rowid = await run_reaction_phase(
+                result.env, db_path, active_agents, config, round_num,
+                str((_period or {}).get("label") or ""), "twitter", agent_names,
+                _reaction_state, last_rowid, action_logger, _RNG, log_info,
+            )
+            if _reaction_actions:
+                actual_actions = list(actual_actions) + list(_reaction_actions)
+                if action_logger:
+                    total_actions += len(_reaction_actions)
+                    round_action_count += len(_reaction_actions)
 
         # I-2-1: 用本轮实际动作更新动态情感状态（默认关 → no-op）
         _observe_agent_dynamics(dynamics_tracker, actual_actions, dyn_name_to_id)
@@ -4543,7 +5221,8 @@ async def run_reddit_simulation(
     # env.reset() 之前注入；config 无 world_brief 字段（旧配置）→ no-op。
     if _world_brief_enabled():
         try:
-            _inject_world_brief(result.agent_graph, config.get("world_brief"), log_info)
+            _inject_world_brief(result.agent_graph, config.get("world_brief"), log_info,
+                                header=_world_brief_header(config))
         except Exception as _wb_err:  # noqa: BLE001
             log_info(f"世界简报注入失败（已隔离，系统提示保持原样）: {_wb_err}")
 
@@ -4760,6 +5439,13 @@ async def run_reddit_simulation(
     _engagement_rate_val = _engagement_rate()
     _engagement_state = {"last_post_id": _max_post_id(db_path) if _engagement_on else 0}
 
+    # SIM-REACT: 每轮发帖后的回应阶段（默认开）；候选窗口水位在每轮有机 step 前推进。
+    _reaction_on = _reaction_phase_enabled()
+    _reaction_state: Dict[str, Any] = {}
+    _sim_language = _sim_output_language(config)
+    if _reaction_on:
+        log_info(f"回应阶段已启用（每轮发帖后回应他人帖子；输出语言={_sim_language or '未指定'}）")
+
     # RUN-7: 每轮结束后落轮级检查点（SIM_CHECKPOINT 默认开）；续跑则跳过已完成的轮次。
     _ckpt_platform = "reddit" if os.path.basename(db_path).startswith("reddit") else "twitter"
     _cfg_hash = _config_hash(config)  # ITEM 3: 每轮检查点写入配置指纹，供续跑前校验（只算一次）
@@ -4868,10 +5554,14 @@ async def run_reddit_simulation(
                     _period, temporal_config,
                     _scheduled_events_due(event_config, round_num),
                     world_delta_text,
+                    response_step=_reaction_on,
+                    language=_sim_language,
                 )
             except Exception as _pc_err:  # noqa: BLE001
                 log_info(f"世界时钟注入失败，跳过（不中断模拟）: {_pc_err}")
 
+        if _reaction_on:
+            _advance_reaction_window(_reaction_state, db_path)
         actions = {agent: LLMAction() for _, agent in active_agents}
         # 健壮性：单次 env.step 内的某个 agent LLM 调用失败（超时/降级/异常）不应中断整场模拟。
         # 记录并跳过本轮，让模拟继续，保住此前所有轮次的进度。
@@ -4922,6 +5612,20 @@ async def run_reddit_simulation(
                 total_actions += 1
                 round_action_count += 1
         
+        # SIM-REACT: 回应阶段——本轮活跃 agent 回应他人帖子（评论/引用/背书）。其动作并入
+        # actual_actions，供下方情感动态、参与度权重与 in-band 世界演化一并消费。
+        if _reaction_on:
+            _reaction_actions, last_rowid = await run_reaction_phase(
+                result.env, db_path, active_agents, config, round_num,
+                str((_period or {}).get("label") or ""), "reddit", agent_names,
+                _reaction_state, last_rowid, action_logger, _RNG, log_info,
+            )
+            if _reaction_actions:
+                actual_actions = list(actual_actions) + list(_reaction_actions)
+                if action_logger:
+                    total_actions += len(_reaction_actions)
+                    round_action_count += len(_reaction_actions)
+
         # I-2-1: 用本轮实际动作更新动态情感状态（默认关 → no-op）
         _observe_agent_dynamics(dynamics_tracker, actual_actions, dyn_name_to_id)
 

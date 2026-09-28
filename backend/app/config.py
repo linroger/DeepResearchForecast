@@ -607,8 +607,17 @@ class Config:
     # (1) 参与度采样：每轮有机动作后从活跃 agent 确定性采样 LIKE_POST 落到本轮新帖上（权重∝该帖
     #     本轮已获互动），补足 OASIS 默认 feed「满屏帖 0 赞」的纯广播失真。采样赞标记 is_engagement_sample，
     #     供有机比例侦测器排除（诚实：采样赞不掩盖 agent 自身零点赞）。rate=每个活跃者本轮产生一次赞的概率。
-    SIM_ENGAGEMENT_SAMPLER = os.environ.get('SIM_ENGAGEMENT_SAMPLER', 'true').strip().lower() == 'true'
+    #     auto（默认）= 仅在回应阶段关闭时开启：采样赞是随机「背书」，会产生与角色矛盾的互动
+    #     （如出口管制机构给被管制方点赞）；回应阶段里点赞由 agent 按身份自己决定。true/false 强制。
+    SIM_ENGAGEMENT_SAMPLER = os.environ.get('SIM_ENGAGEMENT_SAMPLER', 'auto').strip().lower()
     SIM_ENGAGEMENT_RATE = float(os.environ.get('SIM_ENGAGEMENT_RATE', '0.3') or '0.3')  # [0,1] clamp
+    # SIM-REACT 回应阶段：每轮发帖 step 之后，活跃 agent 各做一次只含回复与背书工具（评论/点赞）的
+    # 调用，回应按角色相关性挑出的他人帖子（本轮+上轮，含别人对自己帖子的回复）。OASIS 每个 agent
+    # 每轮只有一次模型调用，此前几乎全部用来发帖（200 帖 : 9 评论）。false 关闭（旧行为）。
+    SIM_REACTION_PHASE = os.environ.get('SIM_REACTION_PHASE', 'true').strip().lower() == 'true'
+    SIM_REACTION_SHARE = float(os.environ.get('SIM_REACTION_SHARE', '1.0') or '1.0')  # [0,1]：参与回应的活跃 agent 比例
+    # 模拟发帖/回应语言覆盖（English/Chinese）；空 = 用配置的 output_language，缺省按预测问题的语言判定。
+    SIM_OUTPUT_LANGUAGE = os.environ.get('SIM_OUTPUT_LANGUAGE', '').strip()
     # (3) 种子 FOLLOW 风暴节流：每个 follower 的种子 FOLLOW 动作上限（add_edge 建图不受影响，仅截断
     #     写 trace/follow 表的 FOLLOW 动作），避免 630 条种子关注淹没早期动作日志。<=0 = 不限（旧行为）。
     SIM_MAX_FOLLOWS_PER_AGENT_ROUND = int(os.environ.get('SIM_MAX_FOLLOWS_PER_AGENT_ROUND', '3') or '3')
