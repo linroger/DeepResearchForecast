@@ -44,6 +44,17 @@ def _write_section(report_id: str, idx: int, body: str):
         f.write(body)
 
 
+def _start_generating(report_id: str) -> None:
+    """真实生成器先落 meta.json（status=generating）再写章节；无可读元信息的章节草稿一律不下发。"""
+    ReportManager.save_report(Report(
+        report_id=report_id,
+        simulation_id=f"sim_{report_id}",
+        graph_id="graph_test",
+        simulation_requirement="Forecast the outcome.",
+        status=ReportStatus.GENERATING,
+    ))
+
+
 def _publish(report_id: str, markdown: str) -> None:
     ReportManager.save_report(Report(
         report_id=report_id,
@@ -69,6 +80,7 @@ def _publish(report_id: str, markdown: str) -> None:
 
 def test_sections_partial_in_progress(client):
     rid = "report_partial_ip"
+    _start_generating(rid)
     _write_section(rid, 1, "## 执行摘要\n\n这是执行摘要正文。\n")
     _write_section(rid, 2, "## 关键发现\n\n关键发现正文。\n")
     # 进度记录当前正在生成第三章
@@ -120,6 +132,7 @@ def test_sections_partial_done_when_full_report(client):
 def test_sections_partial_no_generating_when_current_already_done(client):
     # current_section 已在已完成集合 → 不追加重复占位
     rid = "report_partial_nodup"
+    _start_generating(rid)
     _write_section(rid, 1, "## 执行摘要\n\n正文。\n")
     ReportManager.update_progress(rid, status="generating", progress=30,
                                   message="生成中", current_section="执行摘要",
@@ -142,6 +155,7 @@ def test_sections_partial_missing_report(client):
 def test_sections_partial_title_fallback(client):
     # 章节正文无 markdown 标题 → 回退 'Section N'
     rid = "report_partial_notitle"
+    _start_generating(rid)
     _write_section(rid, 1, "纯正文，没有标题行。\n")
     resp = client.get(f"/api/report/{rid}/sections-partial")
     data = resp.get_json()

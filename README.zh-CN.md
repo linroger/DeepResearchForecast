@@ -1643,7 +1643,7 @@ flowchart LR
   - 请求日志会对凭据脱敏，`run.json` 不保存任何凭据。
   - 提供方设置在写入 `.env` 前会被清洗。
   - 自定义 Base URL 会被校验；设置 `APP_BLOCK_PRIVATE_URLS=true` 还会拒绝私有地址与环回地址。
-- **开发服务器同样只监听环回地址。** `npm start` 与 `npm run dev` 把 Vite 绑定在 `localhost:3000`。它的 `/api` 代理经由环回地址访问 Flask，并在 `X-Forwarded-For` 中转发浏览器的地址。只有当所有转发地址（`X-Forwarded-For`、`X-Real-IP`、`Forwarded`）也都是环回地址时，Flask 才信任这个环回调用方；替其他机器代理过来的请求一律按远程请求处理。转发头只会降低信任，绝不会提升信任。
+- **开发服务器同样只监听环回地址。** `npm start` 与 `npm run dev` 把 Vite 绑定在 `127.0.0.1:3000`，<http://localhost:3000> 与 <http://127.0.0.1:3000> 均可访问。它的 `/api` 代理经由环回地址访问 Flask，并在 `X-Forwarded-For` 中转发浏览器的地址。只有当所有转发地址（`X-Forwarded-For`、`X-Real-IP`、`Forwarded`）也都是环回地址时，Flask 才信任这个环回调用方；替其他机器代理过来的请求一律按远程请求处理。转发头只会降低信任，绝不会提升信任。
   - 若要让网络中的其他设备访问开发服务器，请用 `FRONTEND_HOST=0.0.0.0 npm run dev` 启动（这是 shell 变量，Vite 不会读取根目录的 `.env`）。此时远程浏览器访问 `/api` 会得到 `403`，除非配置了 `APP_API_TOKEN`；而 SPA 不会发送 token，因此真正的远程使用请在前面放一个负责鉴权的反向代理。
 - **有意对外暴露后端时。** 请同时设置 `FLASK_HOST=0.0.0.0` **和** `APP_API_TOKEN`。SPA 不会发送 token，因此需要浏览器访问时，请在前面放一个负责鉴权的反向代理。
 

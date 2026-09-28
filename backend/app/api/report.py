@@ -5,6 +5,7 @@ Report API路由
 
 import hashlib
 import os
+import time
 import traceback
 import threading
 from flask import request, jsonify, send_file, send_from_directory, Response
@@ -22,14 +23,39 @@ from ..utils.logger import get_logger
 logger = get_logger('mirofish.api.report')
 
 
+def _withhold_outline_drafts(outline):
+    """Keep the outline skeleton (title/summary, section titles/descriptions), drop section prose.
+
+    Report.to_dict() 序列化的 outline.sections[*].content 就是各章节正文草稿（报告完成时
+    save_report 连同大纲一起落盘到 meta.json），未通过发布审计时必须与 markdown_content
+    同一闸门隐去。
+    """
+    if not isinstance(outline, dict) or not isinstance(outline.get("sections"), list):
+        return outline
+    return {
+        **outline,
+        "sections": [
+            {**section, "content": "", "draft_withheld": True}
+            if isinstance(section, dict) else section
+            for section in outline["sections"]
+        ],
+    }
+
+
 def _report_publication_payload(report):
-    """Return report metadata without leaking an unaudited draft body."""
+    """Return report metadata without leaking an unaudited draft body.
+
+    Unpublishable reports keep their state and outline skeleton, but both the
+    assembled Markdown and every outline section's draft content are withheld.
+    """
     publication = ReportManager.publication_status(report.report_id)
     payload = report.to_dict()
     payload["publishable"] = bool(publication.get("publishable"))
     payload["publication_issues"] = list(publication.get("reasons") or [])
-    if not payload["publishable"]:
+    payload["draft_withheld"] = not payload["publishable"]
+    if payload["draft_withheld"]:
         payload["markdown_content"] = ""
+        payload["outline"] = _withhold_outline_drafts(payload.get("outline"))
     payload["translation_status"] = ReportManager.translation_status(
         report.report_id, report=report
     )
@@ -45,9 +71,10 @@ def _report_publication_payload(report):
     return payload
 
 
-def _publication_rejection(report_id: str, lang=None):
+def _publication_rejection(report_id: str, lang=None, publication=None):
     """Build the shared fail-closed response for customer-facing artifacts."""
-    publication = ReportManager.publication_status(report_id, lang)
+    if publication is None:
+        publication = ReportManager.publication_status(report_id, lang)
     return jsonify({
         "success": False,
         "error": "报告尚未通过最终发布审计",
@@ -56,9 +83,10 @@ def _publication_rejection(report_id: str, lang=None):
     }), 409
 
 
-# agent_log.jsonl 中承载报告正文草稿的字段。报告仍在生成时照常实时下发（与
-# sections-partial 的渐进发布一致）；一旦生成结束却未通过发布审计，这些字段一律隐去，
-# 只保留事件骨架（action/stage/章节标题/长度/遥测），与 sections/section 端点同一闸门。
+# agent_log.jsonl 中承载报告正文草稿的字段。报告仍在活跃生成时照常实时下发（与
+# sections-partial 的渐进发布一致）；未通过发布审计时（生成结束、元信息不可读、或生成中断
+# 超时，见 _draft_exposure_gate）这些字段一律隐去，只保留事件骨架（action/stage/章节标题/
+# 长度/遥测），与 sections/section 端点同一闸门。
 _AGENT_LOG_DRAFT_FIELDS = {
     "section_content": ("content",),
     "section_complete": ("content",),
@@ -67,18 +95,127 @@ _AGENT_LOG_DRAFT_FIELDS = {
 }
 _REPORT_IN_PROGRESS = (ReportStatus.PENDING, ReportStatus.PLANNING, ReportStatus.GENERATING)
 
+# 「生成中实时下发草稿」豁免的有效期（秒）。生成器崩溃 / 进程被杀时 meta.json 永远停在
+# pending/planning/generating，若豁免不设期限，草稿会被无限期当作「生成中」下发。生成器每次
+# 工具调用、LLM 响应、章节落盘都会刷新下方的活动文件（agent_log.jsonl / console_log.txt 逐事件
+# 追加；单次 LLM HTTP 请求读超时为 600s，见 utils/llm_client.py），正常生成中两次写入的间隔
+# 远小于 30 分钟；超过此时长毫无写入即判定生成已中断，按「未通过发布审计」处理，不再下发任何
+# 草稿。心跳取文件 mtime 而非 progress.json 的 updated_at：后者只在阶段/章节边界刷新（单章节
+# 检索可能很久，并发生成时更久），且为无时区的本地时间。
+REPORT_IN_PROGRESS_STALE_SECONDS = 30 * 60
 
-def _agent_log_publication(report_id: str):
-    """Return (withhold_drafts, publication) for the agent-log endpoints.
+# 只有报告生成器会写入的活动文件（查看 / 导出等读路径不刷新它们），外加 section_XX.md。
+# 其最新 mtime 即生成心跳。
+_REPORT_ACTIVITY_FILES = frozenset({
+    "meta.json", "progress.json", "outline.json", "agent_log.jsonl", "console_log.txt",
+})
 
-    Fail closed: a missing report or any status other than an in-flight one
-    applies the publication gate.
+_STALE_GENERATION_REASON = (
+    "report generation stalled: no generator activity for over "
+    f"{REPORT_IN_PROGRESS_STALE_SECONDS // 60} minutes"
+)
+_UNLOADABLE_METADATA_REASON = "report metadata (meta.json) could not be loaded"
+
+
+def _report_last_activity(report_id: str):
+    """Return the newest mtime (epoch seconds) among generator-written files, or None."""
+    latest = None
+    try:
+        with os.scandir(ReportManager._get_report_folder(report_id)) as entries:
+            for entry in entries:
+                name = entry.name
+                if name not in _REPORT_ACTIVITY_FILES and not (
+                        name.startswith("section_") and name.endswith(".md")):
+                    continue
+                try:
+                    mtime = entry.stat().st_mtime
+                except OSError:
+                    continue
+                if latest is None or mtime > latest:
+                    latest = mtime
+    except OSError:
+        return None
+    return latest
+
+
+def _report_generation_live(report_id: str) -> bool:
+    """True iff the generator wrote an activity file within REPORT_IN_PROGRESS_STALE_SECONDS.
+
+    A timestamp more than the window in the future (clock jump / tampering) is not
+    trusted as proof of liveness either.
     """
-    report = ReportManager.get_report(report_id)
-    publication = ReportManager.publication_status(report_id)
-    in_progress = report is not None and report.status in _REPORT_IN_PROGRESS
-    withhold = not in_progress and not publication.get("publishable")
-    return withhold, publication
+    last = _report_last_activity(report_id)
+    if last is None:
+        return False
+    return abs(time.time() - last) <= REPORT_IN_PROGRESS_STALE_SECONDS
+
+
+def _draft_exposure_gate(report_id: str):
+    """Return (withhold_drafts, report, publication): the single draft-exposure gate.
+
+    Section drafts (section_XX.md, agent-log prose) are served only when the exact
+    report bytes are publishable, or while the report is demonstrably still being
+    generated: loadable metadata with an in-flight status AND generator activity
+    within REPORT_IN_PROGRESS_STALE_SECONDS.  Everything else fails closed:
+    missing / unreadable / malformed meta.json, a finished-but-unpublishable
+    report, and an in-flight status whose generator went silent (crashed).
+    """
+    try:
+        report = ReportManager.get_report(report_id)
+    except Exception as e:  # noqa: BLE001 - 结构损坏的 meta.json 与缺失同等对待（fail closed）
+        logger.warning(f"报告元信息不可读，按不可发布处理: {report_id}: {e}")
+        report = None
+    try:
+        publication = ReportManager.publication_status(report_id)
+    except Exception as e:  # noqa: BLE001 - 结构异常的 meta.json（非对象等）→ fail closed，不 500
+        logger.warning(f"报告发布状态无法判定，按不可发布处理: {report_id}: {e}")
+        publication = {"publishable": False, "reasons": [_UNLOADABLE_METADATA_REASON]}
+    if report is None and publication.get("publishable"):
+        # publication_status 只读 meta.json 的 status 等少数字段；元信息无法还原为 Report
+        # （缺字段等）时即便审计看似通过，也没有可信的报告可言 → 同样不可发布。
+        publication = {
+            **publication,
+            "publishable": False,
+            "reasons": [*(publication.get("reasons") or []), _UNLOADABLE_METADATA_REASON],
+        }
+    live = False
+    if report is not None and report.status in _REPORT_IN_PROGRESS:
+        live = _report_generation_live(report_id)
+        if not live:
+            publication = {
+                **publication,
+                "reasons": [*(publication.get("reasons") or []), _STALE_GENERATION_REASON],
+            }
+    withhold = not live and not publication.get("publishable")
+    return withhold, report, publication
+
+
+# 生成器在控制台日志里会引用草稿原文的几类审计/修订行：标记 → 引文开始处的分隔符。
+# 草稿被扣留时只保留分隔符之前的计数摘要，引文部分替换为扣留标记（诊断信息仍可见）。
+_CONSOLE_DRAFT_QUOTE_MARKERS = (
+    ("引用接地审计", ": "),
+    ("概率一致性审计", ": "),
+    ("统计合理性审计", ": "),
+    ("反思修订已采纳", " ｜指令"),
+)
+_CONSOLE_DRAFT_WITHHELD = " [draft excerpt withheld until the report passes its final audit]"
+
+
+def _withhold_console_log_drafts(lines):
+    """Redact the draft excerpts some generator log lines quote, keeping their summaries."""
+    result = []
+    for line in lines:
+        if isinstance(line, str):
+            for marker, separator in _CONSOLE_DRAFT_QUOTE_MARKERS:
+                start = line.find(marker)
+                if start < 0:
+                    continue
+                cut = line.find(separator, start + len(marker))
+                if cut >= 0:
+                    line = line[:cut] + _CONSOLE_DRAFT_WITHHELD
+                break
+        result.append(line)
+    return result
 
 
 def _withhold_agent_log_drafts(logs):
@@ -97,7 +234,7 @@ def _withhold_agent_log_drafts(logs):
 
 def _gate_agent_log(report_id: str, logs):
     """Apply the publication gate to agent-log entries; returns (logs, gate fields)."""
-    withhold, publication = _agent_log_publication(report_id)
+    withhold, _report, publication = _draft_exposure_gate(report_id)
     if withhold:
         logs = _withhold_agent_log_drafts(logs)
     return logs, {
@@ -1455,25 +1592,23 @@ def get_report_sections(report_id: str):
                     ...
                 ],
                 "total_sections": 3,
-                "is_complete": false
+                "is_complete": false,
+                "draft_withheld": false
             }
         }
+
+    草稿闸门（_draft_exposure_gate）：只有已通过发布审计、或元信息可读且仍在活跃生成中的
+    报告才下发章节正文；元信息缺失/损坏、终态未发布、生成中断（超时无活动）一律返回空章节。
     """
     try:
-        sections = ReportManager.get_generated_sections(report_id)
-        
-        # 获取报告状态
-        report = ReportManager.get_report(report_id)
+        withhold, report, publication = _draft_exposure_gate(report_id)
+        sections = [] if withhold else ReportManager.get_generated_sections(report_id)
         is_complete = bool(
             report is not None
             and report.status == ReportStatus.COMPLETED
-            and ReportManager.is_publishable(report_id)
+            and publication.get("publishable")
         )
-        publication = ReportManager.publication_status(report_id)
-        if report and report.status in (ReportStatus.COMPLETED, ReportStatus.FAILED) \
-                and not is_complete:
-            sections = []
-        
+
         return jsonify({
             "success": True,
             "data": {
@@ -1483,6 +1618,7 @@ def get_report_sections(report_id: str):
                 "is_complete": is_complete,
                 "publishable": bool(publication.get("publishable")),
                 "publication_issues": list(publication.get("reasons") or []),
+                "draft_withheld": withhold,
             }
         })
         
@@ -1516,10 +1652,25 @@ def get_report_sections_partial(report_id: str):
       · 若 progress.json 记录了 current_section 且不在已完成集合中，追加一个占位条目
         （status='generating'，content_md=''），让前端能显示「正在生成: X」。
       · done=true 当且仅当 full_report.md 已落盘（终稿组装完成）。
+      · 草稿闸门（_draft_exposure_gate）：元信息缺失/损坏、终态未发布、生成中断（超时无活动）
+        的报告一律返回空 sections（draft_withheld=true），不读取章节文件。
     任一底层读取异常都 degrade 成安全空集（不 500，保证轮询稳定）。
     """
     try:
         import re as _re
+
+        # ⓪ 草稿闸门先行：不得下发时直接返回空集，连章节文件都不读。
+        withhold, _report, publication = _draft_exposure_gate(report_id)
+        done = bool(publication.get("publishable"))
+        if withhold:
+            return jsonify({
+                "success": True,
+                "sections": [],
+                "done": done,
+                "publishable": done,
+                "publication_issues": list(publication.get("reasons") or []),
+                "draft_withheld": True,
+            })
 
         def _parse_title(md: str, fallback: str) -> str:
             """从章节正文抽首个 markdown 标题（# ~ ######）作为标题；无标题 → fallback。"""
@@ -1565,19 +1716,14 @@ def get_report_sections_partial(report_id: str):
                 })
 
         # ③ done：最终 Markdown 的存在只是候选；只有 exact-byte audit
-        # 通过才可向客户宣告完成。终态失败/未审计报告也不得泄漏章节正文。
-        report = ReportManager.get_report(report_id)
-        publication = ReportManager.publication_status(report_id)
-        done = bool(publication.get("publishable"))
-        if report and report.status in (ReportStatus.COMPLETED, ReportStatus.FAILED) and not done:
-            sections = []
-
+        # 通过才可向客户宣告完成（已由 ⓪ 的闸门一并算出）。
         return jsonify({
             "success": True,
             "sections": sections,
             "done": done,
             "publishable": done,
             "publication_issues": list(publication.get("reasons") or []),
+            "draft_withheld": False,
         })
 
     except Exception as e:
@@ -1604,12 +1750,13 @@ def get_single_section(report_id: str, section_index: int):
                 "content": "## 执行摘要\\n\\n..."
             }
         }
+
+    草稿闸门同 /sections：不得下发草稿时（元信息缺失/损坏、终态未发布、生成中断）返回 409。
     """
     try:
-        report = ReportManager.get_report(report_id)
-        if report and report.status in (ReportStatus.COMPLETED, ReportStatus.FAILED) \
-                and not ReportManager.is_publishable(report_id):
-            return _publication_rejection(report_id)
+        withhold, _report, publication = _draft_exposure_gate(report_id)
+        if withhold:
+            return _publication_rejection(report_id, publication=publication)
         section_path = ReportManager._get_section_path(report_id, section_index)
         
         if not os.path.exists(section_path):
@@ -1708,8 +1855,10 @@ def get_agent_log(report_id: str):
     - 每个章节的开始、工具调用、LLM响应、完成
     - 报告完成或失败
     
-    发布闸门：报告生成结束（completed/failed）但未通过发布审计时，章节正文草稿、LLM 原始
-    响应与 ReACT 思考字段被隐去（draft_withheld=true，条目骨架保留）；生成中照常实时下发。
+    发布闸门（_draft_exposure_gate）：未通过发布审计时——生成结束（completed/failed）、
+    元信息缺失/损坏、或 pending/planning/generating 却超过 REPORT_IN_PROGRESS_STALE_SECONDS
+    无生成活动（生成器崩溃）——章节正文草稿、LLM 原始响应与 ReACT 思考字段被隐去
+    （draft_withheld=true，条目骨架保留）；活跃生成中照常实时下发。
 
     Query参数：
         from_line: 从第几行开始读取（可选，默认0，用于增量获取）
@@ -1833,6 +1982,10 @@ def get_console_log(report_id: str):
         from_line = request.args.get('from_line', 0, type=int)
         
         log_data = ReportManager.get_console_log(report_id, from_line=from_line)
+        withhold, _report, _publication = _draft_exposure_gate(report_id)
+        if withhold and isinstance(log_data, dict):
+            log_data = {**log_data, "logs": _withhold_console_log_drafts(log_data.get("logs") or []),
+                        "draft_withheld": True}
         
         return jsonify({
             "success": True,
@@ -1864,12 +2017,16 @@ def stream_console_log(report_id: str):
     """
     try:
         logs = ReportManager.get_console_log_stream(report_id)
+        withhold, _report, _publication = _draft_exposure_gate(report_id)
+        if withhold:
+            logs = _withhold_console_log_drafts(logs)
         
         return jsonify({
             "success": True,
             "data": {
                 "logs": logs,
-                "count": len(logs)
+                "count": len(logs),
+                "draft_withheld": withhold,
             }
         })
         
