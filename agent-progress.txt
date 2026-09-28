@@ -269,3 +269,7 @@ This repository implements a six-stage forecast workflow: DeerFlow 2 research, o
 
 - **Live run 2 (owner-approved, standard depth, GLM-5.3):** exit 0 in 30.5 min; 94 calls; 693k input / 123k output tokens; 81.4% of input from cache; 10 KIQs, 116 facts (69 VERIFIED), QA 9/9, 48.5k-char report, 34 sources (grounding 0.56 vs 0.36 on the quick run). Retries exercised live (timeout; reasoning-exhausted writer cap).
 - **Tuning:** default GLM write cap 12k → 20k; search failures flag a degraded run only at ≥ 20% failed.
+
+### 2026-09-28T18:40:00+08:00 (CST) — branch `feat/research-engine-v3`
+
+- **Live run 3 (owner-approved, deep depth, GLM-5.3):** exit 0 in 39.3 min; 155 calls; 1.45M input / 244k output tokens; 81.3% of input from cache (~973 credits); 17 KIQs, 0 fallbacks; 194 facts (106 VERIFIED); QA 9/9 with 3 substantive critique rewrites; 92.8k-char report, 65 sources (grounding 0.63), research_quality 0.73. No code change needed.
