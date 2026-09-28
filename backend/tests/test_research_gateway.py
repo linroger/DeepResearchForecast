@@ -333,7 +333,7 @@ def test_glm_call_params_per_kind_and_degrade_ladder():
     assert profile.kind == "glm" and profile.supports_timeout_bind and profile.max_level == 2
     assert profile.cost_weights["cached"] == pytest.approx(1.7 / 6.9)
     assert profile.cost_weights["output"] == pytest.approx(24 / 6.9)
-    expected = {"agent": ("low", 6000), "json": ("low", 16000), "write": ("high", 12000)}
+    expected = {"agent": ("low", 6000), "json": ("low", 16000), "write": ("high", 20000)}
     for kind, (effort, max_tokens) in expected.items():
         params = profile.call_params(kind, timeout=99)
         assert params == {
@@ -2093,7 +2093,7 @@ def test_r2_glm_message_structure_400_does_not_degrade_parameters():
     assert gw.invoke(msgs(), kind="write", label="w").text == "later"
     assert model.calls[-1]["kwargs"]["extra_body"] == {
         "thinking": {"type": "enabled", "clear_thinking": True}, "reasoning_effort": "high",
-        "max_tokens": 12000}
+        "max_tokens": 20000}
     assert not [line for line in plog.of("warn") if "parameter level" in line]
 
 
@@ -2860,7 +2860,7 @@ def test_r3_reasoning_cut_empty_reply_is_retried_once_with_a_wider_cap():
     model = FakeOpenAIModel([ai("", finish="length", usage=(9000, 12000)), ai("Section body.")],
                             model_name="glm-5.3")
     gw, plog = gateway(model)
-    result = gw.invoke(msgs(), kind="write", label="synth:s1")
+    result = gw.invoke(msgs(), kind="write", label="synth:s1", max_tokens=12000)
     assert result.text == "Section body." and not result.truncated and result.output_cap == 24000
     caps = [(call["kwargs"]["max_tokens"], call["kwargs"]["extra_body"]["max_tokens"]) for call in model.calls]
     assert caps == [(12000, 12000), (24000, 24000)]

@@ -567,7 +567,10 @@ def estimate_tokens(messages: Sequence[Any], tools: Sequence[Any] | None = None)
 # ===========================================================================
 
 CALL_KINDS: tuple[str, ...] = ("agent", "json", "write")
-DEFAULT_MAX_TOKENS: Mapping[str, int] = {"agent": 6000, "json": 16000, "write": 12000}
+# "write" leaves room for GLM's high-effort reasoning (~7k tokens per section in
+# live runs) plus the section text; 12k made one writer call in eleven spend the
+# whole cap on reasoning and retry.
+DEFAULT_MAX_TOKENS: Mapping[str, int] = {"agent": 6000, "json": 16000, "write": 20000}
 DEFAULT_TIMEOUT_S: Mapping[str, float] = {"agent": 240.0, "json": 360.0, "write": 600.0}
 DEFAULT_GLM_EFFORT: Mapping[str, str] = {"agent": "low", "json": "low", "write": "high"}
 _GLM_EFFORTS = ("low", "high", "max")

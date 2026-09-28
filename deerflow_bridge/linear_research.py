@@ -5838,7 +5838,9 @@ class _Engine:
         if gap.get("status") == "partial" or detail.startswith("stopped:"):
             events.append(f"gap review ended early ({detail})")
         tools = self._tool_failures()
-        if tools["search_failed"]:
+        # A few transient search errors are routine (a live standard run saw 3 of
+        # 55); only a failure rate that starves the research is a degradation.
+        if tools["search_failed"] and 5 * tools["search_failed"] >= tools["searches"]:
             events.append(f"{tools['search_failed']} of {tools['searches']} searches failed")
         if tools["fetch_failed"] and 2 * tools["fetch_failed"] >= tools["fetches"]:
             events.append(f"{tools['fetch_failed']} of {tools['fetches']} page fetches failed")

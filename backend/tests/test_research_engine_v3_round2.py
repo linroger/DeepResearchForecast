@@ -110,8 +110,8 @@ def test_r2_writer_replies_still_cut_after_the_wider_retry_are_trimmed_and_flagg
     assert "regions where" not in grid and grid.rstrip().endswith(".")
     assert "Interconnection queues in the three" not in grid  # the cut paragraph went as a whole
     assert SUMMARY_TAIL not in summary and summary.rstrip().endswith("frame the tails.")
-    # One wider retry (2 x the 12,000 write cap) for the section alone and for the summary.
-    assert sorted(cap for cap in _write_caps(model) if cap != 12000) == [24000, 24000]
+    # One wider retry (2 x the 20,000 write cap, at most 32,000) for the section alone and the summary.
+    assert sorted(cap for cap in _write_caps(model) if cap != 20000) == [32000, 32000]
     assert meta["truncated_sections"] == ["Executive Summary", CUT_SECTION]
     assert "complete_sections" in meta["research_qa"]["failures"]
     check = next(c for c in meta["research_qa"]["checks"] if c["name"] == "complete_sections")
@@ -122,15 +122,15 @@ def test_r2_writer_replies_still_cut_after_the_wider_retry_are_trimmed_and_flagg
 
 
 def test_r2_a_wider_cap_that_fits_publishes_the_whole_reply(tmp_path, bridge):
-    rc, meta, plog, model, out = v3.run_engine(tmp_path, bridge, CutWriterWorld(fits_at=20000))
+    rc, meta, plog, model, out = v3.run_engine(tmp_path, bridge, CutWriterWorld(fits_at=32000))
     assert rc == 0, meta.get("error")
     sections = dict(lr.report_sections((out / "research_report.md").read_text(encoding="utf-8")))
     assert "regions where" not in sections[CUT_SECTION]
     assert sections["Executive Summary"].rstrip().endswith("Grid queues are the signpost.")
-    assert sorted(cap for cap in _write_caps(model) if cap != 12000) == [24000, 24000]
+    assert sorted(cap for cap in _write_caps(model) if cap != 20000) == [32000, 32000]
     assert meta["truncated_sections"] == [] and "complete_sections" not in meta["research_qa"]["failures"]
     assert not [m for m in plog.of("warn") if "was truncated at its output cap" in m]
-    assert any("asking once more with a 24000-token cap" in m for m in plog.of("stage"))
+    assert any("asking once more with a 32000-token cap" in m for m in plog.of("stage"))
 
 
 class CutRewriteWorld(v3.World):

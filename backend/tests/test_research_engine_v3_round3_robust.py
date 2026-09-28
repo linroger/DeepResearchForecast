@@ -262,24 +262,39 @@ def test_r3_no_sourced_evidence_fails_resumably_before_synthesis(tmp_path, bridg
     assert meta["kiqs"]["facts"] > 0 and (out / "research_report.md").is_file()
 
 
-def test_r3_partial_tool_failures_are_degradation_events(tmp_path, bridge):
+def _flaky(fail_every: int):
+    """A search backend whose every ``fail_every``-th call fails (HTTP 502)."""
     lock = threading.Lock()
-    failed = {"searches": 0}
+    calls = {"n": 0}
 
-    def flaky_search(query, n):
+    def search(query, n):
         with lock:
-            failed["searches"] += 1
-            broken = failed["searches"] <= 2
+            calls["n"] += 1
+            broken = calls["n"] % fail_every == 1
         if broken:
             raise ConnectionError("search provider: HTTP 502")
         return v3.fake_search(query, n)
 
-    rc, meta, _, _, _ = run(tmp_path, bridge, v3.World(), depth="quick", search=flaky_search, fetch=_fetch_down)
+    return search
+
+
+def test_r3_partial_tool_failures_are_degradation_events(tmp_path, bridge):
+    rc, meta, _, _, _ = run(tmp_path, bridge, v3.World(), depth="quick", search=_flaky(2), fetch=_fetch_down)
     assert rc == 0, meta.get("error")
     events = events_of(meta)
     searches, fetches = meta["tools"]["searches"], meta["tools"]["fetches"]
-    assert f"2 of {searches} searches failed" in events
+    failed = meta["tools"]["failures"]
+    assert any(e.endswith(f"of {searches} searches failed") for e in events) and 5 * failed >= searches
     assert fetches > 0 and f"{fetches} of {fetches} page fetches failed" in events
+
+
+def test_r3_a_few_transient_search_failures_are_no_degradation(tmp_path, bridge):
+    """A live standard run saw 3 of 55 searches fail transiently; below a 20%
+    failure rate the research is not starved, so the run is not degraded."""
+    rc, meta, _, _, _ = run(tmp_path, bridge, v3.World(), depth="standard", search=_flaky(1000))
+    assert rc == 0, meta.get("error")
+    assert meta["tools"]["searches"] >= 6
+    assert not [e for e in events_of(meta) if "searches failed" in e]
 
 
 # =============================================================== C5 / C43 degradation events
