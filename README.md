@@ -160,16 +160,6 @@ Here is one prompt, *"Who wins the US AI race by 2030?"*, going from question to
 
 ▶ **[Watch the full demo video (47 s, MP4)](docs/media/demo.mp4)**
 
-### Featured run: The Collision Decade (Modern Mercantilism × AI, 2026–2031)
-
-This run answers a Bridgewater-style challenge brief end to end:
-- a deep-mode English research pass on the collision of modern mercantilism and AI;
-- a 14-actor dossier of the principals (the US executive, China, the EU, Nvidia, TSMC, the hyperscalers, the Fed …) with typed, positive- or negative-valence relationships;
-- an **80-persona dual-platform simulation**;
-- a 3-part forecast brief with **13 binary forecasts**, each with a probability and objective resolution criteria, plus **4 probability-weighted scenarios**.
-
-🔗 **[Explore it live](https://linroger.github.io/DeepAgentForecast/demo.html?run=collision-decade-2031)**
-
 ### Showcase run: global semiconductors through 2030
 
 - A deep-mode research pass on the full semiconductor value chain: memory, HBM, logic and foundry, across 17 named companies.
