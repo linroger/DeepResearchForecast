@@ -16,7 +16,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
       - name: Ruff lint (F/E9)
-        run: uvx ruff check backend/app backend/scripts deerflow_bridge --select F,E9 --ignore F401,F841,F541
+        run: uvx ruff check --select F,E9 --ignore F401,F841,F541 backend/app backend/scripts deerflow_bridge
       - name: .env.example <-> Config drift
         run: python3 backend/scripts/check_env_drift.py --strict
 

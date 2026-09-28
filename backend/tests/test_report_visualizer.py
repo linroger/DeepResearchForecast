@@ -283,10 +283,10 @@ WORLD_STATE_V3 = {
 
 COMPARISON = {
     "dimensions": [
-        {"name": "总动作量", "baseline": 100, "scenario": 120, "delta": "+20", "verdict": "更高"},
-        {"name": "执行轮数", "baseline": 5, "scenario": 6, "delta": "+1", "verdict": "更长"},
-        {"name": "峰值轮次", "baseline": "round 3 (12)", "scenario": "round 2 (18)",
-         "delta": "-1 轮", "verdict": "更早"},  # 数值可从字符串抽取
+        {"name": "Total actions", "baseline": 100, "scenario": 120, "delta": "+20", "verdict": "higher"},
+        {"name": "Execution rounds", "baseline": 5, "scenario": 6, "delta": "+1", "verdict": "longer"},
+        {"name": "Peak round", "baseline": "round 3 (12)", "scenario": "round 2 (18)",
+         "delta": "-1 round", "verdict": "earlier"},  # 数值可从字符串抽取
     ],
 }
 
@@ -603,7 +603,7 @@ def test_comparison_numeric_extraction(tmp_path):
     viz = ReportVisualizer()
     charts = str(tmp_path / "charts")
     # 只含字符串数值的维度也可解析
-    comp = {"dimensions": [{"name": "峰值", "baseline": "round 3 (12)", "scenario": "round 2 (18)"}]}
+    comp = {"dimensions": [{"name": "Peak", "baseline": "round 3 (12)", "scenario": "round 2 (18)"}]}
     rel = viz.build_comparison_bars(comp, charts)
     assert rel is not None and os.path.exists(str(tmp_path / rel))
 

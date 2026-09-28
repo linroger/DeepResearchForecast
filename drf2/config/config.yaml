@@ -380,7 +380,7 @@ subagents:
 # ============================================================================
 
 skills:
-  path: /Users/rogerlin/Downloads/DeepResearchForecast/drf2/skills
+  path: drf2/skills
   container_path: /mnt/skills
 
 title:
