@@ -2385,6 +2385,78 @@ def _wrap_agent_tool_arg_normalizer(agent_graph, log_info) -> None:
         log_info(f"已启用工具参数规整（{wrapped} 个工具；SIM_TOOL_ARG_NORMALIZE=false 关闭）")
 
 
+# 自我背书守卫：点赞 = 公开背书，给自己的帖子/评论点赞不是有效互动。实测（quantum-2040）
+# 提示里写明「never like your own post」后仍有约 2% 的点赞落在自己的帖子上（回应自己帖子
+# 下的回复时顺手点赞），发帖步骤里 OASIS 自带的点赞同样会点自己的帖子——必须在工具层拦截。
+_SELF_ENDORSE_QUERIES = {
+    "like_post": ("post_id",
+                  "SELECT u.agent_id FROM post p JOIN user u ON p.user_id = u.user_id "
+                  "WHERE p.post_id = ?"),
+    "like_comment": ("comment_id",
+                     "SELECT u.agent_id FROM comment c JOIN user u ON c.user_id = u.user_id "
+                     "WHERE c.comment_id = ?"),
+}
+
+
+def _target_author_agent_id(db_path: str, query: str, target_id: Any) -> Optional[int]:
+    """被点赞对象的作者 agent_id；库/表/行缺失或参数非法 → None（不拦截）。"""
+    try:
+        target = int(target_id)
+    except (TypeError, ValueError):
+        return None
+    if not os.path.exists(db_path):
+        return None
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute(query, (target,)).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+    return int(row[0]) if row and row[0] is not None else None
+
+
+def _wrap_agent_self_like_guard(agent_graph, db_path: str, log_info) -> None:
+    """给每个 agent 的 like_post / like_comment 套上自我背书守卫（幂等，best-effort）：
+    目标由本 agent 所写 → 不执行，返回失败结果（模型看到原因），其余照常执行。"""
+    import functools
+    import inspect
+    guarded = 0
+    try:
+        agents = list(agent_graph.get_agents())
+    except Exception:
+        return
+    for aid, agent in agents:
+        tools = getattr(agent, "_internal_tools", None)
+        if not isinstance(tools, dict):
+            continue
+        for name, (arg, query) in _SELF_ENDORSE_QUERIES.items():
+            tool = tools.get(name)
+            func = getattr(tool, "func", None)
+            if func is None or getattr(func, "_sim_self_like_guard", False):
+                continue
+            if not inspect.iscoroutinefunction(func):
+                continue  # OASIS 的社交动作均为 async；非预期形态不包
+
+            def _make(f, owner, arg_name, sql):
+                @functools.wraps(f)
+                async def _w(*args, **kwargs):
+                    target = kwargs.get(arg_name, args[0] if args else None)
+                    if _target_author_agent_id(db_path, sql, target) == owner:
+                        return {"success": False,
+                                "error": "You cannot like your own post or comment."}
+                    return await f(*args, **kwargs)
+                return _w
+
+            new_func = _make(func, int(aid), arg, query)
+            new_func._sim_self_like_guard = True
+            tool.func = new_func
+            guarded += 1
+    if guarded:
+        log_info(f"已启用自我背书守卫（{guarded} 个点赞工具：不能给自己的帖子/评论点赞）")
+
+
 async def inject_initial_follows(env, event_config, log_info, agent_names=None, action_logger=None):
     """T3.3: 把 event_config.initial_follows 作为 round-0 关注边注入。
 
@@ -4703,6 +4775,12 @@ async def run_twitter_simulation(
         _wrap_agent_tool_arg_normalizer(result.agent_graph, log_info)
     except Exception as _tan_err:  # noqa: BLE001
         log_info(f"工具参数规整启用失败（已隔离，保持原生工具行为）: {_tan_err}")
+    # 自我背书守卫：点赞工具拒绝自己写的帖子/评论（发帖与回应两个步骤共用同一工具对象）
+    try:
+        _wrap_agent_self_like_guard(
+            result.agent_graph, os.path.join(simulation_dir, "twitter_simulation.db"), log_info)
+    except Exception as _slg_err:  # noqa: BLE001
+        log_info(f"自我背书守卫启用失败（已隔离，保持原生工具行为）: {_slg_err}")
 
     # 从配置文件获取 Agent 真实名称映射（使用 entity_name 而非默认的 Agent_X）
     agent_names = get_agent_names_from_config(config)
@@ -5250,6 +5328,12 @@ async def run_reddit_simulation(
         _wrap_agent_tool_arg_normalizer(result.agent_graph, log_info)
     except Exception as _tan_err:  # noqa: BLE001
         log_info(f"工具参数规整启用失败（已隔离，保持原生工具行为）: {_tan_err}")
+    # 自我背书守卫：点赞工具拒绝自己写的帖子/评论（发帖与回应两个步骤共用同一工具对象）
+    try:
+        _wrap_agent_self_like_guard(
+            result.agent_graph, os.path.join(simulation_dir, "reddit_simulation.db"), log_info)
+    except Exception as _slg_err:  # noqa: BLE001
+        log_info(f"自我背书守卫启用失败（已隔离，保持原生工具行为）: {_slg_err}")
 
     # 从配置文件获取 Agent 真实名称映射（使用 entity_name 而非默认的 Agent_X）
     agent_names = get_agent_names_from_config(config)

@@ -661,3 +661,60 @@ def test_parameters_serialize_output_language_only_when_set():
     base = {"simulation_id": "s", "project_id": "p", "graph_id": "g", "simulation_requirement": "q"}
     assert "output_language" not in SimulationParameters(**base).to_dict()
     assert SimulationParameters(**base, output_language="English").to_dict()["output_language"] == "English"
+
+
+# ---------------------------------------------------------------------------
+# 8) 自我背书守卫：点赞工具拒绝自己写的帖子/评论（发帖与回应两个步骤共用）
+# ---------------------------------------------------------------------------
+class _Tool:
+    def __init__(self, func):
+        self.func = func
+
+
+class _Graph:
+    def __init__(self, agents):
+        self._agents = agents
+
+    def get_agents(self):
+        return list(self._agents.items())
+
+
+def test_self_like_guard_refuses_own_posts_and_comments(tmp_path):
+    db = _make_db(tmp_path / "guard.db")
+    own_post = _add_post(db, 1, "Origin Quantum: domestic refrigerators ship.")
+    other_post = _add_post(db, 2, "IBM: Starling on schedule.")
+    own_comment = _add_comment(db, 1, other_post, "Origin: we will match that.", trace=False)
+    other_comment = _add_comment(db, 2, own_post, "IBM: congratulations.", trace=False)
+    calls = []
+
+    async def like_post(post_id: int):
+        calls.append(("post", post_id))
+        return {"success": True}
+
+    async def like_comment(comment_id: int):
+        calls.append(("comment", comment_id))
+        return {"success": True}
+
+    agent = _Agent(1, [])
+    agent._internal_tools = {"like_post": _Tool(like_post), "like_comment": _Tool(like_comment)}
+    graph = _Graph({1: agent})
+    msgs = []
+    rps._wrap_agent_self_like_guard(graph, db, msgs.append)
+    rps._wrap_agent_self_like_guard(graph, db, msgs.append)          # 幂等：不重复包装
+    assert len(msgs) == 1 and "2 个点赞工具" in msgs[0]
+
+    guarded_post = agent._internal_tools["like_post"].func
+    guarded_comment = agent._internal_tools["like_comment"].func
+    assert asyncio.run(guarded_post(post_id=own_post))["success"] is False
+    assert asyncio.run(guarded_post(own_post))["success"] is False     # 位置参数同样拦截
+    assert asyncio.run(guarded_post(post_id=str(other_post)))["success"] is True
+    assert asyncio.run(guarded_comment(comment_id=own_comment))["success"] is False
+    assert asyncio.run(guarded_comment(comment_id=other_comment))["success"] is True
+    assert calls == [("post", str(other_post)), ("comment", other_comment)]
+    assert guarded_post.__name__ == "like_post"                        # functools.wraps 保留名字
+
+    # 库不存在 → 不拦截（守卫只做确定能判断的事）
+    other = _Agent(2, [])
+    other._internal_tools = {"like_post": _Tool(like_post)}
+    rps._wrap_agent_self_like_guard(_Graph({2: other}), str(tmp_path / "missing.db"), msgs.append)
+    assert asyncio.run(other._internal_tools["like_post"].func(post_id=1))["success"] is True
