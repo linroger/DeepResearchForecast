@@ -924,8 +924,11 @@ def test_sparse_legacy_dossier_gets_a_safe_pack_without_fake_report_coverage():
     assert "Sparse Legacy Actor" in pack["bounded_context"]
 
 
-def test_role_context_reaches_real_reddit_and_twitter_oasis_system_messages(tmp_path):
-    from oasis import generate_reddit_agent_graph, generate_twitter_agent_graph
+def test_role_context_reaches_real_reddit_and_twitter_oasis_system_messages(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    oasis = pytest.importorskip("oasis")
+    generate_reddit_agent_graph = oasis.generate_reddit_agent_graph
+    generate_twitter_agent_graph = oasis.generate_twitter_agent_graph
 
     dossier = _dossier()
     actor = dossier["actors"][0]
