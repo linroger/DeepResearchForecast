@@ -194,12 +194,17 @@ class _FakePdf:
 
 
 def _fake_pdfplumber(pages_text: list[str]) -> types.ModuleType:
+    """pdfplumber.open like the real one: ``pages`` (1-based numbers) limits
+    which pages are built."""
     module = types.ModuleType("pdfplumber")
     module.opened = []
+    module.pages_requested = []
 
-    def open_(stream):
+    def open_(stream, pages=None):
         module.opened.append(stream.read(4))
-        return _FakePdf([_FakePdfPage(text) for text in pages_text])
+        module.pages_requested.append(pages)
+        return _FakePdf([_FakePdfPage(text) for number, text in enumerate(pages_text, start=1)
+                         if pages is None or number in pages])
 
     module.open = open_
     return module
@@ -211,6 +216,25 @@ def test_pdf_text_falls_back_to_pdfplumber_when_pypdf_is_absent(monkeypatch):
     monkeypatch.setitem(sys.modules, "pdfplumber", plumber)
     assert cf._extract_pdf_text(b"%PDF-1.7 body", max_pages=2) == "page one text\n\npage two text"
     assert plumber.opened == [b"%PDF"]
+    assert plumber.pages_requested == [[1, 2]]              # only the needed pages are built
+
+
+def test_pdf_parse_waits_for_a_held_parser_lock_at_most_the_parse_bound(monkeypatch):
+    """A timed-out parse keeps running and keeps the lock; a later parse gives
+    up at the bound instead of pinning another thread behind it."""
+    monkeypatch.setitem(sys.modules, "pypdf", None)
+    monkeypatch.setitem(sys.modules, "pdfplumber", _fake_pdfplumber(["page text " * 30]))
+    monkeypatch.setattr(cf, "PDF_PARSE_TIMEOUT_S", 0.1)
+    assert cf._PDF_LOCK.acquire(timeout=1)
+    try:
+        started = time.monotonic()
+        with pytest.raises(TimeoutError, match="parser lock"):
+            cf._extract_pdf_text(b"%PDF-1.7")
+        assert time.monotonic() - started < 1.0
+    finally:
+        cf._PDF_LOCK.release()
+    assert cf._extract_pdf_text(b"%PDF-1.7").startswith("page text")  # the lock was never leaked
+    assert not cf._PDF_LOCK.locked()
 
 
 def test_pdf_text_reports_the_parse_error_when_every_library_fails(monkeypatch):
@@ -288,6 +312,19 @@ def test_direct_fallback_pdf_parse_is_bounded(monkeypatch):
     result = rg._run_coroutine_bounded(lambda: cf._direct_http_fetch("https://agency.example/big.pdf"), 5)
     assert result == "Error: direct fallback PDF parse timed out"
     assert time.monotonic() - started < 1.5     # never waits for the 2 s parse thread
+
+
+def test_direct_fallback_pdf_behind_a_held_parser_lock_times_out(monkeypatch):
+    _fake_httpx(monkeypatch)
+    monkeypatch.setitem(sys.modules, "pypdf", None)
+    monkeypatch.setitem(sys.modules, "pdfplumber", _fake_pdfplumber(["Capacity reached 176 GW. " * 12]))
+    monkeypatch.setattr(cf, "PDF_PARSE_TIMEOUT_S", 0.1)
+    assert cf._PDF_LOCK.acquire(timeout=1)      # a parse that outlived its fetch
+    try:
+        assert asyncio.run(cf._direct_http_fetch("https://agency.example/queued.pdf")) == (
+            "Error: direct fallback PDF parse timed out")
+    finally:
+        cf._PDF_LOCK.release()
 
 
 # ============================================================== knob plumbing

@@ -2525,6 +2525,18 @@ class SourceLedger:
             self._touch()
             return dict(row)
 
+    def unmark_fetched(self, sid: int) -> dict | None:
+        """Return a fetched row to the unfetched state (its stored page is not
+        evidence: an extraction shell stored before the tool-layer check);
+        returns a copy, or ``None`` for an unknown sid."""
+        with self._lock:
+            row = self._rows.get(_as_int(sid) or 0)
+            if row is None:
+                return None
+            row.update(fetched=False, content_sha256=None, chars=0, page_path=None)
+            self._touch()
+            return dict(row)
+
     def get(self, sid: int) -> dict | None:
         with self._lock:
             row = self._rows.get(_as_int(sid) or 0)
@@ -3380,7 +3392,7 @@ _TRANSIENT_FETCH_REASON_RE = re.compile(r"timeout|timed_out|rate_limit|429|infli
 # never pays the deadline twice for one URL.  0 keeps the asyncio.run path.
 DEFAULT_FETCH_CALL_TIMEOUT_S = 150.0
 FETCH_DEADLINE_ERROR = "Error: fetch call deadline exceeded"
-# Shell reasons of cached_fetch.extraction_failure_reason; its failover chain
+# cached_fetch.SHELL_REASONS (a test holds the two equal); its failover chain
 # reports a shell as "Error: fetch returned <reason>".
 _SHELL_REASONS = frozenset({"empty_extraction", "unavailable_page", "bot_wall", "paywalled"})
 _SHELL_ERROR_PREFIX = "Error: fetch returned "

@@ -13,11 +13,15 @@ behaviour).  Offline: providers, search and fetch are injected fakes.
 from __future__ import annotations
 
 import asyncio
+import importlib.util
+import inspect
 import json
 import os
+import re
 import sys
 import threading
 import time
+import types
 
 import pytest
 
@@ -121,6 +125,31 @@ def test_short_paywall_teaser_is_paywalled():
 def test_plain_200_char_text_is_not_a_shell():
     assert cf.extraction_failure_reason("X" * 200) is None
     assert cf.extraction_failure_reason("X" * 199) == "empty_extraction"
+
+
+def test_blank_line_padding_is_not_content():
+    """Review round 1: boilerplate split by blank lines passed the 200-char rule
+    on its line breaks; only visible characters count now."""
+    padded = "\n\n".join(["Accept cookies"] * 14)       # 196 visible chars
+    assert len(padded) >= 200                            # what the old length rule measured
+    reader = "Title: Cookie notice\nURL Source: https://example.org/\nMarkdown Content:\n\n" + padded
+    plain = "# Cookie notice\n\n" + padded
+    assert cf.extraction_failure_reason(reader) == "empty_extraction"
+    assert cf.extraction_failure_reason(plain) == "empty_extraction"
+    assert cf.extraction_failure_reason(" \r\n\t\n".join(["Accept cookies"] * 14)) == "empty_extraction"
+    longer = "\n\n".join(["Accept cookies"] * 15)        # 210 visible chars
+    assert cf.extraction_failure_reason("Markdown Content:\n\n" + longer) is None
+    assert cf.extraction_failure_reason("# Cookie notice\n\n" + longer) is None
+
+
+def test_gateway_shell_reasons_match_the_classifier():
+    """research_gateway recognises "Error: fetch returned <reason>" by its own
+    copy of the reason set; a reason added to the classifier must reach it."""
+    returned = set(re.findall(r'return "([a-z_]+)"', inspect.getsource(cf.extraction_failure_reason)))
+    assert returned == set(cf.SHELL_REASONS) == rg._SHELL_REASONS
+    bot_wall = "# Just a moment...\n\nChecking your browser before accessing example.org. " + prose(300)
+    samples = (JINA_PDF_SHELL, UNAVAILABLE_PAGE, bot_wall, PAYWALL_TEASER)
+    assert [cf.extraction_failure_reason(text) for text in samples] == list(cf.SHELL_REASONS)
 
 
 def test_long_article_mentioning_a_bot_check_is_not_a_shell():
@@ -228,6 +257,28 @@ def test_shell_detection_knob_fails_closed(monkeypatch, raw, expected):
         monkeypatch.delenv("RESEARCH_FETCH_SHELL_DETECTION", raising=False)
     else:
         monkeypatch.setenv("RESEARCH_FETCH_SHELL_DETECTION", raw)
+    assert cf._shell_detection_on() is expected
+
+
+@pytest.mark.parametrize("raw, expected", [
+    (None, True), ("", True), ("true", True), ("1", True), ("yes", True), ("banana", True),
+    ("false", False), ("0", False), ("No", False), (" OFF ", False),
+])
+def test_config_shell_detection_knob_fails_closed_like_the_bridge(monkeypatch, raw, expected):
+    """Review round 1: the orchestrator forwards Config's verdict as an explicit
+    true/false, so Config must parse the knob fail-closed too ('1' or a typo
+    used to turn the check off before the bridge ever saw it)."""
+    import app.config  # noqa: F401 — its import-time env defaults are set once, before the probe
+
+    if raw is None:
+        monkeypatch.delenv("RESEARCH_FETCH_SHELL_DETECTION", raising=False)
+    else:
+        monkeypatch.setenv("RESEARCH_FETCH_SHELL_DETECTION", raw)
+    spec = importlib.util.spec_from_file_location("_research1_config_probe",
+                                                  os.path.join(_BACKEND, "app", "config.py"))
+    probe = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(probe)       # a fresh Config; app.config itself is untouched
+    assert probe.Config.RESEARCH_FETCH_SHELL_DETECTION is expected
     assert cf._shell_detection_on() is expected
 
 
@@ -351,6 +402,12 @@ def _sources(out) -> list[dict]:
     return json.loads((out / "sources.json").read_text(encoding="utf-8"))
 
 
+def _ledger_rows(out, url: str) -> list[dict]:
+    """The persisted v3 ledger rows of ``url`` (none when it was never registered)."""
+    rows = json.loads((out / "v3" / "sources_ledger.json").read_text(encoding="utf-8"))
+    return [row for row in rows if row["canonical"] == rg.canonical_url(url)]
+
+
 def test_engine_rejects_a_shell_at_the_tool_layer(tmp_path, bridge):
     fetch = _ShellOnce(JINA_PDF_SHELL)
     rc, meta, plog, _, out = v3.run_engine(tmp_path, bridge, v3.World(), fetch=fetch)
@@ -358,6 +415,11 @@ def test_engine_rejects_a_shell_at_the_tool_layer(tmp_path, bridge):
     sources = _sources(out)
     fetched = [row for row in sources if row["source_origin"] == "fetched"]
     assert fetched and not any("Markdown Content" in (row.get("excerpt") or "") for row in fetched)
+    # The shell URL was requested, and whether it is in the ledger (seen in a
+    # search) or not (the shell was never registered), it is never fetched.
+    assert fetch.shell_url is not None
+    assert all(row["fetched"] is False and row["page_path"] is None
+               for row in _ledger_rows(out, fetch.shell_url))
     assert all(row["source_origin"] == "cited" for row in sources if row["url"] == fetch.shell_url)
     assert not any("fetch_status" in row for row in sources)
     pages = list((out / "v3" / "pages").glob("*.txt"))
@@ -431,3 +493,94 @@ def test_stored_shell_marked_fetched_is_published_as_cited(tmp_path, bridge):
     assert meta["fetched_sources_count"] == fetched
     assert meta["research_quality"]["components"]["grounding"] == round(fetched / len(sources), 3)
     assert meta["fetch_shells"] == {"rejected": {}, "sources_demoted": 1}
+
+
+def _resume_after_prefix_run(tmp_path, bridge):
+    """A work dir whose pre-fix tool layer stored the shell and marked it
+    fetched, plus one reloaded fact VERIFIED only by that shell (what a pre-fix
+    agent could write).  Returns ``(fetch, first_meta, out, shell_sid)``."""
+    fetch = _ShellOnce(JINA_PDF_SHELL)
+    rc, meta, out, tools = _run_with_prefix_tools(tmp_path, bridge, fetch)
+    assert rc == 0, meta.get("error")
+    shell = tools.ledger.find(fetch.shell_url)
+    assert shell["fetched"] is True
+    kiq_path = out / "v3" / "kiq" / "K1.json"
+    record = json.loads(kiq_path.read_text(encoding="utf-8"))
+    record["facts"].append({"kiq": record["id"], "text": "The draft sets the migration deadline.",
+                            "sids": [shell["sid"]], "tag": "VERIFIED", "verified_numbers": None})
+    kiq_path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    return fetch, meta, out, shell["sid"]
+
+
+def _silent_model():
+    return v3.ScriptedModel(lambda call: pytest.fail(f"unexpected model call: {v3.role_of(call)}"))
+
+
+def test_resumed_work_dir_unmarks_a_stored_shell(tmp_path, bridge):
+    """Review round 1: a shell an earlier run stored and marked fetched is
+    un-marked once when the run resumes with the check on, so it is never served
+    as a stored copy, never VERIFIED evidence and published as cited."""
+    fetch, first_meta, out, shell_sid = _resume_after_prefix_run(tmp_path, bridge)
+    rc, meta, plog, model, _ = v3.run_engine(tmp_path, bridge, v3.World(), out_dir=out, model=_silent_model())
+    assert rc == 0 and model.calls == [], meta.get("error")
+    assert "1 stored page(s) of the resumed work dir are extraction shells" in plog.text()
+    (row,) = _ledger_rows(out, fetch.shell_url)
+    assert row["fetched"] is False and row["page_path"] is None and row["content_sha256"] is None
+    shell_row = next(r for r in _sources(out) if r["url"] == fetch.shell_url)
+    assert shell_row["source_origin"] == "cited" and shell_row["reachable"] is None
+    assert shell_row["fetch_status"] == "shell:empty_extraction" and "excerpt" not in shell_row
+    assert meta["fetch_shells"] == {"rejected": {}, "sources_demoted": 1}
+    # Reloaded facts VERIFIED only through the shell are REPORTED now.
+    fetched = {r["sid"] for r in json.loads((out / "v3" / "sources_ledger.json").read_text("utf-8"))
+               if r["fetched"]}
+    shell_only = sum(1 for path in (out / "v3" / "kiq").glob("*.json")
+                     for fact in json.loads(path.read_text("utf-8"))["facts"]
+                     if fact["tag"] == "VERIFIED" and shell_sid in fact["sids"]
+                     and not fetched & set(fact["sids"]))
+    assert shell_only >= 1
+    assert meta["kiqs"]["verified"] == first_meta["kiqs"]["verified"] + 1 - shell_only
+    # The tool layer fetches the URL again instead of serving the stored shell.
+    ledger = rg.SourceLedger(out / "v3" / "sources_ledger.json")
+    requested: list[str] = []
+
+    def refetch(url: str) -> str:
+        requested.append(url)
+        return v3.page_text(url)
+
+    tools = rg.ResearchTools(ledger, out / "v3" / "pages", fetch_fn=refetch)
+    tools.shell_detection = True
+    answer = tools.fetch(fetch.shell_url, agent_id="K9")
+    assert requested == [fetch.shell_url] and "Markdown Content" not in answer
+    assert ledger.find(fetch.shell_url)["fetched"] is True
+    assert "Markdown Content" not in tools.page_text(shell_sid)
+
+
+def test_resumed_work_dir_keeps_stored_shells_with_the_flag_off(tmp_path, bridge, monkeypatch):
+    fetch, _, out, shell_sid = _resume_after_prefix_run(tmp_path, bridge)
+    monkeypatch.setenv("RESEARCH_FETCH_SHELL_DETECTION", "false")
+    rc, meta, plog, _, _ = v3.run_engine(tmp_path, bridge, v3.World(), out_dir=out, model=_silent_model())
+    assert rc == 0, meta.get("error")
+    assert "extraction shells" not in plog.text() and "fetch_shells" not in meta
+    (row,) = _ledger_rows(out, fetch.shell_url)
+    assert row["fetched"] is True and row["sid"] == shell_sid
+    shell_row = next(r for r in _sources(out) if r["url"] == fetch.shell_url)
+    assert shell_row["source_origin"] == "fetched" and "Markdown Content" in shell_row["excerpt"]
+
+
+def test_reloaded_fact_verified_only_by_an_unmarked_shell_is_reported():
+    rows = {1: {"fetched": False}, 2: {"fetched": True}, 3: {"fetched": False}}
+    engine = types.SimpleNamespace(stored_shells={1: "empty_extraction"},
+                                   ledger=types.SimpleNamespace(get=rows.get))
+    record = {"facts": [
+        {"text": "a", "sids": [1], "tag": "VERIFIED", "verified_numbers": True},
+        {"text": "b", "sids": [1, 2], "tag": "VERIFIED", "verified_numbers": True},
+        {"text": "c", "sids": [3], "tag": "VERIFIED", "verified_numbers": None},
+        {"text": "d", "sids": [1], "tag": "REPORTED", "verified_numbers": None},
+    ]}
+    lr._Engine._demote_shell_facts(engine, record)
+    assert [(f["tag"], f.get("verification"), f["verified_numbers"]) for f in record["facts"]] == [
+        ("REPORTED", "no_fetched_source", None),   # only the shell backed it
+        ("VERIFIED", None, True),                   # another fetched page still does
+        ("VERIFIED", None, None),                   # not a shell this sweep found
+        ("REPORTED", None, None),
+    ]

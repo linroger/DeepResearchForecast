@@ -99,7 +99,13 @@ _CONTENT_FAILURE_MARKERS = (
 # lowercase or CJK and is matched only inside a length window, so a long real
 # article that merely mentions "captcha" or carries a subscribe footer passes.
 _SHELL_PREFIX_CHARS = 3000
+# Visible characters: blank lines, line breaks and the whitespace around each
+# line do not count, so boilerplate padded with blank lines is still a shell.
 _SHELL_MIN_CONTENT_CHARS = 200
+# Every reason extraction_failure_reason returns.  research_gateway keeps a
+# copy (it recognises "Error: fetch returned <reason>" without importing this
+# module); a test holds the two sets equal.
+SHELL_REASONS = ("empty_extraction", "unavailable_page", "bot_wall", "paywalled")
 _SHELL_READER_ENVELOPE = "markdown content:"
 _SHELL_METADATA_PREFIXES = (
     "title:",
@@ -184,6 +190,11 @@ def _shell_detection_on() -> bool:
     return raw not in _SHELL_FALSY
 
 
+def _visible_chars(lines: list[str]) -> int:
+    """Characters on ``lines`` without the whitespace around each line."""
+    return sum(len(line.strip()) for line in lines)
+
+
 def extraction_failure_reason(text: Any) -> Optional[str]:
     """Why a fetched text is an extraction shell rather than a page, else None.
 
@@ -192,9 +203,11 @@ def extraction_failure_reason(text: Any) -> Optional[str]:
     (they are failures of their own kind).  Rules, first match wins:
 
     * ``empty_extraction`` — a reader envelope ("Markdown Content:") whose body
-      is empty/undefined/null/none or under 200 chars; or fewer than 200 chars
-      left after dropping the first line when it is a "#" title and every
-      Title:/URL Source:/Published Time:/Warning:/Markdown Content: line;
+      is empty/undefined/null/none or under 200 visible chars; or fewer than 200
+      visible chars left after dropping the first line when it is a "#" title
+      and every Title:/URL Source:/Published Time:/Warning:/Markdown Content:
+      line (visible: blank lines, line breaks and the whitespace around each
+      line are not counted);
     * ``unavailable_page`` — under 1,500 chars with a "page unavailable" marker;
     * ``bot_wall`` — under 1,500 chars with a bot-check/interstitial marker;
     * ``paywalled`` — under 3,000 chars with a paywall-teaser marker.
@@ -205,22 +218,19 @@ def extraction_failure_reason(text: Any) -> Optional[str]:
     if not stripped or stripped.startswith("Error:"):
         return None
     prefix = stripped[:_SHELL_PREFIX_CHARS].translate(_ASCII_LOWER)
+    # Text beyond the scanned prefix counts as content (never a false shell).
+    unscanned = max(0, len(stripped) - _SHELL_PREFIX_CHARS)
     envelope_at = prefix.find(_SHELL_READER_ENVELOPE)
     if envelope_at >= 0:
         # The length rule covers the empty/"undefined"/"null"/"none" bodies too.
-        body = stripped[envelope_at + len(_SHELL_READER_ENVELOPE):].strip()
-        if len(body) < _SHELL_MIN_CONTENT_CHARS:
+        body = prefix[envelope_at + len(_SHELL_READER_ENVELOPE):].split("\n")
+        if _visible_chars(body) + unscanned < _SHELL_MIN_CONTENT_CHARS:
             return "empty_extraction"
     lines = prefix.split("\n")
     if lines[0].startswith("#"):
         lines = lines[1:]
-    content = "\n".join(
-        line for line in lines
-        if not line.strip().startswith(_SHELL_METADATA_PREFIXES)
-    ).strip()
-    # Text beyond the scanned prefix counts as content (never a false shell).
-    unscanned = max(0, len(stripped) - _SHELL_PREFIX_CHARS)
-    if len(content) + unscanned < _SHELL_MIN_CONTENT_CHARS:
+    content = [line for line in lines if not line.strip().startswith(_SHELL_METADATA_PREFIXES)]
+    if _visible_chars(content) + unscanned < _SHELL_MIN_CONTENT_CHARS:
         return "empty_extraction"
     length = len(stripped)
     if length < _UNAVAILABLE_PAGE_MAX_CHARS and any(
@@ -263,7 +273,8 @@ def _pdf_text_pypdf(content: bytes, max_pages: int) -> str:
 def _pdf_text_pdfplumber(content: bytes, max_pages: int) -> str:
     import pdfplumber
 
-    with pdfplumber.open(io.BytesIO(content)) as pdf:
+    # ``pages`` (1-based) keeps pdfplumber from building a Page for every page.
+    with pdfplumber.open(io.BytesIO(content), pages=list(range(1, max_pages + 1))) as pdf:
         return "\n\n".join(str(page.extract_text() or "") for page in pdf.pages[:max_pages])
 
 
@@ -271,8 +282,14 @@ def _extract_pdf_text(content: bytes, max_pages: int = 80) -> str:
     """Text of the first ``max_pages`` pages: pypdf, else pdfplumber (the deer-flow
     research venv ships only pdfplumber).  Serialized by ``_PDF_LOCK``; when
     pdfplumber is missing too, pypdf's own failure is raised (a parse error says
-    more than a missing library)."""
-    with _PDF_LOCK:
+    more than a missing library).
+
+    A parse that outlived its caller's ``PDF_PARSE_TIMEOUT_S`` keeps running in
+    its thread and keeps the lock, so the lock is waited for at most that long:
+    a later parse raises TimeoutError instead of pinning another thread."""
+    if not _PDF_LOCK.acquire(timeout=PDF_PARSE_TIMEOUT_S):
+        raise TimeoutError("an earlier PDF parse still holds the parser lock")
+    try:
         try:
             return _pdf_text_pypdf(content, max_pages)
         except Exception as exc:  # noqa: BLE001 — fall back to pdfplumber
@@ -283,6 +300,8 @@ def _extract_pdf_text(content: bytes, max_pages: int = 80) -> str:
             if isinstance(pypdf_failure, ImportError):
                 raise
             raise pypdf_failure from None
+    finally:
+        _PDF_LOCK.release()
 
 
 class _TextExtractor(HTMLParser):

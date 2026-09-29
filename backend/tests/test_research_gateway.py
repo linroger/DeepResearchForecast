@@ -1114,6 +1114,19 @@ def test_ledger_mark_fetched_returns_copies(tmp_path):
     assert ledger.find("https://A.org/x/")["sid"] == 1 and ledger.find("https://b.org") is None
 
 
+def test_ledger_unmark_fetched_restores_the_unfetched_row_and_persists(tmp_path):
+    ledger = rg.SourceLedger(tmp_path / "s.json")
+    ledger.register("https://a.org/x", "A", "snippet text")
+    ledger.mark_fetched(1, content_sha256="abc", chars=252, page_path="pages/abc.txt", title="Untitled")
+    row = ledger.unmark_fetched(1)
+    assert (row["fetched"], row["content_sha256"], row["chars"], row["page_path"]) == (False, None, 0, None)
+    assert row["url"] == "https://a.org/x" and row["snippet"] == "snippet text"
+    assert ledger.unmark_fetched(99) is None
+    ledger.flush()
+    reloaded = rg.SourceLedger(tmp_path / "s.json").get(1)
+    assert reloaded["fetched"] is False and reloaded["page_path"] is None
+
+
 def test_ledger_flush_is_debounced_atomic_and_reloads(tmp_path):
     clock = FakeClock()
     path = tmp_path / "v3" / "sources.json"
