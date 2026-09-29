@@ -77,14 +77,19 @@ def _timeout_seconds() -> float:
 
 
 def _resolve_graph_id(graph_id: Optional[str]) -> str:
-    """把逐调用 graph_id 与进程默认合并；两者皆空则抛 ValueError（由工具包装折成结构化错误）。"""
+    """把逐调用 graph_id 与进程默认合并；两者皆空则抛 ValueError（由工具包装折成结构化错误）。
+
+    INFRA-10：graph_id 来自 LLM 工具调用，可能流向图谱工件路径（布局/kuzu）——非法 id 抛
+    UnsafeIdError（ValueError 子类，同样折成结构化错误）。
+    """
     gid = (graph_id or "").strip() or _default_graph_id()
     if not gid:
         raise ValueError(
             "缺少 graph_id：请在调用参数里传 graph_id，或用 --graph-id / "
             "DRF_MCP_KG_GRAPH_ID 配置进程默认图谱。"
         )
-    return gid
+    from app.utils.security import safe_id
+    return safe_id(gid, "graph")
 
 
 def _get_service() -> Any:

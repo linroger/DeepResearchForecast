@@ -73,7 +73,10 @@ def _resolve_sim_id(sim_id: Optional[str]) -> str:
         raise ValueError(
             "缺少 sim_id：请在调用参数里传 sim_id，或用 --sim-id / DRF_MCP_SIM_ID 配置进程默认模拟。"
         )
-    return sid
+    # INFRA-10: sim_id 来自 LLM 工具调用，会被拼进模拟目录路径——边界上先校验（UnsafeIdError
+    # 由工具包装折成 {ok: false, error}），_sim_dir 拼接处再由 contained_child 复验一次。
+    from app.utils.security import safe_id
+    return safe_id(sid, "simulation")
 
 
 def _error_payload(exc: BaseException, sim_id: str = "") -> Dict[str, Any]:
@@ -85,7 +88,7 @@ def _error_payload(exc: BaseException, sim_id: str = "") -> Dict[str, Any]:
 
 def _sim_dir(sim_id: str) -> str:
     from app.services.simulation_runner import SimulationRunner
-    return os.path.join(SimulationRunner.RUN_STATE_DIR, sim_id)
+    return SimulationRunner._sim_dir(sim_id)
 
 
 def _env_alive(sim_id: str) -> bool:

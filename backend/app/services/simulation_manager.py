@@ -16,6 +16,7 @@ from enum import Enum
 
 from ..config import Config
 from ..utils.logger import get_logger
+from ..utils.security import UnsafeIdError, contained_child, is_safe_id
 from .zep_entity_reader import ZepEntityReader, FilteredEntities
 from .oasis_profile_generator import OasisProfileGenerator, OasisAgentProfile
 from .simulation_config_generator import SimulationConfigGenerator, SimulationParameters
@@ -749,8 +750,12 @@ class SimulationManager:
         self._simulations: Dict[str, SimulationState] = {}
     
     def _get_simulation_dir(self, simulation_id: str) -> str:
-        """获取模拟数据目录"""
-        sim_dir = os.path.join(self.SIMULATION_DATA_DIR, simulation_id)
+        """获取模拟数据目录（不存在则创建）。
+
+        INFRA-10：先经 contained_child 校验再 makedirs——非法/逃逸 id 抛 UnsafeIdError，
+        绝不在 SIMULATION_DATA_DIR 之外创建目录。返回值与原 os.path.join 逐字节相同。
+        """
+        sim_dir = contained_child(self.SIMULATION_DATA_DIR, simulation_id, "simulation")
         os.makedirs(sim_dir, exist_ok=True)
         return sim_dir
     
@@ -774,7 +779,10 @@ class SimulationManager:
         if simulation_id in self._simulations:
             return self._simulations[simulation_id]
         
-        sim_dir = self._get_simulation_dir(simulation_id)
+        try:
+            sim_dir = self._get_simulation_dir(simulation_id)
+        except UnsafeIdError:
+            return None  # INFRA-10: 非法 id 与「不存在」同义
         state_file = os.path.join(sim_dir, "state.json")
         
         if not os.path.exists(state_file):
@@ -1461,9 +1469,9 @@ class SimulationManager:
         
         if os.path.exists(self.SIMULATION_DATA_DIR):
             for sim_id in os.listdir(self.SIMULATION_DATA_DIR):
-                # 跳过隐藏文件（如 .DS_Store）和非目录文件
+                # 跳过非 id 条目（.DS_Store、_zep_dead_letter 等，INFRA-10）和非目录文件
                 sim_path = os.path.join(self.SIMULATION_DATA_DIR, sim_id)
-                if sim_id.startswith('.') or not os.path.isdir(sim_path):
+                if not is_safe_id(sim_id) or not os.path.isdir(sim_path):
                     continue
                 
                 state = self._load_simulation_state(sim_id)

@@ -48,6 +48,19 @@ class Config:
     ).strip()
     # 连通性/研究子进程发起的出站请求是否禁止私网/环回地址（暴露到环回之外时建议开启）。
     APP_BLOCK_PRIVATE_URLS = os.environ.get('APP_BLOCK_PRIVATE_URLS', 'False').strip().lower() == 'true'
+    # DNS-rebinding guard (INFRA-10): a request is trusted without a token because it
+    # arrives over loopback only when its Host header also names this machine
+    # (localhost / 127.0.0.1 / ::1, port ignored). A web page whose own domain resolves
+    # to 127.0.0.1 sends that domain as Host and gets 403. Default on is safe: the local
+    # frontend (Vite proxy with changeOrigin -> Host localhost:5001) and direct
+    # localhost / 127.0.0.1 access keep working; token-authenticated requests are
+    # unaffected. Set false to restore the legacy Host-agnostic loopback trust.
+    # Parsed fail-closed, unlike the usual `== 'true'` knobs: only an explicit
+    # false/0/no/off disables this guard, so 1/yes/on or a typo keeps it on.
+    APP_HOST_CHECK = os.environ.get('APP_HOST_CHECK', 'true').strip().lower() not in ('false', '0', 'no', 'off')
+    # Extra Host names (comma-separated, port ignored) accepted on loopback requests,
+    # e.g. a custom /etc/hosts alias for this machine. Empty = only the built-in names.
+    APP_ALLOWED_HOSTS = os.environ.get('APP_ALLOWED_HOSTS', '').strip()
 
     # 串行化 apply_provider 对共享 Config 类属性 + os.environ + .env 的读改写（EXECPLAN2 F-8-4），
     # 避免并发切换提供方时与正在读取配置的管线发生竞态/撕裂。
@@ -963,20 +976,32 @@ class Config:
 
             for k, v in env_updates.items():
                 os.environ[k] = v
-            cls._persist_env(env_updates)
-            return cls.provider_info()
+            # The runtime switch above already took effect; persistence is reported, not
+            # raised. A stub that predates the (ok, error) contract (returns None) reads
+            # as persisted, matching the old fire-and-forget semantics.
+            persisted = cls._persist_env(env_updates)
+            env_ok, env_error = (
+                persisted if isinstance(persisted, tuple) and len(persisted) == 2 else (True, None)
+            )
+            info = cls.provider_info()
+            info['env_persisted'] = bool(env_ok)
+            info['env_persist_error'] = env_error
+            return info
 
     @classmethod
-    def _persist_env(cls, updates):
-        """把 key=value 安全 upsert 进项目根 .env（best-effort，失败不抛）。
+    def _persist_env(cls, updates, *, env_path=None):
+        """把 key=value 安全 upsert 进 .env，返回 ``(ok, error_class)``。
 
         每个值都经 sanitize（拒绝换行/控制字符，防止注入额外 KEY=VALUE 行）+ dotenv
-        安全引号，再原子落盘（EXECPLAN2 F-8-1）。
+        安全引号，再以 0600 原子落盘（EXECPLAN2 F-8-1；INFRA-10）。失败不再静默吞掉：
+        返回 ``(False, 异常类名)``，由 apply_provider / 设置 API 如实上报，已有 .env 不被破坏。
+        ``env_path`` 缺省为项目根 .env（测试传临时路径，绝不触碰真实 .env）。
         """
         try:
             from .utils.security import sanitize_env_value, quote_env_value
-            from .utils.atomic import write_text_atomic
-            env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.env'))
+            from .utils.atomic import write_secret_text_atomic
+            if env_path is None:
+                env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.env'))
             lines = []
             if os.path.exists(env_path):
                 with open(env_path, 'r', encoding='utf-8') as f:
@@ -995,9 +1020,10 @@ class Config:
                 out.append(line)
             for key, val in remaining.items():
                 out.append(f"{key}={val}")
-            write_text_atomic(env_path, '\n'.join(out) + '\n')
-        except Exception:
-            pass
+            write_secret_text_atomic(env_path, '\n'.join(out) + '\n')
+        except Exception as exc:  # noqa: BLE001 — 上报失败类别，由调用方决定如何呈现
+            return False, type(exc).__name__
+        return True, None
 
     # ============================================================
     # 知识图谱后端：本地 Graphiti（替代 Zep Cloud）

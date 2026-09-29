@@ -1,5 +1,5 @@
-"""Centralized security helpers: secret redaction, URL/SSRF validation, and
-``.env`` value sanitization.
+"""Centralized security helpers: secret redaction, URL/SSRF validation,
+``.env`` value sanitization, and path-safe identifiers.
 
 One place to define what "sensitive" means, so every logging / error-response /
 persistence surface masks the same things and a future endpoint cannot silently
@@ -9,6 +9,7 @@ leak a key. EXECPLAN2: I-8-3, F-13-1, F-8-0, F-8-5, F-13-2, F-8-1.
 from __future__ import annotations
 
 import ipaddress
+import os
 import re
 import socket
 from typing import Any
@@ -154,3 +155,67 @@ def validate_safe_url(url: str, *, block_private: bool = False) -> str:
         if block_private and ip.is_private:
             raise ValueError(f"refusing to connect to private address {addr}")
     return url.strip()
+
+
+# ---------------------------------------------------------------- path-safe ids
+
+# Report / simulation / project / pipeline / graph / task ids are joined into
+# filesystem paths (and, for reports and projects, handed to shutil.rmtree), and
+# they arrive from URLs, JSON bodies and LLM tool calls. Generated ids
+# (report_<hex>, sim_<hex>, proj_<hex>, pipe_<hex>, mirofish_<hex>, uuid4) all fit
+# this allow-list. It admits no '.', '/', '\\' or control character, so '.', '..'
+# and separators can never reach a join, and ``\Z`` (unlike ``$``) refuses a
+# trailing newline. A leading '_' is refused so reserved siblings in the data
+# roots (_sim_index.json, _zep_dead_letter, _forecast_ledger) never parse as ids.
+_SAFE_ID_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9_-]*\Z")
+SAFE_ID_MAX_LEN = 128
+
+
+class UnsafeIdError(ValueError):
+    """An identifier is not safe to use as a single path component under a data root."""
+
+
+def is_safe_id(value: Any, *, max_len: int = SAFE_ID_MAX_LEN) -> bool:
+    """True when *value* is a str of 1..max_len chars matching the id allow-list."""
+    return (
+        isinstance(value, str)
+        and len(value) <= max_len
+        and _SAFE_ID_RE.fullmatch(value) is not None
+    )
+
+
+def safe_id(value: Any, kind: str, *, max_len: int = SAFE_ID_MAX_LEN) -> str:
+    """Return *value* unchanged when it is a safe id; raise :class:`UnsafeIdError` otherwise.
+
+    With the default ``max_len`` this is ``\\A[A-Za-z0-9][A-Za-z0-9_-]{0,127}\\Z``.
+    The error message names only the *kind* and never echoes the rejected value, so
+    a hostile id cannot inject lines into logs or error responses.
+    """
+    if not is_safe_id(value, max_len=max_len):
+        raise UnsafeIdError(f"invalid {kind} id")
+    return value
+
+
+def contained_child(
+    root: str | os.PathLike[str],
+    child_id: Any,
+    kind: str,
+    *,
+    max_len: int = SAFE_ID_MAX_LEN,
+) -> str:
+    """Join a validated id under *root*, requiring the result to stay inside *root*.
+
+    The id must pass :func:`safe_id`, and the realpath of ``root/child_id`` must be a
+    strict descendant of the realpath of *root* (never *root* itself), which also
+    refuses a symlink at ``root/child_id`` that points outside the root or back at
+    it. Returns the unresolved ``os.path.join(root, child_id)`` string, so callers
+    see byte-identical paths to a plain join. Raises :class:`UnsafeIdError`.
+    """
+    safe_id(child_id, kind, max_len=max_len)
+    root_str = os.fspath(root)
+    candidate = os.path.join(root_str, child_id)
+    real_root = os.path.realpath(root_str)
+    real_child = os.path.realpath(candidate)
+    if real_child == real_root or os.path.commonpath([real_root, real_child]) != real_root:
+        raise UnsafeIdError(f"invalid {kind} id")
+    return candidate

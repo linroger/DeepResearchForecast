@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import tempfile
 from typing import Any
 
@@ -41,6 +42,35 @@ def write_text_atomic(
             fh.flush()
             if fsync:
                 os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def write_secret_text_atomic(path: str, text: str, *, encoding: str = "utf-8") -> None:
+    """Atomically write a secret-bearing file (e.g. ``.env``) readable only by its owner.
+
+    Same temp-file + ``fsync`` + ``os.replace`` contract as :func:`write_text_atomic`,
+    but the owner-only mode is explicit rather than an unasserted side effect of
+    ``tempfile.mkstemp``: the temp file is created with ``O_CREAT | O_EXCL`` at
+    ``0o600`` and ``fchmod``-ed to ``0o600`` (independent of the umask), so the file
+    that replaces *path* is always ``0600``. Failures propagate to the caller, and a
+    failed write never leaves the temp file behind.
+    """
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(directory, exist_ok=True)
+    tmp = os.path.join(directory, f".tmp-{secrets.token_hex(8)}")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding=encoding) as fh:
+            os.fchmod(fh.fileno(), 0o600)
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
         os.replace(tmp, path)
     except BaseException:
         try:
