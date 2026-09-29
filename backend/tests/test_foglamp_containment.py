@@ -207,7 +207,9 @@ def test_abstention_silence_failure_and_equilibrium_are_distinct():
     abstain = FakeLLMClient(json_responses=[
         {"decisions": [{"agent_id": r, "scenario": dc.ABSTAIN_TOKEN}]} for r in range(1, 6)
     ])
-    res_a = run_decision_channel(actions, cfgs, dict(seed), abstain, inertia=0.5)
+    # concurrency=1 (SIM-2): FIFO fake replies must land on their own round's roster
+    res_a = run_decision_channel(actions, cfgs, dict(seed), abstain, inertia=0.5,
+                                 concurrency=1)
     assert res_a["round_accounting"]["counts"].get(ROUND_STATUS_ABSTAINED) == 5
     assert res_a["validity"] == "valid"
 
@@ -228,7 +230,8 @@ def test_abstention_silence_failure_and_equilibrium_are_distinct():
         {"decisions": [{"agent_id": r, "scenario": "S1", "magnitude": 1,
                         "confidence": 1}]} for r in range(1, 6)
     ])
-    res_d = run_decision_channel(actions, cfgs, dict(seed), commit, inertia=0.9)
+    res_d = run_decision_channel(actions, cfgs, dict(seed), commit, inertia=0.9,
+                                 concurrency=1)
     assert res_d["validity"] == "valid"
     assert res_d["round_accounting"]["valid_transitions"] == 5
     # four distinct verdicts overall

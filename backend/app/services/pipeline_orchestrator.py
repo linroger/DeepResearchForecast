@@ -11147,6 +11147,9 @@ class PipelineOrchestrator:
         # SIM-1：两路决策通道产物共用的有效性裁定（顶层；旧轨迹缺席 → None）。只观测：
         # 通道本就 diagnostic_only，非 valid 裁定只告警，不进 _assess_run_health。
         validity = traj.get("validity") if isinstance(traj, dict) else None
+        # SIM-2：名册校验的 run 级汇总（DECISION_CHANNEL_VALIDATION 关或旧轨迹 → None）。
+        validation = traj.get("decision_validation") if isinstance(traj, dict) else None
+        validation = validation if isinstance(validation, dict) else {}
         summary = {
             "scenarios_seeded": len(scenarios),
             "trajectory_produced": bool(produced),
@@ -11156,6 +11159,8 @@ class PipelineOrchestrator:
             "validity": validity,
             "validity_reasons": (traj.get("validity_reasons") if isinstance(traj, dict) else None),
             "forecast_effect": (traj.get("forecast_effect") if isinstance(traj, dict) else None),
+            "fallback_share": validation.get("fallback_share"),
+            "decision_validation_measured_rounds": validation.get("measured_rounds"),
         }
         state.options["decision_channel_summary"] = summary
         try:

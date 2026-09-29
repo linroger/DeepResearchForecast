@@ -647,6 +647,122 @@ def test_inband_verdict_failure_keeps_trajectory(tmp_path, monkeypatch):
 
 
 # ===========================================================================
+# 7c) SIM-2：真实 elicit_round 的名册校验记录落轨迹行 / digest 行 / run 级汇总
+# ===========================================================================
+class _ScriptedDecisionLLM:
+    """LLMClient 替身（SIM-2）：每轮批量调用返回同一份脚本回复——字符串 id "0"（名册内，
+    规范化为 int 0）+ 名册外幻觉 id 999。calls 记录调用次数（零额外调用）。"""
+
+    calls = []
+
+    def __init__(self, *a, **k):
+        pass
+
+    def chat_json(self, messages, temperature=0.3, max_tokens=4096, **kw):
+        type(self).calls.append(max_tokens)
+        return {"decisions": [
+            {"agent_id": "0", "scenario": "A", "magnitude": 1, "confidence": 1},
+            {"agent_id": 999, "scenario": "A", "magnitude": 1, "confidence": 1}]}
+
+
+def _read_jsonl(path):
+    with open(path, encoding="utf-8") as f:
+        return [json.loads(line) for line in f if line.strip()]
+
+
+def test_inband_decision_validation_recorded(tmp_path, monkeypatch):
+    sim_dir = str(tmp_path)
+    envs = []
+    _patch_runtime(monkeypatch, sim_dir, envs)
+    monkeypatch.setattr("app.utils.llm_client.LLMClient", _ScriptedDecisionLLM)
+    monkeypatch.setattr(_ScriptedDecisionLLM, "calls", [])
+    monkeypatch.setattr(rps, "_SIM_LLM_USAGE", {   # 进程级 token 计量隔离
+        "calls": 0, "errors": 0, "prompt_tokens": 0, "completion_tokens": 0,
+        "by_source": {}, "by_model": {}})
+
+    _run(_calendar_config(), sim_dir)
+    assert len(_ScriptedDecisionLLM.calls) == 3          # 每轮恰一次批量调用
+    assert _ScriptedDecisionLLM.calls == [2048] * 3      # 小名册 max_tokens 不变
+
+    traj = _read_traj(sim_dir)
+    rows = traj["trajectory"][1:]
+    assert len(rows) == 3 and "decision_validation" not in traj["trajectory"][0]
+    for row in rows:
+        rec = row["decision_validation"]
+        assert rec["measured"] is True
+        assert rec["reasons"]["unknown_agent"] == 1
+        assert rec["normalized"]["id_coerced"] == 1
+        assert "0" in rec["roster_agent_ids"] and "999" not in rec["roster_agent_ids"]
+        assert rec["accepted"] == 1 and rec["rejected"] == 1
+        assert rec["missing_from_reply"] == rec["roster_size"] - 1
+        assert row["round_status"] == "committed"
+    digest_rows = _read_jsonl(os.path.join(sim_dir, "world_digest.jsonl"))
+    assert [r["round"] for r in digest_rows] == [1, 2, 3]
+    for drow, row in zip(digest_rows, rows, strict=True):
+        rec = row["decision_validation"]
+        assert drow["actor_coverage"] == {
+            k: rec[k] for k in ("roster_size", "accepted", "abstained", "rejected",
+                                "missing_from_reply")}
+    decisions = _read_jsonl(os.path.join(sim_dir, "decisions.jsonl"))
+    assert decisions and all(d["agent_id"] == 0 for d in decisions)  # 999 从不入账
+    summary = traj["decision_validation"]
+    assert summary["measured_rounds"] == 3 and summary["unmeasured_rounds"] == 0
+    assert summary["reasons"]["unknown_agent"] == 3
+    slots = sum(r["decision_validation"]["roster_size"] for r in rows)
+    fallback = sum(r["decision_validation"]["fallback_slots"] for r in rows)
+    assert summary["slots"] == slots
+    assert summary["fallback_share"] == round(fallback / slots, 6)
+    # 名册规模确定：主角 0 必激活 + sampled 配额恰 2 人（3 名候选激活概率均为 1.0，
+    # target_count=agents_per_hour_max=2）；采样只决定是哪 2 人，不影响计数。每轮只有
+    # agent 0 有效作答 → fallback 2/3 → run 级 0.666667 > DECISION_CHANNEL_FALLBACK_MAX_SHARE(0.5)
+    assert [r["decision_validation"]["roster_size"] for r in rows] == [3, 3, 3]
+    assert [r["decision_validation"]["fallback_slots"] for r in rows] == [2, 2, 2]
+    assert summary["slots"] == 9 and summary["fallback_share"] == 0.666667
+    assert traj["round_accounting"]["valid_transitions"] == 3   # 每轮都已提交 …
+    assert traj["validity"] == "inconclusive"                    # … 仍因名册覆盖不足降级
+    assert traj["validity_reasons"] == ["fallback_share_exceeded"]
+    assert traj["forecast_effect"] == "no_update"
+
+
+def test_inband_verdict_folds_fallback_share(tmp_path, monkeypatch):
+    """直接驱动演化器：每轮 4 人名册只答 1 人 → fallback_share 0.75 → inconclusive。"""
+    sim_dir = str(tmp_path)
+    _patch_runtime(monkeypatch, sim_dir, [])
+    monkeypatch.setattr("app.utils.llm_client.LLMClient", _ScriptedDecisionLLM)
+    monkeypatch.setattr(_ScriptedDecisionLLM, "calls", [])
+    monkeypatch.setattr(rps, "_SIM_LLM_USAGE", {
+        "calls": 0, "errors": 0, "prompt_tokens": 0, "completion_tokens": 0,
+        "by_source": {}, "by_model": {}})
+    evo = rps._InbandWorldEvolution(_calendar_config(), sim_dir, 1, lambda _m: None)
+    for rn in range(3):
+        evo.deliver("twitter", rn, _ROUND_DATES[rn],
+                    [{"agent_id": a, "agent_name": f"Actor{a}",
+                      "action_args": {"content": f"Actor{a} move"}} for a in range(4)], [])
+    evo.platform_done("twitter")
+
+    traj = _read_traj(sim_dir)
+    assert traj["decision_validation"]["fallback_share"] == 0.75
+    assert traj["round_accounting"]["valid_transitions"] == 3
+    assert traj["validity"] == "inconclusive"
+    assert traj["validity_reasons"] == ["fallback_share_exceeded"]
+    assert traj["forecast_effect"] == "no_update"
+
+
+def test_inband_legacy_elicit_double_adds_no_validation_keys(tmp_path, monkeypatch):
+    """旧签名的 elicit 替身不写记录 → 轨迹/digest/汇总均无新键、裁定不变。"""
+    sim_dir = str(tmp_path)
+    _patch_runtime(monkeypatch, sim_dir, [])
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit([]))
+    _run(_calendar_config(), sim_dir)
+    traj = _read_traj(sim_dir)
+    assert "decision_validation" not in traj
+    assert all("decision_validation" not in row for row in traj["trajectory"])
+    digest_rows = _read_jsonl(os.path.join(sim_dir, "world_digest.jsonl"))
+    assert digest_rows and all("actor_coverage" not in r for r in digest_rows)
+    assert traj["validity"] == "valid" and traj["validity_reasons"] == []
+
+
+# ===========================================================================
 # 8) hours 模式回归钉：无 temporal_config → 旧路径（无注入/无演化/max_rounds 截断）
 # ===========================================================================
 def test_hours_mode_untouched(tmp_path, monkeypatch):
