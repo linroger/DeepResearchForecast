@@ -187,6 +187,16 @@ export function renderMarkdown(md, opts) {
       continue
     }
 
+    // HTML comments are pipeline markers (<!-- viz:charts/… -->,
+    // <!-- binary-forecast-block:start -->), never reader text: drop them instead of
+    // escaping them into the page.  A comment may span lines until its "-->".
+    if (/^\s*<!--/.test(line)) {
+      flushParagraph(paraBuf)
+      while (i < lines.length && !/-->/.test(lines[i])) i++
+      i++
+      continue
+    }
+
     // table (header line + separator of dashes/pipes)
     if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes('-')) {
       flushParagraph(paraBuf)
