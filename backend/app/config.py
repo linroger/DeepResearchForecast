@@ -481,6 +481,12 @@ class Config:
     # 坐标。关闭 / scenario_spine 缺省 = 自由起名（行为与历史一致）。
     REPORT_SCENARIO_SPINE_PIN = os.environ.get('REPORT_SCENARIO_SPINE_PIN', 'True').strip().lower() == 'true'
     RECORD_RUN_MANIFEST = os.environ.get('RECORD_RUN_MANIFEST', 'True').strip().lower() == 'true'  # I-8-1 复现清单 run.json
+    # EVAL-15：管线终态（completed/failed/cancelled）时在 _run 的 finally 里写确定性分阶段记分卡
+    # <pipeline_dir>/stage_scorecard.json（stage-scorecard/v1：已有工件的纯投影 + 契约检查），并把
+    # {stage: passed} 摘要折入 state.options.stage_scorecard_summary。默认开（同 RECORD_RUN_MANIFEST
+    # 的观测侧车先例）：只读投影、独立 try/except，绝不改 status/pipeline_health、绝不写报告目录。
+    # 关闭 = 不写文件、不加 options 键。孤儿/旧跑用 scripts/stage_scorecard.py score 回填。
+    STAGE_SCORECARD_ENABLED = os.environ.get('STAGE_SCORECARD_ENABLED', 'true').strip().lower() == 'true'
 
     # —— EXECPLAN2 第三波改进旋钮（剩余 L-effort 新能力；全部默认关，留空即保持当前行为）——
     # 预测质量回归评测开关（EXECPLAN2 I-7-7）：opt-in，绝不进默认 CI。开启后 eval_forecast_quality.py
