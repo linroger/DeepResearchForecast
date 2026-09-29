@@ -43,6 +43,10 @@ EXPECTED_SKILLS = {
     "prediction-markets",
 }
 
+def _resolve_skills_path(path_value: str | Path) -> Path:
+    path = Path(path_value)
+    return path.resolve() if path.is_absolute() else (REPO_ROOT / path).resolve()
+
 # 引擎 MCP 工具名（与 drf2/engines/*/server.py 实际注册的名字一致；技能 allowed-tools /
 # 子代理 tools 白名单都据此校验。TestEngineToolNameDrift 再把这两个集合与引擎源码
 # 提取出的真名对表 —— 引擎改名会先让测试红，再同步技能与配置）。
@@ -366,8 +370,8 @@ class TestConfigYaml:
             "drf2.config.market_tools:prediction_market_search_tool")
 
     def test_skills_path_points_at_drf2_skills(self, cfg):
-        path = Path(cfg["skills"]["path"])
-        assert path == SKILLS_ROOT, f"skills.path {path} != {SKILLS_ROOT}"
+        path = _resolve_skills_path(cfg["skills"]["path"])
+        assert path == SKILLS_ROOT.resolve(), f"skills.path {path} != {SKILLS_ROOT.resolve()}"
         # loader 扫 {public,custom} —— custom 必须存在且非空
         assert (path / "custom").is_dir() and any((path / "custom").iterdir())
 
@@ -387,7 +391,7 @@ class TestRealSchemaValidation:
         assert cfg.subagents.custom_agents["researcher"].timeout_seconds == 2700
         assert cfg.subagents.custom_agents["sim-configurer"].timeout_seconds == 900
         assert cfg.tool_search.enabled is True
-        assert Path(cfg.skills.path) == SKILLS_ROOT
+        assert _resolve_skills_path(cfg.skills.path) == SKILLS_ROOT.resolve()
 
     def test_extensions_json_loads_via_real_schema(self, deerflow_config_modules):
         _, extensions_config = deerflow_config_modules
