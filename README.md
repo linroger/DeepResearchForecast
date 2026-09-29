@@ -178,10 +178,11 @@ Here is one prompt, *"Who wins the US AI race by 2030?"*, going from question to
 
 ### All demo runs
 
-The demo site hosts 14 complete runs, listed here newest first. Scale varies because the defaults have changed over time. Older runs used larger casts, and some used the legacy news-cycle simulation mode. Under today's defaults, a run simulates at most 20 researched actors, typically over 7–36 calendar rounds.
+The demo site hosts 15 complete runs, listed here newest first. Scale varies because the defaults have changed over time. Older runs used larger casts, and some used the legacy news-cycle simulation mode. Under today's defaults, a run simulates at most 20 researched actors, typically over 7–36 calendar rounds. When a run has an audited translation, its report and dossier tabs switch between English and 中文.
 
 | Run | Date | Research model | Simulation |
 |---|---|---|---|
+| [Quantum computing to 2040: the US, China and EU race](https://linroger.github.io/DeepAgentForecast/demo.html?run=quantum-2040) | 2026-09 | GLM-5.3 | 29 rounds · 18 personas |
 | [Global data centers to 2030: the US–China compute race](https://linroger.github.io/DeepAgentForecast/demo.html?run=datacenter-2030) | 2026-09 | GLM-5.3 (completed by the experimental linear engine) | 17 rounds · 18 personas |
 | [Global grid-scale energy storage through 2040](https://linroger.github.io/DeepAgentForecast/demo.html?run=grid-storage-2040) | 2026-07 | MiniMax | 29 rounds · 19 personas |
 | [Global EV industry through 2035](https://linroger.github.io/DeepAgentForecast/demo.html?run=ev-2035) | 2026-07 | MiniMax | 19 rounds · 12 personas |
@@ -1614,8 +1615,8 @@ flowchart LR
 
 Run the backend scripts from `backend/` with `uv run python scripts/<name>.py --help`.
 
-**Demo site.** The static site lives in `docs/` (`index.html`, `demo.html`) and is served by GitHub Pages. Each run is a bundle in `docs/demos/<key>/`: `meta.json`, `report.md`, `dossier.md`, `actors.json`, `sources.json`, `ontology.json`, `graph.json`, `forum.json`, `research_log.txt` and optional `charts/`. To add a run:
-1. export it with `export_demo_site_data.py`;
+**Demo site.** The static site lives in `docs/` (`index.html`, `demo.html`) and is served by GitHub Pages. Each run is a bundle in `docs/demos/<key>/`: `meta.json`, `report.md`, `dossier.md`, `actors.json`, `sources.json`, `ontology.json`, `graph.json`, `forum.json`, `research_log.txt` and optional `charts/`. A published translation is exported beside its original as `report.<lang>.md` / `dossier.<lang>.md`, and `meta.json` maps each language to its file (`report_languages`, `dossier_languages`). To add a run:
+1. export it with `export_demo_site_data.py` (`--reports-only` refreshes just the report, the dossier and their translations);
 2. register its key in `RUN_KEYS` in `docs/demo.html`;
 3. add its title to `docs/i18n.js`;
 4. add a card to `docs/index.html`.

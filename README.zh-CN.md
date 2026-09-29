@@ -178,10 +178,11 @@ npm start         # 后端 :5001 + 前端 :3000；跟随日志并打印阶段变
 
 ### 全部演示运行
 
-演示站收录了 14 次完整运行，下表按从新到旧排列。各次规模不同，是因为默认设置随时间变化过：早期运行的阵容更大，有些还使用了旧式的新闻周期模拟模式。按当前默认设置，一次运行最多模拟 20 位研究所得的行动者，通常为 7–36 个日历回合。
+演示站收录了 15 次完整运行，下表按从新到旧排列。各次规模不同，是因为默认设置随时间变化过：早期运行的阵容更大，有些还使用了旧式的新闻周期模拟模式。按当前默认设置，一次运行最多模拟 20 位研究所得的行动者，通常为 7–36 个日历回合。已有通过审计的译本的运行，其报告与研究档案标签页可在 English 与中文之间切换。
 
 | 运行 | 日期 | 研究模型 | 模拟 |
 |---|---|---|---|
+| [2040 年前的量子计算：美中欧竞速](https://linroger.github.io/DeepAgentForecast/demo.html?run=quantum-2040) | 2026-09 | GLM-5.3 | 29 轮 · 18 个人格 |
 | [2030 年前全球数据中心市场：中美算力竞赛](https://linroger.github.io/DeepAgentForecast/demo.html?run=datacenter-2030) | 2026-09 | GLM-5.3（由实验性线性引擎收尾完成） | 17 轮 · 18 个人格 |
 | [2040 年前全球电网级储能产业](https://linroger.github.io/DeepAgentForecast/demo.html?run=grid-storage-2040) | 2026-07 | MiniMax | 29 轮 · 19 个人格 |
 | [2035 年前全球电动汽车产业](https://linroger.github.io/DeepAgentForecast/demo.html?run=ev-2035) | 2026-07 | MiniMax | 19 轮 · 12 个人格 |
@@ -1614,8 +1615,8 @@ flowchart LR
 
 后端脚本请在 `backend/` 下运行：`uv run python scripts/<name>.py --help`。
 
-**演示站。** 静态站点位于 `docs/`（`index.html`、`demo.html`），由 GitHub Pages 提供服务。每次运行都是 `docs/demos/<key>/` 下的一个数据包：`meta.json`、`report.md`、`dossier.md`、`actors.json`、`sources.json`、`ontology.json`、`graph.json`、`forum.json`、`research_log.txt`，以及可选的 `charts/`。新增一次运行：
-1. 用 `export_demo_site_data.py` 导出它；
+**演示站。** 静态站点位于 `docs/`（`index.html`、`demo.html`），由 GitHub Pages 提供服务。每次运行都是 `docs/demos/<key>/` 下的一个数据包：`meta.json`、`report.md`、`dossier.md`、`actors.json`、`sources.json`、`ontology.json`、`graph.json`、`forum.json`、`research_log.txt`，以及可选的 `charts/`。已发布的译本与原文并列导出为 `report.<lang>.md` / `dossier.<lang>.md`，`meta.json` 记录每种语言对应的文件（`report_languages`、`dossier_languages`）。新增一次运行：
+1. 用 `export_demo_site_data.py` 导出它（`--reports-only` 只刷新报告、研究档案及其译本）；
 2. 在 `docs/demo.html` 的 `RUN_KEYS` 中登记它的键；
 3. 在 `docs/i18n.js` 中加上标题；
 4. 在 `docs/index.html` 中加一张卡片。

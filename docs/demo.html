@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="site.css?v=20260930a">
 </head>
 <body>
 
@@ -50,10 +50,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/force-graph@1.49.4/dist/force-graph.min.js"></script>
-<script src="i18n.js?v=20260927a"></script>
+<script src="i18n.js?v=20260930a"></script>
 <script>
 (function () {
-  var RUN_KEYS = { 'us-ai-2030': 'run.ai.title', 'ev-2035': 'run.ev.title', 'russia-ukraine': 'run.ru.title', 'semiconductors-2030': 'run.semi.title', 'memory-semi-2030': 'run.mem.title', 'china-storage-2035': 'run.ess.title', 'us-iran-2026': 'run.iran.title', 'storage-semi-2028': 'run.storage.title', 'cloud-2030': 'run.cloud.title', 'collision-decade-2031': 'run.collision.title', 'us-midterms-2026': 'run.midterms.title', 'us-trade-2028': 'run.trade.title', 'grid-storage-2040': 'run.grid.title', 'datacenter-2030': 'run.dc.title' };
+  var RUN_KEYS = { 'us-ai-2030': 'run.ai.title', 'ev-2035': 'run.ev.title', 'russia-ukraine': 'run.ru.title', 'semiconductors-2030': 'run.semi.title', 'memory-semi-2030': 'run.mem.title', 'china-storage-2035': 'run.ess.title', 'us-iran-2026': 'run.iran.title', 'storage-semi-2028': 'run.storage.title', 'cloud-2030': 'run.cloud.title', 'collision-decade-2031': 'run.collision.title', 'us-midterms-2026': 'run.midterms.title', 'us-trade-2028': 'run.trade.title', 'grid-storage-2040': 'run.grid.title', 'datacenter-2030': 'run.dc.title', 'quantum-2040': 'run.quantum.title' };
   var params = new URLSearchParams(location.search);
   var runKey = params.get('run');
   var body = document.getElementById('stage-body');
@@ -96,6 +96,56 @@
     return fetchJSON(name).catch(function () { return null; });
   }
 
+  // Language versions of the report / dossier: meta.json maps each language to its
+  // file ({"en": "report.md", "zh": "report.zh.md"}); older runs have one language.
+  // A version follows the site language unless the reader picks one in the tab.
+  var docLang = {};  // 'report' | 'dossier' -> language picked in the tab
+  function pickDoc(meta, kind, primaryFile) {
+    var map = meta && meta[kind + '_languages'];
+    var files = {}, codes = [], primary = null;
+    ['en', 'zh'].forEach(function (code) {
+      if (map && typeof map[code] === 'string' && /^[a-z]+(?:\.[a-z]+)?\.md$/.test(map[code])) {
+        files[code] = map[code];
+        codes.push(code);
+        if (map[code] === primaryFile) primary = code;
+      }
+    });
+    if (codes.length < 2) return { file: primaryFile, lang: null };
+    var want = docLang[kind] || drfLang();
+    var lang = files[want] ? want : (primary || codes[0]);
+    return { file: files[lang], lang: lang, codes: codes, primary: primary };
+  }
+  function docLangBar(kind, pick) {
+    if (!pick.lang) return '';
+    var label = drfT('doclang.' + kind);
+    var html = '<div class="doc-lang" role="group" aria-label="' + esc(label) + '">' +
+      '<span class="doc-lang-label">' + esc(label) + '</span><span class="forum-switch">';
+    pick.codes.forEach(function (code) {
+      var on = code === pick.lang;
+      html += '<button type="button" data-doc-kind="' + kind + '" data-doc-lang="' + code + '"' +
+        ' class="' + (on ? 'active' : '') + '" aria-pressed="' + on + '">' +
+        (code === 'zh' ? '中文' : 'English') + '</button>';
+    });
+    var note = pick.primary && pick.lang !== pick.primary
+      ? drfT('doclang.translated.' + pick.primary) : drfT('doclang.original');
+    return html + '</span><span class="doc-lang-note">' + esc(note) + '</span></div>';
+  }
+  function mdBody(pick, md) {
+    var lang = pick.lang === 'zh' ? ' lang="zh-CN"' : (pick.lang === 'en' ? ' lang="en"' : '');
+    return '<div class="md-body"' + lang + '>' + marked.parse(md) + '</div>';
+  }
+  function bindDocLang() {
+    var btns = body.querySelectorAll('[data-doc-lang]');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener('click', function () {
+        var kind = this.getAttribute('data-doc-kind');
+        docLang[kind] = this.getAttribute('data-doc-lang');
+        delete rendered[kind];
+        show(currentTab);
+      });
+    }
+  }
+
   function setLoading() { body.innerHTML = '<p class="md-loading">' + esc(drfT('viewer.loading')) + '</p>'; }
   function setError(e) { body.innerHTML = '<p class="md-loading">' + esc(drfT('viewer.loadfail')) + ' ' + esc(e.message) + '</p>'; }
 
@@ -118,41 +168,43 @@
   }
 
   function renderDossier() {
-    return Promise.all([fetchText('dossier.md'), fetchJSONOptional('actors.json'), fetchJSONOptional('sources.json')])
-      .then(function (res) {
-        var md = res[0], actors = res[1], sources = res[2];
-        var html = '';
-        var rows = actors && actors.actors;
-        if (Array.isArray(rows) && rows.length) {
-          html += '<h2 class="block-h">' + esc(drfT('dossier.actors')) + '</h2>' +
-                  '<p class="block-sub">' + esc(drfT('dossier.actorsub')) + '</p><div class="actor-grid">';
-          rows.forEach(function (a) {
-            if (!a || !a.name) return;
-            html += '<div class="actor-card"><div class="actor-top"><strong>' + esc(a.name) + '</strong>' +
-              '<span class="actor-type">' + esc(a.type || '') + '</span></div>' +
-              (a.role ? '<p><span class="alabel">' + esc(drfT('actor.role')) + '</span> ' + esc(a.role) + '</p>' : '') +
-              (a.stance ? '<p><span class="alabel">' + esc(drfT('actor.stance')) + '</span> ' + esc(a.stance) + '</p>' : '') +
-              (a.influence ? '<span class="actor-infl infl-' + esc(String(a.influence).toLowerCase()) + '">' + esc(String(a.influence)) + ' ' + esc(drfT('actor.influence')) + '</span>' : '') +
-              '</div>';
-          });
-          html += '</div>';
-        } else {
-          html += '<p class="block-sub">' + esc(drfT('dossier.noactors')) + '</p>';
-        }
-        html += '<h2 class="block-h">' + esc(drfT('dossier.brief')) + '</h2><div class="md-body">' + marked.parse(md) + '</div>';
-        var srcs = sources && (sources.sources || sources);
-        if (Array.isArray(srcs) && srcs.length) {
-          html += '<h2 class="block-h">' + esc(drfT('dossier.sources')) + '</h2><ol class="source-list">';
-          srcs.forEach(function (s) {
-            if (!s) return;
-            var url = s.url || '', title = s.title || url;
-            if (!url) return;
-            html += '<li><a href="' + esc(url) + '" rel="nofollow noopener" target="_blank">' + esc(title) + '</a></li>';
-          });
-          html += '</ol>';
-        }
-        return html;
-      });
+    return fetchJSONOptional('meta.json').then(function (meta) {
+      var pick = pickDoc(meta, 'dossier', 'dossier.md');
+      return Promise.all([fetchText(pick.file), fetchJSONOptional('actors.json'), fetchJSONOptional('sources.json'), pick]);
+    }).then(function (res) {
+      var md = res[0], actors = res[1], sources = res[2], pick = res[3];
+      var html = docLangBar('dossier', pick);
+      var rows = actors && actors.actors;
+      if (Array.isArray(rows) && rows.length) {
+        html += '<h2 class="block-h">' + esc(drfT('dossier.actors')) + '</h2>' +
+                '<p class="block-sub">' + esc(drfT('dossier.actorsub')) + '</p><div class="actor-grid">';
+        rows.forEach(function (a) {
+          if (!a || !a.name) return;
+          html += '<div class="actor-card"><div class="actor-top"><strong>' + esc(a.name) + '</strong>' +
+            '<span class="actor-type">' + esc(a.type || '') + '</span></div>' +
+            (a.role ? '<p><span class="alabel">' + esc(drfT('actor.role')) + '</span> ' + esc(a.role) + '</p>' : '') +
+            (a.stance ? '<p><span class="alabel">' + esc(drfT('actor.stance')) + '</span> ' + esc(a.stance) + '</p>' : '') +
+            (a.influence ? '<span class="actor-infl infl-' + esc(String(a.influence).toLowerCase()) + '">' + esc(String(a.influence)) + ' ' + esc(drfT('actor.influence')) + '</span>' : '') +
+            '</div>';
+        });
+        html += '</div>';
+      } else {
+        html += '<p class="block-sub">' + esc(drfT('dossier.noactors')) + '</p>';
+      }
+      html += '<h2 class="block-h">' + esc(drfT('dossier.brief')) + '</h2>' + mdBody(pick, md);
+      var srcs = sources && (sources.sources || sources);
+      if (Array.isArray(srcs) && srcs.length) {
+        html += '<h2 class="block-h">' + esc(drfT('dossier.sources')) + '</h2><ol class="source-list">';
+        srcs.forEach(function (s) {
+          if (!s) return;
+          var url = s.url || '', title = s.title || url;
+          if (!url) return;
+          html += '<li><a href="' + esc(url) + '" rel="nofollow noopener" target="_blank">' + esc(title) + '</a></li>';
+        });
+        html += '</ol>';
+      }
+      return html;
+    });
   }
 
   function renderOntology() {
@@ -314,18 +366,21 @@
   }
 
   function renderReport() {
-    return fetchText('report.md').then(function (md) {
-      return '<div class="md-body">' + marked.parse(md) + '</div>';
+    return fetchJSONOptional('meta.json').then(function (meta) {
+      var pick = pickDoc(meta, 'report', 'report.md');
+      return fetchText(pick.file).then(function (md) {
+        return docLangBar('report', pick) + mdBody(pick, md);
+      });
     });
   }
 
   var STAGES = {
     log:      { intro: 'log.intro',     render: renderLog },
-    dossier:  { intro: 'dossier.brief', render: renderDossier, introKey: null },
+    dossier:  { intro: 'dossier.brief', render: renderDossier, after: bindDocLang },
     ontology: { intro: 'onto.intro',    render: renderOntology },
     graph:    { intro: 'graph.intro',   render: renderGraphTab, after: mountGraph },
     forum:    { intro: 'forum.intro',   render: renderForum, after: bindForumSwitch },
-    report:   { intro: 'report.intro',  render: renderReport }
+    report:   { intro: 'report.intro',  render: renderReport, after: bindDocLang }
   };
   STAGES.dossier.intro = null; // dossier renders its own section headings
 
@@ -365,9 +420,11 @@
     show('report');
   });
 
-  // language switch: re-render the current tab (labels inside content) and title
+  // language switch: re-render the current tab (labels inside content) and title;
+  // report and dossier follow the new site language again
   document.addEventListener('drf:lang', function () {
     rendered = {};
+    docLang = {};
     document.title = drfT(RUN_KEYS[runKey]) + ' — DeepAgentForecast';
     show(currentTab);
   });

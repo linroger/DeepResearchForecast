@@ -117,6 +117,11 @@
     'forum.empty':      { en: 'No feed recorded for this platform.', zh: '该平台没有记录到动作流。' },
 
     'report.intro':     { en: 'Stage 6: the final forecast, written by a tool-augmented ReAct agent that queried both the knowledge graph and the simulation.', zh: '阶段 6：最终预测报告，由同时检索知识图谱与模拟结果的工具增强 ReAct Agent 撰写。' },
+    'doclang.report':   { en: 'Report language', zh: '报告语言' },
+    'doclang.dossier':  { en: 'Dossier language', zh: '档案语言' },
+    'doclang.original': { en: 'Original', zh: '原文' },
+    'doclang.translated.en': { en: 'Translated from the English original · every number, date and citation checked against it', zh: '译自英文原文 · 所有数字、日期与引用均已与原文逐一核对' },
+    'doclang.translated.zh': { en: 'Translated from the Chinese original · every number, date and citation checked against it', zh: '译自中文原文 · 所有数字、日期与引用均已与原文逐一核对' },
 
     'run.ai.title':     { en: 'Who dominates US AI by 2030?', zh: '2030 年谁主导美国 AI？' },
     'run.ev.title':     { en: 'Global EV industry through 2035', zh: '2035 年前全球电动汽车产业' },
@@ -132,6 +137,9 @@
     'run.trade.title': { en: "America's trading system in 2028 — tariffs, reshoring & the AI-productivity race", zh: '2028 年美国贸易体系 —— 关税、供应链回流与 AI 生产力竞赛' },
     'run.grid.title': { en: 'Global grid-scale energy storage through 2040', zh: '2040 年前全球电网级储能产业' },
     'run.dc.title': { en: 'Global data centers to 2030 — the US–China compute race', zh: '2030 年前全球数据中心市场 —— 中美算力竞赛' },
+    'run.quantum.title': { en: 'Quantum computing to 2040 — the US, China & EU race', zh: '2040 年前的量子计算 —— 美中欧竞速' },
+    'card.quantum.title': { en: 'Quantum computing to 2040 — the US, China & EU race', zh: '2040 年前的量子计算 —— 美中欧竞速' },
+    'card.quantum.meta': { en: '29-round calendar simulation · 18 personas · 137-node knowledge graph · 10 binary forecasts & 5 scenarios — superconducting vs. trapped-ion, neutral-atom, photonic, spin & topological qubits; US / China / EU strategy, funding & export controls; fault-tolerance timelines and the post-quantum-cryptography window, run end-to-end on GLM-5.3 · report and dossier in English & Chinese', zh: '29 轮日历模拟 · 18 位人格 · 137 节点知识图谱 · 10 条二元预测与 5 个情景 —— 超导、离子阱、中性原子、光量子、硅自旋与拓扑量子比特路线对比；美中欧战略、资金与出口管制；容错时间表与后量子密码迁移窗口，全程由 GLM-5.3 完成 · 报告与研究档案均提供中英双语' },
     'card.grid.title': { en: 'Global grid-scale energy storage through 2040', zh: '2040 年前全球电网级储能产业' },
     'card.dc.title': { en: 'Global data centers to 2030 — the US–China compute race', zh: '2030 年前全球数据中心市场 —— 中美算力竞赛' },
     'card.grid.meta': { en: '29-round calendar simulation · 19 personas · 183-node knowledge graph · 11 binary forecasts & 5 scenarios — LFP vs. sodium-ion, flow, thermal, CAES & long-duration routes across 8 regions, with an additive decision-channel simulation that moved the base case to LDES-Diversified', zh: '29 轮日历模拟 · 19 位人格 · 183 节点知识图谱 · 11 条二元预测与 5 个情景 —— 磷酸铁锂对钠离子、液流、热储、压缩空气与长时储能路线，覆盖 8 大区域；决策通道模拟真实改变了预测，将基准情景移至「长时储能多元化」' },
