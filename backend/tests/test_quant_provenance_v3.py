@@ -21,6 +21,7 @@ import copy
 import datetime as dt
 import hashlib
 import json
+import sys
 import types
 
 import pytest
@@ -41,6 +42,8 @@ po = v3.po
 AS_OF = dt.date(2026, 9, 28)
 LEGACY_FRESHNESS_KEYS = {"fresh_le_90", "recent_le_365", "stale_gt_365", "undated", "n_stale"}
 TYPING_KEYS = {"epistemic_class", "date_precision", "target_date", "epistemic_flags"}
+# The flags of an actual (or unprojected estimate) whose as_of_date lies after as-of.
+IMPOSSIBLE_ACTUAL = ["future_dated_reported", "published_after_as_of"]
 VERIFY_KEYS = {"verification", "verified"}
 
 
@@ -146,8 +149,31 @@ def test_period_end_date_returns_none_for_garbage(garbage):
     ("FY2025-29", (dt.date(2025, 1, 1), dt.date(2029, 12, 31), "year")),
     ("2025/26", (dt.date(2025, 1, 1), dt.date(2026, 12, 31), "year")),
     ("2025-26", (dt.date(2025, 1, 1), dt.date(2026, 12, 31), "year")),
-    ("Q3 2025", (dt.date(2025, 1, 1), dt.date(2025, 12, 31), "year")),
     ("2025-13", (dt.date(2025, 1, 1), dt.date(2025, 12, 31), "year")),     # "13" closes no range
+    # a whole free-text quarter, half or month keeps its own precision
+    ("Q3 2025", (dt.date(2025, 7, 1), dt.date(2025, 9, 30), "quarter")),
+    ("q4-2026", (dt.date(2026, 10, 1), dt.date(2026, 12, 31), "quarter")),
+    ("4Q 2026", (dt.date(2026, 10, 1), dt.date(2026, 12, 31), "quarter")),
+    ("2026-3Q", (dt.date(2026, 7, 1), dt.date(2026, 9, 30), "quarter")),
+    ("H2 2026", (dt.date(2026, 7, 1), dt.date(2026, 12, 31), "half")),
+    ("1H 2026", (dt.date(2026, 1, 1), dt.date(2026, 6, 30), "half")),
+    ("2026 2H", (dt.date(2026, 7, 1), dt.date(2026, 12, 31), "half")),
+    ("Dec 2026", (dt.date(2026, 12, 1), dt.date(2026, 12, 31), "month")),
+    ("September 2026", (dt.date(2026, 9, 1), dt.date(2026, 9, 30), "month")),
+    ("Sept. 2026", (dt.date(2026, 9, 1), dt.date(2026, 9, 30), "month")),
+    ("March, 2026", (dt.date(2026, 3, 1), dt.date(2026, 3, 31), "month")),
+    ("end of 2026", (dt.date(2026, 12, 1), dt.date(2026, 12, 31), "month")),
+    ("year-end 2026", (dt.date(2026, 12, 1), dt.date(2026, 12, 31), "month")),
+    ("2026年第三季度", (dt.date(2026, 7, 1), dt.date(2026, 9, 30), "quarter")),
+    ("2026年Q4", (dt.date(2026, 10, 1), dt.date(2026, 12, 31), "quarter")),
+    ("2026年下半年", (dt.date(2026, 7, 1), dt.date(2026, 12, 31), "half")),
+    ("2026年3月", (dt.date(2026, 3, 1), dt.date(2026, 3, 31), "month")),
+    ("2026年底", (dt.date(2026, 12, 1), dt.date(2026, 12, 31), "month")),
+    # ... only whole: a range of them, or an impossible one, is read by its years
+    ("Q4 2026 to Q2 2027", (dt.date(2026, 1, 1), dt.date(2027, 12, 31), "year")),
+    ("Q5 2026", (dt.date(2026, 1, 1), dt.date(2026, 12, 31), "year")),
+    ("2026年13月", (dt.date(2026, 1, 1), dt.date(2026, 12, 31), "year")),
+    ("Mayday 2026", (dt.date(2026, 1, 1), dt.date(2026, 12, 31), "year")),
     # no year: nothing to read
     ("ongoing", (None, None, "none")),
     ("20251231", (None, None, "none")),
@@ -224,25 +250,51 @@ def test_loose_period_bounds(value, expected):
      {"epistemic_class": "reported", "date_precision": "day"}),
     # an as_of_date after as-of is no publication date, whatever period_end says
     ({"value_type": "actual", "as_of_date": "2029-12-31T00:00:00Z"},
-     {"epistemic_class": "unknown", "date_precision": "day", "epistemic_flags": ["future_dated_reported"]}),
+     {"epistemic_class": "unknown", "date_precision": "day", "epistemic_flags": IMPOSSIBLE_ACTUAL}),
     ({"value_type": "actual", "as_of_date": "2030E"},
-     {"epistemic_class": "unknown", "date_precision": "year", "epistemic_flags": ["future_dated_reported"]}),
+     {"epistemic_class": "unknown", "date_precision": "year", "epistemic_flags": IMPOSSIBLE_ACTUAL}),
     ({"value_type": "actual", "as_of_date": "2027-03", "period_end": "2025"},
-     {"epistemic_class": "unknown", "date_precision": "year", "epistemic_flags": ["future_dated_reported"]}),
+     {"epistemic_class": "unknown", "date_precision": "year", "epistemic_flags": IMPOSSIBLE_ACTUAL}),
     ({"value_type": "estimate", "as_of_date": "2027-03", "period_end": "2025"},
-     {"epistemic_class": "unknown", "date_precision": "year", "epistemic_flags": ["future_dated_reported"]}),
+     {"epistemic_class": "unknown", "date_precision": "year", "epistemic_flags": IMPOSSIBLE_ACTUAL}),
+    ({"value_type": "actual", "as_of_date": "2026-Q4"},
+     {"epistemic_class": "unknown", "date_precision": "quarter", "epistemic_flags": IMPOSSIBLE_ACTUAL}),
+    ({"value_type": "actual", "as_of_date": "Dec 2026"},
+     {"epistemic_class": "unknown", "date_precision": "month", "epistemic_flags": IMPOSSIBLE_ACTUAL}),
     ({"value_type": "actual", "as_of_date": "2025-06-30T12:00:00+08:00"},
      {"epistemic_class": "reported", "date_precision": "day"}),
-    # target dates read by quarter or fiscal year
+    # target dates read by quarter, half, month or fiscal year, in free text too
     ({"value_type": "target", "as_of_date": "2026-Q4"},
      {"epistemic_class": "projected", "date_precision": "quarter", "target_date": "2026-Q4",
       "epistemic_flags": ["as_of_is_target"]}),
+    ({"value_type": "target", "as_of_date": "Q4 2026"},
+     {"epistemic_class": "projected", "date_precision": "quarter", "target_date": "Q4 2026",
+      "epistemic_flags": ["as_of_is_target"]}),
+    ({"value_type": "forecast", "as_of_date": "Dec 2026", "period_end": ""},
+     {"epistemic_class": "projected", "date_precision": "month", "target_date": "Dec 2026",
+      "epistemic_flags": ["as_of_is_target"]}),
+    ({"value_type": "target", "as_of_date": "2026年底"},
+     {"epistemic_class": "projected", "date_precision": "month", "target_date": "2026年底",
+      "epistemic_flags": ["as_of_is_target"]}),
+    ({"value_type": "forecast", "as_of_date": "H2 2026", "period_end": "2030"},
+     {"epistemic_class": "projected", "date_precision": "year"}),
+    # a free-text publication date of the current year before as-of is one
+    ({"value_type": "actual", "as_of_date": "March 2026"},
+     {"epistemic_class": "reported", "date_precision": "month"}),
+    ({"value_type": "actual", "as_of_date": "1H 2026"},
+     {"epistemic_class": "reported", "date_precision": "half"}),
+    ({"value_type": "actual", "as_of_date": "2026年3月", "period_end": "2025年下半年"},
+     {"epistemic_class": "reported", "date_precision": "half"}),
+    ({"value_type": "estimate", "as_of_date": "2026-05-01", "period_end": "Q4 2026"},
+     {"epistemic_class": "projected", "date_precision": "quarter"}),
     ({"value_type": "target", "as_of_date": "FY2027"},
      {"epistemic_class": "projected", "date_precision": "year", "target_date": "FY2027",
       "epistemic_flags": ["as_of_is_target"]}),
     # missing or unknown value_type → unknown
     ({"as_of_date": "2025-11-01"}, {"epistemic_class": "unknown", "date_precision": "day"}),
-    ({"value_type": "guidance", "as_of_date": "2031"}, {"epistemic_class": "unknown", "date_precision": "year"}),
+    ({"value_type": "guidance", "as_of_date": "2031"},
+     {"epistemic_class": "unknown", "date_precision": "year", "epistemic_flags": ["published_after_as_of"]}),
+    ({"value_type": "guidance", "as_of_date": "2025"}, {"epistemic_class": "unknown", "date_precision": "year"}),
     ({"value_type": "actual"}, {"epistemic_class": "reported", "date_precision": "none"}),
 ])
 def test_classify_table(row, expected):
@@ -262,8 +314,9 @@ def test_classify_table_never_touches_evidence_fields():
 
 def test_classify_never_reports_a_period_that_has_not_ended():
     as_of_dates = ("2026-09-28", "2026-09", "2026-Q3", "2026-H2", "2026", "2027-01-15", "2026-09-29T00:00:00Z",
-                   "2030E", "2024-07-01")
-    period_ends = ("", "2025", "2026-09", "2025-2035", "by 2030", "2030E", "FY2025-29", "ongoing", "n/a")
+                   "2030E", "2024-07-01", "Q4 2026", "Sept 2026", "1H 2026", "2026年底")
+    period_ends = ("", "2025", "2026-09", "2025-2035", "by 2030", "2030E", "FY2025-29", "ongoing", "n/a",
+                   "Q3 2026", "H2 2026", "Oct 2026", "2026年第二季度")
     for as_of_date in as_of_dates:
         for period_end in period_ends:
             for value_type in ("actual", "estimate", "forecast", "target", None):
@@ -427,13 +480,14 @@ def test_quant_provenance_summary_has_only_the_enabled_parts():
     lr._Engine._quant_provenance(engine, typed, AS_OF, verify=False, typing=True)
     assert engine.meta["quant_provenance"] == {"rows": 2, "class_hist": {"projected": 1, "reported": 1},
                                                "future_dated_reported": 0, "period_unparsed": 0,
-                                               "as_of_is_target": 1}
+                                               "as_of_is_target": 1, "published_after_as_of": 0}
     assert "verification" not in typed[0] and typed[1]["target_date"] == "2030-12-31"
     engine = _StubEngine()
     lr._Engine._quant_provenance(engine, [], AS_OF, verify=True, typing=True)
     assert engine.meta["quant_provenance"] == {"rows": 0, "class_hist": {}, "verification_hist": {},
                                                "verified_ratio": None, "future_dated_reported": 0,
-                                               "period_unparsed": 0, "as_of_is_target": 0}
+                                               "period_unparsed": 0, "as_of_is_target": 0,
+                                               "published_after_as_of": 0}
 
 
 ROWS = [{"value": "176", "as_of_date": "2023-12-31", "value_type": "actual"},
@@ -451,7 +505,7 @@ def test_quant_provenance_verification_failure_still_types():
     # Typing ran and is summarised; verification claims nothing.
     assert engine.meta["quant_provenance"] == {"rows": 2, "class_hist": {"projected": 1, "reported": 1},
                                                "future_dated_reported": 0, "period_unparsed": 0,
-                                               "as_of_is_target": 1}
+                                               "as_of_is_target": 1, "published_after_as_of": 0}
     assert [row["epistemic_class"] for row in rows] == ["reported", "projected"]
     assert not any(VERIFY_KEYS & set(row) for row in rows)
 
@@ -509,7 +563,8 @@ def test_engine_flag_on(tmp_path, bridge, monkeypatch, fixed_as_of):
     assert meta["quant_provenance"] == {
         "rows": 4, "class_hist": {"projected": 1, "reported": 3},
         "verification_hist": {"none": 1, "unchecked": 1, "unverified": 1, "verified": 1},
-        "verified_ratio": round(1 / 3, 3), "future_dated_reported": 0, "period_unparsed": 0, "as_of_is_target": 1}
+        "verified_ratio": round(1 / 3, 3), "future_dated_reported": 0, "period_unparsed": 0, "as_of_is_target": 1,
+        "published_after_as_of": 0}
     assert meta["quant_freshness"] == {"fresh_le_90": 0, "recent_le_365": 2, "stale_gt_365": 1, "undated": 0,
                                        "n_stale": 1, "future_dated": 1}
     assert _load(out / "meta.json")["quant_provenance"] == meta["quant_provenance"]
@@ -522,6 +577,40 @@ def test_engine_flag_on(tmp_path, bridge, monkeypatch, fixed_as_of):
     assert memo["task_sha256"] == hashlib.sha256(task.encode("utf-8")).hexdigest()
     # Timeline recency is untouched by typing.
     assert "future_dated" not in meta["timeline_freshness"]
+
+
+def test_engine_types_against_the_day_after_the_plan_date(tmp_path, bridge, monkeypatch, fixed_as_of):
+    """plan.as_of is the UTC date fixed at plan time, and a run that crosses
+    UTC midnight can cite a source published the next day: that date is no
+    target date and no future-dated actual.  Two days on, it still is."""
+    _knobs(monkeypatch, typing=True, verify=False)
+    next_day, day_after = ((AS_OF + dt.timedelta(days=days)).isoformat() for days in (1, 2))
+
+    def fact(metric, value, as_of_date, value_type):
+        return {"metric": metric, "value": value, "unit": "GW", "as_of_date": as_of_date, "period_end": "",
+                "value_type": value_type, "source_ref": "S1"}
+
+    facts = [fact("Capacity outlook", "250", next_day, "forecast"),
+             fact("Installed capacity", "180", next_day, "actual"),
+             fact("Capacity target", "260", day_after, "target"),
+             fact("Operating capacity", "185", day_after, "actual")]
+    rc, meta, _, _, out = v3.run_engine(tmp_path, bridge, TypedWorld(quant=facts))
+    assert rc == 0, meta.get("error")
+    assert _load(out / "v3" / "plan.json")["as_of"] == AS_OF.isoformat()
+    outlook, installed, target, operating = _load(out / "quantitative.json")
+    assert [row["as_of_date"] for row in (outlook, installed, target, operating)] == [
+        next_day, next_day, day_after, day_after]
+    # Published the day after the plan date: a projection and a reported number, unrepaired.
+    assert outlook["epistemic_class"] == "projected" and not {"target_date", "epistemic_flags"} & set(outlook)
+    assert installed["epistemic_class"] == "reported" and "epistemic_flags" not in installed
+    # Two days on: a target date and an impossible actual.
+    assert target["target_date"] == day_after and target["epistemic_flags"] == ["as_of_is_target"]
+    assert operating["epistemic_class"] == "unknown" and operating["epistemic_flags"] == IMPOSSIBLE_ACTUAL
+    provenance = meta["quant_provenance"]
+    assert (provenance["as_of_is_target"], provenance["published_after_as_of"],
+            provenance["future_dated_reported"]) == (1, 1, 1)
+    # Recency still ages every row against the plan date (a negative age is future-dated).
+    assert all(row["is_future_dated"] is True for row in (outlook, installed, target, operating))
 
 
 def test_engine_defaults_verify_but_do_not_type(tmp_path, bridge, fixed_as_of):
@@ -711,6 +800,7 @@ def test_pipe_fixture_through_the_engine(tmp_path, bridge, monkeypatch, fixed_as
     assert meta["quant_freshness"]["fresh_le_90"] == 0 and meta["quant_freshness"]["future_dated"] == 14
     provenance = meta["quant_provenance"]
     assert provenance["as_of_is_target"] == 14 and provenance["future_dated_reported"] == 1
+    assert provenance["published_after_as_of"] == 0
     assert provenance["verification_hist"] == {"none": 57}
     assert all(row["verification"] == "none" and row["verified"] is False for row in quant)
 
@@ -755,6 +845,35 @@ def test_chart_builders_never_plot_future_dated_actuals_from_typed_rows():
 
 
 # ================================================================== parent wiring
+
+def test_extract_only_salvage_drops_the_v3_quant_provenance(tmp_path, monkeypatch):
+    """The parent salvages a killed v3 run with the legacy extract-only path,
+    which rewrites quantitative.json without labels: the v3 run's summary of
+    its labelled rows must not survive into the salvage meta."""
+    (tmp_path / dr.REPORT_FILENAME).write_text("x" * 1000, encoding="utf-8")
+    prior = {"status": "running", "research_engine": "v3", "error": "stale",
+             "quant_provenance": {"rows": 2, "verification_hist": {"verified": 2}, "verified_ratio": 1.0},
+             "research_quality": {"score": 0.61}, "quantitative_count": 2}
+    (tmp_path / "meta.json").write_text(json.dumps(prior), encoding="utf-8")
+    monkeypatch.setenv("MINIMAX_API_KEY", "test-key-not-used")
+    seen = {}
+
+    def fake_extract_only(question, out_dir, args, meta, plog, write_meta):
+        seen["meta"] = dict(meta)
+        plog.close()
+        return 0
+
+    monkeypatch.setattr(dr, "run_extract_only", fake_extract_only)
+    monkeypatch.setattr(sys, "argv", ["deerflow_research.py", "--extract-only", "--model", "minimax",
+                                      "--out-dir", str(tmp_path), "--prompt", "Q"])
+    assert dr.main() == 0
+    meta = seen["meta"]
+    assert meta["salvage"]["mode"] == "extract_only" and meta["research_engine"] == "v3"
+    assert "quant_provenance" not in meta and "error" not in meta
+    # The rest of the v3 meta is still carried over.
+    assert meta["research_quality"] == prior["research_quality"] and meta["quantitative_count"] == 2
+    assert "quant_provenance" not in _load(tmp_path / "meta.json")
+
 
 def test_runner_forwards_quant_knobs_from_config_to_v3_only(monkeypatch, tmp_path):
     for name in ("defaults", "flipped", "legacy"):

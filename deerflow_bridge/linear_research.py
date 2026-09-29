@@ -5789,9 +5789,14 @@ class _Engine:
         verify = _env_flag(self.env, "RESEARCH_VERIFIED_FACTS", True)
         typing = _env_flag(self.env, "RESEARCH_QUANT_TYPING", False)
         if verify or typing:
-            self._quant_provenance(quant, ref_date, verify=verify, typing=typing)
+            # Typing tests dates against the day after the plan's as-of: plan.as_of
+            # is the UTC date fixed at plan time, and a run that crosses UTC midnight
+            # can cite a source published the next day (no target date, no
+            # future-dated actual).
+            self._quant_provenance(quant, ref_date + _dt.timedelta(days=1), verify=verify, typing=typing)
         # Typed runs count forecast target dates as future-dated, never as fresh
-        # (by date, and by the as_of_is_target flag when typing stamped it).
+        # (by date, and by the as_of_is_target / published_after_as_of flags
+        # when typing stamped them).
         recency = {"future_bucket": True} if typing else {}
         quant_hist = self.bridge_call("annotate_recency_rows", quant, ref_date, stale_days, date_key="as_of_date",
                                       **recency)
@@ -5828,8 +5833,9 @@ class _Engine:
         in ``meta.quant_provenance`` with only the enabled parts: ``rows``;
         verification adds ``verification_hist`` (rows without a label as
         ``unchecked``) and ``verified_ratio`` (verified / labelled rows; None
-        when none is); typing adds ``class_hist`` and the
-        ``future_dated_reported`` / ``period_unparsed`` / ``as_of_is_target``
+        when none is); typing (:func:`classify_quant_row` against ``as_of``)
+        adds ``class_hist`` and the ``future_dated_reported`` /
+        ``period_unparsed`` / ``as_of_is_target`` / ``published_after_as_of``
         flag counts.
 
         Degrades safe, part by part: a failed part is recorded in
@@ -5855,7 +5861,7 @@ class _Engine:
             summary["verified_ratio"] = round(labels["verified"] / checked, 3) if checked else None
         if typing and part("typing", lambda: _stamp_rows(quant, [classify_quant_row(row, as_of) for row in quant])):
             summary["class_hist"] = dict(sorted(Counter(row["epistemic_class"] for row in quant).items()))
-            for flag in ("future_dated_reported", "period_unparsed", "as_of_is_target"):
+            for flag in ("future_dated_reported", "period_unparsed", "as_of_is_target", "published_after_as_of"):
                 summary[flag] = sum(1 for row in quant if flag in row.get("epistemic_flags", ()))
         if len(summary) > 1:
             self.meta["quant_provenance"] = summary
@@ -5867,8 +5873,9 @@ class _Engine:
 
         * ``verified`` — every number of the value is on the fetched page;
         * ``unverified`` — the page was fetched but a number is not on it;
-        * ``snippet_only`` — the cited source was never fetched (its search
-          snippet is not checked: the label says nothing about the number);
+        * ``snippet_only`` — the cited source was never fetched or its stored
+          page is unavailable (its search snippet is not checked: the label
+          says nothing about the number);
         * ``none`` — no resolvable source.
 
         A value without a checkable number on a fetched page gets no label
@@ -6240,6 +6247,29 @@ _MONTHS_PER = {"month": 1, "quarter": 3, "half": 6}
 # A year named inside free text ("2025-2035", "by 2030", "2030E"), optionally
 # closing a range with two digits ("2025/26", "FY2025-29").
 _PERIOD_YEAR_RE = re.compile(r"(?<!\d)((?:19|20|21)\d{2})(?:\s*[/-]\s*(\d{2})(?!\d))?(?!\d)")
+# Free-text spellings of a month, quarter or half ("Q4 2026", "2H 2026",
+# "2026-3Q", "Dec 2026", "2026年第三季度", "2026年上半年", "2026年3月"), matched
+# whole; a year's end ("end of 2026", "2026年底") is its December.  Named
+# groups: y (year) and q / h / m (quarter / half / month; none = December).
+_FREE_PERIOD_FORMS: tuple[re.Pattern[str], ...] = tuple(re.compile(pattern, re.I) for pattern in (
+    r"Q(?P<q>[1-4])[\s,/-]*(?P<y>\d{4})",
+    r"(?P<q>[1-4])Q[\s,/-]*(?P<y>\d{4})",
+    r"(?P<y>\d{4})[\s/-]*(?P<q>[1-4])Q",
+    r"H(?P<h>[12])[\s,/-]*(?P<y>\d{4})",
+    r"(?P<h>[12])H[\s,/-]*(?P<y>\d{4})",
+    r"(?P<y>\d{4})[\s/-]*(?P<h>[12])H",
+    r"(?P<m>jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?"
+    r"|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?[\s,]*(?P<y>\d{4})",
+    r"(?:(?:the\s+)?end(?:\s+of)?|year[\s-]?end)[\s,-]*(?P<y>\d{4})",
+    r"(?P<y>\d{4})[\s-]*year[\s-]?end",
+    r"(?P<y>\d{4})\s*年\s*(?:第\s*)?(?P<q>[1-4一二三四])\s*季度",
+    r"(?P<y>\d{4})\s*年\s*(?:Q(?P<q>[1-4])|H(?P<h>[12]))",
+    r"(?P<y>\d{4})\s*年\s*(?P<h>[上下])半年",
+    r"(?P<y>\d{4})\s*年\s*(?P<m>\d{1,2})\s*月份?",
+    r"(?P<y>\d{4})\s*年\s*年?[底末]",
+))
+_FREE_PERIOD_DIGITS = {"一": "1", "二": "2", "三": "3", "四": "4", "上": "1", "下": "2"}
+_MONTH_ABBREVIATIONS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 # period_end placeholders that state no period, like an empty field.
 _NO_PERIOD = frozenset({"n/a", "na", "none", "null", "unknown", "not applicable"})
 
@@ -6276,11 +6306,34 @@ def _period_end_date(value: Any) -> _dt.date | None:
     return _period_bounds(value)[1]
 
 
+def _free_period(text: str) -> str | None:
+    """The canonical spelling (YYYY-MM, YYYY-Qn or YYYY-Hn) of a whole
+    free-text month, quarter or half (:data:`_FREE_PERIOD_FORMS`), else None."""
+    for pattern in _FREE_PERIOD_FORMS:
+        match = pattern.fullmatch(text)
+        if match is None:
+            continue
+        parts = match.groupdict()
+        for kind in ("q", "h"):
+            if parts.get(kind):
+                return f"{parts['y']}-{kind.upper()}{_FREE_PERIOD_DIGITS.get(parts[kind], parts[kind])}"
+        month = parts.get("m") or "12"
+        number = int(month) if month.isdigit() else _MONTH_ABBREVIATIONS.index(month[:3].lower()) + 1
+        return f"{parts['y']}-{number:02d}"
+    return None
+
+
 def _loose_period_bounds(value: Any) -> tuple[_dt.date | None, _dt.date | None, str]:
-    """:func:`_period_bounds`, else the years free text names — a range, "by
-    2030", "2030E", "FY2025-29" — read as Jan 1 of the earliest to Dec 31 of
-    the latest (precision ``year``); ``(None, None, "none")`` without one."""
+    """:func:`_period_bounds`, else a whole free-text month, quarter or half
+    at its own precision (:func:`_free_period`: "Q4 2026", "Dec 2026",
+    "2026年上半年"), else the years free text names — a range, "by 2030",
+    "2030E", "FY2025-29" — read as Jan 1 of the earliest to Dec 31 of the
+    latest (precision ``year``); ``(None, None, "none")`` without one."""
     bounds = _period_bounds(value)
+    if bounds[1] is not None:
+        return bounds
+    free = _free_period(str(value or "").strip())
+    bounds = _period_bounds(free) if free else bounds
     if bounds[1] is not None:
         return bounds
     years: list[int] = []
@@ -6300,14 +6353,15 @@ def classify_quant_row(row: Mapping[str, Any], as_of: _dt.date) -> dict:
     """Reported/projected typing of one quantitative row against the research
     as-of date — the program's one classifier (report, forecasting and
     hindcast consumers reuse it).  Returns only NEW keys; evidence fields are
-    never rewritten.
+    never rewritten.  ``as_of`` is the last day a cited source can have
+    published on (the v3 engine passes the day after its plan date).
 
     The reference date is the end of ``period_end``, else of ``as_of_date``
-    (:func:`_period_end_date`; free text is read by the years it names,
-    :func:`_loose_period_bounds`).  ``forecast`` and ``target`` are
-    projected, as is an ``estimate`` whose reference date is after as-of.
-    Any other ``actual`` or ``estimate`` is reported, except that it is
-    unknown
+    (:func:`_period_end_date`; free text is read as a whole month, quarter or
+    half, else by the years it names, :func:`_loose_period_bounds`).
+    ``forecast`` and ``target`` are projected, as is an ``estimate`` whose
+    reference date is after as-of.  Any other ``actual`` or ``estimate`` is
+    reported, except that it is unknown
 
     * with flag ``future_dated_reported`` when its reference date, or the
       first day of its ``as_of_date``, is after as-of (no source publishes
@@ -6319,12 +6373,14 @@ def classify_quant_row(row: Mapping[str, Any], as_of: _dt.date) -> dict:
 
     A missing or other type is unknown.
 
-    Target repair: no source publishes after the as-of date, so a projected
-    row whose ``as_of_date`` lies wholly after it (its FIRST day is later)
-    holds a target date there and is flagged ``as_of_is_target``; when
-    ``period_end`` gives no date, that ``as_of_date`` becomes its
-    ``target_date``.  A coarse date of the current period ("2026" in 2026)
-    may be a publication date and is left alone.
+    No source publishes after the as-of date, so an ``as_of_date`` that lies
+    wholly after it (its FIRST day is later) is no publication date.  Target
+    repair: a projected row holds a target date there and is flagged
+    ``as_of_is_target``; when ``period_end`` gives no date, that
+    ``as_of_date`` becomes its ``target_date``.  Any other row is flagged
+    ``published_after_as_of`` (typed recency then counts both future-dated,
+    never fresh).  A coarse date of the current period ("2026" in 2026) may
+    be a publication date and is left alone.
 
     Keys: ``epistemic_class`` (reported/projected/unknown), ``date_precision``
     of the reference date (day/month/quarter/half/year/none), ``target_date``
@@ -6358,10 +6414,12 @@ def classify_quant_row(row: Mapping[str, Any], as_of: _dt.date) -> dict:
     if period_unparsed:
         flags.append("period_unparsed")
     out: dict[str, Any] = {"epistemic_class": epistemic_class, "date_precision": precision}
-    if epistemic_class == "projected" and stated_after_as_of:
+    if stated_after_as_of and epistemic_class == "projected":
         flags.append("as_of_is_target")
         if period is None:
             out["target_date"] = str(row.get("as_of_date")).strip()
+    elif stated_after_as_of:
+        flags.append("published_after_as_of")
     if flags:
         out["epistemic_flags"] = flags
     return out
@@ -6379,9 +6437,9 @@ def verify_quant_row(row: Mapping[str, Any], page_numbers: frozenset[str] | None
     page percentage, a unit-bearing figure in its unit class, any scale).
 
     Every number token of ``"{value} {unit}"`` on the fetched page
-    (``page_numbers``: its :func:`page_number_set`; None when never fetched)
-    → ``(True, "page")``; else all in the search ``snippet`` →
-    ``(False, "snippet_only")``; else ``(False, "none")``.  A value without a
+    (``page_numbers``: its :func:`page_number_set`; None when never fetched
+    or unavailable) → ``(True, "page")``; else all in the search ``snippet``
+    → ``(False, "snippet_only")``; else ``(False, "none")``.  A value without a
     checkable number (>= 2 digits or a decimal) → ``(False, "not_checkable")``,
     as is one in exponent notation, whose mantissa alone would be matched (a
     float value is written out positionally first: 1.2e-05 → 0.000012).

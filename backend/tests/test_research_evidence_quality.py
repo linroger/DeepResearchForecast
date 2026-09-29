@@ -229,30 +229,39 @@ def test_annotate_recency_future_bucket_keeps_future_rows_out_of_fresh():
 
 
 def test_annotate_recency_future_bucket_counts_typed_target_dates():
-    """A row typed as_of_is_target holds a target date in as_of_date: it is
-    future-dated even when that date reads as this year's start or not at all."""
+    """A row typed as_of_is_target holds a target date in as_of_date, and one
+    typed published_after_as_of states a publication date after as-of: both
+    are future-dated even when that date reads as this year's start or not at
+    all."""
     ref = dt.date(2026, 9, 28)
     target = ["as_of_is_target"]
+    impossible = ["future_dated_reported", "published_after_as_of"]
 
     def rows():
         return [{"as_of_date": "2026-Q4", "epistemic_flags": target},    # reads as 2026-01-01
                 {"as_of_date": "FY2027", "epistemic_flags": target},     # unreadable here
                 {"as_of_date": "2026-Q4"},                                # untyped: legacy reading
                 # an actual for the current month: not yet reported, but freshly published
-                {"as_of_date": "2026-09", "epistemic_flags": ["future_dated_reported"]}]
+                {"as_of_date": "2026-09", "epistemic_flags": ["future_dated_reported"]},
+                # an "actual" dated after as-of: no observation, whatever its date reads as
+                {"as_of_date": "2026-Q4", "epistemic_flags": impossible},
+                {"as_of_date": "Q4 2026", "epistemic_flags": impossible}]
 
     typed = rows()
     hist = dr.annotate_recency_rows(typed, ref, 365, date_key="as_of_date", future_bucket=True)
     assert hist == {"fresh_le_90": 1, "recent_le_365": 1, "stale_gt_365": 0, "undated": 0, "n_stale": 0,
-                    "future_dated": 2}
-    assert [row.get("is_future_dated") for row in typed] == [True, True, None, None]
+                    "future_dated": 4}
+    assert [row.get("is_future_dated") for row in typed] == [True, True, None, None, True, True]
     assert typed[1] == {"as_of_date": "FY2027", "epistemic_flags": target, "staleness_days": None,
                         "is_stale": False, "is_future_dated": True}
-    # Without the keyword the flag is ignored: the legacy histogram and annotations.
+    assert typed[4] == {"as_of_date": "2026-Q4", "epistemic_flags": impossible, "staleness_days": None,
+                        "is_stale": False, "is_future_dated": True}
+    # Without the keyword the flags are ignored: the legacy histogram and annotations.
     legacy = rows()
     assert dr.annotate_recency_rows(legacy, ref, 365, date_key="as_of_date") == {
-        "fresh_le_90": 1, "recent_le_365": 2, "stale_gt_365": 0, "undated": 1, "n_stale": 0}
+        "fresh_le_90": 1, "recent_le_365": 3, "stale_gt_365": 0, "undated": 2, "n_stale": 0}
     assert "is_future_dated" not in legacy[0] and legacy[0]["staleness_days"] == 270
+    assert legacy[4]["staleness_days"] == 270 and "is_future_dated" not in legacy[4]
 
 
 # --- R2-RES-9 gap threading -------------------------------------------------
