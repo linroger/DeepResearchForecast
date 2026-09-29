@@ -6830,29 +6830,63 @@ def _scenario_ledger_identity(options: Optional[dict[str, Any]]) -> dict[str, An
     return {"scenario_label": label, "scenario_key": key}
 
 
+def _ledger_owner_of_simulation(
+        simulation_id: str) -> Optional[tuple[str, dict[str, Any], bool, Any]]:
+    """(pipeline_id, persisted state, is_member, seed) of the pipeline that ran ``simulation_id``.
+
+    ``is_member`` is False (seed None) for the pipeline's own simulation, and True
+    with the member's recorded seed for a seed-ensemble simulation
+    (``options['ensemble_member_simulations']``). One scan, newest pipeline
+    first, like ``_pipeline_for_simulation``.
+    """
+    for entry in PipelineManager.list_pipelines():
+        pid = entry.get("pipeline_id")
+        if not pid:
+            continue
+        data = PipelineManager.load(pid)
+        if not data:
+            continue
+        if data.get("simulation_id") == simulation_id:
+            return pid, data, False, None
+        options = data.get("options") if isinstance(data.get("options"), dict) else {}
+        members = options.get("ensemble_member_simulations")
+        if isinstance(members, dict) and simulation_id in members:
+            return pid, data, True, members[simulation_id]
+    return None
+
+
 def ledger_identity_for_simulation(simulation_id: Optional[str]) -> dict[str, Any]:
     """EVAL-1: ledger identity fields of the pipeline that owns ``simulation_id``.
 
     Report entry points without orchestrator context (``/api/report/generate``
     regenerations) must key the forecast ledger exactly like the pipeline's own
     report: on the graph stage's validated as-of anchor rather than the raw
-    actors.json date, and a what-if fork's simulation stays a conditional
-    scenario. Returns ``{pipeline_id, as_of_date[, scenario_label, scenario_key]}``,
-    or {} when no pipeline owns the simulation. Best-effort: never raises.
+    actors.json date, a what-if fork's simulation stays a conditional scenario,
+    and a seed-ensemble member's simulation stays that seed's ensemble member.
+    Returns ``{pipeline_id, as_of_date[, scenario_label, scenario_key]
+    [, record_class='ensemble_member', seed]}``, or {} when no pipeline ran the
+    simulation. Best-effort: never raises.
     """
     if not simulation_id:
         return {}
     try:
-        owner = _pipeline_for_simulation(simulation_id)
+        owner = _ledger_owner_of_simulation(simulation_id)
         if owner is None:
             return {}
-        pid, data = owner
+        pid, data, is_member, member_seed = owner
         options = data.get("options") if isinstance(data.get("options"), dict) else {}
         identity: dict[str, Any] = {
             "pipeline_id": pid,
             "as_of_date": validated_as_of_from_options(options),
         }
         identity.update(_scenario_ledger_identity(options))
+        if is_member:
+            # Fail closed: an unreadable seed still never makes a member a production row.
+            identity["record_class"] = "ensemble_member"
+            try:
+                identity["seed"] = int(member_seed)
+            except (TypeError, ValueError):
+                pass
         return identity
     except Exception as exc:  # noqa: BLE001 — identity lookup must never break a report
         logger.warning("ledger identity lookup for simulation %s failed (ignored): %s",
@@ -8730,6 +8764,7 @@ class PipelineOrchestrator:
                 if _fc_prev and _fc_prev.get("scenarios"):
                     logger.info("[%s] 集成种子 %s 已在 checkpoint 中完成，复用其报告 %s",
                                 state.pipeline_id, seed, _prev.get("report_id"))
+                    self._note_ensemble_member_simulation(state, _prev.get("simulation_id"), seed)
                     extra_runs.append({"seed": seed,
                                        "simulation_id": _prev.get("simulation_id"),
                                        "report_id": _prev.get("report_id"),
@@ -8885,6 +8920,85 @@ class PipelineOrchestrator:
         except ValueError:
             pass
 
+    def _generate_stage_report(self, state: "PipelineState", agent: Any,
+                               simulation_id: Optional[str], *, report_id: str,
+                               progress_callback: Callable[[str, int, str], None]) -> Any:
+        """EVAL-1: generate the report stage's report with its ledger wiring.
+
+        The agent gets its ledger context before generation (production, or the
+        conditional_scenario a what-if's scenario label derives), and its ledger
+        receipt is copied into ``state.options['forecast_ledger']`` whatever the
+        outcome: completed, FAILED, or a cancellation raised after the completed
+        report was committed.
+        """
+        agent.ledger_context = self._report_ledger_context(
+            state, simulation_id, run_kind="pipeline", seed=int(Config.SIM_SEED or 0))
+        try:
+            return agent.generate_report(progress_callback=progress_callback, report_id=report_id)
+        finally:
+            receipt = getattr(agent, "ledger_receipt", None)
+            if isinstance(receipt, dict):
+                state.options["forecast_ledger"] = dict(receipt)
+
+    def _repair_reused_report_ledger(self, state: "PipelineState", report: Any,
+                                     simulation_id: Optional[str], actors: Any,
+                                     research_report: Optional[str]) -> None:
+        """EVAL-1: commit a reused report whose ledger commit never landed (best-effort).
+
+        A resume reuses the finished report, so a commit that failed (ledger I/O) or
+        was cut off by a crash would otherwise never happen. The report gets the
+        context the report stage gives it; ``ledger_commit.recommit_reused_report``
+        writes only for a completed report with no ledger row at all. A stored
+        receipt proving the report already has its row skips the ledger read.
+        """
+        report_id = getattr(report, "report_id", None) or state.report_id
+        if not report_id:
+            return
+        prior = state.options.get("forecast_ledger")
+        if (isinstance(prior, dict) and prior.get("report_id") == report_id
+                and (prior.get("status") in ("committed", "revision", "duplicate")
+                     or prior.get("unpublished_row") in ("recorded", "duplicate"))):
+            return
+        try:
+            from . import ledger_commit
+            status = getattr(report, "status", None)
+            receipt = ledger_commit.recommit_reused_report(
+                report_id,
+                report_status=getattr(status, "value", status),
+                question=state.prompt,
+                language=ReportAgent.resolve_output_language(
+                    state.prompt, research_report or "", situation_brief(actors) or ""),
+                actors=actors,
+                scenario_label=str(state.options.get("scenario_label") or ""),
+                ledger_context=self._report_ledger_context(
+                    state, simulation_id, run_kind="pipeline", seed=int(Config.SIM_SEED or 0)),
+                publication_status_fn=ReportManager.publication_status,
+                load_forecast_fn=ReportManager.load_structured_forecast,
+            )
+        except Exception as exc:  # noqa: BLE001 — 账本补提交为旁路记账，绝不阻断复用
+            logger.warning("[%s] [ledger] reused report %s: repair failed (ignored): %s",
+                           state.pipeline_id, report_id, exc)
+            return
+        if receipt is None:
+            return
+        state.options["forecast_ledger"] = receipt
+        log = logger.warning if receipt.get("status") == "error" else logger.info
+        log("[%s] [ledger] status=%s commit_id=%s report=%s (reused report repaired)",
+            state.pipeline_id, receipt.get("status"), receipt.get("commit_id"), report_id)
+
+    @staticmethod
+    def _note_ensemble_member_simulation(state: "PipelineState", simulation_id: Optional[str],
+                                         seed: int) -> None:
+        """EVAL-1: remember which ensemble seed a member simulation ran.
+
+        No pipeline owns a member's simulation as its ``simulation_id``, so without
+        this map a later /api/report/generate on it would key a second PRODUCTION
+        primary; ``ledger_identity_for_simulation`` reads it to keep it an
+        ensemble member. Persisted by the ensemble's own state saves.
+        """
+        if simulation_id:
+            state.options.setdefault("ensemble_member_simulations", {})[str(simulation_id)] = int(seed)
+
     def _run_one_seed(self, state: "PipelineState", project: Any, graph_id: str,
                       actors: Any, research: dict, report_md: str, *,
                       seed: int, max_rounds: Optional[int],
@@ -8900,6 +9014,7 @@ class PipelineOrchestrator:
         sim_state = sim_manager.create_simulation(
             project.project_id, graph_id, enable_twitter=True, enable_reddit=True)
         sim_id = sim_state.simulation_id
+        self._note_ensemble_member_simulation(state, sim_id, seed)
         # SIM-11 (pairs with SIM-7): HTTP/openai-compat providers tolerate higher
         # persona fan-out; raise the default 8→16 (configurable via PARALLEL_PROFILE_COUNT).
         # CLI providers stay capped at 3 (local CLI throughput bound).
@@ -13379,6 +13494,11 @@ class PipelineOrchestrator:
             if existing_report is not None and getattr(existing_report, "status", None) != ReportStatus.FAILED:
                 upd(100, "复用已有报告")
                 state.report_id = getattr(existing_report, "report_id", state.report_id)
+                # EVAL-1: 上一 attempt 若没把这份报告记进账本（账本 I/O 失败 / 提交前崩溃），补提交。
+                self._repair_reused_report_ledger(
+                    state, existing_report,
+                    getattr(sim_state, "simulation_id", None) or state.simulation_id,
+                    actors, report_md)
                 self._complete_stage(state, STAGE_REPORT, "报告完成（复用）", reused=True)
             else:
                 # ORCH-8: 报告是最贵的 LLM 阶段，而健康门在全部章节成本烧完后才触发。双 provider
@@ -13451,19 +13571,15 @@ class PipelineOrchestrator:
                     logger.info("[%s] ReportAgent 尚未支持研究工件直通参数，回退旧签名",
                                 state.pipeline_id)
                     agent = ReportAgent(**_ra_kwargs)
-                # EVAL-1: 主报告以 production（what-if 由 scenario_label 派生 conditional_scenario）
-                # 入账；报告的封印发布即提交权威——其后的集成/健康门失败不撤回账本行。
-                agent.ledger_context = self._report_ledger_context(
-                    state, sim_state.simulation_id, run_kind="pipeline",
-                    seed=int(Config.SIM_SEED or 0))
 
                 def report_cb(stage: str, progress: int, message: str):
                     upd(max(5, min(99, int(progress))), f"{stage}: {message}")
 
-                report = agent.generate_report(progress_callback=report_cb, report_id=report_id)
-                _ledger_receipt = getattr(agent, "ledger_receipt", None)
-                if isinstance(_ledger_receipt, dict):
-                    state.options["forecast_ledger"] = dict(_ledger_receipt)
+                # EVAL-1: 主报告以 production（what-if 由 scenario_label 派生 conditional_scenario）
+                # 入账；报告的封印发布即提交权威——其后的集成/健康门失败不撤回账本行。
+                report = self._generate_stage_report(
+                    state, agent, sim_state.simulation_id, report_id=report_id,
+                    progress_callback=report_cb)
                 try:
                     ReportManager.save_report(report)
                 except Exception:

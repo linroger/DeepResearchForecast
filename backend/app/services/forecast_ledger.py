@@ -89,11 +89,22 @@ def is_production_calibration_row(e: Dict[str, Any]) -> bool:
     record_class = str(e.get("record_class") or "").strip().lower()
     if record_class and record_class != "production":
         return False
+    return _is_scorable_row(e)
+
+
+def _is_scorable_row(e: Dict[str, Any]) -> bool:
+    """EVAL-1: False for rows NO lane may score, whatever its record-class policy.
+
+    An ``unpublished_terminal`` (any ``row_type`` other than ``commit``) has no
+    forecast to score, and a ``calibration_role='revision'`` row re-publishes a
+    target whose primary is the only scored row. The evaluation lane
+    (``include_evaluation=True``) relaxes the record-class rule, never this one.
+    """
+    if not isinstance(e, dict):
+        return False
     if "row_type" in e and str(e.get("row_type") or "").strip().lower() != "commit":
         return False
-    if str(e.get("calibration_role") or "").strip().lower() == "revision":
-        return False
-    return True
+    return str(e.get("calibration_role") or "").strip().lower() != "revision"
 
 
 def append_forecast(forecast: Optional[Dict[str, Any]], *, report_id: str,
@@ -274,13 +285,14 @@ def calibration_summary(d: Optional[str] = None, entries: Optional[List[Dict[str
     golden/characterization/evaluation rows are excluded by record type. The
     evaluation lane (``golden_eval``) may opt in with ``include_evaluation=True``
     to score an isolated evaluation ledger; production callers never pass it.
+    Revisions and unpublished terminals are never scored in either lane (EVAL-1).
     """
     led = entries if entries is not None else read_ledger(d)
     resolved = [
         {"forecast": {"scenarios": e.get("scenarios")}, "outcome": e.get("outcome")}
         for e in led
         if e.get("resolved") and e.get("outcome") and e.get("scenarios")
-        and (include_evaluation or is_production_calibration_row(e))
+        and (_is_scorable_row(e) if include_evaluation else is_production_calibration_row(e))
     ]
     if not resolved:
         return {"n_resolved": 0, "mean_brier": None, "calibration_error": None}
@@ -302,9 +314,7 @@ def due_for_resolution(as_of: str, d: Optional[str] = None) -> List[Dict[str, An
         if e.get("resolved"):
             continue
         # EVAL-1: unpublished terminals and never-scored revisions need no resolution.
-        if "row_type" in e and str(e.get("row_type") or "").strip().lower() != "commit":
-            continue
-        if str(e.get("calibration_role") or "").strip().lower() == "revision":
+        if not _is_scorable_row(e):
             continue
         rd = e.get("resolution_date")
         if rd and str(rd) <= str(as_of):
@@ -325,12 +335,12 @@ def recalibration_param(d: Optional[str] = None,
     """
     led = entries if entries is not None else read_ledger(d)
     # Foglamp WP1 (1E, I-21)：重校准拟合默认只吃生产行（见 is_production_calibration_row）；
-    # include_evaluation=True 仅供评估通道在隔离账本上使用。
+    # include_evaluation=True 仅供评估通道在隔离账本上使用（EVAL-1：修订行/未发布行两道都不计）。
     resolved = [
         {"forecast": {"scenarios": e.get("scenarios")}, "outcome": e.get("outcome")}
         for e in led
         if e.get("resolved") and e.get("outcome") and e.get("scenarios")
-        and (include_evaluation or is_production_calibration_row(e))
+        and (_is_scorable_row(e) if include_evaluation else is_production_calibration_row(e))
     ]
     enabled = False
     try:
@@ -520,6 +530,13 @@ _RANGE_POINT = r"(?:19|20)\d{2}(?:-\d{2}-\d{2})?"
 _RANGE_JOIN = r"\s*(?:->|→|-|–|—|~|～|to|至)\s*"
 _RANGE_RE = re.compile(
     rf"(?<!\d)({_RANGE_POINT})年?{_RANGE_JOIN}({_RANGE_POINT})(?!\d)", re.IGNORECASE)
+# A fiscal-style range with a two-digit end year ('FY2026-27', '2026/27'). The end is
+# read in the start year's century and must be later than the start, so a year-month
+# ('2026-07') never qualifies, and a full date ('2010-11-05') is excluded outright.
+_SHORT_RANGE_RE = re.compile(
+    r"(?<!\d)((?:19|20)\d{2})\s*[-–—/]\s*(\d{2})(?!\d)(?!\s*[-/]\s*\d)")
+# An as-of note ('2030 (as-of 2026-07-09)') dates the forecast, not its resolution.
+_AS_OF_NOTE_RE = re.compile(r"[(（]\s*as[\s_-]*of\b[^)）]{0,80}[)）]", re.IGNORECASE)
 
 
 def _utc_now_iso() -> str:
@@ -547,21 +564,29 @@ def resolution_date_for_horizon(horizon: Optional[str]) -> Optional[str]:
     years 1900-2099 or full ISO dates joined by '-', an en/em dash, '~', '→',
     '->', 'to' or '至'; a year endpoint covers its whole year ('2026-2036' →
     '2036-12-31', '2026-01-01 to 2035' → '2035-12-31', '2026-07-08 → 2031-12-31'
-    → '2031-12-31'). When the text names a range, the result is the LATEST of
-    every valid range end and ``_year_end``'s reading, so a baseline range
-    ('from 2019-2020 levels by 2030') can never pull the date earlier: a late
-    resolution date only delays settlement, an early one settles prematurely.
-    Text without a valid range delegates to ``_year_end`` unchanged.
+    → '2031-12-31'). A two-digit end year reads in the start's century
+    ('FY2026-27' → '2027-12-31'). When the text names a range, the result is the
+    LATEST of every valid range end and ``_year_end``'s reading, so a baseline
+    range ('from 2019-2020 levels by 2030') can never pull the date earlier: a
+    late resolution date only delays settlement, an early one settles
+    prematurely. For the same reason a parenthesised as-of note ('2030 (as-of
+    2026-07-09)') is ignored unless nothing else in the text resolves. Any
+    other text without a valid range delegates to ``_year_end`` unchanged.
     """
     if not horizon:
         return None
-    text = str(horizon)
+    original = str(horizon)
+    text = _AS_OF_NOTE_RE.sub(" ", original)
     range_ends: List[str] = []
     for m in _RANGE_RE.finditer(text):
         ends = [_range_point_end(point) for point in m.groups()]
         if all(ends):
             range_ends.append(max(ends))
-    year_end = _year_end(text)
+    for m in _SHORT_RANGE_RE.finditer(text):
+        start, end_2d = int(m.group(1)), int(m.group(2))
+        if end_2d > start % 100:
+            range_ends.append(f"{start - start % 100 + end_2d}-12-31")
+    year_end = _year_end(text) or (_year_end(original) if text != original else None)
     if not range_ends:
         return year_end
     return max(range_ends + ([year_end] if year_end else []))
@@ -665,6 +690,15 @@ def _route_dir(d: Optional[str], record_class: Any) -> str:
     return target
 
 
+def has_report_row(report_id: str, *, record_class: str = "production",
+                   d: Optional[str] = None) -> bool:
+    """True when the ledger that ``record_class`` routes to holds any row for
+    ``report_id`` (a commit, an unpublished terminal or a legacy schema_version 1 row)."""
+    rid = str(report_id or "").strip()
+    return bool(rid) and any(isinstance(e, dict) and e.get("report_id") == rid
+                             for e in read_ledger(_route_dir(d, record_class)))
+
+
 def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: str,
                               question: Optional[str], language: Optional[str],
                               as_of_date: str, as_of_source: str,
@@ -739,6 +773,10 @@ def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: 
         "resolved": False,
         "outcome": None,
         "question": q_text[:max_chars],
+        # The cap is never silent: question_sha256 hashes the FULL text, so a reader
+        # re-hashing a truncated ``question`` can tell why it does not match.
+        "question_chars": len(q_text),
+        "question_truncated": len(q_text) > max_chars,
         "question_sha256": q_sha,
         "language": language,
         "as_of_date": as_of_date,
@@ -784,11 +822,32 @@ def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: 
                     row["calibration_role"] = "revision"
                     row["revision_of"] = anchor.get("commit_id")
                     status = "revision"
-                f.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
+                f.write(_line_boundary(target)
+                        + json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
                 f.flush()
         return status, row
     except OSError:
         return "error", None
+
+
+def _line_boundary(path: str) -> str:
+    """'\\n' when the ledger file ends mid-line (a torn write), else ''.
+
+    A row appended straight after an unterminated fragment (ENOSPC mid-write, a
+    crashed writer) would merge into it, and read_ledger drops the merged line:
+    the row would be reported written yet stay invisible to every idempotency
+    check. The newline isolates the fragment on its own (skipped) line. Called
+    inside the write lock, before the single append.
+    """
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            if fh.tell() == 0:
+                return ""
+            fh.seek(-1, os.SEEK_END)
+            return "" if fh.read(1) == b"\n" else "\n"
+    except OSError:
+        return ""
 
 
 def record_unpublished_terminal(*, report_id: str, question_sha256: Optional[str],
@@ -800,7 +859,9 @@ def record_unpublished_terminal(*, report_id: str, question_sha256: Optional[str
     ``status`` is ``recorded``, ``duplicate`` (this report already has an
     unpublished row; nothing written) or ``error``. The row carries no scenarios
     and no resolution date, so no reader can ever score it; it exists so the
-    denominator of published forecasts stays auditable.
+    denominator of published forecasts stays auditable. ``reasons`` keeps the
+    first UNPUBLISHED_MAX_REASONS, each capped at UNPUBLISHED_REASON_MAX_CHARS;
+    ``reasons_total`` / ``reasons_truncated`` say what the caps removed.
     """
     rid = str(report_id or "").strip()
     if not rid:
@@ -808,6 +869,8 @@ def record_unpublished_terminal(*, report_id: str, question_sha256: Optional[str
     rc = str(record_class or "").strip() or "production"
     if isinstance(reasons, str):
         reasons = [reasons]
+    all_reasons = [str(r) for r in list(reasons or [])]
+    kept = [r[:UNPUBLISHED_REASON_MAX_CHARS] for r in all_reasons[:UNPUBLISHED_MAX_REASONS]]
     row: Dict[str, Any] = {
         "schema_version": LEDGER_COMMIT_SCHEMA_VERSION,
         "row_type": "unpublished_terminal",
@@ -815,8 +878,9 @@ def record_unpublished_terminal(*, report_id: str, question_sha256: Optional[str
         "question_sha256": question_sha256,
         "record_class": rc,
         "run_ref": run_ref,
-        "reasons": [str(r)[:UNPUBLISHED_REASON_MAX_CHARS]
-                    for r in list(reasons or [])[:UNPUBLISHED_MAX_REASONS]],
+        "reasons": kept,
+        "reasons_total": len(all_reasons),
+        "reasons_truncated": kept != all_reasons,
         "recorded_at": recorded_at or _utc_now_iso(),
     }
     try:
@@ -834,7 +898,8 @@ def record_unpublished_terminal(*, report_id: str, question_sha256: Optional[str
                     if (isinstance(e, dict) and e.get("row_type") == "unpublished_terminal"
                             and e.get("report_id") == rid):
                         return "duplicate", e
-                f.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
+                f.write(_line_boundary(target)
+                        + json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
                 f.flush()
         return "recorded", row
     except OSError:

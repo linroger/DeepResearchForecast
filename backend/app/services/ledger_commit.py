@@ -19,8 +19,10 @@ retract a committed row (the ledger is append-only).
 
 Every entry point keys the same forecast target identically: a report without
 orchestrator context (``/api/report/generate`` regenerations) takes its as-of
-anchor and what-if identity from the pipeline that owns its simulation, so it
-becomes a revision of the pipeline's primary instead of a second primary.
+anchor, what-if identity and (for a seed-ensemble simulation) member class and
+seed from the pipeline that ran its simulation, so it becomes a revision of that
+report's commit instead of a second primary. A resumed pipeline that reuses its
+report repairs a commit that never landed (:func:`recommit_reused_report`).
 
 Later post-publication steps are appended inside :func:`run_post_publication`
 after the ledger step, each in its own try/except and NOT behind the ledger
@@ -174,7 +176,8 @@ def _record_unpublished(receipt: Dict[str, Any], *, report_id: str, question: st
             question_sha256=forecast_ledger.question_sha256(question),
             record_class=receipt["record_class"],
             run_ref=forecast_ledger.run_ref_for(dict(context)),
-            reasons=receipt["reasons"],
+            # The full list: the row applies the same caps and records what they removed.
+            reasons=reasons,
             d=d,
             recorded_at=now_utc.isoformat(),
         )
@@ -288,12 +291,16 @@ def _owner_identity(simulation_id: Any) -> Dict[str, Any]:
     return dict(identity) if isinstance(identity, Mapping) else {}
 
 
+def _published_mode_on() -> bool:
+    return bool(getattr(Config, "REPORT_FORECAST_LEDGER", True)) and commit_mode() == "published"
+
+
 def _ledger_step(agent: Any, report_id: str, *, report_status: Any, error: Optional[str],
                  publication_status_fn: Callable[[str], Dict[str, Any]],
                  load_forecast_fn: Callable[[str], Optional[Dict[str, Any]]],
                  final_audit_path_fn: Optional[Callable[[str], str]],
                  now: Optional[datetime]) -> Dict[str, Any]:
-    if not (getattr(Config, "REPORT_FORECAST_LEDGER", True) and commit_mode() == "published"):
+    if not _published_mode_on():
         return {"status": "disabled"}
     raw_context = getattr(agent, "ledger_context", None)
     context = dict(raw_context) if isinstance(raw_context, Mapping) else {}
@@ -301,7 +308,8 @@ def _ledger_step(agent: Any, report_id: str, *, report_status: Any, error: Optio
     if "as_of_date" not in context:
         # No orchestrator context (/api/report/generate, model comparison): key the
         # target exactly as the owning pipeline's own report does — its validated
-        # as-of anchor, not the raw actors.json date, and its what-if identity.
+        # as-of anchor, not the raw actors.json date, its what-if identity, and an
+        # ensemble member's class and seed.
         for key, value in _owner_identity(context.get("simulation_id")).items():
             context.setdefault(key, value)
     return commit_report(
@@ -345,4 +353,40 @@ def run_post_publication(agent: Any, report_id: str, *, report_status: Any,
         receipt = {"status": "error", "commit_id": None, "target_key": None,
                    "record_class": None, "reasons": [f"{type(exc).__name__}: {exc}"[:300]]}
     receipt["report_id"] = report_id
+    return receipt
+
+
+def recommit_reused_report(report_id: str, *, report_status: Any, question: Optional[str],
+                           language: Optional[str], actors: Any,
+                           scenario_label: Optional[str],
+                           ledger_context: Optional[Mapping[str, Any]],
+                           publication_status_fn: Callable[[str], Dict[str, Any]],
+                           load_forecast_fn: Callable[[str], Optional[Dict[str, Any]]],
+                           d: Optional[str] = None,
+                           now: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
+    """Repair the ledger step of a report the orchestrator reuses on resume.
+
+    A resumed pipeline reuses its finished report instead of regenerating it, so
+    a commit that never landed (the step returned 'error' on ledger I/O, or the
+    process died between ``update_progress`` and the commit) would stay missing
+    from both the scored ledger and the unpublished denominator. Only a
+    COMPLETED report with no ledger row at all is retried: any existing row for
+    it — a commit, an unpublished terminal, or a pre-EVAL-1 schema_version 1 row —
+    already represents it, and a second one would count it twice. Returns the
+    receipt (``repaired: True``), or None when there is nothing to repair or the
+    ledger is not in 'published' mode.
+    """
+    rid = str(report_id or "").strip()
+    if not rid or not _published_mode_on() or _status_value(report_status) != "completed":
+        return None
+    ctx: Mapping[str, Any] = ledger_context if isinstance(ledger_context, Mapping) else {}
+    if forecast_ledger.has_report_row(rid, record_class=_record_class(ctx, scenario_label), d=d):
+        return None
+    receipt = commit_report(
+        report_id=rid, report_status=report_status, error=None, question=question,
+        language=language, actors=actors, scenario_label=scenario_label,
+        ledger_context=ctx, publication_status_fn=publication_status_fn,
+        load_forecast_fn=load_forecast_fn, d=d, now=now)
+    receipt["report_id"] = rid
+    receipt["repaired"] = True
     return receipt

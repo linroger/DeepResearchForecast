@@ -495,6 +495,12 @@ def test_question_is_capped_but_hashed_in_full(monkeypatch):
     _status, row = _commit("r_cap", question=long_q)
     assert row["question"] == "Q" * 10
     assert row["question_sha256"] == fl.question_sha256(long_q) != fl.question_sha256("Q" * 10)
+    # The cap is never silent: the row says the stored text is a prefix, and of what.
+    assert (row["question_chars"], row["question_truncated"]) == (50, True)
+    assert _rows("commit")[0]["question_truncated"] is True
+    _status, short = _commit("r_short", question="Q" * 10, as_of="2026-09-02")
+    assert (short["question"], short["question_chars"], short["question_truncated"]) == (
+        "Q" * 10, 10, False)
 
 
 # ───────────────────────────── pure helpers ───────────────────────────────────
@@ -519,6 +525,22 @@ def test_resolution_date_for_horizon_ranges():
     assert fl.resolution_date_for_horizon("2026-2031 (as-of 2026-07-01)") == "2031-12-31"
     assert fl.resolution_date_for_horizon("2030") == "2030-12-31"
     assert fl.resolution_date_for_horizon(None) is None
+    # Two-digit (fiscal-style) range ends read in the start year's century.
+    assert fl.resolution_date_for_horizon("FY2026-27") == "2027-12-31"
+    assert fl.resolution_date_for_horizon("2026-27") == "2027-12-31"
+    assert fl.resolution_date_for_horizon("2026/27") == "2027-12-31"
+    assert fl.resolution_date_for_horizon("2026–27年") == "2027-12-31"
+    assert fl.resolution_date_for_horizon("FY2099-00") == fl._year_end("FY2099-00")
+    # A year-month or a full date is never read as a short range.
+    for text in ("2026-07", "2026-12", "2010-11-05", "2026/09/30"):
+        assert fl.resolution_date_for_horizon(text) == fl._year_end(text), text
+    # An as-of note dates the forecast, not its resolution...
+    assert fl._year_end("2030 (as-of 2026-07-09)") == "2026-07-09"  # the early reading
+    assert fl.resolution_date_for_horizon("2030 (as-of 2026-07-09)") == "2030-12-31"
+    assert fl.resolution_date_for_horizon("by 2030 (As of July 2026)") == "2030-12-31"
+    assert fl.resolution_date_for_horizon("2030（as of 2026-07-09）") == "2030-12-31"
+    # ...unless nothing else in the text resolves (legacy reading kept).
+    assert fl.resolution_date_for_horizon("(as-of 2026-07-09)") == "2026-07-09"
     # Non-range text and invalid dates delegate to _year_end, whose outputs are unchanged.
     for text in ("2030", "到2027年底", "mid-2027", "2030-06-30", "2026-13-01 to 2035-12-31",
                  "2026-11-03", "2026-12-20"):
@@ -745,6 +767,7 @@ def test_failed_audit_row_keeps_every_gate_reason(report_env):
         + ["publish_gate: gate hard issue: fingerprint drift"]
         + [f"publish_gate: {q}" for q in quality])
     assert len(row["reasons"]) <= fl.UNPUBLISHED_MAX_REASONS
+    assert (row["reasons_total"], row["reasons_truncated"]) == (8, False)
 
 
 def test_final_audit_reasons_mirror_the_gate(tmp_path):
@@ -1008,12 +1031,6 @@ def test_entry_points_set_record_class(reports_dir, monkeypatch):
     assert receipt["record_class"] == "production" and receipt["status"] == "committed"
     row = _rows()[-1]
     assert (row["pipeline_id"], row["seed"], row["as_of_date"]) == ("pipe_main", 0, "2026-08-20")
-    src = inspect.getsource(po.PipelineOrchestrator._run)
-    i_ctx = src.find("agent.ledger_context = self._report_ledger_context(")
-    i_gen = src.find("report = agent.generate_report(progress_callback=report_cb")
-    i_receipt = src.find('state.options["forecast_ledger"] = dict(_ledger_receipt)')
-    assert -1 < i_ctx < i_gen < i_receipt
-    assert 'run_kind="pipeline"' in src[i_ctx:i_gen]
 
     # What-if fork: scenario_label → conditional_scenario, excluded from production.
     _write_report("r_whatif", _forecast())
@@ -1067,6 +1084,8 @@ def test_seed_ensemble_member_record_class(monkeypatch, tmp_path):
     assert captured["ctx"] == {"pipeline_id": "pipe_ens", "simulation_id": "sim_seed",
                                "seed": 11, "run_kind": "seed_ensemble",
                                "as_of_date": "2026-08-20", "record_class": "ensemble_member"}
+    # The member simulation is mapped to its seed for later context-less regenerations.
+    assert state.options["ensemble_member_simulations"] == {"sim_seed": 11}
 
 
 def test_model_comparison_record_class(monkeypatch):
@@ -1236,7 +1255,7 @@ def test_owner_lookup_is_best_effort(reports_dir, monkeypatch):
     def boom(simulation_id):
         raise OSError("pipelines dir unreadable")
 
-    monkeypatch.setattr(po, "_pipeline_for_simulation", boom)
+    monkeypatch.setattr(po, "_ledger_owner_of_simulation", boom)
     assert po.ledger_identity_for_simulation("sim_x") == {}
     # An unreadable base never breaks the report stage's ledger context.
     monkeypatch.setattr(po.PipelineManager, "load", classmethod(lambda cls, pid: boom(pid)))
@@ -1337,8 +1356,320 @@ def test_new_report_attempt_drops_stale_ledger_receipt(reports_dir):
     state.options["forecast_ledger"] = {"status": "committed", "report_id": "report_old"}
     po.PipelineOrchestrator._clear_report_attempt_artifacts(state)
     assert "forecast_ledger" not in state.options
+    # Structural only (the helper's behaviour is covered by the report-stage tests):
+    # the stale receipt is dropped before the new attempt's report is generated.
     src = inspect.getsource(po.PipelineOrchestrator._run)
     i_clear = src.find("self._clear_report_attempt_artifacts(state)")
     i_mint = src.find('report_id = f"report_{uuid.uuid4().hex[:12]}"', i_clear)
-    i_copy = src.find('state.options["forecast_ledger"] = dict(_ledger_receipt)')
-    assert -1 < i_clear < i_mint < i_copy
+    i_generate = src.find("self._generate_stage_report(", i_mint)
+    assert -1 < i_clear < i_mint < i_generate
+
+
+# ───────────────────────────── review round 2 ─────────────────────────────────
+def test_torn_tail_is_isolated_before_appending():
+    """A crashed writer's unterminated fragment must not swallow the next row."""
+    os.makedirs(fl.ledger_dir(), exist_ok=True)
+    fragment = '{"report_id": "legacy", "scenarios": ['
+    with open(_ledger_path(), "w", encoding="utf-8") as fh:
+        fh.write(fragment)
+    status, first = _commit("r_torn_1")
+    assert status == "committed"
+    assert [r["commit_id"] for r in _rows("commit")] == [first["commit_id"]]
+    assert _commit("r_torn_2")[0] == "revision"   # one primary per target
+    assert _commit("r_torn_1")[0] == "duplicate"  # idempotency sees the first row
+    assert _read_bytes(_ledger_path()).startswith(fragment.encode("utf-8") + b"\n{")
+    # The unpublished writer applies the same guard.
+    with open(_ledger_path(), "a", encoding="utf-8") as fh:
+        fh.write('{"torn": ')
+    assert fl.record_unpublished_terminal(
+        report_id="r_torn_u", question_sha256="q", record_class="production",
+        run_ref="p", reasons=["gate"])[0] == "recorded"
+    assert fl.record_unpublished_terminal(
+        report_id="r_torn_u", question_sha256="q", record_class="production",
+        run_ref="p", reasons=["gate"])[0] == "duplicate"
+    assert [r["report_id"] for r in fl.read_ledger()] == [
+        "r_torn_1", "r_torn_2", "r_torn_u"]
+
+
+def test_complete_last_row_without_newline_is_preserved():
+    os.makedirs(fl.ledger_dir(), exist_ok=True)
+    with open(_ledger_path(), "w", encoding="utf-8") as fh:
+        fh.write(json.dumps({"report_id": "hand_edited", "schema_version": 1}))
+    assert _commit("r_after_edit")[0] == "committed"
+    assert [r["report_id"] for r in fl.read_ledger()] == ["hand_edited", "r_after_edit"]
+    # A clean file gets no stray blank line.
+    before = _read_bytes(_ledger_path())
+    _commit("r_clean", as_of="2026-09-02")
+    assert b"\n\n" not in _read_bytes(_ledger_path())[len(before) - 1:]
+
+
+def test_unpublished_row_counts_what_the_caps_removed():
+    reasons = [f"reason {i}" for i in range(12)]
+    reasons[0] = "x" * 500
+    status, row = fl.record_unpublished_terminal(
+        report_id="r_many", question_sha256="q", record_class="production",
+        run_ref="p", reasons=reasons)
+    assert status == "recorded"
+    assert len(row["reasons"]) == fl.UNPUBLISHED_MAX_REASONS
+    assert row["reasons"][0] == "x" * fl.UNPUBLISHED_REASON_MAX_CHARS
+    assert (row["reasons_total"], row["reasons_truncated"]) == (12, True)
+    # Only the char cap hit: still flagged.
+    _s, one = fl.record_unpublished_terminal(
+        report_id="r_long", question_sha256="q", record_class="production",
+        run_ref="p", reasons="y" * 301)
+    assert (one["reasons_total"], one["reasons_truncated"]) == (1, True)
+    _s, plain = fl.record_unpublished_terminal(
+        report_id="r_plain", question_sha256="q", record_class="production",
+        run_ref="p", reasons=["gate failed"])
+    assert (plain["reasons"], plain["reasons_total"], plain["reasons_truncated"]) == (
+        ["gate failed"], 1, False)
+    # The ledger_commit path hands the row the full list (its receipt stays bounded).
+    receipt = lc.commit_report(
+        report_id="r_many_lc", report_status="completed", error=None, question=QUESTION,
+        language=None, actors=None, scenario_label="", ledger_context=None,
+        publication_status_fn=lambda rid: {"publishable": False, "reasons": reasons},
+        load_forecast_fn=lambda rid: None, now=NOW)
+    assert len(receipt["reasons"]) == fl.UNPUBLISHED_MAX_REASONS
+    (lc_row,) = [r for r in fl.read_ledger() if r["report_id"] == "r_many_lc"]
+    assert (lc_row["reasons_total"], lc_row["reasons_truncated"]) == (12, True)
+
+
+def test_evaluation_lane_never_scores_revisions_or_unpublished_rows():
+    base = {"resolved": True, "outcome": "YES",
+            "scenarios": [{"name": "YES", "probability": 0.8}, {"name": "NO", "probability": 0.2}]}
+    primary = dict(base, report_id="p", row_type="commit", record_class="evaluation",
+                   calibration_role="primary")
+    revision = dict(base, report_id="r", row_type="commit", record_class="evaluation",
+                    calibration_role="revision")
+    unpublished = dict(base, report_id="u", row_type="unpublished_terminal",
+                       record_class="evaluation")
+    golden = dict(base, report_id="golden:q1", golden=True, record_class="evaluation",
+                  characterization_only=True)
+    rows = [primary, revision, unpublished, golden]
+    # The evaluation lane relaxes only the record-class/golden rule.
+    assert fl.calibration_summary(entries=rows, include_evaluation=True)["n_resolved"] == 2
+    assert fl.recalibration_param(entries=rows, include_evaluation=True)["n"] == \
+        fl.recalibration_param(entries=[primary, golden], include_evaluation=True)["n"]
+    assert fl.calibration_summary(entries=rows)["n_resolved"] == 0
+    assert fl._is_scorable_row(primary) and fl._is_scorable_row(golden)
+    assert not fl._is_scorable_row(revision) and not fl._is_scorable_row(unpublished)
+
+
+def test_report_stage_helper_wires_context_and_receipt(report_env):
+    """_run's report branch delegates to _generate_stage_report: a real ReportAgent
+    receives the pipeline context and its receipt lands in state.options."""
+    orch = po.PipelineOrchestrator()
+    state = po.PipelineState(pipeline_id="pipe_stage", prompt=QUESTION)
+    state.options["as_of_date_validated"] = "2026-08-20"
+    agent = _bare_report_agent(simulation_id="sim_stage")
+    agent._enforce_final_publish_audit = _sealing_audit(_forecast())
+    progress = []
+    report = orch._generate_stage_report(
+        state, agent, "sim_stage", report_id="r_stage",
+        progress_callback=lambda stage, pct, msg: progress.append(stage))
+    assert report.status == ReportStatus.COMPLETED and "completed" in progress
+    assert agent.ledger_context == {"pipeline_id": "pipe_stage", "simulation_id": "sim_stage",
+                                    "seed": int(Config.SIM_SEED or 0), "run_kind": "pipeline",
+                                    "as_of_date": "2026-08-20"}
+    receipt = state.options["forecast_ledger"]
+    assert receipt["status"] == "committed" and receipt["report_id"] == "r_stage"
+    assert receipt is not agent.ledger_receipt and receipt == agent.ledger_receipt
+    (row,) = _rows("commit")
+    assert (row["pipeline_id"], row["run_kind"], row["as_of_date"], row["as_of_source"]) == (
+        "pipe_stage", "pipeline", "2026-08-20", "validated")
+
+
+def test_report_stage_helper_copies_failed_and_cancelled_receipts(report_env):
+    orch = po.PipelineOrchestrator()
+    # A FAILED report still hands its unpublished receipt to the pipeline state.
+    state = po.PipelineState(pipeline_id="pipe_stage_fail", prompt=QUESTION)
+    failing = _bare_report_agent()
+    failing._audit_final_published_markdown = _failing_audit({
+        "hard_passed": False, "hard_issues": ["dangling citation markers [S9]"],
+        "publish_gate": {"enabled": False}})
+    report = orch._generate_stage_report(
+        state, failing, "sim_1", report_id="r_stage_fail", progress_callback=lambda *a: None)
+    assert report.status == ReportStatus.FAILED
+    assert state.options["forecast_ledger"]["status"] == "unpublished"
+    assert state.options["forecast_ledger"]["report_id"] == "r_stage_fail"
+    (row,) = _rows("unpublished_terminal")
+    assert row["run_ref"] == "pipe_stage_fail"
+
+    # A cancellation raised after the completed save propagates, receipt still recorded.
+    state = po.PipelineState(pipeline_id="pipe_stage_cancel", prompt=QUESTION)
+    state.options["forecast_ledger"] = {"status": "committed", "report_id": "report_old"}
+    cancelled = _bare_report_agent()
+    cancelled._enforce_final_publish_audit = _sealing_audit(_forecast())
+
+    def cancel(stage, pct, message):
+        if stage == "completed":
+            raise po.PipelineCancelled("cancelled by user")
+
+    with pytest.raises(po.PipelineCancelled):
+        orch._generate_stage_report(state, cancelled, "sim_1", report_id="r_stage_cancel",
+                                    progress_callback=cancel)
+    assert state.options["forecast_ledger"]["status"] == "committed"
+    assert state.options["forecast_ledger"]["report_id"] == "r_stage_cancel"
+
+    # An agent that never produced a receipt leaves the state untouched.
+    class _NoReceipt:
+        ledger_receipt = None
+
+        def generate_report(self, progress_callback=None, report_id=None):
+            return "report"
+
+    state = po.PipelineState(pipeline_id="pipe_stage_none", prompt=QUESTION)
+    assert orch._generate_stage_report(
+        state, _NoReceipt(), "sim_1", report_id="r_none", progress_callback=None) == "report"
+    assert "forecast_ledger" not in state.options
+
+
+def _reused(report_id, status=ReportStatus.COMPLETED):
+    return Report(report_id=report_id, simulation_id="sim_1", graph_id="g1",
+                  simulation_requirement=QUESTION, status=status)
+
+
+def test_reused_report_missing_commit_is_repaired(reports_dir):
+    orch = po.PipelineOrchestrator()
+    state = po.PipelineState(pipeline_id="pipe_resume", prompt=QUESTION)
+    state.options["as_of_date_validated"] = "2026-08-20"
+    state.options["forecast_ledger"] = {"status": "error", "report_id": "r_reused"}
+    _write_report("r_reused", _forecast(confidence="low"))
+    actors = {"as_of_date": "2026-07-06"}
+    orch._repair_reused_report_ledger(state, _reused("r_reused"), "sim_1", actors, "research")
+    receipt = state.options["forecast_ledger"]
+    assert receipt["status"] == "committed" and receipt["repaired"] is True
+    assert receipt["report_id"] == "r_reused"
+    (row,) = _rows("commit")
+    assert row["report_id"] == "r_reused" and row["confidence"] == "low"
+    assert (row["pipeline_id"], row["run_kind"], row["as_of_date"]) == (
+        "pipe_resume", "pipeline", "2026-08-20")
+    assert row["question"] == QUESTION
+    assert row["language"] == ReportAgent.resolve_output_language(
+        QUESTION, "research", po.situation_brief(actors))
+    # Resuming again: the stored receipt short-circuits; without it the existing row does.
+    before = _read_bytes(_ledger_path())
+    orch._repair_reused_report_ledger(state, _reused("r_reused"), "sim_1", actors, "research")
+    state.options.pop("forecast_ledger")
+    orch._repair_reused_report_ledger(state, _reused("r_reused"), "sim_1", actors, "research")
+    assert _read_bytes(_ledger_path()) == before
+    assert "forecast_ledger" not in state.options
+    # A receipt that proves no row was written (ledger off at generation) does not block it.
+    _write_report("r_was_disabled", _forecast())
+    state.options["forecast_ledger"] = {"status": "disabled", "report_id": "r_was_disabled"}
+    orch._repair_reused_report_ledger(state, _reused("r_was_disabled"), "sim_1", actors, "")
+    assert state.options["forecast_ledger"]["status"] == "revision"  # same target as r_reused
+
+
+def test_reused_report_repair_never_double_represents(reports_dir, monkeypatch):
+    orch = po.PipelineOrchestrator()
+    state = po.PipelineState(pipeline_id="pipe_resume2", prompt=QUESTION)
+    # A pre-EVAL-1 report already has its schema_version 1 row: nothing is added.
+    _write_report("r_legacy_reused", _forecast())
+    fl.append_forecast(_forecast(), report_id="r_legacy_reused", created_at="2026-01-01")
+    orch._repair_reused_report_ledger(state, _reused("r_legacy_reused"), "sim_1", None, "")
+    assert _rows("commit") == [] and "forecast_ledger" not in state.options
+    # A report that is not COMPLETED is never recorded as a terminal.
+    _write_report("r_generating", _forecast())
+    orch._repair_reused_report_ledger(
+        state, _reused("r_generating", ReportStatus.GENERATING), "sim_1", None, "")
+    assert not fl.has_report_row("r_generating")
+    # Outside 'published' mode the repair writes nothing.
+    monkeypatch.setattr(Config, "FORECAST_LEDGER_COMMIT_MODE", "legacy", raising=False)
+    _write_report("r_legacy_mode", _forecast())
+    orch._repair_reused_report_ledger(state, _reused("r_legacy_mode"), "sim_1", None, "")
+    assert not fl.has_report_row("r_legacy_mode")
+    monkeypatch.setattr(Config, "FORECAST_LEDGER_COMMIT_MODE", "published", raising=False)
+    # A completed report that is not publishable gets its unpublished row.
+    _write_report("r_unpub_reused", _forecast(), hard_passed=False)
+    orch._repair_reused_report_ledger(state, _reused("r_unpub_reused"), "sim_1", None, "")
+    assert state.options["forecast_ledger"]["status"] == "unpublished"
+    (row,) = _rows("unpublished_terminal")
+    assert row["report_id"] == "r_unpub_reused" and row["run_ref"] == "pipe_resume2"
+
+
+def test_reused_report_repair_is_best_effort(reports_dir, monkeypatch):
+    def boom(report_id, lang=None):
+        raise OSError("reports dir unreadable")
+
+    monkeypatch.setattr(ReportManager, "publication_status", classmethod(
+        lambda cls, report_id, lang=None: boom(report_id)))
+    orch = po.PipelineOrchestrator()
+    state = po.PipelineState(pipeline_id="pipe_resume3", prompt=QUESTION)
+    orch._repair_reused_report_ledger(state, _reused("r_boom"), "sim_1", None, "")
+    assert "forecast_ledger" not in state.options
+    assert not os.path.exists(_ledger_path())
+
+
+def test_run_resume_reuse_branch_repairs_the_ledger(monkeypatch, tmp_path):
+    """The real _run state machine (every service faked) reuses the finished report on
+    resume and routes it through the ledger repair with the pipeline's context."""
+    from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
+
+    monkeypatch.setattr(Config, "FORECAST_LEDGER_COMMIT_MODE", "published", raising=False)
+    monkeypatch.setattr(Config, "REPORT_FORECAST_LEDGER", True, raising=False)
+    result = _exercise_prepare_run_resume(monkeypatch, tmp_path, rebuild_prepare=False)
+    assert result.state.status == "completed"
+    receipt = result.state.options["forecast_ledger"]
+    assert receipt["report_id"] == "report_existing" and receipt["repaired"] is True
+    # The harness's report folder holds no sealed bundle: it is recorded unpublished.
+    assert receipt["status"] == "unpublished"
+    (row,) = fl.read_ledger()
+    assert (row["row_type"], row["report_id"], row["run_ref"]) == (
+        "unpublished_terminal", "report_existing", "pipe_state_machine")
+    persisted = po.PipelineManager.load("pipe_state_machine")
+    assert persisted["options"]["forecast_ledger"]["status"] == "unpublished"
+
+
+def test_seed_member_simulation_keeps_member_identity(reports_dir):
+    """A context-less regeneration of a seed-ensemble simulation stays that seed's
+    ensemble member (a revision of its commit), never a second production primary."""
+    state = _save_pipeline("pipe_ens_owner", "sim_main", as_of_date_validated="2026-07-05",
+                           ensemble_member_simulations={"sim_member": 7919})
+    assert po.ledger_identity_for_simulation("sim_member") == {
+        "pipeline_id": "pipe_ens_owner", "as_of_date": "2026-07-05",
+        "record_class": "ensemble_member", "seed": 7919}
+    # The pipeline's own simulation is unchanged.
+    assert po.ledger_identity_for_simulation("sim_main") == {
+        "pipeline_id": "pipe_ens_owner", "as_of_date": "2026-07-05"}
+    ctx = po.PipelineOrchestrator._report_ledger_context(
+        state, "sim_member", run_kind="seed_ensemble", seed=7919, record_class="ensemble_member")
+    _write_report("r_member_pipe", _forecast())
+    _write_report("r_member_api", _forecast())
+    pipe = _publish(_Agent(simulation_id="sim_member", ledger_context=ctx), "r_member_pipe")
+    api = _publish(_Agent(simulation_id="sim_member", ledger_context=None), "r_member_api")
+    assert (pipe["status"], api["status"]) == ("committed", "revision")
+    assert api["record_class"] == "ensemble_member" and api["target_key"] == pipe["target_key"]
+    for row in _rows("commit"):
+        assert row["target_variant"] == {"seed": 7919}
+        assert fl.is_production_calibration_row(row) is False
+    # An unreadable recorded seed still fails closed to the member class.
+    _save_pipeline("pipe_ens_bad", "sim_main_bad",
+                   ensemble_member_simulations={"sim_member_bad": "not-a-seed"})
+    identity = po.ledger_identity_for_simulation("sim_member_bad")
+    assert identity["record_class"] == "ensemble_member" and "seed" not in identity
+
+
+def test_resumed_ensemble_seed_is_mapped_and_persisted(reports_dir, monkeypatch):
+    """A seed reused from the ensemble checkpoint is mapped too, and the map is saved."""
+    monkeypatch.setattr(Config, "N_FORECAST_SEEDS", 2, raising=False)
+    monkeypatch.setattr(Config, "REPORT_STRUCTURED_FORECAST", True, raising=False)
+    monkeypatch.setattr(Config, "SIM_SEED", 0, raising=False)
+    state = po.PipelineState(pipeline_id="pipe_ens_resume", prompt=QUESTION, mode="full")
+    state.report_id = "r_primary"
+    handoff = po.PipelineManager.handoff_dir(state.pipeline_id)
+    os.makedirs(handoff, exist_ok=True)
+    seed = 2 * 7919
+    with open(os.path.join(handoff, "ensemble_checkpoint.json"), "w", encoding="utf-8") as fh:
+        json.dump({"schema_version": 1, "completed": [
+            {"k": 2, "seed": seed, "simulation_id": "sim_prev", "report_id": "r_prev"}]}, fh)
+    orch = po.PipelineOrchestrator()
+    monkeypatch.setattr(orch, "_read_report_forecast", lambda rid: _forecast())
+    monkeypatch.setattr(orch, "_run_one_seed",
+                        lambda *a, **k: pytest.fail("the checkpointed seed must be reused"))
+    orch._maybe_run_seed_ensemble(state, type("P", (), {"project_id": "proj"})(), "graph_1",
+                                  None, {}, "report md")
+    assert state.options["ensemble_member_simulations"] == {"sim_prev": seed}
+    persisted = po.PipelineManager.load(state.pipeline_id)
+    assert persisted["options"]["ensemble_member_simulations"] == {"sim_prev": seed}
+    assert po.ledger_identity_for_simulation("sim_prev")["seed"] == seed

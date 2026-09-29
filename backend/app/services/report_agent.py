@@ -1528,6 +1528,23 @@ class ReportAgent:
         "校准与信心评估",
     ]
 
+    @staticmethod
+    def resolve_output_language(simulation_requirement: str, research_report: str = "",
+                                situation_brief: str = "") -> str:
+        """The report's output language (REPORT_OUTPUT_LANGUAGE override, else sniffed).
+
+        Shared by ``__init__`` and callers that need a finished report's language
+        without constructing an agent (EVAL-1's reused-report ledger repair).
+        """
+        forced = (os.environ.get("REPORT_OUTPUT_LANGUAGE", "") or "").strip()
+        if forced:
+            return forced
+        try:
+            from .requirement_spec import detect_output_language
+            return detect_output_language(simulation_requirement, research_report, situation_brief)
+        except Exception:  # noqa: BLE001 — never block construction on language sniff
+            return "English"
+
     def __init__(
         self,
         graph_id: str,
@@ -1589,16 +1606,8 @@ class ReportAgent:
         # report (an English brief → English submission; a wrong-language report is an automatic
         # round-one fail). Overridable via REPORT_OUTPUT_LANGUAGE. Consumed by _lang_override()
         # (section/plan prompts) and the binary/Part-1 renderers.
-        _forced_lang = (os.environ.get("REPORT_OUTPUT_LANGUAGE", "") or "").strip()
-        if _forced_lang:
-            self.output_language = _forced_lang
-        else:
-            try:
-                from .requirement_spec import detect_output_language
-                self.output_language = detect_output_language(
-                    self.simulation_requirement, self.research_report, self.situation_brief)
-            except Exception:  # noqa: BLE001 — never block construction on language sniff
-                self.output_language = "English"
+        self.output_language = self.resolve_output_language(
+            self.simulation_requirement, self.research_report, self.situation_brief)
         # T4.6/T4.7: 情景标签（what-if 框架）+ base 模拟 id（反事实对比）
         self.scenario_label = (scenario_label or "").strip()
         self.base_simulation_id = base_simulation_id or None
