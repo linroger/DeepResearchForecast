@@ -17,8 +17,10 @@ was admitted with (the second admission snapshot next to the orchestrator's
 ``safety_policy_v1``; knobs pinned there are deliberately not repeated here),
 ``diff`` compares a pin with the current ambient values, and
 ``lineage_refusal`` decides whether a stage may reuse its artifact given what
-was recomputed earlier in the same attempt.  The orchestrator owns the thin
-hooks that call these helpers; nothing here does I/O.
+was recomputed earlier in the same attempt or, through the durable
+``lineage_invalidated`` map kept by ``invalidate_downstream``, in an earlier
+attempt whose rebuild never finished.  The orchestrator owns the thin hooks
+that call these helpers; nothing here does I/O.
 """
 
 from __future__ import annotations
@@ -76,14 +78,28 @@ ATTEMPTS_CAP = 20
 STAGE_REUSE_LOG_CAP = 6 * ATTEMPTS_CAP
 STAGE_NOTES_CAP = 20
 
+PIPELINE_STAGES: tuple[str, ...] = (
+    "research", "ontology", "graph", "prepare", "run", "report",
+)
 # A stage's artifact is derived from these upstream stages' outputs; if one of
-# them was recomputed earlier in the same attempt, the artifact is stale.
+# them was recomputed after the artifact was built, the artifact is stale.  The
+# keys are the stages that carry a reuse guard.
 LINEAGE_UPSTREAM: dict[str, tuple[str, ...]] = {
     "ontology": ("research",),
     "graph": ("research", "ontology"),
     "prepare": ("graph",),
     "report": ("run",),
 }
+# RUN has no guard of its own: its outputs are bound to the prepared
+# simulation's id and config seal, so a rebuilt PREPARE (a new simulation)
+# already refuses the old RUN.  The durable invalidation walk still passes
+# through it, because a REPORT built on the old RUN is stale too.
+_PASS_THROUGH_UPSTREAM: dict[str, tuple[str, ...]] = {"run": ("prepare",)}
+# ``state.options`` key of the durable map ``{stage: reason}``: guarded stages
+# whose artifact predates an upstream recompute and has not been rebuilt since.
+# It outlives the attempt, so a rebuild that fails (the usual reason a run is
+# resumed) cannot hand the stale artifact back to the next attempt.
+LINEAGE_INVALIDATED_OPTION = "lineage_invalidated"
 # The id each stage's reused artifact must be bound to, named for the refusal
 # reason ("graph_id_mismatch", "simulation_id_mismatch").
 _BOUND_ID_LABEL: dict[str, str] = {
@@ -107,7 +123,9 @@ RESOLVED_BLOCK_FOR_STAGE: dict[str, str] = {
     "report": "report",
 }
 PROVIDER_STAMPED_STAGES: tuple[str, ...] = ("ontology", "graph", "report")
-# Filled while RUN executes (not at attempt start); a restamp keeps them.
+# Filled while RUN executes (not at attempt start).  A RUN restamp keeps only
+# the values the current attempt's RUN wrote: the carried-forward block may
+# hold the replaced simulation's values.
 SIM_RUNTIME_FIELDS: tuple[str, ...] = (
     "total_rounds", "calendar_unit", "n_rounds", "horizon_date",
 )
@@ -256,6 +274,7 @@ def lineage_refusal(
     *,
     bound_ids: Optional[tuple[Any, Any]] = None,
     exempt: Iterable[str] = (),
+    invalidated: Optional[Mapping[str, Any]] = None,
 ) -> Optional[str]:
     """Why ``stage`` must not reuse its artifact this attempt, or None.
 
@@ -263,7 +282,11 @@ def lineage_refusal(
     PREPARE (simulation graph vs pipeline graph) and REPORT (report
     simulation vs pipeline simulation); an unset bound id cannot prove lineage
     and refuses.  ``exempt`` lists upstream stages whose recompute is a
-    declared design choice rather than staleness.
+    declared design choice rather than staleness.  ``invalidated`` is the
+    durable ``lineage_invalidated`` map: a stage still listed there was made
+    stale in an earlier attempt and refuses with the stored reason.  Evidence
+    from this attempt is reported first, so a same-attempt refusal names its
+    direct cause.
     """
     if bound_ids is not None:
         bound, current = bound_ids
@@ -274,6 +297,8 @@ def lineage_refusal(
     for upstream in LINEAGE_UPSTREAM.get(stage, ()):
         if upstream in recomputed_set and upstream not in skipped:
             return f"{upstream}_recomputed"
+    if isinstance(invalidated, Mapping) and stage in invalidated:
+        return str(invalidated[stage] or "lineage_invalidated")
     return None
 
 
@@ -282,6 +307,67 @@ def graph_lineage_exempt(options: Any) -> tuple[str, ...]:
     if isinstance(options, Mapping) and options.get(SHARED_GRAPH_OPTION):
         return ("ontology",)
     return ()
+
+
+def lineage_exemptions(options: Any) -> dict[str, tuple[str, ...]]:
+    """``{stage: upstream stages ignored}`` for the durable invalidation walk."""
+    graph_exempt = graph_lineage_exempt(options)
+    return {"graph": graph_exempt} if graph_exempt else {}
+
+
+def downstream_stages(
+    stage: str,
+    *,
+    exemptions: Optional[Mapping[str, Iterable[str]]] = None,
+) -> list[str]:
+    """Stages whose output derives, directly or transitively, from ``stage``.
+
+    Follows the guarded ``LINEAGE_UPSTREAM`` edges plus RUN <- PREPARE, in
+    pipeline order.  An exempt edge (for example GRAPH <- ONTOLOGY on a batch
+    question fork) is not followed, so nothing downstream of it is reached
+    through it.
+    """
+    skipped = {
+        name: set(upstreams or ()) for name, upstreams in (exemptions or {}).items()
+    }
+    reached: set[str] = set()
+    frontier = [stage]
+    while frontier:
+        source = frontier.pop()
+        for candidate in PIPELINE_STAGES:
+            if candidate in reached or candidate == stage:
+                continue
+            upstreams = LINEAGE_UPSTREAM.get(candidate, ()) + _PASS_THROUGH_UPSTREAM.get(
+                candidate, ())
+            if source in upstreams and source not in skipped.get(candidate, set()):
+                reached.add(candidate)
+                frontier.append(candidate)
+    return [name for name in PIPELINE_STAGES if name in reached]
+
+
+def invalidate_downstream(
+    invalidated: Any,
+    stage: str,
+    *,
+    exemptions: Optional[Mapping[str, Iterable[str]]] = None,
+) -> dict[str, str]:
+    """The durable ``lineage_invalidated`` map after ``stage`` was recomputed.
+
+    ``stage`` itself is rebuilt from current inputs, so its entry is dropped;
+    every guarded downstream stage is added with ``<stage>_recomputed`` unless
+    it is already listed (the first, root-cause reason is kept).  An entry is
+    cleared only here, when its own stage is recomputed.
+    """
+    out = (
+        {str(key): str(value) for key, value in invalidated.items()}
+        if isinstance(invalidated, Mapping) else {}
+    )
+    out.pop(stage, None)
+    reason = f"{stage}_recomputed"
+    for downstream in downstream_stages(stage, exemptions=exemptions):
+        if downstream in LINEAGE_UPSTREAM:
+            out.setdefault(downstream, reason)
+    return out
 
 
 def carry_forward_resolved(prior: Any, fresh: Any) -> dict[str, Any]:
@@ -308,13 +394,15 @@ def stamp_resolved_stage(
     *,
     fresh: Any,
     provider: Mapping[str, Any],
+    sim_runtime: Optional[Mapping[str, Any]] = None,
 ) -> bool:
     """Restamp the ``resolved`` block of a stage recomputed this attempt.
 
     Provider-stamped stages take the provider pair current at completion;
-    research and simulation take the attempt's fresh block (the simulation
-    block keeps the runtime fields RUN wrote this attempt).  Returns whether a
-    block was written.
+    research and simulation take the attempt's fresh block.  The simulation
+    block adds only the runtime fields in ``sim_runtime`` (what this attempt's
+    RUN wrote), never the carried-forward values of a replaced simulation.
+    Returns whether a block was written.
     """
     block_name = RESOLVED_BLOCK_FOR_STAGE.get(stage)
     if block_name is None:
@@ -325,12 +413,10 @@ def stamp_resolved_stage(
     fresh_map = fresh if isinstance(fresh, Mapping) else {}
     fresh_block = fresh_map.get(block_name)
     block = copy.deepcopy(dict(fresh_block)) if isinstance(fresh_block, Mapping) else {}
-    if block_name == "simulation":
-        existing = resolved.get("simulation")
-        if isinstance(existing, Mapping):
-            for key in SIM_RUNTIME_FIELDS:
-                if existing.get(key) is not None:
-                    block[key] = existing[key]
+    if block_name == "simulation" and isinstance(sim_runtime, Mapping):
+        for key in SIM_RUNTIME_FIELDS:
+            if sim_runtime.get(key) is not None:
+                block[key] = sim_runtime[key]
     resolved[block_name] = block
     return True
 

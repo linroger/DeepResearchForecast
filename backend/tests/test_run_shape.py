@@ -162,6 +162,48 @@ def test_lineage_refusal_rules():
     assert run_shape.graph_lineage_exempt({run_shape.SHARED_GRAPH_OPTION: "pipe_x"}) == (
         "ontology",)
     assert run_shape.graph_lineage_exempt({}) == ()
+    # A stage made stale in an earlier attempt refuses with the stored reason;
+    # evidence from this attempt is named first.
+    stale = {"report": "run_recomputed", "ontology": "research_recomputed"}
+    assert run_shape.lineage_refusal(
+        "report", set(), bound_ids=("s", "s"), invalidated=stale) == "run_recomputed"
+    assert run_shape.lineage_refusal("ontology", set(), invalidated=stale) == (
+        "research_recomputed")
+    assert run_shape.lineage_refusal(
+        "report", set(), bound_ids=("s1", "s2"), invalidated=stale) == "simulation_id_mismatch"
+    assert run_shape.lineage_refusal("graph", {"ontology"}, invalidated=stale) == (
+        "ontology_recomputed")
+    assert run_shape.lineage_refusal("graph", set(), invalidated=stale) is None
+    assert run_shape.lineage_refusal("report", set(), bound_ids=("s", "s"),
+                                     invalidated={"report": ""}) == "lineage_invalidated"
+
+
+def test_durable_invalidation_walk():
+    assert run_shape.downstream_stages("research") == [
+        "ontology", "graph", "prepare", "run", "report"]
+    assert run_shape.downstream_stages("graph") == ["prepare", "run", "report"]
+    assert run_shape.downstream_stages("prepare") == ["run", "report"]
+    assert run_shape.downstream_stages("report") == []
+    batch = run_shape.lineage_exemptions({run_shape.SHARED_GRAPH_OPTION: "pipe_anchor"})
+    assert batch == {"graph": ("ontology",)}
+    assert run_shape.lineage_exemptions({}) == {}
+    # The exempt GRAPH <- ONTOLOGY edge is not followed; RESEARCH -> GRAPH still is.
+    assert run_shape.downstream_stages("ontology", exemptions=batch) == []
+    assert run_shape.downstream_stages("research", exemptions=batch) == [
+        "ontology", "graph", "prepare", "run", "report"]
+    # Only guarded stages are recorded (RUN is bound to its simulation instead).
+    marked = run_shape.invalidate_downstream(None, "research")
+    assert marked == {"ontology": "research_recomputed", "graph": "research_recomputed",
+                      "prepare": "research_recomputed", "report": "research_recomputed"}
+    # Recomputing a stage clears only its own entry and keeps root-cause reasons.
+    after_ontology = run_shape.invalidate_downstream(marked, "ontology")
+    assert after_ontology == {"graph": "research_recomputed",
+                              "prepare": "research_recomputed",
+                              "report": "research_recomputed"}
+    assert marked["ontology"] == "research_recomputed"  # input left untouched
+    assert run_shape.invalidate_downstream(None, "run") == {"report": "run_recomputed"}
+    assert run_shape.invalidate_downstream({"report": "run_recomputed"}, "report") == {}
+    assert run_shape.invalidate_downstream("junk", "ontology", exemptions=batch) == {}
 
 
 def test_resolved_carry_forward_and_restamp():
@@ -181,8 +223,14 @@ def test_resolved_carry_forward_and_restamp():
     assert resolved["ontology"] == pair
     run_shape.stamp_resolved_stage(resolved, "research", fresh=fresh, provider=pair)
     assert resolved["research"] == {"model": "new"}
+    # A RUN restamp keeps only what this attempt's RUN wrote: the carried-forward
+    # total_rounds/n_rounds belong to the replaced simulation.
     run_shape.stamp_resolved_stage(resolved, "run", fresh=fresh, provider=pair)
-    assert resolved["simulation"] == {"max_agents": 80, "total_rounds": 12, "n_rounds": 12}
+    assert resolved["simulation"] == {"max_agents": 80, "total_rounds": None}
+    run_shape.stamp_resolved_stage(resolved, "run", fresh=fresh, provider=pair,
+                                   sim_runtime={"total_rounds": 10, "n_rounds": None})
+    assert resolved["simulation"] == {"max_agents": 80, "total_rounds": 10}
+    assert fresh["simulation"] == {"max_agents": 80, "total_rounds": None}
     assert not run_shape.stamp_resolved_stage(resolved, "prepare", fresh=fresh, provider=pair)
     assert run_shape.carry_forward_resolved(None, fresh) == fresh
 
@@ -434,12 +482,15 @@ class _Sentinel(RuntimeError):
     pass
 
 
-def _drive_full(monkeypatch, pid, *, research_reused, sim_graph_id="graph"):
+def _drive_full(monkeypatch, pid, *, research_reused, sim_graph_id="graph",
+                ontology_failures=0, options=None):
     """Run the real ``_run`` over a resumed full pipeline whose every stage completed.
 
     Fakes stop the attempt with a named sentinel at the first expensive call:
     GRAPH_REBUILT (graph rebuild), PREPARE_REBUILT (new simulation) or
-    PREPARE_REUSED (PREPARE reuse handed over to the RUN checks).
+    PREPARE_REUSED (PREPARE reuse handed over to the RUN checks).  The first
+    ``ontology_failures`` ontology generations raise (a provider outage).  The
+    fakes stay installed, so ``resume(pid)`` runs a second attempt on them.
     """
     calls: list[str] = []
     _real_run_research_only(monkeypatch, calls)
@@ -458,6 +509,8 @@ def _drive_full(monkeypatch, pid, *, research_reused, sim_graph_id="graph"):
     class FakeOntologyGenerator:
         def generate(self, **kwargs):
             ontology_calls.append(kwargs)
+            if len(ontology_calls) <= ontology_failures:
+                raise RuntimeError("ontology provider outage")
             return {"entity_types": [{"name": "Agency"}], "edge_types": [],
                     "analysis_summary": "regenerated"}
 
@@ -501,7 +554,8 @@ def _drive_full(monkeypatch, pid, *, research_reused, sim_graph_id="graph"):
     po.PipelineManager.ensure_dirs(pid)
     state = po.PipelineState(pipeline_id=pid, prompt="Forecast EV adoption", mode="full",
                              status="running", project_id="proj", graph_id="graph",
-                             simulation_id="sim_old", report_id="report_old")
+                             simulation_id="sim_old", report_id="report_old",
+                             options=dict(options or {}))
     state.handoff_dir = po.PipelineManager.handoff_dir(pid)
     state.stages = {name: po.StageState(name=name, status="completed", progress=100)
                     for name in po.STAGE_BANDS}
@@ -511,62 +565,147 @@ def _drive_full(monkeypatch, pid, *, research_reused, sim_graph_id="graph"):
             fh.write(REPORT)
     po.PipelineManager.save(state)
     po.PipelineOrchestrator._run(state)
-    return state, calls, ontology_calls
+    return SimpleNamespace(state=state, calls=calls, ontology_calls=ontology_calls,
+                           project=project)
+
+
+def _resume_attempt(pid):
+    """Resume a failed pipeline for real (a fresh orchestrator) and return its state."""
+    po.PipelineOrchestrator.resume(pid)
+    _join(pid)
+    return po.PipelineManager.load(pid)
+
+
+_STALE_AFTER_RESEARCH = {
+    po.STAGE_GRAPH: "research_recomputed",
+    po.STAGE_PREPARE: "research_recomputed",
+    po.STAGE_REPORT: "research_recomputed",
+}
 
 
 def test_research_recompute_refuses_ontology_and_graph_reuse(roots, monkeypatch):
-    state, calls, ontology_calls = _drive_full(
-        monkeypatch, "pipe_rs_lineage_research", research_reused=False)
-    assert calls, "research was recomputed this attempt"
+    run = _drive_full(monkeypatch, "pipe_rs_lineage_research", research_reused=False)
+    state = run.state
+    assert run.calls, "research was recomputed this attempt"
     assert state.status == "failed" and state.error == "GRAPH_REBUILT"
-    assert len(ontology_calls) == 1, "ontology regenerated from the new research"
+    assert len(run.ontology_calls) == 1, "ontology regenerated from the new research"
     notes = state.options["stage_notes"]
     assert notes[po.STAGE_ONTOLOGY] == ["reuse_refused: research_recomputed"]
     assert notes[po.STAGE_GRAPH] == ["reuse_refused: research_recomputed"]
     decisions = [(row["stage"], row["reused"]) for row in state.options["stage_reuse_v1"]]
     assert decisions == [(po.STAGE_RESEARCH, False), (po.STAGE_ONTOLOGY, False)]
+    # The regenerated ontology left the invalidation map; the unfinished
+    # graph rebuild and everything below it stay stale for the next attempt.
+    assert state.options["lineage_invalidated"] == _STALE_AFTER_RESEARCH
     persisted = po.PipelineManager.load(state.pipeline_id)
     assert persisted["options"]["stage_notes"] == notes
+    assert persisted["options"]["lineage_invalidated"] == _STALE_AFTER_RESEARCH
+
+
+def test_failed_ontology_rebuild_is_not_reused_on_the_next_attempt(roots, monkeypatch):
+    """Research recompute -> ontology rebuild fails -> resume must still rebuild it."""
+    pid = "pipe_rs_lineage_xattempt"
+    run = _drive_full(monkeypatch, pid, research_reused=False, ontology_failures=1)
+    assert run.state.status == "failed"
+    assert run.state.error == "ontology provider outage"
+    assert run.project.ontology["entity_types"] == [{"name": "Company"}], "old ontology"
+    persisted = po.PipelineManager.load(pid)
+    assert persisted["options"]["lineage_invalidated"] == {
+        po.STAGE_ONTOLOGY: "research_recomputed", **_STALE_AFTER_RESEARCH}
+
+    resumed = _resume_attempt(pid)
+    assert len(run.calls) == 1, "research is reused on the next attempt"
+    assert resumed["status"] == "failed" and resumed["error"] == "GRAPH_REBUILT"
+    assert len(run.ontology_calls) == 2, "the stale ontology is regenerated, not reused"
+    assert run.project.ontology["entity_types"] == [{"name": "Agency"}]
+    notes = resumed["options"]["stage_notes"]
+    assert notes[po.STAGE_ONTOLOGY] == ["reuse_refused: research_recomputed"] * 2
+    assert notes[po.STAGE_GRAPH] == ["reuse_refused: ontology_recomputed"]
+    decisions = [(row["stage"], row["reused"])
+                 for row in resumed["options"]["stage_reuse_v1"]]
+    assert decisions[-2:] == [(po.STAGE_RESEARCH, True), (po.STAGE_ONTOLOGY, False)]
+    assert resumed["options"]["lineage_invalidated"] == _STALE_AFTER_RESEARCH
 
 
 def test_flags_off_research_recompute_keeps_legacy_reuse(roots, monkeypatch):
     _flags_off(monkeypatch)
-    state, calls, ontology_calls = _drive_full(
-        monkeypatch, "pipe_rs_lineage_legacy", research_reused=False)
-    assert calls
-    assert state.error == "PREPARE_REUSED", "legacy reuses ontology, graph and PREPARE"
-    assert ontology_calls == []
-    assert "stage_notes" not in state.options
-    assert "stage_reuse_v1" not in state.options
+    run = _drive_full(monkeypatch, "pipe_rs_lineage_legacy", research_reused=False)
+    assert run.calls
+    assert run.state.error == "PREPARE_REUSED", "legacy reuses ontology, graph and PREPARE"
+    assert run.ontology_calls == []
+    for key in ("stage_notes", "stage_reuse_v1", "lineage_invalidated"):
+        assert key not in run.state.options
 
 
 def test_prepare_reuse_refused_when_simulation_graph_differs(roots, monkeypatch):
-    state, calls, ontology_calls = _drive_full(
-        monkeypatch, "pipe_rs_lineage_prepare", research_reused=True,
-        sim_graph_id="graph_other")
-    assert calls == [] and ontology_calls == []
+    run = _drive_full(monkeypatch, "pipe_rs_lineage_prepare", research_reused=True,
+                      sim_graph_id="graph_other")
+    state = run.state
+    assert run.calls == [] and run.ontology_calls == []
     assert state.error == "PREPARE_REBUILT"
     assert state.options["stage_notes"] == {
         po.STAGE_PREPARE: ["reuse_refused: graph_id_mismatch"]}
+    assert state.options["lineage_invalidated"] == {po.STAGE_PREPARE: "graph_id_mismatch"}
     decisions = [(row["stage"], row["reused"]) for row in state.options["stage_reuse_v1"]]
     assert decisions == [(po.STAGE_RESEARCH, True), (po.STAGE_ONTOLOGY, True),
                          (po.STAGE_GRAPH, True)]
 
 
 def test_prepare_reuse_kept_when_simulation_graph_matches(roots, monkeypatch):
-    state, _calls, _ontology_calls = _drive_full(
-        monkeypatch, "pipe_rs_lineage_prepare_ok", research_reused=True)
-    assert state.error == "PREPARE_REUSED"
-    assert "stage_notes" not in state.options
+    run = _drive_full(monkeypatch, "pipe_rs_lineage_prepare_ok", research_reused=True)
+    assert run.state.error == "PREPARE_REUSED"
+    assert "stage_notes" not in run.state.options
+    assert "lineage_invalidated" not in run.state.options
 
 
 def test_prepare_graph_mismatch_ignored_with_guards_off(roots, monkeypatch):
     monkeypatch.setattr(Config, "RESUME_LINEAGE_GUARDS", False, raising=False)
-    state, _calls, _ontology_calls = _drive_full(
-        monkeypatch, "pipe_rs_lineage_prepare_off", research_reused=True,
-        sim_graph_id="graph_other")
-    assert state.error == "PREPARE_REUSED"
-    assert "stage_notes" not in state.options
+    run = _drive_full(monkeypatch, "pipe_rs_lineage_prepare_off", research_reused=True,
+                      sim_graph_id="graph_other")
+    assert run.state.error == "PREPARE_REUSED"
+    assert "stage_notes" not in run.state.options
+    assert "lineage_invalidated" not in run.state.options
+
+
+def _save_base(pipeline_id, project_id):
+    base = po.PipelineState(pipeline_id=pipeline_id, prompt="base", mode="full",
+                            status="completed", graph_id="graph", project_id=project_id)
+    po.PipelineManager.ensure_dirs(pipeline_id)
+    po.PipelineManager.save(base)
+
+
+def test_scenario_fork_sharing_the_base_project_fails_closed(roots, monkeypatch):
+    """The guard never regenerates the base pipeline's ontology in place."""
+    _save_base("pipe_rs_fork_base", "proj")
+    run = _drive_full(monkeypatch, "pipe_rs_fork_shared", research_reused=False,
+                      options={"base_pipeline_id": "pipe_rs_fork_base",
+                               "scenario_overlay": {}, "scenario_label": "what-if"})
+    assert run.state.status == "failed"
+    assert "shared with base pipeline pipe_rs_fork_base" in run.state.error
+    assert "research_recomputed" in run.state.error
+    assert run.ontology_calls == []
+    assert run.project.ontology["entity_types"] == [{"name": "Company"}], "base untouched"
+
+
+def test_scenario_fork_graph_guard_fails_closed_on_the_shared_project(roots, monkeypatch):
+    _save_base("pipe_rs_fork_base_graph", "proj")
+    run = _drive_full(monkeypatch, "pipe_rs_fork_shared_graph", research_reused=True,
+                      options={"base_pipeline_id": "pipe_rs_fork_base_graph",
+                               "scenario_overlay": {},
+                               "lineage_invalidated": {po.STAGE_GRAPH: "ontology_recomputed"}})
+    assert run.state.status == "failed"
+    assert "graph artifact" in run.state.error
+    assert "shared with base pipeline pipe_rs_fork_base_graph" in run.state.error
+    assert run.project.graph_id == "graph"
+
+
+def test_fork_owning_its_project_rebuilds_normally(roots, monkeypatch):
+    """A fork whose project is not the base's (batch question forks) is unaffected."""
+    _save_base("pipe_rs_fork_base_other", "proj_anchor")
+    run = _drive_full(monkeypatch, "pipe_rs_fork_own", research_reused=False,
+                      options={"base_pipeline_id": "pipe_rs_fork_base_other"})
+    assert run.state.error == "GRAPH_REBUILT"
+    assert len(run.ontology_calls) == 1
 
 
 def test_graph_guard_honours_the_batch_shared_graph_declaration(monkeypatch):
@@ -587,9 +726,9 @@ def test_graph_guard_honours_the_batch_shared_graph_declaration(monkeypatch):
 def test_report_reuse_refused_when_report_simulation_differs(monkeypatch, tmp_path, guards):
     from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
 
-    monkeypatch.setattr(Config, "RESUME_LINEAGE_GUARDS", guards, raising=False)
     result = _exercise_prepare_run_resume(
-        monkeypatch, tmp_path, rebuild_prepare=False, report_simulation_id="sim_other")
+        monkeypatch, tmp_path, rebuild_prepare=False, report_simulation_id="sim_other",
+        lineage_flags=guards)
     assert result.state.status == "completed", result.state.error
     assert result.state.simulation_id == result.old_id
     if guards:
@@ -606,13 +745,94 @@ def test_report_reuse_kept_after_run_recompute_only_with_guards_off(monkeypatch,
     """Legacy (guards off): a re-executed RUN still reuses the stale report."""
     from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
 
-    monkeypatch.setattr(Config, "RESUME_LINEAGE_GUARDS", False, raising=False)
     result = _exercise_prepare_run_resume(
-        monkeypatch, tmp_path, rebuild_prepare=False, corrupt_run=True)
+        monkeypatch, tmp_path, rebuild_prepare=False, corrupt_run=True, lineage_flags=False)
     assert result.state.status == "completed"
     assert result.start_calls == [result.old_id]
     assert result.report_generations == []
     assert result.state.report_id == "report_existing"
+
+
+def _stamped_run_manifest(monkeypatch):
+    """A run.json from an earlier attempt: calendar-mode simulation, provider-0 stamps."""
+    monkeypatch.setattr(Config, "LLM_PROVIDER", "provider-a", raising=False)
+    monkeypatch.setattr(Config, "LLM_MODEL_NAME", "model-a", raising=False)
+    stamp = {"provider": "provider-0", "model_name": "model-0"}
+    return {
+        "resolved": {
+            "ontology": dict(stamp), "graph": dict(stamp), "report": dict(stamp),
+            "simulation": {"max_agents": 3, "total_rounds": 18, "calendar_unit": "week",
+                           "n_rounds": 18, "horizon_date": "2027-06-30"},
+        },
+        "attempts": [{"started_at": "t0", "run_shape_sha256": None, "drift_knobs": []}],
+    }
+
+
+def test_failed_report_rebuild_after_run_recompute_is_not_reused_next_attempt(
+        monkeypatch, tmp_path):
+    """RUN re-executed -> report refused -> preflight fails -> resume regenerates it.
+
+    Driven through the real ``_run`` twice with the real run.json writers, so it
+    also checks the attempt history, the RUN runtime fields and the provider
+    stamps across a provider switch.
+    """
+    from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
+
+    result = _exercise_prepare_run_resume(
+        monkeypatch, tmp_path, rebuild_prepare=False, corrupt_run=True,
+        report_preflight_failures=1, real_run_manifest=True,
+        prior_run_manifest=_stamped_run_manifest(monkeypatch))
+    assert result.state.status == "failed"
+    assert "报告前置探测失败" in result.state.error
+    assert result.start_calls == [result.old_id]
+    assert result.report_generations == []
+    assert result.state.report_id == "report_existing", "no new report was minted"
+    assert result.state.options["lineage_invalidated"] == {
+        po.STAGE_REPORT: "run_recomputed"}
+    # While the re-executed RUN was in flight, run.json held this attempt's fresh
+    # simulation block, not the replaced simulation's calendar/round fields.
+    in_flight = result.run_manifest_at_start[0]
+    assert in_flight["total_rounds"] is None
+    assert in_flight["max_agents"] == Config.OASIS_MAX_AGENTS
+    assert not {"calendar_unit", "n_rounds", "horizon_date"} & set(in_flight)
+    first = _manifest(result.pid)
+    assert first["resolved"]["simulation"]["total_rounds"] == 9
+    assert first["resolved"]["simulation"]["calendar_unit"] == "year"
+    assert first["resolved"]["simulation"]["horizon_date"] == "2035-12-31"
+
+    monkeypatch.setattr(Config, "LLM_PROVIDER", "provider-b", raising=False)
+    monkeypatch.setattr(Config, "LLM_MODEL_NAME", "model-b", raising=False)
+    resumed = _resume_attempt(result.pid)
+    assert resumed["status"] == "completed", resumed.get("error")
+    assert result.start_calls == [result.old_id], "RUN is reused on the next attempt"
+    assert result.report_generations == [result.old_id], "the stale report is regenerated"
+    assert resumed["report_id"] not in (None, "report_existing")
+    assert resumed["options"]["stage_notes"][po.STAGE_REPORT] == [
+        "reuse_refused: run_recomputed"] * 2
+    assert "lineage_invalidated" not in resumed["options"]
+    decisions = [(row["stage"], row["reused"]) for row in resumed["options"]["stage_reuse_v1"]]
+    assert decisions[-3:] == [(po.STAGE_PREPARE, True), (po.STAGE_RUN, True),
+                              (po.STAGE_REPORT, False)]
+
+    final = _manifest(result.pid)
+    assert len(final["attempts"]) == 3
+    resolved = final["resolved"]
+    # Reused stages keep the stamp of the attempt that produced them.
+    assert resolved["ontology"] == {"provider": "provider-0", "model_name": "model-0"}
+    assert resolved["graph"] == {"provider": "provider-0", "model_name": "model-0"}
+    assert resolved["report"] == {"provider": "provider-b", "model_name": "model-b"}
+    assert resolved["simulation"] == first["resolved"]["simulation"]
+
+
+def test_guard_refused_report_consumes_the_force_regen_flag(monkeypatch, tmp_path):
+    from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
+
+    result = _exercise_prepare_run_resume(
+        monkeypatch, tmp_path, rebuild_prepare=False, corrupt_run=True,
+        extra_options={"force_report_regen": "2026-09-30T00:00:00Z"})
+    assert result.state.status == "completed", result.state.error
+    assert result.report_generations == [result.old_id]
+    assert "force_report_regen" not in result.state.options
 
 
 # ------------------------------------------------------------- run.json
@@ -687,6 +907,12 @@ def test_flags_off_run_manifest_is_legacy(roots, monkeypatch):
     assert "stage_reuse_v1" not in state.options
     assert second._stage_reuse_this_attempt == []
     assert set(manifest) == set(po._build_run_manifest(state))
+    path = po.PipelineManager.manifest_path(state.pipeline_id)
+    with open(path, "rb") as fh:
+        before = fh.read()
+    second._reset_run_manifest_simulation(state)
+    with open(path, "rb") as fh:
+        assert fh.read() == before, "flags off: a RUN rerun leaves run.json alone"
 
 
 def test_recomputed_research_and_run_restamp_their_blocks(roots, monkeypatch):
@@ -710,7 +936,39 @@ def test_recomputed_research_and_run_restamp_their_blocks(roots, monkeypatch):
     restamped = _manifest(state.pipeline_id)["resolved"]
     assert restamped["research"]["model"] == "model-y"
     assert restamped["simulation"]["max_agents"] == 7
-    assert restamped["simulation"]["total_rounds"] == 12
+    # The recomputed RUN wrote no round count: attempt 1's 12 is not carried.
+    assert restamped["simulation"]["total_rounds"] is None
+
+
+def test_run_rerun_drops_the_replaced_simulations_runtime_fields(roots, monkeypatch):
+    """Calendar-mode attempt 1, then a rounds-mode RUN rerun: no calendar leftovers."""
+    _complete_quietly(monkeypatch)
+    state = po.PipelineState(pipeline_id="pipe_rs_simfields", prompt="q", mode="full")
+    po.PipelineManager.ensure_dirs(state.pipeline_id)
+    calendar = {"calendar_unit": "week", "n_rounds": 18, "horizon_date": "2027-06-30"}
+    first = po.PipelineOrchestrator()
+    first._write_run_manifest(state)
+    first._reset_run_manifest_simulation(state)
+    first._update_manifest(state, po.STAGE_RUN, total_rounds=18, temporal=calendar)
+    first._complete_stage(state, po.STAGE_RUN)
+    written = _manifest(state.pipeline_id)["resolved"]["simulation"]
+    assert {key: written.get(key) for key in ("total_rounds", *calendar)} == {
+        "total_rounds": 18, **calendar}
+
+    second = po.PipelineOrchestrator()
+    second._write_run_manifest(state)
+    carried = _manifest(state.pipeline_id)["resolved"]["simulation"]
+    assert carried["calendar_unit"] == "week", "carried until RUN decides to rerun"
+    second._reset_run_manifest_simulation(state)
+    in_flight = _manifest(state.pipeline_id)["resolved"]["simulation"]
+    assert in_flight["total_rounds"] is None
+    assert not set(calendar) & set(in_flight)
+    second._update_manifest(state, po.STAGE_RUN, total_rounds=10, temporal=None)
+    second._complete_stage(state, po.STAGE_RUN)
+    final = _manifest(state.pipeline_id)["resolved"]["simulation"]
+    assert final["total_rounds"] == 10
+    assert not set(calendar) & set(final)
+    assert second._attempt_sim_runtime() == {"total_rounds": 10}
 
 
 def test_manifest_sim_graph_feedback_follows_the_safety_pin(roots, monkeypatch):

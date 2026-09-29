@@ -496,10 +496,11 @@ class Config:
     # INFRA-7：resume 时 identity 旋钮漂移的处置。record（默认）= 告警 + 记录后继续；refuse = 以点名
     # 漂移旋钮的错误使本次 attempt 失败。provider/model 仅漂移永不拒绝。未知值按 record 处理并告警。
     RUN_SHAPE_DRIFT_POLICY = os.environ.get('RUN_SHAPE_DRIFT_POLICY', 'record').strip().lower()
-    # INFRA-7：resume 血统守卫。同一 attempt 内上游阶段被重算后，拒绝复用由其旧产物派生的下游产物
+    # INFRA-7：resume 血统守卫。上游阶段被重算后，拒绝复用由其旧产物派生的下游产物
     # （研究重算→本体/图谱重建；图谱重算或模拟绑定的 graph_id 不符→重建 PREPARE；RUN 重算或报告绑定的
-    # simulation_id 不符→重生成报告），在 options.stage_notes 留 'reuse_refused: <原因>' 面包屑。默认开：
-    # 以重算成本换取不复用陈旧产物（fail closed）；关闭 = 旧的逐阶段存在性复用。
+    # simulation_id 不符→重生成报告），在 options.stage_notes 留 'reuse_refused: <原因>' 面包屑。失效记录
+    # 持久化在 options.lineage_invalidated，直到该阶段真正重算才清除——下游重建失败后的下一次 resume
+    # 仍拒绝复用陈旧产物。默认开：以重算成本换取不复用陈旧产物（fail closed）；关闭 = 旧的逐阶段存在性复用。
     RESUME_LINEAGE_GUARDS = os.environ.get('RESUME_LINEAGE_GUARDS', 'true').strip().lower() == 'true'
 
     # —— EXECPLAN2 第三波改进旋钮（剩余 L-effort 新能力；全部默认关，留空即保持当前行为）——
