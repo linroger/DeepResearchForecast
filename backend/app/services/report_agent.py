@@ -11236,6 +11236,12 @@ class ReportAgent:
         }
 
 
+# The one publication_status reason that a later REPORT_FINAL_AUDIT_POLICY_VERSION bump adds to
+# an already-sealed report. EVAL-2: publishable_at_issue ignores exactly this reason, so a policy
+# bump never retroactively unpublishes settled history.
+FINAL_AUDIT_STALE_POLICY_REASON = "final audit policy is stale; deterministic replay required"
+
+
 class ReportManager:
     """
     报告管理器
@@ -11311,7 +11317,9 @@ class ReportManager:
         return os.path.join(cls._get_report_folder(report_id), "full_report.md")
 
     @classmethod
-    def load_structured_forecast(cls, report_id: str) -> Optional[Dict[str, Any]]:
+    def load_structured_forecast(
+        cls, report_id: str, *, allow_stale_policy: bool = False
+    ) -> Optional[Dict[str, Any]]:
         """Load an optional forecast only when the final audit seals its bytes.
 
         Legacy reports may be publishable without ``forecast.json``.  Merely
@@ -11321,6 +11329,10 @@ class ReportManager:
         artifact as present and valid and its SHA-256 matches the exact bytes.
         Customer-facing callers must additionally apply ``publication_status``
         to the report itself before exposing the returned object.
+
+        ``allow_stale_policy=True`` (EVAL-2 settlement, paired with
+        ``publishable_at_issue``) skips only the audit policy-version check;
+        every other seal check still applies.
         """
         try:
             # INFRA-10: an unsafe id raises UnsafeIdError (a ValueError) -> "not found".
@@ -11336,7 +11348,7 @@ class ReportManager:
         required_policy = int(getattr(
             Config, "REPORT_FINAL_AUDIT_POLICY_VERSION", 3
         ))
-        if audit.get("policy_version") != required_policy:
+        if not allow_stale_policy and audit.get("policy_version") != required_policy:
             return None
         structured = audit.get("structured_forecast")
         if not isinstance(structured, dict):
@@ -11768,9 +11780,7 @@ class ReportManager:
             Config, "REPORT_FINAL_AUDIT_POLICY_VERSION", 3
         ))
         if audit.get("policy_version") != required_policy:
-            result["reasons"].append(
-                "final audit policy is stale; deterministic replay required"
-            )
+            result["reasons"].append(FINAL_AUDIT_STALE_POLICY_REASON)
         if list(audit.get("hard_issues") or []):
             result["reasons"].append("final audit contains hard issues")
         if audit.get("markdown_sha256") != markdown_sha:
@@ -11868,6 +11878,25 @@ class ReportManager:
     @classmethod
     def is_publishable(cls, report_id: str, lang: Optional[str] = None) -> bool:
         return bool(cls.publication_status(report_id, lang).get("publishable"))
+
+    @classmethod
+    def publishable_at_issue(cls, report_id: str) -> Dict[str, Any]:
+        """Whether the primary report was publishable when it was issued.
+
+        ``publication_status`` with exactly one reason ignored: a stale final
+        audit policy. A later REPORT_FINAL_AUDIT_POLICY_VERSION bump asks for a
+        replay before new customer exposure, but it must not retroactively
+        unpublish history that settlement already scored (EVAL-2). Every other
+        reason still blocks. ``stale_policy_ignored`` says whether it applied.
+        """
+        status = cls.publication_status(report_id)
+        reasons = list(status.get("reasons") or [])
+        kept = [reason for reason in reasons if reason != FINAL_AUDIT_STALE_POLICY_REASON]
+        result = dict(status)
+        result["reasons"] = kept
+        result["stale_policy_ignored"] = len(kept) != len(reasons)
+        result["publishable"] = not kept
+        return result
 
     # ── PDF-1: full_report.md → full_report.pdf（pandoc+xelatex，回退 PyMuPDF；按 mtime 缓存）──
 

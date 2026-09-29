@@ -368,6 +368,10 @@ def recalibration_param(d: Optional[str] = None,
 # 幂等（(report_id, forecast_id, market_id) 唯一），并据此算持续 Brier。
 
 
+# EVAL-2: resolutions.jsonl rows that carry settlement-event facts (see append_market_resolution).
+MARKET_RESOLUTION_EVENT_SCHEMA_VERSION = 2
+
+
 def _resolutions_file(d: Optional[str] = None) -> str:
     return os.path.join(d or ledger_dir(), "resolutions.jsonl")
 
@@ -419,7 +423,8 @@ def append_market_resolution(*, report_id: str, forecast_id: str, market_id: str
                              market_p_at_research: Optional[float],
                              brier_contribution: Optional[float], resolved_at: str,
                              resolved_yes_price: Optional[float] = None,
-                             d: Optional[str] = None) -> Optional[Dict[str, Any]]:
+                             d: Optional[str] = None,
+                             extra: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """追加一条市场判定记录（jsonl）；**幂等且并发安全**——同一 (report_id, forecast_id,
     market_id) 已在账本里则跳过并返回 None，故 resolution_monitor 反复重跑不会重复入账、
     不污染 Brier；重复晋升也绝不改写首行（首次入账的 resolved_at/brier 保持原样）。
@@ -428,6 +433,11 @@ def append_market_resolution(*, report_id: str, forecast_id: str, market_id: str
     fcntl.flock，见 _RESOLUTIONS_WRITE_LOCK）——并发晋升同一判定恰有一个胜者。
     Best-effort：缺 report_id/forecast_id/market_id → None；落盘失败 → None（degrade-safe）。
     返回新写入的 entry；重复/失败 → None。
+
+    EVAL-2：非空 ``extra``（settlement event v2 的附加事实：outcome_known_at、
+    known_at_basis、prospective、scoring_eligible …）并入记录，``schema_version`` 置 2；
+    extra 不能改写上面的基础字段，幂等键与锁不变。extra 为空 → 记录与历史逐字节一致。
+    含非 JSON 值（NaN/不可序列化）的 extra → None，不写盘。
     """
     rid = str(report_id or "").strip()
     fid = str(forecast_id or "").strip()
@@ -447,6 +457,15 @@ def append_market_resolution(*, report_id: str, forecast_id: str, market_id: str
         "resolved_at": resolved_at,
         "schema_version": 1,
     }
+    if isinstance(extra, dict) and extra:
+        for k, v in extra.items():
+            if k not in entry:
+                entry[k] = v
+        entry["schema_version"] = MARKET_RESOLUTION_EVENT_SCHEMA_VERSION
+        try:
+            json.dumps(entry, ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError):
+            return None
     try:
         target = _resolutions_file(d)
         os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
@@ -468,14 +487,24 @@ def append_market_resolution(*, report_id: str, forecast_id: str, market_id: str
         return None
 
 
+def _is_market_brier_row(e: Any) -> bool:
+    """EVAL-2: a market-settled row (legacy rows carry no source_kind). Grace terminals
+    (source_kind 'terminal'), other label sources and 50/50 ambiguous settlements are
+    not market resolutions of a YES/NO outcome, so they never enter the market Brier."""
+    return (isinstance(e, dict) and e.get("source_kind") in (None, "polymarket")
+            and e.get("resolution_status") != "ambiguous")
+
+
 def market_brier_summary(d: Optional[str] = None,
                          entries: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """MON-1：对已入账的市场判定记录汇总持续 Brier（模型概率 vs 已判定真值）。
 
     每条记录的 ``brier_contribution`` = (model_p − y)²，y∈{0,1} 取自市场终态。返回
     ``{n_resolved, mean_brier}``（无记录时 mean_brier=None）。纯读取、无 LLM/无网络。
+    EVAL-2：只计市场判定行（见 _is_market_brier_row）；旧行不受影响。
     """
-    recs = entries if entries is not None else read_market_resolutions(d)
+    recs = [e for e in (entries if entries is not None else read_market_resolutions(d))
+            if _is_market_brier_row(e)]
     briers = [e.get("brier_contribution") for e in recs
               if isinstance(e.get("brier_contribution"), (int, float))]
     if not briers:

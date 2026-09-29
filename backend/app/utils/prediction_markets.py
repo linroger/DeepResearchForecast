@@ -28,9 +28,11 @@ import random
 import re
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import httpx
+
+from .point_in_time import parse_stamp_strict
 
 logger = logging.getLogger(__name__)
 
@@ -293,6 +295,10 @@ def _parse_resolution(raw: Any) -> Optional[Dict[str, Any]]:
     uma_raw = raw.get("umaResolutionStatus")
     if uma_raw is None:
         uma_raw = raw.get("umaResolutionStatuses")
+    if isinstance(uma_raw, (list, tuple)):
+        # EVAL-2: a status history sent as a real JSON array keeps its JSON form (never a
+        # Python repr), so current_uma_status can still read its last stage.
+        uma_raw = json.dumps(list(uma_raw), ensure_ascii=False, default=str)
     uma_status = str(uma_raw).strip() if uma_raw not in (None, "") else None
 
     names = _as_list(raw.get("outcomes"))
@@ -317,7 +323,62 @@ def _parse_resolution(raw: Any) -> Optional[Dict[str, Any]]:
         "resolved_yes_price": (round(resolved_yes_price, 4)
                                if resolved_yes_price is not None else None),
         "uma_status": uma_status,
+        # EVAL-2 (additive): when the market closed, and whether it settled at all.
+        "closed_time": _parse_closed_time(raw.get("closedTime")),
+        "resolution_status": _resolution_status(closed, resolved, uma_status, px),
     }
+
+
+# EVAL-2: a UMA-resolved market whose every outcome price sits at 0.5 ± this tolerance was
+# settled 50/50 (Polymarket's "unknown / ambiguous" resolution): final, but not a YES or NO.
+_AMBIGUOUS_PRICE_TOLERANCE = 0.01
+_UMA_RESOLVED_RE = re.compile(r"\bresolved\b", re.IGNORECASE)
+
+
+def _parse_closed_time(value: Any) -> Optional[str]:
+    """Gamma ``closedTime`` as a UTC ISO string, or None.
+
+    Only a date-time that names its zone is accepted (ISO with ``Z``/offset, or Gamma's
+    ``'YYYY-MM-DD HH:MM:SS+00'``); a bare date or a naive time would be a guess about when
+    the outcome became known. ``endDate`` is the scheduled end, never a known-at time, so it
+    is never used as a fallback."""
+    moment = parse_stamp_strict(value, allow_date=False)
+    return moment.isoformat() if moment is not None else None
+
+
+def current_uma_status(value: Any) -> str:
+    """EVAL-2: the current UMA stage of a Gamma ``uma_status``, lower-cased ('' when absent).
+
+    ``umaResolutionStatuses`` (the fallback key) is a stage history, a JSON-encoded
+    list such as ``'["proposed","resolved"]'`` or a list; its LAST entry is the current
+    stage, so an earlier proposal or dispute never keeps a resolved market pending. Any
+    other value is a single stage and is returned as it is."""
+    if isinstance(value, list):
+        stages: List[Any] = value
+    else:
+        text = str(value if value is not None else "").strip()
+        try:
+            parsed = json.loads(text) if text.startswith("[") else None
+        except ValueError:
+            parsed = None
+        if not isinstance(parsed, list):
+            return text.lower()
+        stages = parsed
+    last = stages[-1] if stages else None
+    return str(last).strip().lower() if last is not None else ""
+
+
+def _resolution_status(closed: bool, resolved: bool, uma_status: Optional[str],
+                       prices: List[Any]) -> str:
+    """'settled' (a YES/NO outcome converged), 'ambiguous' (UMA-resolved 50/50) or 'unknown'."""
+    if resolved:
+        return "settled"
+    if closed and _UMA_RESOLVED_RE.search(current_uma_status(uma_status)) and prices:
+        values = [_coerce_float(p) for p in prices]
+        if all(v is not None and abs(v - 0.5) <= _AMBIGUOUS_PRICE_TOLERANCE + 1e-9
+               for v in values):
+            return "ambiguous"
+    return "unknown"
 
 
 def _cap_per_event(ranked: List[Dict[str, Any]], max_per_event: int,
@@ -523,11 +584,14 @@ class PolymarketClient:
             out.append(m2)
         return out
 
-    def _fetch_fresh_markets(self, ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    def _fetch_fresh_markets(self, ids: List[str],
+                             answered: Optional[Set[str]] = None) -> Dict[str, Dict[str, Any]]:
         """按 id 批量拉 Gamma /markets，返回 {market_id: raw_row}；任一批失败只丢那一批。
 
         Gamma `/markets` 支持重复 id 参数（?id=a&id=b）批量取；httpx 会把 {"id": [...]}
         编码为重复 key。响应通常是市场对象数组，也容忍 {"markets": [...]} / {"data": [...]} 包装。
+        EVAL-2：传入 ``answered`` 时请求带显式 ``limit``（=本批 id 数，不吃 Gamma 的缺省页长），
+        并把判定源确实应答过的 id 加进去（见 ``_confirm_answered``）；失败批次的 id 不在其中。
         """
         out: Dict[str, Dict[str, Any]] = {}
         try:
@@ -538,7 +602,10 @@ class PolymarketClient:
             chunk = 20  # 分批大小非法 → 回落默认，避免 range 步长为 0 死循环
         for start in range(0, len(ids), chunk):
             batch = ids[start:start + chunk]
-            data = self._get("/markets", {"id": batch})
+            params: Dict[str, Any] = {"id": batch}
+            if answered is not None:
+                params["limit"] = len(batch)
+            data = self._get("/markets", params)
             if isinstance(data, list):
                 raw_rows = data
             elif isinstance(data, dict):
@@ -550,7 +617,51 @@ class PolymarketClient:
                     mid = str(raw.get("id") or "").strip()
                     if mid:
                         out[mid] = raw
+            if answered is not None:
+                answered.update(self._confirm_answered(batch, data, out))
         return out
+
+    @staticmethod
+    def _market_list(data: Any) -> Optional[List[Any]]:
+        """Gamma /markets 响应里的市场行列表；响应不是市场列表（失败 / 形状异常）→ None。"""
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            for key in ("markets", "data"):
+                if isinstance(data.get(key), list):
+                    return data[key]
+        return None
+
+    def _confirm_answered(self, batch: List[str], data: Any,
+                          out: Dict[str, Dict[str, Any]]) -> Set[str]:
+        """EVAL-2：本批里判定源确实应答过的 id（返回了该行，或确认无此市场）。
+
+        响应须是市场列表，且每行都是本批请求的 id（混进别的 id 说明 id 过滤没生效，
+        缺行什么也证明不了）。多 id 批次里缺的行可能只是被截断：逐个单 id（limit=1）
+        复查，单 id 请求应答且仍无该行才确认「无此市场」，复查拿到的行照常并入 ``out``。
+        一次请求失败绝不确认任何缺行，以免把存在的市场永久 terminal。"""
+        rows = self._market_list(data)
+        if rows is None:
+            return set()
+        returned = {str(raw.get("id") or "").strip() for raw in rows if isinstance(raw, dict)}
+        if not returned <= set(batch):
+            return set()
+        confirmed = set(returned)
+        omitted = [mid for mid in batch if mid not in returned]
+        if len(batch) == 1:
+            return confirmed | set(omitted)
+        for mid in omitted:
+            single = self._market_list(self._get("/markets", {"id": [mid], "limit": 1}))
+            if single is None:
+                continue
+            found = {str(raw.get("id") or "").strip(): raw
+                     for raw in single if isinstance(raw, dict)}
+            if not set(found) <= {mid}:
+                continue
+            if mid in found:
+                out[mid] = found[mid]
+            confirmed.add(mid)
+        return confirmed
 
     # -------------------------------------------------------- price history
     def fetch_price_history(self, clob_token_id: str, interval: str = "1d",
@@ -607,17 +718,30 @@ class PolymarketClient:
         的批量取数与降级纪律，逐条防御式解析终态：
 
             {market_id: {market_id, closed, resolved, resolved_outcome,
-                         resolved_yes_price, uma_status}}
+                         resolved_yes_price, uma_status, closed_time, resolution_status}}
 
         * closed              —— 市场是否已关闭（active 旗标在已判定市场上仍 True，不可靠）；
         * resolved            —— 是否可判定为确定结局（closed 且某结局价 ≥ HI，收敛到 0/1）；
         * resolved_outcome    —— 胜出结局名（"Yes"/"No"/…），无法判定为 None；
         * resolved_yes_price  —— 判定后 "Yes" 结局的价（胜出=~1 / 落败=~0），据此定二元真值；
-        * uma_status          —— 原样透传的 UMA 判定阶段字符串（诊断用；缺失为 None）。
+        * uma_status          —— 原样透传的 UMA 判定阶段字符串（诊断用；缺失为 None）；
+        * closed_time         —— EVAL-2：Gamma closedTime 的 UTC ISO（须带时区；缺失/不可解析
+                                 为 None，绝不以 endDate 代替）；
+        * resolution_status   —— EVAL-2：'settled' / 'ambiguous'（UMA 判定 50/50）/ 'unknown'。
 
         Degrade-safe：未启用 / 空输入 / 整批网络失败 → {}；单条字段缺失/形状异常 →
         该市场 resolved=False（unknown），绝不抛异常、绝不阻断监测主流程。
         """
+        return self.fetch_resolutions_answered(market_ids)[0]
+
+    def fetch_resolutions_answered(
+            self, market_ids: List[str]) -> Tuple[Dict[str, Dict[str, Any]], Set[str]]:
+        """EVAL-2：``(fetch_resolutions 的结果, 判定源确实应答过的 market id 集合)``。
+
+        应答 = 请求成功、响应是只含所请求 id 的市场列表，且返回了该行或经单 id 复查确认无此
+        市场（见 ``_confirm_answered``）。失败批次（网络 / 5xx / 非列表响应）、未经复查确认的
+        缺行与未启用时的 id 都不在集合里：结算据此只让「确认无数据」的条目走到 grace
+        terminal，绝不因一次瞬时失败或被截断的页永久终结条目。"""
         ids: List[str] = []
         seen: set = set()
         for mid in market_ids or []:
@@ -625,15 +749,16 @@ class PolymarketClient:
             if s and s not in seen:
                 seen.add(s)
                 ids.append(s)
+        answered: Set[str] = set()
         if not self.enabled or not ids:
-            return {}
-        fresh = self._fetch_fresh_markets(ids)
+            return {}, answered
+        fresh = self._fetch_fresh_markets(ids, answered=answered)
         out: Dict[str, Dict[str, Any]] = {}
         for mid, raw in fresh.items():
             parsed = _parse_resolution(raw)
             if parsed is not None:
                 out[mid] = parsed
-        return out
+        return out, answered
 
     @staticmethod
     def _normalize_market(raw: Any, matched_query: str,
