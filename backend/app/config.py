@@ -73,6 +73,13 @@ class Config:
     # SIM-9 / CACHE-1：默认开——进程内、精确键、有界 LRU；仅确定性 attempt-0 调用命中，
     # 故多样性不受影响。跨 seed/resume/fork 的 prepare/persona/config-gen 复用收益最大。
     LLM_CACHE_ENABLED = os.environ.get('LLM_CACHE_ENABLED', 'True').strip().lower() == 'true'
+    # INFRA-1：LLM 传输层严格归一化（默认开）。开启时 LLMClient 用 llm_text.strip_think 剥离
+    # 推理残留（闭合 <think> 块 + 孤立 </think> 前缀 + 被 max_tokens 截断的悬空 <think>；JSON 模式下
+    # 以 { / [ 开头的回复内的标签属正文、保留），并且
+    # finish_reason 为 length/content_filter/error 或带悬空 <think> 的回复不写入 LLMCache
+    # （否则截断回复会被永久重放）。默认开是安全的：正常回复（stop、无 think 标签）输出逐字节不变，
+    # 只影响残缺回复。false 恢复旧的正则剥离 + 无条件缓存。类型化异常与 usage 竞态修复不受此开关控制。
+    LLM_TRANSPORT_STRICT = os.environ.get('LLM_TRANSPORT_STRICT', 'true').strip().lower() == 'true'
     # 每个 run 的 token / 成本上限（0=不限）。超限后下一次 LLM 调用抛 BudgetExceeded，止血式中止。
     LLM_RUN_BUDGET_TOKENS = int(os.environ.get('LLM_RUN_BUDGET_TOKENS', '0') or '0')
     LLM_RUN_BUDGET_USD = float(os.environ.get('LLM_RUN_BUDGET_USD', '0') or '0')
