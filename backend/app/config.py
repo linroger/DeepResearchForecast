@@ -1230,6 +1230,22 @@ class Config:
     #             deerflow / agentic 为其别名（与 bridge 侧解析器的别名集合一致）。
     # 未知值按 v3 处理并告警一次；空值 = 默认 v3。引擎自身旋钮见 .env.example 的 RESEARCH_LINEAR_*。
     RESEARCH_ENGINE = os.environ.get('RESEARCH_ENGINE', 'v3').strip().lower()
+    # v3 quantitative-row page verification (RESEARCH-4): each quantitative.json row is
+    # checked against the fetched page of the source it cites and labelled verification =
+    # verified | unverified | snippet_only | none (absent = unchecked: no checkable number on
+    # a fetched page), plus a `verified` bool; values are never changed.  snippet_only means
+    # the source was never fetched or its stored page is unavailable; its search snippet is
+    # not checked, so the label says nothing about whether the number appears anywhere.
+    # Default true: deterministic, zero model calls, labels are additive keys.  The parent
+    # forwards it to the v3 child.
+    RESEARCH_VERIFIED_FACTS = os.environ.get('RESEARCH_VERIFIED_FACTS', 'true').strip().lower() == 'true'
+    # v3 reported/projected typing of quantitative rows (RESEARCH-4): epistemic_class,
+    # date_precision, target-date repair (a forecast's target date put in as_of_date),
+    # future-dated rows bucketed apart from fresh ones in meta.quant_freshness, and a
+    # date-semantics rule in the facts extraction prompt.  Default false: the facts prompt
+    # changes extraction behaviour and needs a live A/B first; off = byte-identical rows,
+    # prompt and meta.  The parent forwards it to the v3 child.
+    RESEARCH_QUANT_TYPING = os.environ.get('RESEARCH_QUANT_TYPING', 'false').strip().lower() == 'true'
     # PAR-2：编排器级「多角度并行研究轨」。>1 时研究阶段并行跑 K 个 DeerFlowResearchRunner
     # 子进程，每个带角度特化前缀（轨1=基线证据扫描，即原始 brief 逐字；轨2=基率/参照类/历史
     # 类比；轨3=行为者激励+反面证伪+市场定价），各写入 handoff/track_<k>/，随后确定性合并回

@@ -56,6 +56,7 @@ answered (see ``_Engine._require_model_output``).
 from __future__ import annotations
 
 import bisect
+import calendar
 import datetime as _dt
 import difflib
 import functools
@@ -71,6 +72,7 @@ import threading
 import time
 import traceback
 import unicodedata
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
@@ -84,6 +86,7 @@ __all__ = [
     "ENGINE_CORE",
     "ENGINE_VERSION",
     "Preset",
+    "classify_quant_row",
     "detect_language",
     "parse_report_scenarios",
     "postprocess_notes",
@@ -479,6 +482,14 @@ Field rules:
 - contested_claims: at most $max_contested claims on which the report shows sources disagreeing; status is contested, resolved or single-origin; sources are the markers of each position.
 - Write text values in $language.""")
 
+# Field rules the facts task appends after _T_FACTS's own (``_Engine._facts_task``).
+# RESEARCH_QUANT_TYPING: the legacy extraction contract's date semantics
+# (deerflow_research quant schema), which v3's one-line schema lost — models put
+# a forecast's target date in as_of_date, so it counted as fresh evidence.
+_FACTS_DATE_RULE = ("Dates: as_of_date is when the source published or last revised the number (YYYY, YYYY-MM "
+                    "or YYYY-MM-DD; never pad a year to -01-01); period_end is the period the number measures "
+                    "or, for a forecast or target, its target date; never put a target date in as_of_date.")
+
 _PROMPT_TEMPLATES: Mapping[str, string.Template] = {
     "pre_brief": _T_PRE_BRIEF,
     "scope": _T_SCOPE,
@@ -684,6 +695,12 @@ def _parse_knob(raw: str, default: Any) -> Any:
     if not math.isfinite(number):
         return None
     return int(number) if isinstance(default, int) else number
+
+
+def _env_flag(env: Mapping[str, Any] | None, name: str, default: bool) -> bool:
+    """Boolean knob from the run env: truthy/falsy words, anything else -> default."""
+    parsed = _parse_knob((env or {}).get(name, ""), bool(default))
+    return default if parsed is None else parsed
 
 
 def scheduled_tool_calls(values: Mapping[str, Any]) -> tuple[int, int]:
@@ -5602,19 +5619,41 @@ class _Engine:
             rows.append(entry)
         return rows
 
+    def _facts_task_addenda(self) -> list[str]:
+        """Field rules the enabled knobs append to the facts task, in canonical
+        order: the date rule (RESEARCH_QUANT_TYPING) first, later rules after it."""
+        addenda: list[str] = []
+        if _env_flag(self.env, "RESEARCH_QUANT_TYPING", False):
+            addenda.append(_FACTS_DATE_RULE)
+        return addenda
+
+    def _facts_task(self) -> str:
+        """The facts extraction task: ``_T_FACTS`` plus one field-rule line per
+        addendum (none: exactly the template)."""
+        task = _render(_T_FACTS, max_events=MAX_TIMELINE_ROWS, max_quant=MAX_QUANT_ROWS,
+                       max_contested=MAX_CONTESTED_ROWS, language=self.language)
+        return task + "".join(f"\n- {rule}" for rule in self._facts_task_addenda())
+
     def _structured(self, report_body: str, deadline: rg.Deadline) -> tuple[dict | None, dict | None]:
         """Actors + facts extraction over one shared cached report prefix,
         memoized by report hash so a resumed finalize never pays twice.
 
+        The facts memo also records the task's hash when addenda extend it
+        (``task_sha256``): it is reused only for the same task, and a memo
+        without the hash only while the task has no addenda.
+
         A reply still cut by the output cap after the wider retry keeps its
         repaired complete part and flags ``meta.<kind>_truncated``."""
         report_sha = _sha256(report_body)
+        facts_task = self._facts_task()
+        facts_task_sha = _sha256(facts_task) if self._facts_task_addenda() else None
         results: dict[str, dict] = {}
         truncated: list[str] = []
         for kind in ("actors", "facts"):
             cached = _read_json(self.work / "extract" / f"{kind}.json")
             if isinstance(cached, dict) and cached.get("report_sha256") == report_sha \
-                    and isinstance(cached.get("result"), dict):
+                    and isinstance(cached.get("result"), dict) \
+                    and (kind != "facts" or cached.get("task_sha256") == facts_task_sha):
                 results[kind] = cached["result"]
                 if cached.get("truncated"):
                     truncated.append(kind)
@@ -5625,9 +5664,7 @@ class _Engine:
             tasks = {
                 "actors": (_render(_T_ACTORS, actor_cap=self.actor_prompt_cap, language=self.language),
                            ("actors",)),
-                "facts": (_render(_T_FACTS, max_events=MAX_TIMELINE_ROWS, max_quant=MAX_QUANT_ROWS,
-                                  max_contested=MAX_CONTESTED_ROWS, language=self.language),
-                          ("quantitative_facts",)),
+                "facts": (facts_task, ("quantitative_facts",)),
             }
             if len(todo) >= 2:
                 self.gateway.prime(rg.build_messages(ENGINE_CORE, shared, PRIME_TASK), kind="json",
@@ -5644,8 +5681,10 @@ class _Engine:
                 results[kind], cut = result
                 if cut:
                     truncated.append(kind)
-                self.write_json(self.work / "extract" / f"{kind}.json",
-                                {"report_sha256": report_sha, "result": results[kind], "truncated": cut})
+                memo = {"report_sha256": report_sha, "result": results[kind], "truncated": cut}
+                if kind == "facts" and facts_task_sha:
+                    memo["task_sha256"] = facts_task_sha
+                self.write_json(self.work / "extract" / f"{kind}.json", memo)
         for kind in truncated:
             self.meta[f"{kind}_truncated"] = True
             self.log("warn", f"v3: the {kind} extraction reply was truncated at its output cap even with the "
@@ -5747,7 +5786,20 @@ class _Engine:
             quant = enriched
         ref_date = _parse_iso_date(plan.as_of) or _dt.datetime.now(_dt.timezone.utc).date()
         stale_days = _positive_int(self.env.get("RESEARCH_STALE_DAYS"), DEFAULT_STALE_DAYS)
-        quant_hist = self.bridge_call("annotate_recency_rows", quant, ref_date, stale_days, date_key="as_of_date")
+        verify = _env_flag(self.env, "RESEARCH_VERIFIED_FACTS", True)
+        typing = _env_flag(self.env, "RESEARCH_QUANT_TYPING", False)
+        if verify or typing:
+            # Typing tests dates against the day after the plan's as-of: plan.as_of
+            # is the UTC date fixed at plan time, and a run that crosses UTC midnight
+            # can cite a source published the next day (no target date, no
+            # future-dated actual).
+            self._quant_provenance(quant, ref_date + _dt.timedelta(days=1), verify=verify, typing=typing)
+        # Typed runs count forecast target dates as future-dated, never as fresh
+        # (by date, and by the as_of_is_target / published_after_as_of flags
+        # when typing stamped them).
+        recency = {"future_bucket": True} if typing else {}
+        quant_hist = self.bridge_call("annotate_recency_rows", quant, ref_date, stale_days, date_key="as_of_date",
+                                      **recency)
         timeline_hist = self.bridge_call("annotate_recency_rows", timeline, ref_date, stale_days, date_key="date")
         if isinstance(quant_hist, dict):
             self.meta["quant_freshness"] = quant_hist
@@ -5774,6 +5826,78 @@ class _Engine:
                 "timeline_count": len(timeline), "quantitative_count": len(quant),
                 "contested_count": len(contested), "has_situation_brief": bool(obj["situation_brief"]),
                 "_actors_obj": obj}
+
+    def _quant_provenance(self, quant: list[dict], as_of: _dt.date, *, verify: bool, typing: bool) -> None:
+        """Page verification (RESEARCH_VERIFIED_FACTS) and reported/projected
+        typing (RESEARCH_QUANT_TYPING) of the quant rows, in place, summarised
+        in ``meta.quant_provenance`` with only the enabled parts: ``rows``;
+        verification adds ``verification_hist`` (rows without a label as
+        ``unchecked``) and ``verified_ratio`` (verified / labelled rows; None
+        when none is); typing (:func:`classify_quant_row` against ``as_of``)
+        adds ``class_hist`` and the ``future_dated_reported`` /
+        ``period_unparsed`` / ``as_of_is_target`` / ``published_after_as_of``
+        flag counts.
+
+        Degrades safe, part by part: a failed part is recorded in
+        ``analytics_errors`` (``quant_provenance:verify`` / ``:typing``) and
+        left out of the summary, stamps no row (each part computes every row's
+        keys before it stamps any; a row without ``verification`` counts as
+        unchecked, never as verified), and the other part and the run go on."""
+        def part(name: str, step: Callable[[], None]) -> bool:
+            try:
+                step()
+            except Exception as exc:  # noqa: BLE001 — provenance labels never fail a finished report
+                error = f"{type(exc).__name__}: {exc}"
+                self.analytics_errors.append({"helper": f"quant_provenance:{name}", "error": error[:300]})
+                self.log("warn", f"v3: quantitative provenance ({name}) failed ({error})")
+                return False
+            return True
+
+        summary: dict[str, Any] = {"rows": len(quant)}
+        if verify and part("verify", lambda: self._verify_quant_rows(quant)):
+            labels = Counter(row.get("verification", "unchecked") for row in quant)
+            checked = len(quant) - labels["unchecked"]
+            summary["verification_hist"] = dict(sorted(labels.items()))
+            summary["verified_ratio"] = round(labels["verified"] / checked, 3) if checked else None
+        if typing and part("typing", lambda: _stamp_rows(quant, [classify_quant_row(row, as_of) for row in quant])):
+            summary["class_hist"] = dict(sorted(Counter(row["epistemic_class"] for row in quant).items()))
+            for flag in ("future_dated_reported", "period_unparsed", "as_of_is_target", "published_after_as_of"):
+                summary[flag] = sum(1 for row in quant if flag in row.get("epistemic_flags", ()))
+        if len(summary) > 1:
+            self.meta["quant_provenance"] = summary
+            self.log("ok", "v3: quantitative provenance: " + json.dumps(summary, ensure_ascii=False))
+
+    def _verify_quant_rows(self, quant: list[dict]) -> None:
+        """Stamp each row's ``verification`` against the source its
+        ``source_url`` resolves to in the ledger (values are never modified):
+
+        * ``verified`` — every number of the value is on the fetched page;
+        * ``unverified`` — the page was fetched but a number is not on it;
+        * ``snippet_only`` — the cited source was never fetched or its stored
+          page is unavailable (its search snippet is not checked: the label
+          says nothing about the number);
+        * ``none`` — no resolvable source.
+
+        A value without a checkable number on a fetched page gets no label
+        (absent = unchecked).  ``verified`` mirrors the label as a bool.
+        Every label is decided before any row is stamped."""
+        stamps: list[dict] = []
+        for row in quant:
+            url = row.get("source_url")
+            source = self.ledger.find(url) if url else None
+            pages = self.page_numbers(source["sid"]) if source and source.get("fetched") else None
+            if source is None:
+                verification = "none"
+            elif pages is None:
+                verification = "snippet_only"
+            else:
+                ok, detail = verify_quant_row(row, pages, str(source.get("snippet") or ""))
+                if detail == "not_checkable":
+                    stamps.append({})
+                    continue
+                verification = "verified" if ok else "unverified"
+            stamps.append({"verification": verification, "verified": verification == "verified"})
+        _stamp_rows(quant, stamps)
 
     def forecast_inputs(self) -> dict:
         return {"scenarios": [{"name": s.name, "probability": round(s.weight / 100.0, 4),
@@ -6101,6 +6225,246 @@ def normalize_quant(value: Any, sources: Sequence[Mapping[str, Any]]) -> list[di
         if len(rows) >= MAX_QUANT_ROWS:
             break
     return rows
+
+
+def _stamp_rows(rows: list[dict], stamps: Sequence[Mapping[str, Any]]) -> None:
+    """Merge each row's precomputed keys (``stamps``, one per row) in place."""
+    for row, keys in zip(rows, stamps, strict=True):
+        row.update(keys)
+
+
+# A stated date or period, matched whole: (pattern, precision).  "FY2025" is
+# taken as the calendar year; a day may carry an ISO time ("2029-12-31T00:00:00Z").
+_PERIOD_FORMS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?",
+                re.I), "day"),
+    (re.compile(r"(\d{4})-(\d{1,2})"), "month"),
+    (re.compile(r"(\d{4})[-\s]?Q([1-4])", re.I), "quarter"),
+    (re.compile(r"(\d{4})[-\s]?H([12])", re.I), "half"),
+    (re.compile(r"(?:FY\s?)?(\d{4})", re.I), "year"),
+)
+_MONTHS_PER = {"month": 1, "quarter": 3, "half": 6}
+# A year named inside free text ("2025-2035", "by 2030", "2030E"), optionally
+# closing a range with two digits ("2025/26", "FY2025-29").
+_PERIOD_YEAR_RE = re.compile(r"(?<!\d)((?:19|20|21)\d{2})(?:\s*[/-]\s*(\d{2})(?!\d))?(?!\d)")
+# Free-text spellings of a month, quarter or half ("Q4 2026", "2H 2026",
+# "2026-3Q", "Dec 2026", "2026年第三季度", "2026年上半年", "2026年3月"), matched
+# whole; a year's end ("end of 2026", "2026年底") is its December.  Named
+# groups: y (year) and q / h / m (quarter / half / month; none = December).
+_FREE_PERIOD_FORMS: tuple[re.Pattern[str], ...] = tuple(re.compile(pattern, re.I) for pattern in (
+    r"Q(?P<q>[1-4])[\s,/-]*(?P<y>\d{4})",
+    r"(?P<q>[1-4])Q[\s,/-]*(?P<y>\d{4})",
+    r"(?P<y>\d{4})[\s/-]*(?P<q>[1-4])Q",
+    r"H(?P<h>[12])[\s,/-]*(?P<y>\d{4})",
+    r"(?P<h>[12])H[\s,/-]*(?P<y>\d{4})",
+    r"(?P<y>\d{4})[\s/-]*(?P<h>[12])H",
+    r"(?P<m>jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?"
+    r"|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?[\s,]*(?P<y>\d{4})",
+    r"(?:(?:the\s+)?end(?:\s+of)?|year[\s-]?end)[\s,-]*(?P<y>\d{4})",
+    r"(?P<y>\d{4})[\s-]*year[\s-]?end",
+    r"(?P<y>\d{4})\s*年\s*(?:第\s*)?(?P<q>[1-4一二三四])\s*季度",
+    r"(?P<y>\d{4})\s*年\s*(?:Q(?P<q>[1-4])|H(?P<h>[12]))",
+    r"(?P<y>\d{4})\s*年\s*(?P<h>[上下])半年",
+    r"(?P<y>\d{4})\s*年\s*(?P<m>\d{1,2})\s*月份?",
+    r"(?P<y>\d{4})\s*年\s*年?[底末]",
+))
+_FREE_PERIOD_DIGITS = {"一": "1", "二": "2", "三": "3", "四": "4", "上": "1", "下": "2"}
+_MONTH_ABBREVIATIONS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+# period_end placeholders that state no period, like an empty field.
+_NO_PERIOD = frozenset({"n/a", "na", "none", "null", "unknown", "not applicable"})
+
+
+def _period_bounds(value: Any) -> tuple[_dt.date | None, _dt.date | None, str]:
+    """``(first day, last day, precision)`` of a stated date or period;
+    ``(None, None, "none")`` for anything else (see :func:`_period_end_date`)."""
+    text = str(value or "").strip()
+    for pattern, precision in _PERIOD_FORMS:
+        match = pattern.fullmatch(text)
+        if match is None:
+            continue
+        year = int(match.group(1))
+        try:
+            if precision == "day":
+                day = _dt.date(year, int(match.group(2)), int(match.group(3)))
+                return day, day, precision
+            if precision == "year":
+                return _dt.date(year, 1, 1), _dt.date(year, 12, 31), precision
+            months = _MONTHS_PER[precision]
+            last = months * int(match.group(2))
+            return (_dt.date(year, last - months + 1, 1),
+                    _dt.date(year, last, calendar.monthrange(year, last)[1]), precision)
+        except ValueError:  # month 13, Feb 30, year 0
+            return None, None, "none"
+    return None, None, "none"
+
+
+def _period_end_date(value: Any) -> _dt.date | None:
+    """The LAST day of a stated date or period, so a period never counts as
+    known before it ends: YYYY and FYyyyy → Dec 31, YYYY-MM → the month's last
+    day, YYYY-Qn / YYYY-Hn → the quarter's / half's last day, an ISO date (or
+    date-time) → itself; None for anything else."""
+    return _period_bounds(value)[1]
+
+
+def _free_period(text: str) -> str | None:
+    """The canonical spelling (YYYY-MM, YYYY-Qn or YYYY-Hn) of a whole
+    free-text month, quarter or half (:data:`_FREE_PERIOD_FORMS`), else None."""
+    for pattern in _FREE_PERIOD_FORMS:
+        match = pattern.fullmatch(text)
+        if match is None:
+            continue
+        parts = match.groupdict()
+        for kind in ("q", "h"):
+            if parts.get(kind):
+                return f"{parts['y']}-{kind.upper()}{_FREE_PERIOD_DIGITS.get(parts[kind], parts[kind])}"
+        month = parts.get("m") or "12"
+        number = int(month) if month.isdigit() else _MONTH_ABBREVIATIONS.index(month[:3].lower()) + 1
+        return f"{parts['y']}-{number:02d}"
+    return None
+
+
+def _loose_period_bounds(value: Any) -> tuple[_dt.date | None, _dt.date | None, str]:
+    """:func:`_period_bounds`, else a whole free-text month, quarter or half
+    at its own precision (:func:`_free_period`: "Q4 2026", "Dec 2026",
+    "2026年上半年"), else the years free text names — a range, "by 2030",
+    "2030E", "FY2025-29" — read as Jan 1 of the earliest to Dec 31 of the
+    latest (precision ``year``); ``(None, None, "none")`` without one."""
+    bounds = _period_bounds(value)
+    if bounds[1] is not None:
+        return bounds
+    free = _free_period(str(value or "").strip())
+    bounds = _period_bounds(free) if free else bounds
+    if bounds[1] is not None:
+        return bounds
+    years: list[int] = []
+    for match in _PERIOD_YEAR_RE.finditer(str(value or "")):
+        year = int(match.group(1))
+        years.append(year)
+        if match.group(2):
+            closing = year - year % 100 + int(match.group(2))
+            if closing > year:
+                years.append(closing)
+    if not years:
+        return None, None, "none"
+    return _dt.date(min(years), 1, 1), _dt.date(max(years), 12, 31), "year"
+
+
+def classify_quant_row(row: Mapping[str, Any], as_of: _dt.date) -> dict:
+    """Reported/projected typing of one quantitative row against the research
+    as-of date — the program's one classifier (report, forecasting and
+    hindcast consumers reuse it).  Returns only NEW keys; evidence fields are
+    never rewritten.  ``as_of`` is the last day a cited source can have
+    published on (the v3 engine passes the day after its plan date).
+
+    The reference date is the end of ``period_end``, else of ``as_of_date``
+    (:func:`_period_end_date`; free text is read as a whole month, quarter or
+    half, else by the years it names, :func:`_loose_period_bounds`).
+    ``forecast`` and ``target`` are projected, as is an ``estimate`` whose
+    reference date is after as-of.  Any other ``actual`` or ``estimate`` is
+    reported, except that it is unknown
+
+    * with flag ``future_dated_reported`` when its reference date, or the
+      first day of its ``as_of_date``, is after as-of (no source publishes
+      after as-of);
+    * with flag ``period_unparsed`` (set on a row of any type) when
+      ``period_end`` states a period whose end cannot be read — never the
+      publication date in its place, so a period never counts as known
+      before it ends.
+
+    A missing or other type is unknown.
+
+    No source publishes after the as-of date, so an ``as_of_date`` that lies
+    wholly after it (its FIRST day is later) is no publication date.  Target
+    repair: a projected row holds a target date there and is flagged
+    ``as_of_is_target``; when ``period_end`` gives no date, that
+    ``as_of_date`` becomes its ``target_date``.  Any other row is flagged
+    ``published_after_as_of`` (typed recency then counts both future-dated,
+    never fresh).  A coarse date of the current period ("2026" in 2026) may
+    be a publication date and is left alone.
+
+    Keys: ``epistemic_class`` (reported/projected/unknown), ``date_precision``
+    of the reference date (day/month/quarter/half/year/none), ``target_date``
+    (repair only) and ``epistemic_flags`` (only when non-empty).
+    """
+    if isinstance(as_of, _dt.datetime):
+        as_of = as_of.date()
+    period_text = str(row.get("period_end") or "").strip()
+    _, period, period_precision = _loose_period_bounds(period_text)
+    period_unparsed = (period is None and any(ch.isalnum() for ch in period_text)
+                       and period_text.casefold() not in _NO_PERIOD)
+    stated_start, stated_end, stated_precision = _loose_period_bounds(row.get("as_of_date"))
+    if period is not None:
+        reference, precision = period, period_precision
+    elif period_unparsed:
+        reference, precision = None, "none"
+    else:
+        reference, precision = stated_end, stated_precision
+    after_as_of = reference is not None and reference > as_of
+    stated_after_as_of = stated_start is not None and stated_start > as_of
+    value_type = str(row.get("value_type") or "").strip().lower()
+    flags: list[str] = []
+    if value_type in ("forecast", "target") or (value_type == "estimate" and after_as_of):
+        epistemic_class = "projected"
+    elif value_type in ("actual", "estimate"):
+        epistemic_class = "unknown" if after_as_of or stated_after_as_of or period_unparsed else "reported"
+        if after_as_of or stated_after_as_of:
+            flags.append("future_dated_reported")
+    else:
+        epistemic_class = "unknown"
+    if period_unparsed:
+        flags.append("period_unparsed")
+    out: dict[str, Any] = {"epistemic_class": epistemic_class, "date_precision": precision}
+    if stated_after_as_of and epistemic_class == "projected":
+        flags.append("as_of_is_target")
+        if period is None:
+            out["target_date"] = str(row.get("as_of_date")).strip()
+    elif stated_after_as_of:
+        flags.append("published_after_as_of")
+    if flags:
+        out["epistemic_flags"] = flags
+    return out
+
+
+# A number in exponent notation ("1.2E6"): the fact tokenizer reads its parts
+# as separate numbers.
+_EXPONENT_RE = re.compile(r"\d[eE][+-]?\d")
+
+
+def verify_quant_row(row: Mapping[str, Any], page_numbers: frozenset[str] | None,
+                     snippet: str) -> tuple[bool, str]:
+    """Whether a quantitative row's number is on its cited source, under the
+    rules of a VERIFIED finding (:func:`_number_on_pages`: a percentage as a
+    page percentage, a unit-bearing figure in its unit class, any scale).
+
+    Every number token of ``"{value} {unit}"`` on the fetched page
+    (``page_numbers``: its :func:`page_number_set`; None when never fetched
+    or unavailable) → ``(True, "page")``; else all in the search ``snippet``
+    → ``(False, "snippet_only")``; else ``(False, "none")``.  A value without a
+    checkable number (>= 2 digits or a decimal) → ``(False, "not_checkable")``,
+    as is one in exponent notation, whose mantissa alone would be matched (a
+    float value is written out positionally first: 1.2e-05 → 0.000012).
+    """
+    value = row.get("value")
+    if isinstance(value, float):
+        value = format(Decimal(repr(value)), "f")
+    text = f"{value} {row.get('unit') or ''}"
+    tokens = fact_number_tokens(text)
+    if not tokens or _EXPONENT_RE.search(text):
+        return False, "not_checkable"
+    values = fact_number_values(text)
+    percents = fact_percent_tokens(text)
+    units = fact_unit_tokens(text)
+
+    def found(available: frozenset[str]) -> bool:
+        return all(_number_on_pages(token, available, values.get(token, frozenset()),
+                                    percent=token in percents, units=units.get(token, frozenset()))
+                   for token in tokens)
+
+    if page_numbers is not None and found(page_numbers):
+        return True, "page"
+    if snippet and found(page_number_set(snippet)):
+        return False, "snippet_only"
+    return False, "none"
 
 
 def normalize_contested(value: Any, sources: Sequence[Mapping[str, Any]]) -> list[dict]:
