@@ -5538,6 +5538,15 @@ class ReportAgent:
     # Same token grammar plus whole date expressions (translation_dates), placed
     # after comments/code/link targets/URLs (their bytes stay untouched) and before
     # citations/numbers (so a date's numerals are captured by the date, not loose).
+    # Fused letter-digit identifiers (FY2030, Q3, H1, H100, 5G, 10k, 1e) are kept
+    # verbatim too: translated, they get restructured ("FY2030" → "2030财年") and a
+    # numeral the source never had as a number trips the integrity guards.
+    # Ordinals ("14th") and decades ("2030s") are excluded — they translate
+    # naturally around a protected number ("第14", "2030年代").
+    _TRANSLATION_ALNUM_IDENTIFIER = (
+        r"(?<![A-Za-z0-9_])(?!\d+(?:st|nd|rd|th)(?![A-Za-z0-9]))(?!\d{4}s(?![A-Za-z0-9]))"
+        r"(?=[A-Za-z0-9]*[A-Za-z])(?=[A-Za-z0-9]*\d)[A-Za-z0-9]+(?![A-Za-z0-9_])"
+    )
     _TRANSLATION_INLINE_PROTECTED_WITH_DATES_RE = re.compile(
         r"<!--.*?-->"
         r"|`[^`\n]+`"
@@ -5545,7 +5554,8 @@ class ReportAgent:
         r"|https?://[^\s<>()]+"
         r"|" + _tdates.DATE_PATTERN
         + r"|[\[【]\s*S\d+(?:-[A-Za-z])?\s*[\]】]"
-        r"|(?<![A-Za-z0-9_])[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)"
+        r"|" + _TRANSLATION_ALNUM_IDENTIFIER
+        + r"|(?<![A-Za-z0-9_])[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)"
         r"(?:\.\d+)?(?:\s*%)?",
         re.IGNORECASE | re.DOTALL,
     )

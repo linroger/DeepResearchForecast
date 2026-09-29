@@ -340,3 +340,44 @@ def test_live_owner_is_trusted_through_a_long_section(reports_tmp, monkeypatch):
     # Unknown owners keep the 15-minute heartbeat rule.
     assert _runtime("worker-7", 20) == "interrupted"
     assert _runtime("worker-7", 5) == "generating"
+
+
+def test_fused_letter_digit_identifiers_are_kept_verbatim():
+    text = "FY2030 deliveries in Q3 2026 on H100 and 5G, 10k users, the 14th plan, the 2030s"
+    hidden, mapping = ReportAgent._protect_translation_tokens(text, date_target="zh")
+    kept = {raw for placeholder, raw in mapping if placeholder.startswith("⟦X")}
+    assert kept == {"FY2030", "Q3", "H100", "5G", "10k"}
+    numbers = {raw for placeholder, raw in mapping if placeholder.startswith("⟦P")}
+    assert {"2026", "14", "2030"} <= numbers  # ordinals and decades stay natural
+    assert "FY2030" not in hidden
+
+
+def test_fiscal_year_forecast_field_localizes(reports_tmp):
+    """report_c83f21765b96: GLM rewrote raw "FY2030" as "2030财年", adding a loose 2030
+    the guard rejected, so the dashboard field stayed English."""
+    class GlmLike:
+        model = "fake"
+        provider = "fake"
+
+        def chat(self, messages=None, temperature=0.0, max_tokens=4096, tier="strong", **_kw):
+            system, user = messages[0]["content"], messages[-1]["content"]
+
+            def _zh(text):
+                text = text.replace("FY2030", "2030财年")  # what GLM does to a raw FY
+                return text.replace("annual report", "年报").replace("deliveries", "交付量")
+
+            if "same alphabetic keys" in system:
+                return json.dumps({k: _zh(v) for k, v in json.loads(user).items()},
+                                  ensure_ascii=False)
+            return _zh(user)
+
+        def chat_json(self, messages=None, **_kw):
+            return {}
+
+    forecast = {"binary_forecasts": [{
+        "id": "F15", "probability": 0.4,
+        "resolution_criteria": "annual report FY2030 deliveries",
+    }]}
+    localized, summary = _worker(GlmLike())._localize_forecast(forecast, "zh")
+    assert localized["binary_forecasts"][0]["resolution_criteria"] == "年报 FY2030 交付量"
+    assert summary["complete"] is True
