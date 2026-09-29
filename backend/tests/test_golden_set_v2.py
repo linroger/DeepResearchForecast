@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -249,6 +250,56 @@ def test_leak_findings_structural():
     market = _v2_row(resolution_note=None, resolution_evidence=_market_evidence(1.0),
                      resolution_criteria="YES if the jury returns a guilty verdict on >=1 count in 2030.")
     assert gs.leak_findings(market) == []
+    assert gs.leak_findings(dict(market, resolution_evidence=dict(_market_evidence(1.0), raw_value=1.0))) == []
+    # ... but only the price is exempt: any other raw_value key of a settlement is checked
+    winner = dict(_market_evidence(1.0), raw_value={"resolved_yes_price": 1.0, "winner": "Trump"})
+    assert gs.leak_findings(_v2_row(resolution_note=None, resolution_evidence=winner,
+                                    resolution_criteria="YES if the market settles Yes, naming Trump the winner.")) \
+        == [{"code": "outcome_in_visible_text", "field": "resolution_criteria", "text": "Trump"}]
+
+    # a raw number glued to a unit, a currency or an ordinal suffix still leaks
+    def numeric(raw, threshold, criteria):
+        return _v2_row(resolution_note=None, resolution_criteria=criteria, resolution_evidence={
+            "kind": "numeric_threshold", "source_url": "https://example.org/v", "raw_value": {"v": raw},
+            "rule": {"field": "v", "comparator": ">", "threshold": threshold}})
+    for raw, threshold, criteria in (
+            (50, 0, "YES if the FOMC lowers the federal funds target range at its March 2030 meeting, cutting 50bps."),
+            (3.47, 3, "YES if Nvidia's market cap closes above $3T in 2030, peaking at $3.47T."),
+            (53, 51, "YES if the Blue caucus holds >=51 seats, taking its 53rd seat in 2030."),
+            (1e-05, 0, "YES if the error rate stays above 0 all year, ending at 0.00001.")):
+        assert gs.leak_findings(numeric(raw, threshold, criteria)) == [
+            {"code": "outcome_in_visible_text", "field": "resolution_criteria", "text": str(raw)}], criteria
+    # the threshold is masked first, so a raw 5 never matches the fraction of a "$3.5T" threshold
+    assert gs.leak_findings(numeric(5, 3.5, "YES if the cap closes above $3.5T in 2030.")) == []
+    assert gs.leak_findings(numeric(3.47, 3, "YES if the cap closes above $3T in 2030.")) == []
+
+    # the one-sentence rule fails closed on every shape that can hide a second sentence
+    for criteria, extra in (
+            ("YES if the caucus holds >=51 seats\nThey won 53", "They won 53"),
+            ("YES if the caucus holds >=51 seats.They won 53", "They won 53"),
+            ("YES if group A. They won.", "They won."),
+            ("YES if it passes by Dec. It passed.", "It passed."),
+            ("YES if the deal closes with Acme Inc. It closed in May.", "It closed in May."),
+            ("YES if the caucus holds >=51 seats。他们赢了53席。", "他们赢了53席。"),
+            ("YES if the caucus holds >=51 seats！They won", "They won")):
+        assert gs.leak_findings(_v2_row(resolution_criteria=criteria, resolution_note=None,
+                                        resolution_evidence=None)) == [
+            {"code": "extra_sentence", "field": "resolution_criteria", "text": extra}], criteria
+    for criteria in ("YES if it passes by Dec. 31, 2030.", "YES if it passes in Jan. or Feb. 2030.",
+                     "YES if the deal closes before Acme Inc. shares delist in 2030.",
+                     "YES if the U.S.Senate confirms J.K. Rowling's nominee in 2030.",
+                     "YES if BRK.B and ASP.NET both exist at the end of 2030."):
+        assert gs.split_sentences(criteria) == [criteria]
+    assert gs.split_sentences("YES if it holds.\n") == ["YES if it holds."]
+    # full-width parentheses are parentheticals too, reviewed only when listed verbatim
+    fullwidth = _v2_row(resolution_note=None, resolution_evidence=None,
+                        resolution_criteria="YES if the caucus holds >=51 seats （they won 53）.")
+    assert gs.leak_findings(fullwidth) == [
+        {"code": "unreviewed_parenthetical", "field": "resolution_criteria", "text": "（they won 53）"}]
+    assert gs.leak_findings(dict(fullwidth, reviewed_parentheticals=["（they won 53）"])) == []
+    assert gs.validate_question(dict(fullwidth, reviewed_parentheticals=["（they won 53）"])) == []
+    assert _codes(gs.leak_findings(_v2_row(resolution_criteria="YES if the caucus holds （51 seats."))) == [
+        "unbalanced_parenthesis"]
 
     # no marker-word list: "cut" and "convicted" in criteria are legitimate
     for question, criteria in (
@@ -274,6 +325,17 @@ def test_leak_findings_structural():
         "YES if the Senate vote is not no.", "It passed."]
     assert _codes(gs.leak_findings(_v2_row(resolution_criteria="YES if the referendum result is no. It was."))) \
         == ["extra_sentence"]
+
+
+def test_split_sentences_is_linear():
+    """Adversarial runs that made the earlier splitter quadratic (~20 s at 100 KB) stay fast."""
+    started = time.perf_counter()
+    for text in ("a. " * 100_000, "." * 300_000, "Donald J. " * 30_000, "x" * 300_000 + " . y",
+                 "Donald" + " " * 300_000 + "J. Trump"):
+        assert gs.split_sentences(text)
+    assert gs.leak_findings({"question": "Q?", "resolution_criteria": "YES if " + " ".join(
+        f"a{i}." for i in range(30_000))})
+    assert time.perf_counter() - started < 5.0
 
 
 # --------------------------------------------------------------- recompute
@@ -324,20 +386,26 @@ def test_recompute_label_kinds_and_pre_registered_tolerance():
     assert gs.recompute_label(touched(0, "count")) == "YES"
     assert gs.recompute_label(touched(3.0, "value")) == "UNVERIFIABLE"   # a series needs an aggregation
 
-    # dead band only from a pre-registered resolution_tolerance (inclusive, symmetric)
-    near = _seat_evidence(51.4)
+    # dead band only from a pre-registered resolution_tolerance (inclusive, symmetric),
+    # and only on numeric_threshold evidence
+    def measured(value, **rule):
+        return dict(_seat_evidence(value, **rule), kind="numeric_threshold")
+    near = measured(51.4)
     assert gs.recompute_label(_v2_row(resolution_evidence=near)) == "YES"                 # default: no band
-    band = {"epsilon_abs": 0.5, "basis": "provisional seat counts are revised by up to half a seat"}
+    band = {"epsilon_abs": 0.5, "basis": "measurement_revision"}
     assert gs.recompute_label(_v2_row(resolution_evidence=near, resolution_tolerance=band)) == "AMBIGUOUS"
-    assert gs.recompute_label(_v2_row(resolution_evidence=_seat_evidence(51.5),
-                                      resolution_tolerance=band)) == "AMBIGUOUS"
-    assert gs.recompute_label(_v2_row(resolution_evidence=_seat_evidence(51.6),
-                                      resolution_tolerance=band)) == "YES"
-    rel = {"epsilon_rel": 0.01, "basis": "1% revision band"}                              # eps = 0.51
-    assert gs.recompute_label(_v2_row(resolution_evidence=_seat_evidence(50.5), resolution_tolerance=rel)) \
-        == "AMBIGUOUS"
+    assert gs.validate_question(_v2_row(resolution_evidence=near, resolution_tolerance=band)) == []
+    assert gs.recompute_label(_v2_row(resolution_evidence=measured(51.5), resolution_tolerance=band)) == "AMBIGUOUS"
+    assert gs.recompute_label(_v2_row(resolution_evidence=measured(51.6), resolution_tolerance=band)) == "YES"
+    rel = {"epsilon_rel": 0.01, "basis": "source_disagreement"}                           # eps = 0.51
+    assert gs.recompute_label(_v2_row(resolution_evidence=measured(50.5), resolution_tolerance=rel)) == "AMBIGUOUS"
+    # epsilon 0 for counts: a band could only turn an exact 51 against >=51 AMBIGUOUS
+    count_band = _v2_row(resolution_evidence=_seat_evidence(51), resolution_tolerance={
+        "epsilon_abs": 1, "basis": "recount"})
+    assert gs.recompute_label(count_band) == "YES"
+    assert any("applies only to numeric_threshold" in e for e in gs.validate_question(count_band))
     # a band written next to the raw value is ignored by recompute and rejected by validation
-    post_hoc = _v2_row(resolution_evidence=_seat_evidence(51.4, epsilon_abs=0.5))
+    post_hoc = _v2_row(resolution_evidence=measured(51.4, epsilon_abs=0.5))
     assert gs.recompute_label(post_hoc) == "YES"
     assert any("pre-registered" in e for e in gs.validate_question(post_hoc))
     both = {"epsilon_abs": 0.5, "epsilon_rel": 0.01, "basis": "x"}
@@ -349,6 +417,19 @@ def test_recompute_label_kinds_and_pre_registered_tolerance():
     # registered before any evidence exists: allowed
     assert gs.validate_question(_v2_row(resolution_evidence=None, verification="unverified",
                                         resolution_tolerance=band)) == []
+
+    # an inverted window cannot be evaluated: it would empty every series and label every event NO
+    inverted = {"window_start": "2030-12-31", "window_end": "2030-01-01"}
+    inverted_event = occurrence({"occurred": True, "occurred_at": "2030-06-01T00:00:00Z"}, **inverted)
+    assert gs.recompute_label(inverted_event) == "UNVERIFIABLE"
+    assert any("window_start must not be after window_end" in e for e in gs.validate_question(inverted_event))
+    inverted_sum = _v2_row(resolution_evidence={
+        "kind": "numeric_threshold", "source_url": "https://example.org/s", "raw_value": {"v": series},
+        "rule": {"field": "v", "comparator": ">=", "threshold": 0, "aggregation": "sum", **inverted}})
+    assert gs.recompute_label(inverted_sum) == "UNVERIFIABLE"
+    # a date-only window end covers its whole day, sub-second times included
+    assert gs.recompute_label(occurrence({"occurred": True, "occurred_at": "2030-12-31T23:59:59.500Z"},
+                                         **window)) == "YES"
 
     # mismatch semantics: evidence that disagrees, or cannot recompute, is a data defect
     assert gs.recompute_mismatch(_v2_row()) is None
@@ -380,6 +461,14 @@ def test_validate_rejects_as_of_equal_resolution():
     early = _v2_row(as_of_date="2030-11-05", resolve_time="2030-11-05T23:59:59Z",
                     resolve_time_precision="minute")
     assert any("after the end of the as_of day" in e for e in gs.validate_question(early))
+    sub_second = _v2_row(as_of_date="2030-11-05", resolution_date="2030-11-07",
+                         resolve_time="2030-11-05T23:59:59.500Z", resolve_time_precision="minute")
+    assert any("after the end of the as_of day" in e for e in gs.validate_question(sub_second))
+    assert gs.validate_question(dict(sub_second, resolution_date="2030-11-06",
+                                     resolve_time="2030-11-06T00:00:00Z")) == []
+    # resolution_date is resolve_time's UTC calendar date at every precision
+    elsewhere = _v2_row(resolve_time="2031-06-01T10:00:00Z", resolve_time_precision="minute")
+    assert any("must fall on resolution_date 2030-11-06" in e for e in gs.validate_question(elsewhere))
 
     missing = gs.validate_question({"id": "x", "resolved_outcome": True})
     for field in ("question", "resolution_criteria", "as_of_date", "resolve_time", "event_cluster"):
@@ -403,6 +492,25 @@ def test_validate_rejects_as_of_equal_resolution():
         _v2_row(resolution_evidence=dict(_seat_evidence(53), kind="vibes"))))
     no_field = dict(_seat_evidence(53), rule={"comparator": ">=", "threshold": 51})
     assert any("rule.field must name" in e for e in gs.validate_question(_v2_row(resolution_evidence=no_field)))
+
+    # malformed numbers and timestamps are validation errors or UNVERIFIABLE, never a crash
+    huge = _v2_row(resolution_evidence=_seat_evidence(10 ** 400))
+    assert gs.recompute_label(huge) == "UNVERIFIABLE" and gs.leak_findings(huge) == []
+    assert gs.validate_question(huge) == []                   # shape is fine; recompute_mismatch flags it
+    assert "UNVERIFIABLE" in gs.recompute_mismatch(huge)
+    assert "resolution_evidence.rule.threshold must be a finite number" in gs.validate_question(
+        _v2_row(resolution_evidence=_seat_evidence(53, threshold=10 ** 400)))
+    assert any("epsilon_abs must be a finite number" in e for e in gs.validate_question(
+        _v2_row(resolution_tolerance={"epsilon_abs": 10 ** 400, "basis": "b"})))
+    listed = _v2_row(resolution_evidence=_seat_evidence(53, comparator=[">="]))
+    assert gs.recompute_label(listed) == "UNVERIFIABLE"
+    assert any("comparator must be one of" in e for e in gs.validate_question(listed))
+    far = _v2_row(resolution_evidence={          # shifting this bound to UTC leaves datetime's range
+        "kind": "event_occurrence", "source_url": "https://example.org/e",
+        "raw_value": {"occurred": True, "occurred_at": "2030-06-01T00:00:00Z"},
+        "rule": {"window_start": "0001-01-01T00:00:00+01:00"}})
+    assert any("window_start must be" in e for e in gs.validate_question(far))
+    assert gs.recompute_label(far) == "UNVERIFIABLE"
 
     # strict: verified evidence required; every committed row is legacy_unverified
     for q in _committed()["questions"]:
@@ -439,6 +547,19 @@ def test_load_golden_set_v1_compat_and_recompute_mismatch_raises(tmp_path, monke
         ge.load_golden_set(_v2_file(tmp_path / "same_day.json", [_v2_row(as_of_date="2030-11-06")]))
     with pytest.raises(ValueError, match="unsupported golden _meta.schema_version 3"):
         ge.load_golden_set(_write(tmp_path / "v3.json", {"_meta": {"schema_version": 3}, "questions": v1_rows}))
+
+    # a verified row whose criteria spell the raw value with a unit never loads
+    fed_cut = _v2_row(id="fed-2030-03-cut", resolution_note=None, resolution_criteria=(
+        "YES if the FOMC lowers the federal funds target range at its March 2030 meeting, cutting 50bps."),
+        resolution_evidence={"kind": "numeric_threshold", "source_url": "https://example.org/fomc",
+                             "raw_value": {"cut_bps": 50},
+                             "rule": {"field": "cut_bps", "comparator": ">", "threshold": 0}})
+    with pytest.raises(ValueError, match=r"'fed-2030-03-cut'.*outcome_in_visible_text in resolution_criteria: 50"):
+        ge.load_golden_set(_v2_file(tmp_path / "fed.json", [fed_cut]))
+    # a raw value too large for a float is a clean mismatch (ValueError), never an OverflowError
+    huge = _v2_file(tmp_path / "huge.json", [_v2_row(resolution_evidence=_seat_evidence(10 ** 400))])
+    with pytest.raises(gs.RecomputeMismatchError, match="UNVERIFIABLE"):
+        ge.load_golden_set(huge)
 
     mismatch = _v2_file(tmp_path / "mismatch.json", [_v2_row(resolution_evidence=_seat_evidence(49))])
     with pytest.raises(gs.RecomputeMismatchError, match=r"'blue-senate-2030'.*recomputed label NO.*YES"):
@@ -588,6 +709,12 @@ def test_golden_curate_audit_exit_codes(tmp_path, capsys):
     dup = _v2_file(tmp_path / "dup.json", [_v2_row(), _v2_row()])
     assert gc.main(["audit", "--golden", dup, "--strict", "-o", str(bad_out)]) == 2
     assert json.loads(bad_out.read_text(encoding="utf-8"))["duplicate_ids"] == ["blue-senate-2030"]
+    # a raw value too large for a float is audited as an UNVERIFIABLE mismatch, not a traceback
+    huge = _v2_file(tmp_path / "huge.json", [_v2_row(resolution_evidence=_seat_evidence(10 ** 400))])
+    assert gc.main(["audit", "--golden", huge, "-o", str(bad_out)]) == 0
+    assert json.loads(bad_out.read_text(encoding="utf-8"))["recompute"]["labels"] == {
+        "blue-senate-2030": "UNVERIFIABLE"}
+    assert gc.main(["audit", "--golden", huge, "--strict", "-o", str(bad_out)]) == 2
 
     assert gc.main(["audit", "--golden", str(tmp_path / "missing.json")]) == gc.EXIT_UNREADABLE == 1
     assert gc.main(["audit", "--golden", _write(tmp_path / "v9.json", {"_meta": {"schema_version": 9},

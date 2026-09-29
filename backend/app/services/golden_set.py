@@ -13,17 +13,19 @@ recompute its own label so a mistyped outcome fails loudly.
   ``as_of_date``. Everything else is grader-only.
 - ``leak_findings(q)`` is structural, never a marker-word list (a word list
   flags legitimate criteria such as a Fed "cut" or "convicted"): the criteria
-  must be one sentence starting ``YES if``; every parenthetical in the question
-  or criteria must be listed verbatim in ``reviewed_parentheticals``; no
-  ``resolution_note`` sentence and no ``resolution_evidence.raw_value`` string
-  or number may appear in the visible text.
+  must be one sentence starting ``YES if`` (a line break always ends a
+  sentence); every parenthetical in the question or criteria must be listed
+  verbatim in ``reviewed_parentheticals``; no ``resolution_note`` sentence and no
+  ``resolution_evidence.raw_value`` string or number may appear in the visible
+  text. Each rule fails closed: an ambiguous shape is flagged for review.
 - ``validate_question(q, strict)`` checks the contract; ``strict`` also requires
   ``verification == 'verified'`` and non-empty ``resolution_evidence``.
 - ``recompute_label(q)`` recomputes YES / NO / AMBIGUOUS / UNVERIFIABLE from the
-  evidence. A numeric dead band comes only from a pre-registered
-  ``resolution_tolerance`` (default none); a tolerance inside the evidence rule
-  is rejected, because a band chosen after seeing ``raw_value`` can move any
-  near-threshold label.
+  evidence. A dead band comes only from a pre-registered ``resolution_tolerance``
+  (default none) and only for numeric_threshold evidence: counts, winners and
+  settlements use epsilon 0. A tolerance inside the evidence rule is rejected,
+  because a band chosen after seeing ``raw_value`` can move any near-threshold
+  label.
 - ``balance_audit(qs)`` is report-only: YES rate, category shares, event
   clusters, lead buckets and advisory violations. It never gates anything.
 
@@ -38,8 +40,10 @@ import math
 import numbers
 import operator
 import re
+import unicodedata
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from app.services import eval_stats
@@ -77,6 +81,9 @@ KIND_OCCURRENCE = "event_occurrence"
 EVIDENCE_KINDS = (KIND_NUMERIC, KIND_COUNT, KIND_CATEGORICAL, KIND_MARKET, KIND_OCCURRENCE)
 THRESHOLD_KINDS = (KIND_NUMERIC, KIND_COUNT)
 RULE_REQUIRED_KINDS = (KIND_NUMERIC, KIND_COUNT, KIND_CATEGORICAL)
+# P17 source verifier: a fixed per-kind policy with epsilon 0 for counts, winners and
+# settlements. On an integer count a band can only turn an exact result AMBIGUOUS.
+TOLERANCE_KINDS = (KIND_NUMERIC,)
 TOLERANCE_KEYS = ("epsilon_abs", "epsilon_rel")
 
 _NUMERIC_OPS: Dict[str, Callable[[float, float], bool]] = {
@@ -117,6 +124,8 @@ DEFAULT_YES_RATE_BAND = (0.35, 0.65)
 DEFAULT_MAX_CLUSTER_SIZE = 2
 
 _END_OF_DAY = time(23, 59, 59, tzinfo=timezone.utc)
+# The last representable instant of a day: an inclusive date-only window end.
+_LAST_INSTANT = time.max.replace(tzinfo=timezone.utc)
 
 
 class RecomputeMismatchError(ValueError):
@@ -183,82 +192,174 @@ def end_of_day(day: date) -> datetime:
 
 
 def _instant(value: Any, *, day_end: bool) -> Optional[datetime]:
-    """A canonical date (start of day, or end of day when ``day_end``) or any aware timestamp, in UTC."""
+    """A canonical date or any aware timestamp as a UTC instant; None otherwise.
+
+    A date is its first instant, or with ``day_end`` its last representable one
+    (23:59:59.999999), so an inclusive date-only bound also covers sub-second times.
+    """
     day = eval_stats.parse_iso_date(value)
     if day is not None:
-        return end_of_day(day) if day_end else datetime.combine(day, time(0, 0, tzinfo=timezone.utc))
+        return datetime.combine(day, _LAST_INSTANT if day_end else time(0, 0, tzinfo=timezone.utc))
     if not isinstance(value, str) or "T" not in value:
         return None
     try:
         parsed = datetime.fromisoformat(value.strip())
-    except ValueError:
+        return parsed.astimezone(timezone.utc) if parsed.tzinfo is not None else None
+    except (OverflowError, ValueError):   # unparseable, or shifted out of datetime's range
         return None
-    return parsed.astimezone(timezone.utc) if parsed.tzinfo is not None else None
 
 
 def _finite(value: Any) -> Optional[float]:
-    """A finite real number (never a bool) as float; None otherwise."""
+    """A finite real number (never a bool) as float; None otherwise (also when too large for a float)."""
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
         return None
-    number = float(value)
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        return None
     return number if math.isfinite(number) else None
 
 
 # ================================================================== leak lint
 
-# Terminal punctuation followed by whitespace and more text ends a sentence, unless
-# the word before it is an initial ("U.S.", "Donald J. Trump") or a listed
-# abbreviation. Decimals ("3.5") never match: the pattern needs whitespace.
-_SENTENCE_BREAK = re.compile(r"[.!?]+[\"'”’)\]]*\s+(?=\S)")
-_LAST_WORD = re.compile(r"(\S+)$")
+# Sentence breaks. Western terminal punctuation ends a sentence when whitespace and
+# more text follow, or when a capitalized word follows with no space at all
+# ("seats.They won 53"); decimals ("3.5"), domains ("example.com"), tickers
+# ("BRK.B") and initials ("U.S.") are never breaks of that second form. The
+# lookbehind anchors each match to the first mark of a run, so the scan stays linear
+# on long punctuation runs. A CJK terminator ends a sentence with or without
+# following whitespace, and a line break always ends one (split_sentences splits
+# lines first).
+_CJK_TERMINATORS = "。！？"
+_CLOSERS = r"[\"'”’)\]）」』]"
+_SENTENCE_BREAK = re.compile(
+    r"(?<![.!?。！？])(?:[.!?]+" + _CLOSERS + r"*(?:(?P<gap>\s+)(?=\S)|(?=[^\W\d_]))"
+    r"|[。！？]+" + _CLOSERS + r"*\s*(?=\S))")
+_OPENERS = "(\"'[“‘（「『"
 _INITIALS = re.compile(r"(?:[^\W\d_]\.)*[^\W\d_]")
-_ABBREVIATIONS = frozenset({
-    "mr", "mrs", "ms", "dr", "prof", "st", "jr", "sr", "gov", "sen", "rep", "gen",
-    "inc", "corp", "ltd", "co", "vs", "approx", "est", "dept",
+# Longest token worth testing as an abbreviation or initial; a longer one is a word,
+# so the break stands (this also bounds the backward scan per candidate break).
+_MAX_ABBREVIATION_TOKEN = 24
+# Titles precede a name, so a capitalized word after them never opens a sentence.
+_TITLE_ABBREVIATIONS = frozenset({
+    "mr", "mrs", "ms", "dr", "prof", "st", "gov", "sen", "rep", "gen", "vs",
+})
+# These also end sentences ("... by Dec. It passed.", "... Acme Inc. It closed."), so
+# they hide a break only before a numeral or a lowercase word ("Dec. 31", "Inc. shares").
+_TRAILING_ABBREVIATIONS = frozenset({
+    "jr", "sr", "inc", "corp", "ltd", "co", "approx", "est", "dept",
     "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
 })
 # "No." abbreviates "number" only before a numeral ("No. 5"); anywhere else "no." is
 # the word ending its sentence, and hiding that break would let outcome prose through.
 _NUMBER_ABBREVIATION = "no"
-_NON_WORD = re.compile(r"[\W_]+")
+# A number (digits with internal '.' / ',' separators) and a letter run are separate
+# words, so a number glued to a unit, currency or suffix ("50bps", "$3.47T", "53rd")
+# still matches the raw value it spells, while a decimal stays one word: a raw 3 is
+# never found inside "3.47", nor a raw 5 inside a "3.5" threshold.
+_WORD = re.compile(r"\d+(?:[.,]\d+)*|[^\W\d_]+")
 
 
-def _ends_with_abbreviation(prefix: str, following: str) -> bool:
-    match = _LAST_WORD.search(prefix)
-    if not match:
+def _token_before(text: str, lo: int, hi: int) -> Optional[Tuple[str, int]]:
+    """The whitespace-free token ending at ``text[hi]`` (not before ``lo``) and its start.
+
+    None when it is longer than ``_MAX_ABBREVIATION_TOKEN``: no abbreviation is.
+    """
+    i = hi
+    while i > lo and not text[i - 1].isspace():
+        if hi - i >= _MAX_ABBREVIATION_TOKEN:
+            return None
+        i -= 1
+    return text[i:hi], i
+
+
+def _is_abbreviation(text: str, lo: int, hi: int, following: str) -> bool:
+    """True when the '.' at ``text[hi]`` closes an abbreviation or initial, not a sentence.
+
+    ``following`` is the first character after the break. Fails closed: an
+    abbreviation that can also end a sentence hides the break only when the next
+    word cannot open one, and a lone capital is an initial only after a capitalized
+    word ("Donald J. Trump", never "group A. They won.").
+    """
+    found = _token_before(text, lo, hi)
+    if found is None:
         return False
-    word = match.group(1).lstrip("(\"'[“‘").rstrip(".")
-    if word.casefold() == _NUMBER_ABBREVIATION:
-        return following[:1].isdigit()
-    return bool(_INITIALS.fullmatch(word)) or word.casefold() in _ABBREVIATIONS
+    token, token_start = found
+    word = token.lstrip(_OPENERS)
+    key = word.casefold()
+    if key == _NUMBER_ABBREVIATION:
+        return following.isdigit()
+    if key in _TITLE_ABBREVIATIONS:
+        return True
+    if key in _TRAILING_ABBREVIATIONS:
+        return following.isdigit() or following.islower()
+    if not _INITIALS.fullmatch(word):
+        return False
+    if len(word) > 1:                                  # "U.S", "J.K", "e.g"
+        return True
+    j = token_start
+    while j > lo and text[j - 1].isspace() and token_start - j < _MAX_ABBREVIATION_TOKEN:
+        j -= 1
+    previous = _token_before(text, lo, j) if j < token_start else None
+    return previous is not None and previous[0].lstrip(_OPENERS)[:1].isupper()
 
 
-def split_sentences(text: str) -> List[str]:
-    """Split prose into sentences (stripped, terminal punctuation kept)."""
-    text = (text or "").strip()
+def _is_sentence_break(text: str, lo: int, match: "re.Match[str]") -> bool:
+    mark = text[match.start()]
+    if mark in _CJK_TERMINATORS:
+        return True
+    following = text[match.end():match.end() + 2]
+    if match.group("gap") is None:
+        # no whitespace: only a capitalized word ("They") or an uncased letter (CJK)
+        # opens a sentence; "U.S.", "ASP.NET" and "BRK.B" do not
+        first, second = following[:1], following[1:2]
+        if not ((first.isupper() and second.islower())
+                or (first.isalpha() and not first.isupper() and not first.islower())):
+            return False
+    if mark != ".":
+        return True                                    # '!' and '?' end a sentence
+    return not _is_abbreviation(text, lo, match.start(), following[:1])
+
+
+def _split_line(line: str) -> List[str]:
+    line = line.strip()
     sentences: List[str] = []
     start = 0
-    for match in _SENTENCE_BREAK.finditer(text):
-        if _ends_with_abbreviation(text[start:match.start()], text[match.end():]):
-            continue
-        sentences.append(text[start:match.end()].strip())
-        start = match.end()
-    tail = text[start:].strip()
+    for match in _SENTENCE_BREAK.finditer(line):
+        if _is_sentence_break(line, start, match):
+            sentences.append(line[start:match.end()].strip())
+            start = match.end()
+    tail = line[start:].strip()
     if tail:
         sentences.append(tail)
     return sentences
 
 
+def split_sentences(text: str) -> List[str]:
+    """Split prose into sentences (stripped, terminal punctuation kept).
+
+    A line break always ends a sentence. Linear in the length of ``text``.
+    """
+    sentences: List[str] = []
+    for line in (text or "").splitlines():
+        sentences += _split_line(line)
+    return sentences
+
+
+_OPEN_PARENS = "(（"
+_CLOSE_PARENS = ")）"
+
+
 def parentheticals(text: str) -> Tuple[List[str], bool]:
-    """Top-level ``(...)`` spans of ``text`` verbatim, and whether its parentheses balance."""
+    """Top-level ``(...)`` / ``（...）`` spans of ``text`` verbatim, and whether they balance."""
     spans: List[str] = []
     depth, start, balanced = 0, 0, True
     for i, ch in enumerate(text or ""):
-        if ch == "(":
+        if ch in _OPEN_PARENS:
             if depth == 0:
                 start = i
             depth += 1
-        elif ch == ")":
+        elif ch in _CLOSE_PARENS:
             if depth == 0:
                 balanced = False
                 continue
@@ -269,8 +370,12 @@ def parentheticals(text: str) -> Tuple[List[str], bool]:
 
 
 def _normalize(text: Any) -> str:
-    """Casefolded words joined by single spaces (punctuation dropped) for phrase matching."""
-    return " ".join(w for w in _NON_WORD.split(str(text).casefold()) if w)
+    """NFKC-casefolded numbers and letter runs joined by single spaces, for phrase matching.
+
+    Other punctuation is dropped: "$3.47T" -> "3.47 t", "50bps" -> "50 bps",
+    full-width "５３" -> "53".
+    """
+    return " ".join(_WORD.findall(unicodedata.normalize("NFKC", str(text)).casefold()))
 
 
 def _contains_phrase(haystack: str, needle: str) -> bool:
@@ -279,17 +384,26 @@ def _contains_phrase(haystack: str, needle: str) -> bool:
 
 
 def _value_phrases(value: Any) -> List[str]:
-    """Normalized spellings of a raw string or number ("100000" and "100,000" for 1e5)."""
+    """Normalized spellings of a raw string or number.
+
+    A number is matched as written plainly, with thousands separators and as a float
+    literal: 100000 -> "100000", "100,000", "100000.0"; 1e-05 -> "0.00001", "1e-05".
+    """
     if isinstance(value, str):
         phrase = _normalize(value)
         return [phrase] if len(phrase) > 1 else []
     number = _finite(value)
     if number is None:
         return []
+    spellings = {repr(number)}
     if number.is_integer():
-        whole = int(number)
-        return sorted({_normalize(str(whole)), _normalize(f"{whole:,}")})
-    return [_normalize(repr(number))]
+        whole = int(value) if isinstance(value, numbers.Integral) else int(number)
+        spellings |= {str(whole), f"{whole:,}"}
+    else:
+        fixed = format(Decimal(repr(number)), "f")        # exact, never rounded: 1e-07 -> "0.0000001"
+        head, _, tail = fixed.partition(".")
+        spellings |= {fixed, f"{int(head):,}.{tail}"}
+    return sorted({p for p in map(_normalize, spellings) if p})
 
 
 def _raw_leaves(value: Any) -> Iterable[Any]:
@@ -307,17 +421,25 @@ def _raw_leaves(value: Any) -> Iterable[Any]:
 def _raw_value_phrases(evidence: Any) -> List[Tuple[str, str]]:
     """``(phrase, original)`` for each raw_value leaf that would reveal the outcome if visible.
 
-    The rule's own threshold is exempt (the criteria state it by construction), and so
-    is a market settlement (its raw value is a 0 / 0.5 / 1 price, not prose).
+    The rule's own threshold is exempt (the criteria state it by construction). Of a
+    market settlement only the Yes price itself is exempt (a 0 / 0.5 / 1 price, not
+    prose); any other raw_value key, such as a winner, is checked.
     """
-    if not isinstance(evidence, dict) or evidence.get("kind") == KIND_MARKET:
+    if not isinstance(evidence, dict):
         return []
     rule = evidence.get("rule") if isinstance(evidence.get("rule"), dict) else {}
     threshold = rule.get("threshold")
     exempt = {p for t in (threshold if isinstance(threshold, list) else [threshold])
               for p in _value_phrases(t)}
+    raw = evidence.get("raw_value")
+    if evidence.get("kind") == KIND_MARKET:
+        price_field = rule.get("field") or MARKET_DEFAULT_FIELD
+        if isinstance(raw, dict):
+            raw = {key: value for key, value in raw.items() if key != price_field}
+        elif _finite(raw) is not None:
+            raw = None                                   # a bare settlement price
     out: List[Tuple[str, str]] = []
-    for leaf in _raw_leaves(evidence.get("raw_value")):
+    for leaf in _raw_leaves(raw):
         out += [(p, str(leaf)) for p in _value_phrases(leaf) if p not in exempt]
     return out
 
@@ -330,11 +452,13 @@ def leak_findings(q: Dict[str, Any]) -> List[Dict[str, str]]:
     """Structural leak findings over the forecaster-visible text: ``[{code, field, text}]``.
 
     - ``criteria_not_yes_if`` / ``extra_sentence``: the criteria must be a single
-      sentence starting ``YES if`` (outcome prose usually rides in a second sentence);
+      sentence starting ``YES if`` (outcome prose usually rides in a second sentence;
+      a line break always starts one);
     - ``unreviewed_parenthetical`` / ``unbalanced_parenthesis``: every parenthetical in
       the question or criteria must be listed verbatim in ``reviewed_parentheticals``;
     - ``outcome_in_visible_text``: a ``resolution_note`` sentence, or a raw_value string
-      or number of the ``resolution_evidence``, appears in the question or criteria.
+      or number of the ``resolution_evidence``, appears in the question or criteria
+      (whole words, punctuation-insensitive; a number glued to a unit still counts).
     """
     visible = {field: q[field] for field in ("question", "resolution_criteria")
                if isinstance(q.get(field), str)}
@@ -363,9 +487,12 @@ def leak_findings(q: Dict[str, Any]) -> List[Dict[str, str]]:
         for field, text in normalized.items():
             if _contains_phrase(text, phrase):
                 findings.append(_finding(LEAK_OUTCOME_IN_VISIBLE_TEXT, field, original))
+    seen = set()
     unique: List[Dict[str, str]] = []
     for finding in findings:
-        if finding not in unique:
+        key = (finding["code"], finding["field"], finding["text"])
+        if key not in seen:
+            seen.add(key)
             unique.append(finding)
     return unique
 
@@ -374,6 +501,11 @@ def leak_findings(q: Dict[str, Any]) -> List[Dict[str, str]]:
 
 def _nonempty_str(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def _numeric_op(comparator: Any) -> Optional[Callable[[float, float], bool]]:
+    """The operator a numeric comparator names; None for anything else (never raises)."""
+    return _NUMERIC_OPS.get(comparator) if isinstance(comparator, str) else None
 
 
 def _rule_errors(kind: str, rule: Any) -> List[str]:
@@ -389,7 +521,7 @@ def _rule_errors(kind: str, rule: Any) -> List[str]:
         errors.append("resolution_evidence.rule.field must be a non-empty string")
     comparator, threshold = rule.get("comparator"), rule.get("threshold")
     if kind in THRESHOLD_KINDS:
-        if comparator not in _NUMERIC_OPS:
+        if _numeric_op(comparator) is None:
             errors.append(f"resolution_evidence.rule.comparator must be one of {', '.join(_NUMERIC_OPS)}")
         if _finite(threshold) is None:
             errors.append("resolution_evidence.rule.threshold must be a finite number")
@@ -406,9 +538,15 @@ def _rule_errors(kind: str, rule: Any) -> List[str]:
     aggregation = rule.get("aggregation")
     if aggregation is not None and aggregation not in AGGREGATIONS:
         errors.append(f"resolution_evidence.rule.aggregation must be one of {', '.join(AGGREGATIONS)}")
+    bounds: Dict[str, Optional[datetime]] = {}
     for bound, day_end in (("window_start", False), ("window_end", True)):
-        if rule.get(bound) is not None and _instant(rule[bound], day_end=day_end) is None:
-            errors.append(f"resolution_evidence.rule.{bound} must be a YYYY-MM-DD date or an aware timestamp")
+        if rule.get(bound) is not None:
+            bounds[bound] = _instant(rule[bound], day_end=day_end)
+            if bounds[bound] is None:
+                errors.append(f"resolution_evidence.rule.{bound} must be a YYYY-MM-DD date or an aware timestamp")
+    start, end = bounds.get("window_start"), bounds.get("window_end")
+    if start and end and start > end:
+        errors.append("resolution_evidence.rule.window_start must not be after window_end")
     return errors
 
 
@@ -447,8 +585,9 @@ def _tolerance_errors(tolerance: Any, kind: Any) -> List[str]:
         errors.append(f"resolution_tolerance.{keys[0]} must be a finite number >= 0")
     if not _nonempty_str(tolerance.get("basis")):
         errors.append("resolution_tolerance.basis must state why the band was chosen")
-    if kind is not None and kind not in THRESHOLD_KINDS:
-        errors.append(f"resolution_tolerance applies only to {' / '.join(THRESHOLD_KINDS)} evidence")
+    if kind is not None and kind not in TOLERANCE_KINDS:
+        errors.append(f"resolution_tolerance applies only to {' / '.join(TOLERANCE_KINDS)} evidence "
+                      "(counts, winners and settlements use epsilon 0)")
     return errors
 
 
@@ -465,13 +604,18 @@ def _date_errors(q: Dict[str, Any]) -> List[str]:
     resolve_time = parse_utc_instant(q.get("resolve_time"))
     if q.get("resolve_time") is not None and resolve_time is None:
         errors.append("resolve_time must be an ISO-8601 UTC timestamp (...Z or +00:00)")
-    if as_of and resolve_time and not end_of_day(as_of) < resolve_time:
+    # Compared by UTC calendar date: "after the end of the as_of day" must also reject
+    # a sub-second time on that day (23:59:59.5Z), and dates never overflow.
+    if as_of and resolve_time and not resolve_time.date() > as_of:
         errors.append(f"resolve_time {q.get('resolve_time')} must be after the end of the as_of day "
-                      f"({as_of.isoformat()}T23:59:59Z)")
+                      f"{as_of.isoformat()} (UTC)")
     precision = q.get("resolve_time_precision")
     if precision is not None and precision not in RESOLVE_TIME_PRECISIONS:
         errors.append(f"resolve_time_precision must be one of {', '.join(RESOLVE_TIME_PRECISIONS)}")
-    if precision == "day" and resolve_time and resolved and resolve_time != end_of_day(resolved):
+    if resolve_time and resolved and resolve_time.date() != resolved:
+        errors.append(f"resolve_time {q.get('resolve_time')} must fall on resolution_date "
+                      f"{resolved.isoformat()} (resolution_date is its UTC calendar date)")
+    elif precision == "day" and resolve_time and resolved and resolve_time != end_of_day(resolved):
         errors.append(f"a day-precision resolve_time must be {resolved.isoformat()}T23:59:59Z")
     return errors
 
@@ -485,7 +629,8 @@ def _reviewed_errors(q: Dict[str, Any]) -> List[str]:
     visible = " ".join(str(q.get(f) or "") for f in ("question", "resolution_criteria"))
     errors: List[str] = []
     for item in reviewed:
-        if not (isinstance(item, str) and item.startswith("(") and item.endswith(")")):
+        if not (isinstance(item, str) and len(item) >= 2
+                and item[0] in _OPEN_PARENS and item[-1] in _CLOSE_PARENS):
             errors.append(f"reviewed parenthetical {item!r} must be a verbatim '(...)' span")
         elif item not in visible:
             errors.append(f"reviewed parenthetical {item!r} does not appear in the question or criteria")
@@ -496,12 +641,14 @@ def validate_question(q: Any, strict: bool = False) -> List[str]:
     """Schema v2 contract errors for one golden row (empty list when valid).
 
     Checks: required fields; canonical dates with as_of_date strictly before
-    resolution_date; a UTC resolve_time after the end of the as_of day (and equal
-    to the end of the resolution day at 'day' precision); enumerated statuses;
-    evidence and tolerance shape; zero leak findings; a boolean resolved_outcome
-    unless scoring_status is 'ambiguous' (boolean or null there). ``strict`` also requires
-    ``verification == 'verified'`` and non-empty ``resolution_evidence``. Whether
-    the evidence recomputes the recorded label is ``recompute_mismatch``'s job.
+    resolution_date; a UTC resolve_time after the end of the as_of day and on
+    resolution_date (its UTC calendar date; 23:59:59Z at 'day' precision);
+    enumerated statuses; evidence shape (a window that does not end before it
+    starts) and tolerance shape (numeric_threshold evidence only); zero leak
+    findings; a boolean resolved_outcome unless scoring_status is 'ambiguous'
+    (boolean or null there). ``strict`` also requires ``verification ==
+    'verified'`` and non-empty ``resolution_evidence``. Whether the evidence
+    recomputes the recorded label is ``recompute_mismatch``'s job.
     """
     if not isinstance(q, dict):
         return ["entry is not an object"]
@@ -549,7 +696,11 @@ def _field_value(raw: Any, field: Any) -> Any:
 
 
 def _window(rule: Dict[str, Any]) -> Optional[Tuple[Optional[datetime], Optional[datetime]]]:
-    """Inclusive (start, end) bounds of the rule window; None when a given bound is malformed."""
+    """Inclusive (start, end) bounds of the rule window.
+
+    None when a given bound is malformed or the window ends before it starts: an
+    inverted window would silently empty every series and label every event NO.
+    """
     bounds = []
     for key, day_end in (("window_start", False), ("window_end", True)):
         value = rule.get(key)
@@ -557,7 +708,10 @@ def _window(rule: Dict[str, Any]) -> Optional[Tuple[Optional[datetime], Optional
         if value is not None and parsed is None:
             return None
         bounds.append(parsed)
-    return bounds[0], bounds[1]
+    start, end = bounds
+    if start and end and start > end:
+        return None
+    return start, end
 
 
 def _aggregate(value: Any, rule: Dict[str, Any]) -> Optional[float]:
@@ -615,15 +769,15 @@ def _tolerance_eps(tolerance: Any, threshold: float) -> Optional[float]:
 
 
 def _threshold_label(value: Optional[float], rule: Dict[str, Any], tolerance: Any) -> str:
-    comparator, threshold = rule.get("comparator"), _finite(rule.get("threshold"))
-    if value is None or threshold is None or comparator not in _NUMERIC_OPS:
+    op, threshold = _numeric_op(rule.get("comparator")), _finite(rule.get("threshold"))
+    if value is None or threshold is None or op is None:
         return LABEL_UNVERIFIABLE
     eps = _tolerance_eps(tolerance, threshold)
     if eps is None:
         return LABEL_UNVERIFIABLE
     if eps > 0 and abs(value - threshold) <= eps:
         return LABEL_AMBIGUOUS
-    return LABEL_YES if _NUMERIC_OPS[comparator](value, threshold) else LABEL_NO
+    return LABEL_YES if op(value, threshold) else LABEL_NO
 
 
 def _category(text: Any) -> Optional[str]:
@@ -684,10 +838,11 @@ def recompute_label(q: Dict[str, Any]) -> str:
       ``raw_value[rule.field]`` (a scalar, or a [{t, v}] series reduced by
       ``rule.aggregation`` inside ``window_start..window_end``, both inclusive)
       against ``rule.threshold``. Only a pre-registered ``resolution_tolerance``
-      opens a dead band: ``|value - threshold| <= eps`` is AMBIGUOUS (inclusive,
-      symmetric; eps = epsilon_abs or epsilon_rel * |threshold|; default none).
-      A tolerance written into the rule is ignored here and rejected by
-      ``validate_question``.
+      on numeric_threshold evidence opens a dead band: ``|value - threshold| <=
+      eps`` is AMBIGUOUS (inclusive, symmetric; eps = epsilon_abs or epsilon_rel *
+      |threshold|; default none). A count is always judged exactly (epsilon 0). A
+      tolerance written into the rule, or set on a count, is ignored here and
+      rejected by ``validate_question``. An inverted window is UNVERIFIABLE.
     - categorical: ``==`` / ``!=`` against a string, ``in`` / ``not_in`` against a
       list, compared casefolded with collapsed whitespace.
     - market_settlement: the Yes price (``raw_value.resolved_yes_price`` unless the
@@ -705,8 +860,8 @@ def recompute_label(q: Dict[str, Any]) -> str:
     rule = evidence.get("rule") if isinstance(evidence.get("rule"), dict) else {}
     raw = evidence.get("raw_value")
     if kind in THRESHOLD_KINDS:
-        return _threshold_label(_aggregate(_field_value(raw, rule.get("field")), rule), rule,
-                                q.get("resolution_tolerance"))
+        tolerance = q.get("resolution_tolerance") if kind in TOLERANCE_KINDS else None
+        return _threshold_label(_aggregate(_field_value(raw, rule.get("field")), rule), rule, tolerance)
     if kind == KIND_CATEGORICAL:
         return _categorical_label(_field_value(raw, rule.get("field")), rule)
     if kind == KIND_MARKET:
