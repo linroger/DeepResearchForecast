@@ -1,7 +1,10 @@
 """Golden tests for the security helpers (EXECPLAN2 I-7-3, guards F-13-1/F-8-1/F-13-2)."""
 
+import socket
+
 import pytest
 
+from app.utils import security
 from app.utils.security import (
     quote_env_value,
     redact_secrets,
@@ -43,7 +46,13 @@ def test_quote_env_value():
     assert quote_env_value("a#b") == '"a#b"'
 
 
-def test_validate_safe_url_allows_public_and_loopback():
+def test_validate_safe_url_allows_public_and_loopback(monkeypatch):
+    # Offline (INFRA-12 egress guard): resolve the public host from a fixed table
+    # instead of live DNS; the check under test only inspects the returned IPs.
+    resolved = {"api.openai.com": "162.159.140.245", "localhost": "127.0.0.1"}
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo",
+        lambda host, port, *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (resolved[host], port))])
     assert validate_safe_url("https://api.openai.com/v1")
     assert validate_safe_url("http://localhost:11434/v1")  # local LLM allowed by default
 

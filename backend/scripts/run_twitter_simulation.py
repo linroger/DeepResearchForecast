@@ -36,15 +36,14 @@ _project_root = os.path.abspath(os.path.join(_backend_dir, '..'))
 sys.path.insert(0, _scripts_dir)
 sys.path.insert(0, _backend_dir)
 
-# 加载项目根目录的 .env 文件（包含 LLM_API_KEY 等配置）
-from dotenv import load_dotenv
+# 加载项目根目录的 .env 文件（包含 LLM_API_KEY 等配置）。INFRA-12：经 load_project_dotenv
+# 加载——行为同 load_dotenv(override=False)，测试进程（DRF_TEST_PROCESS=1）内为 no-op。
+from app.utils.env_loading import load_project_dotenv
 _env_file = os.path.join(_project_root, '.env')
 if os.path.exists(_env_file):
-    load_dotenv(_env_file)
+    load_project_dotenv(_env_file)
 else:
-    _backend_env = os.path.join(_backend_dir, '.env')
-    if os.path.exists(_backend_env):
-        load_dotenv(_backend_env)
+    load_project_dotenv(os.path.join(_backend_dir, '.env'))
 
 
 import re
