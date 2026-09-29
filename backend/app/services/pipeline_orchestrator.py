@@ -862,12 +862,12 @@ class PipelineManager:
 
     # 管线 id 形如 pipe_<hex>（见 create()/fork()），亦含少量历史/手工 id（如 pipe_e2egold02）。
     # 允许字母数字/下划线/连字符；不含 '.' '/' '\\' 故天然无法 ..  逃逸（EXECPLAN2 F-13-4）。
-    _PIPELINE_ID_RE = re.compile(r"^pipe_[A-Za-z0-9_-]+$")
+    # \A…\Z + fullmatch（INFRA-10）：旧的 ``$`` 会放过尾随换行（'pipe_x\n'）。
+    _PIPELINE_ID_RE = re.compile(r"\Apipe_[A-Za-z0-9_-]{1,128}\Z")
 
     @classmethod
     def _validate_id(cls, pipeline_id: str) -> str:
-        if (not pipeline_id or "/" in pipeline_id or "\\" in pipeline_id
-                or ".." in pipeline_id or not cls._PIPELINE_ID_RE.match(pipeline_id)):
+        if not isinstance(pipeline_id, str) or not cls._PIPELINE_ID_RE.fullmatch(pipeline_id):
             raise ValueError(f"invalid pipeline_id: {pipeline_id!r}")
         return pipeline_id
 

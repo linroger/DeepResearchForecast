@@ -345,7 +345,11 @@ class GraphitiRuntime:
         if backend == "kuzu":
             from graphiti_core.driver.kuzu_driver import KuzuDriver
 
-            path = os.path.join(_data_dir(), "kuzu", graph_id)
+            from ...utils.security import contained_child
+
+            # INFRA-10: graph_id arrives from API requests and MCP tool calls; it must
+            # stay a single path component under <data>/kuzu (UnsafeIdError otherwise).
+            path = contained_child(os.path.join(_data_dir(), "kuzu"), graph_id, "graph")
             os.makedirs(os.path.dirname(path), exist_ok=True)
             driver = KuzuDriver(db=path)
             # Pin _database so add_episode does not attempt to clone the driver by group_id

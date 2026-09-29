@@ -17,7 +17,7 @@ from flask_cors import CORS
 
 from .config import Config
 from .utils.logger import setup_logger, get_logger
-from .utils.security import redact_secrets
+from .utils.security import is_safe_id, redact_secrets
 
 
 def _frontend_dist_dir() -> str:
@@ -79,6 +79,36 @@ def _has_forwarded_remote_client(headers=None) -> bool:
     if headers is None:
         headers = request.headers
     return any(not _is_loopback_addr(a) for a in _forwarded_client_addrs(headers))
+
+
+# Host names that identify this machine; APP_ALLOWED_HOSTS extends the set.
+_LOCAL_HOST_NAMES = frozenset({'localhost', '127.0.0.1', '::1'})
+
+
+def _host_name(host) -> str:
+    """Host 头的主机名部分（小写，去端口/方括号）：'[::1]:5001' → '::1'，'LocalHost:5001' → 'localhost'。"""
+    return _strip_addr_port(host or '').lower()
+
+
+def _is_local_host_header(host, extra_hosts: str = '') -> bool:
+    """Host 头是否指向本机（DNS-rebinding 防护，INFRA-10）。
+
+    端口忽略；缺失/空 Host 一律视为非本机（fail-closed）。``extra_hosts`` 为逗号分隔的
+    额外允许主机名（APP_ALLOWED_HOSTS），同样忽略端口、大小写不敏感。
+    """
+    name = _host_name(host)
+    if not name:
+        return False
+    if name in _LOCAL_HOST_NAMES:
+        return True
+    extra = {_host_name(h) for h in (extra_hosts or '').split(',')}
+    extra.discard('')
+    return name in extra
+
+
+# Route / JSON-body keys that carry an id later joined into a data-root path.
+_PATH_ID_KEYS = ('report_id', 'simulation_id', 'project_id', 'pipeline_id', 'graph_id', 'task_id')
+_MUTATING_METHODS = frozenset({'POST', 'PUT', 'PATCH', 'DELETE'})
 
 
 def create_app(config_class=Config):
@@ -149,6 +179,9 @@ def create_app(config_class=Config):
     #   - 但环回连接若带着转发头（X-Forwarded-For / X-Real-IP / Forwarded）且其中任一客户端地址
     #     不是环回，说明请求是代理替局域网客户端转来的（vite 以 FRONTEND_HOST 对外监听时，
     #     /api 代理以 xfwd 写入真实来源），按非环回处理。转发头只会降低信任、绝不提升；
+    #   - 环回信任还要求 Host 头指向本机（APP_HOST_CHECK，默认开；INFRA-10）：DNS rebinding
+    #     让浏览器把攻击者域名解析到 127.0.0.1 时，请求带的是攻击者域名 → 撤销环回信任，
+    #     按非环回处理（无令牌 403；配置令牌后凭 X-API-Token 仍可访问）；
     #   - 非环回来源：未配置 APP_API_TOKEN 时 fail-closed 拒绝；配置后需带正确的
     #     X-API-Token 头（常量时间比较）。/health 与 CORS 预检放行。
     @app.before_request
@@ -158,17 +191,47 @@ def create_app(config_class=Config):
         path = request.path
         if path == '/health' or not path.startswith('/api/'):
             return None
+        untrusted_host = False
         if _is_loopback_addr(request.remote_addr) and not _has_forwarded_remote_client():
-            return None
+            if not Config.APP_HOST_CHECK or _is_local_host_header(request.host, Config.APP_ALLOWED_HOSTS):
+                return None
+            untrusted_host = True
         token = Config.APP_API_TOKEN
         if not token:
             return jsonify({
                 "success": False,
-                "error": "forbidden: API is loopback-only unless APP_API_TOKEN is configured",
+                "error": (
+                    "forbidden: Host header does not name this machine (add it to APP_ALLOWED_HOSTS)"
+                    if untrusted_host else
+                    "forbidden: API is loopback-only unless APP_API_TOKEN is configured"
+                ),
             }), 403
         supplied = request.headers.get('X-API-Token', '')
         if not hmac.compare_digest(supplied, token):
             return jsonify({"success": False, "error": "unauthorized"}), 401
+        return None
+
+    # 标识符闸门（INFRA-10）：报告/模拟/项目/管线/图谱/任务 id 会被拼进 uploads 下的路径
+    # （报告/项目删除还会 rmtree）。在任何视图运行前统一校验一次：路由参数非法 → 404
+    # （与「不存在」同义，不回显 id）；变更请求的顶层 JSON 体 id 非法/非字符串 → 400。
+    # None/空串/缺失放行，由各端点保留自己的「缺少 id」错误。路径拼接处（contained_child）
+    # 还会再校验一次，此处只是边界上的第一道防线。
+    @app.before_request
+    def _id_gate():
+        if request.method == 'OPTIONS' or not request.path.startswith('/api/'):
+            return None
+        view_args = request.view_args or {}
+        for key in _PATH_ID_KEYS:
+            value = view_args.get(key)
+            if value not in (None, '') and not is_safe_id(value):
+                return jsonify({"success": False, "error": "not found"}), 404
+        if request.method in _MUTATING_METHODS and request.is_json:
+            body = request.get_json(silent=True)
+            if isinstance(body, dict):
+                for key in _PATH_ID_KEYS:
+                    value = body.get(key)
+                    if value not in (None, '') and not is_safe_id(value):
+                        return jsonify({"success": False, "error": f"invalid {key}"}), 400
         return None
 
     # 请求日志中间件（敏感字段脱敏后才落盘，EXECPLAN2 F-13-1/F-8-0）

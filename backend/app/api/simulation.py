@@ -14,6 +14,7 @@ from ..services.oasis_profile_generator import OasisProfileGenerator
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import SimulationRunner, RunnerStatus
 from ..utils.logger import get_logger
+from ..utils.security import UnsafeIdError, contained_child
 from ..models.project import ProjectManager
 
 logger = get_logger('mirofish.api.simulation')
@@ -236,6 +237,15 @@ def create_simulation():
         }), 500
 
 
+def _simulation_dir_or_none(simulation_id: str):
+    """uploads/simulations/<simulation_id>；id 非法或逃逸模拟根目录 → None（调用方按「模拟不存在」
+    处理，INFRA-10）。返回值与 os.path.join(OASIS_SIMULATION_DATA_DIR, id) 逐字节相同。"""
+    try:
+        return contained_child(Config.OASIS_SIMULATION_DATA_DIR, simulation_id, "simulation")
+    except UnsafeIdError:
+        return None
+
+
 def _check_simulation_prepared(simulation_id: str) -> tuple:
     """
     检查模拟是否已经准备完成
@@ -255,10 +265,10 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
     import os
     from ..config import Config
     
-    simulation_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+    simulation_dir = _simulation_dir_or_none(simulation_id)
     
     # 检查目录是否存在
-    if not os.path.exists(simulation_dir):
+    if not simulation_dir or not os.path.exists(simulation_dir):
         return False, {"reason": "模拟目录不存在"}
     
     # 必要文件列表（不包括脚本，脚本位于 backend/scripts/）
@@ -1097,9 +1107,9 @@ def get_simulation_profiles_realtime(simulation_id: str):
         platform = request.args.get('platform', 'reddit')
         
         # 获取模拟目录
-        sim_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+        sim_dir = _simulation_dir_or_none(simulation_id)
         
-        if not os.path.exists(sim_dir):
+        if not sim_dir or not os.path.exists(sim_dir):
             return jsonify({
                 "success": False,
                 "error": f"模拟不存在: {simulation_id}"
@@ -1200,9 +1210,9 @@ def get_simulation_config_realtime(simulation_id: str):
     
     try:
         # 获取模拟目录
-        sim_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+        sim_dir = _simulation_dir_or_none(simulation_id)
         
-        if not os.path.exists(sim_dir):
+        if not sim_dir or not os.path.exists(sim_dir):
             return jsonify({
                 "success": False,
                 "error": f"模拟不存在: {simulation_id}"

@@ -2,7 +2,8 @@
 
 路由（挂载于 /api/settings）：
     GET  /llm        当前提供方 + 受支持提供方清单（含展示元数据）
-    POST /llm        切换提供方 {provider, api_key?, base_url?, model?}；对新发起的管线生效
+    POST /llm        切换提供方 {provider, api_key?, base_url?, model?}；对新发起的管线生效；
+                     data.env_persisted / data.env_persist_error 报告 .env 是否落盘
     POST /llm/test   测试连通性 {provider, api_key?, base_url?, model?}；不持久化任何配置
 
 切换是运行时的：更新 Config 类属性 + os.environ（DeerFlow 子进程继承），并 upsert 进 .env。
@@ -41,6 +42,12 @@ def set_llm_settings():
             model=data.get('model'),
         )
         logger.info(f"LLM 提供方已切换为: {provider}（DeerFlow 研究模型={info.get('deerflow_model')}）")
+        # data.env_persisted / data.env_persist_error tell the client whether the switch
+        # survives a restart: the runtime switch applies either way, .env may not have.
+        if not info.get('env_persisted', True):
+            logger.warning(
+                f"LLM 提供方已在运行时切换，但写入 .env 失败（{info.get('env_persist_error')}）：重启后将恢复旧配置"
+            )
         return jsonify({"success": True, "data": info})
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)}), 400

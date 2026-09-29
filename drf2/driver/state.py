@@ -182,7 +182,9 @@ class DriverState:
 # 迁移链：file_version → 把该版本的 dict 升到 version+1 的纯函数。v1 起步，当前为空。
 _MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {}
 
-_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+# \A…\Z + fullmatch：``$`` 会放过尾随换行；纯点号 id（'.', '..'）另行拒绝，否则
+# pipeline_dir('..') 会逃出 base_dir（INFRA-10）。
+_ID_RE = re.compile(r"\A[A-Za-z0-9._-]{1,64}\Z")
 
 
 class StateStore:
@@ -192,7 +194,8 @@ class StateStore:
         self.base_dir = os.path.abspath(base_dir)
 
     def _validate_id(self, pipeline_id: str) -> str:
-        if not _ID_RE.match(pipeline_id or ""):
+        if (not isinstance(pipeline_id, str) or not _ID_RE.fullmatch(pipeline_id)
+                or not pipeline_id.strip(".")):
             raise ValueError(f"invalid pipeline_id: {pipeline_id!r}")
         return pipeline_id
 

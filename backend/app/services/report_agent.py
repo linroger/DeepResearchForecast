@@ -27,6 +27,7 @@ from ..config import Config
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
+from ..utils.security import UnsafeIdError, contained_child, is_safe_id, safe_id
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMMeter, set_run_context, get_run_context
 from .zep_tools import (
@@ -11111,8 +11112,16 @@ class ReportManager:
     
     @classmethod
     def _get_report_folder(cls, report_id: str) -> str:
-        """获取报告文件夹路径"""
-        return os.path.join(cls.REPORTS_DIR, report_id)
+        """获取报告文件夹路径（INFRA-10：id 经 contained_child 校验，非法/逃逸 id 抛 UnsafeIdError）。
+
+        返回值与 os.path.join(REPORTS_DIR, report_id) 逐字节相同；收容性只按 realpath 判定。
+        """
+        return contained_child(cls.REPORTS_DIR, report_id, "report")
+
+    @classmethod
+    def _get_legacy_report_file(cls, report_id: str, ext: str) -> str:
+        """旧版扁平布局 reports/{report_id}.{ext}：先 safe_id 校验 id，再拼带后缀的文件名。"""
+        return os.path.join(cls.REPORTS_DIR, f"{safe_id(report_id, 'report')}.{ext}")
     
     @classmethod
     def _ensure_report_folder(cls, report_id: str) -> str:
@@ -11143,8 +11152,9 @@ class ReportManager:
         Customer-facing callers must additionally apply ``publication_status``
         to the report itself before exposing the returned object.
         """
-        audit_path = cls._get_report_final_audit_path(report_id)
         try:
+            # INFRA-10: an unsafe id raises UnsafeIdError (a ValueError) -> "not found".
+            audit_path = cls._get_report_final_audit_path(report_id)
             with open(audit_path, encoding="utf-8") as handle:
                 audit = json.load(handle)
         except (OSError, ValueError, TypeError):
@@ -12749,9 +12759,12 @@ class ReportManager:
         meta.json 内嵌了完整 markdown，json.load 仍会读全文；该方法主要用于在已知
         候选 report_id 时只解析一次，避免遍历全部文件夹。读取失败返回 None。
         """
-        path = cls._get_report_path(report_id)
+        try:
+            path = cls._get_report_path(report_id)
+        except UnsafeIdError:
+            return None
         if not os.path.exists(path):
-            old_path = os.path.join(cls.REPORTS_DIR, f"{report_id}.json")
+            old_path = cls._get_legacy_report_file(report_id, "json")
             if not os.path.exists(old_path):
                 return None
             path = old_path
@@ -13372,11 +13385,14 @@ class ReportManager:
         if f"{report_id}.json" == cls._SIM_INDEX_FILENAME or report_id == cls._SIM_INDEX_FILENAME[:-5]:
             return None
 
-        path = cls._get_report_path(report_id)
+        try:
+            path = cls._get_report_path(report_id)
+        except UnsafeIdError:
+            return None  # INFRA-10: 非法 id 与「不存在」同义
 
         if not os.path.exists(path):
             # 兼容旧格式：检查直接存储在reports目录下的文件
-            old_path = os.path.join(cls.REPORTS_DIR, f"{report_id}.json")
+            old_path = cls._get_legacy_report_file(report_id, "json")
             if os.path.exists(old_path):
                 path = old_path
             else:
@@ -13466,14 +13482,18 @@ class ReportManager:
             if item == cls._SIM_INDEX_FILENAME:  # EXECPLAN2 F-7-3: 跳过索引文件，避免误当报告解析
                 continue
             item_path = os.path.join(cls.REPORTS_DIR, item)
-            # 新格式：文件夹
+            # 新格式：文件夹（INFRA-10: 名字不是合法 id 的条目——.DS_Store、_tmp 等——直接跳过）
             if os.path.isdir(item_path):
+                if not is_safe_id(item):
+                    continue
                 report = cls.get_report(item)
                 if report and report.simulation_id == simulation_id:
                     matches.append(report)
             # 兼容旧格式：JSON文件
             elif item.endswith('.json'):
                 report_id = item[:-5]
+                if not is_safe_id(report_id):
+                    continue
                 report = cls.get_report(report_id)
                 if report and report.simulation_id == simulation_id:
                     matches.append(report)
@@ -13511,8 +13531,10 @@ class ReportManager:
             if item == cls._SIM_INDEX_FILENAME:  # EXECPLAN2 F-7-3: 跳过索引文件，避免误当报告解析
                 continue
             item_path = os.path.join(cls.REPORTS_DIR, item)
-            # 新格式：文件夹
+            # 新格式：文件夹（INFRA-10: 名字不是合法 id 的条目——.DS_Store、_tmp 等——直接跳过）
             if os.path.isdir(item_path):
+                if not is_safe_id(item):
+                    continue
                 report = cls.get_report(item)
                 if report:
                     if simulation_id is None or report.simulation_id == simulation_id:
@@ -13520,6 +13542,8 @@ class ReportManager:
             # 兼容旧格式：JSON文件
             elif item.endswith('.json'):
                 report_id = item[:-5]
+                if not is_safe_id(report_id):
+                    continue
                 report = cls.get_report(report_id)
                 if report:
                     if simulation_id is None or report.simulation_id == simulation_id:
@@ -13532,7 +13556,11 @@ class ReportManager:
     
     @classmethod
     def delete_report(cls, report_id: str) -> bool:
-        """删除报告（整个文件夹）"""
+        """删除报告（整个文件夹）。
+
+        INFRA-10: rmtree 的目标只可能来自 contained_child（REPORTS_DIR 的严格后代）；
+        非法/逃逸 id 抛 UnsafeIdError，绝不删除数据根之外的任何东西。
+        """
         import shutil
 
         folder_path = cls._get_report_folder(report_id)
@@ -13546,8 +13574,8 @@ class ReportManager:
 
         # 兼容旧格式：删除单独的文件
         deleted = False
-        old_json_path = os.path.join(cls.REPORTS_DIR, f"{report_id}.json")
-        old_md_path = os.path.join(cls.REPORTS_DIR, f"{report_id}.md")
+        old_json_path = cls._get_legacy_report_file(report_id, "json")
+        old_md_path = cls._get_legacy_report_file(report_id, "md")
 
         if os.path.exists(old_json_path):
             os.remove(old_json_path)
