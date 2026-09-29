@@ -697,6 +697,14 @@ class Config:
     # RQ-5 每章反思：草稿通过基本有效性后做一次廉价批判（骨架概率一致性 / 硬数字接地 / 篇幅下限 /
     # 不复述前序章节），返回 PASS 或单条修订指令；至多一次修订抽取。轮数由 MAX_REFLECTION_ROUNDS 上限。
     REPORT_SECTION_REFLECTION = os.environ.get('REPORT_SECTION_REFLECTION', 'true').strip().lower() == 'true'
+    # REPORT-2（P08 stage 1a）确定性叙事同步：红队批判（含谦逊钳制/兜底情景/舍入闭合）、事前验尸
+    # 转移与 K>1 自洽池化都会移动情景概率，但 headline / confidence_rationale / 情景 summary 仍写着
+    # 移动前的数字（已发布的 report_ffe1ea6bf50d 标题「基准情景（40%）」对应 A=0.35），而该标题被钉进
+    # 每章提示词、大纲摘要、摘要标题与看板。开启后每个移动概率的步骤按「移动前→移动后」唯一值映射
+    # 逐数字改写（歧义值/区间/数量/合计语境一律跳过并计数），原文存 *_detail，逐处编辑记入
+    # forecast.quality.narrative_sync。默认开是安全的：零 token、纯确定性、只改叙事文本，从不改概率；
+    # 设 false 逐字节复现旧 forecast.json。
+    REPORT_NARRATIVE_SYNC = os.environ.get('REPORT_NARRATIVE_SYNC', 'true').strip().lower() == 'true'
 
     # —— WAVE9-FOCUS：报告焦点与编辑纪律（模拟=内部方法，报告主语=现实世界）——
     # 确定性编辑 lint（report_lint.lint_report）：修复 passes 之后、双语翻译之前清理引用残留 /

@@ -28,6 +28,7 @@ from ..utils.probability_parse import (
     parse_probability_field,
     parse_scenario_partition,
 )
+from .narrative_sync import synchronize_forecast_narratives
 
 logger = logging.getLogger(__name__)
 
@@ -613,6 +614,32 @@ def _synchronize_scenario_probability_narratives(
                     "explicit residual/status-quo bin; the original anchor-and-adjust "
                     f"reasoning is preserved in {detail_field}."
                 )
+
+
+def _sync_forecast_narratives(
+    out: Dict[str, Any],
+    *,
+    headline_before: Any,
+    rationale_before: Any,
+    summary_before_by_name: Any,
+) -> None:
+    """REPORT-2：一次概率移动之后，把叙事字段里的旧概率数字同步成 ``out`` 的最终值。
+
+    每个移动概率的步骤只同步它自己的 before/after 一次（不在钉骨架处再补一遍：以原始
+    draw 为 before 会双重映射——B 的旧 35% 被改写到 A 的新 35% 上）。REPORT_NARRATIVE_SYNC
+    关闭时直接返回（逐字节复现旧输出）；同步本身失败只告警，绝不丢弃所在步骤的结果。
+    """
+    if not _cfg("REPORT_NARRATIVE_SYNC", True):
+        return
+    try:
+        synchronize_forecast_narratives(
+            out,
+            headline_before=headline_before,
+            rationale_before=rationale_before,
+            summary_before_by_name=summary_before_by_name,
+        )
+    except Exception as exc:  # noqa: BLE001 — 增强项：失败保留原文、不影响概率
+        logger.warning(f"叙事概率同步失败（忽略，保留原文）: {exc}")
 
 
 def _bad_percentage_allocations(text: Any) -> List[Dict[str, Any]]:
@@ -3445,6 +3472,13 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
                 draws.append(d)
 
     out = _pool_spine_draws(draws, floor) if len(draws) > 1 else first
+    if len(draws) > 1:
+        # REPORT-2：池化沿用 draws[0] 的 headline/rationale/summary，概率却换成跨 draw 均值。
+        base_rows = draws[0].get("scenarios")
+        _sync_forecast_narratives(
+            out, headline_before=base_rows, rationale_before=base_rows,
+            summary_before_by_name=base_rows,
+        )
     out["derived_from"] = "spine"
 
     # R2-CAL-3 echo + R2-CAL-18 per-scenario model-vs-sim divergence.
@@ -3845,6 +3879,21 @@ def self_critique_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
                 "remaining uncertainty reflects evidence quality, forecast-horizon length, "
                 "and unresolved policy and technology branches."
             )
+        # REPORT-2：headline 沿用输入（对照输入情景）；采纳的评审 rationale 对照评审原始行
+        # （兜底情景补入后、归一前），未采纳则对照输入行，被兜底模板替换时不动；summary 出自
+        # 评审行，对照同名评审行本身写下的概率。
+        if residual_added:
+            rationale_before = None
+        elif raw.get("confidence_rationale"):
+            rationale_before = raw_scenarios
+        else:
+            rationale_before = forecast.get("scenarios")
+        _sync_forecast_narratives(
+            out,
+            headline_before=forecast.get("scenarios"),
+            rationale_before=rationale_before,
+            summary_before_by_name=critique_scenarios,
+        )
         if audit_scenario_contract(out).get("valid") is not True:
             return forecast
         out["critiqued"] = True
@@ -3968,6 +4017,10 @@ def premortem_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
                 src["probability"] = round(p_src - shift, 4)
                 dst["probability"] = round((_coerce_float(dst.get("probability")) or 0.0) + shift, 4)
         _synchronize_scenario_probability_narratives(out["scenarios"])
+        _sync_forecast_narratives(
+            out, headline_before=scenarios, rationale_before=scenarios,
+            summary_before_by_name=scenarios,
+        )
         out["premortem"] = {"underweighted_scenario": str(raw.get("underweighted_scenario") or ""),
                             "missed_signals": missed[:8]}
         # VIZ-GAP1(a)：概率被谦逊转移后旧区间可能不再包住 p——先作废再按 ±spread 重建。
