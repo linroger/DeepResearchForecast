@@ -263,8 +263,42 @@ def test_dispersion_collapse_constant_and_hedger():
 
     empty = es.dispersion([], [])
     assert empty["collapsed"] is True and empty["n"] == 0   # no spread to show: fail closed
+    assert sharp["invalid_indices"] == [] and empty["invalid_indices"] == []
     with pytest.raises(ValueError):
         es.dispersion([0.1, 0.2], [True])
+
+
+BAD_PROBABILITIES = (float("nan"), float("inf"), float("-inf"), -40.0, 1.5, None, "high")
+
+
+def test_invalid_probabilities_fail_closed():
+    """NaN, inf, out-of-range or non-numeric p never passes a collapse check or skews a statistic."""
+    ys = [q["resolved_outcome"] for q in _golden_questions()]
+    for bad in BAD_PROBABILITIES:
+        for ps in ([0.8] * (len(ys) - 1) + [bad],                        # would collapse if valid
+                   [0.9 if y else 0.1 for y in ys[:-1]] + [bad]):        # would pass if valid
+            d = es.dispersion(ps, ys)
+            assert d["collapsed"] is True, bad
+            assert d["reasons"] == ["invalid_probability"] and d["invalid_indices"] == [len(ys) - 1]
+            assert d["n"] == len(ys) and d["std"] is None and d["pos_rate"] is None and d["auc"] is None
+            json.dumps(d, allow_nan=False)                               # standard JSON, never NaN
+    assert es.dispersion([None, 0.5, float("nan")], [True, False, True])["invalid_indices"] == [0, 2]
+
+    # the row helpers refuse bad input instead of scoring it (a NaN was a direction "tie")
+    for bad in BAD_PROBABILITIES:
+        rows = [{"id": "ok", "probability": 0.7, "outcome": True},
+                {"id": "bad-row", "probability": bad, "outcome": False}]
+        for fn in (es.mean_brier, es.direction_stats, es.reference_scores,
+                   lambda r: es.strata_stats(r, "category")):
+            with pytest.raises(ValueError, match="bad-row"):
+                fn(rows)
+    with pytest.raises(ValueError, match="missing"):
+        es.mean_brier([{"id": "missing", "outcome": True}])
+
+    for good, expected in ((0, 0.0), (1, 1.0), (0.5, 0.5), ("0.25", 0.25)):
+        assert es.as_probability(good) == expected
+    for bad in BAD_PROBABILITIES:
+        assert es.as_probability(bad) is None, bad
 
 
 # -------------------------------------------------------------------- wilson

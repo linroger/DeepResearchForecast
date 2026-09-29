@@ -21,8 +21,11 @@ is deterministic and offline-testable. It deliberately lives outside
 ``app.evaluation`` (that namespace is reserved for WP14's sealed case registry).
 
 Row contract used throughout: a dict with ``probability`` (YES probability, a
-float in [0, 1]) and ``outcome`` (truthy when the event happened), plus an
-optional ``id`` and any stratum/cluster fields the caller names.
+finite number in [0, 1]) and ``outcome`` (truthy when the event happened), plus
+an optional ``id`` and any stratum/cluster fields the caller names. A missing,
+NaN, infinite or out-of-range probability raises ValueError in the row helpers
+(a NaN would otherwise pass as a direction tie and an out-of-range value would
+skew every mean); ``dispersion`` reports such a vector as collapsed instead.
 """
 
 from __future__ import annotations
@@ -62,8 +65,21 @@ def round4(v: Optional[float]) -> Optional[float]:
     return None if v is None else round(v, 4) + 0.0
 
 
+def as_probability(value: Any) -> Optional[float]:
+    """``float(value)`` when that is a finite number in [0, 1]; None otherwise (unparseable included)."""
+    try:
+        p = float(value)
+    except (TypeError, ValueError):
+        return None
+    return p if math.isfinite(p) and 0.0 <= p <= 1.0 else None
+
+
 def _prob(row: Row) -> float:
-    return float(row["probability"])
+    p = as_probability(row.get("probability"))
+    if p is None:
+        raise ValueError(f"row {row.get('id')!r}: probability {row.get('probability')!r} "
+                         "is not a finite number in [0, 1]")
+    return p
 
 
 def _hit(row: Row) -> bool:
@@ -356,17 +372,26 @@ def dispersion(ps: Sequence[Any], ys: Sequence[Any]) -> Dict[str, Any]:
     ``collapsed`` is True when the stdev is below 0.08, when more than 60% of the
     forecasts sit in the hedge band, or when every forecast calls the same side
     (``pos_rate`` 0 or 1, with p > 0.5 as a positive call) while both outcomes are
-    present. ``auc`` is the Mann-Whitney AUC (0.5 when a class is absent). An
-    empty vector cannot show spread, so it reports collapsed (fail closed).
+    present. ``auc`` is the Mann-Whitney AUC (0.5 when a class is absent). Both
+    failure cases fail closed: an empty vector cannot show spread, and a vector
+    holding any value that is not a finite number in [0, 1] (NaN, inf, None,
+    out of range; positions in ``invalid_indices``) has no trustworthy spread, so
+    each reports collapsed with null statistics.
     """
     if len(ps) != len(ys):
         raise ValueError(f"dispersion needs one outcome per probability ({len(ps)} != {len(ys)})")
-    probs = [float(p) for p in ps]
-    labels = [bool(y) for y in ys]
-    n = len(probs)
+    checked = [as_probability(p) for p in ps]
+    n = len(checked)
     if not n:
         return {"n": 0, "std": None, "hedge_share": None, "pos_rate": None, "n_distinct": 0,
-                "auc": 0.5, "collapsed": True, "reasons": ["empty"]}
+                "auc": 0.5, "collapsed": True, "reasons": ["empty"], "invalid_indices": []}
+    invalid = [i for i, p in enumerate(checked) if p is None]
+    if invalid:
+        return {"n": n, "std": None, "hedge_share": None, "pos_rate": None, "n_distinct": None,
+                "auc": None, "collapsed": True, "reasons": ["invalid_probability"],
+                "invalid_indices": invalid}
+    probs: List[float] = [p for p in checked if p is not None]
+    labels = [bool(y) for y in ys]
     mean = sum(probs) / n
     std = math.sqrt(sum((p - mean) ** 2 for p in probs) / n)
     lo_band, hi_band = HEDGE_BAND
@@ -391,6 +416,7 @@ def dispersion(ps: Sequence[Any], ys: Sequence[Any]) -> Dict[str, Any]:
         "auc": round4(_mann_whitney_auc(pos, neg)) if both_outcomes else 0.5,
         "collapsed": bool(reasons),
         "reasons": reasons,
+        "invalid_indices": [],
     }
 
 

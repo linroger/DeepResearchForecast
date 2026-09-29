@@ -421,7 +421,7 @@ def test_score_forecast_file_constant_09_on_committed_set(tmp_path):
     assert rigor["promotion_eligible"] is False and report["promotion_eligible"] is False
 
     text = md.read_text(encoding="utf-8")
-    assert text.splitlines()[0] == f"> {ge.CHARACTERIZATION_BANNER}"
+    assert text.splitlines()[0] == ge.CHARACTERIZATION_BANNER
     assert ge.CHARACTERIZATION_BANNER == ("Characterization only - answer-bearing golden set; "
                                           "not a skill estimate (ADR 0002 I-21)")
     for section in ("## Caveats", "## Reference & skill", "## Direction & hedging", "## By horizon"):
@@ -465,6 +465,7 @@ def test_score_forecast_file_bootstrap_ci(tmp_path):
     pci = pair["metrics"]["rigor"]["ci"]
     assert pci["brier"] is None and pci["bss"] is None and pci["reason"] == "fewer_than_2_clusters"
 
+    assert ci["bss_degenerate_replicates"] / 300 <= ge.BOOTSTRAP_ALPHA   # committed set: interval kept
     with pytest.raises(ValueError):
         ge.cmd_score_forecast_file(_args(forecast=fpath, golden=ge.GOLDEN_PATH, bootstrap=-1))
     with pytest.raises(argparse.ArgumentTypeError):
@@ -472,6 +473,66 @@ def test_score_forecast_file_bootstrap_ci(tmp_path):
     with pytest.raises(argparse.ArgumentTypeError):
         ge._non_negative_int("many")
     assert ge._non_negative_int("0") == 0
+
+
+@pytest.mark.usefixtures("isolated_ledgers")
+def test_bss_ci_withheld_when_degenerate_replicates_exceed_alpha(tmp_path, monkeypatch):
+    """With 2 clusters about half the resamples have one outcome: no 95% BSS interval, fail closed."""
+    golden = {"questions": [
+        {"id": "a", "resolved_outcome": True, "event_cluster": "c1", "category": "c", "difficulty": "easy"},
+        {"id": "c", "resolved_outcome": True, "event_cluster": "c1", "category": "c", "difficulty": "easy"},
+        {"id": "b", "resolved_outcome": False, "event_cluster": "c2", "category": "c", "difficulty": "easy"},
+    ]}
+    gpath = _write_json(tmp_path / "two_clusters.json", golden)
+    fpath = _write_json(tmp_path / "fc.json", {"binary_forecasts": [
+        {"id": "a", "probability": 0.9}, {"id": "c", "probability": 0.7}, {"id": "b", "probability": 0.2}]})
+    out, md = tmp_path / "r.json", tmp_path / "r.md"
+    assert ge.cmd_score_forecast_file(_args(forecast=fpath, golden=gpath, out=str(out), markdown=str(md),
+                                            bootstrap=200)) == 0
+    ci = json.loads(out.read_text(encoding="utf-8"))["metrics"]["rigor"]["ci"]
+    assert ci["n_clusters"] == 2 and ci["bss_degenerate_replicates"] / 200 > ge.BOOTSTRAP_ALPHA
+    assert ci["bss"] is None and ci["reason"] == "degenerate_reference"   # was a zero-width [0.79, 0.79]
+    assert ci["brier"] is not None                                        # the Brier interval stands
+    text = md.read_text(encoding="utf-8")
+    assert "| — (degenerate_reference) |" in text
+    assert f"| {ci['bss_degenerate_replicates']} / 200 |" in text
+
+    # the threshold is the CI's alpha: 1/20 degenerate keeps the interval, 2/20 withholds it
+    rows = [{"id": "x", "probability": 0.6, "outcome": True, "cluster": "k1"},
+            {"id": "y", "probability": 0.3, "outcome": False, "cluster": "k2"}]
+
+    def _replicates_with(n_none):
+        def fake(_rows, _stat_fn, _cluster_key, B, _seed):
+            return [None] * n_none + [i / B for i in range(B - n_none)]
+        return fake
+
+    monkeypatch.setattr(ge.eval_stats, "cluster_bootstrap_replicates", _replicates_with(1))
+    at_alpha = ge.rigor_ci(rows, 20)
+    assert at_alpha["bss"] is not None and at_alpha["reason"] is None
+    assert at_alpha["bss_degenerate_replicates"] == 1
+    monkeypatch.setattr(ge.eval_stats, "cluster_bootstrap_replicates", _replicates_with(2))
+    over_alpha = ge.rigor_ci(rows, 20)
+    assert over_alpha["bss"] is None and over_alpha["reason"] == "degenerate_reference"
+    assert over_alpha["bss_degenerate_replicates"] == 2 and over_alpha["brier"] is not None
+
+
+def test_score_ledger_repeated_question_ids_caveat(tmp_path, isolated_ledgers):
+    """Append-only ledger repeats are scored per row; the size caveat says rows, not questions."""
+    for _ in range(4):
+        append_golden_result(question_id="q1", probability=0.7, resolved_outcome=True, category="c")
+    append_golden_result(question_id="q2", probability=0.2, resolved_outcome=False, category="c")
+    out, md = tmp_path / "ledger.json", tmp_path / "ledger.md"
+    assert ge.cmd_score_ledger(SimpleNamespace(ledger_dir=None, bins=10, out=str(out), markdown=str(md))) == 0
+    rigor = json.loads(out.read_text(encoding="utf-8"))["golden"]["rigor"]
+    expected = ("n = 5 rows (2 distinct questions) in 2 clusters: a repeated question id is scored "
+                "once per row, so repeats weigh on n, the base rate and every mean")
+    assert expected in rigor["caveats"]
+    assert not any(c.startswith("n = 5 questions") for c in rigor["caveats"])
+    assert f"- {expected}" in md.read_text(encoding="utf-8").splitlines()
+    # distinct ids keep the plain wording
+    unique = ge.score_pairs([{"id": "q1", "probability": 0.7, "outcome": True},
+                             {"id": "q2", "probability": 0.2, "outcome": False}])
+    assert "n = 2 questions in 2 clusters" in unique["rigor"]["caveats"]
 
 
 @pytest.mark.usefixtures("isolated_ledgers")
@@ -553,7 +614,7 @@ def test_score_ledger_default_reads_evaluation_dir(tmp_path, isolated_ledgers):
     # the markdown uses the ledger layout: both scales labelled, golden rigor rendered
     text = md.read_text(encoding="utf-8")
     assert text == ge.render_markdown(report)
-    assert text.splitlines()[0] == f"> {ge.CHARACTERIZATION_BANNER}"
+    assert text.splitlines()[0] == ge.CHARACTERIZATION_BANNER
     assert "# Forecast-ledger evaluation" in text.splitlines() and "matched / scored" not in text
     assert "| mean Brier (multiclass_sum: summed over scenarios" in text
     assert "\n## Golden section (binary Brier)\n" in text and "(2 scored golden rows)" in text
@@ -561,6 +622,16 @@ def test_score_ledger_default_reads_evaluation_dir(tmp_path, isolated_ledgers):
     golden_at = headings.index("## Golden section (binary Brier)")
     for section in ("Caveats", "Overall", "Reference & skill", "Direction & hedging", "By horizon"):
         assert headings.index(f"### {section}") > golden_at, section   # nested under the golden heading
+
+    # an explicit --ledger-dir naming the production ledger reads golden rows like the
+    # default does (the writer redirects explicit production targets too)
+    for prod_dir in (fl.ledger_dir(), fl.ledger_dir() + os.sep):
+        out_p = tmp_path / "explicit_production.json"
+        assert ge.cmd_score_ledger(SimpleNamespace(ledger_dir=prod_dir, bins=10, out=str(out_p),
+                                                   markdown=None)) == 0
+        prod = json.loads(out_p.read_text(encoding="utf-8"))
+        assert prod["golden"]["n"] == 2 and prod["n_entries"] == 0
+        assert os.path.abspath(prod["eval_ledger_dir"]) == os.path.abspath(eval_dir)
 
     # both scales over the same golden rows: the multi-class sum is twice the binary Brier
     out2 = tmp_path / "same_dir.json"
@@ -636,8 +707,10 @@ def test_outputs_written_atomically(tmp_path, monkeypatch):
     def _boom(src, dst):
         raise OSError("simulated crash before rename")
 
-    monkeypatch.setattr(atomic.os, "replace", _boom)
-    with pytest.raises(OSError):
+    # only app.utils.atomic sees the failing rename; the process-wide os module is untouched
+    monkeypatch.setattr(atomic, "os", SimpleNamespace(**{**vars(os), "replace": _boom}))
+    with pytest.raises(OSError, match="simulated crash"):
         ge.cmd_score_forecast_file(_args(forecast=fpath, golden=gpath, out=str(out)))
+    assert os.replace is not _boom
     assert out.read_text(encoding="utf-8") == "PREVIOUS"
     assert not [p for p in os.listdir(tmp_path) if p.startswith(".tmp-")]

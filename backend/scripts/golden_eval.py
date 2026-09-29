@@ -89,6 +89,10 @@ ANSWER_BEARING_CAVEAT = ("answer-bearing golden set resolved before current mode
                          "characterization only (ADR 0002 I-21)")
 BOOTSTRAP_METHOD = "question-clustered percentile bootstrap"
 BOOTSTRAP_SEED = eval_stats.DEFAULT_BOOTSTRAP_SEED
+# Two-sided alpha of the bootstrap percentile CI (95%). It is also the largest
+# share of BSS replicates that may lack a reference before the BSS interval is
+# withheld (see rigor_ci).
+BOOTSTRAP_ALPHA = 0.05
 
 
 # ============================================================ pure scoring core
@@ -255,12 +259,18 @@ def rigor_block(scored: List[Dict[str, Any]]) -> Dict[str, Any]:
     - ``by_horizon``: le30 / d31_180 / gt180 strata (``unknown`` without dates).
     - ``category_flags``: categories too small to rank, and single-outcome
       categories (no BSS: degenerate reference).
-    - ``caveats``: deterministic strings, rendered in JSON and markdown.
+    - ``caveats``: deterministic strings, rendered in JSON and markdown. The
+      size caveat reads ``n = N questions in C clusters``, or ``n = N rows
+      (Q distinct questions) ...`` when question ids repeat (ledger input).
     - ``promotion_eligible`` is always False (ADR 0002 I-21).
     """
     rows = [dict(r, horizon_bucket=eval_stats.horizon_bucket(_row_horizon_days(r))) for r in scored]
     n = len(rows)
     n_clusters = len(eval_stats.group_clusters(rows, "cluster"))
+    # A forecast file is de-duplicated by match_forecasts, but the append-only
+    # ledger can hold one golden question several times (score-ledger scores every
+    # row); count distinct ids so the caveat never calls repeats "questions".
+    n_questions = len(eval_stats.group_clusters(rows, lambda r: r.get("id")))
     direction = eval_stats.direction_stats(rows)
     categories = eval_stats.strata_stats(rows, "category", min_n=eval_stats.MIN_STRATUM_N)
     small = [key for key, v in categories.items() if v["small"]]
@@ -272,7 +282,12 @@ def rigor_block(scored: List[Dict[str, Any]]) -> Dict[str, Any]:
         caveats.append(f"base rate {ybar:.2f} ({hits}/{n}): a constant {ybar:.2f} forecast "
                        f"scores Brier {ybar * (1.0 - ybar):.3f} - read BSS")
     caveats.append(ANSWER_BEARING_CAVEAT)
-    caveats.append(f"n = {n} questions in {n_clusters} clusters")
+    if n_questions == n:
+        caveats.append(f"n = {n} questions in {n_clusters} clusters")
+    else:
+        caveats.append(f"n = {n} rows ({n_questions} distinct questions) in {n_clusters} clusters: "
+                       "a repeated question id is scored once per row, so repeats weigh on "
+                       "n, the base rate and every mean")
     if direction["ties"]:
         caveats.append(f"{direction['ties']} forecast(s) at exactly p = 0.5: excluded from direction "
                        "and MCC; the legacy resolution_accuracy counts p >= 0.5 as YES")
@@ -308,14 +323,25 @@ def rigor_ci(scored: List[Dict[str, Any]], B: int, seed: int = BOOTSTRAP_SEED) -
     by category at 3-7 clusters per stratum would understate the variance. Brier
     and BSS use the same seed, hence the same resamples. A BSS replicate whose
     resample has a single outcome has no reference; it is counted in
-    ``bss_degenerate_replicates`` instead of being dropped silently. ``reason``
-    explains a null interval (``fewer_than_2_clusters`` or ``degenerate_reference``).
+    ``bss_degenerate_replicates`` instead of being dropped silently. The BSS
+    percentile interval is taken over the other replicates, so it is conditional
+    on the resample having both outcomes; when more than ``BOOTSTRAP_ALPHA`` of
+    the replicates are degenerate that conditional interval is no longer a 95%
+    CI (with 2 clusters it can collapse to a single point), so it is withheld
+    (fail closed). ``reason`` explains a null interval (``fewer_than_2_clusters``
+    for both, or ``degenerate_reference`` for BSS).
     """
     B = int(B)
     n_clusters = len(eval_stats.group_clusters(scored, "cluster"))
-    brier = eval_stats.cluster_bootstrap_ci(scored, eval_stats.mean_brier, "cluster", B, seed)
+    brier = eval_stats.cluster_bootstrap_ci(scored, eval_stats.mean_brier, "cluster", B, seed,
+                                            alpha=BOOTSTRAP_ALPHA)
     bss_reps = eval_stats.cluster_bootstrap_replicates(scored, _bss_stat, "cluster", B, seed)
-    bss = eval_stats.percentile_interval(bss_reps) if bss_reps is not None else None
+    degenerate: Optional[int] = None
+    bss: Optional[List[float]] = None
+    if bss_reps is not None:
+        degenerate = sum(1 for v in bss_reps if v is None)
+        if degenerate / B <= BOOTSTRAP_ALPHA:
+            bss = eval_stats.percentile_interval(bss_reps, BOOTSTRAP_ALPHA)
     if n_clusters < 2:
         reason: Optional[str] = "fewer_than_2_clusters"
     elif bss is None:
@@ -329,8 +355,7 @@ def rigor_ci(scored: List[Dict[str, Any]], B: int, seed: int = BOOTSTRAP_SEED) -
         "n_clusters": n_clusters,
         "brier": [eval_stats.round4(v) for v in brier] if brier else None,
         "bss": [eval_stats.round4(v) for v in bss] if bss else None,
-        "bss_degenerate_replicates": (sum(1 for v in bss_reps if v is None)
-                                      if bss_reps is not None else None),
+        "bss_degenerate_replicates": degenerate,
         "reason": reason,
     }
 
@@ -456,8 +481,11 @@ def _fmt(v: Any) -> str:
     return "—" if v is None else (f"{v:.4f}" if isinstance(v, float) else str(v))
 
 
-def _fmt_interval(v: Any) -> str:
-    return "—" if not v else f"[{_fmt(v[0])}, {_fmt(v[1])}]"
+def _fmt_interval(v: Any, reason: Optional[str] = None) -> str:
+    """``[lo, hi]``; a missing interval renders as ``—``, followed by why when known."""
+    if v:
+        return f"[{_fmt(v[0])}, {_fmt(v[1])}]"
+    return f"— ({reason})" if reason else "—"
 
 
 def _render_rigor(rigor: Dict[str, Any], lines: List[str], heading: str = "##") -> None:
@@ -470,12 +498,13 @@ def _render_rigor(rigor: Dict[str, Any], lines: List[str], heading: str = "##") 
               f"| Brier skill vs constant 0.5 | {_fmt(ref.get('bss_vs_half'))} |"]
     ci = rigor.get("ci")
     if ci:
-        label = (f"95% CI, {ci.get('method')} (B={ci.get('B')}, seed {ci.get('seed')}, "
+        label = (f"{1 - BOOTSTRAP_ALPHA:.0%} CI, {ci.get('method')} (B={ci.get('B')}, seed {ci.get('seed')}, "
                  f"{ci.get('n_clusters')} clusters)")
-        lines += [f"| mean Brier {label} | {_fmt_interval(ci.get('brier'))} |",
-                  f"| BSS {label} | {_fmt_interval(ci.get('bss'))} |"]
+        lines += [f"| mean Brier {label} | {_fmt_interval(ci.get('brier'), ci.get('reason'))} |",
+                  f"| BSS {label} | {_fmt_interval(ci.get('bss'), ci.get('reason'))} |"]
         if ci.get("bss_degenerate_replicates"):
-            lines.append(f"| BSS replicates without a reference (single-outcome resample) | "
+            lines.append(f"| BSS replicates without a reference (single-outcome resample; the BSS "
+                         f"interval is withheld above {BOOTSTRAP_ALPHA:.0%}) | "
                          f"{ci['bss_degenerate_replicates']} / {ci.get('B')} |")
     lines.append("")
 
@@ -574,7 +603,7 @@ def _render_ledger_markdown(report: Dict[str, Any]) -> str:
     """
     g = report.get("golden") or {}
     lines: List[str] = [
-        f"> {CHARACTERIZATION_BANNER}", "", "# Forecast-ledger evaluation", "",
+        CHARACTERIZATION_BANNER, "", "# Forecast-ledger evaluation", "",
         f"- production ledger: `{report.get('ledger_dir', '')}` ({report.get('n_entries', 0)} entries, "
         f"{report.get('n_resolved', 0)} resolved)",
         f"- golden section ledger: `{report.get('eval_ledger_dir', '')}` ({g.get('n', 0)} scored golden rows)",
@@ -601,7 +630,7 @@ def render_markdown(report: Dict[str, Any]) -> str:
     if report.get("mode") == "score-ledger":
         return _render_ledger_markdown(report)
     m = report.get("metrics", {})
-    lines: List[str] = [f"> {CHARACTERIZATION_BANNER}", "", "# Golden-question forecast evaluation", ""]
+    lines: List[str] = [CHARACTERIZATION_BANNER, "", "# Golden-question forecast evaluation", ""]
     lines.append(f"- source: `{report.get('forecast_path', '')}`")
     lines.append(f"- golden: `{report.get('golden_path', '')}` "
                  f"({report.get('golden_count', 0)} questions)")
@@ -732,6 +761,7 @@ def cmd_score_forecast_file(args) -> int:
 
 def cmd_score_ledger(args) -> int:
     from app.services.forecast_ledger import calibration_summary, evaluation_ledger_dir, read_ledger
+    from app.services.forecast_ledger import ledger_dir as production_ledger_dir
     from app.services.backtest import calibration_report
     entries = read_ledger(args.ledger_dir)
     resolved = [
@@ -745,15 +775,18 @@ def cmd_score_ledger(args) -> int:
     summary = calibration_summary(args.ledger_dir, entries=entries,
                                   include_evaluation=True)
 
-    # EVAL-7: golden rows are redirected to the isolated evaluation ledger on write
-    # (forecast_ledger.append_golden_result), so by default the golden section reads
-    # that ledger — reading the production ledger here always showed n=0. The
-    # section reads --eval-ledger-dir when given, else --ledger-dir when given
-    # (the explicit single-ledger behaviour), else evaluation_ledger_dir().
+    # EVAL-7: forecast_ledger.append_golden_result redirects every golden row aimed
+    # at the production ledger dir (default or explicit) to the isolated evaluation
+    # ledger, so reading the production ledger here always showed n=0. The golden
+    # section reads --eval-ledger-dir when given, else --ledger-dir when it names a
+    # non-production dir (the explicit single-ledger behaviour), else
+    # evaluation_ledger_dir() — the same production-dir test the writer applies.
     eval_dir = getattr(args, "eval_ledger_dir", None)
+    explicit_non_production = bool(args.ledger_dir) and (
+        os.path.abspath(args.ledger_dir) != os.path.abspath(production_ledger_dir()))
     if eval_dir:
         golden_dir, golden_entries = eval_dir, read_ledger(eval_dir)
-    elif args.ledger_dir:
+    elif explicit_non_production:
         golden_dir, golden_entries = args.ledger_dir, entries
     else:
         golden_dir = evaluation_ledger_dir()
@@ -835,8 +868,8 @@ def main() -> int:
                        help="score every recorded resolution in the forecast ledger")
     b.add_argument("--ledger-dir", default=None, help="override ledger dir (default: FORECAST_LEDGER_DIR)")
     b.add_argument("--eval-ledger-dir", default=None,
-                   help="ledger dir for the golden section (default: --ledger-dir when given, "
-                        "else the isolated evaluation ledger)")
+                   help="ledger dir for the golden section (default: --ledger-dir when it is not "
+                        "the production ledger, else the isolated evaluation ledger)")
     b.add_argument("--bins", type=int, default=DEFAULT_BINS)
     b.add_argument("-o", "--out", default=None, help="write report JSON (default: stdout)")
     b.add_argument("--markdown", default=None, help="also write a readable markdown table")
