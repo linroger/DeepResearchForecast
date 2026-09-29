@@ -306,6 +306,10 @@ let loadVersion = 0
 let languageRequestVersion = 0
 let translationPollVersion = 0
 let translationPollTimer = null
+// An "Update translation" run regenerates a variant that stays published until the
+// new one passes its audit: its task-bound progress must not overwrite the
+// published translation state (that would hide the language toggle mid-update).
+let translationUpdateRun = false
 const exportRequestGate = createLatestRequestGate()
 
 // 生成中判定：报告已创建但尚未产出成稿（status ∈ pending/planning/generating 或成稿为空）。
@@ -329,6 +333,7 @@ async function load() {
   langMdCache.value = {}
   langLoading.value = false
   translationBusy.value = false
+  translationUpdateRun = false
   translationMessage.value = ''
   translationError.value = ''
   if (!reportId) {
@@ -589,6 +594,7 @@ function stopTranslationPolling() {
 }
 
 function updateTranslationState(data, outcome = null) {
+  if (translationUpdateRun) return
   const current = meta.value?.translation_status
   const next = data && typeof data === 'object' && !Array.isArray(data) ? data : {}
   const overrides = outcome ? {
@@ -630,6 +636,7 @@ function terminalTranslationError(outcome) {
 function finishTerminalTranslation(data, outcome) {
   stopTranslationPolling()
   updateTranslationState(data, outcome)
+  translationUpdateRun = false
   translationBusy.value = false
   translationMessage.value = ''
   translationError.value = terminalTranslationError(outcome)
@@ -637,6 +644,7 @@ function finishTerminalTranslation(data, outcome) {
 
 async function activateCompletedTranslation(reportId, lang) {
   stopTranslationPolling()
+  translationUpdateRun = false
   translationBusy.value = false
   await load()
   if (reportId !== props.reportId) return
@@ -678,6 +686,7 @@ async function pollTranslation(reportId, lang, taskId, version) {
   } catch (e) {
     if (version !== translationPollVersion || reportId !== props.reportId) return
     stopTranslationPolling()
+    translationUpdateRun = false
     translationBusy.value = false
     translationMessage.value = ''
     translationError.value = (e && e.message) || L('翻译状态查询失败','Failed to check translation status')
@@ -689,6 +698,7 @@ async function generateTranslation(force = false) {
   const reportId = props.reportId
   if (!action || !reportId || translationBusy.value) return
   stopTranslationPolling()
+  translationUpdateRun = force === true
   const version = translationPollVersion
   const target = langLabel(action.targetLang)
   translationBusy.value = true
@@ -715,6 +725,7 @@ async function generateTranslation(force = false) {
   } catch (e) {
     if (version !== translationPollVersion || reportId !== props.reportId) return
     stopTranslationPolling()
+    translationUpdateRun = false
     translationBusy.value = false
     translationMessage.value = ''
     translationError.value = (e && e.message) || L('无法启动翻译','Unable to start translation')
