@@ -9,12 +9,15 @@ rmtree'd every pipeline, simulation, report and graph. These tests pin:
 - ``safe_id`` / ``contained_child``: the allow-list and the realpath containment;
 - the sinks: ``delete_report`` / ``delete_project`` never rmtree outside their
   root, ``SimulationManager._get_simulation_dir`` never makedirs outside it, read
-  getters map an unsafe id to "not found", directory scans skip stray entries;
-- the regex fixes (pipeline ``\\Z``, drf2 dot-only ids);
+  getters map an unsafe id to "not found", directory scans skip stray entries,
+  the simulation /posts and /comments views re-check ids and only accept the
+  twitter/reddit databases;
+- the regex fixes (pipeline ``\\Z`` and length cap, drf2 dot-only ids);
 - the Flask id gate (404 for route ids, 400 for mutating JSON bodies);
-- the DNS-rebinding Host allowlist on loopback trust (APP_HOST_CHECK /
-  APP_ALLOWED_HOSTS);
-- ``_persist_env`` reporting failures and writing ``.env`` as 0600.
+- the DNS-rebinding Host allowlist on loopback trust (APP_HOST_CHECK, parsed
+  fail-closed / APP_ALLOWED_HOSTS);
+- ``_persist_env`` reporting failures and writing ``.env`` as 0600 through a
+  git-ignored temp file.
 
 Every test is offline and writes only under ``tmp_path``; the real repo-root
 ``.env`` is never touched (``_persist_env`` always gets an explicit tmp path).
@@ -359,6 +362,80 @@ def test_api_simulation_dir_helper_maps_unsafe_ids_to_missing(sims_root, monkeyp
     assert ok is False and info["reason"]
 
 
+def _make_sim_db(path):
+    import sqlite3
+
+    conn = sqlite3.connect(str(path))
+    conn.execute("CREATE TABLE post (post_id INTEGER, content TEXT, created_at TEXT)")
+    conn.execute("CREATE TABLE comment (comment_id INTEGER, post_id INTEGER, content TEXT, created_at TEXT)")
+    conn.execute("INSERT INTO post VALUES (1, 'hello', '2026-01-01')")
+    conn.execute("INSERT INTO comment VALUES (7, 1, 'reply', '2026-01-02')")
+    conn.commit()
+    conn.close()
+
+
+@pytest.fixture
+def sim_db_client(app_client, sims_root, monkeypatch):
+    """App client whose /posts and /comments endpoints read under ``sims_root``."""
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(sims_root))
+    return app_client
+
+
+def test_simulation_posts_and_comments_read_under_the_simulation_root(sim_db_client, sims_root):
+    (sims_root / "sim_1").mkdir()
+    _make_sim_db(sims_root / "sim_1" / "twitter_simulation.db")
+
+    posts = sim_db_client.get("/api/simulation/sim_1/posts?platform=twitter").get_json()
+    assert posts["success"] is True
+    assert [p["content"] for p in posts["data"]["posts"]] == ["hello"]
+    comments = sim_db_client.get("/api/simulation/sim_1/comments?platform=twitter").get_json()
+    assert [c["content"] for c in comments["data"]["comments"]] == ["reply"]
+    # No reddit database for this run: the unchanged "empty" answer.
+    empty = sim_db_client.get("/api/simulation/sim_1/posts").get_json()
+    assert empty["success"] is True and empty["data"]["posts"] == []
+
+
+@pytest.mark.parametrize("endpoint", ["posts", "comments"])
+@pytest.mark.parametrize("platform", ["../../outside/evil", "evil", "", "twitter/../x"])
+def test_simulation_db_endpoints_reject_unknown_platforms(sim_db_client, sims_root, endpoint, platform):
+    outside = sims_root.parent / "outside"
+    outside.mkdir(exist_ok=True)
+    _make_sim_db(outside / "evil_simulation.db")
+    (sims_root / "sim_1").mkdir(exist_ok=True)
+    _make_sim_db(sims_root / "sim_1" / "evil_simulation.db")
+
+    resp = sim_db_client.get(f"/api/simulation/sim_1/{endpoint}", query_string={"platform": platform})
+    assert resp.status_code == 400
+    assert resp.get_json() == {"success": False, "error": "platform 参数只能是 'twitter' 或 'reddit'"}
+
+
+@pytest.mark.parametrize("view_name", ["get_simulation_posts", "get_simulation_comments"])
+@pytest.mark.parametrize("simulation_id", ["..", "../outside", "a/b", "sim_1\n"])
+def test_simulation_db_endpoints_contain_ids_without_the_gate(sim_db_client, sims_root, monkeypatch,
+                                                                view_name, simulation_id):
+    """The views re-check the id themselves (the Flask id gate is not their only guard)."""
+    import sqlite3
+
+    from app.api import simulation as sim_api
+
+    _make_sim_db(sims_root.parent / "reddit_simulation.db")  # what "<root>/.." + db name would open
+    outside = sims_root.parent / "outside"
+    outside.mkdir()
+    _make_sim_db(outside / "reddit_simulation.db")
+    if simulation_id in ("..", "../outside"):  # a plain join would reach a real database
+        assert os.path.isfile(os.path.join(str(sims_root), simulation_id, "reddit_simulation.db"))
+
+    def _no_connect(*_a, **_k):
+        raise AssertionError("an unsafe simulation id must never reach sqlite3.connect")
+
+    monkeypatch.setattr(sqlite3, "connect", _no_connect)
+    with sim_db_client.application.test_request_context("/?platform=reddit"):
+        resp = getattr(sim_api, view_name)(simulation_id)
+    payload = resp.get_json()
+    assert payload["success"] is True
+    assert payload["data"]["count"] == 0
+
+
 # ---------------------------------------------------------------- MCP + graph paths
 
 def test_mcp_sim_server_rejects_unsafe_sim_ids(sims_root):
@@ -436,6 +513,20 @@ def test_pipeline_id_regex_rejects_trailing_newline():
     for good in ("pipe_e2egold02", f"pipe_{uuid.uuid4().hex[:12]}", "pipe_x-1"):
         assert PipelineManager._validate_id(good) == good
     assert PipelineManager.delete("pipe_x\n") is False
+
+
+def test_pipeline_id_length_cap_matches_the_flask_id_gate():
+    from app.services.pipeline_orchestrator import PipelineManager
+    from app.utils.security import SAFE_ID_MAX_LEN
+
+    longest = "pipe_" + "a" * (SAFE_ID_MAX_LEN - len("pipe_"))
+    assert len(longest) == SAFE_ID_MAX_LEN
+    assert PipelineManager._validate_id(longest) == longest
+    assert is_safe_id(longest) is True
+    too_long = longest + "a"
+    with pytest.raises(ValueError):
+        PipelineManager._validate_id(too_long)
+    assert is_safe_id(too_long) is False
 
 
 def test_drf2_state_store_rejects_dot_only_and_newline_ids(tmp_path):
@@ -620,6 +711,36 @@ def test_host_check_knobs_default_on_and_are_documented():
     assert re.search(r"^# APP_ALLOWED_HOSTS=\s", example, re.M)
 
 
+def _fresh_config_class(monkeypatch, **env):
+    """Evaluate a private copy of app/config.py under *env* (None = unset).
+
+    DRF_TEST_PROCESS=1 keeps the copy from loading the developer ``.env``; the shared
+    ``app.config.Config`` is untouched.
+    """
+    import importlib.util
+
+    monkeypatch.setenv("DRF_TEST_PROCESS", "1")
+    for key, value in env.items():
+        if value is None:
+            monkeypatch.delenv(key, raising=False)
+        else:
+            monkeypatch.setenv(key, value)
+    path = pathlib.Path(_REPO_ROOT) / "backend" / "app" / "config.py"
+    spec = importlib.util.spec_from_file_location("_infra10_config_probe", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.Config
+
+
+@pytest.mark.parametrize("raw, expected", [
+    (None, True), ("true", True), ("TRUE", True), ("1", True), ("yes", True), ("on", True),
+    ("", True), ("ture", True),
+    ("false", False), ("FALSE", False), (" False ", False), ("0", False), ("no", False), ("off", False),
+])
+def test_app_host_check_parse_fails_closed(monkeypatch, raw, expected):
+    assert _fresh_config_class(monkeypatch, APP_HOST_CHECK=raw).APP_HOST_CHECK is expected
+
+
 # ---------------------------------------------------------------- .env persistence
 
 def _mode(path):
@@ -678,6 +799,30 @@ def test_write_secret_text_atomic_mode_and_cleanup(tmp_path, monkeypatch):
         write_secret_text_atomic(str(target), "A=2\n")
     assert target.read_text(encoding="utf-8") == "A=1\n"
     assert sorted(os.listdir(target.parent)) == ["secret.env"]
+
+
+def test_secret_temp_file_name_is_git_ignored_next_to_the_repo_env(tmp_path, monkeypatch):
+    """A SIGKILL between create and rename leaves the 0600 temp copy of .env behind;
+    the repo's ignore rules must keep ``git add .`` from committing it."""
+    import subprocess
+
+    if shutil.which("git") is None or not os.path.exists(os.path.join(_REPO_ROOT, ".git")):
+        pytest.skip("needs git and a git checkout of the repo")
+    temp_names = []
+    real_replace = os.replace
+
+    def recording_replace(src, dst):
+        temp_names.append(os.path.basename(src))
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", recording_replace)
+    write_secret_text_atomic(str(tmp_path / ".env"), "A=1\n")
+    assert len(temp_names) == 1
+    result = subprocess.run(
+        ["git", "check-ignore", "--no-index", "-q", temp_names[0]],
+        cwd=_REPO_ROOT, capture_output=True, timeout=30, check=False,
+    )
+    assert result.returncode == 0, f"{temp_names[0]!r} is not git-ignored at the repo root"
 
 
 @pytest.fixture

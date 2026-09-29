@@ -55,7 +55,9 @@ class Config:
     # frontend (Vite proxy with changeOrigin -> Host localhost:5001) and direct
     # localhost / 127.0.0.1 access keep working; token-authenticated requests are
     # unaffected. Set false to restore the legacy Host-agnostic loopback trust.
-    APP_HOST_CHECK = os.environ.get('APP_HOST_CHECK', 'true').strip().lower() == 'true'
+    # Parsed fail-closed, unlike the usual `== 'true'` knobs: only an explicit
+    # false/0/no/off disables this guard, so 1/yes/on or a typo keeps it on.
+    APP_HOST_CHECK = os.environ.get('APP_HOST_CHECK', 'true').strip().lower() not in ('false', '0', 'no', 'off')
     # Extra Host names (comma-separated, port ignored) accepted on loopback requests,
     # e.g. a custom /etc/hosts alias for this machine. Empty = only the built-in names.
     APP_ALLOWED_HOSTS = os.environ.get('APP_ALLOWED_HOSTS', '').strip()

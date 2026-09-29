@@ -2156,16 +2156,20 @@ def get_simulation_posts(simulation_id: str):
         platform = request.args.get('platform', 'reddit')
         limit = request.args.get('limit', 50, type=int)
         offset = request.args.get('offset', 0, type=int)
-        
-        sim_dir = os.path.join(
-            os.path.dirname(__file__),
-            f'../../uploads/simulations/{simulation_id}'
-        )
-        
-        db_file = f"{platform}_simulation.db"
-        db_path = os.path.join(sim_dir, db_file)
-        
-        if not os.path.exists(db_path):
+
+        # platform 会拼进库文件名：只接受两个平台，杜绝 ?platform=../x 打开模拟目录之外的
+        # 任意 *_simulation.db（INFRA-10）。
+        if platform not in ("twitter", "reddit"):
+            return jsonify({
+                "success": False,
+                "error": "platform 参数只能是 'twitter' 或 'reddit'"
+            }), 400
+
+        # 模拟 id 非法或逃逸模拟根目录 → 与「数据库不存在」同样返回空列表（INFRA-10）。
+        sim_dir = _simulation_dir_or_none(simulation_id)
+        db_path = os.path.join(sim_dir, f"{platform}_simulation.db") if sim_dir else None
+
+        if not db_path or not os.path.exists(db_path):
             return jsonify({
                 "success": True,
                 "data": {
@@ -2235,19 +2239,22 @@ def get_simulation_comments(simulation_id: str):
         limit = request.args.get('limit', 50, type=int)
         offset = request.args.get('offset', 0, type=int)
 
-        sim_dir = os.path.join(
-            os.path.dirname(__file__),
-            f'../../uploads/simulations/{simulation_id}'
-        )
+        # platform 会拼进库文件名：只接受两个平台（与 /posts 一致，INFRA-10）。
+        if platform not in ("twitter", "reddit"):
+            return jsonify({
+                "success": False,
+                "error": "platform 参数只能是 'twitter' 或 'reddit'"
+            }), 400
 
         # 此前硬编码只读 reddit_simulation.db（"仅Reddit"）——Twitter 平台其实同样有
         # comment 表且写满了真实评论（CREATE_COMMENT 动作两平台都会产生），只是这个
         # 端点从未读过，导致前端 Feed 只能看到帖子、看不到任何回复。与 /posts 端点
-        # 保持一致，按 platform 选库。
-        db_file = f"{platform}_simulation.db"
-        db_path = os.path.join(sim_dir, db_file)
+        # 保持一致，按 platform 选库。模拟 id 非法或逃逸模拟根目录 → 按「数据库不存在」
+        # 返回空列表（INFRA-10）。
+        sim_dir = _simulation_dir_or_none(simulation_id)
+        db_path = os.path.join(sim_dir, f"{platform}_simulation.db") if sim_dir else None
 
-        if not os.path.exists(db_path):
+        if not db_path or not os.path.exists(db_path):
             return jsonify({
                 "success": True,
                 "data": {

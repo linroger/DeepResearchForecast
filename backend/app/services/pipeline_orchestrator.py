@@ -863,7 +863,9 @@ class PipelineManager:
     # 管线 id 形如 pipe_<hex>（见 create()/fork()），亦含少量历史/手工 id（如 pipe_e2egold02）。
     # 允许字母数字/下划线/连字符；不含 '.' '/' '\\' 故天然无法 ..  逃逸（EXECPLAN2 F-13-4）。
     # \A…\Z + fullmatch（INFRA-10）：旧的 ``$`` 会放过尾随换行（'pipe_x\n'）。
-    _PIPELINE_ID_RE = re.compile(r"\Apipe_[A-Za-z0-9_-]{1,128}\Z")
+    # 后缀上限 123 = 总长 ≤ 128（utils.security.SAFE_ID_MAX_LEN），与 Flask id 闸门对
+    # pipeline_id 的校验一致，否则 129–133 字符的 id 在此合法、到路由却被 404。
+    _PIPELINE_ID_RE = re.compile(r"\Apipe_[A-Za-z0-9_-]{1,123}\Z")
 
     @classmethod
     def _validate_id(cls, pipeline_id: str) -> str:
