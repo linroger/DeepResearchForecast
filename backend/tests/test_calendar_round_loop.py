@@ -712,13 +712,16 @@ def test_inband_decision_validation_recorded(tmp_path, monkeypatch):
     fallback = sum(r["decision_validation"]["fallback_slots"] for r in rows)
     assert summary["slots"] == slots
     assert summary["fallback_share"] == round(fallback / slots, 6)
-    # run 级 fallback_share 折入裁定：超 DECISION_CHANNEL_FALLBACK_MAX_SHARE(0.5) → inconclusive
-    if summary["fallback_share"] > 0.5:
-        assert traj["validity"] == "inconclusive"
-        assert traj["validity_reasons"] == ["fallback_share_exceeded"]
-        assert traj["forecast_effect"] == "no_update"
-    else:
-        assert traj["validity"] == "valid"
+    # 名册规模确定：主角 0 必激活 + sampled 配额恰 2 人（3 名候选激活概率均为 1.0，
+    # target_count=agents_per_hour_max=2）；采样只决定是哪 2 人，不影响计数。每轮只有
+    # agent 0 有效作答 → fallback 2/3 → run 级 0.666667 > DECISION_CHANNEL_FALLBACK_MAX_SHARE(0.5)
+    assert [r["decision_validation"]["roster_size"] for r in rows] == [3, 3, 3]
+    assert [r["decision_validation"]["fallback_slots"] for r in rows] == [2, 2, 2]
+    assert summary["slots"] == 9 and summary["fallback_share"] == 0.666667
+    assert traj["round_accounting"]["valid_transitions"] == 3   # 每轮都已提交 …
+    assert traj["validity"] == "inconclusive"                    # … 仍因名册覆盖不足降级
+    assert traj["validity_reasons"] == ["fallback_share_exceeded"]
+    assert traj["forecast_effect"] == "no_update"
 
 
 def test_inband_verdict_folds_fallback_share(tmp_path, monkeypatch):

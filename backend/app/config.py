@@ -1621,11 +1621,14 @@ class Config:
     # SIM-2: a run whose share of roster slots without an accepted or abstained answer exceeds
     # this is at best 'inconclusive' (fallback_share_exceeded, forecast_effect=no_update).
     # Uncalibrated: 0.5 is a conservative majority-of-slots floor; log live rates before tightening.
+    # Must be a share in [0,1]: the verdict replaces NaN/out-of-range values (e.g. 50 meant as a
+    # percent) with 0.5 and logs a warning, so a typo cannot silently disable the gate.
     DECISION_CHANNEL_FALLBACK_MAX_SHARE = float(
         os.environ.get('DECISION_CHANNEL_FALLBACK_MAX_SHARE', '0.5') or '0.5')
-    # SIM-5: per-round individual-actor cap before the tail collapses into one public block.
-    # Previously a ghost knob read via getattr by both decision-channel producers; 60 is the
-    # default they already used, so defining it here changes nothing.
+    # SIM-2 (defines the SIM-5 cap knob): per-round individual-actor cap before the tail
+    # collapses into one public block. Previously a ghost knob read via getattr by both
+    # decision-channel producers; 60 is the default they already used, so defining it here
+    # changes nothing. An explicit run_decision_channel(max_active_per_round=...) still wins.
     DECISION_CHANNEL_MAX_ACTIVE = int(os.environ.get('DECISION_CHANNEL_MAX_ACTIVE', '60') or '60')
     # Foglamp WP1 (1D, I-16/I-18)：模拟对已发布概率的影响政策（run-pinned）。
     #   diagnostic_only —— 默认。模拟/WorldState 产出只进「显式标注模拟来源」的分析散文，

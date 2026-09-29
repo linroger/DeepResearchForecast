@@ -60,8 +60,9 @@ NORMALIZATION_CODES: Tuple[str, ...] = (
     NORM_ID_COERCED, NORM_SCENARIO_NORMALIZED, NORM_CLAMPED, NORM_CONFIDENCE_DEFAULTED,
 )
 
-# Whitespace plus the quote/bracket characters an LLM wraps scenario names in.
-_SCENARIO_STRIP_CHARS = " \t\r\n\x0b\x0c" + "「」『』“”\"'()（）[]【】"
+# Whitespace plus the quote/bracket characters an LLM wraps scenario names in
+# (the spec's list, plus single curly quotes and 《》 title marks).
+_SCENARIO_STRIP_CHARS = " \t\r\n\x0b\x0c" + "「」『』“”‘’《》\"'()（）[]【】"
 
 _COUNT_KEYS = ("accepted", "abstained", "rejected", "missing_from_reply", "fallback_slots")
 
@@ -72,10 +73,18 @@ def _norm(text: str) -> str:
     return unicodedata.normalize("NFKC", str(text)).casefold().strip(_SCENARIO_STRIP_CHARS)
 
 
+def _id_text(raw: Any) -> str:
+    """``str(raw)``, except that an integral float is rendered as its int (``1.0``
+    → ``"1"``): a JSON reply may carry a whole-number id as a float."""
+    if isinstance(raw, float) and raw.is_integer():
+        raw = int(raw)
+    return str(raw)
+
+
 def _canonical_id_key(raw: Any) -> str:
-    """``str(raw)`` stripped, with a leading ``id=`` (any case) removed — the
+    """``_id_text(raw)`` stripped, with a leading ``id=`` (any case) removed — the
     roster lines render as ``- id=<agent_id>``, and models echo that prefix."""
-    key = str(raw).strip()
+    key = _id_text(raw).strip()
     if key[:3].casefold() == "id=":
         key = key[3:].strip()
     return key
@@ -113,7 +122,7 @@ def validate_round_decisions(raw_decisions: Any, roster: List[Dict[str, Any]],
 
     - not a dict → ``malformed_entry``;
     - its id, canonicalised through the roster (``"3"`` → ``3``, ``"id=2"`` →
-      ``2``, ``"__public__"`` stays a string), is not a roster id →
+      ``2``, ``1.0`` → ``1``, ``"__public__"`` stays a string), is not a roster id →
       ``unknown_agent`` (it never votes and is not a roster slot);
     - its canonical id was already named by an earlier element → ``duplicate``
       (the first element naming an actor is that actor's answer);
@@ -142,7 +151,7 @@ def validate_round_decisions(raw_decisions: Any, roster: List[Dict[str, Any]],
     roster_by_key: Dict[str, Any] = {}
     for entry in roster or []:
         if isinstance(entry, dict) and entry.get("agent_id") is not None:
-            roster_by_key.setdefault(str(entry["agent_id"]), entry["agent_id"])
+            roster_by_key.setdefault(_id_text(entry["agent_id"]), entry["agent_id"])
     candidates = [str(s) for s in (scenarios or [])]
     by_norm: Dict[str, List[str]] = {}
     for name in candidates:

@@ -3,6 +3,9 @@
 import copy
 import hashlib
 import json
+import logging
+
+import pytest
 
 from app.config import Config
 from app.services import decision_channel as dc
@@ -357,6 +360,62 @@ def test_verdict_fallback_share_threshold(monkeypatch):
     failed.step([], round_status="failed")
     verdict = dc.decision_channel_verdict(failed.round_accounting(), fallback_share=1.0)
     assert verdict["validity"] == "invalid" and verdict["validity_reasons"] == ["no_valid_rounds"]
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), 50.0, -0.1, "abc", None])
+def test_misconfigured_fallback_threshold_uses_default(monkeypatch, caplog, bad):
+    """A NaN/out-of-range/non-numeric threshold must not disable (or invert) the gate:
+    it falls back to 0.5 with a warning."""
+    from app.services.worldstate import WorldState
+
+    ws = WorldState(["A", "B"])
+    for _ in range(3):
+        ws.step([{"scenario": "A", "magnitude": 1.0, "weight": 1.0}], round_status="committed")
+    acct = ws.round_accounting()
+    monkeypatch.setattr(Config, "DECISION_CHANNEL_FALLBACK_MAX_SHARE", bad, raising=False)
+    with caplog.at_level(logging.WARNING, logger=dc.logger.name):
+        assert dc.decision_channel_verdict(acct, fallback_share=0.5)["validity"] == "valid"
+        demoted = dc.decision_channel_verdict(acct, fallback_share=0.51)
+    assert demoted["validity_reasons"] == ["fallback_share_exceeded"]
+    assert any("DECISION_CHANNEL_FALLBACK_MAX_SHARE" in r.getMessage() for r in caplog.records)
+
+
+def test_fallback_threshold_bounds_and_non_finite_share(monkeypatch):
+    from app.services.worldstate import WorldState
+
+    ws = WorldState(["A", "B"])
+    for _ in range(3):
+        ws.step([{"scenario": "A", "magnitude": 1.0, "weight": 1.0}], round_status="committed")
+    acct = ws.round_accounting()
+    monkeypatch.setattr(Config, "DECISION_CHANNEL_FALLBACK_MAX_SHARE", 0.0, raising=False)
+    assert dc.decision_channel_verdict(acct, fallback_share=0.0)["validity"] == "valid"
+    assert dc.decision_channel_verdict(acct, fallback_share=0.01)["validity"] == "inconclusive"
+    monkeypatch.setattr(Config, "DECISION_CHANNEL_FALLBACK_MAX_SHARE", 1.0, raising=False)
+    assert dc.decision_channel_verdict(acct, fallback_share=1.0)["validity"] == "valid"
+    # a non-finite share is a broken measurement, never a pass (fail closed)
+    nan_share = dc.decision_channel_verdict(acct, fallback_share=float("nan"))
+    assert nan_share["validity_reasons"] == ["fallback_share_exceeded"]
+
+
+def _roster_ids_per_round(res):
+    return [row["decision_validation"]["roster_agent_ids"] for row in res["trajectory"][1:]]
+
+
+def test_max_active_keyword_wins_over_config(monkeypatch):
+    """An explicit max_active_per_round caps the roster; without it the Config knob does."""
+    actions = [{"round": 1, "agent_id": a} for a in (1, 2, 3)]
+    cfgs = [{"agent_id": a, "influence_weight": float(4 - a)} for a in (1, 2, 3)]
+    reply = {"decisions": [{"agent_id": 1, "scenario": "S1", "magnitude": 1, "confidence": 1}]}
+
+    def _run(**kw):
+        return run_decision_channel(actions, cfgs, {"scenarios": ["S1", "S2"]},
+                                    FakeLLMClient(json_responses=[reply]), concurrency=1, **kw)
+
+    assert _roster_ids_per_round(_run()) == [["1", "2", "3"]]            # Config default 60
+    assert _roster_ids_per_round(_run(max_active_per_round=1)) == [["1", PUBLIC_BLOCK_ID]]
+    monkeypatch.setattr(Config, "DECISION_CHANNEL_MAX_ACTIVE", 2, raising=False)
+    assert _roster_ids_per_round(_run()) == [["1", "2", PUBLIC_BLOCK_ID]]
+    assert _roster_ids_per_round(_run(max_active_per_round=60)) == [["1", "2", "3"]]
 
 
 def test_bare_all_abstain_rounds_stay_valid():

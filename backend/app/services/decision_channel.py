@@ -37,6 +37,7 @@ decisions/轨迹行带 period_end，输出 schema v3。``round_dates=None`` → 
 from __future__ import annotations
 
 import logging
+import math
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -569,6 +570,28 @@ def _fan_out_elicit(tasks: Dict[Any, Tuple[List[Dict[str, Any]], Dict[str, Any]]
     return results
 
 
+_FALLBACK_MAX_SHARE_DEFAULT = 0.5
+
+
+def _fallback_max_share() -> float:
+    """SIM-2: ``DECISION_CHANNEL_FALLBACK_MAX_SHARE`` as a share in ``[0, 1]``.
+
+    A non-numeric, non-finite or out-of-range value (``nan``, ``50`` meant as a
+    percent, a negative) would silently disable or invert the fallback gate, so
+    it falls back to the 0.5 default with a warning instead (fail closed).
+    """
+    raw = _cfg("DECISION_CHANNEL_FALLBACK_MAX_SHARE", _FALLBACK_MAX_SHARE_DEFAULT)
+    try:
+        threshold = float(raw)
+    except (TypeError, ValueError):
+        threshold = math.nan
+    if math.isfinite(threshold) and 0.0 <= threshold <= 1.0:
+        return threshold
+    logger.warning("DECISION_CHANNEL_FALLBACK_MAX_SHARE=%r 不是 [0,1] 内的有限份额，"
+                   "按默认 %.1f 裁定", raw, _FALLBACK_MAX_SHARE_DEFAULT)
+    return _FALLBACK_MAX_SHARE_DEFAULT
+
+
 def decision_channel_verdict(accounting: Dict[str, Any], *,
                              unaccounted_rounds: int = 0,
                              fallback_share: Optional[float] = None) -> Dict[str, Any]:
@@ -602,8 +625,9 @@ def decision_channel_verdict(accounting: Dict[str, Any], *,
     SIM-2 (C26): ``fallback_share`` is the run-level share of roster slots
     without an accepted or abstained answer (``summarize_validation``). A run
     that would be ``valid`` becomes ``inconclusive`` (``fallback_share_exceeded``)
-    when it exceeds ``DECISION_CHANNEL_FALLBACK_MAX_SHARE``; ``None`` (no
-    validation record) leaves the verdict unchanged.
+    when it exceeds ``DECISION_CHANNEL_FALLBACK_MAX_SHARE`` (validated by
+    ``_fallback_max_share``) or is not finite; ``None`` (no validation record)
+    leaves the verdict unchanged.
 
     A non-``valid`` run MUST NOT move a forecast: forecast_effect=no_update. Even a
     valid run defaults to diagnostic_only until an outcome-blind prospective study
@@ -635,10 +659,11 @@ def decision_channel_verdict(accounting: Dict[str, Any], *,
                 CONVERGENCE_POLICY_V1["min_valid_coverage"]):
             reasons.append("low_valid_coverage")
         validity = "inconclusive" if reasons else "valid"
-    if validity == "valid" and fallback_share is not None and float(fallback_share) > float(
-            _cfg("DECISION_CHANNEL_FALLBACK_MAX_SHARE", 0.5)):
-        validity = "inconclusive"
-        reasons = ["fallback_share_exceeded"]
+    if validity == "valid" and fallback_share is not None:
+        share = float(fallback_share)
+        if not math.isfinite(share) or share > _fallback_max_share():
+            validity = "inconclusive"
+            reasons = ["fallback_share_exceeded"]
     if validity != "valid":
         forecast_effect = "no_update"
     else:
@@ -665,7 +690,7 @@ def run_decision_channel(
     conv_eps: float = 0.02,
     round_to_date=None,
     round_dates: Optional[List[Dict[str, Any]]] = None,
-    max_active_per_round: int = 60,
+    max_active_per_round: Optional[int] = None,
     concurrency: Optional[int] = None,
     abstain_allowed: bool = True,
     posts_by_round: Optional[Dict[int, Dict[Any, str]]] = None,
@@ -682,7 +707,9 @@ def run_decision_channel(
     ``{period_start, period_end, label}``）——提供时提示词切换为时段框架、缓存键改为
     ``(roster 签名, 时段 label)``、decisions/轨迹行带 ``period_end``，并按
     ``WORLDSTATE_ENTROPY_MIX`` 传入每时段天数做熵地板；缺省 ``None`` 走旧路径，逐字节不变。
-    ``posts_by_round[round][agent_id]`` and
+    ``max_active_per_round`` caps the individually listed actors per round (the
+    tail collapses into one public block); ``None`` reads
+    ``DECISION_CHANNEL_MAX_ACTIVE``. ``posts_by_round[round][agent_id]`` and
     ``affect_by_agent[agent_id]`` optionally enrich the prompt (R2-SIM-1). Returns
     ``{outcome, trajectory, decisions, converged_at, n_rounds, ...}``; empty seed → ``{}``.
     """
@@ -698,7 +725,12 @@ def run_decision_channel(
     posts_by_round = posts_by_round or {}
     affect_by_agent = affect_by_agent or {}
 
-    cap = int(_cfg("DECISION_CHANNEL_MAX_ACTIVE", max_active_per_round) or max_active_per_round)
+    # SIM-2: an explicit max_active_per_round wins; otherwise the DECISION_CHANNEL_MAX_ACTIVE
+    # knob (default 60, the value this keyword used to default to).
+    if max_active_per_round is not None:
+        cap = int(max_active_per_round)
+    else:
+        cap = int(_cfg("DECISION_CHANNEL_MAX_ACTIVE", 60) or 60)
     if concurrency is None:
         concurrency = int(_cfg("OASIS_SEMAPHORE", 8) or 8)
 

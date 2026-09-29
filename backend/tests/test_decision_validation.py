@@ -64,6 +64,20 @@ def test_string_ids_map_to_canonical_roster_ids():
     assert single["record"]["normalized"]["id_coerced"] == 1
 
 
+def test_integral_float_ids_map_to_canonical_roster_ids():
+    out = _validate([_row(1.0), _row(2.5, "S2"), _row(float("nan"), "S2")])
+    assert out["accepted"] == [{"agent_id": 1, "scenario": "S1", "magnitude": 1.0,
+                                "confidence": 1.0}]
+    assert isinstance(out["accepted"][0]["agent_id"], int)
+    assert out["record"]["normalized"]["id_coerced"] == 1
+    assert out["record"]["reasons"]["unknown_agent"] == 2      # 2.5 and NaN are not ids
+    float_roster = _validate([_row(3), _row(4.0, "S2")],
+                             roster=[{"agent_id": 3.0}, {"agent_id": 4}])
+    assert [type(r["agent_id"]) for r in float_roster["accepted"]] == [float, int]  # roster's own
+    assert float_roster["record"]["normalized"]["id_coerced"] == 2
+    assert float_roster["record"]["roster_agent_ids"] == ["3", "4"]
+
+
 def test_string_roster_id_and_public_block_resolve():
     roster = [{"agent_id": 5}, {"agent_id": dc.PUBLIC_BLOCK_ID}]
     out = _validate([_row("__public__", "S2"), _row(5)], roster=roster)
@@ -130,7 +144,8 @@ def test_non_numeric_confidence_is_rejected(bad):
     assert out["record"]["normalized"]["clamped"] == 0    # rejected rows count no repair
 
 
-@pytest.mark.parametrize("variant", ["“S1”", " s1 ", "「S1」", "（s1）", "【S1】", "'S1'", "Ｓ１"])
+@pytest.mark.parametrize("variant", ["“S1”", " s1 ", "「S1」", "（s1）", "【S1】", "'S1'", "Ｓ１",
+                                     "‘S1’", "《S1》"])
 def test_scenario_normalised_when_unique(variant):
     out = _validate([_row(1, variant)])
     assert out["accepted"][0]["scenario"] == "S1"
