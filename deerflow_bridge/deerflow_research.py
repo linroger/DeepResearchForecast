@@ -16437,9 +16437,12 @@ def _legacy_only_mode(args: Any) -> str:
 
 
 # Keys of a previous meta.json that a salvage run must not inherit: its lifecycle,
-# and quant_provenance (RESEARCH-4), which summarises v3-labelled quantitative
-# rows that the legacy extraction rewrites without labels.
-_SALVAGE_VOLATILE_META_KEYS = frozenset({"status", "error", "traceback", "finished_at", "quant_provenance"})
+# quant_provenance (RESEARCH-4), which summarises v3-labelled quantitative rows
+# that the legacy extraction rewrites without labels, and as_of_model_disagreement
+# (TIME-1), which describes the v3 actors.json as_of_date the legacy extraction
+# rewrites with its own as-of.
+_SALVAGE_VOLATILE_META_KEYS = frozenset({"status", "error", "traceback", "finished_at", "quant_provenance",
+                                         "as_of_model_disagreement"})
 
 
 def _prior_v3_meta(out_dir: Path) -> dict[str, Any] | None:

@@ -516,6 +516,16 @@ class Config:
     # R2-EXEC-7 研究阶段后台预热嵌入器；R2-RES-7 as_of 双时态锚校验；建图输入源。
     EMBED_WARM_AT_RESEARCH = os.environ.get('EMBED_WARM_AT_RESEARCH', 'false').strip().lower() == 'true'
     VALIDATE_AS_OF_DATE = os.environ.get('VALIDATE_AS_OF_DATE', 'true').strip().lower() == 'true'
+    # TIME-1: v3 actor extraction may not override the research as-of.  On, actors.json
+    # as_of_date is always the plan's as-of (the UTC date fixed when the research plan was
+    # made); a different model value is only recorded in meta.json
+    # (as_of_model_disagreement).  That date becomes the graph valid_at/reference_time and
+    # the simulation calendar anchor, and a model once reported its training cutoff as the
+    # as-of.  Honesty fix, so default on and parsed fail-closed like the bridge's _env_flag:
+    # only 0/false/no/off turn it off.  false = the model-supplied YYYY-MM-DD value is
+    # adopted again (previous bytes).  The parent forwards it to the v3 child.
+    RESEARCH_AS_OF_PIN = os.environ.get(
+        'RESEARCH_AS_OF_PIN', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
     # W9-10：建图输入源默认 both→dossier_only——用户明确要求 KG 收敛到关键 actor：actor 中心的
     # 卷宗切块入图，广覆盖研究报告只喂本体/报告上下文（graph 阶段 8h38m/60% 跳块的主要输入面）。
     # dossier 缺失/为空时代码自动回退 both 语义（全量报告切块），设 'both' 可显式恢复旧行为。

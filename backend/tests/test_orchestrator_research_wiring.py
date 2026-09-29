@@ -358,6 +358,7 @@ def test_report_health_hard_fails_when_final_audit_missing(monkeypatch, tmp_path
 
 import json  # noqa: E402
 import os  # noqa: E402
+import re  # noqa: E402
 
 from app.services import pipeline_orchestrator as _po  # noqa: E402
 
@@ -1930,6 +1931,96 @@ def test_runner_launches_the_engine_the_stage_selected(monkeypatch, tmp_path):
 
     assert child["env"]["RESEARCH_ENGINE"] == "legacy"
     assert "DEERFLOW_RESEARCH_TIMEOUT" not in child["env"]
+
+
+# ------------------------------------------------ research-child knob registry
+
+def test_runner_forwards_the_as_of_pin_from_config_to_v3_only(monkeypatch, tmp_path):
+    """TIME-1: Config decides RESEARCH_AS_OF_PIN for the v3 child, never ambient env."""
+    for name in ("default", "off", "ambient", "legacy"):
+        (tmp_path / name).mkdir()
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    monkeypatch.delenv("RESEARCH_AS_OF_PIN", raising=False)
+    # The hermetic Config default (the ambient env is scrubbed before import).
+    assert _po.Config.RESEARCH_AS_OF_PIN is True
+    child = _launch_capturing_child(monkeypatch, tmp_path / "default", timeout=900)
+    assert child["env"]["RESEARCH_AS_OF_PIN"] == "true"
+
+    monkeypatch.setattr(_po.Config, "RESEARCH_AS_OF_PIN", False)
+    child = _launch_capturing_child(monkeypatch, tmp_path / "off", timeout=900)
+    assert child["env"]["RESEARCH_AS_OF_PIN"] == "false"
+
+    monkeypatch.setattr(_po.Config, "RESEARCH_AS_OF_PIN", True)
+    monkeypatch.setenv("RESEARCH_AS_OF_PIN", "false")
+    child = _launch_capturing_child(monkeypatch, tmp_path / "ambient", timeout=900)
+    assert child["env"]["RESEARCH_AS_OF_PIN"] == "true"
+
+    # The legacy engine has its own as-of clamp: the v3-only knob is not forwarded.
+    monkeypatch.delenv("RESEARCH_AS_OF_PIN")
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "legacy", raising=False)
+    child = _launch_capturing_child(monkeypatch, tmp_path / "legacy", timeout=900)
+    assert "RESEARCH_AS_OF_PIN" not in child["env"]
+
+
+def _registry_entries():
+    return [*_po.RESEARCH_CHILD_KNOBS, *_po.RESEARCH_CHILD_V3_KNOBS]
+
+
+def test_research_child_registry_names_exist_on_config_and_are_documented():
+    env_example = (Path(__file__).resolve().parents[2] / ".env.example").read_text(encoding="utf-8")
+    documented = set(re.findall(r"^\s*#?\s*([A-Z][A-Z0-9_]+)=", env_example, re.M))
+    entries = _registry_entries()
+    assert ("RESEARCH_AS_OF_PIN", "bool") in _po.RESEARCH_CHILD_V3_KNOBS
+    for name, kind in entries:
+        assert hasattr(_po.Config, name), name
+        assert name in documented, f"{name} is not documented in .env.example"
+        assert kind in _po._RESEARCH_KNOB_FORMATTERS, (name, kind)
+    names = [name for name, _kind in entries]
+    assert len(names) == len(set(names)), "a knob is registered twice"
+    for table in (_po.RESEARCH_CHILD_KNOBS, _po.RESEARCH_CHILD_V3_KNOBS):
+        assert [name for name, _kind in table] == sorted(name for name, _kind in table)
+
+
+def test_registry_forwarder_formats_each_kind(monkeypatch):
+    monkeypatch.setattr(_po.Config, "_TIME1_ON", True, raising=False)
+    monkeypatch.setattr(_po.Config, "_TIME1_OFF", 0, raising=False)
+    monkeypatch.setattr(_po.Config, "_TIME1_INT", 7.9, raising=False)
+    monkeypatch.setattr(_po.Config, "_TIME1_FLOAT", 5, raising=False)
+    monkeypatch.setattr(_po.Config, "_TIME1_STR", "dossier_only", raising=False)
+    env = {"_TIME1_ON": "0", "UNRELATED": "kept"}
+    _po._forward_research_knobs(env, (("_TIME1_ON", "bool"), ("_TIME1_OFF", "bool"), ("_TIME1_INT", "int"),
+                                      ("_TIME1_FLOAT", "float"), ("_TIME1_STR", "str")))
+    # Bools are 'true'/'false' (never '1'/'0') and overwrite any inherited value.
+    assert env == {"_TIME1_ON": "true", "_TIME1_OFF": "false", "_TIME1_INT": "7",
+                   "_TIME1_FLOAT": "5.0", "_TIME1_STR": "dossier_only", "UNRELATED": "kept"}
+
+
+def test_registry_forwarder_fails_loudly_on_a_broken_entry(monkeypatch):
+    monkeypatch.setattr(_po.Config, "_TIME1_ON", True, raising=False)
+    with pytest.raises(ValueError, match="unknown kind"):
+        _po._forward_research_knobs({}, (("_TIME1_ON", "boolean"),))
+    with pytest.raises(AttributeError):
+        _po._forward_research_knobs({}, (("_TIME1_NOT_ON_CONFIG", "bool"),))
+
+
+def test_every_registry_knob_is_forwarded_from_config(monkeypatch, tmp_path):
+    """Each registered knob reaches its child with the Config value; the v3
+    table only reaches a v3 child."""
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    (tmp_path / "v3").mkdir()
+    (tmp_path / "legacy").mkdir()
+    child = _launch_capturing_child(monkeypatch, tmp_path / "v3", timeout=900)
+    for name, kind in _registry_entries():
+        assert child["env"][name] == _po._RESEARCH_KNOB_FORMATTERS[kind](getattr(_po.Config, name)), name
+
+    for name, _kind in _po.RESEARCH_CHILD_V3_KNOBS:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "legacy", raising=False)
+    child = _launch_capturing_child(monkeypatch, tmp_path / "legacy", timeout=900)
+    for name, _kind in _po.RESEARCH_CHILD_V3_KNOBS:
+        assert name not in child["env"], name
+    for name, kind in _po.RESEARCH_CHILD_KNOBS:
+        assert child["env"][name] == _po._RESEARCH_KNOB_FORMATTERS[kind](getattr(_po.Config, name)), name
 
 
 def test_judge_bound_probe_is_false_without_a_contract_manifest(tmp_path):
