@@ -189,10 +189,18 @@ def test_pinned_client_fails_fast_during_breaker_cooldown(transports, monkeypatc
     monkeypatch.setattr(lc, "_cb_tripped", lambda provider: provider == PRIMARY)
 
     assert lc.LLMClient().chat(_msgs("breaker")) == "fallback answer"
-    with pytest.raises(RuntimeError, match="熔断冷却"):
+    # the pinned error names the real reason (no failover by design), not a missing fallback
+    with pytest.raises(RuntimeError, match="钉定客户端的提供方 minimax 处于 422/429 熔断冷却"
+                                           "（pinned：不做失败转移）") as pinned_err:
         lc.LLMClient(pinned=True).chat(_msgs("breaker-pinned"))
+    assert "回退提供方不可用" not in str(pinned_err.value)
     assert len(transports["kimi"].calls) == 1
     assert PRIMARY not in transports or transports[PRIMARY].calls == []
+
+    # an unpinned client whose fallback is unavailable keeps the existing message
+    monkeypatch.delenv("LLM_FALLBACK_PROVIDER")
+    with pytest.raises(RuntimeError, match="主提供方 minimax 处于 422/429 熔断冷却，且回退提供方不可用"):
+        lc.LLMClient().chat(_msgs("breaker-no-fallback"))
 
 
 def test_pinned_client_never_serves_a_cached_fallback_reply(transports, monkeypatch):
@@ -287,6 +295,28 @@ def test_fast_client_skipped_when_pinned(transports, monkeypatch):
     default.chat(_msgs("fast-chat-default"), tier="fast")
     default.chat_with_tools(_msgs("fast-tools-default"), _tools_schema(), tier="fast")
     assert [c["model"] for c in transports["deepseek"].calls] == [FAST_ALIAS, FAST_ALIAS]
+
+
+def test_one_routing_read_decides_model_and_endpoint(transports, monkeypatch):
+    """A hot-switch between two _routing_pinned() reads must not split one call's routing."""
+    _tiered(monkeypatch)
+    _fast_tier_provider(monkeypatch)
+    client = lc.LLMClient()
+    reads = []
+
+    def flipping():  # unpinned on the first read, pinned on any second read of the same call
+        reads.append(len(reads))
+        return len(reads) % 2 == 0
+
+    monkeypatch.setattr(client, "_routing_pinned", flipping)
+    client._chat_openai(_msgs("one-read"), 0.2, 64, tier="fast")
+    assert len(reads) == 1
+    reads.clear()
+    client.chat_with_tools(_msgs("one-read-tools"), _tools_schema(), tier="fast")
+    assert len(reads) == 1
+    # both calls: the fast alias went to the fast-tier client, never to the primary endpoint
+    assert [c["model"] for c in transports["deepseek"].calls] == [FAST_ALIAS, FAST_ALIAS]
+    assert PRIMARY not in transports or transports[PRIMARY].calls == []
 
 
 def test_routing_off_leaves_every_client_on_its_own_model(transports):

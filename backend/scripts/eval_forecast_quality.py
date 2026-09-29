@@ -36,7 +36,7 @@ import json
 import math
 import os
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -298,27 +298,77 @@ def judge_report(llm, report_markdown: str, scenario: Dict[str, Any], rubric_tex
     signals = objective_signals(report_markdown, forecast)
     messages = build_judge_messages(rubric_text, report_markdown, scenario, signals)
     samples: List[Dict[str, float]] = []
+    served: List[Optional[str]] = []
     for _ in range(max(1, k)):
         try:
-            samples.append(judge_once(llm, messages))
+            sample = judge_once(llm, messages)
         except Exception as e:  # noqa: BLE001 - degrade-safe: one bad pass != crash
-            samples.append({dim: 0.0 for dim in RUBRIC_DIMENSIONS})
+            samples.append(dict.fromkeys(RUBRIC_DIMENSIONS, 0.0))
             print(f"  [warn] judge pass failed: {e}", file=sys.stderr)
+            continue
+        samples.append(sample)
+        served.append(_served_model(llm))
     return {
         "scenario": scenario.get("name"),
         "aggregate": aggregate_scores(samples),
         "samples": samples,
         "signals": signals,
         "k": len(samples),
-        "judge_identity": judge_identity(llm),
+        "judge_identity": judge_identity(llm, served),
     }
 
 
-def judge_identity(llm) -> Dict[str, Any]:
-    """The judge's {provider, model}, recorded with every score so each score is
-    attributable to the backbone that produced it (scores from different judges
-    are not one series)."""
-    return {"provider": getattr(llm, "provider", None), "model": getattr(llm, "model", None)}
+def _requested_model(llm) -> Optional[str]:
+    """The model name the judge's requests carry, or None when its CLI picks the model.
+
+    An OpenAI-compatible judge sends its own model (the judge is pinned: no tier alias).
+    The Claude CLI gets --model only for a claude id/alias (claude_cli_model_arg), so a
+    claude-cli judge whose model is an inherited LLM_MODEL_NAME such as gpt-4o-mini runs
+    on the account default; codex exec is never given a model. Recording ``llm.model`` in
+    those cases would attribute the scores to a model that never served them.
+    """
+    provider = getattr(llm, "provider", None)
+    model = getattr(llm, "model", None)
+    if provider == "claude-cli":
+        from app.utils.llm_client import claude_cli_model_arg
+        return claude_cli_model_arg(model)
+    if provider == "codex-cli":
+        return None
+    return model
+
+
+def _served_model(llm) -> Optional[str]:
+    """The model the provider reported serving the judge's last call (INFRA-1 call metadata)."""
+    last_call_meta = getattr(llm, "last_call_meta", None)
+    meta = last_call_meta() if callable(last_call_meta) else None
+    return meta.get("served_model") if isinstance(meta, dict) else None
+
+
+def judge_identity(llm, served_models: Iterable[Optional[str]] = ()) -> Dict[str, Any]:
+    """The judge's identity, recorded with every score so each score is attributable
+    to the backbone that produced it (scores from different judges are not one series).
+
+    ``provider`` is the judge's provider; ``model`` the model its requests name (None
+    when a CLI judge runs on its own default, see _requested_model); ``served_models``
+    the sorted distinct models the provider reported serving the successful passes
+    (empty when it reports none, e.g. codex-cli).
+    """
+    return {
+        "provider": getattr(llm, "provider", None),
+        "model": _requested_model(llm),
+        "served_models": sorted({m for m in served_models if isinstance(m, str) and m}),
+    }
+
+
+def judge_mismatch(baseline_identity: Dict[str, Any], identity: Dict[str, Any]) -> bool:
+    """True when ``identity`` is not the judge that produced a baseline recorded with
+    ``baseline_identity``: a different provider or requested model, or served-model sets
+    that are both known and differ (a CLI judge whose account default model changed)."""
+    if any(baseline_identity.get(key) != identity.get(key) for key in ("provider", "model")):
+        return True
+    base_served = set(baseline_identity.get("served_models") or [])
+    served = set(identity.get("served_models") or [])
+    return bool(base_served and served and base_served != served)
 
 
 def _load_json(path: str) -> Any:
@@ -408,41 +458,68 @@ def cmd_run(args) -> int:
         return 2
     llm = _build_judge_client(args.judge_provider, args.api_key)
 
-    report: Dict[str, Any] = {"scenarios": {}, "overall_passed": True,
-                              "judge_identity": judge_identity(llm)}
+    report: Dict[str, Any] = {"scenarios": {}, "overall_passed": True}
     new_baseline: Dict[str, Any] = dict(baseline) if isinstance(baseline, dict) else {}
+    run_served: List[str] = []
+    mismatches: List[bool] = []
     for sp in scenario_paths:
         scenario = load_scenario(sp)
         name = scenario["name"]
         report_path = resolve_report_path(scenario)
         if not report_path or not os.path.exists(report_path):
-            print(f"  [skip] {name}: report not found at {report_path}")
-            report["scenarios"][name] = {"skipped": True, "report_path": report_path}
+            skipped: Dict[str, Any] = {"skipped": True, "report_path": report_path}
+            pid = None if scenario.get("report_path") else scenario.get("pipeline_id")
+            if pid:
+                skipped["pipeline_id"] = pid
+            if report_path:
+                reason = f"report not found at {report_path}"
+            elif pid:
+                reason = (f"pipeline {pid} has no resolvable report (pipeline_state.json "
+                          "missing/unreadable, no report_id, or an unsafe id)")
+            else:
+                reason = "scenario names neither a report_path nor a pipeline_id"
+            skipped["reason"] = reason
+            print(f"  [skip] {name}: {reason}")
+            report["scenarios"][name] = skipped
             continue
         report_md, forecast = _load_report_and_forecast(report_path)
         scored = judge_report(llm, report_md, scenario, rubric_text, k=args.k, forecast=forecast)
-        gate = compare_vs_baseline(scored["aggregate"],
-                                   baseline.get(name) if isinstance(baseline, dict) else None,
+        run_served.extend(scored["judge_identity"]["served_models"])
+        base_entry = baseline.get(name) if isinstance(baseline, dict) else None
+        gate = compare_vs_baseline(scored["aggregate"], base_entry,
                                    default_tolerance=args.tolerance)
         scored["gate"] = gate
+        # A baseline written by --update-baseline names its judge; scores from another
+        # judge are not one series with it, so the comparison is flagged (not silently gated).
+        base_identity = base_entry.get("judge_identity") if isinstance(base_entry, dict) else None
+        if isinstance(base_identity, dict):
+            scored["judge_mismatch"] = judge_mismatch(base_identity, scored["judge_identity"])
+            mismatches.append(scored["judge_mismatch"])
+            if scored["judge_mismatch"]:
+                print(f"  [warn] {name}: judge {scored['judge_identity']} differs from the "
+                      f"baseline's {base_identity}; the gate compares different judges",
+                      file=sys.stderr)
         report["scenarios"][name] = scored
         if gate.get("passed") is False:
             report["overall_passed"] = False
-        # update-baseline records the mean per dimension
+        # update-baseline records the mean per dimension and the judge that produced it
         new_baseline[name] = {dim: scored["aggregate"][dim]["mean"] for dim in RUBRIC_DIMENSIONS}
         new_baseline[name]["tolerance"] = args.tolerance
+        new_baseline[name]["judge_identity"] = scored["judge_identity"]
+    report["judge_identity"] = judge_identity(llm, run_served)
+    if mismatches:
+        report["judge_mismatch"] = any(mismatches)
 
+    from app.utils.atomic import write_json_atomic, write_text_atomic
     out = json.dumps(report, ensure_ascii=False, indent=2)
     if args.out:
-        with open(args.out, "w", encoding="utf-8") as f:
-            f.write(out)
+        write_text_atomic(args.out, out)
         print(f"wrote {args.out}")
     else:
         print(out)
 
     if args.update_baseline:
-        with open(BASELINE_PATH, "w", encoding="utf-8") as f:
-            json.dump(new_baseline, f, ensure_ascii=False, indent=2)
+        write_json_atomic(BASELINE_PATH, new_baseline)
         print(f"updated baseline → {BASELINE_PATH}")
         return 0
     # regression gate: non-zero exit on a real failure so CI/opt-in callers can branch

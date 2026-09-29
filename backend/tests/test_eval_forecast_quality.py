@@ -221,7 +221,7 @@ def test_judge_report_degrades_on_judge_exception():
     # every pass failed → all-zero samples, no crash
     assert result["k"] == 2
     assert result["aggregate"]["groundedness"]["mean"] == 0.0
-    assert result["judge_identity"] == {"provider": None, "model": None}
+    assert result["judge_identity"] == {"provider": None, "model": None, "served_models": []}
 
 
 # ------------------------------------------------------ EVAL-10: isolated judge
@@ -240,7 +240,7 @@ class _CountingTransport:
         self.calls.append(kwargs)
         message = SimpleNamespace(content=_JUDGE_REPLY, tool_calls=[])
         return SimpleNamespace(choices=[SimpleNamespace(message=message, finish_reason="stop")],
-                               usage=None)
+                               usage=None, model=f"{kwargs['model']}-served")
 
 
 @pytest.fixture
@@ -284,6 +284,8 @@ def test_k_passes_are_real_calls(judge_transport):
     # pinned: the judge's own model is sent, never the primary's tier alias
     assert [c["model"] for c in judge_transport.calls[1:]] == ["MiniMax-M3"] * 3
     assert judge_transport.calls[0]["model"] == "primary-strong-alias"
+    assert result["judge_identity"] == {"provider": "minimax", "model": "MiniMax-M3",
+                                        "served_models": ["MiniMax-M3-served"]}
 
 
 def test_judge_client_for_other_provider_is_isolated(judge_transport):
@@ -292,14 +294,65 @@ def test_judge_client_for_other_provider_is_isolated(judge_transport):
     assert judge.model != "primary-strong-alias"
     result = ev.judge_report(judge, "report", {"name": "t"}, "RUBRIC", k=2)
     assert [c["model"] for c in judge_transport.calls] == [judge.model, judge.model]
-    assert result["judge_identity"] == {"provider": "deepseek", "model": judge.model}
+    assert result["judge_identity"] == {"provider": "deepseek", "model": judge.model,
+                                        "served_models": [f"{judge.model}-served"]}
+
+
+def _cli_run(captured, stdout):
+    def fake_run(cmd, **kwargs):
+        captured.append(cmd)
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+    return fake_run
+
+
+def test_cli_judge_identity_records_what_served(judge_transport, monkeypatch):
+    """A CLI judge is recorded with the model it was asked for, or None, never LLM_MODEL_NAME."""
+    from app.config import Config
+    from app.utils import llm_client as lc
+
+    envelope = json.dumps({"type": "result", "subtype": "success", "is_error": False,
+                           "result": _JUDGE_REPLY,
+                           "modelUsage": {"claude-opus-4-8": {"outputTokens": 7}}})
+    captured = []
+    monkeypatch.setattr(lc.subprocess, "run", _cli_run(captured, envelope))
+    monkeypatch.setattr(Config, "LLM_PROVIDER", "claude-cli", raising=False)
+    monkeypatch.setattr(Config, "LLM_MODEL_NAME", "gpt-4o-mini", raising=False)
+
+    # the default claude-cli judge inherits a non-claude LLM_MODEL_NAME: no --model is passed,
+    # so the CLI serves its account default and that is what the identity records
+    judge = ev._build_judge_client(None, None)
+    assert judge.provider == "claude-cli" and judge.model == Config.LLM_MODEL_NAME
+    result = ev.judge_report(judge, "report", {"name": "t"}, "RUBRIC", k=2)
+    assert len(captured) == 2 and not any("--model" in cmd for cmd in captured)
+    assert result["aggregate"]["contradiction"]["mean"] == 5.0
+    assert result["judge_identity"] == {"provider": "claude-cli", "model": None,
+                                        "served_models": ["claude-opus-4-8"]}
+    assert result["judge_identity"]["model"] != Config.LLM_MODEL_NAME
+
+    # a claude model id is passed to the CLI, so it is the recorded requested model
+    monkeypatch.setattr(Config, "LLM_MODEL_NAME", "claude-sonnet-4-5", raising=False)
+    judge = ev._build_judge_client(None, None)
+    result = ev.judge_report(judge, "report", {"name": "t"}, "RUBRIC", k=1)
+    assert captured[-1][captured[-1].index("--model") + 1] == "claude-sonnet-4-5"
+    assert result["judge_identity"] == {"provider": "claude-cli", "model": "claude-sonnet-4-5",
+                                        "served_models": ["claude-opus-4-8"]}
+
+    # codex exec is never given a model and reports none: a minimax primary's model is not it
+    monkeypatch.setattr(Config, "LLM_PROVIDER", "minimax", raising=False)
+    monkeypatch.setattr(Config, "LLM_MODEL_NAME", "MiniMax-M3", raising=False)
+    monkeypatch.setattr(lc.subprocess, "run", _cli_run(captured, _JUDGE_REPLY))
+    judge = ev._build_judge_client("codex-cli", None)
+    result = ev.judge_report(judge, "report", {"name": "t"}, "RUBRIC", k=1)
+    assert captured[-1][:2] == ["codex", "exec"] and "--model" not in captured[-1]
+    assert result["judge_identity"] == {"provider": "codex-cli", "model": None, "served_models": []}
+    assert judge_transport.calls == []  # no OpenAI-compatible transport was used
 
 
 def test_output_records_judge_identity(fake_llm, tmp_path, monkeypatch):
     judge = fake_llm(json_responses=[dict.fromkeys(ev.RUBRIC_DIMENSIONS, 3)] * 2,
                      provider="kimi", model="kimi-judge")
     result = ev.judge_report(judge, "report", {"name": "t"}, "RUBRIC", k=1)
-    assert result["judge_identity"] == {"provider": "kimi", "model": "kimi-judge"}
+    assert result["judge_identity"] == {"provider": "kimi", "model": "kimi-judge", "served_models": []}
 
     # the `run` command records it for the whole run and for every scored scenario
     report = tmp_path / "report.md"
@@ -314,9 +367,100 @@ def test_output_records_judge_identity(fake_llm, tmp_path, monkeypatch):
                               api_key=None, k=1, tolerance=0.5, update_baseline=False, out=str(out))
     assert ev.cmd_run(args) == 0
     written = json.loads(out.read_text(encoding="utf-8"))
-    identity = {"provider": "kimi", "model": "kimi-judge"}
+    identity = {"provider": "kimi", "model": "kimi-judge", "served_models": []}
     assert written["judge_identity"] == identity
     assert written["scenarios"]["eval10-identity"]["judge_identity"] == identity
+    assert "judge_mismatch" not in written  # the baseline in use names no judge
+
+
+def _run_args(scenarios, out, *, update_baseline=False):
+    return argparse.Namespace(live=True, scenarios_dir=str(scenarios), judge_provider=None,
+                              api_key=None, k=1, tolerance=0.5,
+                              update_baseline=update_baseline, out=str(out))
+
+
+def test_baseline_records_judge_and_flags_a_different_judge(fake_llm, tmp_path, monkeypatch, capsys):
+    report = tmp_path / "report.md"
+    report.write_text("# Report\n\nBody", encoding="utf-8")
+    scenarios = tmp_path / "scenarios"
+    scenarios.mkdir()
+    (scenarios / "s.json").write_text(json.dumps({"name": "eval10-baseline",
+                                                  "report_path": str(report)}), encoding="utf-8")
+    baseline_path = tmp_path / "baseline_scores.json"
+    baseline_path.write_text(json.dumps({"_comment": "floors"}), encoding="utf-8")
+    monkeypatch.setattr(ev, "BASELINE_PATH", str(baseline_path))
+    scores = dict.fromkeys(ev.RUBRIC_DIMENSIONS, 3)
+
+    def judge_of(provider, model):
+        judge = fake_llm(json_responses=[scores], provider=provider, model=model)
+        monkeypatch.setattr(ev, "_build_judge_client", lambda provider, api_key: judge)
+
+    # --update-baseline writes the judge next to the scores it produced
+    judge_of("kimi", "kimi-judge")
+    assert ev.cmd_run(_run_args(scenarios, tmp_path / "a.json", update_baseline=True)) == 0
+    written = json.loads(baseline_path.read_text(encoding="utf-8"))
+    assert written["_comment"] == "floors"
+    assert written["eval10-baseline"]["judge_identity"] == {
+        "provider": "kimi", "model": "kimi-judge", "served_models": []}
+
+    # the same judge compares cleanly
+    judge_of("kimi", "kimi-judge")
+    assert ev.cmd_run(_run_args(scenarios, tmp_path / "b.json")) == 0
+    same = json.loads((tmp_path / "b.json").read_text(encoding="utf-8"))
+    assert same["judge_mismatch"] is False
+    assert same["scenarios"]["eval10-baseline"]["judge_mismatch"] is False
+    capsys.readouterr()
+
+    # another judge is flagged and warned about; the dimension gate itself is unchanged
+    judge_of("deepseek", "deepseek-chat")
+    assert ev.cmd_run(_run_args(scenarios, tmp_path / "c.json")) == 0
+    other = json.loads((tmp_path / "c.json").read_text(encoding="utf-8"))
+    assert other["judge_mismatch"] is True
+    assert other["scenarios"]["eval10-baseline"]["judge_mismatch"] is True
+    assert other["scenarios"]["eval10-baseline"]["gate"]["passed"] is True
+    assert "differs from the baseline's" in capsys.readouterr().err
+
+
+def test_judge_mismatch_rules():
+    base = {"provider": "claude-cli", "model": None, "served_models": ["claude-opus-4-8"]}
+    assert ev.judge_mismatch(base, dict(base)) is False
+    assert ev.judge_mismatch(base, {**base, "provider": "codex-cli"}) is True
+    assert ev.judge_mismatch(base, {**base, "model": "claude-sonnet-4-5"}) is True
+    # the CLI account default changed under an unchanged request
+    assert ev.judge_mismatch(base, {**base, "served_models": ["claude-sonnet-4-5"]}) is True
+    # unknown served models on either side are not evidence of a different judge
+    assert ev.judge_mismatch(base, {**base, "served_models": []}) is False
+    assert ev.judge_mismatch({"provider": "claude-cli", "model": None}, base) is False
+
+
+def test_skipped_pipeline_scenario_names_the_pipeline(fake_llm, tmp_path, monkeypatch, capsys):
+    from app.config import Config
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"), raising=False)
+    monkeypatch.setattr(Config, "UPLOAD_FOLDER", str(tmp_path), raising=False)
+    _write_pipeline_state(tmp_path / "pipelines", "pipe_done", {"report_id": "report_gone"})
+    scenarios = tmp_path / "scenarios"
+    scenarios.mkdir()
+    for name, body in (("no-state", {"pipeline_id": "pipe_nostate"}),
+                       ("no-file", {"pipeline_id": "pipe_done"}),
+                       ("nothing", {})):
+        (scenarios / f"{name}.json").write_text(json.dumps({"name": name, **body}), encoding="utf-8")
+    judge = fake_llm(provider="kimi", model="kimi-judge")
+    monkeypatch.setattr(ev, "_build_judge_client", lambda provider, api_key: judge)
+    out = tmp_path / "eval_report.json"
+    assert ev.cmd_run(_run_args(scenarios, out)) == 0
+    assert judge.calls == []
+    skipped = json.loads(out.read_text(encoding="utf-8"))["scenarios"]
+
+    assert skipped["no-state"]["pipeline_id"] == "pipe_nostate"
+    assert skipped["no-state"]["report_path"] is None and skipped["no-state"]["skipped"] is True
+    assert "pipeline pipe_nostate has no resolvable report" in skipped["no-state"]["reason"]
+    # the state names a report whose full_report.md does not exist: the path is reported
+    missing = os.path.join(str(tmp_path), "reports", "report_gone", "full_report.md")
+    assert skipped["no-file"] == {"skipped": True, "report_path": missing, "pipeline_id": "pipe_done",
+                                  "reason": f"report not found at {missing}"}
+    assert skipped["nothing"]["reason"] == "scenario names neither a report_path nor a pipeline_id"
+    printed = capsys.readouterr().out
+    assert "[skip] no-state: pipeline pipe_nostate has no resolvable report" in printed
 
 
 # ------------------------------------------------------ committed fixtures wiring

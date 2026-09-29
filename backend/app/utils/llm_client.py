@@ -395,6 +395,21 @@ def _cli_envelope_usage(envelope: Any) -> tuple:
         return None, None
 
 
+def claude_cli_model_arg(model: Optional[str]) -> Optional[str]:
+    """The ``--model`` value the Claude CLI is given for ``model``, or None (the CLI then runs
+    on the account's default model).
+
+    Only claude model ids/aliases pass through; anything else (e.g. another provider's
+    LLM_MODEL_NAME inherited by a claude-cli client) is dropped defensively. Callers that
+    attribute output to a model (the eval judge identity) use this to record the model the
+    CLI was actually asked for rather than ``LLMClient.model``.
+    """
+    m = (model or "").strip()
+    if m and (m.startswith("claude") or m in ("opus", "sonnet", "haiku")):
+        return m
+    return None
+
+
 def _empty_choices_error(response: Any, provider: str, model: Optional[str],
                          usage: Optional[Dict[str, int]]) -> Exception:
     """The typed error for a response without choices, carrying the provider's error envelope
@@ -595,20 +610,25 @@ class LLMClient:
     # ------------------------------------------------------------------
     # EXECPLAN2 I-6-2: 双层模型路由（fast / strong）
     # ------------------------------------------------------------------
-    def _model_for_tier(self, tier: Optional[str]) -> str:
+    def _model_for_tier(self, tier: Optional[str], *, pinned: Optional[bool] = None) -> str:
         """按 tier 解析实际使用的模型名。
 
         - tiered routing 关闭（默认）→ 一律返回 self.model（行为与现状逐字节一致）。
         - tier='fast'  → Config.fast_model()（未配置 LLM_FAST_MODEL 时回退到当前模型，不报错）。
         - tier='strong'/None/未知 → Config.strong_model()（同样回退到当前模型）。
         CLI 订阅提供方只有单一订阅模型，tier 在 _chat_* 中被忽略，此处返回值仅用于计量一致性。
+
+        ``pinned`` is the caller's once-per-call _routing_pinned() result, so the model and the
+        fast-tier client of one transport call come from a single read (None = read it here).
         """
         # The fast/strong aliases belong to the primary provider. A routing-pinned client
         # (fallback, pinned=True, or any provider other than the current primary) keeps its
         # own resolved model: the alias sent MiniMax-M3 to Quotio's Antigravity endpoint and
         # made every production failover return HTTP 400, and sent the primary's strong model
         # to ensemble / judge / comparison clients of other providers (400 -> silent failover).
-        if self._routing_pinned():
+        if pinned is None:
+            pinned = self._routing_pinned()
+        if pinned:
             return self.model
         if not getattr(Config, "LLM_TIERED_ROUTING", False):
             return self.model
@@ -830,6 +850,13 @@ class LLMClient:
                 # 完整的 3 次主重试（指数退避睡眠）+ 第二次回退 —— 双中断期间每次 chat()
                 # 白烧 5 次注定失败的调用（2026-07-08 实测：最高 231 错误/分钟持续 26 小时）。
                 # 直接抛出（复用穷尽路径的异常类型），让调用方快速失败。
+                if getattr(self, "_pinned", False):
+                    # EVAL-10: a pinned client never fails over by design, even with a healthy
+                    # LLM_FALLBACK_PROVIDER configured; say so instead of blaming the fallback.
+                    raise RuntimeError(
+                        f"LLM 调用失败：钉定客户端的提供方 {self.provider} 处于 422/429 熔断冷却"
+                        f"（pinned：不做失败转移）"
+                    )
                 raise RuntimeError(
                     f"LLM 调用失败：主提供方 {self.provider} 处于 422/429 熔断冷却，"
                     f"且回退提供方不可用"
@@ -1090,11 +1117,14 @@ class LLMClient:
         if _cb_tripped(self.provider):
             raise RuntimeError(f"chat_with_tools: 提供方 {self.provider} 处于 422/429 熔断冷却，回退 ReAct")
         # EXECPLAN2 I-6-2: 解析模型/客户端（默认 strong = 当前模型/主客户端，工具调用行为不变）。
-        model = self._model_for_tier(tier)
-        client = self._openai_client
         # EVAL-10: the fast-tier second client serves the primary provider's routing only; a
         # routing-pinned client (fallback, pinned, non-primary provider) keeps its own endpoint.
-        if (not self._routing_pinned()
+        # One _routing_pinned() read decides both, so a settings hot-switch mid-call cannot
+        # pair a tier alias with this client's own endpoint (or the reverse).
+        pinned = self._routing_pinned()
+        model = self._model_for_tier(tier, pinned=pinned)
+        client = self._openai_client
+        if (not pinned
                 and getattr(Config, "LLM_TIERED_ROUTING", False)
                 and tier == "fast"):
             fast_client = self._fast_provider_client()
@@ -1372,11 +1402,13 @@ class LLMClient:
     ) -> str:
         # EXECPLAN2 I-6-2: 解析本次实际模型与客户端。fast tier 指向不同提供方时用第二客户端，
         # 否则同提供方仅切模型名；关闭路由时 model=self.model、client=self._openai_client。
-        model = self._model_for_tier(tier)
-        client = self._openai_client
         # EVAL-10: the fast-tier second client serves the primary provider's routing only; a
         # routing-pinned client (fallback, pinned, non-primary provider) keeps its own endpoint.
-        if (not self._routing_pinned()
+        # One _routing_pinned() read decides both (see chat_with_tools).
+        pinned = self._routing_pinned()
+        model = self._model_for_tier(tier, pinned=pinned)
+        client = self._openai_client
+        if (not pinned
                 and getattr(Config, "LLM_TIERED_ROUTING", False)
                 and tier == "fast"):
             fast_client = self._fast_provider_client()
@@ -1479,8 +1511,8 @@ class LLMClient:
         # LLM_CLI_ISOLATE_HOOKS=false 可恢复继承用户钩子的旧行为。
         if bool(getattr(Config, "LLM_CLI_ISOLATE_HOOKS", True)):
             cmd += ["--settings", '{"disableAllHooks": true}']
-        _m = (self.model or "").strip()
-        if _m and (_m.startswith("claude") or _m in ("opus", "sonnet", "haiku")):
+        _m = claude_cli_model_arg(self.model)
+        if _m:
             cmd += ["--model", _m]
 
         try:
