@@ -10,6 +10,12 @@ The semantics are ported from the research gateway
 both transports read a completion the same way. The gateway runs in the
 deer-flow venv and never imports backend ``app.*`` modules, so it keeps its own
 copy; ``tests/test_llm_text.py`` pins the finish-reason vocabulary to it.
+
+Two deliberate differences from the gateway copy. The orphan ``</think>`` is
+located with a case-insensitive regex on the text itself: the gateway takes the
+index from ``text.lower()``, which is one character longer per U+0130 ('İ') and
+so cuts into the answer. And ``json_reply=True`` (a JSON response_format) keeps
+think tags that sit inside a reply opening with its JSON value.
 """
 
 from __future__ import annotations
@@ -55,8 +61,10 @@ def flatten_content(content: Any) -> str:
 # ---------------------------------------------------------------- think tags
 
 _THINK_TAG_RE = re.compile(r"<(/?)think>", re.IGNORECASE)
+_THINK_CLOSE_RE = re.compile(r"</think>", re.IGNORECASE)
 _DANGLING_THINK_RE = re.compile(r"<think>.*\Z", re.DOTALL | re.IGNORECASE)
-_THINK_CLOSE = "</think>"
+# A reply that opens with a JSON object or array, optionally inside a markdown code fence.
+_JSON_VALUE_START_RE = re.compile(r"\s*(?:```[A-Za-z]*\s*)?[\[{]")
 
 
 def _remove_think_blocks(text: str) -> str:
@@ -78,7 +86,7 @@ def _remove_think_blocks(text: str) -> str:
     return "".join(out)
 
 
-def _scan_think(text: str) -> tuple[str, bool, bool]:
+def _scan_think(text: str, json_reply: bool = False) -> tuple[str, bool, bool]:
     """Return ``(clean, changed, dangling)`` for ``text``.
 
     ``clean`` drops closed ``<think>`` blocks, everything up to the last orphan
@@ -86,19 +94,29 @@ def _scan_think(text: str) -> tuple[str, bool, bool]:
     ``<think>`` to the end of the text (reasoning cut by the output cap), then
     strips surrounding whitespace. ``changed`` is True when any think markup was
     removed; ``dangling`` is True when an unclosed opener was cut.
+
+    ``json_reply``: the caller asked for a JSON reply. When the text left after
+    the closed blocks opens with ``{`` or ``[`` (bare or inside a markdown code
+    fence), no reasoning precedes the answer, so an orphan closer or unclosed
+    opener in it is answer text (for example a string value ``"</think>"``) and
+    is kept.
     """
     if not text:
         return "", False, False
     cleaned = _remove_think_blocks(text)
-    orphan = cleaned.lower().rfind(_THINK_CLOSE)
-    if orphan != -1:
-        cleaned = cleaned[orphan + len(_THINK_CLOSE):]
+    if json_reply and _JSON_VALUE_START_RE.match(cleaned):
+        return cleaned.strip(), cleaned != text, False
+    last_close = None
+    for match in _THINK_CLOSE_RE.finditer(cleaned):
+        last_close = match
+    if last_close is not None:
+        cleaned = cleaned[last_close.end():]
     without_dangling = _DANGLING_THINK_RE.sub("", cleaned)
     dangling = without_dangling != cleaned
     return without_dangling.strip(), without_dangling != text, dangling
 
 
-def strip_think(text: str) -> tuple[str, bool]:
+def strip_think(text: str, *, json_reply: bool = False) -> tuple[str, bool]:
     """Remove inline reasoning from ``text``; return ``(clean, changed)``.
 
     Removes closed ``<think>...</think>`` blocks, any leading text up to an orphan
@@ -106,15 +124,21 @@ def strip_think(text: str) -> tuple[str, bool]:
     strips whitespace. ``changed`` reports whether think markup was removed
     (whitespace trimming alone does not count). A reply that is only a dangling
     ``<think>`` returns ``('', True)``.
+
+    The orphan rule cannot tell reasoning from an answer that itself contains a
+    literal ``</think>``: without ``json_reply`` such an answer loses everything
+    up to that tag. ``json_reply=True`` keeps the tags inside a reply that opens
+    with its JSON value (see ``_scan_think``).
     """
-    clean, changed, _ = _scan_think(text)
+    clean, changed, _ = _scan_think(text, json_reply)
     return clean, changed
 
 
-def has_dangling_think(text: str) -> bool:
+def has_dangling_think(text: str, *, json_reply: bool = False) -> bool:
     """True when ``text`` carries an unclosed ``<think>`` after closed blocks and
-    orphan closers are accounted for: the reply was cut mid-reasoning."""
-    return _scan_think(text)[2]
+    orphan closers are accounted for: the reply was cut mid-reasoning.
+    ``json_reply`` as in ``strip_think``."""
+    return _scan_think(text, json_reply)[2]
 
 
 # ---------------------------------------------------------------- finish reason

@@ -78,6 +78,47 @@ def test_strip_think_orphan_closer_and_trailing_dangling_opener():
     assert strip_think("answer <think> cut mid-reasoning") == ("answer", True)
 
 
+@pytest.mark.parametrize("raw, clean", [
+    # U+0130 lower-cases to two characters; an index taken from text.lower() cut into the answer.
+    ("İ reasoning</think>answer", "answer"),
+    ("İstanbul İzmir reasoning</think>answer", "answer"),
+    ("İ</think>ok", "ok"),
+    ("İ<think>x</think>y</THINK>answer", "answer"),
+    ("reasoning</thİnk>answer", "answer"),  # the tag regex is case-insensitive, as for blocks
+])
+def test_strip_think_orphan_closer_after_non_ascii_text(raw, clean):
+    assert strip_think(raw) == (clean, True)
+
+
+def test_orphan_closer_inside_a_plain_answer_is_still_cut():
+    """The documented trade-off of the gateway's orphan rule: a plain reply cannot be told
+    apart from reasoning, so an answer containing a literal closer loses its head."""
+    assert strip_think('{"k": "</think>"}') == ('"}', True)
+    assert strip_think("Use </think> to end reasoning.") == ("to end reasoning.", True)
+
+
+@pytest.mark.parametrize("raw, clean, changed", [
+    ('{"k": "</think>"}', '{"k": "</think>"}', False),
+    ('  [1, "</think>", 2]  ', '[1, "</think>", 2]', False),
+    ('{"k": "<think>"}', '{"k": "<think>"}', False),
+    ('```json\n{"k": "</think>"}\n```', '```json\n{"k": "</think>"}\n```', False),
+    ('```\n[1, "<think>"]\n```', '```\n[1, "<think>"]\n```', False),
+    ('<think>plan</think>{"k": "</think>"}', '{"k": "</think>"}', True),
+    # Leading reasoning (no opening tag) is still cut, even when it mentions braces.
+    ('plan the {"a": ...} shape</think>{"a": 1}', '{"a": 1}', True),
+    ("<think>cut by the cap", "", True),
+    ('plan</think>```json\n{"a": 1}\n```', '```json\n{"a": 1}\n```', True),
+])
+def test_json_reply_keeps_think_tags_inside_the_json_value(raw, clean, changed):
+    assert strip_think(raw, json_reply=True) == (clean, changed)
+
+
+def test_json_reply_dangling_flag():
+    assert not has_dangling_think('{"k": "<think>"}', json_reply=True)
+    assert has_dangling_think('{"k": "<think>"}')
+    assert has_dangling_think("<think>cut", json_reply=True)
+
+
 def test_strip_think_without_think_is_unchanged():
     assert strip_think("plain answer") == ("plain answer", False)
     # whitespace trimming alone is not a think change
@@ -97,11 +138,17 @@ def test_strip_think_gateway_semantics(raw, clean):
     assert strip_think(raw) == (clean, True)
 
 
-def test_strip_think_is_linear_time():
+@pytest.mark.parametrize("raw, expected", [
+    ("<think>" * 200_000, ("", True)),
+    ("</think>" * 200_000 + "answer", ("answer", True)),
+    ("<think>a</think>" * 100_000 + "answer", ("answer", True)),
+])
+def test_strip_think_is_linear_time(raw, expected):
+    # The linear scan takes ~0.03s here; the backtracking regex it replaced takes minutes, so
+    # this loose bound stays decisive without being sensitive to a loaded machine.
     started = time.monotonic()
-    clean, changed = strip_think("<think>" * 200_000)
-    assert (clean, changed) == ("", True)
-    assert time.monotonic() - started < 1.0
+    assert strip_think(raw) == expected
+    assert time.monotonic() - started < 5.0
 
 
 def test_has_dangling_think():

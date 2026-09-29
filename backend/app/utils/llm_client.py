@@ -225,13 +225,15 @@ class _CompletionDiagnostics:
 
     def __init__(self, message: str, *, finish_reason: str = "unknown",
                  raw_finish_reason: Any = None, usage: Optional[Dict[str, int]] = None,
-                 sent_max_tokens: Optional[int] = None, provider: str = "") -> None:
+                 sent_max_tokens: Optional[int] = None, provider: str = "",
+                 model: Optional[str] = None) -> None:
         super().__init__(message)
         self.finish_reason = finish_reason
         self.raw_finish_reason = raw_finish_reason
         self.usage = usage
         self.sent_max_tokens = sent_max_tokens
         self.provider = provider
+        self.model = model
 
 
 class EmptyCompletion(_CompletionDiagnostics, RuntimeError):
@@ -248,7 +250,15 @@ class LLMEmptyChoices(_CompletionDiagnostics, RuntimeError):
 
     The provider's own error text is kept in the message, so quota/auth wording still reaches
     _is_quota, the 429 breaker and the pipeline outage classifier.
+
+    ``deterministic`` marks an envelope that no retry can repair (see
+    _DETERMINISTIC_ENVELOPE_CODES): chat() and chat_with_tools stop retrying at once, as they
+    did when such an envelope surfaced as an IndexError, and chat() fails over.
     """
+
+    def __init__(self, message: str, *, deterministic: bool = False, **diagnostics: Any) -> None:
+        super().__init__(message, **diagnostics)
+        self.deterministic = deterministic
 
 
 class LLMContentFiltered(_CompletionDiagnostics, Exception):
@@ -274,8 +284,21 @@ _THINKING_KNOBS = {
 }
 # Substrings that DRF's text classifiers read as HTTP status codes (_is_quota matches a bare
 # '429'; the auth / invalid-request checks match delimited 401 / 400; ' 422' marks a content
-# filter). A max_tokens value containing one is left out of failure messages.
+# filter). A max_tokens value or model id containing one is left out of failure messages
+# (it stays on the exception's attributes).
 _STATUS_LIKE_CODES = ("400", "401", "422", "429")
+# MiniMax base_resp status codes that no retry can repair, each mapped to wording DRF's text
+# classifiers already recognise. The auth codes read as a 401, so _is_deterministic_auth_error
+# stops chat()'s retries, puts a failing fallback into its cooldown and gives the pipeline
+# outage classifier 'auth'. Insufficient balance reads as quota (_is_quota: 429 breaker, outage
+# 'quota'). Invalid parameters read as a deterministic 400. 2056 (usage limit) is not listed:
+# its own text already reads as quota and it stays retryable like every other quota error.
+_DETERMINISTIC_ENVELOPE_CODES = {
+    1004: "provider auth failure (status 401)",  # login fail / not authorized
+    2049: "provider auth failure (status 401)",  # invalid api key
+    1008: "provider quota exhausted (insufficient balance)",
+    2013: "provider rejected the request parameters (status 400)",
+}
 # Finish reasons whose reply is complete enough to replay from LLMCache.
 _CACHEABLE_FINISH_REASONS = frozenset({"stop", "tool_calls", "unknown"})
 
@@ -291,6 +314,16 @@ def _thinking_knob(provider: Optional[str]) -> Optional[str]:
 
 def _transport_strict() -> bool:
     return bool(getattr(Config, "LLM_TRANSPORT_STRICT", True))
+
+
+def _is_json_response_format(response_format: Optional[Dict]) -> bool:
+    return isinstance(response_format, dict) and response_format.get("type") in ("json_object", "json_schema")
+
+
+def _status_safe(value: Any) -> bool:
+    """True when ``str(value)`` holds none of _STATUS_LIKE_CODES, so a failure message may show it."""
+    text = str(value)
+    return not any(code in text for code in _STATUS_LIKE_CODES)
 
 
 def _field(obj: Any, name: str) -> Any:
@@ -367,8 +400,11 @@ def _empty_choices_error(response: Any, provider: str, model: Optional[str],
     """The typed error for a response without choices, carrying the provider's error envelope
     text (MiniMax base_resp, error). A content-filter envelope (MiniMax 'new_sensitive') gives
     LLMContentFiltered so chat() fails over at once instead of retrying a filtered prompt;
-    anything else gives LLMEmptyChoices."""
+    anything else gives LLMEmptyChoices, marked deterministic (and tagged with classifier
+    wording) for the codes in _DETERMINISTIC_ENVELOPE_CODES. The model id appears in the
+    message only when it looks like no status code (a '...-0429' id must not read as quota)."""
     details: List[str] = []
+    code = None
     try:
         extra = getattr(response, "model_extra", None)
         extra = extra if isinstance(extra, dict) else {}
@@ -386,15 +422,19 @@ def _empty_choices_error(response: Any, provider: str, model: Optional[str],
     except Exception:  # noqa: BLE001 — best-effort diagnostics only
         pass
     detail = "; ".join(details)[:400] or "the response carried no error detail"
+    source = f"provider={provider}, model={model}" if _status_safe(model) else f"provider={provider}"
     if details and _is_content_filter(Exception(detail)):
         return LLMContentFiltered(
-            f"LLM response has no choices: provider content_filter envelope "
-            f"(provider={provider}, model={model}): {detail}",
-            finish_reason="content_filter", usage=usage, provider=provider,
+            f"LLM response has no choices: provider content_filter envelope ({source}): {detail}",
+            finish_reason="content_filter", usage=usage, provider=provider, model=model,
         )
+    rejection = _DETERMINISTIC_ENVELOPE_CODES.get(_as_int(code))
+    if rejection:
+        detail = f"{rejection}; {detail}"
     return LLMEmptyChoices(
-        f"LLM response has no choices (provider={provider}, model={model}): {detail}",
-        finish_reason="error", usage=usage, provider=provider,
+        f"LLM response has no choices ({source}): {detail}",
+        finish_reason="error", usage=usage, provider=provider, model=model,
+        deterministic=rejection is not None,
     )
 
 
@@ -416,7 +456,7 @@ def _completion_failure(provider: str, finish_reason: str, raw_finish_reason: An
             sent_max_tokens=max_tokens, provider=provider,
         )
     parts = [f"finish_reason={finish_reason}"]
-    if max_tokens is not None and not any(code in str(max_tokens) for code in _STATUS_LIKE_CODES):
+    if max_tokens is not None and _status_safe(max_tokens):
         parts.append(f"max_tokens={max_tokens}")
     parts.append(f"provider={provider}")
     message = f"LLM returned empty content ({', '.join(parts)})."
@@ -716,7 +756,8 @@ class LLMClient:
         模型/提供方；CLI 订阅提供方与关闭路由时一律 no-op（graceful degradation）。
 
         INFRA-1: 空回复/无 choices/中止分别抛 EmptyCompletion / LLMEmptyChoices /
-        LLMAbortedCompletion（均为 RuntimeError，照常退避重试）；审查拦截抛 LLMContentFiltered
+        LLMAbortedCompletion（均为 RuntimeError，照常退避重试；鉴权失败/余额不足/参数非法等
+        确定性错误信封除外——不重试，直接回退）；审查拦截抛 LLMContentFiltered
         （非 RuntimeError：不重试，直接尝试一次回退）。本次调用的 finish_reason/usage 等见 last_call_meta()。
         """
         # EXECPLAN2 I-6-2: 解析本次调用实际使用的模型（fast/strong）。关闭路由时 = self.model。
@@ -784,6 +825,13 @@ class LLMClient:
                     break
                 if _is_quota(exc):
                     _cb_record_429(self.provider)  # LLM-3: 连续配额失败达阈值 → 冷却直连回退
+                if isinstance(exc, LLMEmptyChoices) and exc.deterministic:
+                    # INFRA-1: 确定性错误信封（余额不足/参数非法等）重试无益，直接转回退。
+                    logger.warning(
+                        "LLM provider rejection is deterministic; skipping retries: %s",
+                        _err_brief(exc),
+                    )
+                    break
                 if attempt < MAX_RETRIES - 1:
                     delay = _retry_delay(exc, attempt)
                     logger.warning(
@@ -1048,6 +1096,9 @@ class LLMClient:
                 last_error = exc
                 if _is_quota(exc):
                     _cb_record_429(self.provider)
+                if isinstance(exc, LLMEmptyChoices) and exc.deterministic:
+                    logger.warning(f"chat_with_tools 遇确定性错误信封，不再重试: {_err_brief(exc)}")
+                    break
                 if attempt < MAX_RETRIES - 1:
                     delay = _retry_delay(exc, attempt)
                     logger.warning(
@@ -1218,15 +1269,16 @@ class LLMClient:
         """移除推理模型的 <think> 标签。"""
         return re.sub(r'<think>[\s\S]*?</think>', '', content).strip()
 
-    def _normalize_reply_text(self, raw: str, strict: bool) -> tuple:
+    def _normalize_reply_text(self, raw: str, strict: bool, json_reply: bool = False) -> tuple:
         """(text, think_stripped) of an API reply's flattened content.
 
         ``strict`` (LLM_TRANSPORT_STRICT, default on): llm_text.strip_think also removes an
-        orphan ``</think>`` and a dangling ``<think>`` cut by the output cap. Off: the legacy
-        _clean_content, which removes closed blocks only.
+        orphan ``</think>`` and a dangling ``<think>`` cut by the output cap, except inside a
+        ``json_reply`` that opens with its JSON value. Off: the legacy _clean_content, which
+        removes closed blocks only.
         """
         if strict:
-            return strip_think(raw)
+            return strip_think(raw, json_reply=json_reply)
         cleaned = self._clean_content(raw)
         return cleaned, cleaned != raw.strip()
 
@@ -1320,7 +1372,8 @@ class LLMClient:
         raw_finish = getattr(choice, "finish_reason", None)
         finish = normalize_finish_reason(raw_finish)
         strict = _transport_strict()
-        content, think_stripped = self._normalize_reply_text(raw_content, strict)
+        json_reply = _is_json_response_format(response_format)
+        content, think_stripped = self._normalize_reply_text(raw_content, strict, json_reply)
         # 推理模型在 content 被推理耗尽时会返回空串/None（finish_reason=length）。
         # 明确报错而不是把空串交给下游 JSON 解析，便于定位与重试。strict 模式按剥离推理后的正文判空；
         # 关闭时沿用历史判据（原文判空，返回 _clean_content 结果）。
@@ -1330,7 +1383,7 @@ class LLMClient:
         self._stamp_call_meta(
             model=model, finish_reason=finish, raw_finish_reason=raw_finish, usage=usage,
             usage_source="provider", served_model=getattr(response, "model", None),
-            think_stripped=think_stripped, dangling=has_dangling_think(raw_content),
+            think_stripped=think_stripped, dangling=has_dangling_think(raw_content, json_reply=json_reply),
         )
         return content
 
@@ -1439,7 +1492,8 @@ class LLMClient:
                 model=getattr(self, "model", None), finish_reason="stop", usage=cli_usage,
                 usage_source="cli",
                 served_model=served_model, think_stripped=content != raw_content.strip(),
-                dangling=has_dangling_think(raw_content),
+                dangling=has_dangling_think(
+                    raw_content, json_reply=_is_json_response_format(response_format)),
             )
             return content
 

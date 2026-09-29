@@ -149,6 +149,101 @@ def test_chat_retries_empty_choices_then_raises_typed_error_not_index_error():
     assert client.last_call_meta() is None
 
 
+def _envelope(code, status_msg):
+    return SimpleNamespace(choices=None, usage=None,
+                           model_extra={"base_resp": {"status_code": code, "status_msg": status_msg}})
+
+
+@pytest.mark.parametrize("code, status_msg", [
+    (1004, "login fail: Please carry the API secret key in the 'Authorization' field"),
+    (2049, "invalid api key"),
+])
+def test_minimax_auth_envelope_fails_over_after_a_single_attempt(monkeypatch, code, status_msg):
+    script = _Script(_envelope(code, status_msg))
+    client = _client(script)
+    fallback_calls = []
+    monkeypatch.setattr(lc.LLMClient, "_try_fallback",
+                        lambda self, *a: fallback_calls.append(a[-1]) or "fallback text")
+    assert client.chat([{"role": "user", "content": f"auth-envelope-{code}"}]) == "fallback text"
+    assert len(script.calls) == 1
+    exc, = fallback_calls
+    assert isinstance(exc, lc.LLMEmptyChoices) and exc.deterministic
+    assert str(code) in str(exc) and status_msg in str(exc) and "model=MiniMax-M3" in str(exc)
+    assert lc._is_deterministic_auth_error(exc) and not lc._is_quota(exc)
+    assert _classify_provider_outage(exc) == "auth"
+
+
+def test_insufficient_balance_envelope_counts_as_quota_without_retries():
+    script = _Script(_envelope(1008, "insufficient balance"))
+    client = _client(script)
+    with pytest.raises(lc.LLMEmptyChoices, match="1008") as ei:
+        client.chat([{"role": "user", "content": "balance-envelope"}])
+    assert len(script.calls) == 1
+    assert ei.value.deterministic and lc._is_quota(ei.value)
+    assert not lc._is_deterministic_auth_error(ei.value)
+    assert _classify_provider_outage(ei.value) == "quota"
+    assert lc._CB_STATE["minimax"]["consec429"] == 1.0  # counted toward the 429 breaker
+
+
+def test_invalid_params_envelope_is_not_retried_and_is_no_outage():
+    script = _Script(_envelope(2013, "invalid params, temperature out of range"))
+    client = _client(script)
+    with pytest.raises(lc.LLMEmptyChoices, match="2013") as ei:
+        client.chat([{"role": "user", "content": "invalid-params-envelope"}])
+    assert len(script.calls) == 1
+    assert ei.value.deterministic and lc._is_deterministic_invalid_request_error(ei.value)
+    assert not lc._is_deterministic_auth_error(ei.value) and not lc._is_quota(ei.value)
+    assert _classify_provider_outage(ei.value) is None
+
+
+@pytest.mark.parametrize("code, status_msg", [
+    (2056, "usage limit exceeded (2056)"), (1002, "rate limit exceeded"), (1013, "internal error"),
+])
+def test_transient_envelopes_keep_the_retry_budget(code, status_msg):
+    script = _Script(_envelope(code, status_msg))
+    client = _client(script)
+    with pytest.raises(lc.LLMEmptyChoices) as ei:
+        client.chat([{"role": "user", "content": f"transient-envelope-{code}"}])
+    assert not ei.value.deterministic
+    assert len(script.calls) == lc.MAX_RETRIES
+
+
+def test_fallback_auth_envelope_enters_the_deterministic_cooldown(monkeypatch):
+    primary_script = _Script(_resp(content="", finish="content_filter"))
+    fallback_script = _Script(_envelope(2049, "invalid api key"))
+    fakes = {"kimi": primary_script, "minimax": fallback_script}
+    monkeypatch.setattr(lc.LLMClient, "_build_openai_client",
+                        staticmethod(lambda provider, api_key, base_url: _fake_openai(fakes[provider])))
+    monkeypatch.setenv("LLM_FALLBACK_PROVIDER", "minimax")
+    monkeypatch.setenv("LLM_FALLBACK_MODEL", "MiniMax-M3")
+    monkeypatch.setenv("LLM_FALLBACK_API_KEY", "sk-bad")
+    monkeypatch.setenv("LLM_FALLBACK_BASE_URL", "http://127.0.0.1:2/v1")
+    client = lc.LLMClient(provider="kimi", api_key="sk-test",
+                          base_url="http://127.0.0.1:1/v1", model="kimi-k2")
+    with pytest.raises(lc.LLMContentFiltered):
+        client.chat([{"role": "user", "content": "fallback-auth-envelope"}])
+    assert len(primary_script.calls) == 1 and len(fallback_script.calls) == 1
+    assert ("minimax", "MiniMax-M3", "http://127.0.0.1:2/v1") in lc._FB_AUTH_UNAVAILABLE_UNTIL
+
+
+@pytest.mark.parametrize("model", ["abab6.5s-chat-0429", "MiniMax-M2-2401", "glm-4-1422"])
+def test_status_like_model_id_stays_out_of_envelope_messages(model):
+    script = _Script(SimpleNamespace(choices=[], usage=None))
+    client = _client(script, model=model)
+    with pytest.raises(lc.LLMEmptyChoices) as ei:
+        client.chat([{"role": "user", "content": f"status-like-model-{model}"}])
+    exc = ei.value
+    assert model not in str(exc) and exc.model == model
+    assert not lc._is_quota(exc) and not lc._is_content_filter(exc)
+    assert _classify_provider_outage(exc) is None
+    assert lc._CB_STATE.get("minimax", {}).get("consec429", 0.0) == 0.0  # no 429-breaker count
+
+    filtered = lc._empty_choices_error(_envelope(1027, "output new_sensitive"), "minimax", model, None)
+    assert isinstance(filtered, lc.LLMContentFiltered) and filtered.model == model
+    assert model not in str(filtered) and not lc._is_quota(filtered)
+    assert _classify_provider_outage(filtered) is None
+
+
 # ---------------------------------------------------------------- empty completion
 def test_length_with_empty_content_raises_empty_completion_without_outage_words():
     script = _Script(_resp(content="", finish="length", usage=_usage(90, 512)))
@@ -310,9 +405,33 @@ def test_orphan_closer_is_stripped_only_in_strict_mode(monkeypatch):
     assert client._chat_openai([{"role": "user", "content": "q"}], 0.2, 256) == "answer"
     assert client.last_call_meta()["think_stripped"] is True
 
+    client = _client(_Script(_resp(content="İ</think>ok")))
+    assert client.chat([{"role": "user", "content": "unicode-orphan"}]) == "ok"
+
     monkeypatch.setattr(Config, "LLM_TRANSPORT_STRICT", False, raising=False)
+    client = _client(_Script(_resp(content="reasoning</think>answer")))
     assert client._chat_openai([{"role": "user", "content": "q"}], 0.2, 256) == "reasoning</think>answer"
     assert client.last_call_meta()["think_stripped"] is False
+
+
+def test_chat_json_keeps_a_literal_think_tag_inside_the_json_value():
+    script = _Script(_resp(content='{"k": "</think>", "v": "<think>"}'))
+    client = _client(script)
+    assert client.chat_json([{"role": "user", "content": "json-literal-tag"}]) == {"k": "</think>", "v": "<think>"}
+    assert len(script.calls) == 1 and script.calls[0]["response_format"] == {"type": "json_object"}
+    meta = client.last_call_meta()
+    assert meta["think_stripped"] is False and meta["cacheable"] is True
+
+    fenced = _client(_Script(_resp(content='```json\n{"k": "</think>"}\n```')))
+    assert fenced.chat_json([{"role": "user", "content": "json-fenced-tag"}]) == {"k": "</think>"}
+
+    # JSON mode still removes leading reasoning that lacks its opening tag.
+    orphan = _client(_Script(_resp(content='plan the {"k": ...} shape</think>{"k": 1}')))
+    assert orphan.chat_json([{"role": "user", "content": "json-orphan"}]) == {"k": 1}
+
+    # Documented trade-off: a plain reply keeps the gateway's orphan rule and loses its head.
+    plain = _client(_Script(_resp(content='{"k": "</think>"}')))
+    assert plain.chat([{"role": "user", "content": "plain-literal-tag"}]) == '"}'
 
 
 def test_unterminated_think_raises_in_strict_mode_and_passes_through_legacy(monkeypatch):
@@ -332,10 +451,11 @@ def test_flag_off_returns_exactly_the_legacy_clean_content(monkeypatch):
     monkeypatch.setattr(Config, "LLM_TRANSPORT_STRICT", False, raising=False)
     corpus = ["plain", "  padded  \n", "<think>a</think>b", "a<think>b</think>c<think>d</think>e",
               "<think>only reasoning</think>", "x </think> y", "<THINK>upper</THINK>z"]
-    for raw in corpus:
-        client = _client(_Script(_resp(content=raw)))
-        out = client._chat_openai([{"role": "user", "content": "q"}], 0.2, 256)
-        assert out == client._clean_content(raw)
+    for raw in corpus + ['{"k": "</think>"}', '{"k": "<think>"}']:
+        for response_format in (None, {"type": "json_object"}):
+            client = _client(_Script(_resp(content=raw)))
+            out = client._chat_openai([{"role": "user", "content": "q"}], 0.2, 256, response_format)
+            assert out == client._clean_content(raw)
 
 
 def test_strict_output_equals_legacy_output_for_well_formed_replies(monkeypatch):
@@ -578,6 +698,14 @@ def test_chat_with_tools_content_filter_envelope_fails_fast():
         client.chat_with_tools([{"role": "user", "content": "q"}], tools_schema=[])
     assert len(script.calls) == 1
     assert lc._CB_STATE["minimax"]["consec"] == 1.0
+
+
+def test_chat_with_tools_deterministic_envelope_fails_fast():
+    script = _Script(_envelope(1004, "login fail"))
+    client = _client(script)
+    with pytest.raises(lc.LLMEmptyChoices, match="status 401"):
+        client.chat_with_tools([{"role": "user", "content": "q"}], tools_schema=[])
+    assert len(script.calls) == 1
 
 
 def test_chat_with_tools_strips_think_like_chat(monkeypatch):
