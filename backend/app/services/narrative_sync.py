@@ -19,7 +19,8 @@ Precision first — a number is rewritten only when
   word) equals the old probability of exactly one scenario whose value changed;
 * it is not a range endpoint or one end of a stated move ("30–40%",
   "from 55% to 50%", "由40%下调至35%");
-* it is not a quantity ("52% share", "增长40%", "占约40%");
+* it is not a quantity ("52% share", "增长40%", "占约40%") or a signed change
+  ("+10%", "−5%");
 * it does not take part in a sum statement ("合计50%" and the addends that make
   it up, "40% + 35%").
 
@@ -86,6 +87,9 @@ _QUANTITY_BEFORE_RE = re.compile(
     r"增长|增速|占比|份额|渗透率|同比|税率|利率|占|(?<![A-Za-z])(?:growth|share|rate|tariff)",
     re.I,
 )
+# A signed number ("+10%", "−5%", "±3%") is a change, never a probability.  A sign
+# after a digit ("40%-45%") is a range joiner, which the range guard checks first.
+_SIGN_CHARS = frozenset("+＋-−±")
 
 # Sum guard.  Sentences split on 。；;.!?！？ and newlines (a '.' between digits is a
 # decimal point, not a stop).
@@ -190,6 +194,8 @@ def _is_range(text: str, start: int, end: int) -> bool:
 
 
 def _is_quantity(text: str, start: int, end: int) -> bool:
+    if start > 0 and text[start - 1] in _SIGN_CHARS:
+        return True
     if _QUANTITY_AFTER_RE.match(text, end):
         return True
     return bool(_QUANTITY_BEFORE_RE.search(text, max(0, start - _QUANTITY_BEFORE_WINDOW), start))

@@ -141,6 +141,18 @@ def test_range_and_quantity_guards_skip_mapped_values():
     assert skipped == {"range": 2, "quantity": 4}
 
 
+def test_signed_changes_are_quantities():
+    before = _rows(("A", 0.40), ("D", 0.10), ("C", 0.50))
+    after = _rows(("A", 0.35), ("D", 0.05), ("C", 0.60))
+    text = "AI capex (+10%), power −10%, ±10% band, ＋10%, -10%; D (10%)."
+
+    new_text, edits, skipped = sync_probability_numbers(text, before, after)
+
+    assert new_text == text.replace("D (10%)", "D (5%)")
+    assert [(e["from"], e["to"]) for e in edits] == [("10%", "5%")]
+    assert skipped == {"quantity": 5}
+
+
 def test_stated_moves_are_left_alone():
     """A before→after pair ("由40%下调至35%", "from 40% to 35%", "40% → 35%") is
     history plus a critic target, never one scenario's current value."""
