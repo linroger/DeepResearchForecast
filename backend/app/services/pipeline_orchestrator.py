@@ -1996,11 +1996,14 @@ def _synthesis_provider_unavailable(error: Any) -> bool:
 RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
     ("PREDICTION_MARKETS_END_DATE_GATE", "bool"),
     ("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", "float"),
+    ("RESEARCH_FORECAST_INPUTS", "bool"),
     ("RESEARCH_SOURCE_TAXONOMY", "bool"),
 )
 RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_AS_OF_PIN", "bool"),
     ("RESEARCH_QUANT_TYPING", "bool"),
+    ("RESEARCH_QUESTION_SPEC", "bool"),
+    ("RESEARCH_V3_FORECAST_INPUTS", "bool"),
     ("RESEARCH_VERIFIED_FACTS", "bool"),
 )
 # Child-env text per registry kind: bools are 'true'/'false', never '1'/'0'.
@@ -9958,6 +9961,10 @@ class PipelineOrchestrator:
             # REPORT-7 (RESEARCH_VERIFIED_FACTS): v3's claim/figure-to-page-span projection;
             # optional (absent with the knob off, on legacy runs and older handoffs).
             specs.append(("verified_facts", os.path.join(hd, "verified_facts.json")))
+            # RESEARCH-11 (RESEARCH_QUESTION_SPEC): v3's operational definition of the
+            # question (drf.question_spec/v1), written at plan time; optional (absent
+            # with the knob off, on legacy runs and older handoffs).
+            specs.append(("question_spec", os.path.join(hd, "question_spec.json")))
             specs.append(("prediction_markets", os.path.join(hd, "prediction_markets.json")))
             specs.append(("market_price_history", os.path.join(hd, "market_price_history.json")))
             specs.append(("prediction_market_candidates",

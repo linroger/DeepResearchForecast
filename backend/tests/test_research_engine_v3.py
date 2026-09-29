@@ -44,7 +44,8 @@ _ENV_EXACT = ("DEERFLOW_RESEARCH_TIMEOUT", "RESEARCH_MODEL_CONCURRENCY_GLOBAL", 
               "RESEARCH_ENGINE", "RESEARCH_LINEAR_MODE", "RESEARCH_SOURCE_DENY_DOMAINS",
               "RESEARCH_QUANT_TYPING", "RESEARCH_VERIFIED_FACTS",
               "RESEARCH_FETCH_SHELL_DETECTION", "RESEARCH_FETCH_CALL_TIMEOUT_S", "RESEARCH_AS_OF_PIN",
-              "RESEARCH_SOURCE_TAXONOMY")
+              "RESEARCH_SOURCE_TAXONOMY", "RESEARCH_QUESTION_SPEC", "RESEARCH_FORECAST_INPUTS",
+              "RESEARCH_V3_FORECAST_INPUTS")
 
 
 @pytest.fixture(autouse=True)
@@ -144,7 +145,7 @@ def ai(text: str = "", tool_calls=None, invalid=None, *, inp: int = 1000, cached
                      response_metadata={"finish_reason": finish})
 
 
-TASK_MARKERS = ("SCOPE TASK", "PLANNING TASK", "KIQ INVESTIGATION TASK", "GAP REVIEW TASK",
+TASK_MARKERS = ("SCOPE TASK", "QUESTION SPEC TASK", "PLANNING TASK", "KIQ INVESTIGATION TASK", "GAP REVIEW TASK",
                 "SECTION WRITING TASK", "EXECUTIVE SUMMARY TASK", "CRITIQUE TASK",
                 "ACTOR EXTRACTION TASK", "FACT EXTRACTION TASK", "CACHE WARM-UP")
 
@@ -205,7 +206,8 @@ class World:
         if role == "prime":
             return ai("OK", out=1)
         handler = {
-            "SCOPE TASK": self.scope, "PLANNING TASK": self.plan, "agent": self.agent,
+            "SCOPE TASK": self.scope, "QUESTION SPEC TASK": self.question_spec, "PLANNING TASK": self.plan,
+            "agent": self.agent,
             "GAP REVIEW TASK": self.gap, "SECTION WRITING TASK": self.writer,
             "EXECUTIVE SUMMARY TASK": self.exec_summary, "CRITIQUE TASK": self.critique,
             "ACTOR EXTRACTION TASK": self.actors, "FACT EXTRACTION TASK": self.facts,
@@ -222,6 +224,18 @@ class World:
                               "scout_queries": ["data centre capacity 2023", "grid connection queue",
                                                 "hyperscaler capex 2025", "数据中心 容量"],
                               "key_entities": ["National energy agency", "Hyperscalers"]}))
+
+    def question_spec(self, call):
+        return ai(json.dumps({
+            "operational_question": "Will installed global data-centre capacity exceed 250 GW on 31 December 2027?",
+            "outcome_definition": "Installed global data-centre IT capacity above 250 GW at the end of 2027.",
+            "resolution_source": {"name": "National energy agency annual capacity survey",
+                                  "url": "https://www.agency1.org/data/capacity", "kind": "official_statistic"},
+            "horizon": {"label": "by 31 December 2027", "date": "2027-12-31", "basis": "explicit"},
+            "reference_class": "Multi-year infrastructure build-out targets",
+            "assumptions": [{"text": "Capacity means installed IT load, not grid connections.", "slot": "units"},
+                            {"text": "The agency's end-2027 survey settles the question.",
+                             "slot": "resolution_source"}]}))
 
     def plan(self, call):
         titles = (["市场基线", "需求驱动", "主要参与方", "电网约束", "情景与概率", "观察信号"] if self.zh()
