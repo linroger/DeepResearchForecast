@@ -89,7 +89,7 @@ filterwarnings = ["ignore::DeprecationWarning"]
 markers = [
     "integration: live test that may use the network and real providers; deselected by default and exempt from the egress guard",
     "localhost: allow loopback (127.0.0.1 / ::1) socket connects under the egress guard",
-    "subprocess_egress: allow spawning provider CLIs (claude, codex, curl, wget) and pipeline child scripts under the egress guard",
+    "subprocess_egress: allow spawning provider CLIs (claude, codex, curl, wget), the macOS keychain CLI (security) and pipeline child scripts under the egress guard",
 ]
 
 # EXECPLAN2 I-7-6: lint gate. Scoped to the cheap, high-signal rules so it can be a

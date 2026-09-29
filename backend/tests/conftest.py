@@ -10,6 +10,10 @@ sockets / DNS / provider-CLI spawns are refused unless a test opts in with a
 marker (localhost, subprocess_egress, integration), process-global breakers
 and caches are reset around every test, and Config._persist_env never writes
 the real .env.
+
+No ``pytest_plugins`` here: pytest rejects it in a conftest that is not
+top-level (``pytest .`` from the repo root); test_suite_isolation.py loads
+pytester itself.
 """
 
 import os
@@ -19,13 +23,12 @@ import pytest
 
 import _hermetic
 
-pytest_plugins = ("pytester",)
-
-# INFRA-12: pop every ambient name that could steer DRF code (Config knobs,
-# .env names, credentials, egress endpoints) before anything imports ``app``,
-# so an exported LLM_PROVIDER or API key cannot change test behaviour.  Runs
-# once per process: `from tests.conftest import ...` re-executes this file under
-# a second module name and must not pop names that app modules set since.
+# INFRA-12: pop every ambient name that could steer DRF code (names the DRF
+# sources read, Config knobs, .env names, credentials, egress endpoints) before
+# anything imports ``app``, so an exported LLM_PROVIDER, API key or feature flag
+# cannot change test behaviour.  Runs once per process: `from tests.conftest
+# import ...` re-executes this file under a second module name and must not pop
+# names that app modules set since.
 _FIRST_CONFTEST_LOAD = _hermetic.ENV_BASELINE is None
 if _FIRST_CONFTEST_LOAD:
     _hermetic.scrub_ambient_env(os.environ)
@@ -56,8 +59,8 @@ class FakeLLMClient:
     test_suite_isolation.py pins with a signature-subset meta-test.
     """
 
-    def __init__(self, responses=None, json_responses=None, tool_responses=None,
-                 provider="fake", model="fake-1"):
+    def __init__(self, responses=None, json_responses=None, provider="fake", model="fake-1",
+                 *, tool_responses=None):
         self.provider = provider
         self.model = model
         self._responses = list(responses or [])
@@ -279,21 +282,51 @@ def pytest_collection_finish(session):
     _hermetic.EGRESS_GUARD.install()
 
 
+@pytest.hookimpl(wrapper=True, trylast=True)
 def pytest_sessionfinish(session):
-    """Restore the unguarded socket / DNS / subprocess functions."""
-    _hermetic.EGRESS_GUARD.uninstall()
+    """Fail the session for egress refused after the last test, then restore the originals.
+
+    The innermost wrapper: its finally runs after pytest has torn down whatever
+    fixtures remained (an interrupted run) and before the terminal summary.  A
+    refusal recorded this late (a thread that outlived the last test, a
+    session fixture torn down here) has no test left to fail, so it is printed
+    and turns a passing exit status into TESTS_FAILED.
+    """
+    try:
+        return (yield)
+    finally:
+        guard = _hermetic.EGRESS_GUARD
+        refusals = guard.take_refusals()
+        guard.uninstall()
+        if refusals:
+            _report_session_refusals(session, refusals)
+
+
+def _report_session_refusals(session, refusals):
+    message = "egress refused after the last test's teardown: " + "; ".join(refusals)
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None:
+        reporter.write_sep("=", "egress refused outside any test", red=True)
+        reporter.write_line(message, red=True)
+    else:
+        print(message, file=sys.stderr)
+    if session.exitstatus in (pytest.ExitCode.OK, pytest.ExitCode.NO_TESTS_COLLECTED):
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_setup(item):
     """Apply the test's egress policy before any of its fixtures (any scope) is set up.
 
-    - TCP/UDP connects over AF_INET/AF_INET6 are refused, loopback included,
+    - AF_INET/AF_INET6 connects and datagrams are refused, loopback included,
       unless the test is marked @pytest.mark.localhost (loopback only);
-    - socket.getaddrinfo refuses every hostname except localhost and IP literals;
-    - subprocess.Popen refuses claude / codex / curl / wget and the pipeline
-      children (run_*_simulation.py, deerflow_research.py, resolution_monitor.py)
-      unless the test is marked @pytest.mark.subprocess_egress;
+    - the resolvers refuse every hostname except localhost and IP literals, and
+      reverse lookups of non-loopback addresses;
+    - Popen / os.system / os.posix_spawn / os.exec* refuse claude, codex, curl,
+      wget, the macOS keychain CLI (security) and the pipeline children
+      (run_*_simulation.py, deerflow_research.py, resolution_monitor.py), also
+      behind sh -c, env, timeout, uv run or npx/node, unless the test is marked
+      @pytest.mark.subprocess_egress;
     - @pytest.mark.integration tests are exempt.
     """
     guard = _hermetic.EGRESS_GUARD
@@ -308,11 +341,24 @@ def pytest_runtest_setup(item):
 
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_teardown(item, nextitem):
-    """Back to the between-tests policy (refuse everything) once the test is torn down."""
+    """Fail this teardown for egress refused while its fixtures were torn down, then
+    return to the between-tests policy (refuse everything).
+
+    _no_egress checks when the function-scoped fixtures unwind; this catches what
+    is torn down after it: autouse fixtures set up before it and the class,
+    module and session fixtures this item's teardown finalizes (pytest charges
+    those to the item whose teardown runs them, as it does for their errors).
+    """
+    guard = _hermetic.EGRESS_GUARD
     try:
         return (yield)
     finally:
-        _hermetic.EGRESS_GUARD.idle()
+        refusals = guard.take_refusals()
+        guard.idle()
+        if refusals:
+            pytest.fail(
+                "egress refused while tearing down this test's fixtures (any scope): "
+                + "; ".join(refusals), pytrace=False)
 
 
 @pytest.fixture(autouse=True)

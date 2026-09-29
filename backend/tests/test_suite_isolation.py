@@ -2,11 +2,14 @@
 
 Covers the harness in tests/_hermetic.py and tests/conftest.py:
 
-- the ambient scrub pops steering / credential / egress names and keeps infra;
+- the ambient scrub pops steering / credential / egress names (every env name
+  the DRF sources read, pinned by an independent AST scan) and keeps infra;
 - importing a test module that mutates os.environ stops the session (UsageError);
-- sockets, DNS and provider-CLI / pipeline-child spawns are refused and recorded,
-  so a test that swallows the error still fails; markers opt in narrowly; the
-  policy covers fixtures of every scope and the gap between tests;
+- sockets, datagrams, DNS and provider-CLI / keychain / pipeline-child spawns
+  (also behind sh -c, env, timeout, uv run, npx/node and os-level spawners) are
+  refused and recorded, so a test that swallows the error still fails; markers
+  opt in narrowly; the policy covers fixtures of every scope, their teardown,
+  the gap between tests and the end of the session;
 - process-global breakers and caches do not leak from one test into the next;
 - FakeLLMClient accepts every parameter of the real LLMClient methods;
 - load_project_dotenv is a no-op in the test process and plain load_dotenv
@@ -20,6 +23,7 @@ patches can never touch this process.
 import ast
 import inspect
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -37,6 +41,10 @@ import yaml
 
 import _hermetic
 from tests.conftest import FakeLLMClient
+
+# Loaded here, not in conftest.py: pytest rejects pytest_plugins in a conftest
+# that is not top-level (`pytest .` from the repo root).
+pytest_plugins = ("pytester",)
 
 _TESTS_DIR = Path(__file__).resolve().parent
 _BACKEND_DIR = _TESTS_DIR.parent
@@ -61,17 +69,19 @@ def _pyproject_pytest_options():
         return tomllib.load(fh)["tool"]["pytest"]["ini_options"]
 
 
-def _run_inner_session(pytester, source, conftest_extra=""):
-    """Run ``source`` as a test module under the real conftest in a child pytest.
+def _run_inner_session(pytester, source, conftest_extra="", *args):
+    """Run test modules under the real conftest in a child pytest.
 
-    ``conftest_extra`` is appended to the conftest shim (extra hooks for one run).
+    ``source`` is the text of test_inner.py or a {module name: text} mapping,
+    ``conftest_extra`` is appended to the conftest shim (extra hooks for one
+    run) and ``args`` are passed to the child pytest.
     """
     markers = "\n".join(f"    {line}" for line in _pyproject_pytest_options()["markers"])
     pytester.makeini(f"[pytest]\naddopts = -p no:cacheprovider --strict-markers\nmarkers =\n{markers}\n")
     pytester.makeconftest(_CONFTEST_SHIM.format(tests_dir=str(_TESTS_DIR),
                                                 conftest=str(_TESTS_DIR / "conftest.py")) + conftest_extra)
-    pytester.makepyfile(test_inner=source)
-    return pytester.runpytest_subprocess("-rA", timeout=180)
+    pytester.makepyfile(**(source if isinstance(source, dict) else {"test_inner": source}))
+    return pytester.runpytest_subprocess("-rA", *args, timeout=180)
 
 
 @contextmanager
@@ -108,6 +118,7 @@ def test_scrub_pops_steering_credential_and_egress_names_and_keeps_infra():
         "OPENAI_BASE_URL": "https://proxy.example/v1",
         "ANTHROPIC_BASE_URL": "https://proxy.example",
         "ACME_BASE_URL": "https://acme.example",   # *_BASE_URL
+        "ACME_API_URL": "https://acme.example",    # *_API_URL
         "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example",
         "SOME_SERVICE_TOKEN": "t", "DB_PASSWORD": "p", "APP_SECRET": "s",
         "LLM_ACME_DISABLE_THINKING": "true",       # per-provider dynamic knob
@@ -124,23 +135,38 @@ def test_scrub_pops_steering_credential_and_egress_names_and_keeps_infra():
     assert environ["TRANSFORMERS_OFFLINE"] == "1"
 
 
-def test_scrub_pops_names_from_config_env_example_and_local_dotenv_files(tmp_path):
-    (tmp_path / "backend" / "app").mkdir(parents=True)
-    (tmp_path / "backend" / "app" / "config.py").write_text(
-        "import os\nX = os.environ.get('CUSTOM_CONFIG_KNOB', 'a')\nY = os.environ['OTHER_CONFIG_KNOB']\n",
-        encoding="utf-8")
-    (tmp_path / ".env.example").write_text("# DOC_ONLY_KNOB=1\nDOC_ACTIVE_KNOB=2\n", encoding="utf-8")
-    (tmp_path / ".env").write_text("export ROOT_DOTENV_KNOB='v'\n", encoding="utf-8")
-    (tmp_path / "backend" / ".env").write_text("BACKEND_DOTENV_KNOB=v\n", encoding="utf-8")
-    names = ["CUSTOM_CONFIG_KNOB", "OTHER_CONFIG_KNOB", "DOC_ONLY_KNOB", "DOC_ACTIVE_KNOB",
+def test_scrub_pops_names_from_config_docs_dotenv_files_and_sources(tmp_path):
+    files = {
+        "backend/app/config.py":
+            "import os\nX = os.environ.get('CUSTOM_CONFIG_KNOB', 'a')\nY = os.environ['OTHER_CONFIG_KNOB']\n",
+        "backend/app/services/svc.py": "flag = _env_flag('APP_HELPER_KNOB')\nkey = os.getenv('SHORTKNOB')\n",
+        "backend/scripts/tool.py": "PROMPT_ENV = 'SCRIPT_CONSTANT_KNOB'\n",
+        "backend/run.py": "if 'RUNNER_KNOB' in os.environ:\n    pass\n",
+        "deerflow_bridge/bridge.py": "for name in ('BRIDGE_TUPLE_KNOB',):\n    pass\n",
+        "deerflow_bridge/config.yaml": "model: $YAML_REF_MODEL\nurl: ${YAML_REF_TARGET}\n",
+        "drf2/driver/cli.py": "limit = _cfg_int('DRF2_KNOB', 3)\n",
+        "scripts/salvage.py": "x = getattr(Config, 'ROOT_SCRIPT_KNOB', 0)\n",
+        "backend/tests/test_x.py": "os.environ.get('TEST_ONLY_OPT_IN')\n",       # tests are not scanned
+        "backend/app/.venv/lib/site.py": "os.environ.get('VENDORED_KNOB')\n",   # nor virtualenvs
+        ".env.example": "# DOC_ONLY_KNOB=1\nDOC_ACTIVE_KNOB=2\n",
+        ".env": "export ROOT_DOTENV_KNOB='v'\n",
+        "backend/.env": "BACKEND_DOTENV_KNOB=v\n",
+    }
+    for relative, text in files.items():
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    names = ["CUSTOM_CONFIG_KNOB", "OTHER_CONFIG_KNOB", "APP_HELPER_KNOB", "SHORTKNOB",
+             "SCRIPT_CONSTANT_KNOB", "RUNNER_KNOB", "BRIDGE_TUPLE_KNOB", "YAML_REF_MODEL",
+             "YAML_REF_TARGET", "DRF2_KNOB", "ROOT_SCRIPT_KNOB", "DOC_ONLY_KNOB", "DOC_ACTIVE_KNOB",
              "ROOT_DOTENV_KNOB", "BACKEND_DOTENV_KNOB"]
-    environ = dict.fromkeys(names, "ambient")
-    environ["UNRELATED_NAME"] = "kept"
+    kept = {"TEST_ONLY_OPT_IN": "kept", "VENDORED_KNOB": "kept", "UNRELATED_NAME": "kept"}
+    environ = {**dict.fromkeys(names, "ambient"), **kept}
 
     popped = _hermetic.scrub_ambient_env(environ, repo_root=str(tmp_path))
 
     assert popped == sorted(names)
-    assert environ == {"UNRELATED_NAME": "kept", "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"}
+    assert environ == {**kept, "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"}
 
 
 def test_scrub_covers_every_name_config_reads():
@@ -150,16 +176,118 @@ def test_scrub_covers_every_name_config_reads():
     assert set(environ) == {"HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"}
 
 
+# Independent oracle for the source scan: an AST walk, not _hermetic's regex.
+_ORACLE_SOURCE_ROOTS = ("backend/app", "backend/scripts", "backend/run.py", "deerflow_bridge", "drf2", "scripts")
+_ENV_NAME_SHAPE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+
+def _oracle_python_sources():
+    for relative in _ORACLE_SOURCE_ROOTS:
+        root = _REPO_ROOT / relative
+        if root.is_file():
+            yield root
+            continue
+        for path in sorted(root.rglob("*.py")):
+            if not {".venv", "node_modules", "__pycache__"} & set(path.parts):
+                yield path
+
+
+def _is_environ(node):
+    return ((isinstance(node, ast.Attribute) and node.attr == "environ")
+            or (isinstance(node, ast.Name) and node.id == "environ"))
+
+
+def _reads_environment(function):
+    return any(_is_environ(node) or (isinstance(node, ast.Attribute) and node.attr == "getenv")
+               for node in ast.walk(function))
+
+
+def _env_names_read_by_sources():
+    """Env names the DRF sources read, found by walking their ASTs.
+
+    A name counts when it reaches os.environ.get / pop / setdefault,
+    os.environ[...], ``in os.environ`` or os.getenv, either directly or as the
+    first argument of a helper whose body reads the environment (_env_flag,
+    _cfg_int, _resolve_credential_path, ...), as a literal or through a
+    module-level string constant.
+    """
+    trees = [ast.parse(path.read_text(encoding="utf-8"), str(path)) for path in _oracle_python_sources()]
+    helpers = {node.name for tree in trees for node in ast.walk(tree)
+               if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+               and node.args.args and _reads_environment(node)}
+    names = set()
+    for tree in trees:
+        constants = {target.id: node.value.value for node in tree.body if isinstance(node, ast.Assign)
+                     and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
+                     for target in node.targets if isinstance(target, ast.Name)}
+
+        def resolve(expr, constants=constants):
+            if isinstance(expr, ast.Constant) and isinstance(expr.value, str):
+                return expr.value
+            return constants.get(expr.id) if isinstance(expr, ast.Name) else None
+
+        for node in ast.walk(tree):
+            key = None
+            if isinstance(node, ast.Call) and node.args:
+                func = node.func
+                called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+                environ_method = (isinstance(func, ast.Attribute) and _is_environ(func.value)
+                                  and called in ("get", "pop", "setdefault"))
+                if environ_method or called == "getenv" or called in helpers:
+                    key = resolve(node.args[0])
+            elif isinstance(node, ast.Subscript) and _is_environ(node.value):
+                key = resolve(node.slice)
+            elif (isinstance(node, ast.Compare) and any(isinstance(op, (ast.In, ast.NotIn)) for op in node.ops)
+                  and any(_is_environ(c) for c in node.comparators)):
+                key = resolve(node.left)
+            if key and _ENV_NAME_SHAPE.match(key):
+                names.add(key)
+    return names
+
+
+def test_scrub_covers_every_env_name_the_sources_read():
+    read = _env_names_read_by_sources()
+    # Knobs that once survived the scrub (read outside config.py, via helpers or constants).
+    assert {"REPORT_META_CHARTS", "SIM_ACTOR_ROLE_PROMPT_MAX_CHARS", "GLOBAL_ACTOR_BLOCK_CHARS",
+            "FIRECRAWL_API_URL", "DEERFLOW_RESEARCH_MODEL", "CODEX_AUTH_PATH",
+            "DEERFLOW_CLAUDE_PROMPT_CACHE"} <= read
+    environ = dict.fromkeys(read, "ambient")
+    _hermetic.scrub_ambient_env(environ)
+    survivors = sorted(name for name in environ
+                       if name not in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE") and not _hermetic._is_protected(name))
+    assert survivors == []
+
+
+def test_hostile_ambient_knobs_never_reach_the_suite(pytester, monkeypatch):
+    hostile = {
+        "LLM_PROVIDER": "openai", "OPENAI_API_KEY": "sk-hostile", "REPORT_META_CHARTS": "true",
+        "SIM_ACTOR_ROLE_PROMPT_MAX_CHARS": "50", "GLOBAL_ACTOR_BLOCK_CHARS": "100",
+        "DEERFLOW_RESEARCH_MODEL": "bogus-model", "FIRECRAWL_API_URL": "https://firecrawl.example",
+        "CODEX_AUTH_PATH": "/nonexistent/auth.json",
+    }
+    for name, value in hostile.items():
+        monkeypatch.setenv(name, value)
+    result = _run_inner_session(pytester, f"""
+import os
+
+
+def test_ambient_knobs_were_scrubbed_before_app_import():
+    assert sorted(set({sorted(hostile)!r}) & set(os.environ)) == []
+""")
+    result.assert_outcomes(passed=1)
+
+
 def test_this_session_started_from_a_scrubbed_environment():
     baseline = _hermetic.ENV_BASELINE
     assert baseline is not None
     assert baseline["DRF_TEST_PROCESS"] == "1"
     assert baseline["HF_HUB_OFFLINE"] == "1" and baseline["TRANSFORMERS_OFFLINE"] == "1"
     drift = _hermetic._env_drift()
+    set_by_the_harness = {"DRF_TEST_PROCESS", "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"}
+    steering = _hermetic._steering_names(_hermetic.REPO_ROOT) - set_by_the_harness
     leaked = [name for name in baseline
               if not _hermetic._is_protected(name)
-              and (drift.is_secret(name) or _hermetic._is_egress_name(name)
-                   or name in drift.config_env_vars() - {"DRF_TEST_PROCESS"})]
+              and (drift.is_secret(name) or _hermetic._is_egress_name(name) or name in steering)]
     assert leaked == []
 
 
@@ -258,9 +386,56 @@ def test_dns_allows_localhost_and_ip_literals():
     assert socket.getaddrinfo("::1", 80)
     assert socket.getaddrinfo("localhost", 80)
     assert socket.getaddrinfo(None, 80)
+    assert socket.gethostbyname("127.0.0.1") == "127.0.0.1"
 
 
-_NO_PATH = {"PATH": "/nonexistent-drf-test-path"}  # if the guard ever failed, nothing would spawn
+def test_the_other_resolvers_are_guarded_too(_no_egress):
+    for resolve, name in ((socket.gethostbyname, "example.com"), (socket.gethostbyname_ex, "example.com"),
+                          (socket.gethostbyaddr, "example.com"), (socket.gethostbyaddr, "192.0.2.1")):
+        with pytest.raises(_hermetic.EgressRefused):
+            resolve(name)
+    assert _no_egress.take_refusals() == ["DNS lookup of 'example.com'"] * 3 + ["reverse DNS lookup of '192.0.2.1'"]
+
+
+def test_reverse_lookup_is_allowed_for_loopback_only():
+    guard = _hermetic.EgressGuard()  # never installed: the check is called directly
+    guard.activate()
+    for address in ("127.0.0.1", "::1", "localhost"):
+        guard._check_reverse_resolve(address)
+    assert guard.take_refusals() == []
+
+
+def test_datagrams_to_the_network_are_refused(_no_egress):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        with pytest.raises(_hermetic.EgressRefused):
+            sock.sendto(b"x", ("192.0.2.1", 9))
+        with pytest.raises(_hermetic.EgressRefused):
+            sock.sendto(b"x", 0, ("192.0.2.1", 9))
+        with pytest.raises(_hermetic.EgressRefused):
+            sock.sendmsg([b"x"], [], 0, ("192.0.2.1", 9))
+    finally:
+        sock.close()
+    assert _no_egress.take_refusals() == [
+        "socket sendto ('192.0.2.1', 9)", "socket sendto ('192.0.2.1', 9)", "socket sendmsg ('192.0.2.1', 9)"]
+
+
+@pytest.mark.localhost
+def test_localhost_marker_allows_loopback_datagrams():
+    server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        server.bind(("127.0.0.1", 0))
+        server.settimeout(5)
+        client.sendto(b"ping", server.getsockname())
+        assert server.recv(4) == b"ping"
+    finally:
+        client.close()
+        server.close()
+
+
+_MISSING_DIR = "/nonexistent-drf-test-path"
+_NO_PATH = {"PATH": _MISSING_DIR}  # if the guard ever failed, nothing would spawn
 
 
 @pytest.mark.parametrize("argv,kwargs", [
@@ -275,11 +450,30 @@ _NO_PATH = {"PATH": "/nonexistent-drf-test-path"}  # if the guard ever failed, n
     (["python3", "/nonexistent/deerflow_research.py", "--query", "q"], {}),
     (["python3", "/nonexistent/resolution_monitor.py", "run", "--all-recent"], {}),
     (["whatever"], {"executable": "claude"}),
+    (["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"], {}),
+    (["sh", "-c", "claude -p x"], {}),
+    (["env", "FOO=1", "codex", "exec"], {}),
+    (["timeout", "60", "claude", "-p", "x"], {}),
 ])
 def test_provider_cli_and_pipeline_child_spawns_are_refused(_no_egress, argv, kwargs):
     with pytest.raises(PermissionError):
         subprocess.Popen(argv, env=_NO_PATH, **kwargs)
     assert len(_no_egress.take_refusals()) == 1
+
+
+def test_os_level_spawners_are_guarded(_no_egress):
+    # Every program path below is missing, so a guard failure could not start anything.
+    with pytest.raises(_hermetic.EgressRefused):
+        os.system(f"{_MISSING_DIR}/codex exec x")
+    with pytest.raises(_hermetic.EgressRefused):
+        os.posix_spawn(f"{_MISSING_DIR}/claude", ["claude", "-p", "x"], {})
+    with pytest.raises(_hermetic.EgressRefused):
+        os.posix_spawnp(f"{_MISSING_DIR}/claude", ["claude", "-p", "x"], {})
+    with pytest.raises(_hermetic.EgressRefused):
+        os.execv(f"{_MISSING_DIR}/curl", ["curl", "https://example.com"])
+    with pytest.raises(_hermetic.EgressRefused):
+        os.execve(f"{_MISSING_DIR}/wget", ["wget", "https://example.com"], {})
+    assert len(_no_egress.take_refusals()) == 5
 
 
 def test_subprocess_run_is_refused_through_popen(_no_egress):
@@ -305,6 +499,13 @@ def test_real_popen_fixture_bypasses_the_guard(_no_egress, real_popen):
         real_popen(["codex", "--version"], env=_NO_PATH)
     proc = real_popen([sys.executable, "-c", "pass"])
     assert proc.wait(timeout=30) == 0
+    assert _no_egress.take_refusals() == []
+
+
+def test_real_popen_fixture_also_bypasses_the_os_level_spawn_hooks(_no_egress, real_popen):
+    # A program path with close_fds=False lets Popen spawn through os.posix_spawn where available.
+    with pytest.raises(FileNotFoundError):
+        real_popen([f"{_MISSING_DIR}/codex", "--version"], close_fds=False)
     assert _no_egress.take_refusals() == []
 
 
@@ -336,8 +537,9 @@ def test_refusals_from_background_threads_are_recorded(_no_egress):
 
 def test_guard_passes_everything_through_when_no_policy_is_active():
     guard = _hermetic.EgressGuard()
-    guard._check_connect(SimpleNamespace(family=socket.AF_INET), ("192.0.2.1", 80))
+    guard._check_address(SimpleNamespace(family=socket.AF_INET), ("192.0.2.1", 80), "connect to")
     guard._check_resolve("example.com")
+    guard._check_reverse_resolve("192.0.2.1")
     guard._check_spawn(["claude", "-p", "x"], None, False)
     assert guard.take_refusals() == []
 
@@ -346,7 +548,7 @@ def test_between_tests_policy_refuses_everything_and_labels_the_record():
     guard = _hermetic.EgressGuard()  # never installed: the checks are called directly
     guard.idle()
     with pytest.raises(_hermetic.EgressRefused):
-        guard._check_connect(SimpleNamespace(family=socket.AF_INET), ("127.0.0.1", 80))
+        guard._check_address(SimpleNamespace(family=socket.AF_INET), ("127.0.0.1", 80), "connect to")
     with pytest.raises(_hermetic.EgressRefused):
         guard._check_resolve("example.com")
     with pytest.raises(_hermetic.EgressRefused):
@@ -364,6 +566,10 @@ def test_between_tests_policy_refuses_everything_and_labels_the_record():
     (["git", "log", "--", "backend/scripts/run_parallel_simulation.py"], False),
     (["ruff", "check", "deerflow_bridge/deerflow_research.py"], False),
     (["uv", "run", "python", "backend/scripts/run_twitter_simulation.py"], True),
+    (["uv", "run", "backend/scripts/run_parallel_simulation.py"], True),
+    (["uv", "--directory", "backend", "run", "--no-sync", "python", "-u", "x/deerflow_research.py"], True),
+    (["uv", "run", "--no-sync", "pytest", "-q"], False),
+    (["uv", "pip", "list"], False),
     (["/venv/bin/python3.12", "-u", "/x/deerflow_research.py", "--query", "q"], True),
     (["/x/backend/scripts/run_reddit_simulation.py", "--config", "c.json"], True),
 ])
@@ -376,6 +582,49 @@ def test_pipeline_child_scripts_are_refused_only_when_run(argv, refused):
         assert refused, argv
     else:
         assert not refused, argv
+    assert len(guard.take_refusals()) == int(refused)
+
+
+@pytest.mark.parametrize("args,shell,refused", [
+    # shells running an inline command line
+    (["sh", "-c", "claude -p x"], False, True),
+    (["/bin/bash", "-lc", "curl https://example.com"], False, True),
+    (["bash", "-o", "pipefail", "-c", "ls | wget https://example.com"], False, True),
+    (["sh", "-c", "sh -c 'codex exec x'"], False, True),
+    (["sh", "script.sh"], False, False),
+    # launchers in front of the program
+    (["env", "claude", "-p", "x"], False, True),
+    (["env", "-i", "-u", "HOME", "FOO=1", "codex", "exec"], False, True),
+    (["env", "-S", "claude -p x"], False, True),
+    (["timeout", "-s", "KILL", "60", "claude", "-p", "x"], False, True),
+    (["nice", "-n", "5", "nohup", "stdbuf", "-oL", "xargs", "-I", "{}", "codex", "{}"], False, True),
+    (["env", "python3", "-c", "pass"], False, False),
+    # provider CLIs through JavaScript launchers
+    (["npx", "@anthropic-ai/claude-code"], False, True),
+    (["npx", "-y", "@openai/codex@latest", "exec", "x"], False, True),
+    (["node", "/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js", "-p", "x"], False, True),
+    (["node", "/x/claude-code/cli.js"], False, True),
+    (["pnpm", "dlx", "codex"], False, True),
+    (["node", "script.js", "--model", "claude"], False, False),
+    # shell=True lines: only words in command position are programs
+    ("ls /tmp/claude", True, False),
+    ("echo claude codex", True, False),
+    ("grep -r run_parallel_simulation.py backend", True, False),
+    ("cd /tmp && FOO=1 codex exec x > out.txt", True, True),
+    ("echo $(claude -p x)", True, True),
+    ("echo `wget https://example.com`", True, True),
+    ("if claude -p x; then echo ok; fi", True, True),
+    ("python3 backend/scripts/run_reddit_simulation.py", True, True),
+])
+def test_spawn_check_looks_through_shells_and_launchers(args, shell, refused):
+    guard = _hermetic.EgressGuard()  # never installed: the check is called directly
+    guard.activate()
+    try:
+        guard._check_spawn(args, None, shell)
+    except _hermetic.EgressRefused:
+        assert refused, args
+    else:
+        assert not refused, args
     assert len(guard.take_refusals()) == int(refused)
 
 
@@ -511,6 +760,84 @@ def pytest_runtest_logreport(report):
     ])
 
 
+def test_egress_while_higher_scoped_fixtures_are_torn_down_fails_that_teardown(pytester):
+    """Refusals after _no_egress's check fail the teardown that finalized the fixture
+    (as pytest reports its errors), never an innocent later test."""
+    result = _run_inner_session(pytester, {
+        "test_a": """
+import socket
+
+import pytest
+
+
+def _swallowed_lookup(host):
+    try:
+        socket.getaddrinfo(host, 80)
+    except OSError:
+        pass
+
+
+@pytest.fixture(scope="session")
+def session_resource():
+    yield
+    _swallowed_lookup("session-teardown.example")
+
+
+@pytest.fixture(scope="module")
+def module_resource():
+    yield
+    _swallowed_lookup("module-teardown.example")
+
+
+def test_a1(session_resource, module_resource):
+    pass
+
+
+def test_a2(module_resource):
+    pass
+""",
+        "test_b": """
+def test_b1():
+    pass
+""",
+    })
+    result.assert_outcomes(passed=3, errors=2)
+    result.stdout.fnmatch_lines([
+        "*ERROR at teardown of test_a2*",
+        "*egress refused while tearing down this test's fixtures (any scope): "
+        "DNS lookup of 'module-teardown.example'",
+        "*ERROR at teardown of test_b1*",
+        "*egress refused while tearing down this test's fixtures (any scope): "
+        "DNS lookup of 'session-teardown.example'",
+    ])
+    result.stdout.fnmatch_lines(["PASSED test_a.py::test_a1", "PASSED test_a.py::test_a2", "PASSED test_b.py::test_b1"])
+    assert "between tests" not in result.stdout.str()
+
+
+def test_egress_after_the_last_test_fails_the_session(pytester):
+    pytester.makepyfile(late_egress_plugin="""
+import socket
+
+import pytest
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_sessionfinish(session):
+    # Stands in for a thread that outlived the last test.
+    try:
+        socket.getaddrinfo("after-the-last-test.example", 80)
+    except OSError:
+        pass
+""")
+    result = _run_inner_session(pytester, "def test_passes():\n    pass\n", "", "-p", "late_egress_plugin")
+    assert result.ret == pytest.ExitCode.TESTS_FAILED
+    result.stdout.fnmatch_lines([
+        "*egress refused outside any test*",
+        "egress refused after the last test's teardown: DNS lookup of 'after-the-last-test.example' (between tests*",
+    ])
+    result.assert_outcomes(passed=1)
+
+
 # ---------------------------------------------------------------------------
 # Process-global state reset
 # ---------------------------------------------------------------------------
@@ -630,6 +957,14 @@ def test_fake_llm_client_records_tier_and_scripts_tool_calls():
     assert fake.last_call_meta() is None
 
 
+def test_fake_llm_client_keeps_its_positional_constructor_order():
+    fake = FakeLLMClient(["r"], [{"a": 1}], "prov", "model-x")
+    assert (fake.provider, fake.model) == ("prov", "model-x")
+    assert fake.chat([]) == "r" and fake.chat_json([]) == {"a": 1}
+    tool_responses = inspect.signature(FakeLLMClient).parameters["tool_responses"]
+    assert tool_responses.kind is inspect.Parameter.KEYWORD_ONLY
+
+
 # ---------------------------------------------------------------------------
 # load_project_dotenv
 # ---------------------------------------------------------------------------
@@ -712,6 +1047,16 @@ def test_markers_are_registered_strict_and_integration_is_opt_in(request):
     assert {"integration", "localhost", "subprocess_egress"} <= registered
     assert "--strict-markers" in options["addopts"]
     assert "-m 'not integration'" in options["addopts"]
+
+
+def test_conftest_does_not_define_pytest_plugins():
+    """pytest rejects pytest_plugins in a conftest that is not top-level, which
+    breaks `pytest .` from the repo root; pytester is loaded by this module."""
+    tree = ast.parse((_TESTS_DIR / "conftest.py").read_text(encoding="utf-8"))
+    assigned = {target.id for node in tree.body if isinstance(node, (ast.Assign, ast.AnnAssign))
+                for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+                if isinstance(target, ast.Name)}
+    assert "pytest_plugins" not in assigned
 
 
 def test_ci_cancels_superseded_runs_and_tests_two_timezones():
