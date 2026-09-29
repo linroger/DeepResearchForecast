@@ -16572,9 +16572,11 @@ def _legacy_only_mode(args: Any) -> str:
 # quant_provenance (RESEARCH-4), which summarises v3-labelled quantitative rows
 # that the legacy extraction rewrites without labels, and as_of_model_disagreement
 # (TIME-1), which describes the v3 actors.json as_of_date the legacy extraction
-# rewrites with its own as-of.
+# rewrites with its own as-of, and verified_facts (REPORT-7), whose quant counts
+# describe that same rewritten quantitative.json (verified_facts.json itself binds
+# the file it indexes by quantitative_sha256, so a stale copy is detectable).
 _SALVAGE_VOLATILE_META_KEYS = frozenset({"status", "error", "traceback", "finished_at", "quant_provenance",
-                                         "as_of_model_disagreement"})
+                                         "as_of_model_disagreement", "verified_facts"})
 
 
 def _prior_v3_meta(out_dir: Path) -> dict[str, Any] | None:

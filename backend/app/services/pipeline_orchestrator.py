@@ -9897,6 +9897,9 @@ class PipelineOrchestrator:
             specs.append(("sources", os.path.join(hd, "sources.json")))
             specs.append(("quantitative", os.path.join(hd, "quantitative.json")))
             specs.append(("contested", os.path.join(hd, "contested.json")))
+            # REPORT-7 (RESEARCH_VERIFIED_FACTS): v3's claim/figure-to-page-span projection;
+            # optional (absent with the knob off, on legacy runs and older handoffs).
+            specs.append(("verified_facts", os.path.join(hd, "verified_facts.json")))
             specs.append(("prediction_markets", os.path.join(hd, "prediction_markets.json")))
             specs.append(("market_price_history", os.path.join(hd, "market_price_history.json")))
             specs.append(("prediction_market_candidates",
