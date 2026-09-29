@@ -15004,7 +15004,7 @@ def _pm_fetch_price_history(clob_token_id: Any, interval: str = "1d",
 # 逐条一致 (test_market_end_date_gate.py asserts parity on one shared vector table).
 _PM_END_DATE_GRACE_MAX_HOURS = 168.0
 _PM_ISO_DATE_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
-_PM_DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_PM_DATE_ONLY_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})[Zz]?$")
 
 
 def _pm_now() -> _dt.datetime:
@@ -15024,15 +15024,17 @@ def _pm_parse_market_end(value: Any) -> _dt.datetime | None:
 
     Mirrors backend parse_market_end: strings only (extended ``YYYY-MM-DD`` prefix); a
     trailing ``Z`` means UTC; offsets and fractional seconds are accepted; a date-only
-    ``YYYY-MM-DD`` means 23:59:59.999999 UTC that day; naive → UTC. Never raises."""
+    ``YYYY-MM-DD`` (a bare ``Z`` designator allowed) means 23:59:59.999999 UTC that day;
+    naive → UTC. Never raises."""
     if not isinstance(value, str):
         return None
     text = value.strip()
     if not _PM_ISO_DATE_PREFIX_RE.match(text):
         return None
     try:
-        if _PM_DATE_ONLY_RE.match(text):
-            day = _dt.date.fromisoformat(text)
+        date_only = _PM_DATE_ONLY_RE.match(text)
+        if date_only:
+            day = _dt.date.fromisoformat(date_only.group(1))
             return _dt.datetime(day.year, day.month, day.day, 23, 59, 59, 999999,
                                 tzinfo=_dt.timezone.utc)
         if text[-1] in "Zz":
@@ -15408,7 +15410,8 @@ def _pm_per_query() -> int:
 
 def _pm_render_pricing_block(markets: list[dict], as_of: str, limit: int = 8) -> str:
     """PM-4: 一段紧凑的『当前市场定价』块，注入 pass-0 提示词让开场带着锚点搜。
-    确定性、无 LLM。空市场 → 空串。"""
+    确定性、无 LLM。空市场 → 空串。TIME-3：已盖 window_ended 章的行在行尾追加
+    「window ended …, awaiting settlement」标注；未盖章的行逐字节不变。"""
     if not markets:
         return ""
     lines = [
@@ -15422,7 +15425,7 @@ def _pm_render_pricing_block(markets: list[dict], as_of: str, limit: int = 8) ->
         q = str(m.get("question") or "").replace("\n", " ").strip()[:140]
         pct = f"{prob * 100:.0f}%" if prob is not None else "—"
         vtxt = f", volume ${vol:,.0f}" if vol is not None else ""
-        lines.append(f"- {q}: market prices YES at {pct}{vtxt}")
+        lines.append(f"- {q}: market prices YES at {pct}{vtxt}{_pm_window_ended_label(m)}")
     return "\n".join(lines)
 
 
@@ -15599,7 +15602,17 @@ def _pm_initial_snapshot(question: str, model_name: str, plog: "ProgressLog") ->
         return []
     _set_pm_transport_unavailable(False)
     scores = score_market_relevance(question, markets, model_name, plog)
-    return _apply_relevance_gate(markets, scores, _pm_min_relevance())
+    selected = _apply_relevance_gate(markets, scores, _pm_min_relevance())
+    # TIME-3: these rows feed the pass-0 pricing block and the INT-1 extraction input; stamp
+    # (never drop) the ones past their endDate so both surfaces label them as awaiting
+    # settlement instead of presenting a near-settled price as live. Gate off → rows untouched.
+    if selected and _env_flag("PREDICTION_MARKETS_END_DATE_GATE", True):
+        selected, stamped = _pm_stamp_window_ended(
+            selected, _pm_now(), _pm_end_date_grace_hours())
+        if stamped:
+            plog.write("warn", f"prediction markets (pre-pass): {stamped} market(s) past their "
+                               "endDate (kept, labelled as awaiting settlement)")
+    return selected
 
 
 def _collect_prediction_markets(out_dir: Path, question: str, report: str,

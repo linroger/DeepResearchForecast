@@ -153,7 +153,7 @@ def _fresh_yes_price(raw: Any) -> Optional[float]:
 # checks are replayable and tests never depend on the wall clock.
 _END_DATE_GRACE_MAX_HOURS = 168.0
 _ISO_DATE_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
-_DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_DATE_ONLY_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})[Zz]?$")
 
 
 def market_clock_now() -> datetime:
@@ -173,7 +173,8 @@ def parse_market_end(value: Any) -> Optional[datetime]:
 
     This is the program's only endDate parser. Strings only (extended ``YYYY-MM-DD`` prefix):
       * a trailing ``Z`` means UTC; offsets and fractional seconds are accepted;
-      * a date-only ``YYYY-MM-DD`` means the end of that UTC day (23:59:59.999999);
+      * a date-only ``YYYY-MM-DD`` (a bare ``Z`` designator allowed) means the end of that
+        UTC day (23:59:59.999999);
       * a naive timestamp is read as UTC; an aware one is converted to UTC.
     Never raises (bad calendar values, overflow and non-strings all return None).
     """
@@ -183,8 +184,9 @@ def parse_market_end(value: Any) -> Optional[datetime]:
     if not _ISO_DATE_PREFIX_RE.match(text):
         return None
     try:
-        if _DATE_ONLY_RE.match(text):
-            day = date.fromisoformat(text)
+        date_only = _DATE_ONLY_RE.match(text)
+        if date_only:
+            day = date.fromisoformat(date_only.group(1))
             return datetime(day.year, day.month, day.day, 23, 59, 59, 999999,
                             tzinfo=timezone.utc)
         if text[-1] in "Zz":

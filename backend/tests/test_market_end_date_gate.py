@@ -64,6 +64,11 @@ PARSE_VECTORS = [
     ("2026-12-31T00:00:00.123Z", datetime(2026, 12, 31, 0, 0, 0, 123000, tzinfo=UTC)),
     ("2026-12-31T05:00:00+05:00", datetime(2026, 12, 31, 0, 0, tzinfo=UTC)),
     ("2026-12-31", datetime(2026, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)),
+    # A date-only value with a UTC designator is still date-only: end of that day, not
+    # midnight at its start (which would count the market as ended almost a day early).
+    ("2026-12-31Z", datetime(2026, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)),
+    (" 2026-12-31z ", datetime(2026, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)),
+    ("2026-02-30Z", None),
     ("2026-12-31T12:30:00", datetime(2026, 12, 31, 12, 30, tzinfo=UTC)),
     ("  2026-12-31T00:00:00z ", datetime(2026, 12, 31, 0, 0, tzinfo=UTC)),
     ("not-a-date", None),
@@ -102,6 +107,7 @@ WINDOW_VECTORS = [
     ({"end_date": "2026-09-30T12:00:00Z"}, "junk", True),
     ({"end_date": "2026-10-01"}, 0.0, False),                # date-only = end of that day
     ({"end_date": "2026-09-30"}, 0.0, True),
+    ({"end_date": "2026-10-01Z"}, 0.0, False),               # date-only + Z = end of that day
     ({"endDate": "2026-09-01T00:00:00Z"}, 0.0, True),         # raw key fallback
     ({"end_date": "2027-04-19T12:00:00Z"}, 0.0, False),
     ({"end_date": "garbage"}, 0.0, False),                   # unparseable → tolerated

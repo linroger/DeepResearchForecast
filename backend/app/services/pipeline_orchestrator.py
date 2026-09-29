@@ -6633,6 +6633,7 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
         "tool_observation_count": 0,
     }
     empty_reason_counts: dict[str, int] = {}
+    end_date_gate_seen = False
     for track_index, pm in enumerate(snapshots, start=1):
         snap_as_of = str(pm.get("as_of") or "")
         source_value = pm.get("registry_sources") or pm.get("source")
@@ -6660,6 +6661,8 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
         empty_reason = str(track_status.get("empty_reason") or "").strip()
         if empty_reason:
             empty_reason_counts[empty_reason] = empty_reason_counts.get(empty_reason, 0) + 1
+        if "end_date_passed_count" in track_status:
+            end_date_gate_seen = True
         for query in pm.get("queries") or []:
             text = str(query or "").strip()
             key = text.casefold()
@@ -6756,6 +6759,12 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
             )
         ),
     }
+    # TIME-3: keep the endDate-gate exclusion telemetry across tracks by recounting the
+    # stamped rows that survived selection. Only tracks that ran with the gate on carry the
+    # key, so an all-gate-off merge keeps its bytes.
+    if end_date_gate_seen:
+        status["end_date_passed_count"] = sum(
+            1 for row in selected if row.get("window_ended") is True)
     return {
         "as_of": latest_as_of,
         "source": "polymarket",

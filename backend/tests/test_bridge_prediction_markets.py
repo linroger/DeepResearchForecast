@@ -1309,9 +1309,17 @@ def _time3_raw(mid, question, yes, end_date):
             "volume": "50000", "liquidity": "1000", "endDate": end_date}
 
 
-def _collect_time3(tmp_path, monkeypatch, gate, grace_hours=None):
-    """Run the collector over one active ladder event (patched network, pinned clocks):
-    child A's endDate passed a day ago (still priced 3%), child B ends in 2027."""
+class _Time3Log:
+    def __init__(self):
+        self.rows = []
+
+    def write(self, level, message):
+        self.rows.append((level, message))
+
+
+def _patch_time3_markets(monkeypatch, gate, grace_hours=None):
+    """Patch the network and pin the clocks over one active ladder event: child A's endDate
+    passed a day ago (still priced 3%), child B ends in 2027."""
     event = {"title": "Fed rate cuts", "slug": "fed-rate-cuts", "markets": [
         _time3_raw("A", "Will the Fed cut rates 3 times in 2026?", 0.03, "2026-09-30T12:00:00Z"),
         _time3_raw("B", "Will the Fed cut rates 4 times by April 2027?", 0.62,
@@ -1331,14 +1339,11 @@ def _collect_time3(tmp_path, monkeypatch, gate, grace_hours=None):
     else:
         monkeypatch.setenv("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", grace_hours)
 
-    class Log:
-        def __init__(self):
-            self.rows = []
 
-        def write(self, level, message):
-            self.rows.append((level, message))
-
-    log = Log()
+def _collect_time3(tmp_path, monkeypatch, gate, grace_hours=None):
+    """Run the collector over the patched ladder event (see _patch_time3_markets)."""
+    _patch_time3_markets(monkeypatch, gate, grace_hours)
+    log = _Time3Log()
     tmp_path.mkdir(parents=True, exist_ok=True)
     d._collect_prediction_markets(
         tmp_path, "How many times will the Fed cut rates by 2027?", "# Report\n\nBody.\n",
@@ -1386,3 +1391,50 @@ def test_collector_gate_off_writes_no_stamp_key_or_label(tmp_path, monkeypatch):
     del on_payload["status"]["end_date_passed_count"]
     assert on_payload == off_payload
     assert on_report.replace(" — window ended 2026-09-30, awaiting settlement", "") == off_report
+
+
+_TIME3_QUESTION = "How many times will the Fed cut rates by 2027?"
+_TIME3_PRICING_LINE_A = ("- Will the Fed cut rates 3 times in 2026?: market prices YES at 3%, "
+                         "volume $50,000")
+_TIME3_LABEL = " — window ended 2026-09-30, awaiting settlement"
+
+
+def test_prepass_snapshot_stamps_expired_child_and_labels_pass0_and_extraction_input(
+        monkeypatch):
+    # Legacy-engine PM-4/INT-1 pre-pass: the same rows feed the pass-0 pricing block and the
+    # actor-extraction input, so an expired child must reach both labelled, never as live.
+    _patch_time3_markets(monkeypatch, gate=True)
+    monkeypatch.setattr(d, "_MARKET_PRICING_BLOCK", "")
+    log = _Time3Log()
+    rows = d._pm_initial_snapshot(_TIME3_QUESTION, "test", log)
+    by_id = {row["market_id"]: row for row in rows}
+    assert set(by_id) == {"A", "B"}  # stamped, never dropped
+    assert by_id["A"]["window_ended"] is True
+    assert by_id["A"]["window_ended_at"] == "2026-09-30T12:00:00+00:00"
+    assert "window_ended" not in by_id["B"]
+    assert any(level == "warn" and "pre-pass" in msg and "past their endDate" in msg
+               for level, msg in log.rows)
+    block = d._pm_render_pricing_block(rows, _TIME3_AS_OF)
+    assert _TIME3_PRICING_LINE_A + _TIME3_LABEL + "\n" in block + "\n"
+    assert block.count("window ended") == 1
+    d._set_market_pricing_block(block)
+    assert _TIME3_PRICING_LINE_A + _TIME3_LABEL in d.build_research_prompt(
+        _TIME3_QUESTION, "standard", None)
+    section = d._pm_render_section(rows, _TIME3_AS_OF)  # INT-1 extraction-input table
+    assert "Will the Fed cut rates 3 times in 2026? (A)" + _TIME3_LABEL + " |" in section
+
+
+def test_prepass_snapshot_gate_off_leaves_rows_and_pricing_block_unchanged(monkeypatch):
+    _patch_time3_markets(monkeypatch, gate=False)
+    off_log = _Time3Log()
+    off_rows = d._pm_initial_snapshot(_TIME3_QUESTION, "test", off_log)
+    assert {row["market_id"] for row in off_rows} == {"A", "B"}
+    assert all("window_ended" not in row and "window_ended_at" not in row for row in off_rows)
+    assert not any("past their endDate" in msg for _level, msg in off_log.rows)
+    off_block = d._pm_render_pricing_block(off_rows, _TIME3_AS_OF)
+    assert _TIME3_PRICING_LINE_A + "\n" in off_block + "\n"
+    assert "window ended" not in off_block
+    _patch_time3_markets(monkeypatch, gate=True)
+    on_rows = d._pm_initial_snapshot(_TIME3_QUESTION, "test", _Time3Log())
+    on_block = d._pm_render_pricing_block(on_rows, _TIME3_AS_OF)
+    assert on_block.replace(_TIME3_LABEL, "") == off_block  # the gate only adds the label
