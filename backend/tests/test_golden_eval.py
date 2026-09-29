@@ -137,6 +137,39 @@ def test_match_forecasts_matched_unmatched_and_invalid():
     assert res["unmatched_golden_ids"] == ["q2", "q3"]  # q2 invalid counts as unmatched
 
 
+def test_match_by_target_question_id():
+    """EVAL-13: an evaluation cell's bound binary is matched on target_question_id, not its F id."""
+    golden = ge.index_golden([
+        {"id": "q-eu", "resolved_outcome": True, "category": "c", "difficulty": "easy"},
+        {"id": "q-fed", "resolved_outcome": False, "category": "c", "difficulty": "hard"},
+    ])
+    binaries = [
+        {"id": "F1", "probability": 0.4},                                   # unbound → unmatched
+        {"id": "F2", "probability": 0.7, "target_question_id": "q-eu",
+         "target_bind": "normalized"},
+        {"id": "F3", "probability": 0.2, "target_question_id": "not-golden"},  # falls back to F3
+        {"id": "q-fed", "probability": 0.1},                                # plain id match unchanged
+    ]
+    res = ge.match_forecasts(binaries, golden)
+    by_id = {m["id"]: m for m in res["matched"]}
+    assert set(by_id) == {"q-eu", "q-fed"}
+    assert by_id["q-eu"]["probability"] == 0.7 and by_id["q-eu"]["outcome"] is True
+    assert by_id["q-eu"]["forecast_id"] == "F2"          # the row's own id is kept for audit
+    assert "forecast_id" not in by_id["q-fed"]           # id-matched rows keep today's shape
+    assert res["unmatched_forecast_ids"] == ["F1", "F3"]
+    assert res["unmatched_golden_ids"] == []
+    # target_question_id is preferred over the F id: a row whose own id is also golden
+    # still answers its bound target, and a second row for that target is a duplicate.
+    res2 = ge.match_forecasts([
+        {"id": "q-fed", "probability": 0.6, "target_question_id": "q-eu"},
+        {"id": "F9", "probability": 0.3, "target_question_id": "q-eu"},
+    ], golden)
+    assert [m["id"] for m in res2["matched"]] == ["q-eu"]
+    assert res2["matched"][0]["probability"] == 0.6
+    assert res2["duplicate_forecast_ids"] == ["q-eu"]
+    assert res2["unmatched_golden_ids"] == ["q-fed"]
+
+
 # --------------------------------------------------------------- golden fixture
 def test_golden_set_fixture_is_wellformed():
     questions = ge.load_golden_set()  # committed fixture

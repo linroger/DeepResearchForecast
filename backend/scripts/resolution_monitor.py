@@ -222,12 +222,84 @@ def resolve_report_id(id_: str) -> Optional[str]:
     return None
 
 
-def recent_report_ids(n: int, *, as_of: Optional[str] = None) -> List[str]:
+# EVAL-13: exclude_evaluation 时按 n 的这个倍数多取候选，剔除评估运行报告后仍能凑满 n 份。
+EVALUATION_OVERFETCH_FACTOR = 4
+# EVAL-13: 归属回退（模拟 id → 是否属评估运行）的进程内备忘，recent_report_ids 与 run_monitor
+# 共用：一轮 `run --all-recent` 对每个模拟只扫一次管线状态，而不是每份报告扫两次。监测以一次性
+# CLI 子进程运行（resolution_autorun 每轮新起进程），recent_report_ids 每批从空备忘开始；
+# 查找失败（fail closed）的答案从不入备忘，下次仍重查。
+_EVALUATION_OWNER_MEMO: Dict[str, bool] = {}
+
+
+def is_evaluation_forecast(forecast: Any) -> bool:
+    """EVAL-13: True for the forecast of an evaluation run (``evaluation.record_class``)."""
+    if not isinstance(forecast, dict):
+        return False
+    stamp = forecast.get("evaluation")
+    return isinstance(stamp, dict) and stamp.get("record_class") == "evaluation"
+
+
+def _report_owned_by_evaluation_run(report_folder: Optional[str],
+                                    memo: Optional[Dict[str, bool]] = None) -> bool:
+    """EVAL-13 fail-closed fallback for a report whose forecast carries no evaluation stamp.
+
+    The stamp rides on forecast.json, so an evaluation report that never reached a
+    stamped write (no forecast spine and a failed finalize) carries none. Its
+    meta.json still names the simulation, and the pipeline that ran it decides
+    (``evaluation_context_for_simulation``: its pin, its own admission marker, or a
+    fail-closed context when that lookup fails). A lookup that cannot even be
+    imported excludes the report too. ``memo`` caches the answer per simulation id;
+    a lookup that failed is never cached.
+    """
+    meta = _read_json(os.path.join(report_folder, "meta.json")) if report_folder else None
+    simulation_id = str(meta.get("simulation_id") or "").strip() if isinstance(meta, dict) else ""
+    if not simulation_id:
+        return False
+    if memo is not None and simulation_id in memo:
+        return memo[simulation_id]
+    try:
+        from app.services.pipeline_orchestrator import evaluation_context_for_simulation
+        context = evaluation_context_for_simulation(simulation_id)
+    except Exception as e:  # noqa: BLE001 — 归属无法判定 → 按评估运行跳过（fail closed）
+        logger.warning(f"模拟 {simulation_id} 的评估运行归属无法判定（按评估运行跳过）: {e}")
+        return True
+    if isinstance(context, dict) and context.get("lookup_failed") is True:
+        return True
+    owned = context is not None
+    if memo is not None:
+        memo[simulation_id] = owned
+    return owned
+
+
+def _is_evaluation_report(report_id: str, memo: Optional[Dict[str, bool]] = None) -> bool:
+    """EVAL-13: whether a report belongs to an evaluation run.
+
+    Reads the report's forecast.json, the file run_monitor processes: a sealed
+    forecast is exactly these bytes, so an unsealed or stale-policy evaluation
+    report is recognised too. A forecast without the stamp (or no forecast.json)
+    falls back to the run that owns the report's simulation (fail closed).
+    """
+    try:
+        folder = _report_folder(report_id)
+    except Exception:  # noqa: BLE001 — 不可定位的报告交由 run_monitor 自身降级
+        return False
+    return (is_evaluation_forecast(_read_json(os.path.join(folder, "forecast.json")))
+            or _report_owned_by_evaluation_run(folder, memo))
+
+
+def recent_report_ids(n: int, *, as_of: Optional[str] = None,
+                      exclude_evaluation: bool = True) -> List[str]:
     """最近 n 份报告的 report_id（按 created_at 倒序，与 ReportManager.list_reports 同序）。
-    RESOLUTION_MONITOR_LOOKBACK_DAYS>0 时进一步过滤到 created_at 在近 N 天内的报告。"""
+    RESOLUTION_MONITOR_LOOKBACK_DAYS>0 时进一步过滤到 created_at 在近 N 天内的报告。
+
+    EVAL-13 ``exclude_evaluation``（默认开）：评估运行的报告（forecast.evaluation.record_class
+    == 'evaluation'；无此章时按报告模拟所属管线判定，fail closed）绝不进入监测；多取至多
+    4n 份候选，剔除后仍返回至多 n 份生产报告。没有评估报告时结果与旧行为逐字节一致。"""
+    wanted = max(1, int(n))
+    limit = wanted * EVALUATION_OVERFETCH_FACTOR if exclude_evaluation else wanted
     try:
         from app.services.report_agent import ReportManager
-        reports = ReportManager.list_reports(limit=max(1, int(n)))
+        reports = ReportManager.list_reports(limit=limit)
     except Exception as e:  # noqa: BLE001 — 列报告失败 → 空（degrade-safe）
         logger.warning(f"列出最近报告失败（返回空）: {e}")
         return []
@@ -241,12 +313,18 @@ def recent_report_ids(n: int, *, as_of: Optional[str] = None) -> List[str]:
         except (TypeError, ValueError):
             cutoff = None
     out: List[str] = []
+    _EVALUATION_OWNER_MEMO.clear()
     for r in reports:
+        if len(out) >= wanted:
+            break
         if cutoff is not None and str(getattr(r, "created_at", "") or "")[:10] < cutoff:
             continue
         rid = getattr(r, "report_id", None)
-        if rid:
-            out.append(str(rid))
+        if not rid:
+            continue
+        if exclude_evaluation and _is_evaluation_report(str(rid), _EVALUATION_OWNER_MEMO):
+            continue
+        out.append(str(rid))
     return out
 
 
@@ -763,7 +841,11 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     dry_run=True 时不写任何盘（price_track / ledger / monitor_report.md 均跳过）。
     任何市场访问失败都退化为部分报告（degraded=True），绝不抛。
 
-    EVAL-2：先过 fail-closed 闸门——``publishable_fn(report_id)``（缺省
+    EVAL-13：评估运行的预测（forecast.evaluation.record_class == 'evaluation'，或无此章而
+    报告模拟属于评估运行）最先判定，直接返回 ``skipped='evaluation_run'`` 的零计数摘要，零写盘、
+    零市场访问——评估运行绝不被监测，先于下面的发布闸门。
+
+    EVAL-2：再过 fail-closed 闸门——``publishable_fn(report_id)``（缺省
     ReportManager.publishable_at_issue）为假 → ``{skipped: 'not_publishable'}``；未注入
     forecast 时只读审计封印的 forecast.json，读不到 → ``{skipped: 'not_sealed'}``；两者
     都不写盘、不联网。``as_of`` 规整为 UTC 的 processed_at（无时区按 UTC 读），是结算判定
@@ -775,6 +857,18 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     resolution_records，单列在 terminal_count / newly_terminal_count 与 settlement 里。"""
     processed_at = normalize_processed_at(as_of or _utcnow_iso())
     as_of_day = processed_at[:10]
+    if report_folder is None:
+        report_folder = _report_folder(report_id)
+    _evaluation_probe = (forecast if forecast is not None
+                         else _read_json(os.path.join(report_folder, "forecast.json")))
+    if (is_evaluation_forecast(_evaluation_probe)
+            or _report_owned_by_evaluation_run(report_folder, _EVALUATION_OWNER_MEMO)):
+        # EVAL-13：评估运行的预测绝不被监测——不重报价、不入账、不落任何文件。
+        skipped = _skipped_result(report_id, "evaluation_run", as_of_day, dry_run)
+        skipped.update({"movers": [], "needs_manual_count": 0, "needs_manual": [],
+                        "resolution_records": [], "calibration": {}, "market_brier": {},
+                        "degraded": False, "monitor_report_md": ""})
+        return skipped
     if not _is_publishable(report_id, publishable_fn):
         return _skipped_result(report_id, "not_publishable", as_of_day, dry_run)
     if forecast is None:
@@ -782,8 +876,6 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
         if forecast is None:
             return _skipped_result(report_id, "not_sealed", as_of_day, dry_run)
     thr = threshold if threshold is not None else drift_threshold()
-    if report_folder is None:
-        report_folder = _report_folder(report_id)
     binaries = [b for b in ((forecast or {}).get("binary_forecasts") or [])
                 if isinstance(b, dict)]
     if target_meta is None:

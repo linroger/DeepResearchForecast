@@ -61,6 +61,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app.config import Config  # noqa: E402
 from app.services.ensemble import aggregate_forecasts  # noqa: E402
 from app.services.pipeline_orchestrator import (  # noqa: E402
+    EVALUATION_RUN_OPTION,
     PIPELINE_SCHEMA_VERSION,
     STAGE_BANDS,
     STAGE_GRAPH,
@@ -73,6 +74,7 @@ from app.services.pipeline_orchestrator import (  # noqa: E402
     PipelineOrchestrator,
     PipelineState,
     StageState,
+    evaluation_pin_for_question_fork,
     preflight_pipeline,
 )
 from app.services.report_agent import ReportManager  # noqa: E402
@@ -307,6 +309,12 @@ def fork_question(
     }
     if batch_id:
         options["batch_id"] = batch_id
+    evaluation_pin = evaluation_pin_for_question_fork(base_pipeline_id, base_state)
+    if evaluation_pin is not None:
+        # EVAL-13: a question fork of an evaluation run stays in the evaluation lane without
+        # the base's cell identity; carried in options, so its lane survives the loss of the
+        # base's handoff marker.
+        options[EVALUATION_RUN_OPTION] = evaluation_pin
     if max_rounds:
         try:
             options["max_rounds"] = int(max_rounds)

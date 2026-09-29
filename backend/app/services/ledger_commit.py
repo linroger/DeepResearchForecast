@@ -24,6 +24,13 @@ seed from the pipeline that ran its simulation, so it becomes a revision of that
 report's commit instead of a second primary. A resumed pipeline that reuses its
 report repairs a commit that never landed (:func:`recommit_reused_report`).
 
+EVAL-13: a report of an evaluation run (``agent._resolve_evaluation_context()``,
+the orchestrator's pin or the owning pipeline's persisted marker) is re-classed by
+:func:`apply_evaluation_context`: record_class ``evaluation``,
+``characterization_only`` and eval_run_id / cell_id provenance, committed to
+``forecast_ledger.evaluation_ledger_dir()``. The production ledger.jsonl never
+receives such a row.
+
 Later post-publication steps are appended inside :func:`run_post_publication`
 after the ledger step, each in its own try/except and NOT behind the ledger
 gate.  This module must not import ``report_agent`` at module level (circular
@@ -44,6 +51,12 @@ from . import forecast_ledger
 logger = get_logger("mirofish.ledger_commit")
 
 COMMIT_MODES = ("published", "legacy", "off")
+EVALUATION_RECORD_CLASS = "evaluation"
+# EVAL-13: why an evaluation context claims no run (pipeline_orchestrator's fail-closed
+# contexts): the report was routed to the evaluation lane because it could not be shown to
+# be production. First flag set wins.
+EVALUATION_FAIL_CLOSED_REASONS = ("lookup_failed", "foreign_marker", "marker_unreadable",
+                                  "pin_unreadable")
 
 
 def commit_mode() -> str:
@@ -96,13 +109,72 @@ def _record_class(context: Mapping[str, Any], scenario_label: Optional[str]) -> 
     return "conditional_scenario" if _scenario_label(context, scenario_label) else "production"
 
 
+def evaluation_fail_closed(evaluation: Optional[Mapping[str, Any]]
+                           ) -> Tuple[Optional[str], Optional[str]]:
+    """EVAL-13: ``(reason, marker_pipeline_id)`` of a fail-closed evaluation context.
+
+    ``(None, None)`` for a run's own pin (or no context). ``marker_pipeline_id`` is
+    the evaluation run whose admission a ``foreign_marker`` context inherits.
+    """
+    if not isinstance(evaluation, Mapping):
+        return None, None
+    reason = next((flag for flag in EVALUATION_FAIL_CLOSED_REASONS
+                   if evaluation.get(flag) is True), None)
+    if reason is None:
+        return None, None
+    marker_pipeline_id = str(evaluation.get("marker_pipeline_id") or "").strip() or None
+    return reason, marker_pipeline_id
+
+
+def apply_evaluation_context(context: Optional[Mapping[str, Any]],
+                             evaluation: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+    """EVAL-13: a copy of ``context`` re-classed for an evaluation run.
+
+    With an evaluation context the report belongs to the evaluation lane only:
+    ``record_class='evaluation'`` (which :func:`commit_report` commits
+    ``characterization_only`` into ``forecast_ledger.evaluation_ledger_dir()``)
+    plus the run's ``eval_run_id`` / ``cell_id`` provenance. A fail-closed context
+    (no run identity) instead records why as ``evaluation_fail_closed`` (plus
+    ``evaluation_marker_pipeline_id``), so an operator can find the demoted rows.
+    The class it replaces is kept as ``evaluated_record_class``, so an ensemble
+    member keeps its seed and a compared provider its provider in its target.
+    Idempotent; without an evaluation context the copy is unchanged.
+    """
+    out: Dict[str, Any] = dict(context) if isinstance(context, Mapping) else {}
+    if not isinstance(evaluation, Mapping):
+        return out
+    prior = str(out.get("record_class") or "").strip()
+    if prior and prior != EVALUATION_RECORD_CLASS:
+        out["evaluated_record_class"] = prior
+    out["record_class"] = EVALUATION_RECORD_CLASS
+    for key in ("eval_run_id", "cell_id"):
+        value = str(evaluation.get(key) or "").strip()
+        if value:
+            out[key] = value
+    reason, marker_pipeline_id = evaluation_fail_closed(evaluation)
+    if reason:
+        out["evaluation_fail_closed"] = reason
+        if marker_pipeline_id:
+            out["evaluation_marker_pipeline_id"] = marker_pipeline_id
+    return out
+
+
+def _agent_evaluation_context(agent: Any) -> Optional[Mapping[str, Any]]:
+    """The evaluation context of a report agent (its pin, else the owning pipeline's marker)."""
+    resolve = getattr(agent, "_resolve_evaluation_context", None)
+    evaluation = resolve() if callable(resolve) else getattr(agent, "evaluation_context", None)
+    return evaluation if isinstance(evaluation, Mapping) else None
+
+
 def _target_variant(record_class: str, context: Mapping[str, Any],
                     scenario_label: Optional[str]) -> Optional[Dict[str, Any]]:
     """What splits one question's non-production commits into separate targets.
 
     A what-if scenario (its overlay fingerprint, else its label), an ensemble
     member's seed and a compared provider are distinct forecasts, not revisions
-    of one another. Production keys never carry a variant.
+    of one another. So are two evaluation runs or cells (EVAL-13): each is its
+    own sample, never a revision of another run's commit. Production keys never
+    carry a variant.
     """
     if record_class == "production":
         return None
@@ -113,12 +185,19 @@ def _target_variant(record_class: str, context: Mapping[str, Any],
         variant["scenario"] = scenario_key
     elif label:
         variant["scenario"] = forecast_ledger.question_sha256(label)
-    if record_class == "ensemble_member":
+    member_class = record_class
+    if record_class == EVALUATION_RECORD_CLASS:
+        for key in ("eval_run_id", "cell_id"):
+            value = str(context.get(key) or "").strip()
+            if value:
+                variant[key] = value
+        member_class = str(context.get("evaluated_record_class") or "").strip()
+    if member_class == "ensemble_member":
         try:
             variant["seed"] = int(context.get("seed"))
         except (TypeError, ValueError):
             pass
-    if record_class == "comparison":
+    if member_class == "comparison":
         provider = str(context.get("provider") or "").strip()
         if provider:
             variant["provider"] = provider
@@ -208,7 +287,9 @@ def commit_report(*, report_id: str, report_status: Any, error: Optional[str],
     only) or ``error``. ``publication_status_fn`` is called at most once, and
     exactly once for a completed report. A failed report's reasons also carry
     its final audit's issues when ``final_audit_path_fn`` locates one. Unknown
-    context keys are ignored.
+    context keys are ignored. An ``evaluation`` record class (EVAL-13) writes
+    ``characterization_only`` rows into ``forecast_ledger.evaluation_ledger_dir()``
+    unless ``d`` names another directory.
     """
     ctx: Mapping[str, Any] = ledger_context if isinstance(ledger_context, Mapping) else {}
     now_utc = _utc(now)
@@ -220,6 +301,9 @@ def commit_report(*, report_id: str, report_status: Any, error: Optional[str],
         "record_class": _record_class(ctx, scenario_label),
         "reasons": [],
     }
+    evaluation_row = receipt["record_class"] == EVALUATION_RECORD_CLASS
+    if evaluation_row and d is None:
+        d = forecast_ledger.evaluation_ledger_dir()
     if _status_value(report_status) != "completed":
         reasons = [f"report_failed: {str(error or '')[:200]}"]
         reasons.extend(_final_audit_reasons(report_id, final_audit_path_fn))
@@ -272,6 +356,7 @@ def commit_report(*, report_id: str, report_status: Any, error: Optional[str],
         d=d,
         committed_at=now_utc.isoformat(),
         target_variant=_target_variant(receipt["record_class"], ctx, scenario_label),
+        characterization_only=evaluation_row,
     )
     receipt["status"] = status
     if isinstance(row, dict):
@@ -320,6 +405,7 @@ def _ledger_step(agent: Any, report_id: str, *, report_status: Any, error: Optio
         # ensemble member's class and seed.
         for key, value in _owner_identity(context.get("simulation_id")).items():
             context.setdefault(key, value)
+    context = apply_evaluation_context(context, _agent_evaluation_context(agent))
     return commit_report(
         report_id=report_id,
         report_status=report_status,

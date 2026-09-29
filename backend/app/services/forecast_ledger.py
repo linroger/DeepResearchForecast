@@ -533,14 +533,20 @@ def market_brier_summary(d: Optional[str] = None,
 
 LEDGER_COMMIT_SCHEMA_VERSION = 2
 # Provenance copied into commit rows when present; anything else in the caller's
-# context is ignored so rows keep one stable, reviewable shape.
+# context is ignored so rows keep one stable, reviewable shape. EVAL-13: an evaluation
+# row routed there fail-closed (no run identity) names why (evaluation_fail_closed) and,
+# for a fork of an evaluation run, which run (evaluation_marker_pipeline_id).
 _PROVENANCE_KEYS = ("pipeline_id", "simulation_id", "run_ref", "seed", "run_kind",
-                    "config_hash", "eval_run_id", "cell_id")
+                    "config_hash", "eval_run_id", "cell_id", "evaluation_fail_closed",
+                    "evaluation_marker_pipeline_id")
 UNPUBLISHED_MAX_REASONS = 10
 UNPUBLISHED_REASON_MAX_CHARS = 300
 _BINARY_ANCHOR_MAX_CHARS = 300
+# EVAL-13: target_question_id / target_bind tie an evaluation row's binary to its golden
+# question without reopening forecast.json; only an evaluation run's extraction sets them.
 _COMPACT_BINARY_OPTIONAL_KEYS = ("market_anchor", "market_influence",
-                                 "scenario_membership", "target")
+                                 "scenario_membership", "target",
+                                 "target_question_id", "target_bind")
 
 # Same protocol as _RESOLUTIONS_WRITE_LOCK: the duplicate/revision decision and
 # the single append happen in one critical section (in-process lock + advisory
@@ -736,6 +742,7 @@ def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: 
                               d: Optional[str] = None,
                               committed_at: Optional[str] = None,
                               target_variant: Optional[Dict[str, Any]] = None,
+                              characterization_only: bool = False,
                               ) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Append one publication-sealed forecast; returns ``(status, row)``.
 
@@ -746,7 +753,9 @@ def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: 
     failure; nothing written). ``forecast`` must be the audit-sealed object
     whose bytes hash to ``publication['forecast_sha256']``. ``target_variant``
     (non-production classes only; ignored for production) joins the target key
-    and is stored on the row as ``target_variant``.
+    and is stored on the row as ``target_variant``. ``characterization_only=True``
+    (EVAL-13 evaluation runs) stamps the row so no production reader ever scores
+    it; the default leaves the row shape unchanged.
     """
     rid = str(report_id or "").strip()
     pub = publication if isinstance(publication, dict) else {}
@@ -821,6 +830,8 @@ def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: 
     }
     if variant:
         row["target_variant"] = variant
+    if characterization_only:
+        row["characterization_only"] = True
     row.update(_provenance_fields(provenance))
     try:
         # Reject non-JSON / NaN rows before touching the ledger file at all.
