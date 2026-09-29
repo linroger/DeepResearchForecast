@@ -1404,6 +1404,8 @@ class OasisProfileGenerator:
         report_agent 按 simulation_id 定位同模式）；延迟导入 PipelineManager 规避循环依赖。
         开关关 / 无 graph_id / 无对应管线 / 文件缺失 / 解析失败 → []（人设提示词逐字节不变）。
         缓存于 self._market_priors_cache，避免每个 persona 都重新扫描管线目录。
+        TIME-3（PREDICTION_MARKETS_END_DATE_GATE，默认开）：截止日已过（market_clock_now()）或
+        已盖 window_ended 章的市场不进入人设市场感知提示，剔除数记日志。
         """
         cached = getattr(self, "_market_priors_cache", None)
         if cached is not None:
@@ -1426,7 +1428,12 @@ class OasisProfileGenerator:
                         with open(path, "r", encoding="utf-8") as f:
                             payload = json.load(f)
                         markets = payload.get("markets") if isinstance(payload, dict) else payload
-                        rows = [m for m in (markets or []) if isinstance(m, dict)]
+                        from ..utils.prediction_markets import drop_window_ended_rows
+                        rows, ended = drop_window_ended_rows(
+                            [m for m in (markets or []) if isinstance(m, dict)])
+                        if ended:
+                            logger.info(f"人设市场感知：剔除 {ended} 个已过截止日的市场"
+                                        "（PREDICTION_MARKETS_END_DATE_GATE）")
                         break
             except Exception as e:  # noqa: BLE001 — best-effort，失败即降级空
                 logger.debug(f"读取 handoff prediction_markets.json 失败（降级跳过）: {e}")

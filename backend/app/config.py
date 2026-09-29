@@ -1529,6 +1529,17 @@ class Config:
     # 使 market_anchor 用现价。关闭 → 只用研究期快照（在包头标注时效性）。重报价失败一律 degrade-safe：
     # 保留研究期价 + 时效性说明，绝不阻断报告（PolymarketClient.requote_markets 每行自带失败标记）。
     PREDICTION_MARKETS_REQUOTE = os.environ.get('PREDICTION_MARKETS_REQUOTE', 'true').strip().lower() == 'true'
+    # TIME-3 endDate hygiene: a market past its endDate can stay open at a near-settled price
+    # while it awaits UMA resolution. With the gate on, such a market never anchors a binary
+    # forecast and never seeds SIM priors (world brief / persona hints); it still appears in
+    # the market pack and research section, labelled "window ended ... awaiting settlement",
+    # because its price remains evidence. Default on (honesty fix); false restores the exact
+    # pre-gate prompts, anchors, snapshot and market-pack bytes. The research child receives
+    # both knobs from Config.
+    PREDICTION_MARKETS_END_DATE_GATE = os.environ.get('PREDICTION_MARKETS_END_DATE_GATE', 'true').strip().lower() == 'true'
+    # Hours after endDate before a market counts as ended (absorbs Gamma endDate quirks on
+    # extended events); clamped to [0, 168] where it is used. 0 = strictly after endDate.
+    PREDICTION_MARKETS_END_DATE_GRACE_HOURS = float(os.environ.get('PREDICTION_MARKETS_END_DATE_GRACE_HOURS', '0') or '0')
     # PM-HZ（WAVE9）：预测市场远期降级阶梯——主检索词零命中/全被相关性门挡时，按「剥 4 位年份 →
     # 事件级宽词（前 3 词）」两级放宽重试。降级候选必须过 LLM 相关性门（fail-closed：打分不可用
     # 即整阶段丢弃），命中行打 horizon_degraded 标签留痕。同时研究阶段**始终**落盘

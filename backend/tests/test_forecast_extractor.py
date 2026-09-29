@@ -1,6 +1,7 @@
 """Golden tests for structured forecast extraction + citation audit (EXECPLAN2 I-3-0/I-3-1)."""
 
 import json
+from datetime import datetime, timezone
 
 import pytest
 
@@ -28,6 +29,7 @@ from app.services.forecast_extractor import (
     validate_citation_markers,
 )
 from app.services.ensemble import pool_binary_forecasts
+from app.utils import prediction_markets
 from tests.conftest import FakeLLMClient
 
 
@@ -1363,7 +1365,10 @@ def test_general_scenario_membership_and_unbound_market_equivalence_fail_closed(
     assert result["passed"] is True
 
 
-def test_extract_binary_forecasts_anchors_and_emits_comparison():
+def test_extract_binary_forecasts_anchors_and_emits_comparison(monkeypatch):
+    # TIME-3: pin the endDate clock so the 2028-12-31 market never ages out of anchoring.
+    monkeypatch.setattr(prediction_markets, "market_clock_now",
+                        lambda: datetime(2026, 10, 1, tzinfo=timezone.utc))
     markets = [{"market_id": "mkt-1", "question": "Tariffs > 10%?", "implied_yes_prob": 0.30,
                 "url": "https://polymarket.com/event/t", "end_date": "2028-12-31"}]
     fake = FakeLLMClient(json_responses=[

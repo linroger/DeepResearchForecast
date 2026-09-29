@@ -1962,6 +1962,35 @@ def test_runner_forwards_the_as_of_pin_from_config_to_v3_only(monkeypatch, tmp_p
     assert "RESEARCH_AS_OF_PIN" not in child["env"]
 
 
+def test_runner_forwards_the_end_date_gate_knobs_from_config_to_every_engine(
+        monkeypatch, tmp_path):
+    """TIME-3: Config decides the Polymarket endDate gate and its grace hours for the
+    research child of every engine (all engines collect prediction markets)."""
+    for name in ("default", "flipped", "legacy"):
+        (tmp_path / name).mkdir()
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    # The hermetic Config defaults: gate on, no grace.
+    assert _po.Config.PREDICTION_MARKETS_END_DATE_GATE is True
+    assert _po.Config.PREDICTION_MARKETS_END_DATE_GRACE_HOURS == 0.0
+    child = _launch_capturing_child(monkeypatch, tmp_path / "default", timeout=900)
+    assert child["env"]["PREDICTION_MARKETS_END_DATE_GATE"] == "true"
+    assert child["env"]["PREDICTION_MARKETS_END_DATE_GRACE_HOURS"] == "0.0"
+
+    monkeypatch.setattr(_po.Config, "PREDICTION_MARKETS_END_DATE_GATE", False)
+    monkeypatch.setattr(_po.Config, "PREDICTION_MARKETS_END_DATE_GRACE_HOURS", 6.5)
+    # An ambient value never decides: the parent's Config is authoritative.
+    monkeypatch.setenv("PREDICTION_MARKETS_END_DATE_GATE", "true")
+    monkeypatch.setenv("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", "99")
+    child = _launch_capturing_child(monkeypatch, tmp_path / "flipped", timeout=900)
+    assert child["env"]["PREDICTION_MARKETS_END_DATE_GATE"] == "false"
+    assert child["env"]["PREDICTION_MARKETS_END_DATE_GRACE_HOURS"] == "6.5"
+
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "legacy", raising=False)
+    child = _launch_capturing_child(monkeypatch, tmp_path / "legacy", timeout=900)
+    assert child["env"]["PREDICTION_MARKETS_END_DATE_GATE"] == "false"
+    assert child["env"]["PREDICTION_MARKETS_END_DATE_GRACE_HOURS"] == "6.5"
+
+
 def _registry_entries():
     return [*_po.RESEARCH_CHILD_KNOBS, *_po.RESEARCH_CHILD_V3_KNOBS]
 
