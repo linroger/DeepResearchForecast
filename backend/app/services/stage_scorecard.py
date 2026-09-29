@@ -30,7 +30,8 @@ Metric record: ``{value, num, den, status, source}`` (+ ``threshold`` /
                         research meta without ``kiqs``) - unevaluable, never a pass;
 * ``artifact_missing``  the artifact the stage should have written is absent;
 * ``unreadable``        the artifact exists but cannot be parsed, has the wrong
-                        shape, or a rate whose numerator exceeds its denominator.
+                        shape, a rate whose numerator exceeds its denominator, or
+                        disagrees with the producer's own counts.
 
 A required check fails on ``artifact_missing`` / ``unreadable`` (fail closed),
 is unevaluable on ``not_instrumented`` and is skipped on ``not_applicable``.
@@ -39,16 +40,21 @@ something was unevaluable, and True only when every check was measured and
 passed.  Stages after a failed/cancelled stage are ``not_reached``; in a
 ``research_only`` run every stage but research is ``not_applicable``.
 
-``runtime_gates`` records the honesty-critical gate values of the scoring
-process next to the suite thresholds.  run.json does not pin them, so for the
-sidecar the values are the run's own process configuration
-(``identity.scored_by == "pipeline"``) and for an offline backfill they are the
-current configuration (``"backfill"``).  A relaxed publish-gate coverage
-threshold therefore shows as ``relaxed: true`` next to a failed
-``citation_coverage`` contract instead of hiding behind a passed publish gate.
-Because the pipeline-authored sidecar is the only record of the gates a run
-was published under, the backfill CLI never replaces it unless forced, and a
-forced rewrite keeps it under ``identity.previous``.
+``runtime_gates`` records the honesty-critical gate values next to the suite
+thresholds, each with the ``source`` it was read from.  A value the reached
+report's ``final_audit.json`` recorded (``publish_gate.enabled`` for
+REPORT_PUBLISH_GATE; the audit's own ``read_only`` stamp for
+REPORT_FINAL_READ_ONLY_AUDIT) is the one that report was published under and
+wins.  run.json does not pin the others, so they are the scoring process's
+configuration (``source: "process_config"``): the run's own configuration for
+the sidecar (``identity.scored_by == "pipeline"``) and the current one for an
+offline backfill (``"backfill"``).  A relaxed publish-gate coverage threshold
+therefore shows as ``relaxed: true`` next to a failed ``citation_coverage``
+contract instead of hiding behind a passed publish gate.  Because the
+pipeline-authored sidecar is the only record of the process gates a run was
+published under, the backfill CLI keeps one that still describes the
+pipeline's current attempt (same ``identity.task_id`` and ``status``) unless
+forced, and any rewrite keeps it under ``identity.previous``.
 """
 
 from __future__ import annotations
@@ -108,6 +114,7 @@ _MARKET_LABEL_STATES = {
 # Honesty-critical boolean gates recorded in runtime_gates (the suite expects each on).
 _HONESTY_BOOLEAN_GATES = ("REPORT_PUBLISH_GATE", "REPORT_FINAL_READ_ONLY_AUDIT",
                           "PIPELINE_HEALTH_GATE")
+PROCESS_CONFIG = "process_config"
 
 _WORKDIR_RE = re.compile(r"\A[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}\Z")
 _ABSENT = object()
@@ -239,7 +246,7 @@ def _research_metrics(paths: Mapping[str, Any], digests: dict) -> dict:
             metrics["kiq_fallback_rate"] = _unavailable(
                 NOT_INSTRUMENTED, fsrc, "kiqs has no 'fallback' field")
 
-    metrics.update(_kiq_fact_metrics(paths, meta, err, digests))
+    metrics.update(_kiq_fact_metrics(paths, meta, None if err else kiqs, err, digests))
 
     src = "handoff/meta.json:tools"
     err, tools = _field(meta, meta_status, "tools", src)
@@ -285,9 +292,17 @@ def _kiq_dir(paths: Mapping[str, Any], meta: dict) -> Optional[str]:
     return os.path.join(handoff, workdir, "kiq")
 
 
-def _kiq_fact_metrics(paths: Mapping[str, Any], meta: Optional[dict],
+def _kiq_fact_metrics(paths: Mapping[str, Any], meta: Optional[dict], kiqs: Optional[dict],
                       kiqs_error: Optional[dict], digests: dict) -> dict:
-    """verified_share and number_verification_pass_rate from handoff/<v3>/kiq/*.json facts."""
+    """verified_share and number_verification_pass_rate from handoff/<v3>/kiq/*.json facts.
+
+    The files are cross-checked against the producer's own ``meta.kiqs.facts`` /
+    ``verified`` counts when meta records them: a resumed v3 run demotes
+    shell-verified facts in memory only (``_demote_shell_facts``), and a kiq/
+    directory can keep records the run no longer counts.  On a disagreement the
+    producer's counts give verified_share and the per-fact number checks, which
+    have no producer count to validate them, are unreadable.
+    """
     names = {"verified_share": "handoff/v3/kiq/*.json:facts[].tag",
              "number_verification_pass_rate": "handoff/v3/kiq/*.json:facts[].verified_numbers"}
     if kiqs_error is not None:
@@ -316,6 +331,17 @@ def _kiq_fact_metrics(paths: Mapping[str, Any], meta: Optional[dict],
         combined.update(f"{filename}\0{_sha256(path)}\n".encode("utf-8"))
     digests["research_kiq_facts"] = combined.hexdigest()
     verified = sum(1 for fact in facts if fact.get("tag") == "VERIFIED")
+    kiqs = kiqs or {}
+    if ("facts" in kiqs or "verified" in kiqs) and (
+            _as_count(kiqs.get("facts")), _as_count(kiqs.get("verified"))) != (len(facts), verified):
+        detail = (f"disk facts disagree with meta.kiqs: {verified}/{len(facts)} VERIFIED on disk, "
+                  f"meta records {kiqs.get('verified')!r}/{kiqs.get('facts')!r}")[:300]
+        return {
+            "verified_share": _rate(kiqs.get("verified"), kiqs.get("facts"),
+                                    "handoff/meta.json:kiqs.verified/facts", detail=detail),
+            "number_verification_pass_rate": _unavailable(
+                UNREADABLE, names["number_verification_pass_rate"], detail),
+        }
     checked = [fact.get("verified_numbers") for fact in facts
                if isinstance(fact.get("verified_numbers"), bool)]
     return {
@@ -346,7 +372,12 @@ def _market_state(paths: Mapping[str, Any], digests: dict) -> dict:
     """found | none_relevant | infra_failure | not_attempted from prediction_markets.json.
 
     Reads both ``status.state`` and ``status.empty_reason`` (an infrastructure
-    label in either wins) and records both in ``detail``.
+    label in either wins) and records both in ``detail``.  A ``status`` that is
+    not an object or ``markets`` that is not a list is unreadable.  Without a
+    status block an empty result cannot be told apart from a transport failure,
+    so ``no_relevant_markets`` alone never decides the state: such a file is
+    ``found`` only with markets, ``infra_failure`` when its ``reason`` names the
+    transport, and otherwise not_instrumented (unevaluable, never a pass).
     """
     src = "handoff/prediction_markets.json:status"
     status, payload = _read_json_object(paths.get("prediction_markets"))
@@ -355,13 +386,19 @@ def _market_state(paths: Mapping[str, Any], digests: dict) -> dict:
     if status != MEASURED:
         return _unavailable(status, src)
     digests["prediction_markets"] = _sha256(paths.get("prediction_markets"))
-    markets = payload.get("markets")
-    pm_status = payload.get("status") if isinstance(payload.get("status"), dict) else {}
+    markets = payload.get("markets", [])
+    pm_status = payload.get("status", _ABSENT)
+    if not isinstance(markets, list):
+        return _unavailable(UNREADABLE, src, "markets is not a list")
+    if pm_status is _ABSENT:
+        return _legacy_market_state(payload, markets)
+    if not isinstance(pm_status, dict):
+        return _unavailable(UNREADABLE, src, "status is not an object")
     selected = _as_count(pm_status.get("selected_count")) or 0
     labels = {key: str(pm_status.get(key) or "").strip() for key in ("state", "empty_reason")}
     failures = _as_count(pm_status.get("transport_failure_count")) or 0
     candidates = _as_count(pm_status.get("candidate_count")) or 0
-    if (isinstance(markets, list) and markets) or selected > 0:
+    if markets or selected > 0:
         state = "found"
     elif pm_status.get("attempted") is False:
         state = "not_attempted"
@@ -373,14 +410,26 @@ def _market_state(paths: Mapping[str, Any], digests: dict) -> dict:
         # single-snapshot producer stored the generic 'no_equivalent_market'.
         state = "infra_failure"
     else:
+        # Every producer labels an empty result; an unlabelled one is never a pass.
         state = (_MARKET_LABEL_STATES.get(labels["state"])
                  or _MARKET_LABEL_STATES.get(labels["empty_reason"])
-                 or ("none_relevant" if payload.get("no_relevant_markets") is True
-                     else "not_attempted"))
+                 or "not_attempted")
     detail: dict[str, Any] = {key: label for key, label in labels.items() if label}
     if failures:
         detail["transport_failure_count"] = failures
     return _metric(state, source=src, detail=detail or None)
+
+
+def _legacy_market_state(payload: dict, markets: list) -> dict:
+    """market_state of a prediction_markets.json written without a status block."""
+    if markets:
+        return _metric("found", source="handoff/prediction_markets.json:markets")
+    reason = str(payload.get("reason") or "").strip()
+    if "transport" in reason.lower():
+        return _metric("infra_failure", source="handoff/prediction_markets.json:reason",
+                       detail={"reason": reason[:120]})
+    return _unavailable(NOT_INSTRUMENTED, "handoff/prediction_markets.json:status",
+                        "no status block: an empty result cannot be classified")
 
 
 # -------------------------------------------------------------------- ontology
@@ -559,14 +608,22 @@ def _scenario_metrics(forecast: Optional[dict], status: str,
         return {"probability_sum_ok": _unavailable(UNREADABLE, psrc, "scenarios is not a list of objects"),
                 "has_residual_scenario": _unavailable(UNREADABLE, rsrc, "scenarios is not a list of objects")}
     probabilities = [_as_float(row.get("probability")) for row in scenarios]
-    if not scenarios or None in probabilities:
-        total = None
-        ok = False
-        detail = "no scenarios" if not scenarios else "a scenario probability is not a finite number"
+    total: Optional[float] = None
+    detail: Optional[str] = None
+    if not scenarios:
+        detail = "no scenarios"
+    elif None in probabilities:
+        detail = "a scenario probability is not a finite number"
     else:
-        total = round(sum(probabilities), 6)
-        ok = abs(total - 1.0) <= tolerance + 1e-9
-        detail = None
+        try:
+            exact = math.fsum(probabilities)
+        except OverflowError:  # finite probabilities whose sum leaves float range
+            exact = math.inf
+        if math.isfinite(exact):
+            total = round(exact, 6)
+        else:  # never written: an infinite sum would make the scorecard unserialisable
+            detail = "the scenario probability sum is not finite"
+    ok = total is not None and abs(total - 1.0) <= tolerance + 1e-9
     residual = forecast.get("residual_scenario_added") is True or any(
         _is_residual_scenario_name(row.get("name")) for row in scenarios)
     return {
@@ -739,18 +796,45 @@ def load_thresholds(path: str) -> dict[str, float]:
     return effective_thresholds(payload)
 
 
-def runtime_gates(thresholds: Mapping[str, float]) -> dict[str, dict]:
-    """Honesty-critical gate values of this process next to the suite expectation."""
+def _recorded_gates(final_audit_path: Any) -> dict[str, tuple[bool, str]]:
+    """{gate: (value, source)} for the gate values a report's final_audit.json recorded.
+
+    ``publish_gate.enabled`` is the REPORT_PUBLISH_GATE value the audit ran
+    under, and only the read-only final audit writes the file (stamping
+    ``read_only: true``), so that stamp shows REPORT_FINAL_READ_ONLY_AUDIT
+    governed the report.  A missing or malformed audit records nothing.
+    """
+    status, audit = _read_json_object(final_audit_path)
+    if status != MEASURED:
+        return {}
+    recorded: dict[str, tuple[bool, str]] = {}
+    gate = audit.get("publish_gate")
+    if isinstance(gate, dict) and isinstance(gate.get("enabled"), bool):
+        recorded["REPORT_PUBLISH_GATE"] = (
+            gate["enabled"], "report/final_audit.json:publish_gate.enabled")
+    if audit.get("read_only") is True:
+        recorded["REPORT_FINAL_READ_ONLY_AUDIT"] = (True, "report/final_audit.json:read_only")
+    return recorded
+
+
+def runtime_gates(thresholds: Mapping[str, float],
+                  recorded: Optional[Mapping[str, tuple[bool, str]]] = None) -> dict[str, dict]:
+    """Honesty-critical gate values next to the suite expectation, each with its source.
+
+    A value in ``recorded`` (see :func:`_recorded_gates`) wins over this
+    process's configuration, which is ``source: "process_config"``.
+    """
+    recorded = recorded if isinstance(recorded, Mapping) else {}
     coverage = _as_float(getattr(Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", None))
     suite = thresholds["citation_coverage_min"]
     gates = {"REPORT_PUBLISH_GATE_MIN_COVERAGE": {
         "effective": coverage, "suite_threshold": suite,
-        "relaxed": coverage is None or coverage < suite}}
+        "relaxed": coverage is None or coverage < suite, "source": PROCESS_CONFIG}}
     for name in _HONESTY_BOOLEAN_GATES:
-        effective = getattr(Config, name, None)
+        effective, source = recorded.get(name) or (getattr(Config, name, None), PROCESS_CONFIG)
         effective = effective if isinstance(effective, bool) else None
         gates[name] = {"effective": effective, "suite_threshold": True,
-                       "relaxed": effective is not True}
+                       "relaxed": effective is not True, "source": source}
     return gates
 
 
@@ -772,6 +856,7 @@ def _identity(inputs: Mapping[str, Any], digests: dict) -> dict:
                     backbone[str(stage)] = picked
     return {
         "pipeline_id": inputs["pipeline_id"],
+        "task_id": inputs["task_id"],
         "mode": inputs["mode"],
         "status": inputs["status"],
         "report_id": inputs["report_id"],
@@ -792,6 +877,7 @@ def _normalize_inputs(inputs: Any) -> dict:
     stage_status = raw.get("stage_status") if isinstance(raw.get("stage_status"), Mapping) else {}
     return {
         "pipeline_id": _clean_str(raw.get("pipeline_id")),
+        "task_id": _clean_str(raw.get("task_id")),
         "mode": "research_only" if raw.get("mode") == "research_only" else "full",
         "status": _clean_str(raw.get("status")),
         "report_id": _clean_str(raw.get("report_id")),
@@ -860,11 +946,13 @@ def build_stage_scorecard(inputs: Any, thresholds: Any = None) -> dict:
     try:
         identity = _identity(norm, digests)
     except Exception:  # noqa: BLE001 — identity is descriptive; never raise
-        identity = {key: norm[key] for key in
-                    ("pipeline_id", "mode", "status", "report_id", "simulation_id", "scored_by")}
+        identity = {key: norm[key] for key in ("pipeline_id", "task_id", "mode", "status",
+                                               "report_id", "simulation_id", "scored_by")}
         identity.update(repo_git_sha=None, backbone=None)
     try:
-        gates = runtime_gates(limits)
+        # Only a reached report stage's audit describes the gates of this attempt.
+        gates = runtime_gates(limits, _recorded_gates(norm["paths"].get("final_audit"))
+                              if stages["report"]["status"] == STAGE_SCORED else None)
     except Exception:  # noqa: BLE001 — an unreadable config records no gate values
         gates = {}
     return {
@@ -940,6 +1028,8 @@ def resolve_inputs(pipeline_id: str, state: Optional[Mapping[str, Any]] = None) 
             pass
     return {
         "pipeline_id": pipeline_id,
+        # Every attempt (start / resume / continue / fork) gets a fresh task id.
+        "task_id": pipeline_state.task_id,
         "mode": pipeline_state.mode,
         "status": pipeline_state.status,
         "report_id": pipeline_state.report_id,

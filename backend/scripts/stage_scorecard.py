@@ -13,14 +13,21 @@ Usage:
 ``--pipeline`` prints the full scorecard JSON; ``--all`` scores every terminal
 pipeline (completed / failed / cancelled) and prints a compact summary per
 run.  ``-o`` / ``--write`` also writes ``<pipeline_dir>/stage_scorecard.json``.
-The runtime_gates block records the current configuration (``scored_by:
-"backfill"``), since run.json does not pin the gate values of the original run.
+The runtime_gates block records the gate values the report's final_audit.json
+recorded and, for the rest, the current configuration (``source:
+"process_config"``, ``scored_by: "backfill"``), since run.json does not pin the
+gate values of the original run.
 
 ``-o`` is a backfill: a sidecar the pipeline wrote itself (``scored_by:
-"pipeline"``) is the only record of the gates that run was published under, so
-it is kept and reported as skipped.  ``--force`` rewrites it anyway and keeps
-its ``scored_by`` / ``status`` / ``runtime_gates`` under ``identity.previous``
-(any rewrite carries an existing ``identity.previous`` forward).
+"pipeline"``) for its current attempt (same ``identity.task_id`` and
+``status`` as the pipeline state) is the only record of the process gates that
+run was published under, so it is kept and reported as skipped.  A
+pipeline-authored sidecar from an earlier attempt (a later attempt ran with
+STAGE_SCORECARD_ENABLED=false, or died as an orphan) is stale and rewritten.
+``--force`` rewrites a current one too.  A rewrite keeps the replaced
+pipeline-authored record (``scored_by`` / ``task_id`` / ``status`` /
+``runtime_gates``) under ``identity.previous``, and any rewrite carries an
+existing ``identity.previous`` forward.
 
 Exit codes: 0 scored (a kept pipeline-authored sidecar is a skip, not an
 error), 1 a pipeline could not be scored, 2 usage error.
@@ -49,8 +56,8 @@ TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
 PIPELINE_AUTHORED = "pipeline-authored sidecar"
 
 
-def _print_json(payload: Any) -> None:
-    print(json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False))
+def _render_json(payload: Any) -> str:
+    return json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False)
 
 
 def _error_text(exc: BaseException) -> str:
@@ -103,19 +110,29 @@ def _pipeline_record(existing: Optional[dict]) -> Optional[dict]:
     """The pipeline-authored gate record an existing sidecar holds (itself or identity.previous)."""
     identity = _identity(existing)
     if identity.get("scored_by") == "pipeline":
-        return {"scored_by": "pipeline", "status": identity.get("status"),
+        return {"scored_by": "pipeline", "task_id": identity.get("task_id"),
+                "status": identity.get("status"),
                 "runtime_gates": existing.get("runtime_gates")}
     previous = identity.get("previous")
     return previous if isinstance(previous, dict) else None
 
 
+def _is_current_pipeline_sidecar(existing: Optional[dict], inputs: dict) -> bool:
+    """True when the pipeline wrote the sidecar for the attempt its state now describes."""
+    identity = _identity(existing)
+    return (identity.get("scored_by") == "pipeline"
+            and identity.get("task_id") == inputs.get("task_id")
+            and identity.get("status") == inputs.get("status"))
+
+
 def _score(pipeline_id: str, thresholds: Optional[dict], *, write: bool,
            force: bool) -> tuple[Optional[dict], Optional[str]]:
     """(scorecard, skip reason).  A write never silently replaces pipeline-authored evidence."""
+    inputs = scorecard.resolve_inputs(pipeline_id)
     existing = _existing_sidecar(pipeline_id) if write else None
-    if write and not force and _identity(existing).get("scored_by") == "pipeline":
+    if write and not force and _is_current_pipeline_sidecar(existing, inputs):
         return None, PIPELINE_AUTHORED
-    card = scorecard.build_stage_scorecard(scorecard.resolve_inputs(pipeline_id), thresholds)
+    card = scorecard.build_stage_scorecard(inputs, thresholds)
     if write:
         previous = _pipeline_record(existing)
         if previous is not None:
@@ -153,17 +170,19 @@ def _cmd_score(args: argparse.Namespace) -> int:
     if args.pipeline:
         try:
             card, skip = _score(args.pipeline, thresholds, write=args.write, force=args.force)
+            if skip:
+                output = _render_json({"pipeline_id": args.pipeline, "skipped": skip})
+            elif args.write:
+                output = _render_json(_summary_row(card, scorecard.sidecar_path(args.pipeline)))
+            else:
+                output = _render_json(card)
         except Exception as exc:  # noqa: BLE001 — report any failure as "could not be scored"
             print(f"cannot score {args.pipeline}: {_error_text(exc)}", file=sys.stderr)
             return 1
         if skip:
             print(f"kept {scorecard.sidecar_path(args.pipeline)} ({skip}); "
                   "pass --force to rewrite it", file=sys.stderr)
-            _print_json({"pipeline_id": args.pipeline, "skipped": skip})
-        elif args.write:
-            _print_json(_summary_row(card, scorecard.sidecar_path(args.pipeline)))
-        else:
-            _print_json(card)
+        print(output)
         return 0
 
     ids, skipped, errors = _terminal_pipeline_ids()
@@ -178,9 +197,9 @@ def _cmd_score(args: argparse.Namespace) -> int:
             skipped.append({"pipeline_id": pipeline_id, "reason": skip})
             continue
         rows.append(_summary_row(card, scorecard.sidecar_path(pipeline_id) if args.write else None))
-    _print_json({"count": len(rows), "pipelines": rows,
-                 "skipped": sorted(skipped, key=lambda row: row["pipeline_id"]),
-                 "errors": sorted(errors, key=lambda row: row["pipeline_id"])})
+    print(_render_json({"count": len(rows), "pipelines": rows,
+                        "skipped": sorted(skipped, key=lambda row: row["pipeline_id"]),
+                        "errors": sorted(errors, key=lambda row: row["pipeline_id"])}))
     return 1 if errors else 0
 
 

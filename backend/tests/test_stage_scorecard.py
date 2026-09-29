@@ -101,7 +101,7 @@ def roots(tmp_path, monkeypatch):
 
 def _make_pipeline(pid="pipe_eval15fixture", *, mode="full", status="completed",
                    stage_status=None, meta=V3_META, kiqs=KIQ_RECORDS, markets=None,
-                   forecast=None, audit=None, options=None):
+                   forecast=None, audit=None, options=None, task_id="task_eval15fixture"):
     """A complete full-mode pipeline on disk; every stage passes unless overridden."""
     stages = {stage: po.StageState(name=stage, status="completed") for stage in sc.STAGES}
     for stage, value in (stage_status or {}).items():
@@ -111,7 +111,7 @@ def _make_pipeline(pid="pipe_eval15fixture", *, mode="full", status="completed",
             stages[stage].status = value
     state = po.PipelineState(
         pipeline_id=pid, prompt="Will X happen by 2030?", mode=mode, status=status,
-        report_id=REPORT_ID, simulation_id=SIM_ID, stages=stages,
+        task_id=task_id, report_id=REPORT_ID, simulation_id=SIM_ID, stages=stages,
         options=dict(options if options is not None else {"graph_prune": {"kept": 9}}),
     )
     state.handoff_dir = po.PipelineManager.handoff_dir(pid)
@@ -163,6 +163,7 @@ def test_healthy_fixture_passes_every_stage_and_envelope_shape(roots):
     assert sc.summarize_checks(card) == dict.fromkeys(sc.STAGES, True)
     identity = card["identity"]
     assert identity["pipeline_id"] == "pipe_eval15fixture"
+    assert identity["task_id"] == "task_eval15fixture"
     assert identity["mode"] == "full" and identity["status"] == "completed"
     assert identity["repo_git_sha"] == "abc123" and identity["scored_by"] == "backfill"
     assert identity["backbone"] == {"report": {"provider": "glm", "model_name": "glm-5.3"},
@@ -186,6 +187,8 @@ def test_research_rates_from_v3_kiq_fixture(roots):
     verified = _metric(card, "research", "verified_share")
     assert (verified["num"], verified["den"], verified["value"]) == (3, 7, 0.4286)
     assert verified["status"] == "measured"
+    # The files agree with meta.kiqs (7 facts, 3 VERIFIED), so the disk projection stands.
+    assert verified["source"] == "handoff/v3/kiq/*.json:facts[].tag"
     numbers = _metric(card, "research", "number_verification_pass_rate")
     # Only facts whose numbers were checked (True/False) count; None is "no number".
     assert (numbers["num"], numbers["den"], numbers["value"]) == (2, 4, 0.5)
@@ -196,6 +199,40 @@ def test_research_rates_from_v3_kiq_fixture(roots):
     tools = _metric(card, "research", "tool_failure_rate")
     assert (tools["num"], tools["den"], tools["value"]) == (1, 20, 0.05)
     assert _metric(card, "research", "actor_count")["value"] == 12
+
+
+@pytest.mark.parametrize("case", ["demoted-in-memory", "stale-record-on-disk", "meta-garbage"])
+def test_kiq_facts_cross_checked_against_meta(roots, case):
+    """The files never outvote the producer's own meta.kiqs counts."""
+    meta, kiqs = V3_META, KIQ_RECORDS
+    if case == "demoted-in-memory":
+        # A resumed v3 run demoted one shell-verified fact in memory only: the file
+        # still says VERIFIED, meta.kiqs.verified does not.
+        meta = dict(V3_META, kiqs=dict(V3_META["kiqs"], verified=2))
+    elif case == "stale-record-on-disk":
+        # A follow-up record the run no longer counts is still in kiq/.
+        kiqs = dict(KIQ_RECORDS, K9=[_fact("VERIFIED", True), _fact("VERIFIED", True)])
+    else:
+        meta = dict(V3_META, kiqs=dict(V3_META["kiqs"], verified=9))  # 9 of 7
+    _make_pipeline(meta=meta, kiqs=kiqs)
+    card = _score()
+    share = _metric(card, "research", "verified_share")
+    numbers = _metric(card, "research", "number_verification_pass_rate")
+    assert share["source"] == "handoff/meta.json:kiqs.verified/facts"
+    if case == "meta-garbage":
+        assert share["status"] == "unreadable" and share["value"] is None
+        assert share["detail"] == "numerator exceeds denominator"
+    else:
+        expected = (2, 7, 0.2857) if case == "demoted-in-memory" else (3, 7, 0.4286)
+        assert (share["num"], share["den"], share["value"]) == expected
+        assert share["status"] == "measured"
+        assert share["detail"].startswith("disk facts disagree with meta.kiqs")
+    # The per-fact number checks have no producer count to validate them against.
+    assert numbers["status"] == "unreadable" and numbers["value"] is None
+    assert numbers["detail"].startswith("disk facts disagree with meta.kiqs")
+    # Both metrics are descriptive: the research contract itself is unaffected.
+    assert card["checks"]["research"]["passed"] is True
+    json.dumps(card, allow_nan=False)
 
 
 def test_rate_numerator_never_exceeds_denominator(roots):
@@ -336,6 +373,28 @@ def test_report_contract_checks(roots):
     assert (ratio["num"], ratio["den"], ratio["value"]) == (1, 10, 0.1)
 
 
+def test_probability_sum_overflow_stays_serialisable(roots, capsys):
+    """Finite probabilities whose sum leaves float range fail the check without an inf sum."""
+    forecast = _healthy_forecast(scenarios=[
+        {"name": "Base case", "probability": 1e308},
+        {"name": "Other", "probability": 1e308}])
+    state = _make_pipeline(forecast=forecast)
+    card = _score()
+    total = _metric(card, "report", "probability_sum_ok")
+    assert total["status"] == "measured" and total["value"] is False
+    assert "sum" not in total
+    assert total["detail"] == "the scenario probability sum is not finite"
+    assert card["checks"]["report"]["failed"] == ["probability_sum_ok"]
+    json.dumps(card, allow_nan=False)
+    # The sidecar writer and the CLI both serialise it.
+    written = sc.write_stage_scorecard(state.pipeline_id, state=state.to_dict())
+    with open(sc.sidecar_path(state.pipeline_id), encoding="utf-8") as handle:
+        assert json.load(handle) == written
+    assert cli.main(["score", "--pipeline", state.pipeline_id]) == 0
+    assert json.loads(capsys.readouterr().out)["checks"]["report"]["failed"] == [
+        "probability_sum_ok"]
+
+
 @pytest.mark.parametrize("semantic,expected", [
     # Older final audits stored only the counts (e.g. report_1b70ace5c9e8).
     ({"checked": 288, "unverifiable": 0, "unsupported": 0, "passed": True, "examples": []},
@@ -373,15 +432,20 @@ def test_relaxed_runtime_gate_recorded(roots, monkeypatch):
     _make_pipeline(audit=_healthy_audit(coverage=0.07))
     card = _score()
     gate = card["runtime_gates"]["REPORT_PUBLISH_GATE_MIN_COVERAGE"]
-    assert gate == {"effective": 0.05, "suite_threshold": 0.75, "relaxed": True}
+    assert gate == {"effective": 0.05, "suite_threshold": 0.75, "relaxed": True,
+                    "source": "process_config"}
     coverage = _metric(card, "report", "citation_coverage")
     assert coverage["value"] == 0.07 and coverage["threshold"] == 0.75
     assert coverage["source"].endswith("citation_grounding.resolved_coverage")
     assert card["checks"]["report"]["failed"] == ["citation_coverage"]
     assert _metric(card, "report", "publish_gate_passed")["value"] is True
-    for name in ("REPORT_PUBLISH_GATE", "REPORT_FINAL_READ_ONLY_AUDIT", "PIPELINE_HEALTH_GATE"):
+    assert card["runtime_gates"]["REPORT_PUBLISH_GATE"] == {
+        "effective": True, "suite_threshold": True, "relaxed": False,
+        "source": "report/final_audit.json:publish_gate.enabled"}
+    for name in ("REPORT_FINAL_READ_ONLY_AUDIT", "PIPELINE_HEALTH_GATE"):
         assert card["runtime_gates"][name] == {
-            "effective": True, "suite_threshold": True, "relaxed": False}
+            "effective": True, "suite_threshold": True, "relaxed": False,
+            "source": "process_config"}
 
 
 def test_publish_gate_disabled_fails_its_contract(roots, monkeypatch):
@@ -393,6 +457,44 @@ def test_publish_gate_disabled_fails_its_contract(roots, monkeypatch):
     assert _metric(card, "report", "publish_gate_passed")["detail"] == (
         "publish gate disabled at runtime")
     assert card["checks"]["report"]["failed"] == ["publish_gate_passed"]
+
+
+def test_runtime_gates_prefer_values_the_final_audit_recorded(roots, monkeypatch):
+    """A backfill reads the gate values the report was audited under, not today's config."""
+    audit_src = "report/final_audit.json:publish_gate.enabled"
+    # The run published with the gate off; the backfill process has it on.
+    _make_pipeline(audit=dict(_healthy_audit(), publish_gate={"enabled": False, "passed": True},
+                              read_only=True))
+    monkeypatch.setattr(Config, "REPORT_FINAL_READ_ONLY_AUDIT", False, raising=False)
+    gates = _score()["runtime_gates"]
+    assert gates["REPORT_PUBLISH_GATE"] == {"effective": False, "suite_threshold": True,
+                                            "relaxed": True, "source": audit_src}
+    assert gates["REPORT_FINAL_READ_ONLY_AUDIT"] == {
+        "effective": True, "suite_threshold": True, "relaxed": False,
+        "source": "report/final_audit.json:read_only"}
+    assert gates["PIPELINE_HEALTH_GATE"]["source"] == "process_config"
+    assert gates["REPORT_PUBLISH_GATE_MIN_COVERAGE"]["source"] == "process_config"
+
+    # The run published with the gate on; the backfill process has it off.
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE", False, raising=False)
+    _make_pipeline("pipe_eval15gateon")
+    gates = _score("pipe_eval15gateon")["runtime_gates"]
+    assert gates["REPORT_PUBLISH_GATE"] == {"effective": True, "suite_threshold": True,
+                                            "relaxed": False, "source": audit_src}
+    assert gates["REPORT_FINAL_READ_ONLY_AUDIT"] == {
+        "effective": False, "suite_threshold": True, "relaxed": True, "source": "process_config"}
+
+    # No audit, or a report stage this attempt never reached: process configuration.
+    process = {"effective": False, "suite_threshold": True, "relaxed": True,
+               "source": "process_config"}
+    _make_pipeline("pipe_eval15noaudit")
+    os.remove(os.path.join(po.ReportManager._get_report_folder(REPORT_ID), "final_audit.json"))
+    assert _score("pipe_eval15noaudit")["runtime_gates"]["REPORT_PUBLISH_GATE"] == process
+    _make_pipeline("pipe_eval15unreached", status="failed",
+                   stage_status={"run": "failed", "report": "pending"})
+    assert os.path.exists(os.path.join(po.ReportManager._get_report_folder(REPORT_ID),
+                                       "final_audit.json"))
+    assert _score("pipe_eval15unreached")["runtime_gates"]["REPORT_PUBLISH_GATE"] == process
 
 
 # ---------------------------------------------------------------------- markets
@@ -460,10 +562,18 @@ def test_merged_market_fixtures_have_the_ambiguous_shape():
                                 "candidate_count": 20,
                                 "empty_reason": "all_candidates_irrelevant"}},
      "none_relevant", "pass"),
+    # no_relevant_markets alone never makes an unlabelled empty result a pass.
+    ({"markets": [], "no_relevant_markets": True, "status": {"attempted": True}},
+     "not_attempted", "unevaluable"),
+    # Without a status block: markets are direct evidence, a transport reason is infra.
+    ({"markets": [{"market_id": "m"}]}, "found", "pass"),
+    ({"markets": [], "no_relevant_markets": True, "reason": "pre-pass transport circuit open"},
+     "infra_failure", "fail"),
 ], ids=["found", "irrelevant", "no-equivalent", "verified-empty", "transport", "timeout",
         "no-queries", "not-attempted", "file-absent", "merged-timeout", "merged-partial",
         "merged-empty", "state-timeout", "state-partial", "single-partial",
-        "irrelevant-with-failures"])
+        "irrelevant-with-failures", "unlabelled-empty", "statusless-found",
+        "statusless-transport"])
 def test_market_states(roots, payload, state, verdict):
     pipeline = _make_pipeline()
     path = os.path.join(pipeline.handoff_dir, "prediction_markets.json")
@@ -490,6 +600,33 @@ def test_market_state_unreadable_fails(roots):
     card = _score()
     assert _metric(card, "research", "market_state")["status"] == "unreadable"
     assert "market_state" in card["checks"]["research"]["failed"]
+
+
+@pytest.mark.parametrize("payload,status,verdict", [
+    ({"markets": [], "no_relevant_markets": True, "status": "transport_failure"},
+     "unreadable", "fail"),
+    ({"markets": [], "status": None}, "unreadable", "fail"),
+    ({"markets": {"m1": {}}, "status": {"attempted": True, "selected_count": 1}},
+     "unreadable", "fail"),
+    ({"markets": None, "status": {"attempted": True, "empty_reason": "no_equivalent_market"}},
+     "unreadable", "fail"),
+    ({"markets": [], "no_relevant_markets": True}, "not_instrumented", "unevaluable"),
+    ({"markets": [], "no_relevant_markets": True, "reason": "no derivable queries"},
+     "not_instrumented", "unevaluable"),
+], ids=["status-string", "status-null", "markets-object", "markets-null", "statusless-empty",
+        "statusless-no-queries"])
+def test_market_state_fails_closed_on_malformed_or_statusless_files(roots, payload, status,
+                                                                    verdict):
+    """A wrong shape is unreadable (fails); a status-less empty result is unevaluable."""
+    pipeline = _make_pipeline()
+    _write(os.path.join(pipeline.handoff_dir, "prediction_markets.json"), payload)
+    card = _score()
+    record = _metric(card, "research", "market_state")
+    assert record["status"] == status and record["value"] is None
+    research = card["checks"]["research"]
+    assert ("market_state" in research["failed"]) is (verdict == "fail")
+    assert ("market_state" in research["unevaluable"]) is (verdict == "unevaluable")
+    assert research["passed"] is (False if verdict == "fail" else None)
 
 
 # ------------------------------------------------------------ graph/prepare/run
@@ -570,6 +707,11 @@ _GARBAGE = [b"\xff\xfe\x00garbage", "{not json", "[]", "null", "42", '"text"',
                         "scenarios": [{"name": "Other", "probability": 10 ** 400}],
                         "selected_actor_count": 10 ** 400, "organic_action_count": 10 ** 400,
                         "seed_action_count": 1, "hard_passed": True}),
+            # Finite floats whose sum overflows must not write an inf probability sum.
+            json.dumps({"scenarios": [{"probability": 1e308}, {"name": "Other", "probability": 1e308}],
+                        "kiqs": {"planned": 1, "followups": 0, "completed": 1,
+                                 "facts": [], "verified": {}},
+                        "status": "transport_failure", "markets": {}}),
             "DIRECTORY"]
 _TARGETS = ["meta", "kiq", "markets", "ontology", "graph_prune", "actor_cast", "run_summary",
             "forecast", "final_audit", "run_manifest"]
@@ -630,7 +772,7 @@ def test_builder_never_raises_on_garbage_inputs(inputs):
 
 # ---------------------------------------------------------------- the _run hook
 def _drive_run(monkeypatch, tmp_path, *, outcome, pid, flag=True, options=None,
-               mode="research_only", overrides=None, probe=None):
+               mode="research_only", overrides=None, probe=None, task_id=None):
     """Run the real ``_run`` with a faked research child.
 
     outcome: completed (research_only run finishes), failed (the research child
@@ -689,7 +831,7 @@ def _drive_run(monkeypatch, tmp_path, *, outcome, pid, flag=True, options=None,
     monkeypatch.setattr(po.DeerFlowResearchRunner, "run", staticmethod(fake_research))
     po.PipelineManager.ensure_dirs(pid)
     state = po.PipelineState(pipeline_id=pid, prompt="Will capacity exceed 250 GW by 2027?",
-                             mode=mode, status="running",
+                             mode=mode, status="running", task_id=task_id,
                              options=dict(options or {"research_language": None}))
     state.handoff_dir = po.PipelineManager.handoff_dir(pid)
     os.makedirs(state.handoff_dir, exist_ok=True)
@@ -954,7 +1096,8 @@ def test_cli_backfill_keeps_pipeline_authored_sidecar(roots, monkeypatch, capsys
     monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.05, raising=False)
     state = _make_pipeline(pid, audit=_healthy_audit(coverage=0.07))
     authored = sc.write_stage_scorecard(pid, state=state.to_dict())
-    relaxed_gate = {"effective": 0.05, "suite_threshold": 0.75, "relaxed": True}
+    relaxed_gate = {"effective": 0.05, "suite_threshold": 0.75, "relaxed": True,
+                    "source": "process_config"}
     assert authored["runtime_gates"]["REPORT_PUBLISH_GATE_MIN_COVERAGE"] == relaxed_gate
     with open(sc.sidecar_path(pid), "rb") as handle:
         original = handle.read()
@@ -985,8 +1128,8 @@ def test_cli_backfill_keeps_pipeline_authored_sidecar(roots, monkeypatch, capsys
     assert forced["identity"]["scored_by"] == "backfill"
     assert forced["runtime_gates"]["REPORT_PUBLISH_GATE_MIN_COVERAGE"]["relaxed"] is False
     previous = forced["identity"]["previous"]
-    assert previous == {"scored_by": "pipeline", "status": "completed",
-                        "runtime_gates": authored["runtime_gates"]}
+    assert previous == {"scored_by": "pipeline", "task_id": "task_eval15fixture",
+                        "status": "completed", "runtime_gates": authored["runtime_gates"]}
     # A later plain backfill may rewrite a backfill sidecar but carries the evidence forward.
     assert cli.main(["score", "--all", "-o"]) == 0
     capsys.readouterr()
@@ -994,6 +1137,70 @@ def test_cli_backfill_keeps_pipeline_authored_sidecar(roots, monkeypatch, capsys
         assert json.load(handle)["identity"]["previous"] == previous
     with open(sc.sidecar_path("pipe_eval15orphan"), encoding="utf-8") as handle:
         assert "previous" not in json.load(handle)["identity"]
+
+
+@pytest.mark.parametrize("change", ["task", "status", "both"])
+def test_cli_backfill_replaces_stale_pipeline_authored_sidecar(roots, capsys, change):
+    """A pipeline-authored sidecar from an earlier attempt no longer describes the pipeline:
+    -o rewrites it (no --force needed) and keeps the old record under identity.previous."""
+    pid = "pipe_eval15stalecli"
+    state = _make_pipeline(pid)
+    authored = sc.write_stage_scorecard(pid, state=state.to_dict())
+    if change in ("task", "both"):
+        state.task_id = "task_eval15later"
+    if change in ("status", "both"):
+        state.status = "failed"
+    po.PipelineManager.save(state)
+
+    assert cli.main(["score", "--pipeline", pid, "-o"]) == 0
+    row = json.loads(capsys.readouterr().out)
+    assert row["written"] == sc.sidecar_path(pid) and row["status"] == state.status
+    with open(sc.sidecar_path(pid), encoding="utf-8") as handle:
+        rewritten = json.load(handle)
+    identity = rewritten["identity"]
+    assert identity["scored_by"] == "backfill"
+    assert (identity["task_id"], identity["status"]) == (state.task_id, state.status)
+    assert identity["previous"] == {"scored_by": "pipeline", "task_id": "task_eval15fixture",
+                                    "status": "completed",
+                                    "runtime_gates": authored["runtime_gates"]}
+
+
+def test_flag_off_later_attempt_leaves_a_sidecar_the_backfill_replaces(roots, monkeypatch,
+                                                                         capsys):
+    """End to end on the real _run: the hook's sidecar is current for its own attempt; a later
+    attempt with the flag off leaves it behind, and the backfill sees it is stale."""
+    pid = "pipe_eval15attempts"
+    _drive_run(monkeypatch, roots, outcome="completed", pid=pid, task_id="task_eval15a1")
+    assert cli.main(["score", "--pipeline", pid, "-o"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"pipeline_id": pid,
+                                                   "skipped": "pipeline-authored sidecar"}
+    with open(sc.sidecar_path(pid), encoding="utf-8") as handle:
+        first = json.load(handle)
+    assert first["identity"]["task_id"] == "task_eval15a1"
+
+    later = _drive_run(monkeypatch, roots, outcome="failed", pid=pid, mode="full", flag=False,
+                       task_id="task_eval15a2")
+    assert later.status == "failed"
+    with open(sc.sidecar_path(pid), encoding="utf-8") as handle:
+        assert json.load(handle) == first  # flag off: the old attempt's sidecar is untouched
+    assert cli.main(["score", "--pipeline", pid, "-o"]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "failed"
+    with open(sc.sidecar_path(pid), encoding="utf-8") as handle:
+        identity = json.load(handle)["identity"]
+    assert identity["scored_by"] == "backfill" and identity["task_id"] == "task_eval15a2"
+    assert identity["previous"] == {"scored_by": "pipeline", "task_id": "task_eval15a1",
+                                    "status": "completed", "runtime_gates": first["runtime_gates"]}
+
+
+def test_cli_unserialisable_card_is_cannot_score(roots, monkeypatch, capsys):
+    """Rendering sits inside the error handling: exit 1 with a message, never a traceback."""
+    _make_pipeline()
+    monkeypatch.setattr(sc, "build_stage_scorecard",
+                        lambda inputs, thresholds=None: {"value": float("nan")})
+    assert cli.main(["score", "--pipeline", "pipe_eval15fixture"]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "cannot score pipe_eval15fixture: ValueError" in captured.err
 
 
 def test_cli_all_reports_corrupt_states_without_aborting(roots, capsys):
