@@ -214,6 +214,25 @@ def test_pinned_client_never_serves_a_cached_fallback_reply(transports, monkeypa
     assert len(transports[PRIMARY].calls) == 2 and len(transports["kimi"].calls) == 1
 
 
+def test_no_cache_client_stays_uncached_through_failover(transports, monkeypatch):
+    _fallback_env(monkeypatch)
+    transports[PRIMARY] = _Transport(_resp(content="", finish="content_filter"))
+    transports["kimi"] = _Transport(_resp(content="fallback answer"))
+
+    # default client: the fallback's own chat() caches under the fallback key (unchanged)
+    assert lc.LLMClient().chat(_msgs("failover-cache")) == "fallback answer"
+    assert len(transports["kimi"].calls) == 1
+    stored = dict(tel.LLMCache._store)
+    assert len(stored) == 2  # the primary key and the fallback client's own key
+
+    no_cache = lc.LLMClient(use_cache=False)  # unpinned, so it may still fail over
+    for expected_calls in (2, 3):
+        assert no_cache.chat(_msgs("failover-cache")) == "fallback answer"
+        assert len(transports["kimi"].calls) == expected_calls  # a real fallback call each time
+        assert no_cache.last_call_meta()["served_by"] == "fallback"
+    assert tel.LLMCache._store == stored  # and nothing new was written
+
+
 # ---------------------------------------------------------------- tier routing
 def test_non_default_provider_keeps_own_model(transports, monkeypatch):
     _tiered(monkeypatch)

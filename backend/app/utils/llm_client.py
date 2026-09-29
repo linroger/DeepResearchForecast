@@ -966,6 +966,9 @@ class LLMClient:
                 model=fb_model,
                 api_key=(os.environ.get("LLM_FALLBACK_API_KEY", "") or None),
                 base_url=fb_base_url,
+                # EVAL-10: a use_cache=False client stays uncached through failover too (the
+                # fallback's own chat() must not replay a cached fallback reply).
+                use_cache=getattr(self, "use_cache", True),
             )
             fb._is_fallback = True  # prevent recursive failover
             # LLM-3: 复用回退提供方的 OpenAI 连接池（每次失败转移重建 httpx 池 = 每调用一次
