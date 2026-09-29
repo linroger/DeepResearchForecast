@@ -8379,11 +8379,18 @@ class PipelineOrchestrator:
                 # ORCH-3(b): completed 但交付物健康降级/失败时，允许 force 重驱报告阶段。
                 _ph = ((data.get("options") or {}).get("pipeline_health") or {})
                 if not (force and _ph.get("status") in ("degraded", "failed")):
-                    raise RuntimeError(
-                        "管线已完成，无需恢复"
-                        + ("（如需重生成降级报告，请带 force=true 重试）"
-                           if _ph.get("status") in ("degraded", "failed") else "")
-                    )
+                    _degraded_stages = sorted(
+                        name for name, st in (_ph.get("stages") or {}).items()
+                        if isinstance(st, dict) and st.get("health") in ("degraded", "failed"))
+                    if _ph.get("status") not in ("degraded", "failed"):
+                        _hint = ""
+                    elif _degraded_stages and "report" not in _degraded_stages:
+                        # force 只重生成报告：上游阶段（如 RESEARCH-2 的研究降级）的问题它修不了。
+                        _hint = ("（降级来自 " + "/".join(_degraded_stages)
+                                 + " 阶段；force=true 只会重生成报告，无法修复这些阶段，请重新运行管线）")
+                    else:
+                        _hint = "（如需重生成降级报告，请带 force=true 重试）"
+                    raise RuntimeError("管线已完成，无需恢复" + _hint)
 
             state = PipelineState.from_dict(data)
             PipelineManager.ensure_dirs(pipeline_id)

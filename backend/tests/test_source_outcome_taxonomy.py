@@ -975,9 +975,9 @@ def test_provider_body_naming_a_timeout_is_a_page_failure_in_every_layer(monkeyp
     _taxonomy(monkeypatch, True)
     monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
     monkeypatch.setenv("EXA_API_KEY", "exa-test")
-    # The (flag-independent) Jina transport circuit is not what this test is about.
-    monkeypatch.setenv("RESEARCH_PROVIDER_FAILURE_THRESHOLD", "100")
-    bodies = [_JINA_422_NAVIGATION_TIMEOUT] * 3 + [_JINA_451_CONNECTION_RESET] * 2
+    # Default circuit threshold (5): page failures must not open Jina's circuit,
+    # so all seven pages still reach Jina first.
+    bodies = [_JINA_422_NAVIGATION_TIMEOUT] * 4 + [_JINA_451_CONNECTION_RESET] * 3
 
     async def jina(url):
         return bodies[int(url.rsplit("-", 1)[1])]
@@ -991,8 +991,8 @@ def test_provider_body_naming_a_timeout_is_a_page_failure_in_every_layer(monkeyp
         url = f"https://www.agency.org/page-{i}"
         assert asyncio.run(cf.cached_fetch(url, cf._resilient_fetch)) == v3.page_text(url)
     events = cf.provider_events()
-    assert events["jina"] == {"content": {"count": 5, "reason": "jina_api_returned_status_451_data_null_code_451"}}
-    assert events["exa"] == {"ok": {"count": 5, "reason": ""}}
+    assert events["jina"] == {"content": {"count": 7, "reason": "jina_api_returned_status_451_data_null_code_451"}}
+    assert events["exa"] == {"ok": {"count": 7, "reason": ""}}
     assert lr._source_health_events({"searches": 10, "search_refused": None}, {}, events) == []
 
     for i, body in enumerate((_JINA_422_NAVIGATION_TIMEOUT, _JINA_451_CONNECTION_RESET)):
@@ -1001,6 +1001,31 @@ def test_provider_body_naming_a_timeout_is_a_page_failure_in_every_layer(monkeyp
         tools = _tools(tmp_path / f"tools-{i}", fetch_fn=_Recorder(body))
         assert tools.fetch("https://www.agency.org/report", agent_id="K1").startswith(f"FETCH_FAILED({reason}): ")
     assert _negative_keys(budget_db) == 2
+
+
+def test_http_408_is_an_infrastructure_failure_in_both_layers(monkeypatch, budget_db):
+    """A 408 is the fetch service giving up on the request, not the page's own
+    failure: neither layer negative-caches it, and both classify it the same."""
+    _taxonomy(monkeypatch, True)
+    for i, text in enumerate(("Error: Firecrawl failed: HTTP 408", 'Error: Jina API returned status 408: {"code":408}')):
+        assert cf._fetch_failure_class(text) == "unavailable"
+        assert rg._fetch_reason_is_infra(rg.ResearchTools._failure_reason(text, None))
+        _cached_fetch(f"https://www.agency.org/slow-{i}", text)
+    assert _negative_keys(budget_db) == 0
+
+
+def test_page_failures_do_not_open_the_provider_circuit_with_the_taxonomy_on(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cf, "_research_budget", type("B", (), {
+        "record_provider_transport_failure": staticmethod(lambda p, r: calls.append((p, r)))})())
+    _taxonomy(monkeypatch, True)
+    cf._record_provider_failure("jina", _JINA_422_NAVIGATION_TIMEOUT)
+    assert calls == []
+    cf._record_provider_failure("jina", "Error: Jina primary failed: ConnectTimeout: x")
+    assert [p for p, _ in calls] == ["jina"]
+    _taxonomy(monkeypatch, False)
+    cf._record_provider_failure("jina", _JINA_422_NAVIGATION_TIMEOUT)
+    assert [p for p, _ in calls] == ["jina", "jina"]  # flag off: previous whole-text rule
 
 
 def test_outages_are_negative_cached_with_the_flag_off(monkeypatch, budget_db):

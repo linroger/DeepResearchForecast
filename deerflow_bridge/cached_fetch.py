@@ -183,6 +183,7 @@ _INFRA_FETCH_REASON_PREFIXES = (
     "firecrawl_failed_payment_required",
     "firecrawl_failed_http_401",
     "firecrawl_failed_http_402",
+    "firecrawl_failed_http_408",
     "firecrawl_failed_http_5",
     "firecrawl_failed_rate_limited",
     "firecrawl_unavailable",
@@ -192,6 +193,7 @@ _INFRA_FETCH_REASON_PREFIXES = (
     "jina_api_returned_status_5",
     "jina_api_returned_status_401",
     "jina_api_returned_status_402",
+    "jina_api_returned_status_408",
     "exa_fallback_failed",
     "exa_fallback_unavailable",
     "direct_fallback_failed",
@@ -757,10 +759,18 @@ def _provider_circuit_open(provider: str) -> bool:
 
 
 def _record_provider_failure(provider: str, result: str) -> None:
+    # The circuit counts transport failures (credential/quota refusals have their
+    # own latch).  With the source taxonomy on it also requires the shared table
+    # (tool layer, provider events) to call the text the fetch service's failure,
+    # so a Jina 4xx body that mentions the target site's timeout stays the page's
+    # failure and cannot open Jina's circuit for every lane.
+    is_outage = _is_transport_failure(result)
+    if is_outage and _source_taxonomy_on():
+        is_outage = _fetch_failure_class(result) == "unavailable"
     if (
         _research_budget is not None
         and hasattr(_research_budget, "record_provider_transport_failure")
-        and _is_transport_failure(result)
+        and is_outage
     ):
         _research_budget.record_provider_transport_failure(provider, result)
 
