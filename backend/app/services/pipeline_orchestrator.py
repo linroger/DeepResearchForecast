@@ -8830,7 +8830,9 @@ class PipelineOrchestrator:
                             logger.warning("[%s] 集成种子 %s 失败（跳过）: %s", state.pipeline_id, k, _se)
                 if cancelled is not None:
                     raise cancelled
-            if len(forecasts) < 2:
+            # REPORT-1：概率待复核（needs_review）的 run 会被 aggregate_forecasts 剔除，不算有效
+            # 样本——否则 1 个可读 run 会被写成集成，一致度 1.0 被映射成「high」信心。
+            if sum(1 for f in forecasts if f.get("probability_status") != "needs_review") < 2:
                 logger.info("[%s] 有效集成样本<2，不写 ensemble_forecast.json", state.pipeline_id)
                 state.options["ensemble_done"] = True
                 PipelineManager.save(state)
@@ -9470,6 +9472,12 @@ class PipelineOrchestrator:
                 bq = fc.get("binary_quality") or {}
                 if bq and not bq.get("passed", True):
                     q_issues.append("binary-forecast conviction/objectivity gate failed (A3/A4): " + "；".join(bq.get("issues", [])[:2]))
+                elif bq.get("needs_review_count"):
+                    # REPORT-1：部分二元概率不可读被扣下、其余仍过门时，扣下说明只在
+                    # binary_quality 里——作为降级信号浮到健康面（不阻断发布；门未过时
+                    # 上一分支的 issues 已以该说明行打头）。
+                    from .forecast_extractor import _binary_withheld_issue
+                    q_issues.append(_binary_withheld_issue(bq["needs_review_count"]))
                 # XRUN-1(c): 二元预测对模拟不敏感（与另一份报告输出同一概率向量）→ 降级信号。
                 if (q.get("sim_insensitivity") or {}).get("issue"):
                     q_issues.append(

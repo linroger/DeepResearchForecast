@@ -359,6 +359,11 @@ class Config:
     # R2-CAL-4：发布前给每个保留情景一个概率下限再做最终重归一，绝不发布 0%。消除「已实现但未预测」
     # 结果坐在 ~0 处的灾难性 log-loss/Brier 失败。trivial 且 tail-dominant。
     FORECAST_PROB_FLOOR = float(os.environ.get('FORECAST_PROB_FLOOR', '0.03') or '0.03')
+    # REPORT-1：概率字段的类型化解析（utils/probability_parse.py）。开启后 '30%' 读作 0.30，
+    # 缺失/区间/上下限/混合量纲等不可读概率一律置 null 并标 probability_status=needs_review
+    # （情景合同审计随之失败），绝不再被补成 0.0、均匀分布或 0.98/0.02 钳制。默认开是安全的：
+    # 格式良好的数值输入与旧路径逐字节一致，只有畸形输入会改为显式待复核；设 false 复现旧行为。
+    FORECAST_PROB_STRICT_PARSE = os.environ.get('FORECAST_PROB_STRICT_PARSE', 'true').strip().lower() == 'true'
     # R2-CAL-1 / R2-CAL-17：把预测脊柱推导 K 次（共享情景名、变 temp），汇成均值概率 + spread→confidence。
     # Foglamp WP1 (1D)：默认回到【1】。同模型重抽样的 spread 不是校准过的不确定性——把它
     # 当区间发布会高估独立性；重抽样只有在测得的不稳定性证明其成本合理时才加（WP15）。

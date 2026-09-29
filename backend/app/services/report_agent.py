@@ -1665,6 +1665,8 @@ class ReportAgent:
         # 推导一次，注入每章提示词让叙事对齐可证伪目标；缺省/未开时为空，_prepend 自动跳过。
         self._forecast_spine: Optional[Dict[str, Any]] = None
         self._forecast_spine_block = ""
+        # REPORT-1：骨架因概率不可读被弃用时的复核摘要（并入 forecast.quality.probability_parse）。
+        self._spine_probability_review: Optional[Dict[str, Any]] = None
         # XRUN-5/RPT-8: 报告级紧凑检索查询（懒派生一次后缓存）；None=未派生。
         self._retrieval_query: Optional[str] = None
         # RQ-1(4): 报告形状（章节数区间 / 每章字数 / 每章工具预算），从需求书 page_budget 懒派生
@@ -2866,6 +2868,7 @@ class ReportAgent:
         empty, so sections behave exactly as the pre-spine path.
         """
         from . import forecast_extractor as _fe
+        self._spine_probability_review = None
         try:
             from ..utils import actors as _actors
             try:
@@ -2917,6 +2920,10 @@ class ReportAgent:
                 market_block=market_pack,
             )
             if not spine or not spine.get("scenarios"):
+                # REPORT-1：骨架因概率不可读被置空时保留复核摘要，_finalize 并入
+                # forecast.quality.probability_parse（回退成稿后抽取的原因可审计）。
+                if isinstance(spine, dict) and spine.get("probability_review"):
+                    self._spine_probability_review = spine["probability_review"]
                 logger.info("预测骨架推导未产出情景，跳过（回退为成稿后抽取）")
                 return
             # RPT-3（REPORT_CRITIQUE_BEFORE_PROSE，默认开）：红队自校准 + 事前验尸挪到
@@ -3046,6 +3053,7 @@ class ReportAgent:
             try:
                 from .forecast_extractor import (
                     _binary_quality as _binary_quality_score,
+                    _binary_withheld_issue,
                     apply_horizon_consistency as _apply_horizon_consistency,
                     extract_binary_forecasts as _ebf,
                     reconcile_forecast_contract as _reconcile_forecast_contract,
@@ -3117,6 +3125,16 @@ class ReportAgent:
                         themes_expected=_themes,
                     )
                     _quality["proposition_consistency"] = _contract
+                    # REPORT-1：重算的记分卡会丢掉抽取时统计的「概率不可读被扣下」计数与说明行，
+                    # 照搬回来（说明行置首，发布门只展示前两条 issues）。
+                    _bq_extracted = _bres.get("binary_quality") or {}
+                    for _review_key in ("needs_review_count", "needs_review_reasons",
+                                        "needs_review_secondary_count"):
+                        if _review_key in _bq_extracted:
+                            _quality[_review_key] = _bq_extracted[_review_key]
+                    if _bq_extracted.get("needs_review_count"):
+                        _quality.setdefault("issues", []).insert(0, _binary_withheld_issue(
+                            _bq_extracted["needs_review_count"]))
                     forecast["binary_quality"] = _quality
                     # RQ-6：校验二元预测结算年份与真实判定期一致——目标年份集合（需求书 +
                     # 日历 horizon_date.year）与二元结算年份集合非空且无交集时，把
@@ -3154,6 +3172,10 @@ class ReportAgent:
                                 f"完全一致（不同 simulation_id）")
                     except Exception:  # noqa: BLE001 — 观测性检查，绝不影响产物
                         pass
+                elif (_bres.get("binary_quality") or {}).get("needs_review_count"):
+                    # REPORT-1：二元概率全部不可读被扣下 → 无可发布的二元，但抽取记分卡（扣下
+                    # 计数、原因与说明行）照样随 forecast.json 落盘，运维可见缺二元的原因。
+                    forecast["binary_quality"] = _bres["binary_quality"]
             except Exception as _be:  # noqa: BLE001 — additive; never break finalization
                 logger.warning(f"二元预测抽取失败（忽略，不影响情景预测）: {_be}")
         # RQ-2：质量门失败 → 按维度单次定向修复（引用回填 / 引文接地 / 占位符解析），
@@ -3194,6 +3216,15 @@ class ReportAgent:
                          + " ｜" + _note).strip(" ｜"))
             except Exception:  # noqa: BLE001
                 pass
+        # REPORT-1：骨架因概率不可读被弃用时，把其复核摘要并入 quality.probability_parse。
+        _spine_review = getattr(self, "_spine_probability_review", None)
+        if _spine_review:
+            _pq0 = forecast.get("quality")
+            _pq = dict(_pq0) if isinstance(_pq0, dict) else {}
+            _pparse = dict(_pq.get("probability_parse") or {})
+            _pparse["spine"] = _spine_review
+            _pq["probability_parse"] = _pparse
+            forecast["quality"] = _pq
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
@@ -3204,7 +3235,13 @@ class ReportAgent:
             try:
                 from .forecast_ledger import append_forecast as _append
                 from .ledger_commit import commit_mode as _ledger_commit_mode
-                if _ledger_commit_mode() == "legacy":
+                if _ledger_commit_mode() != "legacy":
+                    pass
+                elif (getattr(Config, "FORECAST_PROB_STRICT_PARSE", True)
+                        and forecast.get("probability_status") == "needs_review"):
+                    # REPORT-1：概率待复核（含 null 概率）的预测不可打分，绝不写入校准账本。
+                    logger.warning(f"预测概率待复核（needs_review），跳过校准账本追加: {report_id}")
+                else:
                     _append(forecast, report_id=report_id,
                             horizon=str(forecast.get("horizon") or "") or None,
                             created_at=datetime.now().isoformat())
@@ -5001,6 +5038,8 @@ class ReportAgent:
         for s in (forecast.get("scenarios") or []):
             if not isinstance(s, dict):
                 continue
+            if s.get("probability") is None:
+                continue  # REPORT-1：待复核（null）概率无可比对的值，不当作 0% 比对
             name = str(s.get("name") or "").strip()
             try:
                 p = round(float(s.get("probability") or 0.0) * 100)
@@ -8413,7 +8452,12 @@ class ReportAgent:
             coverage = float(audit.get(_coverage_basis, 1.0) or 0.0)
             min_cov = float(getattr(Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.5) or 0.0)
             probs: List[float] = []
+            unreadable_probabilities = 0
             for s in scenarios:
+                if s.get("probability") is None:
+                    # REPORT-1：待复核（null）概率不计入和，也绝不当作 0。
+                    unreadable_probabilities += 1
+                    continue
                 try:
                     probs.append(float(s.get("probability") or 0.0))
                 except (TypeError, ValueError):
@@ -8431,17 +8475,25 @@ class ReportAgent:
                 for s in scenarios
             )
             top = max(probs) if probs else 0.0
+            # REPORT-1：概率待复核时只有部分行可读，其和/最大值不是分区的量——不据此下结论。
+            probabilities_unreadable = forecast.get("probability_status") == "needs_review"
             epistemic_issues: List[str] = []
             hard_issues: List[str] = []
             if scenarios and coverage < min_cov:
                 epistemic_issues.append(
                     f"定量声明引用覆盖率 {coverage:.2f} < 阈值 {min_cov:.2f}"
                 )
-            if scenarios and abs(prob_sum - 1.0) > 0.05:
+            if probabilities_unreadable:
+                # REPORT-1：概率不可读 → 显式 NEEDS_REVIEW 硬失败（替代误导性的「和偏离 1」）。
+                hard_issues.append(
+                    f"{unreadable_probabilities} 个情景概率无法解析"
+                    "（NEEDS_REVIEW，未以 0/均匀分布代替）"
+                )
+            elif scenarios and abs(prob_sum - 1.0) > 0.05:
                 hard_issues.append(f"情景概率之和 {prob_sum} 偏离 1")
             if scenarios and not has_residual:
                 hard_issues.append("缺少『维持现状/兜底』情景")
-            if top >= 0.9 and len(probs) <= 1:
+            if top >= 0.9 and len(probs) <= 1 and not probabilities_unreadable:
                 epistemic_issues.append("概率分布退化（单情景≥0.9 且无对照情景）")
             # QUALITY-OPT: fold the binary-forecast conviction/objectivity gate (A3/A4) +
             # the S2/S11/S12 audits into the publish gate so they actually demote confidence.
@@ -8511,9 +8563,10 @@ class ReportAgent:
                 "pre_publish_confidence_rationale": _baseline_rationale,
                 "citation_coverage": round(coverage, 3),
                 "citation_coverage_basis": _coverage_basis,
-                "probability_sum": prob_sum,
+                # REPORT-1：待复核时记 None（部分行之和会被误读成分区之和）。
+                "probability_sum": None if probabilities_unreadable else prob_sum,
                 "has_residual_scenario": has_residual,
-                "max_probability": round(top, 3),
+                "max_probability": None if probabilities_unreadable else round(top, 3),
                 "hard_issues": hard_issues,
                 "epistemic_issues": epistemic_issues,
                 "hard_passed": not hard_issues,

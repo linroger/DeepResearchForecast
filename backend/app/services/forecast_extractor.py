@@ -17,7 +17,17 @@ import hashlib
 import logging
 import math
 import re
+import unicodedata
 from typing import Any, Dict, List, Optional, Tuple
+
+from ..utils.probability_parse import (
+    PROB_OK,
+    PROB_REVIEW,
+    ProbParse,
+    is_nullish,
+    parse_probability_field,
+    parse_scenario_partition,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,18 +76,35 @@ def _coerce_float(v: Any) -> Optional[float]:
         return None
 
 
-def _normalize_scenarios(scenarios: Any) -> List[Dict[str, Any]]:
-    """Validate + normalize scenarios so probabilities are floats summing to ~1.0."""
+def _normalize_scenarios(scenarios: Any, *,
+                         review_out: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Validate + normalize scenarios so probabilities are floats summing to ~1.0.
+
+    REPORT-1（FORECAST_PROB_STRICT_PARSE，默认开）：整组概率先经类型化解析
+    （'45%' → 0.45、[3, 1] 仍按权重归一）。任一行不可读或量纲混杂 → 不归一、不加下限：
+    可读行保留规范值，不可读行 probability=None 并标 probability_status='needs_review'
+    （附原值与原因），``review_out``（若给出）被填入整组复核摘要；合同审计随之按
+    probability_not_numeric 失败。数值输入的输出与旧路径逐字节一致；旗标关闭复现旧行为。
+    """
     if not isinstance(scenarios, list):
         return []
+    strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
+    dict_rows = [s for s in scenarios if isinstance(s, dict)]
+    parsed: Optional[List[ProbParse]] = None
+    partition_status, partition_reason = PROB_OK, ""
+    if strict:
+        parsed, partition_status, partition_reason = parse_scenario_partition(
+            [s.get("probability") for s in dict_rows])
     cleaned: List[Dict[str, Any]] = []
-    for s in scenarios:
-        if not isinstance(s, dict):
-            continue
-        prob = _coerce_float(s.get("probability"))
+    for index, s in enumerate(dict_rows):
+        if parsed is None:
+            prob = _coerce_float(s.get("probability"))
+            probability = prob if prob is not None else 0.0
+        else:
+            probability = parsed[index].value
         row = {
             "name": str(s.get("name") or "未命名情景"),
-            "probability": prob if prob is not None else 0.0,
+            "probability": probability,
             "summary": str(s.get("summary") or ""),
             "key_drivers": [str(x) for x in (s.get("key_drivers") or []) if x],
             "resolution_criteria": str(s.get("resolution_criteria") or ""),
@@ -88,7 +115,23 @@ def _normalize_scenarios(scenarios: Any) -> List[Dict[str, Any]]:
             row["base_rate_anchor"] = str(s.get("base_rate_anchor"))
         if s.get("adjustment_rationale"):
             row["adjustment_rationale"] = str(s.get("adjustment_rationale"))
+        if parsed is not None and parsed[index].status != PROB_OK:
+            row["probability_status"] = PROB_REVIEW
+            row["probability_raw"] = parsed[index].raw
+            row["probability_parse_reason"] = parsed[index].reason
         cleaned.append(row)
+    if partition_status == PROB_REVIEW:
+        if isinstance(review_out, dict):
+            review_out.update({
+                "status": PROB_REVIEW,
+                "reason": partition_reason,
+                "rows": [
+                    {"name": row["name"], "raw": row["probability_raw"],
+                     "reason": row["probability_parse_reason"]}
+                    for row in cleaned if row.get("probability_status") == PROB_REVIEW
+                ],
+            })
+        return cleaned
     total = sum(s["probability"] for s in cleaned)
     if total > 0:
         for s in cleaned:
@@ -1005,7 +1048,8 @@ def _assemble_forecast(raw: Dict[str, Any]) -> Dict[str, Any]:
     ``derive_forecast_spine`` (NEXTSTEPS P0-1, from signals) so both emit an
     identical shape regardless of where the probabilities came from.
     """
-    scenarios = _normalize_scenarios(raw.get("scenarios"))
+    review: Dict[str, Any] = {}
+    scenarios = _normalize_scenarios(raw.get("scenarios"), review_out=review)
     confidence = str(raw.get("confidence") or "medium").lower()
     if confidence not in ("low", "medium", "high"):
         confidence = "medium"
@@ -1018,6 +1062,13 @@ def _assemble_forecast(raw: Dict[str, Any]) -> Dict[str, Any]:
         "confidence_rationale": str(raw.get("confidence_rationale") or ""),
         "schema_version": 1,
     }
+    # REPORT-1：情景概率不可读 → 顶层显式 needs_review（合同审计按 probability_not_numeric
+    # 失败，无需新门控）；全部可读时不加键（schema 不变）。
+    if review:
+        out["probability_status"] = PROB_REVIEW
+        out["probability_review"] = {
+            "stage": "assemble", "reason": review["reason"], "rows": review["rows"],
+        }
     # R2-CAL-7 / R2-CAL-12：仅当相应旗标开启时附加 quality 诊断块（默认不加 → schema 不变）。
     quality = _quality_from_scenarios(scenarios)
     if quality:
@@ -1423,9 +1474,25 @@ def _is_circular_market_forecast(
     return False
 
 
+_HORIZON_YEAR_RE = re.compile(r"(?<!\d)((?:19|20)\d{2})(?!\d)")
+
+
+def _strict_horizon_year(value: Any) -> Optional[int]:
+    """REPORT-1：horizon_year 的类型化读取。字符串经 NFKC 后收集不同的 19xx/20xx 年份，
+    恰好一个才采用（'2030年'、'FY2030' → 2030；'2030-2031' → None）；数值输入沿用 int(float())。"""
+    if isinstance(value, str):
+        years = set(_HORIZON_YEAR_RE.findall(unicodedata.normalize("NFKC", value)))
+        return int(years.pop()) if len(years) == 1 else None
+    try:
+        return int(float(value)) if value is not None else None
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def _normalize_binaries(items: Any, *, start_index: int = 1,
                         allowed_themes: Optional[List[str]] = None,
-                        market_lookup: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
+                        market_lookup: Optional[Dict[str, float]] = None,
+                        review_sink: Optional[list] = None) -> List[Dict[str, Any]]:
     """Clamp/round each probability INDEPENDENTLY (no sum-normalization), dedup by
     statement, attach an objective-criteria quality flag. Drops rows missing a
     statement or a numeric probability.
@@ -1437,17 +1504,34 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
     预测市场锚点：模型给出 market_anchor 时校验并保留 {market_id, implied_yes_prob,
     divergence}；``market_lookup``（market_id→隐含概率，来自我们抓取的快照）命中时
     以快照价回填 implied_yes_prob（不盲信模型转录），divergence 一律由本函数确定性
-    计算（本预测概率 − 市场隐含概率）。锚点非法/缺失时不加字段（degrade-safe）。"""
+    计算（本预测概率 − 市场隐含概率）。锚点非法/缺失时不加字段（degrade-safe）。
+    REPORT-1（FORECAST_PROB_STRICT_PARSE）：不可读概率的行扣下并追加
+    {statement, raw, reason} 到 ``review_sink``（若给出），绝不钳制。"""
+    strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
     out: List[Dict[str, Any]] = []
     seen: set = set()
     for it in (items or []):
         if not isinstance(it, dict):
             continue
         stmt = str(it.get("statement") or "").strip()
-        p = _coerce_float(it.get("probability"))
-        if not stmt or p is None or _is_circular_market_forecast(
-                stmt, it.get("resolution_criteria")):
-            continue
+        if strict:
+            # REPORT-1：概率类型化解析——不可读（30、True、'30-40%'、缺失）的行绝不钳制成
+            # 0.98/0.02，而是记入 review_sink 并扣下（'30%' 正常读作 0.30）。
+            if not stmt or _is_circular_market_forecast(
+                    stmt, it.get("resolution_criteria")):
+                continue
+            parsed_p = parse_probability_field(it.get("probability"))
+            if parsed_p.status != PROB_OK:
+                if review_sink is not None:
+                    review_sink.append({"statement": stmt[:200], "raw": parsed_p.raw,
+                                        "reason": parsed_p.reason})
+                continue
+            p = parsed_p.value
+        else:
+            p = _coerce_float(it.get("probability"))
+            if not stmt or p is None or _is_circular_market_forecast(
+                    stmt, it.get("resolution_criteria")):
+                continue
         key = _binary_key(stmt)
         if not key or key in seen:
             continue
@@ -1455,10 +1539,16 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
         p = max(0.02, min(0.98, p))
         rc = str(it.get("resolution_criteria") or "")
         hy_raw = it.get("horizon_year")
-        try:
-            hy = int(float(hy_raw)) if hy_raw not in (None, "") else None
-        except (TypeError, ValueError):
-            hy = None
+        if strict:
+            hy = _strict_horizon_year(hy_raw)
+        else:
+            try:
+                hy = int(float(hy_raw)) if hy_raw not in (None, "") else None
+            except (TypeError, ValueError):
+                hy = None
+        resolution_source = it.get("resolution_source")
+        if strict and is_nullish(resolution_source):
+            resolution_source = ""
         theme = str(it.get("theme") or "").strip().lower()
         if allowed_themes:
             if theme not in allowed_themes:
@@ -1470,7 +1560,7 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
             "statement": stmt,
             "probability": round(p, 2),
             "resolution_criteria": rc,
-            "resolution_source": str(it.get("resolution_source") or ""),
+            "resolution_source": str(resolution_source or ""),
             "theme": theme,
             "horizon_year": hy,
             "base_rate_anchor": str(it.get("base_rate_anchor") or ""),
@@ -1618,6 +1708,30 @@ def _binary_quality(binaries: List[Dict[str, Any]], *, min_count: int,
         "theme_cardinality": theme_cardinality,
         "passed": bool(passed), "issues": issues,
     }
+
+
+def _withheld_binary_reviews(review_sink: List[Dict[str, Any]],
+                             binaries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """REPORT-1：复核槽中真正被扣下的行——按陈述去重，并排除已被其他抽取轮以可读概率
+    收录的同一陈述（首轮不可读、补足轮可读的不算扣下）。复核槽只存陈述前 200 字，故两侧
+    按同一截断比较。"""
+    published = {_binary_key(str(b.get("statement") or "")[:200])
+                 for b in binaries if isinstance(b, dict)}
+    withheld: List[Dict[str, Any]] = []
+    seen: set = set()
+    for row in review_sink:
+        key = _binary_key(row.get("statement"))
+        if key in published or key in seen:
+            continue
+        seen.add(key)
+        withheld.append(row)
+    return withheld
+
+
+def _binary_withheld_issue(count: int) -> str:
+    """REPORT-1：binary_quality.issues 里「概率不可读被扣下」的说明行（抽取与 ReportAgent
+    重算记分卡共用同一措辞）。"""
+    return f"{count} binary probabilities unreadable — withheld, not clamped"
 
 
 # --------------------------------------------- PM-2: deterministic market anchoring
@@ -1884,6 +1998,7 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
     if not isinstance(revs, list):
         return 0
     by_id = {str(b.get("id")): b for b in candidates}
+    strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
     revised = 0
     for r in revs:
         if not isinstance(r, dict):
@@ -1897,8 +2012,17 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
         new_rat = str(r.get("adjustment_rationale") or "").strip()
         if not new_rat or not _rationale_cites_market(new_rat, anchor):
             continue  # 重述未引用市场 → 拒绝（绝不静默移动概率）
-        b["adjustment_rationale"] = new_rat
-        new_p = _coerce_float(r.get("probability"))
+        if strict:
+            # REPORT-1：先解析重述概率再动理由——不可读（30、'30-40%'）→ 整条重述作废
+            # （理由/概率/印章均不动，绝不钳成 0.98）；缺失 → 仅改理由的「保留分歧」。
+            parsed_p = parse_probability_field(r.get("probability"))
+            if parsed_p.status == PROB_REVIEW:
+                continue
+            b["adjustment_rationale"] = new_rat
+            new_p = parsed_p.value
+        else:
+            b["adjustment_rationale"] = new_rat
+            new_p = _coerce_float(r.get("probability"))
         if new_p is not None:
             new_p = round(max(0.02, min(0.98, new_p)), 2)
             prior_p = _coerce_float(b.get("probability"))
@@ -2075,6 +2199,11 @@ def _market_proposition_key(question: Any) -> str:
     return ""
 
 
+# REPORT-1：显式情景归属指向一个含不可读（null）概率的分区时的命题键。此时既不对账也不
+# 算矛盾，proposition 审计把它记为「无法核验」（unverifiable），而不是静默放行。
+_UNREADABLE_PARTITION_KEY = "unreadable-scenario-partition"
+
+
 def _scenario_yes_membership(
     binary: Dict[str, Any], scenarios: List[Dict[str, Any]]
 ) -> Tuple[str, List[str], Optional[float], Optional[str]]:
@@ -2172,6 +2301,20 @@ def _scenario_yes_membership(
                 None,
                 "canonical scenario partition contains duplicate names",
             )
+        proposition_id = str(binary.get("proposition_id") or "").strip()
+        if (
+            _cfg("FORECAST_PROB_STRICT_PARSE", True)
+            and all(name in scenario_by_name for name in yes_names)
+            and any(p is None for p in scenario_by_name.values())
+        ):
+            # REPORT-1：分区含不可读（needs_review 的 null）概率 → 可读行未经归一，其部分和
+            # 不是规范概率；expected=None ⇒ 不对账（二元保留独立估计），审计记为无法核验。
+            return (
+                _UNREADABLE_PARTITION_KEY,
+                yes_names,
+                None,
+                "scenario partition probabilities need review",
+            )
         if (
             yes_names
             and all(name in scenario_by_name for name in yes_names)
@@ -2180,7 +2323,6 @@ def _scenario_yes_membership(
             expected = round(sum(
                 float(scenario_by_name[name]) for name in yes_names
             ), 4)
-            proposition_id = str(binary.get("proposition_id") or "").strip()
             return (
                 proposition_id or "explicit-scenario-membership",
                 yes_names,
@@ -2243,6 +2385,7 @@ def audit_proposition_consistency(forecast: Dict[str, Any]) -> Dict[str, Any]:
     ]
     checked: List[Dict[str, Any]] = []
     mismatches: List[Dict[str, Any]] = []
+    unverifiable: List[Dict[str, Any]] = []
     for binary in (forecast.get("binary_forecasts") or []):
         if not isinstance(binary, dict):
             continue
@@ -2250,6 +2393,14 @@ def audit_proposition_consistency(forecast: Dict[str, Any]) -> Dict[str, Any]:
             binary, scenarios
         )
         actual = _coerce_float(binary.get("probability"))
+        if key == _UNREADABLE_PARTITION_KEY:
+            unverifiable.append({
+                "forecast_id": str(binary.get("id") or ""),
+                "binary_probability": round(actual, 4) if actual is not None else None,
+                "yes_scenarios": names,
+                "reason": membership_error,
+            })
+            continue
         if key in {
             "invalid-scenario-membership",
             "conflicting-binary-contract",
@@ -2279,13 +2430,20 @@ def audit_proposition_consistency(forecast: Dict[str, Any]) -> Dict[str, Any]:
         checked.append(row)
         if abs(actual - expected) > 0.015:
             mismatches.append(row)
-    return {
+    result: Dict[str, Any] = {
         "checked": len(checked),
         "rows": checked,
         "mismatches": mismatches,
         "mismatch_count": len(mismatches),
         "passed": not mismatches,
     }
+    if unverifiable:
+        # REPORT-1：仅当确有无法核验的行时才出现这两个键（格式良好的分区输出逐字节不变）；
+        # 无法核验不是矛盾，但也不算通过。
+        result["unverifiable"] = unverifiable
+        result["unverifiable_count"] = len(unverifiable)
+        result["passed"] = False
+    return result
 
 
 def _market_anchor_complete(anchor: Dict[str, Any]) -> bool:
@@ -2683,6 +2841,11 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     _hz_hint = str(_hz_year) if _hz_year else "2027"
     _hz_rule = (f"resolution year, at or before the forecast horizon {_hz_year}"
                 if _hz_year else "resolution year, within 1-5 years of now")
+    # REPORT-1：主模型的各轮 _draw（首轮/补足/低概率重述）共用一个复核槽，收集因概率不可读
+    # 而扣下的行（仅 FORECAST_PROB_STRICT_PARSE 下由 _normalize_binaries 写入）。集成副模型的
+    # 行只用于池化已匹配的主模型行、本就不会单独发布，故另记一槽，不计入「扣下」条数。
+    review_sink: List[Dict[str, Any]] = []
+    secondary_review_sink: List[Dict[str, Any]] = []
 
     def _draw(instr_min: int, exclude: List[str], *, low_p: bool = False,
               client: Any = None) -> List[Dict[str, Any]]:
@@ -2738,7 +2901,9 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              temperature=0.25, max_tokens=4096)
         items = raw.get("binary_forecasts") if isinstance(raw, dict) else None
         return _normalize_binaries(items or [], allowed_themes=themes,
-                                   market_lookup=market_lookup or None)
+                                   market_lookup=market_lookup or None,
+                                   review_sink=(review_sink if client is None
+                                                else secondary_review_sink))
 
     def _merge(base: List[Dict[str, Any]], extra: List[Dict[str, Any]]) -> None:
         seen = {_binary_key(b["statement"]) for b in base}
@@ -2824,6 +2989,23 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         "binary_quality": _binary_quality(binaries, min_count=min_count,
                                           themes_expected=themes),
     }
+    if _cfg("FORECAST_PROB_STRICT_PARSE", True):
+        _bq_review = out["binary_quality"]
+        _withheld = _withheld_binary_reviews(review_sink, binaries)
+        if _withheld:
+            _reasons: Dict[str, int] = {}
+            for _row in _withheld:
+                _reasons[_row["reason"]] = _reasons.get(_row["reason"], 0) + 1
+            _bq_review["needs_review_count"] = len(_withheld)
+            _bq_review["needs_review_reasons"] = _reasons
+            # 根因排第一：发布门与编排器只展示 issues 的前两条。
+            _bq_review.setdefault("issues", []).insert(0, _binary_withheld_issue(len(_withheld)))
+            logger.warning("二元预测：%d 条概率不可读，已扣下（未钳制），原因 %s；可发布 %d 条",
+                           len(_withheld), _reasons, len(binaries))
+        if secondary_review_sink:
+            _bq_review["needs_review_secondary_count"] = len(secondary_review_sink)
+            logger.warning("集成副模型：%d 条二元概率不可读，未参与池化",
+                           len(secondary_review_sink))
     _bq_prov = out["binary_quality"]
     if isinstance(_bq_prov, dict):
         _bq_prov["provenance_downgrades"] = provenance_downgrades
@@ -2993,6 +3175,13 @@ _SPINE_INSTRUCTIONS = """你是预测校准专家。在撰写任何叙事之前�
 概率为数值且之和≈1；resolution_criteria 必须客观可验证。**对每个情景采用 anchor-and-adjust**：
 先给 base_rate_anchor（参考类基率/外部视角），再据案例特征调整得到最终 probability，并在
 adjustment_rationale 说明，以抵御基率忽视/内视过度自信。先确定数字与判定标准，再让叙事去捍卫它们。"""
+
+# REPORT-1：骨架重试时追加的提示。消息变化 ⇒ LLMCache 键变化（键含 messages），重试不再
+# 命中首轮的缓存回复；同时明确要求裸数值概率，避免再次出现不可读的百分数/区间。
+_SPINE_RETRY_NOTE = (
+    "\n\n[上一轮输出不可用：请重新输出完整 JSON；每个 probability 必须是 [0,1] 内的裸 JSON 数值"
+    "（如 0.35），不得为字符串、百分数、区间或上下限]"
+)
 
 
 def _spine_draw(llm, user: str, temperature: float, max_tokens: int) -> Dict[str, Any]:
@@ -3219,8 +3408,27 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
         k = 1
     k = max(1, k)
 
+    strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
     first = _spine_draw(llm, user, 0.2, max_tokens)
-    if not first.get("scenarios"):
+    if strict:
+        # REPORT-1：骨架为空或概率不可读 → 携重试提示重试一次（提示改变缓存键，重试不会
+        # 被首轮缓存回复原样应答）；仍不可读 → 情景置空但保留 probability_review，让上层
+        # 与今日空骨架一样回退成稿后抽取。
+        if not first.get("scenarios") or first.get("probability_status") == PROB_REVIEW:
+            logger.warning("预测骨架首轮无可用情景（为空或概率不可读），携重试提示重试一次")
+            first_review = first.get("probability_review")
+            first = _spine_draw(llm, user + _SPINE_RETRY_NOTE, 0.2, max_tokens)
+            if (first_review and not first.get("scenarios")
+                    and not first.get("probability_review")):
+                # 首轮不可读、重试为空：保留首轮的复核摘要，上层仍能记录骨架被弃的原因。
+                first["probability_status"] = PROB_REVIEW
+                first["probability_review"] = first_review
+        if first.get("probability_status") == PROB_REVIEW:
+            logger.warning(
+                "预测骨架重试后仍无可读概率（%s），回退成稿后抽取",
+                (first.get("probability_review") or {}).get("reason"))
+            first["scenarios"] = []
+    elif not first.get("scenarios"):
         # R2-CAL-11：骨架为空 → 告警并重试一次后再让上层回退成稿后抽取。
         logger.warning("预测骨架首轮无情景，重试一次")
         first = _spine_draw(llm, user, 0.2, max_tokens)
@@ -3233,7 +3441,7 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
         for i in range(1, k):
             temp = min(0.9, 0.2 + 0.15 * i)  # varied temperature for diversity
             d = _spine_draw(llm, follow, temp, max_tokens)
-            if d.get("scenarios"):
+            if d.get("scenarios") and not (strict and d.get("probability_status") == PROB_REVIEW):
                 draws.append(d)
 
     out = _pool_spine_draws(draws, floor) if len(draws) > 1 else first
@@ -3270,6 +3478,16 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
     return apply_self_consistency_intervals(out)
 
 
+def _pct_or_review(p: Any, zh: bool) -> str:
+    """整数百分比渲染；null/布尔/非有限概率 → 显式「待复核 / needs review」（REPORT-1）。
+
+    数值输出与旧的 ``f"{float(p) * 100:.0f}%"`` 逐字节一致；不可转成数的字符串照旧抛
+    TypeError/ValueError，由调用方原有的「—」兜底处理。绝不把缺失概率渲染成 0%。"""
+    if p is None or isinstance(p, bool) or (isinstance(p, float) and not math.isfinite(p)):
+        return "待复核" if zh else "needs review"
+    return f"{float(p) * 100:.0f}%"
+
+
 def render_forecast_spine_block(forecast: Optional[Dict[str, Any]], max_scenarios: int = 6) -> str:
     """Render a compact, authoritative spine block to pin into each section prompt.
 
@@ -3292,7 +3510,7 @@ def render_forecast_spine_block(forecast: Optional[Dict[str, Any]], max_scenario
         if not isinstance(s, dict):
             continue
         try:
-            pct = f"{float(s.get('probability') or 0.0) * 100:.0f}%"
+            pct = _pct_or_review(s.get("probability"), True)
         except (TypeError, ValueError):
             pct = "—"
         name = str(s.get("name") or "未命名情景")
@@ -3368,7 +3586,7 @@ def render_binary_forecasts_block(forecast: Optional[Dict[str, Any]],
         if not isinstance(b, dict):
             continue
         try:
-            pct = f"{float(b.get('probability') or 0.0) * 100:.0f}%"
+            pct = _pct_or_review(b.get("probability"), zh)
         except (TypeError, ValueError):
             pct = "—"
         _ens = b.get("ensemble")
@@ -3508,7 +3726,7 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
         if not isinstance(s, dict):
             continue
         try:
-            pct = f"{float(s.get('probability') or 0.0) * 100:.0f}%"
+            pct = _pct_or_review(s.get("probability"), zh)
         except (TypeError, ValueError):
             pct = "—"
         name = str(s.get("name") or ("未命名情景" if zh else "Unnamed scenario"))
@@ -3554,7 +3772,12 @@ def self_critique_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
     failure returns the input unchanged (degrade-safe).
     """
     import json as _json
+    strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
     try:
+        # REPORT-1：概率已是 needs_review 的预测不交给红队——评审只能对 null 概率凭空
+        # 补数，谦逊单调约束也失去原始峰值；保持待复核，让合同审计照常失败。
+        if strict and forecast.get("probability_status") == PROB_REVIEW:
+            return forecast
         raw = llm.chat_json(
             messages=[{"role": "user",
                        "content": _CRITIQUE_INSTRUCTIONS + "\n\n[预测对象]\n" + _json.dumps(forecast, ensure_ascii=False)}],
@@ -3566,6 +3789,27 @@ def self_critique_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
         critique_scenarios = raw.get("scenarios")
         if not isinstance(critique_scenarios, list) or not critique_scenarios:
             return forecast
+        if strict and all(isinstance(row, dict) for row in critique_scenarios):
+            # REPORT-1：评审概率先做类型化解析。不可读 → 丢弃评审并在 quality 记录原因
+            # （返回原对象本身）；可读 → 仅把显式百分数字符串（'30%'）换成解析值，其余原值
+            # （含 "0.50" 这类数字字符串）照旧交给 _ensure_residual_critique_scenario 拒收。
+            parsed_rows, partition_status, partition_reason = parse_scenario_partition(
+                [row.get("probability") for row in critique_scenarios])
+            if partition_status == PROB_REVIEW:
+                _q0 = forecast.get("quality")
+                quality = dict(_q0) if isinstance(_q0, dict) else {}
+                quality["critique_discarded"] = {
+                    "reason": "unreadable_probabilities", "detail": partition_reason,
+                }
+                forecast["quality"] = quality
+                logger.warning(f"红队评审概率不可读（{partition_reason}），丢弃评审结果")
+                return forecast
+            critique_scenarios = [
+                {**row, "probability": parsed.value}
+                if isinstance(row.get("probability"), str) and parsed.unit == "percent"
+                else row
+                for row, parsed in zip(critique_scenarios, parsed_rows, strict=True)
+            ]
         out = dict(forecast)
         raw_scenarios, residual_added = _ensure_residual_critique_scenario(
             critique_scenarios, forecast,
@@ -3681,6 +3925,11 @@ def premortem_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
     failure returns the input unchanged (degrade-safe).
     """
     if not _cfg("REPORT_PREMORTEM", False):
+        return forecast
+    # REPORT-1：null 概率不参与有界转移（否则 None 会被当作 0.0 写回）。
+    if (_cfg("FORECAST_PROB_STRICT_PARSE", True)
+            and isinstance(forecast, dict)
+            and forecast.get("probability_status") == PROB_REVIEW):
         return forecast
     import json as _json
     try:
