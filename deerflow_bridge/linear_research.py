@@ -686,6 +686,12 @@ def _parse_knob(raw: str, default: Any) -> Any:
     return int(number) if isinstance(default, int) else number
 
 
+def _env_flag(env: Mapping[str, Any] | None, name: str, default: bool) -> bool:
+    """Boolean knob from the run env: truthy/falsy words, anything else -> default."""
+    parsed = _parse_knob((env or {}).get(name, ""), bool(default))
+    return default if parsed is None else parsed
+
+
 def scheduled_tool_calls(values: Mapping[str, Any]) -> tuple[int, int]:
     """Worst-case (searches, fetches) a preset schedules for the whole run:
     the planner's scout queries, every plan and gap follow-up KIQ's seed
@@ -3987,6 +3993,14 @@ class _Engine:
                                                    * self.preset.followups_per_round), 0),
             })
         self.tools = tools_factory(self.ledger, self.work / "pages", bridge, reporter, self.limits)
+        # RESEARCH_FETCH_SHELL_DETECTION (default on, an honesty check): reader
+        # shells, unavailable pages, bot walls and paywall teasers are failed
+        # fetches at the tool layer and never published as fetched sources.
+        self.shell_detection = _env_flag(self.env, "RESEARCH_FETCH_SHELL_DETECTION", True)
+        if hasattr(self.tools, "shell_detection"):
+            self.tools.shell_detection = self.shell_detection
+        # Fetched rows whose stored page is a shell, published as cited (_source_rows).
+        self.shell_sources_demoted = 0
         self.gateway = gateway_factory(args, reporter, bridge, self.preset)
         # Every model call (the gateway's json/text calls go through its
         # invoke) and every search/fetch passes through these wrappers: the
@@ -5579,27 +5593,40 @@ class _Engine:
         return "src_" + _sha256(rg.canonical_url(url))[:16]
 
     def _source_rows(self, order: Sequence[int]) -> list[dict]:
-        """sources.json: cited sources only, in positional citation order."""
+        """sources.json: cited sources only, in positional citation order.
+
+        With shell detection on, a fetched row whose stored page is an
+        extraction shell (a resumed work dir, or a page stored before the
+        tool-layer check) is published as ``cited`` with ``fetch_status``
+        ``shell:<reason>`` and no excerpt or hash, so grounding excludes it."""
         rows: list[dict] = []
+        demoted = 0
         for sid in order:
             row = self.ledger.get(sid)
             if not row:
                 continue
             fetched = bool(row.get("fetched"))
+            text = self.tools.page_text(sid) if fetched else None
+            shell = rg._extraction_failure_reason(text) if (fetched and self.shell_detection and text) else None
+            if shell is not None:
+                fetched = False
+                demoted += 1
             entry: dict[str, Any] = {
                 "source_id": self._source_id(row["url"]), "url": row["url"], "title": row.get("title"),
                 "tier": row.get("tier"), "date": None,
                 "source_origin": "fetched" if fetched else "cited",
                 "reachable": True if fetched else None,
             }
+            if shell is not None:
+                entry["fetch_status"] = f"shell:{shell}"
             if fetched:
                 entry["content_sha256"] = row.get("content_sha256")
-                text = self.tools.page_text(sid)
                 if text:
                     entry["excerpt"] = _collapse(text, EXCERPT_CHARS)
             entry["supports"] = []
             entry["independent"] = None
             rows.append(entry)
+        self.shell_sources_demoted = demoted
         return rows
 
     def _structured(self, report_body: str, deadline: rg.Deadline) -> tuple[dict | None, dict | None]:
@@ -5889,6 +5916,10 @@ class _Engine:
         self.meta["usage"] = {"total": ledger["total"], "phases": ledger["phases"],
                               "calls_recorded": len(ledger["calls"]), "calls_dropped": ledger["calls_dropped"]}
         self.meta["tools"] = self.tools.stats()
+        if self.shell_detection:
+            shell_stats = getattr(self.tools, "shell_stats", None)
+            self.meta["fetch_shells"] = {"rejected": shell_stats() if callable(shell_stats) else {},
+                                         "sources_demoted": self.shell_sources_demoted}
         self.meta["phases"] = {name: {**self.state.phase(name), "seconds": self.phase_seconds.get(name)}
                                for name in PHASES if self.state.phase(name)}
         records = list(self.records.values())

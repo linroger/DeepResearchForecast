@@ -22,6 +22,9 @@ jina `web_fetch` 工具包成一层**磁盘缓存**：命中且未过期即秒�
 * **绝不放入正缓存的失败/哨兵/死抓取**：jina 失败返回以 "Error:" 起头的串；正文 <200 字符
   视作死抓取。LOOP-007 账本启用时，此类 exact 结果允许一次真抓重试，随后在负缓存 TTL 内
   稳定抑制；账本未启用时仍维持原来的每次真抓行为。
+* **抽取空壳（RESEARCH-1，RESEARCH_FETCH_SHELL_DETECTION 缺省开）**：reader 空壳、"page
+  unavailable" 页、bot wall、短付费墙预告由 ``extraction_failure_reason`` 判定——不落盘、
+  触发 provider 回退、缓存命中时视作未命中；全链只剩空壳时返回 "Error: fetch returned <reason>"。
 * **LOOP-007 —— 跨进程预算**：正缓存命中只计 attempt、不计 network；miss 后才原子占用
   fetch global/lane 额度。预算拒绝不调用 jina delegate；账本故障 fail-open 并输出 degraded 遥测。
 * **degrade-safe**：任何缓存读写/目录/淘汰异常都被吞掉并回退到「直接抓取并返回」，缓存层的
@@ -33,11 +36,13 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import hashlib
+import io
 import ipaddress
 import json
 import logging
 import os
 import socket
+import threading
 import time
 from html.parser import HTMLParser
 from typing import Any, Awaitable, Callable, Optional
@@ -87,6 +92,66 @@ _CONTENT_FAILURE_MARKERS = (
     "enable javascript and cookies",
     "captcha",
 )
+# —— RESEARCH-1：抽取空壳分类器（extraction_failure_reason）——
+# Reader shells ("Markdown Content: undefined"), "page unavailable" pages, bot
+# walls and short paywall teasers used to count as successful reads: cached for
+# 72 h, marked fetched and published as fetched.  Every marker below is ASCII
+# lowercase or CJK and is matched only inside a length window, so a long real
+# article that merely mentions "captcha" or carries a subscribe footer passes.
+_SHELL_PREFIX_CHARS = 3000
+_SHELL_MIN_CONTENT_CHARS = 200
+_SHELL_READER_ENVELOPE = "markdown content:"
+_SHELL_METADATA_PREFIXES = (
+    "title:",
+    "url source:",
+    "published time:",
+    "warning:",
+    "markdown content:",
+)
+_UNAVAILABLE_PAGE_MAX_CHARS = 1500
+_UNAVAILABLE_PAGE_MARKERS = (
+    "page unavailable",
+    "this page is unavailable",
+    "no longer available",
+    "could not be found",
+    "has been removed",
+    "page not found",
+    "404 not found",
+)
+_BOT_WALL_MAX_CHARS = 1500
+_BOT_WALL_MARKERS = (
+    "just a moment",
+    "checking your browser",
+    "attention required",
+    "unusual traffic",
+    "are you a robot",
+    "request blocked",
+    "verify you are human",
+    "enable javascript and cookies",
+    "captcha",
+    "access denied",
+    "403 forbidden",
+)
+_PAYWALL_MAX_CHARS = 3000
+_PAYWALL_MARKERS = (
+    "subscribe to continue",
+    "to continue reading",
+    "already a subscriber",
+    "subscribers only",
+    "sign in to continue reading",
+    "register to continue reading",
+    "登录后查看",
+    "订阅后阅读",
+    "付费阅读",
+)
+_SHELL_FALSY = frozenset({"0", "false", "no", "off"})
+# ASCII-only lowercasing keeps every offset aligned with the original text (the
+# reader-envelope body is sliced from the original); all markers are ASCII or CJK.
+_ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+# Direct-fallback PDF parsing: pdfplumber/pypdfium2 are not thread-safe, and a
+# pathological PDF must not hold the fetch past this bound.
+PDF_PARSE_TIMEOUT_S = 20.0
+_PDF_LOCK = threading.Lock()
 _FETCH_PROVIDER: contextvars.ContextVar[str] = contextvars.ContextVar(
     "research_fetch_provider", default=""
 )
@@ -110,6 +175,114 @@ def _env_float(name: str, default: float, minimum: float = 0.1) -> float:
 def _is_transport_failure(value: Any) -> bool:
     lowered = str(value or "").lower()
     return any(marker in lowered for marker in _TRANSPORT_FAILURE_MARKERS)
+
+
+def _shell_detection_on() -> bool:
+    """RESEARCH_FETCH_SHELL_DETECTION（缺省开）。诚实性检查 fail-closed：只有显式假值
+    （0/false/no/off）才恢复旧行为（逐字节一致）。"""
+    raw = os.environ.get("RESEARCH_FETCH_SHELL_DETECTION", "").strip().lower()
+    return raw not in _SHELL_FALSY
+
+
+def extraction_failure_reason(text: Any) -> Optional[str]:
+    """Why a fetched text is an extraction shell rather than a page, else None.
+
+    Pure and stdlib-only: substring checks over an ASCII-lowercased prefix of at
+    most 3,000 chars (no regex).  Non-str, empty and "Error:" texts return None
+    (they are failures of their own kind).  Rules, first match wins:
+
+    * ``empty_extraction`` — a reader envelope ("Markdown Content:") whose body
+      is empty/undefined/null/none or under 200 chars; or fewer than 200 chars
+      left after dropping the first line when it is a "#" title and every
+      Title:/URL Source:/Published Time:/Warning:/Markdown Content: line;
+    * ``unavailable_page`` — under 1,500 chars with a "page unavailable" marker;
+    * ``bot_wall`` — under 1,500 chars with a bot-check/interstitial marker;
+    * ``paywalled`` — under 3,000 chars with a paywall-teaser marker.
+    """
+    if not isinstance(text, str):
+        return None
+    stripped = text.strip()
+    if not stripped or stripped.startswith("Error:"):
+        return None
+    prefix = stripped[:_SHELL_PREFIX_CHARS].translate(_ASCII_LOWER)
+    envelope_at = prefix.find(_SHELL_READER_ENVELOPE)
+    if envelope_at >= 0:
+        # The length rule covers the empty/"undefined"/"null"/"none" bodies too.
+        body = stripped[envelope_at + len(_SHELL_READER_ENVELOPE):].strip()
+        if len(body) < _SHELL_MIN_CONTENT_CHARS:
+            return "empty_extraction"
+    lines = prefix.split("\n")
+    if lines[0].startswith("#"):
+        lines = lines[1:]
+    content = "\n".join(
+        line for line in lines
+        if not line.strip().startswith(_SHELL_METADATA_PREFIXES)
+    ).strip()
+    # Text beyond the scanned prefix counts as content (never a false shell).
+    unscanned = max(0, len(stripped) - _SHELL_PREFIX_CHARS)
+    if len(content) + unscanned < _SHELL_MIN_CONTENT_CHARS:
+        return "empty_extraction"
+    length = len(stripped)
+    if length < _UNAVAILABLE_PAGE_MAX_CHARS and any(
+            marker in prefix for marker in _UNAVAILABLE_PAGE_MARKERS):
+        return "unavailable_page"
+    if length < _BOT_WALL_MAX_CHARS and any(
+            marker in prefix for marker in _BOT_WALL_MARKERS):
+        return "bot_wall"
+    if length < _PAYWALL_MAX_CHARS and any(
+            marker in prefix for marker in _PAYWALL_MARKERS):
+        return "paywalled"
+    return None
+
+
+def _shell_error(text: Any) -> Optional[str]:
+    """``"Error: fetch returned <reason>"`` when the failover chain's last text is
+    a shell; None for real text, "Error:" strings and JSON object envelopes (an
+    envelope's own error, e.g. research_budget_exhausted, must reach the tool
+    layer unchanged)."""
+    if not isinstance(text, str):
+        return None
+    stripped = text.strip()
+    if stripped.startswith("{"):
+        try:
+            if isinstance(json.loads(stripped), dict):
+                return None
+        except (TypeError, ValueError):
+            pass
+    reason = extraction_failure_reason(stripped)
+    return f"Error: fetch returned {reason}" if reason else None
+
+
+def _pdf_text_pypdf(content: bytes, max_pages: int) -> str:
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(content))
+    return "\n\n".join(str(page.extract_text() or "") for page in reader.pages[:max_pages])
+
+
+def _pdf_text_pdfplumber(content: bytes, max_pages: int) -> str:
+    import pdfplumber
+
+    with pdfplumber.open(io.BytesIO(content)) as pdf:
+        return "\n\n".join(str(page.extract_text() or "") for page in pdf.pages[:max_pages])
+
+
+def _extract_pdf_text(content: bytes, max_pages: int = 80) -> str:
+    """Text of the first ``max_pages`` pages: pypdf, else pdfplumber (the deer-flow
+    research venv ships only pdfplumber).  Serialized by ``_PDF_LOCK``; when
+    pdfplumber is missing too, pypdf's own failure is raised (a parse error says
+    more than a missing library)."""
+    with _PDF_LOCK:
+        try:
+            return _pdf_text_pypdf(content, max_pages)
+        except Exception as exc:  # noqa: BLE001 — fall back to pdfplumber
+            pypdf_failure = exc
+        try:
+            return _pdf_text_pdfplumber(content, max_pages)
+        except ImportError:
+            if isinstance(pypdf_failure, ImportError):
+                raise
+            raise pypdf_failure from None
 
 
 class _TextExtractor(HTMLParser):
@@ -198,18 +371,17 @@ async def _direct_http_fetch(url: str) -> str:
             content_type = response.headers.get("content-type", "").lower()
             if "pdf" in content_type or response.content.startswith(b"%PDF"):
                 try:
-                    import io
-                    from pypdf import PdfReader
-
-                    reader = PdfReader(io.BytesIO(response.content))
-                    text = "\n\n".join(
-                        str(page.extract_text() or "") for page in reader.pages[:80]
+                    text = await asyncio.wait_for(
+                        asyncio.to_thread(_extract_pdf_text, response.content),
+                        PDF_PARSE_TIMEOUT_S,
                     )
-                    return text[:12000] if len(text.strip()) >= 200 else (
-                        "Error: direct fallback PDF had no extractable text"
-                    )
+                except TimeoutError:
+                    return "Error: direct fallback PDF parse timed out"
                 except Exception as exc:  # noqa: BLE001
                     return f"Error: direct fallback PDF extraction failed: {type(exc).__name__}"
+                return text[:12000] if len(text.strip()) >= 200 else (
+                    "Error: direct fallback PDF had no extractable text"
+                )
             raw = response.text
             if "html" not in content_type and "<html" not in raw[:1000].lower():
                 return raw[:12000]
@@ -497,9 +669,14 @@ async def _resilient_fetch(url: str) -> str:
             _FETCH_PROVIDER.set("direct")
             return direct_result
 
-    return direct_result or exa_result or primary_result or firecrawl_result or (
+    final = direct_result or exa_result or primary_result or firecrawl_result or (
         "Error: no web-fetch provider was available"
     )
+    if _shell_detection_on():
+        # Every provider failed; a shell left as the last text is a failure too,
+        # so legacy agents and the v3 tool layer never read it as a page.
+        return _shell_error(final) or final
+    return final
 
 
 def _source_policy_rejection(url: str) -> Optional[str]:
@@ -587,15 +764,23 @@ def _cache_path(root: str, url: str) -> str:
 
 
 def _is_cacheable(content: Any) -> bool:
-    """仅当是**成功的、非空壳**正文才可落盘：str、非空、非 "Error:" 起头、且 ≥200 字符。"""
+    """仅当是**成功的、非空壳**正文才可落盘：str、非空、非 "Error:" 起头、且 ≥200 字符。
+
+    RESEARCH_FETCH_SHELL_DETECTION 开（缺省）时空壳由 extraction_failure_reason 判定（带长度
+    窗口的标记，替代旧的无窗口前缀标记）；关时保持旧的 _CONTENT_FAILURE_MARKERS 前缀判定。
+    """
     if not isinstance(content, str):
         return False
     stripped = content.strip()
     if not stripped or stripped.startswith("Error:"):
         return False
-    prefix = stripped[:1200].lower()
-    if any(marker in prefix for marker in _CONTENT_FAILURE_MARKERS):
-        return False
+    if _shell_detection_on():
+        if extraction_failure_reason(stripped) is not None:
+            return False
+    else:
+        prefix = stripped[:1200].lower()
+        if any(marker in prefix for marker in _CONTENT_FAILURE_MARKERS):
+            return False
     if stripped.startswith("{"):
         try:
             envelope = json.loads(stripped)
@@ -625,6 +810,13 @@ def _read_cache(path: str, ttl_seconds: float) -> Optional[str]:
             return None
         if (time.time() - fetched_at) > ttl_seconds:
             return None  # 过期 → 视作未命中（调用方将重抓覆盖）
+        if _shell_detection_on() and extraction_failure_reason(content) is not None:
+            # 修复前落盘的空壳：视作未命中并 best-effort 删除，让本次重抓走完整回退链。
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            return None
         try:
             os.utime(path, None)  # LRU：命中即刷新 mtime 为「最近使用」（best-effort）
         except OSError:
