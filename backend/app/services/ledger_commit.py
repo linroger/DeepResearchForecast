@@ -244,6 +244,14 @@ def commit_report(*, report_id: str, report_status: Any, error: Optional[str],
         logger.info(f"[ledger] {report_id} is publishable but has no sealed structured "
                     "forecast; nothing committed")
         return receipt
+    if isinstance(forecast, dict) and forecast.get("probability_status") == "needs_review":
+        # REPORT-1 marks unreadable probabilities needs_review and fails the publish gate on
+        # them; with that gate disabled the report can still be publishable, but its
+        # probabilities are not scoreable, so it never becomes a scored row.
+        return _record_unpublished(
+            receipt, report_id=report_id, question=q_text, context=ctx,
+            reasons=["probability_status: needs_review (probabilities unreadable, not scoreable)"],
+            d=d, now_utc=now_utc)
 
     as_of_date, as_of_source = resolve_as_of(ctx, actors, now_utc)
     status, row = forecast_ledger.commit_published_forecast(

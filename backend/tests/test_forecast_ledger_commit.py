@@ -289,6 +289,27 @@ def test_record_unpublished_knob_off_writes_nothing(reports_dir, monkeypatch):
     assert not os.path.exists(_ledger_path())
 
 
+def test_publishable_needs_review_forecast_is_never_scored(reports_dir):
+    """REPORT-1 × EVAL-1: with the publish gate off, a report whose probabilities are
+    needs_review can still be publishable; it must land as an unpublished row, never a
+    scored commit row."""
+    forecast = dict(_forecast(), probability_status="needs_review")
+    forecast["scenarios"] = [dict(s, probability=None) for s in forecast["scenarios"]]
+
+    def _status(rid):
+        return {"publishable": True, "forecast_sha256": "f" * 64, "markdown_sha256": "m" * 64}
+
+    receipt = lc.commit_report(
+        report_id="r_review", report_status="completed", error=None, question=QUESTION,
+        language="English", actors=None, scenario_label="", ledger_context=None,
+        publication_status_fn=_status, load_forecast_fn=lambda rid: forecast, now=NOW)
+    assert receipt["status"] == "unpublished" and receipt["commit_id"] is None
+    assert _rows("commit") == []
+    (row,) = _rows("unpublished_terminal")
+    assert row["reasons"] == ["probability_status: needs_review (probabilities unreadable, not scoreable)"]
+    assert fl.calibration_summary()["n_resolved"] == 0
+
+
 def test_completed_but_unpublishable_report_uses_gate_reasons(reports_dir):
     _write_report("r_gate", _forecast(), hard_passed=False)
     receipt = _publish(_Agent(), "r_gate")
