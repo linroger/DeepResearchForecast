@@ -2962,16 +2962,19 @@ _ANCHOR_UNIT_WORDS = frozenset({"thousand", "million", "billion", "trillion", "p
 
 def evidence_anchor_terms(text: Any) -> tuple[frozenset[str], frozenset[str]]:
     """``(Latin words, CJK bigrams)`` a window is anchored on: casefolded
-    Latin words of >= 4 letters minus stopwords and unit words (a plural "s"
-    dropped from words over 5 letters, as the report's citation checker
-    reads them) and the 2-grams of every CJK run; citation markers ignored."""
+    Latin words of >= 4 letters (a plural "s" dropped from words over 5
+    letters, as the report's citation checker reads them) minus stopwords and
+    unit words, singular or plural ("years", "euros"), and the 2-grams of
+    every CJK run; citation markers ignored."""
     value = _CITE_RE.sub(" ", unicodedata.normalize("NFKC", str(text or ""))).casefold()
     words: set[str] = set()
     for word in _ANCHOR_LATIN_RE.findall(value):
         if word.endswith("s") and len(word) > 5:
             word = word[:-1]
-        if word not in rg._STOPWORDS and word not in _ANCHOR_UNIT_WORDS:
-            words.add(word)
+        if word in rg._STOPWORDS or word in _ANCHOR_UNIT_WORDS \
+                or (word.endswith("s") and word[:-1] in _ANCHOR_UNIT_WORDS):
+            continue
+        words.add(word)
     grams = {run[i:i + 2] for run in _ANCHOR_CJK_RE.findall(value) for i in range(len(run) - 1)}
     return frozenset(words), frozenset(grams)
 
@@ -2979,18 +2982,28 @@ def evidence_anchor_terms(text: Any) -> tuple[frozenset[str], frozenset[str]]:
 @dataclass
 class _EvidenceSentence:
     """One candidate sentence of a page: its position, text, anchor terms
-    and (computed once, on first use) its :func:`page_number_set`."""
+    and (computed once, on first use) its :func:`page_number_set` and its
+    text cleaned as web text (every figure the sentence states shares both)."""
 
     index: int
     text: str
     words: frozenset[str]
     grams: frozenset[str]
     _numbers: frozenset[str] | None = field(default=None, repr=False, compare=False)
+    _cleaned: str | None = field(default=None, repr=False, compare=False)
 
     def numbers(self) -> frozenset[str]:
         if self._numbers is None:
             self._numbers = page_number_set(self.text)
         return self._numbers
+
+    def cleaned(self) -> str:
+        """The sentence as ``rg._clean_web_text`` leaves it for model-facing
+        use (instruction-like sentences replaced, page-own ``[S1]`` labels
+        defused), stripped."""
+        if self._cleaned is None:
+            self._cleaned = rg._clean_web_text(self.text).strip()
+        return self._cleaned
 
 
 def evidence_sentences(text: Any) -> list[_EvidenceSentence]:
@@ -3095,7 +3108,7 @@ def select_evidence_windows(sentences: Sequence[_EvidenceSentence], number_text:
         points = score(len(words & sentence.words), len(grams & sentence.grams))
         if points is None or not found(sentence.numbers()):
             continue
-        window = _window_around(rg._clean_web_text(sentence.text).strip(), tokens)
+        window = _window_around(sentence.cleaned(), tokens)
         window_words, window_grams = evidence_anchor_terms(window)
         if score(len(words & window_words), len(grams & window_grams)) is None \
                 or not found(page_number_set(window)):
@@ -3103,6 +3116,32 @@ def select_evidence_windows(sentences: Sequence[_EvidenceSentence], number_text:
         ranked.append((points, sentence.index, window))
     ranked.sort(key=lambda item: (-item[0], item[1]))
     return ranked[:limit]
+
+
+def select_source_windows(candidates: Iterable[tuple[int, int, int, str]], existing: Sequence[str],
+                          cap: int = EVIDENCE_WINDOWS_PER_SOURCE) -> tuple[list[str], list[str]]:
+    """The evidence windows one source publishes, chosen by coverage.
+
+    ``candidates`` are ``(rank, anchor score, sentence index, window)``, rank
+    0 for a figure's best window and 1 for its second.  Every figure's best
+    window (higher score first, then page order) is taken before any
+    figure's second, each distinct window once, until the source holds
+    ``cap`` spans counting its ``existing`` ones: while a source states at
+    most ``cap`` figures, every figure keeps a published window.  Returns
+    ``(the kept windows in page order, the windows left out)``."""
+    taken: dict[str, int] = {}
+    left_out: list[str] = []
+    seen = set(existing)
+    room = cap - len(seen)
+    for _, _, index, window in sorted(candidates, key=lambda item: (item[0], -item[1], item[2])):
+        if window in seen:
+            continue
+        seen.add(window)
+        if len(taken) < room:
+            taken[window] = index
+        else:
+            left_out.append(window)
+    return sorted(taken, key=taken.__getitem__), left_out
 
 
 # ===========================================================================
@@ -6091,7 +6130,7 @@ class _Engine:
         return parsed, truncated
 
     def _write_structured(self, actors_raw: dict | None, facts_raw: dict | None,
-                          sources: Sequence[Mapping[str, Any]], order: Sequence[int] | None = None) -> dict:
+                          sources: Sequence[Mapping[str, Any]], order: Sequence[int]) -> dict:
         """actors/timeline/quantitative/contested — ALWAYS all four (possibly
         empty) so no stale file of an earlier attempt survives.
 
@@ -6173,7 +6212,7 @@ class _Engine:
         if isinstance(timeline_hist, dict):
             self.meta["timeline_freshness"] = timeline_hist
         # Same publication bound as typing: the day after the plan's as-of.
-        evidence = (self._evidence_step(quant, sources, order or (), ref_date + _dt.timedelta(days=1))
+        evidence = (self._evidence_step(quant, sources, order, ref_date + _dt.timedelta(days=1))
                     if verify else None)
         # actors.json keeps the rows without their window text: its readers
         # serialize whole rows into budgeted actor context packs.  The text
@@ -6305,28 +6344,36 @@ class _Engine:
         computed before anything is stamped or written; zero model calls.
 
         * Quant rows (labelled by :meth:`_verify_quant_rows`): an ``actual``
-          whose ``as_of_date`` is a full ISO day after ``as_of`` (the last day
-          a cited source can have published on) gets ``future_dated``; a ``verified``
-          row gets ``evidence_window`` — ``{"text": <its best window>,
-          "basis": "number_and_anchor"}`` on the fetched page of its source
-          (anchors: metric, series, definition), else ``{"text": None,
-          "basis": "number_only"}``: the number is on the page but no
-          sentence states it next to its metric, and nothing is published.
+          whose ``as_of_date`` is a day (an ISO date, or date-time, read as
+          typing reads it: :func:`_period_bounds`) after ``as_of`` (the last
+          day a cited source can have published on) gets ``future_dated``; a
+          ``verified`` row gets ``evidence_window`` — ``{"text": <its best
+          window>, "basis": "number_and_anchor", "published": <bool>}`` on the
+          fetched page of its source (anchors: metric, series, definition),
+          else ``{"text": None, "basis": "number_only"}``: the number is on
+          the page but no sentence states it next to its metric, and nothing
+          is published.
         * Findings: every fact of ``self.records`` in KIQ order as a claim
           (``K3-F2``: KIQ K3's second fact) with its status (the fact's tag),
           numbers, the positional refs and source ids of its sources in
           sources.json (``citable``: it has one and is not unverified) and,
           when VERIFIED, ``spans``: its best windows over its fetched pages
-          (anchors: the finding's words).
+          (anchors: the finding's words), each with ``published``.
 
         At most EVIDENCE_WINDOWS_PER_FACT windows per figure
-        (:func:`select_evidence_windows`); a source's windows are merged in
-        page order, deduplicated and capped at EVIDENCE_WINDOWS_PER_SOURCE
-        (:func:`_merge_supports`).  Only sources.json rows published as
-        ``fetched`` get windows.
+        (:func:`select_evidence_windows`).  A source publishes at most
+        EVIDENCE_WINDOWS_PER_SOURCE of the windows found on it, chosen by
+        coverage (:func:`select_source_windows`: every figure's best window
+        before any figure's second) and merged in page order
+        (:func:`_merge_supports`).  ``published`` says whether a window is in
+        its source's supports, the spans the report's citation check reads;
+        a window left out stays its figure's evidence and is counted in
+        ``windows_dropped``.  Only sources.json rows published as ``fetched``
+        get windows.
 
         Returns ``{"stamps": [per quant row], "windows": {position: [new
-        supports spans]}, "payload": <verified_facts.json>}``."""
+        supports spans]}, "dropped": {position: [windows left out]},
+        "payload": <verified_facts.json>}``."""
         by_url = {str(entry.get("url")): position for position, entry in enumerate(sources, 1)}
         positions: dict[int, int] = {}
         for sid in order:
@@ -6337,11 +6384,12 @@ class _Engine:
         fetched = {sid: position for sid, position in positions.items()
                    if sources[position - 1].get("source_origin") == "fetched"}
         pages: dict[int, list[_EvidenceSentence]] = {}
-        candidates: dict[int, list[tuple[int, str]]] = {}
+        candidates: dict[int, list[tuple[int, int, int, str]]] = {}
 
         def best_windows(sids: Sequence[int], number_text: str, anchor_text: str) -> list[tuple[int, str]]:
             """``(position, window)`` of the figure's best windows over the
-            fetched pages of ``sids``, recorded as supports candidates."""
+            fetched pages of ``sids``, recorded as supports candidates with
+            their rank in the figure (see :func:`select_source_windows`)."""
             ranked: list[tuple[int, int, int, int, str]] = []
             for rank, sid in enumerate(dict.fromkeys(sids)):
                 if sid not in fetched:
@@ -6352,31 +6400,29 @@ class _Engine:
                     ranked.append((-score, rank, index, fetched[sid], text))
             ranked.sort()
             chosen = ranked[:EVIDENCE_WINDOWS_PER_FACT]
-            for _, _, index, position, text in chosen:
-                candidates.setdefault(position, []).append((index, text))
+            for figure_rank, (negative_score, _, index, position, text) in enumerate(chosen):
+                candidates.setdefault(position, []).append((figure_rank, -negative_score, index, text))
             return [(position, text) for _, _, _, position, text in chosen]
 
         stamps: list[dict] = []
-        quant_rows: list[dict] = []
-        for number, row in enumerate(quant):
+        row_windows: list[tuple[int, str] | None] = []
+        for row in quant:
             stamp: dict[str, Any] = {}
-            stated = str(row.get("as_of_date") or "").strip()
-            day = _parse_iso_date(stated) if _ISO_DAY_RE.fullmatch(stated) else None
-            if row.get("value_type") == "actual" and day is not None and day > as_of:
+            stated, _, precision = _period_bounds(row.get("as_of_date"))
+            if row.get("value_type") == "actual" and precision == "day" and stated is not None and stated > as_of:
                 stamp["future_dated"] = True
+            window: tuple[int, str] | None = None
             if row.get("verification") == "verified":
                 source = self.ledger.find(row.get("source_url")) if row.get("source_url") else None
                 anchors = " ".join(str(row.get(key) or "") for key in ("metric", "series", "definition"))
                 found = best_windows([source["sid"]], _quant_number_text(row), anchors) if source else []
-                stamp["evidence_window"] = ({"text": found[0][1], "basis": "number_and_anchor"} if found
+                window = found[0] if found else None
+                stamp["evidence_window"] = ({"text": window[1], "basis": "number_and_anchor"} if window
                                             else {"text": None, "basis": "number_only"})
             stamps.append(stamp)
-            quant_rows.append({"row": number, "metric": row.get("metric"),
-                               "verification": row.get("verification"), "source_ref": row.get("source_ref"),
-                               "future_dated": bool(stamp.get("future_dated")),
-                               "evidence_window": stamp.get("evidence_window")})
+            row_windows.append(window)
 
-        facts: list[dict] = []
+        claims: list[tuple[dict, list[tuple[int, str]]]] = []
         for kiq in self.kiqs:
             record = self.records.get(kiq.id)
             for number, fact in enumerate((record or {}).get("facts") or [], 1):
@@ -6386,34 +6432,59 @@ class _Engine:
                 status = str(fact.get("tag") or "REPORTED").lower()
                 sids = [sid for sid in fact.get("sids") or [] if isinstance(sid, int)]
                 cited = list(dict.fromkeys(positions[sid] for sid in sids if sid in positions))
-                spans = best_windows(sids, text, text) if status == "verified" else []
-                facts.append({
+                claims.append(({
                     "claim_id": f"{kiq.id}-F{number}", "kiq": kiq.id, "text_plain": text, "status": status,
                     "numbers": fact_number_tokens(text),
                     "missing_numbers": [str(token) for token in fact.get("missing_numbers") or []],
                     "source_refs": [f"S{position}" for position in cited],
                     "source_ids": [sources[position - 1].get("source_id") for position in cited],
                     "citable": bool(cited) and status != "unverified",
-                    "spans": [{"source_ref": f"S{position}", "span_text": span, "span_sha256": _sha256(span)}
-                              for position, span in spans],
-                })
+                }, best_windows(sids, text, text) if status == "verified" else []))
 
         windows: dict[int, list[str]] = {}
+        dropped: dict[int, list[str]] = {}
+        published: dict[int, frozenset[str]] = {}
         for position in sorted(candidates):
             scratch = {"supports": list(sources[position - 1].get("supports") or [])}
-            added = _merge_supports(scratch, [text for _, text in sorted(candidates[position])],
-                                    EVIDENCE_WINDOWS_PER_SOURCE)
+            _merge_supports(scratch, (), EVIDENCE_WINDOWS_PER_SOURCE)   # the row's own spans, as merged
+            kept, left_out = select_source_windows(candidates[position], scratch["supports"],
+                                                   EVIDENCE_WINDOWS_PER_SOURCE)
+            added = _merge_supports(scratch, kept, EVIDENCE_WINDOWS_PER_SOURCE)
             if added:
                 windows[position] = added
+            if left_out:
+                dropped[position] = left_out
+            published[position] = frozenset(scratch["supports"])
+
+        def is_published(position: int, text: str) -> bool:
+            return text in published.get(position, frozenset())
+
+        quant_rows: list[dict] = []
+        for number, (row, stamp, window) in enumerate(zip(quant, stamps, row_windows, strict=True)):
+            if window is not None:
+                stamp["evidence_window"]["published"] = is_published(*window)
+            quant_rows.append({"row": number, "metric": row.get("metric"),
+                               "verification": row.get("verification"), "source_ref": row.get("source_ref"),
+                               "future_dated": bool(stamp.get("future_dated")),
+                               "evidence_window": stamp.get("evidence_window")})
+        facts = [dict(claim, spans=[{"source_ref": f"S{position}", "span_text": span, "span_sha256": _sha256(span),
+                                     "published": is_published(position, span)} for position, span in spans])
+                 for claim, spans in claims]
         labels = Counter(row.get("verification") for row in quant)
         counts = {"facts": len(facts), "verified": sum(1 for fact in facts if fact["status"] == "verified"),
                   "quant_verified": labels["verified"], "quant_unverified": labels["unverified"],
                   "quant_snippet_only": labels["snippet_only"], "quant_none": labels["none"],
-                  "windows": sum(len(spans) for spans in windows.values())}
+                  "windows": sum(len(spans) for spans in windows.values()),
+                  "windows_dropped": sum(len(spans) for spans in dropped.values())}
+        # report_sha256 is the QA'd report (qa.json) as finalize writes it, the
+        # text the findings and the citation order come from; the chart step
+        # later appends its Visual Annex to research_report.md, so it is not
+        # the published file's hash.  _write_structured stamps
+        # quantitative_sha256.
         payload = {"schema": VERIFIED_FACTS_SCHEMA, "as_of": self.plan.as_of,
                    "report_sha256": self.qa.get("report_sha256"), "quantitative_sha256": None,
                    "facts": facts, "quant": quant_rows, "counts": counts}
-        return {"stamps": stamps, "windows": windows, "payload": payload}
+        return {"stamps": stamps, "windows": windows, "dropped": dropped, "payload": payload}
 
     def _publish_evidence(self, evidence: dict | None, sources: list[dict], sources_name: str) -> bool:
         """Publish :meth:`_verified_evidence`: its windows join the rows'
@@ -6440,6 +6511,11 @@ class _Engine:
                 self.write_json(self.out_dir / sources_name, sources, internal=False)
                 self.log("ok", f"v3: added {counts['windows']} evidence window(s) to the supports of "
                                f"{len(evidence['windows'])} source(s) in {sources_name}")
+            if counts["windows_dropped"]:
+                self.log("warn", f"v3: {counts['windows_dropped']} evidence window(s) of "
+                                 f"{len(evidence['dropped'])} source(s) not added to {sources_name} (cap "
+                                 f"{EVIDENCE_WINDOWS_PER_SOURCE} per source; their figures keep them with "
+                                 "published false)")
             self.write_json(path, payload, internal=False)
             self.log("ok", f"wrote {VERIFIED_FACTS_FILENAME} ({counts['facts']} findings, {counts['verified']} "
                            f"verified; {counts['quant_verified']} of {len(payload['quant'])} quantitative rows "
@@ -6611,8 +6687,6 @@ _RELATION_TYPES = frozenset({
     "SUPPLIES", "CUSTOMER_OF", "FUNDS", "INVESTS_IN", "BACKS", "OWNS", "SUPPORTS", "SANCTIONS", "OTHER"})
 _VALENCES = frozenset({"allied", "adversarial", "neutral", "transactional", "directional"})
 _VALUE_TYPES = frozenset({"actual", "estimate", "forecast", "target"})
-# A full ISO day ("2026-09-28"): the only as_of_date a future_dated check reads.
-_ISO_DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def _parse_iso_date(value: Any) -> _dt.date | None:

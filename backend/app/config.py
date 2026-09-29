@@ -1265,14 +1265,15 @@ class Config:
     # not checked, so the label says nothing about whether the number appears anywhere.
     # The same knob gates the evidence windows (REPORT-7): the page sentence that states a
     # verified figure next to >= 2 of its metric words becomes a sources.json `supports`
-    # span (<= 360 chars, cleaned like web text; <= 2 per figure, <= 8 per source), so the
+    # span (<= 360 chars, cleaned like web text; <= 2 per figure, <= 8 per source, every
+    # figure's best window first; windows over the cap are counted, never silent), so the
     # report's number-aware citation check sees figures deeper than the 1,200-char page
     # excerpt; quant rows keep source_ref and get evidence_window / future_dated, and the
     # findings and figures are projected to handoff verified_facts.json (SHA-manifested).
     # Default true: deterministic, zero model calls, labels and spans are additive keys;
     # false leaves every research artifact byte-identical.  The parent forwards it to the
     # v3 child.
-    RESEARCH_VERIFIED_FACTS =os.environ.get('RESEARCH_VERIFIED_FACTS', 'true').strip().lower() == 'true'
+    RESEARCH_VERIFIED_FACTS = os.environ.get('RESEARCH_VERIFIED_FACTS', 'true').strip().lower() == 'true'
     # v3 reported/projected typing of quantitative rows (RESEARCH-4): epistemic_class,
     # date_precision, target-date repair (a forecast's target date put in as_of_date),
     # future-dated rows bucketed apart from fresh ones in meta.quant_freshness, and a

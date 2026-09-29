@@ -8,8 +8,8 @@ each quantitative row's ``verification``) finalize
   on a verified row;
 * publishes the page sentences that state a verified figure next to >= 2 of
   its metric words as sources.json ``supports`` windows (<= 360 chars, cleaned
-  like web text, <= 2 per figure, <= 8 per source) through the one supports
-  writer ``_merge_supports``;
+  like web text, <= 2 per figure, <= 8 per source chosen by coverage, the
+  rest counted) through the one supports writer ``_merge_supports``;
 * writes handoff verified_facts.json (``drf.verified_facts/v1``), which the
   parent SHA-manifests with the research artifacts.
 
@@ -144,6 +144,55 @@ def test_normalize_quant_keeps_the_normalised_ref_only_when_asked(ref, expected)
     assert {k: v for k, v in kept.items() if k != "source_ref"} == plain
 
 
+@pytest.mark.parametrize("text", [
+    "Queue wait (years) for grid connection in euros",
+    "Queue waits of several years for grid connections, costed in euros and dollars",
+    "Monthly queue months quarters percents thousands millions billions yuans",
+])
+def test_unit_words_never_anchor_singular_or_plural(text):
+    """A unit or scale word belongs to the number: "years" / "euros" (5
+    letters, never singularised) are as excluded as "year" / "euro"."""
+    words, _ = lr.evidence_anchor_terms(text)
+    units = {"year", "years", "euro", "euros", "dollar", "dollars", "month", "months", "quarter", "quarters",
+             "percent", "percents", "thousand", "thousands", "million", "millions", "billion", "billions",
+             "yuan", "yuans"}
+    assert not words & units and "queue" in words
+
+
+def test_unit_plurals_do_not_qualify_a_window():
+    """With "years" and "euros" read as units only "queue" is shared and no
+    window qualifies; a second real anchor word ("cost") qualifies it."""
+    sentence = "The queue lasted 7 years and cost 40 million euros."
+    sentences = lr.evidence_sentences(sentence + "\n")
+    assert lr.select_evidence_windows(sentences, "40 million euros", "queue (years) in euros") == []
+    assert [text for _, _, text in lr.select_evidence_windows(sentences, "40 million euros",
+                                                              "queue cost (years) in euros")] == [sentence]
+
+
+def test_select_source_windows_takes_every_figure_best_window_first():
+    # (rank in figure, score, sentence index, window)
+    candidates = [(0, 2, 0, "a0"), (1, 2, 1, "a1"),      # figure A: 2 windows early
+                  (0, 3, 2, "b0"), (1, 2, 3, "b1"),      # figure B
+                  (0, 2, 9, "c0"),                        # figure C: 1 window, late
+                  (1, 2, 1, "a1"), (0, 2, 0, "a0")]      # another figure sharing A's windows
+    kept, left_out = lr.select_source_windows(candidates, [], 4)
+    assert kept == ["a0", "a1", "b0", "c0"] and left_out == ["b1"]   # page order; best windows first
+    kept, left_out = lr.select_source_windows(candidates, ["x", "c0"], 4)
+    assert kept == ["a0", "b0"] and left_out == ["a1", "b1"]         # existing spans count and never repeat
+    assert lr.select_source_windows(candidates, [], 8) == (["a0", "a1", "b0", "b1", "c0"], [])
+    assert lr.select_source_windows([], [], 8) == ([], [])
+
+
+def test_a_sentence_is_cleaned_once_for_all_its_figures(monkeypatch):
+    calls = []
+    real = rg._clean_web_text
+    monkeypatch.setattr(rg, "_clean_web_text", lambda text: calls.append(text) or real(text))
+    sentences = lr.evidence_sentences("Installed capacity was 10 GW, 20 GW and 30 GW in three regions.\n")
+    for figure in ("10 GW", "20 GW", "30 GW"):
+        assert lr.select_evidence_windows(sentences, figure, "Installed capacity")
+    assert len(calls) == 1
+
+
 def test_window_selection():
     """The verified number near char 4,000 in a sentence sharing its metric
     words is the one window; an earlier sentence with the number but no
@@ -241,20 +290,60 @@ def test_verified_number_only(tmp_path):
     assert quant[0].get("evidence_window") is None      # nothing stamped before the step applies it
 
 
-def test_supports_are_capped_per_source_in_page_order(tmp_path):
+def test_supports_cover_every_figure_before_second_windows(tmp_path):
+    """Figures 101-104 each have two qualifying sentences early on the page,
+    figure 105 one late: every figure's best window is published before any
+    second one, so the one window left out is a second window, and counted."""
+    url = "https://www.agency.example.org/regions"
+    sentences = []
+    for k in range(1, 5):
+        sentences += [f"Installed capacity in region {k} reached {100 + k} GW in 2023.",
+                      f"Installed capacity of region {k} operators was {100 + k} GW last year."]
+    sentences.append("Installed capacity in region 5 reached 105 GW in 2023.")
+    engine, sources, order = _stub(tmp_path, {url: "\n\n".join(sentences)})
+    quant = [_verified("Installed capacity", str(100 + k), "GW", url, source_ref="S1") for k in (5, 1, 2, 3, 4)]
+    evidence = lr._Engine._verified_evidence(engine, quant, sources, order, AS_OF)
+    (published,) = evidence["windows"].values()
+    assert len(published) == lr.EVIDENCE_WINDOWS_PER_SOURCE
+    assert published == [text for text in sentences if text != sentences[7]]   # page order
+    assert evidence["dropped"] == {1: [sentences[7]]}           # figure 104's second window, the last in page order
+    assert evidence["payload"]["counts"]["windows_dropped"] == 1
+    windows = [stamp["evidence_window"] for stamp in evidence["stamps"]]
+    assert windows[0] == {"text": sentences[8], "basis": "number_and_anchor", "published": True}
+    assert all(window["published"] and window["text"] in published for window in windows)
+
+
+def test_supports_are_capped_per_source_and_drops_counted(tmp_path):
+    """More figures than the cap: the best windows win (by score, then page
+    order), every row keeps its window, the rest are published false, the
+    drop is counted and logged."""
     url = "https://www.agency.example.org/regions"
     page = "\n\n".join(f"Installed capacity in region {k} reached {100 + k} GW in 2023." for k in range(1, 13))
     engine, sources, order = _stub(tmp_path, {url: page, "https://www.cited.example.org/x": None})
     shuffled = (12, 3, 7, 1, 9, 5, 11, 2, 8, 4, 10, 6)
     quant = [_verified("Installed capacity", str(100 + k), "GW", url, source_ref="S1") for k in shuffled]
     evidence = lr._Engine._verified_evidence(engine, quant, sources, order, AS_OF)
-    expected = [f"Installed capacity in region {k} reached {100 + k} GW in 2023." for k in range(1, 9)]
-    assert evidence["windows"] == {1: expected}                     # page order, capped at 8
-    assert evidence["payload"]["counts"]["windows"] == lr.EVIDENCE_WINDOWS_PER_SOURCE
+    lines = [f"Installed capacity in region {k} reached {100 + k} GW in 2023." for k in range(1, 13)]
+    assert evidence["windows"] == {1: lines[:8]} and evidence["dropped"] == {1: lines[8:]}
+    counts = evidence["payload"]["counts"]
+    assert (counts["windows"], counts["windows_dropped"]) == (lr.EVIDENCE_WINDOWS_PER_SOURCE, 4)
     # Every verified row keeps its own window, published or not.
-    assert all(stamp["evidence_window"]["basis"] == "number_and_anchor" for stamp in evidence["stamps"])
-    assert evidence["stamps"][0]["evidence_window"]["text"] == (
-        "Installed capacity in region 12 reached 112 GW in 2023.")
+    windows = [stamp["evidence_window"] for stamp in evidence["stamps"]]
+    assert all(window["basis"] == "number_and_anchor" for window in windows)
+    assert windows[0] == {"text": lines[11], "basis": "number_and_anchor", "published": False}
+    assert [window["published"] for window in windows] == [k <= 8 for k in shuffled]
+    assert [row["evidence_window"] for row in evidence["payload"]["quant"]] == windows
+
+    # Published, the drop is logged (never silent) and counted in verified_facts.json.
+    logs = []
+    engine.out_dir, engine.analytics_errors = tmp_path, []
+    engine.log = lambda kind, message: logs.append((kind, message))
+    engine.write_json = lambda path, obj, internal=True: path.write_text(json.dumps(obj), encoding="utf-8")
+    assert lr._Engine._publish_evidence(engine, evidence, sources, "sources.json") is True
+    assert sources[0]["supports"] == lines[:8] and sources[1]["supports"] == []
+    assert ("warn", "v3: 4 evidence window(s) of 1 source(s) not added to sources.json (cap 8 per source; "
+                    "their figures keep them with published false)") in logs
+    assert _load(tmp_path / lr.VERIFIED_FACTS_FILENAME)["counts"]["windows_dropped"] == 4
 
 
 def test_findings_are_projected_as_claims(tmp_path):
@@ -285,7 +374,7 @@ def test_findings_are_projected_as_claims(tmp_path):
         "status": "verified", "numbers": ["176", "2023"], "missing_numbers": [], "source_refs": ["S1"],
         "source_ids": [f"src_{sid_a}"], "citable": True,
         "spans": [{"source_ref": "S1", "span_text": HARNESS_WINDOW,
-                   "span_sha256": hashlib.sha256(HARNESS_WINDOW.encode("utf-8")).hexdigest()}]}
+                   "span_sha256": hashlib.sha256(HARNESS_WINDOW.encode("utf-8")).hexdigest(), "published": True}]}
     # Only sources in sources.json are refs; an unverified finding is never citable.
     assert unverified["source_refs"] == ["S1"] and unverified["citable"] is False
     assert unverified["missing_numbers"] == ["250", "2030"] and unverified["spans"] == []
@@ -295,23 +384,29 @@ def test_findings_are_projected_as_claims(tmp_path):
     assert evidence["windows"] == {1: [HARNESS_WINDOW]}
     assert evidence["payload"]["counts"] == {"facts": 3, "verified": 1, "quant_verified": 0,
                                              "quant_unverified": 0, "quant_snippet_only": 0, "quant_none": 0,
-                                             "windows": 1}
+                                             "windows": 1, "windows_dropped": 0}
 
 
 def test_future_dated_uses_the_publication_bound(tmp_path):
     """An actual dated after the day after the plan's as-of is future-dated
     (a run crossing UTC midnight can cite a source published the next day);
-    targets, partial dates and past dates never are."""
+    a day is read as typing reads it (an ISO date-time or unpadded day
+    counts); targets, partial dates and past dates never are."""
     engine, _, _ = _stub(tmp_path, {})
     bound = AS_OF + dt.timedelta(days=1)
-    rows = [{"metric": "m", "value": "1", "value_type": "actual", "as_of_date": LATER},
-            {"metric": "m", "value": "1", "value_type": "actual", "as_of_date": NEXT_DAY},
-            {"metric": "m", "value": "1", "value_type": "target", "as_of_date": LATER},
-            {"metric": "m", "value": "1", "value_type": "actual", "as_of_date": "2027-03"},
-            {"metric": "m", "value": "1", "value_type": "actual", "as_of_date": "2023-12-31"}]
+    dates = [(LATER, "actual", True), (NEXT_DAY, "actual", False), (LATER, "target", False),
+             ("2027-03", "actual", False), ("2023-12-31", "actual", False),
+             (f"{LATER}T00:00:00Z", "actual", True), (f"{NEXT_DAY}T23:59:59+00:00", "actual", False),
+             ("2026-10-5", "actual", True), ("2026-9-29", "actual", False), ("2026-13-01", "actual", False)]
+    rows = [{"metric": "m", "value": "1", "value_type": kind, "as_of_date": date} for date, kind, _ in dates]
     evidence = lr._Engine._verified_evidence(engine, rows, [], [], bound)
-    assert evidence["stamps"] == [{"future_dated": True}, {}, {}, {}, {}]
-    assert [row["future_dated"] for row in evidence["payload"]["quant"]] == [True, False, False, False, False]
+    assert evidence["stamps"] == [{"future_dated": True} if future else {} for _, _, future in dates]
+    assert [row["future_dated"] for row in evidence["payload"]["quant"]] == [future for _, _, future in dates]
+    # The same day reading as RESEARCH-4 typing: its flag agrees on every actual.
+    for date, kind, future in dates:
+        flags = lr.classify_quant_row({"value_type": kind, "as_of_date": date}, bound).get("epistemic_flags", [])
+        if kind == "actual" and lr._period_bounds(date)[2] == "day":
+            assert ("published_after_as_of" in flags) is future
 
 
 # ================================================================ engine end to end
@@ -341,8 +436,8 @@ def test_labels(tmp_path, bridge, fixed_as_of):
         "verified", "unverified", "snippet_only", "none", "verified", "verified", "verified"]
     assert [row.get("source_ref") for row in rows] == ["S2", "S2", f"S{cited}", None, "S2", "S2", "S2"]
     assert [row.get("future_dated") for row in rows] == [None, None, None, None, True, None, None]
-    assert rows[0]["evidence_window"] == {"text": HARNESS_WINDOW, "basis": "number_and_anchor"}
-    assert rows[4]["evidence_window"] == {"text": HARNESS_WINDOW, "basis": "number_and_anchor"}
+    assert rows[0]["evidence_window"] == {"text": HARNESS_WINDOW, "basis": "number_and_anchor", "published": True}
+    assert rows[4]["evidence_window"] == {"text": HARNESS_WINDOW, "basis": "number_and_anchor", "published": True}
     assert rows[6]["evidence_window"] == {"text": None, "basis": "number_only"}
     assert not any("evidence_window" in row for row in rows[1:4])
     payload = _load(out / lr.VERIFIED_FACTS_FILENAME)
@@ -371,7 +466,7 @@ def test_window_selection_end_to_end(tmp_path, bridge, fixed_as_of):
     # The 1,200-char excerpt never reaches the figure: the window is the only span stating it.
     assert all("reached 176 GW" not in row["excerpt"] for row in fetched)
     (row,) = _load(out / "quantitative.json")
-    assert row["evidence_window"] == {"text": LONG_WINDOW, "basis": "number_and_anchor"}
+    assert row["evidence_window"] == {"text": LONG_WINDOW, "basis": "number_and_anchor", "published": True}
 
 
 def test_end_to_end_and_idempotent(tmp_path, bridge, monkeypatch, fixed_as_of):
@@ -381,10 +476,12 @@ def test_end_to_end_and_idempotent(tmp_path, bridge, monkeypatch, fixed_as_of):
     payload = _load(out / lr.VERIFIED_FACTS_FILENAME)
     assert list(payload) == ["schema", "as_of", "report_sha256", "quantitative_sha256", "facts", "quant", "counts"]
     assert payload["schema"] == "drf.verified_facts/v1" and payload["as_of"] == AS_OF.isoformat()
-    assert payload["report_sha256"] == hashlib.sha256((out / "research_report.md").read_bytes()).hexdigest()
+    # The QA'd report (the harness's chart step embeds nothing, so it is also the file on disk).
+    assert payload["report_sha256"] == _load(out / "v3" / "qa.json")["report_sha256"]
     assert payload["quantitative_sha256"] == hashlib.sha256((out / "quantitative.json").read_bytes()).hexdigest()
     counts = payload["counts"]
     assert counts["facts"] == len(payload["facts"]) > 0 and counts["verified"] >= 1 and counts["windows"] >= 1
+    assert counts["windows_dropped"] == 0
     assert meta["verified_facts"] == counts and _load(out / "meta.json")["verified_facts"] == counts
 
     sources = _load(out / "sources.json")
@@ -403,7 +500,7 @@ def test_end_to_end_and_idempotent(tmp_path, bridge, monkeypatch, fixed_as_of):
     for fact in verified:
         for span in fact["spans"]:
             position = int(span["source_ref"][1:])
-            assert span["span_text"] in sources[position - 1]["supports"]
+            assert span["published"] is True and span["span_text"] in sources[position - 1]["supports"]
             assert span["span_sha256"] == hashlib.sha256(span["span_text"].encode("utf-8")).hexdigest()
     # actors.json carries the rows without the window text (budgeted actor context packs).
     quant_rows = _load(out / "quantitative.json")
@@ -433,6 +530,28 @@ def test_end_to_end_and_idempotent(tmp_path, bridge, monkeypatch, fixed_as_of):
     assert rc == 0 and model.calls == []
     assert {name: (out / name).read_bytes() for name in first} == first
     assert meta["verified_facts"] == counts
+
+
+def test_report_sha256_is_the_qa_report_before_the_chart_annex(tmp_path, bridge, monkeypatch, fixed_as_of):
+    """report_sha256 binds the QA'd report finalize wrote (qa.json), not the
+    published file the chart step later extends with its Visual Annex."""
+    annex = "\n## Visual Annex\n\n![Figure 1](charts/fig1.png)\n"
+
+    def charts(out_dir, meta, plog, question=""):
+        path = out_dir / dr.REPORT_FILENAME
+        path.write_text(path.read_text(encoding="utf-8") + annex, encoding="utf-8")
+        return {}
+
+    monkeypatch.setattr(dr, "_render_research_charts", charts)
+    rc, meta, _, _, out = v3.run_engine(tmp_path, bridge, v3.World())
+    assert rc == 0, meta.get("error")
+    published = (out / dr.REPORT_FILENAME).read_bytes()
+    assert published.endswith(annex.encode("utf-8"))
+    qa_report = published[:-len(annex.encode("utf-8"))]
+    payload = _load(out / lr.VERIFIED_FACTS_FILENAME)
+    assert payload["report_sha256"] == hashlib.sha256(qa_report).hexdigest()
+    assert payload["report_sha256"] == _load(out / "v3" / "qa.json")["report_sha256"]
+    assert payload["report_sha256"] != hashlib.sha256(published).hexdigest()
 
 
 @pytest.mark.parametrize("raw", ["false", "0"])
@@ -573,11 +692,62 @@ def test_orchestrator_wiring(tmp_path, monkeypatch):
         assert child["env"]["RESEARCH_VERIFIED_FACTS"] == expected
 
 
-def test_extract_only_salvage_drops_the_v3_verified_facts_counts(tmp_path, monkeypatch):
+def test_research_completion_drops_the_manifest_row_of_a_removed_projection(tmp_path, monkeypatch):
+    """A research re-run that no longer writes verified_facts.json (knob off,
+    step or publish failure) must not leave the earlier attempt's manifest row
+    and pointer behind: a row whose file is gone fails every later reuse check
+    and would re-run research on each resume."""
+    handoff = tmp_path / "handoff"
+    handoff.mkdir()
+    for name in ("research_report.md", "sources.json"):
+        (handoff / name).write_text("[]" if name.endswith(".json") else "# Report\n", encoding="utf-8")
+    projection = handoff / "verified_facts.json"
+    projection.write_bytes(_dump({"schema": "drf.verified_facts/v1", "facts": [], "quant": [], "counts": {}}))
+    store: dict = {}
+    writes = []
+
+    def write_manifest(cls, pid, value):
+        writes.append(dict(value))
+        store.clear()
+        store.update(value)
+
+    monkeypatch.setattr(po.Config, "PIPELINE_VALIDATE_ARTIFACTS", True, raising=False)
+    monkeypatch.setattr(po.PipelineManager, "load_artifact_manifest", classmethod(lambda cls, pid: dict(store)))
+    monkeypatch.setattr(po.PipelineManager, "write_artifact_manifest", classmethod(write_manifest))
+    state = po.PipelineState(pipeline_id="pipe-vf-stale", prompt="x", handoff_dir=str(handoff))
+    orch = po.PipelineOrchestrator.__new__(po.PipelineOrchestrator)
+
+    orch._record_stage_artifacts(state, po.STAGE_RESEARCH)        # attempt 1 (knob on) completes
+    assert {"report", "sources", "verified_facts"} <= set(store) and "verified_facts" in state.artifacts
+    assert orch._validate_reuse(state, po.STAGE_RESEARCH) is True
+
+    projection.unlink()                                            # attempt 2 removes the projection
+    state.artifacts["verified_facts_partial"] = str(projection)   # a mid-run pointer to it
+    orch._record_stage_artifacts(state, po.STAGE_RESEARCH)        # attempt 2 completes
+    assert "verified_facts" not in store and {"report", "sources"} <= set(store)
+    assert "verified_facts" not in state.artifacts and "verified_facts_partial" not in state.artifacts
+    assert orch._validate_reuse(state, po.STAGE_RESEARCH) is True
+
+    # Nothing recorded and no stale row: the manifest is not rewritten.
+    count = len(writes)
+    empty = po.PipelineState(pipeline_id="pipe-vf-empty", prompt="x", handoff_dir=str(tmp_path / "none"))
+    store.clear()
+    orch._record_stage_artifacts(empty, po.STAGE_RESEARCH)
+    assert len(writes) == count and store == {}
+    # Other stages keep their rows as before (the cleanup is the research boundary's).
+    store["ontology"] = {"path": str(tmp_path / "none" / "ontology.json")}
+    orch._record_stage_artifacts(empty, po.STAGE_ONTOLOGY)
+    assert "ontology" in store and len(writes) == count
+
+
+def test_extract_only_salvage_drops_the_v3_verified_facts(tmp_path, monkeypatch):
     """The parent salvages a killed v3 run with the legacy extract-only path,
-    which rewrites quantitative.json: the v3 counts must not survive into the
-    salvage meta (verified_facts.json binds the file it indexed by hash)."""
+    which rewrites quantitative.json: neither the v3 counts nor the
+    verified_facts.json indexing the old rows survive into the salvage (the
+    parent SHA-manifests whatever the handoff holds)."""
+    assert dr.VERIFIED_FACTS_FILENAME == lr.VERIFIED_FACTS_FILENAME
     (tmp_path / dr.REPORT_FILENAME).write_text("x" * 1000, encoding="utf-8")
+    (tmp_path / dr.VERIFIED_FACTS_FILENAME).write_text('{"schema": "drf.verified_facts/v1"}', encoding="utf-8")
     prior = {"status": "running", "research_engine": "v3",
              "verified_facts": {"facts": 3, "verified": 1, "quant_verified": 2, "quant_unverified": 0,
                                 "quant_snippet_only": 0, "quant_none": 0, "windows": 2},
@@ -588,6 +758,7 @@ def test_extract_only_salvage_drops_the_v3_verified_facts_counts(tmp_path, monke
 
     def fake_extract_only(question, out_dir, args, meta, plog, write_meta):
         seen["meta"] = dict(meta)
+        seen["projection_left"] = (out_dir / dr.VERIFIED_FACTS_FILENAME).exists()
         plog.close()
         return 0
 
@@ -597,5 +768,6 @@ def test_extract_only_salvage_drops_the_v3_verified_facts_counts(tmp_path, monke
     assert dr.main() == 0
     meta = seen["meta"]
     assert meta["salvage"]["mode"] == "extract_only" and "verified_facts" not in meta
+    assert seen["projection_left"] is False and not (tmp_path / dr.VERIFIED_FACTS_FILENAME).exists()
     assert meta["research_quality"] == prior["research_quality"] and meta["quantitative_count"] == 2
     assert "verified_facts" not in _load(tmp_path / "meta.json")
