@@ -924,8 +924,21 @@ def test_sparse_legacy_dossier_gets_a_safe_pack_without_fake_report_coverage():
     assert "Sparse Legacy Actor" in pack["bounded_context"]
 
 
-def test_role_context_reaches_real_reddit_and_twitter_oasis_system_messages(tmp_path):
+def test_role_context_reaches_real_reddit_and_twitter_oasis_system_messages(tmp_path, monkeypatch):
+    import camel.utils.token_counting as camel_token_counting
     from oasis import generate_reddit_agent_graph, generate_twitter_agent_graph
+
+    # OASIS builds each agent on camel's default OpenAI model, whose constructor
+    # demands a non-empty OPENAI_API_KEY; nothing here calls the model.  The
+    # hermetic harness (INFRA-12) scrubs the developer's key, so set a fake one.
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-offline-test-not-used")
+    # That model's token counter loads tiktoken's cl100k_base encoding, which a
+    # cold cache (a fresh CI runner) downloads from the internet and the egress
+    # guard refuses; nothing here counts tokens, so hand it an offline stand-in.
+    monkeypatch.setattr(
+        camel_token_counting, "get_model_encoding",
+        lambda _model: type("_OfflineEncoding", (), {
+            "encode": staticmethod(lambda text, **_kwargs: list(text.encode("utf-8")))})())
 
     dossier = _dossier()
     actor = dossier["actors"][0]

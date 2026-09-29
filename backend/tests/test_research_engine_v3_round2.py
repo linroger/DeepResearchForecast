@@ -817,6 +817,9 @@ def _positional_citations_ok(report: str, sources: list) -> bool:
             and [url for _, url in refs] == [row["url"] for row in sources])
 
 
+# subprocess_egress (INFRA-12): the child is a deerflow_research.py shim in
+# tmp_path whose model and search/fetch tools are scripted, so it stays offline.
+@pytest.mark.subprocess_egress
 @pytest.mark.parametrize("world", ["clean", "cut"])
 def test_r2_parent_pipeline_accepts_a_v3_research_run(tmp_path, monkeypatch, world):
     """PipelineOrchestrator._run (research_only) spawns a real research child
