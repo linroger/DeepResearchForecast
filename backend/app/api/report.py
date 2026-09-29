@@ -602,7 +602,19 @@ def get_report_forecast(report_id: str):
     if not ReportManager.is_publishable(report_id):
         return _publication_rejection(report_id)
 
-    forecast = ReportManager.load_structured_forecast(report_id)
+    # ?lang=en|zh returns the dashboard strings in that language when a localized
+    # copy bound to the sealed forecast.json exists; otherwise the sealed original.
+    lang = (request.args.get("lang") or "").strip().lower() or None
+    if lang is not None and lang not in ReportManager._TRANSLATION_LANGS:
+        return jsonify({
+            "success": False,
+            "error": f"不支持的语种: {lang}（仅 en / zh）",
+        }), 400
+    if lang is None:
+        forecast = ReportManager.load_structured_forecast(report_id)
+        localization = {"requested_lang": None, "localized": False}
+    else:
+        forecast, localization = ReportManager.load_localized_forecast(report_id, lang)
     return jsonify({
         "success": True,
         "data": {
@@ -610,6 +622,7 @@ def get_report_forecast(report_id: str):
             "simulation_id": report.simulation_id,
             "forecast": forecast,
             "available": forecast is not None,
+            "localization": localization,
         },
     })
 
@@ -808,26 +821,49 @@ def generate_report_translation(report_id: str, lang: str):
             "success": False,
             "error": f"报告不存在: {report_id}",
         }), 404
+    # ?force=1 regenerates a published variant (e.g. one an older translation engine
+    # produced — translation_status reports it as outdated); the published variant
+    # stays until the new one passes the audit.
+    force = (request.args.get("force") or "").strip().lower() in {"1", "true", "yes"}
     task_manager = TaskManager()
+
+    def _in_progress_response(state, active):
+        return jsonify({
+            "success": True,
+            "data": {
+                **state,
+                # A task-bound answer describes the task: an update of a published
+                # variant is not "available" until the task itself succeeds.
+                "available": False,
+                "status": active["status"],
+                "task_id": active["task_id"],
+                "progress": active.get("progress", 0),
+                "message": active.get("message", ""),
+            },
+        }), 202
+
+    # A running generation holds the lease below for its whole run (minutes).
+    # Answer a duplicate request (second tab, click after a reload) from the task
+    # and durable runtime state first, instead of blocking it on that lease.
+    active = _active_translation_task(report_id, lang)
+    if active:
+        state = ReportManager.translation_status(report_id, lang, report=report)
+        return _in_progress_response(state, active)
+    state = ReportManager.translation_status(report_id, lang, report=report)
+    if state.get("status") == "generating":
+        return jsonify({"success": True, "data": state}), 202
+
     with ReportManager._translation_generation_lease(report_id, lang):
         # Re-read under the cross-process lease.  This makes the durable task
         # record the deduplication authority even when another worker owns the
         # in-memory TaskManager entry.
         state = ReportManager.translation_status(report_id, lang, report=report)
-        if state.get("available"):
+        regenerate = bool(force and state.get("available"))
+        if state.get("available") and not regenerate:
             return jsonify({"success": True, "data": state})
         active = _active_translation_task(report_id, lang)
         if active:
-            return jsonify({
-                "success": True,
-                "data": {
-                    **state,
-                    "status": active["status"],
-                    "task_id": active["task_id"],
-                    "progress": active.get("progress", 0),
-                    "message": active.get("message", ""),
-                },
-            }), 202
+            return _in_progress_response(state, active)
         if state.get("status") == "generating":
             return jsonify({"success": True, "data": state}), 202
         if not state.get("can_generate"):
@@ -874,8 +910,9 @@ def generate_report_translation(report_id: str, lang: str):
                     progress=progress,
                     message=message,
                 ),
+                force=regenerate,
             )
-            if result.get("available"):
+            if result.get("available") and result.get("updated", True):
                 ReportManager._set_translation_runtime_status(
                     report_id,
                     lang,
@@ -928,6 +965,7 @@ def generate_report_translation(report_id: str, lang: str):
         "success": True,
         "data": {
             **state,
+            "available": False,
             "status": TaskStatus.PENDING.value,
             "task_id": task_id,
             "progress": 0,
@@ -959,10 +997,19 @@ def get_report_translation_status(report_id: str, lang: str):
                 "success": False,
                 "error": "任务与报告或语种不匹配",
             }), 409
+        task_result = task_data.get("result")
+        task_result = task_result if isinstance(task_result, dict) else {}
         return jsonify({
             "success": True,
             "data": {
                 **state,
+                # Availability of *this task's* output: while updating a published
+                # variant the old one stays available, which must not read as done.
+                "available": bool(
+                    task_data["status"] == TaskStatus.COMPLETED.value
+                    and task_result.get("available")
+                    and task_result.get("updated", True)
+                ),
                 "status": task_data["status"],
                 "task_id": task_id,
                 "progress": task_data.get("progress", 0),

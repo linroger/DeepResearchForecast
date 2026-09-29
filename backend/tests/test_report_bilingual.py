@@ -567,8 +567,12 @@ def test_parallel_translation_workers_inherit_run_telemetry_context(
 
 # ─────────────────────────── number-integrity flag ──────────────────────
 def test_bilingual_number_mutation_is_repaired_but_bad_prose_still_blocks_variant(
-    reports_tmp,
+    reports_tmp, monkeypatch,
 ):
+    # Strict mode: with REPORT_TRANSLATION_RESIDUAL_LINES=0 any residual source-language
+    # line blocks the variant (the default tolerance is covered in
+    # tests/test_translation_robustness.py).
+    monkeypatch.setattr(Config, "REPORT_TRANSLATION_RESIDUAL_LINES", 0)
     rid = "report_numint"
     ReportManager._ensure_report_folder(rid)
     report = Report(report_id=rid, simulation_id="s", graph_id="g",
@@ -983,9 +987,11 @@ def test_api_translation_retry_task_is_report_and_language_bound(
         lang,
         llm_client=None,
         progress_callback=None,
+        force=False,
     ):
         assert report_id == rid and lang == "zh"
         assert progress_callback is not None
+        assert force is False  # a retry of a missing variant is not a forced update
         progress_callback(55, "Translating report sections")
         return {
             "report_id": rid,
@@ -1051,6 +1057,148 @@ def test_api_translation_post_deduplicates_from_durable_lease_after_restart(
     assert third_data["status"] == "generating"
     assert third_data["task_id"] == task_id
     assert third_data["source_markdown_sha256"]
+
+
+def test_api_translation_post_answers_duplicates_while_generation_holds_lease(
+    client, reports_tmp, monkeypatch,
+):
+    """A generation holds the lease for its whole run; a duplicate POST (second tab,
+    click after a reload) must answer from the task state instead of hanging."""
+    import threading
+    import time
+
+    from app.api import report as report_api
+
+    rid = "report_api_translate_duplicate_nonblocking"
+    _publish_primary(rid, "# EV Forecast\n\nEnglish report body for translation.\n")
+    monkeypatch.setattr(report_api, "_launch_translation_thread", lambda _target: None)
+    first = client.post(f"/api/report/{rid}/translations/zh")
+    assert first.status_code == 202
+    task_id = first.get_json()["data"]["task_id"]
+
+    held, release = threading.Event(), threading.Event()
+
+    def _worker_holding_lease():
+        with ReportManager._translation_generation_lease(rid, "zh"):
+            held.set()
+            release.wait(10)
+
+    worker = threading.Thread(target=_worker_holding_lease)
+    worker.start()
+    assert held.wait(5)
+    try:
+        started = time.monotonic()
+        second = client.post(f"/api/report/{rid}/translations/zh")
+        elapsed = time.monotonic() - started
+    finally:
+        release.set()
+        worker.join(5)
+    assert second.status_code == 202
+    assert second.get_json()["data"]["task_id"] == task_id
+    assert elapsed < 2.0
+
+
+def test_report_payload_translation_row_satisfies_the_ui_identity_contract(client, reports_tmp):
+    """The report UI (frontend/src/utils/reportLanguages.js isVerifiedTranslationRow)
+    shows the language toggle only for a row carrying every identity field below; a
+    missing citations_path hid the toggle after every successful translation."""
+    rid = "report_ui_translation_contract"
+    _publish_primary(rid, "# EV Forecast\n\nEnglish report body for translation.\n")
+    zh_md = "# 电动车预测\n\n中文报告正文。\n"
+    with open(ReportManager._get_report_translation_path(rid, "zh"), "w", encoding="utf-8") as f:
+        f.write(zh_md)
+    _publish_variant(rid, "zh", zh_md)
+
+    data = client.get(f"/api/report/{rid}").get_json()["data"]
+    state = data["translation_status"]
+    assert state["status"] == "available" and state["available"] is True
+    assert (state["source_lang"], state["target_lang"]) == ("en", "zh")
+    [row] = data["translations"]
+    assert row["report_id"] == rid and row["available"] is True
+    assert (row["lang"], row["source_lang"]) == ("zh", "en")
+    assert row["path"] == "full_report.zh.md"
+    assert row["citations_path"] == "citations.zh.json"
+    assert row["final_audit_path"] == "final_audit.zh.json"
+    assert row["markdown_sha256"] == state["markdown_sha256"]
+    assert re.fullmatch(r"[0-9a-f]{64}", row["source_markdown_sha256"])
+    verified = state["translation"]
+    assert verified["markdown_sha256"] == state["markdown_sha256"]
+    assert (verified["lang"], verified["source_lang"], verified["path"]) == (
+        "zh", "en", "full_report.zh.md"
+    )
+
+
+def _publish_old_variant(rid: str) -> str:
+    """A published zh variant from an older engine (no translator_version stamp)."""
+    _publish_primary(rid, _EN_MD)
+    old_zh = "# 旧译文\n\n旧的中文正文。\n"
+    with open(ReportManager._get_report_translation_path(rid, "zh"), "w", encoding="utf-8") as f:
+        f.write(old_zh)
+    _publish_variant(rid, "zh", old_zh)
+    return old_zh
+
+
+def test_outdated_translation_updates_in_place_and_survives_a_failed_update(reports_tmp):
+    rid = "report_update_translation"
+    old_zh = _publish_old_variant(rid)
+    state = ReportManager.translation_status(rid, "zh")
+    assert state["available"] is True
+    assert state["outdated"] is True and state["can_update"] is True
+
+    # A rejected update (the model echoes English) leaves the published variant alone.
+    rejected = ReportManager.generate_translation_variant(
+        rid, "zh", llm_client=_TransLLM(translate=lambda text: text), force=True
+    )
+    assert rejected["available"] is True and rejected["updated"] is False
+    assert rejected["issues"]
+    with open(ReportManager._get_report_translation_path(rid, "zh"), encoding="utf-8") as f:
+        assert f.read() == old_zh
+    assert ReportManager.is_publishable(rid, "zh")
+
+    # A passing update replaces it with a current-engine variant.
+    accepted = ReportManager.generate_translation_variant(
+        rid, "zh", llm_client=_TransLLM(translate=_translate_outlook), force=True
+    )
+    assert accepted["updated"] is True
+    state = ReportManager.translation_status(rid, "zh")
+    assert state["outdated"] is False and state["can_update"] is False
+    assert state["translation"]["translator_version"] == ReportAgent._TRANSLATOR_VERSION
+
+
+def test_date_aware_variant_without_a_version_stamp_is_not_outdated(reports_tmp):
+    """Variants audited by the date-aware engine before the stamp existed record
+    date facts in their number parity; they must not be offered as outdated."""
+    rid = "report_version_inferred"
+    _publish_old_variant(rid)
+    audit_path = ReportManager._get_report_final_audit_path(rid, "zh")
+    with open(audit_path, encoding="utf-8") as f:
+        audit = json.load(f)
+    audit["number_parity"] = {"passed": True, "source": {"date:2025-09": 1}, "variant": {"date:2025-09": 1}}
+    with open(audit_path, "w", encoding="utf-8") as f:
+        json.dump(audit, f)
+    state = ReportManager.translation_status(rid, "zh")
+    assert state["available"] is True and state["outdated"] is False
+
+
+def test_api_forced_update_is_task_bound_not_instantly_available(client, reports_tmp, monkeypatch):
+    from app.api import report as report_api
+
+    rid = "report_api_force_update"
+    _publish_old_variant(rid)
+    monkeypatch.setattr(report_api, "_launch_translation_thread", lambda _target: None)
+
+    plain = client.post(f"/api/report/{rid}/translations/zh")
+    assert plain.status_code == 200 and plain.get_json()["data"]["available"] is True
+
+    forced = client.post(f"/api/report/{rid}/translations/zh?force=1")
+    assert forced.status_code == 202
+    data = forced.get_json()["data"]
+    assert data["available"] is False and data["task_id"]
+
+    polled = client.get(
+        f"/api/report/{rid}/translations/zh/status?task_id={data['task_id']}"
+    ).get_json()["data"]
+    assert polled["available"] is False and polled["status"] == "pending"
 
 
 def test_api_pdf_lang_param(client, reports_tmp, monkeypatch):

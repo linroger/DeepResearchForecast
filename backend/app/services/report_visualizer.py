@@ -60,6 +60,51 @@ from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
 
+# Chinese titles for the fixed English manifest titles the builders below emit.
+# Chinese report variants use them for chart image alt text, which pandoc prints as
+# the figure caption.  frontend/src/utils/vizManifest.js keeps the same table for
+# the gallery; tests/test_report_zh_presentation.py pins the two in sync.
+CHART_TITLES_ZH: Dict[str, str] = {
+    "Scenario Probabilities": "情景概率",
+    "Binary Forecasts — P(yes)": "二元预测 — P(是)",
+    "Model vs Market (binary forecasts)": "模型与市场对比（二元预测）",
+    "Model vs Market": "模型与市场对比",
+    "Event Timeline": "事件时间线",
+    "Actor Relationship Network": "行为体关系网络",
+    "Source Mix — tier / origin / reachability": "来源构成 — 层级 / 来源 / 可达性",
+    "Key Metric Trajectories (research-extracted)": "关键指标轨迹（研究提取）",
+    "Technology Shares by Metric Family": "按指标族划分的技术份额",
+    "Regional Comparison by Metric Family": "按指标族划分的地区比较",
+    "Comparable Forecast Benchmarks": "可比预测基准",
+    "Forecast Revisions Across Published Vintages": "历次发布版本的预测修订",
+    "Forecast Outcome-Share Trajectory": "预测结果份额轨迹",
+    "Baseline vs Scenario": "基线与情景对比",
+    "Calibration Curve": "校准曲线",
+    "Market-Implied P(yes) History vs Model": "市场隐含 P(是) 历史与模型对比",
+}
+
+_CHART_IMAGE_RE = re.compile(r"!\[([^\]\n]*)\]\((charts/[^)\s]+)\)")
+
+
+def localize_chart_alt_text(markdown: str, lang: str) -> str:
+    """Give embedded chart images their ``lang`` title (Chinese only; fences untouched)."""
+    if lang != "zh" or not markdown:
+        return markdown
+
+    def _title(match: "re.Match[str]") -> str:
+        localized = CHART_TITLES_ZH.get(match.group(1).strip())
+        return f"![{localized}]({match.group(2)})" if localized else match.group(0)
+
+    lines = markdown.split("\n")
+    in_fence = False
+    for index, line in enumerate(lines):
+        if line.lstrip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+            continue
+        if not in_fence and "](charts/" in line:
+            lines[index] = _CHART_IMAGE_RE.sub(_title, line)
+    return "\n".join(lines)
+
 _EMBEDDED_FAVICON = (
     "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 "
     "viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 "

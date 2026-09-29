@@ -100,6 +100,14 @@
               :title="translationAction.issues.join('; ')"
               @click="generateTranslation"
             >{{ translationButtonLabel }}</button>
+            <button
+              v-if="translationUpdateAction"
+              class="translate-btn"
+              type="button"
+              :disabled="translationBusy"
+              :title="L('此译文由旧版翻译引擎生成（例如日期中的月份可能丢失），重新生成后替换', 'This translation was made by an older translation engine (for example, months in dates may be missing); regenerate it')"
+              @click="generateTranslation(true)"
+            >{{ translationBusy ? L('正在更新翻译…', 'Updating translation…') : L('更新翻译', 'Update translation') }}</button>
             <!-- BILINGUAL：语种切换（仅在存在自动翻译版本时出现）。 -->
             <div v-if="langOptions.length > 1" class="lang-toggle" role="group" :aria-label="L('语言','Language')">
               <button
@@ -115,6 +123,9 @@
             </div>
             <span v-if="translationMessage" class="translation-feedback" aria-live="polite">
               {{ translationMessage }}
+            </span>
+            <span v-else-if="translationResidualNote" class="translation-feedback">
+              {{ translationResidualNote }}
             </span>
             <span v-if="translationIssueMessage" class="translation-feedback translation-error" role="alert">
               {{ translationIssueMessage }}
@@ -241,6 +252,7 @@ import { renderMarkdown, extractHeadings } from '../../utils/markdown'
 import {
   chartAssetKind,
   filterVizGalleryByMarkdown,
+  localizeChartCaption,
   normalizeVizGallery,
   safeChartPath,
 } from '../../utils/vizManifest'
@@ -248,6 +260,7 @@ import {
   createLatestRequestGate,
   downloadFilenameFromDisposition,
   hasPdfMagic,
+  normalizeReportTranslations,
   reportLanguageOptions,
   reportTranslationAction,
   reportTranslationIssues,
@@ -268,9 +281,11 @@ const scrollEl = ref(null)
 
 // VIZ-1：可视化清单（PNG 图表 + 图注）。空数组 → 不渲染图区（degrade-safe）。
 const vizManifest = ref([])
-// FORECAST-DASH：结构化预测对象（GET /api/report/<id>/forecast 的 data.forecast）。
+// FORECAST-DASH：结构化预测对象（GET /api/report/<id>/forecast?lang= 的 data.forecast），
+// 按展示语种缓存 { '<lang>' | '': forecast|null }——仪表盘/二元预测表/市场瓦片跟随当前语种。
 // 404/409/网络错误（报告缺失或未通过发布门）→ null → 仪表盘隐藏。
-const forecastPayload = ref(null)
+const forecastByLang = ref({})
+const forecastInFlight = new Set()
 // BILINGUAL：当前展示语种。null=原文（markdown_content）；否则为某翻译语种码（'en'|'zh'）。
 const activeLang = ref(null)
 const langMdCache = ref({})       // 翻译成稿缓存 { lang: markdown }
@@ -322,13 +337,13 @@ async function load() {
     error.value = ''
     loading.value = false
     vizManifest.value = []
-    forecastPayload.value = null
+    forecastByLang.value = {}
     partialSections.value = []
     return
   }
   loading.value = true
   error.value = ''
-  forecastPayload.value = null
+  forecastByLang.value = {}
   try {
     const res = await getReport(reportId)
     if (version !== loadVersion || reportId !== props.reportId) return
@@ -338,7 +353,7 @@ async function load() {
     // 成稿已就绪 → 拉可视化清单 + 结构化预测；否则进入生成期章节轮询（degrade-safe）。
     if (md.value) {
       loadVizManifest(reportId, version)
-      loadForecast(reportId, version)
+      loadForecast(reportId, version, viewLang.value)
     } else {
       startPolling(reportId, version)
     }
@@ -364,16 +379,25 @@ async function loadVizManifest(reportId = props.reportId, version = loadVersion)
   }
 }
 
-// FORECAST-DASH：拉取结构化预测。旧报告会返回 forecast:null；其余失败（404/409/网络错误）
-// → null → 仪表盘整体隐藏，报告正文不受影响（degrade-safe）。
-async function loadForecast(reportId = props.reportId, version = loadVersion) {
+// FORECAST-DASH：拉取某展示语种的结构化预测。旧报告会返回 forecast:null；其余失败
+// （404/409/网络错误）→ null → 仪表盘整体隐藏，报告正文不受影响（degrade-safe）。
+async function loadForecast(reportId = props.reportId, version = loadVersion, lang = '') {
+  const key = String(lang || '')
+  const flight = `${version}:${reportId}:${key}`
+  if (forecastInFlight.has(flight)) return
+  forecastInFlight.add(flight)
   try {
-    const res = await getForecast(reportId)
+    const res = await getForecast(reportId, key || undefined)
     if (version !== loadVersion || reportId !== props.reportId) return
     const data = (res && res.data) || {}
-    forecastPayload.value = (data.forecast && typeof data.forecast === 'object') ? data.forecast : null
+    const forecast = (data.forecast && typeof data.forecast === 'object') ? data.forecast : null
+    forecastByLang.value = { ...forecastByLang.value, [key]: forecast }
   } catch (e) {
-    if (version === loadVersion && reportId === props.reportId) forecastPayload.value = null
+    if (version === loadVersion && reportId === props.reportId) {
+      forecastByLang.value = { ...forecastByLang.value, [key]: null }
+    }
+  } finally {
+    forecastInFlight.delete(flight)
   }
 }
 
@@ -475,11 +499,41 @@ function langLabel(code) {
   return c ? c.toUpperCase() : L('原文', 'Original')
 }
 
+// 当前展示语种代码：译文视图为 activeLang，原文视图为报告源语种
+// （translation_status.source_lang；未知时为 ''，仪表盘请求不带 lang，行为同旧版）。
+const sourceLang = computed(() => {
+  const code = String(meta.value?.translation_status?.source_lang || '').trim().toLowerCase()
+  return code === 'en' || code === 'zh' ? code : ''
+})
+const viewLang = computed(() => activeLang.value || sourceLang.value || '')
+
 const langOptions = computed(() => {
   return reportLanguageOptions(meta.value, langLabel)
 })
 
 const translationAction = computed(() => reportTranslationAction(meta.value))
+
+// A published translation made by an older engine (backend reports `outdated`) can be
+// regenerated in place; the published one stays until the new one passes the audit.
+const translationUpdateAction = computed(() => {
+  const state = meta.value?.translation_status
+  if (!state || state.available !== true || state.outdated !== true || state.can_update !== true) {
+    return null
+  }
+  const lang = String(state.target_lang || '').toLowerCase()
+  return lang === 'en' || lang === 'zh' ? { targetLang: lang } : null
+})
+
+// The audit may publish a translation that keeps a few source-language lines
+// (REPORT_TRANSLATION_RESIDUAL_LINES); say so rather than imply full coverage.
+const translationResidualNote = computed(() => {
+  if (!activeLang.value) return ''
+  const row = normalizeReportTranslations(meta.value)
+    .find(entry => String(entry?.lang || '').toLowerCase() === activeLang.value)
+  const count = Number(row?.residual_source_lines || 0)
+  if (!Number.isFinite(count) || count <= 0) return ''
+  return L(`${count} 行未能翻译，保留原文`, `${count} line(s) kept in the source language`)
+})
 
 const translationIssueMessage = computed(() => {
   if (translationError.value) return translationError.value
@@ -616,7 +670,7 @@ async function pollTranslation(reportId, lang, taskId, version) {
       return
     }
     updateTranslationState(data)
-    translationMessage.value = data.message || L('正在生成并审计中文版本…','Generating and auditing Mandarin…')
+    translationMessage.value = data.message || L('正在生成并审计译文…','Generating and auditing the translation…')
     translationPollTimer = setTimeout(
       () => pollTranslation(reportId, lang, taskId, version),
       1500,
@@ -630,17 +684,18 @@ async function pollTranslation(reportId, lang, taskId, version) {
   }
 }
 
-async function generateTranslation() {
-  const action = translationAction.value
+async function generateTranslation(force = false) {
+  const action = force === true ? translationUpdateAction.value : translationAction.value
   const reportId = props.reportId
   if (!action || !reportId || translationBusy.value) return
   stopTranslationPolling()
   const version = translationPollVersion
+  const target = langLabel(action.targetLang)
   translationBusy.value = true
   translationError.value = ''
-  translationMessage.value = L('正在启动中文翻译…','Starting Mandarin translation…')
+  translationMessage.value = L(`正在启动${target}翻译…`, `Starting ${target} translation…`)
   try {
-    const res = await requestReportTranslation(reportId, action.targetLang)
+    const res = await requestReportTranslation(reportId, action.targetLang, force === true)
     if (version !== translationPollVersion || reportId !== props.reportId) return
     const data = (res && res.data) || {}
     const taskId = String(data.task_id || '').trim()
@@ -655,7 +710,7 @@ async function generateTranslation() {
     }
     if (!taskId) throw new Error(L('后端未返回翻译任务','Translation task was not created'))
     updateTranslationState(data)
-    translationMessage.value = data.message || L('正在生成并审计中文版本…','Generating and auditing Mandarin…')
+    translationMessage.value = data.message || L('正在生成并审计译文…','Generating and auditing the translation…')
     await pollTranslation(reportId, action.targetLang, taskId, version)
   } catch (e) {
     if (version !== translationPollVersion || reportId !== props.reportId) return
@@ -743,7 +798,7 @@ const galleryCharts = computed(() => {
   return fallbackOnly.map(item => ({
       id: item.id,
       src: item.imagePath ? resolveAsset(item.imagePath) : '',
-      caption: item.caption,
+      caption: localizeChartCaption(item.caption, viewLang.value),
       // schema-v2 的主 path 是 Plotly HTML、png_path 是静态孪生；legacy
       // PNG+HTML 双行同样被纯函数折叠为一个预览和一个交互链接。
       interactive: item.interactivePath ? resolveAsset(item.interactivePath) : ''
@@ -752,7 +807,13 @@ const galleryCharts = computed(() => {
 })
 
 // ---------- FORECAST-DASH：结构化预测仪表盘 ----------
-const fc = computed(() => forecastPayload.value || null)
+// 当前语种的预测；其本地化副本加载中/不存在时回退为已加载的原始预测（绝不空白闪烁）。
+const fc = computed(() => {
+  const cache = forecastByLang.value
+  const own = cache[viewLang.value || '']
+  if (own) return own
+  return cache[sourceLang.value || ''] || cache[''] || null
+})
 
 // 0..1 概率 → 百分比字符串（保留 1 位小数，去掉尾零由 Math.round 保证）。
 function pct(v) {
@@ -878,7 +939,7 @@ async function pollOnce(reportId = props.reportId, version = loadVersion) {
       activeLang.value = null
       if (firstFinalBody) {
         loadVizManifest(reportId, version)
-        loadForecast(reportId, version)
+        loadForecast(reportId, version, viewLang.value)
       }
     }
     // A primary body may land before automatic translation metadata. Keep
@@ -1001,6 +1062,12 @@ async function copyMarkdown() {
 
 onMounted(load)
 watch(() => props.reportId, load)
+// 切换语种（原文 ⇄ 译文）时按需拉取该语种的仪表盘文本；已缓存则不重复请求。
+watch(viewLang, lang => {
+  const key = String(lang || '')
+  if (!props.reportId || !md.value || key in forecastByLang.value) return
+  loadForecast(props.reportId, loadVersion, key)
+})
 onBeforeUnmount(() => {
   stopTranslationPolling()
   stopPolling()

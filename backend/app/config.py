@@ -704,6 +704,15 @@ class Config:
     REPORT_BILINGUAL = os.environ.get('REPORT_BILINGUAL', 'true').strip().lower() == 'true'
     # 逐章节翻译的并发度（ThreadPoolExecutor 线程数）；下限 1（串行）。默认 4。
     REPORT_TRANSLATION_CONCURRENCY = max(1, int(os.environ.get('REPORT_TRANSLATION_CONCURRENCY', '4') or '4'))
+    # Lines a published translation may keep in the source language after the full
+    # repair ladder (min(this, one per 200 body lines, at least 1)); they publish with a
+    # recorded warning instead of withholding the whole translation.  0 = strict.
+    REPORT_TRANSLATION_RESIDUAL_LINES = max(0, int(os.environ.get('REPORT_TRANSLATION_RESIDUAL_LINES', '3') or '3'))
+    # Per-request timeout for translation model calls (the client default is 600 s, which
+    # lets one dead HTTP/2 stream stall a translation for 10 minutes before the retry).
+    REPORT_TRANSLATION_CALL_TIMEOUT_S = max(0.0, float(os.environ.get('REPORT_TRANSLATION_CALL_TIMEOUT_S', '240') or '240'))
+    # Still-contaminated lines that get one last whole-line retranslation (2 prompts each).
+    REPORT_TRANSLATION_RESIDUAL_LINE_RETRIES = max(0, int(os.environ.get('REPORT_TRANSLATION_RESIDUAL_LINE_RETRIES', '12') or '12'))
 
     # —— PM-2：确定性逐预测市场锚定（forecast_extractor 经 getattr 读取）——
     # 抽取二元预测后跑一次批处理 LLM 匹配（陈述表 × 相关性门控市场表），确定性回填

@@ -86,9 +86,17 @@ export const getReportTranslationMd = (reportId, lang) => {
   return service.get(`/api/report/${reportId}/full_report.${lang}.md`, { responseType: 'text' })
 }
 
-/** Start or deduplicate a publication-gated translation retry. */
-export const requestReportTranslation = (reportId, lang) => {
-  return service.post(`/api/report/${reportId}/translations/${lang}`)
+/**
+ * Start or deduplicate a publication-gated translation retry.  `force` regenerates a
+ * published variant (e.g. one an older engine produced); the published variant
+ * stays until the new one passes the audit.
+ */
+export const requestReportTranslation = (reportId, lang, force = false) => {
+  return service.post(
+    `/api/report/${reportId}/translations/${lang}`,
+    null,
+    force ? { params: { force: 1 } } : undefined,
+  )
 }
 
 /** Poll one report-bound translation task; task ids cannot cross reports/languages. */
@@ -120,16 +128,19 @@ export const reportPdfUrl = (reportId, lang) => {
 
 /**
  * FORECAST-DASH：获取报告的机器可读结构化预测对象（第一方报告 API）。
- * 返回 { success, data: { report_id, simulation_id, forecast, available } }；
+ * 返回 { success, data: { report_id, simulation_id, forecast, available, localization } }；
  * forecast 内含 scenarios / confidence / ensemble / market_comparison 等字段。
+ * lang（en|zh，可选）：返回该语种的仪表盘文本（绑定已封存 forecast.json 的本地化副本），
+ * 无副本时回退为原始预测；localization.localized 说明实际返回的是哪一份。
  * 降级路径（调用方一律按「无仪表盘」处理，不报错）：
  *   · 报告不存在 → 404；
  *   · 已审计旧报告没有 forecast.json → 200 + forecast: null；
  *   · 报告未通过发布门 → 409。
  * @param {string} reportId
+ * @param {string} [lang]
  */
-export const getForecast = (reportId) => {
-  return service.get(`/api/report/${reportId}/forecast`)
+export const getForecast = (reportId, lang) => {
+  return service.get(`/api/report/${reportId}/forecast`, lang ? { params: { lang } } : undefined)
 }
 
 /**
