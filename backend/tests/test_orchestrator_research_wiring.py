@@ -718,8 +718,14 @@ def test_missing_legacy_run_summary_is_backfilled_once(monkeypatch, tmp_path):
 
 def _exercise_prepare_run_resume(
         monkeypatch, tmp_path, *, rebuild_prepare, corrupt_run=False,
-        corrupt_prepare_seal=False):
-    """Run the real orchestrator state machine with every external service faked."""
+        corrupt_prepare_seal=False, report_simulation_id=None):
+    """Run the real orchestrator state machine with every external service faked.
+
+    The persisted report was generated for ``report_simulation_id`` (default:
+    the old simulation).  A regenerated report is recorded in
+    ``report_generations`` (the simulation id it was generated for) instead
+    of running the real ReportAgent.
+    """
     pipeline_root = tmp_path / "pipelines"
     simulation_root = tmp_path / "simulations"
     report_root = tmp_path / "reports" / "report_existing"
@@ -1023,7 +1029,8 @@ def _exercise_prepare_run_resume(
         _po.SimulationRunner, "write_run_summary", classmethod(write_summary))
 
     existing_report = SimpleNamespace(
-        report_id="report_existing", status=_po.ReportStatus.COMPLETED)
+        report_id="report_existing", status=_po.ReportStatus.COMPLETED,
+        simulation_id=report_simulation_id or old_id)
     monkeypatch.setattr(
         _po.ReportManager,
         "get_report",
@@ -1039,6 +1046,14 @@ def _exercise_prepare_run_resume(
         "_get_report_folder",
         classmethod(lambda cls, report_id: str(report_root)),
     )
+
+    report_generations = []
+
+    def generate_stage_report(self, state, agent, simulation_id, *, report_id,
+                              progress_callback):
+        report_generations.append(simulation_id)
+        return SimpleNamespace(report_id=report_id, status=_po.ReportStatus.COMPLETED,
+                               simulation_id=simulation_id)
 
     # Keep this transition test focused on durable stage contracts, not provider,
     # telemetry, or final-report quality systems.
@@ -1056,8 +1071,18 @@ def _exercise_prepare_run_resume(
         "_maybe_run_seed_ensemble": lambda self, *args, **kwargs: None,
         "_enforce_pipeline_health": lambda self, state: None,
         "_assess_report_health": lambda self, report_id: ("ok", [], {}),
+        "_generate_stage_report": generate_stage_report,
     }.items():
         monkeypatch.setattr(_po.PipelineOrchestrator, name, replacement)
+    class FakeReportAgent(_po.ReportAgent):
+        # Keeps the class-level helpers (the reuse-path ledger repair calls
+        # them) while skipping the real agent's service construction.
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    monkeypatch.setattr(_po, "ReportAgent", FakeReportAgent)
+    monkeypatch.setattr(
+        _po.ReportManager, "save_report", classmethod(lambda cls, report: None))
 
     state = _po.PipelineState(
         pipeline_id=pid,
@@ -1097,6 +1122,7 @@ def _exercise_prepare_run_resume(
         start_calls=start_calls,
         summary_writes=summary_writes,
         manager_calls=manager_calls,
+        report_generations=report_generations,
         manifest=_po.PipelineManager.load_artifact_manifest(pid),
         old_config_sha=old_config_sha,
         old_config_manifest_sha=old_config_manifest_sha,
@@ -1139,6 +1165,11 @@ def test_prepare_rebuild_invalidates_and_executes_run_end_to_end(monkeypatch, tm
     assert result.manifest["run_summary"]["path"].endswith(
         f"{result.new_id}/run_summary.json")
     assert result.state.stages[_po.STAGE_RUN].message == "模拟完成"
+    # INFRA-7: the old report was written for the replaced simulation.
+    assert result.report_generations == [result.new_id]
+    assert result.state.report_id != "report_existing"
+    assert result.state.options["stage_notes"][_po.STAGE_REPORT] == [
+        "reuse_refused: simulation_id_mismatch"]
 
 
 def test_prepare_and_run_reuse_is_read_only_end_to_end(monkeypatch, tmp_path):
@@ -1162,6 +1193,9 @@ def test_prepare_and_run_reuse_is_read_only_end_to_end(monkeypatch, tmp_path):
     assert config_manifest.read_bytes() == result.old_config_manifest_bytes
     assert _po._sha256_file(str(config_manifest)) == result.old_config_manifest_sha
     assert result.state.stages[_po.STAGE_RUN].message == "模拟已恢复"
+    assert result.report_generations == []
+    assert result.state.report_id == "report_existing"
+    assert "stage_notes" not in result.state.options
 
 
 def test_invalid_run_manifest_applies_overlay_before_rerun(monkeypatch, tmp_path):
@@ -1181,6 +1215,10 @@ def test_invalid_run_manifest_applies_overlay_before_rerun(monkeypatch, tmp_path
     assert len(scenario_events) == 1
     assert scenario_events[0]["content"] == "Policy shock"
     assert result.state.stages[_po.STAGE_RUN].message == "模拟完成"
+    # INFRA-7: RUN re-executed this attempt, so the old report is stale.
+    assert result.report_generations == [result.old_id]
+    assert result.state.options["stage_notes"][_po.STAGE_REPORT] == [
+        "reuse_refused: run_recomputed"]
 
 
 def test_scenario_overlay_replay_preserves_requested_duplicate_multiplicity():
@@ -1228,6 +1266,7 @@ def test_prepare_reuse_rebuilds_when_state_bound_config_seal_is_tampered(
     assert result.state.options["artifact_validation_error"]["artifact"] == (
         "simulation_config_manifest"
     )
+    assert result.report_generations == [result.new_id]
     assert "fingerprint mismatch" in result.state.options[
         "artifact_validation_error"
     ]["error"]

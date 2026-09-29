@@ -512,15 +512,30 @@ def estimate_tokens(text: str) -> int:
 _PIPELINE_STAGE_ORDER = ("research", "ontology", "graph", "prepare", "run", "report")
 
 
+def _latest_stage_reuse(stage_decisions: Any) -> Dict[str, bool]:
+    """INFRA-7：把 ``[{stage, reused}, ...]`` 折成 {stage: reused}（后写覆盖前写；畸形行跳过）。"""
+    folded: Dict[str, bool] = {}
+    if not isinstance(stage_decisions, (list, tuple)):
+        return folded
+    for row in stage_decisions:
+        if isinstance(row, dict) and isinstance(row.get("stage"), str):
+            folded[row["stage"]] = bool(row.get("reused"))
+    return folded
+
+
 def build_stage_telemetry(run_id: Optional[str],
-                          stage_walls: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+                          stage_walls: Optional[Dict[str, float]] = None,
+                          stage_decisions: Optional[Any] = None) -> Dict[str, Any]:
     """ITEM-18：构建 {stage: {calls, input_tokens, output_tokens, est_cost_usd, wall_seconds}}。
 
     token/调用/成本取自 :meth:`LLMMeter.snapshot` 的 ``by_stage``（成本已按 estimate_cost 计入，
     含 LLM_COST_PER_MTOK 覆盖）；``wall_seconds`` 取自编排器传入的 ``stage_walls``（各阶段
     started_at→finished_at 墙钟差——反映整段阶段耗时，与纯 LLM 在飞延迟不同）。某阶段可能只在
     一侧出现（graph/prepare 常有墙钟但 0 LLM 调用；run 阶段 LLM 在子进程、计量归 0）——两侧取
-    并集，缺失侧填 0。degrade-safe：snapshot 空 → 仅墙钟骨架。"""
+    并集，缺失侧填 0。degrade-safe：snapshot 空 → 仅墙钟骨架。
+
+    INFRA-7：``stage_decisions``（编排器本 attempt 的 stage_reuse_v1 记录 ``[{stage, reused}]``）
+    给出时，为已出现的阶段附加 ``reused`` 标志（同一阶段多条记录取最后一条）；None → 输出不变。"""
     walls: Dict[str, float] = {}
     for k, v in (stage_walls or {}).items():
         if isinstance(v, (int, float)) and v >= 0:
@@ -537,6 +552,9 @@ def build_stage_telemetry(run_id: Optional[str],
             "est_cost_usd": round(float(c.get("cost_usd", 0.0) or 0.0), 6),
             "wall_seconds": round(walls.get(name, 0.0), 1),
         }
+    for name, reused in _latest_stage_reuse(stage_decisions).items():
+        if name in stages:
+            stages[name]["reused"] = reused
     total = {
         "calls": sum(s["calls"] for s in stages.values()),
         "input_tokens": sum(s["input_tokens"] for s in stages.values()),

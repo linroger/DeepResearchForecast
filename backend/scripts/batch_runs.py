@@ -76,6 +76,7 @@ from app.services.pipeline_orchestrator import (  # noqa: E402
     preflight_pipeline,
 )
 from app.services.report_agent import ReportManager  # noqa: E402
+from app.services.run_shape import ORIGIN_FORK, SHARED_GRAPH_OPTION  # noqa: E402
 from app.utils.atomic import write_json_atomic  # noqa: E402
 from app.utils.logger import get_logger  # noqa: E402
 
@@ -328,7 +329,13 @@ def fork_question(
     else:
         new_state.current_stage = STAGE_ONTOLOGY
 
+    if bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
+        # INFRA-7：本体按本问题重生成、图谱刻意沿用锚点——向图谱血统守卫声明这一设计，
+        # 否则本 attempt 的本体重算会被当作陈旧上游而重建共享图谱。
+        options[SHARED_GRAPH_OPTION] = base_pipeline_id
     new_state.options = options
+    # INFRA-7：批次问题分叉是新准入——按分叉时刻的环境钉运行形状（origin=fork）。
+    PipelineOrchestrator._pin_run_shape(new_state, ORIGIN_FORK)
 
     PipelineManager.ensure_dirs(new_id)
 
