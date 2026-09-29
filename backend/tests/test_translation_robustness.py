@@ -295,3 +295,48 @@ def test_integrity_retries_run_concurrently(reports_tmp, monkeypatch):
     ReportManager.save_report(report)
     _worker(RetryNeedsPeers())._generate_bilingual_report("report_parallel_retries", report)
     assert met and all(met), "integrity retries did not overlap"
+
+
+def test_live_owner_is_trusted_through_a_long_section(reports_tmp, monkeypatch):
+    import hashlib
+    from datetime import datetime, timedelta, timezone
+
+    rid = "report_long_section"
+    markdown = "# EV Forecast\n\nEnglish report body for translation.\n"
+    ReportManager.save_report(Report(
+        report_id=rid, simulation_id="sim", graph_id="graph",
+        simulation_requirement="req", status=ReportStatus.COMPLETED,
+        markdown_content=markdown,
+    ))
+    with open(ReportManager._get_report_final_audit_path(rid), "w", encoding="utf-8") as f:
+        json.dump({
+            "policy_version": 3, "hard_passed": True, "hard_issues": [],
+            "markdown_sha256": hashlib.sha256(markdown.encode("utf-8")).hexdigest(),
+            "publish_gate": {"enabled": True, "passed": True},
+            "structured_forecast": {"required": False, "valid": True},
+            "citation_artifacts": {"required": False, "passed": True},
+        }, f)
+    source_sha = hashlib.sha256(markdown.encode("utf-8")).hexdigest()
+
+    def _runtime(owner, minutes_ago):
+        ReportManager._set_translation_runtime_status(
+            rid, "zh", "generating", source_markdown_sha256=source_sha, owner=owner,
+            progress=40, message="translated 9/21 report sections",
+        )
+        path = ReportManager._get_translation_runtime_status_path(rid, "zh")
+        with open(path, encoding="utf-8") as f:
+            state = json.load(f)
+        state["updated_at"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
+        ).isoformat()
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+        return ReportManager.translation_status(rid, "zh")["status"]
+
+    # Live owner: 20 minutes without a heartbeat is a long section, not a dead job.
+    assert _runtime(f"pid:{os.getpid()}", 20) == "generating"
+    # ...but not forever.
+    assert _runtime(f"pid:{os.getpid()}", 90) == "interrupted"
+    # Unknown owners keep the 15-minute heartbeat rule.
+    assert _runtime("worker-7", 20) == "interrupted"
+    assert _runtime("worker-7", 5) == "generating"

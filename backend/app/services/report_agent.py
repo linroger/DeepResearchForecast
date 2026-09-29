@@ -12166,13 +12166,18 @@ class ReportManager:
                     )
                     if updated.tzinfo is None:
                         updated = updated.replace(tzinfo=timezone.utc)
-                    stale = (datetime.now(timezone.utc) - updated).total_seconds() > 900
+                    age_s = (datetime.now(timezone.utc) - updated).total_seconds()
                 except (TypeError, ValueError):
-                    stale = True
-                # A backend restart kills the worker thread but leaves "generating"
-                # on disk; without this the retry stays blocked for the full timeout.
-                if not stale and not cls._translation_owner_alive(runtime.get("owner")):
-                    stale = True
+                    age_s = float("inf")
+                owner = runtime.get("owner")
+                if re.fullmatch(r"pid:\d+", str(owner or "").strip()):
+                    # A backend restart kills the worker thread but leaves "generating"
+                    # on disk: a dead owner is interrupted at once, while a live owner
+                    # is trusted through a long section (bounded at one hour in case
+                    # the pid has been reused).
+                    stale = not cls._translation_owner_alive(owner) or age_s > 3600
+                else:
+                    stale = age_s > 900
                 if not stale:
                     result["status"] = "generating"
                     result["can_generate"] = False
