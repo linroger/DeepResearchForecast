@@ -117,8 +117,10 @@ def test_archived_decimal_headlines_are_synced(headline, final_a, expected, d_be
     assert skipped == ({"quantity": 1} if d_before == 0.13 else {})
 
 
-_QUANTITY_BEFORE = _rows(("A", 0.40), ("D", 0.13), ("C", 0.47))
-_QUANTITY_AFTER = _rows(("A", 0.35), ("D", 0.08), ("C", 0.57))
+# "Bear" holds 13%: a label slot ("Bear case at 13%") needs the label to name the
+# scenario whose old value the number is.
+_QUANTITY_BEFORE = _rows(("A", 0.40), ("Bear", 0.13), ("C", 0.47))
+_QUANTITY_AFTER = _rows(("A", 0.35), ("Bear", 0.08), ("C", 0.57))
 
 
 @pytest.mark.parametrize("text", [
@@ -171,7 +173,7 @@ def test_quantity_figures_are_never_rewritten(text):
     ("几率40%", "几率35%"),
     ("基准情景（概率0.40）", "基准情景（概率0.35）"),
     ("Base holds 40% of the probability mass", "Base holds 35% of the probability mass"),
-    ("a 40% chance of recession", "a 35% chance of recession"),
+    ("a 40% chance of the base case", "a 35% chance of the base case"),
     ("Soft landing (40%) — rate cuts follow", "Soft landing (35%) — rate cuts follow"),
     ("Escalation (40%): tariffs rise", "Escalation (35%): tariffs rise"),
     ("Bear case at 13%", "Bear case at 8%"),
@@ -184,7 +186,7 @@ def test_quantity_figures_are_never_rewritten(text):
     ("40%的可能性", "35%的可能性"),
     ("以40%的发生概率领先", "以35%的发生概率领先"),
     ("有40%的把握", "有35%的把握"),
-    ("a 40% likelihood of a soft landing", "a 35% likelihood of a soft landing"),
+    ("a 40% likelihood of the soft-landing scenario", "a 35% likelihood of the soft-landing scenario"),
 ])
 def test_probabilities_next_to_quantity_words_are_still_synced(text, expected):
     assert sync_probability_numbers(text, _QUANTITY_BEFORE, _QUANTITY_AFTER)[0] == expected
@@ -341,7 +343,7 @@ def test_summary_syncs_only_its_own_scenario_and_keeps_details():
     before = _rows(("A", 0.40), ("B", 0.30), ("Other", 0.20), ("D", 0.10))
     after = [
         {"name": "A", "probability": 0.35, "summary": "Base path (40%); B was 30%."},
-        {"name": "B", "probability": 0.35, "summary": "Grid-limited path at 30%."},
+        {"name": "B", "probability": 0.35, "summary": "Grid-limited path (30%)."},
         {"name": "Other", "probability": 0.20, "summary": "Residual."},
         {"name": "D", "probability": 0.10, "summary": "Upside 10%."},
     ]
@@ -355,7 +357,7 @@ def test_summary_syncs_only_its_own_scenario_and_keeps_details():
     assert out["headline"] == "A 35%, B 35%."
     assert after[0]["summary"] == "Base path (35%); B was 30%."
     assert after[0]["summary_detail"] == "Base path (40%); B was 30%."
-    assert after[1]["summary"] == "Grid-limited path at 35%."
+    assert after[1]["summary"] == "Grid-limited path (35%)."
     assert "summary_detail" not in after[2] and "summary_detail" not in after[3]
     assert "confidence_rationale_detail" not in out
     assert [e["field"] for e in out["quality"]["narrative_sync"]] == [
@@ -374,9 +376,9 @@ def test_details_keep_first_original_and_log_is_capped():
     assert "narrative_sync_dropped" not in out["quality"]
 
     out["scenarios"] = _rows(("A", 0.30), ("B", 0.70))
-    out["headline"] = "A 35% but 35% and 65%-70%."
+    out["headline"] = "A 35%; A (35%) and 65%-70%."
     synchronize_forecast_narratives(out, headline_before=_rows(("A", 0.35), ("B", 0.65)))
-    assert out["headline"] == "A 30% but 30% and 65%-70%."
+    assert out["headline"] == "A 30%; A (30%) and 65%-70%."
     assert out["headline_detail"] == "A 40%."                  # first original wins
     assert len(out["quality"]["narrative_sync"]) == NARRATIVE_SYNC_LOG_CAP
     assert out["quality"]["narrative_sync_dropped"] == 2      # the cap never drops silently
@@ -384,7 +386,7 @@ def test_details_keep_first_original_and_log_is_capped():
 
     out["scenarios"] = _rows(("A", 0.25), ("B", 0.75))
     synchronize_forecast_narratives(out, headline_before=_rows(("A", 0.30), ("B", 0.70)))
-    assert out["headline"] == "A 25% but 25% and 65%-70%."
+    assert out["headline"] == "A 25%; A (25%) and 65%-70%."
     assert out["quality"]["narrative_sync_dropped"] == 4
 
 
@@ -498,27 +500,44 @@ def test_summary_blocks_are_keyed_by_scenario_name():
 
 
 def test_foreign_value_in_a_probability_slot_stays_blocked():
-    """'a 25% chance of a cut' was written against no scenario.  Once a move makes 25%
-    Bear's value, the next move must not treat that token as Bear's."""
+    """'an early cut (25%)' was written against no scenario.  Once a move makes 25%
+    Bear's value, the next move must not treat that token as Bear's: a bracket is a
+    slot whatever its label, so only the record keeps it apart."""
     step0 = _rows(("Base", 0.40), ("Bear", 0.30), ("Bull", 0.20), ("Other", 0.10))
     step1 = _rows(("Base", 0.40), ("Bear", 0.25), ("Bull", 0.20), ("Other", 0.15))
     step2 = _rows(("Base", 0.40), ("Bear", 0.20), ("Bull", 0.20), ("Other", 0.20))
-    out = {"headline": "Bear (30%); markets price a 25% chance of a cut; capex fell 25%."}
+    out = {"headline": "Bear (30%); an early cut (25%); capex fell 25%."}
 
     _step(out, step0, step1)
-    assert out["headline"] == "Bear (25%); markets price a 25% chance of a cut; capex fell 25%."
+    assert out["headline"] == "Bear (25%); an early cut (25%); capex fell 25%."
     assert out["quality"]["narrative_sync_skipped"] == {"foreign": 1}   # the quantity is guarded
     assert out["quality"]["narrative_sync_blocked"] == {"headline": [25]}
     unblocked = copy.deepcopy(out)
     del unblocked["quality"]["narrative_sync_blocked"]
 
     _step(out, step1, step2)                 # Bear 25→20: every 25% is left alone
-    assert out["headline"] == "Bear (25%); markets price a 25% chance of a cut; capex fell 25%."
+    assert out["headline"] == "Bear (25%); an early cut (25%); capex fell 25%."
     assert out["quality"]["narrative_sync_skipped"] == {"foreign": 1, "ambiguous": 3}
 
     _step(unblocked, step1, step2)                             # the record is what guards it
-    assert unblocked["headline"] == (
-        "Bear (20%); markets price a 20% chance of a cut; capex fell 25%.")
+    assert unblocked["headline"] == "Bear (20%); an early cut (20%); capex fell 25%."
+
+
+def test_a_market_cited_foreign_value_is_never_rewritten_nor_recorded():
+    """A market citation is skipped by the words next to it at every step, so it needs
+    no record and does not block Bear's own number at the next step."""
+    step0 = _rows(("Base", 0.40), ("Bear", 0.30), ("Bull", 0.20), ("Other", 0.10))
+    step1 = _rows(("Base", 0.40), ("Bear", 0.25), ("Bull", 0.20), ("Other", 0.15))
+    step2 = _rows(("Base", 0.40), ("Bear", 0.20), ("Bull", 0.20), ("Other", 0.20))
+    out = {"headline": "Bear (30%); markets price a 25% chance of a cut."}
+
+    _step(out, step0, step1)
+    assert out["headline"] == "Bear (25%); markets price a 25% chance of a cut."
+    assert set(out["quality"]) == {"narrative_sync"}          # nothing skipped or blocked
+
+    _step(out, step1, step2)
+    assert out["headline"] == "Bear (20%); markets price a 25% chance of a cut."
+    assert out["quality"]["narrative_sync_skipped"] == {"market": 1}
 
 
 def test_a_guarded_foreign_quantity_is_not_recorded():
@@ -546,7 +565,7 @@ def test_context_rows_block_values_another_scenario_held():
     input_rows = _rows(("Base", 0.40), ("Bear", 0.30), ("Bull", 0.20), ("Other", 0.10))
     critic_rows = _rows(("Base", 0.35), ("Bear", 0.20), ("Bull", 0.30), ("Other", 0.10))
     final_rows = _rows(("Base", 0.3684), ("Bear", 0.2105), ("Bull", 0.3158), ("Other", 0.1053))
-    text = "Bear's 30% ignored grid relief: Bear cut to 20%, Bull raised to 30%, Base to 35%."
+    text = "Bear (30%) ignored grid relief: Bear cut to 20%, Bull raised to 30%, Base to 35%."
 
     out = {"confidence_rationale": text, "scenarios": copy.deepcopy(final_rows)}
     synchronize_forecast_narratives(out, rationale_before=critic_rows, context_rows=input_rows)
@@ -557,7 +576,14 @@ def test_context_rows_block_values_another_scenario_held():
     unguarded = {"confidence_rationale": text, "scenarios": copy.deepcopy(final_rows)}
     synchronize_forecast_narratives(unguarded, rationale_before=critic_rows)
     assert unguarded["confidence_rationale"] == (      # what the input context prevents
-        "Bear's 32% ignored grid relief: Bear cut to 21%, Bull raised to 32%, Base to 37%.")
+        "Bear (32%) ignored grid relief: Bear cut to 21%, Bull raised to 32%, Base to 37%.")
+    # A label slot names its scenario: "Bear's 30%" is no slot for Bull's old 30%.
+    labelled = {"confidence_rationale": text.replace("Bear (30%)", "Bear's 30%"),
+                "scenarios": copy.deepcopy(final_rows)}
+    synchronize_forecast_narratives(labelled, rationale_before=critic_rows)
+    assert labelled["confidence_rationale"] == (
+        "Bear's 30% ignored grid relief: Bear cut to 21%, Bull raised to 32%, Base to 37%.")
+    assert labelled["quality"]["narrative_sync_skipped"] == {"no_slot": 1}
 
     for before, after, headline in (
             (FFE1_BEFORE, FFE1_AFTER, FFE1_HEADLINE),
@@ -643,7 +669,9 @@ def test_critique_integration(monkeypatch):
     probabilities = {row["name"]: row["probability"] for row in out["scenarios"]}
     peak = max(probabilities.values())
     assert probabilities["Path B"] == peak == 0.45           # critic's 60% clamped to 45%
-    assert out["headline"] == "Path A leads at 34%, Path B trails at 45%, residual 21%."
+    # "residual 20%" names no scenario ("Other / Status Quo"), so it is no slot and
+    # stays (the rule fails closed); the two labelled numbers are synced.
+    assert out["headline"] == "Path A leads at 34%, Path B trails at 45%, residual 20%."
     assert "60%" not in out["headline"]
     assert out["headline_detail"] == snapshot["headline"]
     assert out["confidence_rationale"] == "Raised Path B to 45% on new grid evidence."
@@ -653,7 +681,8 @@ def test_critique_integration(monkeypatch):
     assert rows["Path B"]["summary"] == "B now most likely at 45%."
     assert rows["Path B"]["summary_detail"] == "B now most likely at 60%."
     assert "summary_detail" not in rows["Other / Status Quo"]
-    assert len(out["quality"]["narrative_sync"]) == 6
+    assert len(out["quality"]["narrative_sync"]) == 5
+    assert out["quality"]["narrative_sync_skipped"] == {"no_slot": 1}
     assert FE.audit_scenario_contract(out)["valid"] is True
     assert forecast == snapshot                               # input never mutated
 
@@ -886,11 +915,11 @@ def test_critic_rationale_citing_input_values_is_not_rewritten():
 
 
 def test_pooling_then_critique_keeps_a_foreign_value_blocked(monkeypatch):
-    """Pooling makes Bear 25%, the value of an unrelated '25% chance of an early rate
-    cut' in draws[0]'s headline; the critique that then moves Bear 25→20 must not
-    rewrite that market-implied probability."""
+    """Pooling makes Bear 25%, the value of an unrelated 'early rate cut (25%)' in
+    draws[0]'s headline; the critique that then moves Bear 25→20 must not rewrite
+    that outside probability."""
     monkeypatch.setattr(Config, "REPORT_SPINE_SELFCONSISTENCY_K", 2, raising=False)
-    draw0 = {"headline": "Base (40%) leads; markets price a 25% chance of an early rate cut.",
+    draw0 = {"headline": "Base (40%) leads; an early rate cut (25%) would lift Bull.",
              "horizon": "2030", "confidence": "medium", "confidence_rationale": "Spine view.",
              "scenarios": _criteria(_rows(("Base", 0.40), ("Bear", 0.30), ("Bull", 0.20),
                                           ("Other / Status Quo", 0.10)))}
@@ -918,7 +947,7 @@ def test_pooling_then_critique_keeps_a_foreign_value_blocked(monkeypatch):
     assert out["quality"]["narrative_sync_skipped"] == {"foreign": 1, "ambiguous": 1}
 
     rewritten = FE.self_critique_forecast(unblocked, FakeLLMClient(json_responses=[critique]))
-    assert "a 20% chance of an early rate cut" in rewritten["headline"]   # what the record stops
+    assert "an early rate cut (20%)" in rewritten["headline"]   # what the record stops
 
 
 def _pooled_critique():
@@ -1056,6 +1085,498 @@ def test_single_spine_draw_is_not_synced(monkeypatch):
     spine = FE.derive_forecast_spine(FakeLLMClient(json_responses=[draw]), central_question="q")
     assert spine["headline"] == draw["headline"]
     assert "quality" not in spine
+
+
+# ------------------------------------------------------------------ round-3 review probes
+# Round 3 found that a deny-list quantity guard fails open: 262 of the reviewer's 458
+# should-stay phrasings and 3 of 7 distinct archive-replay edits were rewritten.  The
+# rule is now a fail-closed slot allowlist (see the module docstring).  Below are the
+# reviewer's probes (report2_round3_review.md; probe scripts p1–p7 and final_probes),
+# the archived false edits and the phrasings the new label slot must reject.  Every
+# reviewer probe moves A 40→35 with C 20→22 and D 15→18.
+_PROBE_BEFORE = _rows(("A", 0.40), ("B", 0.25), ("C", 0.20), ("D", 0.15))
+_PROBE_AFTER = _rows(("A", 0.35), ("B", 0.25), ("C", 0.22), ("D", 0.18))
+
+_REVIEW_KEEP_PROBES = (
+    # p1: quantities, shares, rates, thresholds and metrics
+    '成本下降40%，基准情景仍占主导', '价格涨40%', '价格上涨了40%', 'a 40% decline in costs',
+    'costs 40% cheaper', '40% more capacity', 'capex cut 40%', 'capex was cut by 40%',
+    '约40%的装机来自中国', '关税40%', '40%的关税', 'WACC 40%', 'ROE of 40%', '毛利40%',
+    'inflation at 40%', '40% inflation', '40% of respondents said yes', '40% of GDP', '占GDP的40%',
+    'p=0.40, significant', '(p = 0.40) not significant', '(p=0.40; statistically significant)',
+    '概率加权成本0.40', 'market odds imply 40%', '2030年达到40%', '30–40%', '30-40%',
+    'from 40% to 35%', '由40%下调至35%', '40%以上', 'EV share above 40%', '占比40%', '40%份额',
+    '增长40%', '同比40%', '市占率40%', '渗透率达40%', '渗透率约40%', 'the utilization rate is 40%',
+    'a 40% tariff', '40% import tariffs', 'unemployment of 40%', 'load factor 40%',
+    '40% capacity factor', 'efficiency gains of 40%', 'prices rose 40%', 'prices rose by 40%',
+    'prices are up 40%', 'prices fell nearly 40%', 'prices dropped roughly 40% year on year',
+    'a drop of 40%', 'a decline of about 40%', 'a 40 % drop', '40% lower costs',
+    'a 40%-lower cost', 'costs are 40% below 2020 levels', 'costs are 40% above 2020 levels',
+    '40% higher than', '40% less expensive', 'shrinks by 40%', 'shrank 40%', 'grew 40%',
+    'expanded 40%', 'a 40% expansion', 'a 40% contraction', 'a 40% discount', '40% premium',
+    'a 40% stake', '40% owned by', '40% of the market', 'roughly 40% of new builds',
+    'about 40% of capex', '40% of total', '工程完成40%', '降幅40%', '下滑40%', '萎缩40%',
+    '缩水40%', '减少了约40%', '提升40%', '增加40%', '翻了40%', '年化40%', '收益率40%', '回报40%',
+    '毛利率40%', '净利率达到40%', '负债率高达40%', '折旧40%', '40%的受访者', '40%的企业',
+    '40%的GDP', '40%的人口', 'GDP的40%', '全球40%的产能', '占全球产能的约40%', '市场份额约为40%',
+    '有40%的企业', '近40%的数据中心', '超过40%', '不到40%', '低于40%', '高于40%', '将近40%',
+    '40% yield', 'a yield of 40%', '40% returns', '40% interest', '40% vacancy', '40% cut',
+    '40% haircut', '40% markdown', '40% rebound', '40% slump', '40% plunge', '40% crash',
+    '40% selloff', '40% rally', '40% improvement', '40% reduction', '40% savings', '40% saving',
+    '40% smaller', '40% larger', '40% bigger', '40% fewer', '40% faster', '40% slower',
+    '40% of the time', '40% chance-weighted cost', '40% utilization', '40% occupancy',
+    '40% uptime', '40% efficient', '40% complete', '40% done', '40% renewable', '40% renewables',
+    '40% electrified', '40% adoption', 'adoption of 40%', 'adoption reaches 40%',
+    'adoption hits 40%', 'coverage of 40%', '40% coverage', '40% mix', 'the mix is 40%',
+    '40% probability-weighted', 'by 2030, 40% of cars are EVs', 'EVs reach 40% of sales',
+    'EVs reach 40% by 2030', 'EVs account for 40%', 'EVs make up 40%', 'EVs comprise 40%',
+    'EVs represent 40%', 'EVs represent roughly 40%', 'EV penetration hits 40%',
+    'EV sales share of 40%', '40% attach rate', 'attach rate 40%', 'hit rate 40%',
+    'win rate of 40%', 'success rate of 40%', 'failure rate 40%', 'default rate 40%',
+    '40% default rate', 'a 40% hurdle', '40% threshold', 'threshold of 40%', '40% cap',
+    'capped at 40%', 'a floor of 40%', '40% ceiling', '40% limit', '40% quota', 'a 40% quota',
+    '40% local content', '40% LTV', 'LTV 40%', '40% leverage', '40% payout', 'payout ratio 40%',
+    '40% tax', 'tax of 40%', 'a tax rate of 40%', '40% duty', '40% levy', '40% subsidy',
+    '40% rebate', '40% down payment', '40% deposit', '40% equity', '40% debt', '40% volatility',
+    'vol of 40%', '40% implied vol', '40% drawdown', '40% IRR', '40% ROI', '40% EBITDA margin',
+    '40% gross margin', 'margin of 40%', '40% utilisation',
+    # p2: round-2 CJK change verbs and English comparatives / change verbs
+    '成本下降40%', '成本下降了40%', '成本下降了约40%', '成本减少40%', '成本减少了40%',
+    '成本减少了约40%', '价格上涨了约40%', '装机增加了40%', '削减了40%', '削减了近40%', '缩减了40%',
+    '压缩40%', '扩大40%', '腰斩40%', '下跌了40%', '下跌约40%', '跌了40%', '跌去40%', '跌掉40%',
+    '回撤40%', '回撤了40%', '提升了40%', '提高了40%', '降低了40%', '降低了近40%', '下调40%',
+    '上调40%', '收窄40%', '扩张40%', '翻倍后再涨40%', '价格较2020年低40%', '比2020年高40%',
+    '较基准低40%', '便宜40%', '贵40%', '多40%', '少40%', '快40%', '慢40%', 'costs fell 40%',
+    'costs have fallen 40%', 'costs have fallen by roughly 40%', 'costs decreased 40%',
+    'a decrease of 40%', 'down about 40%', '40% below', '40% above', '40% under', '40% over',
+    '40% higher', '40% greater', '40% worse', '40% better', '40% cheaper than', '40% costlier',
+    'grow 40%', 'grows 40%', 'grew by 40%', 'shrinks 40%', 'contracted 40%', 'plunged 40%',
+    'soared 40%', 'climbed 40%', 'tumbled 40%', 'slumped 40%', 'rebounded 40%', 'declined 40%',
+    'slid 40%', 'sank 40%', 'lost 40%', 'added 40%', 'gained 40%', 'fell 40%', 'rose 40%',
+    'increased 40%', 'doubled then rose 40%', 'sales jumped 40%', 'sales were up 40%',
+    'sales were down 40%', 'cost is 40% lower', '40% year-over-year', '40% y/y', '40% YoY',
+    '40% QoQ', '40% MoM', '40% annually', '40% a year', '40% per year', '40% p.a.',
+    # p4: decimals that are not scenario probabilities
+    'p=0.40 (n.s.)', 'p = 0.40; not statistically meaningful', 'regression p=0.40', 'R²=0.40',
+    'r=0.40', 'beta 0.40', 'Brier 0.40', 'a Brier score of 0.40', 'log-loss 0.40',
+    'probability calibration slope 0.40', 'probability-weighted 0.40',
+    'probability weighted mean 0.40', 'probability. 0.40 of revenue',
+    'Probability anchors matter. .40 of revenue comes from...', 'probability, e.g. 0.40',
+    '概率加权后0.40', '概率区间0.40', '概率区间0.30-0.40', '概率0.30至0.40', '概率从0.40降到0.35',
+    'probability $0.40', 'probability 0.40 USD', 'probability 0.40美元', '概率约0.40元',
+    '概率约0.40亿', 'probability 0.40x', 'probability 0.40 GW', 'probability; 0.40',
+    'Brier/probability 0.40', 'probability score 0.40', 'probability threshold 0.40',
+    'probability cutoff of 0.40', 'probability floor 0.40', '概率阈值0.40', '概率下限0.40',
+    'posterior probability ratio 0.40', 'the 0.40 probability', 'probability 0.40–0.45',
+    'probability ~0.40 to 0.45', 'P=0.40 for H0', 'p=.40 (t-test)', 'p=0.40, CI 0.2-0.6',
+    'Kelly probability 0.40 odds', 'market probability 0.40', 'Polymarket probability 0.40',
+    'Polymarket prices it at 0.40',
+    # p5: market and outside probabilities
+    'Polymarket prices this at 40%', 'Polymarket 40%',
+    "Polymarket's 40% US-China deal probability", "Kalshi's 40% on OH-Senate",
+    'markets imply a 40% chance of a rate cut', 'the market-implied probability is 40%',
+    '（Polymarket 40%）', '(Optimus-2026 at 40%)', 'Polymarket 对 2026 发布的 40% 概率',
+    '市场隐含概率40%', '盘口40%', '赔率隐含40%', 'Metaculus community forecast 40%',
+    'Metaculus: 40%', 'AI bubble 40%', 'the Fed cut odds are 40%',
+    'a 40% chance of an early rate cut', '~40% residual R-trifecta paths', 'base rate 40%',
+    'historical base rate of 40%', 'reference-class frequency 40%', '40% of comparable cases',
+    'in 40% of past cycles', '40% hit rate for analogues', 'superforecasters put it at 40%',
+    'experts give 40%', 'IEA puts the odds at 40%', 'BNEF 40% base case',
+    # p7: round-2 leftovers (decimals after a comma, dash minus, <=, far quantity words)
+    '该情景概率较高，EPS 0.40', '概率上升，股价跌0.40', 'probability up, EPS 0.40',
+    'probability high, Sharpe 0.40', '概率不变，系数0.40', '概率下降，弹性0.40', '概率高：β=0.40',
+    '概率高（β 0.40）', '概率与0.40的相关系数', 'probability vs. 0.40 correlation', 'gains of 40%',
+    'a gain of 40%', 'rose sharply, 40%', 'SOX correction of –40% to –55%',
+    'drawdown deepens to –40%', 'exceeds –40%', '—40% YoY', 'declines of —40%',
+    'EU weakens CO2 target to <=40%', '目标削弱至 <=40%', '=<40%', '≦40%', '≧40%', '≥ 40%',
+    '> 40%', '→40%', 'roughly 40% domestic EV penetration', '40% global EV share',
+    '40% domestic penetration', '40% of new capacity', 'account for roughly 40%',
+    'the US and China account for roughly 40% and 15–20% of the incremental capacity', '占约40%',
+    '美国与中国分别占约40%与15–20%增量', '美国与中国分别约40%与15–20%增量',
+    '美国约40%、中国15–20%的增量', '2027年AI收入不及$2T门槛的40%', '不及40%', '未及40%', '不足40%',
+    '逾40%', '近四成', '40%上下', '40%左右的份额', 'post-SCOTUS ~40% ETR', '(40% H20 model)',
+    'tariffs ratchet back toward the ~40% Liberation-Day peak',
+    'IEA GEVO 2026 40% 2026 trajectory', 'China 40%, US 5.8%', 'softened 40% CO₂ rule',
+    '(40%海外C端+AGI叙事优先)', 'BNEF 40% base case vs Plateau Thesis ~30%',
+    # final probes (the review's issue list)
+    'global IT installed capacity in 2030 reaches 190–210 GW, of which the US and China account for roughly 40% and 15–20% of the incremental capacity',
+    'Polymarket provides one external calibration anchor (Optimus-2026 at 40%)',
+    "Kalshi's 40% on OH-Senate-going-D aligns with the base case", '40% below 2020 levels',
+    'China reaches ~40% domestic EV penetration', 'BNEF 40% global EV share by 2035',
+    '概率较高，EPS 0.40',
+)
+
+
+_REVIEW_REWRITE_PROBES = [
+    pytest.param('基准情景（40%）下装机达200GW',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '基准情景（35%）下装机达200GW',
+                 id='zh paren'),
+    pytest.param('基准情景（40 %）',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '基准情景（35 %）',
+                 id='zh paren spaced'),
+    pytest.param('Under the base case (40%), capacity grows',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 'Under the base case (35%), capacity grows',
+                 id='en paren'),
+    pytest.param('基准情景概率40%',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '基准情景概率35%',
+                 id='zh 概率'),
+    pytest.param('基准情景的概率为40%',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '基准情景的概率为35%',
+                 id='zh 概率为'),
+    pytest.param('基准情景概率约40%',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '基准情景概率约35%',
+                 id='zh 概率约'),
+    pytest.param('基准情景概率降至40%',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '基准情景概率降至35%',
+                 id='zh 概率降至'),
+    pytest.param('有40%的概率维持基准',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '有35%的概率维持基准',
+                 id='zh 40%的概率'),
+    pytest.param('仅40%概率超预期上行',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '仅35%概率超预期上行',
+                 id='zh 40%概率'),
+    pytest.param('40%的可能性',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '35%的可能性',
+                 id='zh 40%的可能'),
+    pytest.param('a 40% probability of the base case',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 'a 35% probability of the base case',
+                 id='en prob'),
+    pytest.param('a 40% chance of the base case',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 'a 35% chance of the base case',
+                 id='en chance'),
+    pytest.param('40% likelihood',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '35% likelihood',
+                 id='en likelihood'),
+    pytest.param('the base case carries 40% of the probability mass',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 'the base case carries 35% of the probability mass',
+                 id='en of the probability mass'),
+    pytest.param('Base holds 40% of probability',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 'Base holds 35% of probability',
+                 id='en of the probability mass2'),
+    pytest.param('基准情景（概率0.40）',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '基准情景（概率0.35）',
+                 id='decimal'),
+    pytest.param('Base (p=0.40)',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 'Base (p=0.35)',
+                 id='decimal p='),
+    pytest.param('Base (P = .40)',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 'Base (P = .35)',
+                 id='decimal P ='),
+    pytest.param('probability of 0.40',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 'probability of 0.35',
+                 id='decimal probability of'),
+    pytest.param('prob. 0.40',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 'prob. 0.35',
+                 id='decimal prob.'),
+    pytest.param('Base (~52% share, 55%), Accelerated (~65–75%, 25%), and Plateau (~30–35%, 20%)',
+                 _rows(('Base', 0.55), ('Acc', 0.25), ('Pla', 0.2)),
+                 _rows(('Base', 0.5), ('Acc', 0.22), ('Pla', 0.18), ('Other', 0.1)),
+                 'Base (~52% share, 50%), Accelerated (~65–75%, 22%), and Plateau (~30–35%, 18%)',
+                 id='zh b283'),
+    pytest.param('A（40%）B（25%）',
+                 _rows(('A', 0.4), ('B', 0.25), ('C', 0.35)),
+                 _rows(('A', 0.25), ('B', 0.2), ('C', 0.55)),
+                 'A（25%）B（20%）',
+                 id='no cascade'),
+    pytest.param('基准情景（40％）',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '基准情景（35％）',
+                 id='fullwidth pct'),
+    pytest.param('基准情景（~40%）',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '基准情景（~35%）',
+                 id='tilde hedge'),
+    pytest.param('基准情景（约40%）',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '基准情景（约35%）',
+                 id='约 hedge'),
+    pytest.param('基准情景[40%]',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 '基准情景[35%]',
+                 id='in bracket'),
+    pytest.param('The base case is 40% likely',
+                 _PROBE_BEFORE, _PROBE_AFTER,
+                 'The base case is 35% likely',
+                 id="en 'is 40%'"),
+]
+
+
+@pytest.mark.parametrize("text", _REVIEW_KEEP_PROBES)
+def test_review_probes_that_must_stay_untouched(text):
+    new_text, edits, _ = sync_probability_numbers(text, _PROBE_BEFORE, _PROBE_AFTER)
+
+    assert (new_text, edits) == (text, [])
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "Known residual: a bracket is a probability slot whatever its label ('Soft landing "
+    "(40%)', '下行（40%）' must sync), so an outside probability in brackets whose value "
+    "equals a scenario's old value is still rewritten."))
+def test_bracketed_outside_probability_is_the_known_residual():
+    assert sync_probability_numbers("AI bubble (40%)", _PROBE_BEFORE, _PROBE_AFTER)[0] == (
+        "AI bubble (40%)")
+
+
+@pytest.mark.parametrize("text, before, after, expected", _REVIEW_REWRITE_PROBES + [
+    pytest.param(FFE1_HEADLINE.replace("、单年capex $2.5–3.2T", ""), FFE1_BEFORE, FFE1_AFTER,
+                 FFE1_HEADLINE.replace("、单年capex $2.5–3.2T", "").replace("（40%）", "（35%）", 1)
+                 .replace("仅10%概率", "仅5%概率"),
+                 id="ffe1 zh"),
+])
+def test_review_probes_that_must_still_sync(text, before, after, expected):
+    assert sync_probability_numbers(text, before, after)[0] == expected
+
+
+@pytest.mark.parametrize("text, expected, no_slot", [
+    ("Base: 40%; Bear: 20%", "Base: 35%; Bear: 22%", 2),
+    ("Base 40%, Bear 20%, Bull 15%", "Base 35%, Bear 22%, Bull 18%", 3),
+])
+def test_label_lists_sync_only_when_the_label_names_the_scenario(text, expected, no_slot):
+    before = _rows(("Base", 0.40), ("B", 0.25), ("Bear", 0.20), ("Bull", 0.15))
+    after = _rows(("Base", 0.35), ("B", 0.25), ("Bear", 0.22), ("Bull", 0.18))
+
+    assert sync_probability_numbers(text, before, after)[0] == expected
+    # With the reviewer's A–D rows no label names a scenario: nothing is rewritten
+    # (the accepted recall loss of failing closed).
+    assert sync_probability_numbers(text, _PROBE_BEFORE, _PROBE_AFTER) == (
+        text, [], {"no_slot": no_slot})
+
+
+@pytest.mark.parametrize("text, skipped", [
+    # the review's unexpectation probes: left alone (recall loss, never a false edit)
+    ("基准情景占40%概率", {"quantity": 1}),
+    ("the base case at 40%", {"no_slot": 1}),
+    ("the base case, weighted at 40%", {"no_slot": 1}),
+    ("Base holds 40%", {"no_slot": 1}),
+    ("We assign the base case 40%", {"no_slot": 1}),
+    ("基准情景权重40%", {"quantity": 1}),
+    ("odds of 40% for Base", {"no_slot": 1}),
+])
+def test_review_recall_losses_are_left_alone(text, skipped):
+    assert sync_probability_numbers(text, _PROBE_BEFORE, _PROBE_AFTER) == (text, [], skipped)
+
+
+_E5C9E8_ROWS = _rows(
+    ("D House + D Senate (clean Dem sweep)", 0.1876), ("D House + R Senate (split Congress)", 0.4371),
+    ("D House + 50–50 Senate (VP Vance tiebreaker)", 0.1251), ("R trifecta preserved (status quo)", 0.1042),
+    ("R House + D Senate (upset Democratic Senate, GOP House hold)", 0.0625),
+    ("Other / ambiguous / contingent (election contested, delayed certification, or other "
+     "non-standard outcome)", 0.0834))
+_A53841_ROWS = _rows(
+    ("China-led hardware ramp (base case)", 0.4771), ("Bull breakthrough — software + hardware compound", 0.1634),
+    ("Bear plateau — hardware bottleneck bites", 0.2179), ("Other / Status Quo", 0.1416))
+_A53841_ZH_ROWS = _rows(
+    ("中国主导的硬件爬坡（基准情形）", 0.4771), ("牛市突破 — 软件 + 硬件复合", 0.1634),
+    ("熊市平台期 — 硬件瓶颈显现", 0.2179), ("其他 / 维持现状", 0.1416))
+_AA88CC_ROWS = _rows(
+    ("Oscillating Bipolar Equilibrium (Chokepoint Reflexivity, base case)", 0.38),
+    ("Accelerated Two-Bloc Bifurcation (Managed Decoupling)", 0.23),
+    ("Escalation to Systemic Breakdown / Crisis", 0.14),
+    ("Détente / Grand Bargain (Durable De-escalation)", 0.09),
+    ("Status Quo / Other (Catch-all Fallback)", 0.16))
+
+
+def _moved(rows, name, delta):
+    return [{**row, "probability": round(row["probability"] + delta, 4)} if row["name"] == name else row
+            for row in rows]
+
+
+@pytest.mark.parametrize("text, before, moved_name, delta", [
+    pytest.param(  # report_1b70ace5c9e8 confidence_rationale
+        "Cannot be high because Polymarket resolution cluster still shows 16% residual R House and "
+        "~10% residual R-trifecta paths.", _E5C9E8_ROWS, "R trifecta preserved (status quo)", -0.03,
+        id="e5c9e8 residual paths"),
+    pytest.param(  # report_970e5aa53841 confidence_rationale_detail
+        "(4) Polymarket provides one external calibration anchor (Optimus-2026 at 14%) but limited "
+        "coverage of the broader question.", _A53841_ROWS, "Other / Status Quo", -0.03, id="a53841 en"),
+    pytest.param(
+        "(4) Polymarket 提供了一个外部校准锚点（Optimus-2026 为 14%），但对更广泛问题的覆盖有限。",
+        _A53841_ZH_ROWS, "其他 / 维持现状", -0.03, id="a53841 zh"),
+    pytest.param(  # report_4c90deaa88cc: a true edit the fail-closed rule gives up
+        "the four-scenario overconfidence was reduced, and the residual bucket was fattened to ~16% "
+        "to carry model-specification and unknown-unknown risk.", _AA88CC_ROWS,
+        "Status Quo / Other (Catch-all Fallback)", -0.03, id="aa88cc recall loss"),
+    pytest.param(  # report_319207d17c9a scenario A summary: a rate compared in brackets
+        "装机区间上限从原210 GW下调，因管道兑现率口径分歧大（13% vs 40-60%），中位预期应向保守端回归。",
+        _QUANTITY_BEFORE, "Bear", -0.05, id="d17c9a rate comparison"),
+])
+def test_archived_false_edits_stay_untouched(text, before, moved_name, delta):
+    """The review's archive replay (each scenario moved −3 points) rewrote the first
+    three: market odds and a residual count, not the scenario's own probability.  The
+    ffe1 English summary's "roughly 40%" is covered below."""
+    after = _moved(before, moved_name, delta)
+
+    new_text, edits, skipped = sync_probability_numbers(text, before, after)
+
+    assert (new_text, edits) == (text, [])
+    assert skipped and set(skipped) <= {"market", "no_slot"}
+
+
+FFE1_EN_BEFORE = _rows(
+    ("A: Base-case expansion (steady delivery after pipeline haircuts)", 0.40),
+    ("B: Power-constrained (physical/regulatory constraints compress delivery)", 0.30),
+    ("C: Financial tightening/credit contraction (AI revenue validation failure triggers "
+     "renegotiation)", 0.20),
+    ("D: Upside surprise (revenue explosion + rapid resolution of supply bottlenecks)", 0.10))
+FFE1_EN_HEADLINE = (
+    "Under the base case (40%), global IT installed capacity reaches 2030 at 190–210 GW, with "
+    "single-year capex of $2.5–3.2T, but power hard constraints (30%) and financing tightening "
+    "(20%) create a combined 50% downside tail, with only a 10% probability of upside surprise.")
+FFE1_EN_SUMMARY = (
+    "global IT installed capacity in 2030 reaches 190–210 GW, with single-year capex of "
+    "$2.5–3.2T, of which the US and China account for roughly 40% and 15–20% of the "
+    "incremental capacity")
+
+
+def test_ffe1_english_run_syncs_the_headline_but_not_the_capacity_share():
+    after = copy.deepcopy(FFE1_EN_BEFORE)
+    for row, probability in zip(after, (0.35, 0.30, 0.20, 0.05), strict=True):
+        row["probability"] = probability
+    after.append({"name": "E: Other/hybrid paths (including inertia-driven status quo)",
+                  "probability": 0.10})
+    after[0]["summary"] = FFE1_EN_SUMMARY
+    out = {"headline": FFE1_EN_HEADLINE, "scenarios": after}
+
+    synchronize_forecast_narratives(out, headline_before=FFE1_EN_BEFORE,
+                                    summary_before_by_name=FFE1_EN_BEFORE, context_rows=FFE1_EN_BEFORE)
+
+    assert out["headline"] == (FFE1_EN_HEADLINE.replace("(40%)", "(35%)")
+                               .replace("a 10% probability", "a 5% probability"))
+    assert out["scenarios"][0]["summary"] == FFE1_EN_SUMMARY          # "roughly 40%" is a share
+    assert out["quality"]["narrative_sync_skipped"] == {"no_slot": 1}
+
+
+def test_an_outside_event_chance_never_takes_a_scenario_move():
+    """p6: 'a 30% chance of an early rate cut' named no scenario, so Bear 30→35 must not
+    rewrite it; a chance whose object is the scenario (or a scenario noun) is synced."""
+    before = _rows(("Base", 0.50), ("Bear", 0.30), ("Bull", 0.20))
+    after = _rows(("Base", 0.45), ("Bear", 0.35), ("Bull", 0.20))
+    for text, expected in (
+            ("Base (50%); a 30% chance of an early rate cut.", "Base (45%); a 30% chance of an early rate cut."),
+            ("a 30% chance of Bear.", "a 35% chance of Bear."),
+            ("a 30% chance of the bear case.", "a 35% chance of the bear case."),
+            ("a 30% probability that the downside scenario plays out.",
+             "a 35% probability that the downside scenario plays out."),
+            ("Bear is 30% likely to materialise.", "Bear is 35% likely to materialise."),
+            ("a 30% chance.", "a 35% chance."),
+            ("30% likely to be delayed by permitting.", "30% likely to be delayed by permitting.")):
+        assert sync_probability_numbers(text, before, after)[0] == expected
+
+    # A one-word label must match its first letter ("Other" is the residual scenario,
+    # "other central banks" is not); a multi-word label ignores case.
+    before = _rows(("Base", 0.50), ("Other / Status Quo", 0.25), ("Bull", 0.20))
+    after = _rows(("Base", 0.45), ("Other / Status Quo", 0.30), ("Bull", 0.25))
+    for text, expected in (
+            ("a 25% chance of other central banks cutting.", "a 25% chance of other central banks cutting."),
+            ("a 25% chance of Other.", "a 30% chance of Other."),
+            ("a 25% chance of the status quo.", "a 30% chance of the status quo.")):
+        assert sync_probability_numbers(text, before, after)[0] == expected
+
+
+def test_market_words_block_every_slot():
+    before = _rows(("Base", 0.40), ("Bear", 0.25), ("Bull", 0.20), ("Other", 0.15))
+    after = _rows(("Base", 0.35), ("Bear", 0.25), ("Bull", 0.22), ("Other", 0.18))
+    for text in ("Polymarket prices Base at 40%.", "Kalshi's 40% on Base.", "Base (Polymarket 40%)",
+                 "市场隐含基准情景概率40%", "Polymarket probability 0.40", "Base 40% on Kalshi.",
+                 "Base (40%, per Metaculus)", "盘口：基准40%", "Polymarket 对基准情景给出 40% 概率",
+                 "consensus puts Base at 40%.", "Fed funds futures imply a 40% chance of Base."):
+        new_text, edits, skipped = sync_probability_numbers(text, before, after)
+        assert (new_text, edits, skipped) == (text, [], {"market": 1}), text
+
+
+@pytest.mark.parametrize("text", [
+    "（成本减少了约40%）", "（装机增加了40%）", "（回撤40%）", "（价格较2020年低40%）", "（不及40%）",
+    "（未及40%）", "(costs have fallen 40%)", "(grew 40%)", "(efficiency gains of 40%)", "(–40%)",
+    "(<=40%)", "(>=40%)", "(≦40%)", "(≧40%)", "Base: 40% smaller", "Base: 40% larger",
+    "Base: 40% greater", "Base: 40% fewer", "Base: 40% below", "Base: 40% above", "Base falls 40%.",
+])
+def test_quantity_guards_still_apply_inside_a_slot(text):
+    before = _rows(("Base", 0.40), ("Bear", 0.60))
+    after = _rows(("Base", 0.35), ("Bear", 0.65))
+
+    assert sync_probability_numbers(text, before, after) == (text, [], {"quantity": 1})
+
+
+@pytest.mark.parametrize("text", [
+    "p=0.40 (n.s.)", "regression p=0.40", "(p=0.40, n.s.)", "(p = 0.40; t-test)", "概率较高，EPS 0.40",
+    "probability threshold 0.40", "probability floor 0.40", "概率阈值0.40", "概率下限0.40",
+    "概率区间0.40", "Brier/probability 0.40", "probability 0.40 GW", "Kelly probability 0.40 odds",
+])
+def test_decimals_outside_the_probability_slot_are_not_tokens(text):
+    before = _rows(("Base", 0.40), ("Bear", 0.60))
+    after = _rows(("Base", 0.35), ("Bear", 0.65))
+
+    assert sync_probability_numbers(text, before, after) == (text, [], {})
+
+
+# The label slot (d) is new: a label must name the scenario whose old value the number
+# is, LINK words must end on a state word or "to", and the number must close its clause.
+_LABEL_BEFORE = _rows(("Base", 0.40), ("Bear", 0.25), ("Bull", 0.20), ("基准情景", 0.15))
+_LABEL_AFTER = _rows(("Base", 0.35), ("Bear", 0.25), ("Bull", 0.22), ("基准情景", 0.18))
+
+
+@pytest.mark.parametrize("text", [
+    "Base: 40% renewables by 2030", "In Base, 40% of capacity is gas", "Base assumes 40%.",
+    "Base grows at 40%.", "Base case: 40% EV share", "Base: capex falls 40%.", "Base 40% tariff",
+    "Base at 40% utilization", "Base hits 40%.", "Base reaches 40%.", "Base: 40%-45% range", "Bear's 40%",
+    "Base, with 40%", "base 40%.", "Baseline 40%.", "Database 40%.", "Base grew 40%.", "Base falls 40%.",
+    "Base is 40% higher.", "Base is 40% of demand.", "Base: EV share 40%.", "Bull at 40%.",
+    "Base stands at 40% penetration.", "基准情景的装机40%。", "基准情景占15%。", "基准情景增长15%。",
+    "基准情景较2020年高15%。", "the probability of reaching 40%.", "probability of 40% adoption",
+    "probability that EV share exceeds 40%.", "chance of a 40% drawdown.", "the likelihood EVs reach 40%.",
+    "概率较高的40%渗透率", "概率：EV渗透率40%。", "Probability-weighted capex 40%.",
+    "probability mass: 40% of paths", "Base (EV share 40%)", "(Base: 40% share)", "Base [40% of load]",
+    "a 40% probability of an EU ban", "40% likely to be delayed by 2030 permitting.",
+    "Base, per Polymarket, at 40%.", "Base 40% on Kalshi.", "Base (40%, per Metaculus)",
+    "基准情景（市场隐含40%）", "Base holds 40% of the market.", "Base carries 40% margin.", "Base: –40%.",
+    "Base at <=40%.", "Base drops 40%.", "Base down 40%.", "Base rose 40%,", "Base cut 40%.",
+    "兑现率口径分歧大（40% vs 40-60%）", "a 40% chance of recession",
+])
+def test_label_slot_rejects(text):
+    new_text, edits, _ = sync_probability_numbers(text, _LABEL_BEFORE, _LABEL_AFTER)
+
+    assert (new_text, edits) == (text, [])
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("Base: 40%;", "Base: 35%;"), ("Base 40%, Bull 20%.", "Base 35%, Bull 22%."),
+    ("Base at 40%.", "Base at 35%."), ("Base is 40%.", "Base is 35%."),
+    ("Base case at 40%.", "Base case at 35%."),
+    ("Base now 40% given grid relief.", "Base now 35% given grid relief."),
+    ("Base's 40% reflects demand.", "Base's 35% reflects demand."),
+    ("Bull raised to 20%, Base trimmed to 40%.", "Bull raised to 22%, Base trimmed to 35%."),
+    ("基准情景15%，", "基准情景18%，"), ("基准15%，", "基准18%，"), ("基准情景为15%。", "基准情景为18%。"),
+    ("基准情景降至15%。", "基准情景降至18%。"), ("probability of 40%.", "probability of 35%."),
+    ("Base probability is now 40%.", "Base probability is now 35%."),
+    ("a 40% probability of the Base scenario", "a 35% probability of the Base scenario"),
+    ("a 40% chance of Base", "a 35% chance of Base"), ("Base (40%) leads", "Base (35%) leads"),
+    ("(40% vs 20%)", "(35% vs 22%)"),
+    ("Base is 40% likely to materialise.", "Base is 35% likely to materialise."),
+    ("Base is cut to 40%.", "Base is cut to 35%."), ("Base falls to 40%.", "Base falls to 35%."),
+    ("Base leads at 40%,", "Base leads at 35%,"),
+])
+def test_label_slot_accepts(text, expected):
+    assert sync_probability_numbers(text, _LABEL_BEFORE, _LABEL_AFTER)[0] == expected
 
 
 # ------------------------------------------------------------------ knob
