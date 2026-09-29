@@ -23,15 +23,18 @@ EVAL-2（settlement events v2，确定性、无 LLM）：
   市场写 schema_version 2 事件（outcome_known_at 取 Gamma closedTime，缺失/晚于处理时刻则
   以处理时刻为上界，绝不取 endDate；prospective 需下界证明；scoring_eligible 需精确、
   字节绑定、截止日一致的锚点）；未关闭 / UMA 提议或争议中 / 价未收敛 → pending 按原因计数；
-  判定日（二元预测写出的最晚 ISO 日期）+ RESOLUTION_PENDING_GRACE_DAYS 仍无判定 → 一条
-  永不计分的 terminal 事件（判定源未应答的市场绝不终结）。
+  判定日（二元预测写出的所有日期——ISO、「2028年12月31日」「June 30, 2027」「Q2 2027」等
+  各种写法——与 horizon_year 年底中最晚的一个）+ RESOLUTION_PENDING_GRACE_DAYS 仍无判定
+  → 一条永不计分的 terminal 事件（判定源未应答的市场绝不终结）；已有 terminal 的条目
+  即为终态，之后市场再判定也不追加第二条事实（计入 already_terminal）。
   事件仍落 resolutions.jsonl，幂等键 (report_id, forecast_id, market_id) 与文件锁不变。
   只有生产 primary 目标的结算入账：ensemble / what-if / comparison / revision / evaluation
   报告（生产或 evaluation 账本里有行、却无生产 primary commit）照算照报、一条不写。
-- ``settle`` 子命令：按新到旧扫描账本里的生产 primary commit 行（自包含
-  binary_forecasts，报告目录已删也能结算），只处理本轮可处理的条目（未入账，且有市场
-  锚点、或无锚点且已过 grace），批量查判定并追加事件；RESOLUTION_SETTLE_MAX_TARGETS
-  只限需联网查判定的行，已过 grace 的无锚点条目不受上限（terminal 不需要网络）；
+- ``settle`` 子命令：扫描账本里的生产 primary commit 行（自包含 binary_forecasts，
+  报告目录已删也能结算），只处理本轮可处理的条目（未入账，且有市场锚点、或无锚点且已过
+  grace），批量查判定并追加事件；RESOLUTION_SETTLE_MAX_TARGETS 只限需联网查判定的行，
+  判定日已过的锚定行最早逾期者优先，其余新到旧；已过 grace 的无锚点条目不受上限
+  （terminal 不需要网络）；
   RESOLUTION_SETTLE_LEDGER=true（默认）时 ``run --all-recent`` 在逐报告循环后也跑一次。
   ensemble / evaluation 行永不扫描。
 
@@ -384,6 +387,8 @@ def _render_settlement(settlement: Dict[str, Any],
         f"- Ambiguous 50/50 settlements (never scored): **{settlement.get('ambiguous', 0)}**",
         f"- Terminal, unresolvable after grace (never scored): "
         f"**{settlement.get('terminal', 0)}**",
+        f"- Already terminal (final; a later settlement is not recorded): "
+        f"**{settlement.get('already_terminal', 0)}**",
         f"- Pending by reason: {_reason_counts(settlement.get('pending_by_reason'))}",
         f"- Ineligible by reason: {_reason_counts(settlement.get('ineligible_by_reason'))}",
         f"- Events appended this run: **{settlement.get('appended', 0)}**",
@@ -715,6 +720,7 @@ def _settlement_counts(settlement: Dict[str, Any], *, appended: int) -> Dict[str
         "settled_eligible": sum(1 for e in events if e.get("scoring_eligible")),
         "ambiguous": sum(1 for e in events if e.get("resolution_status") == "ambiguous"),
         "terminal": len(settlement.get("terminal") or []),
+        "already_terminal": int(settlement.get("already_terminal") or 0),
         "pending_by_reason": dict(settlement.get("pending_by_reason") or {}),
         "ineligible_by_reason": dict(settlement.get("ineligible_by_reason") or {}),
         "appended": appended,
@@ -916,25 +922,41 @@ def settle_targets(entries: List[Dict[str, Any]], limit: int,
                    existing: Optional[List[Dict[str, Any]]] = None, *,
                    processed_at: str, grace_days: int
                    ) -> Tuple[List[Tuple[Dict[str, Any], List[Dict[str, Any]]]], int]:
-    """本轮结算扫描的目标 → ``([(commit 行, 本轮可处理的二元预测)], deferred_by_cap)``，新到旧。
+    """本轮结算扫描的目标 → ``([(commit 行, 本轮可处理的二元预测)], deferred_by_cap)``。
 
     commit 行只在报告发布封印后写入，且自带 binary_forecasts，报告目录已删也能结算。
     ensemble / evaluation 等非生产类、revision 与 unpublished_terminal 行一律不扫。
     每行只取 processed_at 时刻可处理的条目（forecast_resolution.due_binaries：未入账、且
     有市场锚点，或无锚点且已过 grace）；无可处理条目的行不占上限——grace 内的无锚点条目
     本轮无事可做，若占上限，更老目标的 grace terminal 就永远轮不到。
-    上限 limit 只限需联网查判定的行（含未入账锚定条目）：超限的行 deferred_by_cap 计数，
-    其锚定条目留待下轮；它们已过 grace 的无锚点条目照常结算——terminal 不需要网络。"""
+    上限 limit 只限需联网查判定的行（含未入账锚定条目），先排「逾期」行：有锚定条目的
+    结算判定日（settlement_resolution_date）已早于处理日——这些市场本该已收盘，其
+    grace terminal 也要先联网确认；逾期行按最早逾期日、再按账本先后（老的在前）排，其余
+    行新到旧。否则长期未收盘的新目标会一直占满上限，老目标永远查不到、也永远结不了。
+    超限的行 deferred_by_cap 计数，其锚定条目留待下轮；它们已过 grace 的无锚点条目照常
+    结算——terminal 不需要网络。"""
     recorded = _settlement.recorded_items(existing)
     cap = max(0, int(limit))
-    targets: List[Tuple[Dict[str, Any], List[Dict[str, Any]]]] = []
-    fetching = deferred = 0
-    for row in reversed(entries):
+    overdue: List[Tuple[str, int, Dict[str, Any], List[Dict[str, Any]]]] = []
+    current: List[Tuple[Dict[str, Any], List[Dict[str, Any]]]] = []
+    for position, row in enumerate(entries):
         if not _is_production_primary(row) or not str(row.get("report_id") or "").strip():
             continue
         due = _settlement.due_binaries(row.get("report_id"), row.get("binary_forecasts"),
                                        recorded, processed_at=processed_at,
                                        grace_days=grace_days)
+        if not due:
+            continue
+        since = _settlement.overdue_since(due, processed_at)
+        if since:
+            overdue.append((since, position, row, due))
+        else:
+            current.append((row, due))
+    ordered = [(row, due) for _since, _position, row, due in sorted(
+        overdue, key=lambda item: (item[0], item[1]))] + current[::-1]
+    targets: List[Tuple[Dict[str, Any], List[Dict[str, Any]]]] = []
+    fetching = deferred = 0
+    for row, due in ordered:
         if any(_settlement.anchor_market_id(b) for b in due):
             if fetching < cap:
                 fetching += 1
@@ -958,7 +980,8 @@ def settle_ledger(*, client: Any = None, ledger_dir: Optional[str] = None,
     """扫描账本 primary commit 行，一次批量查判定，把结算事件幂等追加进 resolutions.jsonl。
 
     返回计数 {targets, deferred_by_cap, settled, settled_eligible, ambiguous, terminal,
-    pending_by_reason, ineligible_by_reason, appended, errors, degraded, dry_run, as_of}，
+    already_terminal, pending_by_reason, ineligible_by_reason, appended, errors, degraded,
+    dry_run, as_of}，
     只计本轮可处理的条目（见 settle_targets）。dry_run 不写盘；重跑只会命中幂等键、不重复
     追加；判定源不可达只产生 pending（degraded=True）；单行坏数据记日志、计入 errors 并跳过。"""
     processed_at = normalize_processed_at(as_of or _utcnow_iso())
@@ -987,7 +1010,7 @@ def settle_ledger(*, client: Any = None, ledger_dir: Optional[str] = None,
             resolutions, answered = {}, set()
         degraded = not resolutions
     totals: Dict[str, Any] = {"settled": 0, "settled_eligible": 0, "ambiguous": 0,
-                              "terminal": 0, "appended": 0}
+                              "terminal": 0, "already_terminal": 0, "appended": 0}
     pending: Dict[str, int] = {}
     ineligible: Dict[str, int] = {}
     errors = 0

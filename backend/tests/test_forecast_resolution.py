@@ -292,8 +292,11 @@ def test_eligibility_deadline_contract():
     # No readable origin: every named date counts, so the check is the strictest one.
     for origin in (None, "", "May 2026", "2026-05-01T08:00:00"):
         assert fr.eligibility_deadline(baseline, origin) == "2024-12-31", origin
-    # Every named date before the origin → horizon_year's end; resolution_source is ignored.
-    assert fr.eligibility_deadline(baseline, "2027-07-01") == "2027-12-31"
+    # An origin after every date the statement names: the forecast was issued after its own
+    # deadline, so no other date may stand in for it (unverifiable, not horizon_year's end).
+    assert fr.eligibility_deadline(baseline, "2027-07-01") is None
+    assert fr.eligibility_window(baseline, "2027-07-01") is None
+    # No date in statement or criteria → horizon_year's end; resolution_source is ignored.
     assert fr.eligibility_deadline({"resolution_source": "release 2026-09-30",
                                     "horizon_year": 2026}) == "2026-12-31"
     assert fr.eligibility_deadline({"statement": "someday"}) is None
@@ -312,24 +315,29 @@ def test_settlement_resolution_date_is_the_latest_named_date():
                                         "level by 2027-06-30."),
                 "horizon_year": 2027}
     assert fl.binary_resolution_date(baseline) == "2024-12-31"  # first date: the baseline
-    assert fr.settlement_resolution_date(baseline) == "2027-06-30"
-    # Invalid calendar dates are ignored; no date at all falls back to horizon_year's end.
+    # The latest plausible deadline: the named dates and the end of horizon_year.
+    assert fr.settlement_resolution_date(baseline) == "2027-12-31"
+    assert fr.settlement_resolution_date(dict(baseline, horizon_year=2026)) == "2027-06-30"
+    # An invalid calendar date counts at its month's end, never skipped; no date at all
+    # falls back to horizon_year's end.
     assert fr.settlement_resolution_date(
         {"resolution_criteria": "by 2026-02-30", "horizon_year": 2027}) == "2027-12-31"
+    assert fr.settlement_resolution_date(
+        {"resolution_criteria": "by 2029-02-30", "horizon_year": 2027}) == "2029-02-28"
     assert fr.settlement_resolution_date(
         {"statement": "by 2026-03-01", "resolution_source": "2026-09-30 release"}) == "2026-09-30"
     assert fr.settlement_resolution_date({"statement": "someday"}) is None
     assert fr.settlement_resolution_date(None) is None
 
-    # Unanchored: no terminal before 2027-06-30 + grace (processing day 2026-09-29 is far off).
+    # Unanchored: no terminal before 2027-12-31 + grace (processing day 2026-09-29 is far off).
     early = fr.settle_binaries("r1", [baseline], {}, processed_at=PROCESSED, grace_days=180)
     assert early["terminal"] == [] and early["pending_by_reason"] == {"no_market_anchor": 1}
-    boundary = fr.settle_binaries("r1", [baseline], {}, processed_at="2027-12-27T12:00:00+00:00",
+    boundary = fr.settle_binaries("r1", [baseline], {}, processed_at="2028-06-28T12:00:00+00:00",
                                   grace_days=180)
     assert boundary["terminal"] == []
-    late = fr.settle_binaries("r1", [baseline], {}, processed_at="2027-12-28T12:00:00+00:00",
+    late = fr.settle_binaries("r1", [baseline], {}, processed_at="2028-06-29T12:00:00+00:00",
                               grace_days=180)
-    assert [t["evidence"]["resolution_date"] for t in late["terminal"]] == ["2027-06-30"]
+    assert [t["evidence"]["resolution_date"] for t in late["terminal"]] == ["2027-12-31"]
 
     # Exact anchor whose market ends on the real deadline: eligible once the forecast origin
     # shows the first date is a baseline; without an origin the check fails closed.
@@ -358,6 +366,324 @@ def test_settlement_resolution_date_is_the_latest_named_date():
         {"m-gdp": _resolved("m-gdp", 1.0, closed_time="2027-07-01T09:00:00Z")},
         target_meta=META, processed_at="2027-07-02T00:00:00+00:00")["events"][0]
     assert (settled["scoring_eligible"], settled["ineligible_reason"]) == (True, None)
+
+
+# ------------------------------------------------------------------ deadlines in any written form
+
+def _dated(fid, statement, criteria, *, source="", horizon_year=2027,
+           end_date="2027-06-30T12:00:00Z", market_id="m-1", price=0.4):
+    """A binary whose market anchor is built by the real producer (complete, byte-bound)."""
+    binary = {"id": fid, "proposition_id": f"prop-{fid}", "statement": statement,
+              "probability": 0.3, "resolution_criteria": criteria, "resolution_source": source,
+              "horizon_year": horizon_year}
+    binary["market_anchor"] = _build_market_anchor(
+        0.3, {"market_id": market_id, "question": f"Will {fid} resolve YES?",
+              "implied_yes_prob": price, "url": f"https://polymarket.com/event/{market_id}",
+              "end_date": end_date},
+        equivalence="exact", match_confidence=0.9, binary=binary)
+    return binary
+
+
+def test_scan_date_mentions_reads_every_written_form():
+    from datetime import date
+
+    from app.utils.deadline_dates import scan_date_mentions
+
+    def read(text):
+        return [(m.text, m.day and m.day.isoformat(), m.latest.isoformat())
+                for m in scan_date_mentions(text)]
+
+    pinned = {
+        "by June 30, 2027": "2027-06-30", "Nov. 3rd, 2026": "2026-11-03",
+        "30 June 2027": "2027-06-30", "2028年12月31日前": "2028-12-31", "2027年6月30": "2027-06-30",
+        "2027/06/30": "2027-06-30", "30.06.2027": "2027-06-30", "6/30/2027": "2027-06-30",
+        "by 2027-06.": "2027-06-30", "Q2 2027": "2027-06-30", "2027Q4": "2027-12-31",
+        "2028年第三季度": "2028-09-30", "H1 2027": "2027-06-30", "2027年下半年": "2027-12-31",
+        "mid-2027": "2027-06-30", "the middle of 2027": "2027-06-30", "2027年中": "2027-06-30",
+        "2027年年中": "2027-06-30", "end-2027": "2027-12-31", "year-end 2027": "2027-12-31",
+        "by the end of 2027": "2027-12-31", "late 2027": "2027-12-31", "2027年底": "2027-12-31",
+        "2027年末": "2027-12-31", "March 2027": "2027-03-31", "2027年11月": "2027-11-30",
+        "2027-06-30T00:00Z": "2027-06-30", "FYE 2026-05-31": "2026-05-31",
+    }
+    for text, day in pinned.items():
+        mentions = scan_date_mentions(text)
+        assert [(m.day, m.latest) for m in mentions] == [
+            (date.fromisoformat(day), date.fromisoformat(day))], text
+    # Not a real or pinnable day: reported with day=None and its latest plausible day.
+    assert read("by 2027-02-30") == [("2027-02-30", None, "2027-02-28")]
+    assert read("February 30, 2027") == [("February 30, 2027", None, "2027-02-28")]
+    assert read("2027年13月") == [("2027年13月", None, "2027-12-31")]
+    assert read("06/07/2027") == [("06/07/2027", None, "2027-07-06")]  # either way round
+    assert read("published in early 2031") == [("early 2031", None, "2031-06-30")]
+    assert read("2027年初") == [("2027年初", None, "2027-06-30")]
+    # A day claims its span: '30 June 2027' is not also the month 'June 2027'.
+    assert read("on 30 June 2027 or Q4 2027") == [("30 June 2027", "2027-06-30", "2027-06-30"),
+                                                  ("Q4 2027", "2027-12-31", "2027-12-31")]
+    assert read("2027-01-01-2027-12-31") == [("2027-01-01", "2027-01-01", "2027-01-01"),
+                                             ("2027-12-31", "2027-12-31", "2027-12-31")]
+    # Fiscal ranges, bare years, decimals and words ending in 'end' are not dates.
+    for text in ("FY2026-27", "2026/27", "2026-2027", "in 2027", "revenue of 2025.3 million",
+                 "trend 2027", "spend 2027", None, ""):
+        assert scan_date_mentions(text) == [], text
+
+
+def test_grace_terminal_waits_for_the_latest_plausible_deadline():
+    """Round-3 issue 1: a deadline written in any form, or a later horizon_year, holds the
+    grace terminal back; a baseline ISO date never ends an item early."""
+    oracle = {"id": "F9", "probability": 0.1, "horizon_year": 2028,
+              "statement": "到2028年12月31日前的某个季度，Oracle的RPO单季环比下降超过1000亿美元。",
+              "resolution_criteria": ("Oracle季报显示任一单季度RPO较上季环比下降>$100B"
+                                      "（当前基数$638B，FYE 2026-05-31）。")}
+    assert fr.settlement_resolution_date(oracle) == "2028-12-31"
+    for processed in ("2026-11-28T00:00:00+00:00", "2029-06-29T12:00:00+00:00"):
+        out = fr.settle_binaries("report_ef905c569a90", [oracle], {},
+                                 target_meta={"as_of": "2026-07-01"}, processed_at=processed,
+                                 grace_days=180)
+        assert out["terminal"] == [] and out["pending_by_reason"] == {"no_market_anchor": 1}
+        assert fr.due_binaries("report_ef905c569a90", [oracle], set(), processed_at=processed,
+                               grace_days=180) == []
+    ended = fr.settle_binaries("report_ef905c569a90", [oracle], {},
+                               processed_at="2029-06-30T00:00:00+00:00", grace_days=180)
+    assert [t["evidence"]["resolution_date"] for t in ended["terminal"]] == ["2028-12-31"]
+
+    # Every form counts toward the latest date, and so does a later horizon_year.
+    for text, horizon_year, expected in (
+            ("by June 30, 2027 (baseline 2025-12-31)", 2026, "2027-06-30"),
+            ("in Q2 2028", 2027, "2028-06-30"), ("到2028年底", 2027, "2028-12-31"),
+            ("by 30.06.2028", 2027, "2028-06-30"), ("by 2028/03/31", None, "2028-03-31"),
+            ("by mid-2028", 2027, "2028-06-30"), ("by 2028-09", 2027, "2028-09-30"),
+            ("before early 2029", 2027, "2029-06-30"), ("by 2026-03-31", 2027, "2027-12-31")):
+        assert fr.settlement_resolution_date(
+            {"statement": text, "horizon_year": horizon_year}) == expected, text
+
+
+def _probe_eligibility(statement, criteria, *, source="", horizon_year=2027,
+                       end_date, origin="2026-07-01"):
+    binary = _dated("F1", statement, criteria, source=source, horizon_year=horizon_year,
+                    end_date=end_date)
+    return (fr.eligibility_deadline(binary, origin),
+            fr.market_eligibility(binary, binary["market_anchor"], "exact", origin=origin))
+
+
+MISMATCH = (False, "end_date_mismatch")
+UNVERIFIABLE = (False, "end_date_unverifiable")
+
+# The round-3 review's end-date probes: (statement, criteria, source, market end, origin,
+# expected deadline, expected eligibility).
+ROUND3_ELIGIBILITY_PROBES = {
+    "A_iso_deadline_later_publication": (
+        "The widget index exceeds 100 by 2027-06-30.",
+        "Resolves YES per the index report published 2027-12-31.", "",
+        "2027-12-31T12:00:00Z", "2026-07-01", "2027-06-30", MISMATCH),
+    "B_later_date_in_source_only": (
+        "The widget index exceeds 100 by 2027-06-30.", "Index level on 2027-06-30.",
+        "Verified 2028-03-31", "2028-03-31T00:00:00Z", "2026-07-01", "2027-06-30", MISMATCH),
+    "C_baseline_before_origin": (
+        "The widget index exceeds its 2025-12-31 level by 2027-06-30.",
+        "Index above 2025-12-31 level on 2027-06-30.", "",
+        "2027-06-30T12:00:00Z", "2026-07-01", "2027-06-30", (True, None)),
+    "D_month_name_deadline_later_iso_as_of": (
+        "The widget index exceeds 100 by June 30, 2027.",
+        "Resolves YES if the index, as of 2027-12-31, shows a print above 100 before "
+        "June 30, 2027.", "", "2027-12-31T12:00:00Z", "2026-07-01", "2027-06-30", MISMATCH),
+    "E_chinese_deadline_later_iso_publication": (
+        "小部件指数在2027年6月30日前超过100。", "以2027-12-31发布的指数报告为准。", "",
+        "2027-12-31T12:00:00Z", "2026-07-01", "2027-06-30", MISMATCH),
+    "F_slash_deadline": (
+        "The widget index exceeds 100 by 2027/06/30.", "Per the report published 2027-12-31.",
+        "", "2027-12-31T12:00:00Z", "2026-07-01", "2027-06-30", MISMATCH),
+    "G_year_month_deadline_later_release": (
+        "The widget index exceeds 100 by 2027-06.", "Per the data release on 2027-09-15.", "",
+        "2027-09-15T12:00:00Z", "2026-07-01", "2027-06-30", MISMATCH),
+    "H_mid_year_deadline": (
+        "The widget index exceeds 100 by mid-2027.", "Index above 100 by the middle of 2027.",
+        "", "2027-12-31T12:00:00Z", "2026-07-01", "2027-06-30", MISMATCH),
+    "I_range_market_at_range_end": (
+        "The widget index exceeds 100 at any time between 2027-01-01 and 2027-12-31.",
+        "Any daily close above 100 between 2027-01-01 and 2027-12-31.", "",
+        "2027-12-31T12:00:00Z", "2026-07-01", "2027-12-31", (True, None)),
+    "J_market_ends_early": (
+        "The widget index exceeds 100 by 2027-12-31.", "Any close above 100 by 2027-12-31.", "",
+        "2027-06-30T12:00:00Z", "2026-07-01", "2027-12-31", MISMATCH),
+    "K_market_ends_after_range_start": (
+        "The widget index exceeds 100 at any time between 2026-09-01 and 2027-12-31.",
+        "Any daily close above 100 between 2026-09-01 and 2027-12-31.", "",
+        "2026-09-05T12:00:00Z", "2026-07-01", "2027-12-31", MISMATCH),
+    "L_origin_after_every_statement_date": (
+        "The widget index exceeds 100 by 2027-06-30.",
+        "Per the index report published 2027-09-30.", "",
+        "2027-09-30T12:00:00Z", "2027-07-15", None, UNVERIFIABLE),
+    "M_market_end_equals_deadline": (
+        "The widget index exceeds 100 by 2027-06-30.", "Index above 100 on 2027-06-30.", "",
+        "2027-06-30T23:59:59Z", "2026-07-01", "2027-06-30", (True, None)),
+    "N_market_end_deadline_plus_7d": (
+        "The widget index exceeds 100 by 2027-06-30.", "Index above 100 on 2027-06-30.", "",
+        "2027-07-07T23:59:59Z", "2026-07-01", "2027-06-30", (True, None)),
+    "O_market_end_deadline_plus_8d": (
+        "The widget index exceeds 100 by 2027-06-30.", "Index above 100 on 2027-06-30.", "",
+        "2027-07-08T12:00:00Z", "2026-07-01", "2027-06-30", MISMATCH),
+    "P_no_origin_baseline_counts": (
+        "The widget index exceeds its 2025-12-31 level by 2027-06-30.",
+        "Index above 2025-12-31 level on 2027-06-30.", "",
+        "2027-06-30T12:00:00Z", None, "2025-12-31", MISMATCH),
+    "Q_invalid_date": (
+        "The widget index exceeds 100 by 2027-02-30.", "Per report published 2027-12-31.", "",
+        "2027-12-31T12:00:00Z", "2026-07-01", None, UNVERIFIABLE),
+    "R_dotted_deadline": (
+        "The widget index exceeds 100 by 30.06.2027.", "Per the report published 2027-12-31.",
+        "", "2027-12-31T12:00:00Z", "2026-07-01", "2027-06-30", MISMATCH),
+    "S_iso_datetime_deadline": (
+        "The widget index exceeds 100 by 2027-06-30T00:00Z.", "Per report published 2027-12-31.",
+        "", "2027-12-31T12:00:00Z", "2026-07-01", "2027-06-30", MISMATCH),
+    "T_quarter_deadline": (
+        "The widget index exceeds 100 in Q2 2027.", "Per the Q2 report published 2027-08-15.",
+        "", "2027-08-15T12:00:00Z", "2026-07-01", "2027-06-30", MISMATCH),
+}
+
+
+@pytest.mark.parametrize("probe", sorted(ROUND3_ELIGIBILITY_PROBES))
+def test_round3_end_date_probes(probe):
+    statement, criteria, source, end_date, origin, deadline, expected = (
+        ROUND3_ELIGIBILITY_PROBES[probe])
+    assert _probe_eligibility(statement, criteria, source=source, end_date=end_date,
+                              origin=origin) == (deadline, expected)
+    if expected == MISMATCH and deadline and probe[0] != "P":
+        # The same binary with a market that ends on its real deadline stays eligible: the
+        # guard is strict, not blind.
+        assert _probe_eligibility(statement, criteria, source=source,
+                                  end_date=f"{deadline}T12:00:00Z", origin=origin) == (
+            deadline, (True, None))
+
+
+def test_real_house_anchor_stays_eligible():
+    """The corpus's exact anchors name their date as 'November 3, 2026'; the market ends then."""
+    for statement, criteria in (
+            ("Democrats win a majority (218+) in the U.S. House of Representatives after the "
+             "November 3, 2026 midterm elections.",
+             "AP race calls show Democrats holding 218+ House seats after the November 3, 2026 "
+             "midterm elections."),
+            ("Democrats win control of the US House of Representatives on November 3, 2026 with "
+             "a net gain of at least 1 seat.",
+             "CNN/AP projects that the Democratic caucus holds 218 or more of the 435 House seats "
+             "certified by November 3, 2026 (or within 7 days of recounts).")):
+        house = _dated("F2", statement, criteria, horizon_year=2026,
+                       end_date="2026-11-03T00:00:00Z")
+        assert fr.eligibility_window(house, "2026-07-03") == ("2026-11-03", "2026-11-03")
+        assert fr.market_eligibility(house, house["market_anchor"], "exact",
+                                     origin="2026-07-03") == (True, None)
+        # A market that closes a month early, or on the old horizon-year proxy, does not.
+        for early_or_late in ("2026-10-01T00:00:00Z", "2026-12-31T00:00:00Z"):
+            other = _dated("F2", statement, criteria, horizon_year=2026, end_date=early_or_late)
+            assert fr.market_eligibility(other, other["market_anchor"], "exact",
+                                         origin="2026-07-03") == MISMATCH, early_or_late
+
+
+def test_eligibility_window_fails_closed_on_both_sides():
+    origin = "2026-07-10"
+    # Interim observation dates never loosen the early side: the statement commits to
+    # end-2027, so neither the end-2027 market nor the Q3-2026 one may label it.
+    hynix = {"statement": "SK hynix loses its memory-revenue lead at any point before the end "
+                          "of 2027.",
+             "resolution_criteria": "Samsung's DRAM+NAND revenue exceeds SK hynix's in any of "
+                                    "Q3 2026, Q4 2026, Q1 2027, Q2 2027, Q3 2027 or Q4 2027.",
+             "horizon_year": 2027}
+    assert fr.eligibility_window(hynix, origin) == ("2026-09-30", "2027-12-31")
+    for end in ("2026-09-30T12:00:00Z", "2027-12-31T12:00:00Z"):
+        binary = _dated("H1", hynix["statement"], hynix["resolution_criteria"], end_date=end)
+        assert fr.market_eligibility(binary, binary["market_anchor"], "exact",
+                                     origin=origin) == MISMATCH, end
+    # A dateless statement commits to its horizon year: a later publication date in the
+    # criteria sets neither side.
+    brent = {"statement": "Average Brent crude exceeds $90/bbl for calendar year 2030.",
+             "resolution_criteria": "ICE Brent annual average per data published by 2031-03-31.",
+             "horizon_year": 2030}
+    assert fr.eligibility_window(brent, origin) == ("2030-12-31", "2030-12-31")
+    # A vague publication time cannot be pinned, so the deadline is unverifiable.
+    assert fr.eligibility_window(dict(brent, resolution_criteria="Published in early 2031."),
+                                 origin) is None
+    # A range contributes only its end ('至', 'through', a dash, 'between ... 之间').
+    for text in ("在2027-01-01至2029-12-31窗口内", "from January 1, 2027 through 2029-12-31",
+                 "2027-01-01 – 2029-12-31", "介于2027年1月1日与2029年12月31日之间"):
+        assert fr.eligibility_window({"statement": text, "horizon_year": 2029}, origin) == (
+            "2029-12-31", "2029-12-31"), text
+    # Two dates joined by a bare 'and' are two deadlines, not a range: the earlier binds.
+    both = {"statement": "The index is above 100 on 2027-06-30 and 2027-12-31.",
+            "horizon_year": 2027}
+    assert fr.eligibility_window(both, origin) == ("2027-06-30", "2027-12-31")
+    # A pre-origin invalid date is only a baseline; a post-origin one blocks.
+    assert fr.eligibility_window({"statement": "Above its 2025-02-30 level by 2027-06-30.",
+                                  "horizon_year": 2027}, origin) == ("2027-06-30", "2027-06-30")
+    assert fr.eligibility_window({"statement": "By 2027-06-30.",
+                                  "resolution_criteria": "Checked on 2027-06-31.",
+                                  "horizon_year": 2027}, origin) is None
+    # A later horizon_year never loosens the late side; an earlier one tightens it.
+    assert fr.eligibility_window({"statement": "By 2027-06-30.", "horizon_year": 2029},
+                                 origin) == ("2027-06-30", "2027-06-30")
+    assert fr.eligibility_window({"statement": "By June 30, 2028.", "horizon_year": 2027},
+                                 origin) == ("2027-12-31", "2028-06-30")
+
+
+def test_market_after_terminal_is_never_a_second_fact():
+    """Round-3 issue 5: an item that already holds a terminal row is final."""
+    binary = _dated("F1", "X happens by 2025-06-30.", "Resolves YES if X by 2025-06-30.",
+                    horizon_year=2025, end_date="2025-06-30T12:00:00Z")
+    meta = {"as_of": "2025-01-01", "created_at": "2025-01-01T10:00:00+00:00",
+            "production_primary": True}
+    disputed = {"m-1": _resolved("m-1", 1.0, uma="disputed", closed_time="2026-08-01T00:00:00Z")}
+    first = fr.settle_binaries("r-1", [binary], disputed, target_meta=meta,
+                               processed_at="2026-08-10T00:00:00+00:00", grace_days=180)
+    assert [t["forecast_id"] for t in first["terminal"]] == ["F1"]
+    assert first["already_terminal"] == 0
+    resolved = {"m-1": _resolved("m-1", 1.0, closed_time="2026-09-01T00:00:00Z")}
+    later = fr.settle_binaries("r-1", [binary], resolved, target_meta=meta,
+                               processed_at="2026-09-10T00:00:00+00:00", grace_days=180,
+                               existing_events=first["terminal"])
+    assert (later["events"], later["terminal"], later["pending_by_reason"],
+            later["already_terminal"]) == ([], [], {}, 1)
+    # Another report's terminal for the same forecast id changes nothing.
+    other = fr.settle_binaries("r-2", [binary], resolved, target_meta=meta,
+                               processed_at="2026-09-10T00:00:00+00:00",
+                               existing_events=first["terminal"])
+    assert len(other["events"]) == 1 and other["already_terminal"] == 0
+
+
+def test_round3_settlement_invariants():
+    """The round-3 review's invariant probes (P5), pinned."""
+    binary = _dated("F1", "X by 2026-06-30.", "Resolves YES if X by 2026-06-30.",
+                    horizon_year=2026, end_date="2026-06-30T12:00:00Z")
+
+    def settle(resolution, meta):
+        return fr.settle_binaries("r-5", [binary], {"m-1": resolution}, target_meta=meta,
+                                  processed_at=PROCESSED)
+
+    as_of = {"as_of": "2026-05-01"}
+    both = {"as_of": "2026-05-01", "created_at": "2026-05-02T08:00:00+00:00"}
+    fifty = pm._parse_resolution(dict(_gamma("m-1", 0.5), outcomePrices='["0.5","0.5"]'))
+    event = settle(fifty, as_of)["events"][0]
+    assert (event["resolution_status"], event["y"], event["brier_contribution"],
+            event["scoring_eligible"], event["ineligible_reason"]) == (
+        "ambiguous", None, None, False, "ambiguous_settlement")
+    history = pm._parse_resolution({"id": "m-1", "outcomes": '["Yes","No"]',
+                                    "outcomePrices": '["0.5","0.5"]', "closed": True,
+                                    "umaResolutionStatuses": ["proposed", "disputed", "resolved"]})
+    assert history["resolution_status"] == "ambiguous"
+    reopened = pm._parse_resolution({"id": "m-1", "outcomes": '["Yes","No"]',
+                                     "outcomePrices": '["1","0"]', "closed": True,
+                                     "umaResolutionStatuses": ["proposed", "resolved", "disputed"]})
+    pending = settle(reopened, as_of)
+    assert pending["events"] == [] and pending["pending_by_reason"] == {"uma_pending": 1}
+    future = settle(_resolved("m-1", 1.0, closed_time="2026-12-01T00:00:00Z"), as_of)["events"][0]
+    assert (future["outcome_known_at"], future["known_at_basis"], future["known_at_clamped"],
+            future["prospective"]) == (PROCESSED, "processing_upper_bound", True, True)
+    missing = settle(_resolved("m-1", 1.0, closed_time=None), as_of)["events"][0]
+    assert (missing["outcome_known_at"], missing["known_at_basis"], missing["prospective"]) == (
+        PROCESSED, "processing_upper_bound", True)
+    before = settle(_resolved("m-1", 1.0, closed_time="2026-04-01T00:00:00Z"), both)["events"][0]
+    assert (before["prospective"], before["scoring_eligible"], before["ineligible_reason"]) == (
+        False, False, "not_prospective")
+    same_day = settle(_resolved("m-1", 1.0, closed_time="2026-05-01T20:00:00Z"), as_of)["events"][0]
+    assert (same_day["prospective"], same_day["scoring_eligible"]) == (False, False)
+    assert _resolved("m", 1.0, closed_time="2026-07-02 15:30:00+00")["closed_time"] == CLOSED_AT
 
 
 # ------------------------------------------------------------------ prospective proof
@@ -394,7 +720,10 @@ def test_prospective_requires_lower_bound_proof():
     assert fr.prospective_status(CLOSED_AT, "source", None, "9999-12-31", {}) == "unknown"
     far = fr.settle_binaries("r1", [_binary()], {"m-1": _resolved("m-1", 1.0)},
                              target_meta={"as_of": "9999-12-31"}, processed_at=PROCESSED)
-    assert far["events"][0]["ineligible_reason"] == "prospective_unknown"
+    # The as-of stamp also lies after every date the statement names, so the end-date check
+    # (run first) already fails closed.
+    assert (far["events"][0]["prospective"], far["events"][0]["scoring_eligible"],
+            far["events"][0]["ineligible_reason"]) == ("unknown", False, "end_date_unverifiable")
 
     # scoring_eligible only when prospective is True.
     resolutions = {"m-1": _resolved("m-1", 1.0)}
@@ -498,7 +827,8 @@ def test_pending_reasons_and_grace_terminal():
                                      grace_days=180)
     assert unreachable["terminal"] == [] and unreachable["pending_by_reason"] == {
         "no_resolution_data": 1}
-    # An item that already holds a market event never gets a terminal one.
+    # An item that already holds a market event never gets a terminal one; an item that
+    # already holds a terminal row is final and gets nothing at all.
     prior = [{"report_id": "r1", "forecast_id": "F1", "market_id": "m-open",
               "source_kind": "polymarket"},
              {"report_id": "r1", "forecast_id": "F2", "market_id": "terminal",
@@ -506,8 +836,8 @@ def test_pending_reasons_and_grace_terminal():
              {"report_id": "other", "forecast_id": "F3", "market_id": "m-proposed"}]
     kept = fr.settle_binaries("r1", binaries[:3], resolutions, processed_at=late,
                               grace_days=180, existing_events=prior)
-    assert sorted(t["forecast_id"] for t in kept["terminal"]) == ["F2", "F3"]
-    assert kept["pending_by_reason"] == {"market_open": 1}
+    assert sorted(t["forecast_id"] for t in kept["terminal"]) == ["F3"]
+    assert kept["pending_by_reason"] == {"market_open": 1} and kept["already_terminal"] == 1
 
 
 def test_uma_status_history_uses_current_stage():
@@ -742,7 +1072,7 @@ def test_run_monitor_reports_settlement_counters(tmp_path):
     assert res["terminal_count"] == 1 and res["newly_terminal_count"] == 1
     assert res["settlement"] == {
         "settled": 2, "settled_eligible": 1, "ambiguous": 0, "terminal": 1,
-        "pending_by_reason": {"market_open": 1},
+        "already_terminal": 0, "pending_by_reason": {"market_open": 1},
         "ineligible_by_reason": {"equivalence_near": 1}, "appended": 3}
     assert {r["forecast_id"] for r in res["resolution_records"]} == {"F1", "F2"}
     rows = fl.read_market_resolutions(led)

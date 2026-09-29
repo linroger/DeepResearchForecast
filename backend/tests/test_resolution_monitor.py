@@ -338,3 +338,140 @@ def test_run_monitor_degrades_when_market_access_fails(tmp_path):
     assert res["degraded"] is True and res["resolved_count"] == 0
     # 指标检查仍在（不依赖网络）：F3（+可能 F1）需人工。
     assert res["needs_manual_count"] >= 1
+
+
+# ---------------------------------------------------------------- EVAL-2 round 3
+
+def _exact_anchored(fid, statement, criteria, *, market_id, end_date, horizon_year):
+    """A binary with a complete, byte-bound exact anchor (built by the real producer)."""
+    from app.services.forecast_extractor import _build_market_anchor
+    binary = {"id": fid, "proposition_id": f"prop-{fid}", "statement": statement,
+              "probability": 0.3, "resolution_criteria": criteria,
+              "horizon_year": horizon_year}
+    binary["market_anchor"] = _build_market_anchor(
+        0.3, {"market_id": market_id, "question": f"Will {fid} happen?", "implied_yes_prob": 0.4,
+              "url": f"https://polymarket.com/event/{market_id}", "end_date": end_date},
+        equivalence="exact", match_confidence=0.9, binary=binary)
+    return binary
+
+
+def _gamma_resolution(market_id, *, uma, closed_time):
+    return _parse_resolution({"id": market_id, "outcomes": '["Yes","No"]',
+                              "outcomePrices": '["1","0"]', "closed": True,
+                              "umaResolutionStatus": uma, "closedTime": closed_time,
+                              "endDate": "2025-06-30T12:00:00Z"})
+
+
+def test_run_monitor_adds_no_market_fact_after_a_terminal(tmp_path):
+    """Round-3 issue 5 (probe P2): the settle sweep ended the item after grace while its
+    market sat in a UMA dispute; when the dispute settles, run_monitor must not append a
+    market event beside the terminal (both writers treat the terminal as final)."""
+    from app.services import forecast_resolution as fr
+    led = str(tmp_path / "ledger")
+    binary = _exact_anchored("F1", "X happens by 2025-06-30.", "Resolves YES if X by 2025-06-30.",
+                             market_id="m-1", end_date="2025-06-30T12:00:00Z", horizon_year=2025)
+    meta = {"as_of": "2025-01-01", "created_at": "2025-01-01T10:00:00+00:00", "commit_id": "c",
+            "production_primary": True}
+    disputed = {"m-1": _gamma_resolution("m-1", uma="disputed", closed_time="2026-08-01T00:00:00Z")}
+    sweep = fr.settle_binaries("r-1", [binary], disputed, target_meta=meta,
+                               processed_at="2026-08-10T00:00:00+00:00", grace_days=180)
+    assert [mon._append_event(e, led) is not None for e in sweep["terminal"]] == [True]
+
+    resolved = {"m-1": _gamma_resolution("m-1", uma="resolved", closed_time="2026-09-01T00:00:00Z")}
+
+    class Client:
+        def requote_markets(self, rows):
+            return [dict(r, implied_yes_prob=r.get("price_at_research"), price_delta=0.0)
+                    for r in rows]
+
+        def fetch_resolutions(self, ids):
+            return {mid: resolved[mid] for mid in ids if mid in resolved}
+
+    res = mon.run_monitor("r-1", forecast={"binary_forecasts": [binary]},
+                          report_folder=str(tmp_path / "report"), client=Client(),
+                          ledger_dir=led, as_of="2026-09-10T00:00:00+00:00",
+                          publishable_fn=lambda rid: True, target_meta=meta)
+    rows = ledger.read_market_resolutions(led)
+    assert [(r["market_id"], r["resolution_status"]) for r in rows] == [("terminal", "terminal")]
+    assert res["newly_recorded_count"] == 0 and res["resolved_count"] == 0
+    assert res["settlement"]["already_terminal"] == 1 and res["settlement"]["appended"] == 0
+    assert "- Already terminal (final; a later settlement is not recorded): **1**" in (
+        res["monitor_report_md"])
+    assert fr.due_binaries("r-1", [binary], fr.recorded_items(rows),
+                           processed_at="2026-09-10T00:00:00+00:00") == []
+
+
+def _commit_row(report_id, binaries, *, as_of):
+    return {"row_type": "commit", "calibration_role": "primary", "record_class": "production",
+            "schema_version": 2, "report_id": report_id, "as_of_date": as_of,
+            "created_at": f"{as_of}T00:00:00+00:00", "commit_id": f"c-{report_id}",
+            "binary_forecasts": binaries}
+
+
+def test_settle_cap_fetches_overdue_targets_first():
+    """Round-3 issue 4 (probe P3): a newer target whose market stays open for years never
+    starves an older target whose deadline has passed."""
+    old = _exact_anchored("F1", "Old by 2025-06-30.", "Old resolves by 2025-06-30.",
+                          market_id="m-old", end_date="2025-06-30T12:00:00Z", horizon_year=2025)
+    new = _exact_anchored("F1", "New by 2028-06-30.", "New resolves by 2028-06-30.",
+                          market_id="m-new", end_date="2028-06-30T12:00:00Z", horizon_year=2028)
+    entries = [_commit_row("r-old", [old], as_of="2025-01-01"),
+               _commit_row("r-new", [new], as_of="2026-01-01")]
+    assert all(mon._is_production_primary(row) for row in entries)
+    for day in ("2026-09-30", "2027-09-30", "2028-06-01"):
+        targets, deferred = mon.settle_targets(entries, 1, [], processed_at=f"{day}T00:00:00+00:00",
+                                               grace_days=180)
+        assert ([row["report_id"] for row, _ in targets], deferred) == (["r-old"], 1), day
+    # Once the old item holds a row, the newer target gets the slot.
+    targets, deferred = mon.settle_targets(
+        entries, 1, [{"report_id": "r-old", "forecast_id": "F1", "market_id": "m-old"}],
+        processed_at="2026-09-30T00:00:00+00:00", grace_days=180)
+    assert ([row["report_id"] for row, _ in targets], deferred) == (["r-new"], 0)
+
+    # Overdue rows go first, earliest overdue date first (then the older row); the rest
+    # follow newest first.
+    mid = _exact_anchored("F1", "Mid by 2024-06-30.", "Mid resolves by 2024-06-30.",
+                          market_id="m-mid", end_date="2024-06-30T12:00:00Z", horizon_year=2024)
+    later = _exact_anchored("F1", "Later by 2029-06-30.", "Later resolves by 2029-06-30.",
+                            market_id="m-later", end_date="2029-06-30T12:00:00Z",
+                            horizon_year=2029)
+    entries = [_commit_row("r-old", [old], as_of="2025-01-01"),
+               _commit_row("r-new", [new], as_of="2026-01-01"),
+               _commit_row("r-mid", [mid], as_of="2026-02-01"),
+               _commit_row("r-later", [later], as_of="2026-03-01")]
+    targets, deferred = mon.settle_targets(entries, 4, [], processed_at="2026-09-30T00:00:00+00:00",
+                                           grace_days=180)
+    assert [row["report_id"] for row, _ in targets] == ["r-mid", "r-old", "r-later", "r-new"]
+    assert deferred == 0
+    targets, deferred = mon.settle_targets(entries, 3, [], processed_at="2026-09-30T00:00:00+00:00",
+                                           grace_days=180)
+    assert ([row["report_id"] for row, _ in targets], deferred) == (
+        ["r-mid", "r-old", "r-later"], 1)
+
+
+def test_concurrent_appends_of_one_v2_event_write_one_row(tmp_path):
+    """Round-3 probe P4: 8 threads appending the same settlement event write exactly 1 row."""
+    import threading
+
+    from app.services import forecast_resolution as fr
+    led = str(tmp_path / "ledger")
+    binary = _exact_anchored("F1", "X by 2026-06-30.", "Resolves YES if X by 2026-06-30.",
+                             market_id="m-1", end_date="2026-06-30T12:00:00Z", horizon_year=2026)
+    event = fr.settle_binaries(
+        "r-4", [binary], {"m-1": _gamma_resolution("m-1", uma="resolved",
+                                                   closed_time="2026-07-02T15:30:00Z")},
+        target_meta={"as_of": "2026-05-01", "created_at": "2026-05-02T08:00:00+00:00"},
+        processed_at="2026-09-29T12:00:00+00:00")["events"][0]
+    assert event["scoring_eligible"] is True
+    start = threading.Barrier(8)
+
+    def worker():
+        start.wait()
+        mon._append_event(dict(event), led)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len(ledger.read_market_resolutions(led)) == 1

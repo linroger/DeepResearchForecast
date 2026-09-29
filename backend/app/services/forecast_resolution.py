@@ -30,21 +30,35 @@ Honesty rules (all fail closed):
   terminal event, and an item whose market the source never answered for is
   never ended.
 - Each use of a binary's resolution date fails closed on its own side, because
-  both write append-only facts. A grace terminal waits for the LATEST ISO date
-  the binary names (``settlement_resolution_date``), so a baseline written
-  before the deadline never ends an item early. The end-date check holds a
-  market to the EARLIEST date named on or after the forecast origin
-  (``eligibility_deadline``), so a later publication or release date never
-  admits a market that resolves a later window.
+  both write append-only facts. Dates are read by ``utils.deadline_dates`` in
+  every written form (ISO, 'June 30, 2027', '2028年12月31日', '30.06.2027',
+  'Q2 2027', 'mid-2027', '2027-06', 'end-2027' ...), never ISO only. A grace
+  terminal waits for the LATEST plausible deadline: every date the binary names
+  and the end of its ``horizon_year`` (``settlement_resolution_date``), so a
+  baseline or a missed date never ends an item early. The end-date check holds
+  a market's end to a window (``eligibility_window``): no later than a week
+  after the EARLIEST deadline named on or after the forecast origin (or the end
+  of ``horizon_year``), so a later publication date never admits a market that
+  resolves a later window; and no earlier than a week before the deadline the
+  statement itself commits to (the latest date it names, else the end of its
+  ``horizon_year``), so a market that closes while the binary can still resolve
+  YES never labels it. A range names its end as the deadline. A
+  deadline-shaped date that is not a real or pinnable day ('2027-02-30',
+  'early 2027'), or a statement whose every date lies before the origin, makes
+  the end date unverifiable.
+- An item that already holds a terminal row is final: a market that settles
+  later never adds a second fact for it (``already_terminal``).
 """
 
 from __future__ import annotations
 
 import math
+import re
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
+from ..utils.deadline_dates import DateMention, scan_date_mentions
 from ..utils.point_in_time import parse_stamp_strict
 from ..utils.prediction_markets import current_uma_status, parse_market_end
 from .forecast_extractor import (
@@ -53,7 +67,7 @@ from .forecast_extractor import (
     audit_market_anchor_integrity,
 )
 from .forecast_ledger import (
-    _ISO_DATE_RE,
+    _RANGE_JOIN,
     MARKET_RESOLUTION_EVENT_SCHEMA_VERSION,
     binary_resolution_date,
 )
@@ -69,9 +83,15 @@ TERMINAL_REASON = "unresolvable_after_grace"
 # commit: its settlement must never label production calibration (I-21).
 NOT_PRODUCTION_PRIMARY = "not_production_primary"
 ITEM_KIND_BINARY = "binary"
-# A market may end up to a week after the binary's resolution date (settlement lag);
-# a later end means the market resolves a different window.
+# A market may end up to a week on either side of the binary's deadline (settlement lag,
+# time zones); outside that window it resolves a different period.
 END_DATE_TOLERANCE = timedelta(days=7)
+# Two dates joined like this name a window whose START is no deadline: the connectors of
+# forecast_ledger's range regex, plus 'through'/'until'/'到'.
+_RANGE_GAP_RE = re.compile(rf"{_RANGE_JOIN}|\s*(?:through|thru|until|till|到)\s*", re.IGNORECASE)
+_BETWEEN_AND_RE = re.compile(r"\s*(?:and|&|与|和)\s*", re.IGNORECASE)
+_BETWEEN_BEFORE_RE = re.compile(r"(?:between|介于)\s*$", re.IGNORECASE)
+_BETWEEN_AFTER_RE = re.compile(r"^\s*之间")
 # A research-time price strictly inside this band proves the market was unsettled then.
 _UNSETTLED_PRICE_LO = 0.01
 _UNSETTLED_PRICE_HI = 0.99
@@ -130,17 +150,19 @@ def known_at(resolution: Optional[Dict[str, Any]], processed_at: str) -> Tuple[s
     return processed.isoformat(), BASIS_PROCESSING_UPPER_BOUND, closed is not None
 
 
-def _named_dates(binary: Dict[str, Any], keys: Tuple[str, ...]) -> List[str]:
-    """Every real calendar date (``YYYY-MM-DD``) named in ``binary``'s ``keys``, in order."""
-    named: List[str] = []
-    for key in keys:
-        for match in _ISO_DATE_RE.finditer(str(binary.get(key) or "")):
-            try:
-                date.fromisoformat(match.group(1))
-            except ValueError:
-                continue  # '2026-02-30' is not a date; it can be neither deadline nor baseline
-            named.append(match.group(1))
-    return named
+def _range_starts(text: str, mentions: List[DateMention]) -> Set[int]:
+    """Indexes of the mentions that open a range ('between A and B', 'A to B', 'A–B',
+    'A至B'): a window's start, never its deadline. Its end stays a deadline."""
+    starts: Set[int] = set()
+    for index in range(len(mentions) - 1):
+        first, second = mentions[index], mentions[index + 1]
+        gap = text[first.end:second.start]
+        if _RANGE_GAP_RE.fullmatch(gap) or (
+                _BETWEEN_AND_RE.fullmatch(gap)
+                and (_BETWEEN_BEFORE_RE.search(text[:first.start])
+                     or _BETWEEN_AFTER_RE.match(text[second.end:]))):
+            starts.add(index)
+    return starts
 
 
 def _horizon_year_end(binary: Dict[str, Any]) -> Optional[str]:
@@ -151,45 +173,114 @@ def _horizon_year_end(binary: Dict[str, Any]) -> Optional[str]:
 
 
 def settlement_resolution_date(binary: Any) -> Optional[str]:
-    """The binary's resolution date for grace terminals: the LATEST real calendar
-    date (``YYYY-MM-DD``) named in ``resolution_criteria``, ``resolution_source``
-    or ``statement``, else 31 Dec of ``horizon_year``; None when there is neither.
+    """The date a grace terminal waits for: the LATEST of every date named in
+    ``resolution_criteria``, ``resolution_source`` or ``statement`` (in any written
+    form, each at the latest day it can plausibly mean, so an invalid '2027-02-30'
+    counts as 2027-02-28 and a vague 'early 2027' as 2027-06-30) and 31 Dec of
+    ``horizon_year``; None when there is none of them.
 
-    ``forecast_ledger.binary_resolution_date`` takes the FIRST date, so a
-    baseline written before the deadline ('exceeds the 2024-12-31 level by
-    2027-06-30') would read as the resolution date. A grace terminal is an
-    append-only fact: a late date only delays it, an early one records it
-    wrongly for good, so the latest date wins (the rule of
-    resolution_date_for_horizon). The end-date check needs the opposite
-    direction and uses ``eligibility_deadline``.
+    A grace terminal is an append-only fact: a late date only delays it, an early
+    one ends an item that can still resolve, for good. So nothing named can pull
+    the date earlier: not a baseline ('FYE 2026-05-31') beside a deadline written
+    as '2028年12月31日', not a deadline the scanner reads as a period end, and not a
+    ``horizon_year`` later than every named date. The end-date check needs the
+    opposite direction and uses ``eligibility_window``.
     """
     if not isinstance(binary, dict):
         return None
-    named = _named_dates(binary, ("resolution_criteria", "resolution_source", "statement"))
-    return max(named) if named else _horizon_year_end(binary)
+    latest = [mention.latest
+              for key in ("resolution_criteria", "resolution_source", "statement")
+              for mention in scan_date_mentions(str(binary.get(key) or ""))]
+    horizon_end = _horizon_year_end(binary)
+    if horizon_end:
+        latest.append(date.fromisoformat(horizon_end))
+    return max(latest).isoformat() if latest else None
 
 
-def eligibility_deadline(binary: Any, origin: Any = None) -> Optional[str]:
-    """The deadline a market's end date is held to: the EARLIEST real calendar date
-    named in ``resolution_criteria`` or ``statement`` on or after the UTC day of
-    ``origin`` (the forecast's as-of date or creation stamp), else 31 Dec of
-    ``horizon_year``; None when there is neither.
+def _deadline_candidates(text: str, origin_day: Optional[date]
+                         ) -> Tuple[bool, List[date], bool]:
+    """``(names_a_date, deadlines, unverifiable)`` for one field of a binary.
 
-    A date before the origin is a baseline ('above its 2024-12-31 level'), never
-    a deadline. A later date may be a publication or verification date ('on
-    2027-12-31 ... published by 2028-03-31'), and ``resolution_source`` names
-    where and when the answer is published, so neither may loosen the check: an
-    early deadline can only cost a label, a late one would let a market that
-    resolves a later window label the binary for good. Without a readable origin
-    every named date counts.
+    ``deadlines`` are the pinned days on or after ``origin_day`` (all of them without
+    an origin) that do not open a range. ``unverifiable`` is True when a date-shaped
+    span that is not a real or pinnable day ('2027-02-30', '06/07/2027', 'early 2027')
+    could be on or after the origin: it may be the deadline, so no market can be
+    checked against this binary.
+    """
+    mentions = scan_date_mentions(text)
+    starts = _range_starts(text, mentions)
+    deadlines: List[date] = []
+    for index, mention in enumerate(mentions):
+        if mention.day is None:
+            if origin_day is None or mention.latest >= origin_day:
+                return bool(mentions), [], True
+            continue
+        if index not in starts and (origin_day is None or mention.day >= origin_day):
+            deadlines.append(mention.day)
+    return bool(mentions), deadlines, False
+
+
+def eligibility_window(binary: Any, origin: Any = None) -> Optional[Tuple[str, str]]:
+    """``(earliest, latest)``: the deadlines a market's end date is held to; None when
+    the binary's deadline cannot be verified.
+
+    Candidates are the dates named in ``statement`` and ``resolution_criteria`` (any
+    written form) on or after the UTC day of ``origin`` (the forecast's as-of date or
+    creation stamp); a range contributes its end only. Without a readable origin every
+    named date counts. ``resolution_source`` says where and when the answer is
+    published, so it is never read.
+
+    - ``earliest`` = the earliest candidate or 31 Dec of ``horizon_year``, whichever
+      is first. A later date may be a publication or verification date ('on
+      2027-12-31 ... published by 2028-03-31'), so it can never loosen the late side:
+      an early deadline only costs a label, a late one lets a market that resolves a
+      later window label the binary for good.
+    - ``latest`` = the deadline the statement itself commits to: the latest
+      candidate it names, else 31 Dec of ``horizon_year`` (the period a dateless
+      statement covers), else the latest candidate the criteria name. An earlier
+      date may be an interim observation point ('any quarter from Q3 2026 ... before
+      the end of 2027'), so it can never loosen the early side: a market that closes
+      before the binary's own deadline could label as NO a binary that can still
+      resolve YES. Criteria dates never set this side when the statement or
+      ``horizon_year`` does, because a criteria date after the period is usually its
+      publication date ('calendar year 2030 ... published by 2031-06-30').
+
+    None (unverifiable) when a deadline-shaped date could not be pinned (see
+    ``_deadline_candidates``), when the statement names dates but every one of them
+    lies before the origin (the forecast was issued after its own deadline, so no
+    later date in the text can stand in for it), or when there is neither a
+    candidate nor a readable ``horizon_year``.
     """
     if not isinstance(binary, dict):
         return None
     origin_moment = parse_stamp_strict(origin)
-    origin_day = origin_moment.date().isoformat() if origin_moment is not None else None
-    named = [day for day in _named_dates(binary, ("resolution_criteria", "statement"))
-             if origin_day is None or day >= origin_day]
-    return min(named) if named else _horizon_year_end(binary)
+    origin_day = origin_moment.date() if origin_moment is not None else None
+    statement_named, statement_deadlines, statement_blocked = _deadline_candidates(
+        str(binary.get("statement") or ""), origin_day)
+    _, criteria_deadlines, criteria_blocked = _deadline_candidates(
+        str(binary.get("resolution_criteria") or ""), origin_day)
+    if statement_blocked or criteria_blocked:
+        return None
+    if statement_named and not statement_deadlines:
+        return None
+    horizon_iso = _horizon_year_end(binary)
+    horizon_end = date.fromisoformat(horizon_iso) if horizon_iso else None
+    candidates = statement_deadlines + criteria_deadlines
+    late_side = candidates + ([horizon_end] if horizon_end else [])
+    if not late_side:
+        return None
+    earliest = min(late_side)
+    if statement_deadlines:
+        latest = max(statement_deadlines)
+    else:
+        latest = horizon_end or max(criteria_deadlines)
+    return earliest.isoformat(), latest.isoformat()
+
+
+def eligibility_deadline(binary: Any, origin: Any = None) -> Optional[str]:
+    """The earliest deadline of ``eligibility_window`` (None when unverifiable)."""
+    window = eligibility_window(binary, origin)
+    return window[0] if window else None
 
 
 def market_eligibility(binary: Any, anchor: Any, min_equivalence: str = "exact", *,
@@ -203,10 +294,11 @@ def market_eligibility(binary: Any, anchor: Any, min_equivalence: str = "exact",
     contract hash that no longer matches the binary's statement and criteria),
     ``equivalence_<level>`` below the ``min_equivalence`` floor (unknown floors
     act as ``exact``; a ``loose`` floor therefore admits what ``near`` does),
-    ``end_date_unverifiable`` (an unparseable market end or a binary without a
-    resolution date) and ``end_date_mismatch`` (the market ends more than
-    END_DATE_TOLERANCE after ``eligibility_deadline(binary, origin)``, where
-    ``origin`` is the forecast's as-of date, else its creation stamp).
+    ``end_date_unverifiable`` (an unparseable market end, or a binary whose
+    deadline ``eligibility_window`` cannot verify) and ``end_date_mismatch`` (the
+    market ends more than END_DATE_TOLERANCE after the window's earliest deadline
+    or before its latest one), where ``origin`` is the forecast's as-of date, else
+    its creation stamp.
     """
     if not isinstance(binary, dict) or not isinstance(anchor, dict):
         return False, "anchor_incomplete"
@@ -223,10 +315,16 @@ def market_eligibility(binary: Any, anchor: Any, min_equivalence: str = "exact",
         level = equivalence if equivalence in _MARKET_EQUIVALENCE_RANK else "missing"
         return False, f"equivalence_{level}"
     market_end = parse_market_end(anchor.get("endDate"))
-    resolution_end = parse_market_end(eligibility_deadline(binary, origin))
-    if market_end is None or resolution_end is None:
+    window = eligibility_window(binary, origin)
+    if market_end is None or window is None:
         return False, "end_date_unverifiable"
-    if market_end > resolution_end + END_DATE_TOLERANCE:
+    earliest_end = parse_market_end(window[0])  # the end of that UTC day
+    latest_day = date.fromisoformat(window[1])
+    latest_start = datetime(latest_day.year, latest_day.month, latest_day.day,
+                            tzinfo=timezone.utc)
+    if earliest_end is None or market_end > earliest_end + END_DATE_TOLERANCE:
+        return False, "end_date_mismatch"
+    if market_end < latest_start - END_DATE_TOLERANCE:
         return False, "end_date_mismatch"
     return True, None
 
@@ -412,15 +510,22 @@ def _grace_expired(binary: Dict[str, Any], processed: datetime,
     return resolution_date if expired else None
 
 
-def _settled_forecast_ids(report_id: str, events: Optional[Iterable[Any]]) -> Set[str]:
-    """Forecast ids of ``report_id`` that already hold a non-terminal event in the ledger."""
-    out: Set[str] = set()
+def _is_terminal_row(event: Dict[str, Any]) -> bool:
+    return (event.get("market_id") == TERMINAL_MARKET_ID
+            or event.get("source_kind") == SOURCE_KIND_TERMINAL)
+
+
+def _held_forecast_ids(report_id: str, events: Optional[Iterable[Any]]
+                       ) -> Tuple[Set[str], Set[str]]:
+    """``(settled, terminal)``: forecast ids of ``report_id`` that already hold a
+    non-terminal event, and those that already hold a terminal row, in the ledger."""
+    settled: Set[str] = set()
+    terminal: Set[str] = set()
     for event in events or []:
-        if (isinstance(event, dict) and str(event.get("report_id") or "") == report_id
-                and event.get("market_id") != TERMINAL_MARKET_ID
-                and event.get("source_kind") != SOURCE_KIND_TERMINAL):
-            out.add(str(event.get("forecast_id") or ""))
-    return out
+        if isinstance(event, dict) and str(event.get("report_id") or "") == report_id:
+            forecast_id = str(event.get("forecast_id") or "")
+            (terminal if _is_terminal_row(event) else settled).add(forecast_id)
+    return settled, terminal
 
 
 def recorded_items(events: Optional[Iterable[Any]]) -> Set[Tuple[str, str]]:
@@ -438,6 +543,22 @@ def anchor_market_id(binary: Any) -> str:
     """The market id of ``binary``'s market anchor ('' when it has none)."""
     anchor = binary.get("market_anchor") if isinstance(binary, dict) else None
     return str(anchor.get("market_id") or "").strip() if isinstance(anchor, dict) else ""
+
+
+def overdue_since(binaries: Any, processed_at: str) -> Optional[str]:
+    """The earliest ``settlement_resolution_date`` among ``binaries``' market-anchored items
+    that lies before the processing day, else None: those markets should be closed by now,
+    so a capped sweep fetches them first (their grace terminals need a fetch too). Raises
+    ``ValueError`` when ``processed_at`` is not an offset-aware ISO date-time."""
+    processed = parse_stamp_strict(processed_at, allow_date=False)
+    if processed is None:
+        raise ValueError("processed_at must be an offset-aware ISO date-time")
+    today = processed.date().isoformat()
+    overdue = [day for day in (settlement_resolution_date(binary)
+                               for binary in (binaries if isinstance(binaries, list) else [])
+                               if anchor_market_id(binary))
+               if day and day < today]
+    return min(overdue) if overdue else None
 
 
 def due_binaries(report_id: Any, binaries: Any, recorded: Set[Tuple[str, str]], *,
@@ -486,12 +607,17 @@ def settle_binaries(report_id: Any, binaries: Any, resolutions: Any, *,
     (offset-aware, ``ValueError`` otherwise) is the only clock, so every
     decision is replayable. ``existing_events`` are the ledger's resolutions
     rows: an item that already holds a non-terminal event never gets a
-    terminal one. ``answered_market_ids`` are the markets the source answered
+    terminal one, and an item that already holds a terminal row is final and
+    gets nothing (counted in ``already_terminal``): the terminal is an
+    append-only fact, so a market that settles after it must not add a second,
+    contradicting one (the sweep's ``due_binaries`` skips such items the same
+    way). ``answered_market_ids`` are the markets the source answered
     for (``PolymarketClient.fetch_resolutions_answered``: returned, or confirmed
     missing by a successful request for that id alone); None means only the
     markets present in ``resolutions``.
 
-    Returns ``{events, terminal, pending_by_reason, ineligible_by_reason}``.
+    Returns ``{events, terminal, pending_by_reason, ineligible_by_reason,
+    already_terminal}``.
     ``events`` are settled or ambiguous market events (append-ready rows with
     every v2 field); ``terminal`` are grace-expired items without a settlement
     (market_id 'terminal', never scored). Pending reasons: ``no_resolution_data``,
@@ -510,17 +636,21 @@ def settle_binaries(report_id: Any, binaries: Any, resolutions: Any, *,
     answered = {str(mid or "").strip() for mid in (
         answered_market_ids if answered_market_ids is not None else by_market)}
     grace = max(0, int(grace_days))
-    already_settled = _settled_forecast_ids(rid, existing_events)
+    already_settled, already_ended = _held_forecast_ids(rid, existing_events)
     events: List[Dict[str, Any]] = []
     terminal: List[Dict[str, Any]] = []
     pending: Counter = Counter()
     ineligible: Counter = Counter()
+    already_terminal = 0
     for binary in binaries if isinstance(binaries, list) else []:
         if not isinstance(binary, dict):
             continue
         forecast_id = str(binary.get("id") or "").strip()
         if not forecast_id:
             pending["missing_forecast_id"] += 1
+            continue
+        if forecast_id in already_ended:
+            already_terminal += 1
             continue
         anchor = binary.get("market_anchor") if isinstance(binary.get("market_anchor"), dict) else None
         market_id = anchor_market_id(binary)
@@ -550,4 +680,5 @@ def settle_binaries(report_id: Any, binaries: Any, resolutions: Any, *,
         "terminal": terminal,
         "pending_by_reason": dict(sorted(pending.items())),
         "ineligible_by_reason": dict(sorted(ineligible.items())),
+        "already_terminal": already_terminal,
     }
