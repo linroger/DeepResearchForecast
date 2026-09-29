@@ -6,8 +6,10 @@ reply and a repair note appended; a second miss raises ValueError naming both re
 repaired truncations are accepted and flagged in last_call_meta(); every outcome is counted in
 LLMMeter's structured_outputs. Also pins the flag-off legacy path (blind retry at temperature-0.2,
 non-dict values returned), the byte-identical first-try-valid request, the fallback-key discard,
-the use_cache=False opt-out (EVAL-10) and the never-raise guarantees. Every OpenAI response is a
-SimpleNamespace fed through a fake client: no network, no real LLM.
+the use_cache=False opt-out (EVAL-10) and the never-raise guarantees. Review round 1: a JSON null
+reply is named 'not a JSON object', an empty reply is echoed as a placeholder, and a transport
+failure in the repair turn is still counted 'failed'. Every OpenAI response is a SimpleNamespace
+fed through a fake client: no network, no real LLM.
 """
 
 import os
@@ -107,6 +109,10 @@ def _structured(label="chat_json"):
     return tel.LLMMeter.snapshot(RUN_ID).get("structured_outputs", {}).get(label)
 
 
+def _structured_by_stage(label="chat_json"):
+    return tel.LLMMeter.snapshot(RUN_ID).get("structured_outputs_by_stage", {}).get(label)
+
+
 def _repair_note(reason):
     return lc._JSON_REPAIR_NOTE.format(reason=reason)
 
@@ -127,9 +133,9 @@ def test_list_reply_gets_a_repair_turn_at_the_same_temperature(transports):
     ]
     assert first["temperature"] == second["temperature"] == 0.4
     assert first["response_format"] == second["response_format"] == _JSON_FORMAT
-    assert _structured() == {"ok": 0, "repaired": 1, "failed": 0, "truncation_repaired": 0,
-                             "by_stage": {"graph": {"ok": 0, "repaired": 1, "failed": 0,
-                                                    "truncation_repaired": 0}}}
+    assert _structured() == {"ok": 0, "repaired": 1, "failed": 0, "truncation_repaired": 0}
+    assert _structured_by_stage() == {"graph": {"ok": 0, "repaired": 1, "failed": 0,
+                                                "truncation_repaired": 0}}
 
 
 def test_repair_note_names_invalid_json_and_caps_the_echoed_reply(transports):
@@ -142,6 +148,88 @@ def test_repair_note_names_invalid_json_and_caps_the_echoed_reply(transports):
     echoed, note = transports[PRIMARY].calls[1]["messages"][-2:]
     assert echoed == {"role": "assistant", "content": bad.strip()[:4000]}
     assert note == {"role": "user", "content": _repair_note("invalid JSON")}
+
+
+@pytest.mark.parametrize("allow_non_dict", [False, True])
+def test_json_null_reply_is_a_miss_named_not_an_object(transports, allow_non_dict):
+    """JSON null parses, so the note must not claim the reply was invalid JSON; chat_json
+    never returns None, not even for an allow_non_dict caller."""
+    client = _client()
+    transports[PRIMARY].script(" null ", '{"a": 1}')
+
+    assert client.chat_json(_msgs(f"null-{allow_non_dict}"), allow_non_dict=allow_non_dict) == {"a": 1}
+
+    echoed, note = transports[PRIMARY].calls[1]["messages"][-2:]
+    assert echoed == {"role": "assistant", "content": "null"}
+    assert note == {"role": "user", "content": _repair_note("not a JSON object")}
+    assert _structured()["repaired"] == 1
+
+
+def test_two_null_replies_name_not_an_object_in_the_value_error(transports):
+    client = _client()
+    transports[PRIMARY].script("null", "garbage")
+
+    with pytest.raises(ValueError) as excinfo:
+        client.chat_json(_msgs("null-twice"))
+    assert "首轮: not a JSON object; 修复轮: invalid JSON" in str(excinfo.value)
+
+
+def test_empty_reply_is_echoed_as_a_placeholder_in_non_strict_transport(transports, monkeypatch):
+    """LLM_TRANSPORT_STRICT=false: a think-only reply passes chat()'s legacy raw-text empty
+    check and is cleaned to ''. The repair turn must not send an empty assistant message
+    (MiniMax answers that with a 400)."""
+    monkeypatch.setattr(Config, "LLM_TRANSPORT_STRICT", False, raising=False)
+    client = _client()
+    transports[PRIMARY].script("<think>only reasoning, no answer</think>", '{"a": 1}')
+
+    assert client.chat_json(_msgs("think-only")) == {"a": 1}
+
+    echoed, note = transports[PRIMARY].calls[1]["messages"][-2:]
+    assert echoed == {"role": "assistant", "content": lc._JSON_REPAIR_EMPTY_REPLY}
+    assert echoed["content"].strip()
+    assert note == {"role": "user", "content": _repair_note("invalid JSON")}
+
+
+class _TransportDown(RuntimeError):
+    pass
+
+
+def _fail_on_call(monkeypatch, client, failing_call):
+    """Make client.chat raise _TransportDown on its ``failing_call``-th call (1-based)."""
+    real_chat = client.chat
+    calls = []
+
+    def chat(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == failing_call:
+            raise _TransportDown("provider down")
+        return real_chat(**kwargs)
+
+    monkeypatch.setattr(client, "chat", chat)
+    return calls
+
+
+def test_repair_turn_transport_failure_propagates_and_is_counted_failed(transports, monkeypatch):
+    client = _client()
+    transports[PRIMARY].script("[1]")
+    calls = _fail_on_call(monkeypatch, client, 2)
+    messages = _msgs("repair-transport")
+
+    with pytest.raises(_TransportDown, match="provider down"):
+        client.chat_json(messages, temperature=0.0)
+
+    assert len(calls) == 2 and len(transports[PRIMARY].calls) == 1
+    assert tel.LLMCache.get(_key(messages, 0.0)) is None  # the missed attempt 1 was still discarded
+    assert _structured() == {"ok": 0, "repaired": 0, "failed": 1, "truncation_repaired": 0}
+
+
+def test_first_attempt_transport_failure_records_no_structured_outcome(transports, monkeypatch):
+    client = _client()
+    _fail_on_call(monkeypatch, client, 1)
+
+    with pytest.raises(_TransportDown):
+        client.chat_json(_msgs("first-transport"))
+    assert "structured_outputs" not in tel.LLMMeter.snapshot(RUN_ID)
 
 
 def test_temperature_zero_miss_gets_a_fresh_completion_and_is_never_replayed(transports):
@@ -260,8 +348,9 @@ def test_label_and_stage_attribution(transports):
 
     counts = _structured("critique")
     assert (counts["ok"], counts["repaired"], counts["failed"]) == (1, 0, 1)
-    assert counts["by_stage"]["graph"]["ok"] == 1
-    assert counts["by_stage"]["report"]["failed"] == 1
+    by_stage = _structured_by_stage("critique")
+    assert by_stage["graph"]["ok"] == 1
+    assert by_stage["report"]["failed"] == 1
     assert _structured() is None  # the default label was never used
 
 
@@ -345,10 +434,30 @@ def test_chat_and_repair_path_share_one_cache_key_helper(transports):
     ('{"a": "unterminated', ({"a": "unterminated"}, True)),
     ('{"a": 1,', ({"a": 1}, True)),
     ("no json here", (None, False)),
+    ("null", (None, False)),
+    ("", (None, False)),
 ])
 def test_parse_json_response_ex_reports_truncation_repair(text, expected):
     assert lc.LLMClient._parse_json_response_ex(text) == expected
     assert lc.LLMClient._parse_json_response(text) == expected[0]
+
+
+@pytest.mark.parametrize("text, expected_value", [
+    ("null", None),                 # parsed: JSON null
+    ("```json\nnull\n```", None),   # parsed: fenced JSON null
+    ("[1]", [1]),
+    ("no json here", "UNPARSED"),
+    ("", "UNPARSED"),
+    ('{"a": "x" "b"}', "UNPARSED"),  # has braces, repair branch still fails
+])
+def test_parse_json_response_ex_unparsed_sentinel_tells_null_from_garbage(text, expected_value):
+    sentinel = object()
+    value, repaired = lc.LLMClient._parse_json_response_ex(text, unparsed=sentinel)
+    assert repaired is False
+    if expected_value == "UNPARSED":
+        assert value is sentinel
+    else:
+        assert value == expected_value and value is not sentinel
 
 
 def test_new_chat_json_options_are_keyword_only():

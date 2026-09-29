@@ -304,9 +304,15 @@ _CACHEABLE_FINISH_REASONS = frozenset({"stop", "tool_calls", "unknown"})
 
 # INFRA-2: chat_json repair turn (LLM_JSON_REPAIR_TURN). The miss reasons are named in the
 # repair note and in the ValueError; the rejected reply is echoed back at most this many chars.
+# An empty echo is replaced by the placeholder: providers such as MiniMax reject an assistant
+# turn with empty content (400), and chat() can return '' when LLM_TRANSPORT_STRICT is off.
 _JSON_MISS_INVALID = "invalid JSON"
 _JSON_MISS_NOT_OBJECT = "not a JSON object"
 _JSON_REPAIR_REPLY_CHARS = 4000
+_JSON_REPAIR_EMPTY_REPLY = "(empty reply)"
+# Passed as _parse_json_response_ex(unparsed=...) so a reply of JSON null (parsed, but not an
+# object) is told apart from text that does not parse at all.
+_JSON_UNPARSED = object()
 _JSON_REPAIR_NOTE = (
     "Your previous reply was not a single valid JSON object ({reason}). Reply again with "
     "exactly ONE complete JSON object that follows the schema requested above - no markdown "
@@ -1087,11 +1093,12 @@ class LLMClient:
         解析失败时先做本地修复（提取 JSON 块、补全被 max_tokens 截断的括号）。
 
         INFRA-2（LLM_JSON_REPAIR_TURN，默认开）：首轮回复不是单个 JSON 对象（解析失败，或解析出
-        list/标量；allow_non_dict=True 时只看解析失败）即为未命中：先从 LLMCache 删掉这份坏回复，
-        再以同温度发一次修复轮（原消息 + 坏回复 + 点名原因的纠正提示）；两轮皆未命中则删掉第二份
-        并抛 ValueError。靠补括号修复的截断回复照常采纳，并在 last_call_meta() 标记
-        json_truncation_repaired=True。结局按 ``label``（缺省 'chat_json'）计入 LLMMeter 的
-        structured_outputs。关闭时为旧行为：降温 0.2 重发同一提示，可能返回非 dict。
+        list/标量/null；allow_non_dict=True 时只看解析失败与 null）即为未命中：先从 LLMCache 删掉
+        这份坏回复，再以同温度发一次修复轮（原消息 + 坏回复 + 点名原因的纠正提示；空回复以占位文本
+        代替）；两轮皆未命中则删掉第二份并抛 ValueError。靠补括号修复的截断回复照常采纳，并在
+        last_call_meta() 标记 json_truncation_repaired=True。结局按 ``label``（缺省 'chat_json'）计入
+        LLMMeter 的 structured_outputs（修复轮传输失败也计 failed）。关闭时为旧行为：降温 0.2 重发同一
+        提示，可能返回非 dict。
 
         tier（EXECPLAN2 I-6-2）透传给 chat()：结构化/机械型 JSON 调用（子查询分解、
         受访者选择、图谱抽取）可传 tier='fast' 路由到廉价档；默认 'strong' 行为不变。
@@ -1124,24 +1131,35 @@ class LLMClient:
 
         Both attempts run at the caller's temperature: the repair turn's messages differ from
         the first request, so its cache key differs too, and a temperature-0 caller still gets a
-        fresh completion. A transport error from chat() propagates unchanged.
+        fresh completion. A transport error from chat() propagates unchanged; when it hits the
+        repair turn, the lost attempt is still counted as 'failed' first.
+
+        A reply of JSON null is a miss ('not a JSON object') even with allow_non_dict=True:
+        chat_json has never returned None (the legacy loop retried it like a parse failure).
         """
         response_format = {"type": "json_object"}
         attempt_messages = messages
         reasons: List[str] = []
         response = ""
         for attempt in range(2):
-            response = self.chat(
-                messages=attempt_messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                response_format=response_format,
-                tier=tier,
-            )
-            value, truncation_repaired = self._parse_json_response_ex(response)
-            if value is None:
+            try:
+                response = self.chat(
+                    messages=attempt_messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    response_format=response_format,
+                    tier=tier,
+                )
+            except Exception:
+                if attempt:
+                    # Attempt 1 already missed: without this the failure would vanish from
+                    # structured_outputs, which is what decides whether Phase B is needed.
+                    self._record_structured(label, "failed", False)
+                raise
+            value, truncation_repaired = self._parse_json_response_ex(response, unparsed=_JSON_UNPARSED)
+            if value is _JSON_UNPARSED:
                 reason = _JSON_MISS_INVALID
-            elif not allow_non_dict and not isinstance(value, dict):
+            elif value is None or (not allow_non_dict and not isinstance(value, dict)):
                 reason = _JSON_MISS_NOT_OBJECT
             else:
                 if truncation_repaired:
@@ -1156,8 +1174,9 @@ class LLMClient:
                                        response_format, tier)
             if attempt == 0:
                 logger.warning(f"chat_json 回复不是单个合法 JSON 对象（{reason}），携纠正提示重发一次")
+                echoed = str(response)[:_JSON_REPAIR_REPLY_CHARS]
                 attempt_messages = list(messages) + [
-                    {"role": "assistant", "content": str(response)[:_JSON_REPAIR_REPLY_CHARS]},
+                    {"role": "assistant", "content": echoed if echoed.strip() else _JSON_REPAIR_EMPTY_REPLY},
                     {"role": "user", "content": _JSON_REPAIR_NOTE.format(reason=reason)},
                 ]
         self._record_structured(label, "failed", False)
@@ -1373,10 +1392,12 @@ class LLMClient:
         return LLMClient._parse_json_response_ex(response)[0]
 
     @staticmethod
-    def _parse_json_response_ex(response: str) -> Tuple[Any, bool]:
+    def _parse_json_response_ex(response: str, *, unparsed: Any = None) -> Tuple[Any, bool]:
         """(value, repaired_truncation): the _parse_json_response value, plus whether the
         bracket-repair branch had to close an unterminated string / structure (or drop a
-        dangling trailing comma) for it to parse. (None, False) when nothing parses."""
+        dangling trailing comma) for it to parse. (unparsed, False) when nothing parses:
+        (None, False) by default, the same as a reply of JSON null; chat_json passes a
+        sentinel to tell the two apart."""
         cleaned = response.strip()
         # 清理 markdown 代码块标记
         cleaned = re.sub(r'^```(?:json)?\s*\n?', '', cleaned, flags=re.IGNORECASE)
@@ -1399,7 +1420,7 @@ class LLMClient:
             # 没有闭合的 '}'：截断式输出，从首个 '{' 起修复
             brace = cleaned.find('{')
             if brace < 0:
-                return None, False
+                return unparsed, False
             cleaned = cleaned[brace:]
 
         # 补全被 max_tokens 截断的字符串/括号：扫描跟踪字符串态与括号栈，
@@ -1436,7 +1457,7 @@ class LLMClient:
         try:
             return json.loads(repaired), repaired != cleaned
         except json.JSONDecodeError:
-            return None, False
+            return unparsed, False
 
     # ------------------------------------------------------------------
     # 共享辅助

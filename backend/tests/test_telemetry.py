@@ -260,6 +260,7 @@ def test_snapshot_has_no_structured_outputs_until_one_is_recorded():
     try:
         T.LLMMeter.record("minimax", "MiniMax-M3", 10, 5, 1.0, stage="graph", run_id="so")
         assert "structured_outputs" not in T.LLMMeter.snapshot("so")
+        assert "structured_outputs_by_stage" not in T.LLMMeter.snapshot("so")
         assert "structured_outputs" not in T.LLMMeter.snapshot("so-never-seen")
 
         T.LLMMeter.record_structured("chat_json", "ok", stage="graph", run_id="so")
@@ -267,20 +268,27 @@ def test_snapshot_has_no_structured_outputs_until_one_is_recorded():
                                      stage="report", run_id="so")
         T.LLMMeter.record_structured("critique", "failed", stage="report", run_id="so")
         snap = T.LLMMeter.snapshot("so")
+        # The spec shape: every value under a label is an integer counter.
         assert snap["structured_outputs"] == {
-            "chat_json": {"ok": 1, "repaired": 1, "failed": 0, "truncation_repaired": 1,
-                          "by_stage": {
-                              "graph": {"ok": 1, "repaired": 0, "failed": 0, "truncation_repaired": 0},
-                              "report": {"ok": 0, "repaired": 1, "failed": 0, "truncation_repaired": 1},
-                          }},
-            "critique": {"ok": 0, "repaired": 0, "failed": 1, "truncation_repaired": 0,
-                         "by_stage": {"report": {"ok": 0, "repaired": 0, "failed": 1,
-                                                 "truncation_repaired": 0}}},
+            "chat_json": {"ok": 1, "repaired": 1, "failed": 0, "truncation_repaired": 1},
+            "critique": {"ok": 0, "repaired": 0, "failed": 1, "truncation_repaired": 0},
+        }
+        assert all(isinstance(n, int) for counts in snap["structured_outputs"].values()
+                   for n in counts.values())
+        # The per-stage breakdown lives in a sibling key.
+        assert snap["structured_outputs_by_stage"] == {
+            "chat_json": {
+                "graph": {"ok": 1, "repaired": 0, "failed": 0, "truncation_repaired": 0},
+                "report": {"ok": 0, "repaired": 1, "failed": 0, "truncation_repaired": 1},
+            },
+            "critique": {"report": {"ok": 0, "repaired": 0, "failed": 1, "truncation_repaired": 0}},
         }
         # record_structured never touches the call counters.
         assert snap["total"]["calls"] == 1
         T.LLMMeter.reset("so")
-        assert "structured_outputs" not in T.LLMMeter.snapshot("so")
+        after_reset = T.LLMMeter.snapshot("so")
+        assert "structured_outputs" not in after_reset
+        assert "structured_outputs_by_stage" not in after_reset
     finally:
         T.LLMMeter.reset("so")
 
@@ -292,7 +300,7 @@ def test_record_structured_attribution_matches_record():
         T.set_run_context("so-ctx", "research")
         T.LLMMeter.record_structured("chat_json", "ok")
         T.set_run_context(None)
-        assert T.LLMMeter.snapshot("so-ctx")["structured_outputs"]["chat_json"]["by_stage"] == {
+        assert T.LLMMeter.snapshot("so-ctx")["structured_outputs_by_stage"]["chat_json"] == {
             "research": {"ok": 1, "repaired": 0, "failed": 0, "truncation_repaired": 0}}
 
         # No run contextvar on the thread + exactly one active run -> fallback attribution.

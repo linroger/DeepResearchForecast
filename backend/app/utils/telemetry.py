@@ -334,8 +334,9 @@ class LLMMeter:
         - ``finish_reasons`` (INFRA-1): ``{stage: {finish_reason: calls}}`` for the calls
           recorded with a finish reason; present only when at least one was.
         - ``structured_outputs`` (INFRA-2): ``{label: {ok, repaired, failed,
-          truncation_repaired, by_stage: {stage: {same four counts}}}}`` from
-          record_structured(); present only when at least one was recorded.
+          truncation_repaired}}`` (integer counts only) from record_structured(), and
+          ``structured_outputs_by_stage``: ``{label: {stage: {same four counts}}}``; both
+          present only when at least one was recorded.
         """
         rid = run_id or _current_run.get() or _DEFAULT_BUCKET
         with cls._lock:
@@ -387,15 +388,17 @@ class LLMMeter:
                 out["finish_reasons"] = {stg: dict(reasons)
                                          for stg, reasons in rm.finish_reasons.items()}
             if rm.structured:
-                structured: Dict[str, Any] = {}
+                structured: Dict[str, Dict[str, int]] = {}
+                structured_by_stage: Dict[str, Dict[str, Dict[str, int]]] = {}
                 for label, by_stage in rm.structured.items():
                     totals = _structured_counts()
                     for counts in by_stage.values():
                         for key in totals:
                             totals[key] += counts.get(key, 0)
-                    structured[label] = {**totals, "by_stage": {stg: dict(counts)
-                                                                for stg, counts in by_stage.items()}}
+                    structured[label] = totals
+                    structured_by_stage[label] = {stg: dict(counts) for stg, counts in by_stage.items()}
                 out["structured_outputs"] = structured
+                out["structured_outputs_by_stage"] = structured_by_stage
             if rid != _DEFAULT_BUCKET:
                 out["unattributed_process"] = unattributed
             return out
