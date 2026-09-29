@@ -74,6 +74,7 @@ from ..utils.actors import (
     situation_brief_block,
     valid_scenario_distribution,
 )
+from ..utils.canonical_json import canonical_json_sha256
 from ..utils.dates import parse_as_of
 from ..utils.logger import get_logger
 
@@ -6754,13 +6755,9 @@ def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[s
     if not simulation_id:
         return out
     try:
-        for entry in PipelineManager.list_pipelines():
-            pid = entry.get("pipeline_id")
-            if not pid:
-                continue
-            data = PipelineManager.load(pid)
-            if not data or data.get("simulation_id") != simulation_id:
-                continue
+        owner = _pipeline_for_simulation(simulation_id)
+        if owner is not None:
+            pid, data = owner
             hd = data.get("handoff_dir") or PipelineManager.handoff_dir(pid)
             actors = _read_json(os.path.join(hd, "actors.json"))
             report = _read_text(os.path.join(hd, "research_report.md"))
@@ -6770,10 +6767,97 @@ def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[s
             out["research_report"] = report or None
             out["actor_dossier"] = dossier or None
             out["situation_brief"] = situation_brief(actors) if actors else None
-            break
     except Exception:  # best-effort enrichment must never break manual report generation
         pass
     return out
+
+
+def _pipeline_for_simulation(simulation_id: str) -> Optional[tuple[str, dict[str, Any]]]:
+    """(pipeline_id, persisted state) of the newest pipeline whose simulation is ``simulation_id``."""
+    for entry in PipelineManager.list_pipelines():
+        pid = entry.get("pipeline_id")
+        if not pid:
+            continue
+        data = PipelineManager.load(pid)
+        if data and data.get("simulation_id") == simulation_id:
+            return pid, data
+    return None
+
+
+def validated_as_of_from_options(options: Optional[dict[str, Any]]) -> Optional[str]:
+    """EVAL-1: the graph stage's validated as-of anchor recorded in pipeline options.
+
+    A what-if fork reuses its base's research and graph (its graph stage never
+    re-runs), so it inherits the anchor of the nearest base pipeline that recorded
+    one. None when no validated anchor exists (the ledger then falls back to the
+    strict actors date, then the commit date). Never raises: it runs on the report
+    stage's critical path.
+    """
+    opts = options if isinstance(options, dict) else {}
+    seen: set[str] = set()
+    while True:
+        value = opts.get("as_of_date_validated")
+        if isinstance(value, str) and value:
+            return value
+        base_pid = str(opts.get("base_pipeline_id") or "")
+        if not base_pid or base_pid in seen:
+            return None
+        seen.add(base_pid)
+        try:
+            base = PipelineManager.load(base_pid)
+        except Exception:  # noqa: BLE001 — an unreadable base simply has no anchor
+            return None
+        base_opts = base.get("options") if isinstance(base, dict) else None
+        opts = base_opts if isinstance(base_opts, dict) else {}
+
+
+def _scenario_ledger_identity(options: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """EVAL-1: what-if identity of a pipeline for the ledger ({} for a plain pipeline).
+
+    ``scenario_key`` fingerprints the fork's label + overlay, so two forks of one
+    base with different overlays are different conditional forecast targets.
+    """
+    opts = options if isinstance(options, dict) else {}
+    label = str(opts.get("scenario_label") or "").strip()
+    if not label:
+        return {}
+    overlay = opts.get("scenario_overlay")
+    try:
+        key = canonical_json_sha256({"label": label,
+                                     "overlay": overlay if isinstance(overlay, dict) else {}})
+    except (TypeError, ValueError):
+        key = canonical_json_sha256({"label": label, "overlay": {}})
+    return {"scenario_label": label, "scenario_key": key}
+
+
+def ledger_identity_for_simulation(simulation_id: Optional[str]) -> dict[str, Any]:
+    """EVAL-1: ledger identity fields of the pipeline that owns ``simulation_id``.
+
+    Report entry points without orchestrator context (``/api/report/generate``
+    regenerations) must key the forecast ledger exactly like the pipeline's own
+    report: on the graph stage's validated as-of anchor rather than the raw
+    actors.json date, and a what-if fork's simulation stays a conditional
+    scenario. Returns ``{pipeline_id, as_of_date[, scenario_label, scenario_key]}``,
+    or {} when no pipeline owns the simulation. Best-effort: never raises.
+    """
+    if not simulation_id:
+        return {}
+    try:
+        owner = _pipeline_for_simulation(simulation_id)
+        if owner is None:
+            return {}
+        pid, data = owner
+        options = data.get("options") if isinstance(data.get("options"), dict) else {}
+        identity: dict[str, Any] = {
+            "pipeline_id": pid,
+            "as_of_date": validated_as_of_from_options(options),
+        }
+        identity.update(_scenario_ledger_identity(options))
+        return identity
+    except Exception as exc:  # noqa: BLE001 — identity lookup must never break a report
+        logger.warning("ledger identity lookup for simulation %s failed (ignored): %s",
+                       simulation_id, exc)
+        return {}
 
 
 def preflight_pipeline(mode: str = "full", model: Optional[str] = None) -> list[str]:
@@ -8765,20 +8849,41 @@ class PipelineOrchestrator:
                                record_class: Optional[str] = None) -> dict[str, Any]:
         """EVAL-1: ledger provenance for one ReportAgent (``agent.ledger_context``).
 
-        ``as_of_date`` is the graph stage's validated anchor (None when it was not
-        validated → the ledger falls back to strict actors / commit date). Without an
-        explicit ``record_class`` the ledger derives production / conditional_scenario.
+        ``as_of_date`` is the graph stage's validated anchor, inherited from the base
+        pipeline by a what-if fork (None when it was not validated → the ledger falls
+        back to strict actors / commit date). A fork also carries its scenario identity
+        (``scenario_label`` / ``scenario_key``). Without an explicit ``record_class`` the
+        ledger derives production / conditional_scenario.
         """
         context: dict[str, Any] = {
             "pipeline_id": state.pipeline_id,
             "simulation_id": simulation_id,
             "seed": seed,
             "run_kind": run_kind,
-            "as_of_date": (state.options or {}).get("as_of_date_validated"),
+            "as_of_date": validated_as_of_from_options(state.options),
         }
+        context.update(_scenario_ledger_identity(state.options))
         if record_class:
             context["record_class"] = record_class
         return context
+
+    @staticmethod
+    def _record_validated_as_of(state: "PipelineState", as_of: Optional[datetime],
+                                validated: bool) -> None:
+        """EVAL-1: record the graph stage's as-of anchor as the ledger pre-registration date.
+
+        Only an anchor the validator actually produced counts (``validated``); the
+        raw-parse fallback date is unvalidated and never recorded. Every graph build
+        re-decides, so a stale anchor from an earlier attempt is dropped first.
+        """
+        state.options.pop("as_of_date_validated", None)
+        if not validated or as_of is None:
+            return
+        from ..utils.point_in_time import validate_as_of
+        try:
+            state.options["as_of_date_validated"] = validate_as_of(as_of.date().isoformat())
+        except ValueError:
+            pass
 
     def _run_one_seed(self, state: "PipelineState", project: Any, graph_id: str,
                       actors: Any, research: dict, report_md: str, *,
@@ -9706,6 +9811,9 @@ class PipelineOrchestrator:
     @staticmethod
     def _clear_report_attempt_artifacts(state: PipelineState) -> None:
         """Remove old REPORT-owned pointers and integrity rows at a new attempt boundary."""
+        # EVAL-1: the previous attempt's ledger receipt must not pass for the verdict of
+        # the new report (a cancelled/halted attempt never replaces it).
+        state.options.pop("forecast_ledger", None)
         stale_names = {
             name for name in list(state.artifacts)
             if name.endswith("_partial") or name == "report_viz_manifest"
@@ -12550,13 +12658,7 @@ class PipelineOrchestrator:
                     as_of = parse_as_of((actors or {}).get("as_of_date")) if isinstance(actors, dict) else None
                 # EVAL-1: 只有校验器实际给出的锚点才成为账本预注册键的 as_of（本次建图重新判定，
                 # 旧值先清掉）；回退到原始解析的日期未经校验，不写入。
-                state.options.pop("as_of_date_validated", None)
-                if _as_of_validated and as_of is not None:
-                    from ..utils.point_in_time import validate_as_of as _validate_as_of
-                    try:
-                        state.options["as_of_date_validated"] = _validate_as_of(as_of.date().isoformat())
-                    except ValueError:
-                        pass
+                self._record_validated_as_of(state, as_of, _as_of_validated)
                 seeded = _seed_research_actors(
                     builder, graph_id, actors, valid_at=as_of
                 )

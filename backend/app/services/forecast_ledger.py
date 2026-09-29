@@ -17,7 +17,8 @@ rewritten or pruned.  Besides the schema_version 1 rows of ``append_forecast``
 
 - ``row_type='commit'`` (``commit_published_forecast``): the exact audit-sealed
   forecast of a publishable report, idempotent on ``commit_id`` and
-  pre-registered on ``target_key`` (question × as_of × record class).  The first
+  pre-registered on ``target_key`` (question × as_of × record class, plus a
+  scenario / seed / provider variant for non-production classes).  The first
   commit for a target is the scored ``primary``; later ones are never-scored
   ``revision`` rows.  Rows are self-contained (question, binaries, provenance,
   publication fingerprint) so they stay settleable after the report folder goes.
@@ -485,7 +486,11 @@ def market_brier_summary(d: Optional[str] = None,
 #                commit for a question at an as-of date is the scored primary, any
 #                later publication is a never-scored revision (run/seed are
 #                provenance, not identity, so a regenerated report cannot replace
-#                a primary whose outcome may already be known).
+#                a primary whose outcome may already be known). Non-production
+#                classes add a ``variant`` (what-if scenario, ensemble seed,
+#                compared provider) so distinct scenarios / members / providers of
+#                one question are separate targets, not revisions of each other;
+#                production keys never carry one.
 
 LEDGER_COMMIT_SCHEMA_VERSION = 2
 # Provenance copied into commit rows when present; anything else in the caller's
@@ -509,13 +514,12 @@ _LEDGER_WRITE_LOCK = threading.Lock()
 # 供账本行自描述二元预测的判定日；监测脚本保留同名别名。）
 _ISO_DATE_RE = re.compile(r"(?<!\d)(20\d{2}-\d{2}-\d{2})(?!\d)")
 
-_RANGE_YEAR = r"(?:19|20)\d{2}"
-_RANGE_DAY = r"(?:19|20)\d{2}-\d{2}-\d{2}"
-_RANGE_JOIN = r"\s*(?:-|–|—|~|～|to|至)\s*"
-_DATE_RANGE_RE = re.compile(
-    rf"(?<!\d)({_RANGE_DAY}){_RANGE_JOIN}({_RANGE_DAY})(?!\d)", re.IGNORECASE)
-_YEAR_RANGE_RE = re.compile(
-    rf"(?<!\d)({_RANGE_YEAR})年?{_RANGE_JOIN}({_RANGE_YEAR})(?!\d)", re.IGNORECASE)
+# A range endpoint is a year 1900-2099 or a full ISO date; '->' precedes '-' so an
+# ASCII arrow is one join, not a dash followed by '>'.
+_RANGE_POINT = r"(?:19|20)\d{2}(?:-\d{2}-\d{2})?"
+_RANGE_JOIN = r"\s*(?:->|→|-|–|—|~|～|to|至)\s*"
+_RANGE_RE = re.compile(
+    rf"(?<!\d)({_RANGE_POINT})年?{_RANGE_JOIN}({_RANGE_POINT})(?!\d)", re.IGNORECASE)
 
 
 def _utc_now_iso() -> str:
@@ -529,25 +533,38 @@ def _is_calendar_date(text: str) -> bool:
         return False
 
 
+def _range_point_end(point: str) -> Optional[str]:
+    """Last day covered by a range endpoint: a year → its 31 Dec; a real date → itself."""
+    if len(point) == 4:
+        return f"{point}-12-31"
+    return point if _is_calendar_date(point) else None
+
+
 def resolution_date_for_horizon(horizon: Optional[str]) -> Optional[str]:
     """Range-aware resolution date for a free-text horizon.
 
-    A horizon naming a range resolves at its END, not its start: two full ISO
-    dates joined by '-', an en/em dash, '~', 'to' or '至' give the later date
-    ('2026-01-01 to 2035-12-31' → '2035-12-31'); two years 1900-2099 joined the
-    same way give 31 Dec of the later year ('2026-2036' → '2036-12-31').
-    Everything else delegates to ``_year_end`` unchanged.
+    A horizon naming a range resolves at its END, not its start. Endpoints are
+    years 1900-2099 or full ISO dates joined by '-', an en/em dash, '~', '→',
+    '->', 'to' or '至'; a year endpoint covers its whole year ('2026-2036' →
+    '2036-12-31', '2026-01-01 to 2035' → '2035-12-31', '2026-07-08 → 2031-12-31'
+    → '2031-12-31'). When the text names a range, the result is the LATEST of
+    every valid range end and ``_year_end``'s reading, so a baseline range
+    ('from 2019-2020 levels by 2030') can never pull the date earlier: a late
+    resolution date only delays settlement, an early one settles prematurely.
+    Text without a valid range delegates to ``_year_end`` unchanged.
     """
     if not horizon:
         return None
     text = str(horizon)
-    m = _DATE_RANGE_RE.search(text)
-    if m and all(_is_calendar_date(day) for day in m.groups()):
-        return max(m.groups())
-    m = _YEAR_RANGE_RE.search(text)
-    if m:
-        return f"{max(int(m.group(1)), int(m.group(2)))}-12-31"
-    return _year_end(text)
+    range_ends: List[str] = []
+    for m in _RANGE_RE.finditer(text):
+        ends = [_range_point_end(point) for point in m.groups()]
+        if all(ends):
+            range_ends.append(max(ends))
+    year_end = _year_end(text)
+    if not range_ends:
+        return year_end
+    return max(range_ends + ([year_end] if year_end else []))
 
 
 def question_sha256(text: Any) -> str:
@@ -655,6 +672,7 @@ def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: 
                               provenance: Optional[Dict[str, Any]] = None,
                               d: Optional[str] = None,
                               committed_at: Optional[str] = None,
+                              target_variant: Optional[Dict[str, Any]] = None,
                               ) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Append one publication-sealed forecast; returns ``(status, row)``.
 
@@ -663,7 +681,9 @@ def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: 
     ``duplicate`` (this exact publication is already in the ledger; nothing
     written, the existing row is returned) or ``error`` (invalid input or I/O
     failure; nothing written). ``forecast`` must be the audit-sealed object
-    whose bytes hash to ``publication['forecast_sha256']``.
+    whose bytes hash to ``publication['forecast_sha256']``. ``target_variant``
+    (non-production classes only; ignored for production) joins the target key
+    and is stored on the row as ``target_variant``.
     """
     rid = str(report_id or "").strip()
     pub = publication if isinstance(publication, dict) else {}
@@ -689,8 +709,16 @@ def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: 
         max_chars = 4000
     q_sha = question_sha256(q_text)
     commit_id = hashlib.sha256(f"{rid}:{forecast_sha}".encode("utf-8")).hexdigest()
-    target_key = canonical_json_sha256(
-        {"v": 1, "q": q_sha, "as_of": as_of_date, "record_class": rc})
+    key_payload: Dict[str, Any] = {"v": 1, "q": q_sha, "as_of": as_of_date, "record_class": rc}
+    variant = (dict(target_variant)
+               if isinstance(target_variant, dict) and target_variant and rc != "production"
+               else None)
+    if variant:
+        key_payload["variant"] = variant
+    try:
+        target_key = canonical_json_sha256(key_payload)
+    except (TypeError, ValueError):
+        return "error", None
     hz = str(forecast.get("horizon") or "").strip() or None
     row: Dict[str, Any] = {
         "schema_version": LEDGER_COMMIT_SCHEMA_VERSION,
@@ -724,6 +752,8 @@ def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: 
         "binary_forecasts": [compact_binary(b) for b in (forecast.get("binary_forecasts") or [])
                              if isinstance(b, dict)],
     }
+    if variant:
+        row["target_variant"] = variant
     row.update(_provenance_fields(provenance))
     try:
         # Reject non-JSON / NaN rows before touching the ledger file at all.

@@ -8,6 +8,7 @@ steps are stubbed so ``generate_report`` runs end-to-end on disk.
 import hashlib
 import inspect
 import json
+import logging
 import os
 import threading
 import time
@@ -127,6 +128,8 @@ def _write_report(report_id, forecast, *, markdown=MARKDOWN, hard_passed=True):
 def reports_dir(monkeypatch, tmp_path):
     monkeypatch.setattr(Config, "UPLOAD_FOLDER", str(tmp_path), raising=False)
     monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path / "reports"), raising=False)
+    # Context-less commits look up the pipeline that owns the simulation: keep it hermetic.
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"), raising=False)
     monkeypatch.setattr(Config, "REPORT_FORECAST_LEDGER", True, raising=False)
     monkeypatch.setattr(Config, "FORECAST_LEDGER_COMMIT_MODE", "published", raising=False)
     monkeypatch.setattr(Config, "FORECAST_LEDGER_RECORD_UNPUBLISHED", True, raising=False)
@@ -171,6 +174,32 @@ def _commit(report_id, *, question=QUESTION, as_of="2026-09-01", record_class="p
         publication={"authority": "final_audit", "policy_version": 3,
                      "markdown_sha256": _sha(MARKDOWN), "forecast_sha256": _sha(report_id)},
         record_class=record_class, provenance=provenance, committed_at=NOW.isoformat())
+
+
+def _save_pipeline(pipeline_id, simulation_id, **options):
+    state = po.PipelineState(pipeline_id=pipeline_id, prompt=QUESTION)
+    state.simulation_id = simulation_id
+    state.options.update(options)
+    po.PipelineManager.save(state)
+    return state
+
+
+@pytest.fixture
+def ledger_logs():
+    """mirofish loggers do not propagate to root (caplog misses them): attach a probe."""
+    records = []
+
+    class _Probe(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    probe = _Probe(level=logging.INFO)
+    lg = logging.getLogger("mirofish.report_agent")
+    lg.addHandler(probe)
+    try:
+        yield records
+    finally:
+        lg.removeHandler(probe)
 
 
 def _mark_resolved(path, outcome="Adopted"):
@@ -477,10 +506,22 @@ def test_resolution_date_for_horizon_ranges():
     assert fl.resolution_date_for_horizon("2026~2029") == "2029-12-31"
     assert fl.resolution_date_for_horizon("2026-01-01 to 2035-12-31") == "2035-12-31"
     assert fl.resolution_date_for_horizon("2035-12-31 — 2026-01-01") == "2035-12-31"
+    # Arrow joins and mixed date/year endpoints (observed live: '2026-07-08 → 2031-12-31').
+    assert fl.resolution_date_for_horizon("2026-07-08 → 2031-12-31") == "2031-12-31"
+    assert fl.resolution_date_for_horizon("2026-07-08 -> 2031-12-31") == "2031-12-31"
+    assert fl.resolution_date_for_horizon("2026-07-08->2031-12-31") == "2031-12-31"
+    assert fl.resolution_date_for_horizon("2026-01-01 to 2035") == "2035-12-31"
+    assert fl.resolution_date_for_horizon("2026 to 2035-06-30") == "2035-06-30"
+    assert fl.resolution_date_for_horizon("Q3-2026 to 2030") == "2030-12-31"
+    # The latest end wins: a baseline range never pulls the date before a later year,
+    # and an as-of note never pulls a range back to its start.
+    assert fl.resolution_date_for_horizon("from 2019-2020 levels by 2030") == "2030-12-31"
+    assert fl.resolution_date_for_horizon("2026-2031 (as-of 2026-07-01)") == "2031-12-31"
     assert fl.resolution_date_for_horizon("2030") == "2030-12-31"
     assert fl.resolution_date_for_horizon(None) is None
     # Non-range text and invalid dates delegate to _year_end, whose outputs are unchanged.
-    for text in ("2030", "到2027年底", "mid-2027", "2030-06-30", "2026-13-01 to 2035-12-31"):
+    for text in ("2030", "到2027年底", "mid-2027", "2030-06-30", "2026-13-01 to 2035-12-31",
+                 "2026-11-03", "2026-12-20"):
         assert fl.resolution_date_for_horizon(text) == fl._year_end(text)
     assert fl._year_end("2030") == "2030-12-31"
     assert fl._year_end("到2027年底") == "2027-12-31"
@@ -628,15 +669,25 @@ def test_generate_report_commit_order(report_env, monkeypatch):
         return real_commit(report_id, report, error=error)
 
     a._commit_forecast_ledger = commit
-    report = a.generate_report(report_id="r_order")
+
+    def progress(stage, pct, message):
+        if stage == "completed":
+            calls.append("progress(completed)")
+
+    report = a.generate_report(progress_callback=progress, report_id="r_order")
     assert report.status == ReportStatus.COMPLETED
     i_audit = calls.index("final_audit")
     i_commit = calls.index("commit_forecast_ledger")
     i_update = calls.index("update_progress(completed)")
+    i_progress = calls.index("progress(completed)")
     last_save_before_commit = max(i for i, c in enumerate(calls[:i_commit]) if c == "save_report")
-    assert i_audit < last_save_before_commit < i_update < i_commit
+    # The commit is the last step: after the save/update that publication_status reads
+    # and after the closing callback that could still flip the report to FAILED.
+    assert i_audit < last_save_before_commit < i_update < i_progress < i_commit
+    assert calls[-1] == "commit_forecast_ledger"
     assert calls.count("commit_forecast_ledger") == 1
     assert a.ledger_receipt["status"] == "committed"
+    assert a.ledger_receipt["report_id"] == "r_order"
     (row,) = _rows()
     assert row["confidence"] == "low" and row["report_id"] == "r_order"
     audit = json.loads(_read_bytes(os.path.join(report_env, "r_order", "final_audit.json")))
@@ -644,12 +695,22 @@ def test_generate_report_commit_order(report_env, monkeypatch):
     assert ReportManager.is_publishable("r_order") is True
 
 
+def _failing_audit(audit):
+    """Stand-in for _audit_final_published_markdown: persists final_audit.json like the real one."""
+    def _audit(report_id, report):
+        with open(ReportManager._get_report_final_audit_path(report_id), "w",
+                  encoding="utf-8") as fh:
+            json.dump(audit, fh, ensure_ascii=False)
+        return audit
+    return _audit
+
+
 def test_failed_audit_records_unpublished_only(report_env):
     """The real _enforce_final_publish_audit gate fails → one unpublished row with its reasons."""
     a = _bare_report_agent()
-    a._audit_final_published_markdown = lambda report_id, report: {
+    a._audit_final_published_markdown = _failing_audit({
         "hard_passed": False, "hard_issues": ["dangling citation markers [S9]"],
-        "publish_gate": {"enabled": True, "passed": False}}
+        "publish_gate": {"enabled": True, "passed": False}})
     report = a.generate_report(report_id="r_fail")
     assert report.status == ReportStatus.FAILED
     assert a.ledger_receipt["status"] == "unpublished"
@@ -659,9 +720,48 @@ def test_failed_audit_records_unpublished_only(report_env):
     assert row["reasons"][0].startswith("report_failed: ")
     assert "dangling citation markers [S9]" in row["reasons"][0]
     assert len(row["reasons"][0]) <= len("report_failed: ") + 200
+    assert row["reasons"][1:] == ["final_audit: dangling citation markers [S9]"]
     assert row["run_ref"] == "sim:sim_1"
     assert fl.calibration_summary()["n_resolved"] == 0
     assert fl.due_for_resolution("2099-12-31") == []
+
+
+def test_failed_audit_row_keeps_every_gate_reason(report_env):
+    """The report error truncates the joined gate issues at 200 chars; the row does not."""
+    hard = [f"hard issue {i}: " + "h" * 60 for i in range(3)]
+    gate_hard = [hard[0], "gate hard issue: fingerprint drift"]
+    quality = [f"quality issue {i}: " + "q" * 40 for i in range(3)]
+    a = _bare_report_agent()
+    a._audit_final_published_markdown = _failing_audit({
+        "hard_passed": False, "hard_issues": hard,
+        "publish_gate": {"enabled": True, "passed": False,
+                         "hard_issues": gate_hard, "issues": quality}})
+    report = a.generate_report(report_id="r_fail_long")
+    assert report.status == ReportStatus.FAILED
+    assert len(report.error) > len("report_failed: ") + 200  # the error alone would lose reasons
+    (row,) = _rows("unpublished_terminal")
+    assert row["reasons"][1:] == (
+        [f"final_audit: {h}" for h in hard]
+        + ["publish_gate: gate hard issue: fingerprint drift"]
+        + [f"publish_gate: {q}" for q in quality])
+    assert len(row["reasons"]) <= fl.UNPUBLISHED_MAX_REASONS
+
+
+def test_final_audit_reasons_mirror_the_gate(tmp_path):
+    path = tmp_path / "final_audit.json"
+    locate = lambda rid: str(path)  # noqa: E731
+    assert lc._final_audit_reasons("r", None) == []
+    assert lc._final_audit_reasons("r", locate) == []  # no audit ran
+    path.write_text("{not json", encoding="utf-8")
+    assert lc._final_audit_reasons("r", locate) == []
+    # A passed/disabled gate's quality notes are not failure reasons.
+    path.write_text(json.dumps({"hard_issues": [], "publish_gate": {
+        "enabled": True, "passed": True, "issues": ["soft note"]}}), encoding="utf-8")
+    assert lc._final_audit_reasons("r", locate) == []
+    path.write_text(json.dumps({"hard_issues": "not a list", "publish_gate": {
+        "enabled": False, "passed": False, "issues": ["ignored when disabled"]}}),
+        encoding="utf-8")
+    assert lc._final_audit_reasons("r", locate) == []
 
 
 def test_real_final_audit_seal_is_what_gets_committed(reports_dir, monkeypatch):
@@ -719,7 +819,7 @@ def test_real_final_audit_seal_is_what_gets_committed(reports_dir, monkeypatch):
     assert ReportManager.is_publishable(report_id) is True
 
 
-def test_commit_error_never_changes_report_status(report_env, monkeypatch):
+def test_commit_error_never_changes_report_status(report_env, monkeypatch, ledger_logs):
     def explode(*a, **k):
         raise OSError("disk full")
 
@@ -729,11 +829,47 @@ def test_commit_error_never_changes_report_status(report_env, monkeypatch):
     report = a.generate_report(report_id="r_err")
     assert report.status == ReportStatus.COMPLETED
     assert a.ledger_receipt["status"] == "error"
+    assert a.ledger_receipt["report_id"] == "r_err"
     assert ReportManager.is_publishable("r_err") is True
+    # A publishable report missing from the ledger is loud, not an INFO line.
+    (line,) = [r for r in ledger_logs if r.getMessage().startswith("[ledger]")]
+    assert line.levelno == logging.WARNING and "disk full" in line.getMessage()
 
 
-def test_late_failure_after_commit_adds_no_second_row(report_env):
-    """A failure after the success-path commit leaves exactly the one commit row."""
+def test_ledger_io_error_receipt_is_warned(report_env, monkeypatch, ledger_logs):
+    _write_report("r_io", _forecast())
+    real_open = open
+
+    def failing_open(path, *args, **kwargs):
+        if str(path).endswith("ledger.jsonl"):
+            raise OSError("read-only file system")
+        return real_open(path, *args, **kwargs)
+
+    a = _bare_report_agent()
+    with monkeypatch.context() as m:
+        m.setattr("builtins.open", failing_open)
+        receipt = a._commit_forecast_ledger("r_io", Report(
+            report_id="r_io", simulation_id="sim_1", graph_id="g1",
+            simulation_requirement=QUESTION, status=ReportStatus.COMPLETED))
+    assert receipt["status"] == "error" and receipt["commit_id"] is None
+    (line,) = [r for r in ledger_logs if r.getMessage().startswith("[ledger]")]
+    assert line.levelno == logging.WARNING
+    assert not os.path.exists(_ledger_path())
+
+
+def test_successful_commit_logs_at_info(report_env, ledger_logs):
+    _write_report("r_info", _forecast())
+    receipt = _bare_report_agent()._commit_forecast_ledger("r_info", Report(
+        report_id="r_info", simulation_id="sim_1", graph_id="g1",
+        simulation_requirement=QUESTION, status=ReportStatus.COMPLETED))
+    assert receipt["status"] == "committed"
+    (line,) = [r for r in ledger_logs if r.getMessage().startswith("[ledger]")]
+    assert line.levelno == logging.INFO
+
+
+def test_closing_callback_failure_leaves_no_scored_row(report_env):
+    """A closing-step failure flips the report to FAILED (unpublishable): the ledger must
+    then hold only its unpublished_terminal row, never a scored primary."""
     a = _bare_report_agent()
     a._enforce_final_publish_audit = _sealing_audit(_forecast())
 
@@ -743,8 +879,30 @@ def test_late_failure_after_commit_adds_no_second_row(report_env):
 
     report = a.generate_report(progress_callback=progress, report_id="r_late")
     assert report.status == ReportStatus.FAILED
+    assert ReportManager.is_publishable("r_late") is False
     (row,) = _rows()
-    assert row["row_type"] == "commit" and row["report_id"] == "r_late"
+    assert row["row_type"] == "unpublished_terminal" and row["report_id"] == "r_late"
+    assert row["reasons"] == ["report_failed: progress sink unavailable"]
+    assert a.ledger_receipt["status"] == "unpublished"
+    assert fl.calibration_summary()["n_resolved"] == 0
+
+
+def test_cancellation_after_completed_save_still_commits(report_env):
+    """Cancellation (a BaseException) raised by the closing callback bypasses the FAILED
+    branch: the report stays completed and publishable on disk, so it is committed."""
+    a = _bare_report_agent()
+    a._enforce_final_publish_audit = _sealing_audit(_forecast())
+
+    def progress(stage, progress_pct, message):
+        if stage == "completed":
+            raise po.PipelineCancelled("cancelled by user")
+
+    with pytest.raises(po.PipelineCancelled):
+        a.generate_report(progress_callback=progress, report_id="r_cancel")
+    assert ReportManager.is_publishable("r_cancel") is True
+    (row,) = _rows()
+    assert row["row_type"] == "commit" and row["report_id"] == "r_cancel"
+    assert row["calibration_role"] == "primary"
     assert a.ledger_receipt["status"] == "committed"
 
 
@@ -785,7 +943,7 @@ def test_legacy_mode_byte_identical(report_env, monkeypatch):
     assert _read_bytes(_ledger_path()) == _read_bytes(os.path.join(reference_dir, "ledger.jsonl"))
     # The post-publication commit is disabled in legacy mode.
     _write_report("r_fin", _forecast(confidence="low"))
-    assert _publish(_Agent(), "r_fin") == {"status": "disabled"}
+    assert _publish(_Agent(), "r_fin") == {"status": "disabled", "report_id": "r_fin"}
     assert _rows("commit") == [] and len(fl.read_ledger()) == 1
 
 
@@ -804,11 +962,12 @@ def test_off_mode_and_master_switch_write_nothing(report_env, monkeypatch):
         monkeypatch.setattr(Config, "REPORT_FORECAST_LEDGER", master, raising=False)
         a = _finalize_agent(monkeypatch, report_env)
         a._finalize_structured_forecast("r_fin", MARKDOWN)
-        assert _publish(_Agent(), "r_off") == {"status": "disabled"}
+        assert _publish(_Agent(), "r_off") == {"status": "disabled", "report_id": "r_off"}
         assert lc.run_post_publication(
             _Agent(), "r_off", report_status="failed", error="x",
             publication_status_fn=ReportManager.publication_status,
-            load_forecast_fn=ReportManager.load_structured_forecast) == {"status": "disabled"}
+            load_forecast_fn=ReportManager.load_structured_forecast) == {
+                "status": "disabled", "report_id": "r_off"}
     assert not os.path.exists(_ledger_path())
 
 
@@ -930,7 +1089,8 @@ def test_model_comparison_record_class(monkeypatch):
          "prompt": QUESTION}, "fake", None, self_critique=False)
     assert result["ok"] is False and result["error"] == "stop here"
     assert captured["ctx"] == {"pipeline_id": "pipe_base", "simulation_id": "sim_base",
-                               "record_class": "comparison", "run_kind": "model_comparison"}
+                               "record_class": "comparison", "run_kind": "model_comparison",
+                               "provider": "fake"}
 
 
 def test_graph_stage_sets_validated_as_of_outside_fallback():
@@ -940,9 +1100,7 @@ def test_graph_stage_sets_validated_as_of_outside_fallback():
         "as_of, _as_of_note = self._validate_as_of_date(",
         "_as_of_validated = True",
         "except Exception as _ae:",  # the raw-parse fallback never sets the flag
-        'state.options.pop("as_of_date_validated", None)',
-        "if _as_of_validated and as_of is not None:",
-        'state.options["as_of_date_validated"] = _validate_as_of(',
+        "self._record_validated_as_of(state, as_of, _as_of_validated)",
         "seeded = _seed_research_actors(",
     ]
     pos = -1
@@ -950,6 +1108,25 @@ def test_graph_stage_sets_validated_as_of_outside_fallback():
         nxt = src.find(marker, pos + 1)
         assert nxt > pos, marker
         pos = nxt
+    assert src.count("_as_of_validated = True") == 1
+
+
+def test_record_validated_as_of_behaviour():
+    record = po.PipelineOrchestrator._record_validated_as_of
+    state = po.PipelineState(pipeline_id="pipe_asof", prompt=QUESTION)
+    anchor = datetime(2026, 7, 5, 18, 30, tzinfo=timezone.utc)
+    # The validator produced the anchor → recorded as a canonical date.
+    record(state, anchor, True)
+    assert state.options["as_of_date_validated"] == "2026-07-05"
+    # The validator raised (raw-parse fallback) → nothing recorded, stale value dropped.
+    record(state, datetime(2026, 7, 6), False)
+    assert "as_of_date_validated" not in state.options
+    # No anchor at all, or a future one, is never recorded.
+    state.options["as_of_date_validated"] = "2026-07-05"
+    record(state, None, True)
+    assert "as_of_date_validated" not in state.options
+    record(state, datetime(2999, 1, 1), True)
+    assert "as_of_date_validated" not in state.options
 
 
 def test_health_failure_after_commit_does_not_retract(reports_dir, monkeypatch):
@@ -967,3 +1144,201 @@ def test_health_failure_after_commit_does_not_retract(reports_dir, monkeypatch):
     assert _read_bytes(_ledger_path()) == before
     (row,) = _rows()
     assert row["calibration_role"] == "primary" and fl.is_production_calibration_row(row)
+
+
+# ───────────────────────────── review round 1 ─────────────────────────────────
+def test_api_regeneration_is_revision_of_pipeline_primary(reports_dir):
+    """The pipeline keys on the validator-corrected anchor; a context-less regeneration
+    (/api/report/generate) of the same simulation keys identically → a revision, not a
+    second scored primary."""
+    state = _save_pipeline("pipe_owner", "sim_owner", as_of_date_validated="2026-07-05")
+    raw_actors = {"as_of_date": "2026-07-06"}  # the uncorrected handoff actors.json date
+    ctx = po.PipelineOrchestrator._report_ledger_context(
+        state, "sim_owner", run_kind="pipeline", seed=0)
+    _write_report("r_pipe", _forecast())
+    pipe = _publish(_Agent(simulation_id="sim_owner", actors=raw_actors, ledger_context=ctx),
+                    "r_pipe")
+    assert pipe["status"] == "committed"
+    _write_report("r_api", _forecast(confidence="medium"))
+    api = _publish(_Agent(simulation_id="sim_owner", actors=raw_actors, ledger_context=None),
+                   "r_api")
+    assert api["status"] == "revision" and api["target_key"] == pipe["target_key"]
+    assert api["record_class"] == "production"
+    primary, revision = _rows("commit")
+    assert (primary["as_of_date"], primary["as_of_source"]) == ("2026-07-05", "validated")
+    assert (revision["as_of_date"], revision["as_of_source"]) == ("2026-07-05", "validated")
+    assert revision["revision_of"] == primary["commit_id"]
+    assert revision["pipeline_id"] == "pipe_owner" and revision["run_ref"] == "pipe_owner"
+    assert "run_kind" not in revision  # provenance still shows it was not the pipeline run
+    assert [fl.is_production_calibration_row(r) for r in (primary, revision)] == [True, False]
+
+
+def test_unvalidated_owner_keys_both_entry_points_on_actors(reports_dir):
+    """Validator raised / pre-EVAL-1 pipeline: both paths fall back to the same actors date."""
+    state = _save_pipeline("pipe_raw", "sim_raw")
+    ctx = po.PipelineOrchestrator._report_ledger_context(
+        state, "sim_raw", run_kind="pipeline", seed=0)
+    assert ctx["as_of_date"] is None
+    actors = {"as_of_date": "2026-07-06"}
+    _write_report("r_raw_pipe", _forecast())
+    _write_report("r_raw_api", _forecast())
+    pipe = _publish(_Agent(simulation_id="sim_raw", actors=actors, ledger_context=ctx),
+                    "r_raw_pipe")
+    api = _publish(_Agent(simulation_id="sim_raw", actors=actors), "r_raw_api")
+    assert (pipe["status"], api["status"]) == ("committed", "revision")
+    assert {(r["as_of_date"], r["as_of_source"]) for r in _rows("commit")} == {
+        ("2026-07-06", "actors")}
+
+
+def test_fork_inherits_base_anchor_and_stays_conditional(reports_dir):
+    _save_pipeline("pipe_base", "sim_base", as_of_date_validated="2026-07-05")
+    overlay = {"label": "Tariffs double", "stance_overrides": {"EU": "hawkish"}}
+    fork = _save_pipeline("pipe_fork", "sim_fork", scenario_label="Tariffs double",
+                          scenario_overlay=overlay, base_pipeline_id="pipe_base")
+    chained = _save_pipeline("pipe_fork2", "sim_fork2", scenario_label="Tariffs triple",
+                             scenario_overlay={"label": "Tariffs triple"},
+                             base_pipeline_id="pipe_fork")
+    assert po.validated_as_of_from_options(fork.options) == "2026-07-05"
+    assert po.validated_as_of_from_options(chained.options) == "2026-07-05"
+    # A base cycle cannot loop.
+    _save_pipeline("pipe_cyc_a", "sim_cyc_a", base_pipeline_id="pipe_cyc_b")
+    _save_pipeline("pipe_cyc_b", "sim_cyc_b", base_pipeline_id="pipe_cyc_a")
+    assert po.validated_as_of_from_options({"base_pipeline_id": "pipe_cyc_a"}) is None
+    assert po.validated_as_of_from_options(None) is None
+
+    ctx = po.PipelineOrchestrator._report_ledger_context(
+        fork, "sim_fork", run_kind="pipeline", seed=0)
+    scenario_key = canonical_json_sha256({"label": "Tariffs double", "overlay": overlay})
+    assert ctx["as_of_date"] == "2026-07-05"
+    assert (ctx["scenario_label"], ctx["scenario_key"]) == ("Tariffs double", scenario_key)
+    assert po.ledger_identity_for_simulation("sim_fork") == {
+        "pipeline_id": "pipe_fork", "as_of_date": "2026-07-05",
+        "scenario_label": "Tariffs double", "scenario_key": scenario_key}
+
+    _write_report("r_fork_pipe", _forecast())
+    _write_report("r_fork_api", _forecast())
+    pipe = _publish(_Agent(simulation_id="sim_fork", scenario_label="Tariffs double",
+                           ledger_context=ctx), "r_fork_pipe")
+    # The API path passes no scenario_label: the owner lookup keeps it conditional.
+    api = _publish(_Agent(simulation_id="sim_fork", ledger_context=None), "r_fork_api")
+    assert (pipe["record_class"], api["record_class"]) == ("conditional_scenario",) * 2
+    assert (pipe["status"], api["status"]) == ("committed", "revision")
+    for row in _rows("commit"):
+        assert row["target_variant"] == {"scenario": scenario_key}
+        assert row["as_of_date"] == "2026-07-05"
+        assert fl.is_production_calibration_row(row) is False
+
+
+def test_owner_lookup_is_best_effort(reports_dir, monkeypatch):
+    assert po.ledger_identity_for_simulation(None) == {}
+    assert po.ledger_identity_for_simulation("sim_nobody") == {}
+
+    def boom(simulation_id):
+        raise OSError("pipelines dir unreadable")
+
+    monkeypatch.setattr(po, "_pipeline_for_simulation", boom)
+    assert po.ledger_identity_for_simulation("sim_x") == {}
+    # An unreadable base never breaks the report stage's ledger context.
+    monkeypatch.setattr(po.PipelineManager, "load", classmethod(lambda cls, pid: boom(pid)))
+    fork = po.PipelineState(pipeline_id="pipe_fork_x", prompt=QUESTION)
+    fork.options.update(scenario_label="X", base_pipeline_id="pipe_unreadable")
+    assert po.validated_as_of_from_options(fork.options) is None
+    assert po.PipelineOrchestrator._report_ledger_context(
+        fork, "sim_fork_x", run_kind="pipeline", seed=0)["as_of_date"] is None
+    monkeypatch.setattr(po, "ledger_identity_for_simulation", boom)
+    assert lc._owner_identity("sim_x") == {}
+    _write_report("r_best_effort", _forecast())
+    receipt = _publish(_Agent(actors={"as_of_date": "2026-07-06"}), "r_best_effort")
+    assert receipt["status"] == "committed"
+    assert _rows("commit")[0]["as_of_source"] == "actors"
+
+
+def test_dossier_lookup_unchanged_by_owner_refactor(reports_dir, tmp_path):
+    handoff = tmp_path / "handoff_owner"
+    handoff.mkdir()
+    (handoff / "actors.json").write_text(json.dumps({"as_of_date": "2026-07-06"}),
+                                         encoding="utf-8")
+    (handoff / "research_report.md").write_text("research", encoding="utf-8")
+    state = po.PipelineState(pipeline_id="pipe_dossier", prompt=QUESTION)
+    state.simulation_id = "sim_dossier"
+    state.handoff_dir = str(handoff)
+    po.PipelineManager.save(state)
+    out = po.load_research_dossier_for_simulation("sim_dossier")
+    assert out["actors"] == {"as_of_date": "2026-07-06"}
+    assert out["research_report"] == "research" and out["actor_dossier"] is None
+    assert po.load_research_dossier_for_simulation("sim_missing")["actors"] is None
+
+
+def _commit_ctx(report_id, ctx, scenario_label=""):
+    publication = {"publishable": True, "markdown_sha256": _sha(MARKDOWN),
+                   "forecast_sha256": _sha(report_id)}
+    return lc.commit_report(
+        report_id=report_id, report_status="completed", error=None, question=QUESTION,
+        language="English", actors=None, scenario_label=scenario_label,
+        ledger_context=dict(ctx, as_of_date="2026-09-01"),
+        publication_status_fn=lambda rid: publication,
+        load_forecast_fn=lambda rid: _forecast(), now=NOW)
+
+
+def test_non_production_targets_carry_a_variant(reports_dir):
+    # Production keys are unchanged: no variant, even when one is passed.
+    prod = _commit_ctx("r_prod", {"pipeline_id": "p", "seed": 3})
+    assert prod["status"] == "committed"
+    assert prod["target_key"] == canonical_json_sha256(
+        {"v": 1, "q": fl.question_sha256(QUESTION), "as_of": "2026-09-01",
+         "record_class": "production"})
+    status, row = fl.commit_published_forecast(
+        _forecast(), report_id="r_prod_variant", question=QUESTION, language=None,
+        as_of_date="2026-09-01", as_of_source="validated",
+        publication={"forecast_sha256": _sha("r_prod_variant")}, target_variant={"seed": 9})
+    assert status == "revision" and row["target_key"] == prod["target_key"]
+    assert "target_variant" not in row and "target_variant" not in _rows("commit")[0]
+
+    # What-if forks with different overlays are separate conditional targets.
+    fork_a = {"scenario_key": "k_a", "scenario_label": "A"}
+    fork_b = {"scenario_key": "k_b", "scenario_label": "B"}
+    assert _commit_ctx("r_fork_a", fork_a, "A")["status"] == "committed"
+    assert _commit_ctx("r_fork_b", fork_b, "B")["status"] == "committed"
+    assert _commit_ctx("r_fork_a2", fork_a, "A")["status"] == "revision"
+    # Without an overlay fingerprint the label discriminates.
+    assert _commit_ctx("r_label_c", {}, "C")["status"] == "committed"
+    assert _commit_ctx("r_label_c2", {}, "C")["status"] == "revision"
+
+    # Seed-ensemble members are distinct members, not revisions of each other.
+    member = {"record_class": "ensemble_member"}
+    assert _commit_ctx("r_seed_1", dict(member, seed=1))["status"] == "committed"
+    assert _commit_ctx("r_seed_2", dict(member, seed=2))["status"] == "committed"
+    assert _commit_ctx("r_seed_1b", dict(member, seed=1))["status"] == "revision"
+    # ...and a fork's members are not the base's members.
+    assert _commit_ctx("r_seed_fork", dict(member, seed=1, scenario_key="k_a"))["status"] \
+        == "committed"
+
+    # Compared providers are separate targets.
+    cmp_ctx = {"record_class": "comparison"}
+    assert _commit_ctx("r_cmp_a", dict(cmp_ctx, provider="claude"))["status"] == "committed"
+    assert _commit_ctx("r_cmp_b", dict(cmp_ctx, provider="minimax"))["status"] == "committed"
+    assert _commit_ctx("r_cmp_a2", dict(cmp_ctx, provider="claude"))["status"] == "revision"
+
+    by_report = {r["report_id"]: r for r in _rows("commit")}
+    assert by_report["r_fork_a"]["target_variant"] == {"scenario": "k_a"}
+    assert by_report["r_label_c"]["target_variant"] == {"scenario": fl.question_sha256("C")}
+    assert by_report["r_seed_2"]["target_variant"] == {"seed": 2}
+    assert by_report["r_seed_fork"]["target_variant"] == {"scenario": "k_a", "seed": 1}
+    assert by_report["r_cmp_b"]["target_variant"] == {"provider": "minimax"}
+    assert by_report["r_fork_a"]["target_key"] == canonical_json_sha256(
+        {"v": 1, "q": fl.question_sha256(QUESTION), "as_of": "2026-09-01",
+         "record_class": "conditional_scenario", "variant": {"scenario": "k_a"}})
+    assert all(not fl.is_production_calibration_row(r) for r in by_report.values()
+               if r["record_class"] != "production")
+
+
+def test_new_report_attempt_drops_stale_ledger_receipt(reports_dir):
+    state = po.PipelineState(pipeline_id="pipe_rx", prompt=QUESTION)
+    state.options["forecast_ledger"] = {"status": "committed", "report_id": "report_old"}
+    po.PipelineOrchestrator._clear_report_attempt_artifacts(state)
+    assert "forecast_ledger" not in state.options
+    src = inspect.getsource(po.PipelineOrchestrator._run)
+    i_clear = src.find("self._clear_report_attempt_artifacts(state)")
+    i_mint = src.find('report_id = f"report_{uuid.uuid4().hex[:12]}"', i_clear)
+    i_copy = src.find('state.options["forecast_ledger"] = dict(_ledger_receipt)')
+    assert -1 < i_clear < i_mint < i_copy

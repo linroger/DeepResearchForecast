@@ -10349,7 +10349,8 @@ class ReportAgent:
         Called once the report is terminal and saved (meta.json + full_report.md on
         disk), so ``publication_status`` judges the exact published bytes. Only reads
         the sealed artifacts: never mutates forecast.json / full_report.md and never
-        changes the report status. Any failure yields ``{'status': 'error'}``.
+        changes the report status. Any failure yields ``{'status': 'error'}``, logged
+        at WARNING because such a report is missing from the auditable ledger.
         """
         try:
             from . import ledger_commit as _ledger_commit
@@ -10360,14 +10361,20 @@ class ReportAgent:
                 error=error,
                 publication_status_fn=ReportManager.publication_status,
                 load_forecast_fn=ReportManager.load_structured_forecast,
+                final_audit_path_fn=ReportManager._get_report_final_audit_path,
             )
         except Exception as _le:  # noqa: BLE001 — 账本为旁路记账，绝不影响报告终态
             receipt = {"status": "error", "reasons": [f"{type(_le).__name__}: {_le}"[:300]]}
         if not isinstance(receipt, dict):
             receipt = {"status": "error", "reasons": ["post-publication returned no receipt"]}
+        receipt.setdefault("report_id", report_id)
         self.ledger_receipt = receipt
-        logger.info(f"[ledger] status={receipt.get('status')} "
-                    f"commit_id={receipt.get('commit_id')} report={report_id}")
+        _line = (f"[ledger] status={receipt.get('status')} "
+                 f"commit_id={receipt.get('commit_id')} report={report_id}")
+        if receipt.get("status") == "error":
+            logger.warning(f"{_line} reasons={receipt.get('reasons')}")
+        else:
+            logger.info(_line)
         return receipt
 
     def generate_report(
@@ -10436,10 +10443,6 @@ class ReportAgent:
             except Exception:  # noqa: BLE001 — 遥测初始化失败不得影响报告生成
                 _telemetry_on = False
                 _telemetry_run_id = report_id
-
-        # EVAL-1: 成功路径已提交账本后若再抛异常（进度回调等），失败分支不再补记
-        # unpublished_terminal 行——同一报告在账本里只有一个终态结论。
-        _ledger_committed = False
 
         try:
             # 初始化：创建报告文件夹并保存初始状态
@@ -10932,21 +10935,28 @@ class ReportAgent:
                 failed_sections=failed_section_titles,
                 forecast_ok=_forecast_ok
             )
-            # EVAL-1: 账本提交必须在 save_report/update_progress 之后——publication_status 读
-            # meta.json 判定终态，提前调用会把每份报告都记成 unpublished。
-            self._commit_forecast_ledger(report_id, report)
-            _ledger_committed = True
+            # EVAL-1: 账本提交放在收尾步骤（进度回调/日志/关闭控制台）之后、return 之前：
+            # 须在 save_report/update_progress 之后（publication_status 读 meta.json）；收尾步骤
+            # 抛普通异常会让失败分支把报告改记 FAILED（不可发布）→ 只留 unpublished_terminal 行，
+            # 绝不让计分主行归属一份未发布报告。取消/熔断（BaseException）不经失败分支，
+            # 报告仍以 completed 落盘可发布 → 照常入账后再上抛。
+            try:
+                if progress_callback:
+                    progress_callback("completed", 100, "报告生成完成")
 
-            if progress_callback:
-                progress_callback("completed", 100, "报告生成完成")
-            
-            logger.info(f"报告生成完成: {report_id}")
-            
-            # 关闭控制台日志记录器
-            if self.console_logger:
-                self.console_logger.close()
-                self.console_logger = None
-            
+                logger.info(f"报告生成完成: {report_id}")
+
+                # 关闭控制台日志记录器
+                if self.console_logger:
+                    self.console_logger.close()
+                    self.console_logger = None
+            except Exception:  # 普通异常 → 下方失败分支（报告改记 FAILED，只记 unpublished 行）
+                raise
+            except BaseException:  # 取消/熔断：报告已按 completed 发布 → 入账后上抛
+                self._commit_forecast_ledger(report_id, report)
+                raise
+
+            self._commit_forecast_ledger(report_id, report)
             return report
             
         except Exception as e:
@@ -10969,8 +10979,7 @@ class ReportAgent:
             except Exception:
                 pass  # 忽略保存失败的错误
             # EVAL-1: 失败终态同样留痕——unpublished_terminal 行（不计分）让校准分母可审计。
-            if not _ledger_committed:
-                self._commit_forecast_ledger(report_id, report, error=str(e))
+            self._commit_forecast_ledger(report_id, report, error=str(e))
             
             # 关闭控制台日志记录器
             if self.console_logger:

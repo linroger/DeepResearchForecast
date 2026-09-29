@@ -230,12 +230,14 @@ def _run_report_for_provider(
             sources=ctx.get("sources"),
             research_report=ctx.get("research_report"),
         )
-        # EVAL-1: 提供方对比重跑是同一问题的重复作答——以 comparison 入账，不进生产校准。
+        # EVAL-1: 提供方对比重跑是同一问题的重复作答——以 comparison 入账，不进生产校准；
+        # provider 区分各提供方的目标键（彼此不是修订关系）。
         agent.ledger_context = {
             "pipeline_id": ctx["base_pipeline_id"],
             "simulation_id": ctx["simulation_id"],
             "record_class": "comparison",
             "run_kind": "model_comparison",
+            "provider": provider,
         }
 
         def _cb(stage: str, progress: int, message: str) -> None:
