@@ -215,17 +215,42 @@ def discover_scenarios(scenarios_dir: str = SCENARIOS_DIR) -> List[str]:
     )
 
 
-def resolve_report_path(scenario: Dict[str, Any], repo_root: str = REPO_ROOT) -> Optional[str]:
+def resolve_report_path(scenario: Dict[str, Any], repo_root: str = REPO_ROOT, *,
+                        pipelines_dir: Optional[str] = None,
+                        reports_dir: Optional[str] = None) -> Optional[str]:
     """Resolve a scenario's report to score: explicit report_path (rel to repo
-    root) wins; else a pipeline_id's report.md under uploads/pipelines/."""
+    root) wins; else the report a pipeline_id's run produced.
+
+    A pipeline never writes a report under its own folder: its pipeline_state.json
+    names the report_id, and the published report is <reports_dir>/<report_id>/
+    full_report.md (forecast.json sits beside it). ``pipelines_dir`` defaults to
+    Config.PIPELINE_DATA_DIR and ``reports_dir`` to Config.UPLOAD_FOLDER/reports.
+    None when the state file is missing or unreadable, names no report_id, or an
+    id is not a safe path component.
+    """
     rp = scenario.get("report_path")
     if rp:
         cand = rp if os.path.isabs(rp) else os.path.join(repo_root, rp)
         return cand
     pid = scenario.get("pipeline_id")
-    if pid:
-        return os.path.join(repo_root, "backend", "uploads", "pipelines", pid, "report", "report.md")
-    return None
+    if not pid:
+        return None
+    from app.config import Config
+    from app.utils.security import contained_child
+    if pipelines_dir is None:
+        pipelines_dir = Config.PIPELINE_DATA_DIR
+    if reports_dir is None:
+        reports_dir = os.path.join(Config.UPLOAD_FOLDER, "reports")
+    try:
+        state_path = os.path.join(contained_child(pipelines_dir, pid, "pipeline"),
+                                  "pipeline_state.json")
+        state = _load_json(state_path)
+        report_id = state.get("report_id") if isinstance(state, dict) else None
+        if not report_id:
+            return None
+        return os.path.join(contained_child(reports_dir, report_id, "report"), "full_report.md")
+    except (OSError, ValueError):  # ValueError covers bad JSON and UnsafeIdError
+        return None
 
 
 def build_judge_messages(rubric_text: str, report_markdown: str,
@@ -285,7 +310,15 @@ def judge_report(llm, report_markdown: str, scenario: Dict[str, Any], rubric_tex
         "samples": samples,
         "signals": signals,
         "k": len(samples),
+        "judge_identity": judge_identity(llm),
     }
+
+
+def judge_identity(llm) -> Dict[str, Any]:
+    """The judge's {provider, model}, recorded with every score so each score is
+    attributable to the backbone that produced it (scores from different judges
+    are not one series)."""
+    return {"provider": getattr(llm, "provider", None), "model": getattr(llm, "model", None)}
 
 
 def _load_json(path: str) -> Any:
@@ -307,11 +340,19 @@ def _load_report_and_forecast(report_path: str) -> Tuple[str, Optional[Dict[str,
 
 
 def _build_judge_client(provider: Optional[str], api_key: Optional[str]):
-    """Construct a per-instance LLMClient for the judge (never touches global Config)."""
+    """Construct a per-instance LLMClient for the judge (never touches global Config).
+
+    EVAL-10: the judge is isolated. pinned=True keeps its provider and model (no
+    tier re-route, no silent failover to another backbone) and use_cache=False
+    makes each of the k passes a real call; with the process-wide LLMCache on, the
+    k identical temperature-0 requests collapsed into one call, and a malformed
+    cached reply zeroed every sample (chat_json's re-ask hit the same entry).
+    """
     from app.utils.llm_client import LLMClient
     from app.config import Config
+    isolation: Dict[str, Any] = {"pinned": True, "use_cache": False}
     if not provider or provider == Config.LLM_PROVIDER:
-        return LLMClient()  # default global provider
+        return LLMClient(**isolation)  # default global provider
     # mirror model_comparison._build_client_for for non-default providers
     meta = Config.PROVIDER_META.get(provider, {})
     kwargs: Dict[str, Any] = {"provider": provider}
@@ -327,7 +368,7 @@ def _build_judge_client(provider: Optional[str], api_key: Optional[str]):
             kwargs["base_url"] = meta["default_base"]
         if meta.get("default_model"):
             kwargs["model"] = meta["default_model"]
-    return LLMClient(**kwargs)
+    return LLMClient(**kwargs, **isolation)
 
 
 def _eval_allowed(args) -> bool:
@@ -367,7 +408,8 @@ def cmd_run(args) -> int:
         return 2
     llm = _build_judge_client(args.judge_provider, args.api_key)
 
-    report: Dict[str, Any] = {"scenarios": {}, "overall_passed": True}
+    report: Dict[str, Any] = {"scenarios": {}, "overall_passed": True,
+                              "judge_identity": judge_identity(llm)}
     new_baseline: Dict[str, Any] = dict(baseline) if isinstance(baseline, dict) else {}
     for sp in scenario_paths:
         scenario = load_scenario(sp)
