@@ -450,11 +450,12 @@ Field rules:
 - This spec governs how the forecast resolves, not how widely it is researched: it never narrows the research to the resolution source or the outcome definition.
 - Write the text values in $language.""")
 
-# Appended to the plan task (the template stays as it is) when a usable
-# question spec precedes it in the shared context.
-_QSPEC_PLAN_RULE = ("Scenarios must partition the question spec's outcome (one per candidate when the question "
-                    "asks which one) with a residual where needed; one KIQ must establish the base rate for the "
-                    "spec's reference class.")
+# Clauses of the line appended to the plan task (the template stays as it is)
+# when a usable question spec precedes it in the shared context; each is used
+# only when the spec has the field it names (question_spec_plan_rule).
+_QSPEC_PARTITION_CLAUSE = ("scenarios must partition the question spec's outcome (one per candidate when the "
+                           "question asks which one) with a residual where needed")
+_QSPEC_BASE_RATE_CLAUSE = "one KIQ must establish the base rate for the spec's reference class"
 
 _T_KIQ_TASK = string.Template("""KIQ INVESTIGATION TASK
 Investigate $kiq_id: $question
@@ -1615,7 +1616,9 @@ def build_plan(question: str, language: str, as_of: str, preset: Preset, actor_c
 
     ``question_spec`` (a :func:`normalize_question_spec` result) is kept on the
     plan whatever its status; a usable spec's horizon label is the plan's
-    horizon, so the brief has one horizon source."""
+    horizon, so the brief has one horizon source (the normalizer drops a
+    label whose date was rejected or that names only past years, and the
+    scope's horizon then stays)."""
     scope = scope or {}
     raw_plan = raw_plan or {}
     fallback: dict[str, bool] = {"scope": not scope, "plan": not raw_plan}
@@ -1722,6 +1725,11 @@ _QSPEC_BASES = ("explicit", "implied", "default")
 _QSPEC_SLOTS = ("horizon", "resolution_source", "units", "entity", "outcome")
 _QSPEC_URL_CHARS = 300
 _ISO_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# A year named in a horizon label, with an optional two-digit end year
+# ("FY2025/26", "2029-30"); ASCII digits only.
+_QSPEC_LABEL_YEAR_RE = re.compile(r"(?<![0-9])((?:19|20|21)[0-9]{2})(?:[/-]([0-9]{2})(?![0-9]))?(?![0-9])")
+# An assumption ending in one of these asks instead of recording a default.
+_QSPEC_QUESTION_MARKS = ("?", "？")
 # Values a model writes for "no value" (or echoes from the template): never content.
 _QSPEC_EMPTY = frozenset({"", "...", "…", "-", "n/a", "na", "none", "null", "unknown", "false", "true"})
 
@@ -1788,17 +1796,38 @@ def _qspec_horizon_date(value: Any, as_of: str) -> tuple[str, bool]:
     return day.isoformat(), False
 
 
+def _qspec_label_stale(label: str, as_of: str) -> bool:
+    """True when the horizon ``label`` names years and every one precedes the
+    as-of year: a deadline in words already past (the model anchored to an
+    earlier year), which the window check on ``horizon.date`` cannot see when
+    the date is missing or disagrees with the label."""
+    anchor = _parse_iso_date(as_of) if _ISO_DAY_RE.match(str(as_of or "")) else None
+    years: list[int] = []
+    for match in _QSPEC_LABEL_YEAR_RE.finditer(label):
+        start = int(match.group(1))
+        years.append(start)
+        if match.group(2) and int(match.group(2)) > start % 100:     # "2025/26" ends in 2026
+            years.append(start - start % 100 + int(match.group(2)))
+    return anchor is not None and bool(years) and max(years) < anchor.year
+
+
 def _qspec_assumptions(value: Any, degradation: list[str]) -> list[dict]:
     """A list of ``{"text", "slot"}`` dicts only (a string is never split into
-    characters), deduplicated, ordered by slot priority (stable) and capped."""
+    characters), deduplicated, ordered by slot priority (stable) and capped.
+
+    The spec never asks: a text ending in a question mark is dropped
+    (``assumption_question_dropped``).  A missing or unknown slot becomes
+    ``outcome`` (the last slot, so it sorts last and its default is still
+    disclosed) and ``assumption_slot_coerced`` records that a kept row's slot
+    was not the model's."""
     if value is None:
         return []
     if not isinstance(value, list):
         degradation.append("assumptions_invalid")
         return []
-    rows: list[dict] = []
+    rows: list[tuple[dict, bool]] = []          # (row, slot coerced)
     seen: set[str] = set()
-    invalid = False
+    invalid = question = False
     for item in value:
         if not isinstance(item, dict):
             invalid = True
@@ -1807,15 +1836,23 @@ def _qspec_assumptions(value: Any, degradation: list[str]) -> list[dict]:
         key = _norm_key(text)
         if not text or not key or key in seen:
             continue
+        if text.endswith(_QSPEC_QUESTION_MARKS):
+            question = True
+            continue
         seen.add(key)
-        # An unknown slot sorts last: its default is still disclosed.
-        rows.append({"text": text, "slot": _qspec_enum(item.get("slot"), _QSPEC_SLOTS, _QSPEC_SLOTS[-1])})
+        slot = _qspec_enum(item.get("slot"), _QSPEC_SLOTS, "")
+        rows.append(({"text": text, "slot": slot or _QSPEC_SLOTS[-1]}, not slot))
     if invalid:
         degradation.append("assumptions_invalid")
-    rows.sort(key=lambda row: _QSPEC_SLOTS.index(row["slot"]))
+    if question:
+        degradation.append("assumption_question_dropped")
+    rows.sort(key=lambda pair: _QSPEC_SLOTS.index(pair[0]["slot"]))
+    kept = rows[:QUESTION_SPEC_MAX_ASSUMPTIONS]
+    if any(coerced for _row, coerced in kept):
+        degradation.append("assumption_slot_coerced")
     if len(rows) > QUESTION_SPEC_MAX_ASSUMPTIONS:
         degradation.append("assumptions_capped")
-    return rows[:QUESTION_SPEC_MAX_ASSUMPTIONS]
+    return [row for row, _coerced in kept]
 
 
 def normalize_question_spec(raw: Any, *, question: str, as_of: str,
@@ -1832,7 +1869,12 @@ def normalize_question_spec(raw: Any, *, question: str, as_of: str,
       ``implied``);
     * ``horizon.date`` is kept only when ISO and in (as_of, as_of + 30y],
       else dropped with ``horizon_date_invalid``;
-    * at most 3 assumptions, slot priority first (:func:`_qspec_assumptions`).
+    * ``horizon.label`` (the plan horizon and the brief's Resolves line) is
+      dropped with ``horizon_label_dropped`` when the date was rejected (the
+      label states the same deadline) or when every year it names precedes
+      the as-of year (:func:`_qspec_label_stale`);
+    * at most 3 assumptions, slot priority first, never a question
+      (:func:`_qspec_assumptions`).
 
     ``status`` is ``unavailable`` for a failed call or a reply with no usable
     field, ``ok`` when there is an outcome definition and a horizon date or a
@@ -1853,13 +1895,16 @@ def normalize_question_spec(raw: Any, *, question: str, as_of: str,
     date, rejected = _qspec_horizon_date(horizon.get("date"), as_of)
     if rejected:
         degradation.append("horizon_date_invalid")
+    label = _qspec_text(horizon.get("label"), 120)
+    if label and (rejected or _qspec_label_stale(label, as_of)):
+        label = ""
+        degradation.append("horizon_label_dropped")
     fields: dict[str, Any] = {
         "operational_question": _qspec_text(data.get("operational_question"), 400),
         "outcome_definition": _qspec_text(data.get("outcome_definition"), 600),
         "resolution_source": {"name": _qspec_text(source.get("name"), 200), "url": _qspec_url(source.get("url")),
                               "kind": _qspec_enum(source.get("kind"), _QSPEC_SOURCE_KINDS, "other")},
-        "horizon": {"label": _qspec_text(horizon.get("label"), 120), "date": date,
-                    "basis": _qspec_enum(horizon.get("basis"), _QSPEC_BASES, "implied")},
+        "horizon": {"label": label, "date": date, "basis": _qspec_enum(horizon.get("basis"), _QSPEC_BASES, "implied")},
         "reference_class": _qspec_text(data.get("reference_class"), 300),
         "assumptions": _qspec_assumptions(data.get("assumptions"), degradation),
     }
@@ -1920,11 +1965,31 @@ def render_question_spec_block(spec: Any) -> str:
     return "\n".join(lines)
 
 
+def question_spec_plan_rule(spec: Any) -> str:
+    """The line appended to the plan task for a usable spec: the partition
+    clause when it has an outcome definition, the base-rate clause when it
+    has a reference class, ``""`` when it has neither (a partial spec never
+    points the planner at a field it lacks)."""
+    if not question_spec_usable(spec):
+        return ""
+    text = "; ".join(clause for field, clause in (("outcome_definition", _QSPEC_PARTITION_CLAUSE),
+                                                   ("reference_class", _QSPEC_BASE_RATE_CLAUSE))
+                     if spec.get(field))
+    return text[:1].upper() + text[1:] + "." if text else ""
+
+
 def question_spec_telemetry(spec: Mapping[str, Any]) -> dict:
-    """``meta.question_spec``: status, assumptions_n, spec_sha256, horizon_date."""
+    """``meta.question_spec``: status, assumptions_n, spec_sha256, horizon_date.
+
+    The status is ``invalid`` for a spec that is not ``unavailable`` yet not
+    :func:`question_spec_usable` (a damaged plan.json): the brief, the plan
+    and actors.json ignore it, so the telemetry never reports it as usable."""
     horizon = spec.get("horizon") if isinstance(spec.get("horizon"), Mapping) else {}
     assumptions = spec.get("assumptions") if isinstance(spec.get("assumptions"), list) else []
-    return {"status": spec.get("status"), "assumptions_n": len(assumptions),
+    status = spec.get("status")
+    if status != "unavailable" and not question_spec_usable(spec):
+        status = "invalid"
+    return {"status": status, "assumptions_n": len(assumptions),
             "spec_sha256": spec.get("spec_sha256"), "horizon_date": horizon.get("date") or None}
 
 
@@ -4987,7 +5052,8 @@ class _Engine:
         never fails planning: its normalized result (``unavailable`` when the
         call failed, then ``prior_spec`` when one is given) is left in
         ``self._pending_question_spec``, and a usable spec is appended to the
-        plan call's shared context with the partition rule on its task.
+        plan call's shared context with :func:`question_spec_plan_rule` on its
+        task.
         """
         suffix = ":replan" if single_attempt else ""
         self._pending_question_spec = None
@@ -5016,8 +5082,11 @@ class _Engine:
                 spec = dict(prior_spec)
             self._pending_question_spec = spec
             if question_spec_usable(spec):
-                shared.append(render_question_spec_block(spec))
-                task += "\n- " + _QSPEC_PLAN_RULE
+                # A new list: the spec call's request was built from ``shared``.
+                shared = [*shared, render_question_spec_block(spec)]
+                rule = question_spec_plan_rule(spec)
+                if rule:
+                    task += "\n- " + rule
         raw_plan: dict | None = None
         outage = False
         try:
@@ -5077,8 +5146,8 @@ class _Engine:
             self.log("warn", f"v3: writing {QUESTION_SPEC_FILENAME} failed ({error})")
         if spec is not None:
             self.meta["question_spec"] = question_spec_telemetry(spec)
-            if spec.get("status") in QUESTION_SPEC_USABLE and not question_spec_usable(spec):
-                self.log("warn", "v3: the plan's question spec fails its hash check; it is not used")
+            if self.meta["question_spec"]["status"] == "invalid":
+                self.log("warn", "v3: the plan's question spec fails its integrity check; it is not used")
 
     def _scout(self, queries: Sequence[str]) -> str:
         """Concurrent scout searches (planner budget) → digest of <= 6,000 chars."""
@@ -6605,8 +6674,8 @@ class _Engine:
         obj.update(key_events=timeline, quantitative_facts=actor_quant, contested_claims=contested,
                    forecast_inputs=self.forecast_inputs(facts_raw))
         if question_spec_usable(plan.question_spec):
-            # The whole normalized spec, so spec_sha256 recomputes from actors.json
-            # alone (the backend verifies it before any consumer uses the spec).
+            # The whole normalized spec, so a consumer (RESEARCH-12) can recompute
+            # spec_sha256 from actors.json alone.
             obj["question_spec"] = dict(plan.question_spec)
             if plan.question_spec["horizon"].get("date"):
                 obj["horizon_date"] = plan.question_spec["horizon"]["date"]
@@ -6987,10 +7056,10 @@ class _Engine:
     def _research_events(self) -> list[str]:
         """Research the report rests on incompletely: a template plan from a
         model outage, content-filter refusals of every model call, a question
-        spec the model never delivered (RESEARCH_QUESTION_SPEC), KIQs never
-        researched or ended in deterministic notes, a gap review a failure
-        ended early, failed searches, and a page fetch failure rate of 50% or
-        more."""
+        spec the model never delivered or that fails its integrity check
+        (RESEARCH_QUESTION_SPEC), KIQs never researched or ended in
+        deterministic notes, a gap review a failure ended early, failed
+        searches, and a page fetch failure rate of 50% or more."""
         events: list[str] = []
         if self.plan is not None and self.plan.fallback.get(PLAN_OUTAGE_KEY):
             events.append("research plan built from the deterministic templates: the model was unavailable "
@@ -7009,9 +7078,13 @@ class _Engine:
         if self.refused_calls:
             events.append(f"the provider's content filter refused every model call ({self.refused_calls} "
                           "refused); the report is built from the deterministic fallbacks")
-        if (self.question_spec_enabled and self.plan is not None
-                and (self.plan.question_spec or {}).get("status") == "unavailable"):
-            events.append("question spec unavailable: forecasts have no pinned outcome definition")
+        if self.question_spec_enabled and self.plan is not None and self.plan.question_spec is not None:
+            spec_status = question_spec_telemetry(self.plan.question_spec)["status"]
+            if spec_status == "unavailable":
+                events.append("question spec unavailable: forecasts have no pinned outcome definition")
+            elif spec_status == "invalid":
+                events.append("question spec invalid (it fails its integrity check): forecasts have no pinned "
+                              "outcome definition")
         for label, kiqs in (("planned", [k for k in self.kiqs if k.round == 0]),
                             ("gap follow-up", [k for k in self.kiqs if k.round > 0])):
             missing = [k.id for k in kiqs if k.id not in self.records]

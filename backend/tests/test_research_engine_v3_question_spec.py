@@ -44,6 +44,12 @@ SPEC_TASK = "QUESTION SPEC TASK"
 SCOPE_HORIZON = "by end of 2027"            # what the scripted scope call returns
 SPEC_LABEL = "by 31 December 2027"          # what the scripted spec call returns
 UNAVAILABLE_EVENT = "question spec unavailable: forecasts have no pinned outcome definition"
+INVALID_EVENT = ("question spec invalid (it fails its integrity check): forecasts have no pinned "
+                 "outcome definition")
+# The plan-task line of a spec with an outcome definition and a reference class (the spec wording).
+PLAN_RULE = ("Scenarios must partition the question spec's outcome (one per candidate when the question "
+             "asks which one) with a residual where needed; one KIQ must establish the base rate for the "
+             "spec's reference class.")
 BASE_RATE_BASIS = "question spec (engine default; base rate to be established by research)"
 SPEC_KEYS = {"schema", "status", "as_of", "question_sha256", "operational_question", "outcome_definition",
              "resolution_source", "horizon", "reference_class", "assumptions", "degradation", "spec_sha256"}
@@ -160,7 +166,7 @@ def test_off_byte_identical(tmp_path, bridge, monkeypatch):
     # The plan call: the spec block after the scout and the partition rule on the task.
     on_messages = _plan_call(on_model)["messages"]
     assert on_messages[:3] == off_messages[:3]
-    assert on_messages[3:] == [("human", block), ("human", off_messages[3][1] + "\n- " + lr._QSPEC_PLAN_RULE)]
+    assert on_messages[3:] == [("human", block), ("human", off_messages[3][1] + "\n- " + PLAN_RULE)]
     for artifact in ("research_report.md", "sources.json", "quantitative.json"):
         assert (on_out / artifact).read_bytes() == (out / artifact).read_bytes(), artifact
 
@@ -206,8 +212,9 @@ def test_order_and_prefix(tmp_path, bridge, monkeypatch):
     spec = _load(out / lr.QUESTION_SPEC_FILENAME)
     assert plan_call["messages"][:3] == spec_call["messages"][:3]
     assert plan_call["messages"][3] == ("human", lr.render_question_spec_block(spec))
-    assert plan_call["messages"][-1] == ("human", _plain_plan_task() + "\n- " + lr._QSPEC_PLAN_RULE)
-    assert plan_call["messages"][-1][1].endswith(lr._QSPEC_PLAN_RULE) and len(plan_call["messages"]) == 5
+    assert lr.question_spec_plan_rule(spec) == PLAN_RULE
+    assert plan_call["messages"][-1] == ("human", _plain_plan_task() + "\n- " + PLAN_RULE)
+    assert len(plan_call["messages"]) == 5
 
 
 def test_persist_and_brief(tmp_path, bridge, monkeypatch):
@@ -285,6 +292,114 @@ def test_persist_and_brief(tmp_path, bridge, monkeypatch):
     # The backend's forecast-inputs block renders the reference class.
     from app.utils.actors import forecast_inputs_block
     assert "Multi-year infrastructure build-out targets" in forecast_inputs_block(actors)
+
+
+class PastHorizonWorld(v3.World):
+    """The model anchored the deadline to an earlier year (its training cutoff)."""
+
+    def question_spec(self, call):
+        reply = json.loads(super().question_spec(call).content)
+        reply["horizon"] = {"label": "by 31 December 2025", "date": "2025-12-31", "basis": "implied"}
+        return v3.ai(json.dumps(reply))
+
+
+def test_a_past_horizon_keeps_the_scope_horizon(tmp_path, bridge, monkeypatch):
+    """A rejected horizon date takes its label with it: the scope's horizon
+    stays the plan horizon, and neither the plan call, the brief nor
+    actors.json carries the past deadline."""
+    rc, meta, _plog, model, out = _run(tmp_path, bridge, monkeypatch, spec="true", world=PastHorizonWorld())
+    assert rc == 0, meta.get("error")
+    spec = _load(out / lr.QUESTION_SPEC_FILENAME)
+    assert spec["status"] == "ok" and spec["horizon"] == {"label": "", "date": "", "basis": "implied"}
+    assert spec["degradation"] == ["horizon_date_invalid", "horizon_label_dropped"]
+    assert _load(out / "v3" / "plan.json")["horizon"] == SCOPE_HORIZON
+    brief = (out / "v3" / "brief.md").read_text(encoding="utf-8")
+    assert f"Forecast horizon: {SCOPE_HORIZON}\n" in brief and "Question spec" in brief
+    assert "- Resolves:" not in brief and "December 2025" not in brief
+    spec_block = _plan_call(model)["messages"][3][1]
+    assert spec_block == lr.render_question_spec_block(spec) and "Resolves" not in spec_block
+    actors = _load(out / "actors.json")
+    assert actors["question_spec"] == spec and "horizon_date" not in actors
+    assert meta["question_spec"]["horizon_date"] is None
+
+
+class AssumptionsOnlyWorld(v3.World):
+    def question_spec(self, call):
+        return v3.ai(json.dumps({"outcome_definition": "", "assumptions": [
+            {"text": "Capacity means installed IT load.", "slot": "units"}]}))
+
+
+def test_a_partial_spec_gets_only_the_rules_it_supports(tmp_path, bridge, monkeypatch):
+    """A partial spec without an outcome definition or a reference class is
+    shared with the plan call, but its task names neither."""
+    rc, meta, _plog, model, out = _run(tmp_path, bridge, monkeypatch, spec="true", world=AssumptionsOnlyWorld())
+    assert rc == 0, meta.get("error")
+    spec = _load(out / lr.QUESTION_SPEC_FILENAME)
+    assert spec["status"] == "partial" and spec["outcome_definition"] == spec["reference_class"] == ""
+    messages = _plan_call(model)["messages"]
+    assert messages[3] == ("human", lr.render_question_spec_block(spec))
+    assert messages[4] == ("human", _plain_plan_task()) and len(messages) == 5
+
+
+def test_question_spec_plan_rule_names_only_present_fields():
+    both = _normalize({"outcome_definition": "X above 5", "reference_class": "Past build-out targets"})
+    assert lr.question_spec_plan_rule(both) == PLAN_RULE
+    assert lr.question_spec_plan_rule(_normalize({"outcome_definition": "X above 5"})) == (
+        "Scenarios must partition the question spec's outcome (one per candidate when the question asks which "
+        "one) with a residual where needed.")
+    assert lr.question_spec_plan_rule(_normalize({"reference_class": "Past build-out targets"})) == (
+        "One KIQ must establish the base rate for the spec's reference class.")
+    only_assumptions = _normalize({"assumptions": [{"text": "A", "slot": "units"}]})
+    assert only_assumptions["status"] == "partial" and lr.question_spec_plan_rule(only_assumptions) == ""
+    assert lr.question_spec_plan_rule(_normalize(None, status_if_failed="unavailable")) == ""
+    assert lr.question_spec_plan_rule({**both, "reference_class": "Other"}) == ""     # fails its hash check
+
+
+def test_the_spec_request_context_is_never_changed_afterwards(tmp_path, bridge, monkeypatch):
+    """The plan call extends a new list: the one the spec request was built
+    from keeps exactly the cached [pre-brief, scout] prefix."""
+    seen: list[tuple[str, list, list]] = []
+    plan_json = lr._Engine._plan_json
+
+    def recording_plan_json(engine, shared, task, **kwargs):
+        seen.append((kwargs["label"], shared, list(shared)))
+        return plan_json(engine, shared, task, **kwargs)
+
+    monkeypatch.setattr(lr._Engine, "_plan_json", recording_plan_json)
+    rc, meta, _plog, _model, _out = _run(tmp_path, bridge, monkeypatch, spec="true")
+    assert rc == 0, meta.get("error")
+    (spec_shared, spec_copy), = [(shared, copy) for label, shared, copy in seen if label == "plan:question_spec"]
+    assert len(spec_copy) == 2 and spec_shared == spec_copy
+    (plan_shared,) = [shared for label, shared, _copy in seen if label == "plan:plan"]
+    assert plan_shared[:2] == spec_copy and len(plan_shared) == 3
+
+
+def test_a_damaged_plan_spec_is_reported_invalid(tmp_path, bridge, monkeypatch):
+    """A reused plan.json whose spec fails its hash check: the telemetry says
+    ``invalid`` (never the damaged spec's own status) and, with the knob on,
+    a degradation event records it."""
+    good = _normalize({"outcome_definition": "X above 5", "horizon": {"date": "2027-12-31"}})
+    assert lr.question_spec_telemetry(good)["status"] == "ok"
+    assert lr.question_spec_telemetry({**good, "outcome_definition": "X above 6"})["status"] == "invalid"
+    assert lr.question_spec_telemetry({"status": "bogus"})["status"] == "invalid"
+    unavailable = _normalize(None, status_if_failed="unavailable")
+    assert lr.question_spec_telemetry(unavailable)["status"] == "unavailable"
+
+    out = tmp_path / "out"
+    rc, meta, _, _, _ = _run(tmp_path, bridge, monkeypatch, spec="true", out_dir=out)
+    assert rc == 0 and meta["question_spec"]["status"] == "ok"
+    plan_path = out / "v3" / "plan.json"
+    plan = _load(plan_path)
+    plan["question_spec"]["outcome_definition"] = "Installed capacity above 300 GW."
+    plan_path.write_bytes(_dump(plan))
+    rc, meta, plog, model, _ = _run(tmp_path, bridge, monkeypatch, spec="true", out_dir=out,
+                                    model=_silent_model())
+    assert rc == 0 and model.calls == []
+    assert meta["question_spec"]["status"] == "invalid"
+    assert meta["research_quality"]["degradation"] == [INVALID_EVENT]
+    assert any("question spec fails its integrity check" in line for line in plog.of("warn"))
+    rc, meta, _, _, _ = _run(tmp_path, bridge, monkeypatch, spec="false", out_dir=out, model=_silent_model())
+    assert rc == 0 and "degradation" not in meta["research_quality"]
 
 
 class JunkSpecWorld(v3.World):
@@ -524,10 +639,35 @@ def test_normalizer_caps_assumptions_in_slot_order():
                                    {"text": "Source default", "slot": "resolution_source"},
                                    {"text": "Units default", "slot": "units"}]
     assert spec["degradation"] == ["assumptions_capped"]
-    # An unknown slot is kept (disclosed) and sorts last.
+    # An unknown or missing slot is kept (disclosed) as the last slot, and recorded.
     spec = _normalize({"outcome_definition": "X", "assumptions": [{"text": "A", "slot": "vibes"},
                                                                   {"text": "B", "slot": "horizon"}]})
     assert spec["assumptions"] == [{"text": "B", "slot": "horizon"}, {"text": "A", "slot": "outcome"}]
+    assert spec["degradation"] == ["assumption_slot_coerced"]
+    spec = _normalize({"outcome_definition": "X", "assumptions": [{"text": "A"}]})
+    assert spec["assumptions"] == [{"text": "A", "slot": "outcome"}]
+    assert spec["degradation"] == ["assumption_slot_coerced"]
+    # Only a kept row counts: a coerced row the cap removes is not recorded.
+    spec = _normalize({"outcome_definition": "X", "assumptions": [
+        {"text": "A", "slot": "vibes"}, {"text": "B", "slot": "horizon"}, {"text": "C", "slot": "units"},
+        {"text": "D", "slot": "entity"}]})
+    assert [row["text"] for row in spec["assumptions"]] == ["B", "C", "D"]
+    assert spec["degradation"] == ["assumptions_capped"]
+
+
+def test_normalizer_drops_question_assumptions():
+    """The spec never asks: an assumption phrased as a question is not a
+    default and is dropped (recorded), so it can take no slot of the three."""
+    spec = _normalize({"outcome_definition": "X above 5", "assumptions": [
+        {"text": "Does capacity include colocation?", "slot": "horizon"},
+        {"text": "容量是否包括托管？", "slot": "units"},
+        {"text": "Capacity means installed IT load.", "slot": "units"},
+        {"text": "Which agency publishes the figure (national or regional)?", "slot": "resolution_source"},
+        {"text": "The national agency settles the question.", "slot": "resolution_source"}]})
+    assert spec["assumptions"] == [{"text": "The national agency settles the question.", "slot": "resolution_source"},
+                                   {"text": "Capacity means installed IT load.", "slot": "units"}]
+    assert spec["degradation"] == ["assumption_question_dropped"] and "?" not in json.dumps(spec)
+    assert spec["status"] == "partial"
 
 
 @pytest.mark.parametrize("as_of, date, kept", [
@@ -546,12 +686,54 @@ def test_normalizer_caps_assumptions_in_slot_order():
     ("not a date", "2027-12-31", False),
 ])
 def test_normalizer_horizon_window(as_of, date, kept):
+    """A date outside the window is dropped, and the label stating the same
+    deadline with it: it never becomes the plan horizon."""
     spec = _normalize({"outcome_definition": "X above 5", "horizon": {"label": "L", "date": date}}, as_of=as_of)
     if kept:
-        assert spec["horizon"]["date"] == date and spec["degradation"] == [] and spec["status"] == "ok"
+        assert spec["horizon"]["date"] == date and spec["horizon"]["label"] == "L"
+        assert spec["degradation"] == [] and spec["status"] == "ok"
     else:
-        assert spec["horizon"]["date"] == "" and spec["degradation"] == ["horizon_date_invalid"]
+        assert spec["horizon"]["date"] == "" and spec["horizon"]["label"] == ""
+        assert spec["degradation"] == ["horizon_date_invalid", "horizon_label_dropped"]
         assert spec["status"] == "partial"
+
+
+@pytest.mark.parametrize("as_of, label, date, kept_label", [
+    (AS_OF, "by 31 December 2025", "", False),              # no date: the label alone is past
+    (AS_OF, "by 31 December 2025", "2027-12-31", False),    # a valid date does not rescue a past label
+    (AS_OF, "2025年底前", "", False),
+    (AS_OF, "between 2024 and 2025", "", False),
+    (AS_OF, "by end of 2026", "", True),                     # the as-of year itself is not past
+    (AS_OF, "by 2025-12-31 or the 2027 survey", "", True),   # a later year is named
+    (AS_OF, "within two years", "", True),                   # no year: nothing to check
+    (AS_OF, "by 20251231", "", True),                        # not a year token
+    ("2026-01-15", "FY2025/26 national accounts", "2026-05-31", True),   # the fiscal year ends in 2026
+    ("2026-01-15", "FY2024-25 national accounts", "", False),
+    ("not a date", "by 31 December 2025", "", True),         # no as-of to compare with
+])
+def test_normalizer_drops_past_horizon_labels(as_of, label, date, kept_label):
+    spec = _normalize({"outcome_definition": "X above 5", "resolution_source": {"name": "Agency"},
+                       "horizon": {"label": label, "date": date}}, as_of=as_of)
+    assert spec["status"] == "ok" and spec["horizon"]["date"] == date
+    if kept_label:
+        assert spec["horizon"]["label"] == label and spec["degradation"] == []
+    else:
+        assert spec["horizon"]["label"] == "" and spec["degradation"] == ["horizon_label_dropped"]
+
+
+def test_a_rejected_horizon_never_replaces_the_scope_horizon():
+    """The model anchored to its training year: the rejected date's label is
+    not the plan horizon and the brief carries no Resolves line for it."""
+    spec = _normalize({"outcome_definition": "X above 5", "resolution_source": {"name": "Agency"},
+                       "horizon": {"label": "by 31 December 2025", "date": "2025-12-31", "basis": "implied"}})
+    assert spec["status"] == "ok" and spec["horizon"] == {"label": "", "date": "", "basis": "implied"}
+    assert spec["degradation"] == ["horizon_date_invalid", "horizon_label_dropped"]
+    plan = lr.build_plan(QUESTION, "English", AS_OF, lr.resolve_preset("standard", {}), 20,
+                         {"horizon": SCOPE_HORIZON, "scout_queries": ["q"]}, None, question_spec=spec)
+    assert plan.horizon == SCOPE_HORIZON
+    brief = lr.render_brief(plan)
+    assert f"Forecast horizon: {SCOPE_HORIZON}\n" in brief and "Question spec" in brief
+    assert "Resolves" not in brief and "2025" not in brief
 
 
 def test_normalizer_neutralizes_injection_and_drops_bad_urls():
