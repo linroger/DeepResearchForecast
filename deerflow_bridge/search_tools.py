@@ -34,16 +34,22 @@ community 工具函数——因此行为与直接在 config 里选那个 provide
 * **LOOP-007 —— 跨进程预算**：编排器提供 RESEARCH_BUDGET_DB 后，每次工具调用先计 attempt；
   正缓存 miss 后才原子占用 global/lane 网络额度。exact 空结果只放行一次重试，随后在 10 分钟
   TTL 内稳定抑制。账本故障 fail-open，并写 research_budget.json degraded 遥测。
+* **RESEARCH-2 —— 类型化来源结果**（RESEARCH_SOURCE_TAXONOMY，缺省关）：开启时 Firecrawl
+  错误 JSON 在原 "error" 之外追加 failure_class（not_configured / unavailable / budget）、
+  provider、reason；DDG 的 "No results found" 标注 empty_unconfirmed（可能是故障而非真空）。
+  后端替换（configured→ddg）总是记入进程内 provider_events()。关 = 输出逐字节不变。
 """
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import logging
 import os
 import random
 import re
+import threading
 import time
 from typing import Any, Optional
 
@@ -89,6 +95,49 @@ DEFAULT_FIRECRAWL_CALLS_PER_MINUTE = 8
 DEFAULT_FIRECRAWL_SEARCH_MAX_RETRIES = 4
 _FIRECRAWL_RETRY_AFTER_RE = re.compile(r"retry after (\d+)\s*s", re.IGNORECASE)
 _firecrawl_window: list[float] = []  # 本进程最近 60s 内发出请求的 monotonic 时间戳
+
+# —— RESEARCH-2：类型化来源结果（RESEARCH_SOURCE_TAXONOMY，缺省关）——
+# Firecrawl 401/402 = credential/quota refusal: no later search in this run can
+# succeed, so the v3 tool layer latches it instead of retrying every query.
+_FIRECRAWL_NOT_CONFIGURED_STATUSES = frozenset({401, 402})
+_TAXONOMY_TRUTHY = frozenset({"1", "true", "yes", "on"})
+# Process-local provider events ("substitution:<configured>->ddg" -> count).
+# Always recorded; linear_research reads them only with the taxonomy on.
+_PROVIDER_EVENTS: dict[str, int] = {}
+_PROVIDER_EVENTS_LOCK = threading.Lock()
+
+
+def _source_taxonomy_on() -> bool:
+    """RESEARCH_SOURCE_TAXONOMY (default off; the orchestrator forwards Config's value)."""
+    return os.environ.get("RESEARCH_SOURCE_TAXONOMY", "").strip().lower() in _TAXONOMY_TRUTHY
+
+
+def _record_provider_event(name: str) -> None:
+    with _PROVIDER_EVENTS_LOCK:
+        _PROVIDER_EVENTS[name] = _PROVIDER_EVENTS.get(name, 0) + 1
+
+
+def provider_events() -> dict[str, int]:
+    """Snapshot (deep copy) of this process's search provider events."""
+    with _PROVIDER_EVENTS_LOCK:
+        return copy.deepcopy(_PROVIDER_EVENTS)
+
+
+def reset_provider_events() -> None:
+    """Forget this process's search provider events (a new process starts empty)."""
+    with _PROVIDER_EVENTS_LOCK:
+        _PROVIDER_EVENTS.clear()
+
+
+def _firecrawl_error(error: str, query: str, failure_class: str, reason: str) -> str:
+    """Firecrawl's legacy ``{"error", "query"}`` envelope; with the taxonomy on,
+    also its failure_class, provider and reason (legacy keys first, unchanged)."""
+    payload: dict[str, Any] = {"error": error, "query": query}
+    if _source_taxonomy_on():
+        payload.update({"failure_class": failure_class, "provider": "firecrawl",
+                        "reason": reason})
+    return json.dumps(payload, ensure_ascii=False)
+
 
 # ---------------------------------------------------------------------------
 # WAVE9 —— web_search 结果磁盘缓存（镜像 cached_fetch.py 的模式，自包含不 import 桥）。
@@ -245,6 +294,26 @@ def _filter_denied_search_results(result: Any) -> str:
             obj = filtered
     return (json.dumps(obj, ensure_ascii=False, sort_keys=True)
             if changed else text)
+
+
+def _mark_unconfirmed_empty(result: str) -> str:
+    """Annotate the community DDG tool's ``{"error": "No results found", ...}``.
+
+    The DDG tool swallows every engine error (throttling included) into the
+    same payload as a genuine empty result, so the payload proves nothing
+    about absence: add ``empty_unconfirmed`` and ``provider`` (other keys kept).
+    Such payloads carry "error", so they are neither negative- nor disk-cached.
+    """
+    try:
+        obj = json.loads(result)
+    except (TypeError, ValueError):
+        return result
+    if not isinstance(obj, dict):
+        return result
+    if not str(obj.get("error") or "").casefold().startswith("no results"):
+        return result
+    return json.dumps({**obj, "empty_unconfirmed": True, "provider": "ddg"},
+                      ensure_ascii=False)
 
 
 def _budget_denial(tool: str, reason: str, request: str) -> str:
@@ -451,10 +520,9 @@ def _firecrawl_search(query: str, max_results: int) -> str:
             logger.warning(
                 "search_tools: Firecrawl 本进程 search 计费调用已达上限 %d，"
                 "后续搜索直接返回瞬态错误（不再产生 Firecrawl 费用）", ceiling)
-        return json.dumps(
-            {"error": f"firecrawl search per-run call ceiling reached ({ceiling})",
-             "query": q},
-            ensure_ascii=False)
+        return _firecrawl_error(
+            f"firecrawl search per-run call ceiling reached ({ceiling})", q,
+            "budget", "per_run_call_ceiling")
     try:
         import httpx
 
@@ -496,10 +564,12 @@ def _firecrawl_search(query: str, max_results: int) -> str:
             attempt += 1
             time.sleep(backoff)
         if response.status_code >= 400:
-            return json.dumps(
-                {"error": f"firecrawl search HTTP {response.status_code}",
-                 "query": q},
-                ensure_ascii=False)
+            status = response.status_code
+            return _firecrawl_error(
+                f"firecrawl search HTTP {status}", q,
+                "not_configured" if status in _FIRECRAWL_NOT_CONFIGURED_STATUSES
+                else "unavailable",
+                f"http_{status}")
         payload = response.json()
         data = payload.get("data") if isinstance(payload, dict) else None
         # v2 按 source 分组（{"web":[...]}）；容忍 v1 风格的裸列表。
@@ -521,10 +591,9 @@ def _firecrawl_search(query: str, max_results: int) -> str:
             {"query": q, "total_results": len(results), "results": results},
             ensure_ascii=False)
     except Exception as exc:  # noqa: BLE001 — 不回显异常正文（可能含 bearer 头）
-        return json.dumps(
-            {"error": f"firecrawl search failed: {type(exc).__name__}",
-             "query": q},
-            ensure_ascii=False)
+        return _firecrawl_error(
+            f"firecrawl search failed: {type(exc).__name__}", q,
+            "unavailable", type(exc).__name__)
 
 
 def _load_search_module(provider: str) -> Optional[Any]:
@@ -574,6 +643,7 @@ def web_search_impl(
     缓存关闭（TTL<=0）或 query 归一化后为空时绕过正缓存；LOOP-007 预算仍独立生效。
     """
     provider = _select_search_provider()
+    configured = provider
     if _research_budget is not None:
         attempt = _research_budget.admit_attempt("search")
         if not attempt.allowed:
@@ -594,6 +664,9 @@ def web_search_impl(
         if tool_obj is None:
             return json.dumps({"error": "no web_search backend available", "query": query},
                               ensure_ascii=False)
+    if provider != configured:
+        # RESEARCH-2: a silent substitution is visible to the engine's health events.
+        _record_provider_event(f"substitution:{configured}->{provider}")
     # Provider fallback changes the actual request identity; negative-cache the
     # delegate that was really used, just like the positive disk-cache key.
     exact_key = f"{provider}\n{_normalize_query(query)}\n{int(max_results)}"
@@ -688,6 +761,8 @@ def web_search_impl(
                   else _call_delegate(tool_obj, query, max_results))
         result = result if isinstance(result, str) else str(result)
         result = _filter_denied_search_results(result)
+        if provider == "ddg" and _source_taxonomy_on():
+            result = _mark_unconfirmed_empty(result)
     except Exception as e:  # noqa: BLE001 — 工具层最后兜底：绝不向 agent 循环抛异常
         logger.warning("search_tools: 委派 %s 失败（降级为空结果）: %s", provider, e)
         if _research_budget is not None:

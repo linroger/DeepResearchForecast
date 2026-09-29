@@ -46,6 +46,9 @@ DEFAULT_INFLIGHT_TTL_SECONDS = 120
 DEFAULT_PROVIDER_FAILURE_THRESHOLD = 5
 DEFAULT_PROVIDER_COOLDOWN_SECONDS = 120
 DEFAULT_PROVIDER_PROBE_LEASE_SECONDS = 30
+# RESEARCH-2: a credential/quota refusal (HTTP 401/402) does not heal in the
+# transport cooldown, so the shared circuit stays open this long instead.
+QUOTA_COOLDOWN_SECONDS = 3600
 TELEMETRY_MIN_INTERVAL_SECONDS = 1.0
 
 _TELEMETRY_LOCK = threading.Lock()
@@ -735,6 +738,43 @@ def record_provider_transport_failure(provider: str, error: str) -> bool:
     except Exception as exc:
         _emit_degraded(f"provider-circuit-write: {type(exc).__name__}: {exc}")
         return False
+
+
+def record_provider_quota_failure(provider: str, error: str) -> None:
+    """Open ``provider``'s shared circuit for QUOTA_COOLDOWN_SECONDS after a
+    credential/quota refusal, so every lane skips it (provider_circuit_open).
+
+    Counts ``provider_<name>_not_configured`` for the run and the lane and
+    leaves the transport-failure counters alone.  Never raises: a ledger
+    failure is reported as degraded telemetry.
+    """
+    name = str(provider or "").strip().lower()
+    if not enabled() or not name:
+        return
+    now = time.time()
+    try:
+        with closing(_connect()) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """INSERT INTO provider_health(
+                       provider, consecutive_transport_failures,
+                       total_transport_failures, opened_at, open_until, probe_until,
+                       last_error, updated_at
+                   ) VALUES (?, 0, 0, ?, ?, NULL, ?, ?)
+                   ON CONFLICT(provider) DO UPDATE SET
+                       opened_at=excluded.opened_at,
+                       open_until=excluded.open_until,
+                       probe_until=NULL,
+                       last_error=excluded.last_error,
+                       updated_at=excluded.updated_at""",
+                (name, now, now + QUOTA_COOLDOWN_SECONDS, str(error or "")[:500], now),
+            )
+            _increment(conn, "global", "", f"provider_{name}_not_configured")
+            _increment(conn, "lane", _lane_id(), f"provider_{name}_not_configured")
+            conn.commit()
+        export_telemetry(force=True)
+    except Exception as exc:
+        _emit_degraded(f"provider-quota-write: {type(exc).__name__}: {exc}")
 
 
 def record_provider_success(provider: str) -> None:

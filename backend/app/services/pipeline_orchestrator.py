@@ -1993,7 +1993,9 @@ def _synthesis_provider_unavailable(error: Any) -> bool:
 # child.  A work package that forwards a Config knob adds exactly one entry,
 # keeping each table alphabetical; every name must exist on Config and be
 # documented in .env.example (test_orchestrator_research_wiring checks both).
-RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = ()
+RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
+    ("RESEARCH_SOURCE_TAXONOMY", "bool"),
+)
 RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_AS_OF_PIN", "bool"),
     ("RESEARCH_QUANT_TYPING", "bool"),
@@ -6544,6 +6546,19 @@ def merge_research_quality(track_metas: list[Any]) -> dict:
     return merged
 
 
+def _research_health_stage(research_quality: Any) -> Optional[dict]:
+    """RESEARCH-2（纯）：research_quality 已降级 → pipeline_health 的 research 阶段块
+    {health: degraded, issues: 前 8 条降级说明（各 ≤200 字符）, score}；否则 None。"""
+    if not isinstance(research_quality, dict) or not research_quality.get("degraded"):
+        return None
+    degradation = research_quality.get("degradation")
+    if isinstance(degradation, str):
+        degradation = [degradation]
+    issues = [str(item)[:200] for item in (degradation if isinstance(degradation, list) else [])
+              if str(item).strip()][:8]
+    return {"health": "degraded", "issues": issues, "score": research_quality.get("score")}
+
+
 def _source_tier_histogram(sources: Any) -> dict[str, int]:
     """PAR-2（纯）：从（合并后的）sources 重算 {s1_count..s4_count,s_unknown}，键名与 bridge 一致。"""
     hist = {"s1_count": 0, "s2_count": 0, "s3_count": 0, "s4_count": 0, "s_unknown": 0}
@@ -9787,6 +9802,12 @@ class PipelineOrchestrator:
                     "issues": graph_issues,
                     **graph_meta,
                 }
+            # RESEARCH-2: a degraded research_quality is a degraded research stage
+            # (degrade-only: it never adds a hard issue).
+            if getattr(Config, "PIPELINE_HEALTH_RESEARCH_STAGE", False):
+                research_stage = _research_health_stage(state.options.get("research_quality"))
+                if research_stage is not None:
+                    health["stages"]["research"] = research_stage
             degraded = any(s.get("health") in ("degraded", "failed")
                            for s in health["stages"].values())
             health["status"] = "failed" if hard_issues else ("degraded" if degraded else "ok")
