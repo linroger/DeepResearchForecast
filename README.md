@@ -122,8 +122,8 @@ flowchart TB
 ## Quickstart
 
 ```bash
-git clone https://github.com/linroger/DeepAgentForecast.git
-cd DeepAgentForecast
+git clone https://github.com/linroger/DeepResearchForecast.git
+cd DeepResearchForecast
 ./setup.sh        # interactive: pick an LLM provider, install everything, assemble DeerFlow
 npm run doctor    # fast, offline check of prerequisites and imports
 npm start         # backend on :5001 + frontend on :3000; follows logs and stage transitions
@@ -146,7 +146,7 @@ The full walkthrough is in [Requirements](#requirements), [Installation and setu
 
 ## Demo
 
-🔗 **[Live demo site](https://linroger.github.io/DeepAgentForecast/)** (English + 中文) walks through **every stage** of real end-to-end runs:
+🔗 **[Live demo site](https://linroger.github.io/DeepResearchForecast/)** (English + 中文) walks through **every stage** of real end-to-end runs:
 - the deep-research console log;
 - the research dossier, with actors and sources;
 - the generated ontology;
@@ -167,7 +167,7 @@ Here is one prompt, *"Who wins the US AI race by 2030?"*, going from question to
 - **115 personas** over **40 dual-platform rounds**.
 - A sectioned forecast report.
 
-▶ **[Watch the semiconductor walkthrough (42 s at 4× speed, MP4)](docs/media/demo-semiconductors.mp4)** · 🔗 **[Explore it live](https://linroger.github.io/DeepAgentForecast/demo.html?run=semiconductors-2030)**
+▶ **[Watch the semiconductor walkthrough (42 s at 4× speed, MP4)](docs/media/demo-semiconductors.mp4)** · 🔗 **[Explore it live](https://linroger.github.io/DeepResearchForecast/demo.html?run=semiconductors-2030)**
 
 | | |
 |---|---|
@@ -182,21 +182,21 @@ The demo site hosts 15 complete runs, listed here newest first. Scale varies bec
 
 | Run | Date | Research model | Simulation |
 |---|---|---|---|
-| [Quantum computing to 2040: the US, China and EU race](https://linroger.github.io/DeepAgentForecast/demo.html?run=quantum-2040) | 2026-09 | GLM-5.3 | 29 rounds · 18 personas |
-| [Global data centers to 2030: the US–China compute race](https://linroger.github.io/DeepAgentForecast/demo.html?run=datacenter-2030) | 2026-09 | GLM-5.3 (completed by the experimental linear engine) | 17 rounds · 18 personas |
-| [Global grid-scale energy storage through 2040](https://linroger.github.io/DeepAgentForecast/demo.html?run=grid-storage-2040) | 2026-07 | MiniMax | 29 rounds · 19 personas |
-| [Global EV industry through 2035](https://linroger.github.io/DeepAgentForecast/demo.html?run=ev-2035) | 2026-07 | MiniMax | 19 rounds · 12 personas |
-| [The 2026 US midterms: House and Senate control scenarios](https://linroger.github.io/DeepAgentForecast/demo.html?run=us-midterms-2026) | 2026-07 | MiniMax | 36 rounds · 14 personas |
-| [America's trading system in 2028: tariffs, reshoring and the AI-productivity race](https://linroger.github.io/DeepAgentForecast/demo.html?run=us-trade-2028) | 2026-07 | MiniMax | 36 rounds · 20 personas |
-| [The Collision Decade: Modern Mercantilism × AI, 2026–2031](https://linroger.github.io/DeepAgentForecast/demo.html?run=collision-decade-2031) | 2026-07 | Claude | 24 rounds · 80 personas |
-| [Global cloud computing: the 2030 endgame](https://linroger.github.io/DeepAgentForecast/demo.html?run=cloud-2030) | 2026-06 | MiniMax | 120 rounds · 80 personas |
-| [Storage semiconductors: the 2027–2028 outlook](https://linroger.github.io/DeepAgentForecast/demo.html?run=storage-semi-2028) | 2026-06 | MiniMax | 96 rounds · 80 personas |
-| [Global memory-chip market through 2030](https://linroger.github.io/DeepAgentForecast/demo.html?run=memory-semi-2030) | 2026-06 | — | 4 rounds · 80 personas |
-| [How does the 2026 US–Iran war end?](https://linroger.github.io/DeepAgentForecast/demo.html?run=us-iran-2026) | 2026-06 | MiniMax | 40 rounds · 135 personas |
-| [China's energy storage and battery market in 2035](https://linroger.github.io/DeepAgentForecast/demo.html?run=china-storage-2035) | 2026-06 | MiniMax | 40 rounds · 94 personas |
-| [Global semiconductors through 2030](https://linroger.github.io/DeepAgentForecast/demo.html?run=semiconductors-2030) | 2026-06 | MiniMax | 40 rounds · 115 personas |
-| [Who dominates US AI by 2030?](https://linroger.github.io/DeepAgentForecast/demo.html?run=us-ai-2030) | 2026-06 | MiniMax | 40 rounds · 42 personas |
-| [How and when does the Russia–Ukraine war end?](https://linroger.github.io/DeepAgentForecast/demo.html?run=russia-ukraine) | 2026-06 | MiniMax | 3 rounds · 36 personas |
+| [Quantum computing to 2040: the US, China and EU race](https://linroger.github.io/DeepResearchForecast/demo.html?run=quantum-2040) | 2026-09 | GLM-5.3 | 29 rounds · 18 personas |
+| [Global data centers to 2030: the US–China compute race](https://linroger.github.io/DeepResearchForecast/demo.html?run=datacenter-2030) | 2026-09 | GLM-5.3 (completed by the experimental linear engine) | 17 rounds · 18 personas |
+| [Global grid-scale energy storage through 2040](https://linroger.github.io/DeepResearchForecast/demo.html?run=grid-storage-2040) | 2026-07 | MiniMax | 29 rounds · 19 personas |
+| [Global EV industry through 2035](https://linroger.github.io/DeepResearchForecast/demo.html?run=ev-2035) | 2026-07 | MiniMax | 19 rounds · 12 personas |
+| [The 2026 US midterms: House and Senate control scenarios](https://linroger.github.io/DeepResearchForecast/demo.html?run=us-midterms-2026) | 2026-07 | MiniMax | 36 rounds · 14 personas |
+| [America's trading system in 2028: tariffs, reshoring and the AI-productivity race](https://linroger.github.io/DeepResearchForecast/demo.html?run=us-trade-2028) | 2026-07 | MiniMax | 36 rounds · 20 personas |
+| [The Collision Decade: Modern Mercantilism × AI, 2026–2031](https://linroger.github.io/DeepResearchForecast/demo.html?run=collision-decade-2031) | 2026-07 | Claude | 24 rounds · 80 personas |
+| [Global cloud computing: the 2030 endgame](https://linroger.github.io/DeepResearchForecast/demo.html?run=cloud-2030) | 2026-06 | MiniMax | 120 rounds · 80 personas |
+| [Storage semiconductors: the 2027–2028 outlook](https://linroger.github.io/DeepResearchForecast/demo.html?run=storage-semi-2028) | 2026-06 | MiniMax | 96 rounds · 80 personas |
+| [Global memory-chip market through 2030](https://linroger.github.io/DeepResearchForecast/demo.html?run=memory-semi-2030) | 2026-06 | — | 4 rounds · 80 personas |
+| [How does the 2026 US–Iran war end?](https://linroger.github.io/DeepResearchForecast/demo.html?run=us-iran-2026) | 2026-06 | MiniMax | 40 rounds · 135 personas |
+| [China's energy storage and battery market in 2035](https://linroger.github.io/DeepResearchForecast/demo.html?run=china-storage-2035) | 2026-06 | MiniMax | 40 rounds · 94 personas |
+| [Global semiconductors through 2030](https://linroger.github.io/DeepResearchForecast/demo.html?run=semiconductors-2030) | 2026-06 | MiniMax | 40 rounds · 115 personas |
+| [Who dominates US AI by 2030?](https://linroger.github.io/DeepResearchForecast/demo.html?run=us-ai-2030) | 2026-06 | MiniMax | 40 rounds · 42 personas |
+| [How and when does the Russia–Ukraine war end?](https://linroger.github.io/DeepResearchForecast/demo.html?run=russia-ukraine) | 2026-06 | MiniMax | 3 rounds · 36 personas |
 
 ### Screenshots
 
@@ -1730,7 +1730,7 @@ See [`drf2/README.md`](drf2/README.md) and [§17 of the DeerFlow 2 atlas](docs/a
 ## Project layout
 
 ```text
-DeepAgentForecast/                   # repository: linroger/DeepAgentForecast
+DeepResearchForecast/                # repository: linroger/DeepResearchForecast
 ├── backend/                         # Flask API + UI host on :5001 (uv, Python 3.12)
 │   ├── app/
 │   │   ├── api/                     #   research · graph · simulation · report · settings · sdk (/api/v1)

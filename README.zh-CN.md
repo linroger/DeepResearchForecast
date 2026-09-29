@@ -122,8 +122,8 @@ flowchart TB
 ## 快速上手
 
 ```bash
-git clone https://github.com/linroger/DeepAgentForecast.git
-cd DeepAgentForecast
+git clone https://github.com/linroger/DeepResearchForecast.git
+cd DeepResearchForecast
 ./setup.sh        # 交互式：选择 LLM 提供方、安装全部依赖、装配 DeerFlow
 npm run doctor    # 快速、离线地检查依赖与导入
 npm start         # 后端 :5001 + 前端 :3000；跟随日志并打印阶段变化
@@ -146,7 +146,7 @@ npm start         # 后端 :5001 + 前端 :3000；跟随日志并打印阶段变
 
 ## 演示
 
-🔗 **[在线演示站](https://linroger.github.io/DeepAgentForecast/)**（中英双语）带你走完真实端到端运行的**每一个阶段**：
+🔗 **[在线演示站](https://linroger.github.io/DeepResearchForecast/)**（中英双语）带你走完真实端到端运行的**每一个阶段**：
 - 深度研究控制台日志；
 - 含行动者与来源的研究档案；
 - 自动生成的本体；
@@ -167,7 +167,7 @@ npm start         # 后端 :5001 + 前端 :3000；跟随日志并打印阶段变
 - **115 个人格**，进行 **40 轮双平台模拟**。
 - 一份分章节的预测报告。
 
-▶ **[观看半导体运行全程（42 秒，4 倍速，MP4）](docs/media/demo-semiconductors.mp4)** · 🔗 **[在线浏览这次运行](https://linroger.github.io/DeepAgentForecast/demo.html?run=semiconductors-2030)**
+▶ **[观看半导体运行全程（42 秒，4 倍速，MP4）](docs/media/demo-semiconductors.mp4)** · 🔗 **[在线浏览这次运行](https://linroger.github.io/DeepResearchForecast/demo.html?run=semiconductors-2030)**
 
 | | |
 |---|---|
@@ -182,21 +182,21 @@ npm start         # 后端 :5001 + 前端 :3000；跟随日志并打印阶段变
 
 | 运行 | 日期 | 研究模型 | 模拟 |
 |---|---|---|---|
-| [2040 年前的量子计算：美中欧竞速](https://linroger.github.io/DeepAgentForecast/demo.html?run=quantum-2040) | 2026-09 | GLM-5.3 | 29 轮 · 18 个人格 |
-| [2030 年前全球数据中心市场：中美算力竞赛](https://linroger.github.io/DeepAgentForecast/demo.html?run=datacenter-2030) | 2026-09 | GLM-5.3（由实验性线性引擎收尾完成） | 17 轮 · 18 个人格 |
-| [2040 年前全球电网级储能产业](https://linroger.github.io/DeepAgentForecast/demo.html?run=grid-storage-2040) | 2026-07 | MiniMax | 29 轮 · 19 个人格 |
-| [2035 年前全球电动汽车产业](https://linroger.github.io/DeepAgentForecast/demo.html?run=ev-2035) | 2026-07 | MiniMax | 19 轮 · 12 个人格 |
-| [2026 年美国中期选举：参众两院控制权情景](https://linroger.github.io/DeepAgentForecast/demo.html?run=us-midterms-2026) | 2026-07 | MiniMax | 36 轮 · 14 个人格 |
-| [2028 年美国贸易体系：关税、供应链回流与 AI 生产力竞赛](https://linroger.github.io/DeepAgentForecast/demo.html?run=us-trade-2028) | 2026-07 | MiniMax | 36 轮 · 20 个人格 |
-| [碰撞的十年：现代重商主义 × AI（2026–2031）](https://linroger.github.io/DeepAgentForecast/demo.html?run=collision-decade-2031) | 2026-07 | Claude | 24 轮 · 80 个人格 |
-| [2030 年全球云计算竞争格局推演](https://linroger.github.io/DeepAgentForecast/demo.html?run=cloud-2030) | 2026-06 | MiniMax | 120 轮 · 80 个人格 |
-| [2027—2028 年存储半导体前景预判](https://linroger.github.io/DeepAgentForecast/demo.html?run=storage-semi-2028) | 2026-06 | MiniMax | 96 轮 · 80 个人格 |
-| [2030 年前全球存储半导体市场](https://linroger.github.io/DeepAgentForecast/demo.html?run=memory-semi-2030) | 2026-06 | — | 4 轮 · 80 个人格 |
-| [2026 年美伊战争如何收场？](https://linroger.github.io/DeepAgentForecast/demo.html?run=us-iran-2026) | 2026-06 | MiniMax | 40 轮 · 135 个人格 |
-| [2035 年中国储能与电池市场](https://linroger.github.io/DeepAgentForecast/demo.html?run=china-storage-2035) | 2026-06 | MiniMax | 40 轮 · 94 个人格 |
-| [2030 年前全球半导体产业](https://linroger.github.io/DeepAgentForecast/demo.html?run=semiconductors-2030) | 2026-06 | MiniMax | 40 轮 · 115 个人格 |
-| [2030 年谁主导美国 AI？](https://linroger.github.io/DeepAgentForecast/demo.html?run=us-ai-2030) | 2026-06 | MiniMax | 40 轮 · 42 个人格 |
-| [俄乌战争如何终结、何时终结？](https://linroger.github.io/DeepAgentForecast/demo.html?run=russia-ukraine) | 2026-06 | MiniMax | 3 轮 · 36 个人格 |
+| [2040 年前的量子计算：美中欧竞速](https://linroger.github.io/DeepResearchForecast/demo.html?run=quantum-2040) | 2026-09 | GLM-5.3 | 29 轮 · 18 个人格 |
+| [2030 年前全球数据中心市场：中美算力竞赛](https://linroger.github.io/DeepResearchForecast/demo.html?run=datacenter-2030) | 2026-09 | GLM-5.3（由实验性线性引擎收尾完成） | 17 轮 · 18 个人格 |
+| [2040 年前全球电网级储能产业](https://linroger.github.io/DeepResearchForecast/demo.html?run=grid-storage-2040) | 2026-07 | MiniMax | 29 轮 · 19 个人格 |
+| [2035 年前全球电动汽车产业](https://linroger.github.io/DeepResearchForecast/demo.html?run=ev-2035) | 2026-07 | MiniMax | 19 轮 · 12 个人格 |
+| [2026 年美国中期选举：参众两院控制权情景](https://linroger.github.io/DeepResearchForecast/demo.html?run=us-midterms-2026) | 2026-07 | MiniMax | 36 轮 · 14 个人格 |
+| [2028 年美国贸易体系：关税、供应链回流与 AI 生产力竞赛](https://linroger.github.io/DeepResearchForecast/demo.html?run=us-trade-2028) | 2026-07 | MiniMax | 36 轮 · 20 个人格 |
+| [碰撞的十年：现代重商主义 × AI（2026–2031）](https://linroger.github.io/DeepResearchForecast/demo.html?run=collision-decade-2031) | 2026-07 | Claude | 24 轮 · 80 个人格 |
+| [2030 年全球云计算竞争格局推演](https://linroger.github.io/DeepResearchForecast/demo.html?run=cloud-2030) | 2026-06 | MiniMax | 120 轮 · 80 个人格 |
+| [2027—2028 年存储半导体前景预判](https://linroger.github.io/DeepResearchForecast/demo.html?run=storage-semi-2028) | 2026-06 | MiniMax | 96 轮 · 80 个人格 |
+| [2030 年前全球存储半导体市场](https://linroger.github.io/DeepResearchForecast/demo.html?run=memory-semi-2030) | 2026-06 | — | 4 轮 · 80 个人格 |
+| [2026 年美伊战争如何收场？](https://linroger.github.io/DeepResearchForecast/demo.html?run=us-iran-2026) | 2026-06 | MiniMax | 40 轮 · 135 个人格 |
+| [2035 年中国储能与电池市场](https://linroger.github.io/DeepResearchForecast/demo.html?run=china-storage-2035) | 2026-06 | MiniMax | 40 轮 · 94 个人格 |
+| [2030 年前全球半导体产业](https://linroger.github.io/DeepResearchForecast/demo.html?run=semiconductors-2030) | 2026-06 | MiniMax | 40 轮 · 115 个人格 |
+| [2030 年谁主导美国 AI？](https://linroger.github.io/DeepResearchForecast/demo.html?run=us-ai-2030) | 2026-06 | MiniMax | 40 轮 · 42 个人格 |
+| [俄乌战争如何终结、何时终结？](https://linroger.github.io/DeepResearchForecast/demo.html?run=russia-ukraine) | 2026-06 | MiniMax | 3 轮 · 36 个人格 |
 
 ### 截图
 
@@ -1730,7 +1730,7 @@ PYTHONPATH=. backend/.venv/bin/python -m drf2.driver.cli run --question "…" --
 ## 项目结构
 
 ```text
-DeepAgentForecast/                   # 仓库：linroger/DeepAgentForecast
+DeepResearchForecast/                # 仓库：linroger/DeepResearchForecast
 ├── backend/                         # Flask API + 界面托管，端口 :5001（uv，Python 3.12）
 │   ├── app/
 │   │   ├── api/                     #   research · graph · simulation · report · settings · sdk（/api/v1）
