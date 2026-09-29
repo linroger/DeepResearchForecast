@@ -144,6 +144,11 @@ def resolve_report_id(id_: str) -> Optional[str]:
 
 # EVAL-13: exclude_evaluation 时按 n 的这个倍数多取候选，剔除评估运行报告后仍能凑满 n 份。
 EVALUATION_OVERFETCH_FACTOR = 4
+# EVAL-13: 归属回退（模拟 id → 是否属评估运行）的进程内备忘，recent_report_ids 与 run_monitor
+# 共用：一轮 `run --all-recent` 对每个模拟只扫一次管线状态，而不是每份报告扫两次。监测以一次性
+# CLI 子进程运行（resolution_autorun 每轮新起进程），recent_report_ids 每批从空备忘开始；
+# 查找失败（fail closed）的答案从不入备忘，下次仍重查。
+_EVALUATION_OWNER_MEMO: Dict[str, bool] = {}
 
 
 def is_evaluation_forecast(forecast: Any) -> bool:
@@ -163,7 +168,8 @@ def _report_owned_by_evaluation_run(report_folder: Optional[str],
     meta.json still names the simulation, and the pipeline that ran it decides
     (``evaluation_context_for_simulation``: its pin, its own admission marker, or a
     fail-closed context when that lookup fails). A lookup that cannot even be
-    imported excludes the report too. ``memo`` caches the answer per simulation id.
+    imported excludes the report too. ``memo`` caches the answer per simulation id;
+    a lookup that failed is never cached.
     """
     meta = _read_json(os.path.join(report_folder, "meta.json")) if report_folder else None
     simulation_id = str(meta.get("simulation_id") or "").strip() if isinstance(meta, dict) else ""
@@ -173,10 +179,13 @@ def _report_owned_by_evaluation_run(report_folder: Optional[str],
         return memo[simulation_id]
     try:
         from app.services.pipeline_orchestrator import evaluation_context_for_simulation
-        owned = evaluation_context_for_simulation(simulation_id) is not None
+        context = evaluation_context_for_simulation(simulation_id)
     except Exception as e:  # noqa: BLE001 — 归属无法判定 → 按评估运行跳过（fail closed）
         logger.warning(f"模拟 {simulation_id} 的评估运行归属无法判定（按评估运行跳过）: {e}")
-        owned = True
+        return True
+    if isinstance(context, dict) and context.get("lookup_failed") is True:
+        return True
+    owned = context is not None
     if memo is not None:
         memo[simulation_id] = owned
     return owned
@@ -224,7 +233,7 @@ def recent_report_ids(n: int, *, as_of: Optional[str] = None,
         except (TypeError, ValueError):
             cutoff = None
     out: List[str] = []
-    owner_memo: Dict[str, bool] = {}
+    _EVALUATION_OWNER_MEMO.clear()
     for r in reports:
         if len(out) >= wanted:
             break
@@ -233,7 +242,7 @@ def recent_report_ids(n: int, *, as_of: Optional[str] = None,
         rid = getattr(r, "report_id", None)
         if not rid:
             continue
-        if exclude_evaluation and _is_evaluation_report(str(rid), owner_memo):
+        if exclude_evaluation and _is_evaluation_report(str(rid), _EVALUATION_OWNER_MEMO):
             continue
         out.append(str(rid))
     return out
@@ -557,7 +566,8 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
         report_folder = _report_folder(report_id)
     if forecast is None:
         forecast = _read_json(os.path.join(report_folder, "forecast.json"))
-    if is_evaluation_forecast(forecast) or _report_owned_by_evaluation_run(report_folder):
+    if (is_evaluation_forecast(forecast)
+            or _report_owned_by_evaluation_run(report_folder, _EVALUATION_OWNER_MEMO)):
         # EVAL-13：评估运行的预测绝不被监测——不重报价、不入账、不落任何文件。
         return {
             "report_id": report_id, "as_of": as_of_day, "anchored_count": 0, "movers": [],

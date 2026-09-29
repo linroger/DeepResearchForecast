@@ -3043,13 +3043,17 @@ class ReportAgent:
         ``target_binding.missing``, never silently dropped: ``repair_draw`` is
         ``extraction_failed`` when the extraction raised, else ``not_attempted``
         (binary extraction off, or the early spine copy written before it ran).
+        A fail-closed context (no run identity) also records why the report was
+        routed here (``fail_closed``, plus ``marker_pipeline_id`` for a fork of an
+        evaluation run), so a demoted production report can be found and recommitted.
         """
+        from .ledger_commit import evaluation_fail_closed
         binding = target_binding
         if targets and not isinstance(binding, dict):
             binding = {"bound": {}, "missing": [t["question_id"] for t in targets],
                        "method": "normalized_equality",
                        "repair_draw": "extraction_failed" if extraction_failed else "not_attempted"}
-        return {
+        stamp: Dict[str, Any] = {
             "record_class": "evaluation",
             "eval_run_id": evaluation.get("eval_run_id"),
             "cell_id": evaluation.get("cell_id"),
@@ -3057,6 +3061,12 @@ class ReportAgent:
             "historical_calibration_suppressed": True,
             "target_binding": binding,
         }
+        reason, marker_pipeline_id = evaluation_fail_closed(evaluation)
+        if reason:
+            stamp["fail_closed"] = reason
+            if marker_pipeline_id:
+                stamp["marker_pipeline_id"] = marker_pipeline_id
+        return stamp
 
     def _finalize_structured_forecast(self, report_id: str, report_markdown: str,
                                       report: Optional["Report"] = None) -> None:

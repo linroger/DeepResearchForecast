@@ -52,6 +52,11 @@ logger = get_logger("mirofish.ledger_commit")
 
 COMMIT_MODES = ("published", "legacy", "off")
 EVALUATION_RECORD_CLASS = "evaluation"
+# EVAL-13: why an evaluation context claims no run (pipeline_orchestrator's fail-closed
+# contexts): the report was routed to the evaluation lane because it could not be shown to
+# be production. First flag set wins.
+EVALUATION_FAIL_CLOSED_REASONS = ("lookup_failed", "foreign_marker", "marker_unreadable",
+                                  "pin_unreadable")
 
 
 def commit_mode() -> str:
@@ -104,6 +109,23 @@ def _record_class(context: Mapping[str, Any], scenario_label: Optional[str]) -> 
     return "conditional_scenario" if _scenario_label(context, scenario_label) else "production"
 
 
+def evaluation_fail_closed(evaluation: Optional[Mapping[str, Any]]
+                           ) -> Tuple[Optional[str], Optional[str]]:
+    """EVAL-13: ``(reason, marker_pipeline_id)`` of a fail-closed evaluation context.
+
+    ``(None, None)`` for a run's own pin (or no context). ``marker_pipeline_id`` is
+    the evaluation run whose admission a ``foreign_marker`` context inherits.
+    """
+    if not isinstance(evaluation, Mapping):
+        return None, None
+    reason = next((flag for flag in EVALUATION_FAIL_CLOSED_REASONS
+                   if evaluation.get(flag) is True), None)
+    if reason is None:
+        return None, None
+    marker_pipeline_id = str(evaluation.get("marker_pipeline_id") or "").strip() or None
+    return reason, marker_pipeline_id
+
+
 def apply_evaluation_context(context: Optional[Mapping[str, Any]],
                              evaluation: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """EVAL-13: a copy of ``context`` re-classed for an evaluation run.
@@ -111,10 +133,12 @@ def apply_evaluation_context(context: Optional[Mapping[str, Any]],
     With an evaluation context the report belongs to the evaluation lane only:
     ``record_class='evaluation'`` (which :func:`commit_report` commits
     ``characterization_only`` into ``forecast_ledger.evaluation_ledger_dir()``)
-    plus the run's ``eval_run_id`` / ``cell_id`` provenance. The class it replaces
-    is kept as ``evaluated_record_class``, so an ensemble member keeps its seed and
-    a compared provider its provider in its target. Idempotent; without an
-    evaluation context the copy is unchanged.
+    plus the run's ``eval_run_id`` / ``cell_id`` provenance. A fail-closed context
+    (no run identity) instead records why as ``evaluation_fail_closed`` (plus
+    ``evaluation_marker_pipeline_id``), so an operator can find the demoted rows.
+    The class it replaces is kept as ``evaluated_record_class``, so an ensemble
+    member keeps its seed and a compared provider its provider in its target.
+    Idempotent; without an evaluation context the copy is unchanged.
     """
     out: Dict[str, Any] = dict(context) if isinstance(context, Mapping) else {}
     if not isinstance(evaluation, Mapping):
@@ -127,6 +151,11 @@ def apply_evaluation_context(context: Optional[Mapping[str, Any]],
         value = str(evaluation.get(key) or "").strip()
         if value:
             out[key] = value
+    reason, marker_pipeline_id = evaluation_fail_closed(evaluation)
+    if reason:
+        out["evaluation_fail_closed"] = reason
+        if marker_pipeline_id:
+            out["evaluation_marker_pipeline_id"] = marker_pipeline_id
     return out
 
 

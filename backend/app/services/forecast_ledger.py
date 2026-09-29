@@ -504,9 +504,12 @@ def market_brier_summary(d: Optional[str] = None,
 
 LEDGER_COMMIT_SCHEMA_VERSION = 2
 # Provenance copied into commit rows when present; anything else in the caller's
-# context is ignored so rows keep one stable, reviewable shape.
+# context is ignored so rows keep one stable, reviewable shape. EVAL-13: an evaluation
+# row routed there fail-closed (no run identity) names why (evaluation_fail_closed) and,
+# for a fork of an evaluation run, which run (evaluation_marker_pipeline_id).
 _PROVENANCE_KEYS = ("pipeline_id", "simulation_id", "run_ref", "seed", "run_kind",
-                    "config_hash", "eval_run_id", "cell_id")
+                    "config_hash", "eval_run_id", "cell_id", "evaluation_fail_closed",
+                    "evaluation_marker_pipeline_id")
 UNPUBLISHED_MAX_REASONS = 10
 UNPUBLISHED_REASON_MAX_CHARS = 300
 _BINARY_ANCHOR_MAX_CHARS = 300

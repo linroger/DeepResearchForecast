@@ -58,6 +58,8 @@ def env(monkeypatch, tmp_path):
     monkeypatch.setattr(Config, "FORECAST_LEDGER_RECORD_UNPUBLISHED", True, raising=False)
     # Admission is what matters here; the background run is a no-op.
     monkeypatch.setattr(po.PipelineOrchestrator, "_run", classmethod(lambda cls, state: None))
+    # The monitor's per-process owner memo never carries answers across tests.
+    monkeypatch.setattr(mon, "_EVALUATION_OWNER_MEMO", {})
     return tmp_path
 
 
@@ -280,8 +282,18 @@ def test_invalid_eval_run_id_rejected_before_thread(env, monkeypatch, bad_id):
     {"eval_run_id": "ok", "target": {"question_id": "q1", "statement": "Will\u200bX happen?"}},
     {"eval_run_id": "ok", "target": {"question_id": "q1", "statement": "S",
                                      "resolution_criteria": "YES if X.\u2028Also Y."}},
+    # Lone surrogates (json.loads yields them from '\ud800' escapes) cannot be written as
+    # UTF-8: refused before the marker write could fail behind a created dir and task.
+    {"eval_run_id": "ok", "cell_id": "c\ud8001"},
+    {"eval_run_id": "ok", "target": {"question_id": "q1", "statement": "Will X\udfff happen?"}},
+    json.loads('{"eval_run_id": "ok", "question_id": "q\\udc001"}'),
 ])
-def test_invalid_evaluation_context_rejected(env, ctx):
+def test_invalid_evaluation_context_rejected(env, monkeypatch, ctx):
+    class _NoTasks:
+        def __init__(self):
+            pytest.fail("a task was created for an invalid evaluation context")
+
+    monkeypatch.setattr(po, "TaskManager", _NoTasks)
     with pytest.raises(ValueError):
         po.PipelineOrchestrator.start(QUESTION, evaluation=ctx)
     assert not os.path.exists(Config.PIPELINE_DATA_DIR)
@@ -508,6 +520,14 @@ def test_api_path_resolves_context_via_marker(env, monkeypatch):
     assert po.evaluation_context_for_simulation("sim_marker") == pin
     assert po.evaluation_context_for_simulation("sim_broken")["record_class"] == "evaluation"
     assert po.evaluation_context_for_simulation("sim_broken")["marker_unreadable"] is True
+    # A pin key that is present but malformed (corrupted / hand-edited state) fails closed
+    # instead of falling through to "no marker, production".
+    for i, malformed in enumerate((True, "sweep-2026-09", None, ["x"])):
+        _save_pipeline(f"pipe_malformed{i}", f"sim_malformed{i}",
+                       **{po.EVALUATION_RUN_OPTION: malformed})
+        stub = po.evaluation_context_for_simulation(f"sim_malformed{i}")
+        assert stub["record_class"] == "evaluation" and stub["pin_unreadable"] is True
+        assert (stub["eval_run_id"], stub["cell_id"], stub["target"]) == (None, None, None)
     assert po.evaluation_context_for_simulation("sim_prod") is None
     assert po.evaluation_context_for_simulation("sim_unknown") is None
     assert po.evaluation_context_for_simulation(None) is None
@@ -553,7 +573,6 @@ def test_marker_yields_pin_only_to_its_own_pipeline(env):
     _settle(child.pipeline_id)
     child_state = po.PipelineState.from_dict(po.PipelineManager.load(child.pipeline_id))
     assert child_state.handoff_dir == loaded.handoff_dir
-    assert po.EVALUATION_RUN_OPTION not in child_state.options
     child_state.simulation_id = "sim_child"
     po.PipelineManager.save(child_state)
 
@@ -562,20 +581,66 @@ def test_marker_yields_pin_only_to_its_own_pipeline(env):
                 "characterization_only": True, "eval_run_id": None, "cell_id": None,
                 "question_id": None, "target": None, "foreign_marker": True,
                 "marker_pipeline_id": base.pipeline_id}
+    # The fork carries that context in its options (never the base's cell identity) ...
+    assert child_state.options[po.EVALUATION_RUN_OPTION] == expected
     assert po.PipelineOrchestrator._evaluation_pin(child_state) == expected
     assert po.evaluation_context_for_simulation("sim_child") == expected
     ctx = po.PipelineOrchestrator._report_ledger_context(
         child_state, "sim_child", run_kind="pipeline", seed=0)
     assert ctx["record_class"] == "evaluation"
     assert "eval_run_id" not in ctx and "cell_id" not in ctx
+    assert (ctx["evaluation_fail_closed"], ctx["evaluation_marker_pipeline_id"]) == (
+        "foreign_marker", base.pipeline_id)
     agent = _bare_agent(simulation_id="sim_child")
     assert ReportAgent._evaluation_target_propositions(agent._resolve_evaluation_context()) is None
+    # ... and its report and ledger row say why it sits in the evaluation lane.
+    stamp = ReportAgent._evaluation_stamp(agent._resolve_evaluation_context(), None, None)
+    assert (stamp["fail_closed"], stamp["marker_pipeline_id"]) == (
+        "foreign_marker", base.pipeline_id)
+    _write_report("r_child", _forecast(), simulation_id="sim_child")
+    assert _publish(agent, "r_child")["status"] == "committed"
+    (row,) = fl.read_ledger(fl.evaluation_ledger_dir())
+    assert (row["evaluation_fail_closed"], row["evaluation_marker_pipeline_id"]) == (
+        "foreign_marker", base.pipeline_id)
+    assert "eval_run_id" not in row and not os.path.exists(_production_ledger())
     # The base keeps its full pin through options and through its own marker alike.
     assert po.PipelineOrchestrator._evaluation_pin(loaded) == pin
     assert po.evaluation_context_for_simulation("sim_base") == pin
     options_less = po.PipelineManager.load(base.pipeline_id)
     del options_less["options"][po.EVALUATION_RUN_OPTION]
     assert po._evaluation_pin_of(base.pipeline_id, options_less) == pin
+
+    # A shared-simulation child borrows the base's simulation and is found first by the
+    # newest-first owner scan; the simulation still answers with the base's pin (an API
+    # regeneration on it keeps the cell's identity and target), while the child's own
+    # report stays in the lane without them.
+    shared = batch_runs.fork_question(base.pipeline_id, "Will Canada adopt one too?",
+                                      shared_simulation=True)
+    _settle(shared.pipeline_id)
+    shared_state = po.PipelineState.from_dict(po.PipelineManager.load(shared.pipeline_id))
+    assert shared_state.simulation_id == "sim_base"
+    assert po._ledger_owner_of_simulation("sim_base")[0] == shared.pipeline_id
+    assert po.PipelineOrchestrator._evaluation_pin(shared_state) == expected
+    assert po.evaluation_context_for_simulation("sim_base") == pin
+    regenerated = _bare_agent(simulation_id="sim_base")
+    assert ReportAgent._evaluation_target_propositions(
+        regenerated._resolve_evaluation_context())[0]["question_id"] == QID
+
+    # The forks' lane no longer depends on the base's handoff marker surviving.
+    os.remove(os.path.join(loaded.handoff_dir, po.EVALUATION_RUN_MARKER))
+    for state in (child_state, shared_state):
+        reloaded = po.PipelineState.from_dict(po.PipelineManager.load(state.pipeline_id))
+        assert po.PipelineOrchestrator._evaluation_pin(reloaded) == expected
+    assert po.evaluation_context_for_simulation("sim_child") == expected
+    assert po.evaluation_context_for_simulation("sim_base") == pin
+    # A production base's question fork keeps options without any evaluation key.
+    production = _save_pipeline("pipe_prod_base", "sim_prod_base")
+    production.graph_id = "graph_2"
+    po.PipelineManager.save(production)
+    prod_child = batch_runs.fork_question("pipe_prod_base", "Another question?")
+    _settle(prod_child.pipeline_id)
+    assert po.EVALUATION_RUN_OPTION not in po.PipelineManager.load(
+        prod_child.pipeline_id)["options"]
 
     # A marker that names no pipeline cannot be attributed: fail closed the same way.
     orphan = _save_pipeline("pipe_orphan", "sim_orphan")
@@ -607,6 +672,15 @@ def test_owner_lookup_failure_fails_closed(env, monkeypatch):
     assert not os.path.exists(_production_ledger())
     (row,) = fl.read_ledger(fl.evaluation_ledger_dir())
     assert row["record_class"] == "evaluation" and "eval_run_id" not in row
+    # The row and the forecast say why, so a demoted production sample can be found.
+    assert row["evaluation_fail_closed"] == "lookup_failed"
+    assert "evaluation_marker_pipeline_id" not in row
+    _finalize_env(monkeypatch, emit_binary=False)
+    os.makedirs(ReportManager._get_report_folder("r_unknown_owner_fc"), exist_ok=True)
+    agent._finalize_structured_forecast("r_unknown_owner_fc", MARKDOWN)
+    stamp = _read_forecast("r_unknown_owner_fc")["evaluation"]
+    assert stamp["fail_closed"] == "lookup_failed" and stamp["eval_run_id"] is None
+    assert "marker_pipeline_id" not in stamp
 
     # Even the lookup itself raising inside the agent fails closed.
     def lookup_raises(simulation_id):
@@ -778,7 +852,12 @@ def test_monitor_excludes_unstamped_evaluation_reports_by_owner(env, monkeypatch
                   sealed=False, simulation_id="sim_eval")
     _write_report("r_e_noforecast", None, created_at="2026-09-23T00:00:00",
                   simulation_id="sim_eval")
+    scans = []
+    real_owner = po._ledger_owner_of_simulation
+    monkeypatch.setattr(po, "_ledger_owner_of_simulation",
+                        lambda sid: scans.append(sid) or real_owner(sid))
     assert mon.recent_report_ids(2) == ["r_p2", "r_p1"]
+    assert scans == ["sim_eval", "sim_1"]              # one pipeline-state scan per simulation
 
     class _NoMarkets:
         def __getattr__(self, name):
@@ -792,6 +871,11 @@ def test_monitor_excludes_unstamped_evaluation_reports_by_owner(env, monkeypatch
                               as_of="2026-09-30T00:00:00")
         assert res["skipped"] == "evaluation_run"
         assert sorted(os.listdir(folder)) == before and not os.path.exists(led)
+    # run_monitor reuses the batch's owner answers: no second scan for a vetted report.
+    prod = mon.run_monitor("r_p1", client=_NoMarkets(), ledger_dir=led, dry_run=True,
+                           as_of="2026-09-30T00:00:00")
+    assert "skipped" not in prod
+    assert scans == ["sim_eval", "sim_1"]
 
     # An owner lookup that fails excludes the report too (never monitored as production).
     def boom(simulation_id):
