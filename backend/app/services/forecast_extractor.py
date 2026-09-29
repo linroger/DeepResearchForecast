@@ -3339,8 +3339,10 @@ _SPINE_RESEARCH_HEADINGS = (
     ("### 可观测指标", "观察指标"),
     ("### 情景", "候选情景"),
 )
-# 研究未给参考类基率时：仍要求数值化的外部视角基率（anchor-and-adjust 不能丢），但须标明出处是
-# 模型判断而非研究——禁止给数字会伤校准，放任不标会把模型先验伪装成研究结论。
+# 研究未给参考类基率、且没有其他可引用的锚点块（S级量化事实 / 基准分布锚点）时：仍要求数值化的
+# 外部视角基率（anchor-and-adjust 不能丢），但须标明出处是模型判断而非研究——禁止给数字会伤校准，
+# 放任不标会把模型先验伪装成研究结论。有锚点块时不追加：那些块自带锚点出处要求，再叫模型把
+# 锚点标成「模型判断、非研究来源」会与之矛盾。
 _SPINE_NO_BASE_RATE_NOTE = (
     "\n（研究输入未提供参考类基率：各情景 base_rate_anchor 仍须给出数值化的外部视角基率，"
     "但须写明其为模型外部视角判断、非研究来源；不得虚构来源或出处。）"
@@ -3355,7 +3357,9 @@ def _spine_research_sections(forecast_inputs: str) -> List[str]:
 
 
 def _spine_prompt_head(labels: List[str], *, base_rates_supplied: bool) -> str:
-    """REPORT-4：按实际注入的输入块名重建骨架首句 + 指令正文；研究无基率时追加出处要求。"""
+    """REPORT-4：按实际注入的输入块名重建骨架首句 + 指令正文；无可引用锚点时追加出处要求。
+
+    base_rates_supplied：研究输入含参考类基率，或提示词另有 S级量化事实 / 基准分布锚点块。"""
     if labels:
         lead = (_SPINE_LEAD_PREFIX + "先基于下面提供的输入（" + "、".join(labels) + "），"
                 + _SPINE_LEAD_TAIL)
@@ -3602,8 +3606,9 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
                      + "\n请以此为外部视角先验：沿用相同情景集合，最终概率应落在各自份额的合理带内"
                        "（偏离须在 adjustment_rationale 中给出具体证据）。")
     if absence_markers:
-        user = _spine_prompt_head(
-            labels, base_rates_supplied="参考类基率" in research_sections) + user
+        anchors_supplied = ("参考类基率" in research_sections
+                            or "S级量化事实" in labels or "基准分布锚点" in labels)
+        user = _spine_prompt_head(labels, base_rates_supplied=anchors_supplied) + user
     else:
         user = _SPINE_INSTRUCTIONS + user
 

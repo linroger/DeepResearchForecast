@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 import re
 
 import pytest
@@ -43,7 +44,7 @@ def test_zh_and_en_markers_differ_and_follow_lang():
         assert zh != en
         assert zh.startswith("（预测市场表：") and en.startswith("(market table: ")
     assert "本次运行未启用该步骤" in absence_marker("信号包", absence.not_run("x"))
-    assert "不代表现实中不存在" in absence_marker("信号包", absence.empty("x"))
+    assert "这是检索结果，不代表现实中不存在" in absence_marker("信号包", absence.empty("x"))
     assert "本次运行中不可用" in absence_marker("信号包", absence.unavailable("x"))
     assert "not part of this run" in absence_marker("s", absence.not_run("x"), "en")
     assert "not evidence of absence in the world" in absence_marker("s", absence.empty("x"), "en")
@@ -132,3 +133,52 @@ def test_market_status_legacy_marker_and_unknown():
     bad_counts = {"markets": [], "status": {"empty_reason": "no_equivalent_market",
                                             "transport_failure_count": "n/a"}}
     assert _st(bad_counts) == ("empty", "no_equivalent_market")
+
+
+@pytest.mark.parametrize("raw_counts", [
+    '"transport_failure_count": Infinity, "query_count": 3',
+    '"transport_failure_count": NaN, "query_count": 3',
+    '"transport_failure_count": 1, "query_count": Infinity, "successful_query_count": 1',
+    '"transport_failure_count": 1, "query_count": 3, "successful_query_count": -Infinity',
+])
+def test_non_finite_counts_never_raise(raw_counts):
+    # json.load accepts Infinity / NaN; int(float('inf')) raises OverflowError.
+    payload = json.loads('{"markets": [], "status": {"empty_reason": "no_equivalent_market", '
+                         + raw_counts + "}}")
+    state, reason = _st(payload)
+    assert state in absence.SLOT_STATES and reason
+
+
+def test_infinite_failure_count_reads_as_unreadable_not_as_a_crash():
+    payload = json.loads('{"markets": [], "status": {"empty_reason": "no_equivalent_market", '
+                         '"transport_failure_count": Infinity, "query_count": 3}}')
+    assert _st(payload) == ("empty", "no_equivalent_market")
+
+
+@pytest.mark.parametrize("counts", [
+    {"query_count": None, "attempted_query_count": 3},
+    {"attempted_query_count": 3},
+])
+def test_null_query_count_falls_back_to_attempted(counts):
+    ok = {"markets": [], "status": {"empty_reason": "no_equivalent_market",
+                                    "successful_query_count": 3,
+                                    "transport_failure_count": 0, **counts}}
+    assert _st(ok) == ("empty", "no_equivalent_market")
+    partial = {"markets": [], "status": {"empty_reason": "no_equivalent_market",
+                                         "successful_query_count": 2,
+                                         "transport_failure_count": 1, **counts}}
+    assert _st(partial) == ("unavailable", "partial_transport_failure")
+
+
+@pytest.mark.parametrize("counts", [
+    {"query_count": None},
+    {},
+    {"query_count": "n/a"},
+])
+def test_transport_failure_with_unknown_query_count_is_unavailable(counts):
+    # Without a query count nothing proves every query succeeded, so the folded
+    # no_equivalent_market label cannot be trusted as a clean empty search.
+    payload = {"markets": [], "status": {"empty_reason": "no_equivalent_market",
+                                         "successful_query_count": 2,
+                                         "transport_failure_count": 1, **counts}}
+    assert _st(payload) == ("unavailable", "partial_transport_failure")

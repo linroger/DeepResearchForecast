@@ -94,6 +94,27 @@ def test_lead_lists_every_block_actually_appended(monkeypatch):
     assert "\n\n[模拟量化信号]\nSIG" in p  # legacy_prompt path still carries the block
 
 
+def test_quantitative_facts_suppress_the_model_judgment_note():
+    # The S-grade facts block asks base_rate_anchor to cite its indicator + as_of date;
+    # telling the model to label the anchor as unsourced model judgment would contradict it.
+    p = _prompt(central_question="q", forecast_inputs=_SCENARIO_ONLY,
+                quantitative_facts="GDP growth 2.1% (as_of 2026-06)")
+    assert "\n\n[S级量化事实（数字底座，base_rate_anchor 须引用其中的 指标+as_of 日期）]\n" in p
+    assert _NO_BASE_RATE_NOTE not in p and "模型外部视角判断" not in p
+
+
+def test_base_distribution_suppresses_the_model_judgment_note(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_SPINE_ANCHOR_WORLDSTATE", True, raising=False)
+    p = _prompt(central_question="q", base_distribution={"A": 0.6, "B": 0.4})
+    assert "\n\n[基准分布锚点（模拟 WorldState 份额，先验）]\n" in p
+    assert _NO_BASE_RATE_NOTE not in p
+
+
+def test_market_block_alone_keeps_the_model_judgment_note():
+    p = _prompt(central_question="q", forecast_inputs=_SCENARIO_ONLY, market_block="| m | 30% |")
+    assert _NO_BASE_RATE_NOTE in p
+
+
 def test_no_blocks_lead():
     p = _prompt()
     assert p.startswith("你是预测校准专家。在撰写任何叙事之前，给出一个**机器可读**的结构化预测骨架。"

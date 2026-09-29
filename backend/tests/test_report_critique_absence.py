@@ -139,18 +139,54 @@ def test_present_market_table_passes_through_byte_identically():
             "正文引用且与表内数值一致时视为已接地，不要求 [S#]，绝不能当作捏造数字要求删除或改写") in sys_p
 
 
-def test_missing_signal_pack_marker_and_clause(monkeypatch):
+_NO_SIGNAL_CLAUSE = "本次质检未注入内部情景推演诊断材料：任何「内部情景推演显示…」类论断视为无依据"
+
+
+def test_missing_signal_pack_with_pack_step_on_is_unavailable(monkeypatch):
+    # The pack step runs by default: an empty pack means a hollow or errored simulation,
+    # so the marker must not claim the step was "not enabled in this run".
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK", True, raising=False)
+    monkeypatch.setattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only", raising=False)
     a = _agent(llm=_RecLLM(), _market_pack=_MARKET)
     sys_p, usr_p = _critique(a, _PRIOR)
-    assert ("本次质检未注入内部情景推演诊断材料：任何「内部情景推演显示…」类论断视为无依据"
-            in sys_p)
+    assert _NO_SIGNAL_CLAUSE in sys_p
     assert "【信号包】中的数字是内部模拟推演产物" not in sys_p
+    assert ("【信号包（硬数字）】\n（信号包：本次运行中不可用（signal_pack_empty）——不是空结果，"
+            "不可据此推断任何结论）\n\n") in usr_p
+    assert "本次运行未启用" not in usr_p
+
+
+def test_missing_signal_pack_with_pack_step_off_is_not_run(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK", False, raising=False)
+    a = _agent(llm=_RecLLM(), _market_pack=_MARKET)
+    sys_p, usr_p = _critique(a, _PRIOR)
+    assert _NO_SIGNAL_CLAUSE in sys_p
     assert "（信号包：本次运行未启用该步骤——不是空结果，不可据此推断任何结论）" in usr_p
     assert "signal_pack_not_injected" not in usr_p  # not_run markers carry no reason text
+
+
+def test_no_update_policy_is_not_run_even_with_pack_step_on(monkeypatch):
+    # no_update suppresses the whole pack by policy (_build_signal_pack returns '').
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK", True, raising=False)
     monkeypatch.setattr(Config, "SIMULATION_FORECAST_EFFECT", "no_update", raising=False)
-    b = _agent(llm=_RecLLM(), _market_pack=_MARKET)
-    _, usr_b = _critique(b, _PRIOR)
-    assert "（信号包：本次运行未启用该步骤" in usr_b
+    a = _agent(llm=_RecLLM(), _market_pack=_MARKET)
+    _, usr_p = _critique(a, _PRIOR)
+    assert "（信号包：本次运行未启用该步骤——不是空结果，不可据此推断任何结论）" in usr_p
+    assert "signal_pack_empty" not in usr_p
+
+
+@pytest.mark.parametrize("pack_on,effect,expected", [
+    (True, "diagnostic_only", ("unavailable", "signal_pack_empty")),
+    (True, "legacy_prompt", ("unavailable", "signal_pack_empty")),
+    (False, "diagnostic_only", ("not_run", "signal_pack_not_injected")),
+    (True, "no_update", ("not_run", "simulation_forecast_effect_no_update")),
+    (False, "no_update", ("not_run", "simulation_forecast_effect_no_update")),
+])
+def test_signal_slot_status_reasons(monkeypatch, pack_on, effect, expected):
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK", pack_on, raising=False)
+    monkeypatch.setattr(Config, "SIMULATION_FORECAST_EFFECT", effect, raising=False)
+    st = ReportAgent._signal_slot_status()
+    assert (st.state, st.reason) == expected
 
 
 def test_signal_pack_present_passes_through():

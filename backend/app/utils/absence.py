@@ -94,7 +94,9 @@ MARKER_SENTINELS = (
     "不是空结果",
     "本次运行未启用",
     "本次运行中不可用",
-    "不代表现实中不存在",
+    # The full empty-marker tail: the bare '不代表现实中不存在' is ordinary analytical prose
+    # ("未检索到直接证据不代表现实中不存在该风险") and must not be flagged.
+    "这是检索结果，不代表现实中不存在",
 )
 
 _REASON_SEPARATOR_RE = re.compile(r"[\s\-./:]+")
@@ -132,9 +134,10 @@ def absence_marker(slot_label: str, status: SlotStatus, lang: str = "zh") -> str
 
 
 def _count(value: Any) -> int:
+    """A non-negative count, or 0 when unreadable (json.load accepts Infinity / NaN)."""
     try:
         return max(0, int(value or 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
@@ -153,7 +156,9 @@ def market_status(payload: Any, *, enabled: bool) -> SlotStatus:
     ``status.state`` (the merge's rich label) is read first.  Without it, a
     transport failure on any query makes the result ``unavailable``: the bridge
     folds a partial outage with no candidates into ``no_equivalent_market``, so
-    that label is trusted as ``empty`` only when every query succeeded.
+    that label is trusted as ``empty`` only when every query succeeded.  An
+    unknown (missing, null or unreadable) query count cannot prove that, so any
+    transport failure then counts as partial too.
     """
     if not enabled:
         return not_run("prediction_markets_disabled")
@@ -176,8 +181,8 @@ def market_status(payload: Any, *, enabled: bool) -> SlotStatus:
         return unavailable(empty_reason)
     failures = _count(status.get("transport_failure_count"))
     successes = _count(status.get("successful_query_count"))
-    queries = _count(status.get("query_count", status.get("attempted_query_count")))
-    if failures > 0 and (successes == 0 or successes < queries):
+    queries = _count(status.get("query_count") or status.get("attempted_query_count"))
+    if failures > 0 and (queries == 0 or successes < queries):
         return unavailable("partial_transport_failure")
     if empty_reason in _EMPTY_REASONS:
         return empty(empty_reason)

@@ -9,6 +9,7 @@ Polymarket helpers are monkeypatched, the client stays disabled unless a test op
 
 from __future__ import annotations
 
+import inspect
 import json
 
 import pytest
@@ -162,6 +163,23 @@ def test_market_slot_status_disabled_is_not_run():
     assert (st.state, st.reason) == ("not_run", "prediction_markets_disabled")
 
 
+def test_frozen_status_wins_over_a_later_reload(enabled):
+    a = _agent(_market_status=absence.unavailable("report_fallback_error"))
+    a._freeze_market_slot_status()
+    a._market_status = absence.unavailable("no_market_snapshot")  # a later reload
+    assert a._market_slot_status().reason == "report_fallback_error"
+    assert a._live_market_slot_status().reason == "no_market_snapshot"
+
+
+def test_generate_report_freezes_status_right_after_the_market_pack_build():
+    src = inspect.getsource(ReportAgent.generate_report)
+    build = src.index("self._market_pack = self._build_market_pack()")
+    freeze = src.index("self._freeze_market_slot_status()")
+    spine = src.index("self._derive_and_pin_forecast_spine(report_id)")
+    assert build < freeze < spine
+    assert src.count("self._freeze_market_slot_status()") == 1
+
+
 # ------------------------------------------------------------ _prepend_research_background
 def test_prepend_has_absence_line_only_when_not_present(enabled):
     missing = _agent(_market_status=absence.unavailable("partial_transport_failure"))
@@ -241,3 +259,47 @@ def test_finalize_knob_off_writes_no_slot_states(finalize_env, monkeypatch):
     monkeypatch.setattr(Config, "REPORT_ABSENCE_MARKERS", False, raising=False)
     a = _agent(llm=None, _forecast_spine=dict(_SPINE))
     assert "prompt_slot_states" not in (_finalize(finalize_env, a).get("quality") or {})
+
+
+class _QuietLLM:
+    """Any LLM step finalize might reach answers with nothing usable (offline)."""
+
+    def chat(self, *_a, **_k):
+        return ""
+
+    def chat_json(self, *_a, **_k):
+        return {}
+
+
+def test_finalize_rebuild_cannot_rewrite_the_recorded_slot_state(
+        finalize_env, enabled, handoff, monkeypatch):
+    """The binary-extraction rebuild in finalize re-runs _load_prediction_markets; the
+    recorded prompt_slot_states.market must stay what the section prompts saw."""
+    from app.services import forecast_extractor as fe
+
+    calls = []
+
+    def _queries(*_a, **_k):
+        calls.append(1)
+        if len(calls) == 1:  # generate_report's build: the report-time fallback errors
+            raise RuntimeError("query derivation down")
+        return []            # finalize's rebuild: no queries -> no_market_snapshot
+
+    monkeypatch.setattr(pm, "derive_market_queries_llm", _queries)
+    monkeypatch.setattr(Config, "FORECAST_EMIT_BINARY", True, raising=False)
+    monkeypatch.setattr(Config, "FORECAST_SIM_SENSITIVITY", False, raising=False)
+    monkeypatch.setattr(fe, "extract_binary_forecasts", lambda *_a, **_k: {})
+    a = _agent(llm=_QuietLLM(), _forecast_spine=dict(_SPINE))
+    a._market_pack = a._build_market_pack()  # as generate_report does
+    assert a._market_pack == ""
+    a._freeze_market_slot_status()
+    prefix = a._prepend_research_background("PROMPT")
+    assert "（预测市场信号：本次运行中不可用（report_fallback_error）" in prefix
+
+    states = _finalize(finalize_env, a)["quality"]["prompt_slot_states"]
+    assert len(calls) == 2  # finalize really re-ran the market load ...
+    assert (a._market_status.state, a._market_status.reason) == (
+        "unavailable", "no_market_snapshot")  # ... and the live status drifted
+    assert states["market"] == {"state": "unavailable", "reason": "report_fallback_error",
+                                "detail": ""}
+    assert a._prepend_research_background("PROMPT") == prefix

@@ -1659,6 +1659,8 @@ class ReportAgent:
         # PREDICTION_MARKETS_ENABLED 时为空串，注入自动跳过（degrade-safe，行为不变）。
         self._market_pack = ""
         self._prediction_markets: List[Dict[str, Any]] = []
+        # REPORT-4：章节提示词所见的市场槽状态（generate_report 构建市场包后冻结；None ⇒ 现算）。
+        self._prompt_market_status: Optional[_absence.SlotStatus] = None
         # PM-3：市场快照是否「陈旧」（实时重报价未生效——关闭旗标/client 不可用/整体失败）。
         # True 时 _build_market_pack 在包头附一句时效性说明，读者知道价是研究期而非当下（degrade-safe）。
         self._markets_stale = False
@@ -2834,6 +2836,22 @@ class ReportAgent:
 
     def _market_slot_status(self) -> "_absence.SlotStatus":
         """REPORT-4：提示词里市场槽的状态（absence.SlotStatus）。
+
+        generate_report 构建市场包后即冻结该状态（_freeze_market_slot_status）：之后骨架 / 二元
+        抽取在市场包为空时会重跑 _load_prediction_markets 并改写 self._market_status，但章节前缀、
+        章节质检与 forecast.quality.prompt_slot_states 必须一致地反映章节提示词实际看到的那个状态。
+        未冻结（单独调用 / 离线测试）时现算，见 _live_market_slot_status。"""
+        frozen = getattr(self, "_prompt_market_status", None)
+        if frozen is not None:
+            return frozen
+        return self._live_market_slot_status()
+
+    def _freeze_market_slot_status(self) -> None:
+        """REPORT-4：把此刻的市场槽状态冻结为本次运行章节提示词所用的状态（见 _market_slot_status）。"""
+        self._prompt_market_status = self._live_market_slot_status()
+
+    def _live_market_slot_status(self) -> "_absence.SlotStatus":
+        """REPORT-4：按当前记录现算市场槽状态。
 
         PREDICTION_MARKETS_ENABLED 关 ⇒ not_run；否则取 _load_prediction_markets 记下的状态，
         未加载过 ⇒ unavailable('no_market_snapshot')。状态为 present 但提示词实际没有市场表
@@ -9722,6 +9740,21 @@ class ReportAgent:
             return None
         return text[:600]
 
+    @staticmethod
+    def _signal_slot_status() -> "_absence.SlotStatus":
+        """REPORT-4：章节质检里空信号包槽的状态。
+
+        信号包步骤不在本次运行里（SIMULATION_FORECAST_EFFECT=no_update 整包自抑制，或
+        REPORT_SIGNAL_PACK 关）⇒ not_run；步骤开着却没有信号包（_build_signal_pack 产出空串或
+        构建失败——空心 / 出错的模拟）⇒ unavailable('signal_pack_empty')，不能谎称「未启用」。"""
+        _effect = str(getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
+                      or "diagnostic_only").strip().lower()
+        if _effect == "no_update":
+            return _absence.not_run("simulation_forecast_effect_no_update")
+        if not getattr(Config, "REPORT_SIGNAL_PACK", False):
+            return _absence.not_run("signal_pack_not_injected")
+        return _absence.unavailable("signal_pack_empty")
+
     # REPORT-4：并发/brief 上下文模式下 previous_sections[0] 是 _build_synthesis_brief 的大纲意图，
     # 不是前序章节正文。
     _SYNTHESIS_BRIEF_PREFIX = "【报告大纲与各章节意图"
@@ -9748,11 +9781,7 @@ class ReportAgent:
         else:
             signal_clause = ("本次质检未注入内部情景推演诊断材料：任何「内部情景推演显示…」"
                              "类论断视为无依据")
-            _effect = str(getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
-                          or "diagnostic_only").strip().lower()
-            signal_slot = _absence.absence_marker("信号包", _absence.not_run(
-                "simulation_forecast_effect_no_update" if _effect == "no_update"
-                else "signal_pack_not_injected"))
+            signal_slot = _absence.absence_marker("信号包", self._signal_slot_status())
         if market_txt:
             market_clause = (
                 "【预测市场表】中的隐含概率/价格是机器抓取的真实市场数据（Polymarket 公开 API），"
@@ -10748,6 +10777,10 @@ class ReportAgent:
                 except Exception as _mp_err:  # noqa: BLE001 — 市场信号为可选增强
                     logger.warning(f"构建预测市场信号包失败（忽略）: {_mp_err}")
                     self._market_pack = ""
+            # REPORT-4：冻结章节提示词所见的市场槽状态——骨架 / 二元抽取稍后可能重跑市场加载并
+            # 改写 self._market_status，缺失标记与 prompt_slot_states 仍须与章节提示词一致。
+            if getattr(Config, "REPORT_ABSENCE_MARKERS", True):
+                self._freeze_market_slot_status()
 
             if (getattr(Config, "REPORT_STRUCTURED_FORECAST", True)
                     and getattr(Config, "REPORT_FORECAST_SPINE_FIRST", True)):
