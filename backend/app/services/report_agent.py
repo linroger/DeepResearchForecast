@@ -7199,21 +7199,54 @@ class ReportAgent:
         with LLMCache.bypass(), llm_call_timeout(
             getattr(Config, "REPORT_TRANSLATION_CALL_TIMEOUT_S", 240)
         ):
-            self._generate_bilingual_report_uncached(
-                report_id, report, progress_callback=progress_callback,
-                keep_existing_on_failure=keep_existing_on_failure,
-            )
-            # A report whose sealed forecast.json is (partly) in another language —
-            # every run before the spine prompts carried an output-language rule —
-            # also gets a copy in its own language, so the primary view's dashboard
-            # matches the report.  No-op (no model call) when nothing is foreign.
-            llm = getattr(self, "llm", None)
-            if getattr(Config, "REPORT_BILINGUAL", True) and llm is not None \
-                    and hasattr(llm, "chat"):
-                source_code, _target_code, _target_name = self._detect_translation_target(
-                    report.markdown_content or ""
+            dashboards = self._start_dashboard_localization(report_id, report)
+            try:
+                self._generate_bilingual_report_uncached(
+                    report_id, report, progress_callback=progress_callback,
+                    keep_existing_on_failure=keep_existing_on_failure,
                 )
-                self._ensure_localized_forecast_safely(report_id, source_code)
+            finally:
+                if dashboards is not None:
+                    if dashboards.is_alive() and progress_callback is not None:
+                        try:
+                            progress_callback(97, "localizing forecast dashboard")
+                        except Exception as exc:  # noqa: BLE001 — observability only
+                            logger.warning("双语报告进度回调失败（忽略）: %s", exc)
+                    dashboards.join()
+
+    def _start_dashboard_localization(
+        self, report_id: str, report: "Report"
+    ) -> Optional[threading.Thread]:
+        """Localize the dashboard strings (forecast.json) alongside the body.
+
+        They do not depend on the translated Markdown, so running them in parallel
+        hides their latency (a large Chinese forecast took ~8 minutes after the body
+        had finished).  Both the target language (translated view) and — for runs
+        whose sealed forecast.json is partly in another language — the report's own
+        language (primary view) are covered.  The caller joins the thread before the
+        task completes; failures only log (the dashboard falls back to the original).
+        """
+        llm = getattr(self, "llm", None)
+        if not getattr(Config, "REPORT_BILINGUAL", True) or llm is None \
+                or not hasattr(llm, "chat"):
+            return None
+        source_code, target_code, _target_name = self._detect_translation_target(
+            report.markdown_content or ""
+        )
+        if not target_code:
+            return None
+
+        def _localize() -> None:
+            self._ensure_localized_forecast_safely(report_id, str(target_code))
+            self._ensure_localized_forecast_safely(report_id, source_code)
+
+        context = contextvars.copy_context()
+        thread = threading.Thread(
+            target=context.run, args=(_localize,), daemon=True,
+            name=f"dashboard-l10n-{report_id}",
+        )
+        thread.start()
+        return thread
 
     def _generate_bilingual_report_uncached(
         self,
@@ -7543,11 +7576,6 @@ class ReportAgent:
                 report_id, tgt_code, (audit.get("issues") or [])[:8],
             )
             return
-
-        # Dashboard strings for the variant's language land before the variant is
-        # marked available, so the translated view never opens on a dashboard,
-        # binary-forecast table and market tiles still in the source language.
-        self._ensure_localized_forecast_safely(report_id, str(tgt_code), progress=_progress)
 
         # Publish barrier: citation map + audit land before Markdown.  Readers can
         # never observe a new variant without its language-specific integrity data.

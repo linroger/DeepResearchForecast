@@ -263,25 +263,20 @@ def test_forecast_endpoint_serves_the_requested_language(reports_tmp):
 
 
 def test_bilingual_run_localizes_dashboards_under_a_cache_bypass(reports_tmp, monkeypatch):
+    """Dashboards are localized alongside the body (both languages) and are ready by
+    the time the translation run returns; every model call bypasses the cache."""
     rid = "report_bilingual_dashboard"
     _seal_forecast(rid, _FORECAST, _MARKDOWN)
     report = ReportManager.get_report(rid)
     llm = Translator()
     agent = _agent(llm)
-    order = []
-    original_status = ReportManager._set_translation_runtime_status.__func__
-
-    def _status(cls, report_id, lang, status, **kwargs):
-        order.append(("status", lang, status))
-        return original_status(cls, report_id, lang, status, **kwargs)
-
+    localized_langs = []
     original_ensure = ReportAgent._ensure_localized_forecast
 
     def _ensure(self, report_id, lang, progress=None):
-        order.append(("localize", lang))
+        localized_langs.append(lang)
         return original_ensure(self, report_id, lang, progress=progress)
 
-    monkeypatch.setattr(ReportManager, "_set_translation_runtime_status", classmethod(_status))
     monkeypatch.setattr(ReportAgent, "_ensure_localized_forecast", _ensure)
     monkeypatch.setattr(Config, "REPORT_TRANSLATION_CONCURRENCY", 1)
 
@@ -289,13 +284,13 @@ def test_bilingual_run_localizes_dashboards_under_a_cache_bypass(reports_tmp, mo
 
     assert llm.bypass_seen and all(llm.bypass_seen)
     assert LLMCache.bypassed() is False
-    assert ("status", "zh", "available") in order
-    assert order.index(("localize", "zh")) < order.index(("status", "zh", "available"))
-    assert ("localize", "en") in order
+    assert sorted(localized_langs) == ["en", "zh"]
+    runtime = ReportManager._load_translation_runtime_status(rid, "zh")
+    assert runtime and runtime["status"] == "available"  # the variant passed its audit
     zh, zh_info = ReportManager.load_localized_forecast(rid, "zh")
     en, en_info = ReportManager.load_localized_forecast(rid, "en")
     assert zh_info["localized"] and en_info["localized"]
-    assert not re.search(r"[一-鿿]", en["headline"])
+    assert not re.search(r"[\u4e00-\u9fff]", en["headline"])
     assert "2033年12月31日" in zh["binary_forecasts"][0]["statement"]
 
 
