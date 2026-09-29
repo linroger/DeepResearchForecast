@@ -333,6 +333,11 @@ def _constant_forecast(tmp_path, p):
                        {"binary_forecasts": [{"id": i, "probability": p} for i in ids]})
 
 
+def _committed_cluster_count():
+    """Resampling clusters in the committed set: its ``event_cluster`` when present, else the id."""
+    return len({str(q.get("event_cluster") or "").strip() or q["id"] for q in ge.load_golden_set()})
+
+
 @pytest.mark.usefixtures("isolated_ledgers")
 def test_rigor_block_additive_legacy_unchanged(tmp_path):
     """Every pre-EVAL-7 key and value is unchanged; rigor and the new keys are additive.
@@ -406,7 +411,9 @@ def test_score_forecast_file_constant_09_on_committed_set(tmp_path):
     assert rigor["reference"]["climatology_brier"] == 0.16 and rigor["reference"]["bss"] == -0.0625
     assert rigor["caveats"][0] == "base rate 0.80 (24/30): a constant 0.80 forecast scores Brier 0.160 - read BSS"
     assert ge.ANSWER_BEARING_CAVEAT in rigor["caveats"]
-    assert "n = 30 questions in 30 clusters" in rigor["caveats"]
+    n_clusters = _committed_cluster_count()             # 30 until the fixture gains event_cluster
+    assert rigor["n_clusters"] == n_clusters
+    assert f"n = 30 questions in {n_clusters} clusters" in rigor["caveats"]
     assert {k: v["n"] for k, v in rigor["by_horizon"].items()} == {"le30": 16, "d31_180": 13, "gt180": 1}
     assert rigor["by_horizon"]["gt180"]["small"] is True
     assert rigor["category_flags"]["small"] == ["awards", "legal-politics", "science-tech"]
@@ -418,7 +425,7 @@ def test_score_forecast_file_constant_09_on_committed_set(tmp_path):
     assert ge.CHARACTERIZATION_BANNER == ("Characterization only - answer-bearing golden set; "
                                           "not a skill estimate (ADR 0002 I-21)")
     for section in ("## Caveats", "## Reference & skill", "## Direction & hedging", "## By horizon"):
-        assert section in text, section
+        assert section in text.splitlines(), section
     assert "resolution accuracy (p >= 0.5 counts as YES)" in text
     assert "base rate 0.80 (24/30)" in text
 
@@ -435,7 +442,7 @@ def test_score_forecast_file_bootstrap_ci(tmp_path):
     assert reports[0] == reports[1]                        # seeded: byte-identical reruns
     ci = json.loads(reports[0])["metrics"]["rigor"]["ci"]
     assert ci["method"] == "question-clustered percentile bootstrap"
-    assert (ci["B"], ci["seed"], ci["n_clusters"]) == (300, 1729, 30)
+    assert (ci["B"], ci["seed"], ci["n_clusters"]) == (300, 1729, _committed_cluster_count())
     assert ci["brier"][0] <= 0.17 <= ci["brier"][1]
     assert ci["bss"][0] <= ci["bss"][1] and ci["reason"] is None
     assert isinstance(ci["bss_degenerate_replicates"], int)
@@ -533,8 +540,8 @@ def test_score_ledger_default_reads_evaluation_dir(tmp_path, isolated_ledgers):
     assert e1["ledger_redirected"] == "evaluation"
     assert read_ledger(fl.ledger_dir()) == [] and len(read_ledger(eval_dir)) == 2
 
-    out = tmp_path / "ledger_eval.json"
-    assert ge.cmd_score_ledger(SimpleNamespace(ledger_dir=None, bins=10, out=str(out), markdown=None)) == 0
+    out, md = tmp_path / "ledger_eval.json", tmp_path / "ledger_eval.md"
+    assert ge.cmd_score_ledger(SimpleNamespace(ledger_dir=None, bins=10, out=str(out), markdown=str(md))) == 0
     report = json.loads(out.read_text(encoding="utf-8"))
     assert report["n_entries"] == 0 and report["n_resolved"] == 0   # production ledger is empty
     assert report["golden"]["n"] == 2                                 # was always 0 before EVAL-7
@@ -543,6 +550,17 @@ def test_score_ledger_default_reads_evaluation_dir(tmp_path, isolated_ledgers):
     assert report["promotion_eligible"] is False
     assert report["golden"]["rigor"]["promotion_eligible"] is False
     assert {k: v["n"] for k, v in report["golden"]["rigor"]["by_horizon"].items()} == {"le30": 1, "gt180": 1}
+    # the markdown uses the ledger layout: both scales labelled, golden rigor rendered
+    text = md.read_text(encoding="utf-8")
+    assert text == ge.render_markdown(report)
+    assert text.splitlines()[0] == f"> {ge.CHARACTERIZATION_BANNER}"
+    assert "# Forecast-ledger evaluation" in text.splitlines() and "matched / scored" not in text
+    assert "| mean Brier (multiclass_sum: summed over scenarios" in text
+    assert "\n## Golden section (binary Brier)\n" in text and "(2 scored golden rows)" in text
+    headings = [line for line in text.splitlines() if line.startswith("#")]
+    golden_at = headings.index("## Golden section (binary Brier)")
+    for section in ("Caveats", "Overall", "Reference & skill", "Direction & hedging", "By horizon"):
+        assert headings.index(f"### {section}") > golden_at, section   # nested under the golden heading
 
     # both scales over the same golden rows: the multi-class sum is twice the binary Brier
     out2 = tmp_path / "same_dir.json"
@@ -565,6 +583,8 @@ def test_score_ledger_default_reads_evaluation_dir(tmp_path, isolated_ledgers):
     out4 = tmp_path / "empty.json"
     assert ge.cmd_score_ledger(SimpleNamespace(ledger_dir=empty_dir, bins=10, out=str(out4), markdown=None)) == 0
     assert json.loads(out4.read_text(encoding="utf-8"))["golden"] == {"n": 0, "brier_scale": "binary"}
+    empty_md = ge.render_markdown(json.loads(out4.read_text(encoding="utf-8")))
+    assert "## Golden section (binary Brier)" in empty_md and "No resolved golden rows in this ledger." in empty_md
 
 
 @pytest.mark.usefixtures("isolated_ledgers")

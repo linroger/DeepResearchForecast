@@ -460,10 +460,10 @@ def _fmt_interval(v: Any) -> str:
     return "—" if not v else f"[{_fmt(v[0])}, {_fmt(v[1])}]"
 
 
-def _render_rigor(rigor: Dict[str, Any], lines: List[str]) -> None:
-    """EVAL-7 sections: Reference & skill, Direction & hedging, By horizon."""
+def _render_rigor(rigor: Dict[str, Any], lines: List[str], heading: str = "##") -> None:
+    """EVAL-7 sections: Reference & skill, Direction & hedging, By horizon (at ``heading`` level)."""
     ref = rigor.get("reference") or {}
-    lines += ["## Reference & skill", "", "| metric | value |", "|---|---|",
+    lines += [f"{heading} Reference & skill", "", "| metric | value |", "|---|---|",
               f"| base rate (YES share) | {_fmt(ref.get('base_rate'))} |",
               f"| climatology Brier (constant base-rate forecast) | {_fmt(ref.get('climatology_brier'))} |",
               f"| Brier skill vs climatology (BSS; > 0 beats the base rate) | {_fmt(ref.get('bss'))} |",
@@ -483,7 +483,7 @@ def _render_rigor(rigor: Dict[str, Any], lines: List[str]) -> None:
     conf = d.get("confusion") or {}
     band = d.get("hedge_band") or list(eval_stats.HEDGE_BAND)
     collapse = d.get("hedge_collapse")
-    lines += ["## Direction & hedging", "", "| metric | value |", "|---|---|",
+    lines += [f"{heading} Direction & hedging", "", "| metric | value |", "|---|---|",
               f"| YES calls (p > 0.5) | {_fmt(d.get('yes_calls'))} |",
               f"| NO calls (p < 0.5) | {_fmt(d.get('no_calls'))} |",
               f"| ties (p = 0.5; excluded from direction and MCC) | {_fmt(d.get('ties'))} |",
@@ -508,7 +508,7 @@ def _render_rigor(rigor: Dict[str, Any], lines: List[str]) -> None:
 
     by_h = rigor.get("by_horizon") or {}
     if by_h:
-        lines += ["## By horizon", "", "| horizon | n | mean Brier | base rate | BSS | flags |",
+        lines += [f"{heading} By horizon", "", "| horizon | n | mean Brier | base rate | BSS | flags |",
                   "|---|---|---|---|---|---|"]
         for key, v in by_h.items():
             flags = [name for name, on in (("small", v.get("small")),
@@ -518,15 +518,89 @@ def _render_rigor(rigor: Dict[str, Any], lines: List[str]) -> None:
         lines.append("")
 
 
+def _render_metrics(m: Dict[str, Any], lines: List[str], heading: str = "##") -> None:
+    """Shared metric sections of a ``score_pairs`` result: Caveats, Overall, the
+    EVAL-7 rigor sections, the category / difficulty tables and calibration bins,
+    each titled at ``heading`` level."""
+    rigor = m.get("rigor")
+    if isinstance(rigor, dict) and rigor.get("caveats"):
+        lines += ["", f"{heading} Caveats", ""]
+        lines += [f"- {c}" for c in rigor["caveats"]]
+    lines += ["", f"{heading} Overall", "", "| metric | value |", "|---|---|",
+              f"| mean Brier (lower=better) | {_fmt(m.get('mean_brier'))} |",
+              f"| mean log-score (higher=better) | {_fmt(m.get('mean_log_score'))} |",
+              f"| resolution accuracy (p >= 0.5 counts as YES) | {_fmt(m.get('resolution_accuracy'))} |",
+              f"| ECE (lower=better) | {_fmt(m.get('calibration', {}).get('ece'))} |",
+              f"| base rate (YES share) | {_fmt(m.get('base_rate'))} |", ""]
+    if isinstance(rigor, dict):
+        _render_rigor(rigor, lines, heading)
+
+    def _table(title: str, bd: Dict[str, Any]) -> None:
+        if not bd:
+            return
+        lines.append(f"{heading} By {title}")
+        lines.append("")
+        lines.append("| " + title + " | n | mean Brier | accuracy (p >= 0.5) | base rate |")
+        lines.append("|---|---|---|---|---|")
+        for key, v in bd.items():
+            lines.append(f"| {key} | {v['n']} | {_fmt(v['mean_brier'])} | "
+                         f"{_fmt(v['resolution_accuracy'])} | {_fmt(v['base_rate'])} |")
+        lines.append("")
+
+    _table("category", m.get("by_category", {}))
+    _table("difficulty", m.get("by_difficulty", {}))
+
+    cal = m.get("calibration", {})
+    if cal.get("bins"):
+        lines += [f"{heading} Calibration bins", "",
+                  "| range | n | mean pred | observed | gap |", "|---|---|---|---|---|"]
+        for b in cal["bins"]:
+            if not b["count"]:
+                continue
+            rng = f"{b['range'][0]:.1f}–{b['range'][1]:.1f}"
+            lines.append(f"| {rng} | {b['count']} | {_fmt(b['mean_predicted'])} | "
+                         f"{_fmt(b['observed_frequency'])} | {_fmt(b['gap'])} |")
+        lines.append("")
+
+
+def _render_ledger_markdown(report: Dict[str, Any]) -> str:
+    """Markdown for a score-ledger report (EVAL-7).
+
+    score-ledger used to reuse the forecast-file layout, which has no place for
+    its numbers and always printed "matched / scored: 0". This layout shows the
+    production summary on its multi-class-sum Brier scale and the golden section
+    on the binary scale, each labelled, with the golden metric and rigor sections
+    nested one level under the golden heading.
+    """
+    g = report.get("golden") or {}
+    lines: List[str] = [
+        f"> {CHARACTERIZATION_BANNER}", "", "# Forecast-ledger evaluation", "",
+        f"- production ledger: `{report.get('ledger_dir', '')}` ({report.get('n_entries', 0)} entries, "
+        f"{report.get('n_resolved', 0)} resolved)",
+        f"- golden section ledger: `{report.get('eval_ledger_dir', '')}` ({g.get('n', 0)} scored golden rows)",
+        "", "## Production ledger", "", "| metric | value |", "|---|---|",
+        f"| mean Brier ({report.get('brier_scale')}: summed over scenarios, 2x the binary Brier "
+        f"on a YES/NO row) | {_fmt(report.get('mean_brier'))} |",
+        f"| calibration error | {_fmt(report.get('calibration_error'))} |", "",
+        f"## Golden section ({g.get('brier_scale', 'binary')} Brier)"]
+    if g.get("n"):
+        _render_metrics(g, lines, heading="###")
+    else:
+        lines += ["", "No resolved golden rows in this ledger.", ""]
+    return "\n".join(lines)
+
+
 def render_markdown(report: Dict[str, Any]) -> str:
-    """Human-readable markdown summary of a score-forecast-file report.
+    """Human-readable markdown summary of a score-forecast-file or score-ledger report.
 
     EVAL-7: the first line is the characterization-only banner; the Caveats,
     Reference & skill, Direction & hedging and By horizon sections render the
-    ``metrics.rigor`` block when present.
+    ``metrics.rigor`` block when present. A score-ledger report gets its own
+    layout (``_render_ledger_markdown``).
     """
+    if report.get("mode") == "score-ledger":
+        return _render_ledger_markdown(report)
     m = report.get("metrics", {})
-    rigor = m.get("rigor")
     lines: List[str] = [f"> {CHARACTERIZATION_BANNER}", "", "# Golden-question forecast evaluation", ""]
     lines.append(f"- source: `{report.get('forecast_path', '')}`")
     lines.append(f"- golden: `{report.get('golden_path', '')}` "
@@ -541,44 +615,7 @@ def render_markdown(report: Dict[str, Any]) -> str:
     dup = report.get("duplicate_forecast_ids") or []
     if dup:
         lines.append(f"- repeated forecast ids (first row scored, later rows ignored): {', '.join(dup)}")
-    if isinstance(rigor, dict) and rigor.get("caveats"):
-        lines += ["", "## Caveats", ""]
-        lines += [f"- {c}" for c in rigor["caveats"]]
-    lines += ["", "## Overall", "", "| metric | value |", "|---|---|",
-              f"| mean Brier (lower=better) | {_fmt(m.get('mean_brier'))} |",
-              f"| mean log-score (higher=better) | {_fmt(m.get('mean_log_score'))} |",
-              f"| resolution accuracy (p >= 0.5 counts as YES) | {_fmt(m.get('resolution_accuracy'))} |",
-              f"| ECE (lower=better) | {_fmt(m.get('calibration', {}).get('ece'))} |",
-              f"| base rate (YES share) | {_fmt(m.get('base_rate'))} |", ""]
-    if isinstance(rigor, dict):
-        _render_rigor(rigor, lines)
-
-    def _table(title: str, bd: Dict[str, Any]) -> None:
-        if not bd:
-            return
-        lines.append(f"## By {title}")
-        lines.append("")
-        lines.append("| " + title + " | n | mean Brier | accuracy (p >= 0.5) | base rate |")
-        lines.append("|---|---|---|---|---|")
-        for key, v in bd.items():
-            lines.append(f"| {key} | {v['n']} | {_fmt(v['mean_brier'])} | "
-                         f"{_fmt(v['resolution_accuracy'])} | {_fmt(v['base_rate'])} |")
-        lines.append("")
-
-    _table("category", m.get("by_category", {}))
-    _table("difficulty", m.get("by_difficulty", {}))
-
-    cal = m.get("calibration", {})
-    if cal.get("bins"):
-        lines += ["## Calibration bins", "",
-                  "| range | n | mean pred | observed | gap |", "|---|---|---|---|---|"]
-        for b in cal["bins"]:
-            if not b["count"]:
-                continue
-            rng = f"{b['range'][0]:.1f}–{b['range'][1]:.1f}"
-            lines.append(f"| {rng} | {b['count']} | {_fmt(b['mean_predicted'])} | "
-                         f"{_fmt(b['observed_frequency'])} | {_fmt(b['gap'])} |")
-        lines.append("")
+    _render_metrics(m, lines)
 
     rows = report.get("matched") or []
     if rows:
