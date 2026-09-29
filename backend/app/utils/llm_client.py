@@ -15,7 +15,7 @@ import re
 import subprocess
 import threading
 import time
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from ..config import Config
 from .llm_text import flatten_content, has_dangling_think, normalize_finish_reason, strip_think
@@ -650,6 +650,20 @@ class LLMClient:
             return True
         return self.provider != (Config.LLM_PROVIDER or "claude-cli").lower()
 
+    def _tier_route(self, tier: Optional[str]) -> Tuple[str, bool]:
+        """EVAL-10: resolve one call's tier routing from a single _routing_pinned() read.
+
+        Returns ``(model, fast_tier)``: the model name the request carries, and whether the
+        fast-tier second client (instead of this client's own endpoint) should serve it. chat()
+        resolves the route once and hands it to _chat_openai, so the LLMCache key, the LLMMeter
+        by_model entry and every retry of the request share one model even when a settings
+        hot-switch of LLM_PROVIDER / LLM_MODEL_NAME lands mid-call.
+        """
+        pinned = self._routing_pinned()
+        model = self._model_for_tier(tier, pinned=pinned)
+        fast_tier = bool(not pinned and getattr(Config, "LLM_TIERED_ROUTING", False) and tier == "fast")
+        return model, fast_tier
+
     def _fast_provider_client(self):
         """若 fast tier 指向不同的 OpenAI 兼容提供方，返回（懒构建的）第二客户端，否则 None。
 
@@ -807,7 +821,10 @@ class LLMClient:
         （非 RuntimeError：不重试，直接尝试一次回退）。本次调用的 finish_reason/usage 等见 last_call_meta()。
         """
         # EXECPLAN2 I-6-2: 解析本次调用实际使用的模型（fast/strong）。关闭路由时 = self.model。
-        model = self._model_for_tier(tier)
+        # EVAL-10: one routing read per call; the cache key, the meter and every transport retry
+        # below use this route (see _tier_route).
+        route = self._tier_route(tier)
+        model = route[0]
         # EXECPLAN2 I-6-0/I-5-0/I-5-3: 内容寻址缓存命中直接返回；否则正常调用后记录
         # token/延迟/成本计量并做预算检查。计量默认开（开销极小），缓存/预算默认关。
         from .telemetry import LLMMeter, LLMCache, get_run_context, check_budget, estimate_tokens
@@ -866,7 +883,8 @@ class LLMClient:
                 break
             try:
                 if self.provider in OPENAI_COMPATIBLE_PROVIDERS:
-                    result = self._chat_openai(messages, temperature, max_tokens, response_format, tier=tier)
+                    result = self._chat_openai(messages, temperature, max_tokens, response_format,
+                                               tier=tier, route=route)
                 elif self.provider == "codex-cli":
                     # CLI 订阅提供方只有单一订阅模型，tier 在此为 no-op。
                     result = self._chat_codex_cli(messages, temperature, max_tokens, response_format)
@@ -1119,14 +1137,11 @@ class LLMClient:
         # EXECPLAN2 I-6-2: 解析模型/客户端（默认 strong = 当前模型/主客户端，工具调用行为不变）。
         # EVAL-10: the fast-tier second client serves the primary provider's routing only; a
         # routing-pinned client (fallback, pinned, non-primary provider) keeps its own endpoint.
-        # One _routing_pinned() read decides both, so a settings hot-switch mid-call cannot
-        # pair a tier alias with this client's own endpoint (or the reverse).
-        pinned = self._routing_pinned()
-        model = self._model_for_tier(tier, pinned=pinned)
+        # One _routing_pinned() read decides both (_tier_route), so a settings hot-switch
+        # mid-call cannot pair a tier alias with this client's own endpoint (or the reverse).
+        model, fast_tier = self._tier_route(tier)
         client = self._openai_client
-        if (not pinned
-                and getattr(Config, "LLM_TIERED_ROUTING", False)
-                and tier == "fast"):
+        if fast_tier:
             fast_client = self._fast_provider_client()
             if fast_client is not None:
                 client = fast_client
@@ -1398,19 +1413,18 @@ class LLMClient:
         temperature: float,
         max_tokens: int,
         response_format: Optional[Dict] = None,
-        tier: str = "strong"
+        tier: str = "strong",
+        route: Optional[Tuple[str, bool]] = None,
     ) -> str:
         # EXECPLAN2 I-6-2: 解析本次实际模型与客户端。fast tier 指向不同提供方时用第二客户端，
         # 否则同提供方仅切模型名；关闭路由时 model=self.model、client=self._openai_client。
         # EVAL-10: the fast-tier second client serves the primary provider's routing only; a
         # routing-pinned client (fallback, pinned, non-primary provider) keeps its own endpoint.
-        # One _routing_pinned() read decides both (see chat_with_tools).
-        pinned = self._routing_pinned()
-        model = self._model_for_tier(tier, pinned=pinned)
+        # ``route`` is chat()'s once-per-call _tier_route() result, so the request carries the
+        # model chat() caches and meters under (None = resolve it here, one read).
+        model, fast_tier = route if route is not None else self._tier_route(tier)
         client = self._openai_client
-        if (not pinned
-                and getattr(Config, "LLM_TIERED_ROUTING", False)
-                and tier == "fast"):
+        if fast_tier:
             fast_client = self._fast_provider_client()
             if fast_client is not None:
                 client = fast_client

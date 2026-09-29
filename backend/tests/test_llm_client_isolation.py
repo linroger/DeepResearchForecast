@@ -319,6 +319,38 @@ def test_one_routing_read_decides_model_and_endpoint(transports, monkeypatch):
     assert PRIMARY not in transports or transports[PRIMARY].calls == []
 
 
+def test_chat_caches_meters_and_retries_under_the_model_the_request_carried(transports, monkeypatch):
+    """chat() resolves the route once: its cache key, its meter entry and every transport
+    retry share one model, even when a hot-switch lands between two routing reads."""
+    _tiered(monkeypatch)
+    _fast_tier_provider(monkeypatch)
+    transports["deepseek"] = _Transport(RuntimeError("transient fast-tier failure"), _resp("fast-ok"))
+    client = lc.LLMClient()
+    reads = []
+
+    def flipping():  # unpinned on the first read of a call, pinned on any second read
+        reads.append(len(reads))
+        return len(reads) % 2 == 0
+
+    monkeypatch.setattr(client, "_routing_pinned", flipping)
+    run_id = "run-eval10-one-route"
+    tel.set_run_context(run_id, stage="report")
+    try:
+        assert client.chat(_msgs("one-route"), tier="fast") == "fast-ok"
+        assert len(reads) == 1  # one read served the cache key, the meter and both attempts
+        assert [c["model"] for c in transports["deepseek"].calls] == [FAST_ALIAS, FAST_ALIAS]
+        assert PRIMARY not in transports or transports[PRIMARY].calls == []
+        assert set(tel.LLMMeter.snapshot(run_id)["by_model"]) == {f"{PRIMARY}:{FAST_ALIAS}"}
+        key = tel.LLMCache.key(PRIMARY, FAST_ALIAS, _msgs("one-route"), 0.7, 4096, None)
+        assert tel.LLMCache.get(key) == "fast-ok"
+        reads.clear()
+        assert client.chat(_msgs("one-route"), tier="fast") == "fast-ok"  # replayed from the cache
+        assert len(transports["deepseek"].calls) == 2
+    finally:
+        tel.set_run_context(None)
+        tel.LLMMeter.reset(run_id)
+
+
 def test_routing_off_leaves_every_client_on_its_own_model(transports):
     for client in (lc.LLMClient(), lc.LLMClient(pinned=True),
                    lc.LLMClient(provider="deepseek", api_key="sk", model="deepseek-chat")):
