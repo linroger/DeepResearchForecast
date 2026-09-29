@@ -64,6 +64,7 @@ _LABELS: Dict[str, Dict[str, str]] = {
         "coverage": "citation coverage",
         "sim_run": "simulation run",
         "organic": "organic actions",
+        "research_degraded": "research degraded",
         "gen_note": "Deterministically extracted from the full report — no model generation.",
     },
     "zh": {
@@ -93,6 +94,7 @@ _LABELS: Dict[str, Dict[str, str]] = {
         "coverage": "引用覆盖率",
         "sim_run": "模拟运行",
         "organic": "条有机行为",
+        "research_degraded": "研究阶段降级",
         "gen_note": "全部从成稿确定性抽取——无模型生成。",
     },
 }
@@ -401,6 +403,16 @@ def _build_honesty_note(forecast: Optional[Dict[str, Any]], report_dir: str,
                 if isinstance(organic, (int, float)):
                     seg += f" ({int(organic)} {L['organic']})"
                 parts.append(seg)
+        # RESEARCH-2：研究阶段降级（仅 PIPELINE_HEALTH_RESEARCH_STAGE 开时才有该阶段块）
+        research_stage = (ph.get("stages") or {}).get("research") if isinstance(ph.get("stages"), dict) else None
+        if isinstance(research_stage, dict):
+            raw_issues = research_stage.get("issues")
+            issues = [str(i) for i in raw_issues if str(i).strip()] if isinstance(raw_issues, list) else []
+            seg = L["research_degraded"]
+            if issues:
+                more = f" +{len(issues) - 1}" if len(issues) > 1 else ""
+                seg += f" ({issues[0][:120]}{more})"
+            parts.append(seg)
 
     # forecast 质量门（forecast.json 内，永远在报告目录里）
     if isinstance(forecast, dict):

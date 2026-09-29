@@ -46,6 +46,21 @@ DEFAULT_INFLIGHT_TTL_SECONDS = 120
 DEFAULT_PROVIDER_FAILURE_THRESHOLD = 5
 DEFAULT_PROVIDER_COOLDOWN_SECONDS = 120
 DEFAULT_PROVIDER_PROBE_LEASE_SECONDS = 30
+# RESEARCH-2: a credential/quota refusal (HTTP 401/402) does not heal in the
+# transport cooldown, so the shared circuit stays open this long instead.
+QUOTA_COOLDOWN_SECONDS = 3600
+# provider_health.last_error of a quota-opened circuit starts with this mark.
+# Until open_until passes, another lane's in-flight transport failure or
+# success (record_provider_transport_failure / record_provider_success) keeps
+# the circuit, its opened_at and its last_error; once it passes,
+# provider_circuit_open gives one caller the half-open probe lease, as after a
+# transport-opened circuit.  Rows without the mark (every row with
+# RESEARCH_SOURCE_TAXONOMY off) are read and updated exactly as before.
+QUOTA_ERROR_MARK = "quota refusal: "
+_QUOTA_CIRCUIT_OPEN_SQL = (
+    f"(provider_health.last_error LIKE '{QUOTA_ERROR_MARK}%' "
+    "AND provider_health.open_until > excluded.updated_at)"
+)
 TELEMETRY_MIN_INTERVAL_SECONDS = 1.0
 
 _TELEMETRY_LOCK = threading.Lock()
@@ -632,7 +647,7 @@ def provider_circuit_open(provider: str) -> bool:
         with closing(_connect()) as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT consecutive_transport_failures, open_until, probe_until "
+                "SELECT consecutive_transport_failures, open_until, probe_until, last_error "
                 "FROM provider_health WHERE provider=?",
                 (name,),
             ).fetchone()
@@ -640,8 +655,11 @@ def provider_circuit_open(provider: str) -> bool:
             failures = int(row[0] or 0) if row else 0
             open_until = float(row[1] or 0.0) if row else 0.0
             probe_until = float(row[2] or 0.0) if row else 0.0
+            # A quota-opened circuit (RESEARCH-2) records no transport failure
+            # but is half-open after its window all the same: one probe first.
+            quota_opened = bool(row) and str(row[3] or "").startswith(QUOTA_ERROR_MARK)
             is_open = open_until > now
-            if not is_open and failures > 0:
+            if not is_open and (failures > 0 or quota_opened):
                 if probe_until > now:
                     is_open = True
                 else:
@@ -703,11 +721,14 @@ def record_provider_transport_failure(provider: str, error: str) -> bool:
                    ON CONFLICT(provider) DO UPDATE SET
                        consecutive_transport_failures=excluded.consecutive_transport_failures,
                        total_transport_failures=provider_health.total_transport_failures+1,
-                       opened_at=excluded.opened_at,
-                       open_until=excluded.open_until,
+                       opened_at=CASE WHEN {q} THEN provider_health.opened_at
+                                 ELSE excluded.opened_at END,
+                       open_until=CASE WHEN {q} THEN provider_health.open_until
+                                  ELSE excluded.open_until END,
                        probe_until=NULL,
-                       last_error=excluded.last_error,
-                       updated_at=excluded.updated_at""",
+                       last_error=CASE WHEN {q} THEN provider_health.last_error
+                                  ELSE excluded.last_error END,
+                       updated_at=excluded.updated_at""".format(q=_QUOTA_CIRCUIT_OPEN_SQL),
                 (
                     name,
                     consecutive,
@@ -737,6 +758,47 @@ def record_provider_transport_failure(provider: str, error: str) -> bool:
         return False
 
 
+def record_provider_quota_failure(provider: str, error: str) -> None:
+    """Open ``provider``'s shared circuit for QUOTA_COOLDOWN_SECONDS after a
+    credential/quota refusal, so every lane skips it (provider_circuit_open);
+    its last_error carries QUOTA_ERROR_MARK, so no in-flight transport
+    failure or success closes it early, and once the window passes exactly
+    one lane probes the provider (the half-open lease) before the others.
+
+    Counts ``provider_<name>_not_configured`` for the run and the lane and
+    leaves the transport-failure counters alone.  Never raises: a ledger
+    failure is reported as degraded telemetry.
+    """
+    name = str(provider or "").strip().lower()
+    if not enabled() or not name:
+        return
+    now = time.time()
+    try:
+        with closing(_connect()) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """INSERT INTO provider_health(
+                       provider, consecutive_transport_failures,
+                       total_transport_failures, opened_at, open_until, probe_until,
+                       last_error, updated_at
+                   ) VALUES (?, 0, 0, ?, ?, NULL, ?, ?)
+                   ON CONFLICT(provider) DO UPDATE SET
+                       opened_at=excluded.opened_at,
+                       open_until=excluded.open_until,
+                       probe_until=NULL,
+                       last_error=excluded.last_error,
+                       updated_at=excluded.updated_at""",
+                (name, now, now + QUOTA_COOLDOWN_SECONDS,
+                 (QUOTA_ERROR_MARK + str(error or ""))[:500], now),
+            )
+            _increment(conn, "global", "", f"provider_{name}_not_configured")
+            _increment(conn, "lane", _lane_id(), f"provider_{name}_not_configured")
+            conn.commit()
+        export_telemetry(force=True)
+    except Exception as exc:
+        _emit_degraded(f"provider-quota-write: {type(exc).__name__}: {exc}")
+
+
 def record_provider_success(provider: str) -> None:
     """Reset consecutive failures after a successful provider response."""
     name = str(provider or "").strip().lower()
@@ -752,11 +814,11 @@ def record_provider_success(provider: str) -> None:
                    ) VALUES (?, 0, 0, NULL, NULL, NULL, '', ?)
                    ON CONFLICT(provider) DO UPDATE SET
                        consecutive_transport_failures=0,
-                       opened_at=NULL,
-                       open_until=NULL,
+                       opened_at=CASE WHEN {q} THEN provider_health.opened_at ELSE NULL END,
+                       open_until=CASE WHEN {q} THEN provider_health.open_until ELSE NULL END,
                        probe_until=NULL,
-                       last_error='',
-                       updated_at=excluded.updated_at""",
+                       last_error=CASE WHEN {q} THEN provider_health.last_error ELSE '' END,
+                       updated_at=excluded.updated_at""".format(q=_QUOTA_CIRCUIT_OPEN_SQL),
                 (name, time.time()),
             )
     except Exception as exc:

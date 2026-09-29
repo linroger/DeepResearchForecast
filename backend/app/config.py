@@ -185,6 +185,14 @@ class Config:
     # and record a degraded health block (consumed by status API + sim-caveat) for hollow/
     # truncated sims. Stops the "fake completed" runs (8/13 of the audited corpus).
     PIPELINE_HEALTH_GATE = os.environ.get('PIPELINE_HEALTH_GATE', 'True').strip().lower() == 'true'
+    # RESEARCH-2: add pipeline_health.stages.research = {health: degraded, issues, score}
+    # when research_quality is degraded, so the status API and the executive brief's
+    # honesty note name the research degradation.  Degrade-only: it never fails the
+    # pipeline, but the run's status is degraded, so a force resume (ORCH-3, which only
+    # regenerates the report) is accepted and cannot repair the research.
+    # Default false: off = pipeline_health without a research stage, as before.
+    PIPELINE_HEALTH_RESEARCH_STAGE = os.environ.get(
+        'PIPELINE_HEALTH_RESEARCH_STAGE', 'false').strip().lower() == 'true'
     # NEXTSTEPS P0-1：在撰写任何章节叙事**之前**先从信号包+forecast_inputs 推导「预测骨架」
     # （情景+概率+判定标准），强制 MECE 纪律并把骨架注入每章提示词，让叙事对齐可证伪目标。
     # 默认开；关闭则回退为旧的「报告写完后再从成稿抽取」行为（degrade-safe）。
@@ -1273,6 +1281,18 @@ class Config:
     # 抓取结果不变；0 = 旧的 asyncio.run 路径（逐字节一致）。
     RESEARCH_FETCH_CALL_TIMEOUT_S = max(
         0, int(os.environ.get('RESEARCH_FETCH_CALL_TIMEOUT_S', '150') or '150'))
+    # RESEARCH-2: typed source outcomes for the research tools.  On: search budget
+    # denials stop counting as fetch failures; a Firecrawl 401/402 on search latches
+    # the v3 run (SEARCH_NOT_CONFIGURED, no further backend calls) and on fetch
+    # disables Firecrawl for the process and opens the shared provider circuit;
+    # outages never enter the gateway run cache or the fetch negative cache; a DDG
+    # "No results found" is SEARCH_EMPTY_UNCONFIRMED; fetch failures say whether the
+    # service (FETCH_UNAVAILABLE) or the page (FETCH_FAILED) failed; meta.source_health
+    # and source-health degradation events are written.  Default false: the new
+    # sentinels may end some KIQs earlier during outages and need a live comparison
+    # run first; off = byte-identical tool text, caches and meta.  The parent forwards
+    # it to every research child (search_tools / cached_fetch / linear_research).
+    RESEARCH_SOURCE_TAXONOMY = os.environ.get('RESEARCH_SOURCE_TAXONOMY', 'false').strip().lower() == 'true'
     # PAR-2：编排器级「多角度并行研究轨」。>1 时研究阶段并行跑 K 个 DeerFlowResearchRunner
     # 子进程，每个带角度特化前缀（轨1=基线证据扫描，即原始 brief 逐字；轨2=基率/参照类/历史
     # 类比；轨3=行为者激励+反面证伪+市场定价），各写入 handoff/track_<k>/，随后确定性合并回

@@ -27,6 +27,11 @@ jina `web_fetch` 工具包成一层**磁盘缓存**：命中且未过期即秒�
   触发 provider 回退、缓存命中时视作未命中；全链只剩空壳时返回 "Error: fetch returned <reason>"。
 * **LOOP-007 —— 跨进程预算**：正缓存命中只计 attempt、不计 network；miss 后才原子占用
   fetch global/lane 额度。预算拒绝不调用 jina delegate；账本故障 fail-open 并输出 degraded 遥测。
+* **RESEARCH-2 —— 类型化来源结果**（RESEARCH_SOURCE_TAXONOMY，缺省关）：每次失败的 provider
+  物理尝试（即便回退成功）按 not_configured / unavailable / content 记入进程内
+  provider_events()；Firecrawl 401/402（凭据/额度拒绝）后本进程不再请求 Firecrawl，并经
+  research_budget 打开共享熔断（各 lane 同跳过）；传输故障与凭据/额度拒绝不进负缓存。
+  关 = 行为逐字节不变。
 * **degrade-safe**：任何缓存读写/目录/淘汰异常都被吞掉并回退到「直接抓取并返回」，缓存层的
   故障绝不阻断研究主流程，也绝不改变抓取结果本身。
 """
@@ -35,12 +40,14 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import copy
 import hashlib
 import io
 import ipaddress
 import json
 import logging
 import os
+import re
 import socket
 import threading
 import time
@@ -161,6 +168,58 @@ _PDF_LOCK = threading.Lock()
 _FETCH_PROVIDER: contextvars.ContextVar[str] = contextvars.ContextVar(
     "research_fetch_provider", default=""
 )
+# —— RESEARCH-2：类型化来源结果（RESEARCH_SOURCE_TAXONOMY，缺省关）——
+# research_gateway._INFRA_FETCH_REASON_PREFIXES / _CONTENT_FETCH_REASON_PREFIXES /
+# _TRANSIENT_FETCH_REASON_RE / _FIRECRAWL_FAILED_PREFIX (kept as copies so
+# neither module imports the other; a test holds them equal): a failure-reason
+# slug matching either infra table, or naming a Firecrawl exception, is the
+# fetch service's failure, not the page's (a content prefix wins over both).
+# The provider events and the negative-cache decision use this table alone,
+# so both always carry the class the tool layer gives the same text.
+_FIRECRAWL_FAILED_PREFIX = "firecrawl_failed_"
+_CONTENT_FETCH_REASON_PREFIXES = ("research_negative_cache_suppressed",)
+_INFRA_FETCH_REASON_PREFIXES = (
+    "no_web_fetch_provider_was_available",
+    "firecrawl_failed_payment_required",
+    "firecrawl_failed_http_401",
+    "firecrawl_failed_http_402",
+    "firecrawl_failed_http_5",
+    "firecrawl_failed_rate_limited",
+    "firecrawl_unavailable",
+    "firecrawl_per_run_call_ceiling",
+    "jina_primary_failed",
+    "request_to_jina_api_failed",
+    "jina_api_returned_status_5",
+    "jina_api_returned_status_401",
+    "jina_api_returned_status_402",
+    "exa_fallback_failed",
+    "exa_fallback_unavailable",
+    "direct_fallback_failed",
+    "direct_fallback_produced_no_response",
+    "already_available",
+    "research_",
+    "fetch_call_deadline",
+)
+_TRANSIENT_FETCH_REASON_RE = re.compile(r"timeout|timed_out|rate_limit|429|inflight|temporarily")
+# (provider, lower-cased text prefix, reason) of a provider's own
+# credential/quota refusal: _firecrawl_fetch's 402/401 texts and the deer-flow
+# Jina client's "Jina API returned status 402/401".  A prefix match, so a page
+# body that mentions "payment required" is never taken for one.
+_QUOTA_REFUSAL_TEXTS = (
+    ("firecrawl", "error: firecrawl failed: payment required", "http_402"),
+    ("firecrawl", "error: firecrawl failed: http 402", "http_402"),
+    ("firecrawl", "error: firecrawl failed: http 401", "http_401"),
+    ("jina", "error: jina api returned status 402", "http_402"),
+    ("jina", "error: jina api returned status 401", "http_401"),
+)
+# provider -> reason ("http_402"/"http_401"): a provider that refused this
+# process's credential or quota; later _resilient_fetch calls skip it
+# (Firecrawl only; a Jina refusal is recorded as not_configured, Jina is still asked).
+_DISABLED_FETCH_PROVIDERS: dict[str, str] = {}
+# provider -> outcome ("ok" | "not_configured" | "unavailable" | "content")
+# -> {"count": attempts, "reason": latest failure reason}; see provider_events().
+_PROVIDER_EVENTS: dict[str, dict[str, dict[str, Any]]] = {}
+_PROVIDER_EVENTS_LOCK = threading.Lock()
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -181,6 +240,118 @@ def _env_float(name: str, default: float, minimum: float = 0.1) -> float:
 def _is_transport_failure(value: Any) -> bool:
     lowered = str(value or "").lower()
     return any(marker in lowered for marker in _TRANSPORT_FAILURE_MARKERS)
+
+
+def _source_taxonomy_on() -> bool:
+    """RESEARCH_SOURCE_TAXONOMY (default off; the orchestrator forwards Config's value)."""
+    return _env_flag("RESEARCH_SOURCE_TAXONOMY", False)
+
+
+def _is_outage_result(value: Any) -> bool:
+    """The service failed, not the URL: the tool layer's infrastructure class
+    (_fetch_failure_class), which covers every provider's transport-failure
+    "Error:" (each starts with an infra prefix or names a timeout in its slug),
+    a credential/quota refusal, an unconfigured provider and an empty provider
+    chain.  A page body that merely mentions a timeout or an HTTP 401 is the
+    page's failure: it is negative-cached, as the tool layer remembers it."""
+    return _fetch_failure_class(value) == "unavailable"
+
+
+def _quota_refusal_reason(provider: str, value: Any) -> str:
+    """``http_402``/``http_401`` when ``value`` is ``provider``'s own
+    credential/quota refusal (_QUOTA_REFUSAL_TEXTS), else ""."""
+    lowered = str(value or "").strip().lower()
+    for name, prefix, reason in _QUOTA_REFUSAL_TEXTS:
+        if name == provider and lowered.startswith(prefix):
+            return reason
+    return ""
+
+
+def _failure_slug(value: Any) -> str:
+    """The failure reason research_gateway would show for this fetch text: the
+    slug of an "Error:" message or of a JSON envelope's error
+    (research_budget_exhausted...), else the shell reason or unusable_page."""
+    stripped = str(value or "").strip()
+    if not stripped:
+        return "empty"
+    message: Any = None
+    if stripped.startswith("Error:"):
+        message = stripped[len("Error:"):] or "error"
+    elif stripped.startswith("{"):
+        try:
+            envelope = json.loads(stripped)
+        except ValueError:
+            envelope = None
+        if isinstance(envelope, dict):
+            message = envelope.get("error") or (
+                "already_available" if envelope.get("status") == "already_available" else None)
+    if not message:
+        return extraction_failure_reason(stripped) or "unusable_page"
+    slug = re.sub(r"[^0-9a-z]+", "_", str(message).lower()).strip("_")
+    return slug[:48].rstrip("_") or "error"
+
+
+def _fetch_failure_class(value: Any) -> str:
+    """``unavailable`` (infrastructure) or ``content`` for one failed fetch
+    text: research_gateway._fetch_reason_is_infra applied to the same reason
+    slug, and nothing else.  The slug (at most 48 chars) is all the tool layer
+    sees, so a provider body that mentions a timeout further on (a Jina 422
+    "Navigation timeout" of the target site) is the page's failure here too."""
+    slug = _failure_slug(value)
+    if slug.startswith(_CONTENT_FETCH_REASON_PREFIXES):
+        return "content"
+    if (_TRANSIENT_FETCH_REASON_RE.search(slug)
+            or slug.startswith(_INFRA_FETCH_REASON_PREFIXES)
+            or (slug.startswith(_FIRECRAWL_FAILED_PREFIX)
+                and not slug.startswith(_FIRECRAWL_FAILED_PREFIX + "http_"))):
+        return "unavailable"
+    return "content"
+
+
+def _record_fetch_event(provider: str, outcome: str, reason: str = "") -> None:
+    with _PROVIDER_EVENTS_LOCK:
+        entry = _PROVIDER_EVENTS.setdefault(provider, {}).setdefault(
+            outcome, {"count": 0, "reason": ""})
+        entry["count"] += 1
+        if reason:
+            entry["reason"] = reason
+
+
+def _note_fetch_failure(provider: str, result: str) -> None:
+    """Record one failed provider attempt (a credential/quota refusal as
+    not_configured); a Firecrawl refusal also disables Firecrawl for this
+    process (one ERROR log) and opens its shared circuit so every lane skips it."""
+    refusal = _quota_refusal_reason(provider, result)
+    if not refusal:
+        _record_fetch_event(provider, _fetch_failure_class(result), _failure_slug(result))
+        return
+    _record_fetch_event(provider, "not_configured", refusal)
+    if provider != "firecrawl":
+        return
+    with _PROVIDER_EVENTS_LOCK:
+        first = provider not in _DISABLED_FETCH_PROVIDERS
+        _DISABLED_FETCH_PROVIDERS[provider] = refusal
+    if first:
+        logger.error(
+            "cached_fetch: %s refused this run's credential/quota (%s); "
+            "later fetches skip it and use the fallback providers", provider, refusal)
+    if _research_budget is not None and hasattr(
+            _research_budget, "record_provider_quota_failure"):
+        _research_budget.record_provider_quota_failure(provider, result)
+
+
+def provider_events() -> dict[str, dict[str, dict[str, Any]]]:
+    """Snapshot (deep copy) of this process's fetch provider outcomes."""
+    with _PROVIDER_EVENTS_LOCK:
+        return copy.deepcopy(_PROVIDER_EVENTS)
+
+
+def reset_provider_events() -> None:
+    """Forget this process's fetch provider outcomes and credential/quota
+    disables (a new process starts clean; tests reset between cases)."""
+    with _PROVIDER_EVENTS_LOCK:
+        _PROVIDER_EVENTS.clear()
+        _DISABLED_FETCH_PROVIDERS.clear()
 
 
 def _shell_detection_on() -> bool:
@@ -623,9 +794,13 @@ async def _resilient_fetch(url: str) -> str:
     Jina (53% ConnectTimeout in the 2026-07-14 humanoid run) becomes fallback.
     """
     _FETCH_PROVIDER.set("")
+    # RESEARCH-2 (taxonomy on): every physical attempt's outcome is recorded,
+    # and a provider that refused the credential/quota is not asked again.
+    taxonomy = _source_taxonomy_on()
     physical_attempts = 0
     firecrawl_result = ""
     if (os.environ.get("FIRECRAWL_API_KEY", "").strip()
+            and not (taxonomy and "firecrawl" in _DISABLED_FETCH_PROVIDERS)
             and not _provider_circuit_open("firecrawl")):
         ceiling_sentinel = _firecrawl_over_ceiling()
         if ceiling_sentinel is not None:
@@ -638,8 +813,12 @@ async def _resilient_fetch(url: str) -> str:
             if _is_cacheable(firecrawl_result):
                 _FETCH_PROVIDER.set("firecrawl")
                 _record_provider_success("firecrawl")
+                if taxonomy:
+                    _record_fetch_event("firecrawl", "ok")
                 return firecrawl_result
             _record_provider_failure("firecrawl", firecrawl_result)
+            if taxonomy:
+                _note_fetch_failure("firecrawl", firecrawl_result)
 
     primary_result = ""
     if not _provider_circuit_open("jina"):
@@ -658,8 +837,12 @@ async def _resilient_fetch(url: str) -> str:
         if _is_cacheable(primary_result):
             _FETCH_PROVIDER.set("jina")
             _record_provider_success("jina")
+            if taxonomy:
+                _record_fetch_event("jina", "ok")
             return primary_result
         _record_provider_failure("jina", primary_result)
+        if taxonomy:
+            _note_fetch_failure("jina", primary_result)
 
     exa_result = ""
     if os.environ.get("EXA_API_KEY", "").strip() and not _provider_circuit_open("exa"):
@@ -672,8 +855,12 @@ async def _resilient_fetch(url: str) -> str:
         if _is_cacheable(exa_result):
             _FETCH_PROVIDER.set("exa")
             _record_provider_success("exa")
+            if taxonomy:
+                _record_fetch_event("exa", "ok")
             return exa_result
         _record_provider_failure("exa", exa_result)
+        if taxonomy:
+            _note_fetch_failure("exa", exa_result)
 
     # Raw crawling has more variable robots/readability behavior than either
     # content provider, so it remains an explicit operator opt-in.
@@ -686,7 +873,11 @@ async def _resilient_fetch(url: str) -> str:
         direct_result = await _direct_http_fetch(url)
         if _is_cacheable(direct_result):
             _FETCH_PROVIDER.set("direct")
+            if taxonomy:
+                _record_fetch_event("direct", "ok")
             return direct_result
+        if taxonomy:
+            _note_fetch_failure("direct", direct_result)
 
     final = direct_result or exa_result or primary_result or firecrawl_result or (
         "Error: no web-fetch provider was available"
@@ -1017,7 +1208,9 @@ async def cached_fetch(
                         provider=_FETCH_PROVIDER.get(),
                         cache_hit=False,
                     )
-            else:
+            elif not (_source_taxonomy_on() and _is_outage_result(content)):
+                # RESEARCH-2 (taxonomy on): an outage or a credential/quota
+                # refusal is not the URL's failure, so it is never negative-cached.
                 _research_budget.record_negative("fetch", exact_key)
         if ttl > 0 and _is_cacheable(content):
             _write_cache(path, url, content)

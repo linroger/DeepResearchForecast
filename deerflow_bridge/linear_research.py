@@ -61,6 +61,7 @@ import datetime as _dt
 import difflib
 import functools
 import hashlib
+import importlib
 import json
 import math
 import os
@@ -701,6 +702,79 @@ def _env_flag(env: Mapping[str, Any] | None, name: str, default: bool) -> bool:
     """Boolean knob from the run env: truthy/falsy words, anything else -> default."""
     parsed = _parse_knob((env or {}).get(name, ""), bool(default))
     return default if parsed is None else parsed
+
+
+# cached_fetch._resilient_fetch's provider order: the first one with recorded
+# outcomes is the run's fetch primary (RESEARCH-2 source events).
+_FETCH_PROVIDER_CHAIN = ("firecrawl", "jina", "exa", "direct")
+
+
+def _bridge_provider_events(module: str) -> dict:
+    """``<module>.provider_events()`` of a bridge tool module (search_tools or
+    cached_fetch: this process's provider outcomes), ``{}`` when the module or
+    its events are unavailable: source telemetry never breaks a run."""
+    try:
+        events = importlib.import_module(module).provider_events()
+    except Exception:  # noqa: BLE001 — fail-open telemetry
+        return {}
+    return events if isinstance(events, dict) else {}
+
+
+def _event_count(entry: Any) -> int:
+    return int(entry.get("count") or 0) if isinstance(entry, Mapping) else 0
+
+
+def _source_health_events(tools: Mapping[str, Any], search_events: Mapping[str, Any],
+                          fetch_events: Mapping[str, Any]) -> list[str]:
+    """Source-health degradation events (RESEARCH_SOURCE_TAXONOMY on; pure).
+
+    ``tools``: :meth:`_Engine._tool_failures` with the taxonomy on;
+    ``search_events`` / ``fetch_events``: search_tools / cached_fetch
+    ``provider_events()``.  Events: a search credential/quota refusal, a
+    configured search provider replaced by another, a search provider's
+    per-run call ceiling refusing 1 in 5 or more of the search attempts
+    (searches + budget denials), a fetch primary whose service failed while
+    fallback providers served pages (a credential/quota refusal at any count,
+    an outage at 1 in 5 or more of its attempts; a page's own failure does
+    not count), and unconfirmed empty searches at 1 in 5 or more of the
+    searches.
+    """
+    events: list[str] = []
+    refused = tools.get("search_refused")
+    if refused:
+        events.append(f"search provider {refused[0]} refused this run ({refused[1]}); "
+                      "no further search was possible")
+    attempts = int(tools.get("searches") or 0) + int(tools.get("search_budget") or 0)
+    for name, count in sorted(search_events.items()):
+        kind, _, detail = str(name).partition(":")
+        if kind == "substitution":
+            configured, _, served = detail.partition("->")
+            if served:
+                events.append(f"configured search provider {configured} unavailable; {count} searches "
+                              f"served by {served}")
+        elif kind == "ceiling" and isinstance(count, int) and count and 5 * count >= attempts:
+            events.append(f"search provider {detail} reached its per-run call ceiling; {count} of {attempts} "
+                          "searches refused")
+    chain = [name for name in _FETCH_PROVIDER_CHAIN if isinstance(fetch_events.get(name), Mapping)]
+    if chain:
+        primary = fetch_events[chain[0]]
+        failures = {cls: entry for cls, entry in primary.items()
+                    if cls in ("not_configured", "unavailable") and _event_count(entry)}
+        failed = sum(_event_count(value) for value in failures.values())
+        primary_attempts = sum(_event_count(value) for value in primary.values())
+        # A refused credential stays refused for the run; a few transient
+        # outages among many served pages are routine, not a degradation.
+        broken = "not_configured" in failures or 5 * failed >= primary_attempts
+        served = sum(_event_count(fetch_events[name].get("ok")) for name in chain[1:])
+        if failures and broken and served:
+            cls, entry = max(failures.items(), key=lambda item: _event_count(item[1]))
+            events.append(f"fetch primary {chain[0]} failed {failed} times ({cls}: "
+                          f"{entry.get('reason') or 'unknown'}); fallback providers served the pages")
+    empty = int(tools.get("search_empty_unconfirmed") or 0)
+    if empty and 5 * empty >= int(tools.get("searches") or 0):
+        events.append(f"{empty} of {tools.get('searches')} searches came back empty from a backend that may "
+                      "have failed (not evidence of absence)")
+    return events
 
 
 def scheduled_tool_calls(values: Mapping[str, Any]) -> tuple[int, int]:
@@ -4010,6 +4084,12 @@ class _Engine:
         self.shell_detection = _env_flag(self.env, "RESEARCH_FETCH_SHELL_DETECTION", True)
         if hasattr(self.tools, "shell_detection"):
             self.tools.shell_detection = self.shell_detection
+        # RESEARCH_SOURCE_TAXONOMY (default off): typed search/fetch outcomes —
+        # honest failure counts, a search credential/quota refusal latch,
+        # service-vs-page fetch texts and meta.source_health.
+        self.source_taxonomy = _env_flag(self.env, "RESEARCH_SOURCE_TAXONOMY", False)
+        if hasattr(self.tools, "source_taxonomy"):
+            self.tools.source_taxonomy = self.source_taxonomy
         # Fetched rows whose stored page is a shell, published as cited (_source_rows).
         self.shell_sources_demoted = 0
         # sid -> reason for the shells a resumed work dir stored as fetched pages
@@ -4527,10 +4607,32 @@ class _Engine:
                 self.state.set_phase("gather", "done", f"{len(plan_kiqs)} KIQs")
         self.flush_meta()
 
-    def _tool_failures(self) -> dict[str, int]:
+    def _tool_failures(self) -> dict[str, Any]:
         """This attempt's backend searches and fetches and how many failed
-        (a fetch of an invalid URL fails without reaching the backend)."""
+        (a fetch of an invalid URL fails without reaching the backend).
+
+        With the source taxonomy on the counts come from the tools' outcome
+        classes: every non-budget outcome is one search/fetch (a latched
+        search refusal, which reserves nothing, included) and budget denials
+        are neither searches/fetches nor failures (they are returned apart,
+        with the search refusal, if any)."""
         stats = self.tools.stats()
+        outcome_counts = getattr(self.tools, "outcome_counts", None)
+        if self.source_taxonomy and callable(outcome_counts):
+            counts = outcome_counts()
+
+            def total(*names: str) -> int:
+                return sum(int(counts.get(name) or 0) for name in names)
+
+            search_failed = total("search_unavailable", "search_not_configured", "search_empty_unconfirmed")
+            fetch_failed = total("fetch_content", "fetch_unavailable")
+            refusal = getattr(self.tools, "search_refusal", None)
+            return {"searches": search_failed + total("search_ok", "search_no_result"),
+                    "search_failed": search_failed,
+                    "fetches": fetch_failed + total("fetch_ok"), "fetch_failed": fetch_failed,
+                    "search_budget": total("search_budget"), "fetch_budget": total("fetch_budget"),
+                    "search_empty_unconfirmed": total("search_empty_unconfirmed"),
+                    "search_refused": refusal() if callable(refusal) else None}
         with self._lock:
             search_failed = self._search_failures
         fetch_failed = max(0, int(stats.get("failures") or 0) - search_failed)
@@ -4546,6 +4648,9 @@ class _Engine:
         tools = self._tool_failures()
         detail = (f"{tools['search_failed']} of {tools['searches']} searches and {tools['fetch_failed']} of "
                   f"{tools['fetches']} fetches failed")
+        refused = tools.get("search_refused")
+        if refused:
+            detail += f"; search provider refused: {refused[0]} {refused[1]}"
         self.state.reset_kiqs()
         self.records.clear()
         self.state.set_phase("gather", "failed", f"no sourced evidence ({detail})")
@@ -6051,6 +6156,9 @@ class _Engine:
             events.append(f"{tools['search_failed']} of {tools['searches']} searches failed")
         if tools["fetch_failed"] and 2 * tools["fetch_failed"] >= tools["fetches"]:
             events.append(f"{tools['fetch_failed']} of {tools['fetches']} page fetches failed")
+        if self.source_taxonomy:
+            events.extend(_source_health_events(tools, _bridge_provider_events("search_tools"),
+                                                _bridge_provider_events("cached_fetch")))
         return events
 
     def _degradation_events(self, actor_count: int) -> list[str]:
@@ -6100,6 +6208,17 @@ class _Engine:
             shell_stats = getattr(self.tools, "shell_stats", None)
             self.meta["fetch_shells"] = {"rejected": shell_stats() if callable(shell_stats) else {},
                                          "sources_demoted": self.shell_sources_demoted}
+        if self.source_taxonomy:
+            outcome_counts = getattr(self.tools, "outcome_counts", None)
+            refusal = getattr(self.tools, "search_refusal", None)
+            refused = refusal() if callable(refusal) else None
+            self.meta["source_health"] = {
+                "version": 1,
+                "tools": outcome_counts() if callable(outcome_counts) else {},
+                "search_providers": _bridge_provider_events("search_tools"),
+                "fetch_providers": _bridge_provider_events("cached_fetch"),
+                "search_refused": {"provider": refused[0], "reason": refused[1]} if refused else None,
+            }
         self.meta["phases"] = {name: {**self.state.phase(name), "seconds": self.phase_seconds.get(name)}
                                for name in PHASES if self.state.phase(name)}
         records = list(self.records.values())

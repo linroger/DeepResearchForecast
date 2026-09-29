@@ -59,6 +59,7 @@ import tempfile
 import threading
 import time
 import unicodedata
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
@@ -3383,6 +3384,60 @@ _CONTENT_FAILURE_MARKERS = (
 # negative cache (one retry, then suppression).
 FETCH_TRANSIENT_RETRIES = 1
 _TRANSIENT_FETCH_REASON_RE = re.compile(r"timeout|timed_out|rate_limit|429|inflight|temporarily")
+# RESEARCH-2 source-outcome taxonomy (``ResearchTools.source_taxonomy``, set by
+# the engine from RESEARCH_SOURCE_TAXONOMY).  A fetch failure reason (slug)
+# starting with one of these, or matching _TRANSIENT_FETCH_REASON_RE, is the
+# page-reading service's failure (infra), not the page's; so is
+# "firecrawl_failed_<exception class>" (_FIRECRAWL_FAILED_PREFIX not followed by
+# "http_": cached_fetch reports every Firecrawl exception that way); everything
+# else (too_short, blocked_page, shells, HTTP 403/404/410...) is content.
+# request_to_jina_api_failed / jina_api_returned_status_5 / _401 / _402 are the
+# deer-flow Jina client's own transport, 5xx and credential/quota errors.  A
+# _CONTENT_FETCH_REASON_PREFIXES reason is content before any other rule: with
+# the taxonomy on only a page's own failure enters the fetch negative cache, so
+# its suppression envelope names a failed page.  cached_fetch keeps a copy (a
+# test holds the two equal).
+_FIRECRAWL_FAILED_PREFIX = "firecrawl_failed_"
+_CONTENT_FETCH_REASON_PREFIXES = ("research_negative_cache_suppressed",)
+_INFRA_FETCH_REASON_PREFIXES = (
+    "no_web_fetch_provider_was_available",
+    "firecrawl_failed_payment_required",
+    "firecrawl_failed_http_401",
+    "firecrawl_failed_http_402",
+    "firecrawl_failed_http_5",
+    "firecrawl_failed_rate_limited",
+    "firecrawl_unavailable",
+    "firecrawl_per_run_call_ceiling",
+    "jina_primary_failed",
+    "request_to_jina_api_failed",
+    "jina_api_returned_status_5",
+    "jina_api_returned_status_401",
+    "jina_api_returned_status_402",
+    "exa_fallback_failed",
+    "exa_fallback_unavailable",
+    "direct_fallback_failed",
+    "direct_fallback_produced_no_response",
+    "already_available",
+    "research_",
+    "fetch_call_deadline",
+)
+# Run-level outcome classes (ResearchTools.outcome_counts), always counted.
+OUTCOME_CLASSES = (
+    "search_ok", "search_no_result", "search_unavailable", "search_not_configured",
+    "search_empty_unconfirmed", "search_budget",
+    "fetch_ok", "fetch_content", "fetch_unavailable", "fetch_budget",
+)
+# Taxonomy-on tool texts.  None starts with "[S", so none can name a source.
+MSG_SEARCH_EMPTY_UNCONFIRMED = ("SEARCH_EMPTY_UNCONFIRMED: the backend returned nothing and may have failed; "
+                                "not evidence of absence. Try another angle or use known URLs.")
+_SEARCH_NOT_CONFIGURED_TEXT = ("SEARCH_NOT_CONFIGURED({provider}: {reason}): the search service refused this "
+                               "run; no further search will work. Not evidence that sources are absent; use the "
+                               "sources you have or finish.")
+_FETCH_UNAVAILABLE_TEXT = ("FETCH_UNAVAILABLE({reason}): {already}the page-reading service failed, not this page; "
+                           "work from the sources you have (snippet claims stay REPORTED).")
+_FETCH_CONTENT_TEXT = ("FETCH_FAILED({reason}): {already}page unread; claims from its snippet stay REPORTED; "
+                       "try another source.")
+_ALREADY_FAILED = "this URL already failed in this run; "
 # RESEARCH_FETCH_CALL_TIMEOUT_S: hard wall-clock bound of one production
 # web_fetch (``_default_fetch_fn``).  ``asyncio.run`` waits for the loop's
 # default executor at shutdown, so a hung ``to_thread`` parse, SDK call or DNS
@@ -3545,6 +3600,56 @@ def _page_title(text: str) -> str:
     return ""
 
 
+def _classify_search_payload(raw: Any) -> tuple[str, str, str]:
+    """``(outcome class, provider, reason)`` of one search backend payload.
+
+    Pure; the class mapping mirrors :meth:`ResearchTools._render_search`
+    (whose text it never changes).  ``failure_class`` / ``empty_unconfirmed``
+    are the typed annotations search_tools adds with RESEARCH_SOURCE_TAXONOMY
+    on; an unannotated payload classifies as it renders today.
+    """
+    try:
+        payload = json.loads(raw) if isinstance(raw, str) else raw
+    except ValueError:
+        return "search_unavailable", "", "unparseable_payload"
+    if isinstance(payload, list):
+        payload = {"results": payload}
+    if not isinstance(payload, Mapping):
+        return "search_unavailable", "", "unparseable_payload"
+    error = str(payload.get("error") or "").strip()
+    failure_class = str(payload.get("failure_class") or "")
+    # Slugged: both may reach model-visible text (SEARCH_NOT_CONFIGURED).
+    provider = _slug(payload.get("provider"), 24) if payload.get("provider") else ""
+    raw_reason = payload.get("reason") or error
+    reason = _slug(raw_reason) if raw_reason else ""
+    if error == "research_budget_exhausted" or failure_class == "budget":
+        return "search_budget", provider, reason
+    if error == "research_negative_cache_suppressed":
+        return "search_no_result", provider, reason
+    if error.lower().startswith("no results"):
+        if payload.get("empty_unconfirmed") is True:
+            return "search_empty_unconfirmed", provider, reason
+        return "search_no_result", provider, reason
+    if failure_class == "not_configured":
+        return "search_not_configured", provider or "unknown", reason
+    if error or payload.get("status") == "already_available":
+        return "search_unavailable", provider, reason or "already_available"
+    results = payload.get("results")
+    if not isinstance(results, list) or not results:
+        return "search_no_result", provider, "no_results"
+    return "search_ok", provider, ""
+
+
+def _fetch_reason_is_infra(reason: str) -> bool:
+    """True when a fetch failure reason is the page-reading service's failure
+    (see _INFRA_FETCH_REASON_PREFIXES); False when it is the page's."""
+    if reason.startswith(_CONTENT_FETCH_REASON_PREFIXES):
+        return False
+    return (bool(_TRANSIENT_FETCH_REASON_RE.search(reason)) or reason.startswith(_INFRA_FETCH_REASON_PREFIXES)
+            or (reason.startswith(_FIRECRAWL_FAILED_PREFIX)
+                and not reason.startswith(_FIRECRAWL_FAILED_PREFIX + "http_")))
+
+
 class _AgentCounters:
     __slots__ = ("searches", "fetches", "cached_searches", "cached_fetches", "failures")
 
@@ -3571,7 +3676,12 @@ class ResearchTools:
       returned as deterministic passages wrapped as untrusted evidence;
     * with ``shell_detection`` (set by the engine from
       RESEARCH_FETCH_SHELL_DETECTION) an extraction shell is a failed fetch:
-      never stored, never marked fetched, so never VERIFIED evidence.
+      never stored, never marked fetched, so never VERIFIED evidence;
+    * every backend search/fetch outcome is counted by class
+      (:meth:`outcome_counts`); with ``source_taxonomy`` (set by the engine
+      from RESEARCH_SOURCE_TAXONOMY) a credential/quota refusal latches search
+      for the run, an unconfirmed empty search is never run-cached, and a
+      failed fetch says whether the service or the page failed.
     """
 
     def __init__(self, ledger: SourceLedger, pages_dir: str | os.PathLike[str], *,
@@ -3600,6 +3710,13 @@ class ResearchTools:
         # Off unless the engine turns it on; reason -> shells rejected.
         self.shell_detection = False
         self._shells: dict[str, int] = {}
+        # RESEARCH-2: off unless the engine turns it on.  Outcomes are counted
+        # either way; the latch and the typed texts need the taxonomy on.
+        self.source_taxonomy = False
+        self._outcomes: Counter[str] = Counter()
+        self._search_refused: tuple[str, str] | None = None
+        # canonical URL -> "infra" | "content" (taxonomy on; for _known_failure).
+        self._failure_class: dict[str, str] = {}
 
     # ---------------------------------------------------------------- helpers
     def _log(self, kind: str, message: str) -> None:
@@ -3638,6 +3755,10 @@ class ResearchTools:
     def _failure(self, agent_id: str) -> None:
         with self._lock:
             self._count(agent_id, "failures")
+
+    def _outcome(self, name: str) -> None:
+        with self._lock:
+            self._outcomes[name] += 1
 
     @contextmanager
     def _singleflight(self, table: dict[str, threading.Event], key: str) -> Iterator[bool]:
@@ -3685,22 +3806,50 @@ class ResearchTools:
         return self._search_uncached(clean, key, agent_id)
 
     def _search_uncached(self, clean: str, key: str, agent_id: str) -> str:
+        if self.source_taxonomy:
+            with self._lock:
+                refused = self._search_refused
+            if refused is not None:
+                # Latched: no backend call and no budget for the rest of the run.
+                self._outcome("search_not_configured")
+                self._failure(agent_id)
+                self._log("result", "web_search → SEARCH_NOT_CONFIGURED (refused earlier in this run)")
+                return _SEARCH_NOT_CONFIGURED_TEXT.format(provider=refused[0], reason=refused[1])
         if not self._reserve(agent_id, "search"):
+            self._outcome("search_budget")
             self._log("result", "web_search → SEARCH_BUDGET_EXHAUSTED")
             return MSG_SEARCH_BUDGET
         try:
             raw = self._search_fn(clean, SEARCH_RESULTS_PER_QUERY)
         except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
+            self._outcome("search_unavailable")
             self._failure(agent_id)
             self._log("result", f"web_search → SEARCH_TEMPORARILY_UNAVAILABLE ({type(exc).__name__})")
             return MSG_SEARCH_UNAVAILABLE
+        outcome, provider, reason = _classify_search_payload(raw)
         text, cacheable, count = self._render_search(raw, agent_id)
+        if outcome == "search_ok" and not count:
+            outcome = "search_no_result"  # every row was unusable: rendered as NO_RESULTS
+        if self.source_taxonomy and outcome == "search_not_configured":
+            with self._lock:
+                if self._search_refused is None:
+                    self._search_refused = (provider, reason or "refused")
+                refused = self._search_refused
+            text, cacheable = _SEARCH_NOT_CONFIGURED_TEXT.format(provider=refused[0], reason=refused[1]), False
+        elif self.source_taxonomy and outcome == "search_empty_unconfirmed":
+            text, cacheable = MSG_SEARCH_EMPTY_UNCONFIRMED, False
+        elif self.source_taxonomy and outcome == "search_budget":
+            # A provider's per-run call ceiling never recovers in this process:
+            # a budget, so the model is told to stop (not "temporarily unavailable").
+            text, cacheable = MSG_SEARCH_BUDGET, False
+        self._outcome(outcome)
         if cacheable:
             with self._lock:
                 self._search_cache[key] = text
         else:
             self._failure(agent_id)
-        self._log("result", f"web_search → {count} results" if count else f"web_search → {text.split(':', 1)[0]}")
+        label = text.split(":", 1)[0].split("(", 1)[0]
+        self._log("result", f"web_search → {count} results" if count else f"web_search → {label}")
         return text
 
     def _render_search(self, raw: Any, agent_id: str) -> tuple[str, bool, int]:
@@ -3761,9 +3910,7 @@ class ResearchTools:
         url = str(url or "").strip()
         self._log("tool", f"web_fetch {url[:160]}")
         if not url or not self.ledger.valid_url(url):
-            self._failure(agent_id)
-            self._log("result", "web_fetch → FETCH_FAILED(invalid_url)")
-            return "FETCH_FAILED(invalid_url): try another source."
+            return self._fetch_failed(agent_id, "invalid_url", infra=False)
         # The focus decides which passages the agent sees; the KIQ question only
         # breaks ties (it is the same for every fetch of the investigation, so
         # weighting it like the focus made a new focus unable to reach the
@@ -3800,14 +3947,26 @@ class ResearchTools:
             if transient and failures <= FETCH_TRANSIENT_RETRIES:
                 return None
             self._count(agent_id, "cached_fetches")
+            infra = self._failure_class.get(key) == "infra"
+        if self.source_taxonomy:
+            label, template = (("FETCH_UNAVAILABLE", _FETCH_UNAVAILABLE_TEXT) if infra
+                               else ("FETCH_FAILED", _FETCH_CONTENT_TEXT))
+            self._log("result", f"web_fetch → {label}({reason}) (already failed in this run)")
+            return template.format(reason=reason, already=_ALREADY_FAILED)
         self._log("result", f"web_fetch → FETCH_FAILED({reason}) (already failed in this run)")
         return f"FETCH_FAILED({reason}): this URL already failed in this run; try another source."
 
-    def _remember_failure(self, key: str, reason: str, *, transient: bool) -> None:
+    def _remember_failure(self, key: str, reason: str, *, transient: bool, infra: bool) -> None:
+        """Remember a failed URL for :meth:`_known_failure`; with the taxonomy
+        on its class (``infra``: the service failed, not the page) is stored
+        under the same lock, so a concurrent fetch never reads one without the
+        other."""
         with self._lock:
             previous = self._failed_fetches.get(key)
             failures = (previous[1] if previous is not None else 0) + 1
             self._failed_fetches[key] = (reason, failures, transient)
+            if self.source_taxonomy:
+                self._failure_class[key] = "infra" if infra else "content"
 
     def _stored_page(self, url: str) -> tuple[dict, str] | None:
         row = self.ledger.find(url)
@@ -3828,17 +3987,19 @@ class ResearchTools:
     def _fetch_uncached(self, url: str, key: str, terms: list[str], context_terms: list[str],
                         agent_id: str) -> str:
         if not self._reserve(agent_id, "fetch"):
+            self._outcome("fetch_budget")
             self._log("result", "web_fetch → FETCH_BUDGET_EXHAUSTED")
             return MSG_FETCH_BUDGET
         try:
             raw = self._fetch_fn(url)
         except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
-            self._remember_failure(key, type(exc).__name__, transient=True)
-            return self._fetch_failed(agent_id, type(exc).__name__)
+            self._remember_failure(key, type(exc).__name__, transient=True, infra=True)
+            return self._fetch_failed(agent_id, type(exc).__name__, infra=True)
         text = raw if isinstance(raw, str) else str(raw or "")
         envelope = _json_object(text)
         if envelope is not None and envelope.get("error") == "research_budget_exhausted":
             self._failure(agent_id)
+            self._outcome("fetch_budget")
             self._log("result", "web_fetch → FETCH_BUDGET_EXHAUSTED (research budget)")
             return MSG_FETCH_BUDGET
         reason = self._failure_reason(text, envelope)
@@ -3846,11 +4007,18 @@ class ResearchTools:
         if shell is not None:
             with self._lock:
                 self._shells[shell] = self._shells.get(shell, 0) + 1
-            self._remember_failure(key, shell, transient=False)
-            return self._fetch_failed(agent_id, shell)
+            self._remember_failure(key, shell, transient=False, infra=False)
+            return self._fetch_failed(agent_id, shell, infra=False)
         if reason is not None:
-            self._remember_failure(key, reason, transient=bool(_TRANSIENT_FETCH_REASON_RE.search(reason)))
-            return self._fetch_failed(agent_id, reason)
+            infra = _fetch_reason_is_infra(reason)
+            if self.source_taxonomy and infra:
+                # An outage is retried like a transient failure; only the
+                # per-call deadline is not (the run never pays it twice).
+                transient = not reason.startswith("fetch_call_deadline")
+            else:
+                transient = bool(_TRANSIENT_FETCH_REASON_RE.search(reason))
+            self._remember_failure(key, reason, transient=transient, infra=infra)
+            return self._fetch_failed(agent_id, reason, infra=infra)
         stripped = text.strip()
         digest = hashlib.sha256(stripped.encode("utf-8")).hexdigest()
         page_path = f"{self.pages_dir.name}/{digest[:16]}.txt"
@@ -3859,13 +4027,15 @@ class ResearchTools:
             if not target.exists():
                 _atomic_write_text(target, stripped)
         except OSError as exc:
-            return self._fetch_failed(agent_id, f"storage_{type(exc).__name__}")
+            return self._fetch_failed(agent_id, f"storage_{type(exc).__name__}", infra=True)
         row = self.ledger.register(url, "", "", "fetch", agent_id)
         if row is None:
-            self._remember_failure(key, "invalid_url", transient=False)
-            return self._fetch_failed(agent_id, "invalid_url")
+            self._remember_failure(key, "invalid_url", transient=False, infra=False)
+            return self._fetch_failed(agent_id, "invalid_url", infra=False)
         with self._lock:
             self._failed_fetches.pop(key, None)
+            self._failure_class.pop(key, None)
+            self._outcomes["fetch_ok"] += 1
         row = self.ledger.mark_fetched(
             row["sid"], content_sha256=digest, chars=len(stripped), page_path=page_path,
             title=_page_title(stripped) or None) or row
@@ -3907,10 +4077,18 @@ class ResearchTools:
                 return "blocked_page"
         return None
 
-    def _fetch_failed(self, agent_id: str, reason: str) -> str:
+    def _fetch_failed(self, agent_id: str, reason: str, *, infra: bool) -> str:
+        """Count one failed fetch (``infra``: the service failed, not the page)
+        and return its text; with the taxonomy on the text names the class."""
         self._failure(agent_id)
-        self._log("result", f"web_fetch → FETCH_FAILED({reason})")
-        return f"FETCH_FAILED({reason}): try another source."
+        self._outcome("fetch_unavailable" if infra else "fetch_content")
+        if not self.source_taxonomy:
+            self._log("result", f"web_fetch → FETCH_FAILED({reason})")
+            return f"FETCH_FAILED({reason}): try another source."
+        label, template = (("FETCH_UNAVAILABLE", _FETCH_UNAVAILABLE_TEXT) if infra
+                           else ("FETCH_FAILED", _FETCH_CONTENT_TEXT))
+        self._log("result", f"web_fetch → {label}({reason})")
+        return template.format(reason=reason, already="")
 
     def _render_page(self, row: Mapping[str, Any], text: str, terms: list[str],
                      context_terms: list[str], *, cached: bool) -> str:
@@ -3943,6 +4121,20 @@ class ResearchTools:
         """Extraction shells rejected at the tool layer, per reason."""
         with self._lock:
             return dict(sorted(self._shells.items()))
+
+    def outcome_counts(self) -> dict[str, int]:
+        """This run's search/fetch outcomes per class (:data:`OUTCOME_CLASSES`):
+        one per backend call, budget refusal, latched search refusal and
+        invalid-URL fetch; run-cache answers, stored pages and already-failed
+        URLs are not counted again."""
+        with self._lock:
+            return {name: int(self._outcomes.get(name, 0)) for name in OUTCOME_CLASSES}
+
+    def search_refusal(self) -> tuple[str, str] | None:
+        """``(provider, reason)`` once a search credential/quota refusal latched
+        (taxonomy on), else None."""
+        with self._lock:
+            return self._search_refused
 
     def stats(self) -> dict[str, Any]:
         with self._lock:

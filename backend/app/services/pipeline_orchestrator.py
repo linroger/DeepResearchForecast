@@ -1996,6 +1996,7 @@ def _synthesis_provider_unavailable(error: Any) -> bool:
 RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
     ("PREDICTION_MARKETS_END_DATE_GATE", "bool"),
     ("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", "float"),
+    ("RESEARCH_SOURCE_TAXONOMY", "bool"),
 )
 RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_AS_OF_PIN", "bool"),
@@ -6547,6 +6548,59 @@ def merge_research_quality(track_metas: list[Any]) -> dict:
     return merged
 
 
+def _source_count(value: Any) -> int:
+    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+
+def merge_source_health(track_metas: list[Any]) -> Optional[dict]:
+    """RESEARCH-2（纯）：合并各轨 meta.source_health（每轨是独立研究子进程，计数互不重叠）。
+
+    tools / search_providers 按键求和；fetch_providers 按 provider→结果类求和 count，reason
+    取最后一个非空值；search_refused 取首个非空；merged_from_tracks = 带该块的轨数。
+    没有任何轨带该块（RESEARCH_SOURCE_TAXONOMY 关）→ None，合并 meta 不新增键。
+    """
+    blocks = [meta["source_health"] for meta in track_metas
+              if isinstance(meta, dict) and isinstance(meta.get("source_health"), dict)]
+    if not blocks:
+        return None
+    tools: dict[str, int] = {}
+    search_providers: dict[str, int] = {}
+    fetch_providers: dict[str, dict[str, dict[str, Any]]] = {}
+    refused: Any = None
+    for block in blocks:
+        for target, counts in ((tools, block.get("tools")), (search_providers, block.get("search_providers"))):
+            for name, count in (counts.items() if isinstance(counts, dict) else ()):
+                target[str(name)] = target.get(str(name), 0) + _source_count(count)
+        providers = block.get("fetch_providers")
+        for provider, outcomes in (providers.items() if isinstance(providers, dict) else ()):
+            merged_outcomes = fetch_providers.setdefault(str(provider), {})
+            for outcome, entry in (outcomes.items() if isinstance(outcomes, dict) else ()):
+                if not isinstance(entry, dict):
+                    continue
+                merged_entry = merged_outcomes.setdefault(str(outcome), {"count": 0, "reason": ""})
+                merged_entry["count"] += _source_count(entry.get("count"))
+                if entry.get("reason"):
+                    merged_entry["reason"] = str(entry["reason"])
+        if refused is None and block.get("search_refused"):
+            refused = block["search_refused"]
+    return {"version": 1, "tools": tools, "search_providers": search_providers,
+            "fetch_providers": fetch_providers, "search_refused": refused,
+            "merged_from_tracks": len(blocks)}
+
+
+def _research_health_stage(research_quality: Any) -> Optional[dict]:
+    """RESEARCH-2（纯）：research_quality 已降级 → pipeline_health 的 research 阶段块
+    {health: degraded, issues: 前 8 条降级说明（各 ≤200 字符）, score}；否则 None。"""
+    if not isinstance(research_quality, dict) or not research_quality.get("degraded"):
+        return None
+    degradation = research_quality.get("degradation")
+    if isinstance(degradation, str):
+        degradation = [degradation]
+    issues = [str(item)[:200] for item in (degradation if isinstance(degradation, list) else [])
+              if str(item).strip()][:8]
+    return {"health": "degraded", "issues": issues, "score": research_quality.get("score")}
+
+
 def _source_tier_histogram(sources: Any) -> dict[str, int]:
     """PAR-2（纯）：从（合并后的）sources 重算 {s1_count..s4_count,s_unknown}，键名与 bridge 一致。"""
     hist = {"s1_count": 0, "s2_count": 0, "s3_count": 0, "s4_count": 0, "s_unknown": 0}
@@ -9799,6 +9853,12 @@ class PipelineOrchestrator:
                     "issues": graph_issues,
                     **graph_meta,
                 }
+            # RESEARCH-2: a degraded research_quality is a degraded research stage
+            # (degrade-only: it never adds a hard issue).
+            if getattr(Config, "PIPELINE_HEALTH_RESEARCH_STAGE", False):
+                research_stage = _research_health_stage(state.options.get("research_quality"))
+                if research_stage is not None:
+                    health["stages"]["research"] = research_stage
             degraded = any(s.get("health") in ("degraded", "failed")
                            for s in health["stages"].values())
             health["status"] = "failed" if hard_issues else ("degraded" if degraded else "ok")
@@ -12035,6 +12095,9 @@ class PipelineOrchestrator:
         base_meta: dict = next((m for m in track_metas if m), {})
         merged_meta = dict(base_meta)
         merged_meta["research_quality"] = merged_rq
+        merged_source_health = merge_source_health(track_metas)
+        if merged_source_health is not None:
+            merged_meta["source_health"] = merged_source_health
         merged_meta["source_tiers"] = _source_tier_histogram(merged_sources)
         merged_meta["sources_count"] = len(merged_sources)
         if isinstance(merged_actors, dict):
