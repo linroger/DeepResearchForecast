@@ -5836,10 +5836,24 @@ class _Engine:
         contested = normalize_contested(facts_raw.get("contested_claims"), sources)
         actors_raw = actors_raw or {}
         as_of = str(actors_raw.get("as_of_date") or "")
+        if _env_flag(self.env, "RESEARCH_AS_OF_PIN", True):
+            # TIME-1: the as-of anchors graph valid_at and the simulation calendar,
+            # and the extraction model has reported its training cutoff as the
+            # as-of.  Pin it to the plan's date; a different model value is only
+            # recorded in meta (never in actors.json, whose readers are the
+            # backend actor contract).
+            as_of_value = plan.as_of
+            model_as_of = _collapse(as_of, 40)
+            if model_as_of and model_as_of != plan.as_of:
+                self.meta["as_of_model_disagreement"] = {"plan_as_of": plan.as_of, "model_as_of": model_as_of}
+                self.log("warn", f"v3: extraction as_of_date {model_as_of} differs from the plan as-of "
+                                 f"{plan.as_of}; pinned to the plan date")
+        else:
+            as_of_value = as_of if re.match(r"^\d{4}-\d{2}-\d{2}$", as_of) else plan.as_of
         obj: dict[str, Any] = {
             "central_question": _collapse(actors_raw.get("central_question"), 600)
             or plan.restated_question or self.question,
-            "as_of_date": as_of if re.match(r"^\d{4}-\d{2}-\d{2}$", as_of) else plan.as_of,
+            "as_of_date": as_of_value,
             "situation_brief": normalize_situation(actors_raw.get("situation_brief")),
             "actors": actors,
             "relationships": normalize_relationships(actors_raw.get("relationships"), actors),

@@ -1986,6 +1986,43 @@ def _synthesis_provider_unavailable(error: Any) -> bool:
     return any(marker in text for marker in _SYNTHESIS_PROVIDER_UNAVAILABLE_MARKERS)
 
 
+# Research-child knob forwarding registry: (Config attribute, kind).  The parent
+# writes each entry's Config value into the child env, so the backend's Config
+# is the single source of truth and an ambient os.environ value never decides.
+# RESEARCH_CHILD_KNOBS reach every engine; RESEARCH_CHILD_V3_KNOBS only a v3
+# child.  A work package that forwards a Config knob adds exactly one entry,
+# keeping each table alphabetical; every name must exist on Config and be
+# documented in .env.example (test_orchestrator_research_wiring checks both).
+RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = ()
+RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
+    ("RESEARCH_AS_OF_PIN", "bool"),
+    ("RESEARCH_QUANT_TYPING", "bool"),
+    ("RESEARCH_VERIFIED_FACTS", "bool"),
+)
+# Child-env text per registry kind: bools are 'true'/'false', never '1'/'0'.
+_RESEARCH_KNOB_FORMATTERS: dict[str, Callable[[Any], str]] = {
+    "bool": lambda value: "true" if value else "false",
+    "int": lambda value: str(int(value)),
+    "float": lambda value: str(float(value)),
+    "str": str,
+}
+
+
+def _forward_research_knobs(env: dict[str, str],
+                            table: tuple[tuple[str, str], ...]) -> None:
+    """Write each registry knob's Config value into the research child ``env``.
+
+    A name missing from Config or an unknown kind raises: the registry is code,
+    and a broken entry must fail loudly rather than silently leave the child on
+    its own default.
+    """
+    for name, kind in table:
+        formatter = _RESEARCH_KNOB_FORMATTERS.get(kind)
+        if formatter is None:
+            raise ValueError(f"research child knob {name}: unknown kind {kind!r}")
+        env[name] = formatter(getattr(Config, name))
+
+
 def _configure_research_budget_env(
     env: dict[str, str],
     handoff_dir: str,
@@ -2308,9 +2345,6 @@ class DeerFlowResearchRunner:
             # effective watchdog budget (explicit timeout / .env / depth tier)
             # rather than only an operator-set .env value it may not match.
             env["DEERFLOW_RESEARCH_TIMEOUT"] = str(max(1, int(budget)))
-            # Quantitative-row provenance knobs (RESEARCH-4): Config decides, never ambient env.
-            env["RESEARCH_VERIFIED_FACTS"] = "true" if Config.RESEARCH_VERIFIED_FACTS else "false"
-            env["RESEARCH_QUANT_TYPING"] = "true" if Config.RESEARCH_QUANT_TYPING else "false"
         if isinstance(skill_sync_result, dict):
             # The child re-hashes the exact live directories before constructing
             # a research client.  This binds source/deployed manifest identities,
@@ -2369,6 +2403,11 @@ class DeerFlowResearchRunner:
         env["PREDICTION_MARKETS_PER_QUERY"] = str(getattr(Config, "PREDICTION_MARKETS_PER_QUERY", 15))
         env["PREDICTION_MARKETS_MIN_RELEVANCE"] = str(
             getattr(Config, "PREDICTION_MARKETS_MIN_RELEVANCE", 5.0))
+        # Registry-forwarded knobs (RESEARCH_CHILD_KNOBS / RESEARCH_CHILD_V3_KNOBS):
+        # Config decides, never ambient env.
+        _forward_research_knobs(env, RESEARCH_CHILD_KNOBS)
+        if research_engine == RESEARCH_ENGINE_V3:
+            _forward_research_knobs(env, RESEARCH_CHILD_V3_KNOBS)
         # RESEARCH-1: fetch-layer shell detection and the per-call fetch bound
         # come from Config too (cached_fetch / research_gateway / linear_research
         # read them from os.environ with the same defaults).
