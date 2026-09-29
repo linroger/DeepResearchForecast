@@ -282,7 +282,7 @@ def test_run_monitor_writes_and_scores(tmp_path):
         current={"mA": 0.62, "mB": 0.55})
     res = mon.run_monitor("r1", forecast=fc, report_folder=folder, client=client,
                           ledger_dir=led, dry_run=False, as_of="2026-07-07T00:00:00",
-                          threshold=0.05)
+                          threshold=0.05, publishable_fn=lambda rid: True)
     # mA 判定 → 一条记录入账；mB 现价==研究期价（无 Δ）→ 非 mover；
     # mA 研究期 0.40 → 现 0.62 = +0.22 → mover。
     assert res["resolved_count"] == 1 and res["newly_recorded_count"] == 1
@@ -295,7 +295,8 @@ def test_run_monitor_writes_and_scores(tmp_path):
     assert ledger.market_brier_summary(led)["n_resolved"] == 1
     # 二次运行幂等：账本不重复入账。
     res2 = mon.run_monitor("r1", forecast=fc, report_folder=folder, client=client,
-                           ledger_dir=led, dry_run=False, as_of="2026-07-08T00:00:00")
+                           ledger_dir=led, dry_run=False, as_of="2026-07-08T00:00:00",
+                           publishable_fn=lambda rid: True)
     assert res2["newly_recorded_count"] == 0
     assert ledger.market_brier_summary(led)["n_resolved"] == 1
 
@@ -310,7 +311,8 @@ def test_run_monitor_dry_run_writes_nothing(tmp_path):
                             "resolved_outcome": "Yes", "resolved_yes_price": 1.0}},
         current={"mA": 0.62})
     res = mon.run_monitor("r1", forecast=fc, report_folder=folder, client=client,
-                          ledger_dir=led, dry_run=True, as_of="2026-07-07T00:00:00")
+                          ledger_dir=led, dry_run=True, as_of="2026-07-07T00:00:00",
+                          publishable_fn=lambda rid: True)
     # 仍计算出判定/mover/需人工，但绝不写盘。
     assert res["resolved_count"] == 1 and res["dry_run"] is True
     assert not os.path.exists(mon.price_track_path(folder))
@@ -331,7 +333,8 @@ def test_run_monitor_degrades_when_market_access_fails(tmp_path):
             raise httpx.ConnectError("down")
 
     res = mon.run_monitor("r1", forecast=fc, report_folder=folder, client=DownClient(),
-                          ledger_dir=led, dry_run=True, as_of="2026-07-07T00:00:00")
+                          ledger_dir=led, dry_run=True, as_of="2026-07-07T00:00:00",
+                          publishable_fn=lambda rid: True)
     assert res["degraded"] is True and res["resolved_count"] == 0
     # 指标检查仍在（不依赖网络）：F3（+可能 F1）需人工。
     assert res["needs_manual_count"] >= 1

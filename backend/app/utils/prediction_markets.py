@@ -32,6 +32,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+from .point_in_time import parse_stamp_strict
+
 logger = logging.getLogger(__name__)
 
 POLYMARKET_BASE_URL = "https://gamma-api.polymarket.com"
@@ -317,7 +319,40 @@ def _parse_resolution(raw: Any) -> Optional[Dict[str, Any]]:
         "resolved_yes_price": (round(resolved_yes_price, 4)
                                if resolved_yes_price is not None else None),
         "uma_status": uma_status,
+        # EVAL-2 (additive): when the market closed, and whether it settled at all.
+        "closed_time": _parse_closed_time(raw.get("closedTime")),
+        "resolution_status": _resolution_status(closed, resolved, uma_status, px),
     }
+
+
+# EVAL-2: a UMA-resolved market whose every outcome price sits at 0.5 ± this tolerance was
+# settled 50/50 (Polymarket's "unknown / ambiguous" resolution): final, but not a YES or NO.
+_AMBIGUOUS_PRICE_TOLERANCE = 0.01
+_UMA_RESOLVED_RE = re.compile(r"\bresolved\b", re.IGNORECASE)
+
+
+def _parse_closed_time(value: Any) -> Optional[str]:
+    """Gamma ``closedTime`` as a UTC ISO string, or None.
+
+    Only a date-time that names its zone is accepted (ISO with ``Z``/offset, or Gamma's
+    ``'YYYY-MM-DD HH:MM:SS+00'``); a bare date or a naive time would be a guess about when
+    the outcome became known. ``endDate`` is the scheduled end, never a known-at time, so it
+    is never used as a fallback."""
+    moment = parse_stamp_strict(value, allow_date=False)
+    return moment.isoformat() if moment is not None else None
+
+
+def _resolution_status(closed: bool, resolved: bool, uma_status: Optional[str],
+                       prices: List[Any]) -> str:
+    """'settled' (a YES/NO outcome converged), 'ambiguous' (UMA-resolved 50/50) or 'unknown'."""
+    if resolved:
+        return "settled"
+    if closed and uma_status and _UMA_RESOLVED_RE.search(uma_status) and prices:
+        values = [_coerce_float(p) for p in prices]
+        if all(v is not None and abs(v - 0.5) <= _AMBIGUOUS_PRICE_TOLERANCE + 1e-9
+               for v in values):
+            return "ambiguous"
+    return "unknown"
 
 
 def _cap_per_event(ranked: List[Dict[str, Any]], max_per_event: int,
@@ -607,13 +642,16 @@ class PolymarketClient:
         的批量取数与降级纪律，逐条防御式解析终态：
 
             {market_id: {market_id, closed, resolved, resolved_outcome,
-                         resolved_yes_price, uma_status}}
+                         resolved_yes_price, uma_status, closed_time, resolution_status}}
 
         * closed              —— 市场是否已关闭（active 旗标在已判定市场上仍 True，不可靠）；
         * resolved            —— 是否可判定为确定结局（closed 且某结局价 ≥ HI，收敛到 0/1）；
         * resolved_outcome    —— 胜出结局名（"Yes"/"No"/…），无法判定为 None；
         * resolved_yes_price  —— 判定后 "Yes" 结局的价（胜出=~1 / 落败=~0），据此定二元真值；
-        * uma_status          —— 原样透传的 UMA 判定阶段字符串（诊断用；缺失为 None）。
+        * uma_status          —— 原样透传的 UMA 判定阶段字符串（诊断用；缺失为 None）；
+        * closed_time         —— EVAL-2：Gamma closedTime 的 UTC ISO（须带时区；缺失/不可解析
+                                 为 None，绝不以 endDate 代替）；
+        * resolution_status   —— EVAL-2：'settled' / 'ambiguous'（UMA 判定 50/50）/ 'unknown'。
 
         Degrade-safe：未启用 / 空输入 / 整批网络失败 → {}；单条字段缺失/形状异常 →
         该市场 resolved=False（unknown），绝不抛异常、绝不阻断监测主流程。
