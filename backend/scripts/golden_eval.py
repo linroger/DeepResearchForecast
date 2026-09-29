@@ -25,9 +25,19 @@ INTENDED WORKFLOW (the whole point — read this before using):
      is not point-in-time yet, so no replay is a fair as-of forecast.
      As-of runs must set PREDICTION_MARKETS_ENABLED=false (or use hindcast market
      admission once available): live Polymarket odds leak the outcome.
-  2. Set each produced binary forecast's ``id`` to the golden question's ``id``
-     (matching is by id), or curate the golden ``id``s to match your forecast ids.
-  3. Score the pipeline's ``forecast.json`` against the golden set:
+  2. Start the run as an evaluation run (EVAL-13):
+     ``PipelineOrchestrator.start(brief, evaluation={"eval_run_id": ..., "target":
+     evaluation_target_from_golden(q)})``. Its reports never read production
+     calibration or write the production ledger (their rows go to the isolated
+     evaluation ledger), the resolution monitor skips them, and the binary whose
+     statement equals the question carries ``target_question_id`` (or the
+     question is listed under ``forecast.evaluation.target_binding.missing``);
+     matching prefers ``target_question_id`` over the row's F id. Without a
+     target, set each produced binary forecast's ``id`` to the golden question's
+     ``id``.
+  3. Score the pipeline's primary report ``forecast.json`` (with
+     N_FORECAST_SEEDS>1 the seed members are diagnostics, not the scored
+     artifact) against the golden set:
          python backend/scripts/golden_eval.py score-forecast-file \
              --forecast backend/uploads/reports/<report_id>/forecast.json \
              -o eval_report.json --markdown eval_report.md [--bootstrap 1000]
@@ -459,9 +469,22 @@ def extract_binary_forecasts(forecast_obj: Any) -> List[Dict[str, Any]]:
     return [it for it in (items or []) if isinstance(it, dict)]
 
 
+def _match_key(row: Dict[str, Any], golden_index: Dict[str, Dict[str, Any]]) -> str:
+    """The golden id a forecast row answers: its ``target_question_id`` when that names a
+    golden question (EVAL-13 target binding), else its own ``id``."""
+    target = str(row.get("target_question_id") or "").strip()
+    if target and target in golden_index:
+        return target
+    return str(row.get("id") or "").strip()
+
+
 def match_forecasts(binary_forecasts: List[Dict[str, Any]],
                     golden_index: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     """Match forecast rows to golden questions by ``id``; score the intersection.
+
+    EVAL-13: a row whose ``target_question_id`` names a golden question is matched
+    on it in preference to its own (F-numbered) ``id``; such a matched row also
+    carries ``forecast_id``, the row's own id.
 
     Returns ``{matched:[…scored…], unmatched_forecast_ids, unmatched_golden_ids,
     invalid_probability_ids, duplicate_forecast_ids}``. A matched row with an
@@ -487,7 +510,7 @@ def match_forecasts(binary_forecasts: List[Dict[str, Any]],
     duplicates: set = set()
     ambiguous = {gid for gid, g in golden_index.items() if golden_set.is_ambiguous(g)}
     for row in binary_forecasts:
-        fid = str(row.get("id") or "").strip()
+        fid = _match_key(row, golden_index)
         if not fid or fid not in golden_index or fid in ambiguous:
             continue
         if fid in seen:
@@ -501,7 +524,7 @@ def match_forecasts(binary_forecasts: List[Dict[str, Any]],
             continue
         matched_ids.add(fid)
         h_days = eval_stats.horizon_days(g.get("as_of_date"), g.get("resolution_date"))
-        matched.append({
+        entry = {
             "id": fid,
             "probability": p,
             "outcome": bool(g["resolved_outcome"]),
@@ -515,8 +538,12 @@ def match_forecasts(binary_forecasts: List[Dict[str, Any]],
             "cluster": str(g.get("event_cluster") or "").strip() or fid,
             "horizon_days": h_days,
             "horizon_bucket": eval_stats.horizon_bucket(h_days),
-        })
-    forecast_ids = {str(r.get("id") or "").strip() for r in binary_forecasts if str(r.get("id") or "").strip()}
+        }
+        own_id = str(row.get("id") or "").strip()
+        if own_id != fid:
+            entry["forecast_id"] = own_id
+        matched.append(entry)
+    forecast_ids = {key for key in (_match_key(r, golden_index) for r in binary_forecasts) if key}
     return {
         "matched": matched,
         "unmatched_forecast_ids": sorted(forecast_ids - matched_ids - set(invalid) - ambiguous),

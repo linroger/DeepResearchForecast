@@ -1682,6 +1682,10 @@ class ReportAgent:
         # 测试经 __new__ 构造 agent 时二者缺失，读取一律走 getattr。
         self.ledger_context: Optional[Dict[str, Any]] = None
         self.ledger_receipt: Optional[Dict[str, Any]] = None
+        # EVAL-13: 评估运行准入钉（编排器主报告/种子报告在构造后赋值）。缺省 None 时由
+        # _resolve_evaluation_context 按模拟 id 查回所属管线的持久化标记（覆盖 API 重生成）；
+        # 两者皆无 = 生产运行，行为不变。测试经 __new__ 构造时缺失，读取一律走 getattr。
+        self.evaluation_context: Optional[Dict[str, Any]] = None
 
         self.llm = llm_client or LLMClient()
         self.zep_tools = zep_tools or ZepToolsService()
@@ -2977,6 +2981,66 @@ class ReportAgent:
             self._forecast_spine = None
             self._forecast_spine_block = ""
 
+    def _resolve_evaluation_context(self) -> Optional[Dict[str, Any]]:
+        """EVAL-13: this report's evaluation-run context, or None for a production report.
+
+        The assigned ``evaluation_context`` (orchestrator main and seed reports) wins;
+        otherwise the pipeline that ran ``simulation_id`` is looked up once
+        (``pipeline_orchestrator.evaluation_context_for_simulation``: its pin or its
+        persisted handoff marker), so entry points that build a ReportAgent without
+        orchestrator context (``/api/report/generate``) still honour the run.
+        """
+        assigned = getattr(self, "evaluation_context", None)
+        if isinstance(assigned, dict):
+            return assigned
+        if getattr(self, "_evaluation_context_looked_up", False):
+            return getattr(self, "_evaluation_context_lookup", None)
+        found: Optional[Dict[str, Any]] = None
+        simulation_id = getattr(self, "simulation_id", None)
+        if simulation_id:
+            try:
+                from .pipeline_orchestrator import evaluation_context_for_simulation
+                found = evaluation_context_for_simulation(simulation_id)
+            except Exception as exc:  # noqa: BLE001 — 查找失败按生产运行处理（仅记录）
+                logger.warning(f"评估运行上下文查找失败（按生产运行处理）: {exc}")
+                found = None
+        self._evaluation_context_lookup = found if isinstance(found, dict) else None
+        self._evaluation_context_looked_up = True
+        return self._evaluation_context_lookup
+
+    @staticmethod
+    def _evaluation_target_propositions(evaluation: Optional[Dict[str, Any]]
+                                        ) -> Optional[List[Dict[str, Any]]]:
+        """EVAL-13: the pinned target as ``extract_binary_forecasts`` target propositions."""
+        target = (evaluation or {}).get("target")
+        if not isinstance(target, dict) or not target.get("question_id") or not target.get("statement"):
+            return None
+        return [{"question_id": str(target["question_id"]),
+                 "statement": str(target["statement"]),
+                 "resolution_criteria": target.get("resolution_criteria")}]
+
+    @staticmethod
+    def _evaluation_stamp(evaluation: Dict[str, Any],
+                          targets: Optional[List[Dict[str, Any]]],
+                          target_binding: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """EVAL-13: forecast['evaluation'] for a report of an evaluation run.
+
+        A pinned target the binary extraction never bound (disabled, failed or empty)
+        is still reported under ``target_binding.missing``, never silently dropped.
+        """
+        binding = target_binding
+        if targets and not isinstance(binding, dict):
+            binding = {"bound": {}, "missing": [t["question_id"] for t in targets],
+                       "method": "normalized_equality", "repair_draw": "not_attempted"}
+        return {
+            "record_class": "evaluation",
+            "eval_run_id": evaluation.get("eval_run_id"),
+            "cell_id": evaluation.get("cell_id"),
+            "question_id": evaluation.get("question_id"),
+            "historical_calibration_suppressed": True,
+            "target_binding": binding,
+        }
+
     def _finalize_structured_forecast(self, report_id: str, report_markdown: str,
                                       report: Optional["Report"] = None) -> None:
         """Persist the final forecast.json.
@@ -2995,6 +3059,11 @@ class ReportAgent:
         from .forecast_extractor import (
             extract_structured_forecast, audit_citation_grounding, self_critique_forecast,
         )
+        # EVAL-13：评估运行（准入钉或所属管线标记）——跳过生产校准读、绑定钉住的目标命题、
+        # 盖 forecast['evaluation'] 章；生产运行时三者皆为 None，行为逐字节不变。
+        _evaluation = self._resolve_evaluation_context()
+        _eval_targets = self._evaluation_target_propositions(_evaluation)
+        _target_binding: Optional[Dict[str, Any]] = None
         if self._forecast_spine and self._forecast_spine.get("scenarios"):
             forecast = dict(self._forecast_spine)        # 骨架已由信号驱动且 MECE
         else:
@@ -3116,6 +3185,9 @@ class ReportAgent:
                 # 二元预测会静默结算到 2027，与情景骨架/图表的日历判定日不一致）。hours 模式
                 # _temporal_horizon_date() 返回 ""，传 None ⇒ 旧行为逐字节不变（degrade-safe）。
                 _hz_date = self._temporal_horizon_date() or None
+                # EVAL-13：仅评估运行的钉住目标作为目标命题传入（生产调用形状逐字节不变）。
+                _ebf_eval_kwargs: Dict[str, Any] = (
+                    {"target_propositions": _eval_targets} if _eval_targets else {})
                 # B2: 需求书解析出的 binary_min_count 参与生效——取 spec 与 Config 的较大者
                 # （需求书写明「15+ binary forecasts」时不被 Config 默认静默压低）。
                 _bres = _ebf(
@@ -3129,7 +3201,10 @@ class ReportAgent:
                     markets=getattr(self, "_prediction_markets", None) or None,
                     scenarios=forecast.get("scenarios") or None,
                     horizon_date=_hz_date,
+                    **_ebf_eval_kwargs,
                 )
+                if isinstance(_bres.get("target_binding"), dict):
+                    _target_binding = _bres["target_binding"]
                 if _bres.get("binary_forecasts"):
                     forecast["binary_forecasts"] = _bres["binary_forecasts"]
                     forecast["binary_quality"] = _bres.get("binary_quality") or {}
@@ -3239,7 +3314,8 @@ class ReportAgent:
             pass
         # NEXTSTEPS P2-4: 把历史校准（已解析预测的 Brier/ECE）surfacing 进 confidence_rationale，
         # 让信心由 track record 赚得而非自评；无已解析样本时不改（degrade-safe）。
-        if getattr(Config, "REPORT_FORECAST_LEDGER", True):
+        # EVAL-13：评估运行绝不读生产校准（生产 track record 不得影响评估样本的信心）。
+        if getattr(Config, "REPORT_FORECAST_LEDGER", True) and _evaluation is None:
             try:
                 from .forecast_ledger import calibration_summary as _cal
                 _cs = _cal()
@@ -3261,6 +3337,9 @@ class ReportAgent:
             _pparse["spine"] = _spine_review
             _pq["probability_parse"] = _pparse
             forecast["quality"] = _pq
+        if _evaluation is not None:
+            forecast["evaluation"] = self._evaluation_stamp(
+                _evaluation, _eval_targets, _target_binding)
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
@@ -3277,6 +3356,13 @@ class ReportAgent:
                         and forecast.get("probability_status") == "needs_review"):
                     # REPORT-1：概率待复核（含 null 概率）的预测不可打分，绝不写入校准账本。
                     logger.warning(f"预测概率待复核（needs_review），跳过校准账本追加: {report_id}")
+                elif _evaluation is not None:
+                    # EVAL-13：评估运行的 legacy 追加改写进隔离的评估账本，绝不进生产 ledger.jsonl。
+                    from .forecast_ledger import evaluation_ledger_dir as _eval_ledger_dir
+                    _append(forecast, report_id=report_id,
+                            horizon=str(forecast.get("horizon") or "") or None,
+                            created_at=datetime.now().isoformat(),
+                            d=_eval_ledger_dir())
                 else:
                     _append(forecast, report_id=report_id,
                             horizon=str(forecast.get("horizon") or "") or None,

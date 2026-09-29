@@ -142,12 +142,45 @@ def resolve_report_id(id_: str) -> Optional[str]:
     return None
 
 
-def recent_report_ids(n: int, *, as_of: Optional[str] = None) -> List[str]:
+# EVAL-13: exclude_evaluation 时按 n 的这个倍数多取候选，剔除评估运行报告后仍能凑满 n 份。
+EVALUATION_OVERFETCH_FACTOR = 4
+
+
+def is_evaluation_forecast(forecast: Any) -> bool:
+    """EVAL-13: True for the forecast of an evaluation run (``evaluation.record_class``)."""
+    if not isinstance(forecast, dict):
+        return False
+    stamp = forecast.get("evaluation")
+    return isinstance(stamp, dict) and stamp.get("record_class") == "evaluation"
+
+
+def _is_evaluation_report(report_id: str) -> bool:
+    """EVAL-13: whether a report belongs to an evaluation run (fail closed on a stamped file).
+
+    Reads the report's forecast.json, the file run_monitor processes: a sealed
+    forecast is exactly these bytes, so an unsealed or stale-policy evaluation
+    report is recognised too.
+    """
+    try:
+        folder = _report_folder(report_id)
+    except Exception:  # noqa: BLE001 — 不可定位的报告交由 run_monitor 自身降级
+        return False
+    return is_evaluation_forecast(_read_json(os.path.join(folder, "forecast.json")))
+
+
+def recent_report_ids(n: int, *, as_of: Optional[str] = None,
+                      exclude_evaluation: bool = True) -> List[str]:
     """最近 n 份报告的 report_id（按 created_at 倒序，与 ReportManager.list_reports 同序）。
-    RESOLUTION_MONITOR_LOOKBACK_DAYS>0 时进一步过滤到 created_at 在近 N 天内的报告。"""
+    RESOLUTION_MONITOR_LOOKBACK_DAYS>0 时进一步过滤到 created_at 在近 N 天内的报告。
+
+    EVAL-13 ``exclude_evaluation``（默认开）：评估运行的报告（forecast.evaluation.record_class
+    == 'evaluation'）绝不进入监测；多取至多 4n 份候选，剔除后仍返回至多 n 份生产报告。
+    没有评估报告时结果与旧行为逐字节一致。"""
+    wanted = max(1, int(n))
+    limit = wanted * EVALUATION_OVERFETCH_FACTOR if exclude_evaluation else wanted
     try:
         from app.services.report_agent import ReportManager
-        reports = ReportManager.list_reports(limit=max(1, int(n)))
+        reports = ReportManager.list_reports(limit=limit)
     except Exception as e:  # noqa: BLE001 — 列报告失败 → 空（degrade-safe）
         logger.warning(f"列出最近报告失败（返回空）: {e}")
         return []
@@ -162,11 +195,16 @@ def recent_report_ids(n: int, *, as_of: Optional[str] = None) -> List[str]:
             cutoff = None
     out: List[str] = []
     for r in reports:
+        if len(out) >= wanted:
+            break
         if cutoff is not None and str(getattr(r, "created_at", "") or "")[:10] < cutoff:
             continue
         rid = getattr(r, "report_id", None)
-        if rid:
-            out.append(str(rid))
+        if not rid:
+            continue
+        if exclude_evaluation and _is_evaluation_report(str(rid)):
+            continue
+        out.append(str(rid))
     return out
 
 
@@ -477,7 +515,9 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
 
     可注入 forecast / report_folder / client / ledger_dir / as_of，全离线可测。
     dry_run=True 时不写任何盘（price_track / ledger / monitor_report.md 均跳过）。
-    任何市场访问失败都退化为部分报告（degraded=True），绝不抛。"""
+    任何市场访问失败都退化为部分报告（degraded=True），绝不抛。
+    EVAL-13：评估运行的预测（forecast.evaluation.record_class == 'evaluation'）直接返回
+    ``skipped='evaluation_run'`` 的零计数摘要，零写盘、零市场访问。"""
     as_of = as_of or _utcnow_iso()
     as_of_day = str(as_of)[:10]
     thr = threshold if threshold is not None else drift_threshold()
@@ -485,6 +525,16 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
         report_folder = _report_folder(report_id)
     if forecast is None:
         forecast = _read_json(os.path.join(report_folder, "forecast.json"))
+    if is_evaluation_forecast(forecast):
+        # EVAL-13：评估运行的预测绝不被监测——不重报价、不入账、不落任何文件。
+        return {
+            "report_id": report_id, "as_of": as_of_day, "anchored_count": 0, "movers": [],
+            "resolved_count": 0, "newly_recorded_count": 0, "needs_manual_count": 0,
+            "needs_manual": [], "resolution_records": [], "calibration": {},
+            "market_brier": {}, "degraded": False, "dry_run": bool(dry_run),
+            "monitor_report_path": None, "monitor_report_md": "",
+            "skipped": "evaluation_run",
+        }
     if client is None:
         from app.utils.prediction_markets import PolymarketClient
         client = PolymarketClient()

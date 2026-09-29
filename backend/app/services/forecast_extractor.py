@@ -1415,6 +1415,78 @@ def _binary_key(stmt: str) -> str:
     return re.sub(r"\W+", " ", str(stmt or "").lower()).strip()
 
 
+# ------------------------------------------- evaluation-run target propositions (EVAL-13)
+# An evaluation cell pins one target question. The extraction prompt then asks for its
+# statement VERBATIM as one binary, and after the F-renumbering the row whose statement
+# equals it under normalize_target_statement is bound (row['target_question_id']), so
+# golden_eval can score the cell without hand-editing ids. A target no draw produced
+# gets at most one bounded repair draw (EVAL_TARGET_REPAIR_DRAW); it is never fabricated.
+_TARGET_PROPOSITION_RULE = (
+    "\n\nREQUIRED TARGET PROPOSITIONS: include each statement below as the \"statement\" of "
+    "exactly one binary forecast, copied VERBATIM (same words in the same order; do not "
+    "rephrase, merge, split or negate it), with your own evidence-based probability."
+)
+_TARGET_REPAIR_RULE = (
+    "\n\nREQUIRED TARGET PROPOSITIONS: return ONLY forecasts for the statement(s) below, one "
+    "binary forecast per statement, its \"statement\" copied VERBATIM (same words in the same "
+    "order; do not rephrase, merge, split or negate it), with your own evidence-based probability."
+)
+_TARGET_TRAILING_RE = re.compile(r"[\s?.]+$")
+TARGET_BINDING_METHOD = "normalized_equality"
+
+
+def normalize_target_statement(text: Any) -> str:
+    """NFKC, casefold, collapsed whitespace, trailing '?' / '.' stripped (EVAL-13 binding key)."""
+    folded = unicodedata.normalize("NFKC", str(text or "")).casefold()
+    return _TARGET_TRAILING_RE.sub("", " ".join(folded.split()))
+
+
+def _clean_target_propositions(targets: Any) -> List[Dict[str, Any]]:
+    """Usable target propositions (question_id + statement), first per question_id wins."""
+    out: List[Dict[str, Any]] = []
+    seen: set = set()
+    for t in targets or []:
+        if not isinstance(t, dict):
+            continue
+        qid = str(t.get("question_id") or "").strip()
+        statement = str(t.get("statement") or "").strip()
+        norm = normalize_target_statement(statement)
+        if not qid or not norm or qid in seen:
+            continue
+        seen.add(qid)
+        criteria = str(t.get("resolution_criteria") or "").strip()
+        out.append({"question_id": qid, "statement": statement,
+                    "resolution_criteria": criteria, "norm": norm})
+    return out
+
+
+def _target_proposition_block(targets: List[Dict[str, Any]], *, repair: bool = False) -> str:
+    lines = [_TARGET_REPAIR_RULE if repair else _TARGET_PROPOSITION_RULE]
+    for t in targets:
+        lines.append(f"- {t['statement']}")
+        if t.get("resolution_criteria"):
+            lines.append(f"  Resolution criteria: {t['resolution_criteria']}")
+    return "\n".join(lines)
+
+
+def _bind_target_propositions(binaries: List[Dict[str, Any]],
+                              targets: List[Dict[str, Any]]) -> Dict[str, str]:
+    """Stamp the first unbound row (F order) equal to each target; returns {question_id: id}."""
+    bound: Dict[str, str] = {}
+    for t in targets:
+        for b in binaries:
+            if b.get("target_question_id"):
+                continue
+            if normalize_target_statement(b.get("statement")) != t["norm"]:
+                continue
+            b["target_question_id"] = t["question_id"]
+            b["target_bind"] = ("verbatim" if str(b.get("statement") or "").strip() == t["statement"]
+                                else "normalized")
+            bound[t["question_id"]] = str(b.get("id") or "")
+            break
+    return bound
+
+
 _MARKET_ENTITY_EN_RE = re.compile(
     r"\b(?:polymarket|prediction[- ]market|event[- ]contract|market[- ]contract|"
     r"market[- ]implied)\b",
@@ -2869,7 +2941,9 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              scenarios: Optional[List[Dict[str, Any]]] = None,
                              ensemble_client_factory: Optional[Any] = None,
                              horizon_date: Optional[str] = None,
-                             now: Optional[datetime] = None) -> Dict[str, Any]:
+                             now: Optional[datetime] = None,
+                             target_propositions: Optional[List[Dict[str, Any]]] = None,
+                             ) -> Dict[str, Any]:
     """Extract/derive >=min_count INDEPENDENT binary forecasts from the dossier.
 
     Returns ``{"binary_forecasts": [...], "binary_quality": {...}}``. Degrade-safe:
@@ -2889,7 +2963,15 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     TIME-3（PREDICTION_MARKETS_END_DATE_GATE，默认开）：截止日已过（``now`` 缺省
     market_clock_now()）或已盖 window_ended 章的市场不进入锚点查找表与确定性匹配，
     剔除数记 binary_quality.market_window_ended_excluded；旗标关 → 与旧路径逐字节一致。
+    EVAL-13 ``target_propositions``（仅评估运行，[{question_id, statement,
+    resolution_criteria?}]）：每轮抽取在 [Research dossier] 之前追加「逐字包含这些陈述」的
+    附言（仅列尚未捕获的目标）；F 重编号后按 normalize_target_statement 相等绑定
+    ``row['target_question_id']``。仍缺且 EVAL_TARGET_REPAIR_DRAW 开 → 恰好一次有界补抽，
+    附言只索取缺失陈述，仅在归一相等时保留（下一个 F 号，target_bind='repair_draw'），
+    绝不编造。返回值增 ``target_binding`` = {bound{qid: fid}, missing[qid], method,
+    repair_draw}。None/空 → 提示词与输出逐字节不变。
     """
+    target_rows = _clean_target_propositions(target_propositions)
     content = (report_markdown or "")
     _bbudget = int(_cfg("FORECAST_BINARY_EXTRACT_BUDGET", 48000))
     _bhr = _coerce_float(_cfg("FORECAST_EXTRACT_HEAD_RATIO", 0.6))
@@ -2950,9 +3032,15 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     secondary_review_sink: List[Dict[str, Any]] = []
 
     def _draw(instr_min: int, exclude: List[str], *, low_p: bool = False,
-              client: Any = None) -> List[Dict[str, Any]]:
+              client: Any = None, targets: Optional[List[Dict[str, Any]]] = None,
+              repair: bool = False) -> List[Dict[str, Any]]:
         # ITEM 12：client 指定时用该（副模型）客户端抽取，否则用主 llm——集成各模型共用同一提示词。
         _llm = client if client is not None else llm
+        # EVAL-13：默认只索取 exclude 里尚未出现的目标陈述（无目标 → 空，提示词不变）。低概率
+        # 重述轮不索取：其 0.05-0.35 区间要求会扭曲目标命题的概率。
+        if targets is None and target_rows and not low_p:
+            captured = {normalize_target_statement(x) for x in exclude}
+            targets = [t for t in target_rows if t["norm"] not in captured]
         user = _BINARY_FORECAST_INSTRUCTIONS.format(
             min_count=instr_min, language=language,
             theme_enum=("|".join(themes) if themes else _BINARY_DEFAULT_THEME_ENUM),
@@ -2998,6 +3086,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                     "scenario_membership.derivable=true and copy every YES scenario name "
                     "exactly. Otherwise set derivable=false and leave yes_scenarios empty."
                 )
+        if targets:
+            user += _target_proposition_block(targets, repair=repair)
         user += f"\n\n[Research dossier]\n{content}"
         raw = _llm.chat_json(messages=[{"role": "user", "content": user}],
                              temperature=0.25, max_tokens=4096)
@@ -3034,6 +3124,9 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     # renumber ids stably F1..Fn（锚定用稳定 id 匹配，故在此之后再跑市场锚定）
     for i, b in enumerate(binaries, start=1):
         b["id"] = f"F{i}"
+    target_binding: Optional[Dict[str, Any]] = None
+    if target_rows:
+        target_binding = _bind_evaluation_targets(binaries, target_rows, _draw)
     # ITEM 12：多模型集成——主模型抽完后，对每个所列（非主）提供方各跑一次同提示词二元抽取，
     # 按 id/陈述匹配同一条预测，用与种子集成同一套 extremizing log-odds（ENSEMBLE_EXTREMIZE_A）
     # 把各模型概率池化为发布概率，记 binary['ensemble']={models,probs,pooled,spread}。置于市场锚定
@@ -3159,7 +3252,54 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                     f"(spread > {_ens_block['spread_threshold']}): {', '.join(ensemble_low_agreement)}")
     if market_comparison and market_comparison.get("comparisons"):
         out["market_comparison"] = market_comparison
+    if target_binding is not None:
+        out["target_binding"] = target_binding
     return out
+
+
+def _bind_evaluation_targets(binaries: List[Dict[str, Any]], targets: List[Dict[str, Any]],
+                             draw: Any) -> Dict[str, Any]:
+    """EVAL-13: bind target propositions after the F-renumbering; at most one repair draw.
+
+    ``draw`` is extract_binary_forecasts' ``_draw`` closure. A repair row is kept
+    only when its statement normalizes to a missing target's (next F id,
+    ``target_bind='repair_draw'``); anything else it returns is discarded, and a
+    target still unmatched stays under ``missing``. ``repair_draw`` records
+    not_needed / disabled / failed / unmatched / partial / bound.
+    """
+    bound = _bind_target_propositions(binaries, targets)
+    missing = [t for t in targets if t["question_id"] not in bound]
+    repair_status = "not_needed"
+    if missing and not _cfg("EVAL_TARGET_REPAIR_DRAW", True):
+        repair_status = "disabled"
+    elif missing:
+        try:
+            drawn = draw(1, [b["statement"] for b in binaries], targets=missing, repair=True)
+        except Exception as _te:  # noqa: BLE001 — 补抽失败如实记 missing，绝不编造
+            logger.warning(f"评估目标命题补抽失败（记为缺失）: {_te}")
+            drawn, repair_status = [], "failed"
+        repaired = 0
+        for t in missing:
+            row = next((b for b in drawn
+                        if normalize_target_statement(b.get("statement")) == t["norm"]), None)
+            if row is None:
+                continue
+            drawn.remove(row)
+            row["id"] = f"F{len(binaries) + 1}"
+            row["target_question_id"] = t["question_id"]
+            row["target_bind"] = "repair_draw"
+            binaries.append(row)
+            bound[t["question_id"]] = row["id"]
+            repaired += 1
+        if repair_status != "failed":
+            repair_status = ("bound" if repaired == len(missing)
+                             else "partial" if repaired else "unmatched")
+    return {
+        "bound": bound,
+        "missing": [t["question_id"] for t in targets if t["question_id"] not in bound],
+        "method": TARGET_BINDING_METHOD,
+        "repair_draw": repair_status,
+    }
 
 
 # ------------------------------------------ requirement-horizon consistency (RQ-6)

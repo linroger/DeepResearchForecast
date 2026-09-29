@@ -482,6 +482,13 @@ class Config:
     # 仅当本旋钮开启（或 CLI 显式 --to-ledger）时才把已解析黄金题作为二元(YES/NO)预测追加进校准账本，
     # 让 report_visualizer 校准曲线累积黄金题结局。默认关=不污染生产账本（degrade-safe）。
     GOLDEN_EVAL_LEDGER = os.environ.get('GOLDEN_EVAL_LEDGER', 'False').strip().lower() == 'true'  # EVAL-1
+    # EVAL-13: under an evaluation run whose pin carries a target proposition, a target the binary
+    # extraction did not produce verbatim gets exactly one bounded repair draw that asks only for
+    # that statement; the row is kept only on a normalized match, never fabricated. Default on is
+    # safe: it is inert unless PipelineOrchestrator.start(evaluation=...) pinned a target, so
+    # production runs never see the addendum or the extra draw. false = no repair draw (the target
+    # is reported under forecast.evaluation.target_binding.missing).
+    EVAL_TARGET_REPAIR_DRAW = os.environ.get('EVAL_TARGET_REPAIR_DRAW', 'true').strip().lower() == 'true'
 
     # —— 运维脚本旋钮（此前各脚本用 getattr(Config, ...) 读但 config.py 从未定义 → "幽灵旋钮"：
     #    在 .env 里设了也无效。这里收口为真实可读项 + .env.example 文档化，消除该反模式）——
