@@ -37,7 +37,8 @@ community 工具函数——因此行为与直接在 config 里选那个 provide
 * **RESEARCH-2 —— 类型化来源结果**（RESEARCH_SOURCE_TAXONOMY，缺省关）：开启时 Firecrawl
   错误 JSON 在原 "error" 之外追加 failure_class（not_configured / unavailable / budget）、
   provider、reason；DDG 的 "No results found" 标注 empty_unconfirmed（可能是故障而非真空）。
-  后端替换（configured→ddg）总是记入进程内 provider_events()。关 = 输出逐字节不变。
+  后端替换（configured→ddg）与 Firecrawl 每进程调用上限的拒绝总是记入进程内 provider_events()。
+  关 = 输出逐字节不变。
 """
 
 from __future__ import annotations
@@ -101,7 +102,8 @@ _firecrawl_window: list[float] = []  # 本进程最近 60s 内发出请求的 mo
 # succeed, so the v3 tool layer latches it instead of retrying every query.
 _FIRECRAWL_NOT_CONFIGURED_STATUSES = frozenset({401, 402})
 _TAXONOMY_TRUTHY = frozenset({"1", "true", "yes", "on"})
-# Process-local provider events ("substitution:<configured>->ddg" -> count).
+# Process-local provider events ("substitution:<configured>->ddg" and
+# "ceiling:firecrawl", one per search the per-run call ceiling refused -> count).
 # Always recorded; linear_research reads them only with the taxonomy on.
 _PROVIDER_EVENTS: dict[str, int] = {}
 _PROVIDER_EVENTS_LOCK = threading.Lock()
@@ -520,6 +522,7 @@ def _firecrawl_search(query: str, max_results: int) -> str:
             logger.warning(
                 "search_tools: Firecrawl 本进程 search 计费调用已达上限 %d，"
                 "后续搜索直接返回瞬态错误（不再产生 Firecrawl 费用）", ceiling)
+        _record_provider_event("ceiling:firecrawl")
         return _firecrawl_error(
             f"firecrawl search per-run call ceiling reached ({ceiling})", q,
             "budget", "per_run_call_ceiling")

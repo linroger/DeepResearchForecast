@@ -169,11 +169,13 @@ _FETCH_PROVIDER: contextvars.ContextVar[str] = contextvars.ContextVar(
     "research_fetch_provider", default=""
 )
 # —— RESEARCH-2：类型化来源结果（RESEARCH_SOURCE_TAXONOMY，缺省关）——
-# research_gateway._INFRA_FETCH_REASON_PREFIXES / _TRANSIENT_FETCH_REASON_RE /
-# _FIRECRAWL_FAILED_PREFIX (kept as copies so neither module imports the other;
-# a test holds them equal): a failure-reason slug matching either table, or
-# naming a Firecrawl exception, is the fetch service's failure, not the page's.
+# research_gateway._INFRA_FETCH_REASON_PREFIXES / _CONTENT_FETCH_REASON_PREFIXES /
+# _TRANSIENT_FETCH_REASON_RE / _FIRECRAWL_FAILED_PREFIX (kept as copies so
+# neither module imports the other; a test holds them equal): a failure-reason
+# slug matching either infra table, or naming a Firecrawl exception, is the
+# fetch service's failure, not the page's (a content prefix wins over both).
 _FIRECRAWL_FAILED_PREFIX = "firecrawl_failed_"
+_CONTENT_FETCH_REASON_PREFIXES = ("research_negative_cache_suppressed",)
 _INFRA_FETCH_REASON_PREFIXES = (
     "no_web_fetch_provider_was_available",
     "firecrawl_failed_payment_required",
@@ -186,6 +188,8 @@ _INFRA_FETCH_REASON_PREFIXES = (
     "jina_primary_failed",
     "request_to_jina_api_failed",
     "jina_api_returned_status_5",
+    "jina_api_returned_status_401",
+    "jina_api_returned_status_402",
     "exa_fallback_failed",
     "exa_fallback_unavailable",
     "direct_fallback_failed",
@@ -195,17 +199,20 @@ _INFRA_FETCH_REASON_PREFIXES = (
     "fetch_call_deadline",
 )
 _TRANSIENT_FETCH_REASON_RE = re.compile(r"timeout|timed_out|rate_limit|429|inflight|temporarily")
-# A final fetch text naming a credential/quota refusal or an empty provider
-# chain says nothing about the URL, so it never enters the negative cache.
-_OUTAGE_RESULT_MARKERS = (
-    "payment required",
-    "http 401",
-    "http 402",
-    "is not configured",
-    "no web-fetch provider was available",
+# (provider, lower-cased text prefix, reason) of a provider's own
+# credential/quota refusal: _firecrawl_fetch's 402/401 texts and the deer-flow
+# Jina client's "Jina API returned status 402/401".  A prefix match, so a page
+# body that mentions "payment required" is never taken for one.
+_QUOTA_REFUSAL_TEXTS = (
+    ("firecrawl", "error: firecrawl failed: payment required", "http_402"),
+    ("firecrawl", "error: firecrawl failed: http 402", "http_402"),
+    ("firecrawl", "error: firecrawl failed: http 401", "http_401"),
+    ("jina", "error: jina api returned status 402", "http_402"),
+    ("jina", "error: jina api returned status 401", "http_401"),
 )
 # provider -> reason ("http_402"/"http_401"): a provider that refused this
-# process's credential or quota; later _resilient_fetch calls skip it.
+# process's credential or quota; later _resilient_fetch calls skip it
+# (Firecrawl only; a Jina refusal is recorded as not_configured, Jina is still asked).
 _DISABLED_FETCH_PROVIDERS: dict[str, str] = {}
 # provider -> outcome ("ok" | "not_configured" | "unavailable" | "content")
 # -> {"count": attempts, "reason": latest failure reason}; see provider_events().
@@ -239,21 +246,20 @@ def _source_taxonomy_on() -> bool:
 
 
 def _is_outage_result(value: Any) -> bool:
-    """A transport failure, a credential/quota refusal or any other
-    infrastructure failure (_fetch_failure_class): the service failed, not the URL."""
-    lowered = str(value or "").lower()
-    return (_is_transport_failure(lowered)
-            or any(marker in lowered for marker in _OUTAGE_RESULT_MARKERS)
-            or _fetch_failure_class(value) == "unavailable")
+    """The service failed, not the URL: the tool layer's infrastructure class
+    (_fetch_failure_class), which covers a transport "Error:", a credential/quota
+    refusal, an unconfigured provider and an empty provider chain.  A page body
+    that merely mentions a timeout or an HTTP 401 is the page's failure."""
+    return _fetch_failure_class(value) == "unavailable"
 
 
-def _quota_refusal_reason(value: Any) -> str:
-    """``http_402``/``http_401`` for a Firecrawl credential/quota refusal, else ""."""
-    lowered = str(value or "").lower()
-    if "payment required" in lowered or "http 402" in lowered:
-        return "http_402"
-    if "http 401" in lowered:
-        return "http_401"
+def _quota_refusal_reason(provider: str, value: Any) -> str:
+    """``http_402``/``http_401`` when ``value`` is ``provider``'s own
+    credential/quota refusal (_QUOTA_REFUSAL_TEXTS), else ""."""
+    lowered = str(value or "").strip().lower()
+    for name, prefix, reason in _QUOTA_REFUSAL_TEXTS:
+        if name == provider and lowered.startswith(prefix):
+            return reason
     return ""
 
 
@@ -286,6 +292,8 @@ def _fetch_failure_class(value: Any) -> str:
     text, by research_gateway's table (a transport "Error:" is infrastructure too)."""
     slug = _failure_slug(value)
     stripped = str(value or "").strip()
+    if slug.startswith(_CONTENT_FETCH_REASON_PREFIXES):
+        return "content"
     if ((stripped.startswith("Error:") and _is_transport_failure(stripped))
             or _TRANSIENT_FETCH_REASON_RE.search(slug)
             or slug.startswith(_INFRA_FETCH_REASON_PREFIXES)
@@ -305,14 +313,16 @@ def _record_fetch_event(provider: str, outcome: str, reason: str = "") -> None:
 
 
 def _note_fetch_failure(provider: str, result: str) -> None:
-    """Record one failed provider attempt; a Firecrawl credential/quota refusal
-    also disables Firecrawl for this process (one ERROR log) and opens its
-    shared circuit so every lane skips it."""
-    refusal = _quota_refusal_reason(result) if provider == "firecrawl" else ""
+    """Record one failed provider attempt (a credential/quota refusal as
+    not_configured); a Firecrawl refusal also disables Firecrawl for this
+    process (one ERROR log) and opens its shared circuit so every lane skips it."""
+    refusal = _quota_refusal_reason(provider, result)
     if not refusal:
         _record_fetch_event(provider, _fetch_failure_class(result), _failure_slug(result))
         return
     _record_fetch_event(provider, "not_configured", refusal)
+    if provider != "firecrawl":
+        return
     with _PROVIDER_EVENTS_LOCK:
         first = provider not in _DISABLED_FETCH_PROVIDERS
         _DISABLED_FETCH_PROVIDERS[provider] = refusal

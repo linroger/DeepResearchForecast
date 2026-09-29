@@ -3391,10 +3391,14 @@ _TRANSIENT_FETCH_REASON_RE = re.compile(r"timeout|timed_out|rate_limit|429|infli
 # "firecrawl_failed_<exception class>" (_FIRECRAWL_FAILED_PREFIX not followed by
 # "http_": cached_fetch reports every Firecrawl exception that way); everything
 # else (too_short, blocked_page, shells, HTTP 403/404/410...) is content.
-# request_to_jina_api_failed / jina_api_returned_status_5 are the deer-flow Jina
-# client's own transport and 5xx errors.  cached_fetch keeps a copy (a test
-# holds the two equal).
+# request_to_jina_api_failed / jina_api_returned_status_5 / _401 / _402 are the
+# deer-flow Jina client's own transport, 5xx and credential/quota errors.  A
+# _CONTENT_FETCH_REASON_PREFIXES reason is content before any other rule: with
+# the taxonomy on only a page's own failure enters the fetch negative cache, so
+# its suppression envelope names a failed page.  cached_fetch keeps a copy (a
+# test holds the two equal).
 _FIRECRAWL_FAILED_PREFIX = "firecrawl_failed_"
+_CONTENT_FETCH_REASON_PREFIXES = ("research_negative_cache_suppressed",)
 _INFRA_FETCH_REASON_PREFIXES = (
     "no_web_fetch_provider_was_available",
     "firecrawl_failed_payment_required",
@@ -3407,6 +3411,8 @@ _INFRA_FETCH_REASON_PREFIXES = (
     "jina_primary_failed",
     "request_to_jina_api_failed",
     "jina_api_returned_status_5",
+    "jina_api_returned_status_401",
+    "jina_api_returned_status_402",
     "exa_fallback_failed",
     "exa_fallback_unavailable",
     "direct_fallback_failed",
@@ -3637,6 +3643,8 @@ def _classify_search_payload(raw: Any) -> tuple[str, str, str]:
 def _fetch_reason_is_infra(reason: str) -> bool:
     """True when a fetch failure reason is the page-reading service's failure
     (see _INFRA_FETCH_REASON_PREFIXES); False when it is the page's."""
+    if reason.startswith(_CONTENT_FETCH_REASON_PREFIXES):
+        return False
     return (bool(_TRANSIENT_FETCH_REASON_RE.search(reason)) or reason.startswith(_INFRA_FETCH_REASON_PREFIXES)
             or (reason.startswith(_FIRECRAWL_FAILED_PREFIX)
                 and not reason.startswith(_FIRECRAWL_FAILED_PREFIX + "http_")))
@@ -3944,11 +3952,17 @@ class ResearchTools:
         self._log("result", f"web_fetch → FETCH_FAILED({reason}) (already failed in this run)")
         return f"FETCH_FAILED({reason}): this URL already failed in this run; try another source."
 
-    def _remember_failure(self, key: str, reason: str, *, transient: bool) -> None:
+    def _remember_failure(self, key: str, reason: str, *, transient: bool, infra: bool) -> None:
+        """Remember a failed URL for :meth:`_known_failure`; with the taxonomy
+        on its class (``infra``: the service failed, not the page) is stored
+        under the same lock, so a concurrent fetch never reads one without the
+        other."""
         with self._lock:
             previous = self._failed_fetches.get(key)
             failures = (previous[1] if previous is not None else 0) + 1
             self._failed_fetches[key] = (reason, failures, transient)
+            if self.source_taxonomy:
+                self._failure_class[key] = "infra" if infra else "content"
 
     def _stored_page(self, url: str) -> tuple[dict, str] | None:
         row = self.ledger.find(url)
@@ -3975,8 +3989,8 @@ class ResearchTools:
         try:
             raw = self._fetch_fn(url)
         except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
-            self._remember_failure(key, type(exc).__name__, transient=True)
-            return self._fetch_failed(agent_id, type(exc).__name__, key=key, infra=True)
+            self._remember_failure(key, type(exc).__name__, transient=True, infra=True)
+            return self._fetch_failed(agent_id, type(exc).__name__, infra=True)
         text = raw if isinstance(raw, str) else str(raw or "")
         envelope = _json_object(text)
         if envelope is not None and envelope.get("error") == "research_budget_exhausted":
@@ -3989,8 +4003,8 @@ class ResearchTools:
         if shell is not None:
             with self._lock:
                 self._shells[shell] = self._shells.get(shell, 0) + 1
-            self._remember_failure(key, shell, transient=False)
-            return self._fetch_failed(agent_id, shell, key=key, infra=False)
+            self._remember_failure(key, shell, transient=False, infra=False)
+            return self._fetch_failed(agent_id, shell, infra=False)
         if reason is not None:
             infra = _fetch_reason_is_infra(reason)
             if self.source_taxonomy and infra:
@@ -3999,8 +4013,8 @@ class ResearchTools:
                 transient = not reason.startswith("fetch_call_deadline")
             else:
                 transient = bool(_TRANSIENT_FETCH_REASON_RE.search(reason))
-            self._remember_failure(key, reason, transient=transient)
-            return self._fetch_failed(agent_id, reason, key=key, infra=infra)
+            self._remember_failure(key, reason, transient=transient, infra=infra)
+            return self._fetch_failed(agent_id, reason, infra=infra)
         stripped = text.strip()
         digest = hashlib.sha256(stripped.encode("utf-8")).hexdigest()
         page_path = f"{self.pages_dir.name}/{digest[:16]}.txt"
@@ -4012,8 +4026,8 @@ class ResearchTools:
             return self._fetch_failed(agent_id, f"storage_{type(exc).__name__}", infra=True)
         row = self.ledger.register(url, "", "", "fetch", agent_id)
         if row is None:
-            self._remember_failure(key, "invalid_url", transient=False)
-            return self._fetch_failed(agent_id, "invalid_url", key=key, infra=False)
+            self._remember_failure(key, "invalid_url", transient=False, infra=False)
+            return self._fetch_failed(agent_id, "invalid_url", infra=False)
         with self._lock:
             self._failed_fetches.pop(key, None)
             self._failure_class.pop(key, None)
@@ -4059,18 +4073,14 @@ class ResearchTools:
                 return "blocked_page"
         return None
 
-    def _fetch_failed(self, agent_id: str, reason: str, *, key: str | None = None, infra: bool) -> str:
+    def _fetch_failed(self, agent_id: str, reason: str, *, infra: bool) -> str:
         """Count one failed fetch (``infra``: the service failed, not the page)
-        and return its text; with the taxonomy on the text names the class and
-        a remembered URL (``key``) keeps it for :meth:`_known_failure`."""
+        and return its text; with the taxonomy on the text names the class."""
         self._failure(agent_id)
         self._outcome("fetch_unavailable" if infra else "fetch_content")
         if not self.source_taxonomy:
             self._log("result", f"web_fetch → FETCH_FAILED({reason})")
             return f"FETCH_FAILED({reason}): try another source."
-        if key is not None:
-            with self._lock:
-                self._failure_class[key] = "infra" if infra else "content"
         label, template = (("FETCH_UNAVAILABLE", _FETCH_UNAVAILABLE_TEXT) if infra
                            else ("FETCH_FAILED", _FETCH_CONTENT_TEXT))
         self._log("result", f"web_fetch → {label}({reason})")

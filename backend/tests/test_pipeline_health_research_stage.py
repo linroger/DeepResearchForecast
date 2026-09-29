@@ -101,3 +101,37 @@ def test_label_tables_stay_parallel():
     assert eb._LABELS["en"]["research_degraded"] == "research degraded"
     assert eb._LABELS["zh"]["research_degraded"] == "研究阶段降级"
     assert set(eb._LABELS["en"]) == set(eb._LABELS["zh"])
+
+
+def test_parallel_tracks_merge_source_health():
+    """PAR-2: every track is its own research process, so the merged
+    meta.source_health sums the tracks' counts instead of keeping track 1's."""
+    track_1 = {"source_health": {
+        "version": 1,
+        "tools": {"search_ok": 10, "search_not_configured": 1, "fetch_ok": 4},
+        "search_providers": {"substitution:serper->ddg": 2},
+        "fetch_providers": {"firecrawl": {"ok": {"count": 4, "reason": ""}}},
+        "search_refused": None,
+    }}
+    track_2 = {"source_health": {
+        "version": 1,
+        "tools": {"search_ok": 5, "search_not_configured": 3, "fetch_ok": 1, "fetch_unavailable": 2},
+        "search_providers": {"substitution:serper->ddg": 1, "ceiling:firecrawl": 4},
+        "fetch_providers": {"firecrawl": {"ok": {"count": 1, "reason": ""},
+                                          "not_configured": {"count": 1, "reason": "http_402"}},
+                            "jina": {"ok": {"count": 2, "reason": ""}, "junk": "x"}},
+        "search_refused": {"provider": "firecrawl", "reason": "http_402"},
+    }}
+    merged = po.merge_source_health([track_1, {}, track_2, {"source_health": "junk"}])
+    assert merged == {
+        "version": 1,
+        "tools": {"search_ok": 15, "search_not_configured": 4, "fetch_ok": 5, "fetch_unavailable": 2},
+        "search_providers": {"substitution:serper->ddg": 3, "ceiling:firecrawl": 4},
+        "fetch_providers": {"firecrawl": {"ok": {"count": 5, "reason": ""},
+                                          "not_configured": {"count": 1, "reason": "http_402"}},
+                            "jina": {"ok": {"count": 2, "reason": ""}}},
+        "search_refused": {"provider": "firecrawl", "reason": "http_402"},
+        "merged_from_tracks": 2,
+    }
+    # RESEARCH_SOURCE_TAXONOMY off: no track has the block, the merged meta gains no key.
+    assert po.merge_source_health([{}, {"research_quality": {"score": 1.0}}, None]) is None

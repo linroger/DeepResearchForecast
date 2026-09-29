@@ -49,6 +49,16 @@ DEFAULT_PROVIDER_PROBE_LEASE_SECONDS = 30
 # RESEARCH-2: a credential/quota refusal (HTTP 401/402) does not heal in the
 # transport cooldown, so the shared circuit stays open this long instead.
 QUOTA_COOLDOWN_SECONDS = 3600
+# provider_health.last_error of a quota-opened circuit starts with this mark.
+# Until open_until passes, another lane's in-flight transport failure or
+# success (record_provider_transport_failure / record_provider_success) keeps
+# the circuit, its opened_at and its last_error; rows without the mark (every
+# row with RESEARCH_SOURCE_TAXONOMY off) are updated exactly as before.
+QUOTA_ERROR_MARK = "quota refusal: "
+_QUOTA_CIRCUIT_OPEN_SQL = (
+    f"(provider_health.last_error LIKE '{QUOTA_ERROR_MARK}%' "
+    "AND provider_health.open_until > excluded.updated_at)"
+)
 TELEMETRY_MIN_INTERVAL_SECONDS = 1.0
 
 _TELEMETRY_LOCK = threading.Lock()
@@ -706,11 +716,14 @@ def record_provider_transport_failure(provider: str, error: str) -> bool:
                    ON CONFLICT(provider) DO UPDATE SET
                        consecutive_transport_failures=excluded.consecutive_transport_failures,
                        total_transport_failures=provider_health.total_transport_failures+1,
-                       opened_at=excluded.opened_at,
-                       open_until=excluded.open_until,
+                       opened_at=CASE WHEN {q} THEN provider_health.opened_at
+                                 ELSE excluded.opened_at END,
+                       open_until=CASE WHEN {q} THEN provider_health.open_until
+                                  ELSE excluded.open_until END,
                        probe_until=NULL,
-                       last_error=excluded.last_error,
-                       updated_at=excluded.updated_at""",
+                       last_error=CASE WHEN {q} THEN provider_health.last_error
+                                  ELSE excluded.last_error END,
+                       updated_at=excluded.updated_at""".format(q=_QUOTA_CIRCUIT_OPEN_SQL),
                 (
                     name,
                     consecutive,
@@ -742,7 +755,9 @@ def record_provider_transport_failure(provider: str, error: str) -> bool:
 
 def record_provider_quota_failure(provider: str, error: str) -> None:
     """Open ``provider``'s shared circuit for QUOTA_COOLDOWN_SECONDS after a
-    credential/quota refusal, so every lane skips it (provider_circuit_open).
+    credential/quota refusal, so every lane skips it (provider_circuit_open);
+    its last_error carries QUOTA_ERROR_MARK, so no in-flight transport
+    failure or success closes it early.
 
     Counts ``provider_<name>_not_configured`` for the run and the lane and
     leaves the transport-failure counters alone.  Never raises: a ledger
@@ -767,7 +782,8 @@ def record_provider_quota_failure(provider: str, error: str) -> None:
                        probe_until=NULL,
                        last_error=excluded.last_error,
                        updated_at=excluded.updated_at""",
-                (name, now, now + QUOTA_COOLDOWN_SECONDS, str(error or "")[:500], now),
+                (name, now, now + QUOTA_COOLDOWN_SECONDS,
+                 (QUOTA_ERROR_MARK + str(error or ""))[:500], now),
             )
             _increment(conn, "global", "", f"provider_{name}_not_configured")
             _increment(conn, "lane", _lane_id(), f"provider_{name}_not_configured")
@@ -792,11 +808,11 @@ def record_provider_success(provider: str) -> None:
                    ) VALUES (?, 0, 0, NULL, NULL, NULL, '', ?)
                    ON CONFLICT(provider) DO UPDATE SET
                        consecutive_transport_failures=0,
-                       opened_at=NULL,
-                       open_until=NULL,
+                       opened_at=CASE WHEN {q} THEN provider_health.opened_at ELSE NULL END,
+                       open_until=CASE WHEN {q} THEN provider_health.open_until ELSE NULL END,
                        probe_until=NULL,
-                       last_error='',
-                       updated_at=excluded.updated_at""",
+                       last_error=CASE WHEN {q} THEN provider_health.last_error ELSE '' END,
+                       updated_at=excluded.updated_at""".format(q=_QUOTA_CIRCUIT_OPEN_SQL),
                 (name, time.time()),
             )
     except Exception as exc:

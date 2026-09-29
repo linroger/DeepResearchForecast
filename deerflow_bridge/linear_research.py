@@ -731,31 +731,43 @@ def _source_health_events(tools: Mapping[str, Any], search_events: Mapping[str, 
     ``tools``: :meth:`_Engine._tool_failures` with the taxonomy on;
     ``search_events`` / ``fetch_events``: search_tools / cached_fetch
     ``provider_events()``.  Events: a search credential/quota refusal, a
-    configured search provider replaced by another, a fetch primary whose
-    service failed (not_configured/unavailable; a page's own failure does not
-    count) while fallback providers served pages, and unconfirmed empty
-    searches at 1 in 5 or more of the searches.
+    configured search provider replaced by another, a search provider's
+    per-run call ceiling refusing 1 in 5 or more of the search attempts
+    (searches + budget denials), a fetch primary whose service failed while
+    fallback providers served pages (a credential/quota refusal at any count,
+    an outage at 1 in 5 or more of its attempts; a page's own failure does
+    not count), and unconfirmed empty searches at 1 in 5 or more of the
+    searches.
     """
     events: list[str] = []
     refused = tools.get("search_refused")
     if refused:
         events.append(f"search provider {refused[0]} refused this run ({refused[1]}); "
                       "no further search was possible")
+    attempts = int(tools.get("searches") or 0) + int(tools.get("search_budget") or 0)
     for name, count in sorted(search_events.items()):
-        if not str(name).startswith("substitution:"):
-            continue
-        configured, _, served = str(name)[len("substitution:"):].partition("->")
-        if served:
-            events.append(f"configured search provider {configured} unavailable; {count} searches "
-                          f"served by {served}")
+        kind, _, detail = str(name).partition(":")
+        if kind == "substitution":
+            configured, _, served = detail.partition("->")
+            if served:
+                events.append(f"configured search provider {configured} unavailable; {count} searches "
+                              f"served by {served}")
+        elif kind == "ceiling" and isinstance(count, int) and count and 5 * count >= attempts:
+            events.append(f"search provider {detail} reached its per-run call ceiling; {count} of {attempts} "
+                          "searches refused")
     chain = [name for name in _FETCH_PROVIDER_CHAIN if isinstance(fetch_events.get(name), Mapping)]
     if chain:
-        failures = {cls: entry for cls, entry in fetch_events[chain[0]].items()
+        primary = fetch_events[chain[0]]
+        failures = {cls: entry for cls, entry in primary.items()
                     if cls in ("not_configured", "unavailable") and _event_count(entry)}
+        failed = sum(_event_count(value) for value in failures.values())
+        primary_attempts = sum(_event_count(value) for value in primary.values())
+        # A refused credential stays refused for the run; a few transient
+        # outages among many served pages are routine, not a degradation.
+        broken = "not_configured" in failures or 5 * failed >= primary_attempts
         served = sum(_event_count(fetch_events[name].get("ok")) for name in chain[1:])
-        if failures and served:
+        if failures and broken and served:
             cls, entry = max(failures.items(), key=lambda item: _event_count(item[1]))
-            failed = sum(_event_count(value) for value in failures.values())
             events.append(f"fetch primary {chain[0]} failed {failed} times ({cls}: "
                           f"{entry.get('reason') or 'unknown'}); fallback providers served the pages")
     empty = int(tools.get("search_empty_unconfirmed") or 0)
@@ -4600,21 +4612,26 @@ class _Engine:
         (a fetch of an invalid URL fails without reaching the backend).
 
         With the source taxonomy on the counts come from the tools' outcome
-        classes: budget denials are not failures (they are returned apart,
+        classes: every non-budget outcome is one search/fetch (a latched
+        search refusal, which reserves nothing, included) and budget denials
+        are neither searches/fetches nor failures (they are returned apart,
         with the search refusal, if any)."""
         stats = self.tools.stats()
         outcome_counts = getattr(self.tools, "outcome_counts", None)
         if self.source_taxonomy and callable(outcome_counts):
             counts = outcome_counts()
-            search_failed = sum(int(counts.get(name) or 0) for name in (
-                "search_unavailable", "search_not_configured", "search_empty_unconfirmed"))
-            fetch_failed = int(counts.get("fetch_content") or 0) + int(counts.get("fetch_unavailable") or 0)
+
+            def total(*names: str) -> int:
+                return sum(int(counts.get(name) or 0) for name in names)
+
+            search_failed = total("search_unavailable", "search_not_configured", "search_empty_unconfirmed")
+            fetch_failed = total("fetch_content", "fetch_unavailable")
             refusal = getattr(self.tools, "search_refusal", None)
-            return {"searches": max(int(stats.get("searches") or 0), search_failed), "search_failed": search_failed,
-                    "fetches": max(int(stats.get("fetches") or 0), fetch_failed), "fetch_failed": fetch_failed,
-                    "search_budget": int(counts.get("search_budget") or 0),
-                    "fetch_budget": int(counts.get("fetch_budget") or 0),
-                    "search_empty_unconfirmed": int(counts.get("search_empty_unconfirmed") or 0),
+            return {"searches": search_failed + total("search_ok", "search_no_result"),
+                    "search_failed": search_failed,
+                    "fetches": fetch_failed + total("fetch_ok"), "fetch_failed": fetch_failed,
+                    "search_budget": total("search_budget"), "fetch_budget": total("fetch_budget"),
+                    "search_empty_unconfirmed": total("search_empty_unconfirmed"),
                     "search_refused": refusal() if callable(refusal) else None}
         with self._lock:
             search_failed = self._search_failures

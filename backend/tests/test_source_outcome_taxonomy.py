@@ -16,6 +16,7 @@ import json
 import logging
 import sqlite3
 import sys
+import threading
 import types
 from pathlib import Path
 
@@ -145,6 +146,7 @@ def test_firecrawl_search_classes(monkeypatch, firecrawl_search_env):
         "error": "firecrawl search per-run call ceiling reached (1)", "query": "q",
         "failure_class": "budget", "provider": "firecrawl", "reason": "per_run_call_ceiling"}
     assert calls == []
+    assert st.provider_events() == {"ceiling:firecrawl": 1}
 
 
 def test_firecrawl_search_flag_off_keeps_legacy_bytes(monkeypatch, firecrawl_search_env):
@@ -268,8 +270,11 @@ def test_fetch_class_table():
         assert rg._fetch_reason_is_infra(prefix), prefix
         assert rg._fetch_reason_is_infra(prefix + "_detail"), prefix
     for reason in ("firecrawl_failed_http_503", "firecrawl_failed_readtimeout", "jina_primary_failed_timeouterror",
-                   "research_negative_cache_suppressed", "research_inflight_timeout",
+                   "research_inflight_timeout", "research_budget_exhausted",
                    "request_to_jina_api_failed_connecterror", "jina_api_returned_status_503_upstream",
+                   # The Jina client refusing JINA_API_KEY (credential / credit), not the page.
+                   "jina_api_returned_status_401_name_authenticationrequirederror",
+                   "jina_api_returned_status_402_name_insufficientbalanceerror",
                    "fetch_call_deadline_exceeded",
                    # Every Firecrawl exception ("Error: Firecrawl failed: <class name>").
                    "firecrawl_failed_connecterror", "firecrawl_failed_jsondecodeerror",
@@ -279,10 +284,14 @@ def test_fetch_class_table():
                    "firecrawl_returned_no_page_text", "direct_fallback_http_404", "direct_fallback_http_403",
                    "firecrawl_failed_http_404", "firecrawl_failed_http_403", "firecrawl_failed_http_410",
                    "jina_api_returned_status_422_blocked", "exa_fallback_returned_no_results",
-                   "source_quality_rejected", "invalid_url", "empty"):
+                   "source_quality_rejected", "invalid_url", "empty",
+                   # Only a page's own failure is negative-cached with the flag on, so the
+                   # suppression envelope names a failed page (despite the "research_" prefix).
+                   "research_negative_cache_suppressed", "direct_fallback_http_401"):
         assert not rg._fetch_reason_is_infra(reason), reason
     # cached_fetch keeps a copy of the table (neither module imports the other).
     assert cf._INFRA_FETCH_REASON_PREFIXES == rg._INFRA_FETCH_REASON_PREFIXES
+    assert cf._CONTENT_FETCH_REASON_PREFIXES == rg._CONTENT_FETCH_REASON_PREFIXES
     assert cf._TRANSIENT_FETCH_REASON_RE.pattern == rg._TRANSIENT_FETCH_REASON_RE.pattern
     assert cf._FIRECRAWL_FAILED_PREFIX == rg._FIRECRAWL_FAILED_PREFIX
 
@@ -301,9 +310,12 @@ _FETCH_TEXTS = (
     "Error: Request to Jina API failed: ConnectError: [Errno 61] Connection refused",
     "Error: Jina API returned status 503: upstream",
     "Error: Jina API returned status 422: blocked",
+    'Error: Jina API returned status 402: {"name":"InsufficientBalanceError"}',
+    'Error: Jina API returned status 401: {"name":"AuthenticationRequiredError"}',
     "Error: Exa fallback failed: ReadError",
     "Error: Exa fallback returned no results",
     "Error: direct fallback HTTP 404",
+    "Error: direct fallback HTTP 401",
     "Error: direct fallback failed: ConnectError: x",
     "Error: fetch returned empty_extraction",
     "Error: no web-fetch provider was available",
@@ -312,17 +324,20 @@ _FETCH_TEXTS = (
     json.dumps({"error": "research_negative_cache_suppressed", "tool": "web_fetch"}),
     json.dumps({"status": "already_available", "artifact_id": "a1"}),
     "tiny page",
+    "The request timed out, please reload.",
     "",
 )
 
 
 def test_cached_fetch_classes_agree_with_the_gateway():
-    """cached_fetch's provider-attempt class is the class the tool layer gives the same text."""
+    """cached_fetch's provider-attempt class and its negative-cache decision are
+    the class the tool layer gives the same text."""
     for text in _FETCH_TEXTS:
         reason = rg.ResearchTools._failure_reason(text, rg._json_object(text))
         assert reason is not None, text
         expected = "unavailable" if rg._fetch_reason_is_infra(reason) else "content"
         assert cf._fetch_failure_class(text) == expected, (text, reason)
+        assert cf._is_outage_result(text) is (expected == "unavailable"), (text, reason)
     # A short page that merely mentions a timeout is the page's failure, not a transport one.
     assert cf._fetch_failure_class("The request timed out, please reload.") == "content"
 
@@ -398,6 +413,45 @@ def test_fetch_sentinels_flag_off_keep_legacy_text(tmp_path):
         assert len(backend.calls) == calls
         assert tools.fetch(url, agent_id="K1") == (f"FETCH_FAILED({reason}): this URL already failed in this "
                                                    "run; try another source.")
+
+
+def test_negative_cache_suppression_is_a_page_failure(tmp_path):
+    """With the flag on only a page's own failure is negative-cached, so its
+    suppression envelope is a content failure: FETCH_FAILED, never retried."""
+    backend = _Recorder(json.dumps({"error": "research_negative_cache_suppressed", "tool": "web_fetch",
+                                    "request": "https://www.agency.org/gone", "results": []}))
+    tools = _tools(tmp_path, fetch_fn=backend)
+    first = tools.fetch("https://www.agency.org/gone", agent_id="K1")
+    assert first.startswith("FETCH_FAILED(research_negative_cache_suppressed): page unread; ")
+    again = tools.fetch("https://www.agency.org/gone", agent_id="K2")
+    assert again.startswith("FETCH_FAILED(research_negative_cache_suppressed): this URL already failed")
+    assert len(backend.calls) == 1 and tools.stats()["fetches"] == 1
+    counts = tools.outcome_counts()
+    assert counts["fetch_content"] == 1 and counts["fetch_unavailable"] == 0
+
+
+def test_jina_credential_refusal_is_the_service_failing(tmp_path):
+    for status in (401, 402):
+        backend = _Recorder(f'Error: Jina API returned status {status}: {{"name":"InsufficientBalanceError"}}')
+        tools = _tools(tmp_path / str(status), fetch_fn=backend)
+        text = tools.fetch("https://www.agency.org/report", agent_id="K1")
+        assert text.startswith(f"FETCH_UNAVAILABLE(jina_api_returned_status_{status}_name_insufficient")
+        assert tools.outcome_counts()["fetch_unavailable"] == 1
+
+
+def test_known_failure_class_is_stored_with_the_failure(tmp_path):
+    """The class is written under the lock that records the failure: a
+    concurrent fetch between the two never reads a class-less entry."""
+    tools = _tools(tmp_path)
+    key = rg.canonical_url("https://www.agency.org/slow")
+    tools._remember_failure(key, "fetch_call_deadline_exceeded", transient=False, infra=True)
+    assert tools._known_failure(key, "K2").startswith(
+        "FETCH_UNAVAILABLE(fetch_call_deadline_exceeded): this URL already failed in this run")
+    legacy = _tools(tmp_path / "off", taxonomy=False)
+    legacy._remember_failure(key, "fetch_call_deadline_exceeded", transient=False, infra=True)
+    assert legacy._failure_class == {}
+    assert legacy._known_failure(key, "K2") == ("FETCH_FAILED(fetch_call_deadline_exceeded): this URL already "
+                                                "failed in this run; try another source.")
 
 
 def test_fetch_budget_is_its_own_class(tmp_path):
@@ -480,6 +534,40 @@ def test_counting_fix_flag_off_keeps_partial_failure_events(tmp_path, bridge):
     assert f"{fetches} of {fetches} page fetches failed" in _events(meta)
 
 
+def _taxonomy_tool_failures(tools):
+    """lr._Engine._tool_failures of an engine holding ``tools``, taxonomy on."""
+    engine = types.SimpleNamespace(tools=tools, source_taxonomy=True, _lock=threading.Lock(), _search_failures=0)
+    return lr._Engine._tool_failures(engine)
+
+
+def test_tool_failures_count_every_search_and_fetch(tmp_path):
+    """Latched refusals reserve nothing but are searches; budget denials are
+    neither searches/fetches nor failures (10 served, 1 refusal, 20 latched)."""
+    calls: list = []
+
+    def search(query, n):
+        calls.append(query)
+        if len(calls) > 10:
+            return REFUSAL_402
+        return json.dumps({"query": query, "results": [
+            {"title": "T", "url": f"https://www.agency.org/r{len(calls)}", "content": "c"}]})
+
+    def fetch(url):
+        if url.endswith("/budget"):
+            return json.dumps({"error": "research_budget_exhausted", "tool": "web_fetch", "results": []})
+        return "Error: direct fallback HTTP 404" if url.endswith("/gone") else v3.page_text(url)
+
+    tools = _tools(tmp_path, search_fn=search, fetch_fn=fetch)
+    for i in range(31):
+        tools.search(f"query number {i}", agent_id=f"K{i % 5}")
+    for url in ("https://www.agency.org/page", "https://www.agency.org/gone", "https://www.agency.org/budget"):
+        tools.fetch(url, agent_id="K1")
+    assert len(calls) == 11 and tools.stats()["searches"] == 11 and tools.stats()["fetches"] == 3
+    assert _taxonomy_tool_failures(tools) == {
+        "searches": 31, "search_failed": 21, "fetches": 2, "fetch_failed": 1, "search_budget": 0,
+        "fetch_budget": 1, "search_empty_unconfirmed": 0, "search_refused": ("firecrawl", "http_402")}
+
+
 def test_evidence_unavailable_detail(tmp_path, bridge, monkeypatch):
     _taxonomy(monkeypatch, True)
     rc, meta = _run(tmp_path, bridge, search=_Recorder(REFUSAL_402),
@@ -505,6 +593,13 @@ def test_refusal_mid_run_is_a_degradation_event(tmp_path, bridge, monkeypatch):
     assert "search provider firecrawl refused this run (http_402); no further search was possible" in _events(meta)
     assert sum("market outlook" in q for q in backend_calls) == 1        # latched after the first refusal
     assert meta["source_health"]["search_refused"] == {"provider": "firecrawl", "reason": "http_402"}
+    # The search-failure event counts every search, the latched ones (which reserve nothing) included.
+    counts = meta["source_health"]["tools"]
+    failed = counts["search_unavailable"] + counts["search_not_configured"] + counts["search_empty_unconfirmed"]
+    searches = failed + counts["search_ok"] + counts["search_no_result"]
+    assert counts["search_not_configured"] > 1 and searches > len(backend_calls)
+    assert [e for e in _events(meta) if e.endswith(" searches failed")] in (
+        [], [f"{failed} of {searches} searches failed"])
 
 
 def test_source_events_name_substitution_and_broken_fetch_primary(tmp_path, bridge, monkeypatch):
@@ -557,6 +652,38 @@ def test_source_health_events_thresholds_and_classes():
         "fetch primary jina failed 2 times (unavailable: jina_primary_failed_timeouterror); fallback providers "
         "served the pages"]
     assert lr._source_health_events(base, {}, {"firecrawl": "junk", "jina": {"ok": "junk"}}) == []
+
+
+def test_fetch_primary_event_needs_a_refusal_or_a_failure_rate():
+    """One transient primary timeout among many served pages is routine; a
+    refused credential is reported at any count."""
+    base = {"searches": 10, "search_refused": None}
+    jina_ok = {"ok": {"count": 1, "reason": ""}}
+    one_timeout = {"firecrawl": {"ok": {"count": 99, "reason": ""},
+                                 "unavailable": {"count": 1, "reason": "firecrawl_failed_readtimeout"}},
+                   "jina": jina_ok}
+    assert lr._source_health_events(base, {}, one_timeout) == []
+    # 1 in 5 of the primary's attempts (page failures included) is a broken primary.
+    failing = {"firecrawl": {"ok": {"count": 6, "reason": ""}, "content": {"count": 2, "reason": "x"},
+                             "unavailable": {"count": 2, "reason": "firecrawl_failed_http_503"}},
+               "jina": jina_ok}
+    assert lr._source_health_events(base, {}, failing) == [
+        "fetch primary firecrawl failed 2 times (unavailable: firecrawl_failed_http_503); fallback providers "
+        "served the pages"]
+    refused = {"firecrawl": {"ok": {"count": 99, "reason": ""},
+                             "not_configured": {"count": 1, "reason": "http_402"}},
+               "jina": jina_ok}
+    assert lr._source_health_events(base, {}, refused) == [
+        "fetch primary firecrawl failed 1 times (not_configured: http_402); fallback providers served the pages"]
+
+
+def test_search_ceiling_event():
+    """The Firecrawl per-run search ceiling is a budget outcome (not a failure),
+    reported when it refused 1 in 5 or more of the search attempts."""
+    tools = {"searches": 12, "search_budget": 4, "search_refused": None}
+    assert lr._source_health_events(tools, {"ceiling:firecrawl": 4}, {}) == [
+        "search provider firecrawl reached its per-run call ceiling; 4 of 16 searches refused"]
+    assert lr._source_health_events({**tools, "searches": 30}, {"ceiling:firecrawl": 4}, {}) == []
 
 
 def test_flag_off_engine_meta_has_no_source_health(tmp_path, bridge):
@@ -646,6 +773,73 @@ def test_http_401_disables_and_other_failures_are_classified(monkeypatch, budget
     assert cf._fetch_failure_class("tiny page") == "content"
 
 
+def test_jina_credential_refusal_is_recorded_not_latched(monkeypatch, budget_db):
+    """A Jina 401/402 is a not_configured provider event; only Firecrawl is
+    latched and circuit-opened (spec B.1), so Jina is asked again."""
+    _taxonomy(monkeypatch, True)
+    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+    monkeypatch.delenv("EXA_API_KEY", raising=False)
+    calls: list = []
+
+    async def jina(url):
+        calls.append(url)
+        return 'Error: Jina API returned status 402: {"name":"InsufficientBalanceError"}'
+
+    monkeypatch.setattr(cf, "_jina_delegate_fetch", jina)
+    for url in ("https://www.agency.org/a", "https://www.agency.org/b"):
+        assert asyncio.run(cf._resilient_fetch(url)).startswith("Error: Jina API returned status 402")
+    assert len(calls) == 2 and cf._DISABLED_FETCH_PROVIDERS == {}
+    assert cf.provider_events() == {"jina": {"not_configured": {"count": 2, "reason": "http_402"}}}
+    assert rb.provider_circuit_open("jina") is False
+
+
+def test_quota_refusal_is_the_provider_error_text_only(monkeypatch, budget_db):
+    """A page body that mentions "payment required" (a short paywall page) is
+    the page's failure: no disable, no circuit, a content event."""
+    _taxonomy(monkeypatch, True)
+    calls = _fetch_providers(monkeypatch, "Payment required to read this article. HTTP 402.")
+    asyncio.run(cf._resilient_fetch("https://www.agency.org/paywalled"))
+    asyncio.run(cf._resilient_fetch("https://www.agency.org/paywalled-2"))
+    assert calls["firecrawl"] == 2 and cf._DISABLED_FETCH_PROVIDERS == {}
+    assert set(cf.provider_events()["firecrawl"]) == {"content"}
+    assert rb.provider_circuit_open("firecrawl") is False
+    for provider, text, reason in (
+            ("firecrawl", "Error: Firecrawl failed: payment required / quota exhausted", "http_402"),
+            ("firecrawl", "Error: Firecrawl failed: HTTP 401", "http_401"),
+            ("jina", "Error: Jina API returned status 401: x", "http_401"),
+            ("firecrawl", "Error: Jina API returned status 402: x", ""),
+            ("jina", "Error: Jina API returned status 422: x", ""),
+            ("firecrawl", "Error: direct fallback HTTP 402", "")):
+        assert cf._quota_refusal_reason(provider, text) == reason, (provider, text)
+
+
+def test_quota_circuit_survives_in_flight_transport_failure_and_success(monkeypatch, budget_db):
+    """Another lane's in-flight Firecrawl request finishing after the refusal
+    (a timeout below the threshold, or a success) never closes the quota circuit."""
+    rb.record_provider_quota_failure("firecrawl", "Error: Firecrawl failed: payment required / quota exhausted")
+    rb.record_provider_transport_failure("firecrawl", "Error: Firecrawl failed: ReadTimeout")
+    assert rb.provider_circuit_open("firecrawl") is True
+    rb.record_provider_success("firecrawl")
+    assert rb.provider_circuit_open("firecrawl") is True
+    with sqlite3.connect(budget_db) as conn:
+        last_error = conn.execute("SELECT last_error FROM provider_health WHERE provider='firecrawl'").fetchone()[0]
+        assert last_error.startswith(rb.QUOTA_ERROR_MARK)
+        conn.execute("UPDATE provider_health SET open_until=? WHERE provider='firecrawl'", (1.0,))
+    # Once the quota window passed, a success closes it as before.
+    rb.record_provider_success("firecrawl")
+    assert rb.provider_circuit_open("firecrawl") is False
+    with sqlite3.connect(budget_db) as conn:
+        row = conn.execute("SELECT open_until, last_error FROM provider_health WHERE provider='firecrawl'").fetchone()
+    assert row == (None, "")
+    # A transport-opened circuit (no quota mark) still closes on a success.
+    monkeypatch.setenv("RESEARCH_PROVIDER_FAILURE_THRESHOLD", "2")
+    for _ in range(2):
+        rb.record_provider_transport_failure("jina", "Error: Jina primary failed: ConnectTimeout: x")
+    assert rb.provider_circuit_open("jina") is True
+    rb.record_provider_success("jina")
+    assert rb.provider_circuit_open("jina") is False
+
+
 def test_record_provider_quota_failure_never_raises(monkeypatch, tmp_path):
     monkeypatch.delenv("RESEARCH_BUDGET_DB", raising=False)
     assert rb.record_provider_quota_failure("firecrawl", "HTTP 402") is None
@@ -673,14 +867,19 @@ def test_outages_are_not_negative_cached(monkeypatch, budget_db):
                                 "Error: no web-fetch provider was available",
                                 "Error: Jina API returned status 503: upstream",
                                 "Error: Firecrawl failed: ConnectError",
+                                'Error: Jina API returned status 402: {"name":"InsufficientBalanceError"}',
+                                'Error: Jina API returned status 401: {"name":"AuthenticationRequiredError"}',
                                 json.dumps({"error": "research_budget_exhausted", "tool": "web_fetch",
                                             "results": []}))):
         assert _cached_fetch(f"https://www.agency.org/outage-{i}", outage) == outage
     assert _negative_keys(budget_db) == 0
+    # Page failures, a login-walled page (direct HTTP 401) and a short page that
+    # mentions a timeout included: the tool layer calls each one a content failure.
     for i, gone in enumerate(("Error: direct fallback HTTP 404", "Error: Jina API returned status 422: blocked",
-                              "Error: fetch returned empty_extraction")):
+                              "Error: fetch returned empty_extraction", "Error: direct fallback HTTP 401",
+                              "The request timed out, please reload.")):
         _cached_fetch(f"https://www.agency.org/gone-{i}", gone)
-    assert _negative_keys(budget_db) == 3
+    assert _negative_keys(budget_db) == 5
 
 
 def test_outages_are_negative_cached_with_the_flag_off(monkeypatch, budget_db):
