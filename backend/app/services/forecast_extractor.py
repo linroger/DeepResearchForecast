@@ -622,12 +622,15 @@ def _sync_forecast_narratives(
     headline_before: Any,
     rationale_before: Any,
     summary_before_by_name: Any,
+    context_rows: Any = None,
 ) -> None:
     """REPORT-2：一次概率移动之后，把叙事字段里的旧概率数字同步成 ``out`` 的最终值。
 
     每个移动概率的步骤只同步它自己的 before/after 一次（不在钉骨架处再补一遍：以原始
-    draw 为 before 会双重映射——B 的旧 35% 被改写到 A 的新 35% 上）。REPORT_NARRATIVE_SYNC
-    关闭时直接返回（逐字节复现旧输出）；同步本身失败只告警，绝不丢弃所在步骤的结果。
+    draw 为 before 会双重映射——B 的旧 35% 被改写到 A 的新 35% 上）。``context_rows`` 是
+    文本可能引用、但并非据以写成的情景行（红队评审看着输入预测写自己的行）。
+    REPORT_NARRATIVE_SYNC 关闭时直接返回（逐字节复现旧输出）；同步本身失败只告警，绝不
+    丢弃所在步骤的结果。
     """
     if not _cfg("REPORT_NARRATIVE_SYNC", True):
         return
@@ -637,9 +640,47 @@ def _sync_forecast_narratives(
             headline_before=headline_before,
             rationale_before=rationale_before,
             summary_before_by_name=summary_before_by_name,
+            context_rows=context_rows,
         )
     except Exception as exc:  # noqa: BLE001 — 增强项：失败保留原文、不影响概率
         logger.warning(f"叙事概率同步失败（忽略，保留原文）: {exc}")
+
+
+_NARRATIVE_SYNC_QUALITY_KEYS = frozenset({
+    "narrative_sync", "narrative_sync_skipped", "narrative_sync_blocked", "narrative_sync_dropped",
+})
+
+
+def _llm_forecast_view(forecast: Dict[str, Any]) -> Dict[str, Any]:
+    """REPORT-2：交给红队评审 / 事前验尸提示词的预测对象，去掉叙事同步的簿记。
+
+    同步把改写前的原文存进 headline_detail / confidence_rationale_detail / 情景
+    summary_detail，并把编辑日志写进 quality.narrative_sync*——原样序列化进提示词会把
+    刚被同步掉的旧数字重新交给评审（它可能照抄进被采纳的 confidence_rationale），还白费
+    提示词 token。confidence_rationale_detail 只在不是兜底情景路径写下时才去掉（该路径
+    同时置 residual_scenario_added，且在旗标关闭时也存在）。旗标关闭时这些同步键都不存在，
+    副本与原对象键序、取值完全相同，提示词逐字节不变。
+    """
+    dropped = {"headline_detail"}
+    if not forecast.get("residual_scenario_added"):
+        dropped.add("confidence_rationale_detail")
+    view = {key: value for key, value in forecast.items() if key not in dropped}
+    quality = view.get("quality")
+    if isinstance(quality, dict) and not _NARRATIVE_SYNC_QUALITY_KEYS.isdisjoint(quality):
+        kept = {key: value for key, value in quality.items()
+                if key not in _NARRATIVE_SYNC_QUALITY_KEYS}
+        if kept:
+            view["quality"] = kept
+        else:
+            del view["quality"]
+    scenarios = view.get("scenarios")
+    if isinstance(scenarios, list):
+        view["scenarios"] = [
+            {key: value for key, value in row.items() if key != "summary_detail"}
+            if isinstance(row, dict) else row
+            for row in scenarios
+        ]
+    return view
 
 
 def _bad_percentage_allocations(text: Any) -> List[Dict[str, Any]]:
@@ -3814,7 +3855,8 @@ def self_critique_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
             return forecast
         raw = llm.chat_json(
             messages=[{"role": "user",
-                       "content": _CRITIQUE_INSTRUCTIONS + "\n\n[预测对象]\n" + _json.dumps(forecast, ensure_ascii=False)}],
+                       "content": _CRITIQUE_INSTRUCTIONS + "\n\n[预测对象]\n"
+                       + _json.dumps(_llm_forecast_view(forecast), ensure_ascii=False)}],
             temperature=0.2,
             max_tokens=2048,
         )
@@ -3881,7 +3923,9 @@ def self_critique_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
             )
         # REPORT-2：headline 沿用输入（对照输入情景）；采纳的评审 rationale 对照评审原始行
         # （兜底情景补入后、归一前），未采纳则对照输入行，被兜底模板替换时不动；summary 出自
-        # 评审行，对照同名评审行本身写下的概率。
+        # 评审行，对照同名评审行本身写下的概率。评审是看着输入预测写的，其文本可能引用输入值
+        # （"Bear's 30%"），故输入行作 context：某旧值若在输入里属于另一情景即视为歧义不改写
+        # （headline / 未采纳 rationale 本就对照输入行，context 对它们不增加任何跳过）。
         if residual_added:
             rationale_before = None
         elif raw.get("confidence_rationale"):
@@ -3893,6 +3937,7 @@ def self_critique_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
             headline_before=forecast.get("scenarios"),
             rationale_before=rationale_before,
             summary_before_by_name=critique_scenarios,
+            context_rows=forecast.get("scenarios"),
         )
         if audit_scenario_contract(out).get("valid") is not True:
             return forecast
@@ -3988,7 +4033,7 @@ def premortem_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
         raw = llm.chat_json(
             messages=[{"role": "user",
                        "content": _PREMORTEM_INSTRUCTIONS + "\n\n[预测对象]\n"
-                       + _json.dumps(forecast, ensure_ascii=False)}],
+                       + _json.dumps(_llm_forecast_view(forecast), ensure_ascii=False)}],
             temperature=0.3,
             max_tokens=1024,
         )

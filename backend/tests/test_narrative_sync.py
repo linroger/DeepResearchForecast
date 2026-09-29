@@ -134,6 +134,28 @@ _QUANTITY_AFTER = _rows(("A", 0.35), ("D", 0.08), ("C", 0.57))
     "a 40% tariff on imports", "a 40% import tariff", "40% of respondents", "占全球装机的40%",
     "分别占约40%", "比例为40%", "增速放缓至40%", "涨幅达40%", "prices rose by 40%",
     "shares up 13%",
+    # CJK change verbs (a change amount, not a level: "降至" / "降为" stay probabilities)
+    "成本降低40%", "价格下降40%", "价格下降约40%", "成本下降了40%", "效率提高40%", "需求上升40%",
+    "电价下滑40%", "预算削减40%", "成本缩减40%", "股价暴跌40%", "股价下跌达40%", "价格涨40%",
+    "capex跌40%", "PUE下降40%", "产能翻番、成本下探40%",
+    # English change and comparative words after the number
+    "a 40% decline in capex", "a 40% drop in prices", "a 40% increase in demand",
+    "a 40% reduction in emissions", "costs 40% lower by 2030", "40% higher power prices",
+    "40% cheaper batteries", "40% faster build-out", "doubling, then 40% more",
+    # English change verbs before the number
+    "capex cut 40%", "capex cut by 40%", "emissions reduced 40%", "prices slashed 40%",
+    # CJK "X%的<noun>" shares
+    "40%的降幅", "40%的涨幅", "40%的增量", "约40%的装机", "40%的电力需求", "40%的数据中心",
+    "40%的电价涨幅",
+    # tariffs
+    "关税40%", "40%关税", "上调关税至40%", "tariff of 40%",
+    # metrics
+    "WACC 13%", "WACC of 13%", "ROE 40%", "毛利40%", "净利润40%", "EBITDA margin 40%",
+    "40% EBITDA margin", "13% inflation", "13% unemployment", "unemployment at 13%",
+    "13% interest", "13% vacancy", "40% utilization", "40% utilisation", "40% efficiency",
+    "40% capacity factor", "capacity factor of 40%", "40% load factor", "40%利用率", "40%负荷率",
+    "yields of 13%", "discount rate 13%", "40% YoY", "40% of capex",
+    "roughly 40% of global capacity",
 ])
 def test_quantity_figures_are_never_rewritten(text):
     new_text, edits, skipped = sync_probability_numbers(text, _QUANTITY_BEFORE, _QUANTITY_AFTER)
@@ -154,6 +176,15 @@ def test_quantity_figures_are_never_rewritten(text):
     ("Escalation (40%): tariffs rise", "Escalation (35%): tariffs rise"),
     ("Bear case at 13%", "Bear case at 8%"),
     ("Bear (40%) over Bull (47%)", "Bear (35%) over Bull (57%)"),
+    # a new level after a move verb is a probability, not a change amount
+    ("Bear is cut to 13%", "Bear is cut to 8%"),
+    ("A raised to 40% on grid evidence", "A raised to 35% on grid evidence"),
+    ("基准情景概率降至40%", "基准情景概率降至35%"),
+    ("基准情景概率降为40%", "基准情景概率降为35%"),
+    ("40%的可能性", "35%的可能性"),
+    ("以40%的发生概率领先", "以35%的发生概率领先"),
+    ("有40%的把握", "有35%的把握"),
+    ("a 40% likelihood of a soft landing", "a 35% likelihood of a soft landing"),
 ])
 def test_probabilities_next_to_quantity_words_are_still_synced(text, expected):
     assert sync_probability_numbers(text, _QUANTITY_BEFORE, _QUANTITY_AFTER)[0] == expected
@@ -275,7 +306,18 @@ def test_decimal_context():
     assert sync_probability_numbers("基准情景（概率0.40）", before, after)[0] == "基准情景（概率0.35）"
     assert sync_probability_numbers("A at probability .40", before, after)[0] == "A at probability .35"
     assert sync_probability_numbers("A (p=0.40)", before, after)[0] == "A (p=0.35)"
-    for untouched in ("costs 0.40 USD", "概率。成本0.40", "概率0.40%", "概率10.40", "概率0.405"):
+    assert sync_probability_numbers("A (p = 0.40)", before, after)[0] == "A (p = 0.35)"
+    assert (sync_probability_numbers("概率约0.40。成本0.40美元", before, after)[0]
+            == "概率约0.35。成本0.40美元")
+    for untouched in ("costs 0.40 USD", "概率。成本0.40", "概率0.40%", "概率10.40", "概率0.405",
+                      # an English sentence stop ends the trigger's reach
+                      "The probability. Unit cost 0.40", "probability. unit cost 0.40",
+                      # money next to the number
+                      "probability 0.40 USD", "概率约0.40美元", "概率约0.40元", "probability $0.40",
+                      # probability-weighted figures
+                      "概率加权成本0.40", "probability-weighted 0.40",
+                      # statistical p-values
+                      "(p=0.40) significant", "p=0.40，差异不显著", "p = .40 (p-value)"):
         assert sync_probability_numbers(untouched, before, after) == (untouched, [], {})
 
 
@@ -446,11 +488,86 @@ def test_summary_blocks_are_keyed_by_scenario_name():
 
     move(out, step2, step3)                  # Bear 40→30; 40 is Bear's alone by now
     assert out["scenarios"][0]["summary"] == "Bear (40%) ties Base (40%)."
-    assert out["quality"]["narrative_sync_skipped"] == {"ambiguous": 4}
+    # Step 2 (Bear 35→40) also saw both stale 40% tokens as foreign: Bear's new value,
+    # which Bear did not hold before that move.
+    assert out["quality"]["narrative_sync_skipped"] == {"ambiguous": 4, "foreign": 2}
     assert "narrative_sync" not in out["quality"]
 
     move(unblocked, step2, step3)
     assert unblocked["scenarios"][0]["summary"] == "Bear (30%) ties Base (30%)."
+
+
+def test_foreign_value_in_a_probability_slot_stays_blocked():
+    """'a 25% chance of a cut' was written against no scenario.  Once a move makes 25%
+    Bear's value, the next move must not treat that token as Bear's."""
+    step0 = _rows(("Base", 0.40), ("Bear", 0.30), ("Bull", 0.20), ("Other", 0.10))
+    step1 = _rows(("Base", 0.40), ("Bear", 0.25), ("Bull", 0.20), ("Other", 0.15))
+    step2 = _rows(("Base", 0.40), ("Bear", 0.20), ("Bull", 0.20), ("Other", 0.20))
+    out = {"headline": "Bear (30%); markets price a 25% chance of a cut; capex fell 25%."}
+
+    _step(out, step0, step1)
+    assert out["headline"] == "Bear (25%); markets price a 25% chance of a cut; capex fell 25%."
+    assert out["quality"]["narrative_sync_skipped"] == {"foreign": 1}   # the quantity is guarded
+    assert out["quality"]["narrative_sync_blocked"] == {"headline": [25]}
+    unblocked = copy.deepcopy(out)
+    del unblocked["quality"]["narrative_sync_blocked"]
+
+    _step(out, step1, step2)                 # Bear 25→20: every 25% is left alone
+    assert out["headline"] == "Bear (25%); markets price a 25% chance of a cut; capex fell 25%."
+    assert out["quality"]["narrative_sync_skipped"] == {"foreign": 1, "ambiguous": 3}
+
+    _step(unblocked, step1, step2)                             # the record is what guards it
+    assert unblocked["headline"] == (
+        "Bear (20%); markets price a 20% chance of a cut; capex fell 25%.")
+
+
+def test_a_guarded_foreign_quantity_is_not_recorded():
+    """A foreign number a range or quantity guard skips is skipped again at every later
+    step, so it never blocks the scenario that now holds its value."""
+    step0 = _rows(("Base", 0.40), ("Bear", 0.30), ("Bull", 0.20), ("Other", 0.10))
+    step1 = _rows(("Base", 0.40), ("Bear", 0.25), ("Bull", 0.20), ("Other", 0.15))
+    step2 = _rows(("Base", 0.40), ("Bear", 0.20), ("Bull", 0.20), ("Other", 0.20))
+    out = {"headline": "Bear (30%); capex fell 25%; EV share 15–25%."}
+
+    _step(out, step0, step1)
+    assert out["headline"] == "Bear (25%); capex fell 25%; EV share 15–25%."
+    assert set(out["quality"]) == {"narrative_sync"}          # nothing skipped or blocked
+
+    _step(out, step1, step2)
+    assert out["headline"] == "Bear (20%); capex fell 25%; EV share 15–25%."
+    assert "narrative_sync_blocked" not in out["quality"]
+    assert out["quality"]["narrative_sync_skipped"] == {"quantity": 1, "range": 1}
+
+
+def test_context_rows_block_values_another_scenario_held():
+    """A critic's text written against its own rows may cite the input it saw: a value
+    the input gave another scenario is ambiguous; one the input never held is synced.
+    Context rows equal to the BEFORE rows add nothing."""
+    input_rows = _rows(("Base", 0.40), ("Bear", 0.30), ("Bull", 0.20), ("Other", 0.10))
+    critic_rows = _rows(("Base", 0.35), ("Bear", 0.20), ("Bull", 0.30), ("Other", 0.10))
+    final_rows = _rows(("Base", 0.3684), ("Bear", 0.2105), ("Bull", 0.3158), ("Other", 0.1053))
+    text = "Bear's 30% ignored grid relief: Bear cut to 20%, Bull raised to 30%, Base to 35%."
+
+    out = {"confidence_rationale": text, "scenarios": copy.deepcopy(final_rows)}
+    synchronize_forecast_narratives(out, rationale_before=critic_rows, context_rows=input_rows)
+    assert out["confidence_rationale"] == text.replace("Base to 35%", "Base to 37%")
+    assert out["quality"]["narrative_sync_skipped"] == {"ambiguous": 3}
+    assert out["quality"]["narrative_sync_blocked"] == {"confidence_rationale": [20, 30]}
+
+    unguarded = {"confidence_rationale": text, "scenarios": copy.deepcopy(final_rows)}
+    synchronize_forecast_narratives(unguarded, rationale_before=critic_rows)
+    assert unguarded["confidence_rationale"] == (      # what the input context prevents
+        "Bear's 32% ignored grid relief: Bear cut to 21%, Bull raised to 32%, Base to 37%.")
+
+    for before, after, headline in (
+            (FFE1_BEFORE, FFE1_AFTER, FFE1_HEADLINE),
+            (input_rows, final_rows, "Base (40%) leads; Bear 30%, Bull 20%, Other 10%.")):
+        plain = {"headline": headline, "scenarios": copy.deepcopy(after)}
+        with_context = copy.deepcopy(plain)
+        synchronize_forecast_narratives(plain, headline_before=before)
+        synchronize_forecast_narratives(with_context, headline_before=before, context_rows=before)
+        assert with_context == plain
+        assert plain["headline"] != headline
 
 
 def test_many_sentences_resolve_each_token_to_its_own_sentence():
@@ -714,6 +831,180 @@ def test_pooling_then_critique_keeps_an_ambiguous_value_blocked(monkeypatch):
     assert out["headline"] == "Base (40%) vs Bear (40%); Other 35%."
     assert out["headline_detail"] == "Base (40%) vs Bear (40%); Other 20%."
     assert out["quality"]["narrative_sync_skipped"] == {"ambiguous": 4}
+
+
+def test_critic_rationale_citing_input_values_is_not_rewritten():
+    """A critic swaps Bear and Bull and writes 'Bear's 30%' about the INPUT Bear while
+    its own Bull is 30%.  Normalisation moves every value (the rows sum to 0.95), so
+    without the input rows as context the sync would print 'Bear's 32%', a value Bear
+    never had.  A value the input gave another scenario is ambiguous in every
+    critic-written field (acceptance 2); a value the input never held is still synced."""
+    forecast = {
+        "headline": "Base (40%) leads; Bear 30%, Bull 20%, Other 10%.",
+        "horizon": "2030",
+        "confidence": "medium",
+        "confidence_rationale": "Spine view.",
+        "scenarios": _criteria(_rows(("Base", 0.40), ("Bear", 0.30), ("Bull", 0.20),
+                                     ("Other / Status Quo", 0.10))),
+    }
+    rationale = ("Bear's 30% ignored grid relief, so Bear is cut to 20% and Bull raised to 30%; "
+                 "Base trimmed to 35%.")
+    critique = {
+        "confidence": "medium",
+        "confidence_rationale": rationale,
+        "scenarios": _criteria([
+            {"name": "Base", "probability": 0.35, "summary": "Base trimmed to 35%."},
+            {"name": "Bear", "probability": 0.20, "summary": "Bear cut to 20%."},
+            {"name": "Bull", "probability": 0.30, "summary": "Bull (30%) takes Bear's former 30%."},
+            {"name": "Other / Status Quo", "probability": 0.10, "summary": "Residual paths (10%)."},
+        ]),
+    }
+
+    out = FE.self_critique_forecast(forecast, FakeLLMClient(json_responses=[critique]))
+
+    assert out["critiqued"] is True
+    assert {row["name"]: row["probability"] for row in out["scenarios"]} == {
+        "Base": 0.3684, "Bear": 0.2105, "Bull": 0.3158, "Other / Status Quo": 0.1053}
+    # The headline was written against the input rows: every value is attributable.
+    assert out["headline"] == "Base (37%) leads; Bear 21%, Bull 32%, Other 11%."
+    # 30% (input Bear, critic Bull) and 20% (input Bull, critic Bear) stay; 35% is synced.
+    assert out["confidence_rationale"] == rationale.replace("trimmed to 35%", "trimmed to 37%")
+    assert "Bear's 30%" in out["confidence_rationale"]
+    assert out["confidence_rationale_detail"] == rationale
+    assert [row["summary"] for row in out["scenarios"]] == [
+        "Base trimmed to 37%.",
+        "Bear cut to 20%.",                  # precision first: the input Bull also held 20%
+        "Bull (30%) takes Bear's former 30%.",
+        "Residual paths (11%).",             # the input held 10% under the same name
+    ]
+    quality = out["quality"]
+    assert quality["narrative_sync_skipped"] == {"ambiguous": 6}
+    assert quality["narrative_sync_blocked"] == {
+        "confidence_rationale": [20, 30], "summary:bear": [20], "summary:bull": [30]}
+    assert [edit["field"] for edit in quality["narrative_sync"]] == [
+        "headline"] * 4 + ["confidence_rationale", "scenario[0].summary", "scenario[3].summary"]
+
+
+def test_pooling_then_critique_keeps_a_foreign_value_blocked(monkeypatch):
+    """Pooling makes Bear 25%, the value of an unrelated '25% chance of an early rate
+    cut' in draws[0]'s headline; the critique that then moves Bear 25→20 must not
+    rewrite that market-implied probability."""
+    monkeypatch.setattr(Config, "REPORT_SPINE_SELFCONSISTENCY_K", 2, raising=False)
+    draw0 = {"headline": "Base (40%) leads; markets price a 25% chance of an early rate cut.",
+             "horizon": "2030", "confidence": "medium", "confidence_rationale": "Spine view.",
+             "scenarios": _criteria(_rows(("Base", 0.40), ("Bear", 0.30), ("Bull", 0.20),
+                                          ("Other / Status Quo", 0.10)))}
+    draw1 = copy.deepcopy(draw0)
+    for row, probability in zip(draw1["scenarios"], (0.40, 0.20, 0.20, 0.20), strict=True):
+        row["probability"] = probability
+
+    spine = FE.derive_forecast_spine(FakeLLMClient(json_responses=[draw0, draw1]),
+                                     central_question="q")
+    assert {row["name"]: row["probability"] for row in spine["scenarios"]} == {
+        "Base": 0.40, "Bear": 0.25, "Bull": 0.20, "Other / Status Quo": 0.15}
+    assert spine["headline"] == draw0["headline"]
+    assert spine["quality"]["narrative_sync_skipped"] == {"foreign": 1}
+    assert spine["quality"]["narrative_sync_blocked"] == {"headline": [25]}
+    unblocked = copy.deepcopy(spine)
+    del unblocked["quality"]["narrative_sync_blocked"]
+
+    critique = {"confidence": "medium", "scenarios": _criteria(_rows(
+        ("Base", 0.40), ("Bear", 0.20), ("Bull", 0.20), ("Other / Status Quo", 0.20)))}
+    out = FE.self_critique_forecast(spine, FakeLLMClient(json_responses=[copy.deepcopy(critique)]))
+
+    assert out["critiqued"] is True
+    assert out["scenarios"][1]["probability"] == 0.20
+    assert out["headline"] == draw0["headline"]
+    assert out["quality"]["narrative_sync_skipped"] == {"foreign": 1, "ambiguous": 1}
+
+    rewritten = FE.self_critique_forecast(unblocked, FakeLLMClient(json_responses=[critique]))
+    assert "a 20% chance of an early rate cut" in rewritten["headline"]   # what the record stops
+
+
+def _pooled_critique():
+    return {"confidence": "medium", "scenarios": _criteria([
+        {"name": "基准", "probability": 0.45, "summary": "基准（45%）。"},
+        {"name": "下行", "probability": 0.40, "summary": "下行（40%）。"},
+        {"name": "其它", "probability": 0.10, "summary": "兜底。"}])}
+
+
+_POOLED_PREMORTEM_REPLY = {"underweighted_scenario": "下行", "missed_signals": ["并网延迟"],
+                           "overconfident_scenario": "基准"}
+
+
+def _pooled_prompts():
+    """K=2 pooling → critique → pre-mortem; returns (critique prompt, pre-mortem prompt, out)."""
+    spine = FE.derive_forecast_spine(FakeLLMClient(json_responses=_pooling_draws()),
+                                     central_question="q")
+    critic = FakeLLMClient(json_responses=[_pooled_critique()])
+    critiqued = FE.self_critique_forecast(spine, critic)
+    premortem = FakeLLMClient(json_responses=[dict(_POOLED_PREMORTEM_REPLY)])
+    out = FE.premortem_forecast(critiqued, premortem)
+    return critic.calls[0]["messages"][0]["content"], premortem.calls[0]["messages"][0]["content"], out
+
+
+def test_critique_and_premortem_prompts_omit_sync_bookkeeping(monkeypatch):
+    """The originals and the edit log the sync keeps never reach the LLM: they would
+    hand the critic the stale numbers the sync just removed, and cost prompt tokens."""
+    monkeypatch.setattr(Config, "REPORT_PREMORTEM", True, raising=False)
+    monkeypatch.setattr(Config, "REPORT_SPINE_SELFCONSISTENCY_K", 2, raising=False)
+
+    critique_prompt, premortem_prompt, out = _pooled_prompts()
+
+    assert out["headline_detail"] == _pooling_draws()[0]["headline"]
+    assert out["critiqued"] is True and "premortem" in out
+    assert len(out["quality"]["narrative_sync"]) > 5          # pooling and critique both synced
+    for prompt in (critique_prompt, premortem_prompt):
+        assert "_detail" not in prompt
+        assert "narrative_sync" not in prompt
+        assert "60%" not in prompt and "0.60" not in prompt   # draws[0]'s stale values
+        payload = json.loads(prompt.split("[预测对象]\n", 1)[1])
+        assert "quality" not in payload
+        assert payload["headline"].startswith("基准情景（")
+    assert json.loads(critique_prompt.split("[预测对象]\n", 1)[1])["headline"] == (
+        "基准情景（50%）领先，下行情景（40%）次之，兜底10%。")
+
+
+def test_premortem_prompt_keeps_the_legacy_residual_rationale_detail(monkeypatch):
+    """confidence_rationale_detail written by the residual path (flag on or off) is legacy
+    prompt content and stays; only the sync's own bookkeeping is dropped."""
+    monkeypatch.setattr(Config, "REPORT_PREMORTEM", True, raising=False)
+    forecast = {
+        "headline": "Path A 80%, Path B 20%.",
+        "horizon": "2030",
+        "confidence": "medium",
+        "confidence_rationale": "Path A 80%.",
+        "scenarios": _criteria(_rows(("Path A", 0.80), ("Path B", 0.20))),
+    }
+    critique = {"confidence_rationale": "Path A cut to 55%.",
+                "scenarios": _criteria(_rows(("Path A", 0.55), ("Path B", 0.45)))}
+    reply = {"underweighted_scenario": "Path B", "missed_signals": ["x"],
+             "overconfident_scenario": "Path A"}
+    for flag in (True, False):
+        monkeypatch.setattr(Config, "REPORT_NARRATIVE_SYNC", flag, raising=False)
+        critiqued = FE.self_critique_forecast(copy.deepcopy(forecast),
+                                              FakeLLMClient(json_responses=[critique]))
+        assert critiqued["residual_scenario_added"] is True
+        assert ("headline_detail" in critiqued) is flag
+        premortem = FakeLLMClient(json_responses=[dict(reply)])
+        FE.premortem_forecast(critiqued, premortem)
+        prompt = premortem.calls[0]["messages"][0]["content"]
+        assert '"confidence_rationale_detail": "Path A cut to 55%."' in prompt
+        assert "headline_detail" not in prompt
+
+
+def test_prompts_are_byte_identical_with_the_sync_off(monkeypatch):
+    """Flag off: the critique and pre-mortem prompts equal the pre-REPORT-2 construction
+    (json.dumps of the forecast itself)."""
+    monkeypatch.setattr(Config, "REPORT_NARRATIVE_SYNC", False, raising=False)
+    monkeypatch.setattr(Config, "REPORT_PREMORTEM", True, raising=False)
+    monkeypatch.setattr(Config, "REPORT_SPINE_SELFCONSISTENCY_K", 2, raising=False)
+    flag_off = _pooled_prompts()
+    monkeypatch.setattr(FE, "_llm_forecast_view", lambda forecast: forecast)
+    legacy = _pooled_prompts()
+
+    assert flag_off[:2] == legacy[:2]
+    assert json.dumps(flag_off[2], ensure_ascii=False) == json.dumps(legacy[2], ensure_ascii=False)
 
 
 def test_premortem_and_pooling_flag_off_match_the_unsynced_path(monkeypatch):

@@ -16,14 +16,18 @@ grammar ("基准情景", "Base") because it keys on the old value itself.
 Precision first — a number is rewritten only when
 
 * its value (integer percent, or a two-decimal fraction next to a probability
-  word) equals the old probability of exactly one scenario whose value changed;
+  word and not next to a currency, a "weighted" or a significance test) equals
+  the old probability of exactly one scenario whose value changed, and no row
+  the text may also cite (the input forecast a critic saw) holds it under
+  another scenario's name;
 * that value is not one an earlier sync of the same field already had to leave
   unattributed (see below);
 * it is not a range endpoint or one end of a stated move ("30–40%",
   "from 55% to 50%", "由40%下调至35%");
 * it is not a quantity ("52% share", "增长40%", "占约40%", "基率仅13%",
-  "13%兑现率", "EV share above 40%", "40% of respondents") or a signed change
-  ("+10%", "−5%");
+  "13%兑现率", "EV share above 40%", "40% of respondents", "成本下降40%",
+  "a 40% decline", "40% cheaper", "约40%的装机", "关税40%", "WACC 13%") or a
+  signed change ("+10%", "−5%");
 * it does not take part in a sum statement ("合计50%" and the addends that make
   it up, "40% + 35%").
 
@@ -34,11 +38,13 @@ scenario's new number and another's old number never cascades.
 Moves chain (K>1 pooling, then the critique, then the pre-mortem), and each step
 syncs only its own before/after.  A number one step leaves stale because it
 cannot be attributed to a single scenario — its old value was shared by two
-scenarios ("ambiguous"), or belonged to a scenario that no longer pairs by name
-("unpaired") — would look attributable to the next step, which would then write
-another scenario's new value over it.  So every such value is recorded per field
-in ``quality.narrative_sync_blocked`` and stays unattributable in that field for
-all later steps.  No LLM, no IO.
+scenarios ("ambiguous"), belonged to a scenario that no longer pairs by name
+("unpaired"), or was held by no scenario before the move but by one after it
+("foreign": "a 25% chance of an early rate cut" once pooling makes Bear 25%) —
+would look attributable to the next step, which would then write another
+scenario's new value over it.  So every such value is recorded per field in
+``quality.narrative_sync_blocked`` and stays unattributable in that field for all
+later steps.  No LLM, no IO.
 """
 
 from __future__ import annotations
@@ -66,11 +72,22 @@ _DECIMAL_RE = re.compile(r"(?<![\d.])(?P<num>0?\.[0-9]{2})(?!\d)(?!\s*[%％])")
 # A decimal counts only when one of these words ends at most 12 characters before
 # it, with no sentence stop in between ("概率约0.40", "probability of 0.40").
 _DECIMAL_TRIGGER_RE = re.compile(
-    r"概率|probabilit(?:y|ies)|prob\.|(?<![A-Za-z])p\s*=", re.I
+    r"概率|probabilit(?:y|ies)|prob\.|(?P<p_value>(?<![A-Za-z])p\s*=)", re.I
 )
 _DECIMAL_TRIGGER_WINDOW = 12
 _DECIMAL_TRIGGER_MAX_LEN = 16
-_GAP_STOP_RE = re.compile(r"[。；;！？!?\n]")
+# A '.' between digits is a decimal point, any other '.' ends an English sentence.
+_GAP_STOP_RE = re.compile(r"[。；;！？!?\n]|(?<!\d)\.(?!\d)")
+# Even after a trigger, a decimal is a money or weighted figure when a currency sits
+# next to it ("概率约0.40美元", "probability $0.40") or "weighted" lies in the gap
+# ("概率加权成本0.40", "probability-weighted 0.40"), and a "p=" is a statistical
+# p-value when significance follows ("(p=0.13) significant").
+_DECIMAL_CURRENCY_BEFORE_RE = re.compile(r"[$¥￥€]\s*$")
+_DECIMAL_CURRENCY_AFTER_RE = re.compile(
+    r"\s*(?:USD|EUR|RMB|CNY|美元|欧元|日元|人民币|元|[$¥￥€])", re.I
+)
+_DECIMAL_WEIGHTED_RE = re.compile(r"加权|weighted", re.I)
+_P_VALUE_SIGNIFICANCE_RE = re.compile(r"[^\n]{0,16}?(?:significan|显著|p-value|p值)", re.I)
 
 # Range guard: the token is joined to another number by a dash, tilde, 至/到 or "to"
 # (BEFORE searched at the end of a lookback slice, AFTER matched at the token end).
@@ -96,41 +113,55 @@ _RANGE_LOOKBACK_CHARS = 16
 # it is one of the probability words 概率 / 几率 / 或然率.
 _RATE_CJK = r"(?<![概几然])率"
 # AFTER: a quantity word starts within 8 characters after the token (matched from
-# the token end): "52% share", "40%增长", "20%的市占".
+# the token end): "52% share", "40%增长", "20%的市占", "40%关税".
 _QUANTITY_AFTER_RE = re.compile(
     r"[^\n]{0,8}?(?:(?<![A-Za-z])(?:share|growth|target|CAGR|YoY|margin|penetration|"
-    r"of GDP)|占比|份额|增长|增速|渗透率|同比|目标|市占|利率|税率)",
+    r"of GDP)|占比|份额|增长|增速|渗透率|同比|目标|市占|利率|税率|降幅|涨幅|增幅|增量|关税)",
     re.I,
 )
-# TAIL: a threshold word, a rate noun or "of <quantity>" directly after the token
-# ("40%以上", "13%兑现率", "13% CAGR", "a 40% import tariff", "40% of respondents").
-# Only adjacency counts, so "Soft landing (40%) — rate cuts" keeps its probability, and
-# "40% of the probability mass" stays a probability.
+# TAIL: a threshold word, a rate noun, a change or comparative word, a measured
+# metric, "of <quantity>" or "的<noun>" directly after the token ("40%以上",
+# "13%兑现率", "13% CAGR", "a 40% import tariff", "a 40% decline", "40% cheaper",
+# "13% inflation", "40% capacity factor", "40% of respondents", "约40%的装机").
+# Only adjacency counts, so "Soft landing (40%) — rate cuts" keeps its probability,
+# and "40% of the probability mass" / "40%的概率" / "40%的发生概率" / "40%的可能性"
+# stay probabilities.
 _QUANTITY_TAIL_RE = re.compile(
     r"\s*(?:以上|以下|以内|或以上|或以下|[一-鿿]{0,5}?" + _RATE_CJK
-    + r"|(?:or|and)\s+(?:more|less|higher|lower|above|below)(?![A-Za-z])"
+    + r"|的(?!\s*(?:可能|机会|把握)|[^\s\d%％，。；,;、]{0,4}?(?:概率|几率|或然))"
+    r"|(?:or|and)\s+(?:more|less|higher|lower|above|below)(?![A-Za-z])"
     r"|(?:[A-Za-z-]+\s+)?(?:rates?|tariffs?|CAGR|IRR)(?![A-Za-z])"
+    r"|(?:decline[sd]?|drops?|increases?|reductions?|rises?|falls?|gains?|cuts?|jumps?"
+    r"|surges?|lower|higher|cheaper|faster|slower|more|less|inflation|unemployment"
+    r"|interest|vacancy|utili[sz]ation|efficiency|(?:capacity|load)\s+factor)(?![A-Za-z])"
     r"|of(?![A-Za-z])(?!\s+(?:the\s+)?(?:probabilit|likelihood|chance|odds)))",
     re.I,
 )
 # BEFORE: a quantity word lies within the 6 characters before the token
-# ("同比增长20%", "利润率13%", "管道兑现基率仅13%", "按历史基率13%").
+# ("同比增长20%", "利润率13%", "管道兑现基率仅13%", "按历史基率13%", "上调关税至40%").
 _QUANTITY_BEFORE_WINDOW = 6
 _QUANTITY_BEFORE_RE = re.compile(
-    r"增长|增速|占比|份额|同比|" + _RATE_CJK + r"|(?<![A-Za-z])(?:growth|share|rate|tariff)",
+    r"增长|增速|占比|份额|同比|关税|" + _RATE_CJK
+    + r"|(?<![A-Za-z])(?:growth|share|rate|tariff)",
     re.I,
 )
 # LEAD: the token is led by a comparator, by 占, or by a quantity or change word,
 # with only linking words and hedges in between ("EV share above 40%", "≥40%的装机",
 # "占约40%", "占全球装机的40%", "the base rate is 13%", "CAGR约13%", "margin of about
-# 13%", "通胀约13%", "涨幅达40%", "prices rose by 40%").  Adjacency is what makes it
-# a quantity: "基准情景占主导（40%）" and "高通胀情景（40%）" keep their probability.
+# 13%", "通胀约13%", "涨幅达40%", "prices rose by 40%", "capex cut 40%", "WACC 13%",
+# "关税40%", "成本下降约40%").  Adjacency is what makes it a quantity: "基准情景占主导
+# （40%）" and "高通胀情景（40%）" keep their probability.  A bare CJK change verb takes
+# only the hedges of an amount (约 / 近 / 了 / 达 …), never 为 / 至 / 到, because
+# "概率降为35%" / "降至35%" names a new level (a critic's target), not a change; the
+# English "cut to 20%" is likewise no quantity ("to" is not a linker).
 # Searched at the end of a lookback slice.
 _QUANTITY_LEAD_LOOKBACK_CHARS = 40
 _LEAD_WORDS_EN = (
     r"rates?|tariffs?|CAGR|IRR|margins?|shares?|growth|yields?|inflation|discount|premium"
     r"|returns?|stake|weight(?:ing)?|increase[sd]?|decrease[sd]?|rise|rose|fall|fell"
     r"|drop(?:ped)?|decline[sd]?|gain(?:ed)?|jump(?:ed)?|surge[sd]?|up|down|by"
+    r"|cuts?|reduce[sd]?|slashe[sd]|lowered|raised|WACC|ROE|ROI|unemployment|interest"
+    r"|vacancy|utili[sz]ation|efficiency|(?:capacity|load)\s+factor"
 )
 _LEAD_LINKERS_EN = (
     r"is|was|are|were|of|at|by|near|around|about|roughly|approximately|only|just"
@@ -138,8 +169,13 @@ _LEAD_LINKERS_EN = (
 )
 _LEAD_WORDS_CJK = (
     r"涨幅|跌幅|降幅|增幅|升幅|幅度|比例|比重|通胀|折扣|溢价|折价|回报|收益|权重|利润"
-    r"|上涨|下跌|增加|减少"
+    r"|上涨|下跌|增加|减少|关税|毛利"
 )
+_LEAD_CHANGE_VERBS_CJK = (
+    r"下降|降低|上升|提高|下滑|削减|缩减|下探|回落|回升|暴跌|暴涨|降价|涨价"
+    r"|跌|涨|降|升|减|增"
+)
+_LEAD_CHANGE_HEDGES_CJK = r"了?\s*(?:大约|约|将近|近|逾|超|仅|高达|达)?"
 _COMPARATORS = (
     r"超过|超出|高于|低于|不低于|不高于|不少于|不足|至少|最多|大于|小于|多于|少于|逾"
     r"|(?<![A-Za-z])(?:above|over|below|under|beyond|at\s+(?:least|most)"
@@ -152,7 +188,8 @@ _QUANTITY_LEAD_RE = re.compile(
     + r"|占[^\s\d%％.,，。；;：:()（）、]{0,6}?"
     r"|" + _COMPARATORS + r")"
     r"\s*(?:约为|约|近|逾|仅|(?:可|将|已)?达|为|在|[~≈]"
-    r"|(?:about|around|roughly|nearly|approximately)\s)?\s*$",
+    r"|(?:about|around|roughly|nearly|approximately)\s)?\s*$"
+    r"|(?:" + _LEAD_CHANGE_VERBS_CJK + r")\s*" + _LEAD_CHANGE_HEDGES_CJK + r"\s*$",
     re.I,
 )
 # A signed number ("+10%", "−5%", "±3%") is a change, never a probability.  A sign
@@ -197,32 +234,49 @@ def _scenario_key(name: Any) -> str:
     return _norm_name(name)
 
 
+def _keyed_rows(rows: Any) -> List[Tuple[str, int, Dict[str, Any]]]:
+    """``(normalised name, integer percent, row)`` for each row with a usable probability."""
+    keyed = []
+    for row in rows if isinstance(rows, (list, tuple)) else []:
+        pct = _probability_pct(row)
+        if pct is not None:
+            keyed.append((_scenario_key(row.get("name")), pct, row))
+    return keyed
+
+
 def _value_mapping(
     before_rows: Any,
     after_rows: Any,
     only: Optional[Dict[str, Any]] = None,
-) -> Tuple[Dict[int, int], Dict[int, str]]:
+    context_rows: Any = None,
+) -> Tuple[Dict[int, int], Dict[int, str], Set[int]]:
     """Map old integer percents to new ones for scenarios whose value changed.
 
     Rows pair by ``ensemble._norm_name``; an empty name, or one that occurs twice on
-    either side, never pairs.  Returns ``(mapping, unresolved)``.  ``unresolved``
-    maps each old value whose number cannot be attributed to one scenario to the
-    reason: ``ambiguous`` when a changed scenario's old value is held by more than
-    one BEFORE row (paired or not); ``unpaired`` when a BEFORE row finds no AFTER row
-    (renamed, merged or dropped, so its new value is unknown).  An unresolved value
-    is never mapped.  ``only`` restricts the mapping to the pair whose AFTER row is
-    that exact dict (a scenario's own summary).
-    """
-    def keyed(rows: Any) -> List[Tuple[str, int, Dict[str, Any]]]:
-        keyed_rows = []
-        for row in rows if isinstance(rows, (list, tuple)) else []:
-            pct = _probability_pct(row)
-            if pct is not None:
-                keyed_rows.append((_scenario_key(row.get("name")), pct, row))
-        return keyed_rows
+    either side, never pairs.  Returns ``(mapping, unresolved, fresh)``.
 
-    before = keyed(before_rows)
-    after = keyed(after_rows)
+    ``unresolved`` maps each old value whose number cannot be attributed to one
+    scenario to the reason: ``ambiguous`` when a changed scenario's old value is held
+    by more than one BEFORE row (paired or not), or by a ``context_rows`` row under
+    another scenario's name; ``unpaired`` when a BEFORE row finds no AFTER row
+    (renamed, merged or dropped, so its new value is unknown).  An unresolved value is
+    never mapped.  ``context_rows`` are rows the text may cite although it was not
+    written against them: a red-team critic writes its rationale and summaries
+    against its own rows while looking at the input forecast, so "Bear's 30%" may be
+    the input Bear while the critic's Bull is 30%.
+
+    ``fresh`` holds the values the rows in scope carry AFTER the move but no row in
+    scope carried BEFORE it.  A token with such a value was written against no
+    scenario of this move, yet the next move would attribute it to whichever
+    scenario now holds the value, so the caller records it as blocked.
+
+    ``only`` restricts the scope to the pair whose AFTER row is that exact dict (a
+    scenario's own summary): the mapping is that pair's move, and ``fresh`` is its
+    new value unless the row kept its old one.
+    """
+    before = _keyed_rows(before_rows)
+    after = _keyed_rows(after_rows)
+    context = _keyed_rows(context_rows)
     pct_counts = Counter(pct for _, pct, _ in before)
     before_names = Counter(name for name, _, _ in before if name)
     after_names = Counter(name for name, _, _ in after if name)
@@ -230,25 +284,42 @@ def _value_mapping(
     paired = {name for name, _, _ in after
               if name and after_names[name] == 1 and name in old_by_name}
 
-    changed: List[Tuple[int, int]] = []
+    changed: List[Tuple[str, int, int]] = []
     for name, new_pct, row in after:
         if name not in paired or (only is not None and row is not only):
             continue
         old_pct = old_by_name[name]
         if old_pct != new_pct:
-            changed.append((old_pct, new_pct))
+            changed.append((name, old_pct, new_pct))
     unresolved = {pct: "unpaired" for name, pct, _ in before if name not in paired}
-    unresolved.update({old: "ambiguous" for old, _ in changed if pct_counts[old] > 1})
-    mapping = {old: new for old, new in changed if old not in unresolved}
-    return mapping, unresolved
+    unresolved.update({old: "ambiguous" for _, old, _ in changed if pct_counts[old] > 1})
+    for name, old, _ in changed:
+        if old not in unresolved and any(
+                pct == old and context_name != name for context_name, pct, _ in context):
+            unresolved[old] = "ambiguous"
+    mapping = {old: new for _, old, new in changed if old not in unresolved}
+
+    if only is None:
+        fresh = {pct for _, pct, _ in after} - {pct for _, pct, _ in before}
+    else:
+        fresh = {pct for name, pct, row in after
+                 if row is only and (name not in paired or old_by_name[name] != pct)}
+    return mapping, unresolved, fresh
 
 
-def _decimal_in_probability_context(text: str, start: int) -> bool:
+def _decimal_in_probability_context(text: str, start: int, end: int) -> bool:
+    if (_DECIMAL_CURRENCY_BEFORE_RE.search(text[max(0, start - 2):start])
+            or _DECIMAL_CURRENCY_AFTER_RE.match(text, end)):
+        return False
     lower = max(0, start - _DECIMAL_TRIGGER_WINDOW - _DECIMAL_TRIGGER_MAX_LEN)
     for trigger in _DECIMAL_TRIGGER_RE.finditer(text, lower, start):
         gap = text[trigger.end():start]
-        if len(gap) <= _DECIMAL_TRIGGER_WINDOW and not _GAP_STOP_RE.search(gap):
-            return True
+        if (len(gap) > _DECIMAL_TRIGGER_WINDOW or _GAP_STOP_RE.search(gap)
+                or _DECIMAL_WEIGHTED_RE.search(gap)):
+            continue
+        if trigger.group("p_value") and _P_VALUE_SIGNIFICANCE_RE.match(text, end):
+            continue
+        return True
     return False
 
 
@@ -258,7 +329,7 @@ def _probability_tokens(text: str) -> List[_Token]:
         for match in _INT_PERCENT_RE.finditer(text)
     ]
     for match in _DECIMAL_RE.finditer(text):
-        if _decimal_in_probability_context(text, match.start()):
+        if _decimal_in_probability_context(text, match.start(), match.end()):
             value = round(float(match.group("num")) * 100)
             tokens.append((match.start(), match.end(), value, "decimal"))
     tokens.sort()
@@ -365,15 +436,23 @@ def _rewrite(
     text: str,
     mapping: Dict[int, int],
     unresolved: Dict[int, str],
+    fresh: Set[int],
 ) -> Tuple[str, List[Dict[str, str]], Dict[str, int], Set[int]]:
     """Apply ``mapping`` to ``text`` in one pass by span.
 
     Returns ``(new_text, edits, skipped, unattributed)``; ``unattributed`` holds the
-    values of tokens left alone because ``unresolved`` names them.
+    values of tokens left alone because ``unresolved`` names them, and of
+    ``foreign`` tokens: a token whose value is in ``fresh`` (no scenario of this
+    move held it before the move, but one holds it now: "a 25% chance of an early
+    rate cut") and that no range or quantity guard skips.  Those two guards read
+    only the words next to the token, never a number's value, so they skip the same
+    token again at every later step; the sum shield also depends on the values of
+    the other numbers in the sentence, which later steps may rewrite, so a foreign
+    token inside a sum statement is still recorded.
     """
     skipped: Counter = Counter()
     unattributed: Set[int] = set()
-    if not mapping and not unresolved:
+    if not mapping and not unresolved and not fresh:
         return text, [], {}, unattributed
     sentences = _sentence_bounds(text)
     sentence_starts = [lo for lo, _ in sentences]
@@ -388,6 +467,10 @@ def _rewrite(
             continue
         new_pct = mapping.get(value)
         if new_pct is None:
+            if (value in fresh and not _is_range(text, start, end)
+                    and not _is_quantity(text, start, end)):
+                skipped["foreign"] += 1
+                unattributed.add(value)
             continue
         if _is_range(text, start, end):
             skipped["range"] += 1
@@ -433,8 +516,9 @@ def sync_probability_numbers(
 
     Returns ``(new_text, edits, skipped)``: ``edits`` holds ``{from, to, excerpt}``
     per replaced token; ``skipped`` counts tokens that carried a mapped or
-    unattributable old value but were left alone, by reason (ambiguous / unpaired /
-    range / quantity / sum).  A non-string or empty ``text`` is returned unchanged.
+    unattributable value but were left alone, by reason (ambiguous / unpaired /
+    foreign / range / quantity / sum).  A non-string or empty ``text`` is returned
+    unchanged.
     """
     if not isinstance(text, str) or not text:
         return text, [], {}
@@ -459,21 +543,28 @@ def synchronize_forecast_narratives(
     headline_before: Optional[Sequence[Dict[str, Any]]] = None,
     rationale_before: Optional[Sequence[Dict[str, Any]]] = None,
     summary_before_by_name: Optional[Sequence[Dict[str, Any]]] = None,
+    context_rows: Optional[Sequence[Dict[str, Any]]] = None,
 ) -> None:
     """Sync ``out``'s narrative fields to its current ``scenarios`` after one probability move.
 
     Each ``*_before`` is the scenario list the corresponding text was written
     against; ``None`` leaves that field alone.  Each scenario's ``summary`` maps
     only its own pair: its row in ``summary_before_by_name`` found by normalised
-    name; other rows' moves are ignored.  Originals are kept
-    with ``setdefault`` in ``headline_detail`` / ``confidence_rationale_detail`` /
-    per-scenario ``summary_detail`` (the first original wins across passes); each
-    edit is appended to ``quality.narrative_sync`` (capped at
-    NARRATIVE_SYNC_LOG_CAP; ``quality.narrative_sync_dropped`` counts the edits the
-    cap left out) and skip counts accumulate in ``quality.narrative_sync_skipped``.
+    name; other rows' moves are ignored.  ``context_rows`` are rows every field may
+    also cite (the input forecast a critic saw while writing against its own rows):
+    an old value that a context row holds under another scenario's name is
+    ambiguous.  For a field written against the context rows themselves this adds
+    nothing, since such a value is already held by two of its BEFORE rows.
 
-    Values a pass had to leave unattributed (ambiguous / unpaired) are recorded per
-    field in ``quality.narrative_sync_blocked`` (``headline``,
+    Originals are kept with ``setdefault`` in ``headline_detail`` /
+    ``confidence_rationale_detail`` / per-scenario ``summary_detail`` (the first
+    original wins across passes); each edit is appended to ``quality.narrative_sync``
+    (capped at NARRATIVE_SYNC_LOG_CAP; ``quality.narrative_sync_dropped`` counts the
+    edits the cap left out) and skip counts accumulate in
+    ``quality.narrative_sync_skipped``.
+
+    Values a pass had to leave unattributed (ambiguous / unpaired / foreign) are
+    recorded per field in ``quality.narrative_sync_blocked`` (``headline``,
     ``confidence_rationale``, ``summary:<normalised scenario name>``), and every
     later pass treats a recorded value as ambiguous in that field, so a stale
     number is never mapped onto another scenario's move by a later step.  The
@@ -501,13 +592,13 @@ def synchronize_forecast_narratives(
     skipped: Counter = Counter()
 
     def collect(target: Dict[str, Any], field: str, label: str, key: str,
-                mapping: Dict[int, int], unresolved: Dict[int, str]) -> None:
+                mapping: Dict[int, int], unresolved: Dict[int, str], fresh: Set[int]) -> None:
         text = target.get(field)
         if not isinstance(text, str) or not text:
             return
         carried = prior_blocked.get(key, set()) if key else set()
         unresolved = {**unresolved, **{value: "ambiguous" for value in carried if value in mapping}}
-        new_text, edits, reasons, unattributed = _rewrite(text, mapping, unresolved)
+        new_text, edits, reasons, unattributed = _rewrite(text, mapping, unresolved, fresh)
         skipped.update(reasons)
         if key and not unattributed <= carried:
             blocked[key] = blocked.get(key, carried) | unattributed
@@ -517,14 +608,16 @@ def synchronize_forecast_narratives(
 
     for field, before in (("headline", headline_before), ("confidence_rationale", rationale_before)):
         if before is not None:
-            collect(out, field, field, field, *_value_mapping(before, after_rows))
+            collect(out, field, field, field,
+                    *_value_mapping(before, after_rows, context_rows=context_rows))
     if summary_before_by_name is not None:
         for index, row in enumerate(scenarios):
             if isinstance(row, dict):
                 name_key = _scenario_key(row.get("name"))
                 collect(row, "summary", f"scenario[{index}].summary",
                         f"summary:{name_key}" if name_key else "",
-                        *_value_mapping(summary_before_by_name, after_rows, only=row))
+                        *_value_mapping(summary_before_by_name, after_rows, only=row,
+                                        context_rows=context_rows))
 
     if not log and not skipped:
         return
