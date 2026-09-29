@@ -9919,8 +9919,11 @@ def annotate_recency_rows(rows: Any, ref_date: "_dt.date", stale_days: int, date
     ``future_bucket`` (RESEARCH-4, v3 RESEARCH_QUANT_TYPING): a row dated after
     ``ref_date`` (typically a forecast's target date) is no fresh evidence — it gets
     ``staleness_days=None``, ``is_stale=False``, ``is_future_dated=True`` and counts
-    under ``future_dated`` instead of ``fresh_le_90``.  Without it the histogram keys
-    and row annotations are exactly the legacy ones.
+    under ``future_dated`` instead of ``fresh_le_90``.  So does a row the typing pass
+    flagged ``as_of_is_target`` (its ``as_of_date`` lies wholly after as-of), even
+    when that date reads here as an earlier year start ("2026-Q4") or not at all
+    ("FY2027").  Without it the histogram keys and row annotations are exactly the
+    legacy ones.
     """
     hist = {"fresh_le_90": 0, "recent_le_365": 0, "stale_gt_365": 0, "undated": 0, "n_stale": 0}
     if future_bucket:
@@ -9931,16 +9934,18 @@ def annotate_recency_rows(rows: Any, ref_date: "_dt.date", stale_days: int, date
         if not isinstance(r, dict):
             continue
         d = _parse_date(r.get(date_key) or r.get("as_of_date") or r.get("date"))
-        if d is None:
-            hist["undated"] += 1
-            continue
-        age = (ref_date - d).days
-        if future_bucket and age < 0:
+        flags = r.get("epistemic_flags")
+        target_held = isinstance(flags, (list, tuple)) and "as_of_is_target" in flags
+        if future_bucket and (target_held or (d is not None and d > ref_date)):
             r["staleness_days"] = None
             r["is_stale"] = False
             r["is_future_dated"] = True
             hist["future_dated"] += 1
             continue
+        if d is None:
+            hist["undated"] += 1
+            continue
+        age = (ref_date - d).days
         r["staleness_days"] = age
         is_stale = age > stale_days
         r["is_stale"] = is_stale

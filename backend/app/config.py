@@ -1179,7 +1179,9 @@ class Config:
     # v3 quantitative-row page verification (RESEARCH-4): each quantitative.json row is
     # checked against the fetched page of the source it cites and labelled verification =
     # verified | unverified | snippet_only | none (absent = unchecked: no checkable number on
-    # a fetched page), plus a `verified` bool; values are never changed.  Default true:
+    # a fetched page), plus a `verified` bool; values are never changed.  snippet_only means
+    # the source was never fetched; its search snippet is not checked, so the label says
+    # nothing about whether the number appears anywhere.  Default true:
     # deterministic, zero model calls, labels are additive keys.  The parent forwards it to
     # the v3 child.
     RESEARCH_VERIFIED_FACTS = os.environ.get('RESEARCH_VERIFIED_FACTS', 'true').strip().lower() == 'true'

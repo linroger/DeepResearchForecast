@@ -5790,7 +5790,8 @@ class _Engine:
         typing = _env_flag(self.env, "RESEARCH_QUANT_TYPING", False)
         if verify or typing:
             self._quant_provenance(quant, ref_date, verify=verify, typing=typing)
-        # Typed runs count forecast target dates as future-dated, never as fresh.
+        # Typed runs count forecast target dates as future-dated, never as fresh
+        # (by date, and by the as_of_is_target flag when typing stamped it).
         recency = {"future_bucket": True} if typing else {}
         quant_hist = self.bridge_call("annotate_recency_rows", quant, ref_date, stale_days, date_key="as_of_date",
                                       **recency)
@@ -5825,37 +5826,40 @@ class _Engine:
         """Page verification (RESEARCH_VERIFIED_FACTS) and reported/projected
         typing (RESEARCH_QUANT_TYPING) of the quant rows, in place, summarised
         in ``meta.quant_provenance`` with only the enabled parts: ``rows``;
-        typing adds ``class_hist`` and the ``future_dated_reported`` /
-        ``as_of_is_target`` flag counts; verification adds
-        ``verification_hist`` (rows without a label as ``unchecked``) and
-        ``verified_ratio`` (verified / labelled rows; None when none is).
+        verification adds ``verification_hist`` (rows without a label as
+        ``unchecked``) and ``verified_ratio`` (verified / labelled rows; None
+        when none is); typing adds ``class_hist`` and the
+        ``future_dated_reported`` / ``period_unparsed`` / ``as_of_is_target``
+        flag counts.
 
-        Degrades safe: a failure is recorded in ``analytics_errors`` and the
-        run goes on; a row it left without ``verification`` counts as
-        unchecked, never as verified."""
-        try:
-            if verify:
-                self._verify_quant_rows(quant)
-            if typing:
-                for row in quant:
-                    row.update(classify_quant_row(row, as_of))
-        except Exception as exc:  # noqa: BLE001 — provenance labels never fail a finished report
-            self.analytics_errors.append({"helper": "quant_provenance", "error": f"{type(exc).__name__}: {exc}"[:300]})
-            self.log("warn", f"v3: quantitative provenance failed ({type(exc).__name__}: {exc})")
-            return
+        Degrades safe, part by part: a failed part is recorded in
+        ``analytics_errors`` (``quant_provenance:verify`` / ``:typing``) and
+        left out of the summary, stamps no row (each part computes every row's
+        keys before it stamps any; a row without ``verification`` counts as
+        unchecked, never as verified), and the other part and the run go on."""
+        def part(name: str, step: Callable[[], None]) -> bool:
+            try:
+                step()
+            except Exception as exc:  # noqa: BLE001 — provenance labels never fail a finished report
+                error = f"{type(exc).__name__}: {exc}"
+                self.analytics_errors.append({"helper": f"quant_provenance:{name}", "error": error[:300]})
+                self.log("warn", f"v3: quantitative provenance ({name}) failed ({error})")
+                return False
+            return True
+
         summary: dict[str, Any] = {"rows": len(quant)}
-        if typing:
-            summary["class_hist"] = dict(sorted(Counter(row["epistemic_class"] for row in quant).items()))
-        if verify:
+        if verify and part("verify", lambda: self._verify_quant_rows(quant)):
             labels = Counter(row.get("verification", "unchecked") for row in quant)
             checked = len(quant) - labels["unchecked"]
             summary["verification_hist"] = dict(sorted(labels.items()))
             summary["verified_ratio"] = round(labels["verified"] / checked, 3) if checked else None
-        if typing:
-            for flag in ("future_dated_reported", "as_of_is_target"):
+        if typing and part("typing", lambda: _stamp_rows(quant, [classify_quant_row(row, as_of) for row in quant])):
+            summary["class_hist"] = dict(sorted(Counter(row["epistemic_class"] for row in quant).items()))
+            for flag in ("future_dated_reported", "period_unparsed", "as_of_is_target"):
                 summary[flag] = sum(1 for row in quant if flag in row.get("epistemic_flags", ()))
-        self.meta["quant_provenance"] = summary
-        self.log("ok", "v3: quantitative provenance: " + json.dumps(summary, ensure_ascii=False))
+        if len(summary) > 1:
+            self.meta["quant_provenance"] = summary
+            self.log("ok", "v3: quantitative provenance: " + json.dumps(summary, ensure_ascii=False))
 
     def _verify_quant_rows(self, quant: list[dict]) -> None:
         """Stamp each row's ``verification`` against the source its
@@ -5863,11 +5867,14 @@ class _Engine:
 
         * ``verified`` — every number of the value is on the fetched page;
         * ``unverified`` — the page was fetched but a number is not on it;
-        * ``snippet_only`` — the cited source was never fetched;
+        * ``snippet_only`` — the cited source was never fetched (its search
+          snippet is not checked: the label says nothing about the number);
         * ``none`` — no resolvable source.
 
         A value without a checkable number on a fetched page gets no label
-        (absent = unchecked).  ``verified`` mirrors the label as a bool."""
+        (absent = unchecked).  ``verified`` mirrors the label as a bool.
+        Every label is decided before any row is stamped."""
+        stamps: list[dict] = []
         for row in quant:
             url = row.get("source_url")
             source = self.ledger.find(url) if url else None
@@ -5879,10 +5886,11 @@ class _Engine:
             else:
                 ok, detail = verify_quant_row(row, pages, str(source.get("snippet") or ""))
                 if detail == "not_checkable":
+                    stamps.append({})
                     continue
                 verification = "verified" if ok else "unverified"
-            row["verification"] = verification
-            row["verified"] = verification == "verified"
+            stamps.append({"verification": verification, "verified": verification == "verified"})
+        _stamp_rows(quant, stamps)
 
     def forecast_inputs(self) -> dict:
         return {"scenarios": [{"name": s.name, "probability": round(s.weight / 100.0, 4),
@@ -6212,16 +6220,28 @@ def normalize_quant(value: Any, sources: Sequence[Mapping[str, Any]]) -> list[di
     return rows
 
 
+def _stamp_rows(rows: list[dict], stamps: Sequence[Mapping[str, Any]]) -> None:
+    """Merge each row's precomputed keys (``stamps``, one per row) in place."""
+    for row, keys in zip(rows, stamps, strict=True):
+        row.update(keys)
+
+
 # A stated date or period, matched whole: (pattern, precision).  "FY2025" is
-# taken as the calendar year.
+# taken as the calendar year; a day may carry an ISO time ("2029-12-31T00:00:00Z").
 _PERIOD_FORMS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})"), "day"),
+    (re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?",
+                re.I), "day"),
     (re.compile(r"(\d{4})-(\d{1,2})"), "month"),
     (re.compile(r"(\d{4})[-\s]?Q([1-4])", re.I), "quarter"),
     (re.compile(r"(\d{4})[-\s]?H([12])", re.I), "half"),
     (re.compile(r"(?:FY\s?)?(\d{4})", re.I), "year"),
 )
 _MONTHS_PER = {"month": 1, "quarter": 3, "half": 6}
+# A year named inside free text ("2025-2035", "by 2030", "2030E"), optionally
+# closing a range with two digits ("2025/26", "FY2025-29").
+_PERIOD_YEAR_RE = re.compile(r"(?<!\d)((?:19|20|21)\d{2})(?:\s*[/-]\s*(\d{2})(?!\d))?(?!\d)")
+# period_end placeholders that state no period, like an empty field.
+_NO_PERIOD = frozenset({"n/a", "na", "none", "null", "unknown", "not applicable"})
 
 
 def _period_bounds(value: Any) -> tuple[_dt.date | None, _dt.date | None, str]:
@@ -6251,9 +6271,29 @@ def _period_bounds(value: Any) -> tuple[_dt.date | None, _dt.date | None, str]:
 def _period_end_date(value: Any) -> _dt.date | None:
     """The LAST day of a stated date or period, so a period never counts as
     known before it ends: YYYY and FYyyyy → Dec 31, YYYY-MM → the month's last
-    day, YYYY-Qn / YYYY-Hn → the quarter's / half's last day, an ISO date →
-    itself; None for anything else."""
+    day, YYYY-Qn / YYYY-Hn → the quarter's / half's last day, an ISO date (or
+    date-time) → itself; None for anything else."""
     return _period_bounds(value)[1]
+
+
+def _loose_period_bounds(value: Any) -> tuple[_dt.date | None, _dt.date | None, str]:
+    """:func:`_period_bounds`, else the years free text names — a range, "by
+    2030", "2030E", "FY2025-29" — read as Jan 1 of the earliest to Dec 31 of
+    the latest (precision ``year``); ``(None, None, "none")`` without one."""
+    bounds = _period_bounds(value)
+    if bounds[1] is not None:
+        return bounds
+    years: list[int] = []
+    for match in _PERIOD_YEAR_RE.finditer(str(value or "")):
+        year = int(match.group(1))
+        years.append(year)
+        if match.group(2):
+            closing = year - year % 100 + int(match.group(2))
+            if closing > year:
+                years.append(closing)
+    if not years:
+        return None, None, "none"
+    return _dt.date(min(years), 1, 1), _dt.date(max(years), 12, 31), "year"
 
 
 def classify_quant_row(row: Mapping[str, Any], as_of: _dt.date) -> dict:
@@ -6263,11 +6303,21 @@ def classify_quant_row(row: Mapping[str, Any], as_of: _dt.date) -> dict:
     never rewritten.
 
     The reference date is the end of ``period_end``, else of ``as_of_date``
-    (:func:`_period_end_date`).  ``actual`` is reported, or unknown with flag
-    ``future_dated_reported`` when its reference date is after as-of;
-    ``forecast`` and ``target`` are projected; ``estimate`` is projected when
-    its reference date is after as-of, else reported; a missing or other type
-    is unknown.
+    (:func:`_period_end_date`; free text is read by the years it names,
+    :func:`_loose_period_bounds`).  ``forecast`` and ``target`` are
+    projected, as is an ``estimate`` whose reference date is after as-of.
+    Any other ``actual`` or ``estimate`` is reported, except that it is
+    unknown
+
+    * with flag ``future_dated_reported`` when its reference date, or the
+      first day of its ``as_of_date``, is after as-of (no source publishes
+      after as-of);
+    * with flag ``period_unparsed`` (set on a row of any type) when
+      ``period_end`` states a period whose end cannot be read — never the
+      publication date in its place, so a period never counts as known
+      before it ends.
+
+    A missing or other type is unknown.
 
     Target repair: no source publishes after the as-of date, so a projected
     row whose ``as_of_date`` lies wholly after it (its FIRST day is later)
@@ -6282,30 +6332,44 @@ def classify_quant_row(row: Mapping[str, Any], as_of: _dt.date) -> dict:
     """
     if isinstance(as_of, _dt.datetime):
         as_of = as_of.date()
-    _, period, period_precision = _period_bounds(row.get("period_end"))
-    stated_start, stated_end, stated_precision = _period_bounds(row.get("as_of_date"))
-    reference, precision = (period, period_precision) if period else (stated_end, stated_precision)
+    period_text = str(row.get("period_end") or "").strip()
+    _, period, period_precision = _loose_period_bounds(period_text)
+    period_unparsed = (period is None and any(ch.isalnum() for ch in period_text)
+                       and period_text.casefold() not in _NO_PERIOD)
+    stated_start, stated_end, stated_precision = _loose_period_bounds(row.get("as_of_date"))
+    if period is not None:
+        reference, precision = period, period_precision
+    elif period_unparsed:
+        reference, precision = None, "none"
+    else:
+        reference, precision = stated_end, stated_precision
     after_as_of = reference is not None and reference > as_of
+    stated_after_as_of = stated_start is not None and stated_start > as_of
     value_type = str(row.get("value_type") or "").strip().lower()
     flags: list[str] = []
-    if value_type == "actual":
-        epistemic_class = "unknown" if after_as_of else "reported"
-        if after_as_of:
-            flags.append("future_dated_reported")
-    elif value_type in ("forecast", "target"):
+    if value_type in ("forecast", "target") or (value_type == "estimate" and after_as_of):
         epistemic_class = "projected"
-    elif value_type == "estimate":
-        epistemic_class = "projected" if after_as_of else "reported"
+    elif value_type in ("actual", "estimate"):
+        epistemic_class = "unknown" if after_as_of or stated_after_as_of or period_unparsed else "reported"
+        if after_as_of or stated_after_as_of:
+            flags.append("future_dated_reported")
     else:
         epistemic_class = "unknown"
+    if period_unparsed:
+        flags.append("period_unparsed")
     out: dict[str, Any] = {"epistemic_class": epistemic_class, "date_precision": precision}
-    if epistemic_class == "projected" and stated_start is not None and stated_start > as_of:
+    if epistemic_class == "projected" and stated_after_as_of:
         flags.append("as_of_is_target")
         if period is None:
             out["target_date"] = str(row.get("as_of_date")).strip()
     if flags:
         out["epistemic_flags"] = flags
     return out
+
+
+# A number in exponent notation ("1.2E6"): the fact tokenizer reads its parts
+# as separate numbers.
+_EXPONENT_RE = re.compile(r"\d[eE][+-]?\d")
 
 
 def verify_quant_row(row: Mapping[str, Any], page_numbers: frozenset[str] | None,
@@ -6318,11 +6382,16 @@ def verify_quant_row(row: Mapping[str, Any], page_numbers: frozenset[str] | None
     (``page_numbers``: its :func:`page_number_set`; None when never fetched)
     → ``(True, "page")``; else all in the search ``snippet`` →
     ``(False, "snippet_only")``; else ``(False, "none")``.  A value without a
-    checkable number (>= 2 digits or a decimal) → ``(False, "not_checkable")``.
+    checkable number (>= 2 digits or a decimal) → ``(False, "not_checkable")``,
+    as is one in exponent notation, whose mantissa alone would be matched (a
+    float value is written out positionally first: 1.2e-05 → 0.000012).
     """
-    text = f"{row.get('value')} {row.get('unit') or ''}"
+    value = row.get("value")
+    if isinstance(value, float):
+        value = format(Decimal(repr(value)), "f")
+    text = f"{value} {row.get('unit') or ''}"
     tokens = fact_number_tokens(text)
-    if not tokens:
+    if not tokens or _EXPONENT_RE.search(text):
         return False, "not_checkable"
     values = fact_number_values(text)
     percents = fact_percent_tokens(text)

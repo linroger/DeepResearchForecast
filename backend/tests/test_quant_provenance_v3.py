@@ -7,7 +7,8 @@
 * RESEARCH_QUANT_TYPING (default off): reported/projected typing
   (``classify_quant_row``), target-date repair when a forecast's target date
   sits in ``as_of_date``, the facts-prompt date rule (memoized by task hash),
-  and future-dated rows bucketed apart from fresh ones in ``quant_freshness``.
+  and future-dated rows bucketed apart from fresh ones in ``quant_freshness``
+  (the two chart builders read their ``is_future_dated`` mark).
 
 Both off: quantitative.json, the facts task, the extraction memo and meta are
 byte-identical to the engine before this change.  Offline: the scripted model,
@@ -25,6 +26,8 @@ import types
 import pytest
 
 import test_research_engine_v3 as v3
+from app.services import report_visualizer as rv
+from test_forecast_visuals_manifest import _load_renderer
 from test_orchestrator_research_wiring import _launch_capturing_child
 
 # The shared fixtures (hermetic env, real bridge with network steps stubbed).
@@ -114,15 +117,44 @@ def _load(path):
     ("2025-H2", dt.date(2025, 12, 31)),
     ("2026-03-09", dt.date(2026, 3, 9)),
     (" 2026-03-09 ", dt.date(2026, 3, 9)),
+    # an ISO date-time is its day
+    ("2029-12-31T00:00:00Z", dt.date(2029, 12, 31)),
+    ("2025-06-30T12:00:00+08:00", dt.date(2025, 6, 30)),
+    ("2025-06-30 12:00", dt.date(2025, 6, 30)),
+    ("2025-06-30t08:15:30.5z", dt.date(2025, 6, 30)),
 ])
 def test_period_end_date(value, expected):
     assert lr._period_end_date(value) == expected
 
 
 @pytest.mark.parametrize("garbage", [None, "", "n/a", "by 2030", "2025-2035", "FY2025-2029", "2025-13",
-                                     "2025-02-30", "2025-Q5", "2025-H3", "0000", "Q3 2025", "2026-03-09 draft"])
+                                     "2025-02-30", "2025-Q5", "2025-H3", "0000", "Q3 2025", "2026-03-09 draft",
+                                     "2026-03-09T", "2026-03-09T25", "2030E"])
 def test_period_end_date_returns_none_for_garbage(garbage):
     assert lr._period_end_date(garbage) is None
+
+
+@pytest.mark.parametrize("value, expected", [
+    # a strictly stated period keeps its own bounds and precision
+    ("2025-Q3", (dt.date(2025, 7, 1), dt.date(2025, 9, 30), "quarter")),
+    ("2029-12-31T00:00:00Z", (dt.date(2029, 12, 31), dt.date(2029, 12, 31), "day")),
+    # free text: Jan 1 of the earliest year named to Dec 31 of the latest
+    ("2025-2035", (dt.date(2025, 1, 1), dt.date(2035, 12, 31), "year")),
+    ("by 2030", (dt.date(2030, 1, 1), dt.date(2030, 12, 31), "year")),
+    ("2030E", (dt.date(2030, 1, 1), dt.date(2030, 12, 31), "year")),
+    ("FY2025-2029", (dt.date(2025, 1, 1), dt.date(2029, 12, 31), "year")),
+    ("FY2025-29", (dt.date(2025, 1, 1), dt.date(2029, 12, 31), "year")),
+    ("2025/26", (dt.date(2025, 1, 1), dt.date(2026, 12, 31), "year")),
+    ("2025-26", (dt.date(2025, 1, 1), dt.date(2026, 12, 31), "year")),
+    ("Q3 2025", (dt.date(2025, 1, 1), dt.date(2025, 12, 31), "year")),
+    ("2025-13", (dt.date(2025, 1, 1), dt.date(2025, 12, 31), "year")),     # "13" closes no range
+    # no year: nothing to read
+    ("ongoing", (None, None, "none")),
+    ("20251231", (None, None, "none")),
+    (None, (None, None, "none")),
+])
+def test_loose_period_bounds(value, expected):
+    assert lr._loose_period_bounds(value) == expected
 
 
 @pytest.mark.parametrize("row, expected", [
@@ -162,6 +194,52 @@ def test_period_end_date_returns_none_for_garbage(garbage):
     # a properly dated forecast needs no repair
     ({"value_type": "forecast", "as_of_date": "2025-06", "period_end": "2030-H2"},
      {"epistemic_class": "projected", "date_precision": "half"}),
+    # a free-text period_end is read by the years it names — never replaced by the publication date
+    ({"value_type": "estimate", "as_of_date": "2024-07-01", "period_end": "2025-2035"},
+     {"epistemic_class": "projected", "date_precision": "year"}),
+    ({"value_type": "estimate", "as_of_date": "2025-01-01", "period_end": "by 2030"},
+     {"epistemic_class": "projected", "date_precision": "year"}),
+    ({"value_type": "estimate", "as_of_date": "2025-01-01", "period_end": "2030E"},
+     {"epistemic_class": "projected", "date_precision": "year"}),
+    ({"value_type": "estimate", "as_of_date": "2025-01-01", "period_end": "2025/26"},
+     {"epistemic_class": "projected", "date_precision": "year"}),
+    ({"value_type": "estimate", "as_of_date": "2025-03-01", "period_end": "FY2024-25"},
+     {"epistemic_class": "reported", "date_precision": "year"}),
+    ({"value_type": "actual", "as_of_date": "2025-03-01", "period_end": "by 2027"},
+     {"epistemic_class": "unknown", "date_precision": "year", "epistemic_flags": ["future_dated_reported"]}),
+    # a period_end that names no year cannot be placed: never reported
+    ({"value_type": "estimate", "as_of_date": "2025-01-01", "period_end": "ongoing"},
+     {"epistemic_class": "unknown", "date_precision": "none", "epistemic_flags": ["period_unparsed"]}),
+    ({"value_type": "actual", "as_of_date": "2025-01-01", "period_end": "cumulative to date"},
+     {"epistemic_class": "unknown", "date_precision": "none", "epistemic_flags": ["period_unparsed"]}),
+    ({"value_type": "forecast", "as_of_date": "2025-01-01", "period_end": "long term"},
+     {"epistemic_class": "projected", "date_precision": "none", "epistemic_flags": ["period_unparsed"]}),
+    ({"value_type": "forecast", "as_of_date": "2031", "period_end": "long term"},
+     {"epistemic_class": "projected", "date_precision": "none", "target_date": "2031",
+      "epistemic_flags": ["period_unparsed", "as_of_is_target"]}),
+    # ... but a placeholder is no period
+    ({"value_type": "actual", "as_of_date": "2025-01-01", "period_end": "N/A"},
+     {"epistemic_class": "reported", "date_precision": "day"}),
+    ({"value_type": "actual", "as_of_date": "2025-01-01", "period_end": " — "},
+     {"epistemic_class": "reported", "date_precision": "day"}),
+    # an as_of_date after as-of is no publication date, whatever period_end says
+    ({"value_type": "actual", "as_of_date": "2029-12-31T00:00:00Z"},
+     {"epistemic_class": "unknown", "date_precision": "day", "epistemic_flags": ["future_dated_reported"]}),
+    ({"value_type": "actual", "as_of_date": "2030E"},
+     {"epistemic_class": "unknown", "date_precision": "year", "epistemic_flags": ["future_dated_reported"]}),
+    ({"value_type": "actual", "as_of_date": "2027-03", "period_end": "2025"},
+     {"epistemic_class": "unknown", "date_precision": "year", "epistemic_flags": ["future_dated_reported"]}),
+    ({"value_type": "estimate", "as_of_date": "2027-03", "period_end": "2025"},
+     {"epistemic_class": "unknown", "date_precision": "year", "epistemic_flags": ["future_dated_reported"]}),
+    ({"value_type": "actual", "as_of_date": "2025-06-30T12:00:00+08:00"},
+     {"epistemic_class": "reported", "date_precision": "day"}),
+    # target dates read by quarter or fiscal year
+    ({"value_type": "target", "as_of_date": "2026-Q4"},
+     {"epistemic_class": "projected", "date_precision": "quarter", "target_date": "2026-Q4",
+      "epistemic_flags": ["as_of_is_target"]}),
+    ({"value_type": "target", "as_of_date": "FY2027"},
+     {"epistemic_class": "projected", "date_precision": "year", "target_date": "FY2027",
+      "epistemic_flags": ["as_of_is_target"]}),
     # missing or unknown value_type → unknown
     ({"as_of_date": "2025-11-01"}, {"epistemic_class": "unknown", "date_precision": "day"}),
     ({"value_type": "guidance", "as_of_date": "2031"}, {"epistemic_class": "unknown", "date_precision": "year"}),
@@ -183,11 +261,18 @@ def test_classify_table_never_touches_evidence_fields():
 
 
 def test_classify_never_reports_a_period_that_has_not_ended():
-    for as_of_date in ("2026-09-28", "2026-09", "2026-Q3", "2026-H2", "2026", "2027-01-15"):
-        for value_type in ("actual", "estimate", "forecast", "target", None):
-            row = {"value_type": value_type, "as_of_date": as_of_date}
-            if lr.classify_quant_row(row, AS_OF)["epistemic_class"] == "reported":
-                assert lr._period_end_date(as_of_date) <= AS_OF, row
+    as_of_dates = ("2026-09-28", "2026-09", "2026-Q3", "2026-H2", "2026", "2027-01-15", "2026-09-29T00:00:00Z",
+                   "2030E", "2024-07-01")
+    period_ends = ("", "2025", "2026-09", "2025-2035", "by 2030", "2030E", "FY2025-29", "ongoing", "n/a")
+    for as_of_date in as_of_dates:
+        for period_end in period_ends:
+            for value_type in ("actual", "estimate", "forecast", "target", None):
+                row = {"value_type": value_type, "as_of_date": as_of_date, "period_end": period_end}
+                if lr.classify_quant_row(row, AS_OF)["epistemic_class"] != "reported":
+                    continue
+                published, _, _ = lr._loose_period_bounds(as_of_date)
+                assert published is None or published <= AS_OF, row
+                assert (lr._loose_period_bounds(period_end)[1] or lr._loose_period_bounds(as_of_date)[1]) <= AS_OF, row
 
 
 PAGE = ("Installed capacity reached 176 GW in 2023. Spending hit $1,200 billion. "
@@ -223,6 +308,21 @@ def test_verify_quant_row_numeric_values():
     assert lr.verify_quant_row({"value": 176, "unit": "GW"}, pages, "") == (True, "page")
     assert lr.verify_quant_row({"value": 176.0, "unit": "GW"}, pages, "") == (True, "page")
     assert lr.verify_quant_row({"value": 12}, pages, "") == (True, "page")
+
+
+def test_verify_quant_row_never_matches_an_exponent_by_its_parts():
+    """str(1.2e-05) is "1.2e-05": its mantissa alone matched "1.2 billion"."""
+    billion = lr.page_number_set("Spending hit 1.2 billion; 20 regions report.")
+    assert lr.verify_quant_row({"value": 1.2e-05}, billion, "") == (False, "none")
+    assert lr.verify_quant_row({"value": 1e20}, billion, "") == (False, "none")
+    # A float is written out positionally, so its real digits still verify.
+    dose = lr.page_number_set("The limit is 0.000012 mg per litre.")
+    assert lr.verify_quant_row({"value": 1.2e-05, "unit": "mg"}, dose, "") == (True, "page")
+    # Exponent notation in text cannot be tokenized honestly: unchecked.
+    for value in ("1.2E6", "3.5e9 dollars", "2e+3"):
+        assert lr.verify_quant_row({"value": value, "unit": "USD"}, billion, "1.2 billion") == (False, "not_checkable")
+    for value in (float("nan"), float("inf"), True, None):
+        assert lr.verify_quant_row({"value": value}, billion, "") == (False, "not_checkable")
 
 
 # ============================================================ engine row labelling
@@ -264,6 +364,27 @@ def test_verify_quant_rows_stamps_the_closed_enum(tmp_path):
         assert {k: v for k, v in got.items() if k not in VERIFY_KEYS} == was   # values never modified
 
 
+def test_verify_quant_rows_stamps_all_or_nothing(tmp_path):
+    """A failure part-way leaves no row labelled (never a half-labelled table)."""
+    ledger = rg.SourceLedger(tmp_path / "ledger.json")
+    fetched = ledger.register("https://www.iea.org/fetched", "Fetched", "")
+    ledger.mark_fetched(fetched["sid"], content_sha256="x", chars=10, page_path=str(tmp_path / "p1.txt"))
+    reads = []
+
+    def page_numbers(sid):
+        reads.append(sid)
+        if len(reads) > 1:
+            raise OSError("page store unreadable")
+        return lr.page_number_set("Installed capacity reached 176 GW in 2023.")
+
+    engine = types.SimpleNamespace(ledger=ledger, page_numbers=page_numbers)
+    rows = [{"metric": "m", "value": "176", "unit": "GW", "source_url": fetched["url"]} for _ in range(3)]
+    before = copy.deepcopy(rows)
+    with pytest.raises(OSError):
+        lr._Engine._verify_quant_rows(engine, rows)
+    assert rows == before and len(reads) == 2
+
+
 class _StubEngine:
     def __init__(self, fail: bool = False) -> None:
         self.meta: dict = {}
@@ -281,6 +402,19 @@ class _StubEngine:
             row.update(verification="verified", verified=True)
 
 
+def _failing_classifier(monkeypatch):
+    """classify_quant_row that fails on the second row, after typing the first."""
+    real, seen = lr.classify_quant_row, []
+
+    def classify(row, as_of):
+        seen.append(row)
+        if len(seen) > 1:
+            raise ValueError("bad period")
+        return real(row, as_of)
+
+    monkeypatch.setattr(lr, "classify_quant_row", classify)
+
+
 def test_quant_provenance_summary_has_only_the_enabled_parts():
     rows = [{"value": "176", "as_of_date": "2023-12-31", "value_type": "actual"},
             {"value": "250", "as_of_date": "2030-12-31", "value_type": "target"}]
@@ -292,24 +426,58 @@ def test_quant_provenance_summary_has_only_the_enabled_parts():
     typed = copy.deepcopy(rows)
     lr._Engine._quant_provenance(engine, typed, AS_OF, verify=False, typing=True)
     assert engine.meta["quant_provenance"] == {"rows": 2, "class_hist": {"projected": 1, "reported": 1},
-                                               "future_dated_reported": 0, "as_of_is_target": 1}
+                                               "future_dated_reported": 0, "period_unparsed": 0,
+                                               "as_of_is_target": 1}
     assert "verification" not in typed[0] and typed[1]["target_date"] == "2030-12-31"
     engine = _StubEngine()
     lr._Engine._quant_provenance(engine, [], AS_OF, verify=True, typing=True)
     assert engine.meta["quant_provenance"] == {"rows": 0, "class_hist": {}, "verification_hist": {},
                                                "verified_ratio": None, "future_dated_reported": 0,
-                                               "as_of_is_target": 0}
+                                               "period_unparsed": 0, "as_of_is_target": 0}
 
 
-def test_quant_provenance_degrades_safe():
+ROWS = [{"value": "176", "as_of_date": "2023-12-31", "value_type": "actual"},
+        {"value": "250", "as_of_date": "2030-12-31", "value_type": "target"}]
+
+
+def test_quant_provenance_verification_failure_still_types():
     engine = _StubEngine(fail=True)
-    rows = [{"value": "176", "as_of_date": "2023-12-31", "value_type": "actual"}]
+    rows = copy.deepcopy(ROWS)
+    lr._Engine._quant_provenance(engine, rows, AS_OF, verify=True, typing=True)
+    assert engine.analytics_errors == [{"helper": "quant_provenance:verify",
+                                        "error": "RuntimeError: page store unreadable"}]
+    assert engine.lines[0] == ("warn", "v3: quantitative provenance (verify) failed "
+                                       "(RuntimeError: page store unreadable)")
+    # Typing ran and is summarised; verification claims nothing.
+    assert engine.meta["quant_provenance"] == {"rows": 2, "class_hist": {"projected": 1, "reported": 1},
+                                               "future_dated_reported": 0, "period_unparsed": 0,
+                                               "as_of_is_target": 1}
+    assert [row["epistemic_class"] for row in rows] == ["reported", "projected"]
+    assert not any(VERIFY_KEYS & set(row) for row in rows)
+
+
+def test_quant_provenance_typing_failure_still_verifies(monkeypatch):
+    _failing_classifier(monkeypatch)
+    engine = _StubEngine()
+    rows = copy.deepcopy(ROWS)
+    lr._Engine._quant_provenance(engine, rows, AS_OF, verify=True, typing=True)
+    assert engine.analytics_errors == [{"helper": "quant_provenance:typing", "error": "ValueError: bad period"}]
+    assert engine.meta["quant_provenance"] == {"rows": 2, "verification_hist": {"unchecked": 1, "verified": 1},
+                                               "verified_ratio": 1.0}
+    # The first row's classification was never stamped: typing is all or nothing.
+    assert rows == [dict(ROWS[0], verification="verified", verified=True), ROWS[1]]
+
+
+def test_quant_provenance_degrades_safe(monkeypatch):
+    _failing_classifier(monkeypatch)
+    engine = _StubEngine(fail=True)
+    rows = copy.deepcopy(ROWS)
     lr._Engine._quant_provenance(engine, rows, AS_OF, verify=True, typing=True)
     assert "quant_provenance" not in engine.meta
-    assert engine.analytics_errors == [{"helper": "quant_provenance",
-                                        "error": "RuntimeError: page store unreadable"}]
-    assert engine.lines == [("warn", "v3: quantitative provenance failed (RuntimeError: page store unreadable)")]
-    assert rows == [{"value": "176", "as_of_date": "2023-12-31", "value_type": "actual"}]   # nothing half-claimed
+    assert [error["helper"] for error in engine.analytics_errors] == ["quant_provenance:verify",
+                                                                      "quant_provenance:typing"]
+    assert [kind for kind, _ in engine.lines] == ["warn", "warn"]
+    assert rows == ROWS   # nothing half-claimed
 
 
 # =============================================================== engine end to end
@@ -341,7 +509,7 @@ def test_engine_flag_on(tmp_path, bridge, monkeypatch, fixed_as_of):
     assert meta["quant_provenance"] == {
         "rows": 4, "class_hist": {"projected": 1, "reported": 3},
         "verification_hist": {"none": 1, "unchecked": 1, "unverified": 1, "verified": 1},
-        "verified_ratio": round(1 / 3, 3), "future_dated_reported": 0, "as_of_is_target": 1}
+        "verified_ratio": round(1 / 3, 3), "future_dated_reported": 0, "period_unparsed": 0, "as_of_is_target": 1}
     assert meta["quant_freshness"] == {"fresh_le_90": 0, "recent_le_365": 2, "stale_gt_365": 1, "undated": 0,
                                        "n_stale": 1, "future_dated": 1}
     assert _load(out / "meta.json")["quant_provenance"] == meta["quant_provenance"]
@@ -498,7 +666,8 @@ def _pipe_facts() -> list[dict]:
 
 
 def _reference_date(row: dict) -> dt.date | None:
-    return lr._period_end_date(row.get("period_end")) or lr._period_end_date(row.get("as_of_date"))
+    """The classifier's reference date: period_end's end, else as_of_date's, free text read by its years."""
+    return lr._loose_period_bounds(row.get("period_end"))[1] or lr._loose_period_bounds(row.get("as_of_date"))[1]
 
 
 def test_pipe_fixture_rows_are_typed_and_future_rows_leave_the_fresh_bucket():
@@ -525,6 +694,10 @@ def test_pipe_fixture_rows_are_typed_and_future_rows_leave_the_fresh_bucket():
     # The one actual for a period not yet over is not reported.
     (euro,) = [r for r in rows if r["metric"].startswith("EuroHPC")]
     assert euro["epistemic_class"] == "unknown" and euro["epistemic_flags"] == ["future_dated_reported"]
+    # A cost estimate for "2025-2035" (published 2024-07) is a projection, not a reported number.
+    (pqc,) = [r for r in rows if r["metric"] == "federal PQC migration cost estimate"]
+    assert pqc["epistemic_class"] == "projected" and pqc["date_precision"] == "year"
+    assert not [r["metric"] for r in rows if "period_unparsed" in r.get("epistemic_flags", ())]
 
 
 def test_pipe_fixture_through_the_engine(tmp_path, bridge, monkeypatch, fixed_as_of):
@@ -540,6 +713,45 @@ def test_pipe_fixture_through_the_engine(tmp_path, bridge, monkeypatch, fixed_as
     assert provenance["as_of_is_target"] == 14 and provenance["future_dated_reported"] == 1
     assert provenance["verification_hist"] == {"none": 57}
     assert all(row["verification"] == "none" and row["verified"] is False for row in quant)
+
+
+# ============================================== chart builders read the typed rows
+
+def _pack_price(value: str, as_of_date: str, source: str, value_type: str = "actual") -> dict:
+    return {"metric": "battery pack price", "value": value, "unit": "USD per kWh", "as_of_date": as_of_date,
+            "value_type": value_type, "source": source, "definition": "average lithium-ion battery pack price"}
+
+
+def test_chart_builders_never_plot_future_dated_actuals_from_typed_rows():
+    """Typed recency withholds a future row's age (staleness_days None), which
+    the chart builders read as their only future-dated guard: is_future_dated
+    must keep a future 'actual' off the observed-value panels."""
+    renderer = _load_renderer()
+    rows = [_pack_price("115", "2025-12-31", "IEA"), _pack_price("118", "2025-12-31", "BNEF"),
+            _pack_price("80", "2027-12-31", "Agency A"), _pack_price("82", "2027-12-31", "Agency B"),
+            _pack_price("70", "2030-12-31", "Agency A", "forecast"),
+            _pack_price("72", "2030-12-31", "Agency B", "forecast")]
+    legacy = copy.deepcopy(rows)
+    dr.annotate_recency_rows(legacy, AS_OF, 365, date_key="as_of_date")
+    typed = copy.deepcopy(rows)
+    for row in typed:
+        row.update(lr.classify_quant_row(row, AS_OF))
+    dr.annotate_recency_rows(typed, AS_OF, 365, date_key="as_of_date", future_bucket=True)
+    assert [row.get("is_future_dated") for row in typed] == [None, None, True, True, True, True]
+    assert typed[2]["epistemic_class"] == "unknown" and typed[2]["staleness_days"] is None
+
+    def report_panels(annotated):
+        return [[(row["value"], row["projection"]) for row in panel["rows"]]
+                for panel in rv._prepare_quantitative_panels(annotated)]
+
+    def skill_panels(annotated):
+        return [[(bar["value"], bar["projection"]) for bar in panel["bars"]]
+                for panel in renderer.prep_quant(annotated)["panels"]]
+
+    assert report_panels(typed) == report_panels(legacy) == [[(115.0, False), (118.0, False)]]
+    # The future forecasts still chart, as projections.
+    assert skill_panels(typed) == skill_panels(legacy) == [[(115.0, False), (118.0, False)],
+                                                            [(70.0, True), (72.0, True)]]
 
 
 # ================================================================== parent wiring

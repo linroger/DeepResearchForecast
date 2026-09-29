@@ -228,6 +228,33 @@ def test_annotate_recency_future_bucket_keeps_future_rows_out_of_fresh():
     assert dr.annotate_recency_rows(None, ref, 365, future_bucket=True)["future_dated"] == 0
 
 
+def test_annotate_recency_future_bucket_counts_typed_target_dates():
+    """A row typed as_of_is_target holds a target date in as_of_date: it is
+    future-dated even when that date reads as this year's start or not at all."""
+    ref = dt.date(2026, 9, 28)
+    target = ["as_of_is_target"]
+
+    def rows():
+        return [{"as_of_date": "2026-Q4", "epistemic_flags": target},    # reads as 2026-01-01
+                {"as_of_date": "FY2027", "epistemic_flags": target},     # unreadable here
+                {"as_of_date": "2026-Q4"},                                # untyped: legacy reading
+                # an actual for the current month: not yet reported, but freshly published
+                {"as_of_date": "2026-09", "epistemic_flags": ["future_dated_reported"]}]
+
+    typed = rows()
+    hist = dr.annotate_recency_rows(typed, ref, 365, date_key="as_of_date", future_bucket=True)
+    assert hist == {"fresh_le_90": 1, "recent_le_365": 1, "stale_gt_365": 0, "undated": 0, "n_stale": 0,
+                    "future_dated": 2}
+    assert [row.get("is_future_dated") for row in typed] == [True, True, None, None]
+    assert typed[1] == {"as_of_date": "FY2027", "epistemic_flags": target, "staleness_days": None,
+                        "is_stale": False, "is_future_dated": True}
+    # Without the keyword the flag is ignored: the legacy histogram and annotations.
+    legacy = rows()
+    assert dr.annotate_recency_rows(legacy, ref, 365, date_key="as_of_date") == {
+        "fresh_le_90": 1, "recent_le_365": 2, "stale_gt_365": 0, "undated": 1, "n_stale": 0}
+    assert "is_future_dated" not in legacy[0] and legacy[0]["staleness_days"] == 270
+
+
 # --- R2-RES-9 gap threading -------------------------------------------------
 
 def test_parse_gaps_from_notes_lifts_gap_section_only():
