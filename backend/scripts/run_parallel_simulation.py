@@ -3549,6 +3549,9 @@ class _InbandWorldEvolution:
             # （本进程见过但 WorldState 未步进）按 missing 计入分母——有损续跑只覆盖部分
             # 轮次时不再被判 valid（post-hoc 只入账动作日志中出现的轮次，见
             # decision_channel_verdict）。嵌套 outcome.round_accounting 保留 WorldState 原始口径。
+            # 同理 converged_at / outcome.converged / outcome.convergence_state 只反映本进程实际
+            # 步进的轮次，未入账轮不改它们：有损续跑时 validity=inconclusive 可与"已趋稳"并存，
+            # 下游须以 validity 为准（报告侧 REPORT_WORLDSTATE_HIDE_INVALID 默认连趋稳行一并隐藏）。
             # 裁定失败只丢裁定键，绝不丢轨迹。
             try:
                 accounted = len(self._ws.round_statuses)

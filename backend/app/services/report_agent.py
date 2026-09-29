@@ -2515,7 +2515,10 @@ class ReportAgent:
                          "本分布不可用作任何依据；forecast_effect=no_update）")
             if getattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", True):
                 # SIM-1（fail-closed）：显式非 valid 裁定 → 只留警示与裁定原因，隐藏结果份额与
-                # 演化航点，正文无数字可引（份额行缺席 → 信号包解析不出 sim 结果分布）。
+                # 演化航点，正文无数字可引。注意：信号包解析器
+                # （forecast_extractor._WS_OUTCOME_HEADER_RE / _SIM_SIGNAL_TAXONOMY）至今仍锚定旧头
+                # 「【预测结果分布」，本来就不识别本块的「【推演结果分布」头；隐藏份额行保证即便该头部
+                # 漂移日后被修复，非 valid 块里也没有可被解析成 sim 结果分布的数字。
                 _reasons = (data or {}).get("validity_reasons")
                 _reasons = [str(r) for r in (_reasons if isinstance(_reasons, list) else [])
                             if str(r).strip()]
@@ -8626,7 +8629,8 @@ class ReportAgent:
         """把基线/情景两份最终 P(outcome) 归一化为可比维度的字典。
 
         返回 {dimensions:[{name, baseline, scenario, delta, verdict}]}；任一侧缺少
-        world_state_trajectory.json / outcome.shares 时返回 None。
+        world_state_trajectory.json / outcome.shares，或（REPORT_WORLDSTATE_HIDE_INVALID 开时）
+        任一侧带显式非 valid 有效性裁定时返回 None（后者记一条 info 日志，便于与缺轨迹区分）。
         """
         if not self.base_simulation_id:
             return None
@@ -8647,6 +8651,8 @@ class ReportAgent:
             if hide_invalid:
                 validity = str(doc.get("validity") or "").strip().lower()
                 if validity and validity != "valid":
+                    logger.info("情景对比表跳过：%s 轨迹有效性裁定=%s（REPORT_WORLDSTATE_HIDE_INVALID）",
+                                simulation_id, validity)
                     return {}
             out: Dict[str, float] = {}
             for name, value in raw.items() if isinstance(raw, dict) else []:

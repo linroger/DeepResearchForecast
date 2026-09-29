@@ -25,6 +25,7 @@ import pytest
 
 from app.config import Config
 from app.services import pipeline_orchestrator as po
+from app.services import report_agent as ra
 from app.services import report_visualizer as rv
 from app.services.forecast_extractor import world_state_outcome_from_signal_pack
 from app.services.report_agent import ReportAgent
@@ -87,12 +88,42 @@ def _write(root, sim_id, doc):
         json.dump(doc, f, ensure_ascii=False)
 
 
+def _signal_pack_outcome(block):
+    """Run the signal-pack parser on ``block`` with the header spelling it recognises.
+
+    forecast_extractor._WS_OUTCOME_HEADER_RE still pins the pre-Foglamp-1D header
+    「【预测结果分布」, so on the block as rendered it returns None whether or not share
+    lines are present. Rewriting the header lets the result depend on the share lines only.
+    """
+    return world_state_outcome_from_signal_pack(
+        block.replace("【推演结果分布", "【预测结果分布", 1))
+
+
 def _agent(sim_id, base_id=None):
     agent = ReportAgent.__new__(ReportAgent)
     agent.simulation_id = sim_id
     agent.base_simulation_id = base_id
     agent.scenario_label = "fork"
     return agent
+
+
+class _RecordingLogger:
+    """Stand-in for a non-propagating ``mirofish.*`` logger (caplog misses them)."""
+
+    def __init__(self):
+        self.records = []
+
+    def _log(self, level, msg, *args, **_kwargs):
+        self.records.append((level, msg % args if args else msg))
+
+    def info(self, msg, *args, **kwargs):
+        self._log("info", msg, *args, **kwargs)
+
+    def warning(self, msg, *args, **kwargs):
+        self._log("warning", msg, *args, **kwargs)
+
+    def of(self, level):
+        return [text for lvl, text in self.records if lvl == level]
 
 
 @pytest.fixture
@@ -129,8 +160,9 @@ def test_inconclusive_block_hides_shares_and_waypoints(sim_root):
     assert lines[0] == _HEADER and lines[1].startswith("⚠️ 有效性裁定：inconclusive")
     assert lines[-2:] == [_HIDDEN, _NOTE]
     assert len(lines) == 5
-    # fail-closed downstream: no share line → the signal-pack parser finds no sim outcome
-    assert world_state_outcome_from_signal_pack(block) is None
+    # fail-closed downstream: even under the parser's header spelling the block yields no
+    # sim outcome, because no share line is left (the knob-off test below is the pair)
+    assert _signal_pack_outcome(block) is None
 
 
 def test_invalid_block_without_reasons_omits_reason_line(sim_root):
@@ -167,19 +199,36 @@ def test_knob_off_inconclusive_still_renders_shares(sim_root, monkeypatch):
     assert "\n".join(lines[:1] + lines[2:]) == _LEGACY_V3_GOLDEN
     assert "· A: 62%" in lines and "裁定原因" not in block
     assert "演化航点（按日历时段）：" in lines
+    # regression pair for the fail-closed parser check: the same header rewrite recovers
+    # the sim outcome from a block that still renders its shares
+    parsed = _signal_pack_outcome(block)
+    assert parsed is not None
+    assert parsed["scenario_shares"] == {"A": 0.62, "B": 0.38}
 
 
 # ----------------------------------------------------- _scenario_diff_structured
-def test_scenario_diff_none_when_scenario_trajectory_invalid(sim_root):
+def test_scenario_diff_none_when_scenario_trajectory_invalid(sim_root, monkeypatch):
+    rec = _RecordingLogger()
+    monkeypatch.setattr(ra, "logger", rec)
     _write(sim_root, "sim_base", _traj("valid", []))
     _write(sim_root, "sim_fork", _traj("invalid", ["no_valid_rounds"]))
     assert _agent("sim_fork", "sim_base")._scenario_diff_structured() is None
+    # the suppression is traceable (unlike a missing trajectory, which logs nothing)
+    assert rec.of("info") == [
+        "情景对比表跳过：sim_fork 轨迹有效性裁定=invalid（REPORT_WORLDSTATE_HIDE_INVALID）"]
+    rec.records.clear()
+    assert _agent("sim_missing", "sim_base")._scenario_diff_structured() is None
+    assert rec.records == []
 
 
-def test_scenario_diff_none_when_baseline_trajectory_inconclusive(sim_root):
+def test_scenario_diff_none_when_baseline_trajectory_inconclusive(sim_root, monkeypatch):
+    rec = _RecordingLogger()
+    monkeypatch.setattr(ra, "logger", rec)
     _write(sim_root, "sim_base", _traj("inconclusive", ["failed_rounds"]))
     _write(sim_root, "sim_fork", _traj("valid", []))
     assert _agent("sim_fork", "sim_base")._scenario_diff_structured() is None
+    assert rec.of("info") == [
+        "情景对比表跳过：sim_base 轨迹有效性裁定=inconclusive（REPORT_WORLDSTATE_HIDE_INVALID）"]
 
 
 def test_scenario_diff_dict_when_both_valid_or_legacy(sim_root):
@@ -298,25 +347,6 @@ def test_build_all_matplotlib_only_host_records_skip_reason(viz, tmp_path, monke
 
 
 # ------------------------------------------------ _log_decision_channel_outcome
-class _RecordingLogger:
-    """Stand-in for the orchestrator's non-propagating ``mirofish.*`` logger."""
-
-    def __init__(self):
-        self.records = []
-
-    def _log(self, level, msg, *args, **_kwargs):
-        self.records.append((level, msg % args if args else msg))
-
-    def info(self, msg, *args, **kwargs):
-        self._log("info", msg, *args, **kwargs)
-
-    def warning(self, msg, *args, **kwargs):
-        self._log("warning", msg, *args, **kwargs)
-
-    def of(self, level):
-        return [text for lvl, text in self.records if lvl == level]
-
-
 def _log_outcome(sim_root, monkeypatch, doc):
     sim = sim_root / "sim_log"
     sim.mkdir(exist_ok=True)
