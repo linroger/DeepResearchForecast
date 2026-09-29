@@ -6,7 +6,7 @@ WORSE forecasts (vaguer, over-hedged, mis-calibrated). Unit tests check code
 shape; they cannot tell you whether a 70% actually happens ~70% of the time.
 This harness turns forecast quality into a NUMBER against ground truth: it scores
 the pipeline's binary_forecasts against a curated set of REAL, already-resolved
-2024-2026 yes/no questions (``backend/tests/eval/golden_questions.json``) and
+2024-2025 yes/no questions (``backend/tests/eval/golden_questions.json``) and
 emits Brier score, logarithmic score, calibration bins + ECE, resolution
 accuracy, and per-category / per-difficulty breakdowns — so you can compare
 ``eval_report.json`` across code versions and SEE whether a change helped.
@@ -17,9 +17,12 @@ purely-deterministic, offline OUTCOME scorer — no LLM, no network — that gra
 probabilities against known truth. They are complementary, not duplicative.
 
 INTENDED WORKFLOW (the whole point — read this before using):
-  1. For each golden question, build a research brief and run the pipeline with an
-     AS-OF constraint at/near the question's ``as_of_date`` (the knowledge cutoff a
-     fair forecaster should be scored at — do NOT let it peek past the outcome).
+  1. For each golden question, build a research brief from
+     ``app.services.golden_set.forecaster_view(q)`` only (id, question,
+     resolution_criteria, as_of_date; every other field is grader-only and
+     answer-bearing) and run the pipeline framed at the question's ``as_of_date``.
+     ``as_of_date`` is the forecast origin, not a model knowledge cutoff: research
+     is not point-in-time yet, so no replay is a fair as-of forecast.
      As-of runs must set PREDICTION_MARKETS_ENABLED=false (or use hindcast market
      admission once available): live Polymarket odds leak the outcome.
   2. Set each produced binary forecast's ``id`` to the golden question's ``id``
@@ -52,6 +55,15 @@ INTENDED WORKFLOW (the whole point — read this before using):
   (``brier_scale: multiclass_sum``, 2x the binary Brier for YES/NO rows); the
   golden section is binary (``golden.brier_scale: binary``).
 
+Golden files declaring ``_meta.schema_version: 2`` (EVAL-9) are also checked
+against the v2 contract on load (``golden_set.validate_question``: outcome-free
+visible text, UTC resolve_time after the as_of day, ...), and their rows with
+``scoring_status: ambiguous`` are never scored (``exclusions.ambiguous``). In any
+file, an evidence-backed row whose recomputed label disagrees with its record
+fails loudly (exit 4).
+``backend/scripts/golden_curate.py audit`` reports the same checks plus a
+balance audit without scoring anything.
+
 This script NEVER runs the pipeline itself — it only scores its outputs.
 
 The pure scoring core (brier / log-score / ECE bins / matching / breakdowns) is
@@ -70,7 +82,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.services import eval_stats  # noqa: E402
+from app.services import eval_stats, golden_set  # noqa: E402
 from app.utils.atomic import write_json_atomic, write_text_atomic  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -95,6 +107,9 @@ BOOTSTRAP_SEED = eval_stats.DEFAULT_BOOTSTRAP_SEED
 # share of BSS replicates that may lack a reference before the BSS interval is
 # withheld (see rigor_ci).
 BOOTSTRAP_ALPHA = 0.05
+# EVAL-9: exit status when an evidence-backed golden row's recomputed label
+# disagrees with its recorded outcome (3 stays "nothing matched").
+EXIT_RECOMPUTE_MISMATCH = 4
 
 
 # ============================================================ pure scoring core
@@ -362,22 +377,50 @@ def rigor_ci(scored: List[Dict[str, Any]], B: int, seed: int = BOOTSTRAP_SEED) -
     }
 
 
-def load_golden_set(path: str = GOLDEN_PATH) -> List[Dict[str, Any]]:
-    """Load + validate the golden question set. Accepts either a top-level list or
-    an object with a ``questions`` list. Each entry needs a non-empty ``id`` and a
-    boolean ``resolved_outcome``; malformed entries raise ValueError (fail loud —
-    a silently-dropped golden question would understate coverage)."""
+def load_golden_file(path: str = GOLDEN_PATH) -> Tuple[int, List[Dict[str, Any]]]:
+    """Load + validate a golden file; returns ``(schema_version, questions)``.
+
+    Accepts either a top-level list or an object with a ``questions`` list. Each
+    entry needs a non-empty ``id`` and a boolean ``resolved_outcome``; malformed
+    entries raise ValueError (fail loud — a silently-dropped golden question
+    would understate coverage).
+
+    EVAL-9: a file declaring ``_meta.schema_version: 2`` also runs
+    ``golden_set.validate_question`` (non-strict) on every row and raises
+    ValueError naming the id on any error; there, a row with ``scoring_status:
+    ambiguous`` needs no boolean outcome (validate_question governs it). In any
+    file, an evidence-backed row whose recomputed label disagrees with its
+    record raises ``golden_set.RecomputeMismatchError`` (a ValueError; ``main``
+    exits 4). v1 rows carry no evidence, so v1 files keep exactly the checks above.
+    """
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     questions = data.get("questions") if isinstance(data, dict) else data
     if not isinstance(questions, list) or not questions:
         raise ValueError(f"golden set {path} has no 'questions' list")
+    version = golden_set.schema_version(data)
+    v2 = version == golden_set.SCHEMA_VERSION
     for q in questions:
         if not isinstance(q, dict) or not str(q.get("id") or "").strip():
             raise ValueError(f"golden entry missing 'id': {q!r}")
+        if v2 and golden_set.is_ambiguous(q):
+            continue
         if not isinstance(q.get("resolved_outcome"), bool):
             raise ValueError(f"golden entry {q.get('id')!r} needs boolean 'resolved_outcome'")
-    return questions
+    for q in questions:
+        errors = golden_set.validate_question(q) if v2 else []
+        if errors:
+            raise ValueError(f"golden entry {q['id']!r} breaks the schema v2 contract: "
+                             + "; ".join(errors))
+        mismatch = golden_set.recompute_mismatch(q)
+        if mismatch:
+            raise golden_set.RecomputeMismatchError(f"golden entry {q['id']!r}: {mismatch}")
+    return version, questions
+
+
+def load_golden_set(path: str = GOLDEN_PATH) -> List[Dict[str, Any]]:
+    """The validated golden questions of ``path`` (see ``load_golden_file``)."""
+    return load_golden_file(path)[1]
 
 
 def index_golden(questions: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
@@ -431,15 +474,21 @@ def match_forecasts(binary_forecasts: List[Dict[str, Any]],
     invalid first one). Matched rows also carry ``cluster`` (golden
     ``event_cluster``, else the id), ``horizon_days`` (resolution_date minus
     as_of_date; None without canonical dates) and ``horizon_bucket``.
+
+    EVAL-9: a golden row with ``scoring_status: ambiguous`` is never scored. Its id
+    is listed under ``exclusions.ambiguous`` (whether or not a forecast names it)
+    and in neither unmatched list, so an excluded row never reads as an id
+    misalignment.
     """
     matched: List[Dict[str, Any]] = []
     matched_ids: set = set()
     invalid: List[str] = []
     seen: set = set()
     duplicates: set = set()
+    ambiguous = {gid for gid, g in golden_index.items() if golden_set.is_ambiguous(g)}
     for row in binary_forecasts:
         fid = str(row.get("id") or "").strip()
-        if not fid or fid not in golden_index:
+        if not fid or fid not in golden_index or fid in ambiguous:
             continue
         if fid in seen:
             duplicates.add(fid)
@@ -470,10 +519,11 @@ def match_forecasts(binary_forecasts: List[Dict[str, Any]],
     forecast_ids = {str(r.get("id") or "").strip() for r in binary_forecasts if str(r.get("id") or "").strip()}
     return {
         "matched": matched,
-        "unmatched_forecast_ids": sorted(forecast_ids - matched_ids - set(invalid)),
-        "unmatched_golden_ids": sorted(set(golden_index) - matched_ids),
+        "unmatched_forecast_ids": sorted(forecast_ids - matched_ids - set(invalid) - ambiguous),
+        "unmatched_golden_ids": sorted(set(golden_index) - matched_ids - ambiguous),
         "invalid_probability_ids": sorted(invalid),
         "duplicate_forecast_ids": sorted(duplicates),
+        "exclusions": {"ambiguous": sorted(ambiguous)},
     }
 
 
@@ -646,6 +696,9 @@ def render_markdown(report: Dict[str, Any]) -> str:
     dup = report.get("duplicate_forecast_ids") or []
     if dup:
         lines.append(f"- repeated forecast ids (first row scored, later rows ignored): {', '.join(dup)}")
+    excluded = (report.get("exclusions") or {}).get("ambiguous") or []
+    if excluded:
+        lines.append(f"- excluded, ambiguous resolution (never scored): {', '.join(excluded)}")
     _render_metrics(m, lines)
 
     rows = report.get("matched") or []
@@ -722,7 +775,7 @@ def _write_outputs(report: Dict[str, Any], out_path: Optional[str], md_path: Opt
 # =============================================================== CLI commands
 
 def cmd_score_forecast_file(args) -> int:
-    questions = load_golden_set(args.golden)
+    version, questions = load_golden_file(args.golden)
     gindex = index_golden(questions)
     with open(args.forecast, encoding="utf-8") as f:
         forecast_obj = json.load(f)
@@ -755,6 +808,10 @@ def cmd_score_forecast_file(args) -> int:
         "ledger_appended": ledger_appended,
         "promotion_eligible": False,
     }
+    # EVAL-9: a v2 golden set always reports its exclusions; a v1 report keeps its
+    # exact pre-EVAL-9 keys unless a row really was excluded.
+    if version == golden_set.SCHEMA_VERSION or any(match["exclusions"].values()):
+        report["exclusions"] = match["exclusions"]
     _write_outputs(report, args.out, args.markdown)
     # Non-zero exit only when NOTHING matched — a signal the ids are misaligned, not
     # a quality gate (there is no committed golden baseline to gate against here).
@@ -878,7 +935,12 @@ def main() -> int:
     b.set_defaults(func=cmd_score_ledger)
 
     args = ap.parse_args()
-    return args.func(args)
+    try:
+        return args.func(args)
+    except golden_set.RecomputeMismatchError as exc:
+        # EVAL-9: an answer key that its own evidence contradicts is never scored.
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_RECOMPUTE_MISMATCH
 
 
 if __name__ == "__main__":
