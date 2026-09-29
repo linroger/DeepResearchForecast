@@ -32,10 +32,12 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 import os
 import re
 import threading
 import unicodedata
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -90,6 +92,14 @@ def is_production_calibration_row(e: Dict[str, Any]) -> bool:
     if record_class and record_class != "production":
         return False
     return _is_scorable_row(e)
+
+
+def is_production_primary_commit(e: Any) -> bool:
+    """EVAL-3: a production primary commit row, the only forecast target a settlement
+    event may label for production calibration (I-21)."""
+    return (isinstance(e, dict) and e.get("row_type") == "commit"
+            and e.get("calibration_role") == "primary"
+            and is_production_calibration_row(e))
 
 
 def _is_scorable_row(e: Dict[str, Any]) -> bool:
@@ -274,36 +284,113 @@ def read_ledger(d: Optional[str] = None) -> List[Dict[str, Any]]:
     return out
 
 
+def _settlement_fold_default(include_evaluation: bool) -> bool:
+    """EVAL-3: FORECAST_LEDGER_SETTLEMENT_FOLD for the production lane. The evaluation lane
+    never folds unless asked: its golden rows carry known outcomes, not settlement events,
+    so the gate would drop every one of them."""
+    if include_evaluation:
+        return False
+    try:
+        from ..config import Config
+        return bool(getattr(Config, "FORECAST_LEDGER_SETTLEMENT_FOLD", False))
+    except Exception:  # noqa: BLE001 — unreadable config → the historical, unfolded read
+        return False
+
+
+def _calibration_selection(d: Optional[str], entries: Optional[List[Dict[str, Any]]], *,
+                           include_evaluation: bool, as_of: Any,
+                           fold_settlements: Optional[bool],
+                           events: Optional[List[Dict[str, Any]]]
+                           ) -> Tuple[List[Dict[str, Any]], int, Dict[str, int]]:
+    """EVAL-3: the resolved scenario forecasts calibration may score, shared by
+    calibration_summary and recalibration_param → ``(resolved, n_unscoreable, excluded)``.
+
+    ``fold_settlements`` None follows ``_settlement_fold_default``. Folding replaces the
+    production primary commit rows by ``forecast_resolution.resolved_view`` over the
+    settlement ``events`` (read from ``d`` only when neither ``entries`` nor ``events`` is
+    given, so explicit entries keep a call hermetic). A candidate is a resolved row with
+    scenarios that passes the record-class rule (silently, as before). With the fold on or
+    an ``as_of`` given, it must pass ``forecast_resolution.admissible`` — the only
+    point-in-time gate; it must always pass ``is_scoreable_resolution``. ``excluded``
+    counts every candidate either check rejected, by reason; ``n_unscoreable`` those the
+    scoreability check rejected.
+    """
+    from . import forecast_resolution as fr  # lazy: forecast_resolution imports this module
+
+    if fold_settlements is None:
+        fold = _settlement_fold_default(include_evaluation)
+    else:
+        fold = bool(fold_settlements)
+    led = entries if entries is not None else read_ledger(d)
+    if fold:
+        if events is None:
+            events = [] if entries is not None else read_market_resolutions(d)
+        led = fr.resolved_view(led, events) + [e for e in led
+                                               if not is_production_primary_commit(e)]
+    gated = fold or as_of is not None
+    resolved: List[Dict[str, Any]] = []
+    excluded: Counter = Counter()
+    n_unscoreable = 0
+    for e in led:
+        if not isinstance(e, dict) or not e.get("resolved") or not e.get("scenarios"):
+            continue
+        if not (_is_scorable_row(e) if include_evaluation else is_production_calibration_row(e)):
+            continue
+        if gated:
+            ok, reason = fr.admissible(e, as_of)
+            if not ok:
+                excluded[reason] += 1
+                continue
+        reason = fr.unscoreable_reason(e)
+        if reason is not None:
+            excluded[reason] += 1
+            n_unscoreable += 1
+            continue
+        resolved.append({"forecast": {"scenarios": e.get("scenarios")}, "outcome": e.get("outcome")})
+    return resolved, n_unscoreable, dict(sorted(excluded.items()))
+
+
 def calibration_summary(d: Optional[str] = None, entries: Optional[List[Dict[str, Any]]] = None,
-                        *, include_evaluation: bool = False) -> Dict[str, Any]:
+                        *, include_evaluation: bool = False, as_of: Any = None,
+                        fold_settlements: Optional[bool] = None,
+                        events: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Historical calibration over RESOLVED ledger entries (Brier / ECE / count).
 
     Each resolved entry carries ``outcome`` = the scenario name that actually occurred.
-    Returns ``{n_resolved, mean_brier, calibration_error}`` (Nones when nothing resolved).
+    Returns ``{n_resolved, mean_brier, calibration_error, n_excluded_unscoreable,
+    excluded}`` (Nones when nothing resolved); ``mean_brier`` is the multi-class sum
+    over scenarios (0-2).
 
     Foglamp WP1 (1E, I-21): by default only PRODUCTION rows count —
     golden/characterization/evaluation rows are excluded by record type. The
     evaluation lane (``golden_eval``) may opt in with ``include_evaluation=True``
     to score an isolated evaluation ledger; production callers never pass it.
     Revisions and unpublished terminals are never scored in either lane (EVAL-1).
+
+    EVAL-3 (see ``_calibration_selection``): a row whose outcome matches no scenario
+    name, or several, is never scored as an all-miss; it is counted in
+    ``n_excluded_unscoreable`` and ``excluded`` instead. ``fold_settlements`` (None =
+    FORECAST_LEDGER_SETTLEMENT_FOLD on the production lane) folds the settlement
+    ``events`` into the production primary commit rows; with the fold on or an
+    ``as_of`` date given, only items ``forecast_resolution.admissible`` admits count,
+    i.e. known strictly before 00:00Z of ``as_of`` (before now without it). With the
+    fold off and no ``as_of``, the selection is the historical one minus unscoreable rows.
     """
-    led = entries if entries is not None else read_ledger(d)
-    resolved = [
-        {"forecast": {"scenarios": e.get("scenarios")}, "outcome": e.get("outcome")}
-        for e in led
-        if e.get("resolved") and e.get("outcome") and e.get("scenarios")
-        and (_is_scorable_row(e) if include_evaluation else is_production_calibration_row(e))
-    ]
+    resolved, n_unscoreable, excluded = _calibration_selection(
+        d, entries, include_evaluation=include_evaluation, as_of=as_of,
+        fold_settlements=fold_settlements, events=events)
+    counts = {"n_excluded_unscoreable": n_unscoreable, "excluded": excluded}
     if not resolved:
-        return {"n_resolved": 0, "mean_brier": None, "calibration_error": None}
+        return {"n_resolved": 0, "mean_brier": None, "calibration_error": None, **counts}
     try:
         from .backtest import calibration_report
         rep = calibration_report(resolved)
         return {"n_resolved": len(resolved),
                 "mean_brier": rep.get("mean_brier"),
-                "calibration_error": rep.get("calibration_error")}
+                "calibration_error": rep.get("calibration_error"), **counts}
     except Exception:  # noqa: BLE001
-        return {"n_resolved": len(resolved), "mean_brier": None, "calibration_error": None}
+        return {"n_resolved": len(resolved), "mean_brier": None, "calibration_error": None,
+                **counts}
 
 
 def due_for_resolution(as_of: str, d: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -324,24 +411,25 @@ def due_for_resolution(as_of: str, d: Optional[str] = None) -> List[Dict[str, An
 
 def recalibration_param(d: Optional[str] = None,
                         entries: Optional[List[Dict[str, Any]]] = None,
-                        *, include_evaluation: bool = False) -> Dict[str, Any]:
+                        *, include_evaluation: bool = False, as_of: Any = None,
+                        fold_settlements: Optional[bool] = None,
+                        events: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """R2-CAL-5: fit the 1-param logit-scale recalibrator over RESOLVED ledger entries.
 
-    Returns ``{slope, n, fitted, enabled}``. ``enabled`` mirrors the
-    ``REPORT_RECALIBRATE_FROM_LEDGER`` flag (default OFF) so a caller can fit the
-    parameter for inspection yet only APPLY it once explicitly enabled AND enough
-    labels exist (``fitted``). Identity slope (1.0) when data is thin → applying it is
-    a no-op (degrade-safe; deferred until labels accrue).
+    Returns ``{slope, n, fitted, enabled, n_excluded_unscoreable, excluded}``.
+    ``enabled`` mirrors the shadow-only ``REPORT_RECALIBRATE_FROM_LEDGER`` flag (default
+    OFF): nothing applies the slope until a WP14 PromotionDecision. Identity slope (1.0)
+    when data is thin → applying it would be a no-op (degrade-safe).
+
+    EVAL-3: selects rows exactly like ``calibration_summary`` (same kwargs, same
+    ``admissible`` gate and scoreability filter, same exclusion counts).
     """
-    led = entries if entries is not None else read_ledger(d)
     # Foglamp WP1 (1E, I-21)：重校准拟合默认只吃生产行（见 is_production_calibration_row）；
     # include_evaluation=True 仅供评估通道在隔离账本上使用（EVAL-1：修订行/未发布行两道都不计）。
-    resolved = [
-        {"forecast": {"scenarios": e.get("scenarios")}, "outcome": e.get("outcome")}
-        for e in led
-        if e.get("resolved") and e.get("outcome") and e.get("scenarios")
-        and (_is_scorable_row(e) if include_evaluation else is_production_calibration_row(e))
-    ]
+    resolved, n_unscoreable, excluded = _calibration_selection(
+        d, entries, include_evaluation=include_evaluation, as_of=as_of,
+        fold_settlements=fold_settlements, events=events)
+    counts = {"n_excluded_unscoreable": n_unscoreable, "excluded": excluded}
     enabled = False
     try:
         from ..config import Config
@@ -349,14 +437,15 @@ def recalibration_param(d: Optional[str] = None,
     except Exception:  # noqa: BLE001
         enabled = False
     if not resolved:
-        return {"slope": 1.0, "n": 0, "fitted": False, "enabled": enabled}
+        return {"slope": 1.0, "n": 0, "fitted": False, "enabled": enabled, **counts}
     try:
         from .backtest import fit_recalibrator
         fit = fit_recalibrator(resolved)
         fit["enabled"] = enabled
+        fit.update(counts)
         return fit
     except Exception:  # noqa: BLE001
-        return {"slope": 1.0, "n": len(resolved), "fitted": False, "enabled": enabled}
+        return {"slope": 1.0, "n": len(resolved), "fitted": False, "enabled": enabled, **counts}
 
 
 # ---------------------------------------------------------------------------
@@ -511,6 +600,74 @@ def market_brier_summary(d: Optional[str] = None,
         return {"n_resolved": len(recs), "mean_brier": None}
     return {"n_resolved": len(recs),
             "mean_brier": round(sum(briers) / len(briers), 4)}
+
+
+def _unit_probability(value: Any) -> Optional[float]:
+    """A finite probability in [0, 1], else None (bools are not probabilities)."""
+    if isinstance(value, bool):
+        return None
+    try:
+        p = float(value)
+    except (TypeError, ValueError):
+        return None
+    return p if math.isfinite(p) and 0.0 <= p <= 1.0 else None
+
+
+def binary_calibration_summary(d: Optional[str] = None, *, as_of: Any = None,
+                               events: Optional[List[Dict[str, Any]]] = None,
+                               entries: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """EVAL-3: binary-scale calibration over the folded binary settlement events.
+
+    Folds ``events`` (default: ``resolutions.jsonl`` in ``d``) per item with
+    ``forecast_resolution.fold_binary_items``, legacy rows proven against ``entries``
+    (default: ``ledger.jsonl`` in ``d``), and keeps the items ``admissible(item, as_of)``
+    admits. Each is scored as the YES/NO two-scenario forecast ``append_golden_result``
+    writes (YES = model_p, NO = 1 - model_p) through ``backtest.calibration_report``;
+    that multi-class sum is twice the binary Brier for a YES/NO pair, so ``mean_brier``
+    is halved onto the binary 0-1 scale. Returns ``{n_resolved, mean_brier,
+    calibration_error, excluded, as_of, scale: 'binary'}``; ``excluded`` counts by
+    reason every folded item that is not scored (admissibility reasons,
+    ``no_binary_outcome``, ``invalid_model_probability``).
+    """
+    from . import forecast_resolution as fr  # lazy: forecast_resolution imports this module
+
+    items = fr.fold_binary_items(
+        events if events is not None else read_market_resolutions(d),
+        targets=entries if entries is not None else read_ledger(d))
+    resolved: List[Dict[str, Any]] = []
+    excluded: Counter = Counter()
+    for key in sorted(items):
+        item = items[key]
+        ok, reason = fr.admissible(item, as_of)
+        if not ok:
+            excluded[reason] += 1
+            continue
+        outcome = str(item.get("outcome") or "").strip().upper()
+        if outcome not in ("YES", "NO"):
+            excluded["no_binary_outcome"] += 1
+            continue
+        p = _unit_probability(item.get("model_p"))
+        if p is None:
+            excluded["invalid_model_probability"] += 1
+            continue
+        resolved.append({"forecast": {"scenarios": [
+            {"name": "YES", "probability": round(p, 4)},
+            {"name": "NO", "probability": round(1.0 - p, 4)},
+        ]}, "outcome": outcome})
+    out: Dict[str, Any] = {"n_resolved": len(resolved), "mean_brier": None,
+                           "calibration_error": None, "excluded": dict(sorted(excluded.items())),
+                           "as_of": as_of, "scale": "binary"}
+    if resolved:
+        try:
+            from .backtest import calibration_report
+            rep = calibration_report(resolved)
+            multi_class = rep.get("mean_brier")
+            if isinstance(multi_class, (int, float)):
+                out["mean_brier"] = round(multi_class / 2.0, 4)
+            out["calibration_error"] = rep.get("calibration_error")
+        except Exception:  # noqa: BLE001 — scoring failure leaves the numbers None
+            pass
+    return out
 
 
 # ---------------------------------------------------------------------------

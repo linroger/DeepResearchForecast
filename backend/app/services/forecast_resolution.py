@@ -48,19 +48,30 @@ Honesty rules (all fail closed):
   the end date unverifiable.
 - An item that already holds a terminal row is final: a market that settles
   later never adds a second fact for it (``already_terminal``).
+
+EVAL-3 adds the reader side (no I/O, inputs never mutated; the only clock is
+``admissible``'s default ``now`` when no as-of date is given):
+``fold_binary_items`` and ``resolved_view`` fold the events of one item into a
+single fact (scoring-eligible settled > ineligible settled > terminal; eligible
+events that disagree are a ``conflict``), ``admissible`` is the one
+point-in-time gate every calibration consumer calls, and
+``is_scoreable_resolution`` keeps unmatched or ambiguous scenario outcomes from
+being scored as an all-miss.
 """
 
 from __future__ import annotations
 
+import copy
 import math
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from ..utils.deadline_dates import DateMention, scan_date_mentions
 from ..utils.point_in_time import parse_stamp_strict
 from ..utils.prediction_markets import current_uma_status, parse_market_end
+from .ensemble import _norm_name
 from .forecast_extractor import (
     _MARKET_EQUIVALENCE_RANK,
     _market_anchor_complete,
@@ -70,6 +81,7 @@ from .forecast_ledger import (
     _RANGE_JOIN,
     MARKET_RESOLUTION_EVENT_SCHEMA_VERSION,
     binary_resolution_date,
+    is_production_primary_commit,
 )
 
 BASIS_SOURCE = "source"
@@ -682,3 +694,340 @@ def settle_binaries(report_id: Any, binaries: Any, resolutions: Any, *,
         "ineligible_by_reason": dict(sorted(ineligible.items())),
         "already_terminal": already_terminal,
     }
+
+
+# ---------------------------------------------------------------------------
+# EVAL-3: reader side (settlement fold, point-in-time gate, scoreability)
+# ---------------------------------------------------------------------------
+
+ITEM_KIND_SCENARIO_SET = "scenario_set"
+# The folded status of an item whose scoring-eligible events disagree on the outcome.
+RESOLUTION_CONFLICT = "conflict"
+# Fields resolved_view fills on each production primary commit row, from its folded
+# scenario_set events only (a row with no event gets the unresolved defaults).
+_VIEW_DEFAULTS: Dict[str, Any] = {
+    "resolved": False, "outcome": None, "outcome_known_at": None, "known_at_basis": None,
+    "processed_at": None, "scoring_eligible": False, "prospective": None,
+    "resolution_status": None, "ineligible_reason": None,
+}
+_LATEST_ORDER_KEY = datetime.max.replace(tzinfo=timezone.utc)
+
+
+def _event_item(event: Dict[str, Any]) -> Dict[str, Any]:
+    """One schema_version 2 event as a fold candidate (a new dict; the event is untouched)."""
+    status = "terminal" if _is_terminal_row(event) else str(
+        event.get("resolution_status") or "unknown")
+    return {
+        "report_id": str(event.get("report_id") or "").strip(),
+        "item_id": str(event.get("forecast_id") or "").strip(),
+        "item_kind": event.get("item_kind") or ITEM_KIND_BINARY,
+        "market_id": str(event.get("market_id") or "").strip(),
+        "source_kind": event.get("source_kind"),
+        "resolution_status": status,
+        "outcome": event.get("outcome"),
+        "y": event.get("y"),
+        "model_p": event.get("model_p"),
+        "outcome_known_at": event.get("outcome_known_at"),
+        "known_at_basis": event.get("known_at_basis"),
+        "processed_at": event.get("processed_at"),
+        "prospective": event.get("prospective"),
+        "scoring_eligible": event.get("scoring_eligible") is True,
+        "ineligible_reason": event.get("ineligible_reason"),
+        "target_commit_id": event.get("target_commit_id"),
+        "schema_version": event.get("schema_version"),
+        "legacy": False,
+    }
+
+
+def _legacy_outcome(event: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    """``(outcome, reason)`` of a legacy row: the converged final YES price decides
+    (>= 0.99 YES, <= 0.01 NO, as the legacy monitor only recorded converged markets);
+    without a price, a 'Yes'/'No' resolved_outcome label; anything else has no outcome."""
+    yes_price = _finite(event.get("resolved_yes_price"))
+    if yes_price is not None:
+        if yes_price >= _UNSETTLED_PRICE_HI:
+            return "YES", None
+        if yes_price <= _UNSETTLED_PRICE_LO:
+            return "NO", None
+        return None, "not_converged"
+    label = str(event.get("resolved_outcome") or "").strip().upper()
+    return (label, None) if label in ("YES", "NO") else (None, "no_yes_outcome")
+
+
+def _binary_targets(targets: Optional[Iterable[Any]]
+                    ) -> Dict[Tuple[str, str], Optional[Tuple[Dict[str, Any], Dict[str, Any]]]]:
+    """``(report_id, binary id) -> (commit row, binary)`` over the production primary commit
+    rows in ``targets``; a key that two rows register maps to None (it proves nothing)."""
+    index: Dict[Tuple[str, str], Optional[Tuple[Dict[str, Any], Dict[str, Any]]]] = {}
+    for row in targets or []:
+        if not is_production_primary_commit(row):
+            continue
+        report_id = str(row.get("report_id") or "").strip()
+        binaries = row.get("binary_forecasts")
+        for binary in binaries if isinstance(binaries, list) else []:
+            item_id = str(binary.get("id") or "").strip() if isinstance(binary, dict) else ""
+            if report_id and item_id:
+                key = (report_id, item_id)
+                index[key] = None if key in index else (row, binary)
+    return index
+
+
+def _legacy_binary_item(event: Dict[str, Any], targets: Dict[Tuple[str, str], Any]
+                        ) -> Dict[str, Any]:
+    """A legacy (schema_version 1) row as a fold candidate.
+
+    Its only stamp is ``resolved_at``, a processing time, so the basis is always
+    ``processing_upper_bound``. It is scoring-eligible only when a production primary
+    v2 commit row registers the binary with this very market as its anchor, the anchor
+    passes ``market_eligibility`` at the ``exact`` floor and ``prospective_status``
+    proves the outcome was unknown at the forecast origin (research price strictly
+    inside (0.01, 0.99), market end after the as-of date); otherwise it is ineligible.
+    """
+    report_id = str(event.get("report_id") or "").strip()
+    item_id = str(event.get("forecast_id") or "").strip()
+    market_id = str(event.get("market_id") or "").strip()
+    resolved_at = event.get("resolved_at")
+    outcome, reason = _legacy_outcome(event)
+    prospective: Prospective = "unknown"
+    if reason is None:
+        target = targets.get((report_id, item_id))
+        if target is None:
+            reason = "no_v2_target"
+        else:
+            row, binary = target
+            anchor = binary.get("market_anchor")
+            if anchor_market_id(binary) != market_id:
+                reason = "market_mismatch"
+            else:
+                as_of, created_at = row.get("as_of_date"), row.get("created_at")
+                origin = as_of if as_of not in (None, "") else created_at
+                eligible, eligibility_reason = market_eligibility(binary, anchor, "exact",
+                                                                  origin=origin)
+                prospective = prospective_status(resolved_at, BASIS_PROCESSING_UPPER_BOUND,
+                                                 as_of, created_at, anchor)
+                if not eligible:
+                    reason = eligibility_reason
+                elif prospective is not True:
+                    reason = "not_prospective" if prospective is False else "prospective_unknown"
+    return {
+        "report_id": report_id,
+        "item_id": item_id,
+        "item_kind": ITEM_KIND_BINARY,
+        "market_id": market_id,
+        "source_kind": SOURCE_KIND_MARKET,
+        "resolution_status": "settled" if outcome is not None else "unknown",
+        "outcome": outcome,
+        "y": None if outcome is None else (1 if outcome == "YES" else 0),
+        "model_p": event.get("model_p"),
+        "outcome_known_at": resolved_at,
+        "known_at_basis": BASIS_PROCESSING_UPPER_BOUND,
+        "processed_at": resolved_at,
+        "prospective": prospective,
+        "scoring_eligible": reason is None,
+        "ineligible_reason": reason,
+        "target_commit_id": None,
+        "schema_version": event.get("schema_version"),
+        "legacy": True,
+    }
+
+
+def effective_known_at(item: Any) -> Optional[datetime]:
+    """The instant an item's outcome counts as known, or None when it is unverifiable.
+
+    ``outcome_known_at`` on a ``source`` or ``attested`` basis, else ``processed_at``
+    (an upper bound). Read with ``parse_stamp_strict`` at the latest instant it can
+    denote: a bare date is the end of its UTC day, and a naive, partial or missing
+    stamp is None.
+    """
+    if not isinstance(item, dict):
+        return None
+    if item.get("known_at_basis") in (BASIS_SOURCE, BASIS_ATTESTED):
+        return _latest_instant(item.get("outcome_known_at"))
+    return _latest_instant(item.get("processed_at"))
+
+
+def _fold_tier(item: Dict[str, Any]) -> int:
+    """Fold precedence: 2 = scoring-eligible settled outcome, 1 = any other settlement
+    fact (ineligible, ambiguous, ...), 0 = grace terminal."""
+    if item.get("resolution_status") == "terminal":
+        return 0
+    if (item.get("scoring_eligible") is True and item.get("resolution_status") == "settled"
+            and _norm_name(item.get("outcome"))):
+        return 2
+    return 1
+
+
+def _fold_order(item: Dict[str, Any]) -> Tuple[bool, datetime, str, str]:
+    """Earliest effective known-at first (an unverifiable stamp last); ties by stamp text
+    and market id, so the fold never depends on the order events were appended."""
+    known = effective_known_at(item)
+    return (known is None, known or _LATEST_ORDER_KEY,
+            str(item.get("processed_at") or ""), str(item.get("market_id") or ""))
+
+
+def _fold(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """One item's events → one folded fact (a new dict).
+
+    The highest tier wins; within it the earliest effective known-at, which is the
+    tightest upper bound on when the outcome became known. Two or more scoring-eligible
+    settlements whose outcomes differ (after ``ensemble._norm_name``) make the item a
+    ``conflict``: never scored, whichever outcome is right.
+    """
+    best = max(_fold_tier(item) for item in items)
+    top = sorted((item for item in items if _fold_tier(item) == best), key=_fold_order)
+    folded = dict(top[0])
+    folded["n_events"] = len(items)
+    outcomes = {_norm_name(item.get("outcome")) for item in top}
+    if best == 2 and len(outcomes) > 1:
+        folded.update({
+            "resolution_status": RESOLUTION_CONFLICT, "outcome": None, "y": None,
+            "scoring_eligible": False, "ineligible_reason": RESOLUTION_CONFLICT,
+            "conflicting_outcomes": sorted({str(item.get("outcome")) for item in top}),
+        })
+    return folded
+
+
+def fold_binary_items(events: Optional[Iterable[Any]], targets: Optional[Iterable[Any]] = None
+                      ) -> Dict[Tuple[str, str], Dict[str, Any]]:
+    """``{(report_id, item_id): folded item}`` over the binary settlement events.
+
+    ``events`` are resolutions.jsonl rows; scenario_set and other non-binary kinds are
+    skipped. schema_version 2 events keep the writer's facts. Legacy rows (any other
+    schema_version) are rebuilt by ``_legacy_binary_item`` and can only be proven
+    eligible through ``targets`` (ledger rows; only production primary commit rows
+    count); without targets they are ineligible (``no_v2_target``). Each item folds by
+    ``_fold``: scoring-eligible settled > ineligible settled > terminal, and
+    disagreeing eligible events make a ``conflict``.
+    """
+    proofs = _binary_targets(targets)
+    grouped: Dict[Tuple[str, str], List[Dict[str, Any]]] = defaultdict(list)
+    for event in events or []:
+        if not isinstance(event, dict) or event.get("item_kind") not in (None, ITEM_KIND_BINARY):
+            continue
+        if event.get("schema_version") == MARKET_RESOLUTION_EVENT_SCHEMA_VERSION:
+            item = _event_item(event)
+        else:
+            item = _legacy_binary_item(event, proofs)
+        if item["report_id"] and item["item_id"]:
+            grouped[(item["report_id"], item["item_id"])].append(item)
+    return {key: _fold(items) for key, items in grouped.items()}
+
+
+def resolved_view(entries: Optional[Iterable[Any]], events: Optional[Iterable[Any]]
+                  ) -> List[Dict[str, Any]]:
+    """Copies of the production primary commit rows of ``entries``, each with its folded
+    ``scenario_set`` settlement filled in: ``resolved``, ``outcome``, ``outcome_known_at``,
+    ``known_at_basis``, ``processed_at``, ``scoring_eligible``, ``prospective``,
+    ``resolution_status`` and ``ineligible_reason``.
+
+    An event belongs to a row by ``report_id`` and, when it names one, by
+    ``target_commit_id``. A row with no event gets the unresolved defaults, so a hand-marked
+    ``resolved`` on disk never counts; only a grace terminal leaves ``resolved`` False.
+    Other rows are left out. Never mutates ``entries`` or ``events`` and never touches disk.
+    """
+    by_report: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for event in events or []:
+        if isinstance(event, dict) and event.get("item_kind") == ITEM_KIND_SCENARIO_SET:
+            item = _event_item(event)
+            if item["report_id"]:
+                by_report[item["report_id"]].append(item)
+    view: List[Dict[str, Any]] = []
+    for row in entries or []:
+        if not is_production_primary_commit(row):
+            continue
+        commit_id = str(row.get("commit_id") or "").strip()
+        candidates = [item for item in by_report.get(str(row.get("report_id") or "").strip(), [])
+                      if not item["target_commit_id"]
+                      or str(item["target_commit_id"]).strip() == commit_id]
+        out = copy.deepcopy(row)
+        out.update(_VIEW_DEFAULTS)
+        if candidates:
+            folded = _fold(candidates)
+            out.update({key: folded.get(key) for key in _VIEW_DEFAULTS})
+            out["resolved"] = folded["resolution_status"] != "terminal"
+        view.append(out)
+    return view
+
+
+def _as_of_cutoff(as_of: Any) -> Optional[datetime]:
+    """00:00Z of the UTC day ``as_of`` names (a canonical date, an offset-aware stamp,
+    or a ``date``/aware ``datetime``); None when it names no unambiguous day."""
+    if isinstance(as_of, datetime):
+        moment = as_of.astimezone(timezone.utc) if as_of.tzinfo is not None else None
+    elif isinstance(as_of, date):
+        moment = datetime(as_of.year, as_of.month, as_of.day, tzinfo=timezone.utc)
+    else:
+        moment = parse_stamp_strict(as_of)
+    if moment is None:
+        return None
+    return datetime(moment.year, moment.month, moment.day, tzinfo=timezone.utc)
+
+
+def admissible(item: Any, as_of: Any = None, *,
+               now: Optional[datetime] = None) -> Tuple[bool, Optional[str]]:
+    """``(ok, reason)``: may this folded item (or ``resolved_view`` row) enter calibration?
+
+    The single point-in-time gate: every calibration consumer calls it and nothing else
+    decides. Checked in order, first failure wins:
+
+    - ``conflict``: its scoring-eligible events disagree on the outcome;
+    - not ``scoring_eligible``: the writer's ``ineligible_reason`` when it recorded one
+      (``not_prospective``, ``ambiguous_settlement``, ``unresolvable_after_grace`` ...),
+      else ``not_scoring_eligible``;
+    - ``not_prospective``: ``prospective`` is not True (no proof the outcome was unknown
+      at the forecast origin);
+    - ``unverifiable_stamp``: no strict effective known-at (``effective_known_at``);
+    - with ``as_of`` None, ``known_after_now`` unless known-at <= ``now`` (offset-aware,
+      default the current UTC time); otherwise ``known_on_or_after_as_of`` unless
+      known-at is strictly before 00:00Z of the ``as_of`` day, so an outcome known on the
+      as-of day itself is excluded; ``unverifiable_as_of`` when ``as_of`` names no day.
+    """
+    if not isinstance(item, dict):
+        return False, "not_an_item"
+    if item.get("resolution_status") == RESOLUTION_CONFLICT:
+        return False, RESOLUTION_CONFLICT
+    if item.get("scoring_eligible") is not True:
+        reason = item.get("ineligible_reason")
+        return False, reason if isinstance(reason, str) and reason else "not_scoring_eligible"
+    if item.get("prospective") is not True:
+        return False, "not_prospective"
+    known = effective_known_at(item)
+    if known is None:
+        return False, "unverifiable_stamp"
+    if as_of is None:
+        current = now if now is not None else datetime.now(timezone.utc)
+        if current.tzinfo is None:
+            raise ValueError("now must be an offset-aware datetime")
+        return (True, None) if known <= current else (False, "known_after_now")
+    cutoff = _as_of_cutoff(as_of)
+    if cutoff is None:
+        return False, "unverifiable_as_of"
+    return (True, None) if known < cutoff else (False, "known_on_or_after_as_of")
+
+
+def unscoreable_reason(entry: Any) -> Optional[str]:
+    """Why a resolved scenario row cannot be scored, or None when it can.
+
+    ``not_resolved``; ``not_settled`` (a ``resolution_status`` other than absent or
+    'settled'); ``no_outcome``; ``unmatched_outcome`` (the outcome names no scenario) and
+    ``ambiguous_outcome`` (it names several), both under ``ensemble._norm_name``, the
+    scorer's own normaliser. Scoring either would count every scenario as a miss or two
+    as hits, so such a row never enters calibration.
+    """
+    if not isinstance(entry, dict) or not entry.get("resolved"):
+        return "not_resolved"
+    if entry.get("resolution_status") not in (None, "settled"):
+        return "not_settled"
+    target = _norm_name(entry.get("outcome") or "")
+    if not target:
+        return "no_outcome"
+    matches = sum(1 for scenario in (entry.get("scenarios") or [])
+                  if isinstance(scenario, dict) and _norm_name(scenario.get("name")) == target)
+    if matches == 0:
+        return "unmatched_outcome"
+    return "ambiguous_outcome" if matches > 1 else None
+
+
+def is_scoreable_resolution(entry: Any) -> bool:
+    """True when a resolved scenario row can be scored (see ``unscoreable_reason``)."""
+    return unscoreable_reason(entry) is None

@@ -328,6 +328,17 @@ class Config:
     # EVAL-1: cap on the question text stored in a commit row (question_sha256 always covers the
     # full normalized text, so the cap only bounds row size, never identity).
     FORECAST_LEDGER_QUESTION_MAX_CHARS = int(os.environ.get('FORECAST_LEDGER_QUESTION_MAX_CHARS', '4000') or '4000')
+    # EVAL-3: true = the report's historical calibration folds the settlement events of
+    # resolutions.jsonl into the production primary commit rows, admits only items whose outcome
+    # was known before 00:00Z of the report's as-of date (forecast_resolution.admissible) and adds
+    # that as_of plus a binary-scale block to forecast['historical_calibration']. Default off
+    # (ADR 0002 decision 6, shadow first): the report path stays byte-identical, while the
+    # resolution monitor always shows the folded numbers as shadow observability.
+    FORECAST_LEDGER_SETTLEMENT_FOLD = os.environ.get('FORECAST_LEDGER_SETTLEMENT_FOLD', 'false').strip().lower() == 'true'
+    # R2-CAL-5 / EVAL-3: shadow-only. forecast_ledger.recalibration_param reports this as
+    # `enabled` beside the fitted slope, but nothing applies a slope until a WP14
+    # PromotionDecision, so neither value changes any forecast; default off.
+    REPORT_RECALIBRATE_FROM_LEDGER = os.environ.get('REPORT_RECALIBRATE_FROM_LEDGER', 'false').strip().lower() == 'true'
     # MON-1 持续预测/判定监测（scripts/resolution_monitor.py，cron 驱动）：对已发布报告的锚定
     # 市场周期性重报价 + 查询判定终态，落 price_track.jsonl / resolutions.jsonl / monitor_report.md。
     # 纯脚本旁路，不改任何在线管线语义；下列旋钮仅被该脚本读取（degrade-safe，默认保守）。
