@@ -246,6 +246,62 @@ def test_market_eligibility_rules():
     assert fr.market_eligibility(undated, undated["market_anchor"], "exact") == (
         False, "end_date_unverifiable")
 
+    # The end-date check fails closed: a later date in resolution_source (a publication
+    # date) never loosens it, with or without a forecast origin.
+    brent = {"id": "B1", "proposition_id": "prop-B1", "probability": 0.2, "horizon_year": 2026,
+             "statement": "Brent closes above $100 by 2026-06-30.",
+             "resolution_criteria": ("Resolves YES if Brent settles above $100 on any day "
+                                     "by 2026-06-30."),
+             "resolution_source": "EIA weekly report published 2027-01-10"}
+    brent["market_anchor"] = _build_market_anchor(
+        0.2, {"market_id": "m-brent", "question": "Brent above $100 in 2026?",
+              "implied_yes_prob": 0.3, "url": "https://polymarket.com/event/m-brent",
+              "end_date": "2026-12-31T23:59:59Z"},
+        equivalence="exact", match_confidence=0.9, binary=brent)
+    assert fr.settlement_resolution_date(brent) == "2027-01-10"  # grace waits for the latest
+    for origin in (None, "2026-05-01"):
+        assert fr.eligibility_deadline(brent, origin) == "2026-06-30"
+        assert fr.market_eligibility(brent, brent["market_anchor"], "exact", origin=origin) == (
+            False, "end_date_mismatch"), origin
+    # 'on <deadline> ... published by <later date>': the deadline is the earliest date on or
+    # after the origin, so a market ending near the publication date is a different window.
+    cpi = {"id": "C1", "proposition_id": "prop-C1", "probability": 0.4, "horizon_year": 2027,
+           "statement": "US CPI inflation is above 3% on 2027-12-31.",
+           "resolution_criteria": ("Resolves YES if CPI YoY on 2027-12-31 exceeds 3%, as "
+                                   "published by 2028-03-31.")}
+    for market_end, expected in (("2028-04-07T00:00:00Z", (False, "end_date_mismatch")),
+                                 ("2028-01-05T00:00:00Z", (True, None))):
+        cpi["market_anchor"] = _build_market_anchor(
+            0.4, {"market_id": "m-cpi", "question": "US CPI above 3% at end of 2027?",
+                  "implied_yes_prob": 0.35, "url": "https://polymarket.com/event/m-cpi",
+                  "end_date": market_end},
+            equivalence="exact", match_confidence=0.9, binary=cpi)
+        assert fr.market_eligibility(cpi, cpi["market_anchor"], "exact",
+                                     origin="2026-05-01") == expected, market_end
+    assert fr.eligibility_deadline(cpi, "2026-05-01") == "2027-12-31"
+    assert fr.settlement_resolution_date(cpi) == "2028-03-31"
+
+
+def test_eligibility_deadline_contract():
+    baseline = {"statement": "GDP exceeds its 2024-12-31 level by 2027-06-30.",
+                "resolution_source": "Eurostat release 2027-09-15", "horizon_year": 2027}
+    # Dates before the origin day are baselines; the origin day itself can be the deadline.
+    assert fr.eligibility_deadline(baseline, "2026-05-01") == "2027-06-30"
+    assert fr.eligibility_deadline(baseline, "2026-05-02T08:00:00+00:00") == "2027-06-30"
+    assert fr.eligibility_deadline(baseline, "2027-06-30") == "2027-06-30"
+    # No readable origin: every named date counts, so the check is the strictest one.
+    for origin in (None, "", "May 2026", "2026-05-01T08:00:00"):
+        assert fr.eligibility_deadline(baseline, origin) == "2024-12-31", origin
+    # Every named date before the origin → horizon_year's end; resolution_source is ignored.
+    assert fr.eligibility_deadline(baseline, "2027-07-01") == "2027-12-31"
+    assert fr.eligibility_deadline({"resolution_source": "release 2026-09-30",
+                                    "horizon_year": 2026}) == "2026-12-31"
+    assert fr.eligibility_deadline({"statement": "someday"}) is None
+    assert fr.eligibility_deadline(None) is None
+    # An unreadable horizon_year never raises (the sweep computes due items outside its try).
+    assert fr.settlement_resolution_date({"statement": "someday", "horizon_year": "inf"}) is None
+    assert fr.eligibility_deadline({"statement": "someday", "horizon_year": 1e400}) is None
+
 
 def test_settlement_resolution_date_is_the_latest_named_date():
     """A baseline date named before the deadline never triggers a premature terminal or an
@@ -275,14 +331,23 @@ def test_settlement_resolution_date_is_the_latest_named_date():
                               grace_days=180)
     assert [t["evidence"]["resolution_date"] for t in late["terminal"]] == ["2027-06-30"]
 
-    # Exact anchor whose market ends on the real deadline: eligible, never end_date_mismatch.
+    # Exact anchor whose market ends on the real deadline: eligible once the forecast origin
+    # shows the first date is a baseline; without an origin the check fails closed.
     anchored = dict(baseline)
     anchored["market_anchor"] = _build_market_anchor(
         0.6, {"market_id": "m-gdp", "question": "Euro-area GDP above end-2024 by June 2027?",
               "implied_yes_prob": 0.55, "url": "https://polymarket.com/event/m-gdp",
               "end_date": "2027-06-30T12:00:00Z"},
         equivalence="exact", match_confidence=0.9, binary=anchored)
-    assert fr.market_eligibility(anchored, anchored["market_anchor"], "exact") == (True, None)
+    assert fr.market_eligibility(anchored, anchored["market_anchor"], "exact",
+                                 origin=META["as_of"]) == (True, None)
+    assert fr.market_eligibility(anchored, anchored["market_anchor"], "exact") == (
+        False, "end_date_mismatch")
+    no_as_of = fr.settle_binaries(
+        "r1", [anchored],
+        {"m-gdp": _resolved("m-gdp", 1.0, closed_time="2027-07-01T09:00:00Z")},
+        target_meta=dict(META, as_of=None), processed_at="2027-07-02T00:00:00+00:00")
+    assert no_as_of["events"][0]["ineligible_reason"] is None  # created_at is the origin
     open_market = fr.settle_binaries(
         "r1", [anchored], {"m-gdp": _resolved("m-gdp", 0.55, closed=False, uma=None)},
         target_meta=META, processed_at=PROCESSED)
@@ -472,6 +537,25 @@ def test_uma_status_history_uses_current_stage():
     # A 50/50 settlement whose history ends 'resolved' is ambiguous; one still proposed is not.
     assert history("m-1", 0.5, ["proposed", "resolved"])["resolution_status"] == "ambiguous"
     assert history("m-1", 0.5, ["resolved", "proposed"])["resolution_status"] == "unknown"
+
+    # A history Gamma sends as a real JSON array keeps its JSON form, never a Python repr
+    # ("['proposed', 'resolved']" would read as a pending proposal until the grace terminal).
+    def listed(yes, stages):
+        raw = _gamma("m-1", yes, uma=None)
+        raw["umaResolutionStatuses"] = stages
+        return pm._parse_resolution(raw)
+
+    for stages in (["proposed", "resolved"], ("proposed", "resolved")):
+        parsed = listed(1.0, stages)
+        assert parsed["uma_status"] == '["proposed", "resolved"]', stages
+        assert pm.current_uma_status(parsed["uma_status"]) == "resolved"
+        assert parsed["resolution_status"] == "settled"
+        out = fr.settle_binaries("r1", [_binary()], {"m-1": parsed}, target_meta=META,
+                                 processed_at=PROCESSED)
+        assert [e["scoring_eligible"] for e in out["events"]] == [True], stages
+    assert listed(0.5, ["proposed", "resolved"])["resolution_status"] == "ambiguous"
+    assert listed(1.0, ["proposed"])["uma_status"] == '["proposed"]'
+    assert listed(1.0, [])["uma_status"] == "[]"
 
 
 def test_ambiguous_settlement_event_not_scored(tmp_path):
@@ -698,9 +782,19 @@ def test_target_meta_from_commit_row_else_meta_json(tmp_path):
     assert mon.target_meta_for("r1", ledger_dir=led, report_folder=str(folder))[
         "production_primary"] is None
     _, row = _commit(_forecast([_binary()]), "r1", d=led)
-    assert mon.target_meta_for("r1", ledger_dir=led, report_folder=str(folder)) == {
-        "as_of": "2026-05-01", "created_at": "2026-05-02T08:00:00+00:00",
-        "commit_id": row["commit_id"], "production_primary": True}
+    primary_meta = {"as_of": "2026-05-01", "created_at": "2026-05-02T08:00:00+00:00",
+                    "commit_id": row["commit_id"], "production_primary": True}
+    assert mon.target_meta_for("r1", ledger_dir=led, report_folder=str(folder)) == primary_meta
+    # Given the binaries to settle, only the commit that pre-registered exactly them counts.
+    assert mon.target_meta_for("r1", ledger_dir=led, report_folder=str(folder),
+                               binaries=_forecast([_binary()])["binary_forecasts"]) == (
+        primary_meta)
+    for other in ([_binary(probability=0.45)], [_binary(), _binary("F2", market_id="m-2")], [],
+                  [dict(_binary(), probability=float("nan"))]):
+        assert mon.target_meta_for("r1", ledger_dir=led, report_folder=str(folder),
+                                   binaries=other) == {
+            "as_of": None, "created_at": None, "commit_id": None,
+            "production_primary": False}, other
     assert mon._local_stamp_to_utc("not a date") is None
     assert mon._local_stamp_to_utc(None) is None
 
@@ -761,6 +855,30 @@ def test_non_production_targets_never_record_settlement(reports_dir):
                                  processed_at=PROCESSED)["events"][0]
     assert (blocked["scoring_eligible"], blocked["ineligible_reason"]) == (
         False, "not_production_primary")
+
+
+def test_run_monitor_settles_only_the_registered_binaries(reports_dir):
+    """A later publication under the same report id is never scored under the primary's
+    commit: run_monitor records nothing for it, while the sweep settles the primary's own
+    pre-registered binaries."""
+    registered = _forecast([_binary(probability=0.30)])
+    _, primary = _commit(registered, "r-rep")
+    _write_sealed_report("r-rep", _forecast([_binary(probability=0.45)]))
+    client = _Client({"m-1": _resolved("m-1", 1.0)})
+    res = mon.run_monitor("r-rep", client=client, as_of=PROCESSED)
+    assert "skipped" not in res
+    assert res["settlement"]["not_recorded"] == "not_production_primary"
+    assert res["newly_recorded_count"] == 0 and fl.read_market_resolutions() == []
+    assert mon.settle_ledger(client=client, as_of=PROCESSED)["appended"] == 1
+    (event,) = fl.read_market_resolutions()
+    assert (event["model_p"], event["target_commit_id"], event["scoring_eligible"]) == (
+        0.30, primary["commit_id"], True)
+    # With the registered bytes sealed on disk, run_monitor agrees with the sweep.
+    _write_sealed_report("r-rep", registered)
+    again = mon.run_monitor("r-rep", client=client, as_of=PROCESSED)
+    assert "not_recorded" not in again["settlement"] and again["settlement"]["appended"] == 0
+    assert [(r["model_p"], r["target_commit_id"]) for r in again["resolution_records"]] == [
+        (0.30, primary["commit_id"])]
 
 
 def test_normalize_processed_at():
@@ -852,19 +970,83 @@ def test_settle_sweep_skips_finished_targets_before_the_cap(tmp_path):
     assert client.calls == [("resolutions", ["m-new"]), ("resolutions", ["m-old"])]
     assert mon.settle_ledger(client=client, ledger_dir=led, as_of=PROCESSED)["targets"] == 0
 
-    # has_open_items: an item is final once any resolutions row holds it (market, ambiguous,
-    # terminal or legacy); an item with neither an anchor nor a date can never settle.
+    # due_binaries: an item is final once any resolutions row holds it (market, ambiguous,
+    # terminal or legacy); an anchored item always needs a fetch; an unanchored one is due
+    # only once its grace period has expired (an undated one never is).
     recorded = fr.recorded_items([{"report_id": "r", "forecast_id": "F1", "market_id": "terminal"},
                                   "junk"])
     assert recorded == {("r", "F1")}
     undated = {"id": "F2", "statement": "someday", "probability": 0.5}
-    dated = {"id": "F3", "statement": "by 2027-01-01", "probability": 0.5}
-    assert fr.has_open_items("r", [_binary("F1")], recorded) is False
-    assert fr.has_open_items("r", [_binary("F1"), undated, {"statement": "no id"}],
-                             recorded) is False
-    assert fr.has_open_items("r", [_binary("F1"), dated], recorded) is True
-    assert fr.has_open_items("other", [_binary("F1")], recorded) is True
-    assert fr.has_open_items("r", None, recorded) is False
+    expired = {"id": "F3", "statement": "by 2025-01-01", "probability": 0.5}
+    in_grace = {"id": "F4", "statement": "by 2026-06-30", "probability": 0.5}
+
+    def due(report_id, binaries):
+        return [b["id"] for b in fr.due_binaries(report_id, binaries, recorded,
+                                                 processed_at=PROCESSED, grace_days=180)]
+
+    assert due("r", [_binary("F1")]) == []
+    assert due("r", [_binary("F1"), undated, in_grace, {"statement": "no id"}, "junk"]) == []
+    assert due("r", [_binary("F1"), expired, _binary("F5", market_id="m-5")]) == ["F3", "F5"]
+    assert due("other", [_binary("F1")]) == ["F1"]
+    assert due("r", None) == []
+    with pytest.raises(ValueError):
+        fr.due_binaries("r", [expired], recorded, processed_at="2026-09-29T12:00:00")
+
+
+def test_settle_sweep_cap_never_starves_grace_terminals(tmp_path):
+    """I-20: a target whose only open items are unanchored and inside grace takes no cap slot,
+    and the cap limits only targets that need a market fetch, so an older target whose grace
+    has expired always gets its terminal."""
+    def unanchored(fid, deadline):
+        return {"id": fid, "statement": f"Event by {deadline}", "probability": 0.5,
+                "resolution_criteria": f"Event by {deadline}"}
+
+    led = str(tmp_path / "ledger")
+    _commit(_forecast([unanchored("F1", "2024-01-01")]), "r-old", d=led, question="Old?")
+    _commit(_forecast([unanchored("F1", "2029-01-01")]), "r-mid", d=led, question="Mid?")
+    _commit(_forecast([unanchored("F1", "2030-01-01")]), "r-new", d=led, question="New?")
+    client = _Client()
+    first = mon.settle_ledger(client=client, ledger_dir=led, as_of=PROCESSED, max_targets=1)
+    assert (first["targets"], first["terminal"], first["appended"]) == (1, 1, 1)
+    assert first["pending_by_reason"] == {} and first["deferred_by_cap"] == 0
+    assert mon.settle_ledger(client=client, ledger_dir=led, as_of=PROCESSED,
+                             max_targets=1)["targets"] == 0
+    assert [(r["report_id"], r["forecast_id"], r["market_id"])
+            for r in fl.read_market_resolutions(led)] == [("r-old", "F1", "terminal")]
+    assert client.calls == []  # a grace terminal needs no network
+
+    # Newer anchored targets fill the cap; older grace terminals still land, and a deferred
+    # target's anchored item is neither fetched nor ended.
+    led2 = str(tmp_path / "ledger2")
+    _commit(_forecast([unanchored("F1", "2024-01-01"), _binary("F2", market_id="m-mixed")]),
+            "r-mixed", d=led2, question="Mixed?")
+    _commit(_forecast([unanchored("F1", "2024-06-01")]), "r-local", d=led2, question="Local?")
+    _commit(_forecast([_binary(market_id="m-a")]), "r-a", d=led2, question="A?")
+    _commit(_forecast([_binary(market_id="m-b")]), "r-b", d=led2, question="B?")
+    client = _Client({mid: _resolved(mid, 0.4, closed=False, uma=None)
+                      for mid in ("m-a", "m-b", "m-mixed")})
+    out = mon.settle_ledger(client=client, ledger_dir=led2, as_of=PROCESSED, max_targets=1)
+    assert client.calls == [("resolutions", ["m-b"])]
+    assert (out["targets"], out["deferred_by_cap"], out["terminal"]) == (3, 2, 2)
+    assert out["pending_by_reason"] == {"market_open": 1}
+    assert sorted((r["report_id"], r["forecast_id"], r["market_id"])
+                  for r in fl.read_market_resolutions(led2)) == [
+        ("r-local", "F1", "terminal"), ("r-mixed", "F1", "terminal")]
+
+
+class _GammaResponse:
+    """Minimal httpx response for PolymarketClient._request."""
+
+    def __init__(self, payload, status_code=200):
+        self.payload, self.status_code = payload, status_code
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise pm.httpx.HTTPStatusError(f"HTTP {self.status_code}",
+                                           request=None, response=None)
+
+    def json(self):
+        return self.payload
 
 
 def test_failed_request_batch_never_ends_an_item(monkeypatch, tmp_path):
@@ -873,28 +1055,20 @@ def test_failed_request_batch_never_ends_an_item(monkeypatch, tmp_path):
     monkeypatch.setattr(Config, "PREDICTION_MARKETS_ENABLED", True, raising=False)
     monkeypatch.setattr(Config, "PREDICTION_MARKETS_REQUOTE_CHUNK", 1, raising=False)
 
-    class Response:
-        def __init__(self, payload, status_code=200):
-            self.payload, self.status_code = payload, status_code
-
-        def raise_for_status(self):
-            if self.status_code >= 400:
-                raise pm.httpx.HTTPStatusError(f"HTTP {self.status_code}",
-                                               request=None, response=None)
-
-        def json(self):
-            return self.payload
+    limits = []
 
     def fake_get(url, params=None, timeout=None, headers=None):
         (mid,) = params["id"]
+        limits.append(params.get("limit"))
         if mid == "m-fail":
-            return Response(None, status_code=400)
-        return Response([_gamma(mid, 1.0)] if mid == "m-ok" else [])
+            return _GammaResponse(None, status_code=400)
+        return _GammaResponse([_gamma(mid, 1.0)] if mid == "m-ok" else [])
 
     monkeypatch.setattr(pm.httpx, "get", fake_get)
     client = pm.PolymarketClient()
     resolutions, answered = client.fetch_resolutions_answered(["m-fail", "m-ok", "m-gone"])
     assert set(resolutions) == {"m-ok"} and answered == {"m-ok", "m-gone"}
+    assert limits == [1, 1, 1]
     assert client.fetch_resolutions(["m-ok"]) == {"m-ok": resolutions["m-ok"]}
     monkeypatch.setattr(Config, "PREDICTION_MARKETS_ENABLED", False, raising=False)
     assert pm.PolymarketClient().fetch_resolutions_answered(["m-ok"]) == ({}, set())
@@ -910,6 +1084,41 @@ def test_failed_request_batch_never_ends_an_item(monkeypatch, tmp_path):
     rows = fl.read_market_resolutions(led)
     assert sorted((r["forecast_id"], r["market_id"]) for r in rows) == [
         ("F2", "m-ok"), ("F3", "terminal")]
+
+
+def test_missing_market_needs_a_single_id_answer(monkeypatch):
+    """A multi-id page may be truncated: an omitted id is confirmed missing only by a
+    successful request for that id alone, and a page that ignores the id filter confirms
+    nothing."""
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_ENABLED", True, raising=False)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_REQUOTE_CHUNK", 3, raising=False)
+    requests = []
+
+    def truncating(url, params=None, timeout=None, headers=None):
+        requests.append(dict(params))
+        ids = params["id"]
+        if len(ids) > 1:  # every multi-id page stops after its first row
+            return _GammaResponse([_gamma(ids[0], 1.0)])
+        (mid,) = ids
+        if mid == "m-flaky":
+            return _GammaResponse(None, status_code=400)
+        return _GammaResponse([_gamma(mid, 1.0)] if mid == "m-late" else [])
+
+    monkeypatch.setattr(pm.httpx, "get", truncating)
+    resolutions, answered = pm.PolymarketClient().fetch_resolutions_answered(
+        ["m-first", "m-late", "m-gone", "m-flaky"])
+    assert set(resolutions) == {"m-first", "m-late"}
+    assert answered == {"m-first", "m-late", "m-gone"}
+    assert requests == [{"id": ["m-first", "m-late", "m-gone"], "limit": 3},
+                        {"id": ["m-late"], "limit": 1}, {"id": ["m-gone"], "limit": 1},
+                        {"id": ["m-flaky"], "limit": 1}]
+
+    def unfiltered(url, params=None, timeout=None, headers=None):
+        return _GammaResponse([_gamma("m-other", 1.0)])
+
+    monkeypatch.setattr(pm.httpx, "get", unfiltered)
+    for ids in (["m-x", "m-y"], ["m-x"]):
+        assert pm.PolymarketClient().fetch_resolutions_answered(ids)[1] == set(), ids
 
 
 def test_settle_sweep_skips_a_failing_row(monkeypatch, tmp_path):

@@ -28,8 +28,10 @@ EVAL-2（settlement events v2，确定性、无 LLM）：
   事件仍落 resolutions.jsonl，幂等键 (report_id, forecast_id, market_id) 与文件锁不变。
   只有生产 primary 目标的结算入账：ensemble / what-if / comparison / revision / evaluation
   报告（生产或 evaluation 账本里有行、却无生产 primary commit）照算照报、一条不写。
-- ``settle`` 子命令：按新到旧扫描账本里仍有待结算条目的生产 primary commit 行（自包含
-  binary_forecasts，报告目录已删也能结算），批量查判定并追加事件；
+- ``settle`` 子命令：按新到旧扫描账本里的生产 primary commit 行（自包含
+  binary_forecasts，报告目录已删也能结算），只处理本轮可处理的条目（未入账，且有市场
+  锚点、或无锚点且已过 grace），批量查判定并追加事件；RESOLUTION_SETTLE_MAX_TARGETS
+  只限需联网查判定的行，已过 grace 的无锚点条目不受上限（terminal 不需要网络）；
   RESOLUTION_SETTLE_LEDGER=true（默认）时 ``run --all-recent`` 在逐报告循环后也跑一次。
   ensemble / evaluation 行永不扫描。
 
@@ -623,8 +625,21 @@ def _report_ledger_rows(report_id: str, ledger_dir: Optional[str]) -> List[Dict[
             if isinstance(row, dict) and row.get("report_id") == report_id]
 
 
+def _registers_binaries(row: Dict[str, Any], binaries: List[Dict[str, Any]]) -> bool:
+    """这条 commit 行是否恰好预登记了 ``binaries``（EVAL-1 的 compact_binary 形态，按 JSON
+    往返比较，与账本读回的行同形）。"""
+    try:
+        registered = json.loads(json.dumps(
+            [_ledger.compact_binary(b) for b in binaries if isinstance(b, dict)],
+            ensure_ascii=False, allow_nan=False))
+    except (TypeError, ValueError):
+        return False  # 不可入账的二元预测不可能被任何 commit 行预登记
+    return registered == row.get("binary_forecasts")
+
+
 def target_meta_for(report_id: str, *, ledger_dir: Optional[str] = None,
-                    report_folder: Optional[str] = None) -> Dict[str, Any]:
+                    report_folder: Optional[str] = None,
+                    binaries: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """一份报告的预测原点 {as_of, created_at, commit_id, production_primary}。
 
     - 账本里有它的生产 primary commit 行 → 取该行（as_of_date / created_at / commit_id），
@@ -633,16 +648,21 @@ def target_meta_for(report_id: str, *, ledger_dir: Optional[str] = None,
       comparison / evaluation 类、revision、unpublished_terminal、非生产的旧行）→
       production_primary=False：它的结算绝不能给生产校准打标签（I-21），run_monitor 不写账；
     - 完全没有行（EVAL-1 之前的旧报告、账本关闭）→ {as_of: None, created_at: meta.json 的
-      created_at（本地时间→UTC）}，production_primary=None（无从证明，按旧行为结算）。"""
+      created_at（本地时间→UTC）}，production_primary=None（无从证明，按旧行为结算）。
+
+    给出 ``binaries``（run_monitor 要结算的二元预测）时，只有恰好预登记了它们的 commit 行
+    才算数：同一 report_id 若有第二次发布（字节不同的 revision 等），盘上的概率绝不能记在
+    primary 的 commit 名下——无匹配的生产 primary → production_primary=False（fail closed）。"""
     rows = _report_ledger_rows(report_id, ledger_dir)
-    for row in rows:
+    commits = [row for row in rows if row.get("row_type") == "commit"
+               and (binaries is None or _registers_binaries(row, binaries))]
+    for row in commits:
         if _is_production_primary(row):
             return _commit_target_meta(row)
     # 旧式 schema_version 1 生产行（无 row_type）不证明任何事，照旧回落 meta.json。
     if any("row_type" in row or not _ledger.is_production_calibration_row(row) for row in rows):
-        commit = next((row for row in rows if row.get("row_type") == "commit"), None)
-        if commit is not None:
-            return _commit_target_meta(commit, production_primary=False)
+        if commits:
+            return _commit_target_meta(commits[0], production_primary=False)
         return {"as_of": None, "created_at": None, "commit_id": None,
                 "production_primary": False}
     meta = _read_json(os.path.join(report_folder, "meta.json")) if report_folder else None
@@ -675,9 +695,10 @@ def _fetch_resolutions(client: Any,
                        market_ids: List[str]) -> Tuple[Dict[str, Dict[str, Any]], Set[str]]:
     """查判定终态 → ``(resolutions, answered_ids)``；异常照常上抛由调用方降级。
 
-    客户端提供 fetch_resolutions_answered（PolymarketClient）时，answered 是请求成功的批次
-    里的全部 id（含确认无此市场的）；否则只把返回了数据的 id 视为应答——判定源是否确认
-    「无此市场」无从得知，条目宁可保持 pending，也不因失败的批次被永久 terminal（fail closed）。"""
+    客户端提供 fetch_resolutions_answered（PolymarketClient）时，answered 是判定源确实应答过
+    的 id（返回了该行，或经单 id 请求确认无此市场）；否则只把返回了数据的 id 视为应答——
+    判定源是否确认「无此市场」无从得知，条目宁可保持 pending，也不因失败的批次被永久
+    terminal（fail closed）。"""
     fetch_answered = getattr(client, "fetch_resolutions_answered", None)
     if callable(fetch_answered):
         resolutions, answered = fetch_answered(market_ids)
@@ -741,7 +762,8 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     forecast 时只读审计封印的 forecast.json，读不到 → ``{skipped: 'not_sealed'}``；两者
     都不写盘、不联网。``as_of`` 规整为 UTC 的 processed_at（无时区按 UTC 读），是结算判定
     唯一的时钟。``target_meta``（{as_of, created_at, commit_id, production_primary}）缺省取
-    target_meta_for；production_primary 为 False（非生产 primary 目标）时结算照算照报、
+    target_meta_for（只认恰好预登记了本次二元预测的 commit 行）；production_primary 为
+    False（非生产 primary 目标，或盘上二元预测不是 primary 预登记的那份）时结算照算照报、
     事件一律 not_production_primary，但一条也不入账（settlement.not_recorded）。
     terminal 事件照常入账，但不计入 resolved_count / newly_recorded_count /
     resolution_records，单列在 terminal_count / newly_terminal_count 与 settlement 里。"""
@@ -756,15 +778,15 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     thr = threshold if threshold is not None else drift_threshold()
     if report_folder is None:
         report_folder = _report_folder(report_id)
+    binaries = [b for b in ((forecast or {}).get("binary_forecasts") or [])
+                if isinstance(b, dict)]
     if target_meta is None:
         target_meta = target_meta_for(report_id, ledger_dir=ledger_dir,
-                                      report_folder=report_folder)
+                                      report_folder=report_folder, binaries=binaries)
     if client is None:
         from app.utils.prediction_markets import PolymarketClient
         client = PolymarketClient()
 
-    binaries = [b for b in ((forecast or {}).get("binary_forecasts") or [])
-                if isinstance(b, dict)]
     anchored = anchored_forecasts(forecast)
     degraded = False
 
@@ -891,20 +913,38 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
 
 
 def settle_targets(entries: List[Dict[str, Any]], limit: int,
-                   existing: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
-    """账本里仍有待结算条目的生产 primary commit 行，新到旧（追加序倒序）至多 limit 条。
+                   existing: Optional[List[Dict[str, Any]]] = None, *,
+                   processed_at: str, grace_days: int
+                   ) -> Tuple[List[Tuple[Dict[str, Any], List[Dict[str, Any]]]], int]:
+    """本轮结算扫描的目标 → ``([(commit 行, 本轮可处理的二元预测)], deferred_by_cap)``，新到旧。
 
     commit 行只在报告发布封印后写入，且自带 binary_forecasts，报告目录已删也能结算。
     ensemble / evaluation 等非生产类、revision 与 unpublished_terminal 行一律不扫。
-    先按 ``existing``（resolutions.jsonl 各行）剔除已无待结算条目的目标（每条可结算的
-    二元预测都已有市场 / 模糊 / terminal 事件），再取上限——否则已结清的新目标会占满
-    上限，老目标永远等不到 grace terminal。"""
+    每行只取 processed_at 时刻可处理的条目（forecast_resolution.due_binaries：未入账、且
+    有市场锚点，或无锚点且已过 grace）；无可处理条目的行不占上限——grace 内的无锚点条目
+    本轮无事可做，若占上限，更老目标的 grace terminal 就永远轮不到。
+    上限 limit 只限需联网查判定的行（含未入账锚定条目）：超限的行 deferred_by_cap 计数，
+    其锚定条目留待下轮；它们已过 grace 的无锚点条目照常结算——terminal 不需要网络。"""
     recorded = _settlement.recorded_items(existing)
-    rows = [e for e in entries
-            if _is_production_primary(e) and str(e.get("report_id") or "").strip()
-            and _settlement.has_open_items(e.get("report_id"), e.get("binary_forecasts"),
-                                           recorded)]
-    return list(reversed(rows))[:max(0, int(limit))]
+    cap = max(0, int(limit))
+    targets: List[Tuple[Dict[str, Any], List[Dict[str, Any]]]] = []
+    fetching = deferred = 0
+    for row in reversed(entries):
+        if not _is_production_primary(row) or not str(row.get("report_id") or "").strip():
+            continue
+        due = _settlement.due_binaries(row.get("report_id"), row.get("binary_forecasts"),
+                                       recorded, processed_at=processed_at,
+                                       grace_days=grace_days)
+        if any(_settlement.anchor_market_id(b) for b in due):
+            if fetching < cap:
+                fetching += 1
+                targets.append((row, due))
+                continue
+            deferred += 1
+            due = [b for b in due if not _settlement.anchor_market_id(b)]
+        if due:
+            targets.append((row, due))
+    return targets, deferred
 
 
 def _merge_counts(total: Dict[str, int], part: Dict[str, Any]) -> None:
@@ -917,19 +957,20 @@ def settle_ledger(*, client: Any = None, ledger_dir: Optional[str] = None,
                   max_targets: Optional[int] = None) -> Dict[str, Any]:
     """扫描账本 primary commit 行，一次批量查判定，把结算事件幂等追加进 resolutions.jsonl。
 
-    返回计数 {targets, settled, settled_eligible, ambiguous, terminal, pending_by_reason,
-    ineligible_by_reason, appended, errors, degraded, dry_run, as_of}。dry_run 不写盘；重跑
-    只会命中幂等键、不重复追加；判定源不可达只产生 pending（degraded=True）；单行坏数据
-    记日志、计入 errors 并跳过。"""
+    返回计数 {targets, deferred_by_cap, settled, settled_eligible, ambiguous, terminal,
+    pending_by_reason, ineligible_by_reason, appended, errors, degraded, dry_run, as_of}，
+    只计本轮可处理的条目（见 settle_targets）。dry_run 不写盘；重跑只会命中幂等键、不重复
+    追加；判定源不可达只产生 pending（degraded=True）；单行坏数据记日志、计入 errors 并跳过。"""
     processed_at = normalize_processed_at(as_of or _utcnow_iso())
     limit = settle_max_targets() if max_targets is None else max(1, int(max_targets))
+    grace_days = pending_grace_days()
     existing = _ledger.read_market_resolutions(ledger_dir)
-    targets = settle_targets(_ledger.read_ledger(ledger_dir), limit, existing)
+    targets, deferred = settle_targets(_ledger.read_ledger(ledger_dir), limit, existing,
+                                       processed_at=processed_at, grace_days=grace_days)
     market_ids: List[str] = []
-    for row in targets:
-        for b in row.get("binary_forecasts") or []:
-            anchor = b.get("market_anchor") if isinstance(b, dict) else None
-            mid = str(anchor.get("market_id") or "").strip() if isinstance(anchor, dict) else ""
+    for _row, due in targets:
+        for b in due:
+            mid = _settlement.anchor_market_id(b)
             if mid and mid not in market_ids:
                 market_ids.append(mid)
     resolutions: Dict[str, Dict[str, Any]] = {}
@@ -950,12 +991,12 @@ def settle_ledger(*, client: Any = None, ledger_dir: Optional[str] = None,
     pending: Dict[str, int] = {}
     ineligible: Dict[str, int] = {}
     errors = 0
-    for row in targets:
+    for row, due in targets:
         try:
             out = _settlement.settle_binaries(
-                row.get("report_id"), row.get("binary_forecasts") or [], resolutions,
+                row.get("report_id"), due, resolutions,
                 target_meta=_commit_target_meta(row), processed_at=processed_at,
-                min_equivalence=market_min_equivalence(), grace_days=pending_grace_days(),
+                min_equivalence=market_min_equivalence(), grace_days=grace_days,
                 existing_events=existing, answered_market_ids=answered)
             appended = 0
             if not dry_run:
@@ -972,6 +1013,7 @@ def settle_ledger(*, client: Any = None, ledger_dir: Optional[str] = None,
         _merge_counts(ineligible, counts["ineligible_by_reason"])
     return {
         "targets": len(targets),
+        "deferred_by_cap": deferred,
         **totals,
         "pending_by_reason": dict(sorted(pending.items())),
         "ineligible_by_reason": dict(sorted(ineligible.items())),

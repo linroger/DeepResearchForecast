@@ -346,8 +346,10 @@ class Config:
     # Days after a binary's resolution date before an item still lacking a settlement gets one
     # never-scored terminal event ('unresolvable_after_grace'), so nothing stays pending forever.
     RESOLUTION_PENDING_GRACE_DAYS = int(os.environ.get('RESOLUTION_PENDING_GRACE_DAYS', '180') or '180')
-    # Cap on the newest production primary commit rows one settle sweep visits; rows whose
-    # binaries all hold a settlement or terminal event already are skipped before the cap.
+    # Cap on the newest production primary commit rows one settle sweep fetches market
+    # resolutions for (rows with an unrecorded market-anchored binary). Unanchored binaries
+    # past their grace period need no network and are always settled; rows with nothing
+    # actionable (every binary recorded, or unanchored and still inside grace) never count.
     RESOLUTION_SETTLE_MAX_TARGETS = int(os.environ.get('RESOLUTION_SETTLE_MAX_TARGETS', '200') or '200')
     # NEXTSTEPS P3-8：把已实现关系按价投影一个「到预测时点的轨迹」（allied→likely_persists /
     # adversarial→persists_or_escalates / transactional→contingent），喂进报告信号包帮助情景分叉

@@ -295,6 +295,10 @@ def _parse_resolution(raw: Any) -> Optional[Dict[str, Any]]:
     uma_raw = raw.get("umaResolutionStatus")
     if uma_raw is None:
         uma_raw = raw.get("umaResolutionStatuses")
+    if isinstance(uma_raw, (list, tuple)):
+        # EVAL-2: a status history sent as a real JSON array keeps its JSON form (never a
+        # Python repr), so current_uma_status can still read its last stage.
+        uma_raw = json.dumps(list(uma_raw), ensure_ascii=False, default=str)
     uma_status = str(uma_raw).strip() if uma_raw not in (None, "") else None
 
     names = _as_list(raw.get("outcomes"))
@@ -586,8 +590,8 @@ class PolymarketClient:
 
         Gamma `/markets` 支持重复 id 参数（?id=a&id=b）批量取；httpx 会把 {"id": [...]}
         编码为重复 key。响应通常是市场对象数组，也容忍 {"markets": [...]} / {"data": [...]} 包装。
-        EVAL-2：传入 ``answered`` 时，把**请求成功且响应是市场列表**那几批的全部 id 加进去
-        （无论 Gamma 是否返回该行——缺行即确认「无此市场」）；失败批次的 id 不在其中。
+        EVAL-2：传入 ``answered`` 时请求带显式 ``limit``（=本批 id 数，不吃 Gamma 的缺省页长），
+        并把判定源确实应答过的 id 加进去（见 ``_confirm_answered``）；失败批次的 id 不在其中。
         """
         out: Dict[str, Dict[str, Any]] = {}
         try:
@@ -598,23 +602,66 @@ class PolymarketClient:
             chunk = 20  # 分批大小非法 → 回落默认，避免 range 步长为 0 死循环
         for start in range(0, len(ids), chunk):
             batch = ids[start:start + chunk]
-            data = self._get("/markets", {"id": batch})
+            params: Dict[str, Any] = {"id": batch}
+            if answered is not None:
+                params["limit"] = len(batch)
+            data = self._get("/markets", params)
             if isinstance(data, list):
                 raw_rows = data
             elif isinstance(data, dict):
                 raw_rows = data.get("markets") or data.get("data") or []
             else:
                 raw_rows = []
-            if answered is not None and (isinstance(data, list) or (
-                    isinstance(data, dict)
-                    and any(isinstance(data.get(key), list) for key in ("markets", "data")))):
-                answered.update(batch)
             for raw in raw_rows if isinstance(raw_rows, list) else []:
                 if isinstance(raw, dict):
                     mid = str(raw.get("id") or "").strip()
                     if mid:
                         out[mid] = raw
+            if answered is not None:
+                answered.update(self._confirm_answered(batch, data, out))
         return out
+
+    @staticmethod
+    def _market_list(data: Any) -> Optional[List[Any]]:
+        """Gamma /markets 响应里的市场行列表；响应不是市场列表（失败 / 形状异常）→ None。"""
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            for key in ("markets", "data"):
+                if isinstance(data.get(key), list):
+                    return data[key]
+        return None
+
+    def _confirm_answered(self, batch: List[str], data: Any,
+                          out: Dict[str, Dict[str, Any]]) -> Set[str]:
+        """EVAL-2：本批里判定源确实应答过的 id（返回了该行，或确认无此市场）。
+
+        响应须是市场列表，且每行都是本批请求的 id（混进别的 id 说明 id 过滤没生效，
+        缺行什么也证明不了）。多 id 批次里缺的行可能只是被截断：逐个单 id（limit=1）
+        复查，单 id 请求应答且仍无该行才确认「无此市场」，复查拿到的行照常并入 ``out``。
+        一次请求失败绝不确认任何缺行，以免把存在的市场永久 terminal。"""
+        rows = self._market_list(data)
+        if rows is None:
+            return set()
+        returned = {str(raw.get("id") or "").strip() for raw in rows if isinstance(raw, dict)}
+        if not returned <= set(batch):
+            return set()
+        confirmed = set(returned)
+        omitted = [mid for mid in batch if mid not in returned]
+        if len(batch) == 1:
+            return confirmed | set(omitted)
+        for mid in omitted:
+            single = self._market_list(self._get("/markets", {"id": [mid], "limit": 1}))
+            if single is None:
+                continue
+            found = {str(raw.get("id") or "").strip(): raw
+                     for raw in single if isinstance(raw, dict)}
+            if not set(found) <= {mid}:
+                continue
+            if mid in found:
+                out[mid] = found[mid]
+            confirmed.add(mid)
+        return confirmed
 
     # -------------------------------------------------------- price history
     def fetch_price_history(self, clob_token_id: str, interval: str = "1d",
@@ -691,9 +738,10 @@ class PolymarketClient:
             self, market_ids: List[str]) -> Tuple[Dict[str, Dict[str, Any]], Set[str]]:
         """EVAL-2：``(fetch_resolutions 的结果, 判定源确实应答过的 market id 集合)``。
 
-        应答 = 该 id 所在批次请求成功且响应是市场列表（返回了该行，或确认无此市场）。
-        失败批次（网络 / 5xx / 非列表响应）与未启用时的 id 都不在集合里：结算据此只让
-        「确认无数据」的条目走到 grace terminal，绝不因一次瞬时失败永久终结条目。"""
+        应答 = 请求成功、响应是只含所请求 id 的市场列表，且返回了该行或经单 id 复查确认无此
+        市场（见 ``_confirm_answered``）。失败批次（网络 / 5xx / 非列表响应）、未经复查确认的
+        缺行与未启用时的 id 都不在集合里：结算据此只让「确认无数据」的条目走到 grace
+        terminal，绝不因一次瞬时失败或被截断的页永久终结条目。"""
         ids: List[str] = []
         seen: set = set()
         for mid in market_ids or []:

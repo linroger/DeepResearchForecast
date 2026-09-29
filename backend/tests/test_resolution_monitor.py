@@ -104,7 +104,7 @@ def test_fetch_resolutions_batches_and_degrades(enabled, monkeypatch):
     monkeypatch.setattr(pm.httpx, "get", fake_get)
     out = PolymarketClient().fetch_resolutions(["mA", "mB", "mA"])  # 去重
     assert seen["url"].endswith("/markets")
-    assert seen["params"] == {"id": ["mA", "mB"]}
+    assert seen["params"] == {"id": ["mA", "mB"], "limit": 2}  # EVAL-2: explicit page size
     assert out["mA"]["resolved_outcome"] == "Yes"
     assert out["mB"]["resolved_outcome"] == "No"
 
