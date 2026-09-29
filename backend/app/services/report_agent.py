@@ -7301,9 +7301,9 @@ class ReportAgent:
         # 同一轮重译；只有严格改进的候选才会替换首译。References 已在上方确定性处理，不花
         # LLM 调用。最终整篇只读审计仍是发布权威。
         citation_drift: List[Dict[str, Any]] = []
-        for i, ch in enumerate(chunks):
-            if ch.split("\n", 1)[0].strip() in _REFS_HEADINGS:
-                continue
+
+        def _integrity_pass(pair: Tuple[int, str]) -> Tuple[int, str, Dict[str, Any]]:
+            i, ch = pair
             cur = translated[i] if translated[i] is not None else ch
             quality = self._translation_chunk_quality(ch, cur, str(tgt_code))
             citation_retry = bool(
@@ -7349,10 +7349,46 @@ class ReportAgent:
                         len(retry_quality["residual"]),
                     )
                     if retry_rank < current_rank:
-                        translated[i] = retry
                         cur = retry
                         quality = retry_quality
+            return i, cur, quality
 
+        # The per-section retries are independent, so they run with the same
+        # concurrency as the first pass (sequential retries made large reports
+        # spend as long here as on the translation itself).
+        audit_pairs = [
+            (i, ch) for i, ch in enumerate(chunks)
+            if ch.split("\n", 1)[0].strip() not in _REFS_HEADINGS
+        ]
+        outcomes: Dict[int, Tuple[str, Dict[str, Any]]] = {}
+
+        def _record(done: int, outcome: Tuple[int, str, Dict[str, Any]]) -> None:
+            index, cur, quality = outcome
+            outcomes[index] = (cur, quality)
+            _progress(
+                65 + int(25 * done / len(chunks)),
+                f"audited {done}/{len(chunks)} translated sections",
+            )
+
+        if conc > 1 and len(audit_pairs) > 1:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            audit_context = contextvars.copy_context()
+            with ThreadPoolExecutor(max_workers=min(conc, len(audit_pairs))) as ex:
+                audit_futures = [
+                    ex.submit(audit_context.copy().run, _integrity_pass, pair)
+                    for pair in audit_pairs
+                ]
+                for done, future in enumerate(as_completed(audit_futures), 1):
+                    _record(done, future.result())
+        else:
+            for done, pair in enumerate(audit_pairs, 1):
+                _record(done, _integrity_pass(pair))
+
+        for i, ch in enumerate(chunks):
+            if i not in outcomes:
+                continue
+            cur, quality = outcomes[i]
+            translated[i] = cur
             if "citation tokens" in quality["hard"]:
                 src_ms = self._translation_marker_multiset(ch)
                 dst_ms = self._translation_marker_multiset(cur)
@@ -7370,10 +7406,6 @@ class ReportAgent:
                     quality["hard"],
                     len(quality["residual"]),
                 )
-            _progress(
-                65 + int(25 * (i + 1) / len(chunks)),
-                f"audited {i + 1}/{len(chunks)} translated sections",
-            )
         if citation_drift:
             logger.warning(
                 f"双语报告引用对账告警: {report_id} {len(citation_drift)} 个章节的"

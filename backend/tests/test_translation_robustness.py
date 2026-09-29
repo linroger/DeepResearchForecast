@@ -252,3 +252,46 @@ def test_translation_calls_carry_a_bounded_request_timeout(monkeypatch):
     assert "timeout" not in captured[0]
     assert captured[1]["timeout"] == 240.0
     assert "timeout" not in captured[2]
+
+
+def test_integrity_retries_run_concurrently(reports_tmp, monkeypatch):
+    """Sections that need an integrity retry are retried in parallel: two retry calls
+    must meet at a barrier, which would time out if they ran one after another."""
+    import threading
+
+    monkeypatch.setattr(Config, "REPORT_TRANSLATION_CONCURRENCY", 4)
+    barrier = threading.Barrier(2, timeout=5)
+    met = []
+
+    class RetryNeedsPeers:
+        model = "fake"
+        provider = "fake"
+
+        def chat(self, messages=None, temperature=0.0, max_tokens=4096, tier="strong", **_kw):
+            system, user = messages[0]["content"], messages[-1]["content"]
+            if "INTEGRITY RETRY" in system:
+                try:
+                    barrier.wait()
+                    met.append(True)
+                except threading.BrokenBarrierError:
+                    met.append(False)
+                return "## 第一部分\n\n这一节已经完整翻译成中文了。"
+            if "same alphabetic keys" in system:
+                return json.dumps(json.loads(user), ensure_ascii=False)  # refuse → English
+            return user
+
+        def chat_json(self, messages=None, **_kw):
+            return {}
+
+    sections = "".join(
+        f"## Part {name}\n\nThis section stays in English because the model refused it here.\n\n"
+        for name in ("One", "Two")
+    )
+    report = Report(
+        report_id="report_parallel_retries", simulation_id="sim", graph_id="graph",
+        simulation_requirement="req", status=ReportStatus.COMPLETED,
+        markdown_content="# Title\n\n" + sections,
+    )
+    ReportManager.save_report(report)
+    _worker(RetryNeedsPeers())._generate_bilingual_report("report_parallel_retries", report)
+    assert met and all(met), "integrity retries did not overlap"
