@@ -3118,6 +3118,16 @@ class ReportAgent:
                 if _bres.get("binary_forecasts"):
                     forecast["binary_forecasts"] = _bres["binary_forecasts"]
                     forecast["binary_quality"] = _bres.get("binary_quality") or {}
+                    # EVAL-10：reconcile 改概率之前，快照抽取器的 binary_quality，并对它刚打过分的
+                    # 同一份二元列表再算一次基础记分卡，得到抽取器 issues 里的基础打分行
+                    # （spread/midband/count 等）——这些行由下方重算给出，reconcile 恢复概率后
+                    # 可能已过时；其余行（溯源降级、集成分歧、扣下说明等）为抽取器独有。
+                    _ext_bq = dict(_bres.get("binary_quality") or {})
+                    _ext_base = set(_binary_quality_score(
+                        forecast["binary_forecasts"],
+                        min_count=self._binary_min_count(),
+                        themes_expected=_themes,
+                    ).get("issues") or [])
                     _contract = _reconcile_forecast_contract(forecast)
                     _quality = _binary_quality_score(
                         forecast["binary_forecasts"],
@@ -3135,6 +3145,17 @@ class ReportAgent:
                     if _bq_extracted.get("needs_review_count"):
                         _quality.setdefault("issues", []).insert(0, _binary_withheld_issue(
                             _bq_extracted["needs_review_count"]))
+                    # EVAL-10：重算记分卡此前整体覆盖抽取器的 binary_quality，丢掉了 ITEM-12 的
+                    # ensemble 诊断、provenance_downgrades、world_state_outcome 等仅抽取器才写的键
+                    # 与说明行（报表脚注与发布门因此读不到）。通用合并：抽取器键只补缺、绝不覆盖
+                    # 重算的打分键；issues 只追加抽取器独有的行（去重、保序），跳过基础打分行。
+                    for _ext_key, _ext_val in _ext_bq.items():
+                        if _ext_key != "issues":
+                            _quality.setdefault(_ext_key, _ext_val)
+                    _q_issues = _quality.setdefault("issues", [])
+                    for _ext_issue in _ext_bq.get("issues") or []:
+                        if _ext_issue not in _ext_base and _ext_issue not in _q_issues:
+                            _q_issues.append(_ext_issue)
                     forecast["binary_quality"] = _quality
                     # RQ-6：校验二元预测结算年份与真实判定期一致——目标年份集合（需求书 +
                     # 日历 horizon_date.year）与二元结算年份集合非空且无交集时，把

@@ -15,7 +15,7 @@ import re
 import subprocess
 import threading
 import time
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from ..config import Config
 from .llm_text import flatten_content, has_dangling_think, normalize_finish_reason, strip_think
@@ -395,6 +395,21 @@ def _cli_envelope_usage(envelope: Any) -> tuple:
         return None, None
 
 
+def claude_cli_model_arg(model: Optional[str]) -> Optional[str]:
+    """The ``--model`` value the Claude CLI is given for ``model``, or None (the CLI then runs
+    on the account's default model).
+
+    Only claude model ids/aliases pass through; anything else (e.g. another provider's
+    LLM_MODEL_NAME inherited by a claude-cli client) is dropped defensively. Callers that
+    attribute output to a model (the eval judge identity) use this to record the model the
+    CLI was actually asked for rather than ``LLMClient.model``.
+    """
+    m = (model or "").strip()
+    if m and (m.startswith("claude") or m in ("opus", "sonnet", "haiku")):
+        return m
+    return None
+
+
 def _empty_choices_error(response: Any, provider: str, model: Optional[str],
                          usage: Optional[Dict[str, int]]) -> Exception:
     """The typed error for a response without choices, carrying the provider's error envelope
@@ -482,7 +497,10 @@ class LLMClient:
         provider: Optional[str] = None,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        *,
+        use_cache: bool = True,
+        pinned: bool = False,
     ):
         self.provider = (provider or Config.LLM_PROVIDER or "claude-cli").lower()
 
@@ -512,6 +530,14 @@ class LLMClient:
         self._fast_openai_client = None
         # S9: set True on a fallback client so failover never recurses.
         self._is_fallback = False
+        # EVAL-10: per-instance isolation for callers whose calls must stay independent and
+        # attributable (eval judges, replicate/control arms). use_cache=False makes every call a
+        # real transport call even while LLM_CACHE_ENABLED is on (the cache key carries no run or
+        # seed, so k identical judge passes collapsed into one). pinned=True serves every call
+        # with this client's own provider and model: no tier re-route, no fast-tier second
+        # client and no failover (errors surface instead of a silent backbone swap).
+        self.use_cache = bool(use_cache)
+        self._pinned = bool(pinned)
 
     @staticmethod
     def _build_openai_client(provider: str, api_key: Optional[str], base_url: Optional[str]):
@@ -584,25 +610,59 @@ class LLMClient:
     # ------------------------------------------------------------------
     # EXECPLAN2 I-6-2: 双层模型路由（fast / strong）
     # ------------------------------------------------------------------
-    def _model_for_tier(self, tier: Optional[str]) -> str:
+    def _model_for_tier(self, tier: Optional[str], *, pinned: Optional[bool] = None) -> str:
         """按 tier 解析实际使用的模型名。
 
         - tiered routing 关闭（默认）→ 一律返回 self.model（行为与现状逐字节一致）。
         - tier='fast'  → Config.fast_model()（未配置 LLM_FAST_MODEL 时回退到当前模型，不报错）。
         - tier='strong'/None/未知 → Config.strong_model()（同样回退到当前模型）。
         CLI 订阅提供方只有单一订阅模型，tier 在 _chat_* 中被忽略，此处返回值仅用于计量一致性。
+
+        ``pinned`` is the caller's once-per-call _routing_pinned() result, so the model and the
+        fast-tier client of one transport call come from a single read (None = read it here).
         """
-        # The fallback client is already fully resolved from LLM_FALLBACK_MODEL.
-        # Never replace it with the primary provider's global fast/strong alias:
-        # that sent MiniMax-M3 to Quotio's Antigravity endpoint and made every
-        # production failover return HTTP 400.
-        if getattr(self, "_is_fallback", False):
+        # The fast/strong aliases belong to the primary provider. A routing-pinned client
+        # (fallback, pinned=True, or any provider other than the current primary) keeps its
+        # own resolved model: the alias sent MiniMax-M3 to Quotio's Antigravity endpoint and
+        # made every production failover return HTTP 400, and sent the primary's strong model
+        # to ensemble / judge / comparison clients of other providers (400 -> silent failover).
+        if pinned is None:
+            pinned = self._routing_pinned()
+        if pinned:
             return self.model
         if not getattr(Config, "LLM_TIERED_ROUTING", False):
             return self.model
         if tier == "fast":
             return Config.fast_model() or self.model
         return Config.strong_model() or self.model
+
+    def _routing_pinned(self) -> bool:
+        """EVAL-10: True when this client's own provider and model must serve every call.
+
+        The single predicate for tier routing: a pinned client never takes the primary
+        provider's fast/strong model aliases or the fast-tier second client. Pinned are a
+        fallback client, a client built with pinned=True, and a client whose provider is not
+        the current global primary. Evaluated per call, so a settings hot-switch of
+        LLM_PROVIDER cannot send the new primary's model names to an older client's endpoint.
+        Default-provider clients built without pinned=True are not pinned (routing unchanged).
+        """
+        if getattr(self, "_is_fallback", False) or getattr(self, "_pinned", False):
+            return True
+        return self.provider != (Config.LLM_PROVIDER or "claude-cli").lower()
+
+    def _tier_route(self, tier: Optional[str]) -> Tuple[str, bool]:
+        """EVAL-10: resolve one call's tier routing from a single _routing_pinned() read.
+
+        Returns ``(model, fast_tier)``: the model name the request carries, and whether the
+        fast-tier second client (instead of this client's own endpoint) should serve it. chat()
+        resolves the route once and hands it to _chat_openai, so the LLMCache key, the LLMMeter
+        by_model entry and every retry of the request share one model even when a settings
+        hot-switch of LLM_PROVIDER / LLM_MODEL_NAME lands mid-call.
+        """
+        pinned = self._routing_pinned()
+        model = self._model_for_tier(tier, pinned=pinned)
+        fast_tier = bool(not pinned and getattr(Config, "LLM_TIERED_ROUTING", False) and tier == "fast")
+        return model, fast_tier
 
     def _fast_provider_client(self):
         """若 fast tier 指向不同的 OpenAI 兼容提供方，返回（懒构建的）第二客户端，否则 None。
@@ -761,15 +821,24 @@ class LLMClient:
         （非 RuntimeError：不重试，直接尝试一次回退）。本次调用的 finish_reason/usage 等见 last_call_meta()。
         """
         # EXECPLAN2 I-6-2: 解析本次调用实际使用的模型（fast/strong）。关闭路由时 = self.model。
-        model = self._model_for_tier(tier)
+        # EVAL-10: one routing read per call; the cache key, the meter and every transport retry
+        # below use this route (see _tier_route).
+        route = self._tier_route(tier)
+        model = route[0]
         # EXECPLAN2 I-6-0/I-5-0/I-5-3: 内容寻址缓存命中直接返回；否则正常调用后记录
         # token/延迟/成本计量并做预算检查。计量默认开（开销极小），缓存/预算默认关。
         from .telemetry import LLMMeter, LLMCache, get_run_context, check_budget, estimate_tokens
         run_id, stage = get_run_context()
         cache_key = None
-        if Config.LLM_CACHE_ENABLED:
+        # EVAL-10: use_cache=False opts this client out of LLMCache entirely (get and put).
+        cache_on = Config.LLM_CACHE_ENABLED and getattr(self, "use_cache", True)
+        if cache_on:
             # 缓存键纳入解析后的 model，避免 fast/strong 两档结果互相串档。
-            cache_key = LLMCache.key(self.provider, model, messages, temperature, max_tokens, response_format)
+            # EVAL-10: a pinned client reads and writes its own namespace. An unpinned client
+            # caches a fallback-served reply under its primary key, and a pinned client must
+            # never serve a fallback provider's reply, not even from the cache.
+            cache_provider = f"{self.provider}#pinned" if getattr(self, "_pinned", False) else self.provider
+            cache_key = LLMCache.key(cache_provider, model, messages, temperature, max_tokens, response_format)
             hit = LLMCache.get(cache_key)
             if hit is not None:
                 if Config.LLM_TELEMETRY_ENABLED:
@@ -798,6 +867,13 @@ class LLMClient:
                 # 完整的 3 次主重试（指数退避睡眠）+ 第二次回退 —— 双中断期间每次 chat()
                 # 白烧 5 次注定失败的调用（2026-07-08 实测：最高 231 错误/分钟持续 26 小时）。
                 # 直接抛出（复用穷尽路径的异常类型），让调用方快速失败。
+                if getattr(self, "_pinned", False):
+                    # EVAL-10: a pinned client never fails over by design, even with a healthy
+                    # LLM_FALLBACK_PROVIDER configured; say so instead of blaming the fallback.
+                    raise RuntimeError(
+                        f"LLM 调用失败：钉定客户端的提供方 {self.provider} 处于 422/429 熔断冷却"
+                        f"（pinned：不做失败转移）"
+                    )
                 raise RuntimeError(
                     f"LLM 调用失败：主提供方 {self.provider} 处于 422/429 熔断冷却，"
                     f"且回退提供方不可用"
@@ -807,7 +883,8 @@ class LLMClient:
                 break
             try:
                 if self.provider in OPENAI_COMPATIBLE_PROVIDERS:
-                    result = self._chat_openai(messages, temperature, max_tokens, response_format, tier=tier)
+                    result = self._chat_openai(messages, temperature, max_tokens, response_format,
+                                               tier=tier, route=route)
                 elif self.provider == "codex-cli":
                     # CLI 订阅提供方只有单一订阅模型，tier 在此为 no-op。
                     result = self._chat_codex_cli(messages, temperature, max_tokens, response_format)
@@ -875,7 +952,7 @@ class LLMClient:
             # 用解析后的 model 计量，使 by_model 维度区分 fast/strong 用量与成本。
             LLMMeter.record(self.provider, model, pt, ct, latency_ms, cached=False, stage=stage,
                             run_id=run_id, finish_reason=meta.get("finish_reason") if meta else None)
-        if Config.LLM_CACHE_ENABLED and cache_key is not None:
+        if cache_on and cache_key is not None:
             # INFRA-1 (LLM_TRANSPORT_STRICT): 截断(length)/审查/中止/悬空 <think> 的回复不入缓存
             # ——否则同一 prompt 会从 LLMCache 永久重放这份残缺回复。无元数据时同样不缓存（失败安全）。
             if _transport_strict() and not (meta and meta.get("cacheable")):
@@ -894,8 +971,9 @@ class LLMClient:
                       primary_error: Optional[Exception]) -> Optional[str]:
         """QUALITY-OPT S9: retry the request once on a configured fallback provider when the
         primary exhausts retries / hits a content-filter. Off unless LLM_FALLBACK_PROVIDER is
-        set; never recurses (the fallback client has failover disabled). Returns text or None."""
-        if getattr(self, "_is_fallback", False):
+        set; never recurses (the fallback client has failover disabled). Returns text or None.
+        EVAL-10: a pinned client never fails over; the primary's error surfaces instead."""
+        if getattr(self, "_is_fallback", False) or getattr(self, "_pinned", False):
             return None
         fb_provider = (os.environ.get("LLM_FALLBACK_PROVIDER", "") or "").strip().lower()
         if not fb_provider or fb_provider == self.provider:
@@ -933,6 +1011,9 @@ class LLMClient:
                 model=fb_model,
                 api_key=(os.environ.get("LLM_FALLBACK_API_KEY", "") or None),
                 base_url=fb_base_url,
+                # EVAL-10: a use_cache=False client stays uncached through failover too (the
+                # fallback's own chat() must not replay a cached fallback reply).
+                use_cache=getattr(self, "use_cache", True),
             )
             fb._is_fallback = True  # prevent recursive failover
             # LLM-3: 复用回退提供方的 OpenAI 连接池（每次失败转移重建 httpx 池 = 每调用一次
@@ -1054,11 +1135,13 @@ class LLMClient:
         if _cb_tripped(self.provider):
             raise RuntimeError(f"chat_with_tools: 提供方 {self.provider} 处于 422/429 熔断冷却，回退 ReAct")
         # EXECPLAN2 I-6-2: 解析模型/客户端（默认 strong = 当前模型/主客户端，工具调用行为不变）。
-        model = self._model_for_tier(tier)
+        # EVAL-10: the fast-tier second client serves the primary provider's routing only; a
+        # routing-pinned client (fallback, pinned, non-primary provider) keeps its own endpoint.
+        # One _routing_pinned() read decides both (_tier_route), so a settings hot-switch
+        # mid-call cannot pair a tier alias with this client's own endpoint (or the reverse).
+        model, fast_tier = self._tier_route(tier)
         client = self._openai_client
-        if (not self._is_fallback
-                and getattr(Config, "LLM_TIERED_ROUTING", False)
-                and tier == "fast"):
+        if fast_tier:
             fast_client = self._fast_provider_client()
             if fast_client is not None:
                 client = fast_client
@@ -1330,15 +1413,18 @@ class LLMClient:
         temperature: float,
         max_tokens: int,
         response_format: Optional[Dict] = None,
-        tier: str = "strong"
+        tier: str = "strong",
+        route: Optional[Tuple[str, bool]] = None,
     ) -> str:
         # EXECPLAN2 I-6-2: 解析本次实际模型与客户端。fast tier 指向不同提供方时用第二客户端，
         # 否则同提供方仅切模型名；关闭路由时 model=self.model、client=self._openai_client。
-        model = self._model_for_tier(tier)
+        # EVAL-10: the fast-tier second client serves the primary provider's routing only; a
+        # routing-pinned client (fallback, pinned, non-primary provider) keeps its own endpoint.
+        # ``route`` is chat()'s once-per-call _tier_route() result, so the request carries the
+        # model chat() caches and meters under (None = resolve it here, one read).
+        model, fast_tier = route if route is not None else self._tier_route(tier)
         client = self._openai_client
-        if (not self._is_fallback
-                and getattr(Config, "LLM_TIERED_ROUTING", False)
-                and tier == "fast"):
+        if fast_tier:
             fast_client = self._fast_provider_client()
             if fast_client is not None:
                 client = fast_client
@@ -1439,8 +1525,8 @@ class LLMClient:
         # LLM_CLI_ISOLATE_HOOKS=false 可恢复继承用户钩子的旧行为。
         if bool(getattr(Config, "LLM_CLI_ISOLATE_HOOKS", True)):
             cmd += ["--settings", '{"disableAllHooks": true}']
-        _m = (self.model or "").strip()
-        if _m and (_m.startswith("claude") or _m in ("opus", "sonnet", "haiku")):
+        _m = claude_cli_model_arg(self.model)
+        if _m:
             cmd += ["--model", _m]
 
         try:
