@@ -8,6 +8,7 @@ discard, and every consumer that must honour a null probability.
 """
 
 import contextvars
+import hashlib
 import json
 import logging
 import os
@@ -23,6 +24,9 @@ from app.services.report_agent import ReportAgent, ReportManager
 from app.services.report_lint import check_scenario_probabilities
 from app.utils.telemetry import LLMCache
 from tests.conftest import FakeLLMClient
+
+# The real ledger append, kept before any test replaces it with a recorder.
+_REAL_APPEND_FORECAST = forecast_ledger.append_forecast
 
 _NAMES = ("Rapid adoption path", "Gradual adoption path", "Other / Status Quo",
           "Reversal path")
@@ -56,6 +60,12 @@ def test_percent_strings_not_laundered(monkeypatch):
         assert "probability_review" not in out
         assert all("probability_status" not in s for s in out["scenarios"])
         assert fe.audit_scenario_contract(out)["valid"] is True
+    # a zero next to percents is read (not ambiguous) and floored like the numeric partition
+    zero = fe._assemble_forecast({"headline": "h", "scenarios": _rows(["60%", "40%", 0])})
+    numeric = fe._assemble_forecast({"headline": "h", "scenarios": _rows([0.6, 0.4, 0])})
+    assert "probability_status" not in zero
+    assert _probs(zero) == _probs(numeric)
+    assert min(_probs(zero)) > 0  # the floor still applies
 
 
 def test_unreadable_row_fails_closed(monkeypatch):
@@ -441,7 +451,22 @@ def test_consumers(monkeypatch):
     assert "1 个情景概率无法解析（NEEDS_REVIEW，未以 0/均匀分布代替）" in hard
     assert not any("偏离 1" in issue for issue in hard)
     assert gated["quality"]["hard_passed"] is False
-    assert gated["quality"]["probability_sum"] == 0.65
+    # the readable rows' sum (0.65) is not a partition sum: recorded as unknown
+    assert gated["quality"]["probability_sum"] is None
+    assert gated["quality"]["max_probability"] is None
+    # one readable row >= 0.9 is not a "degenerate distribution": the rest is unreadable
+    lone = fe._assemble_forecast({"headline": "h",
+                                  "scenarios": _rows([0.95, "30-40%", "N/A"])})
+    lone["citation_audit"] = {"coverage": 1.0, "quantitative_claims": 0}
+    lone_q = ReportAgent._apply_publish_gate(lone)["quality"]
+    assert "2 个情景概率无法解析（NEEDS_REVIEW，未以 0/均匀分布代替）" in lone_q["hard_issues"]
+    assert not any("退化" in issue for issue in lone_q["epistemic_issues"])
+    assert lone_q["probability_sum"] is None and lone_q["max_probability"] is None
+    # well-formed forecasts keep their numeric fields
+    readable = fe._assemble_forecast({"headline": "h", "scenarios": _rows([0.5, 0.3, 0.2])})
+    readable["citation_audit"] = {"coverage": 1.0, "quantitative_claims": 0}
+    readable_q = ReportAgent._apply_publish_gate(readable)["quality"]
+    assert readable_q["probability_sum"] == 1.0 and readable_q["max_probability"] == 0.5
 
     zh_block = fe.render_resolution_block(_needs_review_forecast(), language="Chinese")
     assert f"**[待复核] {_NAMES[1]}**" in zh_block
@@ -598,6 +623,9 @@ def _report_env(monkeypatch, tmp_path):
     monkeypatch.setattr(Config, "REPORT_CRITIQUE_BEFORE_PROSE", False, raising=False)
     monkeypatch.setattr(Config, "REPORT_SPINE_SELFCONSISTENCY_K", 1, raising=False)
     monkeypatch.setattr(Config, "REPORT_FORECAST_LEDGER", True, raising=False)
+    # EVAL-1 (merged first) appends from _finalize only in its legacy commit mode; pin it
+    # so these checks keep exercising that append once both packages are merged.
+    monkeypatch.setattr(Config, "FORECAST_LEDGER_COMMIT_MODE", "legacy", raising=False)
     appended = []
     monkeypatch.setattr(forecast_ledger, "append_forecast",
                         lambda forecast, **kw: appended.append(kw["report_id"]))
@@ -659,6 +687,105 @@ def test_finalize_ledger_append_for_readable_or_flag_off(monkeypatch, _report_en
     _agent(llm=legacy)._finalize_structured_forecast("report_legacy", "# T\n\nBody.")
     assert "probability_status" not in _load_forecast(tmp_path, "report_legacy")
     assert appended == ["report_ok", "report_legacy"]
+
+
+def _finalize_post_hoc(report_id, probs):
+    """Finalize a report whose post-hoc extraction returns ``probs`` (no pinned spine)."""
+    llm = _RouterLLM(lambda content: _spine(probs))
+    _agent(llm=llm)._finalize_structured_forecast(report_id, "# T\n\nBody.")
+
+
+def _seal_for_publication(report_id):
+    """Write meta.json, full_report.md and final_audit.json for a finalized report.
+
+    The structured-forecast part of the audit is computed the way the real final
+    audit computes it (contract audit, then the integrity issues); every other
+    check passes, so only the forecast itself can make the report unpublishable.
+    """
+    folder = ReportManager._get_report_folder(report_id)
+    markdown = "# Forecast\n\n" + "Substantive outcome analysis. " * 40
+    with open(os.path.join(folder, "meta.json"), "w", encoding="utf-8") as handle:
+        json.dump({"report_id": report_id, "simulation_id": "sim1", "status": "completed",
+                   "failed_sections": [], "partial": False}, handle)
+    with open(os.path.join(folder, "full_report.md"), "w", encoding="utf-8") as handle:
+        handle.write(markdown)
+    with open(os.path.join(folder, "forecast.json"), "rb") as handle:
+        forecast_bytes = handle.read()
+    audit = {
+        "policy_version": int(Config.REPORT_FINAL_AUDIT_POLICY_VERSION),
+        "report_id": report_id,
+        "markdown_sha256": hashlib.sha256(markdown.encode("utf-8")).hexdigest(),
+        "forecast_sha256": hashlib.sha256(forecast_bytes).hexdigest(),
+        "disk_matches_memory": True,
+        "structured_forecast": {"required": True, "present": True, "valid": True},
+        "scenario_contract": fe.audit_scenario_contract(json.loads(forecast_bytes)),
+        "citation_artifacts": {"required": False},
+        "publish_gate": {"enabled": False},
+    }
+    audit["hard_issues"] = ReportAgent._final_audit_integrity_issues(audit)
+    audit["hard_passed"] = not audit["hard_issues"]
+    with open(ReportManager._get_report_final_audit_path(report_id), "w",
+              encoding="utf-8") as handle:
+        json.dump(audit, handle, ensure_ascii=False)
+
+
+def _no_binaries_no_critique(monkeypatch):
+    monkeypatch.setattr(Config, "FORECAST_EMIT_BINARY", False, raising=False)
+    monkeypatch.setattr(Config, "REPORT_FORECAST_SELF_CRITIQUE", False, raising=False)
+
+
+def test_needs_review_report_is_never_publishable(monkeypatch, _report_env):
+    """EVAL-1's default published mode commits a scored row only for a publishable
+    report, so a needs_review forecast must make the report unpublishable itself."""
+    _tmp_path, appended = _report_env
+    _no_binaries_no_critique(monkeypatch)
+    _strict(monkeypatch)
+    _finalize_post_hoc("report_pub_nr", [0.45, "30-40%", 0.2])
+    _finalize_post_hoc("report_pub_ok", [0.5, 0.3, 0.2])
+    for report_id in ("report_pub_nr", "report_pub_ok"):
+        _seal_for_publication(report_id)
+    status = ReportManager.publication_status("report_pub_nr")
+    assert status["publishable"] is False
+    assert "scenario contract is missing or invalid" in status["reasons"]
+    assert ReportManager.publication_status("report_pub_ok")["publishable"] is True
+    assert appended == ["report_pub_ok"]
+
+
+def test_needs_review_forecast_never_gets_a_scored_ledger_row(monkeypatch, _report_env):
+    """Critic amendment 2, checked once EVAL-1's post-publication ledger is merged.
+
+    Legacy commit mode appends no schema_version 1 row for a needs_review forecast;
+    the default published mode records it only as a never-scored
+    unpublished_terminal row, while a readable report still gets its commit row.
+    """
+    ledger_commit = pytest.importorskip("app.services.ledger_commit")
+    tmp_path, _appended = _report_env
+    monkeypatch.setattr(forecast_ledger, "append_forecast", _REAL_APPEND_FORECAST)
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"), raising=False)
+    monkeypatch.setattr(Config, "FORECAST_LEDGER_RECORD_UNPUBLISHED", True, raising=False)
+    _no_binaries_no_critique(monkeypatch)
+    _strict(monkeypatch)
+
+    _finalize_post_hoc("legacy_nr", [0.45, "30-40%", 0.2])
+    _finalize_post_hoc("legacy_ok", [0.5, 0.3, 0.2])
+    assert [(row["report_id"], row["schema_version"])
+            for row in forecast_ledger.read_ledger()] == [("legacy_ok", 1)]
+
+    monkeypatch.setattr(Config, "FORECAST_LEDGER_COMMIT_MODE", "published", raising=False)
+    receipts = {}
+    for report_id, probs in (("pub_nr", [0.45, "30-40%", 0.2]), ("pub_ok", [0.5, 0.3, 0.2])):
+        _finalize_post_hoc(report_id, probs)
+        _seal_for_publication(report_id)
+        receipts[report_id] = ledger_commit.run_post_publication(
+            _agent(), report_id, report_status="completed", error=None,
+            publication_status_fn=ReportManager.publication_status,
+            load_forecast_fn=ReportManager.load_structured_forecast)
+    assert receipts["pub_nr"]["status"] == "unpublished"
+    assert receipts["pub_ok"]["status"] == "committed"
+    assert [(row["report_id"], row.get("row_type"))
+            for row in forecast_ledger.read_ledger()
+            if row["report_id"].startswith("pub_")] == [
+        ("pub_nr", "unpublished_terminal"), ("pub_ok", "commit")]
 
 
 def test_retry_parse_publishes_normally(monkeypatch, _report_env):
@@ -767,3 +894,67 @@ def test_extract_secondary_model_reviews_counted_separately(monkeypatch):
     assert "needs_review_count" not in bq
     assert not any("withheld" in issue for issue in bq["issues"])
     assert bq["needs_review_secondary_count"] == 1
+
+
+def _health_for_binary_quality(monkeypatch, folder, binary_quality):
+    """_assess_report_health on a clean audited report carrying ``binary_quality``."""
+    folder.mkdir()
+    forecast_text = json.dumps({"scenarios": _rows([0.7, 0.3], names=("A", "Other")),
+                                "binary_quality": binary_quality})
+    (folder / "forecast.json").write_text(forecast_text, encoding="utf-8")
+    (folder / "final_audit.json").write_text(json.dumps({
+        "policy_version": int(Config.REPORT_FINAL_AUDIT_POLICY_VERSION),
+        "read_only": True,
+        "markdown_sha256": "fixture",
+        "forecast_sha256": hashlib.sha256(forecast_text.encode("utf-8")).hexdigest(),
+        "disk_matches_memory": True,
+        "hard_issues": [],
+        "hard_passed": True,
+        "structured_forecast": {"required": True, "present": True, "valid": True},
+        "scenario_contract": {"valid": True, "issue_count": 0},
+        "publish_gate": {"enabled": True, "passed": True, "hard_issues": [],
+                         "epistemic_issues": [], "hard_passed": True},
+    }), encoding="utf-8")
+    monkeypatch.setattr(ReportManager, "_get_report_folder", lambda rid: str(folder))
+    return PipelineOrchestrator._assess_report_health(None, "rid-1")
+
+
+def test_report_health_surfaces_partially_withheld_binaries(monkeypatch, tmp_path):
+    withheld = fe._binary_withheld_issue(2)
+    # the binary gate still passes: the withheld rows degrade health, never fail it
+    health, issues, meta = _health_for_binary_quality(
+        monkeypatch, tmp_path / "passed",
+        {"passed": True, "count": 10, "needs_review_count": 2,
+         "needs_review_reasons": {"range": 2}, "issues": [withheld]})
+    assert health == "degraded"
+    assert issues == [withheld] and meta["quality_issues"] == [withheld]
+    assert meta["hard_quality_issues"] == []
+
+    # the gate failed: its line already leads with the withheld count (no duplicate)
+    health, issues, _meta = _health_for_binary_quality(
+        monkeypatch, tmp_path / "failed",
+        {"passed": False, "count": 2, "needs_review_count": 2, "issues": [withheld]})
+    assert health == "degraded"
+    assert len(issues) == 1 and withheld in issues[0]
+    assert issues[0].startswith("binary-forecast conviction/objectivity gate failed")
+
+    # nothing withheld: unchanged
+    health, issues, _meta = _health_for_binary_quality(
+        monkeypatch, tmp_path / "clean", {"passed": True, "count": 10, "issues": []})
+    assert (health, issues) == ("ok", [])
+
+
+def test_model_comparison_keeps_unreadable_probability_null(monkeypatch):
+    from scripts.model_comparison import build_comparison
+
+    _strict(monkeypatch)
+    readable = fe._assemble_forecast({"headline": "h", "scenarios": _rows([0.5, 0.3, 0.2])})
+    unreadable = fe._assemble_forecast({"headline": "h",
+                                        "scenarios": _rows([0.45, "30-40%", 0.2])})
+    comparison = build_comparison("base", [
+        {"provider": "alpha", "ok": True, "forecast": readable},
+        {"provider": "beta", "ok": True, "forecast": unreadable},
+    ])
+    by_scenario = {row["scenario"]: row["by_provider"] for row in comparison["per_scenario"]}
+    assert by_scenario[_NAMES[1]] == {"alpha": 0.3, "beta": None}  # never 0.0
+    assert by_scenario[_NAMES[0]] == {"alpha": 0.5, "beta": 0.45}

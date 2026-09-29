@@ -9225,6 +9225,12 @@ class PipelineOrchestrator:
                 bq = fc.get("binary_quality") or {}
                 if bq and not bq.get("passed", True):
                     q_issues.append("binary-forecast conviction/objectivity gate failed (A3/A4): " + "；".join(bq.get("issues", [])[:2]))
+                elif bq.get("needs_review_count"):
+                    # REPORT-1：部分二元概率不可读被扣下、其余仍过门时，扣下说明只在
+                    # binary_quality 里——作为降级信号浮到健康面（不阻断发布；门未过时
+                    # 上一分支的 issues 已以该说明行打头）。
+                    from .forecast_extractor import _binary_withheld_issue
+                    q_issues.append(_binary_withheld_issue(bq["needs_review_count"]))
                 # XRUN-1(c): 二元预测对模拟不敏感（与另一份报告输出同一概率向量）→ 降级信号。
                 if (q.get("sim_insensitivity") or {}).get("issue"):
                     q_issues.append(

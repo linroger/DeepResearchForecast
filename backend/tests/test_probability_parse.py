@@ -142,6 +142,22 @@ def test_partition_scale():
     assert (status, reason) == (PROB_REVIEW, "ambiguous_scale")
     assert _values(rows) == [None, None]
 
+    # an exact zero reads the same on every scale: never ambiguous next to percents
+    for zero_mix in (["60%", "40%", 0], ["60%", "40%", 0.0], ["60%", "40%", "0"]):
+        rows, status, reason = parse_scenario_partition(zero_mix)
+        assert (status, reason) == (PROB_OK, "")
+        assert _values(rows) == pytest.approx([0.6, 0.4, 0.0])
+    rows, status, _ = parse_scenario_partition([0, "100%"])
+    assert status == PROB_OK
+    assert _values(rows) == [0.0, 1.0]
+    rows, status, _ = parse_scenario_partition(["45%", 35, 0])
+    assert status == PROB_OK
+    assert _values(rows) == pytest.approx([0.45, 0.35, 0.0])
+    # a plain 1 next to percents is still 1% or 100%: ambiguous
+    rows, status, reason = parse_scenario_partition(["60%", "39%", 1])
+    assert (status, reason) == (PROB_REVIEW, "ambiguous_scale")
+    assert _values(rows) == [None, None, None]
+
     rows, status, reason = parse_scenario_partition([0.5, "N/A", 0.5])
     assert (status, reason) == (PROB_REVIEW, "nullish")
     assert _values(rows) == [0.5, None, 0.5]

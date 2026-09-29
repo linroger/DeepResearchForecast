@@ -8455,13 +8455,15 @@ class ReportAgent:
                 for s in scenarios
             )
             top = max(probs) if probs else 0.0
+            # REPORT-1：概率待复核时只有部分行可读，其和/最大值不是分区的量——不据此下结论。
+            probabilities_unreadable = forecast.get("probability_status") == "needs_review"
             epistemic_issues: List[str] = []
             hard_issues: List[str] = []
             if scenarios and coverage < min_cov:
                 epistemic_issues.append(
                     f"定量声明引用覆盖率 {coverage:.2f} < 阈值 {min_cov:.2f}"
                 )
-            if forecast.get("probability_status") == "needs_review":
+            if probabilities_unreadable:
                 # REPORT-1：概率不可读 → 显式 NEEDS_REVIEW 硬失败（替代误导性的「和偏离 1」）。
                 hard_issues.append(
                     f"{unreadable_probabilities} 个情景概率无法解析"
@@ -8471,7 +8473,7 @@ class ReportAgent:
                 hard_issues.append(f"情景概率之和 {prob_sum} 偏离 1")
             if scenarios and not has_residual:
                 hard_issues.append("缺少『维持现状/兜底』情景")
-            if top >= 0.9 and len(probs) <= 1:
+            if top >= 0.9 and len(probs) <= 1 and not probabilities_unreadable:
                 epistemic_issues.append("概率分布退化（单情景≥0.9 且无对照情景）")
             # QUALITY-OPT: fold the binary-forecast conviction/objectivity gate (A3/A4) +
             # the S2/S11/S12 audits into the publish gate so they actually demote confidence.
@@ -8541,9 +8543,10 @@ class ReportAgent:
                 "pre_publish_confidence_rationale": _baseline_rationale,
                 "citation_coverage": round(coverage, 3),
                 "citation_coverage_basis": _coverage_basis,
-                "probability_sum": prob_sum,
+                # REPORT-1：待复核时记 None（部分行之和会被误读成分区之和）。
+                "probability_sum": None if probabilities_unreadable else prob_sum,
                 "has_residual_scenario": has_residual,
-                "max_probability": round(top, 3),
+                "max_probability": None if probabilities_unreadable else round(top, 3),
                 "hard_issues": hard_issues,
                 "epistemic_issues": epistemic_issues,
                 "hard_passed": not hard_issues,

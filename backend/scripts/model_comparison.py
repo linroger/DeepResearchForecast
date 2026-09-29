@@ -319,10 +319,12 @@ def build_comparison(base_pipeline_id: str, results: List[Dict[str, Any]]) -> Di
             prob = None
             for s in (r["forecast"].get("scenarios") or []):
                 if _norm_name(s.get("name")) == key:
-                    try:
-                        prob = round(float(s.get("probability") or 0.0), 4)
-                    except (TypeError, ValueError):
-                        prob = None
+                    # REPORT-1：待复核（null）概率保持 None——绝不在对比表里显示成 0.0。
+                    if s.get("probability") is not None:
+                        try:
+                            prob = round(float(s.get("probability") or 0.0), 4)
+                        except (TypeError, ValueError):
+                            prob = None
                     break
             row["by_provider"][r["provider"]] = prob
         per_scenario.append(row)

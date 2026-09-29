@@ -175,11 +175,14 @@ def parse_scenario_partition(
     the whole partition:
 
     * explicit percents with every plain row above 1 -> percent (plain / 100);
-    * an explicit percent next to a plain value <= 1 -> ambiguous_scale;
+    * an explicit percent next to a plain value in (0, 1] -> ambiguous_scale;
     * no explicit percent, some plain value above 1: a non-integer below 1
       anywhere -> ambiguous_scale, otherwise weights (raw values kept so the
       caller's renormalisation reproduces [3, 1] -> 0.75 / 0.25);
     * otherwise fractions.
+
+    An exact zero reads the same on every scale, so it never makes a partition
+    ambiguous: ['60%', '40%', 0] is 0.6 / 0.4 / 0.0.
 
     Any unreadable row makes the partition ``needs_review`` with that row's
     reason.  Readable rows keep their canonical value only when the scale is
@@ -194,7 +197,7 @@ def parse_scenario_partition(
 
     scaled = list(rows)
     if percent_idx:
-        if all(rows[i].value > 1 for i in plain_idx):
+        if all(rows[i].value > 1 or rows[i].value == 0 for i in plain_idx):
             for i in plain_idx:
                 fraction = rows[i].value / 100.0
                 scaled[i] = (
