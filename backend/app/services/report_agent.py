@@ -2508,10 +2508,25 @@ class ReportAgent:
         # 投影），不是权威/硬模拟证据；标签随块携带，且带上 1C 的有效性裁定（若有）。
         lines = ["【推演结果分布 P(outcome)（elicited model projection——模型引出的推演投影，"
                  "非观察证据；仅供机制分析，不得据此调整概率）】"]
+        note_line = "注：这是结构化情景分析先验，不是观察事实；正文结论必须以研究来源和现实指标校验。"
         _validity = str((data or {}).get("validity") or "").strip().lower()
         if _validity and _validity != "valid":
             lines.append(f"⚠️ 有效性裁定：{_validity}（决策通道存在失败/沉默轮，"
                          "本分布不可用作任何依据；forecast_effect=no_update）")
+            if getattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", True):
+                # SIM-1（fail-closed）：显式非 valid 裁定 → 只留警示与裁定原因，隐藏结果份额与
+                # 演化航点，正文无数字可引。注意：信号包解析器
+                # （forecast_extractor._WS_OUTCOME_HEADER_RE / _SIM_SIGNAL_TAXONOMY）至今仍锚定旧头
+                # 「【预测结果分布」，本来就不识别本块的「【推演结果分布」头；隐藏份额行保证即便该头部
+                # 漂移日后被修复，非 valid 块里也没有可被解析成 sim 结果分布的数字。
+                _reasons = (data or {}).get("validity_reasons")
+                _reasons = [str(r) for r in (_reasons if isinstance(_reasons, list) else [])
+                            if str(r).strip()]
+                if _reasons:
+                    lines.append("裁定原因：" + "、".join(_reasons))
+                lines.append("（有效性未达标：已隐藏结果份额与演化航点——正文不得引用本块任何数字或趋势）")
+                lines.append(note_line)
+                return "\n".join(lines)
         for name, sh in sorted(shares.items(), key=lambda kv: -float(kv[1] or 0)):
             try:
                 lines.append(f"· {name}: {float(sh) * 100:.0f}%")
@@ -2553,7 +2568,7 @@ class ReportAgent:
                              f"（截至 {(data or {}).get('horizon_date') or ''}）")
         else:
             lines.append("稳定性诊断：已趋稳" if ca else "稳定性诊断：尚未趋稳（应降低信心）")
-        lines.append("注：这是结构化情景分析先验，不是观察事实；正文结论必须以研究来源和现实指标校验。")
+        lines.append(note_line)
         return "\n".join(lines)
 
     def _temporal_horizon_date(self) -> str:
@@ -8635,10 +8650,13 @@ class ReportAgent:
         """把基线/情景两份最终 P(outcome) 归一化为可比维度的字典。
 
         返回 {dimensions:[{name, baseline, scenario, delta, verdict}]}；任一侧缺少
-        world_state_trajectory.json / outcome.shares 时返回 None。
+        world_state_trajectory.json / outcome.shares，或（REPORT_WORLDSTATE_HIDE_INVALID 开时）
+        任一侧带显式非 valid 有效性裁定时返回 None（后者记一条 info 日志，便于与缺轨迹区分）。
         """
         if not self.base_simulation_id:
             return None
+        hide_invalid = bool(getattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", True))
+
         def _shares(simulation_id: str) -> Dict[str, float]:
             path = os.path.join(
                 getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or "",
@@ -8646,9 +8664,17 @@ class ReportAgent:
             )
             try:
                 with open(path, "r", encoding="utf-8") as handle:
-                    raw = ((json.load(handle) or {}).get("outcome") or {}).get("shares") or {}
+                    doc = json.load(handle) or {}
+                raw = (doc.get("outcome") or {}).get("shares") or {}
             except (OSError, ValueError, TypeError):
                 return {}
+            # SIM-1（fail-closed）：任一侧轨迹带显式非 valid 裁定 → 无可比份额 → 对比表 None。
+            if hide_invalid:
+                validity = str(doc.get("validity") or "").strip().lower()
+                if validity and validity != "valid":
+                    logger.info("情景对比表跳过：%s 轨迹有效性裁定=%s（REPORT_WORLDSTATE_HIDE_INVALID）",
+                                simulation_id, validity)
+                    return {}
             out: Dict[str, float] = {}
             for name, value in raw.items() if isinstance(raw, dict) else []:
                 try:

@@ -11137,12 +11137,18 @@ class PipelineOrchestrator:
         outcome = (traj.get("outcome") if isinstance(traj, dict) else None) or {}
         shares = outcome.get("shares") if isinstance(outcome, dict) else None
         converged_at = traj.get("converged_at") if isinstance(traj, dict) else None
+        # SIM-1：两路决策通道产物共用的有效性裁定（顶层；旧轨迹缺席 → None）。只观测：
+        # 通道本就 diagnostic_only，非 valid 裁定只告警，不进 _assess_run_health。
+        validity = traj.get("validity") if isinstance(traj, dict) else None
         summary = {
             "scenarios_seeded": len(scenarios),
             "trajectory_produced": bool(produced),
             "leader": (outcome.get("leader") if isinstance(outcome, dict) else None),
             "leader_share": (outcome.get("leader_share") if isinstance(outcome, dict) else None),
             "converged_at": converged_at,
+            "validity": validity,
+            "validity_reasons": (traj.get("validity_reasons") if isinstance(traj, dict) else None),
+            "forecast_effect": (traj.get("forecast_effect") if isinstance(traj, dict) else None),
         }
         state.options["decision_channel_summary"] = summary
         try:
@@ -11167,6 +11173,13 @@ class PipelineOrchestrator:
             logger.warning(
                 "[%s] 决策通道未点火：world_state_seed 无情景（研究阶段未产出概率分布）",
                 state.pipeline_id)
+        validity_norm = str(validity or "").strip().lower()
+        if validity_norm and validity_norm != "valid":
+            logger.warning(
+                "[%s] 决策通道有效性裁定=%s（原因 %s；forecast_effect=%s）——推演结果分布不可用作"
+                "任何依据（REPORT_WORLDSTATE_HIDE_INVALID 开时报告隐藏份额/图表/对比表）",
+                state.pipeline_id, validity_norm, summary["validity_reasons"],
+                summary["forecast_effect"])
 
     # -- 内部：研究 as_of 锚校验 (R2-RES-7) -------------------------------
 

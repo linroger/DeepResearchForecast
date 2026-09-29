@@ -3438,6 +3438,9 @@ class _InbandWorldEvolution:
         self._prev_date = self._as_of_date
         self._stepped = 0
         self._max_round = 0
+        # SIM-1：本进程见过的最高轮次（1 基，deliver/heartbeat 均计）。与 WorldState 实际
+        # 入账轮数之差 = 未入账轮（有损续跑前的轮次、全平台死轮），裁定时按 missing 计入分母。
+        self._max_seen_round = 0
         self._converged_at: Optional[int] = None
         self._stable_streak = 0
         self._finalized = False
@@ -3456,6 +3459,7 @@ class _InbandWorldEvolution:
         """交付某平台本轮（0 基）的有机动作与到期事件；凑齐全部平台水位后按轮序步进。
         内部全隔离：任何异常 → 告警 + 下一轮空摘要，绝不中断轮循环（spec §4）。"""
         try:
+            self._max_seen_round = max(self._max_seen_round, int(round_num) + 1)
             p = str(platform)
             buf = self._pending.get(round_num)
             if buf is None:
@@ -3485,6 +3489,7 @@ class _InbandWorldEvolution:
         """死轮/env.step 失败轮的水位推进（本平台本轮无动作可交付），
         防止双平台按轮配对停摆。绝不抛异常。"""
         try:
+            self._max_seen_round = max(self._max_seen_round, int(round_num) + 1)
             p = str(platform)
             self._watermark[p] = max(self._watermark.get(p, -1), round_num)
             self._advance()
@@ -3540,6 +3545,26 @@ class _InbandWorldEvolution:
                            ("horizon_defaulted", self._horizon_defaulted)):
                 if fv is not None:
                     result[fk] = fv
+            # SIM-1：与 post-hoc 决策通道同一套有效性裁定规则（诚实对齐，无开关）。未入账轮
+            # （本进程见过但 WorldState 未步进）按 missing 计入分母——有损续跑只覆盖部分
+            # 轮次时不再被判 valid（post-hoc 只入账动作日志中出现的轮次，见
+            # decision_channel_verdict）。嵌套 outcome.round_accounting 保留 WorldState 原始口径。
+            # 同理 converged_at / outcome.converged / outcome.convergence_state 只反映本进程实际
+            # 步进的轮次，未入账轮不改它们：有损续跑时 validity=inconclusive 可与"已趋稳"并存，
+            # 下游须以 validity 为准（报告侧 REPORT_WORLDSTATE_HIDE_INVALID 默认连趋稳行一并隐藏）。
+            # 裁定失败只丢裁定键，绝不丢轨迹。
+            try:
+                accounted = len(self._ws.round_statuses)
+                verdict = self._dc.decision_channel_verdict(
+                    self._ws.round_accounting(),
+                    unaccounted_rounds=max(0, self._max_seen_round - accounted))
+                result["round_accounting"] = verdict["round_accounting"]
+                result["validity"] = verdict["validity"]
+                result["validity_reasons"] = verdict["validity_reasons"]
+                result["forecast_effect"] = verdict["forecast_effect"]
+                result["epistemic_status"] = "elicited_model_projection"
+            except Exception as _v_err:  # noqa: BLE001
+                self._log(f"in-band 有效性裁定失败（已隔离，轨迹照写、无裁定键）: {_v_err}")
             write_json_atomic(os.path.join(self._dir, "world_state_trajectory.json"), result)
             with open(os.path.join(self._dir, "decisions.jsonl"), "w", encoding="utf-8") as _df:
                 for _d in self._decisions:
@@ -3547,7 +3572,7 @@ class _InbandWorldEvolution:
             _INBAND_TRAJ_WRITTEN[os.path.abspath(self._dir)] = True
             self._log(f"in-band 世界演化完成: leader={out.get('leader')} "
                       f"share={out.get('leader_share')} converged_at={self._converged_at}"
-                      f"（稳定性信号，从不早停）")
+                      f"（稳定性信号，从不早停） validity={result.get('validity')}")
         except Exception as _e:  # noqa: BLE001
             self._log(f"in-band 轨迹写出失败（已隔离）: {_e}")
 
