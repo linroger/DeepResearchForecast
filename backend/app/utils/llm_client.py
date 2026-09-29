@@ -18,6 +18,7 @@ import time
 from typing import Optional, Dict, Any, List
 
 from ..config import Config
+from .llm_text import flatten_content, has_dangling_think, normalize_finish_reason, strip_think
 from .logger import get_logger
 
 logger = get_logger('mirofish.llm_client')
@@ -158,7 +159,7 @@ def _cb_reset(provider: str) -> None:
 
 # LLM-3: 回退提供方的 OpenAI 连接池缓存。此前每次失败转移都重建 LLMClient/OpenAI 客户端
 # （每次一个新 httpx 连接池 + TLS 握手）；键=(provider, model, base_url)。只缓存底层 OpenAI
-# 客户端（官方文档保证线程安全），LLMClient 实例仍逐调用新建，避免 _last_usage 跨线程串档。
+# 客户端（官方文档保证线程安全），LLMClient 实例仍逐调用新建（逐调用元数据见 _CALL_META）。
 _FB_OPENAI_CLIENTS: Dict[tuple, Any] = {}
 # A deterministic fallback authentication failure is process-scoped, not request-scoped.
 # Remember it long enough to keep parallel workers from repeating an expensive doomed CLI/API
@@ -216,6 +217,223 @@ def _retry_delay(exc: Exception, attempt: int) -> float:
     return base
 
 
+# ---------------------------------------------------------------------------
+# INFRA-1: typed completion failures and race-free per-call metadata.
+# ---------------------------------------------------------------------------
+class _CompletionDiagnostics:
+    """Diagnostic attributes shared by the typed completion failures below."""
+
+    def __init__(self, message: str, *, finish_reason: str = "unknown",
+                 raw_finish_reason: Any = None, usage: Optional[Dict[str, int]] = None,
+                 sent_max_tokens: Optional[int] = None, provider: str = "") -> None:
+        super().__init__(message)
+        self.finish_reason = finish_reason
+        self.raw_finish_reason = raw_finish_reason
+        self.usage = usage
+        self.sent_max_tokens = sent_max_tokens
+        self.provider = provider
+
+
+class EmptyCompletion(_CompletionDiagnostics, RuntimeError):
+    """The provider answered but the reply carries no text.
+
+    A RuntimeError, so chat() still retries it and then fails over. The message never carries
+    outage vocabulary (quota / rate limit / auth / status-code-like numbers): the pipeline's
+    outage breaker (_classify_provider_outage) and _is_quota must not count it as an outage.
+    """
+
+
+class LLMEmptyChoices(_CompletionDiagnostics, RuntimeError):
+    """The response has no choices at all (e.g. a MiniMax base_resp error envelope).
+
+    The provider's own error text is kept in the message, so quota/auth wording still reaches
+    _is_quota, the 429 breaker and the pipeline outage classifier.
+    """
+
+
+class LLMContentFiltered(_CompletionDiagnostics, Exception):
+    """The provider's content filter stopped the reply before any text.
+
+    Deliberately not a RuntimeError: generic RuntimeError handlers (chat()'s transient retry
+    loop among them) must not treat a filtered prompt as transient. chat() counts it toward the
+    422 breaker and tries the fallback provider once, as for any non-retryable error.
+    """
+
+
+class LLMAbortedCompletion(_CompletionDiagnostics, RuntimeError):
+    """The provider aborted the generation (finish_reason 'error') before any text."""
+
+
+# The DISABLE_THINKING knob that governs each reasoning provider (Config.reasoning_extra_body).
+_THINKING_KNOBS = {
+    "kimi": "LLM_KIMI_DISABLE_THINKING",
+    "minimax": "LLM_MINIMAX_DISABLE_THINKING",
+    "deepseek": "LLM_DISABLE_THINKING",
+    "qwen": "LLM_DISABLE_THINKING",
+    "glm": "LLM_DISABLE_THINKING",
+}
+# Substrings that DRF's text classifiers read as HTTP status codes (_is_quota matches a bare
+# '429'; the auth / invalid-request checks match delimited 401 / 400; ' 422' marks a content
+# filter). A max_tokens value containing one is left out of failure messages.
+_STATUS_LIKE_CODES = ("400", "401", "422", "429")
+# Finish reasons whose reply is complete enough to replay from LLMCache.
+_CACHEABLE_FINISH_REASONS = frozenset({"stop", "tool_calls", "unknown"})
+
+# Per-thread metadata of the last successful call. Report sections and graphiti workers share
+# one LLMClient across threads, so per-call state must never live on the instance.
+_CALL_META = threading.local()
+
+
+def _thinking_knob(provider: Optional[str]) -> Optional[str]:
+    """Config knob that disables thinking for ``provider``; None when it has none."""
+    return _THINKING_KNOBS.get((provider or "").strip().lower())
+
+
+def _transport_strict() -> bool:
+    return bool(getattr(Config, "LLM_TRANSPORT_STRICT", True))
+
+
+def _field(obj: Any, name: str) -> Any:
+    """``obj[name]`` for a dict, else ``getattr(obj, name, None)``."""
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return obj.get(name)
+    return getattr(obj, name, None)
+
+
+def _as_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _usage_dict(prompt: int = 0, completion: int = 0, total: Optional[int] = None,
+                reasoning: int = 0, cached: int = 0) -> Dict[str, int]:
+    return {
+        "prompt_tokens": prompt,
+        "completion_tokens": completion,
+        "total_tokens": prompt + completion if total is None else total,
+        "reasoning_tokens": reasoning,
+        "cached_tokens": cached,
+    }
+
+
+def _usage_from_response(response: Any) -> Optional[Dict[str, int]]:
+    """Provider-reported usage of an OpenAI-compatible response; None when it reports none."""
+    try:
+        u = _field(response, "usage")
+        if u is None:
+            return None
+        pt = _as_int(_field(u, "prompt_tokens"))
+        ct = _as_int(_field(u, "completion_tokens"))
+        return _usage_dict(
+            pt, ct,
+            total=_as_int(_field(u, "total_tokens")) or pt + ct,
+            reasoning=_as_int(_field(_field(u, "completion_tokens_details"), "reasoning_tokens")),
+            # DeepSeek reports prompt-cache hits as prompt_cache_hit_tokens.
+            cached=_as_int(_field(_field(u, "prompt_tokens_details"), "cached_tokens"))
+            or _as_int(_field(u, "prompt_cache_hit_tokens")),
+        )
+    except Exception:  # noqa: BLE001 — usage is observability; never fail the call over it
+        return None
+
+
+def _cli_envelope_usage(envelope: Any) -> tuple:
+    """(usage, served_model) from a Claude CLI JSON result envelope; (None, None) if absent."""
+    if not isinstance(envelope, dict):
+        return None, None
+    try:
+        usage = None
+        u = envelope.get("usage")
+        if isinstance(u, dict):
+            fresh = _as_int(u.get("input_tokens"))
+            cache_read = _as_int(u.get("cache_read_input_tokens"))
+            cache_write = _as_int(u.get("cache_creation_input_tokens"))
+            usage = _usage_dict(fresh + cache_read + cache_write, _as_int(u.get("output_tokens")),
+                                cached=cache_read)
+        served = envelope.get("model") if isinstance(envelope.get("model"), str) else None
+        per_model = envelope.get("modelUsage")
+        if not served and isinstance(per_model, dict) and per_model:
+            served = max(per_model, key=lambda name: _as_int(_field(per_model[name], "outputTokens")))
+        return usage, served
+    except Exception:  # noqa: BLE001 — envelope shape drift must not fail a served call
+        return None, None
+
+
+def _empty_choices_error(response: Any, provider: str, model: Optional[str],
+                         usage: Optional[Dict[str, int]]) -> Exception:
+    """The typed error for a response without choices, carrying the provider's error envelope
+    text (MiniMax base_resp, error). A content-filter envelope (MiniMax 'new_sensitive') gives
+    LLMContentFiltered so chat() fails over at once instead of retrying a filtered prompt;
+    anything else gives LLMEmptyChoices."""
+    details: List[str] = []
+    try:
+        extra = getattr(response, "model_extra", None)
+        extra = extra if isinstance(extra, dict) else {}
+        base = extra.get("base_resp") or _field(response, "base_resp")
+        code, msg = _field(base, "status_code"), _field(base, "status_msg")
+        if code not in (None, "") or msg:
+            details.append(f"base_resp status_code={code} status_msg={msg}")
+        err = extra.get("error") or _field(response, "error")
+        if isinstance(err, str) and err:
+            details.append(f"error: {err}")
+        elif err is not None:
+            err_msg, err_code = _field(err, "message"), _field(err, "code")
+            if err_msg or err_code:
+                details.append(f"error code={err_code} message={err_msg}")
+    except Exception:  # noqa: BLE001 — best-effort diagnostics only
+        pass
+    detail = "; ".join(details)[:400] or "the response carried no error detail"
+    if details and _is_content_filter(Exception(detail)):
+        return LLMContentFiltered(
+            f"LLM response has no choices: provider content_filter envelope "
+            f"(provider={provider}, model={model}): {detail}",
+            finish_reason="content_filter", usage=usage, provider=provider,
+        )
+    return LLMEmptyChoices(
+        f"LLM response has no choices (provider={provider}, model={model}): {detail}",
+        finish_reason="error", usage=usage, provider=provider,
+    )
+
+
+def _completion_failure(provider: str, finish_reason: str, raw_finish_reason: Any,
+                        usage: Optional[Dict[str, int]], max_tokens: Optional[int]) -> Exception:
+    """The typed exception for a reply with no text, chosen by its normalized finish reason."""
+    if finish_reason == "content_filter":
+        return LLMContentFiltered(
+            f"LLM reply stopped by the provider content_filter before any text "
+            f"(provider={provider}, finish_reason={raw_finish_reason})",
+            finish_reason=finish_reason, raw_finish_reason=raw_finish_reason, usage=usage,
+            sent_max_tokens=max_tokens, provider=provider,
+        )
+    if finish_reason == "error":
+        return LLMAbortedCompletion(
+            f"LLM provider aborted the reply before any text "
+            f"(provider={provider}, finish_reason={raw_finish_reason})",
+            finish_reason=finish_reason, raw_finish_reason=raw_finish_reason, usage=usage,
+            sent_max_tokens=max_tokens, provider=provider,
+        )
+    parts = [f"finish_reason={finish_reason}"]
+    if max_tokens is not None and not any(code in str(max_tokens) for code in _STATUS_LIKE_CODES):
+        parts.append(f"max_tokens={max_tokens}")
+    parts.append(f"provider={provider}")
+    message = f"LLM returned empty content ({', '.join(parts)})."
+    knob = _thinking_knob(provider)
+    if knob and getattr(Config, knob, True):
+        message += f" Hint: {knob}=true already disables provider thinking; raise max_tokens."
+    elif knob:
+        message += (f" Hint: reasoning may have used the whole output budget; set {knob}=true "
+                    f"to disable provider thinking, or raise max_tokens.")
+    else:
+        message += " Hint: raise max_tokens if the output cap cut the reply."
+    return EmptyCompletion(
+        message, finish_reason=finish_reason, raw_finish_reason=raw_finish_reason, usage=usage,
+        sent_max_tokens=max_tokens, provider=provider,
+    )
+
+
 class LLMClient:
     """LLM客户端 — 支持 claude-cli / codex-cli / openai"""
 
@@ -228,8 +446,9 @@ class LLMClient:
     ):
         self.provider = (provider or Config.LLM_PROVIDER or "claude-cli").lower()
 
-        # 最近一次调用的精确 token 用量（OpenAI 兼容路径填充；CLI 路径为 None→按文本粗估）。
-        self._last_usage: Optional[Dict[str, int]] = None
+        # INFRA-1: 逐调用元数据存于线程本地 _CALL_META（见 last_call_meta）。此处经 _last_usage
+        # 兼容 setter 清掉本线程上可能残留的、恰好复用了本实例 id() 的旧客户端元数据。
+        self._last_usage = None
 
         # openai 提供方所需的连接参数（CLI 模式下不使用）
         self.api_key = api_key or Config.LLM_API_KEY
@@ -366,6 +585,115 @@ class LLMClient:
         return self._fast_openai_client
 
     # ------------------------------------------------------------------
+    # INFRA-1: 逐调用元数据（线程本地，按客户端 id() 归属）
+    # ------------------------------------------------------------------
+    def last_call_meta(self) -> Optional[Dict[str, Any]]:
+        """Metadata of this client's last successful call on the calling thread.
+
+        Keys: client_id, provider, model, served_model, finish_reason (normalized, see
+        llm_text.FINISH_REASONS), raw_finish_reason, usage {prompt_tokens, completion_tokens,
+        total_tokens, reasoning_tokens, cached_tokens}, usage_source ('provider' = reported by
+        the API, 'cli' = Claude CLI envelope, 'none' = not reported, all zeros), think_stripped,
+        served_by ('primary' | 'fallback' | 'cache') and cacheable.
+
+        Returns a copy, or None when the thread's last call belongs to another client or this
+        client's last call on the thread did not complete.
+        """
+        meta = self._own_call_meta()
+        if meta is None:
+            return None
+        out = dict(meta)
+        out["usage"] = dict(meta.get("usage") or {})
+        return out
+
+    def _own_call_meta(self) -> Optional[Dict[str, Any]]:
+        meta = getattr(_CALL_META, "meta", None)
+        if isinstance(meta, dict) and meta.get("client_id") == id(self):
+            return meta
+        return None
+
+    def _clear_own_call_meta(self) -> None:
+        if self._own_call_meta() is not None:
+            _CALL_META.meta = None
+
+    def _stamp_call_meta(self, *, model: Optional[str], finish_reason: str,
+                         raw_finish_reason: Any = None, usage: Optional[Dict[str, int]] = None,
+                         usage_source: str = "none", served_model: Any = None,
+                         think_stripped: bool = False, dangling: bool = False,
+                         served_by: str = "primary") -> None:
+        """Record a completed call as the calling thread's last call.
+
+        Never raises: a failure here is logged at debug level and leaves no metadata, so it
+        can never mask the completion itself.
+        """
+        try:
+            raw = getattr(raw_finish_reason, "value", raw_finish_reason)
+            meta: Optional[Dict[str, Any]] = {
+                "client_id": id(self),
+                "provider": getattr(self, "provider", None),
+                "model": model,
+                "served_model": served_model if isinstance(served_model, str) and served_model else None,
+                "finish_reason": finish_reason,
+                "raw_finish_reason": None if raw is None else str(raw),
+                "usage": dict(usage) if usage else _usage_dict(),
+                "usage_source": usage_source if usage else "none",
+                "think_stripped": bool(think_stripped),
+                "served_by": served_by,
+                "cacheable": finish_reason in _CACHEABLE_FINISH_REASONS and not dangling,
+            }
+        except Exception as exc:  # noqa: BLE001 — metadata is observability only
+            logger.debug(f"LLM 调用元数据构建失败（忽略）: {exc}")
+            meta = None
+        _CALL_META.meta = meta
+
+    def _adopt_fallback_meta(self, fb: "LLMClient") -> None:
+        """Re-stamp the fallback client's call metadata as this client's call (served_by='fallback')."""
+        try:
+            meta = fb.last_call_meta()
+            if meta is None:
+                return
+            meta.update(client_id=id(self), served_by="fallback",
+                        provider=fb.provider, model=fb.model)
+            _CALL_META.meta = meta
+        except Exception as exc:  # noqa: BLE001 — metadata is observability only
+            logger.debug(f"回退调用元数据转写失败（忽略）: {exc}")
+
+    @property
+    def _last_usage(self) -> Optional[Dict[str, int]]:
+        """Backward-compatible mirror of the calling thread's last provider-reported usage.
+
+        Readers such as the simulation child's usage wrapper read ``client._last_usage`` right
+        after chat(). The value comes from the thread-local call metadata, so concurrent calls
+        on one shared client never see each other's usage. None when this client's last call
+        on this thread reported no provider usage (CLI providers, a response without usage),
+        exactly as before.
+        """
+        meta = self._own_call_meta()
+        if meta is None or meta.get("usage_source") != "provider":
+            return None
+        return dict(meta.get("usage") or {})
+
+    @_last_usage.setter
+    def _last_usage(self, value: Optional[Dict[str, int]]) -> None:
+        """None clears this client's metadata on the calling thread; a usage dict is stored as
+        provider-reported usage for it. Never raises (clients built via object.__new__ too)."""
+        try:
+            if value is None:
+                self._clear_own_call_meta()
+                return
+            usage = _usage_dict(_as_int(_field(value, "prompt_tokens")),
+                                _as_int(_field(value, "completion_tokens")))
+            meta = self._own_call_meta()
+            if meta is None:
+                self._stamp_call_meta(model=getattr(self, "model", None), finish_reason="unknown",
+                                      usage=usage, usage_source="provider")
+            else:
+                meta["usage"] = usage
+                meta["usage_source"] = "provider"
+        except Exception:  # noqa: BLE001 — compatibility shim must never raise
+            pass
+
+    # ------------------------------------------------------------------
     # 公共接口
     # ------------------------------------------------------------------
     def chat(
@@ -386,6 +714,10 @@ class LLMClient:
         tier（EXECPLAN2 I-6-2）: 'strong'（默认，= 当前模型，行为不变）| 'fast'（廉价/快速档）。
         仅当 Config.LLM_TIERED_ROUTING=true 且为 OpenAI 兼容提供方时，fast 才路由到更便宜的
         模型/提供方；CLI 订阅提供方与关闭路由时一律 no-op（graceful degradation）。
+
+        INFRA-1: 空回复/无 choices/中止分别抛 EmptyCompletion / LLMEmptyChoices /
+        LLMAbortedCompletion（均为 RuntimeError，照常退避重试）；审查拦截抛 LLMContentFiltered
+        （非 RuntimeError：不重试，直接尝试一次回退）。本次调用的 finish_reason/usage 等见 last_call_meta()。
         """
         # EXECPLAN2 I-6-2: 解析本次调用实际使用的模型（fast/strong）。关闭路由时 = self.model。
         model = self._model_for_tier(tier)
@@ -401,6 +733,7 @@ class LLMClient:
             if hit is not None:
                 if Config.LLM_TELEMETRY_ENABLED:
                     LLMMeter.record(self.provider, model, 0, 0, 0.0, cached=True, stage=stage, run_id=run_id)
+                self._stamp_call_meta(model=model, finish_reason="unknown", served_by="cache")
                 return hit
 
         last_error: Optional[Exception] = None
@@ -410,7 +743,7 @@ class LLMClient:
         # by_model 归属错乱。置位后跳过外层计量。
         served_by_fallback = False
         started = time.monotonic()
-        self._last_usage = None
+        self._clear_own_call_meta()
         # Circuit breaker: if the primary is in a content-filter/quota cooldown, skip the doomed
         # primary attempt entirely and go straight to the fallback (prevents the futile-call flood).
         if _cb_tripped(self.provider) and not self._is_fallback:
@@ -476,9 +809,15 @@ class LLMClient:
             else:
                 raise last_error if last_error is not None else RuntimeError("LLM 调用失败")
 
+        # INFRA-1: 本次调用的元数据取自线程本地 _CALL_META（按本实例 id 归属），不再读实例属性
+        # ——同一客户端被报告章节池 / graphiti 线程池并发调用时，实例级 usage 会被别的线程覆盖，
+        # token 记到错误的调用上。回退接管时 _try_fallback 已把回退方元数据转写为本客户端的。
+        meta = self._own_call_meta()
         if Config.LLM_TELEMETRY_ENABLED and not served_by_fallback:
             latency_ms = (time.monotonic() - started) * 1000.0
-            usage = self._last_usage
+            # 仅 API 上报的精确 usage 顶替粗估；Claude CLI 信封的 usage 含 CLI 自身的系统提示/缓存，
+            # 计入会抬高 run 预算口径，故 CLI 仍按文本长度粗估（与历史一致）。
+            usage = meta["usage"] if meta and meta.get("usage_source") == "provider" else None
             if usage:
                 pt, ct = int(usage.get("prompt_tokens", 0)), int(usage.get("completion_tokens", 0))
             else:
@@ -486,9 +825,18 @@ class LLMClient:
                 pt = sum(estimate_tokens(str(m.get("content", ""))) for m in messages)
                 ct = estimate_tokens(result)
             # 用解析后的 model 计量，使 by_model 维度区分 fast/strong 用量与成本。
-            LLMMeter.record(self.provider, model, pt, ct, latency_ms, cached=False, stage=stage, run_id=run_id)
+            LLMMeter.record(self.provider, model, pt, ct, latency_ms, cached=False, stage=stage,
+                            run_id=run_id, finish_reason=meta.get("finish_reason") if meta else None)
         if Config.LLM_CACHE_ENABLED and cache_key is not None:
-            LLMCache.put(cache_key, result)
+            # INFRA-1 (LLM_TRANSPORT_STRICT): 截断(length)/审查/中止/悬空 <think> 的回复不入缓存
+            # ——否则同一 prompt 会从 LLMCache 永久重放这份残缺回复。无元数据时同样不缓存（失败安全）。
+            if _transport_strict() and not (meta and meta.get("cacheable")):
+                logger.debug(
+                    "LLM 回复不入缓存（finish_reason=%s，无元数据=%s）",
+                    meta.get("finish_reason") if meta else None, meta is None,
+                )
+            else:
+                LLMCache.put(cache_key, result)
         if Config.LLM_RUN_BUDGET_TOKENS or Config.LLM_RUN_BUDGET_USD:
             check_budget(run_id)  # 超预算抛 BudgetExceeded
         return result
@@ -551,6 +899,7 @@ class LLMClient:
             logger.warning(f"主提供方 {self.provider} 失败（{_err_brief(primary_error) if primary_error else '?'}），"
                            f"切换到回退提供方 {fb_provider}")
             out = fb.chat(messages, temperature, max_tokens, response_format)
+            self._adopt_fallback_meta(fb)
             with _CB_LOCK:
                 _FB_AUTH_UNAVAILABLE_UNTIL.pop(auth_key, None)
             logger.info(f"回退提供方 {fb_provider} 成功接管本次调用")
@@ -642,10 +991,14 @@ class LLMClient:
             tools_schema: OpenAI tools schema 列表（[{type:'function', function:{name,description,parameters}}]）。
             tier: EXECPLAN2 I-6-2 模型档位；默认 'strong'（报告合成保持旗舰模型，行为不变）。
         Returns:
-            {"content": str, "tool_calls": [{"id","name","arguments"(dict)}]}。无工具调用时 tool_calls=[]。
+            {"content": str, "tool_calls": [{"id","name","arguments"(dict),"raw_arguments","arguments_error"}],
+             "finish_reason": str, "served_model": str|None}。无工具调用时 tool_calls=[]。
+            arguments 解析失败时仍为 {}，arguments_error 给出原因、raw_arguments 保留模型原文（INFRA-1）。
         Raises:
-            RuntimeError: 非原生提供方调用 / SDK 失败。
+            RuntimeError: 非原生提供方调用 / SDK 失败（含无 choices 的 LLMEmptyChoices）。
         """
+        # INFRA-1: 与 chat() 一致——本次调用未完成时 last_call_meta() 不得返回上一次调用的元数据。
+        self._clear_own_call_meta()
         if self._openai_client is None:
             raise RuntimeError("chat_with_tools 仅支持 OpenAI 兼容提供方")
         # LLM-1/RPT-10: 熔断预检——冷却期内直接抛错（调用方 report_agent 捕获后降级 ReAct，
@@ -683,7 +1036,12 @@ class LLMClient:
         last_error: Optional[Exception] = None
         for attempt in range(MAX_RETRIES):
             try:
-                response = client.chat.completions.create(**kwargs)
+                _resp = client.chat.completions.create(**kwargs)
+                # INFRA-1: 无 choices 的错误信封（MiniMax base_resp 配额等）按瞬时错误重试（审查信封
+                # 为 LLMContentFiltered，记 422 后快速失败），不再在下方 choices[0] 处抛 IndexError。
+                if not getattr(_resp, "choices", None):
+                    raise _empty_choices_error(_resp, self.provider, model, _usage_from_response(_resp))
+                response = _resp
                 _cb_reset(self.provider)
                 break
             except (RuntimeError, *_RETRYABLE_API_ERRORS) as exc:
@@ -704,30 +1062,51 @@ class LLMClient:
                 break
         if response is None:
             raise last_error if last_error is not None else RuntimeError("chat_with_tools 调用失败")
+        choice = response.choices[0]
+        msg = getattr(choice, "message", None)
+        raw_finish = getattr(choice, "finish_reason", None)
+        finish = normalize_finish_reason(raw_finish)
+        usage = _usage_from_response(response)
         if Config.LLM_TELEMETRY_ENABLED:
             try:
-                _u = getattr(response, "usage", None)
-                _pt = int(getattr(_u, "prompt_tokens", 0) or 0) if _u is not None else 0
-                _ct = int(getattr(_u, "completion_tokens", 0) or 0) if _u is not None else 0
+                _pt = usage["prompt_tokens"] if usage else 0
+                _ct = usage["completion_tokens"] if usage else 0
                 LLMMeter.record(self.provider, model, _pt, _ct,
                                 (time.monotonic() - _started) * 1000.0,
-                                cached=False, stage=_stage, run_id=_run_id)
+                                cached=False, stage=_stage, run_id=_run_id, finish_reason=finish)
             except Exception:  # noqa: BLE001 — 计量失败不影响返回
                 pass
         if Config.LLM_RUN_BUDGET_TOKENS or Config.LLM_RUN_BUDGET_USD:
             check_budget(_run_id)  # 超预算抛 BudgetExceeded
-        choice = response.choices[0]
-        msg = choice.message
         tool_calls = []
         for tc in (getattr(msg, "tool_calls", None) or []):
+            raw_args = tc.function.arguments
+            # INFRA-1: 解析失败不再静默当作 {}——arguments 仍为 {}（兼容现有调用方），
+            # 另附 raw_arguments（模型原文）与 arguments_error（失败原因）。
+            args_error: Optional[str] = None
             try:
-                args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-            except (json.JSONDecodeError, TypeError):
+                args = json.loads(raw_args) if raw_args else {}
+            except (json.JSONDecodeError, TypeError) as exc:
                 args = {}
-            tool_calls.append({"id": tc.id, "name": tc.function.name, "arguments": args})
+                args_error = f"{type(exc).__name__}: {exc}"
+            if args_error is None and not isinstance(args, dict):
+                args_error = f"arguments JSON is a {type(args).__name__}, not an object"
+            tool_calls.append({"id": tc.id, "name": tc.function.name, "arguments": args,
+                               "raw_arguments": raw_args, "arguments_error": args_error})
+        raw_content = flatten_content(getattr(msg, "content", None))
+        content, think_stripped = self._normalize_reply_text(raw_content, _transport_strict())
+        served_model = getattr(response, "model", None)
+        served_model = served_model if isinstance(served_model, str) and served_model else None
+        self._stamp_call_meta(
+            model=model, finish_reason=finish, raw_finish_reason=raw_finish, usage=usage,
+            usage_source="provider", served_model=served_model, think_stripped=think_stripped,
+            dangling=has_dangling_think(raw_content),
+        )
         return {
-            "content": self._clean_content(msg.content or ""),
+            "content": content,
             "tool_calls": tool_calls,
+            "finish_reason": finish,
+            "served_model": served_model,
         }
 
     @staticmethod
@@ -839,6 +1218,18 @@ class LLMClient:
         """移除推理模型的 <think> 标签。"""
         return re.sub(r'<think>[\s\S]*?</think>', '', content).strip()
 
+    def _normalize_reply_text(self, raw: str, strict: bool) -> tuple:
+        """(text, think_stripped) of an API reply's flattened content.
+
+        ``strict`` (LLM_TRANSPORT_STRICT, default on): llm_text.strip_think also removes an
+        orphan ``</think>`` and a dangling ``<think>`` cut by the output cap. Off: the legacy
+        _clean_content, which removes closed blocks only.
+        """
+        if strict:
+            return strip_think(raw)
+        cleaned = self._clean_content(raw)
+        return cleaned, cleaned != raw.strip()
+
     def _coerce_temperature(self, temperature: float, extra_body: Optional[Dict]) -> float:
         """按提供方约束修正采样温度。
 
@@ -916,27 +1307,32 @@ class LLMClient:
         kwargs["temperature"] = self._coerce_temperature(temperature, extra_body)
 
         response = client.chat.completions.create(**kwargs)
-        # 捕获精确 token 用量供计量（I-5-0）；无 usage 字段时留空走粗估。
-        try:
-            _u = getattr(response, "usage", None)
-            if _u is not None:
-                self._last_usage = {
-                    "prompt_tokens": int(getattr(_u, "prompt_tokens", 0) or 0),
-                    "completion_tokens": int(getattr(_u, "completion_tokens", 0) or 0),
-                }
-        except Exception:
-            self._last_usage = None
-        choice = response.choices[0]
-        content = choice.message.content
+        # 捕获精确 token 用量供计量（I-5-0）；无 usage 字段时为 None，chat() 走粗估。
+        usage = _usage_from_response(response)
+        # INFRA-1: MiniMax 等在配额/鉴权失败时返回无 choices 的 base_resp 信封——抛带提供方原文的
+        # LLMEmptyChoices（RuntimeError，可重试、可被配额分类器识别；审查信封则为 LLMContentFiltered），
+        # 而非 choices[0] 的 IndexError。
+        choices = getattr(response, "choices", None)
+        if not choices:
+            raise _empty_choices_error(response, self.provider, model, usage)
+        choice = choices[0]
+        raw_content = flatten_content(getattr(getattr(choice, "message", None), "content", None))
+        raw_finish = getattr(choice, "finish_reason", None)
+        finish = normalize_finish_reason(raw_finish)
+        strict = _transport_strict()
+        content, think_stripped = self._normalize_reply_text(raw_content, strict)
         # 推理模型在 content 被推理耗尽时会返回空串/None（finish_reason=length）。
-        # 明确报错而不是把空串交给下游 JSON 解析，便于定位与重试。
-        if content is None or not content.strip():
-            finish = getattr(choice, "finish_reason", None)
-            raise RuntimeError(
-                f"OpenAI 兼容提供方({self.provider})返回空 content（finish_reason={finish}）。"
-                f"若为 kimi/minimax 推理模型，请确认已关闭推理(LLM_{self.provider.upper()}_DISABLE_THINKING)或增大 max_tokens。"
-            )
-        return self._clean_content(content)
+        # 明确报错而不是把空串交给下游 JSON 解析，便于定位与重试。strict 模式按剥离推理后的正文判空；
+        # 关闭时沿用历史判据（原文判空，返回 _clean_content 结果）。
+        empty = not content if strict else not raw_content.strip()
+        if empty:
+            raise _completion_failure(self.provider, finish, raw_finish, usage, max_tokens)
+        self._stamp_call_meta(
+            model=model, finish_reason=finish, raw_finish_reason=raw_finish, usage=usage,
+            usage_source="provider", served_model=getattr(response, "model", None),
+            think_stripped=think_stripped, dangling=has_dangling_think(raw_content),
+        )
+        return content
 
     # ------------------------------------------------------------------
     # claude-cli 提供方
@@ -1013,6 +1409,7 @@ class LLMClient:
                     f"{err_detail or '<no output (timeout/rate-limit/hook suspected)>'}"
                 )
 
+            output = None
             try:
                 output = json.loads(result.stdout)
                 # Detect error envelopes (e.g. is_error / non-success subtype) so the
@@ -1032,9 +1429,18 @@ class LLMClient:
             except json.JSONDecodeError:
                 content = result.stdout.strip()
 
+            raw_content = content
             content = self._clean_content(content)
             if not content:
                 raise RuntimeError("Claude CLI returned empty result")
+            # INFRA-1: CLI 信封无 finish_reason（成功即 'stop'）；usage/served_model 取自 JSON 信封。
+            cli_usage, served_model = _cli_envelope_usage(output)
+            self._stamp_call_meta(
+                model=getattr(self, "model", None), finish_reason="stop", usage=cli_usage,
+                usage_source="cli",
+                served_model=served_model, think_stripped=content != raw_content.strip(),
+                dangling=has_dangling_think(raw_content),
+            )
             return content
 
         except subprocess.TimeoutExpired as exc:
@@ -1089,6 +1495,11 @@ class LLMClient:
             if not cleaned or not cleaned.strip():
                 logger.error(f"Codex CLI 返回空结果（stdout 前200: {raw[:200]}）")
                 raise RuntimeError("Codex CLI 返回空结果")
+            # INFRA-1: codex exec 输出纯文本，无 usage/模型信封。
+            self._stamp_call_meta(
+                model=getattr(self, "model", None), finish_reason="stop",
+                think_stripped=cleaned != content.strip(), dangling=has_dangling_think(content),
+            )
             return cleaned
 
         except subprocess.TimeoutExpired as exc:

@@ -442,7 +442,9 @@ def test_antigravity_fallback_fast_tier_keeps_quotio_endpoint(monkeypatch):
         tier="fast",
     )
 
-    assert tool_result == {"content": "READY", "tool_calls": []}
+    # INFRA-1 added finish_reason / served_model as additive keys of the returned dict.
+    assert tool_result == {"content": "READY", "tool_calls": [],
+                           "finish_reason": "stop", "served_model": None}
     assert [row["model"] for row in primary_calls] == [
         "gemini-3-flash-preview", "gemini-3-flash-preview",
     ]

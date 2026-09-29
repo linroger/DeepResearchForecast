@@ -212,6 +212,8 @@ class _RunMeter:
     # FOG-TEL-1: 无 run 上下文、经「单活跃 run」回退归属到本 run 的那部分（total 的子集，
     # 单独累计使推断归属与显式归属可区分/可审计）。
     fallback: _Counter = field(default_factory=_Counter)
+    # INFRA-1: {stage: {normalized finish_reason: calls}}，仅计入带 finish_reason 的 record()。
+    finish_reasons: Dict[str, Dict[str, int]] = field(default_factory=dict)
 
 
 # TEL-1: '_global' 桶只该接住零星的无归属调用（reset 从不清它，跨 run 累积）。它一旦变大，
@@ -229,7 +231,9 @@ class LLMMeter:
     @classmethod
     def record(cls, provider: str, model: str, prompt_tokens: int, completion_tokens: int,
                latency_ms: float, *, cached: bool = False, stage: Optional[str] = None,
-               run_id: Optional[str] = None) -> None:
+               run_id: Optional[str] = None, finish_reason: Optional[str] = None) -> None:
+        """Accumulate one LLM call. ``finish_reason`` (INFRA-1, normalized by
+        llm_text.normalize_finish_reason) is tallied per stage when given."""
         rid = run_id or _current_run.get()
         fallback = False
         if not rid:
@@ -253,6 +257,9 @@ class LLMMeter:
             if fallback:
                 rm.fallback.add(prompt_tokens, completion_tokens, latency_ms, cost, cached)
                 first_fallback = rm.fallback.calls == 1
+            if finish_reason:
+                reasons = rm.finish_reasons.setdefault(stg, {})
+                reasons[finish_reason] = reasons.get(finish_reason, 0) + 1
             if rid == _DEFAULT_BUCKET and rm.total.calls in _GLOBAL_BUCKET_WARN_AT:
                 warn_calls = rm.total.calls
         if first_fallback:
@@ -281,6 +288,8 @@ class LLMMeter:
           shared across concurrent runs; carried on every run snapshot so persisted
           artifacts (run_telemetry.json) can never hide unattributed spend. Omitted only
           when snapshotting the '_global' bucket itself (it would duplicate ``total``).
+        - ``finish_reasons`` (INFRA-1): ``{stage: {finish_reason: calls}}`` for the calls
+          recorded with a finish reason; present only when at least one was.
         """
         rid = run_id or _current_run.get() or _DEFAULT_BUCKET
         with cls._lock:
@@ -328,6 +337,9 @@ class LLMMeter:
                 "cost_basis": cost_basis,
                 "fallback_attributed": rm.fallback.as_dict(),
             }
+            if rm.finish_reasons:
+                out["finish_reasons"] = {stg: dict(reasons)
+                                         for stg, reasons in rm.finish_reasons.items()}
             if rid != _DEFAULT_BUCKET:
                 out["unattributed_process"] = unattributed
             return out
