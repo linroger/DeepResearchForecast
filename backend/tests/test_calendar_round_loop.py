@@ -374,6 +374,13 @@ def test_calendar_loop_full_run(tmp_path, monkeypatch):
     assert traj["decisions"] and all(d.get("period_end") for d in traj["decisions"])
     assert all("weight" not in d for d in traj["decisions"])
     assert os.path.exists(os.path.join(sim_dir, "decisions.jsonl"))
+    # SIM-1：顶层有效性裁定（与 post-hoc 决策通道同一 helper，诚实对齐，无开关）
+    assert traj["validity"] == "valid"
+    assert traj["forecast_effect"] == "diagnostic_only"
+    assert traj["epistemic_status"] == "elicited_model_projection"
+    assert traj["round_accounting"]["rounds_accounted"] == 3
+    assert traj["validity_reasons"] == []
+    assert "unaccounted_rounds" not in traj["round_accounting"]  # 全部轮次已步进
 
 
 # ===========================================================================
@@ -519,6 +526,100 @@ def test_checkpoint_resume_skips_completed_rounds(tmp_path, monkeypatch):
     notes = _world_clock_notes(env3)
     assert notes and all("round 1/3" not in n for n in notes)
     assert any("round 2/3" in n for n in notes)
+
+
+# ===========================================================================
+# 7b) SIM-1：in-band 有效性裁定按覆盖率记账——未步进的轮次按 missing 计入分母
+# ===========================================================================
+def _read_traj(sim_dir):
+    with open(os.path.join(sim_dir, "world_state_trajectory.json"), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def test_inband_verdict_counts_unstepped_rounds_after_resume(tmp_path, monkeypatch):
+    """有损续跑（WorldState 从种子重建）只步进续跑轮：覆盖 1/3 轮 → unaccounted_rounds=2、
+    inconclusive（low_valid_coverage）、forecast_effect=no_update，不再被判 valid。
+    嵌套 outcome.round_accounting 保留 WorldState 原始口径。"""
+    sim_dir = str(tmp_path)
+    envs, calls = [], []
+    _patch_runtime(monkeypatch, sim_dir, envs)
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit(calls))
+
+    cfg = _calendar_config()
+    _run(cfg, sim_dir)
+    assert _read_traj(sim_dir)["validity"] == "valid"
+
+    # 伪造"崩溃在第 2 轮后"的检查点 → 续跑只执行第 3 轮
+    ckpt_path = os.path.join(sim_dir, "twitter", "checkpoint.json")
+    db_path = os.path.join(sim_dir, "twitter_simulation.db")
+    ckpt = {"platform": "twitter", "completed_round": 2,
+            "last_rowid": rps._max_trace_rowid(db_path),
+            "total_rounds": 3, "total_actions": 0}
+    with open(ckpt_path, "w", encoding="utf-8") as f:
+        json.dump(ckpt, f)
+    _run(cfg, sim_dir, resume=True)
+    assert len(envs[1].llm_steps) == 1  # 只跑第 3 轮
+
+    traj = _read_traj(sim_dir)
+    acct = traj["round_accounting"]
+    assert acct["unaccounted_rounds"] == 2
+    assert acct["rounds_accounted"] == 3
+    assert acct["counts"]["missing"] == 2 and acct["missing_rounds"] == 2
+    assert acct["valid_transitions"] == 1
+    assert acct["valid_coverage"] == pytest.approx(0.333333)
+    assert traj["validity"] == "inconclusive"
+    assert "low_valid_coverage" in traj["validity_reasons"]
+    assert traj["forecast_effect"] == "no_update"
+    assert traj["epistemic_status"] == "elicited_model_projection"
+    raw = traj["outcome"]["round_accounting"]
+    assert raw["rounds_accounted"] == 1 and "unaccounted_rounds" not in raw
+
+
+def test_inband_verdict_counts_heartbeat_only_rounds_as_missing(tmp_path, monkeypatch):
+    """全平台死轮只推水位（heartbeat）、从不步进 → 裁定按 missing 入账；覆盖 2/3 仍达
+    min_valid_coverage → valid，但 round_accounting 如实记 unaccounted_rounds=1。
+    完成日志行带上 validity。"""
+    sim_dir = str(tmp_path)
+    _patch_runtime(monkeypatch, sim_dir, [])
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit([]))
+    logs = []
+    evo = rps._InbandWorldEvolution(_calendar_config(), sim_dir, 1, logs.append)
+    evo.heartbeat("twitter", 0)  # 第 1 轮：死轮，无动作交付
+    for rn in (1, 2):
+        evo.deliver("twitter", rn, _ROUND_DATES[rn],
+                    [{"agent_id": 0, "agent_name": "Actor0",
+                      "action_args": {"content": "Actor0 strategic move"}}], [])
+    evo.platform_done("twitter")
+
+    traj = _read_traj(sim_dir)
+    acct = traj["round_accounting"]
+    assert acct["unaccounted_rounds"] == 1 and acct["counts"]["missing"] == 1
+    assert acct["rounds_accounted"] == 3 and acct["valid_transitions"] == 2
+    assert acct["valid_coverage"] == pytest.approx(0.666667)
+    assert traj["validity"] == "valid" and traj["validity_reasons"] == []
+    assert traj["forecast_effect"] == "diagnostic_only"
+    assert any("in-band 世界演化完成" in m and "validity=valid" in m for m in logs)
+
+
+def test_inband_verdict_failure_keeps_trajectory(tmp_path, monkeypatch):
+    """裁定 helper 异常只丢裁定键，绝不丢轨迹（degrade-safe）。"""
+    sim_dir = str(tmp_path)
+    envs, calls = [], []
+    _patch_runtime(monkeypatch, sim_dir, envs)
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit(calls))
+
+    def _boom(*a, **k):
+        raise RuntimeError("verdict 爆炸（故障注入）")
+
+    monkeypatch.setattr(dc, "decision_channel_verdict", _boom)
+    _run(_calendar_config(), sim_dir)
+
+    traj = _read_traj(sim_dir)
+    assert traj["schema_version"] == 3 and len(traj["trajectory"]) == 4
+    for key in ("validity", "validity_reasons", "forecast_effect", "round_accounting",
+                "epistemic_status"):
+        assert key not in traj
+    assert os.path.exists(os.path.join(sim_dir, "decisions.jsonl"))
 
 
 # ===========================================================================

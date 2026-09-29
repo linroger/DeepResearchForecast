@@ -532,6 +532,72 @@ def _fan_out_elicit(tasks: Dict[Any, Tuple[List[Dict[str, Any]], Dict[str, Any]]
     return results
 
 
+def decision_channel_verdict(accounting: Dict[str, Any], *,
+                             unaccounted_rounds: int = 0) -> Dict[str, Any]:
+    """Foglamp WP1 (1C/1D, I-11/I-16) typed run-level validity verdict, shared by both
+    decision-channel producers (SIM-1): post-hoc ``run_decision_channel`` and the
+    in-band calendar evolution in run_parallel_simulation.
+
+    ``accounting`` is ``WorldState.round_accounting()`` and is never mutated.
+    ``unaccounted_rounds`` counts rounds the run executed but the WorldState never
+    stepped (in-band: pre-resume rounds after a lossy resume, rounds dead on every
+    platform). They are booked as ``missing`` and widen the coverage denominator —
+    the frozen policy's rule "missing data yields inconclusive, not convergence".
+    With ``0`` the returned accounting equals the input (no new key).
+
+      - valid        — every accounted round succeeded (committed/abstained) at
+                       policy coverage, no provider failures
+      - inconclusive — some usable rounds, but provider failures (``failed_rounds``)
+                       or silent/missing rounds (``low_valid_coverage``) keep the run
+                       below the frozen convergence policy's evidence bar
+      - invalid      — zero usable rounds (``no_valid_rounds``; dead channel)
+
+    A non-``valid`` run MUST NOT move a forecast: forecast_effect=no_update. Even a
+    valid run defaults to diagnostic_only until an outcome-blind prospective study
+    promotes a validated update rule (WP6/12/14); validated_update is never emitted
+    (fail closed). ``CONVERGENCE_POLICY_V1`` is read, never modified.
+
+    Returns ``{round_accounting, validity, validity_reasons, forecast_effect}``.
+    """
+    acct = dict(accounting)
+    if isinstance(acct.get("counts"), dict):
+        acct["counts"] = dict(acct["counts"])
+    n = max(0, int(unaccounted_rounds))
+    if n > 0:
+        counts = acct["counts"] = dict(acct.get("counts") or {})
+        counts[ROUND_STATUS_MISSING] = int(counts.get(ROUND_STATUS_MISSING, 0) or 0) + n
+        acct["rounds_accounted"] = int(acct.get("rounds_accounted", 0) or 0) + n
+        acct["missing_rounds"] = int(acct.get("missing_rounds", 0) or 0) + n
+        acct["valid_coverage"] = round(
+            int(acct.get("valid_transitions", 0) or 0) / acct["rounds_accounted"], 6)
+        acct["unaccounted_rounds"] = n
+    reasons: List[str] = []
+    if int(acct.get("valid_transitions", 0) or 0) <= 0:
+        validity = "invalid"
+        reasons.append("no_valid_rounds")
+    else:
+        if int(acct.get("failed_rounds", 0) or 0) > 0:
+            reasons.append("failed_rounds")
+        if float(acct.get("valid_coverage", 0.0) or 0.0) < float(
+                CONVERGENCE_POLICY_V1["min_valid_coverage"]):
+            reasons.append("low_valid_coverage")
+        validity = "inconclusive" if reasons else "valid"
+    if validity != "valid":
+        forecast_effect = "no_update"
+    else:
+        effect_policy = str(_cfg("SIMULATION_FORECAST_EFFECT", "diagnostic_only")
+                            or "diagnostic_only").strip().lower()
+        # validated_update is unavailable until WP6/12/14 promotion (fail closed).
+        forecast_effect = ("diagnostic_only" if effect_policy != "no_update"
+                           else "no_update")
+    return {
+        "round_accounting": acct,
+        "validity": validity,
+        "validity_reasons": reasons,
+        "forecast_effect": forecast_effect,
+    }
+
+
 def run_decision_channel(
     actions: List[Dict[str, Any]],
     agent_configs: Optional[List[Dict[str, Any]]],
@@ -721,32 +787,9 @@ def run_decision_channel(
     ws.converged_at = converged_at
     out = ws.outcome()
     out["converged_at"] = converged_at
-    # Foglamp WP1 (1C/1D, I-11/I-16): typed run-level validity verdict.
-    #  - valid        — every accounted round succeeded (committed/abstained) at
-    #                   policy coverage, no provider failures
-    #  - inconclusive — some usable rounds, but failures/silence keep the run
-    #                   below the frozen convergence policy's evidence bar
-    #  - invalid      — zero usable rounds (dead channel)
-    # A non-``valid`` run MUST NOT move a forecast: forecast_effect=no_update.
-    # Even a valid run defaults to diagnostic_only until an outcome-blind
-    # prospective study promotes a validated update rule (WP6/12/14).
-    accounting = ws.round_accounting()
-    if accounting["valid_transitions"] <= 0:
-        validity = "invalid"
-    elif (accounting["failed_rounds"] > 0
-          or accounting["valid_coverage"] < float(
-              CONVERGENCE_POLICY_V1["min_valid_coverage"])):
-        validity = "inconclusive"
-    else:
-        validity = "valid"
-    if validity != "valid":
-        forecast_effect = "no_update"
-    else:
-        effect_policy = str(_cfg("SIMULATION_FORECAST_EFFECT", "diagnostic_only")
-                            or "diagnostic_only").strip().lower()
-        # validated_update is unavailable until WP6/12/14 promotion (fail closed).
-        forecast_effect = ("diagnostic_only" if effect_policy != "no_update"
-                           else "no_update")
+    # Foglamp WP1 (1C/1D, I-11/I-16): typed run-level validity verdict, shared with
+    # the in-band calendar producer (SIM-1) — see decision_channel_verdict.
+    verdict = decision_channel_verdict(ws.round_accounting())
     result = {
         "outcome": out,
         "trajectory": trajectory,
@@ -757,9 +800,10 @@ def run_decision_channel(
         "schema_version": 2,
         # Foglamp WP1 (1C/1D): validity + epistemic labeling. WorldState output
         # is an elicited model projection, never authoritative evidence (I-11).
-        "round_accounting": accounting,
-        "validity": validity,
-        "forecast_effect": forecast_effect,
+        "round_accounting": verdict["round_accounting"],
+        "validity": verdict["validity"],
+        "validity_reasons": verdict["validity_reasons"],  # SIM-1 (additive)
+        "forecast_effect": verdict["forecast_effect"],
         "epistemic_status": "elicited_model_projection",
     }
     if period_by_round:

@@ -1573,6 +1573,13 @@ class Config:
         in ('diagnostic_only', 'no_update', 'validated_update', 'legacy_prompt')
         else 'diagnostic_only'
     )
+    # SIM-1：报告世界态块/世界态图表/fork 情景对比表遵从决策通道的显式非 valid 裁定
+    # （world_state_trajectory.json 顶层 validity 存在且 != valid）——隐藏结果份额与演化
+    # 航点、跳过图表（trajectory_not_valid）、对比表返回 None。默认开：诚实检查 fail-closed，
+    # 非 valid 分布本就 forecast_effect=no_update；valid 轨迹与无 validity 的旧轨迹逐字节不变。
+    # false → 回到旧行为（仍渲染份额，仅附 ⚠️ 警示行）。
+    REPORT_WORLDSTATE_HIDE_INVALID = os.environ.get(
+        'REPORT_WORLDSTATE_HIDE_INVALID', 'true').strip().lower() == 'true'
     SIM_DECISION_INERTIA = float(os.environ.get('SIM_DECISION_INERTIA', '0.7') or '0.7')  # 先验每轮持久度
     # NEXTSTEPS P1-4：收敛/均衡检测——按 WorldState 的逐轮变化 EWMA 早停（区别于按声量），
     # 把"收敛于 R 轮（稳定）" vs "未收敛（低信心）"本身作为校准信号。需 P1-1 的世界态（现已默认开）。

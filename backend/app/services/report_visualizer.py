@@ -2104,6 +2104,20 @@ class ReportVisualizer:
         finally:
             _close_matplotlib_figure(fig)
 
+    def _worldstate_not_valid(self, trajectory: Any) -> bool:
+        """SIM-1（fail-closed，REPORT_WORLDSTATE_HIDE_INVALID 默认开）：轨迹文档带显式非 valid
+        的顶层 validity → 登记跳过说明 {"reason": "trajectory_not_valid", "validity": v}
+        （build_all 的 _attempt 消费）并返回 True，世界态图（HTML 与 matplotlib 回退）一律不画。
+        valid / 无 validity 的旧轨迹 / 直接列表 → False（行为字节不变）。"""
+        if not bool(_cfg("REPORT_WORLDSTATE_HIDE_INVALID", True)) or not isinstance(trajectory, dict):
+            return False
+        validity = str(trajectory.get("validity") or "").strip().lower()
+        if not validity or validity == "valid":
+            return False
+        self._skip_notes["worldstate_trajectory"] = {"reason": "trajectory_not_valid",
+                                                     "validity": validity}
+        return True
+
     def build_worldstate_area(self, trajectory: Any, charts_dir: str) -> Optional[str]:
         """(3) 结果世界态堆叠面积（world_state_trajectory.json 的 trajectory[].shares 随轮次）。
 
@@ -2111,6 +2125,8 @@ class ReportVisualizer:
         少于 2 个时间点 → None（面积图无意义）。CAL-TEMPORAL：若所有行都带可解析的
         period_end/as_of（轨迹 schema v3，日历模式）→ 横轴改用日历日期并标注 "Date"；
         否则保持旧的 "Forecast update step" 轮次横轴（hours 模式行为字节不变）。"""
+        if self._worldstate_not_valid(trajectory):
+            return None
         if not self._chart_ok():
             return None
         fig = None
@@ -3067,6 +3083,8 @@ class ReportVisualizer:
         兼容 {trajectory:[{round,shares:{name:share}}]} 或直接列表；<2 时间点 → None。
         CAL-TEMPORAL：所有行都带可解析的 period_end/as_of（schema v3）→ 横轴用日历日期
         （"Date"）；否则维持旧的 "Forecast update step" 轮次横轴（hours 模式字节不变）。"""
+        if self._worldstate_not_valid(trajectory):
+            return None
         if not self._interactive_ok():
             return None
         try:
