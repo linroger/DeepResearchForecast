@@ -82,7 +82,8 @@ class FakeLLMClient:
             return self._responses.pop(0)
         return "FAKE_RESPONSE"
 
-    def chat_json(self, messages, temperature=0.3, max_tokens=4096, tier=None, **kwargs):
+    def chat_json(self, messages, temperature=0.3, max_tokens=4096, tier=None, *, label=None,
+                  allow_non_dict=False, **kwargs):
         self.calls.append({"kind": "chat_json", "messages": messages, "temperature": temperature,
                            "max_tokens": max_tokens, "tier": tier})
         if self._json_responses:

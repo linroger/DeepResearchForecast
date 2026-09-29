@@ -236,3 +236,83 @@ def test_http_client_falls_back_to_http1_without_h2(monkeypatch):
         assert client.timeout.read and client.timeout.read >= 120.0
     finally:
         client.close()
+
+
+# ---------------------------------------------------------------- INFRA-2 tests
+def test_cache_discard_removes_key_and_reports_missing():
+    k1 = T.LLMCache.key("p", "m", [{"role": "user", "content": "discard"}], 0.0, 100, None)
+    k2 = T.LLMCache.key("p", "m", [{"role": "user", "content": "keep"}], 0.0, 100, None)
+    T.LLMCache.put(k1, "bad reply")
+    T.LLMCache.put(k2, "good reply")
+
+    assert T.LLMCache.discard(k1) is True
+    assert T.LLMCache.get(k1) is None and k1 not in T.LLMCache._order
+    assert T.LLMCache.get(k2) == "good reply" and k2 in T.LLMCache._order
+    assert T.LLMCache.discard(k1) is False
+    assert T.LLMCache.discard("never-cached") is False
+    # A re-put after a discard is tracked once in the FIFO order again.
+    T.LLMCache.put(k1, "fresh reply")
+    assert T.LLMCache._order.count(k1) == 1 and T.LLMCache.get(k1) == "fresh reply"
+
+
+def test_snapshot_has_no_structured_outputs_until_one_is_recorded():
+    T.LLMMeter.reset("so")
+    try:
+        T.LLMMeter.record("minimax", "MiniMax-M3", 10, 5, 1.0, stage="graph", run_id="so")
+        assert "structured_outputs" not in T.LLMMeter.snapshot("so")
+        assert "structured_outputs" not in T.LLMMeter.snapshot("so-never-seen")
+
+        T.LLMMeter.record_structured("chat_json", "ok", stage="graph", run_id="so")
+        T.LLMMeter.record_structured("chat_json", "repaired", json_truncation_repaired=True,
+                                     stage="report", run_id="so")
+        T.LLMMeter.record_structured("critique", "failed", stage="report", run_id="so")
+        snap = T.LLMMeter.snapshot("so")
+        assert snap["structured_outputs"] == {
+            "chat_json": {"ok": 1, "repaired": 1, "failed": 0, "truncation_repaired": 1,
+                          "by_stage": {
+                              "graph": {"ok": 1, "repaired": 0, "failed": 0, "truncation_repaired": 0},
+                              "report": {"ok": 0, "repaired": 1, "failed": 0, "truncation_repaired": 1},
+                          }},
+            "critique": {"ok": 0, "repaired": 0, "failed": 1, "truncation_repaired": 0,
+                         "by_stage": {"report": {"ok": 0, "repaired": 0, "failed": 1,
+                                                 "truncation_repaired": 0}}},
+        }
+        # record_structured never touches the call counters.
+        assert snap["total"]["calls"] == 1
+        T.LLMMeter.reset("so")
+        assert "structured_outputs" not in T.LLMMeter.snapshot("so")
+    finally:
+        T.LLMMeter.reset("so")
+
+
+def test_record_structured_attribution_matches_record():
+    T.LLMMeter.reset("so-ctx")
+    T.LLMMeter.reset("so-solo")
+    try:
+        T.set_run_context("so-ctx", "research")
+        T.LLMMeter.record_structured("chat_json", "ok")
+        T.set_run_context(None)
+        assert T.LLMMeter.snapshot("so-ctx")["structured_outputs"]["chat_json"]["by_stage"] == {
+            "research": {"ok": 1, "repaired": 0, "failed": 0, "truncation_repaired": 0}}
+
+        # No run contextvar on the thread + exactly one active run -> fallback attribution.
+        T.set_run_context("so-solo")
+        token_ctx = T._current_run.set(None)
+        try:
+            T.LLMMeter.record_structured("chat_json", "failed")
+        finally:
+            T._current_run.reset(token_ctx)
+        assert T.LLMMeter.snapshot("so-solo")["structured_outputs"]["chat_json"]["failed"] == 1
+    finally:
+        T.set_run_context(None)
+        T.LLMMeter.reset("so-ctx")
+        T.LLMMeter.reset("so-solo")
+
+
+def test_record_structured_swallows_bad_outcomes():
+    T.LLMMeter.reset("so-bad")
+    try:
+        T.LLMMeter.record_structured("chat_json", "exhausted", run_id="so-bad")
+        assert "structured_outputs" not in T.LLMMeter.snapshot("so-bad")
+    finally:
+        T.LLMMeter.reset("so-bad")

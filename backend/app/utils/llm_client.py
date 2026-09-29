@@ -302,6 +302,17 @@ _DETERMINISTIC_ENVELOPE_CODES = {
 # Finish reasons whose reply is complete enough to replay from LLMCache.
 _CACHEABLE_FINISH_REASONS = frozenset({"stop", "tool_calls", "unknown"})
 
+# INFRA-2: chat_json repair turn (LLM_JSON_REPAIR_TURN). The miss reasons are named in the
+# repair note and in the ValueError; the rejected reply is echoed back at most this many chars.
+_JSON_MISS_INVALID = "invalid JSON"
+_JSON_MISS_NOT_OBJECT = "not a JSON object"
+_JSON_REPAIR_REPLY_CHARS = 4000
+_JSON_REPAIR_NOTE = (
+    "Your previous reply was not a single valid JSON object ({reason}). Reply again with "
+    "exactly ONE complete JSON object that follows the schema requested above - no markdown "
+    "fences, no commentary, no truncation."
+)
+
 # Per-thread metadata of the last successful call. Report sections and graphiti workers share
 # one LLMClient across threads, so per-call state must never live on the instance.
 _CALL_META = threading.local()
@@ -694,7 +705,9 @@ class LLMClient:
         llm_text.FINISH_REASONS), raw_finish_reason, usage {prompt_tokens, completion_tokens,
         total_tokens, reasoning_tokens, cached_tokens}, usage_source ('provider' = reported by
         the API, 'cli' = Claude CLI envelope, 'none' = not reported, all zeros), think_stripped,
-        served_by ('primary' | 'fallback' | 'cache') and cacheable.
+        served_by ('primary' | 'fallback' | 'cache') and cacheable. chat_json adds
+        json_truncation_repaired=True (INFRA-2) when it accepted a reply only after closing
+        its unterminated brackets locally.
 
         Returns a copy, or None when the thread's last call belongs to another client or this
         client's last call on the thread did not complete.
@@ -794,6 +807,26 @@ class LLMClient:
             pass
 
     # ------------------------------------------------------------------
+    # LLMCache 键（chat() 读写与 chat_json 丢弃坏回复共用同一实现）
+    # ------------------------------------------------------------------
+    def _cache_on(self) -> bool:
+        """EVAL-10: use_cache=False opts this client out of LLMCache entirely (get and put)."""
+        return bool(Config.LLM_CACHE_ENABLED and getattr(self, "use_cache", True))
+
+    def _cache_key(self, model: str, messages: List[Dict[str, str]], temperature: float,
+                   max_tokens: int, response_format: Optional[Dict]) -> str:
+        """The LLMCache key chat() reads and writes for one request.
+
+        The key carries the resolved model, so fast/strong tier replies never mix. EVAL-10: a
+        pinned client reads and writes its own namespace. An unpinned client caches a
+        fallback-served reply under its primary key, and a pinned client must never serve a
+        fallback provider's reply, not even from the cache.
+        """
+        from .telemetry import LLMCache
+        cache_provider = f"{self.provider}#pinned" if getattr(self, "_pinned", False) else self.provider
+        return LLMCache.key(cache_provider, model, messages, temperature, max_tokens, response_format)
+
+    # ------------------------------------------------------------------
     # 公共接口
     # ------------------------------------------------------------------
     def chat(
@@ -831,14 +864,9 @@ class LLMClient:
         run_id, stage = get_run_context()
         cache_key = None
         # EVAL-10: use_cache=False opts this client out of LLMCache entirely (get and put).
-        cache_on = Config.LLM_CACHE_ENABLED and getattr(self, "use_cache", True)
+        cache_on = self._cache_on()
         if cache_on:
-            # 缓存键纳入解析后的 model，避免 fast/strong 两档结果互相串档。
-            # EVAL-10: a pinned client reads and writes its own namespace. An unpinned client
-            # caches a fallback-served reply under its primary key, and a pinned client must
-            # never serve a fallback provider's reply, not even from the cache.
-            cache_provider = f"{self.provider}#pinned" if getattr(self, "_pinned", False) else self.provider
-            cache_key = LLMCache.key(cache_provider, model, messages, temperature, max_tokens, response_format)
+            cache_key = self._cache_key(model, messages, temperature, max_tokens, response_format)
             hit = LLMCache.get(cache_key)
             if hit is not None:
                 if Config.LLM_TELEMETRY_ENABLED:
@@ -1049,16 +1077,29 @@ class LLMClient:
         messages: List[Dict[str, str]],
         temperature: float = 0.3,
         max_tokens: int = 4096,
-        tier: str = "strong"
+        tier: str = "strong",
+        *,
+        label: Optional[str] = None,
+        allow_non_dict: bool = False,
     ) -> Dict[str, Any]:
         """发送聊天请求并返回解析后的 JSON。
 
-        解析失败时先做本地修复（提取 JSON 块、补全被 max_tokens 截断的括号），
-        仍失败则降温重发一次。单次格式抖动不再让上层（如报告大纲）直接退化。
+        解析失败时先做本地修复（提取 JSON 块、补全被 max_tokens 截断的括号）。
+
+        INFRA-2（LLM_JSON_REPAIR_TURN，默认开）：首轮回复不是单个 JSON 对象（解析失败，或解析出
+        list/标量；allow_non_dict=True 时只看解析失败）即为未命中：先从 LLMCache 删掉这份坏回复，
+        再以同温度发一次修复轮（原消息 + 坏回复 + 点名原因的纠正提示）；两轮皆未命中则删掉第二份
+        并抛 ValueError。靠补括号修复的截断回复照常采纳，并在 last_call_meta() 标记
+        json_truncation_repaired=True。结局按 ``label``（缺省 'chat_json'）计入 LLMMeter 的
+        structured_outputs。关闭时为旧行为：降温 0.2 重发同一提示，可能返回非 dict。
 
         tier（EXECPLAN2 I-6-2）透传给 chat()：结构化/机械型 JSON 调用（子查询分解、
         受访者选择、图谱抽取）可传 tier='fast' 路由到廉价档；默认 'strong' 行为不变。
         """
+        if getattr(Config, "LLM_JSON_REPAIR_TURN", True):
+            return self._chat_json_with_repair(messages, temperature, max_tokens, tier,
+                                               label=label or "chat_json",
+                                               allow_non_dict=allow_non_dict)
         last_response = ""
         for attempt in range(2):
             response = self.chat(
@@ -1075,6 +1116,89 @@ class LLMClient:
             if attempt == 0:
                 logger.warning("chat_json 解析失败，降温重发一次")
         raise ValueError(f"LLM返回的JSON格式无效: {last_response[:500]}")
+
+    def _chat_json_with_repair(self, messages: List[Dict[str, str]], temperature: float,
+                               max_tokens: int, tier: str, *, label: str,
+                               allow_non_dict: bool) -> Any:
+        """INFRA-2: chat_json under LLM_JSON_REPAIR_TURN (see chat_json).
+
+        Both attempts run at the caller's temperature: the repair turn's messages differ from
+        the first request, so its cache key differs too, and a temperature-0 caller still gets a
+        fresh completion. A transport error from chat() propagates unchanged.
+        """
+        response_format = {"type": "json_object"}
+        attempt_messages = messages
+        reasons: List[str] = []
+        response = ""
+        for attempt in range(2):
+            response = self.chat(
+                messages=attempt_messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                response_format=response_format,
+                tier=tier,
+            )
+            value, truncation_repaired = self._parse_json_response_ex(response)
+            if value is None:
+                reason = _JSON_MISS_INVALID
+            elif not allow_non_dict and not isinstance(value, dict):
+                reason = _JSON_MISS_NOT_OBJECT
+            else:
+                if truncation_repaired:
+                    self._mark_json_truncation_repaired()
+                self._record_structured(label, "ok" if attempt == 0 else "repaired",
+                                        truncation_repaired)
+                return value
+            reasons.append(reason)
+            # A rejected reply must never stay in LLMCache: the next identical call (graphiti's
+            # tenacity retry resends the same arguments) would replay it forever.
+            self._discard_cached_reply(attempt_messages, temperature, max_tokens,
+                                       response_format, tier)
+            if attempt == 0:
+                logger.warning(f"chat_json 回复不是单个合法 JSON 对象（{reason}），携纠正提示重发一次")
+                attempt_messages = list(messages) + [
+                    {"role": "assistant", "content": str(response)[:_JSON_REPAIR_REPLY_CHARS]},
+                    {"role": "user", "content": _JSON_REPAIR_NOTE.format(reason=reason)},
+                ]
+        self._record_structured(label, "failed", False)
+        raise ValueError(
+            f"LLM返回的JSON格式无效（首轮: {reasons[0]}; 修复轮: {reasons[1]}）: {response[:500]}"
+        )
+
+    def _mark_json_truncation_repaired(self) -> None:
+        """Flag this client's last call on the calling thread as a locally repaired truncation."""
+        meta = self._own_call_meta()
+        if meta is not None:
+            meta["json_truncation_repaired"] = True
+
+    @staticmethod
+    def _record_structured(label: str, outcome: str, truncation_repaired: bool) -> None:
+        """Count one chat_json outcome in LLMMeter (run and stage from the calling context)."""
+        if Config.LLM_TELEMETRY_ENABLED:
+            from .telemetry import LLMMeter
+            LLMMeter.record_structured(label, outcome, json_truncation_repaired=truncation_repaired)
+
+    def _discard_cached_reply(self, messages: List[Dict[str, str]], temperature: float,
+                              max_tokens: int, response_format: Optional[Dict], tier: str) -> None:
+        """INFRA-2: drop a rejected reply from LLMCache. Never raises.
+
+        Removes the key chat() wrote for this request and, when a fallback provider served
+        it, also the key the fallback client's own chat() wrote (fallback clients are routing
+        pinned, so that key carries their provider and model). Skipped for a use_cache=False
+        client (EVAL-10) and while the cache is off.
+        """
+        if not self._cache_on():
+            return
+        try:
+            from .telemetry import LLMCache
+            model = self._tier_route(tier)[0]
+            LLMCache.discard(self._cache_key(model, messages, temperature, max_tokens, response_format))
+            meta = self._own_call_meta()
+            if meta is not None and meta.get("served_by") == "fallback":
+                LLMCache.discard(LLMCache.key(meta.get("provider"), meta.get("model"), messages,
+                                              temperature, max_tokens, response_format))
+        except Exception as exc:  # noqa: BLE001 — cache hygiene must never fail the call
+            logger.debug(f"LLMCache 丢弃坏回复失败（忽略）: {exc}")
 
     # ------------------------------------------------------------------
     # 原生 tool calling（T4.5）—— 取代手搓 ReAct 的正则解析
@@ -1246,6 +1370,13 @@ class LLMClient:
     @staticmethod
     def _parse_json_response(response: str) -> Optional[Dict[str, Any]]:
         """尽力把模型输出解析成 JSON 对象；失败返回 None（不抛异常）。"""
+        return LLMClient._parse_json_response_ex(response)[0]
+
+    @staticmethod
+    def _parse_json_response_ex(response: str) -> Tuple[Any, bool]:
+        """(value, repaired_truncation): the _parse_json_response value, plus whether the
+        bracket-repair branch had to close an unterminated string / structure (or drop a
+        dangling trailing comma) for it to parse. (None, False) when nothing parses."""
         cleaned = response.strip()
         # 清理 markdown 代码块标记
         cleaned = re.sub(r'^```(?:json)?\s*\n?', '', cleaned, flags=re.IGNORECASE)
@@ -1253,7 +1384,7 @@ class LLMClient:
         cleaned = cleaned.strip()
 
         try:
-            return json.loads(cleaned)
+            return json.loads(cleaned), False
         except json.JSONDecodeError:
             pass
 
@@ -1261,14 +1392,14 @@ class LLMClient:
         match = re.search(r'\{[\s\S]*\}', cleaned)
         if match:
             try:
-                return json.loads(match.group())
+                return json.loads(match.group()), False
             except json.JSONDecodeError:
                 cleaned = match.group()
         else:
             # 没有闭合的 '}'：截断式输出，从首个 '{' 起修复
             brace = cleaned.find('{')
             if brace < 0:
-                return None
+                return None, False
             cleaned = cleaned[brace:]
 
         # 补全被 max_tokens 截断的字符串/括号：扫描跟踪字符串态与括号栈，
@@ -1303,9 +1434,9 @@ class LLMClient:
         for opener in reversed(stack):
             repaired += '}' if opener == '{' else ']'
         try:
-            return json.loads(repaired)
+            return json.loads(repaired), repaired != cleaned
         except json.JSONDecodeError:
-            return None
+            return None, False
 
     # ------------------------------------------------------------------
     # 共享辅助

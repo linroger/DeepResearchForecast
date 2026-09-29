@@ -670,6 +670,8 @@ def _critique_json():
 
 def test_critique_flag_off_is_byte_identical(monkeypatch):
     monkeypatch.setattr(Config, "REPORT_NARRATIVE_SYNC", False, raising=False)
+    # INFRA-2's critique_attempted stamp is a separate knob; the legacy golden predates it.
+    monkeypatch.setattr(Config, "REPORT_CRITIQUE_SINGLE_PASS", False, raising=False)
     flag_off = _critique_json()
     monkeypatch.setattr(FE, "_sync_forecast_narratives", lambda *_args, **_kwargs: None)
 
@@ -999,6 +1001,9 @@ def test_prompts_are_byte_identical_with_the_sync_off(monkeypatch):
     monkeypatch.setattr(Config, "REPORT_NARRATIVE_SYNC", False, raising=False)
     monkeypatch.setattr(Config, "REPORT_PREMORTEM", True, raising=False)
     monkeypatch.setattr(Config, "REPORT_SPINE_SELFCONSISTENCY_K", 2, raising=False)
+    # INFRA-2's critique_attempted stamp is a separate knob (its own prompt test lives in
+    # test_critique_single_pass.py); the identity view below would echo it into the prompt.
+    monkeypatch.setattr(Config, "REPORT_CRITIQUE_SINGLE_PASS", False, raising=False)
     flag_off = _pooled_prompts()
     monkeypatch.setattr(FE, "_llm_forecast_view", lambda forecast: forecast)
     legacy = _pooled_prompts()
