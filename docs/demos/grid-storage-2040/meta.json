@@ -56,7 +56,8 @@
   "charts/worldstate_trajectory.png": "8a5f4de9f566542b8c8b526097148156bde3e7fca7efdb316cff8ee4fb741b7f",
   "charts/metric_trajectories.png": "ae61f49591a74779feea8c069df79ec50be5d48a9f3c41371efd4748d17e7a1f",
   "charts/quantitative_claims.png": "d4b080ed0e0f730f9437f8d3965ef3f391acfd3c7922df6afe4b3b93ff866963",
-  "charts/timeline_lanes.png": "022e25c02eea87c296a25240b7866df356dfbdabfb55dbb3ea80d1ca3224c68f"
+  "charts/timeline_lanes.png": "022e25c02eea87c296a25240b7866df356dfbdabfb55dbb3ea80d1ca3224c68f",
+  "report.zh.md": "07f5f45587ce22289fce269136519df7604b4f68df21094f89c4b65cb4e7d40f"
  },
  "publication": {
   "hard_passed": true,
@@ -66,5 +67,12 @@
   "semantic_citations_passed": true,
   "markdown_sha256": "0b0fd21fb0562dafa21f5bcbbd7c5794bf0b0c9ca8efc36708e2df29ac9a3804",
   "forecast_sha256": "26c3f5691247499b2c45f354ebcd961a3cd8f66d403683169cd6e178cd3a5b08"
+ },
+ "report_languages": {
+  "en": "report.md",
+  "zh": "report.zh.md"
+ },
+ "dossier_languages": {
+  "en": "dossier.md"
  }
 }

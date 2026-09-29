@@ -1,0 +1,566 @@
+{
+ "entity_types": [
+  {
+   "name": "Organization",
+   "description": "Companies and private firms driving quantum hardware, software and supply chain",
+   "attributes": [
+    {
+     "name": "full_name",
+     "type": "text",
+     "description": "官方全称"
+    },
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "量子子领域（superconducting/trapped-ion/neutral-atom/photonic/topological/cryogenics等）"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "总部所在国家/地区（US/China/EU等）"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "影响力档位（high/medium/low）"
+    },
+    {
+     "name": "modality",
+     "type": "text",
+     "description": "主攻硬件路线"
+    }
+   ],
+   "examples": [
+    "IBM",
+    "Google Quantum AI",
+    "Quantinuum",
+    "QuEra",
+    "PsiQuantum",
+    "Microsoft",
+    "IonQ",
+    "Origin Quantum",
+    "IQM",
+    "Bluefors"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "以量子硬件/软件/供应链为业务、其决策因果影响预测结果的私营公司",
+   "anti_examples": [
+    "McKinsey（咨询/报告方）",
+    "Reuters（媒体）",
+    " DARPA（归Government）"
+   ]
+  },
+  {
+   "name": "Government",
+   "description": "Government agencies and state bodies funding, regulating or verifying quantum programs",
+   "attributes": [
+    {
+     "name": "full_name",
+     "type": "text",
+     "description": "机构全称"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "管辖区（US/China/EU/Finland等）"
+    },
+    {
+     "name": "mandate",
+     "type": "text",
+     "description": "职能（funding/regulation/verification/standards）"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "影响力档位"
+    }
+   ],
+   "examples": [
+    "DARPA",
+    "US Department of Energy",
+    "White House OSTP / NQI",
+    "US Department of Commerce / BIS",
+    "Chinese Academy of Sciences / USTC",
+    "Chinese government (NDRC/MOST)",
+    "European Commission",
+    "NIST"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "arbiter",
+   "selection_rule": "能通过资金、监管、标准或验证决策影响量子发展路径的政府机构或国家实验室体系",
+   "anti_examples": [
+    "QED-C（行业协会，归Other）",
+    "Global Risk Institute（归Other）"
+   ]
+  },
+  {
+   "name": "Other",
+   "description": "Consortia and independent expert bodies tracking or calibrating quantum timelines",
+   "attributes": [
+    {
+     "name": "full_name",
+     "type": "text",
+     "description": "机构全称"
+    },
+    {
+     "name": "function",
+     "type": "text",
+     "description": "角色（industry-tracking/threat-calibration）"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "所在地区"
+    }
+   ],
+   "examples": [
+    "Global Risk Institute / evolutionQ",
+    "QED-C"
+   ],
+   "archetype": "source",
+   "simulation_tier": 3,
+   "role_class": "amplifier",
+   "selection_rule": "发布行业统计或专家校准调查、影响舆论与政策但不直接决策的机构",
+   "anti_examples": [
+    "IBM（归Organization）",
+    "NIST（归Government）"
+   ]
+  },
+  {
+   "name": "QuantumProcessor",
+   "description": "Named quantum processors/chips whose milestones anchor the roadmap race",
+   "attributes": [
+    {
+     "name": "qubit_count",
+     "type": "text",
+     "description": "物理量子比特数"
+    },
+    {
+     "name": "modality",
+     "type": "text",
+     "description": "硬件路线"
+    },
+    {
+     "name": "two_qubit_fidelity",
+     "type": "text",
+     "description": "双比特门保真度"
+    },
+    {
+     "name": "target_date",
+     "type": "text",
+     "description": "发布/交付目标日期"
+    }
+   ],
+   "examples": [
+    "Willow",
+    "IBM Quantum Starling",
+    "Zuchongzhi 3.2",
+    "Helios",
+    "Majorana 1",
+    "Libra"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "有具体名字与量化规格、作为里程碑被追踪的量子处理器或芯片",
+   "anti_examples": [
+    "superconducting（抽象路线，非具体产品）",
+    "logical qubit（概念）"
+   ]
+  },
+  {
+   "name": "QuantumProgram",
+   "description": "Named national funding/regulatory programs shaping regional strategies",
+   "attributes": [
+    {
+     "name": "budget",
+     "type": "text",
+     "description": "授权/承诺金额"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "所属地区"
+    },
+    {
+     "name": "status",
+     "type": "text",
+     "description": "状态（enacted/pending/lapsed）"
+    },
+    {
+     "name": "deadline",
+     "type": "text",
+     "description": "关键时间节点"
+    }
+   ],
+   "examples": [
+    "National Quantum Initiative Reauthorization (S.3597)",
+    "DARPA Quantum Benchmarking Initiative",
+    "EU Quantum Flagship",
+    "EuroHPC JU",
+    "NIST IR 8547 PQC transition plan",
+    "China Five-Year Plan quantum megaproject"
+   ],
+   "archetype": "institution_rule",
+   "simulation_tier": 2,
+   "role_class": "stakeholder",
+   "selection_rule": "有名称、预算或时间表的政府项目、法案或标准计划",
+   "anti_examples": [
+    "export controls（泛指政策，应落到具体规则）",
+    "CHIPS Act（除非专指量子条款）"
+   ]
+  },
+  {
+   "name": "CriticalMaterial",
+   "description": "Scarce inputs and choke-point components in the quantum supply chain",
+   "attributes": [
+    {
+     "name": "supply_concentration",
+     "type": "text",
+     "description": "供应集中度描述"
+    },
+    {
+     "name": "price_level",
+     "type": "text",
+     "description": "当前价格水平"
+    },
+    {
+     "name": "substitutability",
+     "type": "text",
+     "description": "可替代性（low/medium/high）"
+    }
+   ],
+   "examples": [
+    "Helium-3",
+    "Dilution refrigerators",
+    "Rare earth elements",
+    "Precision lasers",
+    "Cryogenic control electronics"
+   ],
+   "archetype": "constraint_resource",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "构成供应链瓶颈、可被追踪价格与集中度的具体物料或部件",
+   "anti_examples": [
+    "talent（抽象概念）",
+    "capital（抽象概念）"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "COMPETES_WITH",
+   "description": "Rivalry between hardware vendors or state labs on milestones and modalities",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "modality",
+     "type": "text",
+     "description": "竞争的硬件路线"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "竞争强度"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "source 与 target 在同一技术路线上直接竞争里程碑"
+  },
+  {
+   "name": "INFLUENCES",
+   "description": "Shaping of decisions, roadmaps or standards by a program, agency or survey body",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Other",
+     "target": "Government"
+    },
+    {
+     "source": "Other",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "channel",
+     "type": "text",
+     "description": "影响渠道（verification/narrative/benchmarking）"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "影响强度"
+    }
+   ],
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "source 影响 target 的路线、声誉或政策判断"
+  },
+  {
+   "name": "FUNDS",
+   "description": "Public money flowing from agencies/programs to companies or labs",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "QuantumProgram",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "amount",
+     "type": "text",
+     "description": "金额"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "起始时间"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "资助规模档位"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source 向 target 出资（资助/协议/拨款）"
+  },
+  {
+   "name": "PARTNERS_WITH",
+   "description": "Technical or standards collaboration between firms or agencies",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "scope",
+     "type": "text",
+     "description": "合作范围"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "合作起始时间"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "关系态度（positive）"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source 与 target 建立技术/标准伙伴关系（无向偏 allied）"
+  },
+  {
+   "name": "SANCTIONS",
+   "description": "Export controls, Entity List additions and investment restrictions",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "instrument",
+     "type": "text",
+     "description": "管制工具（Entity List/rule/outbound）"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "生效时间"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "限制严厉程度"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "source 对 target 实施出口管制或制裁"
+  },
+  {
+   "name": "OPPOSES",
+   "description": "Strategic opposition or retaliation between states in tech competition",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "instrument",
+     "type": "text",
+     "description": "对抗手段（rare-earth controls等）"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "对抗强度"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "source 在政策上对抗/报复 target"
+  },
+  {
+   "name": "BACKS",
+   "description": "State-directed support (industrial policy, national-champion backing)",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "mode",
+     "type": "text",
+     "description": "扶持方式（state fund/procurement）"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "扶持力度"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source 以产业政策扶持 target"
+  },
+  {
+   "name": "SUPPORTS",
+   "description": "Institutional support such as EU deployment funding or procurement",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "QuantumProgram",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "instrument",
+     "type": "text",
+     "description": "支持工具（procurement/funding call）"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "关系态度（positive）"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source 通过部署/采购/资助支持 target"
+  },
+  {
+   "name": "ALLY_OF",
+   "description": "Allied alignment of export-control regimes across jurisdictions",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "domain",
+     "type": "text",
+     "description": "结盟领域（export controls/PQC）"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "结盟时间"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source 与 target 在管制/标准上结盟（无向 allied）"
+  },
+  {
+   "name": "SUPPLIES",
+   "description": "Choke-point component supply from equipment vendors to hardware makers",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "CriticalMaterial",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "CriticalMaterial"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "component",
+     "type": "text",
+     "description": "供应的部件/物料"
+    },
+    {
+     "name": "dependency_level",
+     "type": "text",
+     "description": "依赖程度（high/medium/low）"
+    },
+    {
+     "name": "lead_time",
+     "type": "text",
+     "description": "交付周期"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source 向 target 供应关键部件或物料"
+  }
+ ],
+ "analysis_summary": "该预测问题横跨2026-2040年美中欧量子计算发展：硬件里程碑（Willow/Starling/Zuchongzhi/Helios）、国家战略与资金（NQI、QBI、Quantum Flagship、五年计划）、供应链瓶颈（氦-3、稀释制冷机）、出口管制博弈与后量子密码迁移。角色阵容以9个Organization（量子厂商与供应链企业）、8个Government（资助/监管/验证机构）和2个Other（GRI专家调查与QED-C行业统计，作为被动信息源）为核心。本体保留种子的三类实体与11种关系，新增QuantumProcessor、QuantumProgram、CriticalMaterial三个客体/规则类型刻画可追踪的里程碑、政策工具与瓶颈资源，并补充PRODUCES、OPERATES_PROGRAM、DEPENDS_ON、CONSTRAINS等因果与治理边，使图谱能表达'管制→替代→竞争格局'与'氦-3稀缺→制冷平台受限'的传导机制，支撑四情景概率推演与12项二元预测。"
+}

@@ -1,0 +1,66 @@
+{
+ "pipeline_id": "pipe_6c4190b31f0b",
+ "report_id": "report_d79a064bf5cc",
+ "simulation_id": "sim_2af38e28f92a",
+ "graph_id": "mirofish_e208b596d44f4a7d",
+ "status": "completed",
+ "prompt": "Forecast the development of quantum computing in the United States, China, and the European Union from 2026 through 2040, and its impact on the economy. Compare the leading hardware modalities (superconducting, trapped-ion, neutral-atom, photonic, spin/silicon, and topological qubits) on physical qubit counts, two-qubit gate fidelity, logical-qubit demonstrations, error-correction overhead, and the timeline to fault-tolerant, commercially useful machines. Analyze each region's national strategy and funding (US National Quantum Initiative, DOE/DARPA programs including the Quantum Benchmarking Initiative, and CHIPS-related support; China's Five-Year Plans, state laboratories, and quantum communication networks; the EU Quantum Flagship, EuroHPC quantum systems, the Quantum Europe strategy, and national programs in Germany, France, and the Netherlands), private investment and venture funding, leading companies and research institutions, talent pipelines, supply chains (dilution refrigerators, cryogenics, lasers, isotopes, control electronics), and export controls and technology-security restrictions. Assess the economic impact: quantum-computing market revenue and addressable value by sector (pharmaceuticals and chemistry, materials and batteries, finance, logistics and optimization, AI and machine learning, energy), productivity and GDP effects, jobs, and the cost and timing of migrating to post-quantum cryptography, including the risk window for breaking RSA and elliptic-curve encryption (\"harvest now, decrypt later\"). Quantify, for each region and year where data exist, public and private funding, number of quantum companies, record qubit counts and fidelities, logical-qubit milestones, market revenue, and estimated economic value created by 2030, 2035, and 2040. Identify the inflection points separating the noisy intermediate-scale era from demonstrated quantum advantage on commercially relevant problems and from cryptographically relevant quantum computers, and assess which region is most likely to lead at each stage. End with four mutually exclusive scenarios totaling 100%, 10-12 resolution-ready binary forecasts with dates and probabilities, and sourced visualizations of funding, hardware roadmaps, market size, and regional comparisons.",
+ "created_at": "2026-09-28T18:57:59.783086+00:00",
+ "mode": "full",
+ "rounds": 29,
+ "personas": 18,
+ "has_actors": true,
+ "research_log": {
+  "line_count": 680,
+  "source_count": 1,
+  "complete": true,
+  "event_fidelity": "summarized_progress_events"
+ },
+ "dossier_assets": [
+  "research-charts/timeline.png",
+  "research-charts/timeline.html"
+ ],
+ "report_assets": [
+  "charts/binary_forecast_dotplot.png",
+  "charts/metric_trajectories.png",
+  "charts/scenario_probabilities.png",
+  "charts/worldstate_trajectory.png",
+  "charts/timeline_lanes.png"
+ ],
+ "dossier_languages": {
+  "en": "dossier.md",
+  "zh": "dossier.zh.md"
+ },
+ "report_languages": {
+  "en": "report.md",
+  "zh": "report.zh.md"
+ },
+ "artifact_sha256": {
+  "research_log.txt": "a4d1d4c181ffe0490ce0ec76395fa09da0a068e0de7488b7ec86fb079ca8cc83",
+  "dossier.md": "cb6bb278dcd28b616d675a1691294c7d6207c9d06e94377835a737b54721a7b3",
+  "dossier.zh.md": "9328216064149142751fb74ae364894ee522f93ffa1b7c30281e7b8963a3ba96",
+  "actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d",
+  "sources.json": "54b3b011e7a4c17e22b2ed4938a0fe5ae4e0f4cb83858f5bb71c255ff3319084",
+  "ontology.json": "721429062519eddb13c227a4e9f1777eea594fedf65050e2557f73733d201651",
+  "graph.json": "a8e6adcfd727b6e0cd972a6ff14c277414226087e5cf8a5fbf5517e9d12468bb",
+  "forum.json": "af1cbef632be51a9563309df5d1830031bf2d143cc709b38957533a54769ff99",
+  "report.md": "48d606f153b8b23c77a7d5b5995d260c1c4c245cba6682a89a4c25d6a5203357",
+  "report.zh.md": "3cea105af2b9c90d3f4284c5890bbdce729e6167b7d22af69bcf7a139c4aa2c4",
+  "research-charts/timeline.png": "210d15fb5295d235e0f4826b8e1df2a89e216b228e4062e4a723663d859cbecf",
+  "research-charts/timeline.html": "ed1acd788dc2733b34fa96014b9e7a6213bb68abd0629d39553723f52df6d79f",
+  "charts/binary_forecast_dotplot.png": "09364dfc2c7b0fd3f078d14e30f2101ae1dfebb5c52268df9db8974a5055c68b",
+  "charts/metric_trajectories.png": "ba1585f644b021a0780e7bdd11a9584175cd775cbc7f22d8d0cc2879af7c461b",
+  "charts/scenario_probabilities.png": "fe7f72d3f74b40c65dd48820477d04f65babaf6919919a61ba117a8185f91163",
+  "charts/worldstate_trajectory.png": "73617b4cedb76a9eb57d0c3212fe36cbf4b7ccac1d0159425272917a7082eb81",
+  "charts/timeline_lanes.png": "7432569fd6bc4e9ff3f6bdec1b8423ce876306071c9067bf3396c11074fdf53f"
+ },
+ "publication": {
+  "hard_passed": true,
+  "publish_passed": true,
+  "scenario_contract_valid": true,
+  "citation_coverage": 0.746,
+  "semantic_citations_passed": true,
+  "markdown_sha256": "3fae768811d2c7e98b5f362a3fdd5a8472defd568b5233b776606b63a93e9e70",
+  "forecast_sha256": "66fc1751d52529b6930c9819aa090178e5bb1470e54cf4717eb2e65afb990d5e"
+ }
+}

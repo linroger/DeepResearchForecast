@@ -1,0 +1,680 @@
+2026-09-28T18:57:59.940880+00:00 [stage] runtime skill bundle: outcome=verified source_manifest_hash=f14068b3574acef8317e1475d4439a78e5590457966b5936d8c34315b1809e01 deployed_manifest_hash=f14068b3574acef8317e1475d4439a78e5590457966b5936d8c34315b1809e01 deployed_path=/Users/rogerlin/Downloads/DeepResearchForecast/deer-flow/skills/public
+2026-09-28T18:57:59.941064+00:00 [stage] runtime skill lazy-resource hashes: skill=actor-ontology-research {"references/actor-intelligence-contract.md":"668e01eb87d1c491eca03483e3ff80b0257749d954cada4945fcfc247a8e23aa","references/scoring-rubric.md":"570d71951cb2d3e2122028bdb351a22bd9fe96464e2bfcb157fe552586c82f78"}
+2026-09-28T18:57:59.941080+00:00 [stage] runtime skill lazy-resource hashes: skill=deep-research {"references/final-dossier-contract.md":"6f2be6ed603ac5a2db7c1a52b581c06d0bfc36cab0de0d3770c870aa6dc0b92e","references/source-tradecraft.md":"2da584d0f9a2f065f103a978be4c2ebe615fd98afa2cdc2d09d4c387da8ae07d"}
+2026-09-28T18:57:59.941091+00:00 [stage] runtime skill lazy-resource hashes: skill=forecast-visuals {"references/chart-patterns.md":"a48316244d5293830ae42a5cfe40285a2a38d13f1da52c8949bee9a007130a60","scripts/render.py":"8ca9b27f10c2217ed552f459312ab19178e51cd160a339c2052c23e2978503ea"}
+2026-09-28T18:57:59.941102+00:00 [stage] runtime skill lazy-resource hashes: skill=prediction-markets {}
+2026-09-28T18:57:59.941117+00:00 [stage] research engine: v3 (linear_research)
+2026-09-28T18:58:00.801760+00:00 [warn] RESEARCH_LINEAR_MODE=salvage is a legacy knob: v3 resumes its own identity-bound phases and never adopts a research_report.md it did not produce
+2026-09-28T18:58:00.802401+00:00 [stage] research:v3:plan start
+2026-09-28T18:59:31.249622+00:00 [warn] gateway: plan:scope: primary attempt 1/5 failed (transient: APIConnectionError: Connection error.); retry in 8s
+2026-09-28T19:00:09.562643+00:00 [warn] gateway: plan:scope: primary attempt 2/5 failed (transient: APIConnectionError: Connection error.); retry in 23s
+2026-09-28T19:00:46.791691+00:00 [usage] tokens in=1984 out=384 total=2368 phase=plan:plan:scope cached=1920 cache_write=0 reasoning=0
+2026-09-28T19:00:46.791973+00:00 [tool] web_search quantum computing hardware 2026 record qubit count fidelity superconducting trapped-ion neutral-atom
+2026-09-28T19:00:46.792036+00:00 [tool] web_search US National Quantum Initiative DARPA Quantum Benchmarking Initiative funding 2025 2026
+2026-09-28T19:00:46.792275+00:00 [tool] web_search China quantum computing five-year plan funding Origin Quantum Beijing Academy 2025
+2026-09-28T19:00:46.792343+00:00 [tool] web_search EU Quantum Flagship Quantum Europe strategy EuroHPC quantum computer budget 2025
+2026-09-28T19:00:49.016520+00:00 [result] web_search → 5 results
+2026-09-28T19:00:49.016588+00:00 [tool] web_search quantum computing market size forecast 2030 2040 McKinsey BCG revenue
+2026-09-28T19:00:49.542840+00:00 [result] web_search → 4 results
+2026-09-28T19:00:49.542916+00:00 [tool] web_search NIST post-quantum cryptography migration harvest now decrypt later RSA-2048 timeline
+2026-09-28T19:00:51.049978+00:00 [result] web_search → 5 results
+2026-09-28T19:00:51.393577+00:00 [result] web_search → 5 results
+2026-09-28T19:00:52.171371+00:00 [result] web_search → 5 results
+2026-09-28T19:00:52.236369+00:00 [result] web_search → 4 results
+2026-09-28T19:01:26.593323+00:00 [usage] tokens in=3769 out=2544 total=6313 phase=plan:plan:plan cached=1728 cache_write=0 reasoning=0
+2026-09-28T19:01:26.595846+00:00 [ok] research:v3:plan done (10 KIQs, 16 sections)
+2026-09-28T19:01:26.596966+00:00 [stage] research:v3:gather start (10 KIQs, workers=4)
+2026-09-28T19:01:26.597084+00:00 [tool] web_search IBM Google superconducting quantum processor qubit count two-qubit gate fidelity 2026 roadmap
+2026-09-28T19:01:26.597144+00:00 [tool] web_search Quantinuum IonQ trapped ion logical qubit fidelity record 2026
+2026-09-28T19:01:26.597253+00:00 [tool] web_search Zuchongzhi Jiuzhang China quantum computer qubit fidelity record 2025 2026
+2026-09-28T19:01:26.597338+00:00 [tool] web_search record quantum computing milestones by year United States Europe 2020-2026
+2026-09-28T19:01:28.867548+00:00 [result] web_search → 4 results
+2026-09-28T19:01:28.867605+00:00 [tool] web_search National Quantum Initiative reauthorization funding 2025 2026 budget
+2026-09-28T19:01:29.540122+00:00 [result] web_search → 5 results
+2026-09-28T19:01:29.540176+00:00 [tool] web_search EU Quantum Flagship EuroHPC quantum investment 2025 billion euro
+2026-09-28T19:01:49.271606+00:00 [result] web_search → 5 results
+2026-09-28T19:01:49.277621+00:00 [result] web_search → 5 results
+2026-09-28T19:01:49.277682+00:00 [tool] web_search global quantum computing private investment by year 2021-2026 McKinsey Quantum Insider
+2026-09-28T19:01:49.277744+00:00 [tool] web_search quantum computing startups number United States China Europe 2026
+2026-09-28T19:01:51.388787+00:00 [result] web_search → 5 results
+2026-09-28T19:01:51.388836+00:00 [tool] web_search IBM Google fault tolerant quantum computer roadmap 2029 2033
+2026-09-28T19:01:51.901957+00:00 [result] web_search → 5 results
+2026-09-28T19:01:51.902007+00:00 [tool] web_search PsiQuantum Atom Computing QuEra timeline million qubit fault tolerant
+2026-09-28T19:02:28.650459+00:00 [result] web_search → 5 results
+2026-09-28T19:02:28.650526+00:00 [tool] web_search quantum computing supply chain dilution refrigerator helium-3 isotope constraint
+2026-09-28T19:02:28.730178+00:00 [result] web_search → 5 results
+2026-09-28T19:02:28.730240+00:00 [tool] web_search quantum workforce shortage talent pipeline US Europe China 2025
+2026-09-28T19:02:28.919092+00:00 [result] web_search → 5 results
+2026-09-28T19:02:28.919159+00:00 [tool] web_search US export controls quantum computing China 2025 2026 restrictions
+2026-09-28T19:02:29.313232+00:00 [result] web_search → 4 results
+2026-09-28T19:02:29.313315+00:00 [tool] web_search NIST post-quantum cryptography standards migration deadline federal 2035
+2026-09-28T19:02:48.876761+00:00 [result] web_search → 5 results
+2026-09-28T19:02:48.876816+00:00 [tool] web_search quantum computing market size forecast 2030 2035 2040 billion
+2026-09-28T19:02:48.931503+00:00 [result] web_search → 5 results
+2026-09-28T19:02:48.931574+00:00 [tool] web_search quantum computing value at stake by industry McKinsey BCG 2035
+2026-09-28T19:02:49.330896+00:00 [result] web_search → 4 results
+2026-09-28T19:02:49.330963+00:00 [tool] web_search quantum computing GDP impact estimate 2035 jobs World Economic Forum McKinsey
+2026-09-28T19:02:49.544992+00:00 [result] web_search → 5 results
+2026-09-28T19:02:49.545058+00:00 [tool] web_search harvest now decrypt later RSA 2048 breaking estimate years quantum
+2026-09-28T19:02:51.481191+00:00 [result] web_search → 5 results
+2026-09-28T19:02:51.481260+00:00 [tool] web_search expert survey quantum computing timeline fault tolerant Mosca probability
+2026-09-28T19:02:51.545480+00:00 [result] web_search → 5 results
+2026-09-28T19:02:51.545549+00:00 [tool] web_search Global Risk Institute quantum threat timeline report 2025
+2026-09-28T19:02:51.624351+00:00 [result] web_search → 5 results
+2026-09-28T19:02:51.705241+00:00 [result] web_search → 5 results
+2026-09-28T19:03:28.422793+00:00 [result] web_search → 5 results
+2026-09-28T19:03:28.542468+00:00 [result] web_search → 5 results
+2026-09-28T19:03:32.653894+00:00 [usage] tokens in=3497 out=3 total=3500 phase=gather:gather:prime cached=0 cache_write=0 reasoning=0
+2026-09-28T19:03:37.846365+00:00 [usage] tokens in=4555 out=94 total=4649 phase=gather:K2:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:03:37.846504+00:00 [tool] web_search Zuchongzhi 3.0 105 qubit fidelity 2025 USTC benchmark
+2026-09-28T19:03:37.846579+00:00 [tool] web_search record logical qubits 2025 Quantinuum H2 48 logical qubits fidelity
+2026-09-28T19:03:37.846773+00:00 [tool] web_search quantum computing record two-qubit gate fidelity 99.99% 2025 trapped ion QuEra neutral atom 2025
+2026-09-28T19:03:37.888498+00:00 [usage] tokens in=4455 out=127 total=4582 phase=gather:K1:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:03:37.888711+00:00 [tool] web_fetch https://www.ibm.com/quantum/blog/large-scale-ftqc
+2026-09-28T19:03:37.888783+00:00 [tool] web_search Google Willow chip 105 qubit two-qubit gate fidelity logical qubit below threshold 2025
+2026-09-28T19:03:37.889099+00:00 [tool] web_search Quantinuum H2 56 qubits fidelity 99.9% logical qubits 2025 roadmap Apollo 2029
+2026-09-28T19:03:37.927809+00:00 [usage] tokens in=4452 out=120 total=4572 phase=gather:K4:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:03:37.928026+00:00 [tool] web_fetch https://www.mckinsey.com/capabilities/mckinsey-technology/our-insights/mckinsey-quantum-technology-monitor-2026-a-commercial-tipping-point
+2026-09-28T19:03:37.928070+00:00 [tool] web_fetch https://thequantuminsider.com/2026/03/26/leading-quantum-computing-countries/
+2026-09-28T19:03:38.130934+00:00 [usage] tokens in=4529 out=126 total=4655 phase=gather:K3:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:03:38.131137+00:00 [tool] web_fetch https://www.eurohpc-ju.europa.eu/quantum-technologies/quantum-technologies-flagship_en
+2026-09-28T19:03:38.131183+00:00 [tool] web_fetch https://www.cbo.gov/publication/60891
+2026-09-28T19:03:38.131225+00:00 [tool] web_search DARPA Quantum Benchmarking Initiative funding amount awarded companies 2025
+2026-09-28T19:03:39.676544+00:00 [result] web_fetch → 2597/12055 chars [S54]
+2026-09-28T19:03:40.666577+00:00 [result] web_fetch → 2578/12051 chars [S49]
+2026-09-28T19:03:40.724073+00:00 [result] web_fetch → 2597/12092 chars [S44]
+2026-09-28T19:03:42.503926+00:00 [result] web_fetch → 2227/2227 chars [S59]
+2026-09-28T19:03:45.974940+00:00 [usage] tokens in=5772 out=114 total=5886 phase=gather:K4:s2 cached=4416 cache_write=0 reasoning=0
+2026-09-28T19:03:45.975191+00:00 [tool] web_fetch https://www.mckinsey.com/capabilities/mckinsey-technology/our-insights/mckinsey-quantum-technology-monitor-2026-a-commercial-tipping-point
+2026-09-28T19:03:45.975252+00:00 [tool] web_search QED-C State of the Global Quantum Industry 2026 number of quantum companies by region private funding
+2026-09-28T19:03:45.983997+00:00 [result] web_fetch → 2597/12055 chars [S54] (stored copy)
+2026-09-28T19:03:47.022388+00:00 [result] web_fetch → 2594/9680 chars [S40]
+2026-09-28T19:03:49.130342+00:00 [result] web_search → 5 results
+2026-09-28T19:03:49.136662+00:00 [result] web_search → 5 results
+2026-09-28T19:03:49.195921+00:00 [result] web_search → 5 results
+2026-09-28T19:03:49.279724+00:00 [result] web_search → 5 results
+2026-09-28T19:03:58.833504+00:00 [usage] tokens in=6468 out=42 total=6510 phase=gather:K3:s2 cached=4480 cache_write=0 reasoning=0
+2026-09-28T19:03:58.834217+00:00 [tool] web_search China government quantum funding estimate billion dollars McKinsey ASPI state investment
+2026-09-28T19:03:58.834337+00:00 [tool] web_search Germany France Netherlands national quantum program funding billion euros
+2026-09-28T19:04:28.630223+00:00 [result] web_search → 5 results
+2026-09-28T19:04:28.925304+00:00 [result] web_search → 4 results
+2026-09-28T19:04:28.960780+00:00 [result] web_search → 4 results
+2026-09-28T19:04:29.289091+00:00 [result] web_search → 4 results
+2026-09-28T19:04:29.463695+00:00 [result] web_search → 5 results
+2026-09-28T19:04:31.951987+00:00 [usage] tokens in=7065 out=142 total=7207 phase=gather:K4:s3 cached=5760 cache_write=0 reasoning=0
+2026-09-28T19:04:31.952235+00:00 [tool] web_fetch https://quantumconsortium.org/global-quantum-computing-market-to-double/
+2026-09-28T19:04:31.952425+00:00 [tool] web_fetch https://8441224.fs1.hubspotusercontent-na1.net/hubfs/8441224/2026%20SGQIR/SGQI%202026%20Booklet_Web%20Final.pdf
+2026-09-28T19:04:33.980405+00:00 [usage] tokens in=6186 out=61 total=6247 phase=gather:K2:s2 cached=4544 cache_write=0 reasoning=0
+2026-09-28T19:04:33.980523+00:00 [tool] web_search IBM roadmap Nighthawk 120 qubits 2025 Starling 200 qubits 2029 logical error rate milestone
+2026-09-28T19:04:33.980562+00:00 [tool] web_search Google Willow 105 qubit below-threshold logical qubit 2024 milestone
+2026-09-28T19:04:34.098582+00:00 [usage] tokens in=7461 out=78 total=7539 phase=gather:K3:s3 cached=6464 cache_write=0 reasoning=0
+2026-09-28T19:04:34.098913+00:00 [tool] web_fetch https://merics.org/en/report/chinas-long-view-quantum-tech-has-us-and-eu-playing-catch
+2026-09-28T19:04:34.098992+00:00 [tool] web_search EuroHPC quantum computer procurement investment euros Alice Bob quantum ensemble
+2026-09-28T19:04:34.373941+00:00 [result] web_fetch → 2598/12000 chars [S143]
+2026-09-28T19:04:34.679010+00:00 [usage] tokens in=6262 out=173 total=6435 phase=gather:K1:s2 cached=4416 cache_write=0 reasoning=0
+2026-09-28T19:04:34.679701+00:00 [tool] web_fetch https://blog.google/innovation-and-ai/technology/research/google-willow-quantum-chip/
+2026-09-28T19:04:34.679867+00:00 [tool] web_fetch https://www.quantinuum.com/press-releases/quantinuum-unveils-accelerated-roadmap-to-achieve-universal-fault-tolerant-quantum-computing-by-2030
+2026-09-28T19:04:34.680810+00:00 [tool] web_search neutral atom QuEra Atom Computing Harvard record 2025 logical qubits 48 qubits roadmap
+2026-09-28T19:04:35.728994+00:00 [result] web_fetch → 2583/10197 chars [S142]
+2026-09-28T19:04:37.116228+00:00 [result] web_fetch → 2587/12050 chars [S125]
+2026-09-28T19:04:37.376138+00:00 [result] web_fetch → 2594/12111 chars [S131]
+2026-09-28T19:04:38.384919+00:00 [result] web_fetch → 2583/12080 chars [S51]
+2026-09-28T19:04:40.168680+00:00 [usage] tokens in=8554 out=100 total=8654 phase=gather:K4:s4 cached=7040 cache_write=0 reasoning=0
+2026-09-28T19:04:40.168968+00:00 [tool] web_fetch https://8441224.fs1.hubspotusercontent-na1.net/hubfs/8441224/2026%20SGQIR/SGQI%202026%20Booklet_Web%20Final.pdf
+2026-09-28T19:04:40.193071+00:00 [result] web_fetch → 2596/12000 chars [S143] (stored copy)
+2026-09-28T19:04:46.079917+00:00 [usage] tokens in=9441 out=62 total=9503 phase=gather:K4:s5 cached=8512 cache_write=0 reasoning=0
+2026-09-28T19:04:46.080325+00:00 [tool] web_search quantum startup venture funding 2021 2022 2023 2024 by year total McKinsey Quantum Monitor $2.35 billion 2024
+2026-09-28T19:04:46.080541+00:00 [tool] web_search China quantum computing private investment companies count Origin Quantum funding
+2026-09-28T19:04:48.958141+00:00 [result] web_search → 4 results
+2026-09-28T19:04:49.106615+00:00 [result] web_search → 5 results
+2026-09-28T19:04:49.110187+00:00 [result] web_search → 5 results
+2026-09-28T19:04:49.807448+00:00 [result] web_search → 5 results
+2026-09-28T19:04:49.872534+00:00 [result] web_search → 4 results
+2026-09-28T19:04:54.412849+00:00 [usage] tokens in=8825 out=81 total=8906 phase=gather:K3:s4 cached=7424 cache_write=0 reasoning=0
+2026-09-28T19:04:54.413184+00:00 [tool] web_fetch https://www.congress.gov/bill/119th-congress/senate-bill/3597/text
+2026-09-28T19:04:54.413255+00:00 [tool] web_search EuroHPC Joint Undertaking quantum budget million euros total invested 2026
+2026-09-28T19:04:54.725841+00:00 [usage] tokens in=10470 out=61 total=10531 phase=gather:K4:s6 cached=9408 cache_write=0 reasoning=0
+2026-09-28T19:04:54.726061+00:00 [tool] web_fetch https://www.mckinsey.com/featured-insights/charts/quantum-investment-surge
+2026-09-28T19:04:56.092138+00:00 [usage] tokens in=8338 out=97 total=8435 phase=gather:K1:s3 cached=6208 cache_write=0 reasoning=0
+2026-09-28T19:04:56.092544+00:00 [tool] web_fetch https://www.quera.com/ai-info-page
+2026-09-28T19:04:56.092658+00:00 [tool] web_search PsiQuantum photonic fusion ribbon fault tolerance roadmap million qubits 2027; Intel silicon spin qubits; Microsoft topo
+2026-09-28T19:04:58.038392+00:00 [result] web_fetch → 2573/3478 chars [S161]
+2026-09-28T19:04:58.348316+00:00 [result] web_fetch → 2587/12024 chars [S159]
+2026-09-28T19:04:58.739787+00:00 [result] web_fetch → 2576/12140 chars [S39]
+2026-09-28T19:05:18.483103+00:00 [usage] tokens in=11262 out=1468 total=12730 phase=gather:K4:s7 cached=10432 cache_write=0 reasoning=40
+2026-09-28T19:05:18.525331+00:00 [ok] research:v3:gather K4 facts=13 verified=8 sources=12
+2026-09-28T19:05:24.146953+00:00 [usage] tokens in=4459 out=154 total=4613 phase=gather:K5:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:05:24.147267+00:00 [tool] web_fetch https://www.ibm.com/roadmaps/quantum/
+2026-09-28T19:05:24.147627+00:00 [tool] web_fetch https://www.quera.com/questions/when-will-fault-tolerant-quantum-computers-be-available
+2026-09-28T19:05:24.148006+00:00 [tool] web_search Google Quantum AI Willow 105 qubit 2024 roadmap fault-tolerant 2030
+2026-09-28T19:05:27.456402+00:00 [result] web_fetch → 2581/5488 chars [S65]
+2026-09-28T19:05:28.280059+00:00 [result] web_fetch → 2595/9364 chars [S69]
+2026-09-28T19:05:30.320105+00:00 [result] web_search → 5 results
+2026-09-28T19:05:30.582179+00:00 [result] web_search → 4 results
+2026-09-28T19:05:31.219264+00:00 [result] web_search → 5 results
+2026-09-28T19:05:35.342322+00:00 [usage] tokens in=6528 out=89 total=6617 phase=gather:K5:s2 cached=4416 cache_write=0 reasoning=0
+2026-09-28T19:05:35.342462+00:00 [tool] web_search PsiQuantum Omega chip 2027 million qubit photonic fault tolerance funding Australia Chicago
+2026-09-28T19:05:35.342506+00:00 [tool] web_search Quantinuum Helios roadmap Apollo 2029 fault-tolerant logical qubits fidelity 99.9%
+2026-09-28T19:05:35.342634+00:00 [tool] web_search Origin Quantum 中国 本源量子 roadmap 2025 fault-tolerant superconducting qubits
+2026-09-28T19:05:37.748613+00:00 [usage] tokens in=9783 out=135 total=9918 phase=gather:K1:s4 cached=8320 cache_write=0 reasoning=0
+2026-09-28T19:05:37.748812+00:00 [tool] web_fetch https://azure.microsoft.com/en-us/blog/quantum/2025/02/19/microsoft-unveils-majorana-1-the-worlds-first-quantum-processor-powered-by-topological-qubits/
+2026-09-28T19:05:37.748850+00:00 [tool] web_fetch https://www.psiquantum.com/news-import/omega
+2026-09-28T19:05:40.471561+00:00 [result] web_fetch → 2595/11363 chars [S176]
+2026-09-28T19:05:41.883885+00:00 [result] web_fetch → 2588/12130 chars [S174]
+2026-09-28T19:05:48.857185+00:00 [usage] tokens in=11248 out=91 total=11339 phase=gather:K1:s5 cached=9728 cache_write=0 reasoning=0
+2026-09-28T19:05:48.857312+00:00 [tool] web_search IBM Quantum Nighthawk 2025 120 qubit Starling 2029 Loon 2026 two-qubit gate fidelity CZ 99.7%
+2026-09-28T19:05:48.857351+00:00 [tool] web_search Intel silicon spin qubit 2025 wafer 12-qubit fidelity; Atom Computing 1000+ atom array roadmap; IonQ roadmap 2027 2029 l
+2026-09-28T19:05:48.857423+00:00 [result] web_search → SEARCH_BUDGET_EXHAUSTED
+2026-09-28T19:05:49.136087+00:00 [result] web_search → 5 results
+2026-09-28T19:05:49.253344+00:00 [result] web_search → 5 results
+2026-09-28T19:05:49.312741+00:00 [result] web_search → 5 results
+2026-09-28T19:05:49.449286+00:00 [result] web_search → 4 results
+2026-09-28T19:05:51.125336+00:00 [result] web_search → 5 results
+2026-09-28T19:05:55.252361+00:00 [usage] tokens in=10391 out=1569 total=11960 phase=gather:K3:s5 cached=8768 cache_write=0 reasoning=52
+2026-09-28T19:05:55.275878+00:00 [ok] research:v3:gather K3 facts=13 verified=3 sources=22
+2026-09-28T19:05:55.807421+00:00 [usage] tokens in=8155 out=150 total=8305 phase=gather:K5:s3 cached=6464 cache_write=0 reasoning=0
+2026-09-28T19:05:55.808252+00:00 [tool] web_fetch https://www.quantinuum.com/press-releases/quantinuum-unveils-accelerated-roadmap-to-achieve-universal-fault-tolerant-quantum-computing-by-2030
+2026-09-28T19:05:55.808841+00:00 [tool] web_fetch https://quantumai.google/roadmap
+2026-09-28T19:05:55.815664+00:00 [tool] web_search IonQ roadmap 2 million physical qubits 2030 acquisition Capella; Alibaba Baidu quantum lab exit 2023
+2026-09-28T19:05:55.830179+00:00 [result] web_fetch → 2588/12111 chars [S131] (stored copy)
+2026-09-28T19:05:55.920428+00:00 [usage] tokens in=7087 out=217 total=7304 phase=gather:K2:s3 cached=6144 cache_write=0 reasoning=0
+2026-09-28T19:05:55.921255+00:00 [tool] web_fetch https://english.cas.cn/head/202503/t20250305_903086.shtml
+2026-09-28T19:05:55.921439+00:00 [tool] web_fetch https://www.ibm.com/roadmaps/quantum/
+2026-09-28T19:05:55.921867+00:00 [tool] web_fetch https://www.quera.com/press-releases/harvard-university-mit-and-quera-demonstrate-historic-99-5-two-qubit-gate-fidelity-on-60-neutral-atom-qubits
+2026-09-28T19:05:55.937361+00:00 [result] web_fetch → 2578/5488 chars [S65] (stored copy)
+2026-09-28T19:05:57.284363+00:00 [result] web_fetch → 2589/7504 chars [S164]
+2026-09-28T19:05:59.387990+00:00 [result] web_fetch → 2595/12023 chars [S130]
+2026-09-28T19:06:00.243771+00:00 [usage] tokens in=4432 out=124 total=4556 phase=gather:K6:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:06:00.244144+00:00 [tool] web_fetch https://warontherocks.com/cogs-of-war/the-supply-chain-chokepoints-in-quantum/
+2026-09-28T19:06:00.244248+00:00 [tool] web_search quantum computing supply chain dilution refrigerator Bluefors market share helium-3 shortage constraints 2025
+2026-09-28T19:06:00.245354+00:00 [tool] web_search quantum workforce talent shortage number of quantum companies graduates US China EU 2025
+2026-09-28T19:06:02.905854+00:00 [result] web_fetch → 2597/12043 chars [S78]
+2026-09-28T19:06:03.764697+00:00 [result] web_fetch → 2585/8581 chars [S124]
+2026-09-28T19:06:10.337466+00:00 [usage] tokens in=9588 out=209 total=9797 phase=gather:K2:s4 cached=7040 cache_write=0 reasoning=94
+2026-09-28T19:06:10.337889+00:00 [tool] web_search Jiuzhang photonic quantum advantage 2020 2021 Origin Quantum Wukong 72 qubit 2024 China records timeline
+2026-09-28T19:06:10.337978+00:00 [tool] web_fetch https://www.quantinuum.com/blog/introducing-helios-the-most-accurate-quantum-computer-in-the-world
+2026-09-28T19:06:10.338015+00:00 [result] web_search → SEARCH_BUDGET_EXHAUSTED
+2026-09-28T19:06:12.470940+00:00 [result] web_fetch → 2595/12071 chars [S114]
+2026-09-28T19:06:14.243879+00:00 [usage] tokens in=11906 out=1551 total=13457 phase=gather:K1:s6 cached=11200 cache_write=0 reasoning=0
+2026-09-28T19:06:14.305616+00:00 [ok] research:v3:gather K1 facts=13 verified=4 sources=17
+2026-09-28T19:06:18.378433+00:00 [usage] tokens in=10372 out=61 total=10433 phase=gather:K2:s5 cached=9536 cache_write=0 reasoning=0
+2026-09-28T19:06:18.378765+00:00 [tool] web_fetch https://www.ibm.com/quantum/blog/large-scale-ftqc
+2026-09-28T19:06:18.399090+00:00 [result] web_fetch → 2593/12092 chars [S44] (stored copy)
+2026-09-28T19:06:19.638035+00:00 [usage] tokens in=4459 out=113 total=4572 phase=gather:K7:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:06:19.638469+00:00 [tool] web_fetch https://csrc.nist.gov/projects/post-quantum-cryptography
+2026-09-28T19:06:19.638613+00:00 [tool] web_fetch https://www.iiss.org/online-analysis/online-analysis/2026/07/securing-the-quantum-stack-export-controls-choke-points-and-strategic-competition/
+2026-09-28T19:06:21.420794+00:00 [result] web_fetch → 2583/12036 chars [S30]
+2026-09-28T19:06:23.600419+00:00 [result] web_fetch → 2584/12087 chars [S86]
+2026-09-28T19:06:29.030837+00:00 [result] web_search → 5 results
+2026-09-28T19:06:29.682024+00:00 [result] web_search → 5 results
+2026-09-28T19:06:30.419156+00:00 [usage] tokens in=5803 out=183 total=5986 phase=gather:K7:s2 cached=4416 cache_write=0 reasoning=0
+2026-09-28T19:06:30.419845+00:00 [tool] web_fetch https://www.federalregister.gov/documents/2024/09/06/2024-19633/commerce-control-list-additions-and-revisions-and-bis-license-requirements
+2026-09-28T19:06:30.419930+00:00 [tool] web_fetch https://www.rusi.org/explore-our-research/publications/commentary/export-controls-accelerate-chinas-quantum-supply-chain
+2026-09-28T19:06:30.420280+00:00 [tool] web_search NSM-10 2035 federal PQC migration deadline 2030 NIST IR 8547 deprecate 2030 disallow 2035
+2026-09-28T19:06:35.770670+00:00 [result] web_fetch → 2580/12093 chars [S83]
+2026-09-28T19:06:36.308813+00:00 [usage] tokens in=6268 out=157 total=6425 phase=gather:K6:s2 cached=4416 cache_write=0 reasoning=0
+2026-09-28T19:06:36.310125+00:00 [tool] web_fetch https://postquantum.com/building-quantum-computers/quantum-cryogenic-infrastructure-helium3/
+2026-09-28T19:06:36.310842+00:00 [tool] web_fetch https://magnapetra.com/helium-3-and-quantum-computing-necessity-supply-and-scaling/
+2026-09-28T19:06:36.311290+00:00 [tool] web_search quantum control electronics market Keysight Zurich Instruments quantum laser supplyconstraints 2025
+2026-09-28T19:06:37.344465+00:00 [result] web_fetch → 2582/12199 chars [S197]
+2026-09-28T19:06:41.294784+00:00 [result] web_fetch → 2563/12079 chars [S80]
+2026-09-28T19:06:43.825202+00:00 [usage] tokens in=11203 out=1652 total=12855 phase=gather:K2:s6 cached=10368 cache_write=0 reasoning=0
+2026-09-28T19:06:43.859942+00:00 [ok] research:v3:gather K2 facts=13 verified=5 sources=14
+2026-09-28T19:06:43.968123+00:00 [result] web_fetch → 2352/4096 chars [S79]
+2026-09-28T19:06:48.971366+00:00 [usage] tokens in=4459 out=91 total=4550 phase=gather:K8:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:06:48.971734+00:00 [tool] web_fetch https://www.mckinsey.com/capabilities/digital/quantum-computing/our-insights/quantum-technology-monitor
+2026-09-28T19:06:48.971817+00:00 [tool] web_search BCC Research quantum computing market forecast 2030 billion
+2026-09-28T19:06:50.127512+00:00 [result] web_search → 5 results
+2026-09-28T19:06:50.129858+00:00 [result] web_search → 5 results
+2026-09-28T19:06:50.163777+00:00 [result] web_search → 5 results
+2026-09-28T19:06:51.480630+00:00 [result] web_search → 4 results
+2026-09-28T19:06:54.963263+00:00 [usage] tokens in=7991 out=105 total=8096 phase=gather:K7:s3 cached=5760 cache_write=0 reasoning=0
+2026-09-28T19:06:54.963647+00:00 [tool] web_fetch https://nvlpubs.nist.gov/nistpubs/ir/2024/NIST.IR.8547.ipd.pdf
+2026-09-28T19:06:54.963759+00:00 [tool] web_search China export control list quantum computing added December 2024 rare earths lasers cryogenic
+2026-09-28T19:06:56.698809+00:00 [usage] tokens in=10201 out=80 total=10281 phase=gather:K5:s4 cached=8128 cache_write=0 reasoning=0
+2026-09-28T19:06:56.699298+00:00 [tool] web_fetch https://postquantum.com/industry-news/ionqroadmap-crqc/
+2026-09-28T19:06:56.699419+00:00 [tool] web_search Alibaba Baidu shut down quantum labs 2023 donated Chinese Academy of Sciences
+2026-09-28T19:06:56.701287+00:00 [result] web_search → SEARCH_BUDGET_EXHAUSTED
+2026-09-28T19:06:57.211284+00:00 [usage] tokens in=8062 out=152 total=8214 phase=gather:K6:s3 cached=6208 cache_write=0 reasoning=0
+2026-09-28T19:06:57.211755+00:00 [tool] web_fetch https://magnapetra.com/helium-3-and-quantum-computing-necessity-supply-and-scaling/
+2026-09-28T19:06:57.211835+00:00 [tool] web_fetch https://www.isotopes.gov/Supply-and-Demand-of-Helium-3
+2026-09-28T19:06:57.212331+00:00 [tool] web_search China quantum supply chain self-sufficiency cryogenic dilution refrigerator Chinese vendors helium rare earth export con
+2026-09-28T19:06:57.232088+00:00 [result] web_fetch → 2598/12079 chars [S80] (stored copy)
+2026-09-28T19:06:57.854189+00:00 [result] web_search → 4 results
+2026-09-28T19:06:58.090899+00:00 [result] web_fetch → 252/252 chars [S75]
+2026-09-28T19:06:59.614657+00:00 [result] web_fetch → 2573/12085 chars [S204]
+2026-09-28T19:06:59.746709+00:00 [result] web_fetch → 2025/2025 chars [S220]
+2026-09-28T19:07:03.968294+00:00 [result] web_fetch → FETCH_FAILED(exa_fallback_returned_no_results)
+2026-09-28T19:07:04.432368+00:00 [usage] tokens in=8676 out=98 total=8774 phase=gather:K7:s4 cached=7936 cache_write=0 reasoning=0
+2026-09-28T19:07:04.432776+00:00 [tool] web_fetch https://ura.uchicago.edu/policy-library/guidance-re-new-export-controls-quantum-technology-and-associated-deemed-exports
+2026-09-28T19:07:04.432876+00:00 [tool] web_search EU dual-use regulation quantum computers 2025 Wassenaar amendment cryogenic "quantum" export control EU regulation
+2026-09-28T19:07:06.926751+00:00 [result] web_fetch → 2582/12162 chars [S84]
+2026-09-28T19:07:09.044995+00:00 [usage] tokens in=5126 out=62 total=5188 phase=gather:K8:s2 cached=4416 cache_write=0 reasoning=0
+2026-09-28T19:07:09.045249+00:00 [tool] web_search McKinsey Quantum Technology Monitor 2025 quantum computing revenue $1.3 trillion 2035 value chemicals pharma
+2026-09-28T19:07:09.045335+00:00 [tool] web_search quantum computing value by industry 2035 McKinsey chemicals life sciences finance $XX billion
+2026-09-28T19:07:22.963506+00:00 [usage] tokens in=11032 out=1702 total=12734 phase=gather:K5:s5 cached=10176 cache_write=0 reasoning=54
+2026-09-28T19:07:22.996784+00:00 [ok] research:v3:gather K5 facts=13 verified=4 sources=17
+2026-09-28T19:07:27.483726+00:00 [usage] tokens in=4550 out=119 total=4669 phase=gather:K9:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:07:27.484224+00:00 [tool] web_fetch https://www.mckinsey.com/capabilities/mckinsey-technology/our-insights/mckinsey-quantum-technology-monitor-2026-a-commercial-tipping-point
+2026-09-28T19:07:27.484309+00:00 [tool] web_search post-quantum cryptography migration cost estimate Deloitte billions CISA timeline
+2026-09-28T19:07:27.484593+00:00 [tool] web_search Global Risk Institute quantum threat timeline report 2025 experts probability RSA-2048
+2026-09-28T19:07:27.510555+00:00 [result] web_fetch → 2597/12055 chars [S54] (stored copy)
+2026-09-28T19:07:28.814804+00:00 [result] web_search → 5 results
+2026-09-28T19:07:28.932104+00:00 [result] web_search → 4 results
+2026-09-28T19:07:28.941072+00:00 [result] web_search → 4 results
+2026-09-28T19:07:29.967754+00:00 [result] web_search → 4 results
+2026-09-28T19:07:34.910319+00:00 [usage] tokens in=6189 out=169 total=6358 phase=gather:K8:s3 cached=5120 cache_write=0 reasoning=0
+2026-09-28T19:07:34.910819+00:00 [tool] web_fetch https://www.mckinsey.com/capabilities/mckinsey-technology/our-insights/mckinsey-quantum-technology-monitor-2026-a-commercial-tipping-point
+2026-09-28T19:07:34.910894+00:00 [tool] web_fetch https://www.thequantuminsider.com/2024/09/13/the-quantum-insider-projects-1-trillion-in-economic-impact-from-quantum-computing-by-2035/
+2026-09-28T19:07:34.938407+00:00 [result] web_fetch → 2598/12055 chars [S54] (stored copy)
+2026-09-28T19:07:35.190911+00:00 [usage] tokens in=9779 out=125 total=9904 phase=gather:K6:s4 cached=8000 cache_write=0 reasoning=0
+2026-09-28T19:07:35.191404+00:00 [tool] web_fetch https://postquantum.com/china-quantum-ambition/china-supply-chain-self-sufficiency/
+2026-09-28T19:07:35.191493+00:00 [tool] web_fetch https://postquantum.com/leadership/quantum-workforce-talent/
+2026-09-28T19:07:37.218604+00:00 [result] web_fetch → 2592/12094 chars [S217]
+2026-09-28T19:07:37.618262+00:00 [result] web_fetch → 2595/12094 chars [S93]
+2026-09-28T19:07:38.274375+00:00 [result] web_fetch → 2590/12071 chars [S88]
+2026-09-28T19:07:40.566003+00:00 [usage] tokens in=11193 out=68 total=11261 phase=gather:K6:s5 cached=9728 cache_write=0 reasoning=0
+2026-09-28T19:07:40.566267+00:00 [tool] web_fetch https://www.rusi.org/explore-our-research/publications/commentary/export-controls-accelerate-chinas-quantum-supply-chain
+2026-09-28T19:07:40.588767+00:00 [result] web_fetch → 2590/12093 chars [S83] (stored copy)
+2026-09-28T19:07:42.548673+00:00 [usage] tokens in=7692 out=92 total=7784 phase=gather:K8:s4 cached=6144 cache_write=0 reasoning=0
+2026-09-28T19:07:42.549053+00:00 [tool] web_fetch https://www.mckinsey.com/featured-insights/the-rise-of-quantum-computing
+2026-09-28T19:07:42.549139+00:00 [tool] web_search quantum computing market forecast 2040 billion Goldman McKinsey addressable value
+2026-09-28T19:07:44.443558+00:00 [result] web_fetch → 2589/12054 chars [S11]
+2026-09-28T19:07:49.128322+00:00 [result] web_search → 5 results
+2026-09-28T19:07:51.152241+00:00 [usage] tokens in=9869 out=1266 total=11135 phase=gather:K7:s5 cached=8640 cache_write=0 reasoning=60
+2026-09-28T19:07:51.222239+00:00 [ok] research:v3:gather K7 facts=12 verified=6 sources=13
+2026-09-28T19:07:54.752693+00:00 [usage] tokens in=9175 out=161 total=9336 phase=gather:K8:s5 cached=7680 cache_write=0 reasoning=0
+2026-09-28T19:07:54.753127+00:00 [tool] web_fetch https://postquantum.com/quantum-computing/mckinsey-quantum-finance-600b/
+2026-09-28T19:07:54.753189+00:00 [tool] web_fetch https://www.marks-clerk.com/insights/latest-insights/102jf66-quantum-computing-to-create-over-450-billion-of-economic-value-by-2040/
+2026-09-28T19:07:55.286032+00:00 [usage] tokens in=4453 out=69 total=4522 phase=gather:K10:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:07:55.286377+00:00 [tool] web_fetch https://globalriskinstitute.org/publication/quantum-threat-timeline-report-2025b/
+2026-09-28T19:07:55.286480+00:00 [tool] web_search expert survey commercial quantum advantage timeline 2030 forecast
+2026-09-28T19:07:56.350897+00:00 [result] web_fetch → 2578/12058 chars [S100]
+2026-09-28T19:07:56.975631+00:00 [result] web_search → 5 results
+2026-09-28T19:07:57.161036+00:00 [result] web_search → 5 results
+2026-09-28T19:07:57.504215+00:00 [result] web_fetch → 2563/3046 chars [S104]
+2026-09-28T19:07:57.904867+00:00 [result] web_fetch → 2586/8740 chars [S232]
+2026-09-28T19:08:02.154958+00:00 [usage] tokens in=6245 out=139 total=6384 phase=gather:K9:s2 cached=4544 cache_write=0 reasoning=0
+2026-09-28T19:08:02.155915+00:00 [tool] web_fetch https://postquantum.com/security-pqc/quantum-threat-timeline-report-2025/
+2026-09-28T19:08:02.156040+00:00 [tool] web_fetch https://postquantum.com/security-pqc/white-house-pqc-estimate/
+2026-09-28T19:08:02.157846+00:00 [tool] web_search quantum computing jobs estimate McKinsey 2035 employment half million
+2026-09-28T19:08:02.697732+00:00 [usage] tokens in=10797 out=87 total=10884 phase=gather:K8:s6 cached=9152 cache_write=0 reasoning=0
+2026-09-28T19:08:02.699545+00:00 [tool] web_fetch https://www.mckinsey.com/capabilities/mckinsey-technology/our-insights/mckinsey-quantum-technology-monitor-2026-a-commercial-tipping-point
+2026-09-28T19:08:02.722040+00:00 [result] web_fetch → 2593/12055 chars [S54] (stored copy)
+2026-09-28T19:08:04.190478+00:00 [usage] tokens in=11876 out=1589 total=13465 phase=gather:K6:s6 cached=11136 cache_write=0 reasoning=6
+2026-09-28T19:08:04.206379+00:00 [ok] research:v3:gather K6 facts=13 verified=4 sources=13
+2026-09-28T19:08:04.524625+00:00 [result] web_fetch → 2591/12088 chars [S110]
+2026-09-28T19:08:04.898685+00:00 [result] web_fetch → 2581/12075 chars [S239]
+2026-09-28T19:08:07.583663+00:00 [usage] tokens in=11507 out=91 total=11598 phase=gather:K8:s7 cached=10752 cache_write=0 reasoning=0
+2026-09-28T19:08:07.584322+00:00 [tool] web_fetch https://www.mckinsey.com/capabilities/mckinsey-technology/our-insights/the-year-of-quantum-from-concept-to-reality-in-2025
+2026-09-28T19:08:12.022334+00:00 [result] web_fetch → 2590/12046 chars [S241]
+2026-09-28T19:08:31.147503+00:00 [result] web_search → 5 results
+2026-09-28T19:08:31.264441+00:00 [result] web_search → 5 results
+2026-09-28T19:08:33.370665+00:00 [usage] tokens in=12240 out=1341 total=13581 phase=gather:K8:s8 cached=11456 cache_write=0 reasoning=0
+2026-09-28T19:08:33.413293+00:00 [ok] research:v3:gather K8 facts=12 verified=7 sources=8
+2026-09-28T19:08:36.936829+00:00 [usage] tokens in=8209 out=116 total=8325 phase=gather:K9:s3 cached=6208 cache_write=0 reasoning=71
+2026-09-28T19:08:36.937044+00:00 [tool] web_search Goldman Sachs quantum computing GDP boost estimate 2035 billion
+2026-09-28T19:08:36.937120+00:00 [tool] web_search BCG quantum computing economic value $450 billion 2040 report
+2026-09-28T19:08:38.571265+00:00 [usage] tokens in=5653 out=94 total=5747 phase=gather:K10:s2 cached=4416 cache_write=0 reasoning=0
+2026-09-28T19:08:38.571523+00:00 [tool] web_fetch https://globalriskinstitute.org/mp-files/pdf-quantum-threat-timeline-report-2025.pdf/
+2026-09-28T19:08:38.571716+00:00 [tool] web_search Global Risk Institute quantum threat timeline 2024 report CRQC probability 2030 2035
+2026-09-28T19:08:40.951479+00:00 [result] web_search → 5 results
+2026-09-28T19:08:48.832128+00:00 [result] web_fetch → 2584/12039 chars [S250]
+2026-09-28T19:08:50.550802+00:00 [result] web_search → 5 results
+2026-09-28T19:08:50.685747+00:00 [result] web_search → 5 results
+2026-09-28T19:08:57.815859+00:00 [usage] tokens in=6857 out=102 total=6959 phase=gather:K10:s3 cached=5632 cache_write=0 reasoning=0
+2026-09-28T19:08:57.816385+00:00 [tool] web_fetch https://globalriskinstitute.org/mp-files/pdf-quantum-threat-timeline-report-2025.pdf/
+2026-09-28T19:08:57.816490+00:00 [tool] web_search commercial quantum advantage expert forecast 2027 2030 Metacalon Global Risk Institute useful applications early quantum
+2026-09-28T19:08:57.841253+00:00 [result] web_fetch → 2591/12039 chars [S250] (stored copy)
+2026-09-28T19:08:59.312858+00:00 [usage] tokens in=9222 out=133 total=9355 phase=gather:K9:s4 cached=8192 cache_write=0 reasoning=0
+2026-09-28T19:08:59.313612+00:00 [tool] web_fetch https://www.bcg.com/publications/2024/long-term-forecast-for-quantum-computing-still-looks-bright
+2026-09-28T19:08:59.313727+00:00 [tool] web_fetch https://www.mckinsey.com/capabilities/tech-and-ai/our-insights/the-year-of-quantum-from-concept-to-reality-in-2025
+2026-09-28T19:09:01.288265+00:00 [result] web_search → 5 results
+2026-09-28T19:09:03.813676+00:00 [result] web_fetch → 2580/12059 chars [S245]
+2026-09-28T19:09:05.023083+00:00 [result] web_fetch → 2596/12046 chars [S102]
+2026-09-28T19:09:07.336677+00:00 [usage] tokens in=8090 out=171 total=8261 phase=gather:K10:s4 cached=6848 cache_write=0 reasoning=51
+2026-09-28T19:09:07.337106+00:00 [tool] web_fetch https://globalriskinstitute.org/publication/2024-quantum-threat-timeline-report/
+2026-09-28T19:09:07.337186+00:00 [tool] web_fetch https://www.deloitte.com/us/en/insights/topics/emerging-technologies/quantum-computing-futures.html
+2026-09-28T19:09:11.200700+00:00 [result] web_fetch → 2343/2808 chars [S236]
+2026-09-28T19:09:11.948741+00:00 [result] web_fetch → 2595/12049 chars [S244]
+2026-09-28T19:09:16.752339+00:00 [usage] tokens in=9450 out=33 total=9483 phase=gather:K10:s5 cached=8064 cache_write=0 reasoning=0
+2026-09-28T19:09:16.752500+00:00 [tool] web_search NIST IR 8547 draft deprecated quantum-vulnerable algorithms 2030 disallowed 2035 migration
+2026-09-28T19:09:18.605558+00:00 [result] web_search → 5 results
+2026-09-28T19:09:20.105756+00:00 [usage] tokens in=10050 out=63 total=10113 phase=gather:K10:s6 cached=9408 cache_write=0 reasoning=0
+2026-09-28T19:09:20.106069+00:00 [tool] web_fetch https://nvlpubs.nist.gov/nistpubs/ir/2024/NIST.IR.8547.ipd.pdf
+2026-09-28T19:09:20.108859+00:00 [result] web_fetch → 252/252 chars [S75] (stored copy)
+2026-09-28T19:09:24.111280+00:00 [usage] tokens in=10270 out=50 total=10320 phase=gather:K10:s7 cached=10048 cache_write=0 reasoning=0
+2026-09-28T19:09:24.111526+00:00 [tool] web_fetch https://csrc.nist.gov/pubs/ir/8547/ipd
+2026-09-28T19:09:25.470086+00:00 [result] web_fetch → 2571/5643 chars [S200]
+2026-09-28T19:09:26.681588+00:00 [usage] tokens in=10864 out=1475 total=12339 phase=gather:K9:s5 cached=9216 cache_write=0 reasoning=71
+2026-09-28T19:09:26.738598+00:00 [ok] research:v3:gather K9 facts=13 verified=8 sources=12
+2026-09-28T19:09:47.235425+00:00 [usage] tokens in=10870 out=1364 total=12234 phase=gather:K10:s8 cached=10240 cache_write=0 reasoning=30
+2026-09-28T19:09:47.275010+00:00 [ok] research:v3:gather K10 facts=12 verified=3 sources=11
+2026-09-28T19:09:47.277029+00:00 [stage] research:v3:gap round 1
+2026-09-28T19:09:58.940659+00:00 [usage] tokens in=5368 out=714 total=6082 phase=gap:gap:r1 cached=1280 cache_write=0 reasoning=46
+2026-09-28T19:09:58.941604+00:00 [stage] research:v3:gather start (4 KIQs, workers=4)
+2026-09-28T19:09:58.941732+00:00 [tool] web_search Zuchongzhi 3.0 105 qubit superconducting processor paper 2025
+2026-09-28T19:09:58.941777+00:00 [tool] web_search Jiuzhang 3.0 photonic quantum computational advantage 2024 gates
+2026-09-28T19:09:58.941904+00:00 [tool] web_search Global Risk Institute quantum threat timeline report 10 year 15 year probability
+2026-09-28T19:09:58.942007+00:00 [tool] web_search GRI quantum threat timeline 2026 report download
+2026-09-28T19:10:00.864081+00:00 [result] web_search → 5 results
+2026-09-28T19:10:00.864134+00:00 [tool] web_search Quantinuum H2 56 qubits two-qubit gate fidelity 99.9% record
+2026-09-28T19:10:01.114922+00:00 [result] web_search → 5 results
+2026-09-28T19:10:01.114978+00:00 [tool] web_search Pasqal 2025 neutral atom qubit record quantum
+2026-09-28T19:10:01.183881+00:00 [result] web_search → 5 results
+2026-09-28T19:10:01.183948+00:00 [tool] web_search National Quantum Initiative reauthorization act 2026 committee markup funding billion
+2026-09-28T19:10:01.249501+00:00 [result] web_search → 5 results
+2026-09-28T19:10:01.249578+00:00 [tool] web_search DARPA Quantum Benchmarking Initiative stage B awards companies million
+2026-09-28T19:10:02.894493+00:00 [result] web_search → 5 results
+2026-09-28T19:10:02.899279+00:00 [result] web_search → 5 results
+2026-09-28T19:10:03.195723+00:00 [result] web_search → 5 results
+2026-09-28T19:10:19.127125+00:00 [result] web_search → 5 results
+2026-09-28T19:10:23.645123+00:00 [usage] tokens in=3497 out=3 total=3500 phase=gap:gather:prime cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:10:28.012125+00:00 [usage] tokens in=4436 out=128 total=4564 phase=gap:G1F4:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:10:28.012547+00:00 [tool] web_fetch https://www.darpa.mil/research/programs/quantum-benchmarking-initiative/stage-b-selection
+2026-09-28T19:10:28.012629+00:00 [tool] web_fetch https://www.congress.gov/bill/119th-congress/senate-bill/3597
+2026-09-28T19:10:28.013486+00:00 [tool] web_search BIS Entity List quantum computing additions 2025 China companies
+2026-09-28T19:10:29.359601+00:00 [usage] tokens in=4481 out=135 total=4616 phase=gap:G1F1:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:10:29.359814+00:00 [tool] web_fetch https://arxiv.org/abs/2412.11924
+2026-09-28T19:10:29.359876+00:00 [tool] web_fetch https://www.nature.com/articles/s41586-022-04725-x
+2026-09-28T19:10:29.360103+00:00 [tool] web_search Origin Quantum Wukong superconducting chip qubits 2024 specifications
+2026-09-28T19:10:29.611483+00:00 [usage] tokens in=4444 out=115 total=4559 phase=gap:G1F2:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:10:29.611759+00:00 [tool] web_fetch https://globalriskinstitute.org/publication/quantum-threat-timeline-report-2025b/
+2026-09-28T19:10:29.611929+00:00 [tool] web_fetch https://globalriskinstitute.org/publication/2024-quantum-threat-timeline-report/
+2026-09-28T19:10:29.622443+00:00 [result] web_fetch → 2343/2808 chars [S236] (stored copy)
+2026-09-28T19:10:29.624795+00:00 [result] web_fetch → 2270/3046 chars [S104] (stored copy)
+2026-09-28T19:10:30.150858+00:00 [usage] tokens in=4584 out=149 total=4733 phase=gap:G1F3:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:10:30.151742+00:00 [tool] web_fetch https://www.quantinuum.com/blog/quantinuum-extends-its-significant-lead-in-quantum-computing-achieving-historic-milestones-for-hardware-fidelity-and-quantum-vol
+2026-09-28T19:10:30.152978+00:00 [tool] web_search Quantinuum H2-1 launch 2023 32 qubits 99.8% two-qubit gate fidelity; H1-1 20 qubits 2020
+2026-09-28T19:10:30.155191+00:00 [tool] web_search EU private venture capital quantum investment by year 2019 2024 McKinsey Quantum Technology Monitor Europe
+2026-09-28T19:10:31.127493+00:00 [result] web_fetch → 2575/10001 chars [S18]
+2026-09-28T19:10:34.079787+00:00 [result] web_fetch → 2519/2792 chars [S271]
+2026-09-28T19:10:36.167127+00:00 [usage] tokens in=5747 out=144 total=5891 phase=gap:G1F2:s2 cached=4416 cache_write=0 reasoning=27
+2026-09-28T19:10:36.167710+00:00 [tool] web_fetch https://globalriskinstitute.org/mp-files/pdf-quantum-threat-timeline-report-2025.pdf/
+2026-09-28T19:10:36.167803+00:00 [tool] web_fetch https://postquantum.com/security-pqc/quantum-threat-timeline-report-2025/
+2026-09-28T19:10:36.186092+00:00 [result] web_fetch → 2581/12039 chars [S250] (stored copy)
+2026-09-28T19:10:36.192272+00:00 [result] web_fetch → 2588/12088 chars [S110] (stored copy)
+2026-09-28T19:10:36.232875+00:00 [result] web_fetch → 2497/12120 chars [S266]
+2026-09-28T19:10:39.964948+00:00 [result] web_fetch → 2594/12135 chars [S268]
+2026-09-28T19:10:40.038730+00:00 [result] web_fetch → 2587/12083 chars [S262]
+2026-09-28T19:10:45.614202+00:00 [usage] tokens in=7238 out=110 total=7348 phase=gap:G1F2:s3 cached=5696 cache_write=0 reasoning=33
+2026-09-28T19:10:45.614588+00:00 [tool] web_fetch https://globalriskinstitute.org/mp-files/pdf-quantum-threat-timeline-report-2025.pdf/
+2026-09-28T19:10:45.632988+00:00 [result] web_fetch → 2586/12039 chars [S250] (stored copy)
+2026-09-28T19:10:49.435023+00:00 [usage] tokens in=7994 out=108 total=8102 phase=gap:G1F2:s4 cached=7232 cache_write=0 reasoning=42
+2026-09-28T19:10:49.435272+00:00 [tool] web_fetch https://globalriskinstitute.org/mp-files/pdf-quantum-threat-timeline-report-2024.pdf/
+2026-09-28T19:10:56.519300+00:00 [result] web_fetch → 2547/3659 chars [S280]
+2026-09-28T19:11:04.211962+00:00 [result] web_search → 5 results
+2026-09-28T19:11:04.550079+00:00 [result] web_search → 4 results
+2026-09-28T19:11:04.662185+00:00 [result] web_search → 5 results
+2026-09-28T19:11:05.109561+00:00 [usage] tokens in=8863 out=57 total=8920 phase=gap:G1F2:s5 cached=7936 cache_write=0 reasoning=24
+2026-09-28T19:11:05.109703+00:00 [tool] web_search Quantum Threat Timeline Report 2024 averaged likelihood 10-year 15-year pessimistic optimistic average CRQC
+2026-09-28T19:11:05.285968+00:00 [result] web_search → 4 results
+2026-09-28T19:11:10.745258+00:00 [result] web_search → 5 results
+2026-09-28T19:11:12.052355+00:00 [usage] tokens in=6567 out=173 total=6740 phase=gap:G1F3:s2 cached=4544 cache_write=0 reasoning=0
+2026-09-28T19:11:12.052757+00:00 [tool] web_fetch https://postquantum.com/industry-news/mckinsey-quantum-monitor-2026/
+2026-09-28T19:11:12.052850+00:00 [tool] web_fetch https://www.quantinuum.com/press-releases/quantinuum-launches-industry-first-trapped-ion-56-qubit-quantum-computer-that-challenges-the-worlds-best-supercomputer
+2026-09-28T19:11:12.053150+00:00 [tool] web_search IQM 2025 roadmap fault-tolerant 1 million qubits 2033; Pasqal 1000+ atom qubit milestone date
+2026-09-28T19:11:15.274348+00:00 [usage] tokens in=6802 out=186 total=6988 phase=gap:G1F1:s2 cached=4480 cache_write=0 reasoning=0
+2026-09-28T19:11:15.274845+00:00 [tool] web_fetch https://link.aps.org/doi/10.1103/PhysRevLett.134.090601
+2026-09-28T19:11:15.274942+00:00 [tool] web_fetch https://en.ustc.edu.cn/info/1007/5015.htm
+2026-09-28T19:11:15.275465+00:00 [tool] web_search Jiuzhang 3.0 255 photons Gaussian boson sampling 2025 USTC Science Advances
+2026-09-28T19:11:15.722276+00:00 [usage] tokens in=6543 out=160 total=6703 phase=gap:G1F4:s2 cached=4416 cache_write=0 reasoning=0
+2026-09-28T19:11:15.723143+00:00 [tool] web_fetch https://www.federalregister.gov/documents/2025/09/16/2025-17893/additions-and-revisions-to-the-entity-list
+2026-09-28T19:11:15.725396+00:00 [tool] web_search DARPA Quantum Benchmarking Initiative Stage B award value million per company
+2026-09-28T19:11:15.725860+00:00 [tool] web_fetch https://www.commerce.senate.gov/press/dem/release/led-by-cantwell-and-young-national-quantum-initiative-reauthorization-act-unanimously-passes-commerce-committe
+2026-09-28T19:11:17.766977+00:00 [result] web_search → 5 results
+2026-09-28T19:11:17.943526+00:00 [result] web_fetch → 2585/12049 chars [S55]
+2026-09-28T19:11:18.381568+00:00 [result] web_fetch → 2583/12108 chars [S267]
+2026-09-28T19:11:19.476714+00:00 [result] web_search → 5 results
+2026-09-28T19:11:19.978519+00:00 [result] web_search → 5 results
+2026-09-28T19:11:20.800367+00:00 [usage] tokens in=9376 out=85 total=9461 phase=gap:G1F2:s6 cached=8832 cache_write=0 reasoning=0
+2026-09-28T19:11:20.800667+00:00 [tool] web_fetch https://www.quintessencelabs.com/hubfs/PDFs/Global-Risk-Institute-Quantum-Threat-Timeline-Report-2024.pdf
+2026-09-28T19:11:21.791489+00:00 [result] web_fetch → 1061/1061 chars [S285]
+2026-09-28T19:11:23.061340+00:00 [result] web_fetch → 2519/4096 chars [S272]
+2026-09-28T19:11:23.104892+00:00 [result] web_fetch → 2587/8282 chars [S62]
+2026-09-28T19:11:24.267062+00:00 [usage] tokens in=8623 out=181 total=8804 phase=gap:G1F3:s3 cached=6528 cache_write=0 reasoning=0
+2026-09-28T19:11:24.267649+00:00 [tool] web_fetch https://www.mckinsey.com/~/media/mckinsey/business%20functions/mckinsey%20digital/our%20insights/steady%20progress%20in%20approaching%20the%20quantum%20advantag
+2026-09-28T19:11:24.267773+00:00 [tool] web_fetch https://www.businesswire.com/news/home/20260623243333/en/IQM-achieves-milestone-in-quantum-error-correction-enabling-fault-tolerant-computing-in-the-near-term
+2026-09-28T19:11:25.098145+00:00 [result] web_fetch → 2106/12128 chars [S121]
+2026-09-28T19:11:27.900530+00:00 [result] web_fetch → 295/295 chars [S295]
+2026-09-28T19:11:28.127288+00:00 [result] web_fetch → 246/246 chars [S234]
+2026-09-28T19:11:29.294039+00:00 [result] web_fetch → 2582/12012 chars [S12]
+2026-09-28T19:11:30.088914+00:00 [usage] tokens in=8071 out=228 total=8299 phase=gap:G1F4:s3 cached=6528 cache_write=0 reasoning=174
+2026-09-28T19:11:30.089516+00:00 [tool] web_search Entity List January 2025 quantum computing additions China "quantum" BIS rule
+2026-09-28T19:11:30.089677+00:00 [tool] web_search S.3597 National Quantum Initiative Reauthorization 2026 authorized funding billion amount
+2026-09-28T19:11:31.395724+00:00 [usage] tokens in=9075 out=178 total=9253 phase=gap:G1F1:s3 cached=6784 cache_write=0 reasoning=0
+2026-09-28T19:11:31.396373+00:00 [tool] web_fetch https://arxiv.org/html/2508.09092v1
+2026-09-28T19:11:31.396516+00:00 [tool] web_fetch https://quantumcomputingreport.com/origin-quantum-unveils-origin-wukong-180-fourth-generation-quantum-computer/
+2026-09-28T19:11:31.397554+00:00 [tool] web_search Jiuzhang 2020 Science 76 photons "quantum computational advantage using photons" Zhong 50 squeezed states 100 modes
+2026-09-28T19:11:34.478759+00:00 [usage] tokens in=9613 out=61 total=9674 phase=gap:G1F2:s7 cached=9344 cache_write=0 reasoning=0
+2026-09-28T19:11:34.478965+00:00 [tool] web_fetch https://www.evolutionq.com/post/the-quantum-threat-timeline-why-organizations-must-act-now
+2026-09-28T19:11:34.621445+00:00 [result] web_fetch → 2550/4096 chars [S281]
+2026-09-28T19:11:35.474678+00:00 [result] web_fetch → 2527/12096 chars [S297]
+2026-09-28T19:11:35.627871+00:00 [usage] tokens in=9628 out=82 total=9710 phase=gap:G1F3:s4 cached=8576 cache_write=0 reasoning=0
+2026-09-28T19:11:35.628922+00:00 [tool] web_fetch https://postquantum.com/industry-news/mckinsey-quantum-monitor-2026/
+2026-09-28T19:11:35.629456+00:00 [tool] web_search IQM quantum error correction milestone June 2026 roadmap one million qubits 2033 details
+2026-09-28T19:11:35.645798+00:00 [result] web_fetch → 2586/12049 chars [S55] (stored copy)
+2026-09-28T19:11:37.270799+00:00 [result] web_fetch → 2582/4096 chars [S235]
+2026-09-28T19:11:40.286550+00:00 [usage] tokens in=10314 out=72 total=10386 phase=gap:G1F2:s8 cached=9600 cache_write=0 reasoning=0
+2026-09-28T19:11:40.287036+00:00 [tool] web_fetch https://postquantum.com/security-pqc/quantum-threat-timeline-report-2025/
+2026-09-28T19:11:40.303677+00:00 [result] web_fetch → 2586/12088 chars [S110] (stored copy)
+2026-09-28T19:12:01.572678+00:00 [result] web_search → 5 results
+2026-09-28T19:12:02.021724+00:00 [result] web_search → 4 results
+2026-09-28T19:12:06.543292+00:00 [usage] tokens in=11063 out=1420 total=12483 phase=gap:G1F2:s9 cached=10304 cache_write=0 reasoning=76
+2026-09-28T19:12:06.567844+00:00 [ok] research:v3:gather G1F2 facts=13 verified=6 sources=6
+2026-09-28T19:12:07.898510+00:00 [result] web_search → 5 results
+2026-09-28T19:12:08.182348+00:00 [result] web_search → 5 results
+2026-09-28T19:12:09.240567+00:00 [usage] tokens in=10840 out=112 total=10952 phase=gap:G1F3:s5 cached=9600 cache_write=0 reasoning=0
+2026-09-28T19:12:09.240919+00:00 [tool] web_fetch https://iqm.tech/press-releases/iqm-achieves-milestone-in-quantum-error-correction-enabling-fault-tolerant-computing-in-the-near-term/
+2026-09-28T19:12:09.241399+00:00 [tool] web_search Quantinuum Helios launch 2025 98 qubits; Solovay-Kitaev; Quantinuum logical qubits 12 2025
+2026-09-28T19:12:11.110447+00:00 [usage] tokens in=9098 out=110 total=9208 phase=gap:G1F4:s4 cached=8064 cache_write=0 reasoning=0
+2026-09-28T19:12:11.110908+00:00 [tool] web_fetch https://www.congress.gov/bill/119th-congress/senate-bill/3597/text
+2026-09-28T19:12:11.111057+00:00 [tool] web_fetch https://www.bis.gov/press-release/commerce-further-restricts-chinas-artificial-intelligence-advanced-computing-capabilities
+2026-09-28T19:12:11.135806+00:00 [result] web_fetch → 2578/12140 chars [S39] (stored copy)
+2026-09-28T19:12:11.167113+00:00 [result] web_fetch → 2589/5482 chars [S306]
+2026-09-28T19:12:14.571798+00:00 [result] web_fetch → 2591/9475 chars [S286]
+2026-09-28T19:12:14.612417+00:00 [result] web_search → 5 results
+2026-09-28T19:12:21.129150+00:00 [usage] tokens in=10744 out=129 total=10873 phase=gap:G1F4:s5 cached=9088 cache_write=0 reasoning=74
+2026-09-28T19:12:21.129598+00:00 [tool] web_fetch https://www.darpa.mil/research/programs/quantum-benchmarking-initiative
+2026-09-28T19:12:21.472155+00:00 [usage] tokens in=12176 out=110 total=12286 phase=gap:G1F3:s6 cached=10816 cache_write=0 reasoning=0
+2026-09-28T19:12:21.472565+00:00 [tool] web_fetch https://www.quantinuum.com/blog/introducing-helios-the-most-accurate-quantum-computer-in-the-world
+2026-09-28T19:12:21.472664+00:00 [tool] web_search Europe quantum startups private funding 2024 "$1.6 billion" OR "€1 billion" McKinsey 2025 Europe share quantum investmen
+2026-09-28T19:12:21.472928+00:00 [result] web_search → SEARCH_BUDGET_EXHAUSTED
+2026-09-28T19:12:21.492900+00:00 [result] web_fetch → 2590/12071 chars [S114] (stored copy)
+2026-09-28T19:12:24.352639+00:00 [usage] tokens in=11042 out=1635 total=12677 phase=gap:G1F1:s4 cached=9024 cache_write=0 reasoning=85
+2026-09-28T19:12:24.413200+00:00 [ok] research:v3:gather G1F1 facts=12 verified=3 sources=11
+2026-09-28T19:12:25.012715+00:00 [result] web_fetch → 2567/7772 chars [S16]
+2026-09-28T19:12:31.435713+00:00 [usage] tokens in=11558 out=144 total=11702 phase=gap:G1F4:s6 cached=10688 cache_write=0 reasoning=86
+2026-09-28T19:12:31.436772+00:00 [tool] web_fetch https://lofgren.house.gov/media/press-releases/ranking-member-lofgrens-opening-statement-markup-national-quantum-initiative
+2026-09-28T19:12:31.437244+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-09-28T19:12:36.656078+00:00 [usage] tokens in=11640 out=31 total=11671 phase=gap:G1F4:s7 cached=11520 cache_write=0 reasoning=0
+2026-09-28T19:12:36.656213+00:00 [tool] web_search Lofgren markup NQI reauthorization "$138 billion" quantum House science committee 2026
+2026-09-28T19:12:39.545199+00:00 [result] web_search → 3 results
+2026-09-28T19:12:40.922572+00:00 [usage] tokens in=12956 out=1372 total=14328 phase=gap:G1F3:s7 cached=12160 cache_write=0 reasoning=21
+2026-09-28T19:12:40.973526+00:00 [ok] research:v3:gather G1F3 facts=12 verified=6 sources=13
+2026-09-28T19:12:56.941248+00:00 [usage] tokens in=11945 out=1307 total=13252 phase=gap:G1F4:s8 cached=11584 cache_write=0 reasoning=26
+2026-09-28T19:12:56.978864+00:00 [ok] research:v3:gather G1F4 facts=12 verified=7 sources=14
+2026-09-28T19:12:56.979680+00:00 [stage] research:v3:gap round 2
+2026-09-28T19:13:09.095011+00:00 [usage] tokens in=6277 out=724 total=7001 phase=gap:gap:r2 cached=3200 cache_write=0 reasoning=84
+2026-09-28T19:13:09.098736+00:00 [stage] research:v3:gather start (4 KIQs, workers=4)
+2026-09-28T19:13:09.099032+00:00 [tool] web_search Google Quantum AI roadmap fault-tolerant 2029 2030 milestone blog
+2026-09-28T19:13:09.099859+00:00 [tool] web_search IBM Quantum Starling 200 logical qubits 2029 roadmap
+2026-09-28T19:13:09.100601+00:00 [tool] web_search Zuchongzhi 3.0 105 qubit gate fidelity Physical Review Letters 2025
+2026-09-28T19:13:09.101009+00:00 [tool] web_search China quantum error correction logical qubit demonstration 2025 2026 USTC
+2026-09-28T19:13:11.509841+00:00 [result] web_search → 5 results
+2026-09-28T19:13:11.509914+00:00 [tool] web_search quantum computing GDP impact estimate 2035 Goldman Sachs McKinsey trillion
+2026-09-28T19:13:11.532042+00:00 [result] web_search → 5 results
+2026-09-28T19:13:11.532096+00:00 [tool] web_search post-quantum cryptography migration cost global financial sector estimate billions
+2026-09-28T19:13:11.573774+00:00 [result] web_search → 5 results
+2026-09-28T19:13:11.573824+00:00 [tool] web_search helium-3 production annual supply isotopes demand quantum computing 2025
+2026-09-28T19:13:12.243294+00:00 [result] web_search → 4 results
+2026-09-28T19:13:12.243365+00:00 [tool] web_search trapped ion quantum computer laser supplier concentration China export controls
+2026-09-28T19:13:14.141632+00:00 [result] web_search → 5 results
+2026-09-28T19:13:15.395153+00:00 [result] web_search → 4 results
+2026-09-28T19:13:15.618375+00:00 [result] web_search → 5 results
+2026-09-28T19:13:39.431577+00:00 [result] web_search → 5 results
+2026-09-28T19:13:46.321584+00:00 [usage] tokens in=3497 out=3 total=3500 phase=gap:gather:prime cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:13:53.691717+00:00 [usage] tokens in=4477 out=46 total=4523 phase=gap:G2F3:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:13:53.692067+00:00 [tool] web_search Goldman Sachs quantum computing GDP boost estimate 2035 2040
+2026-09-28T19:13:53.692231+00:00 [tool] web_search post-quantum cryptography migration cost global private sector estimate billion
+2026-09-28T19:13:54.746577+00:00 [usage] tokens in=4463 out=152 total=4615 phase=gap:G2F1:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:13:54.747120+00:00 [tool] web_fetch https://www.ibm.com/quantum/blog/large-scale-ftqc
+2026-09-28T19:13:54.747203+00:00 [tool] web_fetch https://quantumai.google/roadmap
+2026-09-28T19:13:54.747604+00:00 [tool] web_fetch https://blog.google/innovation-and-ai/technology/research/quantum-hardware-verifiable-advantage/
+2026-09-28T19:13:54.771987+00:00 [result] web_fetch → 2588/7504 chars [S164] (stored copy)
+2026-09-28T19:13:54.778166+00:00 [result] web_fetch → 2595/12092 chars [S44] (stored copy)
+2026-09-28T19:13:55.244782+00:00 [usage] tokens in=4463 out=109 total=4572 phase=gap:G2F4:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:13:55.245311+00:00 [tool] web_fetch https://www.isotopes.gov/Supply-and-Demand-of-Helium-3
+2026-09-28T19:13:55.245412+00:00 [tool] web_fetch https://postquantum.com/china-quantum-ambition/china-supply-chain-self-sufficiency/
+2026-09-28T19:13:55.250257+00:00 [result] web_fetch → 2025/2025 chars [S220] (stored copy)
+2026-09-28T19:13:55.279977+00:00 [result] web_fetch → 2593/12094 chars [S217] (stored copy)
+2026-09-28T19:13:56.724110+00:00 [usage] tokens in=4546 out=113 total=4659 phase=gap:G2F2:s1 cached=3456 cache_write=0 reasoning=0
+2026-09-28T19:13:56.724323+00:00 [tool] web_fetch https://en.ustc.edu.cn/info/1007/5015.htm
+2026-09-28T19:13:56.724381+00:00 [tool] web_fetch https://quantumcomputingreport.com/ustcs-zuchongzhi-3-2-achieves-below-threshold-qec-milestone/
+2026-09-28T19:13:56.733587+00:00 [result] web_fetch → 2592/8282 chars [S62] (stored copy)
+2026-09-28T19:13:57.493820+00:00 [result] web_fetch → 2574/10409 chars [S165]
+2026-09-28T19:13:59.277068+00:00 [result] web_fetch → 2576/3549 chars [S321]
+2026-09-28T19:14:01.381487+00:00 [usage] tokens in=5722 out=119 total=5841 phase=gap:G2F4:s2 cached=4416 cache_write=0 reasoning=0
+2026-09-28T19:14:01.382072+00:00 [tool] web_fetch https://postquantum.com/china-quantum-ambition/china-supply-chain-self-sufficiency/
+2026-09-28T19:14:01.382415+00:00 [tool] web_fetch https://magnapetra.com/helium-3-and-quantum-computing-necessity-supply-and-scaling/
+2026-09-28T19:14:01.396297+00:00 [result] web_fetch → 2596/12094 chars [S217] (stored copy)
+2026-09-28T19:14:01.403692+00:00 [result] web_fetch → 2582/12079 chars [S80] (stored copy)
+2026-09-28T19:14:06.694807+00:00 [usage] tokens in=7109 out=117 total=7226 phase=gap:G2F4:s3 cached=5696 cache_write=0 reasoning=0
+2026-09-28T19:14:06.695542+00:00 [tool] web_fetch https://magnapetra.com/helium-3-and-quantum-computing-necessity-supply-and-scaling/
+2026-09-28T19:14:06.695657+00:00 [tool] web_fetch https://postquantum.com/china-quantum-ambition/china-supply-chain-self-sufficiency/
+2026-09-28T19:14:06.704520+00:00 [result] web_fetch → 2586/12079 chars [S80] (stored copy)
+2026-09-28T19:14:06.710002+00:00 [result] web_fetch → 2581/12094 chars [S217] (stored copy)
+2026-09-28T19:14:06.826382+00:00 [usage] tokens in=6680 out=196 total=6876 phase=gap:G2F1:s2 cached=4416 cache_write=0 reasoning=62
+2026-09-28T19:14:06.827755+00:00 [tool] web_fetch https://www.ibm.com/quantum/blog/large-scale-ftqc
+2026-09-28T19:14:06.829268+00:00 [tool] web_fetch https://blog.google/innovation-and-ai/technology/research/quantum-hardware-verifiable-advantage/
+2026-09-28T19:14:06.855488+00:00 [result] web_fetch → 2582/10409 chars [S165] (stored copy)
+2026-09-28T19:14:06.857518+00:00 [result] web_fetch → 2595/12092 chars [S44] (stored copy)
+2026-09-28T19:14:07.138792+00:00 [usage] tokens in=6046 out=160 total=6206 phase=gap:G2F2:s2 cached=4544 cache_write=0 reasoning=73
+2026-09-28T19:14:07.139179+00:00 [tool] web_fetch https://link.aps.org/doi/10.1103/PhysRevLett.134.090601
+2026-09-28T19:14:07.139705+00:00 [tool] web_search Origin Quantum logical qubit quantum error correction demonstration China 2025 2026
+2026-09-28T19:14:07.156811+00:00 [result] web_fetch → 2106/12128 chars [S121] (stored copy)
+2026-09-28T19:14:08.474398+00:00 [usage] tokens in=8454 out=59 total=8513 phase=gap:G2F4:s4 cached=7104 cache_write=0 reasoning=0
+2026-09-28T19:14:08.474857+00:00 [tool] web_search helium-3 global supply liters per year 2024 2025 quantum computing dilution refrigerators demand
+2026-09-28T19:14:08.475264+00:00 [tool] web_search laser suppliers trapped ion quantum computing concentration Toptica M Squared China export controls
+2026-09-28T19:14:11.265352+00:00 [result] web_search → 5 results
+2026-09-28T19:14:11.468059+00:00 [result] web_search → 5 results
+2026-09-28T19:14:13.153507+00:00 [usage] tokens in=8148 out=164 total=8312 phase=gap:G2F1:s3 cached=6656 cache_write=0 reasoning=62
+2026-09-28T19:14:13.154072+00:00 [tool] web_fetch https://www.ibm.com/quantum/blog/large-scale-ftqc
+2026-09-28T19:14:13.154214+00:00 [tool] web_search Google Quantum AI useful commercial quantum computer "five years" 2030 Hartmut Neven statement
+2026-09-28T19:14:13.170422+00:00 [result] web_fetch → 2592/12092 chars [S44] (stored copy)
+2026-09-28T19:14:15.020202+00:00 [usage] tokens in=7500 out=180 total=7680 phase=gap:G2F2:s3 cached=6016 cache_write=0 reasoning=68
+2026-09-28T19:14:15.020442+00:00 [tool] web_fetch https://link.aps.org/doi/10.1103/PhysRevLett.134.090601
+2026-09-28T19:14:15.020634+00:00 [tool] web_fetch https://www.nature.com/articles/s41467-025-67768-4
+2026-09-28T19:14:15.028084+00:00 [result] web_fetch → 2106/12128 chars [S121] (stored copy)
+2026-09-28T19:14:15.996603+00:00 [result] web_search → 5 results
+2026-09-28T19:14:16.357354+00:00 [result] web_search → 5 results
+2026-09-28T19:14:18.036707+00:00 [usage] tokens in=5419 out=52 total=5471 phase=gap:G2F3:s2 cached=4416 cache_write=0 reasoning=0
+2026-09-28T19:14:18.036977+00:00 [tool] web_search BCG quantum computing economic impact $450 billion 2040 value
+2026-09-28T19:14:18.037069+00:00 [tool] web_search Goldman Sachs quantum computing "GDP" boost "0.1" percent productivity 2035
+2026-09-28T19:14:18.841746+00:00 [result] web_fetch → 2580/12084 chars [S344]
+2026-09-28T19:14:21.882299+00:00 [usage] tokens in=9283 out=113 total=9396 phase=gap:G2F2:s4 cached=7488 cache_write=0 reasoning=60
+2026-09-28T19:14:21.882532+00:00 [tool] web_fetch https://www.nature.com/articles/s41467-025-67768-4
+2026-09-28T19:14:21.904224+00:00 [result] web_fetch → 2593/12084 chars [S344] (stored copy)
+2026-09-28T19:14:23.627025+00:00 [usage] tokens in=10219 out=57 total=10276 phase=gap:G2F2:s5 cached=9280 cache_write=0 reasoning=30
+2026-09-28T19:14:23.627066+00:00 [tool] web_search "Demonstrating quantum error mitigation on logical qubits" Nature Communications authors affiliation
+2026-09-28T19:14:38.904696+00:00 [result] web_search → 5 results
+2026-09-28T19:14:38.904744+00:00 [result] web_search → 5 results
+2026-09-28T19:14:39.727660+00:00 [result] web_search → 5 results
+2026-09-28T19:14:40.016863+00:00 [result] web_search → 4 results
+2026-09-28T19:14:40.832152+00:00 [usage] tokens in=9502 out=54 total=9556 phase=gap:G2F1:s4 cached=8128 cache_write=0 reasoning=12
+2026-09-28T19:14:40.832278+00:00 [tool] web_search IBM Blue Jay 2033 large-scale fault-tolerant Starling 2029 Nighthawk Lovelace Kookaburra specifications qubits
+2026-09-28T19:14:41.794461+00:00 [result] web_search → 5 results
+2026-09-28T19:14:44.091703+00:00 [usage] tokens in=10680 out=54 total=10734 phase=gap:G2F2:s6 cached=10176 cache_write=0 reasoning=0
+2026-09-28T19:14:44.091922+00:00 [tool] web_fetch https://postquantum.com/quantum-computing-companies/origin-quantum/
+2026-09-28T19:14:46.904255+00:00 [result] web_fetch → 2598/12043 chars [S153]
+2026-09-28T19:14:47.767289+00:00 [usage] tokens in=9483 out=122 total=9605 phase=gap:G2F4:s5 cached=8448 cache_write=0 reasoning=0
+2026-09-28T19:14:47.767830+00:00 [tool] web_fetch https://postquantum.com/quantum-systems-integration/helium-3-quantum-computing/
+2026-09-28T19:14:47.767919+00:00 [tool] web_fetch https://postquantum.com/quantum-ecosystem/neutral-atom-quantum-ecosystem/
+2026-09-28T19:14:49.049909+00:00 [usage] tokens in=6495 out=187 total=6682 phase=gap:G2F3:s3 cached=5376 cache_write=0 reasoning=110
+2026-09-28T19:14:49.050371+00:00 [tool] web_search "Goldman Sachs" quantum computing GDP "1.3 trillion" estimate productivity
+2026-09-28T19:14:49.050606+00:00 [tool] web_fetch https://postquantum.com/industry-news/mckinsey-quantum-monitor-2026/
+2026-09-28T19:14:49.077726+00:00 [result] web_fetch → 2571/12049 chars [S55] (stored copy)
+2026-09-28T19:14:50.528089+00:00 [result] web_fetch → 2593/12051 chars [S346]
+2026-09-28T19:14:50.571473+00:00 [result] web_fetch → 2592/12099 chars [S360]
+2026-09-28T19:14:53.861254+00:00 [usage] tokens in=10956 out=143 total=11099 phase=gap:G2F4:s6 cached=9472 cache_write=0 reasoning=0
+2026-09-28T19:14:53.861902+00:00 [tool] web_fetch https://thequantuminsider.com/2026/07/20/interlune-produces-pure-helium-3-from-domestic-helium-using-novel-cryogenic-technology/
+2026-09-28T19:14:55.605929+00:00 [result] web_fetch → 2588/12091 chars [S333]
+2026-09-28T19:15:03.787861+00:00 [usage] tokens in=11416 out=1341 total=12757 phase=gap:G2F2:s7 cached=10624 cache_write=0 reasoning=0
+2026-09-28T19:15:03.794769+00:00 [ok] research:v3:gather G2F2 facts=10 verified=0 sources=12
+2026-09-28T19:15:11.551838+00:00 [result] web_search → 4 results
+2026-09-28T19:15:13.236890+00:00 [result] web_search → 5 results
+2026-09-28T19:15:16.595328+00:00 [usage] tokens in=10054 out=73 total=10127 phase=gap:G2F1:s5 cached=9472 cache_write=0 reasoning=0
+2026-09-28T19:15:16.595704+00:00 [tool] web_fetch https://www.ibm.com/roadmaps/quantum/
+2026-09-28T19:15:16.606432+00:00 [result] web_fetch → 2566/5488 chars [S65] (stored copy)
+2026-09-28T19:15:17.935738+00:00 [usage] tokens in=11854 out=1672 total=13526 phase=gap:G2F4:s7 cached=10944 cache_write=0 reasoning=0
+2026-09-28T19:15:17.949638+00:00 [ok] research:v3:gather G2F4 facts=13 verified=0 sources=9
+2026-09-28T19:15:23.476216+00:00 [usage] tokens in=7620 out=161 total=7781 phase=gap:G2F3:s4 cached=6464 cache_write=0 reasoning=74
+2026-09-28T19:15:23.476579+00:00 [tool] web_search Goldman Sachs quantum computing global GDP growth boost estimate 2047 productivity research
+2026-09-28T19:15:23.476669+00:00 [tool] web_fetch https://www.bcg.com/publications/2024/long-term-forecast-for-quantum-computing-still-looks-bright
+2026-09-28T19:15:23.476709+00:00 [result] web_search → SEARCH_BUDGET_EXHAUSTED
+2026-09-28T19:15:23.492412+00:00 [result] web_fetch → 2591/12059 chars [S245] (stored copy)
+2026-09-28T19:15:27.866450+00:00 [usage] tokens in=8444 out=65 total=8509 phase=gap:G2F3:s5 cached=7616 cache_write=0 reasoning=0
+2026-09-28T19:15:27.866631+00:00 [tool] web_fetch https://thequantuminsider.com/2026/05/15/why-timing-affects-the-cost-of-post-quantum-migration/
+2026-09-28T19:15:30.660085+00:00 [result] web_fetch → 2587/12050 chars [S237]
+2026-09-28T19:15:35.666813+00:00 [usage] tokens in=10861 out=1246 total=12107 phase=gap:G2F1:s6 cached=10048 cache_write=0 reasoning=0
+2026-09-28T19:15:35.713650+00:00 [ok] research:v3:gather G2F1 facts=11 verified=9 sources=6
+2026-09-28T19:15:53.301382+00:00 [usage] tokens in=9205 out=1575 total=10780 phase=gap:G2F3:s6 cached=8384 cache_write=0 reasoning=69
+2026-09-28T19:15:53.330436+00:00 [ok] research:v3:gather G2F3 facts=15 verified=7 sources=10
+2026-09-28T19:15:53.333014+00:00 [warn] v3: evidence digest dropped 63 lower-priority lines to fit its caps
+2026-09-28T19:15:53.390341+00:00 [stage] research:v3:synthesize start (8 groups)
+2026-09-28T19:15:55.524496+00:00 [usage] tokens in=30240 out=16 total=30256 phase=synthesize:synth:prime cached=0 cache_write=0 reasoning=14
+2026-09-28T19:18:14.010448+00:00 [usage] tokens in=30617 out=13628 total=44245 phase=synthesize:synth:g2 cached=30208 cache_write=0 reasoning=11349
+2026-09-28T19:18:14.012399+00:00 [ok] research:v3:synthesize G2 written=2 fallback=0
+2026-09-28T19:18:15.532353+00:00 [usage] tokens in=30617 out=13110 total=43727 phase=synthesize:synth:g3 cached=30208 cache_write=0 reasoning=11201
+2026-09-28T19:18:15.534038+00:00 [ok] research:v3:synthesize G3 written=2 fallback=0
+2026-09-28T19:18:24.308596+00:00 [usage] tokens in=30599 out=14919 total=45518 phase=synthesize:synth:g4 cached=30208 cache_write=0 reasoning=12664
+2026-09-28T19:18:24.310250+00:00 [ok] research:v3:synthesize G4 written=2 fallback=0
+2026-09-28T19:19:07.479230+00:00 [usage] tokens in=30645 out=18914 total=49559 phase=synthesize:synth:g1 cached=30208 cache_write=0 reasoning=16307
+2026-09-28T19:19:07.479832+00:00 [ok] research:v3:synthesize G1 written=2 fallback=0
+2026-09-28T19:20:10.045964+00:00 [usage] tokens in=30606 out=11673 total=42279 phase=synthesize:synth:g5 cached=30208 cache_write=0 reasoning=9658
+2026-09-28T19:20:10.046481+00:00 [ok] research:v3:synthesize G5 written=2 fallback=0
+2026-09-28T19:20:14.138915+00:00 [usage] tokens in=30609 out=11313 total=41922 phase=synthesize:synth:g6 cached=30208 cache_write=0 reasoning=9333
+2026-09-28T19:20:14.139538+00:00 [ok] research:v3:synthesize G6 written=2 fallback=0
+2026-09-28T19:21:18.934507+00:00 [usage] tokens in=30626 out=15741 total=46367 phase=synthesize:synth:g7 cached=30208 cache_write=0 reasoning=13474
+2026-09-28T19:21:18.936124+00:00 [ok] research:v3:synthesize G7 written=2 fallback=0
+2026-09-28T19:22:01.160322+00:00 [usage] tokens in=30676 out=15633 total=46309 phase=synthesize:synth:g8 cached=30208 cache_write=0 reasoning=12863
+2026-09-28T19:22:01.162676+00:00 [ok] research:v3:synthesize G8 written=2 fallback=0
+2026-09-28T19:22:30.919475+00:00 [usage] tokens in=5150 out=2571 total=7721 phase=synthesize:synth:exec cached=3136 cache_write=0 reasoning=1745
+2026-09-28T19:22:30.923959+00:00 [ok] research:v3:synthesize done
+2026-09-28T19:22:30.925947+00:00 [stage] research:v3:qa start
+2026-09-28T19:22:50.363418+00:00 [usage] tokens in=22460 out=786 total=23246 phase=qa:qa:critique cached=3136 cache_write=0 reasoning=8
+2026-09-28T19:22:52.422756+00:00 [usage] tokens in=30240 out=16 total=30256 phase=qa:qa:prime cached=30208 cache_write=0 reasoning=16
+2026-09-28T19:24:41.006228+00:00 [usage] tokens in=32119 out=10046 total=42165 phase=qa:qa:critique:1 cached=30208 cache_write=0 reasoning=8475
+2026-09-28T19:25:03.126519+00:00 [usage] tokens in=31742 out=11747 total=43489 phase=qa:qa:critique:9 cached=30208 cache_write=0 reasoning=10500
+2026-09-28T19:25:21.218547+00:00 [usage] tokens in=31680 out=16328 total=48008 phase=qa:qa:critique:7 cached=30208 cache_write=0 reasoning=15174
+2026-09-28T19:25:21.328979+00:00 [ok] research:v3:qa passed=True failures=0 repaired=3
+2026-09-28T19:25:21.329635+00:00 [stage] research:v3:finalize start
+2026-09-28T19:25:21.351152+00:00 [ok] wrote research_report.md (104465 chars)
+2026-09-28T19:25:21.351178+00:00 [ok] wrote sources.json (125 sources)
+2026-09-28T19:25:22.717600+00:00 [usage] tokens in=22835 out=3 total=22838 phase=finalize:extract:prime cached=3392 cache_write=0 reasoning=0
+2026-09-28T19:26:40.249859+00:00 [usage] tokens in=23129 out=9296 total=32425 phase=finalize:extract:facts cached=22784 cache_write=0 reasoning=11
+2026-09-28T19:27:37.163181+00:00 [usage] tokens in=23439 out=12691 total=36130 phase=finalize:extract:actors cached=22784 cache_write=0 reasoning=11
+2026-09-28T19:27:37.181944+00:00 [ok] wrote actors.json (20 actors)
+2026-09-28T19:27:37.182276+00:00 [ok] wrote timeline.json (39 events)
+2026-09-28T19:27:37.182858+00:00 [ok] wrote quantitative.json (57 rows)
+2026-09-28T19:27:37.183342+00:00 [ok] wrote contested.json (15 claims)
+2026-09-28T19:27:37.183512+00:00 [ok] research_quality=0.667 (grounding=0.52)
+2026-09-28T19:27:42.464236+00:00 [usage] tokens in=865 out=147 total=1012 phase=prediction-market-query-derivation cached=0 cache_write=0 reasoning=0
+2026-09-28T19:27:42.464520+00:00 [ok] prediction markets: LLM derived 16 market-title queries
+2026-09-28T19:27:50.703821+00:00 [usage] tokens in=960 out=142 total=1102 phase=prediction-market-relevance cached=0 cache_write=0 reasoning=0
+2026-09-28T19:27:50.703991+00:00 [ok] prediction markets: LLM relevance-scored 20/20 markets
+2026-09-28T19:27:50.704031+00:00 [warn] prediction markets: all candidates below relevance floor
+2026-09-28T19:27:50.704159+00:00 [warn] prediction markets: horizon-degradation retry (year_stripped) with 16 broadened queries
+2026-09-28T19:27:58.573357+00:00 [usage] tokens in=987 out=184 total=1171 phase=prediction-market-relevance cached=512 cache_write=0 reasoning=0
+2026-09-28T19:27:58.573477+00:00 [ok] prediction markets: LLM relevance-scored 20/20 markets
+2026-09-28T19:27:58.573526+00:00 [warn] prediction markets: degraded (year_stripped) candidates all below relevance floor
+2026-09-28T19:27:58.573549+00:00 [warn] prediction markets: horizon-degradation retry (event_level) with 3 broadened queries
+2026-09-28T19:28:03.548616+00:00 [usage] tokens in=1008 out=221 total=1229 phase=prediction-market-relevance cached=512 cache_write=0 reasoning=33
+2026-09-28T19:28:03.548732+00:00 [ok] prediction markets: LLM relevance-scored 20/20 markets
+2026-09-28T19:28:03.548781+00:00 [warn] prediction markets: degraded (event_level) candidates all below relevance floor
+2026-09-28T19:28:03.549405+00:00 [warn] wrote prediction_markets.json (no_relevant_markets marker; no report section appended)
+2026-09-28T19:28:03.550196+00:00 [stage] research charts: rendering via /Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python render.py (out=/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_6c4190b31f0b/handoff)
+2026-09-28T19:28:07.610459+00:00 [warn] research charts: publication contract failed; decision charts=['timeline'], missing=['quant_metrics'], shortfall=2
+2026-09-28T19:28:07.611442+00:00 [ok] research charts: embedded 1 chart(s) into research_report.md (Visual Annex)
+2026-09-28T19:28:07.611469+00:00 [ok] wrote charts.json (1 charts) + charts/ files
+2026-09-28T19:28:07.614221+00:00 [done] research complete (v3: 18 KIQs, 125 sources, 104649 chars)
