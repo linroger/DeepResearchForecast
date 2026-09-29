@@ -188,7 +188,9 @@ class Config:
     # RESEARCH-2: add pipeline_health.stages.research = {health: degraded, issues, score}
     # when research_quality is degraded, so the status API and the executive brief's
     # honesty note name the research degradation.  Degrade-only: it never fails the
-    # pipeline.  Default false: off = pipeline_health without a research stage, as before.
+    # pipeline, but the run's status is degraded, so a force resume (ORCH-3, which only
+    # regenerates the report) is accepted and cannot repair the research.
+    # Default false: off = pipeline_health without a research stage, as before.
     PIPELINE_HEALTH_RESEARCH_STAGE = os.environ.get(
         'PIPELINE_HEALTH_RESEARCH_STAGE', 'false').strip().lower() == 'true'
     # NEXTSTEPS P0-1：在撰写任何章节叙事**之前**先从信号包+forecast_inputs 推导「预测骨架」

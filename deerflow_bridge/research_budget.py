@@ -52,8 +52,10 @@ QUOTA_COOLDOWN_SECONDS = 3600
 # provider_health.last_error of a quota-opened circuit starts with this mark.
 # Until open_until passes, another lane's in-flight transport failure or
 # success (record_provider_transport_failure / record_provider_success) keeps
-# the circuit, its opened_at and its last_error; rows without the mark (every
-# row with RESEARCH_SOURCE_TAXONOMY off) are updated exactly as before.
+# the circuit, its opened_at and its last_error; once it passes,
+# provider_circuit_open gives one caller the half-open probe lease, as after a
+# transport-opened circuit.  Rows without the mark (every row with
+# RESEARCH_SOURCE_TAXONOMY off) are read and updated exactly as before.
 QUOTA_ERROR_MARK = "quota refusal: "
 _QUOTA_CIRCUIT_OPEN_SQL = (
     f"(provider_health.last_error LIKE '{QUOTA_ERROR_MARK}%' "
@@ -645,7 +647,7 @@ def provider_circuit_open(provider: str) -> bool:
         with closing(_connect()) as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT consecutive_transport_failures, open_until, probe_until "
+                "SELECT consecutive_transport_failures, open_until, probe_until, last_error "
                 "FROM provider_health WHERE provider=?",
                 (name,),
             ).fetchone()
@@ -653,8 +655,11 @@ def provider_circuit_open(provider: str) -> bool:
             failures = int(row[0] or 0) if row else 0
             open_until = float(row[1] or 0.0) if row else 0.0
             probe_until = float(row[2] or 0.0) if row else 0.0
+            # A quota-opened circuit (RESEARCH-2) records no transport failure
+            # but is half-open after its window all the same: one probe first.
+            quota_opened = bool(row) and str(row[3] or "").startswith(QUOTA_ERROR_MARK)
             is_open = open_until > now
-            if not is_open and failures > 0:
+            if not is_open and (failures > 0 or quota_opened):
                 if probe_until > now:
                     is_open = True
                 else:
@@ -757,7 +762,8 @@ def record_provider_quota_failure(provider: str, error: str) -> None:
     """Open ``provider``'s shared circuit for QUOTA_COOLDOWN_SECONDS after a
     credential/quota refusal, so every lane skips it (provider_circuit_open);
     its last_error carries QUOTA_ERROR_MARK, so no in-flight transport
-    failure or success closes it early.
+    failure or success closes it early, and once the window passes exactly
+    one lane probes the provider (the half-open lease) before the others.
 
     Counts ``provider_<name>_not_configured`` for the run and the lane and
     leaves the transport-failure counters alone.  Never raises: a ledger

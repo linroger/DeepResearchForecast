@@ -3838,6 +3838,10 @@ class ResearchTools:
             text, cacheable = _SEARCH_NOT_CONFIGURED_TEXT.format(provider=refused[0], reason=refused[1]), False
         elif self.source_taxonomy and outcome == "search_empty_unconfirmed":
             text, cacheable = MSG_SEARCH_EMPTY_UNCONFIRMED, False
+        elif self.source_taxonomy and outcome == "search_budget":
+            # A provider's per-run call ceiling never recovers in this process:
+            # a budget, so the model is told to stop (not "temporarily unavailable").
+            text, cacheable = MSG_SEARCH_BUDGET, False
         self._outcome(outcome)
         if cacheable:
             with self._lock:

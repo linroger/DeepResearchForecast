@@ -149,6 +149,23 @@ def test_firecrawl_search_classes(monkeypatch, firecrawl_search_env):
     assert st.provider_events() == {"ceiling:firecrawl": 1}
 
 
+def test_firecrawl_search_ceiling_tells_the_model_to_stop(tmp_path):
+    """The per-run search ceiling never recovers in the process: with the flag
+    on the model reads SEARCH_BUDGET_EXHAUSTED (a budget, not an outage);
+    flag off keeps the legacy SEARCH_TEMPORARILY_UNAVAILABLE text."""
+    ceiling = json.dumps({"error": "firecrawl search per-run call ceiling reached (1)", "query": "q",
+                          "failure_class": "budget", "provider": "firecrawl", "reason": "per_run_call_ceiling"})
+    backend = _Recorder(ceiling)
+    tools = _tools(tmp_path / "on", search_fn=backend)
+    assert [tools.search("a query", agent_id="K1") for _ in range(2)] == [rg.MSG_SEARCH_BUDGET] * 2
+    assert len(backend.calls) == 2 and tools._search_cache == {}
+    assert tools.outcome_counts()["search_budget"] == 2
+    legacy = json.dumps({"error": "firecrawl search per-run call ceiling reached (1)", "query": "q"})
+    for payload in (ceiling, legacy):
+        tools = _tools(tmp_path / f"off-{len(payload)}", search_fn=_Recorder(payload), taxonomy=False)
+        assert tools.search("a query", agent_id="K1") == rg.MSG_SEARCH_UNAVAILABLE
+
+
 def test_firecrawl_search_flag_off_keeps_legacy_bytes(monkeypatch, firecrawl_search_env):
     _taxonomy(monkeypatch, False)
     _fake_httpx(monkeypatch, status=402)
@@ -296,6 +313,19 @@ def test_fetch_class_table():
     assert cf._FIRECRAWL_FAILED_PREFIX == rg._FIRECRAWL_FAILED_PREFIX
 
 
+# Real Jina reader 4xx bodies: the target page failed (a navigation timeout of
+# the target site, a blocked domain), although the body names a timeout / a
+# reset connection past the 48-char reason slug the tool layer sees.
+_JINA_422_NAVIGATION_TIMEOUT = (
+    'Error: Jina API returned status 422: {"data":null,"code":422,"name":"AssertionFailureError",'
+    '"status":42206,"message":"Failed to goto https://www.agency.org/report: TimeoutError: Navigation timeout '
+    'of 30000 ms exceeded","readableMessage":"AssertionFailureError: Failed to goto '
+    'https://www.agency.org/report: TimeoutError: Navigation timeout of 30000 ms exceeded"}')
+_JINA_451_CONNECTION_RESET = (
+    'Error: Jina API returned status 451: {"data":null,"code":451,"name":"SecurityCompromiseError",'
+    '"status":45102,"message":"Domain www.agency.org blocked until later due to previous abuse found on '
+    'www.agency.org: connection reset"}')
+
 # Fetch texts as the providers / research_budget produce them.
 _FETCH_TEXTS = (
     "Error: Firecrawl failed: payment required / quota exhausted",
@@ -310,6 +340,8 @@ _FETCH_TEXTS = (
     "Error: Request to Jina API failed: ConnectError: [Errno 61] Connection refused",
     "Error: Jina API returned status 503: upstream",
     "Error: Jina API returned status 422: blocked",
+    _JINA_422_NAVIGATION_TIMEOUT,
+    _JINA_451_CONNECTION_RESET,
     'Error: Jina API returned status 402: {"name":"InsufficientBalanceError"}',
     'Error: Jina API returned status 401: {"name":"AuthenticationRequiredError"}',
     "Error: Exa fallback failed: ReadError",
@@ -340,6 +372,32 @@ def test_cached_fetch_classes_agree_with_the_gateway():
         assert cf._is_outage_result(text) is (expected == "unavailable"), (text, reason)
     # A short page that merely mentions a timeout is the page's failure, not a transport one.
     assert cf._fetch_failure_class("The request timed out, please reload.") == "content"
+    # So is a provider's 4xx body naming a timeout or a reset connection past the reason slug.
+    for text in (_JINA_422_NAVIGATION_TIMEOUT, _JINA_451_CONNECTION_RESET):
+        assert cf._fetch_failure_class(text) == "content" and not cf._is_outage_result(text), text
+
+
+def test_provider_error_bodies_class_like_the_gateway():
+    """Whatever a provider's error text says after its status or exception
+    (a timeout, a reset or refused connection), cached_fetch's class and its
+    negative-cache decision are the tool layer's class of the same text."""
+    bodies = ("", "blocked", "upstream", "ReadTimeout: timed out", "ConnectError: [Errno 61] Connection refused",
+              '{"data":null,"code":422,"name":"AssertionFailureError","message":"Failed to goto https://x.org: '
+              'TimeoutError: Navigation timeout of 30000 ms exceeded"}',
+              '{"data":null,"name":"SecurityCompromiseError","message":"Domain x.org blocked: connection reset"}')
+    texts = [f"Error: Jina API returned status {status}: {body}"
+             for status in (400, 401, 402, 403, 404, 410, 422, 429, 451, 500, 502, 503, 504) for body in bodies]
+    texts += [template.format(body=body) for body in bodies for template in (
+        "Error: Request to Jina API failed: {body}", "Error: Jina primary failed: {body}",
+        "Error: Exa fallback failed: {body}", "Error: direct fallback failed: {body}",
+        "Error: direct fallback PDF extraction failed: {body}", "Error: fetch returned {body}")]
+    texts += [f"Error: {provider} HTTP {status}" for provider in ("Firecrawl failed:", "direct fallback")
+              for status in (401, 402, 403, 404, 408, 410, 422, 429, 500, 503)]
+    for text in texts:
+        reason = rg.ResearchTools._failure_reason(text, rg._json_object(text))
+        expected = "unavailable" if rg._fetch_reason_is_infra(reason) else "content"
+        assert cf._fetch_failure_class(text) == expected, (text, reason)
+        assert cf._is_outage_result(text) is (expected == "unavailable"), (text, reason)
 
 
 def test_fetch_call_deadline_is_infra_and_not_retried(tmp_path):
@@ -840,6 +898,32 @@ def test_quota_circuit_survives_in_flight_transport_failure_and_success(monkeypa
     assert rb.provider_circuit_open("jina") is False
 
 
+def test_quota_circuit_is_half_open_after_its_window(monkeypatch, budget_db):
+    """Once the quota window passes, exactly one lane probes the provider
+    (the half-open lease) while the others keep skipping it, as after a
+    transport-opened circuit; the probe's outcome closes or reopens it."""
+    rb.record_provider_quota_failure("firecrawl", "Error: Firecrawl failed: payment required / quota exhausted")
+    assert rb.provider_circuit_open("firecrawl") is True
+
+    def expire(column):
+        with sqlite3.connect(budget_db) as conn:
+            conn.execute(f"UPDATE provider_health SET {column}=? WHERE provider='firecrawl'", (1.0,))
+
+    expire("open_until")
+    assert [rb.provider_circuit_open("firecrawl") for _ in range(3)] == [False, True, True]
+    expire("probe_until")                               # the probe never reported: its lease lapses
+    assert [rb.provider_circuit_open("firecrawl") for _ in range(2)] == [False, True]
+    rb.record_provider_quota_failure("firecrawl", "Error: Firecrawl failed: HTTP 402")  # the probe was refused
+    assert rb.provider_circuit_open("firecrawl") is True
+    expire("open_until")
+    assert rb.provider_circuit_open("firecrawl") is False
+    rb.record_provider_success("firecrawl")             # the probe was served: closed for everyone
+    assert [rb.provider_circuit_open("firecrawl") for _ in range(3)] == [False, False, False]
+    # A healthy row without the quota mark grants no lease (every caller proceeds), as before.
+    rb.record_provider_success("jina")
+    assert [rb.provider_circuit_open("jina") for _ in range(2)] == [False, False]
+
+
 def test_record_provider_quota_failure_never_raises(monkeypatch, tmp_path):
     monkeypatch.delenv("RESEARCH_BUDGET_DB", raising=False)
     assert rb.record_provider_quota_failure("firecrawl", "HTTP 402") is None
@@ -877,9 +961,46 @@ def test_outages_are_not_negative_cached(monkeypatch, budget_db):
     # mentions a timeout included: the tool layer calls each one a content failure.
     for i, gone in enumerate(("Error: direct fallback HTTP 404", "Error: Jina API returned status 422: blocked",
                               "Error: fetch returned empty_extraction", "Error: direct fallback HTTP 401",
-                              "The request timed out, please reload.")):
+                              "The request timed out, please reload.", _JINA_422_NAVIGATION_TIMEOUT,
+                              _JINA_451_CONNECTION_RESET)):
         _cached_fetch(f"https://www.agency.org/gone-{i}", gone)
-    assert _negative_keys(budget_db) == 5
+    assert _negative_keys(budget_db) == 7
+
+
+def test_provider_body_naming_a_timeout_is_a_page_failure_in_every_layer(monkeypatch, budget_db, tmp_path):
+    """A Jina 422 "Navigation timeout" / 451 "connection reset" body is the
+    target page's failure in the tool layer (FETCH_FAILED), so cached_fetch
+    records a content provider event (no broken-primary degradation event when
+    Exa serves the pages) and negative-caches it when it is the final text."""
+    _taxonomy(monkeypatch, True)
+    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+    monkeypatch.setenv("EXA_API_KEY", "exa-test")
+    # The (flag-independent) Jina transport circuit is not what this test is about.
+    monkeypatch.setenv("RESEARCH_PROVIDER_FAILURE_THRESHOLD", "100")
+    bodies = [_JINA_422_NAVIGATION_TIMEOUT] * 3 + [_JINA_451_CONNECTION_RESET] * 2
+
+    async def jina(url):
+        return bodies[int(url.rsplit("-", 1)[1])]
+
+    async def exa(url):
+        return v3.page_text(url)
+
+    monkeypatch.setattr(cf, "_jina_delegate_fetch", jina)
+    monkeypatch.setattr(cf, "_exa_fetch", exa)
+    for i in range(len(bodies)):
+        url = f"https://www.agency.org/page-{i}"
+        assert asyncio.run(cf.cached_fetch(url, cf._resilient_fetch)) == v3.page_text(url)
+    events = cf.provider_events()
+    assert events["jina"] == {"content": {"count": 5, "reason": "jina_api_returned_status_451_data_null_code_451"}}
+    assert events["exa"] == {"ok": {"count": 5, "reason": ""}}
+    assert lr._source_health_events({"searches": 10, "search_refused": None}, {}, events) == []
+
+    for i, body in enumerate((_JINA_422_NAVIGATION_TIMEOUT, _JINA_451_CONNECTION_RESET)):
+        assert _cached_fetch(f"https://www.agency.org/final-{i}", body) == body
+        reason = rg.ResearchTools._failure_reason(body, None)
+        tools = _tools(tmp_path / f"tools-{i}", fetch_fn=_Recorder(body))
+        assert tools.fetch("https://www.agency.org/report", agent_id="K1").startswith(f"FETCH_FAILED({reason}): ")
+    assert _negative_keys(budget_db) == 2
 
 
 def test_outages_are_negative_cached_with_the_flag_off(monkeypatch, budget_db):

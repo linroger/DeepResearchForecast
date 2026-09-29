@@ -174,6 +174,8 @@ _FETCH_PROVIDER: contextvars.ContextVar[str] = contextvars.ContextVar(
 # neither module imports the other; a test holds them equal): a failure-reason
 # slug matching either infra table, or naming a Firecrawl exception, is the
 # fetch service's failure, not the page's (a content prefix wins over both).
+# The provider events and the negative-cache decision use this table alone,
+# so both always carry the class the tool layer gives the same text.
 _FIRECRAWL_FAILED_PREFIX = "firecrawl_failed_"
 _CONTENT_FETCH_REASON_PREFIXES = ("research_negative_cache_suppressed",)
 _INFRA_FETCH_REASON_PREFIXES = (
@@ -247,9 +249,11 @@ def _source_taxonomy_on() -> bool:
 
 def _is_outage_result(value: Any) -> bool:
     """The service failed, not the URL: the tool layer's infrastructure class
-    (_fetch_failure_class), which covers a transport "Error:", a credential/quota
-    refusal, an unconfigured provider and an empty provider chain.  A page body
-    that merely mentions a timeout or an HTTP 401 is the page's failure."""
+    (_fetch_failure_class), which covers every provider's transport-failure
+    "Error:" (each starts with an infra prefix or names a timeout in its slug),
+    a credential/quota refusal, an unconfigured provider and an empty provider
+    chain.  A page body that merely mentions a timeout or an HTTP 401 is the
+    page's failure: it is negative-cached, as the tool layer remembers it."""
     return _fetch_failure_class(value) == "unavailable"
 
 
@@ -289,13 +293,14 @@ def _failure_slug(value: Any) -> str:
 
 def _fetch_failure_class(value: Any) -> str:
     """``unavailable`` (infrastructure) or ``content`` for one failed fetch
-    text, by research_gateway's table (a transport "Error:" is infrastructure too)."""
+    text: research_gateway._fetch_reason_is_infra applied to the same reason
+    slug, and nothing else.  The slug (at most 48 chars) is all the tool layer
+    sees, so a provider body that mentions a timeout further on (a Jina 422
+    "Navigation timeout" of the target site) is the page's failure here too."""
     slug = _failure_slug(value)
-    stripped = str(value or "").strip()
     if slug.startswith(_CONTENT_FETCH_REASON_PREFIXES):
         return "content"
-    if ((stripped.startswith("Error:") and _is_transport_failure(stripped))
-            or _TRANSIENT_FETCH_REASON_RE.search(slug)
+    if (_TRANSIENT_FETCH_REASON_RE.search(slug)
             or slug.startswith(_INFRA_FETCH_REASON_PREFIXES)
             or (slug.startswith(_FIRECRAWL_FAILED_PREFIX)
                 and not slug.startswith(_FIRECRAWL_FAILED_PREFIX + "http_"))):
