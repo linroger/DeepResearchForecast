@@ -9880,6 +9880,64 @@ class PipelineOrchestrator:
                            json.dumps(health["stages"], ensure_ascii=False)[:400])
 
     @staticmethod
+    def _reset_stage_scorecard_sidecar(state: PipelineState) -> None:
+        """EVAL-15: attempt 起点移除上一 attempt 的记分卡侧车与 options 摘要。
+
+        侧车/摘要只描述「到达 finally 块的最近一次 attempt」。本 attempt 若崩溃后被
+        reconcile_orphans 收尾（不走 finally），旧结果不得冒充本次，也不得让 CLI 回填把它
+        当作管线亲写的证据而跳过。旋钮关闭 = 不动（逐字节不变）。位于 _run 的 try 之前，
+        故自身兜住一切异常、绝不抛出。
+        """
+        if not getattr(Config, "STAGE_SCORECARD_ENABLED", True):
+            return
+        try:
+            from .stage_scorecard import sidecar_path
+            _stale = sidecar_path(state.pipeline_id)
+            if os.path.exists(_stale):
+                os.remove(_stale)
+            if state.options.pop("stage_scorecard_summary", None) is not None:
+                PipelineManager.save(state)
+        except Exception as _rse:  # noqa: BLE001 — 记分卡为观测增益，失败不影响管线
+            logger.warning("[%s] 清理上一 attempt 的记分卡失败（忽略）: %s",
+                           state.pipeline_id, _rse)
+
+    @staticmethod
+    def _write_stage_scorecard_sidecar(state: PipelineState) -> None:
+        """EVAL-15: 确定性分阶段记分卡侧车 <pipeline_dir>/stage_scorecard.json。
+
+        纯投影、绝不是门：不改 status/pipeline_health，不写报告目录；由 _run 的 finally 块在
+        每个终态调用（位于任何 try 之外），故自身兜住一切异常、绝不抛出。成功时把
+        {stage: passed} 折入 state.options['stage_scorecard_summary']；失败时移除上一 attempt
+        的摘要与侧车文件（宁缺毋错——旧结果不得冒充本次结果）。旋钮关闭 = 不写文件、不动
+        options（逐字节不变）。
+        """
+        if not getattr(Config, "STAGE_SCORECARD_ENABLED", True):
+            return
+        summary = None
+        try:
+            from .stage_scorecard import summarize_checks, write_stage_scorecard
+            summary = summarize_checks(
+                write_stage_scorecard(state.pipeline_id, state=state.to_dict()))
+        except Exception as _sce:  # noqa: BLE001 — 记分卡为观测增益，失败不影响管线终态
+            logger.warning("[%s] 分阶段记分卡写入失败（忽略）: %s", state.pipeline_id, _sce)
+            try:
+                from .stage_scorecard import sidecar_path
+                _stale = sidecar_path(state.pipeline_id)
+                if os.path.exists(_stale):
+                    os.remove(_stale)
+            except Exception as _rme:  # noqa: BLE001
+                logger.warning("[%s] 移除上一 attempt 的记分卡失败（忽略）: %s",
+                               state.pipeline_id, _rme)
+        try:
+            if summary is not None:
+                state.options["stage_scorecard_summary"] = summary
+            else:
+                state.options.pop("stage_scorecard_summary", None)
+            PipelineManager.save(state)
+        except Exception as _sse:  # noqa: BLE001
+            logger.warning("[%s] 保存记分卡摘要失败（忽略）: %s", state.pipeline_id, _sse)
+
+    @staticmethod
     def _stage_artifact_specs(state: PipelineState, stage: str) -> list[tuple[str, str]]:
         """T6.3/I-4-3/I-4-6: 单一真源——某阶段「可深链产物」的 (name, 绝对路径) 候选列表。
 
@@ -12297,6 +12355,8 @@ class PipelineOrchestrator:
         # I-8-1: 管线起飞即写首版 run.json（解析后的研究深度/模型/图谱/环境指纹），
         # 后续每阶段进入时把热切换出的报告/模拟 provider 钉入。
         self._write_run_manifest(state)
+        # EVAL-15: 清掉上一 attempt 的记分卡侧车与摘要（本 attempt 的 finally 块会重写）。
+        self._reset_stage_scorecard_sidecar(state)
         # I-4-1: 钉入本进程的 owner 指纹 + 启动一个独立于阶段进度的壁钟心跳看护线程。
         # 心跳让 reconcile_orphans 把「死管线」与「慢但活（深研究/persona 静默数分钟）」区分开。
         hb_stop = self._start_heartbeat(state)
@@ -13896,30 +13956,13 @@ class PipelineOrchestrator:
                                         _rpath, _existing.rstrip() + "\n\n" + _appendix.rstrip() + "\n")
                 except Exception as _ste:  # noqa: BLE001 — 阶段遥测为观测增益，失败不影响管线终态
                     logger.debug(f"[{state.pipeline_id}] 阶段级遥测处理失败（忽略）: {_ste}")
-                # EVAL-15: 确定性分阶段记分卡侧车 <pipeline_dir>/stage_scorecard.json（纯投影、
-                # 绝不是门：不改 status/pipeline_health，不写报告目录）。独立 try/except——
-                # 任何失败只记日志，不得跳过下方的 LLMMeter.reset。旋钮关闭 = 无文件、无 options 键。
-                if getattr(Config, "STAGE_SCORECARD_ENABLED", True):
-                    _scorecard_summary = None
-                    try:
-                        from .stage_scorecard import summarize_checks, write_stage_scorecard
-                        _scorecard_summary = summarize_checks(
-                            write_stage_scorecard(state.pipeline_id, state=state.to_dict()))
-                    except Exception as _sce:  # noqa: BLE001 — 记分卡为观测增益，失败不影响管线终态
-                        logger.warning("[%s] 分阶段记分卡写入失败（忽略）: %s",
-                                       state.pipeline_id, _sce)
-                    # 上一 attempt 的摘要不得冒充本次结果：本次失败时移除（宁缺毋错）。
-                    if _scorecard_summary is not None:
-                        state.options["stage_scorecard_summary"] = _scorecard_summary
-                    else:
-                        state.options.pop("stage_scorecard_summary", None)
-                    try:
-                        PipelineManager.save(state)
-                    except Exception as _sse:  # noqa: BLE001
-                        logger.debug(f"[{state.pipeline_id}] 保存记分卡摘要失败（忽略）: {_sse}")
                 LLMMeter.reset(state.pipeline_id)
             except Exception as _te:
                 logger.debug(f"[{state.pipeline_id}] 写入 run_telemetry 失败（忽略）: {_te}")
+            # EVAL-15: 分阶段记分卡侧车。放在遥测 try 之外（与之平级）——遥测块任何一步抛错都
+            # 不得让终态管线缺记分卡、或让上一 attempt 的摘要冒充本次结果。记分卡不读 LLMMeter，
+            # 位于 reset 之后无影响；方法自身兜住一切异常。
+            self._write_stage_scorecard_sidecar(state)
             # DEFECT-1：本 attempt 的中断熔断器随线程终结注销（下一 attempt 重新注册，
             # 计数不跨 attempt 遗留；注册表清空后探针对全进程完全透传）。
             _clear_outage_breaker(state.pipeline_id)

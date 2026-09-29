@@ -46,6 +46,9 @@ sidecar the values are the run's own process configuration
 current configuration (``"backfill"``).  A relaxed publish-gate coverage
 threshold therefore shows as ``relaxed: true`` next to a failed
 ``citation_coverage`` contract instead of hiding behind a passed publish gate.
+Because the pipeline-authored sidecar is the only record of the gates a run
+was published under, the backfill CLI never replaces it unless forced, and a
+forced rewrite keeps it under ``identity.previous``.
 """
 
 from __future__ import annotations
@@ -88,12 +91,19 @@ STAGE_SCORED = "scored"
 STAGE_NOT_REACHED = "not_reached"
 STAGE_NOT_APPLICABLE = "not_applicable"
 
-# prediction_markets.json status.empty_reason / status.state → market_state.
+# prediction_markets.json status.state / status.empty_reason → market_state.  An
+# infrastructure label in either field wins; otherwise the specific status.state
+# is mapped before the generic empty_reason (merge_market_snapshots stores
+# state 'inflight_timeout' beside empty_reason 'no_equivalent_market').
 _MARKET_INFRA_REASONS = frozenset({
     "transport_failure", "partial_transport_failure", "inflight_timeout"})
-_MARKET_NONE_RELEVANT_REASONS = frozenset({
-    "all_candidates_irrelevant", "no_equivalent_market", "verified_empty"})
-_MARKET_NOT_ATTEMPTED_REASONS = frozenset({"no_derivable_queries", "no_queries"})
+_MARKET_LABEL_STATES = {
+    "all_candidates_irrelevant": "none_relevant",
+    "no_equivalent_market": "none_relevant",
+    "verified_empty": "none_relevant",
+    "no_derivable_queries": "not_attempted",
+    "no_queries": "not_attempted",
+}
 
 # Honesty-critical boolean gates recorded in runtime_gates (the suite expects each on).
 _HONESTY_BOOLEAN_GATES = ("REPORT_PUBLISH_GATE", "REPORT_FINAL_READ_ONLY_AUDIT",
@@ -210,15 +220,24 @@ def _research_metrics(paths: Mapping[str, Any], digests: dict) -> dict:
     metrics: dict[str, dict] = {}
 
     src = "handoff/meta.json:kiqs"
+    fsrc = "handoff/meta.json:kiqs.fallback/completed"
     err, kiqs = _field(meta, meta_status, "kiqs", src)
     if err is None and not isinstance(kiqs, dict):
         err = _unavailable(UNREADABLE, src, "kiqs is not an object")
     if err is not None:
         metrics["kiq_completion"] = err
+        metrics["kiq_fallback_rate"] = _unavailable(err["status"], fsrc, err.get("detail"))
     else:
         planned, followups = _as_count(kiqs.get("planned")), _as_count(kiqs.get("followups"))
         total = planned + followups if planned is not None and followups is not None else None
+        # ``completed`` counts every KIQ with a record, including investigations whose
+        # agent failed and fell back to deterministic notes; kiq_fallback_rate gates those.
         metrics["kiq_completion"] = _rate(kiqs.get("completed"), total, src)
+        if "fallback" in kiqs:
+            metrics["kiq_fallback_rate"] = _rate(kiqs.get("fallback"), kiqs.get("completed"), fsrc)
+        else:
+            metrics["kiq_fallback_rate"] = _unavailable(
+                NOT_INSTRUMENTED, fsrc, "kiqs has no 'fallback' field")
 
     metrics.update(_kiq_fact_metrics(paths, meta, err, digests))
 
@@ -324,7 +343,11 @@ def _actor_count(paths: Mapping[str, Any], meta_status: str, meta: Optional[dict
 
 
 def _market_state(paths: Mapping[str, Any], digests: dict) -> dict:
-    """found | none_relevant | infra_failure | not_attempted from prediction_markets.json."""
+    """found | none_relevant | infra_failure | not_attempted from prediction_markets.json.
+
+    Reads both ``status.state`` and ``status.empty_reason`` (an infrastructure
+    label in either wins) and records both in ``detail``.
+    """
     src = "handoff/prediction_markets.json:status"
     status, payload = _read_json_object(paths.get("prediction_markets"))
     if status == ARTIFACT_MISSING:
@@ -335,22 +358,29 @@ def _market_state(paths: Mapping[str, Any], digests: dict) -> dict:
     markets = payload.get("markets")
     pm_status = payload.get("status") if isinstance(payload.get("status"), dict) else {}
     selected = _as_count(pm_status.get("selected_count")) or 0
-    reason = str(pm_status.get("empty_reason") or pm_status.get("state") or "").strip()
+    labels = {key: str(pm_status.get(key) or "").strip() for key in ("state", "empty_reason")}
+    failures = _as_count(pm_status.get("transport_failure_count")) or 0
+    candidates = _as_count(pm_status.get("candidate_count")) or 0
     if (isinstance(markets, list) and markets) or selected > 0:
         state = "found"
     elif pm_status.get("attempted") is False:
         state = "not_attempted"
-    elif reason in _MARKET_INFRA_REASONS:
+    elif _MARKET_INFRA_REASONS & set(labels.values()):
         state = "infra_failure"
-    elif reason in _MARKET_NONE_RELEVANT_REASONS:
-        state = "none_relevant"
-    elif reason in _MARKET_NOT_ATTEMPTED_REASONS:
-        state = "not_attempted"
-    elif payload.get("no_relevant_markets") is True:
-        state = "none_relevant"
+    elif failures and not candidates and "all_candidates_irrelevant" not in labels.values():
+        # The owners' ladder (merge_market_snapshots, market_tools): no candidate
+        # plus a failed query is a (partial) transport failure, even where a
+        # single-snapshot producer stored the generic 'no_equivalent_market'.
+        state = "infra_failure"
     else:
-        state = "not_attempted"
-    return _metric(state, source=src, detail=reason or None)
+        state = (_MARKET_LABEL_STATES.get(labels["state"])
+                 or _MARKET_LABEL_STATES.get(labels["empty_reason"])
+                 or ("none_relevant" if payload.get("no_relevant_markets") is True
+                     else "not_attempted"))
+    detail: dict[str, Any] = {key: label for key, label in labels.items() if label}
+    if failures:
+        detail["transport_failure_count"] = failures
+    return _metric(state, source=src, detail=detail or None)
 
 
 # -------------------------------------------------------------------- ontology
@@ -502,14 +532,7 @@ def _report_metrics(paths: Mapping[str, Any], thresholds: Mapping[str, float],
     metrics.update(_scenario_metrics(forecast, fc_status, thresholds))
     metrics["citation_coverage"] = _citation_coverage(audit, fa_status, thresholds)
 
-    src = "report/final_audit.json:semantic_citations"
-    err, semantic = _field(audit, fa_status, "semantic_citations", src)
-    if err is None and not isinstance(semantic, dict):
-        err = _unavailable(UNREADABLE, src, "semantic_citations is not an object")
-    if err is None:
-        err = _stored_rate(semantic.get("unverifiable_ratio"), semantic.get("unverifiable"),
-                           semantic.get("checked"), f"{src}.unverifiable_ratio")
-    metrics["semantic_citation_unverifiable_ratio"] = err
+    metrics["semantic_citation_unverifiable_ratio"] = _semantic_unverifiable_ratio(audit, fa_status)
 
     src = "report/forecast.json:market_comparison.anchored_count"
     err, comparison = _field(forecast, fc_status, "market_comparison", src)
@@ -567,6 +590,24 @@ def _citation_coverage(audit: Optional[dict], status: str, thresholds: Mapping[s
                         f"{src}.{basis}", threshold=thresholds["citation_coverage_min"])
 
 
+def _semantic_unverifiable_ratio(audit: Optional[dict], status: str) -> dict:
+    src = "report/final_audit.json:semantic_citations"
+    err, semantic = _field(audit, status, "semantic_citations", src)
+    if err is None and not isinstance(semantic, dict):
+        err = _unavailable(UNREADABLE, src, "semantic_citations is not an object")
+    if err is not None:
+        return err
+    if "unverifiable_ratio" in semantic:
+        return _stored_rate(semantic.get("unverifiable_ratio"), semantic.get("unverifiable"),
+                            semantic.get("checked"), f"{src}.unverifiable_ratio")
+    if "unverifiable" in semantic and "checked" in semantic:
+        # Older audits stored only the counts: schema drift, not a corrupt artifact.
+        return _rate(semantic.get("unverifiable"), semantic.get("checked"),
+                     f"{src}.unverifiable/checked")
+    return _unavailable(NOT_INSTRUMENTED, f"{src}.unverifiable_ratio",
+                        "audit records neither unverifiable_ratio nor its counts")
+
+
 # ---------------------------------------------------------------------- checks
 Predicate = Callable[[dict, Mapping[str, float]], Optional[bool]]
 
@@ -602,6 +643,7 @@ _CHECKS: dict[str, tuple[tuple[str, Predicate], ...]] = {
     "research": (
         ("stage_status", _stage_completed),
         ("kiq_completion", lambda r, _t: bool(r["den"]) and r["num"] == r["den"]),
+        ("kiq_fallback_rate", lambda r, _t: r["num"] == 0),
         ("research_qa_passed", _is_true),
         ("plan_fallback", _is_zero),
         ("synthesis_fallback_sections", _is_zero),
@@ -861,7 +903,11 @@ def resolve_inputs(pipeline_id: str, state: Optional[Mapping[str, Any]] = None) 
         raise ValueError(f"pipeline not found: {pipeline_id}")
     if PipelineManager.is_incompatible(data) is not None:
         raise ValueError(f"pipeline {pipeline_id} has a newer state schema")
-    pipeline_state = PipelineState.from_dict({**data, "pipeline_id": pipeline_id})
+    try:
+        pipeline_state = PipelineState.from_dict({**data, "pipeline_id": pipeline_id})
+    except Exception as exc:  # noqa: BLE001 — a malformed state file is unreadable, not a crash
+        raise ValueError(f"unreadable pipeline state for {pipeline_id}: "
+                         f"{type(exc).__name__}: {exc}") from exc
     handoff = pipeline_state.handoff_dir or PipelineManager.handoff_dir(pipeline_id)
     specs: dict[str, str] = {}
     for stage in STAGES:
