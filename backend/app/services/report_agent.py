@@ -2966,10 +2966,18 @@ class ReportAgent:
             self._forecast_spine = spine
             self._forecast_spine_block = _fe.render_forecast_spine_block(spine)
             # 早落 forecast.json（骨架版）；成稿后由 _finalize_structured_forecast 补
-            # citation_audit / 自校准 / 发布门后覆盖。
+            # citation_audit / 自校准 / 发布门后覆盖。EVAL-13：评估运行的骨架版同样盖
+            # forecast['evaluation'] 章（目标尚未抽取 → missing），成稿失败时留下的这份文件
+            # 也绝不被当成生产预测监测；生产运行写入内容逐字节不变。
             try:
                 fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
-                write_text_atomic(fpath, json.dumps(spine, ensure_ascii=False, indent=2))
+                _early = spine
+                _early_evaluation = self._resolve_evaluation_context()
+                if _early_evaluation is not None:
+                    _early = dict(spine, evaluation=self._evaluation_stamp(
+                        _early_evaluation,
+                        self._evaluation_target_propositions(_early_evaluation), None))
+                write_text_atomic(fpath, json.dumps(_early, ensure_ascii=False, indent=2))
             except Exception as _pe:  # noqa: BLE001 — 早落失败不影响主流程
                 logger.warning(f"预测骨架早落 forecast.json 失败（忽略）: {_pe}")
             logger.info(
@@ -2988,7 +2996,10 @@ class ReportAgent:
         otherwise the pipeline that ran ``simulation_id`` is looked up once
         (``pipeline_orchestrator.evaluation_context_for_simulation``: its pin or its
         persisted handoff marker), so entry points that build a ReportAgent without
-        orchestrator context (``/api/report/generate``) still honour the run.
+        orchestrator context (``/api/report/generate``) still honour the run. The
+        orchestrator marks a production run's agents as already resolved (no scan).
+        A lookup that cannot run fails closed: an evaluation context without run
+        provenance (``lookup_failed``), never a production answer.
         """
         assigned = getattr(self, "evaluation_context", None)
         if isinstance(assigned, dict):
@@ -3001,9 +3012,11 @@ class ReportAgent:
             try:
                 from .pipeline_orchestrator import evaluation_context_for_simulation
                 found = evaluation_context_for_simulation(simulation_id)
-            except Exception as exc:  # noqa: BLE001 — 查找失败按生产运行处理（仅记录）
-                logger.warning(f"评估运行上下文查找失败（按生产运行处理）: {exc}")
-                found = None
+            except Exception as exc:  # noqa: BLE001 — 查找失败按评估运行处理（fail closed）
+                logger.warning(f"评估运行上下文查找失败（按评估运行处理，不进生产账本）: {exc}")
+                found = {"record_class": "evaluation", "characterization_only": True,
+                         "eval_run_id": None, "cell_id": None, "question_id": None,
+                         "target": None, "lookup_failed": True}
         self._evaluation_context_lookup = found if isinstance(found, dict) else None
         self._evaluation_context_looked_up = True
         return self._evaluation_context_lookup
@@ -3022,16 +3035,20 @@ class ReportAgent:
     @staticmethod
     def _evaluation_stamp(evaluation: Dict[str, Any],
                           targets: Optional[List[Dict[str, Any]]],
-                          target_binding: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+                          target_binding: Optional[Dict[str, Any]], *,
+                          extraction_failed: bool = False) -> Dict[str, Any]:
         """EVAL-13: forecast['evaluation'] for a report of an evaluation run.
 
-        A pinned target the binary extraction never bound (disabled, failed or empty)
-        is still reported under ``target_binding.missing``, never silently dropped.
+        A pinned target the binary extraction never bound is still reported under
+        ``target_binding.missing``, never silently dropped: ``repair_draw`` is
+        ``extraction_failed`` when the extraction raised, else ``not_attempted``
+        (binary extraction off, or the early spine copy written before it ran).
         """
         binding = target_binding
         if targets and not isinstance(binding, dict):
             binding = {"bound": {}, "missing": [t["question_id"] for t in targets],
-                       "method": "normalized_equality", "repair_draw": "not_attempted"}
+                       "method": "normalized_equality",
+                       "repair_draw": "extraction_failed" if extraction_failed else "not_attempted"}
         return {
             "record_class": "evaluation",
             "eval_run_id": evaluation.get("eval_run_id"),
@@ -3064,6 +3081,7 @@ class ReportAgent:
         _evaluation = self._resolve_evaluation_context()
         _eval_targets = self._evaluation_target_propositions(_evaluation)
         _target_binding: Optional[Dict[str, Any]] = None
+        _binary_extraction_failed = False
         if self._forecast_spine and self._forecast_spine.get("scenarios"):
             forecast = dict(self._forecast_spine)        # 骨架已由信号驱动且 MECE
         else:
@@ -3289,6 +3307,7 @@ class ReportAgent:
                     forecast["binary_quality"] = _bres["binary_quality"]
             except Exception as _be:  # noqa: BLE001 — additive; never break finalization
                 logger.warning(f"二元预测抽取失败（忽略，不影响情景预测）: {_be}")
+                _binary_extraction_failed = True
         # RQ-2：质量门失败 → 按维度单次定向修复（引用回填 / 引文接地 / 占位符解析），
         # 重跑受影响审计一次并把 before/after 记进 forecast['quality']['repair']（合并，不覆盖）。
         # 置于发布门之前 ⇒ 发布门只对修复后的审计结果打分一次，避免二次降级。任何失败仅告警。
@@ -3339,7 +3358,8 @@ class ReportAgent:
             forecast["quality"] = _pq
         if _evaluation is not None:
             forecast["evaluation"] = self._evaluation_stamp(
-                _evaluation, _eval_targets, _target_binding)
+                _evaluation, _eval_targets, _target_binding,
+                extraction_failed=_binary_extraction_failed)
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）

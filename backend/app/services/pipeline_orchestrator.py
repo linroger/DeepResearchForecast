@@ -874,7 +874,10 @@ EVALUATION_STATEMENT_MAX_CHARS = 1000
 EVALUATION_CRITERIA_MAX_CHARS = 4000
 _EVALUATION_KEYS = ("eval_run_id", "cell_id", "question_id", "target")
 _EVALUATION_TARGET_KEYS = ("question_id", "statement", "resolution_criteria", "resolution_date")
-_EVALUATION_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+# Control (Cc: C0, DEL, C1 incl. U+0085), format (Cf: bidi overrides, zero-width) and
+# line/paragraph separators (Zl/Zp: U+2028/U+2029): anything that breaks a value across
+# lines or hides/reorders text in ledger rows and log lines.
+_EVALUATION_REJECTED_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
 
 
 def _evaluation_text(value: Any, name: str, max_chars: int) -> str:
@@ -886,8 +889,8 @@ def _evaluation_text(value: Any, name: str, max_chars: int) -> str:
         raise ValueError(f"evaluation {name} must be a non-empty string")
     if len(value) > max_chars:
         raise ValueError(f"evaluation {name} exceeds {max_chars} characters")
-    if _EVALUATION_CONTROL_CHAR_RE.search(value):
-        raise ValueError(f"evaluation {name} contains control characters")
+    if any(unicodedata.category(ch) in _EVALUATION_REJECTED_CATEGORIES for ch in value):
+        raise ValueError(f"evaluation {name} contains control, format or line-break characters")
     return value.strip()
 
 
@@ -7154,30 +7157,57 @@ def ledger_identity_for_simulation(simulation_id: Optional[str]) -> dict[str, An
         return {}
 
 
+def _fail_closed_evaluation_pin(**reason: Any) -> dict[str, Any]:
+    """EVAL-13: an evaluation context without run provenance or target (fail closed).
+
+    Used when a run cannot be shown to be production but its own pin is not
+    available: the report stays out of the production ledger, calibration read
+    and monitor, and no cell identity is claimed. ``reason`` flags why.
+    """
+    pin: dict[str, Any] = {"version": EVALUATION_RUN_VERSION, "record_class": "evaluation",
+                           "characterization_only": True, "eval_run_id": None,
+                           "cell_id": None, "question_id": None, "target": None}
+    pin.update(reason)
+    return pin
+
+
 def _evaluation_pin_of(pipeline_id: str, data: dict[str, Any]) -> Optional[dict[str, Any]]:
-    """EVAL-13: the evaluation pin of one persisted pipeline (None for a production run).
+    """EVAL-13: the evaluation pin of one pipeline (None for a production run).
 
     ``options['evaluation_run_v1']`` is authoritative; a state without it still
     counts as an evaluation run when its handoff holds the admission marker. The
-    marker's presence alone decides: an unreadable marker fails closed as an
-    evaluation context without run provenance (``marker_unreadable``).
+    marker's presence alone decides, and it yields the full pin only to the
+    pipeline it names (``pipeline_id``, written at admission): handoff dirs are
+    shared (``fork``, ``scripts/batch_runs.fork_question``), and a pipeline that
+    merely sees another run's marker answers a different question, so it gets a
+    fail-closed context without that run's cell identity or target
+    (``foreign_marker``). An unreadable marker fails closed too
+    (``marker_unreadable``).
     """
     options = data.get("options") if isinstance(data.get("options"), dict) else {}
     pin = options.get(EVALUATION_RUN_OPTION)
     if isinstance(pin, dict):
         return dict(pin)
-    marker_path = os.path.join(data.get("handoff_dir") or PipelineManager.handoff_dir(pipeline_id),
-                               EVALUATION_RUN_MARKER)
+    handoff_dir = data.get("handoff_dir")
+    if not handoff_dir:
+        try:
+            handoff_dir = PipelineManager.handoff_dir(pipeline_id)
+        except ValueError:
+            return None  # an id PipelineManager refuses owns no pipeline dir, hence no marker
+    marker_path = os.path.join(handoff_dir, EVALUATION_RUN_MARKER)
     if not os.path.exists(marker_path):
         return None
     marker = _read_json(marker_path)
-    if isinstance(marker, dict):
-        return marker
-    logger.warning("[%s] unreadable %s: treating the run as an evaluation run",
-                   pipeline_id, EVALUATION_RUN_MARKER)
-    return {"version": EVALUATION_RUN_VERSION, "record_class": "evaluation",
-            "characterization_only": True, "eval_run_id": None, "cell_id": None,
-            "question_id": None, "target": None, "marker_unreadable": True}
+    if not isinstance(marker, dict):
+        logger.warning("[%s] unreadable %s: treating the run as an evaluation run",
+                       pipeline_id, EVALUATION_RUN_MARKER)
+        return _fail_closed_evaluation_pin(marker_unreadable=True)
+    owner = marker.get("pipeline_id")
+    if owner != pipeline_id:
+        logger.warning("[%s] %s belongs to pipeline %s: evaluation lane without its cell identity",
+                       pipeline_id, EVALUATION_RUN_MARKER, owner)
+        return _fail_closed_evaluation_pin(foreign_marker=True, marker_pipeline_id=owner)
+    return {key: value for key, value in marker.items() if key != "pipeline_id"}
 
 
 def evaluation_context_for_simulation(simulation_id: Optional[str]) -> Optional[dict[str, Any]]:
@@ -7187,8 +7217,9 @@ def evaluation_context_for_simulation(simulation_id: Optional[str]) -> Optional[
     regenerations, reports on a seed-ensemble member's simulation) must honour the
     evaluation run their simulation belongs to, so ``ReportAgent`` falls back to
     this lookup when no ``evaluation_context`` was assigned. Same owner scan as
-    ``ledger_identity_for_simulation``. Best-effort: never raises; a failed scan is
-    logged and reads as a production run.
+    ``ledger_identity_for_simulation``. Never raises, and fails closed: a scan that
+    raises is logged and yields an evaluation context without run provenance
+    (``lookup_failed``), never a production answer.
     """
     if not simulation_id:
         return None
@@ -7199,9 +7230,9 @@ def evaluation_context_for_simulation(simulation_id: Optional[str]) -> Optional[
         pid, data, _is_member, _seed = owner
         return _evaluation_pin_of(pid, data)
     except Exception as exc:  # noqa: BLE001 — the lookup must never break a report
-        logger.warning("evaluation context lookup for simulation %s failed (ignored): %s",
-                       simulation_id, exc)
-        return None
+        logger.warning("evaluation context lookup for simulation %s failed "
+                       "(treated as an evaluation run): %s", simulation_id, exc)
+        return _fail_closed_evaluation_pin(lookup_failed=True)
 
 
 def preflight_pipeline(mode: str = "full", model: Optional[str] = None) -> list[str]:
@@ -8402,11 +8433,13 @@ class PipelineOrchestrator:
         state.options["safety_policy_v1"] = capture_safety_policy_v1("admission")
         if evaluation_pin is not None:
             # EVAL-13：评估运行准入钉——报告跳过生产校准读、只入评估账本、不进解析监测。
-            # handoff 标记供无编排器上下文的报告入口（API 重生成）按模拟 id 查回。
+            # handoff 标记供无编排器上下文的报告入口（API 重生成）按模拟 id 查回。标记另记
+            # 准入管线 id：handoff 目录可被共享（what-if 分叉、batch_runs 子问题），只有它自己
+            # 才能凭标记取回整份钉（见 _evaluation_pin_of）。
             from ..utils.atomic import write_json_atomic
             state.options[EVALUATION_RUN_OPTION] = evaluation_pin
             write_json_atomic(os.path.join(state.handoff_dir, EVALUATION_RUN_MARKER),
-                              evaluation_pin)
+                              dict(evaluation_pin, pipeline_id=pipeline_id))
         PipelineManager.save(state)
 
         cls._cancel_events[pipeline_id] = threading.Event()
@@ -8766,11 +8799,12 @@ class PipelineOrchestrator:
             # the base run's exact actor requirement instead of consulting
             # today's ambient dual-track flag.
             new_state.options["actor_intelligence_policy_v1"] = dict(_actor_policy)
-        _evaluation_pin = base_state.options.get(EVALUATION_RUN_OPTION)
-        if isinstance(_evaluation_pin, dict):
+        _evaluation_pin = cls._evaluation_pin(base_state)
+        if _evaluation_pin is not None:
             # EVAL-13: a what-if fork of an evaluation run stays in the evaluation lane
-            # (the admission pin is carried, never re-captured).
-            new_state.options[EVALUATION_RUN_OPTION] = dict(_evaluation_pin)
+            # (the admission pin is carried, never re-captured; the fork shares the base's
+            # handoff dir, whose marker names the base, so the pin must travel in options).
+            new_state.options[EVALUATION_RUN_OPTION] = _evaluation_pin
         if (overlay or {}).get("max_rounds"):
             try:
                 new_state.options["max_rounds"] = int(overlay["max_rounds"])
@@ -9241,9 +9275,31 @@ class PipelineOrchestrator:
 
     @staticmethod
     def _evaluation_pin(state: "PipelineState") -> Optional[dict[str, Any]]:
-        """EVAL-13: this run's evaluation admission pin (None for a production run)."""
-        pin = (state.options or {}).get(EVALUATION_RUN_OPTION)
-        return pin if isinstance(pin, dict) else None
+        """EVAL-13: this run's evaluation pin (None for a production run).
+
+        The same resolution as the report-side lookup (``_evaluation_pin_of``): the
+        options pin, else this pipeline's own handoff marker, else the fail-closed
+        context of a shared handoff whose marker names another run. Orchestrator
+        paths and ``evaluation_context_for_simulation`` therefore always agree.
+        """
+        return _evaluation_pin_of(state.pipeline_id, {"options": state.options or {},
+                                                      "handoff_dir": state.handoff_dir})
+
+    @classmethod
+    def _assign_evaluation_context(cls, agent: Any, state: "PipelineState") -> None:
+        """EVAL-13: give a report agent this run's evaluation context.
+
+        An evaluation run's agent gets its pin as ``evaluation_context``. A production
+        run's agent is marked as already resolved (production), so its report skips
+        the pipeline-state scan of ``ReportAgent._resolve_evaluation_context``: this
+        run's options and handoff decide, exactly as that scan would.
+        """
+        pin = cls._evaluation_pin(state)
+        if pin is not None:
+            agent.evaluation_context = pin
+            return
+        agent._evaluation_context_lookup = None
+        agent._evaluation_context_looked_up = True
 
     @staticmethod
     def _record_validated_as_of(state: "PipelineState", as_of: Optional[datetime],
@@ -9273,13 +9329,11 @@ class PipelineOrchestrator:
         receipt is copied into ``state.options['forecast_ledger']`` whatever the
         outcome: completed, FAILED, or a cancellation raised after the completed
         report was committed. An evaluation run's agent also gets its admission pin
-        as ``evaluation_context`` (EVAL-13).
+        as ``evaluation_context`` (EVAL-13, :meth:`_assign_evaluation_context`).
         """
         agent.ledger_context = self._report_ledger_context(
             state, simulation_id, run_kind="pipeline", seed=int(Config.SIM_SEED or 0))
-        _evaluation_pin = self._evaluation_pin(state)
-        if _evaluation_pin is not None:
-            agent.evaluation_context = _evaluation_pin
+        self._assign_evaluation_context(agent, state)
         try:
             return agent.generate_report(progress_callback=progress_callback, report_id=report_id)
         finally:
@@ -9478,9 +9532,7 @@ class PipelineOrchestrator:
             state, sim_id, run_kind="seed_ensemble", seed=int(seed),
             record_class="ensemble_member")
         # EVAL-13: 评估运行的种子报告同样只进评估通道（跳过生产校准读、入评估账本）。
-        _evaluation_pin = self._evaluation_pin(state)
-        if _evaluation_pin is not None:
-            agent.evaluation_context = _evaluation_pin
+        self._assign_evaluation_context(agent, state)
         agent.generate_report(report_id=rid)
         return sim_id, rid, self._read_report_forecast(rid)
 

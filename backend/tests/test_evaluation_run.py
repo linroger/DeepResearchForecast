@@ -12,6 +12,7 @@ Offline: no LLM (FakeLLMClient / stubs), no network, per-test data directories.
 import hashlib
 import json
 import os
+import time
 
 import pytest
 
@@ -105,16 +106,22 @@ def _forecast(**extra):
     return forecast
 
 
-def _write_report(report_id, forecast, *, created_at="2026-09-29T12:00:00", sealed=True):
-    """A completed report on disk; ``sealed`` adds the final-audit seal of its forecast."""
+def _write_report(report_id, forecast, *, created_at="2026-09-29T12:00:00", sealed=True,
+                  simulation_id="sim_1"):
+    """A completed report on disk; ``sealed`` adds the final-audit seal of its forecast.
+
+    ``forecast=None`` leaves the report without a forecast.json (a failed finalize).
+    """
     folder = ReportManager._get_report_folder(report_id)
     os.makedirs(folder, exist_ok=True)
     with open(os.path.join(folder, "meta.json"), "w", encoding="utf-8") as fh:
-        json.dump({"report_id": report_id, "simulation_id": "sim_1", "graph_id": "g1",
+        json.dump({"report_id": report_id, "simulation_id": simulation_id, "graph_id": "g1",
                    "simulation_requirement": QUESTION, "status": "completed",
                    "created_at": created_at, "failed_sections": [], "partial": False}, fh)
     with open(os.path.join(folder, "full_report.md"), "w", encoding="utf-8") as fh:
         fh.write(MARKDOWN)
+    if forecast is None:
+        return folder
     forecast_text = json.dumps(forecast, ensure_ascii=False, indent=2)
     with open(os.path.join(folder, "forecast.json"), "w", encoding="utf-8") as fh:
         fh.write(forecast_text)
@@ -265,6 +272,14 @@ def test_invalid_eval_run_id_rejected_before_thread(env, monkeypatch, bad_id):
     {"eval_run_id": "ok", "question_id": "q2",
      "target": {"question_id": "q1", "statement": "S"}},                 # ids disagree
     {"eval_run_id": "ok", "target": {"question_id": "q1", "statement": "x" * 1001}},
+    # Line breaks and invisible format characters that pass a C0/DEL-only check.
+    {"eval_run_id": "ok", "cell_id": "c\u20281"},                        # LINE SEPARATOR
+    {"eval_run_id": "ok", "cell_id": "c\u20291"},                        # PARAGRAPH SEPARATOR
+    {"eval_run_id": "ok", "question_id": "q\u00851"},                    # NEXT LINE (C1)
+    {"eval_run_id": "ok", "question_id": "q\u202e1"},                    # RIGHT-TO-LEFT OVERRIDE
+    {"eval_run_id": "ok", "target": {"question_id": "q1", "statement": "Will\u200bX happen?"}},
+    {"eval_run_id": "ok", "target": {"question_id": "q1", "statement": "S",
+                                     "resolution_criteria": "YES if X.\u2028Also Y."}},
 ])
 def test_invalid_evaluation_context_rejected(env, ctx):
     with pytest.raises(ValueError):
@@ -314,7 +329,8 @@ def test_pin_and_marker_written(env):
     assert pin["target"]["statement"] == QUESTION
     with open(os.path.join(po.PipelineManager.handoff_dir(state.pipeline_id),
                            po.EVALUATION_RUN_MARKER), encoding="utf-8") as fh:
-        assert json.load(fh) == pin
+        # The marker is the pin plus the admitting pipeline (handoff dirs can be shared).
+        assert json.load(fh) == dict(pin, pipeline_id=state.pipeline_id)
 
     # Resume carries the pin unchanged (never re-captured).
     po.PipelineManager.mark_failed(state.pipeline_id, "boom")
@@ -404,6 +420,9 @@ def test_commit_routes_to_evaluation_ledger(env):
     assert (row["eval_run_id"], row["cell_id"]) == ("sweep-2026-09", "cell-001")
     assert row["target_variant"] == {"eval_run_id": "sweep-2026-09", "cell_id": "cell-001"}
     assert row["binary_forecasts"][0]["statement"] == QUESTION
+    # The row ties its binary to the golden question without reopening forecast.json.
+    assert (row["binary_forecasts"][0]["target_question_id"],
+            row["binary_forecasts"][0]["target_bind"]) == (QID, "verbatim")
     assert fl.is_production_calibration_row(row) is False
     assert fl.calibration_summary()["n_resolved"] == 0
 
@@ -473,11 +492,11 @@ def test_api_path_resolves_context_via_marker(env, monkeypatch):
     _save_pipeline("pipe_eval", "sim_eval", **{po.EVALUATION_RUN_OPTION: pin,
                                                "ensemble_member_simulations": {"sim_member": 7}})
     _save_pipeline("pipe_prod", "sim_prod")
-    # A state without the option still counts through its handoff admission marker.
+    # A state without the option still counts through its own handoff admission marker.
     marker_state = _save_pipeline("pipe_marker", "sim_marker")
     with open(os.path.join(po.PipelineManager.handoff_dir(marker_state.pipeline_id),
                            po.EVALUATION_RUN_MARKER), "w", encoding="utf-8") as fh:
-        json.dump(pin, fh)
+        json.dump(dict(pin, pipeline_id="pipe_marker"), fh)
     # An unreadable marker fails closed: still an evaluation run.
     broken = _save_pipeline("pipe_broken", "sim_broken")
     with open(os.path.join(po.PipelineManager.handoff_dir(broken.pipeline_id),
@@ -519,6 +538,125 @@ def test_api_path_resolves_context_via_marker(env, monkeypatch):
     member_row = fl.read_ledger(fl.evaluation_ledger_dir())[-1]
     assert member_row["target_variant"] == {"eval_run_id": "sweep-2026-09",
                                             "cell_id": "cell-001", "seed": 7}
+
+
+def test_marker_yields_pin_only_to_its_own_pipeline(env):
+    """A batch child shares its evaluation base's handoff dir but answers another question."""
+    import scripts.batch_runs as batch_runs
+
+    base = _start(evaluation=EVALUATION)
+    pin = po.PipelineManager.load(base.pipeline_id)["options"][po.EVALUATION_RUN_OPTION]
+    loaded = po.PipelineState.from_dict(po.PipelineManager.load(base.pipeline_id))
+    loaded.graph_id, loaded.simulation_id = "graph_1", "sim_base"
+    po.PipelineManager.save(loaded)
+    child = batch_runs.fork_question(base.pipeline_id, "Will the UK adopt one too?")
+    _settle(child.pipeline_id)
+    child_state = po.PipelineState.from_dict(po.PipelineManager.load(child.pipeline_id))
+    assert child_state.handoff_dir == loaded.handoff_dir
+    assert po.EVALUATION_RUN_OPTION not in child_state.options
+    child_state.simulation_id = "sim_child"
+    po.PipelineManager.save(child_state)
+
+    # Every path agrees: the child stays out of production but claims no cell identity.
+    expected = {"version": "evaluation-run/v1", "record_class": "evaluation",
+                "characterization_only": True, "eval_run_id": None, "cell_id": None,
+                "question_id": None, "target": None, "foreign_marker": True,
+                "marker_pipeline_id": base.pipeline_id}
+    assert po.PipelineOrchestrator._evaluation_pin(child_state) == expected
+    assert po.evaluation_context_for_simulation("sim_child") == expected
+    ctx = po.PipelineOrchestrator._report_ledger_context(
+        child_state, "sim_child", run_kind="pipeline", seed=0)
+    assert ctx["record_class"] == "evaluation"
+    assert "eval_run_id" not in ctx and "cell_id" not in ctx
+    agent = _bare_agent(simulation_id="sim_child")
+    assert ReportAgent._evaluation_target_propositions(agent._resolve_evaluation_context()) is None
+    # The base keeps its full pin through options and through its own marker alike.
+    assert po.PipelineOrchestrator._evaluation_pin(loaded) == pin
+    assert po.evaluation_context_for_simulation("sim_base") == pin
+    options_less = po.PipelineManager.load(base.pipeline_id)
+    del options_less["options"][po.EVALUATION_RUN_OPTION]
+    assert po._evaluation_pin_of(base.pipeline_id, options_less) == pin
+
+    # A marker that names no pipeline cannot be attributed: fail closed the same way.
+    orphan = _save_pipeline("pipe_orphan", "sim_orphan")
+    with open(os.path.join(po.PipelineManager.handoff_dir(orphan.pipeline_id),
+                           po.EVALUATION_RUN_MARKER), "w", encoding="utf-8") as fh:
+        json.dump(pin, fh)
+    orphan_pin = po.evaluation_context_for_simulation("sim_orphan")
+    assert orphan_pin["foreign_marker"] is True and orphan_pin["target"] is None
+    # An id PipelineManager refuses owns no handoff dir, hence no marker (and no crash).
+    assert po.PipelineOrchestrator._evaluation_pin(
+        po.PipelineState(pipeline_id="../escape", prompt=QUESTION)) is None
+
+
+def test_owner_lookup_failure_fails_closed(env, monkeypatch):
+    def boom(simulation_id):
+        raise OSError("pipeline store unreadable")
+
+    monkeypatch.setattr(po, "_ledger_owner_of_simulation", boom)
+    stub = po.evaluation_context_for_simulation("sim_any")
+    assert stub["record_class"] == "evaluation" and stub["lookup_failed"] is True
+    assert (stub["eval_run_id"], stub["cell_id"], stub["target"]) == (None, None, None)
+
+    # An API-regenerated report whose owner cannot be determined never reaches production.
+    agent = _bare_agent(simulation_id="sim_any")
+    assert agent._resolve_evaluation_context()["lookup_failed"] is True
+    _write_report("r_unknown_owner", _forecast())
+    receipt = _publish(agent, "r_unknown_owner")
+    assert receipt["record_class"] == "evaluation" and receipt["status"] == "committed"
+    assert not os.path.exists(_production_ledger())
+    (row,) = fl.read_ledger(fl.evaluation_ledger_dir())
+    assert row["record_class"] == "evaluation" and "eval_run_id" not in row
+
+    # Even the lookup itself raising inside the agent fails closed.
+    def lookup_raises(simulation_id):
+        raise RuntimeError("lookup unavailable")
+
+    monkeypatch.setattr(po, "evaluation_context_for_simulation", lookup_raises)
+    resolved = _bare_agent(simulation_id="sim_other")._resolve_evaluation_context()
+    assert resolved["record_class"] == "evaluation" and resolved["lookup_failed"] is True
+
+
+def test_early_spine_forecast_is_stamped(env, monkeypatch):
+    """A report whose finalize never runs keeps a stamped (never monitored) forecast.json."""
+    spine = {k: v for k, v in _forecast().items() if k != "binary_forecasts"}
+    monkeypatch.setattr(fe, "derive_forecast_spine", lambda *a, **k: dict(spine))
+    monkeypatch.setattr(fe, "render_forecast_spine_block", lambda s: "[spine]")
+    monkeypatch.setattr(ReportAgent, "_temporal_horizon_date", lambda self: "")
+    monkeypatch.setattr(Config, "REPORT_CRITIQUE_BEFORE_PROSE", False, raising=False)
+    for rid in ("r_spine_eval", "r_spine_prod"):
+        os.makedirs(ReportManager._get_report_folder(rid), exist_ok=True)
+    _bare_agent(evaluation_context=_pin())._derive_and_pin_forecast_spine("r_spine_eval")
+    early = _read_forecast("r_spine_eval")
+    assert early["evaluation"] == {
+        "record_class": "evaluation", "eval_run_id": "sweep-2026-09", "cell_id": "cell-001",
+        "question_id": QID, "historical_calibration_suppressed": True,
+        "target_binding": {"bound": {}, "missing": [QID], "method": "normalized_equality",
+                           "repair_draw": "not_attempted"}}
+    assert mon._is_evaluation_report("r_spine_eval") is True
+
+    # Production: the early write is byte-identical to the unstamped spine.
+    _save_pipeline("pipe_prod", "sim_1")
+    agent = _bare_agent()
+    agent._derive_and_pin_forecast_spine("r_spine_prod")
+    with open(os.path.join(ReportManager._get_report_folder("r_spine_prod"), "forecast.json"),
+              encoding="utf-8") as fh:
+        assert fh.read() == json.dumps(spine, ensure_ascii=False, indent=2)
+    assert "evaluation" not in agent._forecast_spine
+
+
+def test_extraction_failure_is_distinguished_in_the_stamp(env, monkeypatch):
+    _finalize_env(monkeypatch, emit_binary=True)
+
+    def failing(*args, **kwargs):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr(fe, "extract_binary_forecasts", failing)
+    os.makedirs(ReportManager._get_report_folder("r_eval"), exist_ok=True)
+    _bare_agent(evaluation_context=_pin())._finalize_structured_forecast("r_eval", MARKDOWN)
+    assert _read_forecast("r_eval")["evaluation"]["target_binding"] == {
+        "bound": {}, "missing": [QID], "method": "normalized_equality",
+        "repair_draw": "extraction_failed"}
 
 
 def test_seed_agent_receives_context(env, monkeypatch):
@@ -574,9 +712,22 @@ def test_seed_agent_receives_context(env, monkeypatch):
                                 progress_callback=lambda *a: None)
     assert captured["evaluation"] == pin and captured["ctx"]["record_class"] == "evaluation"
     production = po.PipelineState(pipeline_id="pipe_prod", prompt=QUESTION)
-    orch._generate_stage_report(production, _FakeAgent(), "sim_main", report_id="r_main2",
+    production_agent = _FakeAgent()
+    orch._generate_stage_report(production, production_agent, "sim_main", report_id="r_main2",
                                 progress_callback=lambda *a: None)
     assert captured["evaluation"] is None and "record_class" not in captured["ctx"]
+    # The run's own options/handoff decided "production": the report skips the owner scan.
+    assert production_agent._evaluation_context_looked_up is True
+    assert production_agent._evaluation_context_lookup is None
+
+
+def test_production_agent_from_orchestrator_skips_owner_scan(env, monkeypatch):
+    agent = _bare_agent()
+    po.PipelineOrchestrator._assign_evaluation_context(
+        agent, po.PipelineState(pipeline_id="pipe_prod", prompt=QUESTION))
+    monkeypatch.setattr(po, "_ledger_owner_of_simulation",
+                        lambda sid: pytest.fail("pipeline-state scan for an orchestrator agent"))
+    assert agent._resolve_evaluation_context() is None
 
 
 # ───────────────────────────── (C) resolution monitor ────────────────────────
@@ -615,6 +766,41 @@ def test_monitor_excludes_evaluation_reports(env, monkeypatch):
     assert "skipped" not in prod
 
 
+def test_monitor_excludes_unstamped_evaluation_reports_by_owner(env, monkeypatch):
+    """Fail closed: a report of an evaluation run without the stamp (failed finalize, no
+    forecast.json at all) is recognised through the pipeline that ran its simulation."""
+    monkeypatch.setattr(Config, "RESOLUTION_MONITOR_LOOKBACK_DAYS", 0, raising=False)
+    _save_pipeline("pipe_eval", "sim_eval", **{po.EVALUATION_RUN_OPTION: _pin()})
+    _save_pipeline("pipe_prod", "sim_1")
+    _write_report("r_p1", _forecast(), created_at="2026-09-20T00:00:00")
+    _write_report("r_p2", _forecast(), created_at="2026-09-21T00:00:00")
+    _write_report("r_e_unstamped", _forecast(), created_at="2026-09-22T00:00:00",
+                  sealed=False, simulation_id="sim_eval")
+    _write_report("r_e_noforecast", None, created_at="2026-09-23T00:00:00",
+                  simulation_id="sim_eval")
+    assert mon.recent_report_ids(2) == ["r_p2", "r_p1"]
+
+    class _NoMarkets:
+        def __getattr__(self, name):
+            pytest.fail(f"market client used for an evaluation report ({name})")
+
+    led = str(env / "monitor_ledger")
+    for rid in ("r_e_unstamped", "r_e_noforecast"):
+        folder = ReportManager._get_report_folder(rid)
+        before = sorted(os.listdir(folder))
+        res = mon.run_monitor(rid, client=_NoMarkets(), ledger_dir=led,
+                              as_of="2026-09-30T00:00:00")
+        assert res["skipped"] == "evaluation_run"
+        assert sorted(os.listdir(folder)) == before and not os.path.exists(led)
+
+    # An owner lookup that fails excludes the report too (never monitored as production).
+    def boom(simulation_id):
+        raise OSError("pipeline store unreadable")
+
+    monkeypatch.setattr(po, "_ledger_owner_of_simulation", boom)
+    assert mon.recent_report_ids(2) == []
+
+
 # ───────────────────────────── (D) target binding ────────────────────────────
 def _row(statement, probability, **extra):
     row = {"id": "F9", "statement": statement, "probability": probability,
@@ -646,7 +832,15 @@ def test_normalize_target_statement():
     assert norm("  Will  X\thappen ?? ") == norm("will x happen.") == "will x happen"
     assert norm("Will Ｘ happen？") == "will x happen"        # NFKC folds full-width forms
     assert norm("Will X happen, really?") != norm("Will X happen?")
+    assert norm("Will X happen? . ?\u3000") == "will x happen"
     assert norm(None) == ""
+    # Linear on degenerate model output: a long interior run of '?', '.' or spaces (a
+    # backtracking trailing-strip regex took ~11 s at 64k characters here).
+    started = time.perf_counter()
+    long_run = "a" + "." * 200_000 + "b"
+    assert norm(long_run) == long_run
+    assert norm("x" + " ?." * 100_000) == "x"
+    assert time.perf_counter() - started < 2.0
 
 
 def test_target_binding_case_whitespace_drift(extract_env):
@@ -723,6 +917,85 @@ def test_missing_target_one_repair_draw_then_missing_no_fabrication(extract_env)
         "F3", QID, "repair_draw")
     assert out["target_binding"] == {"bound": {QID: "F3"}, "missing": [],
                                      "method": "normalized_equality", "repair_draw": "bound"}
+
+
+def _binary_keys(binaries):
+    return [fe._binary_key(b["statement"]) for b in binaries]
+
+
+FED_TARGET = {"question_id": "fed-below-3", "statement":
+              "Will the Fed's policy rate be below 3% by 2027-12-31?"}
+
+
+@pytest.mark.parametrize("target, drifted", [
+    (TARGET, QUESTION.replace("AI liability", "AI-liability")),             # hyphen vs space
+    (FED_TARGET, FED_TARGET["statement"].replace("'", "\u2019")),          # curly apostrophe
+])
+def test_near_duplicate_target_is_never_published_twice(extract_env, target, drifted):
+    """Punctuation drift the binding key keeps apart but _binary_key folds: no repair draw,
+    no second row for the proposition; the grader is pointed at the near-verbatim row."""
+    assert fe.normalize_target_statement(drifted) != fe.normalize_target_statement(
+        target["statement"])
+    fake = FakeLLMClient(json_responses=[
+        {"binary_forecasts": [OTHER_A, _row(drifted, 0.3)]},
+        {"binary_forecasts": [_row(target["statement"], 0.6)]}])     # never requested
+    out = fe.extract_binary_forecasts("dossier", fake, min_count=2, target_propositions=[target])
+    assert len(fake.calls) == 1
+    keys = _binary_keys(out["binary_forecasts"])
+    assert len(keys) == len(set(keys)) == 2
+    assert [b["probability"] for b in out["binary_forecasts"]] == [0.8, 0.3]
+    assert all("target_question_id" not in b for b in out["binary_forecasts"])
+    assert out["target_binding"] == {
+        "bound": {}, "missing": [target["question_id"]], "method": "normalized_equality",
+        "repair_draw": "near_duplicate", "near_match": {target["question_id"]: "F2"}}
+
+
+def test_repair_row_colliding_with_an_existing_key_is_dropped(extract_env):
+    """Defence in depth: a repair row that matches the target (NFKC folds a ligature) but
+    shares an existing row's _binary_key is never appended."""
+    target = {"question_id": "q-lig", "statement": "Will \ufb01nance grow?"}   # 'ﬁ' ligature
+    existing = _row("Will finance-grow?", 0.3)
+    fake = FakeLLMClient(json_responses=[{"binary_forecasts": [OTHER_A, existing]},
+                                         {"binary_forecasts": [_row("Will finance grow?", 0.6)]}])
+    out = fe.extract_binary_forecasts("dossier", fake, min_count=2, target_propositions=[target])
+    assert len(fake.calls) == 2                      # the target itself was requested once
+    keys = _binary_keys(out["binary_forecasts"])
+    assert len(keys) == len(set(keys)) == 2
+    assert out["target_binding"] == {
+        "bound": {}, "missing": ["q-lig"], "method": "normalized_equality",
+        "repair_draw": "unmatched", "near_match": {"q-lig": "F2"}}
+
+
+def test_top_up_does_not_rerequest_a_near_duplicate_target(extract_env):
+    drifted = QUESTION.replace("AI liability", "AI-liability")
+    fake = FakeLLMClient(json_responses=[{"binary_forecasts": [OTHER_A, _row(drifted, 0.3)]},
+                                         {"binary_forecasts": [OTHER_B]}])
+    out = fe.extract_binary_forecasts("dossier", fake, min_count=3, target_propositions=[TARGET])
+    assert len(fake.calls) == 2                      # first draw + top-up, no repair draw
+    assert fe._TARGET_PROPOSITION_RULE in _prompt(fake, 0)
+    assert "REQUIRED TARGET" not in _prompt(fake, 1)
+    assert out["target_binding"]["repair_draw"] == "near_duplicate"
+    assert len(set(_binary_keys(out["binary_forecasts"]))) == 3
+
+
+def test_repair_draw_withheld_rows_count_only_for_the_target(extract_env):
+    unreadable_extra = _row("An unrelated proposition the repair draw volunteered", None)
+    fake = FakeLLMClient(json_responses=[{"binary_forecasts": [OTHER_A, OTHER_B]},
+                                         {"binary_forecasts": [_row(QUESTION, 0.4),
+                                                               unreadable_extra]}])
+    out = fe.extract_binary_forecasts("dossier", fake, min_count=2, target_propositions=[TARGET])
+    assert out["target_binding"]["repair_draw"] == "bound"
+    assert "needs_review_count" not in out["binary_quality"]
+    assert not any("withheld" in issue for issue in out["binary_quality"].get("issues", []))
+
+    # The target's own unreadable probability is withheld, and counted.
+    fake = FakeLLMClient(json_responses=[{"binary_forecasts": [OTHER_A, OTHER_B]},
+                                         {"binary_forecasts": [_row(QUESTION, None),
+                                                               unreadable_extra]}])
+    out = fe.extract_binary_forecasts("dossier", fake, min_count=2, target_propositions=[TARGET])
+    assert out["target_binding"]["repair_draw"] == "unmatched"
+    assert out["binary_quality"]["needs_review_count"] == 1
+    assert out["binary_quality"]["issues"][0] == fe._binary_withheld_issue(1)
 
 
 def test_cell_forecast_scores_in_golden_eval_without_editing_ids(env, extract_env, monkeypatch):

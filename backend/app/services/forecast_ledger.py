@@ -510,8 +510,11 @@ _PROVENANCE_KEYS = ("pipeline_id", "simulation_id", "run_ref", "seed", "run_kind
 UNPUBLISHED_MAX_REASONS = 10
 UNPUBLISHED_REASON_MAX_CHARS = 300
 _BINARY_ANCHOR_MAX_CHARS = 300
+# EVAL-13: target_question_id / target_bind tie an evaluation row's binary to its golden
+# question without reopening forecast.json; only an evaluation run's extraction sets them.
 _COMPACT_BINARY_OPTIONAL_KEYS = ("market_anchor", "market_influence",
-                                 "scenario_membership", "target")
+                                 "scenario_membership", "target",
+                                 "target_question_id", "target_bind")
 
 # Same protocol as _RESOLUTIONS_WRITE_LOCK: the duplicate/revision decision and
 # the single append happen in one critical section (in-process lock + advisory
