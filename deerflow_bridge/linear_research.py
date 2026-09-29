@@ -4004,6 +4004,18 @@ class _Engine:
                                                    * self.preset.followups_per_round), 0),
             })
         self.tools = tools_factory(self.ledger, self.work / "pages", bridge, reporter, self.limits)
+        # RESEARCH_FETCH_SHELL_DETECTION (default on, an honesty check): reader
+        # shells, unavailable pages, bot walls and paywall teasers are failed
+        # fetches at the tool layer and never published as fetched sources.
+        self.shell_detection = _env_flag(self.env, "RESEARCH_FETCH_SHELL_DETECTION", True)
+        if hasattr(self.tools, "shell_detection"):
+            self.tools.shell_detection = self.shell_detection
+        # Fetched rows whose stored page is a shell, published as cited (_source_rows).
+        self.shell_sources_demoted = 0
+        # sid -> reason for the shells a resumed work dir stored as fetched pages
+        # before the tool-layer check existed (un-marked once, here).
+        self.stored_shells: dict[int, str] = (
+            self._unmark_stored_shells() if self.shell_detection and self.resumed else {})
         self.gateway = gateway_factory(args, reporter, bridge, self.preset)
         # Every model call (the gateway's json/text calls go through its
         # invoke) and every search/fetch passes through these wrappers: the
@@ -4131,6 +4143,45 @@ class _Engine:
         with self._lock:
             self._page_numbers[sid] = numbers
         return numbers
+
+    def _unmark_stored_shells(self) -> dict[int, str]:
+        """Un-mark the fetched ledger rows of a resumed work dir whose stored
+        page is an extraction shell (stored before the tool-layer check), so
+        the tool layer fetches the URL again instead of serving the shell as a
+        stored copy, notes cannot VERIFY against it and References call it a
+        snippet.  Returns ``{sid: reason}`` (see :meth:`_source_rows`)."""
+        page_text = getattr(self.tools, "page_text", None)
+        if not callable(page_text):
+            return {}
+        shells: dict[int, str] = {}
+        for row in self.ledger.rows():
+            if not row.get("fetched"):
+                continue
+            text = page_text(row["sid"])
+            reason = rg._extraction_failure_reason(text) if text else None
+            if reason is not None and self.ledger.unmark_fetched(row["sid"]) is not None:
+                shells[int(row["sid"])] = reason
+        if shells:
+            self.ledger.flush()
+            self.log("warn", f"v3: {len(shells)} stored page(s) of the resumed work dir are extraction "
+                             "shells; they no longer count as fetched and are fetched again when needed")
+        return shells
+
+    def _demote_shell_facts(self, record: dict) -> None:
+        """A reloaded fact VERIFIED only by pages :meth:`_unmark_stored_shells`
+        found to be shells becomes REPORTED (``no_fetched_source``), the tag
+        :func:`postprocess_notes` gives such a fact now."""
+        if not self.stored_shells:
+            return
+        for fact in record["facts"]:
+            if not isinstance(fact, dict) or fact.get("tag") != "VERIFIED":
+                continue
+            sids = [sid for sid in fact.get("sids") or [] if isinstance(sid, int)]
+            if not any(sid in self.stored_shells for sid in sids):
+                continue
+            if any((self.ledger.get(sid) or {}).get("fetched") for sid in sids):
+                continue
+            fact.update(tag="REPORTED", verification="no_fetched_source", verified_numbers=None)
 
     def json_call(self, shared: Sequence[str], task: str, *, label: str, required: Sequence[str],
                   deadline: rg.Deadline | None) -> dict:
@@ -4408,6 +4459,7 @@ class _Engine:
                 continue
             data = _read_json(self.work / "kiq" / f"{kiq.id}.json")
             if isinstance(data, dict) and data.get("id") == kiq.id and isinstance(data.get("facts"), list):
+                self._demote_shell_facts(data)
                 self.records[kiq.id] = data
 
     def phase_gather(self) -> None:
@@ -5596,27 +5648,44 @@ class _Engine:
         return "src_" + _sha256(rg.canonical_url(url))[:16]
 
     def _source_rows(self, order: Sequence[int]) -> list[dict]:
-        """sources.json: cited sources only, in positional citation order."""
+        """sources.json: cited sources only, in positional citation order.
+
+        With shell detection on, a fetched row whose stored page is an
+        extraction shell (a page stored before the tool-layer check), and a
+        row :meth:`_unmark_stored_shells` un-marked when this resumed run
+        started, is published as ``cited`` with ``fetch_status``
+        ``shell:<reason>`` and no excerpt or hash, so grounding excludes it."""
         rows: list[dict] = []
+        demoted = 0
         for sid in order:
             row = self.ledger.get(sid)
             if not row:
                 continue
             fetched = bool(row.get("fetched"))
+            text = self.tools.page_text(sid) if fetched else None
+            if fetched:
+                shell = rg._extraction_failure_reason(text) if (self.shell_detection and text) else None
+            else:
+                shell = self.stored_shells.get(sid)
+            if shell is not None:
+                fetched = False
+                demoted += 1
             entry: dict[str, Any] = {
                 "source_id": self._source_id(row["url"]), "url": row["url"], "title": row.get("title"),
                 "tier": row.get("tier"), "date": None,
                 "source_origin": "fetched" if fetched else "cited",
                 "reachable": True if fetched else None,
             }
+            if shell is not None:
+                entry["fetch_status"] = f"shell:{shell}"
             if fetched:
                 entry["content_sha256"] = row.get("content_sha256")
-                text = self.tools.page_text(sid)
                 if text:
                     entry["excerpt"] = _collapse(text, EXCERPT_CHARS)
             entry["supports"] = []
             entry["independent"] = None
             rows.append(entry)
+        self.shell_sources_demoted = demoted
         return rows
 
     def _facts_task_addenda(self) -> list[str]:
@@ -6013,6 +6082,10 @@ class _Engine:
         self.meta["usage"] = {"total": ledger["total"], "phases": ledger["phases"],
                               "calls_recorded": len(ledger["calls"]), "calls_dropped": ledger["calls_dropped"]}
         self.meta["tools"] = self.tools.stats()
+        if self.shell_detection:
+            shell_stats = getattr(self.tools, "shell_stats", None)
+            self.meta["fetch_shells"] = {"rejected": shell_stats() if callable(shell_stats) else {},
+                                         "sources_demoted": self.shell_sources_demoted}
         self.meta["phases"] = {name: {**self.state.phase(name), "seconds": self.phase_seconds.get(name)}
                                for name in PHASES if self.state.phase(name)}
         records = list(self.records.values())

@@ -8,6 +8,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 
 BRIDGE_FILE = Path(__file__).resolve().parents[2] / "deerflow_bridge" / "market_tools.py"
 
@@ -333,3 +335,71 @@ def test_captured_tool_candidates_keep_clob_fields(tmp_path, monkeypatch):
     assert row["clob_yes_token_id"] == "0xYES"
     assert row["outcomes"] == ["No", "Yes"]
     assert row["outcome_prices"] == [0.875, 0.125]
+
+
+class _Resp:
+    def __init__(self, status_code: int, headers: dict | None = None, payload=None) -> None:
+        self.status_code = status_code
+        self.headers = headers or {}
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+    def json(self):
+        return self._payload
+
+
+def _scripted_http(monkeypatch, module, responses):
+    """Scripted requests.get plus a recorder of this thread's time.sleep calls."""
+    import requests
+
+    gets: list[str] = []
+    sleeps: list[float] = []
+    main = threading.current_thread()
+    real_sleep = time.sleep
+
+    def fake_get(url, params=None, timeout=None, headers=None):
+        gets.append(url)
+        return responses.pop(0)
+
+    def fake_sleep(seconds):
+        if threading.current_thread() is main:
+            sleeps.append(seconds)
+        else:
+            real_sleep(seconds)
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.setattr(module.time, "sleep", fake_sleep)
+    return gets, sleeps
+
+
+@pytest.mark.parametrize("headers, expected", [
+    ({"Retry-After": "3"}, 3.0),
+    ({"Retry-After": "999"}, 10.0),
+    ({"Retry-After": "0"}, 0.0),
+    ({"Retry-After": "-4"}, 0.0),
+])
+def test_transient_status_waits_retry_after_clamped_then_retries_once(monkeypatch, headers, expected):
+    module = _load_module()
+    gets, sleeps = _scripted_http(monkeypatch, module, [_Resp(429, headers), _Resp(200, payload={"ok": 1})])
+    assert module._http_get("/public-search", {"q": "x"}) == {"ok": 1}
+    assert sleeps == [expected] and len(gets) == 2
+
+
+@pytest.mark.parametrize("headers", [{}, {"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"},
+                                     {"Retry-After": "nan"}, {"Retry-After": "inf"}])
+def test_transient_status_without_a_numeric_retry_after_waits_jitter(monkeypatch, headers):
+    module = _load_module()
+    gets, sleeps = _scripted_http(monkeypatch, module, [_Resp(503, headers), _Resp(503, headers)])
+    assert module._http_get("/public-search", {"q": "x"}) is None   # exactly one retry, then degrade
+    assert len(gets) == 2 and len(sleeps) == 1
+    assert 0.5 <= sleeps[0] <= 1.5
+
+
+def test_non_transient_status_is_not_retried_or_delayed(monkeypatch):
+    module = _load_module()
+    gets, sleeps = _scripted_http(monkeypatch, module, [_Resp(404, {"Retry-After": "3"})])
+    assert module._http_get("/public-search", {"q": "x"}) is None
+    assert len(gets) == 1 and sleeps == []

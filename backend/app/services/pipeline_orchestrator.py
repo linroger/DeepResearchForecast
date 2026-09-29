@@ -2369,6 +2369,13 @@ class DeerFlowResearchRunner:
         env["PREDICTION_MARKETS_PER_QUERY"] = str(getattr(Config, "PREDICTION_MARKETS_PER_QUERY", 15))
         env["PREDICTION_MARKETS_MIN_RELEVANCE"] = str(
             getattr(Config, "PREDICTION_MARKETS_MIN_RELEVANCE", 5.0))
+        # RESEARCH-1: fetch-layer shell detection and the per-call fetch bound
+        # come from Config too (cached_fetch / research_gateway / linear_research
+        # read them from os.environ with the same defaults).
+        env["RESEARCH_FETCH_SHELL_DETECTION"] = (
+            "true" if getattr(Config, "RESEARCH_FETCH_SHELL_DETECTION", True) else "false")
+        env["RESEARCH_FETCH_CALL_TIMEOUT_S"] = str(
+            max(0, int(getattr(Config, "RESEARCH_FETCH_CALL_TIMEOUT_S", 150))))
         if max_concurrent_subagents is not None:
             env["DEER_FLOW_MAX_CONCURRENT_SUBAGENTS"] = str(
                 max(1, min(8, int(max_concurrent_subagents))))

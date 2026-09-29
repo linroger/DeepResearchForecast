@@ -26,6 +26,7 @@ import json
 import logging
 import math
 import os
+import random
 import threading
 import time
 from collections import OrderedDict
@@ -38,6 +39,9 @@ POLYMARKET_BASE_URL = "https://gamma-api.polymarket.com"
 
 # 可重试的瞬时错误状态码（限流/网关抖动）；4xx 参数错误不重试。
 _TRANSIENT_STATUS = frozenset({429, 500, 502, 503, 504})
+# 唯一一次重试前的等待上限（秒）：数值型 Retry-After 被夹到 [0, 此值]；无/非数值头则
+# 0.5–1.5s 抖动。零等待立即重试几乎必然再次 429，白白用掉唯一的重试机会。
+_RETRY_AFTER_CAP_S = 10.0
 
 # 过滤阈值缺省（与 legacy prediction_markets.snapshot_for_queries / drf2 版一致）
 DEFAULT_MIN_VOLUME = 200.0
@@ -139,6 +143,18 @@ def _market_url(event_slug: str, market_slug: str) -> str:
     return ""
 
 
+def _retry_wait(resp: Any) -> float:
+    """瞬时状态重试前的等待秒数：有限数值型 Retry-After 夹到 [0, 10]，否则 U(0.5, 1.5) 抖动。"""
+    try:
+        raw = (getattr(resp, "headers", None) or {}).get("Retry-After")
+        seconds = float(str(raw).strip()) if raw is not None else math.nan
+    except (AttributeError, TypeError, ValueError):
+        seconds = math.nan
+    if math.isfinite(seconds):
+        return min(max(seconds, 0.0), _RETRY_AFTER_CAP_S)
+    return random.uniform(0.5, 1.5)
+
+
 def _http_get(path: str, params: Dict[str, Any], timeout: float = DEFAULT_TIMEOUT) -> Any:
     """GET 一个 Polymarket 端点并解析 JSON（keyless）。瞬时错误重试一次；任何失败返回 None（绝不上抛）。"""
     try:
@@ -154,6 +170,7 @@ def _http_get(path: str, params: Dict[str, Any], timeout: float = DEFAULT_TIMEOU
                                 headers={"Accept": "application/json"})
             if resp.status_code in _TRANSIENT_STATUS and attempt == 1:
                 last_err = f"HTTP {resp.status_code}"
+                time.sleep(_retry_wait(resp))
                 continue
             resp.raise_for_status()
             return resp.json()

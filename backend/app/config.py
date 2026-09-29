@@ -1246,6 +1246,23 @@ class Config:
     # changes extraction behaviour and needs a live A/B first; off = byte-identical rows,
     # prompt and meta.  The parent forwards it to the v3 child.
     RESEARCH_QUANT_TYPING = os.environ.get('RESEARCH_QUANT_TYPING', 'false').strip().lower() == 'true'
+    # RESEARCH-1：抓取层抽取空壳检测（诚实性检查，故默认开 = fail closed）。开启时 reader 空壳
+    # （"Markdown Content: undefined"）、"page unavailable" 页、bot wall 与短付费墙预告不再算成功
+    # 读取：不进 72h 源缓存、触发 provider 回退、v3 工具层返回 FETCH_FAILED(<reason>) 且绝不标记
+    # fetched；续跑的工作目录里检查之前存下的空壳页取消 fetched 标记，定稿时以 cited 发布
+    # （fetch_status=shell:<reason>）。false = 空壳处理与之前逐字节一致（直连回退的 PDF 解析
+    # 修复无条件生效）。fail closed：只有显式假值 0/false/no/off 关闭，空值、1/yes/on 与拼写
+    # 错误都保持开启（与 bridge 侧解析一致）。编排器经 env 显式下发给研究子进程
+    # （cached_fetch / linear_research 读取）。
+    RESEARCH_FETCH_SHELL_DETECTION = os.environ.get(
+        'RESEARCH_FETCH_SHELL_DETECTION', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    # RESEARCH-1：v3 单次 web_fetch 的硬墙钟上限（秒）。旧路径 asyncio.run 在收尾时等待事件循环
+    # 默认线程池，挂住的 to_thread 解析/SDK/DNS 可让一次抓取远超各 provider 超时；有界运行器
+    # 到时即返回 FETCH_FAILED(fetch_call_deadline_exceeded)（非瞬态，不重试）且不等残留线程。
+    # 默认 150：最坏 provider 链约 90s 加余量，仍低于工具层 singleflight 等待（180s）。成功的
+    # 抓取结果不变；0 = 旧的 asyncio.run 路径（逐字节一致）。
+    RESEARCH_FETCH_CALL_TIMEOUT_S = max(
+        0, int(os.environ.get('RESEARCH_FETCH_CALL_TIMEOUT_S', '150') or '150'))
     # PAR-2：编排器级「多角度并行研究轨」。>1 时研究阶段并行跑 K 个 DeerFlowResearchRunner
     # 子进程，每个带角度特化前缀（轨1=基线证据扫描，即原始 brief 逐字；轨2=基率/参照类/历史
     # 类比；轨3=行为者激励+反面证伪+市场定价），各写入 handoff/track_<k>/，随后确定性合并回

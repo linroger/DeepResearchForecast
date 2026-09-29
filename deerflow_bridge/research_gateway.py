@@ -32,7 +32,8 @@ traced back to the same missing choke point:
 * **Tools.** v2 called the async-only ``web_fetch_tool`` synchronously, so every
   fetch raised ``TypeError``; search error envelopes collapsed into
   ``{"results": []}`` and drove rabbit holes.  :class:`ResearchTools` calls
-  ``cached_fetch.cached_fetch`` through ``asyncio.run`` in worker threads, maps
+  ``cached_fetch.cached_fetch`` on a bounded event loop in worker threads
+  (``asyncio.run`` when RESEARCH_FETCH_CALL_TIMEOUT_S is 0), maps
   every envelope to short actionable text, dedups queries run-wide, stores full
   pages on disk and returns deterministic query-focused passages.
 
@@ -2524,6 +2525,18 @@ class SourceLedger:
             self._touch()
             return dict(row)
 
+    def unmark_fetched(self, sid: int) -> dict | None:
+        """Return a fetched row to the unfetched state (its stored page is not
+        evidence: an extraction shell stored before the tool-layer check);
+        returns a copy, or ``None`` for an unknown sid."""
+        with self._lock:
+            row = self._rows.get(_as_int(sid) or 0)
+            if row is None:
+                return None
+            row.update(fetched=False, content_sha256=None, chars=0, page_path=None)
+            self._touch()
+            return dict(row)
+
     def get(self, sid: int) -> dict | None:
         with self._lock:
             row = self._rows.get(_as_int(sid) or 0)
@@ -3370,6 +3383,20 @@ _CONTENT_FAILURE_MARKERS = (
 # negative cache (one retry, then suppression).
 FETCH_TRANSIENT_RETRIES = 1
 _TRANSIENT_FETCH_REASON_RE = re.compile(r"timeout|timed_out|rate_limit|429|inflight|temporarily")
+# RESEARCH_FETCH_CALL_TIMEOUT_S: hard wall-clock bound of one production
+# web_fetch (``_default_fetch_fn``).  ``asyncio.run`` waits for the loop's
+# default executor at shutdown, so a hung ``to_thread`` parse, SDK call or DNS
+# lookup could hold a fetch far past every provider ``wait_for``; the bounded
+# runner closes its loop without waiting for them.  Its reason slug
+# (fetch_call_deadline_exceeded) is deliberately not transient, so the run
+# never pays the deadline twice for one URL.  0 keeps the asyncio.run path.
+DEFAULT_FETCH_CALL_TIMEOUT_S = 150.0
+FETCH_DEADLINE_ERROR = "Error: fetch call deadline exceeded"
+# cached_fetch.SHELL_REASONS (a test holds the two equal); its failover chain
+# reports a shell as "Error: fetch returned <reason>".
+_SHELL_REASONS = frozenset({"empty_extraction", "unavailable_page", "bot_wall", "paywalled"})
+_SHELL_ERROR_PREFIX = "Error: fetch returned "
+_extraction_classifier: Callable[[str], str | None] | None = None
 
 
 def _run_coroutine_blocking(factory: Callable[[], Any]) -> Any:
@@ -3387,6 +3414,86 @@ def _run_coroutine_blocking(factory: Callable[[], Any]) -> Any:
         return pool.submit(lambda: asyncio.run(factory())).result()
 
 
+async def _within_deadline(factory: Callable[[], Any], timeout_s: float) -> Any:
+    """``await factory()`` under ``timeout_s`` (what ``asyncio.wait_for`` does),
+    telling the deadline apart from a TimeoutError the coroutine raised itself
+    (that one propagates as before and stays a transient failure)."""
+    scope = asyncio.timeout(timeout_s)
+    try:
+        async with scope:
+            return await factory()
+    except TimeoutError:
+        if scope.expired():
+            return FETCH_DEADLINE_ERROR
+        raise
+
+
+def _run_on_fresh_loop(factory: Callable[[], Any], timeout_s: float) -> Any:
+    """Run ``factory()`` on a new event loop for at most ``timeout_s`` seconds.
+
+    Unlike ``asyncio.run`` it never waits for the loop's default executor: the
+    loop is closed with pending tasks cancelled, which shuts the executor down
+    without waiting (a late thread result is dropped for a closed loop).
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(_within_deadline(factory, timeout_s))
+    finally:
+        try:
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        finally:
+            asyncio.set_event_loop(None)
+            loop.close()
+
+
+def _run_coroutine_bounded(factory: Callable[[], Any], timeout_s: float) -> Any:
+    """:func:`_run_coroutine_blocking` with a hard wall-clock bound: returns
+    :data:`FETCH_DEADLINE_ERROR` once ``timeout_s`` passes."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return _run_on_fresh_loop(factory, timeout_s)
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="gateway-async") as pool:
+        return pool.submit(_run_on_fresh_loop, factory, timeout_s).result()
+
+
+def _fetch_call_timeout_s() -> float:
+    """RESEARCH_FETCH_CALL_TIMEOUT_S (default 150; ``<= 0`` → 0, the unbounded
+    asyncio.run path; an invalid value keeps the default)."""
+    raw = str(os.environ.get("RESEARCH_FETCH_CALL_TIMEOUT_S", "") or "").strip()
+    if not raw:
+        return DEFAULT_FETCH_CALL_TIMEOUT_S
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_FETCH_CALL_TIMEOUT_S
+    if not math.isfinite(value):
+        return DEFAULT_FETCH_CALL_TIMEOUT_S
+    return max(0.0, value)
+
+
+def _extraction_failure_reason(text: str) -> str | None:
+    """``cached_fetch.extraction_failure_reason`` (imported lazily: the bridge
+    module sits beside this one), or None when it cannot be imported."""
+    global _extraction_classifier
+    if _extraction_classifier is None:
+        try:
+            module = importlib.import_module("cached_fetch")
+        except ImportError:
+            return None
+        classifier = getattr(module, "extraction_failure_reason", None)
+        if not callable(classifier):
+            return None
+        _extraction_classifier = classifier
+    return _extraction_classifier(text)
+
+
 def _default_search_fn(query: str, max_results: int) -> str:
     """``search_tools.web_search_impl`` (never raises; returns JSON text).
 
@@ -3401,10 +3508,16 @@ def _default_search_fn(query: str, max_results: int) -> str:
 def _default_fetch_fn(url: str) -> str:
     """``cached_fetch.cached_fetch(url, cached_fetch._resilient_fetch)`` run
     synchronously (``web_fetch_tool`` is an async-only StructuredTool and must
-    never be called directly)."""
+    never be called directly), bounded by RESEARCH_FETCH_CALL_TIMEOUT_S."""
     cached_fetch = importlib.import_module("cached_fetch")
-    return _run_coroutine_blocking(lambda: cached_fetch.cached_fetch(
-        url, cached_fetch._resilient_fetch, _ENGINE_REVISIT_REASON))
+
+    def factory() -> Any:
+        return cached_fetch.cached_fetch(url, cached_fetch._resilient_fetch, _ENGINE_REVISIT_REASON)
+
+    timeout_s = _fetch_call_timeout_s()
+    if timeout_s > 0:
+        return _run_coroutine_bounded(factory, timeout_s)
+    return _run_coroutine_blocking(factory)
 
 
 def _slug(text: Any, limit: int = 48) -> str:
@@ -3455,7 +3568,10 @@ class ResearchTools:
       no backend call and no budget (``FETCH_TRANSIENT_RETRIES``);
     * error envelopes mapped to one actionable line each;
     * full pages stored once under ``pages_dir`` (re-reads are free) and
-      returned as deterministic passages wrapped as untrusted evidence.
+      returned as deterministic passages wrapped as untrusted evidence;
+    * with ``shell_detection`` (set by the engine from
+      RESEARCH_FETCH_SHELL_DETECTION) an extraction shell is a failed fetch:
+      never stored, never marked fetched, so never VERIFIED evidence.
     """
 
     def __init__(self, ledger: SourceLedger, pages_dir: str | os.PathLike[str], *,
@@ -3481,6 +3597,9 @@ class ResearchTools:
         self._fetches_used = 0
         self._totals = _AgentCounters()
         self._agents: dict[str, _AgentCounters] = {}
+        # Off unless the engine turns it on; reason -> shells rejected.
+        self.shell_detection = False
+        self._shells: dict[str, int] = {}
 
     # ---------------------------------------------------------------- helpers
     def _log(self, kind: str, message: str) -> None:
@@ -3723,6 +3842,12 @@ class ResearchTools:
             self._log("result", "web_fetch → FETCH_BUDGET_EXHAUSTED (research budget)")
             return MSG_FETCH_BUDGET
         reason = self._failure_reason(text, envelope)
+        shell = self._shell_reason(text, reason)
+        if shell is not None:
+            with self._lock:
+                self._shells[shell] = self._shells.get(shell, 0) + 1
+            self._remember_failure(key, shell, transient=False)
+            return self._fetch_failed(agent_id, shell)
         if reason is not None:
             self._remember_failure(key, reason, transient=bool(_TRANSIENT_FETCH_REASON_RE.search(reason)))
             return self._fetch_failed(agent_id, reason)
@@ -3745,6 +3870,22 @@ class ResearchTools:
             row["sid"], content_sha256=digest, chars=len(stripped), page_path=page_path,
             title=_page_title(stripped) or None) or row
         return self._render_page(row, stripped, terms, context_terms, cached=False)
+
+    def _shell_reason(self, text: str, reason: str | None) -> str | None:
+        """The shell a fetch returned (shell detection on), else None: the
+        classifier's verdict on text the static checks accepted, or the reason
+        cached_fetch's failover chain already reported ("Error: fetch returned
+        <reason>")."""
+        if not self.shell_detection:
+            return None
+        stripped = text.strip()
+        if reason is None:
+            return _extraction_failure_reason(stripped)
+        if stripped.startswith(_SHELL_ERROR_PREFIX):
+            named = stripped[len(_SHELL_ERROR_PREFIX):].strip()
+            if named in _SHELL_REASONS:
+                return named
+        return None
 
     @staticmethod
     def _failure_reason(text: str, envelope: Mapping[str, Any] | None) -> str | None:
@@ -3797,6 +3938,11 @@ class ResearchTools:
         if row is None or not row.get("fetched") or not row.get("page_path"):
             return None
         return self._read_page(row)
+
+    def shell_stats(self) -> dict[str, int]:
+        """Extraction shells rejected at the tool layer, per reason."""
+        with self._lock:
+            return dict(sorted(self._shells.items()))
 
     def stats(self) -> dict[str, Any]:
         with self._lock:
