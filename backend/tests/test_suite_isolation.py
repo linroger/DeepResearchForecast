@@ -3,13 +3,16 @@
 Covers the harness in tests/_hermetic.py and tests/conftest.py:
 
 - the ambient scrub pops steering / credential / egress names (every env name
-  the DRF sources read, pinned by an independent AST scan) and keeps infra;
-- importing a test module that mutates os.environ stops the session (UsageError);
+  the DRF sources read, pinned by an independent AST scan, and the knobs the
+  shell scripts read) and keeps infra;
+- importing a test module that mutates os.environ or reaches out stops the
+  session (UsageError);
 - sockets, datagrams, DNS and provider-CLI / keychain / pipeline-child spawns
   (also behind sh -c, env, timeout, uv run, npx/node and os-level spawners) are
   refused and recorded, so a test that swallows the error still fails; markers
   opt in narrowly; the policy covers fixtures of every scope, their teardown,
-  the gap between tests and the end of the session;
+  the gap between tests and the end of the session; tests outside the
+  harness's directory run exempt;
 - process-global breakers and caches do not leak from one test into the next;
 - FakeLLMClient accepts every parameter of the real LLMClient methods;
 - load_project_dotenv is a no-op in the test process and plain load_dotenv
@@ -69,6 +72,16 @@ def _pyproject_pytest_options():
         return tomllib.load(fh)["tool"]["pytest"]["ini_options"]
 
 
+def _make_inner_ini(pytester):
+    markers = "\n".join(f"    {line}" for line in _pyproject_pytest_options()["markers"])
+    pytester.makeini(f"[pytest]\naddopts = -p no:cacheprovider --strict-markers\nmarkers =\n{markers}\n")
+
+
+def _conftest_shim(conftest_extra=""):
+    return _CONFTEST_SHIM.format(tests_dir=str(_TESTS_DIR),
+                                 conftest=str(_TESTS_DIR / "conftest.py")) + conftest_extra
+
+
 def _run_inner_session(pytester, source, conftest_extra="", *args):
     """Run test modules under the real conftest in a child pytest.
 
@@ -76,10 +89,8 @@ def _run_inner_session(pytester, source, conftest_extra="", *args):
     ``conftest_extra`` is appended to the conftest shim (extra hooks for one
     run) and ``args`` are passed to the child pytest.
     """
-    markers = "\n".join(f"    {line}" for line in _pyproject_pytest_options()["markers"])
-    pytester.makeini(f"[pytest]\naddopts = -p no:cacheprovider --strict-markers\nmarkers =\n{markers}\n")
-    pytester.makeconftest(_CONFTEST_SHIM.format(tests_dir=str(_TESTS_DIR),
-                                                conftest=str(_TESTS_DIR / "conftest.py")) + conftest_extra)
+    _make_inner_ini(pytester)
+    pytester.makeconftest(_conftest_shim(conftest_extra))
     pytester.makepyfile(**(source if isinstance(source, dict) else {"test_inner": source}))
     return pytester.runpytest_subprocess("-rA", *args, timeout=180)
 
@@ -146,6 +157,9 @@ def test_scrub_pops_names_from_config_docs_dotenv_files_and_sources(tmp_path):
         "deerflow_bridge/config.yaml": "model: $YAML_REF_MODEL\nurl: ${YAML_REF_TARGET}\n",
         "drf2/driver/cli.py": "limit = _cfg_int('DRF2_KNOB', 3)\n",
         "scripts/salvage.py": "x = getattr(Config, 'ROOT_SCRIPT_KNOB', 0)\n",
+        # shell scripts: ${NAME:-default} and friends are knobs, a bare $NAME is not
+        "scripts/start.sh": 'PORT="${SHELL_DEFAULT_KNOB:-5001}"\n: "${SHELL_ASSIGN_KNOB:=1}"\necho "$USER"\n',
+        "setup.sh": '[ -n "${ROOT_SHELL_KNOB+x}" ] && echo set\n',
         "backend/tests/test_x.py": "os.environ.get('TEST_ONLY_OPT_IN')\n",       # tests are not scanned
         "backend/app/.venv/lib/site.py": "os.environ.get('VENDORED_KNOB')\n",   # nor virtualenvs
         ".env.example": "# DOC_ONLY_KNOB=1\nDOC_ACTIVE_KNOB=2\n",
@@ -159,14 +173,28 @@ def test_scrub_pops_names_from_config_docs_dotenv_files_and_sources(tmp_path):
     names = ["CUSTOM_CONFIG_KNOB", "OTHER_CONFIG_KNOB", "APP_HELPER_KNOB", "SHORTKNOB",
              "SCRIPT_CONSTANT_KNOB", "RUNNER_KNOB", "BRIDGE_TUPLE_KNOB", "YAML_REF_MODEL",
              "YAML_REF_TARGET", "DRF2_KNOB", "ROOT_SCRIPT_KNOB", "DOC_ONLY_KNOB", "DOC_ACTIVE_KNOB",
-             "ROOT_DOTENV_KNOB", "BACKEND_DOTENV_KNOB"]
-    kept = {"TEST_ONLY_OPT_IN": "kept", "VENDORED_KNOB": "kept", "UNRELATED_NAME": "kept"}
+             "ROOT_DOTENV_KNOB", "BACKEND_DOTENV_KNOB", "SHELL_DEFAULT_KNOB", "SHELL_ASSIGN_KNOB",
+             "ROOT_SHELL_KNOB"]
+    kept = {"TEST_ONLY_OPT_IN": "kept", "VENDORED_KNOB": "kept", "UNRELATED_NAME": "kept", "USER": "kept"}
     environ = {**dict.fromkeys(names, "ambient"), **kept}
 
     popped = _hermetic.scrub_ambient_env(environ, repo_root=str(tmp_path))
 
     assert popped == sorted(names)
     assert environ == {**kept, "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"}
+
+
+def test_scrub_covers_the_knobs_start_sh_reads():
+    """test_start_script_progress.py runs scripts/start.sh with a copy of os.environ;
+    START_BACKEND_TIMEOUT_SECONDS=0 exported in the shell once failed four of its tests."""
+    start_sh = (_REPO_ROOT / "scripts" / "start.sh").read_text(encoding="utf-8")
+    knobs = set(re.findall(r"\$\{(\w+):-", start_sh))
+    assert {"FLASK_PORT", "START_BACKEND_TIMEOUT_SECONDS", "START_FRONTEND_TIMEOUT_SECONDS",
+            "START_HEALTH_CURL_TIMEOUT_SECONDS", "START_HEALTH_FAILURE_GRACE_SECONDS",
+            "START_FOLLOWER_RESTART_LIMIT"} <= knobs
+    environ = dict.fromkeys(knobs, "0")
+    _hermetic.scrub_ambient_env(environ)
+    assert set(environ) == {"HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"}
 
 
 def test_scrub_covers_every_name_config_reads():
@@ -263,7 +291,7 @@ def test_hostile_ambient_knobs_never_reach_the_suite(pytester, monkeypatch):
         "LLM_PROVIDER": "openai", "OPENAI_API_KEY": "sk-hostile", "REPORT_META_CHARTS": "true",
         "SIM_ACTOR_ROLE_PROMPT_MAX_CHARS": "50", "GLOBAL_ACTOR_BLOCK_CHARS": "100",
         "DEERFLOW_RESEARCH_MODEL": "bogus-model", "FIRECRAWL_API_URL": "https://firecrawl.example",
-        "CODEX_AUTH_PATH": "/nonexistent/auth.json",
+        "CODEX_AUTH_PATH": "/nonexistent/auth.json", "START_BACKEND_TIMEOUT_SECONDS": "0",
     }
     for name, value in hostile.items():
         monkeypatch.setenv(name, value)
@@ -314,6 +342,36 @@ def test_never_runs():
 """)
     assert result.ret == pytest.ExitCode.USAGE_ERROR
     result.stderr.fnmatch_lines(["*test collection mutated os.environ at import time: FOO_KEY*"])
+    assert "test_never_runs" not in result.stdout.str()
+
+
+def test_import_time_egress_stops_the_session(pytester):
+    """The guard is armed when the conftest is imported, so a test module (or an app
+    module it imports) that reaches out at import time is refused, even if it swallows
+    the error, and the session stops before the first test."""
+    result = _run_inner_session(pytester, """
+import socket
+import subprocess
+
+# Stand-ins for an import-time model download and a provider CLI probe.
+try:
+    socket.getaddrinfo("import-time.invalid", 443)
+except OSError:
+    pass
+try:
+    subprocess.Popen(["claude", "--version"], env={"PATH": "/nonexistent-drf-test-path"})
+except OSError:
+    pass
+
+
+def test_never_runs():
+    pass
+""")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    assert ("ERROR: egress refused during pytest start-up or test collection: "
+            "DNS lookup of 'import-time.invalid' (before the first test); "
+            "subprocess spawn of ['claude', '--version'] (refused: ['claude']) (before the first test)."
+            in result.stderr.str())
     assert "test_never_runs" not in result.stdout.str()
 
 
@@ -599,6 +657,24 @@ def test_pipeline_child_scripts_are_refused_only_when_run(argv, refused):
     (["timeout", "-s", "KILL", "60", "claude", "-p", "x"], False, True),
     (["nice", "-n", "5", "nohup", "stdbuf", "-oL", "xargs", "-I", "{}", "codex", "{}"], False, True),
     (["env", "python3", "-c", "pass"], False, False),
+    (["env", "-", "claude", "-p", "x"], False, True),             # env's bare '-' is -i
+    (["command", "claude", "-p", "x"], False, True),
+    # shell option parsing as bash / zsh / dash do it
+    (["bash", "--rcfile", "rc.sh", "-c", "claude -p x"], False, True),
+    (["bash", "--init-file", "rc.sh", "-c", "claude -p x"], False, True),
+    (["zsh", "--emulate", "sh", "-c", "claude -p x"], False, True),
+    (["bash", "-c", "--", "claude -p x"], False, True),
+    (["sh", "-c", "-", "codex exec x"], False, True),
+    (["bash", "-c", "-x", "claude -p x"], False, True),
+    (["bash", "-eo", "pipefail", "-c", "claude -p x"], False, True),
+    (["bash", "-co", "pipefail", "claude -p x"], False, True),
+    (["bash", "-o", "pipefail", "script.sh", "claude"], False, False),
+    (["bash", "--rcfile", "rc.sh", "script.sh"], False, False),
+    # looking a provider CLI up does not run it
+    (["command", "-v", "claude"], False, False),
+    ("command -V codex", True, False),
+    ("type claude", True, False),
+    ("if command -v claude >/dev/null; then echo ok; fi", True, False),
     # provider CLIs through JavaScript launchers
     (["npx", "@anthropic-ai/claude-code"], False, True),
     (["npx", "-y", "@openai/codex@latest", "exec", "x"], False, True),
@@ -626,6 +702,16 @@ def test_spawn_check_looks_through_shells_and_launchers(args, shell, refused):
     else:
         assert not refused, args
     assert len(guard.take_refusals()) == int(refused)
+
+
+def test_spawn_check_judges_an_exec_through_a_file_descriptor_by_argv():
+    """os.execve(fd, argv, env) (fexecve) hands the check an int, not a path."""
+    guard = _hermetic.EgressGuard()  # never installed: the check is called directly
+    guard.activate()
+    guard._check_spawn(["python3", "-c", "pass"], 7, False)
+    with pytest.raises(_hermetic.EgressRefused):
+        guard._check_spawn(["claude", "-p", "x"], 7, False)
+    assert len(guard.take_refusals()) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -811,6 +897,64 @@ def test_b1():
         "DNS lookup of 'session-teardown.example'",
     ])
     result.stdout.fnmatch_lines(["PASSED test_a.py::test_a1", "PASSED test_a.py::test_a2", "PASSED test_b.py::test_b1"])
+    assert "between tests" not in result.stdout.str()
+
+
+def test_tests_outside_the_harness_directory_run_exempt(pytester):
+    """pytest calls a conftest's runtest hooks only for the items under its directory.
+    A sibling directory's tests in the same session (``pytest .`` from the repo root
+    collects backend/scripts/test_*.py) run exempt instead of under the between-tests
+    policy, nothing is charged to the next harness test, and the harness policy still
+    applies to the harness tests after them."""
+    _make_inner_ini(pytester)
+    harness = pytester.mkdir("harness")
+    (harness / "conftest.py").write_text(_conftest_shim(), encoding="utf-8")
+    (harness / "test_before.py").write_text("def test_owned_before():\n    pass\n", encoding="utf-8")
+    (harness / "test_after.py").write_text("""
+import socket
+
+
+def test_owned_after_is_guarded_again():
+    try:
+        socket.getaddrinfo("owned-after.invalid", 80)
+    except OSError:
+        pass
+""", encoding="utf-8")
+    outside = pytester.mkdir("outside")
+    (outside / "test_outside.py").write_text("""
+import socket
+
+import pytest
+
+import _hermetic
+
+
+@pytest.mark.localhost
+def test_marked_loopback_outside_the_harness():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        socket.create_connection(server.getsockname(), timeout=2).close()
+    finally:
+        server.close()
+
+
+def test_unmarked_test_outside_the_harness_is_exempt():
+    assert _hermetic.EGRESS_GUARD.installed and _hermetic.EGRESS_GUARD.policy is None
+""", encoding="utf-8")
+    result = pytester.runpytest_subprocess(
+        "-rA", "harness/test_before.py", "outside", "harness/test_after.py", timeout=180)
+    result.assert_outcomes(passed=4, errors=1)
+    result.stdout.fnmatch_lines([
+        "*ERROR at teardown of test_owned_after_is_guarded_again*",
+        "*egress refused during this test*DNS lookup of 'owned-after.invalid'",
+    ])
+    result.stdout.fnmatch_lines([
+        "PASSED harness/test_before.py::test_owned_before",
+        "PASSED outside/test_outside.py::test_marked_loopback_outside_the_harness",
+        "PASSED outside/test_outside.py::test_unmarked_test_outside_the_harness_is_exempt",
+    ])
     assert "between tests" not in result.stdout.str()
 
 

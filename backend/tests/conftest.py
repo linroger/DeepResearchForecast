@@ -6,10 +6,11 @@ burning API calls (I-7-4: record/replay-style stub).
 
 Hermetic (INFRA-12, helpers in tests/_hermetic.py): the developer's shell is
 scrubbed before ``app`` is imported, collection may not mutate os.environ,
-sockets / DNS / provider-CLI spawns are refused unless a test opts in with a
-marker (localhost, subprocess_egress, integration), process-global breakers
-and caches are reset around every test, and Config._persist_env never writes
-the real .env.
+sockets / DNS / provider-CLI spawns are refused from this file's import on
+(test-module imports included) unless a test opts in with a marker
+(localhost, subprocess_egress, integration), process-global breakers and
+caches are reset around every test, and Config._persist_env never writes the
+real .env.
 
 No ``pytest_plugins`` here: pytest rejects it in a conftest that is not
 top-level (``pytest .`` from the repo root); test_suite_isolation.py loads
@@ -32,6 +33,10 @@ import _hermetic
 _FIRST_CONFTEST_LOAD = _hermetic.ENV_BASELINE is None
 if _FIRST_CONFTEST_LOAD:
     _hermetic.scrub_ambient_env(os.environ)
+    # Arm the egress guard before any test module (or app module it imports) is
+    # imported: an import-time download or DNS lookup is refused and recorded,
+    # and pytest_collection_finish stops the session over it.
+    _hermetic.EGRESS_GUARD.install()
 
 # Hard test-process boundary: importing or constructing the Flask app runs
 # lifecycle recovery hooks in production.  Without this marker, a pytest
@@ -261,7 +266,8 @@ def _isolate_telemetry_active_runs():
 # ---------------------------------------------------------------------------
 
 def pytest_collection_finish(session):
-    """Importing test modules must not change os.environ; then arm the egress guard.
+    """Importing test modules must not change os.environ or reach out; then the
+    between-tests policy takes over.
 
     An import-time mutation leaks into every later test (the sim scripts'
     load_dotenv once injected the developer's .env this way).  Known DRF and
@@ -269,17 +275,67 @@ def pytest_collection_finish(session):
     _hermetic.IMPORT_TIME_ENV_ALLOWLIST and empty values are ignored; anything
     else stops the session.  Values are never printed: they may be credentials.
 
-    The socket / DNS / subprocess patches go in once collection is done and stay
-    for the whole run (a test that monkeypatches the same attributes restores
-    the guard, not the raw originals); the runtest hooks below switch policy.
+    The socket / DNS / subprocess patches went in when this file was imported
+    and stay for the whole run (a test that monkeypatches the same attributes
+    restores the guard, not the raw originals).  Egress refused since then, even
+    if the importing module swallowed the error, stops the session too.  The
+    install() here is a no-op except in a second session in one process: the
+    conftest arms the guard on its first import only, and the first session's
+    end uninstalled it.  The runtest hooks below switch policy per test.
     """
+    guard = _hermetic.EGRESS_GUARD
+    guard.install()
+    refusals = guard.take_refusals()
+    guard.idle()
+    problems = []
     mutated = _hermetic.env_mutations(_hermetic.ENV_BASELINE, os.environ)
     if mutated:
-        raise pytest.UsageError(
+        problems.append(
             "test collection mutated os.environ at import time: " + ", ".join(mutated)
             + ". Set environment variables inside a fixture (monkeypatch.setenv), "
             "not at module import.")
-    _hermetic.EGRESS_GUARD.install()
+    if refusals:
+        problems.append(
+            "egress refused during pytest start-up or test collection: " + "; ".join(refusals)
+            + ". Reach the network inside a marked test or stub it, not at module import.")
+    if problems:
+        raise pytest.UsageError(" ".join(problems))
+
+
+class _ExemptItemsOutsideTheHarness:
+    """Runs the tests this conftest does not own exempt from the egress guard.
+
+    pytest calls a conftest's runtest hooks only for the items under its
+    directory, but the guard is process-wide.  A session that also collects
+    tests elsewhere (``pytest .`` from the repo root collects
+    backend/scripts/test_*.py) would run those under the between-tests policy
+    and charge their refusals to the next backend test.  So every item is
+    exempted as its setup starts (a wrapper runs ahead of the plain hooks);
+    the conftest's own pytest_runtest_setup below then applies the harness
+    policy to the items it owns before any fixture is set up, and every
+    teardown ends in the between-tests policy.
+    """
+
+    @pytest.hookimpl(wrapper=True, tryfirst=True)
+    def pytest_runtest_setup(self, item):
+        _hermetic.EGRESS_GUARD.exempt()
+        return (yield)
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_runtest_teardown(self, item, nextitem):
+        try:
+            return (yield)
+        finally:
+            _hermetic.EGRESS_GUARD.idle()
+
+
+_OUTSIDE_ITEMS_PLUGIN_NAME = "drf-egress-exempt-outside-the-harness"
+
+
+def pytest_configure(config):
+    """Register _ExemptItemsOutsideTheHarness for the whole session."""
+    if not config.pluginmanager.has_plugin(_OUTSIDE_ITEMS_PLUGIN_NAME):
+        config.pluginmanager.register(_ExemptItemsOutsideTheHarness(), _OUTSIDE_ITEMS_PLUGIN_NAME)
 
 
 @pytest.hookimpl(wrapper=True, trylast=True)
@@ -317,6 +373,9 @@ def _report_session_refusals(session, refusals):
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_setup(item):
     """Apply the test's egress policy before any of its fixtures (any scope) is set up.
+
+    pytest calls this only for the items under this directory (the others run
+    exempt, see _ExemptItemsOutsideTheHarness).  The policy:
 
     - AF_INET/AF_INET6 connects and datagrams are refused, loopback included,
       unless the test is marked @pytest.mark.localhost (loopback only);

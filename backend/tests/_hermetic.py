@@ -4,19 +4,21 @@ Stdlib-only helpers that ``backend/tests/conftest.py`` uses to make the offline
 suite independent of the developer's shell and unable to reach the network:
 
 * ``scrub_ambient_env`` pops every env name that steers DRF code (every name
-  the application, scripts, DeerFlow bridge and drf2 sources mention, Config
-  knobs, documented .env names, credentials, egress endpoints) *before* any
-  ``app`` module is imported, so an exported ``LLM_PROVIDER``, API key or
-  feature flag cannot change test behaviour.  Names are popped, not blanked:
-  DRF reads ``os.environ.get(NAME, default)`` and treats ``''`` as a real value.
+  the application, scripts, DeerFlow bridge and drf2 sources mention, the
+  knobs the shell scripts read, Config knobs, documented .env names,
+  credentials, egress endpoints) *before* any ``app`` module is imported, so
+  an exported ``LLM_PROVIDER``, API key or feature flag cannot change test
+  behaviour.  Names are popped, not blanked: DRF reads
+  ``os.environ.get(NAME, default)`` and treats ``''`` as a real value.
 * ``env_mutations`` backs the collection-time check that importing test
   modules never mutates ``os.environ`` (the sim scripts used to inject the
   developer's .env this way).
 * ``EgressGuard`` refuses TCP/UDP traffic, DNS lookups of real hostnames and
-  provider-CLI / keychain / pipeline-child spawns from the end of collection
-  to the end of the session (per-test markers widen the policy, integration
-  tests are exempt), and records every refusal so a test that swallows the
-  error still fails.
+  provider-CLI / keychain / pipeline-child spawns from the conftest's import
+  (before any test module is imported) to the end of the session (per-test
+  markers widen the policy, integration tests are exempt), and records every
+  refusal so a test that swallows the error, or a module import that does,
+  still fails.
 * ``reset_process_globals`` clears module-level breakers and caches that would
   otherwise leak from one test into the next.
 
@@ -24,8 +26,13 @@ Known limits: the guard patches Python-level entry points, so traffic from
 native extensions that bypass the ``socket`` module (Rust/C HTTP clients) is
 not seen; child Python interpreters run unguarded (with the scrubbed
 environment); a refusal raised inside a forked child blocks the spawn but its
-record stays in the child.  HOME is kept (the offline model caches live
-under it), so credential files there (~/.claude/.credentials.json,
+record stays in the child.  The spawn check reads the command as written: a
+program named only at run time (``$(which claude)``, a shell variable) is not
+recognized.  Tests outside backend/tests that share a session (``pytest .``
+from the repo root also collects backend/scripts/test_*.py) are not under the
+harness and run exempt; only their import falls under the guard, when it comes
+after the conftest's.  HOME is kept (the offline model caches live under
+it), so credential files there (~/.claude/.credentials.json,
 ~/.codex/auth.json) stay readable; the loader that reads them (DeerFlow's
 credential_loader) is not importable in the backend venv, and its macOS
 keychain fallback (``security``) is a refused spawn.
@@ -77,10 +84,12 @@ _EGRESS_NAMES = frozenset({
 _EGRESS_PREFIXES = ("LLM_FALLBACK_", "LLM_FAST_", "DRF_MCP_")
 _EGRESS_SUFFIXES = ("_BASE_URL", "_API_BASE", "_API_URL", "_ENDPOINT")
 
-# Source trees whose env reads steer the code under test.  backend/tests is not
-# scanned: the tests' own env reads are assertions or explicit opt-ins.
+# Source trees whose env reads steer the code under test (their .py and .sh
+# files; the shell scripts at the repo root are scanned too).  backend/tests is
+# not scanned: the tests' own env reads are assertions or explicit opt-ins.
 _SOURCE_ROOTS = ("backend/app", "backend/scripts", "backend/run.py",
                  "deerflow_bridge", "drf2", "scripts")
+_SOURCE_SUFFIXES = (".py", ".sh")
 _SKIPPED_DIRS = frozenset({".venv", "node_modules", "__pycache__"})
 # Configs whose $NAME / ${NAME} references the DeerFlow research child resolves
 # from the environment.
@@ -96,6 +105,11 @@ _SOURCE_ENV_NAME_RE = re.compile(
     r"(?<![\w'\"])[rRuU]?(['\"])([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)\1"
     r"|(?:environ(?:\.get|\.setdefault|\.pop)?|getenv)\s*[(\[]\s*['\"]([A-Z][A-Z0-9_]*)['\"]")
 _CONFIG_ENV_REF_RE = re.compile(r"\$\{?([A-Z][A-Z0-9_]*)")
+# Knobs a shell script reads: ${NAME:-default} (also :=, :?, :+ and the forms
+# without a colon), the idiom a `set -u` script such as scripts/start.sh needs
+# for a variable that may be unset.  A bare $NAME is not collected: it is as
+# likely a script-local variable or shell infrastructure ($PWD, $USER).
+_SHELL_ENV_READ_RE = re.compile(r"\$\{([A-Z][A-Z0-9_]*):?[-=?+]")
 
 # Offline switches for the Hugging Face stack (sentence-transformers et al.):
 # a cache miss then fails fast instead of downloading a model.
@@ -143,7 +157,13 @@ def _repo_path(repo_root: str, relative: str) -> str:
 
 
 def _source_files(repo_root: str):
-    """Every .py file under _SOURCE_ROOTS (a root may also be a single file)."""
+    """The shell scripts at the repo root, then every .py / .sh file under
+    _SOURCE_ROOTS (a root may also be a single file)."""
+    if os.path.isdir(repo_root):
+        for filename in sorted(os.listdir(repo_root)):
+            path = os.path.join(repo_root, filename)
+            if filename.endswith(".sh") and os.path.isfile(path):
+                yield path
     for relative in _SOURCE_ROOTS:
         root = _repo_path(repo_root, relative)
         if os.path.isfile(root):
@@ -152,7 +172,7 @@ def _source_files(repo_root: str):
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = [d for d in dirnames if d not in _SKIPPED_DIRS]
             for filename in filenames:
-                if filename.endswith(".py"):
+                if filename.endswith(_SOURCE_SUFFIXES):
                     yield os.path.join(dirpath, filename)
 
 
@@ -161,7 +181,8 @@ def _steering_names(repo_root: str) -> set:
 
     Config reads (check_env_drift's regex over config.py), .env.example, the
     local .env files, every env-shaped name in the application / script /
-    bridge / drf2 sources and the $NAME references in DeerFlow's configs.
+    bridge / drf2 Python sources, the ${NAME:-default} knobs of the shell
+    scripts and the $NAME references in DeerFlow's configs.
     """
     drift = _env_drift()
     config_text = _read_text(os.path.join(repo_root, "backend", "app", "config.py"))
@@ -170,7 +191,11 @@ def _steering_names(repo_root: str) -> set:
     for env_file in (os.path.join(repo_root, ".env"), os.path.join(repo_root, "backend", ".env")):
         names |= set(drift.parse_env_file(env_file))
     for path in _source_files(repo_root):
-        names |= {m.group(2) or m.group(3) for m in _SOURCE_ENV_NAME_RE.finditer(_read_text(path))}
+        text = _read_text(path)
+        if path.endswith(".sh"):
+            names |= set(_SHELL_ENV_READ_RE.findall(text))
+        else:
+            names |= {m.group(2) or m.group(3) for m in _SOURCE_ENV_NAME_RE.finditer(text)}
     for relative in _ENV_REFERENCING_CONFIGS:
         names |= set(_CONFIG_ENV_REF_RE.findall(_read_text(_repo_path(repo_root, relative))))
     return names
@@ -190,10 +215,11 @@ def scrub_ambient_env(environ: MutableMapping[str, str], *, repo_root: str = REP
 
     Popped: names read by Config or documented in .env.example (parsed with
     check_env_drift's regexes), names in the repo-root and backend .env files,
-    env-shaped names in the DRF sources and DeerFlow configs (_steering_names),
-    per-provider LLM_<P>_DISABLE_THINKING knobs, credential-shaped names
-    (check_env_drift.is_secret) and egress endpoints.  Protected infrastructure
-    names are always kept.  Also switches the Hugging Face stack offline.
+    env-shaped names in the DRF sources, shell scripts and DeerFlow configs
+    (_steering_names), per-provider LLM_<P>_DISABLE_THINKING knobs,
+    credential-shaped names (check_env_drift.is_secret) and egress endpoints.
+    Protected infrastructure names are always kept.  Also switches the Hugging
+    Face stack offline.
     """
     drift = _env_drift()
     steering = _steering_names(repo_root)
@@ -248,6 +274,8 @@ _JS_LAUNCHERS = frozenset({"node", "npx", "bunx", "bun", "pnpm", "pnpx", "yarn",
 _JS_RUNNER_SUBCOMMANDS = frozenset({"dlx", "exec", "x"})
 _JS_EXTENSIONS = (".js", ".mjs", ".cjs")
 _SHELLS = frozenset({"sh", "bash", "zsh", "dash", "ksh", "fish"})
+# Shell long options that take a separate value (bash --rcfile/--init-file, zsh --emulate).
+_SHELL_VALUE_LONG_OPTIONS = frozenset({"--rcfile", "--init-file", "--emulate"})
 # Launchers that run another program, with their options that take a separate
 # value; the spawn check looks through them to the program actually run.
 _LAUNCHER_VALUE_OPTIONS = {
@@ -279,6 +307,7 @@ _SHELL_PUNCTUATION = frozenset("();<>|&")
 _OPT_IN_HINT = ("mark the test @pytest.mark.localhost (loopback sockets), "
                 "@pytest.mark.subprocess_egress (provider CLIs / pipeline children) or "
                 "@pytest.mark.integration, or stub the call")
+_BEFORE_TESTS_NOTE = "before the first test"
 _BETWEEN_TESTS_NOTE = "between tests: a thread or fixture outlived its test"
 
 
@@ -286,12 +315,14 @@ _BETWEEN_TESTS_NOTE = "between tests: a thread or fixture outlived its test"
 class EgressPolicy:
     allow_loopback: bool = False
     allow_subprocess: bool = False
-    between_tests: bool = False
+    # Set on the policies outside any test; appended to each refusal's record.
+    outside_tests: str = ""
 
 
-# Policy outside any test's run (after install, between one test's teardown and
-# the next test's setup): everything guarded is refused.
-_BETWEEN_TESTS = EgressPolicy(between_tests=True)
+# Policies outside any test's run refuse everything guarded: from install to
+# the end of collection, and between one test's teardown and the next setup.
+_BEFORE_TESTS = EgressPolicy(outside_tests=_BEFORE_TESTS_NOTE)
+_BETWEEN_TESTS = EgressPolicy(outside_tests=_BETWEEN_TESTS_NOTE)
 
 
 def _strip_host(host: Any) -> str:
@@ -377,11 +408,18 @@ def _unwrap_launchers(argv: list) -> list:
         if value_options is None:
             return argv
         i = 1
-        while i < len(argv) and argv[i].startswith("-") and argv[i] != "-":
+        while i < len(argv) and argv[i].startswith("-"):
             option = argv[i]
             if option == "--":
                 i += 1
                 break
+            if option == "-":
+                if name != "env":
+                    break
+                i += 1  # env's bare '-' is -i
+                continue
+            if name == "command" and {"v", "V"} & set(option[1:]):
+                return []  # command -v / -V looks the program up without running it
             if name == "env" and option.startswith("-S"):
                 # env -S 'PROGRAM ARGS' (or -S'...') splits one string into words.
                 split, width = (argv[i + 1:i + 2], 2) if option == "-S" else ([option[2:]], 1)
@@ -393,21 +431,31 @@ def _unwrap_launchers(argv: list) -> list:
 
 
 def _shell_inline_command(argv: list) -> Optional[str]:
-    """LINE of ``sh [options] -c LINE`` (also -lc, -ec, -o NAME ... -c); None for a script run."""
+    """LINE of ``sh [options] -c [options] [--] LINE``; None for a script run.
+
+    As the shells parse it: options may follow -c (-c -x LINE), an o / O in an
+    option cluster takes the next word (-o pipefail, -eo pipefail, -co pipefail
+    LINE), --rcfile / --init-file / --emulate take a value, and -- or a bare -
+    ends the options; LINE is the first word after them.
+    """
+    inline = False
     i = 1
     while i < len(argv):
         token = argv[i]
-        if token in ("-o", "+o", "-O", "+O"):
+        if token in ("--", "-"):
+            i += 1
+            break
+        if token in _SHELL_VALUE_LONG_OPTIONS:
             i += 2
         elif token.startswith("--"):
             i += 1
         elif token.startswith(("-", "+")) and len(token) > 1:
-            if "c" in token[1:]:
-                return argv[i + 1] if i + 1 < len(argv) else None
-            i += 1
+            cluster = token[1:]
+            inline = inline or (token[0] == "-" and "c" in cluster)
+            i += 2 if ("o" in cluster or "O" in cluster) else 1
         else:
-            return None
-    return None
+            break
+    return argv[i] if inline and i < len(argv) else None
 
 
 def _shell_commands(line: str) -> list:
@@ -491,14 +539,15 @@ class EgressGuard:
     ``gethostbyaddr``, and the spawners ``subprocess.Popen.__init__`` (which
     also covers os.popen and asyncio), ``os.system``, ``os.posix_spawn`` /
     ``posix_spawnp`` and ``os.execv`` / ``execve`` (the os.exec*/os.spawn*
-    family calls these).  It starts in the between-tests policy, which refuses
-    everything guarded.  ``activate`` switches to a test's policy before any of
-    its fixtures run, ``exempt`` lets an integration test through and ``idle``
-    returns to the between-tests policy after the test's teardown.  Before
-    ``install`` (test collection) and after ``uninstall`` every call passes
-    straight through.  Refusals raise :class:`EgressRefused` and are recorded
-    until ``take_refusals``, so the harness can fail a test whose code
-    swallowed the error.
+    family calls these).  It starts in the before-tests policy, which refuses
+    everything guarded while pytest starts up and imports the test modules.
+    ``activate`` switches to a test's policy before any of its fixtures run,
+    ``exempt`` lets an integration test through and ``idle`` switches to the
+    between-tests policy (also refusing everything) at the end of collection
+    and after each test's teardown.  Before ``install`` and after
+    ``uninstall`` every call passes straight through.  Refusals raise
+    :class:`EgressRefused` and are recorded until ``take_refusals``, so the
+    harness can fail a test whose code swallowed the error.
     """
 
     def __init__(self) -> None:
@@ -611,7 +660,7 @@ class EgressGuard:
         for name in ("posix_spawn", "posix_spawnp", "execv", "execve"):
             if hasattr(os, name):
                 self._patch(os, name, path_spawner(getattr(os, name)))
-        self.idle()
+        self._policy = _BEFORE_TESTS
 
     def uninstall(self) -> None:
         while self._saved:
@@ -639,7 +688,7 @@ class EgressGuard:
         self._policy = None
 
     def idle(self) -> None:
-        """Return to the between-tests policy, which refuses everything guarded."""
+        """Switch to the between-tests policy, which refuses everything guarded."""
         self._policy = _BETWEEN_TESTS
 
     def take_refusals(self) -> list:
@@ -661,8 +710,8 @@ class EgressGuard:
 
     # -- checks ------------------------------------------------------------
     def _refuse(self, what: str) -> None:
-        if self._policy is not None and self._policy.between_tests:
-            what = f"{what} ({_BETWEEN_TESTS_NOTE})"
+        if self._policy is not None and self._policy.outside_tests:
+            what = f"{what} ({self._policy.outside_tests})"
         message = f"egress refused in test: {what}; {_OPT_IN_HINT}"
         with self._lock:
             self._refusals.append(what)
@@ -700,13 +749,15 @@ class EgressGuard:
         if policy is None or policy.allow_subprocess or getattr(self._bypass, "active", False):
             return
         tokens = _command_tokens(args)
+        # os.execve also takes an open file descriptor (fexecve): argv names the program then.
+        program = os.fsdecode(executable) if isinstance(executable, (str, bytes, os.PathLike)) else None
         if shell:
             # The shell runs tokens[0] as a command line; later items are its $0, $1, ...
             refused = _shell_line_refusals(tokens[0]) if tokens else []
-            if executable is not None:
-                refused += _spawn_refusals([os.fsdecode(executable)])
+            if program is not None:
+                refused += _spawn_refusals([program])
         else:
-            argv = tokens if executable is None else [os.fsdecode(executable), *tokens[1:]]
+            argv = tokens if program is None else [program, *tokens[1:]]
             refused = _spawn_refusals(argv)
         if refused:
             self._refuse(f"subprocess spawn of {tokens[:6]!r} (refused: {sorted(set(refused))})")
