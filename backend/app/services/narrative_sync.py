@@ -23,30 +23,54 @@ allowlist that fails closed — a number is rewritten only when
   under another scenario's name;
 * that value is not one an earlier sync of the same field already had to leave
   unattributed (see below);
-* it sits in a recognised probability slot:
-  - in brackets, optionally after a separated label: "基准情景（40%）",
-    "Soft landing (~40%)", "Base (~52% share, 55%)";
-  - right before a probability word: "仅10%概率", "40%的可能性", "a 40% chance",
-    "40% of the probability mass", "40% likely";
+* it sits in a recognised probability slot, and that slot names a scenario.  A
+  scenario is named by a label of the scenario whose old value the number is (its
+  "owner": "Recession" for "B. Recession"; see ``_name_aliases``) or by a scenario
+  word (情景 / 上行 / 下行 / 基准 / 乐观 / 悲观 / case / scenario / path / base /
+  bull / bear / upside / downside …); a residual word alone ("Other", "其它",
+  "Mixed") is no label, because every breakdown has an "Other: 20%" row:
+  - in brackets right after an owner label or a scenario word: "基准情景（40%）",
+    "Recession (~25%)", "Base (~52% share, 55%)", "B. Recession (p=0.25)".  What
+    precedes the bracket is the label ("Section 301 tariffs (25%)", "AP-NORC
+    (37%)", "美国（约40%）", "not robust (p=0.40)" are no slots), and a word label
+    inside the bracket must itself be an owner label or a probability word: "(A:
+    40%, B: 25%)", "（概率：40%）" are slots, "(US: 40%, EU: 25%)", "Bull case
+    (revenue growth: 40%)", "(2030: 40%)" are not;
+  - right before a probability word, with a scenario named in the same clause
+    (for Chinese, also right after the probability word): "The soft landing is
+    40% likely", "仅10%概率超预期上行", "基准情景有40%的可能性".  An English
+    probability word with an object ("a 40% chance of X", "… that X plays out",
+    "… to the base case") counts only when the object IS the scenario: "of the base
+    case", "of Recession", "that the downside scenario plays out" — never "that the
+    court case is dismissed" or "of an early rate cut";
   - after 概率 / 几率 / 可能性 / probability / likelihood / chance with only
-    linking words in between and a clause end after it: "基准情景概率降至40%，",
-    "probability of 40%.", "概率约0.40" (a decimal is a token only in this slot);
+    linking words in between, a clause end after it and a scenario named earlier
+    in the clause: "基准情景概率降至40%，", "Recession probability is 25%.",
+    "基准情景概率约0.40" (a decimal is a token only here or after a bracketed "p=");
+    "JPMorgan puts the probability at 40%" names none;
   - after the name of the very scenario whose old value it is, with only linking
     words in between and a clause end after it: "Base: 40%;", "Bear cut to 20%,",
     "Path A leads at 45%," (a label that names another scenario, or none, is
     no slot: "China 40%, US 5.8%", "Bear's 30%" when 30% was Bull's);
-* nothing within 40 characters before it (or directly after it) cites a market
-  or an outside forecaster ("Polymarket prices this at 40%", "市场隐含概率40%",
-  "40% on Kalshi");
+* no market or outside forecaster (Polymarket, consensus, analysts, futures,
+  Goldman, the IMF, the IEA, 高盛, 一致预期 …) is cited earlier in its sentence,
+  within 40 characters before it, or directly after it ("Polymarket prices this at
+  40%", "市场隐含概率40%", "40% on Kalshi", 'The Polymarket snapshot … "D sweep"
+  (44%)', "Goldman's base case puts the recession probability at 25%");
 * it is not a range endpoint or one end of a stated move ("30–40%",
   "from 55% to 50%", "由40%下调至35%", "–40% to –55%");
 * it is not a quantity ("52% share", "增长40%", "占约40%", "基率仅13%",
   "13%兑现率", "EV share above 40%", "40% of respondents", "成本减少了约40%",
   "a 40% decline", "40% smaller", "costs have fallen 40%", "价格较2020年低40%",
   "约40%的装机", "关税40%", "WACC 13%", "<=40%") or a signed change ("+10%",
-  "−5%", "–40%"); these deny-list guards still apply inside a slot;
+  "−5%", "–40%"); these deny-list guards still apply inside a slot, except that
+  a quantity word inside an owner label is part of the name ("基准扩张40%的概率",
+  "Tariff Ratchet Up at 25%");
 * it does not take part in a sum statement ("合计50%" and the addends that make
-  it up, "40% + 35%").
+  it up, "40% + 35%");
+* it is not one entry of a per-scenario list of another metric: a bracket or a
+  label list after a metric noun ("EV share (Base: 52%, Bull: 70%)", "EV share —
+  Base: 40%, Recession: 25%", "资本开支增速（基准扩张40%，电力受限25%）").
 
 Everything else is left alone and counted by reason.  All replacements of one
 text are applied in a single pass by span, so a value that is both one
@@ -117,27 +141,102 @@ _SLOT_END_RE = re.compile(
     r"(?![A-Za-z])",
     re.I,
 )
+# SCENARIO WORDS name a scenario whatever the forecast calls it: generic scenario
+# nouns and scenario-type words ("基准情景", "the downside case", "Bear", "上行").
+# "base" is no scenario word before rate / year / period / effect ("the base rate"),
+# nor 基准 after 历史 ("历史基准" is a historical benchmark) or before 利率 / 汇率 / 价 /
+# 年 / 期 / 线 ("基准利率" is the policy rate), nor "case" in "in case" / "in any case";
+# an English word followed by a hyphen modifies the next one ("base-rate", "bull-market").
+_SCENARIO_WORDS_EN = (
+    r"base(?!\s+(?:rates?|years?|periods?|effects?)(?![A-Za-z]))|baseline|bull|bear|upside"
+    r"|downside|tail|residual|(?<!\bin )(?<!\bany )case|scenario|path|outcome|branch"
+)
+_SCENARIO_WORD = (
+    r"(?:情景|场景|情形|路径|上行|下行|(?<!历史)基准(?![利汇价年期线])|乐观|悲观|中性|兜底|尾部"
+    r"|(?<![A-Za-z])(?i:(?:" + _SCENARIO_WORDS_EN + r")(?:e?s)?)(?![A-Za-z-]))"
+)
+_SCENARIO_WORD_RE = re.compile(_SCENARIO_WORD)
+# A label ends right before a bracket: optional closing bracket ("(base case) (40%)"),
+# then only spaces, quotes and Markdown emphasis ("**Base case** (40%)").
+_LABEL_END_TAIL = r"(?:\s*[)）\]】])?[\s*_\"'“”‘’]*$"
+# A clause, for "a scenario is named in the same clause": it ends at 。；;！？!? or a
+# newline, or at a '.' that is neither a decimal point nor the "prob." / "approx."
+# abbreviation, and reaches back at most 80 characters.
+_CLAUSE_STOP_RE = re.compile(r"[。；;！？!?\n]|(?<!\d)(?<!\bprob)(?<!\bapprox)\.(?!\d)", re.I)
+_CLAUSE_LOOKBACK_CHARS = 80
+# A Chinese scenario may also follow the probability word ("仅10%概率超预期上行",
+# "有40%的概率维持基准"): within 24 characters, before a comma or a clause stop.
+_CLAUSE_AFTER_CHARS = 24
+_CLAUSE_AFTER_STOP_RE = re.compile(r"[,，、。；;！？!?\n]")
+
 # (a) Brackets: "（40%）", "(~40%)", "[40%]", or after a label that a separator ends
 # ("Base (~52% share, 55%)").  The bracket closes right after, or a separator follows
 # and the bracket closes within 40 characters with no range after the token ("(47% vs
 # 32%)" pairs two scenarios; "兑现率口径分歧大（13% vs 40-60%）" compares rates).
 _SLOT_SEPARATOR = r"(?:[,，;；、:：/]|(?<![A-Za-z])(?:vs\.?|or|and)(?![A-Za-z])|与|和|或)"
+_SLOT_SEPARATOR_RE = re.compile(_SLOT_SEPARATOR, re.I)
 _PAREN_LOOKBACK_CHARS = 40
 _PAREN_BEFORE_RE = re.compile(
-    r"[（(\[【]\s*(?:[^()（）\[\]【】\n]{0,30}?" + _SLOT_SEPARATOR + r"\s*)?"
+    r"[（(\[【]\s*(?:(?P<inner>[^()（）\[\]【】\n]{0,30}?)(?P<sep>" + _SLOT_SEPARATOR + r")\s*)?"
     r"(?:~|～|≈|约|approx\.?|(?<![A-Za-z])p\s*=)?\s*$",
     re.I,
 )
 _PAREN_AFTER_RE = re.compile(r"\s*(?:(?P<close>[)）\]】])|" + _SLOT_SEPARATOR + r")", re.I)
 _PAREN_REST_RE = re.compile(r"(?P<rest>[^()（）\[\]【】\n]{0,40}?)[)）\]】]")
 _RANGE_INSIDE_RE = re.compile(r"\d\s*[%％]?\s*(?:-|–|—|~|～|至|到|to)\s*[+\-−–—]?\s*\.?\d", re.I)
+# The bracket's label.  A ':' before the token labels it with the word before the ':'
+# ("(US: 40%)", "(2030: 40%)"); after a list separator a word item without digits
+# labels it too ("(revenue growth, 40%)"), while an item with a number is a sibling
+# value ("(~52% share, 55%)", "(47% vs 32%)") and leaves the label to what precedes
+# the bracket.
+_LABELLING_SEPARATORS = frozenset(":：")
+# A bracket of scenario labels after a metric noun lists that metric per scenario, not
+# their probabilities: "EV share (Base: 52%, Bull: 70%)", "Margins by scenario (Base:
+# 40%, …)", "资本开支增速（基准扩张：40%，财务紧缩：20%）", "资本开支增速（基准扩张40%，
+# 电力受限25%）".  The noun may stand up to 24 characters before the bracket, in the
+# same clause; a noun inside a label of the owner is part of its name.
+_METRIC_BEFORE_BRACKET_CHARS = 24
+_METRIC_NOUN_RE = re.compile(
+    r"增长|增速|占比|份额|同比|关税|(?<![概几然])率"
+    r"|毛利|利润|收入|营收|价格|成本|资本开支|出货|装机|需求|产能|回撤|损失|违约|利差|通胀|失业"
+    r"|(?<![A-Za-z])(?:share|growth|rate|tariff|margin|yield|return|CAGR|IRR|ROE|ROI|WACC"
+    r"|penetration|utili[sz]ation|inflation|unemployment|capex|revenue|sales|price|cost|EPS"
+    r"|earnings|GDP|output|capacity|demand|volume|drawdown|loss|default|spread)",
+    re.I,
+)
+# The same list outside brackets has a header: a metric noun, then a colon or a dash
+# before the labels ("EV share — Base: 40%, Recession: 25%", "Default rates in each
+# case: Base 15%, …", "各情景出货增速：基准扩张40%，…").  "Weights: Base 40%" and
+# "情景概率：基准扩张40%" have no metric noun; "Base 40% (steady growth), Recession 25%"
+# has no header after its noun.  A header is followed by a label, not by a number
+# ("Tariff Ratchet Up: 25%, Managed Fragmentation: 45%" is a label list whose first
+# name holds a metric word), and reaches across ';' ("EV share — Base: 40%; Recession:
+# 25%"), up to 120 characters back to the sentence start.
+_METRIC_HEADER_RE = re.compile(
+    "(?:" + _METRIC_NOUN_RE.pattern + r")[^。；;！？!?\n:：]{0,30}?(?:[:：]|\s[—–-]\s|—)"
+    r"(?=\s*[^\s\d~～≈约<>≤≥+＋\-−–—])",
+    re.I,
+)
+_HEADER_LOOKBACK_CHARS = 120
+_HEADER_STOP_RE = re.compile(r"[。！？!?\n]|(?<!\d)(?<!\bprob)(?<!\bapprox)\.(?!\d)", re.I)
+# The innermost bracket still open before a token (up to 80 characters back, so a long
+# list is covered: "(Base: 40%, Recession: 25%, Stagflation: 20%)").
+_OPEN_BRACKET_LOOKBACK_CHARS = 81
+_OPEN_BRACKET_RE = re.compile(r"[（(\[【][^()（）\[\]【】\n]{0,80}$")
+_LABEL_STRIP_CHARS = " \t*_\"'“”‘’"
+_LABEL_WORD_RE = re.compile(r"[A-Za-z一-鿿]")
+_DIGIT_RE = re.compile(r"\d")
+# A bracket label that is a probability word ("(probability: 40%)", "（概率：40%）").
+# A compound ("default probability", "违约概率", "probability-weighted") is not.
+_PROB_LABEL_RE = re.compile(
+    r"(?:(?:发生|实现|出现|主观|情景)\s*)?(?:概率|几率|可能性)"
+    r"|(?i:(?:(?:our|est\.?|estimated|assigned|subjective|scenario)\s+)?"
+    r"(?:probabilit(?:y|ies)|likelihood|chances?|prob\.?|p))"
+)
 # (b) A probability word right after the number: "10%概率", "40%的发生概率", "40%的可能性",
 # "有40%的把握", "a 40% chance", "40% of the probability mass", "40% likely".  Never a
 # modal "可能" ("约40%可能来自中国" = "may come from") or a hyphenated compound
-# ("40% probability-weighted", "40% chance-weighted cost").  An English probability
-# word with an object ("a 40% chance of X", "… that X", "… for X") counts only when X
-# names the scenario or is a scenario noun ("of the base case", "of upside surprise"
-# for "D: Upside surprise"): "a 30% chance of an early rate cut" is an outside event.
+# ("40% probability-weighted", "40% chance-weighted cost").
 _PROB_AFTER_RE = re.compile(
     r"\s*(?:的\s*)?(?:(?:发生|实现|出现)\s*)?(?:概率|几率|或然率|可能性)"
     r"|\s*的\s*(?:可能|机会|把握)"
@@ -145,28 +244,54 @@ _PROB_AFTER_RE = re.compile(
     r"(?![\w-])",
     re.I,
 )
+# An English probability word's object ("a 40% chance of X", "… that X", "… for X",
+# "40% likely to X") up to the clause end or a connective ("of the base case and a 20%
+# chance of …").  It counts only when it IS the scenario (``_object_res``): an owner
+# label or a scenario reference, optionally a verb of occurrence and a date.
 _PROB_OBJECT_RE = re.compile(
-    r"\s+(?:of|that|for|to)\s+(?P<object>[^,，;；。.!?！？:：()（）\[\]【】\n]{1,60})", re.I
+    r"\s+(?P<lead>of|that|for|to)\s+(?P<object>[^,，;；。.!?！？:：()（）\[\]【】\n]{1,60})", re.I
 )
-# An object that is the scenario itself: a scenario noun, or "likely to materialise".
-_SCENARIO_NOUN_RE = re.compile(
-    r"(?<![A-Za-z])(?:case|scenario|path|outcome|branch)s?(?![A-Za-z])|情景|场景"
-    r"|^(?:materiali[sz]e|occur|happen|play\s+out|unfold|prevail|dominate)(?![A-Za-z])",
+_OBJECT_CUT_RE = re.compile(
+    r"\s(?:and|or|vs\.?|versus|while|whereas|but|with|as|given|because|since|amid)(?![A-Za-z])",
     re.I,
 )
+_OBJECT_DETERMINER = r"(?:(?:the|this|that|our|a|an|its)\s+)?"
+_OBJECT_NOUN = r"(?:case|scenario|path|outcome|branch)(?:e?s)?"
+# A scenario reference without an owner label: a scenario-type word, optionally with
+# a noun ("the base case", "upside", "the downside path"), or up to two modifiers and
+# "scenario" ("the soft-landing scenario").  "the court case" / "a worst-case outcome"
+# are not.
+_OBJECT_SCENARIO = (
+    r"(?:(?:base|baseline|bull|bear|upside|downside|tail|residual|central|modal)"
+    r"(?:[\s-]+" + _OBJECT_NOUN + r")?"
+    r"|(?:[A-Za-z][\w'’-]*[\s-]+){0,2}scenarios?)"
+)
+_OBJECT_VERB = (
+    r"(?:(?:will|would|could|may|might)\s+)?"
+    r"(?:materiali[sz](?:e[sd]?|ing)|occur(?:s|red|ring)?|happen(?:s|ed|ing)?"
+    r"|play(?:s|ed|ing)?\s+out|unfold(?:s|ed|ing)?|prevail(?:s|ed|ing)?"
+    r"|dominat(?:e[sd]?|ing)|hold(?:s|ing)?|comes?\s+true|comes?\s+to\s+pass)"
+)
+_OBJECT_ADJUNCT = (
+    r"(?:\s+(?:by|in|through|until|before)\s+(?:end-?)?\d{4}"
+    r"|\s+over\s+the\s+(?:forecast\s+)?horizon)?"
+)
+_OBJECT_STRIP_CHARS = " \t*_\"'“”‘’"
 # (c) A probability word before the number, linked by LINK GAP only: "基准情景概率降至40%",
-# "几率40%", "probability of 40%".  ("odds" is not one: "the Fed cut odds are 40%",
+# "Recession probability is 25%".  ("odds" is not one: "the Fed cut odds are 40%",
 # "IEA puts the odds at 40%" cite outside odds.)
 _PROB_TRIGGER_RE = re.compile(r"概率|几率|可能性|probabilit(?:y|ies)|likelihood|chances?", re.I)
 _PROB_GAP_MAX_CHARS = 16
 _PROB_TRIGGER_MAX_CHARS = 13
-# Decimals are tokens only in slot (c).  "p=" counts only as a bracketed scenario
-# annotation ("Base (p=0.40)"); a bare p= is a p-value ("regression p=0.40",
-# "p=0.40 (n.s.)").
+# Decimals are tokens only in slot (c) and after a bracketed "p=" ("Base (p=0.40)",
+# which then needs a label before the bracket like any bracket); a bare p= is a
+# p-value ("regression p=0.40", "p=0.40 (n.s.)").
 _DECIMAL_TRIGGER_RE = re.compile(
     r"概率|probabilit(?:y|ies)|prob\.|(?P<p_value>(?<![A-Za-z])p\s*=)", re.I
 )
 _P_VALUE_OPEN_RE = re.compile(r"[（(\[【]\s*$")
+_P_BRACKET_LOOKBACK_CHARS = 12
+_P_BRACKET_RE = re.compile(r"[（(\[【]\s*p\s*=\s*$", re.I)
 _DECIMAL_CURRENCY_BEFORE_RE = re.compile(r"[$¥￥€]\s*$")
 _DECIMAL_CURRENCY_AFTER_RE = re.compile(
     r"\s*(?:USD|EUR|RMB|CNY|美元|欧元|日元|人民币|元|[$¥￥€])", re.I
@@ -187,10 +312,9 @@ _P_VALUE_STATISTIC_RE = re.compile(
 )
 # (d) A scenario label: the name (or a part of it) of the scenario whose old value
 # the number is, then LINK words, then the number.  Names split on separators and
-# enumerators ("A：基准扩张" → "A", "基准扩张"; "Other / Status Quo" → "Other",
-# "Status Quo"; "Path A" → "A"; "Base Case" → "Base").  The first letter must match
-# exactly ("Other" labels the residual scenario, "the other 20%" does not), the
-# rest ignores case.
+# enumerators ("A：基准扩张" → "A", "基准扩张"; "Other / Status Quo" → "Status Quo";
+# "Path A" → "A"; "Base Case" → "Base").  A one-word label must match its first
+# letter exactly ("Recession", not "recession"), the rest ignores case.
 _LABEL_LOOKBACK_CHARS = 80
 _NAME_SPLIT_RE = re.compile(r"[:：/|()（）\[\]【】,，;；]|\s[-–—]\s|—")
 _NAME_ENUMERATOR_RE = re.compile(r"^(?P<enum>[A-Z]|\d{1,2})\s*[.)．、]\s*(?=\S)")
@@ -199,6 +323,9 @@ _NAME_GENERIC_SUFFIX_RE = re.compile(
     r"(?:\s+(?:case|scenario|path|outcome)s?|\s*(?:情景|场景|路径|情形))$", re.I
 )
 _NAME_GENERIC_WORDS = frozenset({"case", "scenario", "path", "outcome", "情景", "场景", "路径", "情形"})
+# A residual word on its own is no label: "Other / Status Quo" is the pipeline's
+# leftover scenario, and "LFP 45%, NMC 35%, Other 20%" is any breakdown's last row.
+_NAME_RESIDUAL_WORDS = frozenset({"other", "others", "其它", "其他", "mixed", "混合"})
 _LABEL_STATE_WORDS = (
     r"is|was|are|has|had|been|now|still|currently|at|holds?|held|gets?|got|carries|carried"
     r"|leads?|led|trails?|trailed|sits?|sat|stands?|stood|remains?|remained|stays?|stayed"
@@ -222,13 +349,29 @@ _LABEL_TAIL = (
     r"|just))\s*)?$"
 )
 # Market / outside-forecaster citations: never the pipeline's own scenario numbers.
+# A market word vetoes every later token of its sentence ('The Polymarket snapshot
+# provides three anchors: "D House" (84%), …, "D sweep" (44%)'), and any token within
+# 40 characters after it or right before it.  The sentence ends at 。；;！？!?, a newline
+# or a '.' before a space — not the dot of a decimal, of an initial or of a common
+# abbreviation ("U.S.", "vs.", "approx."), which would cut the sentence short.
 _MARKET_WINDOW_CHARS = 40
 _MARKET_WORDS = (
     r"polymarket|kalshi|metaculus|manifold|predictit|good\s+judgment|hypermind|market"
     r"|市场|盘口|赔率|superforecast|consensus|analyst|futures|fedwatch|betting|bookmaker"
-    r"|共识|分析师"
+    r"|共识|一致预期|分析师"
+    # outside forecasters whose own "base case" / probabilities a narrative cites
+    r"|goldman|jpmorgan|j\.\s?p\.\s?morgan|morgan\s+stanley|citigroup|barclays|nomura"
+    r"|bank\s+of\s+america|deutsche\s+bank|(?<![A-Za-z])(?:ubs|bofa|hsbc|imf|oecd)(?![A-Za-z])"
+    r"|world\s+bank|bloomberg|reuters|(?<![A-Za-z])(?:iea|bnef|eia|ipcc)(?![A-Za-z])"
+    r"|高盛|摩根|花旗|瑞银|野村|汇丰|彭博|路透|国际货币基金|世界银行|国际能源署"
 )
 _MARKET_BEFORE_RE = re.compile(_MARKET_WORDS, re.I)
+_MARKET_SENTENCE_STOP_RE = re.compile(
+    r"[。；;！？!?\n]"
+    r"|(?<!\d)(?<![^A-Za-z][A-Za-z])(?<!^[A-Za-z])(?<!\bvs)(?<!\bprob)(?<!\bapprox)(?<!\betc)"
+    r"(?<!\bInc)(?<!\bCorp)(?<!\bCo)(?<!\bNo)(?<!\bSt)(?<!\bMr)(?<!\bDr)\.(?=\s|$)",
+    re.I,
+)
 _MARKET_AFTER_RE = re.compile(
     r"\s*(?:[,，(（]\s*)?(?:(?:on|per|at|in|from|via|by|according\s+to)\s+)?(?:the\s+)?"
     r"(?:" + _MARKET_WORDS + r")",
@@ -543,23 +686,68 @@ def _is_range(text: str, start: int, end: int) -> bool:
     return bool(_RANGE_BEFORE_RE.search(before) or _RANGE_AFTER_RE.match(text, end))
 
 
-def _is_quantity(text: str, start: int, end: int) -> bool:
+def _is_quantity(text: str, start: int, end: int, names: Tuple[str, ...] = ()) -> bool:
+    """The token is a quantity or a signed change (see the quantity guard above).
+
+    A quantity word before the token that lies inside a label of ``names`` is part of
+    a scenario name, not a quantity ("我们给基准扩张40%的概率" for "A：基准扩张",
+    "Tariff Ratchet Up at 25%"), so the BEFORE and LEAD guards skip it.
+    """
     if start > 0 and (text[start - 1] in _SIGN_CHARS or (
             text[start - 1] in _DASH_SIGN_CHARS
             and (start == 1 or not (text[start - 2].isalnum() or text[start - 2] in "%％")))):
         return True
     if _QUANTITY_AFTER_RE.match(text, end) or _QUANTITY_TAIL_RE.match(text, end):
         return True
-    if _QUANTITY_BEFORE_RE.search(text, max(0, start - _QUANTITY_BEFORE_WINDOW), start):
-        return True
-    return bool(_QUANTITY_LEAD_RE.search(
-        text, max(0, start - _QUANTITY_LEAD_LOOKBACK_CHARS), start))
+    for word in _QUANTITY_BEFORE_RE.finditer(text, max(0, start - _QUANTITY_BEFORE_WINDOW), start):
+        if not _inside_label(text, word.start(), start, names):
+            return True
+    lower = max(0, start - _QUANTITY_LEAD_LOOKBACK_CHARS)
+    while True:
+        lead = _QUANTITY_LEAD_RE.search(text, lower, start)
+        if lead is None:
+            return False
+        if not _inside_label(text, lead.start(), start, names):
+            return True
+        lower = lead.start() + 1
 
 
-def _is_market(text: str, start: int, end: int) -> bool:
-    """A market or an outside forecaster is cited right before or after the token."""
-    return bool(_MARKET_BEFORE_RE.search(text, max(0, start - _MARKET_WINDOW_CHARS), start)
-                or _MARKET_AFTER_RE.match(text, end))
+def _inside_label(text: str, position: int, end: int, names: Tuple[str, ...]) -> bool:
+    """A label of ``names`` that ends by ``end`` covers ``text[position]``."""
+    mention = _mention_re(names)
+    if mention is None:
+        return False
+    for label in mention.finditer(text, max(0, position - _LABEL_LOOKBACK_CHARS), end):
+        if label.start() > position:
+            return False
+        if position < label.end():
+            return True
+    return False
+
+
+class _MarketCitations:
+    """Whether a market or an outside forecaster is cited for a token of ``text``:
+    anywhere earlier in its sentence, within 40 characters before it, or right after
+    it.  The first market word of each sentence is found once, so the check stays
+    linear in the text."""
+
+    def __init__(self, text: str) -> None:
+        self._text = text
+        self._starts = [0] + [stop.end() for stop in _MARKET_SENTENCE_STOP_RE.finditer(text)]
+        self._first: Dict[int, int] = {}
+
+    def __call__(self, start: int, end: int) -> bool:
+        text = self._text
+        if (_MARKET_AFTER_RE.match(text, end)
+                or _MARKET_BEFORE_RE.search(text, max(0, start - _MARKET_WINDOW_CHARS), start)):
+            return True
+        sentence = bisect_right(self._starts, start) - 1
+        if sentence not in self._first:
+            lo = self._starts[sentence]
+            hi = self._starts[sentence + 1] if sentence + 1 < len(self._starts) else len(text)
+            market = _MARKET_BEFORE_RE.search(text, lo, hi)
+            self._first[sentence] = market.start() if market else len(text)
+        return self._first[sentence] < start
 
 
 @lru_cache(maxsize=1024)
@@ -567,11 +755,12 @@ def _name_aliases(name: str) -> Tuple[str, ...]:
     """Labels a text may use for the scenario called ``name``, longest first.
 
     The name itself, its parts between separators ("A：基准扩张" → "A", "基准扩张";
-    "Other / Status Quo" → "Other", "Status Quo"), an enumerator and the rest after
-    it ("A. 基准" → "A", "基准"), and each of those without a generic word ("Base
-    Case" → "Base", "Path A" → "A", "基准情景" → "基准").  A part is kept when it has a
-    letter or a CJK character, is not only a generic word, and — if it is a single
-    Latin letter — is upper-case.
+    "Other / Status Quo" → "Status Quo"), an enumerator and the rest after it ("A.
+    基准" → "A", "基准"), and each of those without a generic word ("Base Case" →
+    "Base", "Path A" → "A", "基准情景" → "基准").  A part is kept when it has a letter
+    or a CJK character, is neither only a generic word nor only a residual word
+    ("Other", "其它", "Mixed": a breakdown's "Other 20%" row is no scenario), and — if
+    it is a single Latin letter — is upper-case.
     """
     parts = [" ".join(name.split())]
     parts += [part.strip() for part in _NAME_SPLIT_RE.split(parts[0])]
@@ -585,6 +774,7 @@ def _name_aliases(name: str) -> Tuple[str, ...]:
     for part in parts:
         part = part.strip()
         if (not part or part.lower() in _NAME_GENERIC_WORDS
+                or part.lower() in _NAME_RESIDUAL_WORDS
                 or not re.search(r"[A-Za-z一-鿿]", part)
                 or (len(part) == 1 and not part.isupper())):
             continue
@@ -609,11 +799,10 @@ def _alias_pattern(alias: str) -> str:
 
 
 @lru_cache(maxsize=512)
-def _mention_re(names: Tuple[str, ...]) -> Optional[Pattern[str]]:
-    """Any label of ``names`` anywhere: a multi-word label ignoring case ("upside
-    surprise" for "D: Upside surprise"), a one-word label as ``_alias_pattern`` has it
-    (first character exact: "Other" names the residual scenario, "other banks" does not).
-    """
+def _mention_pattern(names: Tuple[str, ...]) -> Optional[str]:
+    """Any label of ``names``: a multi-word label ignoring case ("upside surprise" for
+    "D: Upside surprise"), a one-word label as ``_alias_pattern`` has it (first
+    character exact: "Recession" names the scenario, "a recession" does not)."""
     aliases = sorted({alias for name in names for alias in _name_aliases(name)},
                      key=lambda alias: (-len(alias), alias))
     if not aliases:
@@ -629,7 +818,54 @@ def _mention_re(names: Tuple[str, ...]) -> Optional[Pattern[str]]:
         if alias[-1].isascii() and alias[-1].isalnum():
             part += r"(?![A-Za-z0-9])"
         parts.append(part)
-    return re.compile("|".join(parts))
+    return "(?:" + "|".join(parts) + ")"
+
+
+@lru_cache(maxsize=512)
+def _mention_re(names: Tuple[str, ...]) -> Optional[Pattern[str]]:
+    """Any label of ``names`` anywhere (see ``_mention_pattern``)."""
+    pattern = _mention_pattern(names)
+    return re.compile(pattern) if pattern else None
+
+
+@lru_cache(maxsize=512)
+def _label_end_re(names: Tuple[str, ...]) -> Pattern[str]:
+    """A label of ``names`` or a scenario word that ends the searched slice (the text
+    right before a bracket: "Recession (25%)", "基准情景（40%）", "(base case) (40%)")."""
+    mention = _mention_pattern(names)
+    label = f"(?:{mention}|{_SCENARIO_WORD})" if mention else _SCENARIO_WORD
+    return re.compile(label + _LABEL_END_TAIL)
+
+
+@lru_cache(maxsize=512)
+def _owner_label_re(names: Tuple[str, ...]) -> Optional[Pattern[str]]:
+    """A whole bracket label that is a label of ``names``, optionally with a possessive
+    and a generic noun ("A", "Base case", "Recession scenario", "基准扩张情景")."""
+    mention = _mention_pattern(names)
+    if mention is None:
+        return None
+    return re.compile(
+        mention + r"(?:['’]s)?(?:\s+(?i:" + _OBJECT_NOUN + r")|\s*(?:情景|场景|路径|情形))?")
+
+
+@lru_cache(maxsize=512)
+def _object_res(names: Tuple[str, ...]) -> Tuple[Pattern[str], Pattern[str], Pattern[str]]:
+    """Full-match patterns for an English probability word's object that IS the
+    scenario: after "of" / "for" / "to" a noun phrase ("the base case", "Recession",
+    "the Base scenario", "the status quo" for "Other / Status Quo"), optionally with a
+    verb of occurrence; after "that" a noun phrase and such a verb ("the downside
+    scenario plays out"); after "to" also the verb alone ("likely to materialise",
+    which then needs the scenario earlier in the clause).  Each may end on a date
+    ("by 2030") or "over the horizon"."""
+    mention = _mention_pattern(names)
+    reference = f"(?:{mention}(?:['’]s)?(?:[\\s-]+(?i:{_OBJECT_NOUN}))?|(?i:{_OBJECT_SCENARIO}))" \
+        if mention else f"(?i:{_OBJECT_SCENARIO})"
+    phrase = f"(?i:{_OBJECT_DETERMINER}){reference}"
+    verb = f"(?i:{_OBJECT_VERB})"
+    adjunct = f"(?i:{_OBJECT_ADJUNCT})"
+    return (re.compile(f"{phrase}(?:\\s+{verb})?{adjunct}"),
+            re.compile(f"{phrase}\\s+{verb}{adjunct}"),
+            re.compile(f"{verb}{adjunct}"))
 
 
 @lru_cache(maxsize=512)
@@ -643,40 +879,147 @@ def _label_slot_re(names: Tuple[str, ...]) -> Optional[Pattern[str]]:
         "(?:" + "|".join(_alias_pattern(alias) for alias in aliases) + ")" + _LABEL_TAIL)
 
 
+def _labelled_before(text: str, position: int, names: Tuple[str, ...]) -> bool:
+    """A label of ``names`` or a scenario word ends right before ``position``."""
+    return bool(_label_end_re(names).search(
+        text, max(0, position - _LABEL_LOOKBACK_CHARS), position))
+
+
+def _names_scenario(text: str, lo: int, hi: int, names: Tuple[str, ...]) -> bool:
+    """``text[lo:hi]`` holds a scenario word or a label of ``names``."""
+    if _SCENARIO_WORD_RE.search(text, lo, hi):
+        return True
+    mention = _mention_re(names)
+    return bool(mention is not None and mention.search(text, lo, hi))
+
+
+def _clause_names_scenario(text: str, position: int, names: Tuple[str, ...]) -> bool:
+    """The clause before ``position`` (at most 80 characters) names a scenario."""
+    lo = max(0, position - _CLAUSE_LOOKBACK_CHARS)
+    for stop in _CLAUSE_STOP_RE.finditer(text, lo, position):
+        lo = stop.end()
+    return _names_scenario(text, lo, position, names)
+
+
+def _names_scenario_after(text: str, position: int, names: Tuple[str, ...]) -> bool:
+    """A scenario is named right after ``position``, before a comma or a clause stop
+    ("仅10%概率超预期上行")."""
+    hi = min(len(text), position + _CLAUSE_AFTER_CHARS)
+    stop = _CLAUSE_AFTER_STOP_RE.search(text, position, hi)
+    return _names_scenario(text, position, stop.start() if stop else hi, names)
+
+
+def _bracket_label(inner: Optional[str], separator: Optional[str]) -> Optional[str]:
+    """The word label a bracket gives its token, or None (see ``_LABELLING_SEPARATORS``)."""
+    if inner is None:
+        return None
+    label = _SLOT_SEPARATOR_RE.split(inner)[-1].strip(_LABEL_STRIP_CHARS)
+    if not label:
+        return None
+    if separator in _LABELLING_SEPARATORS:
+        return label
+    return label if _LABEL_WORD_RE.search(label) and not _DIGIT_RE.search(label) else None
+
+
+def _bracket_is_labelled(text: str, bracket: "re.Match[str]", names: Tuple[str, ...],
+                         any_object: bool) -> bool:
+    """Slot (a)'s label rule: a word label inside the bracket must be a label of
+    ``names`` or a probability word (then a scenario must be named earlier in the
+    clause); without one, a label of ``names`` or a scenario word must end right
+    before the bracket."""
+    opening = bracket.start()
+    label = _bracket_label(bracket.group("inner"), bracket.group("sep"))
+    if label is None:
+        return _labelled_before(text, opening, names)
+    if _metric_before_bracket(text, opening, names):
+        return False
+    owner = _owner_label_re(names)
+    if owner is not None and owner.fullmatch(label):
+        return True
+    if _PROB_LABEL_RE.fullmatch(label):
+        return any_object or _clause_names_scenario(text, opening, names)
+    return False
+
+
+def _metric_before_bracket(text: str, opening: int, names: Tuple[str, ...]) -> bool:
+    """A metric noun stands in the clause shortly before the bracket at ``opening``
+    (see ``_METRIC_BEFORE_BRACKET_CHARS``); one inside a label of ``names`` is part of
+    a scenario name."""
+    lo = max(0, opening - _METRIC_BEFORE_BRACKET_CHARS)
+    for stop in _CLAUSE_STOP_RE.finditer(text, lo, opening):
+        lo = stop.end()
+    return any(not _inside_label(text, word.start(), opening, names)
+               for word in _METRIC_NOUN_RE.finditer(text, lo, opening))
+
+
+def _english_word_slot(text: str, start: int, word_end: int, names: Tuple[str, ...]) -> bool:
+    """Slot (b) for an English probability word: its object must be the scenario;
+    without an object, a scenario must be named earlier in the clause."""
+    target = _PROB_OBJECT_RE.match(text, word_end)
+    if target is None:
+        return _clause_names_scenario(text, start, names)
+    words = _OBJECT_CUT_RE.split(target.group("object"), maxsplit=1)[0].strip(_OBJECT_STRIP_CHARS)
+    phrase_re, that_re, verb_re = _object_res(names)
+    lead = target.group("lead").lower()
+    if lead == "that":
+        return bool(that_re.fullmatch(words))
+    if lead == "to" and verb_re.fullmatch(words):
+        return _clause_names_scenario(text, start, names)
+    return bool(phrase_re.fullmatch(words))
+
+
 def _in_slot(text: str, start: int, end: int, kind: str, names: Tuple[str, ...],
              any_object: bool = False) -> bool:
-    """The token sits in a recognised probability slot (see the module docstring).
+    """The token sits in a recognised probability slot that names a scenario (see
+    the module docstring).
 
-    ``names`` are the scenario names a label slot or an English probability object may
-    use.  ``any_object`` accepts an English probability word whatever its object (the
-    over-inclusive reading a foreign token's record needs).
+    ``names`` are the scenario names whose labels count (the owner's, or every name of
+    the move for a foreign token).  ``any_object`` drops the naming requirement of the
+    probability-word slots (b) and (c) and of a bracketed probability word: the
+    over-inclusive reading a foreign token's record needs, since a record only blocks.
     """
-    if kind == "decimal":
-        return True                     # a decimal is a token only in slot (c)
+    if kind == "decimal":               # slot (c), or a bracketed "p=" (slot (a))
+        p_bracket = _P_BRACKET_RE.search(text, max(0, start - _P_BRACKET_LOOKBACK_CHARS), start)
+        if p_bracket:
+            return _labelled_before(text, p_bracket.start(), names)
+        return any_object or _clause_names_scenario(text, start, names)
     after = _PAREN_AFTER_RE.match(text, end)
-    if after and _PAREN_BEFORE_RE.search(text, max(0, start - _PAREN_LOOKBACK_CHARS), start):
-        if after.group("close"):
-            return True
-        rest = _PAREN_REST_RE.match(text, end)
-        return bool(rest and not _RANGE_INSIDE_RE.search(rest.group("rest")))
+    bracket = after and _PAREN_BEFORE_RE.search(text, max(0, start - _PAREN_LOOKBACK_CHARS), start)
+    if bracket:
+        if not after.group("close"):
+            rest = _PAREN_REST_RE.match(text, end)
+            if not rest or _RANGE_INSIDE_RE.search(rest.group("rest")):
+                return False
+        return _bracket_is_labelled(text, bracket, names, any_object)
+    # Any other slot inside a bracket that follows a metric noun lists the metric
+    # ("资本开支增速（基准扩张40%，电力受限25%）").
+    inside = _OPEN_BRACKET_RE.search(text, max(0, start - _OPEN_BRACKET_LOOKBACK_CHARS), start)
+    if inside and _metric_before_bracket(text, inside.start(), names):
+        return False
     word = _PROB_AFTER_RE.match(text, end)
     if word:
-        target = None if any_object or not word.group("en") else _PROB_OBJECT_RE.match(
-            text, word.end())
-        if target is None:
+        if any_object:
             return True
-        mention = _mention_re(names)
-        return bool(_SCENARIO_NOUN_RE.search(target.group("object"))
-                    or (mention is not None and mention.search(target.group("object"))))
+        if word.group("en"):
+            return _english_word_slot(text, start, word.end(), names)
+        return (_clause_names_scenario(text, start, names)
+                or _names_scenario_after(text, word.end(), names))
     if not _SLOT_END_RE.match(text, end):
         return False
     lower = max(0, start - _PROB_GAP_MAX_CHARS - _PROB_TRIGGER_MAX_CHARS)
-    if any(_linked(text, trigger.end(), start)
-           for trigger in _PROB_TRIGGER_RE.finditer(text, lower, start)):
-        return True
+    for trigger in _PROB_TRIGGER_RE.finditer(text, lower, start):
+        if _linked(text, trigger.end(), start) and (
+                any_object or _clause_names_scenario(text, trigger.start(), names)):
+            return True
     label_re = _label_slot_re(names)
-    return bool(label_re is not None and label_re.search(
-        text, max(0, start - _LABEL_LOOKBACK_CHARS), start))
+    label = label_re.search(text, max(0, start - _LABEL_LOOKBACK_CHARS), start) if label_re else None
+    if label is None:
+        return False
+    sentence = max(0, label.start() - _HEADER_LOOKBACK_CHARS)
+    for stop in _HEADER_STOP_RE.finditer(text, sentence, label.start()):
+        sentence = stop.end()
+    # The header's look-ahead reads the label's first character.
+    return not _METRIC_HEADER_RE.search(text, sentence, label.start() + 1)
 
 
 def _sentence_bounds(text: str) -> List[_Span]:
@@ -764,13 +1107,15 @@ def _rewrite(text: str, move: _Move) -> Tuple[str, List[Dict[str, str]], Dict[st
     Returns ``(new_text, edits, skipped, unattributed)``; ``unattributed`` holds the
     values of tokens left alone because ``move.unresolved`` names them, and of
     ``foreign`` tokens: a token whose value is in ``move.fresh`` (no scenario of this
-    move held it before the move, but one holds it now: "a 25% chance of an early
-    rate cut") that sits in a probability slot and that no range, quantity or market
-    guard skips.  Those guards and the bracket / probability-word slots read only the
-    words next to the token, never a number's value, so they skip the same token
-    again at every later step; a label slot counts for any scenario name of the move
-    (the next step may attribute the value to any of them); the sum shield also
-    depends on the values of the other numbers in the sentence, which later steps may
+    move held it before the move, but one holds it now: "a rate-cut scenario (25%)")
+    that sits in a probability slot and that no range, quantity or market guard
+    skips.  Those guards read only the words around the token, never a number's value,
+    so they skip the same token again at every later step.  The slots and the
+    quantity guard's exemption for a word inside a scenario label depend on the
+    owner's names, so a foreign token is read with every scenario name of the move
+    (the next step may attribute the value to any of them) and with the naming
+    requirement of the probability-word slots dropped; the sum shield also depends
+    on the values of the other numbers in the sentence, which later steps may
     rewrite, so a foreign token inside a sum statement is still recorded.
     """
     skipped: Counter = Counter()
@@ -780,6 +1125,7 @@ def _rewrite(text: str, move: _Move) -> Tuple[str, List[Dict[str, str]], Dict[st
     sentences = _sentence_bounds(text)
     sentence_starts = [lo for lo, _ in sentences]
     shields: Dict[int, Optional[Set[_Span]]] = {}
+    is_market = _MarketCitations(text)
     replacements: List[Tuple[int, int, str]] = []
     for token in _probability_tokens(text):
         start, end, value, kind = token
@@ -791,16 +1137,17 @@ def _rewrite(text: str, move: _Move) -> Tuple[str, List[Dict[str, str]], Dict[st
         new_pct = move.mapping.get(value)
         if new_pct is None:
             if (value in move.fresh and not _is_range(text, start, end)
-                    and not _is_quantity(text, start, end)
-                    and not _is_market(text, start, end)
+                    and not _is_quantity(text, start, end, move.names)
+                    and not is_market(start, end)
                     and _in_slot(text, start, end, kind, move.names, any_object=True)):
                 skipped["foreign"] += 1
                 unattributed.add(value)
             continue
+        owner = move.owners.get(value, ())
         if _is_range(text, start, end):
             skipped["range"] += 1
             continue
-        if _is_quantity(text, start, end):
+        if _is_quantity(text, start, end, owner):
             skipped["quantity"] += 1
             continue
         sentence = bisect_right(sentence_starts, start) - 1
@@ -810,10 +1157,10 @@ def _rewrite(text: str, move: _Move) -> Tuple[str, List[Dict[str, str]], Dict[st
         if shield is None or (start, end) in shield:
             skipped["sum"] += 1
             continue
-        if _is_market(text, start, end):
+        if is_market(start, end):
             skipped["market"] += 1
             continue
-        if not _in_slot(text, start, end, kind, move.owners.get(value, ())):
+        if not _in_slot(text, start, end, kind, owner):
             skipped["no_slot"] += 1
             continue
         replacements.append((start, end, _format_replacement(text, token, new_pct)))
