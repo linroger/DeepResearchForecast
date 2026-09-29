@@ -483,3 +483,22 @@ def _stub_persist_env():
 def real_persist_env(_stub_persist_env):
     """The original Config._persist_env; it writes the real repo-root .env."""
     return _stub_persist_env
+
+
+@pytest.fixture(autouse=True)
+def _isolate_forecast_ledger(tmp_path, monkeypatch):
+    """EVAL-1: no test may append to the real calibration ledger.
+
+    Every report generated in a test now commits a ledger row after publication,
+    so the ledger directory is pointed at a per-test temp SUBDIRECTORY (the
+    evaluation ledger resolves beside it, i.e. under the same per-test tmp_path,
+    so golden/evaluation rows cannot leak between tests either). Tests that need
+    a specific directory still override it or pass ``d=`` explicitly.
+    """
+    monkeypatch.delenv("FORECAST_LEDGER_DIR", raising=False)
+    try:
+        from app.config import Config
+        monkeypatch.setattr(Config, "FORECAST_LEDGER_DIR",
+                            str(tmp_path / "_forecast_ledger"), raising=False)
+    except Exception:  # noqa: BLE001 — Config 不可导入时无账本可写
+        pass

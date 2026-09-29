@@ -1529,6 +1529,23 @@ class ReportAgent:
         "校准与信心评估",
     ]
 
+    @staticmethod
+    def resolve_output_language(simulation_requirement: str, research_report: str = "",
+                                situation_brief: str = "") -> str:
+        """The report's output language (REPORT_OUTPUT_LANGUAGE override, else sniffed).
+
+        Shared by ``__init__`` and callers that need a finished report's language
+        without constructing an agent (EVAL-1's reused-report ledger repair).
+        """
+        forced = (os.environ.get("REPORT_OUTPUT_LANGUAGE", "") or "").strip()
+        if forced:
+            return forced
+        try:
+            from .requirement_spec import detect_output_language
+            return detect_output_language(simulation_requirement, research_report, situation_brief)
+        except Exception:  # noqa: BLE001 — never block construction on language sniff
+            return "English"
+
     def __init__(
         self,
         graph_id: str,
@@ -1590,16 +1607,8 @@ class ReportAgent:
         # report (an English brief → English submission; a wrong-language report is an automatic
         # round-one fail). Overridable via REPORT_OUTPUT_LANGUAGE. Consumed by _lang_override()
         # (section/plan prompts) and the binary/Part-1 renderers.
-        _forced_lang = (os.environ.get("REPORT_OUTPUT_LANGUAGE", "") or "").strip()
-        if _forced_lang:
-            self.output_language = _forced_lang
-        else:
-            try:
-                from .requirement_spec import detect_output_language
-                self.output_language = detect_output_language(
-                    self.simulation_requirement, self.research_report, self.situation_brief)
-            except Exception:  # noqa: BLE001 — never block construction on language sniff
-                self.output_language = "English"
+        self.output_language = self.resolve_output_language(
+            self.simulation_requirement, self.research_report, self.situation_brief)
         # T4.6/T4.7: 情景标签（what-if 框架）+ base 模拟 id（反事实对比）
         self.scenario_label = (scenario_label or "").strip()
         self.base_simulation_id = base_simulation_id or None
@@ -1666,6 +1675,11 @@ class ReportAgent:
         # RPT-5: 大纲摘要（generate_report 规划完成后回填），供引用溯源审计豁免系统注入的
         # 摘要 blockquote（assemble_full_report 固定输出 "> {outline.summary}"）。
         self._outline_summary = ""
+        # EVAL-1: 账本提交的溯源上下文（编排器/脚本在构造后赋值：pipeline_id、seed、run_kind、
+        # record_class、as_of_date；API 路径不设 → 默认 production）与本次提交回执。
+        # 测试经 __new__ 构造 agent 时二者缺失，读取一律走 getattr。
+        self.ledger_context: Optional[Dict[str, Any]] = None
+        self.ledger_receipt: Optional[Dict[str, Any]] = None
 
         self.llm = llm_client or LLMClient()
         self.zep_tools = zep_tools or ZepToolsService()
@@ -3184,12 +3198,16 @@ class ReportAgent:
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
         # P2-4: 追加进校准账本（loop-closer；resolution 经 /api/v1/resolve 或 forecast_tools backtest）。
+        # EVAL-1: 仅 FORECAST_LEDGER_COMMIT_MODE=legacy 在此（终审之前）追加；默认 published 模式
+        # 由 generate_report 在终审封印 + 落盘之后经 _commit_forecast_ledger 提交封印字节。
         if getattr(Config, "REPORT_FORECAST_LEDGER", True):
             try:
                 from .forecast_ledger import append_forecast as _append
-                _append(forecast, report_id=report_id,
-                        horizon=str(forecast.get("horizon") or "") or None,
-                        created_at=datetime.now().isoformat())
+                from .ledger_commit import commit_mode as _ledger_commit_mode
+                if _ledger_commit_mode() == "legacy":
+                    _append(forecast, report_id=report_id,
+                            horizon=str(forecast.get("horizon") or "") or None,
+                            created_at=datetime.now().isoformat())
             except Exception:  # noqa: BLE001
                 pass
         logger.info(
@@ -10334,6 +10352,41 @@ class ReportAgent:
             still_failed.extend([title] * max(0, count))
         return still_failed
 
+    def _commit_forecast_ledger(self, report_id: str, report: "Report",
+                                error: Optional[str] = None) -> Dict[str, Any]:
+        """EVAL-1: run the post-publication steps (first: the forecast-ledger commit).
+
+        Called once the report is terminal and saved (meta.json + full_report.md on
+        disk), so ``publication_status`` judges the exact published bytes. Only reads
+        the sealed artifacts: never mutates forecast.json / full_report.md and never
+        changes the report status. Any failure yields ``{'status': 'error'}``, logged
+        at WARNING because such a report is missing from the auditable ledger.
+        """
+        try:
+            from . import ledger_commit as _ledger_commit
+            _status = getattr(report, "status", None)
+            receipt = _ledger_commit.run_post_publication(
+                self, report_id,
+                report_status=str(getattr(_status, "value", _status) or ""),
+                error=error,
+                publication_status_fn=ReportManager.publication_status,
+                load_forecast_fn=ReportManager.load_structured_forecast,
+                final_audit_path_fn=ReportManager._get_report_final_audit_path,
+            )
+        except Exception as _le:  # noqa: BLE001 — 账本为旁路记账，绝不影响报告终态
+            receipt = {"status": "error", "reasons": [f"{type(_le).__name__}: {_le}"[:300]]}
+        if not isinstance(receipt, dict):
+            receipt = {"status": "error", "reasons": ["post-publication returned no receipt"]}
+        receipt.setdefault("report_id", report_id)
+        self.ledger_receipt = receipt
+        _line = (f"[ledger] status={receipt.get('status')} "
+                 f"commit_id={receipt.get('commit_id')} report={report_id}")
+        if receipt.get("status") == "error":
+            logger.warning(f"{_line} reasons={receipt.get('reasons')}")
+        else:
+            logger.info(_line)
+        return receipt
+
     def generate_report(
         self,
         progress_callback: Optional[Callable[[str, int, str], None]] = None,
@@ -10892,17 +10945,28 @@ class ReportAgent:
                 failed_sections=failed_section_titles,
                 forecast_ok=_forecast_ok
             )
-            
-            if progress_callback:
-                progress_callback("completed", 100, "报告生成完成")
-            
-            logger.info(f"报告生成完成: {report_id}")
-            
-            # 关闭控制台日志记录器
-            if self.console_logger:
-                self.console_logger.close()
-                self.console_logger = None
-            
+            # EVAL-1: 账本提交放在收尾步骤（进度回调/日志/关闭控制台）之后、return 之前：
+            # 须在 save_report/update_progress 之后（publication_status 读 meta.json）；收尾步骤
+            # 抛普通异常会让失败分支把报告改记 FAILED（不可发布）→ 只留 unpublished_terminal 行，
+            # 绝不让计分主行归属一份未发布报告。取消/熔断（BaseException）不经失败分支，
+            # 报告仍以 completed 落盘可发布 → 照常入账后再上抛。
+            try:
+                if progress_callback:
+                    progress_callback("completed", 100, "报告生成完成")
+
+                logger.info(f"报告生成完成: {report_id}")
+
+                # 关闭控制台日志记录器
+                if self.console_logger:
+                    self.console_logger.close()
+                    self.console_logger = None
+            except Exception:  # 普通异常 → 下方失败分支（报告改记 FAILED，只记 unpublished 行）
+                raise
+            except BaseException:  # 取消/熔断：报告已按 completed 发布 → 入账后上抛
+                self._commit_forecast_ledger(report_id, report)
+                raise
+
+            self._commit_forecast_ledger(report_id, report)
             return report
             
         except Exception as e:
@@ -10924,6 +10988,8 @@ class ReportAgent:
                 )
             except Exception:
                 pass  # 忽略保存失败的错误
+            # EVAL-1: 失败终态同样留痕——unpublished_terminal 行（不计分）让校准分母可审计。
+            self._commit_forecast_ledger(report_id, report, error=str(e))
             
             # 关闭控制台日志记录器
             if self.console_logger:

@@ -21,6 +21,7 @@ from datetime import date
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from ..utils.atomic import write_json_atomic
+from ..utils.canonical_json import canonical_json_sha256
 
 
 ACTOR_CONTEXT_VERSION = "actor-context/v1"
@@ -391,17 +392,6 @@ _GENERIC_RELEVANCE_TERMS = {
     "未知", "主张", "证据", "缺口", "行动", "计划", "投资", "能力", "未来",
     "当前", "决策", "风险",
 }
-
-
-def canonical_json_sha256(value: Any) -> str:
-    """Hash strict canonical JSON, rejecting NaN and unserialisable objects."""
-    return hashlib.sha256(json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")).hexdigest()
 
 
 def text_sha256(value: str) -> str:
