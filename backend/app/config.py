@@ -1609,6 +1609,24 @@ class Config:
     # R2-SIM-1 / R2-CAL-3：默认开——硬前提：没有它脊柱只看到活动量、零建模结果。成本由
     # OASIS_DEFAULT_MAX_ROUNDS 封顶 + SIM_CONVERGENCE_STOP 早停 + 并行 elicitation 约束。
     SIM_DECISION_CHANNEL = os.environ.get('SIM_DECISION_CHANNEL', 'true').strip().lower() == 'true'
+    # SIM-2 (C26): bind every decision-channel reply to the round roster before it can move
+    # WorldState — canonical roster ids, unknown ids and duplicate rows dropped, magnitude and
+    # confidence finite and clamped to [0,1], a missing magnitude rejected instead of becoming
+    # 1.0 — and record reason-coded counts per round plus a run-level fallback_share. Default
+    # on: an honesty check that fails closed with zero extra LLM calls and unchanged prompt
+    # text (only rosters above 17 rows get a larger max_tokens). false restores the legacy
+    # parse loop and trajectories byte for byte.
+    DECISION_CHANNEL_VALIDATION = os.environ.get(
+        'DECISION_CHANNEL_VALIDATION', 'true').strip().lower() == 'true'
+    # SIM-2: a run whose share of roster slots without an accepted or abstained answer exceeds
+    # this is at best 'inconclusive' (fallback_share_exceeded, forecast_effect=no_update).
+    # Uncalibrated: 0.5 is a conservative majority-of-slots floor; log live rates before tightening.
+    DECISION_CHANNEL_FALLBACK_MAX_SHARE = float(
+        os.environ.get('DECISION_CHANNEL_FALLBACK_MAX_SHARE', '0.5') or '0.5')
+    # SIM-5: per-round individual-actor cap before the tail collapses into one public block.
+    # Previously a ghost knob read via getattr by both decision-channel producers; 60 is the
+    # default they already used, so defining it here changes nothing.
+    DECISION_CHANNEL_MAX_ACTIVE = int(os.environ.get('DECISION_CHANNEL_MAX_ACTIVE', '60') or '60')
     # Foglamp WP1 (1D, I-16/I-18)：模拟对已发布概率的影响政策（run-pinned）。
     #   diagnostic_only —— 默认。模拟/WorldState 产出只进「显式标注模拟来源」的分析散文，
     #                      不进 derive_forecast_spine() 的概率生成输入，不调整任何概率。

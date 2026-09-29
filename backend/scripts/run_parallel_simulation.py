@@ -3381,8 +3381,10 @@ class _InbandWorldEvolution:
     def __init__(self, config: Dict[str, Any], simulation_dir: str,
                  expected_platforms: int, log_info) -> None:
         from app.services import decision_channel as _dc_mod
+        from app.services import decision_validation as _dv_mod
         from app.services.worldstate import WorldState
         self._dc = _dc_mod
+        self._dv = _dv_mod
         self._log = log_info
         self._dir = simulation_dir
         self._expected = max(1, int(expected_platforms or 1))
@@ -3431,6 +3433,9 @@ class _InbandWorldEvolution:
             row0["as_of"] = self._as_of_date  # spec §6: 第 0 行 as_of=as_of_date
         self._trajectory: List[Dict[str, Any]] = [row0]
         self._decisions: List[Dict[str, Any]] = []
+        # SIM-2：逐轮名册校验记录（elicit_round 写入 ctx["decision_validation"]；旧签名的
+        # elicit 替身不写 → 无记录、无新键、裁定不变）。只收已步进轮，收尾汇总成 fallback_share。
+        self._validation_records: List[Dict[str, Any]] = []
         self._watermark: Dict[str, int] = {}   # 平台 → 已交付/心跳的最高轮次（0 基）
         self._done: set = set()                # 已结束回路的平台
         self._pending: Dict[int, Dict[str, Any]] = {}  # 轮次 → 合并缓冲（等齐平台水位）
@@ -3553,16 +3558,26 @@ class _InbandWorldEvolution:
             # 步进的轮次，未入账轮不改它们：有损续跑时 validity=inconclusive 可与"已趋稳"并存，
             # 下游须以 validity 为准（报告侧 REPORT_WORLDSTATE_HIDE_INVALID 默认连趋稳行一并隐藏）。
             # 裁定失败只丢裁定键，绝不丢轨迹。
+            # SIM-2：有校验记录时汇总 run 级 fallback_share 并折入裁定（超阈 → inconclusive）；
+            # 无记录的已步进轮计作 unmeasured。汇总与裁定同进退：失败只丢裁定键。
             try:
                 accounted = len(self._ws.round_statuses)
+                validation_summary = None
+                if self._validation_records:
+                    validation_summary = self._dv.summarize_validation(
+                        self._validation_records,
+                        unmeasured_rounds=max(0, accounted - len(self._validation_records)))
                 verdict = self._dc.decision_channel_verdict(
                     self._ws.round_accounting(),
-                    unaccounted_rounds=max(0, self._max_seen_round - accounted))
+                    unaccounted_rounds=max(0, self._max_seen_round - accounted),
+                    fallback_share=(validation_summary or {}).get("fallback_share"))
                 result["round_accounting"] = verdict["round_accounting"]
                 result["validity"] = verdict["validity"]
                 result["validity_reasons"] = verdict["validity_reasons"]
                 result["forecast_effect"] = verdict["forecast_effect"]
                 result["epistemic_status"] = "elicited_model_projection"
+                if validation_summary is not None:
+                    result["decision_validation"] = validation_summary
             except Exception as _v_err:  # noqa: BLE001
                 self._log(f"in-band 有效性裁定失败（已隔离，轨迹照写、无裁定键）: {_v_err}")
             write_json_atomic(os.path.join(self._dir, "world_state_trajectory.json"), result)
@@ -3633,6 +3648,9 @@ class _InbandWorldEvolution:
                 ctx.update({"period": period, "n_rounds": self._n_rounds,
                             "horizon_date": self._horizon_date, "unit": self._unit})
             commitments = self._dc.elicit_round(roster, ctx) if roster else []
+            # SIM-2：本轮名册校验记录（DECISION_CHANNEL_VALIDATION 开时由 elicit_round 写入）
+            validation = ctx.get("decision_validation")
+            validation = validation if isinstance(validation, dict) else None
             # Foglamp WP1 (1C/I-16): elicit_round 把类型化轮结果写入 ctx["round_status"]
             # （committed/abstained/silent/failed/missing）；roster 为空即 missing。
             # 旧签名的 elicit 替身（测试/降级路径）不写状态 → 传 None，由
@@ -3647,6 +3665,8 @@ class _InbandWorldEvolution:
             prev_shares = dict(self._ws.shares)
             self._ws.step(commitments, inertia=eff_inertia, entropy_mix_days=entropy_days,
                           round_status=round_status)
+            if validation is not None:  # 与 WorldState 入账轮一一对应（步进成功后才收）
+                self._validation_records.append(validation)
             out = self._ws.outcome()
             leader = out.get("leader")
             # leader_move：只取方向（up/down/flat），份额数值绝不进 agent 可见文本
@@ -3681,6 +3701,8 @@ class _InbandWorldEvolution:
                 for fk in ("period_start", "period_end", "label"):
                     if period.get(fk):
                         snap[fk] = str(period[fk])
+            if validation is not None:
+                snap["decision_validation"] = validation
             self._trajectory.append(snap)
             # world_digest.jsonl（审计产物）：定量份额只活在这里和轨迹里（spec §4）
             digest_row = {
@@ -3695,6 +3717,11 @@ class _InbandWorldEvolution:
                                    - float(prev_shares.get(k, 0.0)), 6)
                           for k in self._ws.shares},
             }
+            if validation is not None and validation.get("measured") is True:
+                # SIM-2：名册覆盖（失败轮的 {"measured": False} 没有计数可报）
+                digest_row["actor_coverage"] = {
+                    k: validation.get(k) for k in ("roster_size", "accepted", "abstained",
+                                                   "rejected", "missing_from_reply")}
             with open(os.path.join(self._dir, "world_digest.jsonl"), "a", encoding="utf-8") as _f:
                 _f.write(json.dumps(digest_row, ensure_ascii=False) + "\n")
             # 收敛只记信号（SIM-1 同窗口口径），绝不早停

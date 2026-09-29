@@ -1,5 +1,10 @@
 """NEXTSTEPS P1-1 integration: decision-channel orchestration (offline, fake LLM)."""
 
+import copy
+import hashlib
+import json
+
+from app.config import Config
 from app.services import decision_channel as dc
 from app.services.decision_channel import (
     PUBLIC_BLOCK_ID,
@@ -30,7 +35,9 @@ def test_run_decision_channel_evolves_outcome():
                        {"agent_id": 2, "scenario": "S1", "magnitude": 1, "confidence": 1}]},
         {"decisions": [{"agent_id": 1, "scenario": "S1", "magnitude": 1, "confidence": 1}]},
     ])
-    res = run_decision_channel(actions, agent_configs, seed, fake, inertia=0.5)
+    # concurrency=1: FakeLLMClient pops replies FIFO, and roster-bound validation (SIM-2)
+    # rejects a reply that a thread pool delivered to another round's roster.
+    res = run_decision_channel(actions, agent_configs, seed, fake, inertia=0.5, concurrency=1)
     assert res["outcome"]["leader"] == "S1"         # evolved toward the committed scenario
     assert res["outcome"]["shares"]["S1"] > 0.5
     assert res["n_rounds"] == 2
@@ -145,3 +152,223 @@ def test_windowed_convergence(monkeypatch):
                                fake, inertia=0.5)
     ca = res["converged_at"]
     assert ca is None or ca >= 3                        # never before the window fills
+
+
+# --------------------------------------------------------------------------- SIM-2
+def _one_round(reply):
+    """One replayed round for actors 1 and 2 (outcome power 1.0 and 3.0)."""
+    actions = [{"round": 1, "agent_id": 1, "agent_name": "A"},
+               {"round": 1, "agent_id": 2, "agent_name": "B"}]
+    cfgs = [
+        {"agent_id": 1, "entity_name": "A", "influence_weight": 2.0, "outcome_power": 1.0},
+        {"agent_id": 2, "entity_name": "B", "influence_weight": 1.0, "outcome_power": 3.0}]
+    return run_decision_channel(actions, cfgs, {"scenarios": ["S1", "S2"],
+                                                "base_rates": {"S1": 0.5, "S2": 0.5}},
+                                FakeLLMClient(json_responses=[reply]), inertia=0.5,
+                                concurrency=1)
+
+
+def test_hallucinated_duplicate_and_inflated_rows_add_no_weight():
+    """SIM-2: an out-of-roster id, a duplicate row, a string id and magnitude 7 move
+    WorldState exactly as the equivalent clean reply; every repair is reason-coded."""
+    clean = _one_round({"decisions": [
+        {"agent_id": 1, "scenario": "S1", "magnitude": 1, "confidence": 1},
+        {"agent_id": 2, "scenario": "S2", "magnitude": 1, "confidence": 1}]})
+    messy = _one_round({"decisions": [
+        {"agent_id": 1, "scenario": "S1", "magnitude": 1, "confidence": 1},
+        {"agent_id": 999, "scenario": "S2", "magnitude": 1, "confidence": 1},
+        {"agent_id": 1, "scenario": "S2", "magnitude": 1, "confidence": 1},
+        {"agent_id": "2", "scenario": "S2", "magnitude": 7, "confidence": 1}]})
+    assert messy["outcome"]["shares"] == clean["outcome"]["shares"]
+    assert [t["shares"] for t in messy["trajectory"]] == [t["shares"] for t in clean["trajectory"]]
+    # the string id kept its actor's outcome power (canonical roster id → pmap hit)
+    assert [(d["agent_id"], d["outcome_power"]) for d in messy["decisions"]] == [(1, 1.0), (2, 3.0)]
+    rec = messy["trajectory"][1]["decision_validation"]
+    assert rec["reasons"]["unknown_agent"] == 1 and rec["reasons"]["duplicate"] == 1
+    assert rec["normalized"]["id_coerced"] == 1 and rec["normalized"]["clamped"] == 1
+    assert rec["roster_agent_ids"] == ["1", "2"] and rec["fallback_slots"] == 0
+    assert clean["trajectory"][1]["decision_validation"]["rejected"] == 0
+    assert messy["decision_validation"]["measured_rounds"] == 1
+    assert messy["decision_validation"]["fallback_share"] == 0.0
+    assert messy["validity"] == "valid"
+
+
+def test_elicit_round_records_validation_in_ctx():
+    roster = [{"agent_id": 1, "outcome_power": 2.0}, {"agent_id": 2}]
+    fake = FakeLLMClient(json_responses=[{"decisions": [
+        {"agent_id": 999, "scenario": "S1", "magnitude": 1, "confidence": 1},
+        {"agent_id": "1", "scenario": "S1", "magnitude": 1, "confidence": 0.5},
+        {"agent_id": 2, "scenario": dc.ABSTAIN_TOKEN}]}])
+    ctx = {"llm": fake, "scenarios": ["S1", "S2"], "round_num": 3}
+    out = dc.elicit_round(roster, ctx)
+    rec = ctx["decision_validation"]
+    assert rec["reasons"]["unknown_agent"] == 1
+    assert rec["roster_agent_ids"] == ["1", "2"]
+    assert rec["abstained_agent_ids"] == ["2"] and rec["measured"] is True
+    assert ctx["round_status"] == "committed"
+    assert len(out) == 1 and out[0]["agent_id"] == 1
+    assert out[0]["outcome_power"] == 2.0 and out[0]["weight"] == 2.0 * 0.5
+    # no attempt (empty roster) → no record
+    ctx_empty = {"llm": fake, "scenarios": ["S1"]}
+    assert dc.elicit_round([], ctx_empty) == [] and "decision_validation" not in ctx_empty
+
+
+# Pre-SIM-2 golden: sha256 of json.dumps({"result": ..., "calls": [[prompt, temperature,
+# max_tokens], ...]}, ensure_ascii=False) for the fixture below, computed by running this
+# exact fixture against backend/app/services/{decision_channel,worldstate}.py at
+# feat/finharness-transplants c1b0604 (post-SIM-1, before this change).
+_LEGACY_GOLDEN_SHA256 = "a55c1ec5ddac68ec22410f895fee1262f1eb884604e4f5c022d4e1a26df02408"
+_MESSY_REPLIES = [
+    {"decisions": [
+        {"agent_id": 1, "scenario": "S1", "magnitude": 1, "confidence": 1},
+        {"agent_id": 999, "scenario": "S2", "magnitude": 1, "confidence": 1},
+        {"agent_id": 1, "scenario": "S2", "magnitude": 1, "confidence": 1},
+        {"agent_id": "2", "scenario": "S2", "magnitude": 7, "confidence": 0.9},
+        {"agent_id": 3, "scenario": "S1"},
+    ]},
+    {"decisions": [
+        {"agent_id": 1, "scenario": "弃权"},
+        {"agent_id": 2, "scenario": "S2", "magnitude": 0.5},
+    ]},
+]
+
+
+def _legacy_fixture_run():
+    actions = [{"round": 1, "agent_id": 1, "agent_name": "A"},
+               {"round": 1, "agent_id": 2, "agent_name": "B"},
+               {"round": 1, "agent_id": 3, "agent_name": "C"},
+               {"round": 2, "agent_id": 1, "agent_name": "A"},
+               {"round": 2, "agent_id": 2, "agent_name": "B"}]
+    cfgs = [{"agent_id": 1, "entity_name": "A", "stance": "pro", "influence_weight": 2.0,
+             "outcome_power": 1.0},
+            {"agent_id": 2, "entity_name": "B", "stance": "con", "influence_weight": 1.0,
+             "outcome_power": 3.0},
+            {"agent_id": 3, "entity_name": "C", "stance": "neutral", "influence_weight": 0.5}]
+    seed = {"scenarios": ["S1", "S2"], "base_rates": {"S1": 0.6, "S2": 0.4}}
+    fake = FakeLLMClient(json_responses=copy.deepcopy(_MESSY_REPLIES))
+    res = run_decision_channel(actions, cfgs, seed, fake, inertia=0.5, concurrency=1,
+                               round_to_date=lambda r: f"2027-0{r}-01")
+    calls = [[c["messages"][0]["content"], c["temperature"], c["max_tokens"]]
+             for c in fake.calls]
+    return res, calls
+
+
+def test_validation_flag_off_is_legacy(monkeypatch):
+    """DECISION_CHANNEL_VALIDATION=false: prompts, decisions and trajectories are
+    byte-identical to the post-SIM-1 state (agent 999 and magnitude 7 pass through)."""
+    monkeypatch.setattr(Config, "DECISION_CHANNEL_VALIDATION", False, raising=False)
+    res, calls = _legacy_fixture_run()
+    blob = json.dumps({"result": res, "calls": calls}, ensure_ascii=False)
+    assert hashlib.sha256(blob.encode("utf-8")).hexdigest() == _LEGACY_GOLDEN_SHA256
+    ids = [d["agent_id"] for d in res["decisions"]]
+    assert 999 in ids and "2" in ids and ids.count(1) == 2
+    assert [d["magnitude"] for d in res["decisions"] if d["agent_id"] == "2"] == [7]
+    assert "decision_validation" not in res
+    assert all("decision_validation" not in t for t in res["trajectory"])
+
+    # the legacy parse loop itself, directly: report untouched, raw values kept
+    report = {}
+    fake = FakeLLMClient(json_responses=[copy.deepcopy(_MESSY_REPLIES[0])])
+    out, status = _elicit_round_decisions(
+        fake, ["S1", "S2"], [{"agent_id": i} for i in (1, 2, 3)], 1, report=report)
+    assert status == "committed" and report == {}
+    assert out == [{"agent_id": 1, "scenario": "S1", "magnitude": 1, "confidence": 1},
+                   {"agent_id": 999, "scenario": "S2", "magnitude": 1, "confidence": 1},
+                   {"agent_id": 1, "scenario": "S2", "magnitude": 1, "confidence": 1},
+                   {"agent_id": "2", "scenario": "S2", "magnitude": 7, "confidence": 0.9},
+                   {"agent_id": 3, "scenario": "S1", "magnitude": 1.0, "confidence": 0.7}]
+
+
+def test_validation_on_keeps_prompts_and_call_count(monkeypatch):
+    """SIM-2 adds zero LLM calls and leaves prompt text unchanged; only the output
+    changes (validated decisions + per-round record + run summary)."""
+    monkeypatch.setattr(Config, "DECISION_CHANNEL_VALIDATION", False, raising=False)
+    _, legacy_calls = _legacy_fixture_run()
+    monkeypatch.setattr(Config, "DECISION_CHANNEL_VALIDATION", True, raising=False)
+    res, calls = _legacy_fixture_run()
+    assert calls == legacy_calls                     # same prompts, temperature, max_tokens
+    assert [d["agent_id"] for d in res["decisions"]] == [1, 2, 2]
+    assert res["decision_validation"]["measured_rounds"] == 2
+    assert res["decision_validation"]["fallback_share"] == round(1 / 5, 6)
+    assert res["decision_validation"]["reasons"]["missing_magnitude"] == 1
+    assert res["trajectory"][2]["decision_validation"]["abstained_agent_ids"] == ["1"]
+
+
+class _SpyLLM:
+    def __init__(self):
+        self.max_tokens = []
+
+    def chat_json(self, messages, temperature=0.3, max_tokens=4096, **kw):
+        self.max_tokens.append(max_tokens)
+        return {"decisions": []}
+
+
+def test_max_tokens_scales_only_above_17(monkeypatch):
+    spy = _SpyLLM()
+    for n in (10, 17, 18, 20):
+        _elicit_round_decisions(spy, ["S1"], [{"agent_id": i} for i in range(n)], 1)
+    assert spy.max_tokens == [2048, 2048, 2080, 2272]
+    big = _SpyLLM()
+    _elicit_round_decisions(big, ["S1"], [{"agent_id": i} for i in range(200)], 1)
+    assert big.max_tokens == [8192]                  # capped
+    monkeypatch.setattr(Config, "DECISION_CHANNEL_VALIDATION", False, raising=False)
+    legacy = _SpyLLM()
+    _elicit_round_decisions(legacy, ["S1"], [{"agent_id": i} for i in range(18)], 1)
+    assert legacy.max_tokens == [2048]               # flag off → unchanged budget
+
+
+def test_fallback_share_demotes_validity():
+    """4-actor rosters, replies covering 1 actor for 5 rounds → fallback_share 0.75 >
+    DECISION_CHANNEL_FALLBACK_MAX_SHARE (0.5) → inconclusive / no_update."""
+    actions = [{"round": r, "agent_id": a} for r in range(1, 6) for a in (1, 2, 3, 4)]
+    cfgs = [{"agent_id": a, "influence_weight": 1.0} for a in (1, 2, 3, 4)]
+    fake = FakeLLMClient(json_responses=[
+        {"decisions": [{"agent_id": 1, "scenario": "S1", "magnitude": 1, "confidence": 1}]}
+        for _ in range(5)])
+    res = run_decision_channel(actions, cfgs, {"scenarios": ["S1", "S2"]}, fake,
+                               concurrency=1, round_to_date=lambda r: f"2027-0{r}-01")
+    assert len(fake.calls) == 5
+    assert res["decision_validation"]["fallback_share"] == 0.75
+    assert res["decision_validation"]["slots"] == 20
+    assert res["round_accounting"]["valid_transitions"] == 5   # every round committed …
+    assert res["validity"] == "inconclusive"                    # … yet mostly fallback
+    assert "fallback_share_exceeded" in res["validity_reasons"]
+    assert res["forecast_effect"] == "no_update"
+
+
+def test_verdict_fallback_share_threshold(monkeypatch):
+    from app.services.worldstate import WorldState
+
+    ws = WorldState(["A", "B"])
+    for _ in range(3):
+        ws.step([{"scenario": "A", "magnitude": 1.0, "weight": 1.0}], round_status="committed")
+    acct = ws.round_accounting()
+    assert dc.decision_channel_verdict(acct)["validity"] == "valid"
+    assert dc.decision_channel_verdict(acct, fallback_share=None)["validity"] == "valid"
+    assert dc.decision_channel_verdict(acct, fallback_share=0.5)["validity"] == "valid"
+    demoted = dc.decision_channel_verdict(acct, fallback_share=0.51)
+    assert (demoted["validity"], demoted["validity_reasons"], demoted["forecast_effect"]) == (
+        "inconclusive", ["fallback_share_exceeded"], "no_update")
+    assert demoted["round_accounting"] == acct
+    monkeypatch.setattr(Config, "DECISION_CHANNEL_FALLBACK_MAX_SHARE", 0.9, raising=False)
+    assert dc.decision_channel_verdict(acct, fallback_share=0.75)["validity"] == "valid"
+    # a non-valid verdict keeps its own reasons (fallback never masks them)
+    failed = WorldState(["A", "B"])
+    failed.step([], round_status="failed")
+    verdict = dc.decision_channel_verdict(failed.round_accounting(), fallback_share=1.0)
+    assert verdict["validity"] == "invalid" and verdict["validity_reasons"] == ["no_valid_rounds"]
+
+
+def test_bare_all_abstain_rounds_stay_valid():
+    """Foglamp I-16 unchanged: explicit bare abstentions are valid evidence and are
+    not fallback slots."""
+    actions = [{"round": r, "agent_id": a} for r in (1, 2, 3) for a in (1, 2)]
+    fake = FakeLLMClient(json_responses=[
+        {"decisions": [{"agent_id": 1, "scenario": dc.ABSTAIN_TOKEN},
+                       {"agent_id": 2, "scenario": dc.ABSTAIN_TOKEN}]}])
+    res = run_decision_channel(actions, [{"agent_id": 1}, {"agent_id": 2}],
+                               {"scenarios": ["S1", "S2"]}, fake, concurrency=1)
+    assert res["round_accounting"]["counts"] == {"abstained": 3}
+    assert res["validity"] == "valid" and res["validity_reasons"] == []
+    assert res["decision_validation"]["fallback_share"] == 0.0
+    assert res["decision_validation"]["abstained"] == 6
