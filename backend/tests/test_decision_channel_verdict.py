@@ -183,15 +183,17 @@ def _containment_runs():
     yield "failure", run_decision_channel(
         fail_actions, [{"agent_id": 1, "influence_weight": 1.0}], dict(seed),
         _FailingLLM(), inertia=0.5)
+    # concurrency=1 (SIM-2): FIFO fake replies must land on their own round's roster,
+    # which roster-bound validation now enforces.
     yield "abstain", run_decision_channel(actions, cfgs, dict(seed), FakeLLMClient(
         json_responses=[{"decisions": [{"agent_id": r, "scenario": dc.ABSTAIN_TOKEN}]}
-                        for r in range(1, 6)]), inertia=0.5)
+                        for r in range(1, 6)]), inertia=0.5, concurrency=1)
     yield "silent", run_decision_channel(actions, cfgs, dict(seed), FakeLLMClient(
         json_responses=[{"decisions": []} for _ in range(5)]), inertia=0.5)
     yield "commit", run_decision_channel(actions, cfgs, dict(seed), FakeLLMClient(
         json_responses=[{"decisions": [{"agent_id": r, "scenario": "S1", "magnitude": 1,
                                         "confidence": 1}]} for r in range(1, 6)]),
-        inertia=0.9)
+        inertia=0.9, concurrency=1)
 
 
 def test_run_decision_channel_unchanged_plus_validity_reasons():
@@ -202,7 +204,8 @@ def test_run_decision_channel_unchanged_plus_validity_reasons():
         "commit": ("valid", "diagnostic_only", []),
     }
     for name, res in _containment_runs():
-        assert set(res) == _LEGACY_RESULT_KEYS | {"validity_reasons"}, name
+        # SIM-2 adds the run-level decision_validation summary (default-on validation)
+        assert set(res) == _LEGACY_RESULT_KEYS | {"validity_reasons", "decision_validation"}, name
         acct = res["round_accounting"]
         # the post-hoc producer never adds unaccounted rounds: accounting is the raw
         # WorldState view, identical to the nested outcome copy

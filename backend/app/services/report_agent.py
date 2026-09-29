@@ -2511,7 +2511,14 @@ class ReportAgent:
         note_line = "注：这是结构化情景分析先验，不是观察事实；正文结论必须以研究来源和现实指标校验。"
         _validity = str((data or {}).get("validity") or "").strip().lower()
         if _validity and _validity != "valid":
-            lines.append(f"⚠️ 有效性裁定：{_validity}（决策通道存在失败/沉默轮，"
+            _reasons = (data or {}).get("validity_reasons")
+            _reasons = [str(r) for r in (_reasons if isinstance(_reasons, list) else [])
+                        if str(r).strip()]
+            # SIM-2：fallback_share_exceeded 只在其余检查全过时出现（每轮都可能已提交），
+            # 病因是名册覆盖不足而非失败/沉默轮；其余裁定沿用原措辞（逐字节不变）。
+            _cause = ("决策通道名册覆盖不足：过多名册席位无有效承诺或弃权"
+                      if "fallback_share_exceeded" in _reasons else "决策通道存在失败/沉默轮")
+            lines.append(f"⚠️ 有效性裁定：{_validity}（{_cause}，"
                          "本分布不可用作任何依据；forecast_effect=no_update）")
             if getattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", True):
                 # SIM-1（fail-closed）：显式非 valid 裁定 → 只留警示与裁定原因，隐藏结果份额与
@@ -2519,9 +2526,6 @@ class ReportAgent:
                 # （forecast_extractor._WS_OUTCOME_HEADER_RE / _SIM_SIGNAL_TAXONOMY）至今仍锚定旧头
                 # 「【预测结果分布」，本来就不识别本块的「【推演结果分布」头；隐藏份额行保证即便该头部
                 # 漂移日后被修复，非 valid 块里也没有可被解析成 sim 结果分布的数字。
-                _reasons = (data or {}).get("validity_reasons")
-                _reasons = [str(r) for r in (_reasons if isinstance(_reasons, list) else [])
-                            if str(r).strip()]
                 if _reasons:
                     lines.append("裁定原因：" + "、".join(_reasons))
                 lines.append("（有效性未达标：已隐藏结果份额与演化航点——正文不得引用本块任何数字或趋势）")

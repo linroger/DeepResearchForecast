@@ -37,10 +37,12 @@ decisions/轨迹行带 period_end，输出 schema v3。``round_dates=None`` → 
 from __future__ import annotations
 
 import logging
+import math
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from .decision_validation import summarize_validation, validate_round_decisions
 from .worldstate import (
     CONVERGENCE_POLICY_V1,
     ROUND_STATUS_ABSTAINED,
@@ -221,6 +223,7 @@ def _elicit_round_decisions(llm, scenarios: List[str], active: List[Dict[str, An
                             n_rounds: Optional[int] = None,
                             horizon_date: Optional[str] = None,
                             unit: Optional[str] = None,
+                            report: Optional[Dict[str, Any]] = None,
                             ) -> Tuple[List[Dict[str, Any]], str]:
     """One batched structured call assigning each active agent a scenario commitment.
 
@@ -240,9 +243,20 @@ def _elicit_round_decisions(llm, scenarios: List[str], active: List[Dict[str, An
     list; the caller decides what the status means for WorldState/convergence.
     ``period``/``n_rounds``/``horizon_date``/``unit`` 仅在日历模式提供，切换提示词
     为 spec §5 的时段框架。
+
+    SIM-2 (C26): with ``DECISION_CHANNEL_VALIDATION`` on (default) the reply is
+    bound to ``active`` by ``validate_round_decisions`` (canonical roster ids,
+    unknown ids and duplicates dropped, magnitude/confidence finite and clamped
+    to [0, 1]) and its reason-coded record is copied into ``report``; a failed
+    call or payload sets ``report["measured"] = False``. ``max_tokens`` scales
+    with rosters above 17 entries. With the flag off the legacy loop runs
+    unchanged and ``report`` is untouched.
     """
     if not active or not scenarios:
         return [], ROUND_STATUS_MISSING
+    validate = bool(_cfg("DECISION_CHANNEL_VALIDATION", True))
+    # SIM-2: ~96 output tokens per roster row plus headroom; 2048 up to 17 rows.
+    max_tokens = min(8192, max(2048, 96 * (len(active) + 1) + 256)) if validate else 2048
     try:
         raw = llm.chat_json(
             messages=[{"role": "user",
@@ -251,18 +265,35 @@ def _elicit_round_decisions(llm, scenarios: List[str], active: List[Dict[str, An
                            period=period, n_rounds=n_rounds,
                            horizon_date=horizon_date, unit=unit)}],
             temperature=0.2,
-            max_tokens=2048,
+            max_tokens=max_tokens,
         )
     except Exception as _elicit_err:  # noqa: BLE001 — 一轮 elicit 失败不拖垮整条决策通道
         # Foglamp WP1 (1C/I-16)：失败必须显式入账（round_status=failed），不得再
         # 伪装成「无承诺→先验静态演化→看似收敛」。升级为 warning 级告警。
         logger.warning("决策通道单轮 elicit 失败（round_status=failed，本轮不更新 WorldState）: %s",
                        _elicit_err)
+        if validate and report is not None:
+            report["measured"] = False
         return [], ROUND_STATUS_FAILED
     decs = raw.get("decisions") if isinstance(raw, dict) else None
     if not isinstance(decs, list):
         # 模型返回了不符合契约的载荷：这是失败，不是沉默（I-16）。
+        if validate and report is not None:
+            report["measured"] = False
         return [], ROUND_STATUS_FAILED
+    if validate:
+        try:
+            checked = validate_round_decisions(decs, active, scenarios,
+                                               abstain_token=ABSTAIN_TOKEN)
+        except Exception as _val_err:  # noqa: BLE001 — fail closed: an unvalidated reply never votes
+            logger.warning("决策通道单轮校验异常（round_status=failed，本轮不更新 WorldState）: %s",
+                           _val_err)
+            if report is not None:
+                report["measured"] = False
+            return [], ROUND_STATUS_FAILED
+        if report is not None:
+            report.update(checked["record"])
+        return checked["accepted"], checked["round_status"]
     out: List[Dict[str, Any]] = []
     abstained = 0
     valid = set(scenarios)
@@ -304,6 +335,10 @@ def elicit_round(roster: List[Dict[str, Any]],
     Foglamp WP1 (1C/I-16)：本轮的类型化结果写入 ``period_ctx["round_status"]``
     （committed/abstained/silent/failed/missing）——调用方必须把它传给
     ``WorldState.step(round_status=...)``，使失败/沉默轮不再伪装成稳定。
+
+    SIM-2 (C26): when ``DECISION_CHANNEL_VALIDATION`` produced a record it is
+    written to ``period_ctx["decision_validation"]`` (``{"measured": False}``
+    for a failed call); roster-canonical ids make the outcome-power lookup hit.
     """
     ctx = period_ctx or {}
     llm = ctx.get("llm")
@@ -317,13 +352,16 @@ def elicit_round(roster: List[Dict[str, Any]],
     except (TypeError, ValueError):
         rnd = 0
     period = ctx.get("period") if isinstance(ctx.get("period"), dict) else None
+    report: Dict[str, Any] = {}
     decisions, round_status = _elicit_round_decisions(
         llm, scenarios, roster, rnd, ctx.get("as_of"),
         ctx.get("base_shares"), bool(ctx.get("abstain_allowed", True)),
         period=period, n_rounds=ctx.get("n_rounds"),
-        horizon_date=ctx.get("horizon_date"), unit=ctx.get("unit"))
+        horizon_date=ctx.get("horizon_date"), unit=ctx.get("unit"), report=report)
     if isinstance(period_ctx, dict):
         period_ctx["round_status"] = round_status
+        if report:  # SIM-2: per-round validation record (absent with the flag off)
+            period_ctx["decision_validation"] = report
     pmap = {e.get("agent_id"): e.get("outcome_power", 1.0) for e in roster}
     period_end = str(period.get("period_end")) if period and period.get("period_end") else None
     out: List[Dict[str, Any]] = []
@@ -532,8 +570,31 @@ def _fan_out_elicit(tasks: Dict[Any, Tuple[List[Dict[str, Any]], Dict[str, Any]]
     return results
 
 
+_FALLBACK_MAX_SHARE_DEFAULT = 0.5
+
+
+def _fallback_max_share() -> float:
+    """SIM-2: ``DECISION_CHANNEL_FALLBACK_MAX_SHARE`` as a share in ``[0, 1]``.
+
+    A non-numeric, non-finite or out-of-range value (``nan``, ``50`` meant as a
+    percent, a negative) would silently disable or invert the fallback gate, so
+    it falls back to the 0.5 default with a warning instead (fail closed).
+    """
+    raw = _cfg("DECISION_CHANNEL_FALLBACK_MAX_SHARE", _FALLBACK_MAX_SHARE_DEFAULT)
+    try:
+        threshold = float(raw)
+    except (TypeError, ValueError):
+        threshold = math.nan
+    if math.isfinite(threshold) and 0.0 <= threshold <= 1.0:
+        return threshold
+    logger.warning("DECISION_CHANNEL_FALLBACK_MAX_SHARE=%r 不是 [0,1] 内的有限份额，"
+                   "按默认 %.1f 裁定", raw, _FALLBACK_MAX_SHARE_DEFAULT)
+    return _FALLBACK_MAX_SHARE_DEFAULT
+
+
 def decision_channel_verdict(accounting: Dict[str, Any], *,
-                             unaccounted_rounds: int = 0) -> Dict[str, Any]:
+                             unaccounted_rounds: int = 0,
+                             fallback_share: Optional[float] = None) -> Dict[str, Any]:
     """Foglamp WP1 (1C/1D, I-11/I-16) typed run-level validity verdict, shared by both
     decision-channel producers (SIM-1): post-hoc ``run_decision_channel`` and the
     in-band calendar evolution in run_parallel_simulation.
@@ -560,6 +621,13 @@ def decision_channel_verdict(accounting: Dict[str, Any], *,
                        or silent/missing rounds (``low_valid_coverage``) keep the run
                        below the frozen convergence policy's evidence bar
       - invalid      — zero usable rounds (``no_valid_rounds``; dead channel)
+
+    SIM-2 (C26): ``fallback_share`` is the run-level share of roster slots
+    without an accepted or abstained answer (``summarize_validation``). A run
+    that would be ``valid`` becomes ``inconclusive`` (``fallback_share_exceeded``)
+    when it exceeds ``DECISION_CHANNEL_FALLBACK_MAX_SHARE`` (validated by
+    ``_fallback_max_share``) or is not finite; ``None`` (no validation record)
+    leaves the verdict unchanged.
 
     A non-``valid`` run MUST NOT move a forecast: forecast_effect=no_update. Even a
     valid run defaults to diagnostic_only until an outcome-blind prospective study
@@ -591,6 +659,11 @@ def decision_channel_verdict(accounting: Dict[str, Any], *,
                 CONVERGENCE_POLICY_V1["min_valid_coverage"]):
             reasons.append("low_valid_coverage")
         validity = "inconclusive" if reasons else "valid"
+    if validity == "valid" and fallback_share is not None:
+        share = float(fallback_share)
+        if not math.isfinite(share) or share > _fallback_max_share():
+            validity = "inconclusive"
+            reasons = ["fallback_share_exceeded"]
     if validity != "valid":
         forecast_effect = "no_update"
     else:
@@ -617,7 +690,7 @@ def run_decision_channel(
     conv_eps: float = 0.02,
     round_to_date=None,
     round_dates: Optional[List[Dict[str, Any]]] = None,
-    max_active_per_round: int = 60,
+    max_active_per_round: Optional[int] = None,
     concurrency: Optional[int] = None,
     abstain_allowed: bool = True,
     posts_by_round: Optional[Dict[int, Dict[Any, str]]] = None,
@@ -634,7 +707,9 @@ def run_decision_channel(
     ``{period_start, period_end, label}``）——提供时提示词切换为时段框架、缓存键改为
     ``(roster 签名, 时段 label)``、decisions/轨迹行带 ``period_end``，并按
     ``WORLDSTATE_ENTROPY_MIX`` 传入每时段天数做熵地板；缺省 ``None`` 走旧路径，逐字节不变。
-    ``posts_by_round[round][agent_id]`` and
+    ``max_active_per_round`` caps the individually listed actors per round (the
+    tail collapses into one public block); ``None`` reads
+    ``DECISION_CHANNEL_MAX_ACTIVE``. ``posts_by_round[round][agent_id]`` and
     ``affect_by_agent[agent_id]`` optionally enrich the prompt (R2-SIM-1). Returns
     ``{outcome, trajectory, decisions, converged_at, n_rounds, ...}``; empty seed → ``{}``.
     """
@@ -650,7 +725,12 @@ def run_decision_channel(
     posts_by_round = posts_by_round or {}
     affect_by_agent = affect_by_agent or {}
 
-    cap = int(_cfg("DECISION_CHANNEL_MAX_ACTIVE", max_active_per_round) or max_active_per_round)
+    # SIM-2: an explicit max_active_per_round wins; otherwise the DECISION_CHANNEL_MAX_ACTIVE
+    # knob (default 60, the value this keyword used to default to).
+    if max_active_per_round is not None:
+        cap = int(max_active_per_round)
+    else:
+        cap = int(_cfg("DECISION_CHANNEL_MAX_ACTIVE", 60) or 60)
     if concurrency is None:
         concurrency = int(_cfg("OASIS_SEMAPHORE", 8) or 8)
 
@@ -740,6 +820,7 @@ def run_decision_channel(
     if period_by_round and seed.get("as_of_date"):
         trajectory[0]["as_of"] = str(seed.get("as_of_date"))  # spec §6: 第 0 行 as_of=as_of_date
     all_decisions: List[Dict[str, Any]] = []
+    validation_records: List[Dict[str, Any]] = []  # SIM-2: one per replayed round
     converged_at: Optional[int] = None
     stable_streak = 0
     prev_date = seed.get("as_of_date")
@@ -767,8 +848,8 @@ def run_decision_channel(
         entropy_days = _period_days(p) if (entropy_mix_on and p) else None  # 熵地板（spec §4）
         # Foglamp WP1 (1C/I-16): the typed elicitation status was written into the
         # shared task ctx by elicit_round; a cached roster key reuses one status.
-        round_status = str((tasks[round_key[rnd]][1] or {}).get("round_status")
-                           or ROUND_STATUS_MISSING)
+        task_ctx = tasks[round_key[rnd]][1] or {}
+        round_status = str(task_ctx.get("round_status") or ROUND_STATUS_MISSING)
         ws.step(commitments_from_decisions(decisions), inertia=eff_inertia,
                 entropy_mix_days=entropy_days, round_status=round_status)
         snap = {"round": rnd, **ws.outcome()}
@@ -779,6 +860,12 @@ def run_decision_channel(
             for fk in ("period_start", "period_end", "label"):
                 if p.get(fk):
                     snap[fk] = str(p[fk])
+        # SIM-2: the round's validation record; a cached roster key contributes it
+        # once per replayed round, like its round_status.
+        rec = task_ctx.get("decision_validation")
+        if isinstance(rec, dict):
+            snap["decision_validation"] = rec
+            validation_records.append(rec)
         trajectory.append(snap)
         # SIM-1: windowed convergence — require the EWMA delta to stay below eps for
         # SIM_CONVERGENCE_WINDOW consecutive rounds (after a 2-round warmup) before the
@@ -800,7 +887,14 @@ def run_decision_channel(
     # shared with the in-band calendar producer (SIM-1), but this path accounts only
     # rounds present in the action log (unaccounted_rounds=0) — see
     # decision_channel_verdict.
-    verdict = decision_channel_verdict(ws.round_accounting())
+    validation_summary: Optional[Dict[str, Any]] = None
+    if validation_records:  # SIM-2: run-level fallback_share folded into the verdict
+        validation_summary = summarize_validation(
+            validation_records,
+            unmeasured_rounds=len(ordered_rounds) - len(validation_records))
+    verdict = decision_channel_verdict(
+        ws.round_accounting(),
+        fallback_share=(validation_summary or {}).get("fallback_share"))
     result = {
         "outcome": out,
         "trajectory": trajectory,
@@ -817,6 +911,8 @@ def run_decision_channel(
         "forecast_effect": verdict["forecast_effect"],
         "epistemic_status": "elicited_model_projection",
     }
+    if validation_summary is not None:
+        result["decision_validation"] = validation_summary
     if period_by_round:
         # 带日期轨迹 schema v3（spec §6）；v2 hours 路径原样。converged/converged_at
         # 只是稳定性信号——日历模式从不据此早停，回放始终推演到判定日。

@@ -594,6 +594,26 @@ def test_orch3_resume_completed_requires_force(monkeypatch):
         po.PipelineOrchestrator.resume("pipe_done", force=True)
 
 
+def test_orch3_resume_message_names_upstream_degradation(monkeypatch):
+    """force only regenerates the report: when only an upstream stage (e.g. RESEARCH-2's
+    research stage) is degraded, the refusal says a force-resume cannot fix it."""
+    monkeypatch.setattr(po.PipelineOrchestrator, "_threads", {})
+
+    def _refusal(stages):
+        data = {"pipeline_id": "pipe_done", "status": "completed",
+                "schema_version": po.PIPELINE_SCHEMA_VERSION,
+                "options": {"pipeline_health": {"status": "degraded", "stages": stages}}}
+        monkeypatch.setattr(po.PipelineManager, "load", classmethod(lambda cls, pid: dict(data)))
+        with pytest.raises(RuntimeError) as exc:
+            po.PipelineOrchestrator.resume("pipe_done", force=False)
+        return str(exc.value)
+
+    upstream = _refusal({"research": {"health": "degraded", "issues": ["x"]}})
+    assert "research" in upstream and "无法修复" in upstream and "请带 force=true 重试" not in upstream
+    report = _refusal({"research": {"health": "degraded"}, "report": {"health": "degraded"}})
+    assert "请带 force=true 重试" in report
+
+
 def test_orch4_ensemble_wired_into_run():
     """ORCH-4: _maybe_run_seed_ensemble 除定义外必须有 _run 内的真实调用点。"""
     src = open(po.__file__, encoding="utf-8").read()

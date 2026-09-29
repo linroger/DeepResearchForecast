@@ -117,3 +117,40 @@ def test_commitments_prefer_per_decision_outcome_power():
         [{"agent_id": 1, "scenario": "A", "magnitude": 1.0, "confidence": 0.5,
           "outcome_power": 8.0}], {1: 1.0})   # per-decision power beats the map
     assert cs[0]["weight"] == 8.0 * 0.5
+
+
+# ------------------------------------------------------------------ SIM-2 guards
+def test_non_finite_decisions_produce_no_commitment():
+    """SIM-2 defence in depth: an inf magnitude used to give a NaN target that zeroed
+    its scenario, and a NaN confidence clamped to a full-weight vote."""
+    inf, nan = float("inf"), float("nan")
+    decisions = [
+        {"agent_id": 1, "scenario": "A", "magnitude": inf, "confidence": 1.0},
+        {"agent_id": 2, "scenario": "A", "magnitude": "inf", "confidence": 1.0},
+        {"agent_id": 3, "scenario": "B", "magnitude": 1.0, "confidence": nan},
+        {"agent_id": 4, "scenario": "B", "magnitude": -inf, "confidence": 1.0},
+        {"agent_id": 5, "scenario": "B", "magnitude": 1.0, "confidence": 1.0,
+         "outcome_power": inf},
+    ]
+    assert commitments_from_decisions(decisions) == []
+    assert commitments_from_decisions(decisions, {1: 1.0, 2: 1.0}) == []
+    kept = commitments_from_decisions(
+        decisions + [{"agent_id": 6, "scenario": "B", "magnitude": 0.5, "confidence": 1.0}])
+    assert kept == [{"scenario": "B", "magnitude": 0.5, "weight": 1.0}]
+
+
+def test_step_skips_non_finite_votes_and_stays_normalized():
+    import math
+
+    ws = WorldState(["A", "B"], base_rates={"A": 0.5, "B": 0.5}, inertia=0.5)
+    ws.step([{"scenario": "A", "magnitude": float("inf"), "weight": 1.0},
+             {"scenario": "A", "magnitude": 1.0, "weight": float("inf")},
+             {"scenario": "A", "magnitude": float("inf"), "weight": 0.0},
+             {"scenario": "B", "magnitude": 1.0, "weight": 1.0}])
+    assert all(math.isfinite(v) for v in ws.shares.values())
+    assert abs(sum(ws.shares.values()) - 1.0) < 1e-6
+    assert ws.shares["B"] > ws.shares["A"] > 0.0     # A is not zeroed by a NaN target
+    ref = WorldState(["A", "B"], base_rates={"A": 0.5, "B": 0.5}, inertia=0.5)
+    ref.step([{"scenario": "B", "magnitude": 1.0, "weight": 1.0}])
+    assert ws.shares == ref.shares                    # identical to the finite-only round
+    assert math.isfinite(ws.outcome()["ewma_delta"])

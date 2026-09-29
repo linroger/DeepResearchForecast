@@ -206,6 +206,32 @@ def test_knob_off_inconclusive_still_renders_shares(sim_root, monkeypatch):
     assert parsed["scenario_shares"] == {"A": 0.62, "B": 0.38}
 
 
+_WARN_TAIL = "，本分布不可用作任何依据；forecast_effect=no_update）"
+
+
+@pytest.mark.parametrize("hide", [True, False])
+def test_fallback_demotion_names_roster_coverage_not_failed_rounds(sim_root, monkeypatch,
+                                                                   hide):
+    """SIM-2: a fallback_share_exceeded demotion can have every round committed, so the
+    warning names roster coverage (the only cause shown when the reasons line is hidden
+    with REPORT_WORLDSTATE_HIDE_INVALID=false)."""
+    monkeypatch.setattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", hide, raising=False)
+    _write(sim_root, "sim_x", _traj("inconclusive", ["fallback_share_exceeded"]))
+    lines = _agent("sim_x")._world_state_block().split("\n")
+    assert lines[1] == ("⚠️ 有效性裁定：inconclusive（决策通道名册覆盖不足："
+                        "过多名册席位无有效承诺或弃权" + _WARN_TAIL)
+    assert "失败/沉默轮" not in "\n".join(lines)
+
+
+def test_other_non_valid_reasons_keep_failed_or_silent_wording(sim_root):
+    _write(sim_root, "sim_x", _traj("inconclusive", ["failed_rounds", "low_valid_coverage"]))
+    lines = _agent("sim_x")._world_state_block().split("\n")
+    assert lines[1] == "⚠️ 有效性裁定：inconclusive（决策通道存在失败/沉默轮" + _WARN_TAIL
+    _write(sim_root, "sim_x", _traj("invalid"))
+    lines = _agent("sim_x")._world_state_block().split("\n")
+    assert lines[1] == "⚠️ 有效性裁定：invalid（决策通道存在失败/沉默轮" + _WARN_TAIL
+
+
 # ----------------------------------------------------- _scenario_diff_structured
 def test_scenario_diff_none_when_scenario_trajectory_invalid(sim_root, monkeypatch):
     rec = _RecordingLogger()

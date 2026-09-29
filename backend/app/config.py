@@ -80,6 +80,14 @@ class Config:
     # （否则截断回复会被永久重放）。默认开是安全的：正常回复（stop、无 think 标签）输出逐字节不变，
     # 只影响残缺回复。false 恢复旧的正则剥离 + 无条件缓存。类型化异常与 usage 竞态修复不受此开关控制。
     LLM_TRANSPORT_STRICT = os.environ.get('LLM_TRANSPORT_STRICT', 'true').strip().lower() == 'true'
+    # INFRA-2：chat_json 结构化输出修复轮（默认开）。首轮回复不是单个合法 JSON 对象（解析失败，或
+    # 解析出 list/标量/null）时：从 LLMCache 删掉这份坏回复，再以同温度发一次修复轮——原消息 + 坏回复
+    # （assistant）+ 点名失败原因的纠正提示，两轮皆失败仍抛 ValueError；每次结局计入
+    # LLMMeter 的 structured_outputs。旧行为是盲目降温 0.2 重发同一提示：LLMCache 按温度作键，
+    # temperature=0 的调用方（graphiti 图谱抽取）会原样重放缓存里的坏回复，失败不可恢复。默认开
+    # 是安全的：首轮即合法的 JSON 对象回复逐字节不变，只改变原本就会失败或返回非对象值的调用。
+    # false 恢复旧的降温重发（且照旧可能返回非 dict）。
+    LLM_JSON_REPAIR_TURN = os.environ.get('LLM_JSON_REPAIR_TURN', 'true').strip().lower() == 'true'
     # 每个 run 的 token / 成本上限（0=不限）。超限后下一次 LLM 调用抛 BudgetExceeded，止血式中止。
     LLM_RUN_BUDGET_TOKENS = int(os.environ.get('LLM_RUN_BUDGET_TOKENS', '0') or '0')
     LLM_RUN_BUDGET_USD = float(os.environ.get('LLM_RUN_BUDGET_USD', '0') or '0')
@@ -492,6 +500,12 @@ class Config:
     # 坐标。关闭 / scenario_spine 缺省 = 自由起名（行为与历史一致）。
     REPORT_SCENARIO_SPINE_PIN = os.environ.get('REPORT_SCENARIO_SPINE_PIN', 'True').strip().lower() == 'true'
     RECORD_RUN_MANIFEST = os.environ.get('RECORD_RUN_MANIFEST', 'True').strip().lower() == 'true'  # I-8-1 复现清单 run.json
+    # EVAL-15：管线终态（completed/failed/cancelled）时在 _run 的 finally 里写确定性分阶段记分卡
+    # <pipeline_dir>/stage_scorecard.json（stage-scorecard/v1：已有工件的纯投影 + 契约检查），并把
+    # {stage: passed} 摘要折入 state.options.stage_scorecard_summary。默认开（同 RECORD_RUN_MANIFEST
+    # 的观测侧车先例）：只读投影、独立 try/except，绝不改 status/pipeline_health、绝不写报告目录。
+    # 关闭 = 不写文件、不加 options 键。孤儿/旧跑用 scripts/stage_scorecard.py score 回填。
+    STAGE_SCORECARD_ENABLED = os.environ.get('STAGE_SCORECARD_ENABLED', 'true').strip().lower() == 'true'
 
     # —— EXECPLAN2 第三波改进旋钮（剩余 L-effort 新能力；全部默认关，留空即保持当前行为）——
     # 预测质量回归评测开关（EXECPLAN2 I-7-7）：opt-in，绝不进默认 CI。开启后 eval_forecast_quality.py
@@ -709,6 +723,13 @@ class Config:
     REPORT_SECTION_RETRY_MAX = int(os.environ.get('REPORT_SECTION_RETRY_MAX', '2') or '2')  # RQ-1 1→2；0=旧的无重试
     REPORT_SECTION_RETRY_BACKOFF_S = float(os.environ.get('REPORT_SECTION_RETRY_BACKOFF_S', '8.0') or '8.0')
     REPORT_CRITIQUE_BEFORE_PROSE = os.environ.get('REPORT_CRITIQUE_BEFORE_PROSE', 'true').strip().lower() == 'true'
+    # INFRA-2：红队自校准每份报告至多执行一次（默认开）。self_critique_forecast 调用评审 LLM 后
+    # 给预测打 critique_attempted 标记；叙事前评审失败/被回退（未 critiqued）时，成稿后的第二次评审
+    # 不再发 LLM 调用，只记 quality.critique_pre_prose='reverted_or_failed'——此前第二次评审会在
+    # 正文写完后再挪概率（正文捍卫的数字与 forecast.json 矛盾），并白付一次评审成本。默认开是安全
+    # 的：评审成功的路径不变（本就跳过二次评审），标记在 LLM 调用之后才写、且不进评审/验尸提示词。
+    # false 恢复旧的「失败后成稿再评一次」且不写标记。
+    REPORT_CRITIQUE_SINGLE_PASS = os.environ.get('REPORT_CRITIQUE_SINGLE_PASS', 'true').strip().lower() == 'true'
     FORECAST_BINARY_CONTRARIAN = os.environ.get('FORECAST_BINARY_CONTRARIAN', 'true').strip().lower() == 'true'
     FORECAST_SIM_SENSITIVITY = os.environ.get('FORECAST_SIM_SENSITIVITY', 'true').strip().lower() == 'true'
     FORECAST_BINARY_THEMES = os.environ.get('FORECAST_BINARY_THEMES', '').strip()  # 空=由 brief/主题自适应
@@ -1282,8 +1303,16 @@ class Config:
     # a fetched page), plus a `verified` bool; values are never changed.  snippet_only means
     # the source was never fetched or its stored page is unavailable; its search snippet is
     # not checked, so the label says nothing about whether the number appears anywhere.
-    # Default true: deterministic, zero model calls, labels are additive keys.  The parent
-    # forwards it to the v3 child.
+    # The same knob gates the evidence windows (REPORT-7): the page sentence that states a
+    # verified figure next to >= 2 of its metric words becomes a sources.json `supports`
+    # span (<= 360 chars, cleaned like web text; <= 2 per figure, <= 8 per source, every
+    # figure's best window first; windows over the cap are counted, never silent), so the
+    # report's number-aware citation check sees figures deeper than the 1,200-char page
+    # excerpt; quant rows keep source_ref and get evidence_window / future_dated, and the
+    # findings and figures are projected to handoff verified_facts.json (SHA-manifested).
+    # Default true: deterministic, zero model calls, labels and spans are additive keys;
+    # false leaves every research artifact byte-identical.  The parent forwards it to the
+    # v3 child.
     RESEARCH_VERIFIED_FACTS = os.environ.get('RESEARCH_VERIFIED_FACTS', 'true').strip().lower() == 'true'
     # v3 reported/projected typing of quantitative rows (RESEARCH-4): epistemic_class,
     # date_precision, target-date repair (a forecast's target date put in as_of_date),
@@ -1628,6 +1657,27 @@ class Config:
     # R2-SIM-1 / R2-CAL-3：默认开——硬前提：没有它脊柱只看到活动量、零建模结果。成本由
     # OASIS_DEFAULT_MAX_ROUNDS 封顶 + SIM_CONVERGENCE_STOP 早停 + 并行 elicitation 约束。
     SIM_DECISION_CHANNEL = os.environ.get('SIM_DECISION_CHANNEL', 'true').strip().lower() == 'true'
+    # SIM-2 (C26): bind every decision-channel reply to the round roster before it can move
+    # WorldState — canonical roster ids, unknown ids and duplicate rows dropped, magnitude and
+    # confidence finite and clamped to [0,1], a missing magnitude rejected instead of becoming
+    # 1.0 — and record reason-coded counts per round plus a run-level fallback_share. Default
+    # on: an honesty check that fails closed with zero extra LLM calls and unchanged prompt
+    # text (only rosters above 17 rows get a larger max_tokens). false restores the legacy
+    # parse loop and trajectories byte for byte.
+    DECISION_CHANNEL_VALIDATION = os.environ.get(
+        'DECISION_CHANNEL_VALIDATION', 'true').strip().lower() == 'true'
+    # SIM-2: a run whose share of roster slots without an accepted or abstained answer exceeds
+    # this is at best 'inconclusive' (fallback_share_exceeded, forecast_effect=no_update).
+    # Uncalibrated: 0.5 is a conservative majority-of-slots floor; log live rates before tightening.
+    # Must be a share in [0,1]: the verdict replaces NaN/out-of-range values (e.g. 50 meant as a
+    # percent) with 0.5 and logs a warning, so a typo cannot silently disable the gate.
+    DECISION_CHANNEL_FALLBACK_MAX_SHARE = float(
+        os.environ.get('DECISION_CHANNEL_FALLBACK_MAX_SHARE', '0.5') or '0.5')
+    # SIM-2 (defines the SIM-5 cap knob): per-round individual-actor cap before the tail
+    # collapses into one public block. Previously a ghost knob read via getattr by both
+    # decision-channel producers; 60 is the default they already used, so defining it here
+    # changes nothing. An explicit run_decision_channel(max_active_per_round=...) still wins.
+    DECISION_CHANNEL_MAX_ACTIVE = int(os.environ.get('DECISION_CHANNEL_MAX_ACTIVE', '60') or '60')
     # Foglamp WP1 (1D, I-16/I-18)：模拟对已发布概率的影响政策（run-pinned）。
     #   diagnostic_only —— 默认。模拟/WorldState 产出只进「显式标注模拟来源」的分析散文，
     #                      不进 derive_forecast_spine() 的概率生成输入，不调整任何概率。

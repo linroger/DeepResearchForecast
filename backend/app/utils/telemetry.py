@@ -214,6 +214,17 @@ class _RunMeter:
     fallback: _Counter = field(default_factory=_Counter)
     # INFRA-1: {stage: {normalized finish_reason: calls}}，仅计入带 finish_reason 的 record()。
     finish_reasons: Dict[str, Dict[str, int]] = field(default_factory=dict)
+    # INFRA-2: {label: {stage: {ok, repaired, failed, truncation_repaired}}}（record_structured）。
+    structured: Dict[str, Dict[str, Dict[str, int]]] = field(default_factory=dict)
+
+
+# INFRA-2: chat_json 结构化输出的结局。ok = 首轮即得合法 JSON 对象；repaired = 修复轮才得到；
+# failed = 两轮皆失败（chat_json 抛 ValueError）。
+STRUCTURED_OUTCOMES = ("ok", "repaired", "failed")
+
+
+def _structured_counts() -> Dict[str, int]:
+    return {"ok": 0, "repaired": 0, "failed": 0, "truncation_repaired": 0}
 
 
 # TEL-1: '_global' 桶只该接住零星的无归属调用（reset 从不清它，跨 run 累积）。它一旦变大，
@@ -228,12 +239,10 @@ class LLMMeter:
     _lock = threading.Lock()
     _runs: Dict[str, _RunMeter] = {}
 
-    @classmethod
-    def record(cls, provider: str, model: str, prompt_tokens: int, completion_tokens: int,
-               latency_ms: float, *, cached: bool = False, stage: Optional[str] = None,
-               run_id: Optional[str] = None, finish_reason: Optional[str] = None) -> None:
-        """Accumulate one LLM call. ``finish_reason`` (INFRA-1, normalized by
-        llm_text.normalize_finish_reason) is tallied per stage when given."""
+    @staticmethod
+    def _attribute(run_id: Optional[str], stage: Optional[str]) -> Tuple[str, str, bool]:
+        """(run id, stage, fallback-attributed) for one record: explicit run_id → the run
+        contextvar → the sole active run (FOG-TEL-1 fallback) → '_global'."""
         rid = run_id or _current_run.get()
         fallback = False
         if not rid:
@@ -244,7 +253,15 @@ class LLMMeter:
             fallback = rid is not None
         if not rid:
             rid = _DEFAULT_BUCKET
-        stg = stage or _current_stage.get() or "_unstaged"
+        return rid, stage or _current_stage.get() or "_unstaged", fallback
+
+    @classmethod
+    def record(cls, provider: str, model: str, prompt_tokens: int, completion_tokens: int,
+               latency_ms: float, *, cached: bool = False, stage: Optional[str] = None,
+               run_id: Optional[str] = None, finish_reason: Optional[str] = None) -> None:
+        """Accumulate one LLM call. ``finish_reason`` (INFRA-1, normalized by
+        llm_text.normalize_finish_reason) is tallied per stage when given."""
+        rid, stg, fallback = cls._attribute(run_id, stage)
         cost = 0.0 if cached else estimate_cost(provider, prompt_tokens, completion_tokens)
         warn_calls = 0
         first_fallback = False
@@ -276,6 +293,32 @@ class LLMMeter:
             )
 
     @classmethod
+    def record_structured(cls, label: str, outcome: str, *, json_truncation_repaired: bool = False,
+                          stage: Optional[str] = None, run_id: Optional[str] = None) -> None:
+        """INFRA-2: tally one structured-output (chat_json) result under ``label``.
+
+        ``outcome`` is one of STRUCTURED_OUTCOMES; ``json_truncation_repaired`` counts an
+        accepted reply whose unterminated brackets had to be closed locally. Run attribution
+        is identical to record(); the stage keeps graph / report / sim failures apart.
+        Observability only: an unknown outcome or any internal failure is logged at debug
+        level and swallowed.
+        """
+        try:
+            if outcome not in STRUCTURED_OUTCOMES:
+                raise ValueError(f"unknown structured outcome {outcome!r}")
+            rid, stg, _fallback = cls._attribute(run_id, stage)
+            with cls._lock:
+                rm = cls._runs.setdefault(rid, _RunMeter())
+                by_stage = rm.structured.setdefault(str(label or "chat_json"), {})
+                counts = by_stage.setdefault(stg, _structured_counts())
+                counts[outcome] += 1
+                if json_truncation_repaired:
+                    counts["truncation_repaired"] += 1
+        except Exception as exc:  # noqa: BLE001 — telemetry must never fail the call path
+            import logging
+            logging.getLogger("mirofish.telemetry").debug(f"结构化输出计数失败（忽略）: {exc}")
+
+    @classmethod
     def snapshot(cls, run_id: Optional[str] = None) -> Dict[str, Any]:
         """Per-run usage snapshot. Additive keys (existing keys keep their meaning):
 
@@ -290,6 +333,10 @@ class LLMMeter:
           when snapshotting the '_global' bucket itself (it would duplicate ``total``).
         - ``finish_reasons`` (INFRA-1): ``{stage: {finish_reason: calls}}`` for the calls
           recorded with a finish reason; present only when at least one was.
+        - ``structured_outputs`` (INFRA-2): ``{label: {ok, repaired, failed,
+          truncation_repaired}}`` (integer counts only) from record_structured(), and
+          ``structured_outputs_by_stage``: ``{label: {stage: {same four counts}}}``; both
+          present only when at least one was recorded.
         """
         rid = run_id or _current_run.get() or _DEFAULT_BUCKET
         with cls._lock:
@@ -340,6 +387,18 @@ class LLMMeter:
             if rm.finish_reasons:
                 out["finish_reasons"] = {stg: dict(reasons)
                                          for stg, reasons in rm.finish_reasons.items()}
+            if rm.structured:
+                structured: Dict[str, Dict[str, int]] = {}
+                structured_by_stage: Dict[str, Dict[str, Dict[str, int]]] = {}
+                for label, by_stage in rm.structured.items():
+                    totals = _structured_counts()
+                    for counts in by_stage.values():
+                        for key in totals:
+                            totals[key] += counts.get(key, 0)
+                    structured[label] = totals
+                    structured_by_stage[label] = {stg: dict(counts) for stg, counts in by_stage.items()}
+                out["structured_outputs"] = structured
+                out["structured_outputs_by_stage"] = structured_by_stage
             if rid != _DEFAULT_BUCKET:
                 out["unattributed_process"] = unattributed
             return out
@@ -575,3 +634,18 @@ class LLMCache:
                     evict = cls._order.pop(0)
                     cls._store.pop(evict, None)
             cls._store[key] = value
+
+    @classmethod
+    def discard(cls, key: str) -> bool:
+        """INFRA-2: forget one entry (a reply its caller rejected, e.g. unparseable JSON), so
+        an identical later call makes a fresh completion instead of replaying it. Returns
+        whether the key was present."""
+        with cls._lock:
+            if key not in cls._store:
+                return False
+            del cls._store[key]
+            try:
+                cls._order.remove(key)
+            except ValueError:
+                pass
+            return True

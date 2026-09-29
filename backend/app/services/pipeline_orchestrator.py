@@ -8379,11 +8379,18 @@ class PipelineOrchestrator:
                 # ORCH-3(b): completed 但交付物健康降级/失败时，允许 force 重驱报告阶段。
                 _ph = ((data.get("options") or {}).get("pipeline_health") or {})
                 if not (force and _ph.get("status") in ("degraded", "failed")):
-                    raise RuntimeError(
-                        "管线已完成，无需恢复"
-                        + ("（如需重生成降级报告，请带 force=true 重试）"
-                           if _ph.get("status") in ("degraded", "failed") else "")
-                    )
+                    _degraded_stages = sorted(
+                        name for name, st in (_ph.get("stages") or {}).items()
+                        if isinstance(st, dict) and st.get("health") in ("degraded", "failed"))
+                    if _ph.get("status") not in ("degraded", "failed"):
+                        _hint = ""
+                    elif _degraded_stages and "report" not in _degraded_stages:
+                        # force 只重生成报告：上游阶段（如 RESEARCH-2 的研究降级）的问题它修不了。
+                        _hint = ("（降级来自 " + "/".join(_degraded_stages)
+                                 + " 阶段；force=true 只会重生成报告，无法修复这些阶段，请重新运行管线）")
+                    else:
+                        _hint = "（如需重生成降级报告，请带 force=true 重试）"
+                    raise RuntimeError("管线已完成，无需恢复" + _hint)
 
             state = PipelineState.from_dict(data)
             PipelineManager.ensure_dirs(pipeline_id)
@@ -9873,6 +9880,64 @@ class PipelineOrchestrator:
                            json.dumps(health["stages"], ensure_ascii=False)[:400])
 
     @staticmethod
+    def _reset_stage_scorecard_sidecar(state: PipelineState) -> None:
+        """EVAL-15: attempt 起点移除上一 attempt 的记分卡侧车与 options 摘要。
+
+        侧车/摘要只描述「到达 finally 块的最近一次 attempt」。本 attempt 若崩溃后被
+        reconcile_orphans 收尾（不走 finally），旧结果不得冒充本次，也不得让 CLI 回填把它
+        当作管线亲写的证据而跳过。旋钮关闭 = 不动（逐字节不变）。位于 _run 的 try 之前，
+        故自身兜住一切异常、绝不抛出。
+        """
+        if not getattr(Config, "STAGE_SCORECARD_ENABLED", True):
+            return
+        try:
+            from .stage_scorecard import sidecar_path
+            _stale = sidecar_path(state.pipeline_id)
+            if os.path.exists(_stale):
+                os.remove(_stale)
+            if state.options.pop("stage_scorecard_summary", None) is not None:
+                PipelineManager.save(state)
+        except Exception as _rse:  # noqa: BLE001 — 记分卡为观测增益，失败不影响管线
+            logger.warning("[%s] 清理上一 attempt 的记分卡失败（忽略）: %s",
+                           state.pipeline_id, _rse)
+
+    @staticmethod
+    def _write_stage_scorecard_sidecar(state: PipelineState) -> None:
+        """EVAL-15: 确定性分阶段记分卡侧车 <pipeline_dir>/stage_scorecard.json。
+
+        纯投影、绝不是门：不改 status/pipeline_health，不写报告目录；由 _run 的 finally 块在
+        每个终态调用（位于任何 try 之外），故自身兜住一切异常、绝不抛出。成功时把
+        {stage: passed} 折入 state.options['stage_scorecard_summary']；失败时移除上一 attempt
+        的摘要与侧车文件（宁缺毋错——旧结果不得冒充本次结果）。旋钮关闭 = 不写文件、不动
+        options（逐字节不变）。
+        """
+        if not getattr(Config, "STAGE_SCORECARD_ENABLED", True):
+            return
+        summary = None
+        try:
+            from .stage_scorecard import summarize_checks, write_stage_scorecard
+            summary = summarize_checks(
+                write_stage_scorecard(state.pipeline_id, state=state.to_dict()))
+        except Exception as _sce:  # noqa: BLE001 — 记分卡为观测增益，失败不影响管线终态
+            logger.warning("[%s] 分阶段记分卡写入失败（忽略）: %s", state.pipeline_id, _sce)
+            try:
+                from .stage_scorecard import sidecar_path
+                _stale = sidecar_path(state.pipeline_id)
+                if os.path.exists(_stale):
+                    os.remove(_stale)
+            except Exception as _rme:  # noqa: BLE001
+                logger.warning("[%s] 移除上一 attempt 的记分卡失败（忽略）: %s",
+                               state.pipeline_id, _rme)
+        try:
+            if summary is not None:
+                state.options["stage_scorecard_summary"] = summary
+            else:
+                state.options.pop("stage_scorecard_summary", None)
+            PipelineManager.save(state)
+        except Exception as _sse:  # noqa: BLE001
+            logger.warning("[%s] 保存记分卡摘要失败（忽略）: %s", state.pipeline_id, _sse)
+
+    @staticmethod
     def _stage_artifact_specs(state: PipelineState, stage: str) -> list[tuple[str, str]]:
         """T6.3/I-4-3/I-4-6: 单一真源——某阶段「可深链产物」的 (name, 绝对路径) 候选列表。
 
@@ -9890,6 +9955,9 @@ class PipelineOrchestrator:
             specs.append(("sources", os.path.join(hd, "sources.json")))
             specs.append(("quantitative", os.path.join(hd, "quantitative.json")))
             specs.append(("contested", os.path.join(hd, "contested.json")))
+            # REPORT-7 (RESEARCH_VERIFIED_FACTS): v3's claim/figure-to-page-span projection;
+            # optional (absent with the knob off, on legacy runs and older handoffs).
+            specs.append(("verified_facts", os.path.join(hd, "verified_facts.json")))
             specs.append(("prediction_markets", os.path.join(hd, "prediction_markets.json")))
             specs.append(("market_price_history", os.path.join(hd, "market_price_history.json")))
             specs.append(("prediction_market_candidates",
@@ -10121,15 +10189,31 @@ class PipelineOrchestrator:
             for name, path in self._report_viz_dynamic_artifact_specs(report_dir):
                 add_if(name, path)
 
+        # REPORT-7: a research completion describes the whole research artifact set.
+        # A research spec file absent at this boundary (the v3 child removes
+        # verified_facts.json when RESEARCH_VERIFIED_FACTS is off or its step fails)
+        # loses the pointer and manifest row an earlier attempt left; a row whose
+        # file is gone fails _validate_reuse, which would re-run research on every
+        # later resume.
+        stale: list[str] = []
+        if stage == STAGE_RESEARCH:
+            present = {name for name, _ in recorded}
+            stale = [name for name, _ in self._stage_artifact_specs(state, stage) if name not in present]
+            for name in stale:
+                state.artifacts.pop(name, None)
+                state.artifacts.pop(f"{name}_partial", None)
+
         # I-4-3: 把本阶段实际登记到的产物写入完整性清单。
-        if recorded and bool(getattr(Config, "PIPELINE_VALIDATE_ARTIFACTS", True)):
+        if (recorded or stale) and bool(getattr(Config, "PIPELINE_VALIDATE_ARTIFACTS", True)):
             try:
                 manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
+                removed = [name for name in stale if manifest.pop(name, None) is not None]
                 for name, path in recorded:
                     entry = _manifest_entry_for(name, path, stage)
                     if entry is not None:
                         manifest[name] = entry
-                PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
+                if recorded or removed:
+                    PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
             except Exception as e:  # noqa: BLE001 — 清单是复用保障，写失败仅退化为无校验
                 logger.debug("[%s] 产物清单写出跳过: %s", state.pipeline_id, e)
 
@@ -11140,6 +11224,9 @@ class PipelineOrchestrator:
         # SIM-1：两路决策通道产物共用的有效性裁定（顶层；旧轨迹缺席 → None）。只观测：
         # 通道本就 diagnostic_only，非 valid 裁定只告警，不进 _assess_run_health。
         validity = traj.get("validity") if isinstance(traj, dict) else None
+        # SIM-2：名册校验的 run 级汇总（DECISION_CHANNEL_VALIDATION 关或旧轨迹 → None）。
+        validation = traj.get("decision_validation") if isinstance(traj, dict) else None
+        validation = validation if isinstance(validation, dict) else {}
         summary = {
             "scenarios_seeded": len(scenarios),
             "trajectory_produced": bool(produced),
@@ -11149,6 +11236,8 @@ class PipelineOrchestrator:
             "validity": validity,
             "validity_reasons": (traj.get("validity_reasons") if isinstance(traj, dict) else None),
             "forecast_effect": (traj.get("forecast_effect") if isinstance(traj, dict) else None),
+            "fallback_share": validation.get("fallback_share"),
+            "decision_validation_measured_rounds": validation.get("measured_rounds"),
         }
         state.options["decision_channel_summary"] = summary
         try:
@@ -12290,6 +12379,8 @@ class PipelineOrchestrator:
         # I-8-1: 管线起飞即写首版 run.json（解析后的研究深度/模型/图谱/环境指纹），
         # 后续每阶段进入时把热切换出的报告/模拟 provider 钉入。
         self._write_run_manifest(state)
+        # EVAL-15: 清掉上一 attempt 的记分卡侧车与摘要（本 attempt 的 finally 块会重写）。
+        self._reset_stage_scorecard_sidecar(state)
         # I-4-1: 钉入本进程的 owner 指纹 + 启动一个独立于阶段进度的壁钟心跳看护线程。
         # 心跳让 reconcile_orphans 把「死管线」与「慢但活（深研究/persona 静默数分钟）」区分开。
         hb_stop = self._start_heartbeat(state)
@@ -13892,6 +13983,10 @@ class PipelineOrchestrator:
                 LLMMeter.reset(state.pipeline_id)
             except Exception as _te:
                 logger.debug(f"[{state.pipeline_id}] 写入 run_telemetry 失败（忽略）: {_te}")
+            # EVAL-15: 分阶段记分卡侧车。放在遥测 try 之外（与之平级）——遥测块任何一步抛错都
+            # 不得让终态管线缺记分卡、或让上一 attempt 的摘要冒充本次结果。记分卡不读 LLMMeter，
+            # 位于 reset 之后无影响；方法自身兜住一切异常。
+            self._write_stage_scorecard_sidecar(state)
             # DEFECT-1：本 attempt 的中断熔断器随线程终结注销（下一 attempt 重新注册，
             # 计数不跨 attempt 遗留；注册表清空后探针对全进程完全透传）。
             _clear_outage_breaker(state.pipeline_id)
