@@ -10,14 +10,35 @@ forecasts' ``confidence_rationale`` so confidence becomes *earned*, not self-ass
 jsonl append/read (+ atomic rewrite for resolution) → pure enough to unit-test offline.
 ``scripts/scheduled_rerun.py`` can use ``due_for_resolution`` to detect forecasts whose
 horizon/indicator dates have passed and queue them.
+
+EVAL-1 (publication-sealed commits): ``ledger.jsonl`` is append-only and never
+rewritten or pruned.  Besides the schema_version 1 rows of ``append_forecast``
+(``FORECAST_LEDGER_COMMIT_MODE=legacy``), it holds schema_version 2 rows:
+
+- ``row_type='commit'`` (``commit_published_forecast``): the exact audit-sealed
+  forecast of a publishable report, idempotent on ``commit_id`` and
+  pre-registered on ``target_key`` (question × as_of × record class).  The first
+  commit for a target is the scored ``primary``; later ones are never-scored
+  ``revision`` rows.  Rows are self-contained (question, binaries, provenance,
+  publication fingerprint) so they stay settleable after the report folder goes.
+- ``row_type='unpublished_terminal'`` (``record_unpublished_terminal``): a
+  terminal report that never became publishable, with its reasons, so the
+  calibration denominator stays auditable.  Never scored.
 """
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 import os
+import re
 import threading
-from typing import Any, Dict, List, Optional
+import unicodedata
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
+from ..utils.canonical_json import canonical_json_sha256
 
 
 def ledger_dir() -> str:
@@ -53,12 +74,23 @@ def is_production_calibration_row(e: Dict[str, Any]) -> bool:
     ``characterization_only``, and rows whose ``record_class`` is ``evaluation``
     — enforced here by record type, not by caller convention, so historical
     mixed-ledger files stop contaminating production numbers.
+
+    EVAL-1 generalises the record-type rule: any ``record_class`` other than
+    ``production`` (ensemble members, model comparisons, what-if scenarios,
+    evaluation), any ``row_type`` other than ``commit`` (unpublished terminals)
+    and every ``calibration_role='revision'`` row are excluded.  Legacy rows that
+    carry none of these keys still count.
     """
     if not isinstance(e, dict):
         return False
     if e.get("golden") or e.get("characterization_only"):
         return False
-    if str(e.get("record_class") or "").strip().lower() == "evaluation":
+    record_class = str(e.get("record_class") or "").strip().lower()
+    if record_class and record_class != "production":
+        return False
+    if "row_type" in e and str(e.get("row_type") or "").strip().lower() != "commit":
+        return False
+    if str(e.get("calibration_role") or "").strip().lower() == "revision":
         return False
     return True
 
@@ -268,6 +300,11 @@ def due_for_resolution(as_of: str, d: Optional[str] = None) -> List[Dict[str, An
     for e in led:
         if e.get("resolved"):
             continue
+        # EVAL-1: unpublished terminals and never-scored revisions need no resolution.
+        if "row_type" in e and str(e.get("row_type") or "").strip().lower() != "commit":
+            continue
+        if str(e.get("calibration_role") or "").strip().lower() == "revision":
+            continue
         rd = e.get("resolution_date")
         if rd and str(rd) <= str(as_of):
             out.append(e)
@@ -434,3 +471,341 @@ def market_brier_summary(d: Optional[str] = None,
         return {"n_resolved": len(recs), "mean_brier": None}
     return {"n_resolved": len(recs),
             "mean_brier": round(sum(briers) / len(briers), 4)}
+
+
+# ---------------------------------------------------------------------------
+# EVAL-1: publication-sealed commits (schema_version 2 rows in ledger.jsonl)
+# ---------------------------------------------------------------------------
+# A scored row must describe exactly what was published: the caller
+# (services/ledger_commit.py) only commits the audit-sealed forecast.json of a
+# report whose publication_status is publishable. Identity is two-level:
+#   commit_id  = sha256(report_id:forecast_sha256)  → re-committing the same
+#                publication is a no-op, even after resolution;
+#   target_key = cjson({v, q, as_of, record_class}) → pre-registration: the first
+#                commit for a question at an as-of date is the scored primary, any
+#                later publication is a never-scored revision (run/seed are
+#                provenance, not identity, so a regenerated report cannot replace
+#                a primary whose outcome may already be known).
+
+LEDGER_COMMIT_SCHEMA_VERSION = 2
+# Provenance copied into commit rows when present; anything else in the caller's
+# context is ignored so rows keep one stable, reviewable shape.
+_PROVENANCE_KEYS = ("pipeline_id", "simulation_id", "run_ref", "seed", "run_kind",
+                    "config_hash", "eval_run_id", "cell_id")
+UNPUBLISHED_MAX_REASONS = 10
+UNPUBLISHED_REASON_MAX_CHARS = 300
+_BINARY_ANCHOR_MAX_CHARS = 300
+_COMPACT_BINARY_OPTIONAL_KEYS = ("market_anchor", "market_influence",
+                                 "scenario_membership", "target")
+
+# Same protocol as _RESOLUTIONS_WRITE_LOCK: the duplicate/revision decision and
+# the single append happen in one critical section (in-process lock + advisory
+# fcntl.flock on the open append handle), so concurrent reports (the seed
+# ensemble runs several at once) can never both become the primary.
+_LEDGER_WRITE_LOCK = threading.Lock()
+
+# 判定标准里显式写出的 ISO 日期（如「by 2026-11-03」）优先于 horizon_year 年底代理。
+# （EVAL-1：连同 binary_resolution_date 从 scripts/resolution_monitor.py 原样迁入，
+# 供账本行自描述二元预测的判定日；监测脚本保留同名别名。）
+_ISO_DATE_RE = re.compile(r"(?<!\d)(20\d{2}-\d{2}-\d{2})(?!\d)")
+
+_RANGE_YEAR = r"(?:19|20)\d{2}"
+_RANGE_DAY = r"(?:19|20)\d{2}-\d{2}-\d{2}"
+_RANGE_JOIN = r"\s*(?:-|–|—|~|～|to|至)\s*"
+_DATE_RANGE_RE = re.compile(
+    rf"(?<!\d)({_RANGE_DAY}){_RANGE_JOIN}({_RANGE_DAY})(?!\d)", re.IGNORECASE)
+_YEAR_RANGE_RE = re.compile(
+    rf"(?<!\d)({_RANGE_YEAR})年?{_RANGE_JOIN}({_RANGE_YEAR})(?!\d)", re.IGNORECASE)
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _is_calendar_date(text: str) -> bool:
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").strftime("%Y-%m-%d") == text
+    except ValueError:
+        return False
+
+
+def resolution_date_for_horizon(horizon: Optional[str]) -> Optional[str]:
+    """Range-aware resolution date for a free-text horizon.
+
+    A horizon naming a range resolves at its END, not its start: two full ISO
+    dates joined by '-', an en/em dash, '~', 'to' or '至' give the later date
+    ('2026-01-01 to 2035-12-31' → '2035-12-31'); two years 1900-2099 joined the
+    same way give 31 Dec of the later year ('2026-2036' → '2036-12-31').
+    Everything else delegates to ``_year_end`` unchanged.
+    """
+    if not horizon:
+        return None
+    text = str(horizon)
+    m = _DATE_RANGE_RE.search(text)
+    if m and all(_is_calendar_date(day) for day in m.groups()):
+        return max(m.groups())
+    m = _YEAR_RANGE_RE.search(text)
+    if m:
+        return f"{max(int(m.group(1)), int(m.group(2)))}-12-31"
+    return _year_end(text)
+
+
+def question_sha256(text: Any) -> str:
+    """Identity hash of a forecast question: NFKC + casefold + collapsed whitespace.
+
+    Cosmetic differences (full-width characters, case, line wrapping) must not
+    split one question into several pre-registration targets.
+    """
+    normalized = " ".join(
+        unicodedata.normalize("NFKC", str(text or "")).casefold().split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def binary_resolution_date(binary: Dict[str, Any]) -> Optional[str]:
+    """一条二元预测的判定日期（ISO）：优先 resolution_criteria/resolution_source 里显式写出的
+    完整 ISO 日期；否则用 horizon_year 的年底（YYYY-12-31）作代理。都无 → None。"""
+    if not isinstance(binary, dict):
+        return None
+    for key in ("resolution_criteria", "resolution_source", "statement"):
+        m = _ISO_DATE_RE.search(str(binary.get(key) or ""))
+        if m:
+            return m.group(1)
+    hy = binary.get("horizon_year")
+    try:
+        y = int(float(hy)) if hy not in (None, "") else None
+    except (TypeError, ValueError):
+        y = None
+    if y and 2000 <= y <= 2100:
+        return f"{y}-12-31"
+    return None
+
+
+def compact_binary(binary: Dict[str, Any]) -> Dict[str, Any]:
+    """Self-contained copy of one binary forecast for a commit row.
+
+    ``statement`` and ``resolution_criteria`` are copied VERBATIM: the market
+    anchor's ``forecast_contract_sha256`` hashes exactly those two strings, so
+    any normalisation here would break later settlement verification.
+    """
+    row: Dict[str, Any] = {
+        "id": binary.get("id"),
+        "proposition_id": binary.get("proposition_id"),
+        "statement": binary.get("statement"),
+        "probability": binary.get("probability"),
+        "resolution_criteria": binary.get("resolution_criteria"),
+        "resolution_source": binary.get("resolution_source"),
+        "theme": binary.get("theme"),
+        "horizon_year": binary.get("horizon_year"),
+        "resolution_date": binary_resolution_date(binary),
+        "base_rate_anchor": str(binary.get("base_rate_anchor") or "")[:_BINARY_ANCHOR_MAX_CHARS],
+        "source": binary.get("source"),
+    }
+    for key in _COMPACT_BINARY_OPTIONAL_KEYS:
+        if binary.get(key) is not None:
+            row[key] = copy.deepcopy(binary[key])
+    return row
+
+
+def run_ref_for(context: Optional[Dict[str, Any]]) -> Optional[str]:
+    """The run a ledger row came from: pipeline_id, else ``sim:<simulation_id>``."""
+    ctx = context if isinstance(context, dict) else {}
+    pipeline_id = str(ctx.get("pipeline_id") or "").strip()
+    if pipeline_id:
+        return pipeline_id
+    simulation_id = str(ctx.get("simulation_id") or "").strip()
+    return f"sim:{simulation_id}" if simulation_id else None
+
+
+def _provenance_fields(provenance: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Whitelisted, present-only provenance for a commit row (run_ref is derived)."""
+    src = provenance if isinstance(provenance, dict) else {}
+    out: Dict[str, Any] = {}
+    for key in _PROVENANCE_KEYS:
+        if key == "run_ref":
+            value: Any = run_ref_for(src)
+        else:
+            value = src.get(key)
+        if value is None or value == "":
+            continue
+        if key == "seed":
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                continue
+        else:
+            value = str(value)
+        out[key] = value
+    return out
+
+
+def _route_dir(d: Optional[str], record_class: Any) -> str:
+    """Foglamp WP1 record-class redirect (mirrors append_golden_result): evaluation
+    rows aimed at the production ledger land in evaluation_ledger_dir()."""
+    target = d or ledger_dir()
+    if (str(record_class or "").strip().lower() == "evaluation"
+            and os.path.abspath(target) == os.path.abspath(ledger_dir())):
+        return evaluation_ledger_dir()
+    return target
+
+
+def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: str,
+                              question: Optional[str], language: Optional[str],
+                              as_of_date: str, as_of_source: str,
+                              publication: Dict[str, Any], record_class: str = "production",
+                              provenance: Optional[Dict[str, Any]] = None,
+                              d: Optional[str] = None,
+                              committed_at: Optional[str] = None,
+                              ) -> Tuple[str, Optional[Dict[str, Any]]]:
+    """Append one publication-sealed forecast; returns ``(status, row)``.
+
+    ``status`` is ``committed`` (new scored primary), ``revision`` (another
+    publication for an already-committed target; appended, never scored),
+    ``duplicate`` (this exact publication is already in the ledger; nothing
+    written, the existing row is returned) or ``error`` (invalid input or I/O
+    failure; nothing written). ``forecast`` must be the audit-sealed object
+    whose bytes hash to ``publication['forecast_sha256']``.
+    """
+    rid = str(report_id or "").strip()
+    pub = publication if isinstance(publication, dict) else {}
+    forecast_sha = str(pub.get("forecast_sha256") or "").strip()
+    # as_of_date is part of the pre-registration key: only a canonical calendar
+    # date may enter it (fail closed rather than key a row on a guess).
+    if (not rid or not forecast_sha or not isinstance(forecast, dict)
+            or not isinstance(as_of_date, str) or not _is_calendar_date(as_of_date)):
+        return "error", None
+    scenarios = [
+        {"name": s.get("name"), "probability": s.get("probability"),
+         "resolution_criteria": s.get("resolution_criteria")}
+        for s in (forecast.get("scenarios") or []) if isinstance(s, dict)
+    ]
+    if not scenarios:
+        return "error", None
+    rc = str(record_class or "").strip() or "production"
+    q_text = str(question or "")
+    try:
+        from ..config import Config
+        max_chars = max(0, int(getattr(Config, "FORECAST_LEDGER_QUESTION_MAX_CHARS", 4000)))
+    except (TypeError, ValueError):
+        max_chars = 4000
+    q_sha = question_sha256(q_text)
+    commit_id = hashlib.sha256(f"{rid}:{forecast_sha}".encode("utf-8")).hexdigest()
+    target_key = canonical_json_sha256(
+        {"v": 1, "q": q_sha, "as_of": as_of_date, "record_class": rc})
+    hz = str(forecast.get("horizon") or "").strip() or None
+    row: Dict[str, Any] = {
+        "schema_version": LEDGER_COMMIT_SCHEMA_VERSION,
+        "row_type": "commit",
+        "commit_id": commit_id,
+        "target_key": target_key,
+        "calibration_role": "primary",
+        "revision_of": None,
+        "record_class": rc,
+        "report_id": rid,
+        "horizon": hz,
+        "resolution_date": resolution_date_for_horizon(hz),
+        "created_at": committed_at or _utc_now_iso(),
+        "scenarios": scenarios,
+        "confidence": forecast.get("confidence"),
+        # Kept so legacy readers (calibration_summary / due_for_resolution) work;
+        # never mutated — outcomes belong to separate settlement records.
+        "resolved": False,
+        "outcome": None,
+        "question": q_text[:max_chars],
+        "question_sha256": q_sha,
+        "language": language,
+        "as_of_date": as_of_date,
+        "as_of_source": as_of_source,
+        "publication": {
+            "authority": pub.get("authority") or "final_audit",
+            "policy_version": pub.get("policy_version"),
+            "markdown_sha256": pub.get("markdown_sha256"),
+            "forecast_sha256": forecast_sha,
+        },
+        "binary_forecasts": [compact_binary(b) for b in (forecast.get("binary_forecasts") or [])
+                             if isinstance(b, dict)],
+    }
+    row.update(_provenance_fields(provenance))
+    try:
+        # Reject non-JSON / NaN rows before touching the ledger file at all.
+        json.dumps(row, ensure_ascii=False, allow_nan=False)
+    except (TypeError, ValueError):
+        return "error", None
+    try:
+        target_dir = _route_dir(d, rc)
+        target = _ledger_file(target_dir)
+        os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
+        with _LEDGER_WRITE_LOCK:
+            with open(target, "a", encoding="utf-8") as f:
+                _flock_exclusive(f)
+                first_for_target: Optional[Dict[str, Any]] = None
+                primary_for_target: Optional[Dict[str, Any]] = None
+                for e in read_ledger(target_dir):
+                    if not isinstance(e, dict) or e.get("row_type") != "commit":
+                        continue
+                    if e.get("commit_id") == commit_id:
+                        return "duplicate", e  # 幂等门：同一份封印发布只入账一次
+                    if e.get("target_key") == target_key:
+                        first_for_target = first_for_target or e
+                        if primary_for_target is None and e.get("calibration_role") == "primary":
+                            primary_for_target = e
+                anchor = primary_for_target or first_for_target
+                status = "committed"
+                if anchor is not None:
+                    row["calibration_role"] = "revision"
+                    row["revision_of"] = anchor.get("commit_id")
+                    status = "revision"
+                f.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
+                f.flush()
+        return status, row
+    except OSError:
+        return "error", None
+
+
+def record_unpublished_terminal(*, report_id: str, question_sha256: Optional[str],
+                                record_class: str, run_ref: Optional[str], reasons: Any,
+                                d: Optional[str] = None, recorded_at: Optional[str] = None,
+                                ) -> Tuple[str, Optional[Dict[str, Any]]]:
+    """Record a terminal report that never became publishable; ``(status, row)``.
+
+    ``status`` is ``recorded``, ``duplicate`` (this report already has an
+    unpublished row; nothing written) or ``error``. The row carries no scenarios
+    and no resolution date, so no reader can ever score it; it exists so the
+    denominator of published forecasts stays auditable.
+    """
+    rid = str(report_id or "").strip()
+    if not rid:
+        return "error", None
+    rc = str(record_class or "").strip() or "production"
+    if isinstance(reasons, str):
+        reasons = [reasons]
+    row: Dict[str, Any] = {
+        "schema_version": LEDGER_COMMIT_SCHEMA_VERSION,
+        "row_type": "unpublished_terminal",
+        "report_id": rid,
+        "question_sha256": question_sha256,
+        "record_class": rc,
+        "run_ref": run_ref,
+        "reasons": [str(r)[:UNPUBLISHED_REASON_MAX_CHARS]
+                    for r in list(reasons or [])[:UNPUBLISHED_MAX_REASONS]],
+        "recorded_at": recorded_at or _utc_now_iso(),
+    }
+    try:
+        json.dumps(row, ensure_ascii=False, allow_nan=False)
+    except (TypeError, ValueError):
+        return "error", None
+    try:
+        target_dir = _route_dir(d, rc)
+        target = _ledger_file(target_dir)
+        os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
+        with _LEDGER_WRITE_LOCK:
+            with open(target, "a", encoding="utf-8") as f:
+                _flock_exclusive(f)
+                for e in read_ledger(target_dir):
+                    if (isinstance(e, dict) and e.get("row_type") == "unpublished_terminal"
+                            and e.get("report_id") == rid):
+                        return "duplicate", e
+                f.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
+                f.flush()
+        return "recorded", row
+    except OSError:
+        return "error", None

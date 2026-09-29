@@ -30,7 +30,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -176,10 +175,6 @@ def recent_report_ids(n: int, *, as_of: Optional[str] = None) -> List[str]:
 # ---------------------------------------------------------------------------
 
 
-# 判定标准里显式写出的 ISO 日期（如「by 2026-11-03」）优先于 horizon_year 年底代理。
-_ISO_DATE_RE = re.compile(r"(?<!\d)(20\d{2}-\d{2}-\d{2})(?!\d)")
-
-
 def anchored_forecasts(forecast: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """从 forecast.json 取「带有效市场锚点」的二元预测（market_anchor.market_id 非空）。"""
     if not isinstance(forecast, dict):
@@ -194,23 +189,9 @@ def anchored_forecasts(forecast: Optional[Dict[str, Any]]) -> List[Dict[str, Any
     return out
 
 
-def binary_resolution_date(binary: Dict[str, Any]) -> Optional[str]:
-    """一条二元预测的判定日期（ISO）：优先 resolution_criteria/resolution_source 里显式写出的
-    完整 ISO 日期；否则用 horizon_year 的年底（YYYY-12-31）作代理。都无 → None。"""
-    if not isinstance(binary, dict):
-        return None
-    for key in ("resolution_criteria", "resolution_source", "statement"):
-        m = _ISO_DATE_RE.search(str(binary.get(key) or ""))
-        if m:
-            return m.group(1)
-    hy = binary.get("horizon_year")
-    try:
-        y = int(float(hy)) if hy not in (None, "") else None
-    except (TypeError, ValueError):
-        y = None
-    if y and 2000 <= y <= 2100:
-        return f"{y}-12-31"
-    return None
+# 二元预测判定日（显式 ISO 日期优先，否则 horizon_year 年底）。EVAL-1：实现原样迁入
+# forecast_ledger，供账本行自描述；此处保留同名别名，既有调用方与测试不变。
+binary_resolution_date = _ledger.binary_resolution_date
 
 
 def build_price_rows(anchored: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

@@ -8759,6 +8759,27 @@ class PipelineOrchestrator:
                 pass
             self._flush_run_telemetry(state)  # W9-3：集成窗口结束即落一版遥测
 
+    @staticmethod
+    def _report_ledger_context(state: "PipelineState", simulation_id: Optional[str], *,
+                               run_kind: str, seed: int,
+                               record_class: Optional[str] = None) -> dict[str, Any]:
+        """EVAL-1: ledger provenance for one ReportAgent (``agent.ledger_context``).
+
+        ``as_of_date`` is the graph stage's validated anchor (None when it was not
+        validated → the ledger falls back to strict actors / commit date). Without an
+        explicit ``record_class`` the ledger derives production / conditional_scenario.
+        """
+        context: dict[str, Any] = {
+            "pipeline_id": state.pipeline_id,
+            "simulation_id": simulation_id,
+            "seed": seed,
+            "run_kind": run_kind,
+            "as_of_date": (state.options or {}).get("as_of_date_validated"),
+        }
+        if record_class:
+            context["record_class"] = record_class
+        return context
+
     def _run_one_seed(self, state: "PipelineState", project: Any, graph_id: str,
                       actors: Any, research: dict, report_md: str, *,
                       seed: int, max_rounds: Optional[int],
@@ -8885,6 +8906,10 @@ class PipelineOrchestrator:
             logger.info("[%s] ReportAgent 尚未支持 scenario_spine，种子 %s 回退自由情景命名",
                         state.pipeline_id, seed)
             agent = ReportAgent(**_agent_kwargs)
+        # EVAL-1: 集成种子报告是相关抽样而非独立预测——以 ensemble_member 入账（不进生产校准）。
+        agent.ledger_context = self._report_ledger_context(
+            state, sim_id, run_kind="seed_ensemble", seed=int(seed),
+            record_class="ensemble_member")
         agent.generate_report(report_id=rid)
         return sim_id, rid, self._read_report_forecast(rid)
 
@@ -12509,6 +12534,7 @@ class PipelineOrchestrator:
                 # bi-temporal anchor; fall back to newest source date / run date on a
                 # future, pre-evidence, or unparseable value. Gated default-on; any
                 # error or a disabled flag reverts to the plain parse (today's behavior).
+                _as_of_validated = False
                 if getattr(Config, "VALIDATE_AS_OF_DATE", True):
                     try:
                         as_of, _as_of_note = self._validate_as_of_date(actors, research.get("sources"))
@@ -12516,11 +12542,21 @@ class PipelineOrchestrator:
                             state.options["as_of_date_correction"] = _as_of_note
                             logger.warning("[%s] %s → %s", state.pipeline_id, _as_of_note,
                                            as_of.date() if as_of else None)
+                        _as_of_validated = True
                     except Exception as _ae:  # noqa: BLE001 — 校验失败回退原始解析
                         logger.debug("[%s] as_of 校验跳过: %s", state.pipeline_id, _ae)
                         as_of = parse_as_of((actors or {}).get("as_of_date")) if isinstance(actors, dict) else None
                 else:
                     as_of = parse_as_of((actors or {}).get("as_of_date")) if isinstance(actors, dict) else None
+                # EVAL-1: 只有校验器实际给出的锚点才成为账本预注册键的 as_of（本次建图重新判定，
+                # 旧值先清掉）；回退到原始解析的日期未经校验，不写入。
+                state.options.pop("as_of_date_validated", None)
+                if _as_of_validated and as_of is not None:
+                    from ..utils.point_in_time import validate_as_of as _validate_as_of
+                    try:
+                        state.options["as_of_date_validated"] = _validate_as_of(as_of.date().isoformat())
+                    except ValueError:
+                        pass
                 seeded = _seed_research_actors(
                     builder, graph_id, actors, valid_at=as_of
                 )
@@ -13313,11 +13349,19 @@ class PipelineOrchestrator:
                     logger.info("[%s] ReportAgent 尚未支持研究工件直通参数，回退旧签名",
                                 state.pipeline_id)
                     agent = ReportAgent(**_ra_kwargs)
+                # EVAL-1: 主报告以 production（what-if 由 scenario_label 派生 conditional_scenario）
+                # 入账；报告的封印发布即提交权威——其后的集成/健康门失败不撤回账本行。
+                agent.ledger_context = self._report_ledger_context(
+                    state, sim_state.simulation_id, run_kind="pipeline",
+                    seed=int(Config.SIM_SEED or 0))
 
                 def report_cb(stage: str, progress: int, message: str):
                     upd(max(5, min(99, int(progress))), f"{stage}: {message}")
 
                 report = agent.generate_report(progress_callback=report_cb, report_id=report_id)
+                _ledger_receipt = getattr(agent, "ledger_receipt", None)
+                if isinstance(_ledger_receipt, dict):
+                    state.options["forecast_ledger"] = dict(_ledger_receipt)
                 try:
                     ReportManager.save_report(report)
                 except Exception:

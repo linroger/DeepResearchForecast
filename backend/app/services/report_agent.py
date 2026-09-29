@@ -1665,6 +1665,11 @@ class ReportAgent:
         # RPT-5: 大纲摘要（generate_report 规划完成后回填），供引用溯源审计豁免系统注入的
         # 摘要 blockquote（assemble_full_report 固定输出 "> {outline.summary}"）。
         self._outline_summary = ""
+        # EVAL-1: 账本提交的溯源上下文（编排器/脚本在构造后赋值：pipeline_id、seed、run_kind、
+        # record_class、as_of_date；API 路径不设 → 默认 production）与本次提交回执。
+        # 测试经 __new__ 构造 agent 时二者缺失，读取一律走 getattr。
+        self.ledger_context: Optional[Dict[str, Any]] = None
+        self.ledger_receipt: Optional[Dict[str, Any]] = None
 
         self.llm = llm_client or LLMClient()
         self.zep_tools = zep_tools or ZepToolsService()
@@ -3183,12 +3188,16 @@ class ReportAgent:
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
         # P2-4: 追加进校准账本（loop-closer；resolution 经 /api/v1/resolve 或 forecast_tools backtest）。
+        # EVAL-1: 仅 FORECAST_LEDGER_COMMIT_MODE=legacy 在此（终审之前）追加；默认 published 模式
+        # 由 generate_report 在终审封印 + 落盘之后经 _commit_forecast_ledger 提交封印字节。
         if getattr(Config, "REPORT_FORECAST_LEDGER", True):
             try:
                 from .forecast_ledger import append_forecast as _append
-                _append(forecast, report_id=report_id,
-                        horizon=str(forecast.get("horizon") or "") or None,
-                        created_at=datetime.now().isoformat())
+                from .ledger_commit import commit_mode as _ledger_commit_mode
+                if _ledger_commit_mode() == "legacy":
+                    _append(forecast, report_id=report_id,
+                            horizon=str(forecast.get("horizon") or "") or None,
+                            created_at=datetime.now().isoformat())
             except Exception:  # noqa: BLE001
                 pass
         logger.info(
@@ -10333,6 +10342,34 @@ class ReportAgent:
             still_failed.extend([title] * max(0, count))
         return still_failed
 
+    def _commit_forecast_ledger(self, report_id: str, report: "Report",
+                                error: Optional[str] = None) -> Dict[str, Any]:
+        """EVAL-1: run the post-publication steps (first: the forecast-ledger commit).
+
+        Called once the report is terminal and saved (meta.json + full_report.md on
+        disk), so ``publication_status`` judges the exact published bytes. Only reads
+        the sealed artifacts: never mutates forecast.json / full_report.md and never
+        changes the report status. Any failure yields ``{'status': 'error'}``.
+        """
+        try:
+            from . import ledger_commit as _ledger_commit
+            _status = getattr(report, "status", None)
+            receipt = _ledger_commit.run_post_publication(
+                self, report_id,
+                report_status=str(getattr(_status, "value", _status) or ""),
+                error=error,
+                publication_status_fn=ReportManager.publication_status,
+                load_forecast_fn=ReportManager.load_structured_forecast,
+            )
+        except Exception as _le:  # noqa: BLE001 — 账本为旁路记账，绝不影响报告终态
+            receipt = {"status": "error", "reasons": [f"{type(_le).__name__}: {_le}"[:300]]}
+        if not isinstance(receipt, dict):
+            receipt = {"status": "error", "reasons": ["post-publication returned no receipt"]}
+        self.ledger_receipt = receipt
+        logger.info(f"[ledger] status={receipt.get('status')} "
+                    f"commit_id={receipt.get('commit_id')} report={report_id}")
+        return receipt
+
     def generate_report(
         self,
         progress_callback: Optional[Callable[[str, int, str], None]] = None,
@@ -10399,6 +10436,10 @@ class ReportAgent:
             except Exception:  # noqa: BLE001 — 遥测初始化失败不得影响报告生成
                 _telemetry_on = False
                 _telemetry_run_id = report_id
+
+        # EVAL-1: 成功路径已提交账本后若再抛异常（进度回调等），失败分支不再补记
+        # unpublished_terminal 行——同一报告在账本里只有一个终态结论。
+        _ledger_committed = False
 
         try:
             # 初始化：创建报告文件夹并保存初始状态
@@ -10891,7 +10932,11 @@ class ReportAgent:
                 failed_sections=failed_section_titles,
                 forecast_ok=_forecast_ok
             )
-            
+            # EVAL-1: 账本提交必须在 save_report/update_progress 之后——publication_status 读
+            # meta.json 判定终态，提前调用会把每份报告都记成 unpublished。
+            self._commit_forecast_ledger(report_id, report)
+            _ledger_committed = True
+
             if progress_callback:
                 progress_callback("completed", 100, "报告生成完成")
             
@@ -10923,6 +10968,9 @@ class ReportAgent:
                 )
             except Exception:
                 pass  # 忽略保存失败的错误
+            # EVAL-1: 失败终态同样留痕——unpublished_terminal 行（不计分）让校准分母可审计。
+            if not _ledger_committed:
+                self._commit_forecast_ledger(report_id, report, error=str(e))
             
             # 关闭控制台日志记录器
             if self.console_logger:

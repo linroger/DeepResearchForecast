@@ -276,6 +276,22 @@ class Config:
     # 自评。默认开（仅 jsonl 追加/读取，无 LLM）；初期无已解析样本时对信心无影响（degrade-safe）。
     REPORT_FORECAST_LEDGER = os.environ.get('REPORT_FORECAST_LEDGER', 'True').strip().lower() == 'true'
     FORECAST_LEDGER_DIR = os.environ.get('FORECAST_LEDGER_DIR', '').strip()  # 空=PIPELINE_DATA_DIR/_forecast_ledger
+    # EVAL-1: when a report enters the calibration ledger. 'published' (default) commits the
+    # audit-sealed forecast.json bytes only after the final publish audit passed and meta.json
+    # says completed (schema_version 2 rows: idempotent, pre-registration keyed, self-contained);
+    # 'legacy' restores the pre-audit schema_version 1 append inside _finalize_structured_forecast
+    # byte-for-byte; 'off' writes nothing. Unknown values act as 'published'. The default is an
+    # intended behaviour change: reports that later fail publication no longer poison calibration.
+    # REPORT_FORECAST_LEDGER=false still disables every ledger write and the calibration read.
+    FORECAST_LEDGER_COMMIT_MODE = os.environ.get('FORECAST_LEDGER_COMMIT_MODE', 'published').strip().lower()
+    # EVAL-1: in 'published' mode, a terminal report that is not publishable (failed, or failed
+    # the final audit) leaves one row_type='unpublished_terminal' row in the same ledger with its
+    # reasons, so the calibration denominator stays auditable (ADR 0002 I-20). Such rows carry no
+    # scenarios and are never scored, so the default cannot change any calibration number.
+    FORECAST_LEDGER_RECORD_UNPUBLISHED = os.environ.get('FORECAST_LEDGER_RECORD_UNPUBLISHED', 'true').strip().lower() == 'true'
+    # EVAL-1: cap on the question text stored in a commit row (question_sha256 always covers the
+    # full normalized text, so the cap only bounds row size, never identity).
+    FORECAST_LEDGER_QUESTION_MAX_CHARS = int(os.environ.get('FORECAST_LEDGER_QUESTION_MAX_CHARS', '4000') or '4000')
     # MON-1 持续预测/判定监测（scripts/resolution_monitor.py，cron 驱动）：对已发布报告的锚定
     # 市场周期性重报价 + 查询判定终态，落 price_track.jsonl / resolutions.jsonl / monitor_report.md。
     # 纯脚本旁路，不改任何在线管线语义；下列旋钮仅被该脚本读取（degrade-safe，默认保守）。
