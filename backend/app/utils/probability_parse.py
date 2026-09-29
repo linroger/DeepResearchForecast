@@ -43,10 +43,17 @@ _PERCENT_UNIT = r"(?:%|percent|per\s+cent|pct)"
 
 _BARE_RE = re.compile(rf"^({_NUMBER})$")
 _PERCENT_RE = re.compile(rf"^({_NUMBER})\s*{_PERCENT_UNIT}$", re.I)
+# Unanchored search over model text, kept linear: a match may only start where a
+# number starts (not inside a digit run), and the whitespace around the optional
+# unit has a single way to match.
 _RANGE_RE = re.compile(
-    rf"{_UNSIGNED}\s*{_PERCENT_UNIT}?\s*(?:-|–|—|~|～|to|至|到)\s*[+-]?{_UNSIGNED}",
+    rf"(?<![\d.]){_UNSIGNED}\s*(?:{_PERCENT_UNIT}\s*)?(?:-|–|—|~|～|to|至|到)\s*[+-]?{_UNSIGNED}",
     re.I,
 )
+# Unreadable text longer than this skips the reason heuristics below and is reported
+# as unparseable: no readable single probability is this long, and the cap bounds the
+# cost of the unanchored searches on arbitrary model output.
+_MAX_REASON_TEXT = 64
 _LEADING_BOUND_RE = re.compile(
     r"^(?:>|<|≥|≤|at\s+least|at\s+most|more\s+than|less\s+than|over\b|under\b|"
     r"至少|至多|不低于|超过|以上|以下)",
@@ -135,6 +142,8 @@ def _parse(value: Any, *, allow_gt1: bool) -> ProbParse:
         if not 0 <= number <= 100:
             return _review("out_of_range", "percent", raw)
         return ProbParse(number / 100.0, PROB_OK, "", "percent", raw)
+    if len(text) > _MAX_REASON_TEXT:
+        return _review("unparseable", "", raw)
     if _RANGE_RE.search(text):
         return _review("range", "", raw)
     if _LEADING_BOUND_RE.match(text) or _TRAILING_BOUND_RE.search(text):

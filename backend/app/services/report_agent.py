@@ -3038,6 +3038,7 @@ class ReportAgent:
             try:
                 from .forecast_extractor import (
                     _binary_quality as _binary_quality_score,
+                    _binary_withheld_issue,
                     apply_horizon_consistency as _apply_horizon_consistency,
                     extract_binary_forecasts as _ebf,
                     reconcile_forecast_contract as _reconcile_forecast_contract,
@@ -3109,11 +3110,16 @@ class ReportAgent:
                         themes_expected=_themes,
                     )
                     _quality["proposition_consistency"] = _contract
-                    # REPORT-1：重算的记分卡会丢掉抽取时统计的「概率不可读被扣下」计数，照搬回来。
+                    # REPORT-1：重算的记分卡会丢掉抽取时统计的「概率不可读被扣下」计数与说明行，
+                    # 照搬回来（说明行置首，发布门只展示前两条 issues）。
                     _bq_extracted = _bres.get("binary_quality") or {}
-                    for _review_key in ("needs_review_count", "needs_review_reasons"):
+                    for _review_key in ("needs_review_count", "needs_review_reasons",
+                                        "needs_review_secondary_count"):
                         if _review_key in _bq_extracted:
                             _quality[_review_key] = _bq_extracted[_review_key]
+                    if _bq_extracted.get("needs_review_count"):
+                        _quality.setdefault("issues", []).insert(0, _binary_withheld_issue(
+                            _bq_extracted["needs_review_count"]))
                     forecast["binary_quality"] = _quality
                     # RQ-6：校验二元预测结算年份与真实判定期一致——目标年份集合（需求书 +
                     # 日历 horizon_date.year）与二元结算年份集合非空且无交集时，把
@@ -3151,6 +3157,10 @@ class ReportAgent:
                                 f"完全一致（不同 simulation_id）")
                     except Exception:  # noqa: BLE001 — 观测性检查，绝不影响产物
                         pass
+                elif (_bres.get("binary_quality") or {}).get("needs_review_count"):
+                    # REPORT-1：二元概率全部不可读被扣下 → 无可发布的二元，但抽取记分卡（扣下
+                    # 计数、原因与说明行）照样随 forecast.json 落盘，运维可见缺二元的原因。
+                    forecast["binary_quality"] = _bres["binary_quality"]
             except Exception as _be:  # noqa: BLE001 — additive; never break finalization
                 logger.warning(f"二元预测抽取失败（忽略，不影响情景预测）: {_be}")
         # RQ-2：质量门失败 → 按维度单次定向修复（引用回填 / 引文接地 / 占位符解析），

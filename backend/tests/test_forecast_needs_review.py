@@ -7,7 +7,9 @@ well-formed numeric input, the cache-busting spine retry, critique salvage and
 discard, and every consumer that must honour a null probability.
 """
 
+import contextvars
 import json
+import logging
 import os
 
 import pytest
@@ -16,6 +18,7 @@ from app.config import Config
 from app.services import forecast_extractor as fe
 from app.services import forecast_ledger
 from app.services.ensemble import aggregate_forecasts
+from app.services.pipeline_orchestrator import PipelineOrchestrator, PipelineState
 from app.services.report_agent import ReportAgent, ReportManager
 from app.services.report_lint import check_scenario_probabilities
 from app.utils.telemetry import LLMCache
@@ -311,6 +314,17 @@ def test_spine_retry(monkeypatch):
     assert out2["derived_from"] == "spine"
     assert out2["probability_review"]["reason"] == "ambiguous_scale"
 
+    # an unreadable first draw followed by an empty retry keeps the first draw's review,
+    # so ReportAgent can still record why the spine was dropped
+    llm3 = FakeLLMClient(json_responses=[_spine([0.5, "30-40%", 0.2]), {}])
+    out3 = fe.derive_forecast_spine(llm3, central_question="Will adoption accelerate?")
+    assert len(llm3.calls) == 2
+    assert out3["scenarios"] == []
+    assert out3["probability_status"] == "needs_review"
+    assert out3["probability_review"]["reason"] == "range"
+    assert out3["probability_review"]["rows"] == [
+        {"name": _NAMES[1], "raw": "'30-40%'", "reason": "range"}]
+
 
 def test_spine_retry_on_empty_draw(monkeypatch):
     monkeypatch.setattr(Config, "REPORT_SPINE_SELFCONSISTENCY_K", 1, raising=False)
@@ -378,6 +392,39 @@ def test_critique_and_premortem_leave_needs_review_forecast_alone(monkeypatch):
     assert forecast["scenarios"][1]["probability"] is None
 
 
+def _partition_binary(probability, yes_scenarios):
+    return {"id": "F1", "statement": "Rapid adoption wins by 2030", "probability": probability,
+            "scenario_membership": {"derivable": True, "yes_scenarios": yes_scenarios}}
+
+
+def test_reconcile_skips_unreadable_partition(monkeypatch):
+    _strict(monkeypatch)
+    forecast = fe._assemble_forecast({"headline": "h",
+                                      "scenarios": _rows([0.45, "30-40%", 0.2])})
+    forecast["binary_forecasts"] = [_partition_binary(0.7, [_NAMES[0]])]
+    diagnostics = fe.reconcile_forecast_contract(forecast)
+    binary = forecast["binary_forecasts"][0]
+    # the readable row of an unreadable partition is not a canonical probability
+    assert binary["probability"] == 0.7
+    assert "pre_reconciliation_probability" not in binary
+    assert binary.get("source") != "scenario-partition"
+    assert diagnostics["corrected_count"] == 0
+    after = diagnostics["after"]
+    assert after["mismatch_count"] == 0  # unverifiable, not a contradiction
+    assert after["unverifiable_count"] == 1
+    assert after["unverifiable"][0]["reason"] == "scenario partition probabilities need review"
+    assert after["passed"] is False and diagnostics["passed"] is False
+
+    # a readable partition still reconciles exactly as before, with no new keys
+    readable = fe._assemble_forecast({"headline": "h", "scenarios": _rows([0.45, 0.35, 0.2])})
+    readable["binary_forecasts"] = [_partition_binary(0.7, [_NAMES[0]])]
+    fixed = fe.reconcile_forecast_contract(readable)
+    assert readable["binary_forecasts"][0]["probability"] == 0.45
+    assert readable["binary_forecasts"][0]["source"] == "scenario-partition"
+    assert "unverifiable" not in fixed["after"] and "unverifiable_count" not in fixed["after"]
+    assert fixed["after"]["passed"] is True
+
+
 # -------------------------------------------------------------------- consumers
 def _needs_review_forecast():
     forecast = fe._assemble_forecast({"headline": "h", "horizon": "2030",
@@ -421,6 +468,67 @@ def test_consumers(monkeypatch):
     assert _NAMES[0] not in " ".join(nc["scenario_prob_mismatches"])
     lint = check_scenario_probabilities(md, forecast)
     assert len(lint) == 1 and _NAMES[1] in lint[0]
+
+
+def test_ensemble_single_readable_run_reports_no_agreement():
+    run = fe._assemble_forecast({"headline": "h", "scenarios": _rows([0.5, 0.3, 0.2])})
+    agg = aggregate_forecasts([run, _needs_review_forecast()])
+    assert agg["n_runs"] == 1 and agg["n_runs_excluded"] == 1
+    # one readable run cannot agree with anything: never a fabricated 1.0 / "high"
+    assert agg["agreement"] is None
+    assert agg["agreement_spread"] is None
+    assert PipelineOrchestrator._agreement_to_confidence(agg["agreement"]) != "high"
+    # with two readable runs the agreement is computed exactly as before
+    pooled = aggregate_forecasts([run, dict(run), _needs_review_forecast()])
+    plain = aggregate_forecasts([run, dict(run)])
+    assert pooled["agreement"] == plain["agreement"] is not None
+    assert pooled["agreement_spread"] == plain["agreement_spread"]
+
+
+def _seed_ensemble_env(monkeypatch, tmp_path, seed_forecast):
+    from app.services import pipeline_orchestrator as po
+
+    monkeypatch.setattr(Config, "N_FORECAST_SEEDS", 2, raising=False)
+    monkeypatch.setattr(Config, "ENSEMBLE_SEED_CONCURRENCY", 1, raising=False)
+    monkeypatch.setattr(Config, "REPORT_STRUCTURED_FORECAST", True, raising=False)
+    monkeypatch.setattr(po.PipelineManager, "save", classmethod(lambda cls, state: None))
+    monkeypatch.setattr(po.PipelineManager, "touch_heartbeat",
+                        classmethod(lambda cls, pipeline_id, pid=None: True))
+    monkeypatch.setattr(ReportManager, "_get_report_folder",
+                        classmethod(lambda cls, report_id: str(tmp_path / "reports" / report_id)))
+    primary = fe._assemble_forecast({"headline": "h", "scenarios": _rows([0.5, 0.3, 0.2])})
+    monkeypatch.setattr(PipelineOrchestrator, "_read_report_forecast",
+                        staticmethod(lambda report_id: primary if report_id == "report_main"
+                                     else None))
+    orchestrator = PipelineOrchestrator.__new__(PipelineOrchestrator)
+    monkeypatch.setattr(orchestrator, "_run_one_seed",
+                        lambda *args, **kwargs: ("sim_seed2", "report_seed2", seed_forecast))
+    monkeypatch.setattr(orchestrator, "_flush_run_telemetry", lambda *args, **kwargs: None)
+    handoff = tmp_path / "handoff"
+    handoff.mkdir()
+    (tmp_path / "reports" / "report_main").mkdir(parents=True)
+    state = PipelineState(pipeline_id="pipe_r1_ensemble", prompt="q", mode="full",
+                          report_id="report_main", handoff_dir=str(handoff))
+    # a copied context keeps the run/stage telemetry context the method sets out of later tests
+    contextvars.copy_context().run(orchestrator._maybe_run_seed_ensemble,
+                                   state, object(), "graph_1", None, {}, "# report")
+    return state, handoff / "ensemble_forecast.json"
+
+
+def test_seed_ensemble_needs_two_readable_runs(monkeypatch, tmp_path):
+    state, path = _seed_ensemble_env(monkeypatch, tmp_path, _needs_review_forecast())
+    # one readable run plus one needs_review run is not an ensemble: nothing is written
+    assert not path.exists()
+    assert state.options["ensemble_done"] is True
+    assert "ensemble" not in state.options
+
+
+def test_seed_ensemble_two_readable_runs_still_written(monkeypatch, tmp_path):
+    seed = fe._assemble_forecast({"headline": "h", "scenarios": _rows([0.4, 0.4, 0.2])})
+    state, path = _seed_ensemble_env(monkeypatch, tmp_path, seed)
+    agg = json.loads(path.read_text(encoding="utf-8"))
+    assert agg["n_runs"] == 2 and "n_runs_excluded" not in agg
+    assert state.options["ensemble"]["n_runs"] == 2
 
 
 def test_renderers_numeric_output_unchanged():
@@ -589,3 +697,73 @@ def test_finalize_keeps_binary_needs_review_count(monkeypatch, _report_env):
     assert bq["needs_review_count"] == 2
     assert bq["needs_review_reasons"] == {"range": 2}
     assert bq["count"] == 3 and "proposition_consistency" in bq
+    # the recomputed scorecard carries the withheld line first (gates show two issues)
+    assert bq["issues"][0] == "2 binary probabilities unreadable — withheld, not clamped"
+
+
+def _hermetic_binary_extraction(monkeypatch, tmp_path):
+    monkeypatch.setattr(Config, "FORECAST_EMIT_BINARY", True, raising=False)
+    monkeypatch.setattr(Config, "REPORT_FORECAST_SELF_CRITIQUE", False, raising=False)
+    monkeypatch.setattr(Config, "FORECAST_BINARY_CONTRARIAN", False, raising=False)
+    monkeypatch.setattr(Config, "FORECAST_SIM_SENSITIVITY", False, raising=False)
+    monkeypatch.setattr(Config, "FORECAST_ENSEMBLE_MODELS", "", raising=False)
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(tmp_path / "sims"),
+                        raising=False)
+
+
+def test_finalize_all_binaries_withheld_keeps_review_counts(monkeypatch, _report_env, caplog):
+    tmp_path, _appended = _report_env
+    _hermetic_binary_extraction(monkeypatch, tmp_path)
+    # the systemic defect: every binary probability written as a percent integer
+    percent_ints = {"binary_forecasts": [
+        _binary(_BIN_A, 30), _binary(_BIN_B, 45), _binary(_BIN_C, 70)]}
+
+    def router(content):
+        return percent_ints if '"binary_forecasts"' in content else _spine([0.5, 0.3, 0.2])
+
+    _strict(monkeypatch)
+    llm = _RouterLLM(router)
+    with caplog.at_level(logging.WARNING, logger="app.services.forecast_extractor"):
+        _agent(llm=llm)._finalize_structured_forecast("report_withheld", "# T\n\nBody.")
+    assert any('"binary_forecasts"' in prompt for prompt in llm.prompts)
+    fc = _load_forecast(tmp_path, "report_withheld")
+    assert "binary_forecasts" not in fc
+    bq = fc["binary_quality"]
+    assert bq["needs_review_count"] == 3
+    assert bq["needs_review_reasons"] == {"plain_gt1": 3}
+    assert bq["issues"][0] == "3 binary probabilities unreadable — withheld, not clamped"
+    assert bq["count"] == 0 and bq["passed"] is False
+    assert any("3 条概率不可读" in record.getMessage() for record in caplog.records)
+    gated = ReportAgent._apply_publish_gate(dict(fc, citation_audit={"coverage": 1.0}))
+    assert any("withheld, not clamped" in issue
+               for issue in gated["quality"]["epistemic_issues"])
+
+    # flag off: the legacy clamp publishes 0.98 rows and records no review counts
+    _strict(monkeypatch, False)
+    _agent(llm=_RouterLLM(router))._finalize_structured_forecast("report_legacy_bin",
+                                                                 "# T\n\nBody.")
+    legacy = _load_forecast(tmp_path, "report_legacy_bin")
+    assert [b["probability"] for b in legacy["binary_forecasts"]] == [0.98, 0.98, 0.98]
+    assert "needs_review_count" not in legacy["binary_quality"]
+
+
+def test_extract_secondary_model_reviews_counted_separately(monkeypatch):
+    _strict(monkeypatch)
+    monkeypatch.setattr(Config, "FORECAST_BINARY_CONTRARIAN", False, raising=False)
+    monkeypatch.setattr(Config, "FORECAST_ENSEMBLE_MODELS", "other", raising=False)
+    primary = {"binary_forecasts": [
+        _binary(_BIN_D, 0.8), _binary(_BIN_B, 0.15), _binary(_BIN_C, 0.25)]}
+    # the secondary model only pools matched primary rows; its unreadable row for a
+    # statement the primary never produced could never have been published
+    secondary = {"binary_forecasts": [
+        _binary(_BIN_D, 0.7), _binary(_BIN_B, 0.2), _binary(_BIN_A, 30)]}
+    res = fe.extract_binary_forecasts(
+        "dossier text", FakeLLMClient(json_responses=[primary]), min_count=3,
+        ensemble_client_factory=lambda name: FakeLLMClient(json_responses=[secondary],
+                                                           provider=name))
+    assert {b["statement"] for b in res["binary_forecasts"]} == {_BIN_D, _BIN_B, _BIN_C}
+    assert any(b.get("ensemble") for b in res["binary_forecasts"])
+    bq = res["binary_quality"]
+    assert "needs_review_count" not in bq
+    assert not any("withheld" in issue for issue in bq["issues"])
+    assert bq["needs_review_secondary_count"] == 1

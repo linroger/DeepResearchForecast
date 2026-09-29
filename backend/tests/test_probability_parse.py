@@ -10,6 +10,7 @@ import math
 import pytest
 
 from app.utils.probability_parse import (
+    _RANGE_RE,
     PROB_ABSENT,
     PROB_OK,
     PROB_REVIEW,
@@ -91,6 +92,23 @@ def test_field_raw_is_truncated_and_result_is_frozen():
     assert parsed.raw == repr(long_text)[:80]
     with pytest.raises(dataclasses.FrozenInstanceError):
         parsed.value = 0.5
+
+
+def test_long_text_is_unparseable_without_backtracking():
+    # A 50k-digit run used to make the unanchored range search quadratic (about 100 s);
+    # over-long unreadable text now skips the reason heuristics entirely.
+    digits = "1" * 50_000
+    for text in (digits + "x", digits + "-2", "30-40% " + "y" * 60):
+        parsed = parse_probability_field(text)
+        assert (parsed.status, parsed.reason) == (PROB_REVIEW, "unparseable")
+        assert parsed.raw == repr(text)[:80]
+    rows, status, reason = parse_scenario_partition([0.5, digits + "x"])
+    assert (status, reason) == (PROB_REVIEW, "unparseable")
+    # the range pattern can no longer restart inside a digit run
+    assert _RANGE_RE.search(digits + "x") is None
+    assert _RANGE_RE.search("v" + digits + "-2") is not None
+    # a readable value is still read however long its digit string is
+    assert parse_probability_field("0." + "3" * 100).value == pytest.approx(1 / 3)
 
 
 def _values(rows):

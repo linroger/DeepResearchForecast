@@ -266,6 +266,11 @@ def aggregate_forecasts(forecasts: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
     if excluded:
         result["n_runs_excluded"] = excluded
+        if n < 2:
+            # 剔除后只剩 1 个可读 run：没有可比对象，一致度无法判定（None），绝不以单 run
+            # 的 1.0 冒充「高度一致」（编排器据 agreement 映射信心）。
+            result["agreement"] = None
+            result["agreement_spread"] = None
     return result
 
 

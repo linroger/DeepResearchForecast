@@ -1728,6 +1728,12 @@ def _withheld_binary_reviews(review_sink: List[Dict[str, Any]],
     return withheld
 
 
+def _binary_withheld_issue(count: int) -> str:
+    """REPORT-1：binary_quality.issues 里「概率不可读被扣下」的说明行（抽取与 ReportAgent
+    重算记分卡共用同一措辞）。"""
+    return f"{count} binary probabilities unreadable — withheld, not clamped"
+
+
 # --------------------------------------------- PM-2: deterministic market anchoring
 # 此前市场锚点走「模型自愿在 market_anchor 里给 market_id」的 opt-in 路径，取证 0/13 与
 # 0/11 条二元被锚定——模型几乎从不主动转录 id。PM-2 改为**确定性**：先跑一次批处理 LLM
@@ -2193,6 +2199,11 @@ def _market_proposition_key(question: Any) -> str:
     return ""
 
 
+# REPORT-1：显式情景归属指向一个含不可读（null）概率的分区时的命题键。此时既不对账也不
+# 算矛盾，proposition 审计把它记为「无法核验」（unverifiable），而不是静默放行。
+_UNREADABLE_PARTITION_KEY = "unreadable-scenario-partition"
+
+
 def _scenario_yes_membership(
     binary: Dict[str, Any], scenarios: List[Dict[str, Any]]
 ) -> Tuple[str, List[str], Optional[float], Optional[str]]:
@@ -2290,6 +2301,20 @@ def _scenario_yes_membership(
                 None,
                 "canonical scenario partition contains duplicate names",
             )
+        proposition_id = str(binary.get("proposition_id") or "").strip()
+        if (
+            _cfg("FORECAST_PROB_STRICT_PARSE", True)
+            and all(name in scenario_by_name for name in yes_names)
+            and any(p is None for p in scenario_by_name.values())
+        ):
+            # REPORT-1：分区含不可读（needs_review 的 null）概率 → 可读行未经归一，其部分和
+            # 不是规范概率；expected=None ⇒ 不对账（二元保留独立估计），审计记为无法核验。
+            return (
+                _UNREADABLE_PARTITION_KEY,
+                yes_names,
+                None,
+                "scenario partition probabilities need review",
+            )
         if (
             yes_names
             and all(name in scenario_by_name for name in yes_names)
@@ -2298,7 +2323,6 @@ def _scenario_yes_membership(
             expected = round(sum(
                 float(scenario_by_name[name]) for name in yes_names
             ), 4)
-            proposition_id = str(binary.get("proposition_id") or "").strip()
             return (
                 proposition_id or "explicit-scenario-membership",
                 yes_names,
@@ -2361,6 +2385,7 @@ def audit_proposition_consistency(forecast: Dict[str, Any]) -> Dict[str, Any]:
     ]
     checked: List[Dict[str, Any]] = []
     mismatches: List[Dict[str, Any]] = []
+    unverifiable: List[Dict[str, Any]] = []
     for binary in (forecast.get("binary_forecasts") or []):
         if not isinstance(binary, dict):
             continue
@@ -2368,6 +2393,14 @@ def audit_proposition_consistency(forecast: Dict[str, Any]) -> Dict[str, Any]:
             binary, scenarios
         )
         actual = _coerce_float(binary.get("probability"))
+        if key == _UNREADABLE_PARTITION_KEY:
+            unverifiable.append({
+                "forecast_id": str(binary.get("id") or ""),
+                "binary_probability": round(actual, 4) if actual is not None else None,
+                "yes_scenarios": names,
+                "reason": membership_error,
+            })
+            continue
         if key in {
             "invalid-scenario-membership",
             "conflicting-binary-contract",
@@ -2397,13 +2430,20 @@ def audit_proposition_consistency(forecast: Dict[str, Any]) -> Dict[str, Any]:
         checked.append(row)
         if abs(actual - expected) > 0.015:
             mismatches.append(row)
-    return {
+    result: Dict[str, Any] = {
         "checked": len(checked),
         "rows": checked,
         "mismatches": mismatches,
         "mismatch_count": len(mismatches),
         "passed": not mismatches,
     }
+    if unverifiable:
+        # REPORT-1：仅当确有无法核验的行时才出现这两个键（格式良好的分区输出逐字节不变）；
+        # 无法核验不是矛盾，但也不算通过。
+        result["unverifiable"] = unverifiable
+        result["unverifiable_count"] = len(unverifiable)
+        result["passed"] = False
+    return result
 
 
 def _market_anchor_complete(anchor: Dict[str, Any]) -> bool:
@@ -2801,9 +2841,11 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     _hz_hint = str(_hz_year) if _hz_year else "2027"
     _hz_rule = (f"resolution year, at or before the forecast horizon {_hz_year}"
                 if _hz_year else "resolution year, within 1-5 years of now")
-    # REPORT-1：所有 _draw（首轮/补足/低概率重述/集成副模型）共用一个复核槽，收集因概率
-    # 不可读而扣下的行（仅 FORECAST_PROB_STRICT_PARSE 下由 _normalize_binaries 写入）。
+    # REPORT-1：主模型的各轮 _draw（首轮/补足/低概率重述）共用一个复核槽，收集因概率不可读
+    # 而扣下的行（仅 FORECAST_PROB_STRICT_PARSE 下由 _normalize_binaries 写入）。集成副模型的
+    # 行只用于池化已匹配的主模型行、本就不会单独发布，故另记一槽，不计入「扣下」条数。
     review_sink: List[Dict[str, Any]] = []
+    secondary_review_sink: List[Dict[str, Any]] = []
 
     def _draw(instr_min: int, exclude: List[str], *, low_p: bool = False,
               client: Any = None) -> List[Dict[str, Any]]:
@@ -2860,7 +2902,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         items = raw.get("binary_forecasts") if isinstance(raw, dict) else None
         return _normalize_binaries(items or [], allowed_themes=themes,
                                    market_lookup=market_lookup or None,
-                                   review_sink=review_sink)
+                                   review_sink=(review_sink if client is None
+                                                else secondary_review_sink))
 
     def _merge(base: List[Dict[str, Any]], extra: List[Dict[str, Any]]) -> None:
         seen = {_binary_key(b["statement"]) for b in base}
@@ -2946,17 +2989,23 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         "binary_quality": _binary_quality(binaries, min_count=min_count,
                                           themes_expected=themes),
     }
-    if review_sink and _cfg("FORECAST_PROB_STRICT_PARSE", True):
+    if _cfg("FORECAST_PROB_STRICT_PARSE", True):
+        _bq_review = out["binary_quality"]
         _withheld = _withheld_binary_reviews(review_sink, binaries)
         if _withheld:
             _reasons: Dict[str, int] = {}
             for _row in _withheld:
                 _reasons[_row["reason"]] = _reasons.get(_row["reason"], 0) + 1
-            _bq_review = out["binary_quality"]
             _bq_review["needs_review_count"] = len(_withheld)
             _bq_review["needs_review_reasons"] = _reasons
-            _bq_review.setdefault("issues", []).append(
-                f"{len(_withheld)} binary probabilities unreadable — withheld, not clamped")
+            # 根因排第一：发布门与编排器只展示 issues 的前两条。
+            _bq_review.setdefault("issues", []).insert(0, _binary_withheld_issue(len(_withheld)))
+            logger.warning("二元预测：%d 条概率不可读，已扣下（未钳制），原因 %s；可发布 %d 条",
+                           len(_withheld), _reasons, len(binaries))
+        if secondary_review_sink:
+            _bq_review["needs_review_secondary_count"] = len(secondary_review_sink)
+            logger.warning("集成副模型：%d 条二元概率不可读，未参与池化",
+                           len(secondary_review_sink))
     _bq_prov = out["binary_quality"]
     if isinstance(_bq_prov, dict):
         _bq_prov["provenance_downgrades"] = provenance_downgrades
@@ -3367,10 +3416,16 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
         # 与今日空骨架一样回退成稿后抽取。
         if not first.get("scenarios") or first.get("probability_status") == PROB_REVIEW:
             logger.warning("预测骨架首轮无可用情景（为空或概率不可读），携重试提示重试一次")
+            first_review = first.get("probability_review")
             first = _spine_draw(llm, user + _SPINE_RETRY_NOTE, 0.2, max_tokens)
+            if (first_review and not first.get("scenarios")
+                    and not first.get("probability_review")):
+                # 首轮不可读、重试为空：保留首轮的复核摘要，上层仍能记录骨架被弃的原因。
+                first["probability_status"] = PROB_REVIEW
+                first["probability_review"] = first_review
         if first.get("probability_status") == PROB_REVIEW:
             logger.warning(
-                "预测骨架重试后概率仍不可读（%s），回退成稿后抽取",
+                "预测骨架重试后仍无可读概率（%s），回退成稿后抽取",
                 (first.get("probability_review") or {}).get("reason"))
             first["scenarios"] = []
     elif not first.get("scenarios"):
