@@ -80,6 +80,14 @@ class Config:
     # （否则截断回复会被永久重放）。默认开是安全的：正常回复（stop、无 think 标签）输出逐字节不变，
     # 只影响残缺回复。false 恢复旧的正则剥离 + 无条件缓存。类型化异常与 usage 竞态修复不受此开关控制。
     LLM_TRANSPORT_STRICT = os.environ.get('LLM_TRANSPORT_STRICT', 'true').strip().lower() == 'true'
+    # INFRA-2：chat_json 结构化输出修复轮（默认开）。首轮回复不是单个合法 JSON 对象（解析失败，或
+    # 解析出 list/标量/null）时：从 LLMCache 删掉这份坏回复，再以同温度发一次修复轮——原消息 + 坏回复
+    # （assistant）+ 点名失败原因的纠正提示，两轮皆失败仍抛 ValueError；每次结局计入
+    # LLMMeter 的 structured_outputs。旧行为是盲目降温 0.2 重发同一提示：LLMCache 按温度作键，
+    # temperature=0 的调用方（graphiti 图谱抽取）会原样重放缓存里的坏回复，失败不可恢复。默认开
+    # 是安全的：首轮即合法的 JSON 对象回复逐字节不变，只改变原本就会失败或返回非对象值的调用。
+    # false 恢复旧的降温重发（且照旧可能返回非 dict）。
+    LLM_JSON_REPAIR_TURN = os.environ.get('LLM_JSON_REPAIR_TURN', 'true').strip().lower() == 'true'
     # 每个 run 的 token / 成本上限（0=不限）。超限后下一次 LLM 调用抛 BudgetExceeded，止血式中止。
     LLM_RUN_BUDGET_TOKENS = int(os.environ.get('LLM_RUN_BUDGET_TOKENS', '0') or '0')
     LLM_RUN_BUDGET_USD = float(os.environ.get('LLM_RUN_BUDGET_USD', '0') or '0')
@@ -690,6 +698,13 @@ class Config:
     REPORT_SECTION_RETRY_MAX = int(os.environ.get('REPORT_SECTION_RETRY_MAX', '2') or '2')  # RQ-1 1→2；0=旧的无重试
     REPORT_SECTION_RETRY_BACKOFF_S = float(os.environ.get('REPORT_SECTION_RETRY_BACKOFF_S', '8.0') or '8.0')
     REPORT_CRITIQUE_BEFORE_PROSE = os.environ.get('REPORT_CRITIQUE_BEFORE_PROSE', 'true').strip().lower() == 'true'
+    # INFRA-2：红队自校准每份报告至多执行一次（默认开）。self_critique_forecast 调用评审 LLM 后
+    # 给预测打 critique_attempted 标记；叙事前评审失败/被回退（未 critiqued）时，成稿后的第二次评审
+    # 不再发 LLM 调用，只记 quality.critique_pre_prose='reverted_or_failed'——此前第二次评审会在
+    # 正文写完后再挪概率（正文捍卫的数字与 forecast.json 矛盾），并白付一次评审成本。默认开是安全
+    # 的：评审成功的路径不变（本就跳过二次评审），标记在 LLM 调用之后才写、且不进评审/验尸提示词。
+    # false 恢复旧的「失败后成稿再评一次」且不写标记。
+    REPORT_CRITIQUE_SINGLE_PASS = os.environ.get('REPORT_CRITIQUE_SINGLE_PASS', 'true').strip().lower() == 'true'
     FORECAST_BINARY_CONTRARIAN = os.environ.get('FORECAST_BINARY_CONTRARIAN', 'true').strip().lower() == 'true'
     FORECAST_SIM_SENSITIVITY = os.environ.get('FORECAST_SIM_SENSITIVITY', 'true').strip().lower() == 'true'
     FORECAST_BINARY_THEMES = os.environ.get('FORECAST_BINARY_THEMES', '').strip()  # 空=由 brief/主题自适应

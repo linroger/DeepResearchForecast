@@ -660,9 +660,10 @@ def _llm_forecast_view(forecast: Dict[str, Any]) -> Dict[str, Any]:
     刚被同步掉的旧数字重新交给评审（它可能照抄进被采纳的 confidence_rationale），还白费
     提示词 token。confidence_rationale_detail 只在不是兜底情景路径写下时才去掉（该路径
     同时置 residual_scenario_added，且在旗标关闭时也存在）。旗标关闭时这些同步键都不存在，
-    副本与原对象键序、取值完全相同，提示词逐字节不变。
+    副本与原对象键序、取值完全相同，提示词逐字节不变。INFRA-2 的 critique_attempted 簿记标记
+    同样去掉（旗标关闭时不存在），评审 / 验尸提示词不因单次评审旗标而改变。
     """
-    dropped = {"headline_detail"}
+    dropped = {"headline_detail", "critique_attempted"}
     if not forecast.get("residual_scenario_added"):
         dropped.add("confidence_rationale_detail")
     view = {key: value for key, value in forecast.items() if key not in dropped}
@@ -3887,6 +3888,14 @@ key_uncertainties/confidence/confidence_rationale），并在每个情景加一�
 只输出 JSON。概率之和应≈1。"""
 
 
+def _critique_attempted(forecast: Dict[str, Any], single_pass: bool) -> Dict[str, Any]:
+    """INFRA-2: stamp ``critique_attempted`` on a forecast the critic LLM has seen (in place;
+    REPORT_CRITIQUE_SINGLE_PASS only). Returns the same object."""
+    if single_pass and isinstance(forecast, dict):
+        forecast["critique_attempted"] = True
+    return forecast
+
+
 def self_critique_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
     """Red-team + recalibrate a structured forecast (EXECPLAN2 I-3-5).
 
@@ -3894,26 +3903,45 @@ def self_critique_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
     neglect / unsupported leaps and may add a status-quo fallback scenario, then
     re-normalizes. Returns a new forecast dict tagged ``critiqued=True``; on any
     failure returns the input unchanged (degrade-safe).
+
+    INFRA-2 (REPORT_CRITIQUE_SINGLE_PASS, default on): the critic runs at most once per
+    report. Once the critic LLM has been called, the result carries
+    ``critique_attempted=True`` (a failure stamps the input dict in place, so the
+    report's pinned spine carries it to the post-hoc call). The stamp is written after the
+    call and _llm_forecast_view leaves it out, so critic and premortem prompts are
+    unchanged. A forecast already attempted but not ``critiqued`` makes no LLM call:
+    ``quality.critique_pre_prose='reverted_or_failed'`` is recorded and the input returned.
     """
     import json as _json
     strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
+    single_pass = bool(_cfg("REPORT_CRITIQUE_SINGLE_PASS", True))
+    if (single_pass and isinstance(forecast, dict)
+            and forecast.get("critique_attempted") is True and not forecast.get("critiqued")):
+        _q0 = forecast.get("quality")
+        quality = dict(_q0) if isinstance(_q0, dict) else {}
+        quality["critique_pre_prose"] = "reverted_or_failed"
+        forecast["quality"] = quality
+        logger.info("红队评审已在叙事前尝试且未成功（失败/被回退），不再二次评审")
+        return forecast
+    called = False
     try:
         # REPORT-1：概率已是 needs_review 的预测不交给红队——评审只能对 null 概率凭空
         # 补数，谦逊单调约束也失去原始峰值；保持待复核，让合同审计照常失败。
         if strict and forecast.get("probability_status") == PROB_REVIEW:
             return forecast
+        prompt = (_CRITIQUE_INSTRUCTIONS + "\n\n[预测对象]\n"
+                  + _json.dumps(_llm_forecast_view(forecast), ensure_ascii=False))
+        called = True
         raw = llm.chat_json(
-            messages=[{"role": "user",
-                       "content": _CRITIQUE_INSTRUCTIONS + "\n\n[预测对象]\n"
-                       + _json.dumps(_llm_forecast_view(forecast), ensure_ascii=False)}],
+            messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
             max_tokens=2048,
         )
         if not isinstance(raw, dict):
-            return forecast
+            return _critique_attempted(forecast, single_pass)
         critique_scenarios = raw.get("scenarios")
         if not isinstance(critique_scenarios, list) or not critique_scenarios:
-            return forecast
+            return _critique_attempted(forecast, single_pass)
         if strict and all(isinstance(row, dict) for row in critique_scenarios):
             # REPORT-1：评审概率先做类型化解析。不可读 → 丢弃评审并在 quality 记录原因
             # （返回原对象本身）；可读 → 仅把显式百分数字符串（'30%'）换成解析值，其余原值
@@ -3928,7 +3956,7 @@ def self_critique_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
                 }
                 forecast["quality"] = quality
                 logger.warning(f"红队评审概率不可读（{partition_reason}），丢弃评审结果")
-                return forecast
+                return _critique_attempted(forecast, single_pass)
             critique_scenarios = [
                 {**row, "probability": parsed.value}
                 if isinstance(row.get("probability"), str) and parsed.unit == "percent"
@@ -3940,10 +3968,10 @@ def self_critique_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
             critique_scenarios, forecast,
         )
         if raw_scenarios is None:
-            return forecast
+            return _critique_attempted(forecast, single_pass)
         out["scenarios"] = _normalize_scenarios(raw_scenarios)
         if not out["scenarios"]:
-            return forecast
+            return _critique_attempted(forecast, single_pass)
         # preserve critique_note per scenario if the model supplied it
         for new_s, raw_s in zip(out["scenarios"], raw_scenarios or [], strict=True):
             if isinstance(raw_s, dict) and raw_s.get("critique_note"):
@@ -3989,13 +4017,14 @@ def self_critique_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
             context_rows=forecast.get("scenarios"),
         )
         if audit_scenario_contract(out).get("valid") is not True:
-            return forecast
+            return _critique_attempted(forecast, single_pass)
         out["critiqued"] = True
+        _critique_attempted(out, single_pass)
         # VIZ-GAP1(a)：_normalize_scenarios 剥掉了池化的 p_low/p_high——发布前从顶层
         # self_consistency 数据确定性重建区间（K<2/缺 spread 时 no-op，绝不编造）。
         return apply_self_consistency_intervals(out)
     except Exception:
-        return forecast
+        return _critique_attempted(forecast, single_pass and called)
 
 
 def _close_probability_rounding(

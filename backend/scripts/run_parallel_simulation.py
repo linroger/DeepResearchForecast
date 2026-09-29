@@ -2121,15 +2121,34 @@ def _accumulate_sim_llm_response(response: Any) -> None:
         pass
 
 
+def _last_provider_usage(client: Any) -> Any:
+    """本线程上 client 最近一次调用的提供方真实 usage；无则 None。
+
+    INFRA-2：优先读 INFRA-1 的逐调用元数据 last_call_meta()（线程本地，按客户端归属；仅
+    usage_source='provider' 算精确值）；不提供该接口或返回 None 的客户端回退旧的 _last_usage。"""
+    meta_of = getattr(client, "last_call_meta", None)
+    try:
+        meta = meta_of() if callable(meta_of) else None
+    except Exception:  # noqa: BLE001 — 元数据读取失败 → 回退 _last_usage
+        meta = None
+    if isinstance(meta, dict):
+        return meta.get("usage") if meta.get("usage_source") == "provider" else None
+    return getattr(client, "_last_usage", None)
+
+
 def _wrap_llm_client_usage(client: Any) -> Any:
     """DEFECT-3: 包装决策通道 / in-band 演化所用 LLMClient 的 chat/chat_json。
 
     这两条路径不经 camel 模型边界，其 LLMMeter 记录只活在子进程内存里。精确 usage
-    （client._last_usage，OpenAI 兼容直连路径填充）→ source='provider'；CLI 提供方
-    无精确 usage → 按文本长度估算 → source='estimate'。包装失败原样返回 client。"""
+    （_last_provider_usage：逐调用元数据，OpenAI 兼容直连路径填充）→ source='provider'；
+    CLI 提供方无精确 usage → 按文本长度估算 → source='estimate'。包装失败原样返回 client。
+
+    INFRA-2：真实 LLMClient 的 chat_json 经 self.chat 发出每次请求（含修复轮），而实例上的
+    chat 已被包装、逐次入账——再包 chat_json 会把同一调用记两遍，故对 LLMClient 实例只包 chat。"""
     if client is None:
         return client
     try:
+        from app.utils.llm_client import LLMClient
         from app.utils.oasis_llm import _estimate_tokens_of
 
         def _wrap_method(name: str) -> None:
@@ -2149,7 +2168,7 @@ def _wrap_llm_client_usage(client: Any) -> Any:
                         or getattr(client, "provider", "")
                         or "unknown"
                     )
-                    usage = getattr(client, "_last_usage", None)
+                    usage = _last_provider_usage(client)
                     if isinstance(usage, dict) and (
                         usage.get("prompt_tokens") or usage.get("completion_tokens")
                     ):
@@ -2171,7 +2190,8 @@ def _wrap_llm_client_usage(client: Any) -> Any:
             setattr(client, name, _wrapped)
 
         _wrap_method("chat")
-        _wrap_method("chat_json")
+        if not isinstance(client, LLMClient):
+            _wrap_method("chat_json")
     except Exception:  # noqa: BLE001 — 包装失败 → 该路径放弃计量，不阻断
         pass
     return client
