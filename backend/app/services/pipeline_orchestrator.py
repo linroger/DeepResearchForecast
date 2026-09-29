@@ -9897,6 +9897,9 @@ class PipelineOrchestrator:
             specs.append(("sources", os.path.join(hd, "sources.json")))
             specs.append(("quantitative", os.path.join(hd, "quantitative.json")))
             specs.append(("contested", os.path.join(hd, "contested.json")))
+            # REPORT-7 (RESEARCH_VERIFIED_FACTS): v3's claim/figure-to-page-span projection;
+            # optional (absent with the knob off, on legacy runs and older handoffs).
+            specs.append(("verified_facts", os.path.join(hd, "verified_facts.json")))
             specs.append(("prediction_markets", os.path.join(hd, "prediction_markets.json")))
             specs.append(("market_price_history", os.path.join(hd, "market_price_history.json")))
             specs.append(("prediction_market_candidates",
@@ -10128,15 +10131,31 @@ class PipelineOrchestrator:
             for name, path in self._report_viz_dynamic_artifact_specs(report_dir):
                 add_if(name, path)
 
+        # REPORT-7: a research completion describes the whole research artifact set.
+        # A research spec file absent at this boundary (the v3 child removes
+        # verified_facts.json when RESEARCH_VERIFIED_FACTS is off or its step fails)
+        # loses the pointer and manifest row an earlier attempt left; a row whose
+        # file is gone fails _validate_reuse, which would re-run research on every
+        # later resume.
+        stale: list[str] = []
+        if stage == STAGE_RESEARCH:
+            present = {name for name, _ in recorded}
+            stale = [name for name, _ in self._stage_artifact_specs(state, stage) if name not in present]
+            for name in stale:
+                state.artifacts.pop(name, None)
+                state.artifacts.pop(f"{name}_partial", None)
+
         # I-4-3: 把本阶段实际登记到的产物写入完整性清单。
-        if recorded and bool(getattr(Config, "PIPELINE_VALIDATE_ARTIFACTS", True)):
+        if (recorded or stale) and bool(getattr(Config, "PIPELINE_VALIDATE_ARTIFACTS", True)):
             try:
                 manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
+                removed = [name for name in stale if manifest.pop(name, None) is not None]
                 for name, path in recorded:
                     entry = _manifest_entry_for(name, path, stage)
                     if entry is not None:
                         manifest[name] = entry
-                PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
+                if recorded or removed:
+                    PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
             except Exception as e:  # noqa: BLE001 — 清单是复用保障，写失败仅退化为无校验
                 logger.debug("[%s] 产物清单写出跳过: %s", state.pipeline_id, e)
 

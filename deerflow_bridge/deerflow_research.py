@@ -870,6 +870,7 @@ ACTOR_INTELLIGENCE_LINEAGE_FILENAME = "actor_intelligence_lineage.json"
 SOURCES_FILENAME = "sources.json"
 TIMELINE_FILENAME = "timeline.json"
 QUANTITATIVE_FILENAME = "quantitative.json"   # EXECPLAN2 I-0-5
+VERIFIED_FACTS_FILENAME = "verified_facts.json"   # REPORT-7: the v3 engine's figure/claim projection
 CONTESTED_FILENAME = "contested.json"         # EXECPLAN2 I-0-1
 PROGRESS_FILENAME = "research_progress.log"
 META_FILENAME = "meta.json"
@@ -16572,9 +16573,11 @@ def _legacy_only_mode(args: Any) -> str:
 # quant_provenance (RESEARCH-4), which summarises v3-labelled quantitative rows
 # that the legacy extraction rewrites without labels, and as_of_model_disagreement
 # (TIME-1), which describes the v3 actors.json as_of_date the legacy extraction
-# rewrites with its own as-of.
+# rewrites with its own as-of, and verified_facts (REPORT-7), whose quant counts
+# describe that same rewritten quantitative.json (the salvage also removes
+# verified_facts.json, which indexes that file's rows).
 _SALVAGE_VOLATILE_META_KEYS = frozenset({"status", "error", "traceback", "finished_at", "quant_provenance",
-                                         "as_of_model_disagreement"})
+                                         "as_of_model_disagreement", "verified_facts"})
 
 
 def _prior_v3_meta(out_dir: Path) -> dict[str, Any] | None:
@@ -16965,6 +16968,14 @@ def main() -> int:
                        if key not in _SALVAGE_VOLATILE_META_KEYS},
                     **meta, "research_engine": "v3",
                     "salvage": {"mode": "extract_only", "engine": "legacy", "started_at": started_at}}
+            # verified_facts.json goes with its meta counts (above): it indexes the
+            # v3 quantitative.json rows the legacy extraction rewrites, and the
+            # parent SHA-manifests whatever the handoff holds.
+            try:
+                (out_dir / VERIFIED_FACTS_FILENAME).unlink(missing_ok=True)
+            except OSError as exc:
+                plog.write("warn", f"extract-only: could not remove the v3 {VERIFIED_FACTS_FILENAME} ({exc}); "
+                                   "its quantitative_sha256 marks it stale once quantitative.json is rewritten")
     if args.depth == "deep" and not use_v3_engine:
         meta["deep_research_phases"] = [
             # SCALE-2: 与 run_research_stage 的实际读值保持一致（开场默认 300；各 pass
