@@ -483,7 +483,9 @@ const translationButtonLabel = computed(() => {
   if (translationBusy.value || translationStatus.value === 'generating') {
     return L('翻译中…', 'Translating…')
   }
-  if (translationStatus.value === 'failed') return L('重试翻译', 'Retry translation')
+  if (translationStatus.value === 'failed' || translationStatus.value === 'interrupted') {
+    return L('重试翻译', 'Retry translation')
+  }
   return targetLang.value === 'zh' ? L('生成中文', 'Generate 中文') : L('Generate EN', 'Generate EN')
 })
 
@@ -494,6 +496,9 @@ const translationFeedback = computed(() => {
   }
   if (translationStatus.value === 'failed') {
     return L('译文未通过发布审计', 'Translation did not pass the publication audit')
+  }
+  if (translationStatus.value === 'interrupted') {
+    return L('上次翻译已中断（服务重启），请重试', 'The previous translation was interrupted (service restart) — retry')
   }
   return ''
 })
