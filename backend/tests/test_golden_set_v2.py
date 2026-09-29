@@ -32,6 +32,9 @@ V2_ONLY_KEYS = ("resolution_note", "resolve_time", "resolve_time_precision", "sc
 # wrote for the v1 fixture of test_golden_eval._legacy_fixture.
 PRE_EVAL9_V1_REPORT_SHA256 = "e27154d37d685b673f707ce14fd62f7545dcae9af1bca2539cacd7341f750c6d"
 PRE_EVAL9_V1_MARKDOWN_SHA256 = "05893386c1bc6167dedd004d1080debd83852f1a06bcfee9760ef1a5bd481b21"
+# sha256 of the canonical JSON (sorted keys, compact) of the pre-EVAL-9 fixture's
+# "questions" list (backend/tests/eval/golden_questions.json at 57d0e65).
+PRE_EVAL9_V1_QUESTIONS_SHA256 = "98ff046bdd386f418e691849d93f691e8dd90ba0d8aeeff91987ebcbaaab70aa"
 
 
 @pytest.fixture(autouse=True)
@@ -156,8 +159,13 @@ def test_committed_fixture_v2_clean():
     assert set(meta["schema"]["grader_only"]) == set(gs.GRADER_ONLY_FIELDS)
     assert "23 clusters" in meta["event_cluster_rule"]
 
-    # the v1 text this migration replaced is reproduced exactly by re-inserting the notes
-    v1 = {q["id"]: q for q in _v1_copy(questions)}
+    # the v1 text this migration replaced is reproduced exactly by re-inserting the notes:
+    # every row (all 30, in order) is byte-identical to the pre-EVAL-9 fixture, so the
+    # outcome prose moved verbatim and nothing else in the v1 fields changed
+    v1_rows = _v1_copy(questions)
+    canon = json.dumps(v1_rows, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    assert hashlib.sha256(canon.encode("utf-8")).hexdigest() == PRE_EVAL9_V1_QUESTIONS_SHA256
+    v1 = {q["id"]: q for q in v1_rows}
     assert v1["us-senate-2024-gop"]["resolution_criteria"] == (
         "YES if the Republican caucus holds >=51 Senate seats after the 2024 general election (they won 53).")
     assert v1["fed-2025-01-cut"]["resolution_criteria"].endswith("2025 meeting. It held rates steady.")
@@ -380,6 +388,9 @@ def test_validate_rejects_as_of_equal_resolution():
         gs.validate_question(_v2_row(resolved_outcome=None))
     assert gs.validate_question(_v2_row(scoring_status="ambiguous", resolved_outcome=None,
                                         resolution_evidence=_market_evidence(0.5), resolution_note=None)) == []
+    assert "an ambiguous row's resolved_outcome must be a boolean or null" in gs.validate_question(
+        _v2_row(scoring_status="ambiguous", resolved_outcome="maybe", resolution_evidence=None,
+                resolution_note=None))
     assert gs.validate_question("row") == ["entry is not an object"]
     enum_errors = gs.validate_question(_v2_row(scoring_status="void", verification="checked",
                                                shift_axis="both", hindsight_framed="no"))

@@ -499,7 +499,7 @@ def validate_question(q: Any, strict: bool = False) -> List[str]:
     resolution_date; a UTC resolve_time after the end of the as_of day (and equal
     to the end of the resolution day at 'day' precision); enumerated statuses;
     evidence and tolerance shape; zero leak findings; a boolean resolved_outcome
-    unless scoring_status is 'ambiguous'. ``strict`` also requires
+    unless scoring_status is 'ambiguous' (boolean or null there). ``strict`` also requires
     ``verification == 'verified'`` and non-empty ``resolution_evidence``. Whether
     the evidence recomputes the recorded label is ``recompute_mismatch``'s job.
     """
@@ -510,8 +510,11 @@ def validate_question(q: Any, strict: bool = False) -> List[str]:
     status = q.get("scoring_status", SCORING_SCORED)
     if status not in SCORING_STATUSES:
         errors.append(f"scoring_status must be one of {', '.join(SCORING_STATUSES)}")
-    if status != SCORING_AMBIGUOUS and not isinstance(q.get("resolved_outcome"), bool):
+    outcome = q.get("resolved_outcome")
+    if status != SCORING_AMBIGUOUS and not isinstance(outcome, bool):
         errors.append("resolved_outcome must be a boolean unless scoring_status is 'ambiguous'")
+    elif status == SCORING_AMBIGUOUS and outcome is not None and not isinstance(outcome, bool):
+        errors.append("an ambiguous row's resolved_outcome must be a boolean or null")
     if _nonempty_str(q.get("verification")) and q["verification"] not in VERIFICATION_STATES:
         errors.append(f"verification must be one of {', '.join(VERIFICATION_STATES)}")
     if q.get("shift_axis") is not None and q["shift_axis"] not in SHIFT_AXES:
