@@ -269,9 +269,18 @@ def test_leak_findings_structural():
             (1e-05, 0, "YES if the error rate stays above 0 all year, ending at 0.00001.")):
         assert gs.leak_findings(numeric(raw, threshold, criteria)) == [
             {"code": "outcome_in_visible_text", "field": "resolution_criteria", "text": str(raw)}], criteria
-    # the threshold is masked first, so a raw 5 never matches the fraction of a "$3.5T" threshold
+    # a decimal is one token, so a raw 5 never matches inside a "$3.5T" threshold
     assert gs.leak_findings(numeric(5, 3.5, "YES if the cap closes above $3.5T in 2030.")) == []
     assert gs.leak_findings(numeric(3.47, 3, "YES if the cap closes above $3T in 2030.")) == []
+    # a raw string is checked like a number: one digit, a currency amount, any spelling
+    for raw, criteria in (("5", "YES if it wins >=3 seats, it won 5."),
+                          ("$5", "YES if it wins >=3 seats, it won 5."),
+                          ("5", "YES if it wins >=3 seats, it won 5.0."),
+                          ("100000", "YES if it wins >=3 seats after 100,000 ballots are counted.")):
+        assert gs.leak_findings(numeric(raw, 3, criteria)) == [
+            {"code": "outcome_in_visible_text", "field": "resolution_criteria", "text": raw}], (raw, criteria)
+    assert gs.leak_findings(numeric("A", 3, "YES if it wins >=3 seats in a landslide.")) == []   # no lone letter
+    assert gs.leak_findings(numeric("3", 3, "YES if it wins >=3 seats.")) == []                   # the threshold
 
     # the one-sentence rule fails closed on every shape that can hide a second sentence
     for criteria, extra in (
@@ -281,14 +290,33 @@ def test_leak_findings_structural():
             ("YES if it passes by Dec. It passed.", "It passed."),
             ("YES if the deal closes with Acme Inc. It closed in May.", "It closed in May."),
             ("YES if the caucus holds >=51 seats。他们赢了53席。", "他们赢了53席。"),
-            ("YES if the caucus holds >=51 seats！They won", "They won")):
+            ("YES if the caucus holds >=51 seats！They won", "They won"),
+            # compatibility and invisible characters are folded before splitting
+            ("YES if the caucus holds >=51 seats．They won 53", "They won 53"),
+            ("YES if the caucus holds >=51 seats｡They won 53", "They won 53"),
+            ("YES if the caucus holds >=51 seats… They won 53", "They won 53"),
+            ("YES if the caucus holds >=51 seats…They won 53", "They won 53"),
+            ("YES if the caucus holds >=51 seats.​They won 53", "They won 53"),
+            ("YES if the caucus holds >=51 seats.‎ They won 53", "They won 53"),
+            ("YES if the caucus holds >=51 seats.“They won 53.”", "They won 53.”"),
+            ("YES if the caucus holds >=51 seats.«They won 53.»", "They won 53.»"),
+            ("YES if the caucus holds >=51 seats!53 won", "53 won"),
+            ("YES if the caucus holds >=51 seats！53 won", "53 won"),
+            # a lone capital before a sentence opener ends its sentence (ballot measures, plans)
+            ("YES if voters approve Proposition A. It passed with 58%.", "It passed with 58%."),
+            ("YES if the Fed adopts Plan B. It did.", "It did."),
+            ("YES if the Fed adopts Plan B.The vote was 7-5.", "The vote was 7-5."),
+            ("YES if the Fed adopts Plan B. “It did.”", "“It did.”")):
         assert gs.leak_findings(_v2_row(resolution_criteria=criteria, resolution_note=None,
                                         resolution_evidence=None)) == [
             {"code": "extra_sentence", "field": "resolution_criteria", "text": extra}], criteria
     for criteria in ("YES if it passes by Dec. 31, 2030.", "YES if it passes in Jan. or Feb. 2030.",
                      "YES if the deal closes before Acme Inc. shares delist in 2030.",
                      "YES if the U.S.Senate confirms J.K. Rowling's nominee in 2030.",
-                     "YES if BRK.B and ASP.NET both exist at the end of 2030."):
+                     "YES if BRK.B and ASP.NET both exist at the end of 2030.",
+                     "YES if voters approve Proposition A. Smith's measure in 2030.",
+                     "YES if John F. Kennedy Airport reopens and Proposition A. passes in 2030.",
+                     "YES if the page at https://example.org/results?id=5 lists it in 2030."):
         assert gs.split_sentences(criteria) == [criteria]
     assert gs.split_sentences("YES if it holds.\n") == ["YES if it holds."]
     # full-width parentheses are parentheticals too, reviewed only when listed verbatim
@@ -300,6 +328,42 @@ def test_leak_findings_structural():
     assert gs.validate_question(dict(fullwidth, reviewed_parentheticals=["（they won 53）"])) == []
     assert _codes(gs.leak_findings(_v2_row(resolution_criteria="YES if the caucus holds （51 seats."))) == [
         "unbalanced_parenthesis"]
+    # so is every other bracket pair (Unicode open / close punctuation)
+    for aside in ("[they won 53]", "{they won 53}", "【they won 53】", "［they won 53］", "﹙they won 53﹚",
+                  "〔they won 53〕", "《they won 53》"):
+        bracketed = _v2_row(resolution_note=None, resolution_evidence=None,
+                            resolution_criteria=f"YES if the caucus holds >=51 seats {aside}.")
+        assert gs.leak_findings(bracketed) == [
+            {"code": "unreviewed_parenthetical", "field": "resolution_criteria", "text": aside}], aside
+        assert gs.validate_question(dict(bracketed, reviewed_parentheticals=[aside])) == [], aside
+    assert _codes(gs.leak_findings(_v2_row(resolution_criteria="YES if the caucus holds [51 seats."))) == [
+        "unbalanced_parenthesis"]
+    # a quotation mark filed as open punctuation ('„') is a quote, not an aside
+    assert gs.leak_findings(_v2_row(resolution_criteria="YES if the „Blue“ caucus holds >=51 seats.")) == []
+
+    # the question is visible too: one sentence, ending in '?'
+    for question, code, text in (
+            ("Will Donald Trump win the 2024 US presidential election? He won 312 electoral votes.",
+             "extra_sentence", "He won 312 electoral votes."),
+            ("Will the Blue party win a majority?\nIt did", "extra_sentence", "It did"),
+            ("Donald Trump won the 2024 US presidential election",
+             "question_not_ending_with_question_mark", "Donald Trump won the 2024 US presidential election")):
+        found = gs.leak_findings(_v2_row(question=question, resolution_note=None))
+        assert {"code": code, "field": "question", "text": text} in found, question
+    for question in ('Will the film be titled "Why?"', "Will the Blue party win a majority？",
+                     "Will the U.S. Senate confirm Donald J. Trump's nominee by Dec. 31, 2030?"):
+        assert gs.leak_findings(_v2_row(question=question, resolution_note=None)) == [], question
+
+    # a one-word note sentence is not matched (it would hit every "YES if"), but it
+    # cannot pass validation: the curator gets a specific message, not a false leak
+    short_note = _v2_row(resolution_note="Yes. They won 53.")
+    assert gs.leak_findings(short_note) == []
+    assert gs.validate_question(short_note) == [
+        "resolution_note sentence 'Yes.' is too short to lint for leaks (fewer than 2 words): "
+        "write the outcome as a full sentence"]
+    assert gs.leak_findings(dict(short_note, resolution_evidence=None, resolution_criteria=(
+        "YES if the Blue caucus holds >=51 Senate seats after the 2030 general election; they won 53."))) == [
+        {"code": "outcome_in_visible_text", "field": "resolution_criteria", "text": "They won 53."}]
 
     # no marker-word list: "cut" and "convicted" in criteria are legitimate
     for question, criteria in (
@@ -331,10 +395,12 @@ def test_split_sentences_is_linear():
     """Adversarial runs that made the earlier splitter quadratic (~20 s at 100 KB) stay fast."""
     started = time.perf_counter()
     for text in ("a. " * 100_000, "." * 300_000, "Donald J. " * 30_000, "x" * 300_000 + " . y",
-                 "Donald" + " " * 300_000 + "J. Trump"):
+                 "Donald" + " " * 300_000 + "J. Trump", "3.5" * 100_000, "a!5" * 100_000,
+                 "Plan B. " * 30_000, "x" + "​" * 300_000 + "…" * 30_000):
         assert gs.split_sentences(text)
     assert gs.leak_findings({"question": "Q?", "resolution_criteria": "YES if " + " ".join(
         f"a{i}." for i in range(30_000))})
+    assert gs.leak_findings({"question": "Q" + " )]" * 100_000, "resolution_criteria": "YES if " + "【(" * 50_000})
     assert time.perf_counter() - started < 5.0
 
 
@@ -480,6 +546,12 @@ def test_validate_rejects_as_of_equal_resolution():
     assert "an ambiguous row's resolved_outcome must be a boolean or null" in gs.validate_question(
         _v2_row(scoring_status="ambiguous", resolved_outcome="maybe", resolution_evidence=None,
                 resolution_note=None))
+    # without evidence, one edited field must not silently pull a row out of scoring: say why
+    unexplained = _v2_row(scoring_status="ambiguous", resolved_outcome=None, resolution_evidence=None,
+                          resolution_note=None, verification="unverified")
+    assert gs.validate_question(unexplained) == [
+        "an ambiguous row without resolution_evidence must say why in resolution_note"]
+    assert gs.validate_question(dict(unexplained, resolution_note="The contest was voided by the court.")) == []
     assert gs.validate_question("row") == ["entry is not an object"]
     enum_errors = gs.validate_question(_v2_row(scoring_status="void", verification="checked",
                                                shift_axis="both", hindsight_framed="no"))
@@ -665,8 +737,16 @@ def test_golden_curate_audit_exit_codes(tmp_path, capsys):
     assert report["verification"] == {"legacy_unverified": 30}
     assert report["recompute"]["n_evidence_backed"] == 0
     assert report["balance"]["n_event_clusters"] == 23 and report["balance"]["yes_rate"] == 0.8
+    assert report["scoring_status"] == {"counts": {"scored": 30}, "ambiguous": {}}
     md = (tmp_path / "golden_audit.md").read_text(encoding="utf-8")
     assert md.startswith("# Golden-set audit") and "mode: report-only" in md
+    assert "## Scoring status" in md and "| scored | 30 |" in md
+
+    # -o naming a .md file must not let the derived markdown path overwrite the JSON
+    clash = tmp_path / "clash.md"
+    assert gc.main(["audit", "-o", str(clash), "--markdown"]) == gc.EXIT_UNREADABLE == 1
+    assert gc.main(["audit", "-o", str(clash), "--markdown", str(clash)]) == 1
+    assert not clash.exists()
 
     strict_out = tmp_path / "strict.json"
     assert gc.main(["audit", "--strict", "-o", str(strict_out)]) == gc.EXIT_STRICT_VIOLATIONS == 2
@@ -700,6 +780,19 @@ def test_golden_curate_audit_exit_codes(tmp_path, capsys):
     good_report = json.loads(good_out.read_text(encoding="utf-8"))
     assert good_report["recompute"]["labels"] == {"blue-senate-2030": "YES", "void-2030": "AMBIGUOUS"}
     assert good_report["recompute"]["mismatches"] == {} and good_report["violation_ids"] == []
+    assert good_report["scoring_status"] == {
+        "counts": {"ambiguous": 1, "scored": 1},
+        "ambiguous": {"void-2030": {"evidence_backed": True, "recomputed_label": "AMBIGUOUS", "reason": None}}}
+    # an ambiguous row without evidence is listed with its stated reason
+    reason = "The contest was voided by the court."
+    unverified = _v2_file(tmp_path / "unverified.json", [_v2_row(), _v2_row(
+        id="void-2031", scoring_status="ambiguous", resolved_outcome=None, resolution_note=reason,
+        resolution_evidence=None, verification="unverified", event_cluster="void-2031")])
+    unverified_out, unverified_md = tmp_path / "unverified_audit.json", tmp_path / "unverified_audit.md"
+    assert gc.main(["audit", "--golden", unverified, "-o", str(unverified_out), "--markdown", str(unverified_md)]) == 0
+    assert json.loads(unverified_out.read_text(encoding="utf-8"))["scoring_status"]["ambiguous"] == {
+        "void-2031": {"evidence_backed": False, "recomputed_label": None, "reason": reason}}
+    assert f"| void-2031 | no | - | {reason} |" in unverified_md.read_text(encoding="utf-8")
     bad = _v2_file(tmp_path / "bad.json", [_v2_row(resolution_evidence=_seat_evidence(49))])
     bad_out = tmp_path / "bad_audit.json"
     assert gc.main(["audit", "--golden", bad, "-o", str(bad_out)]) == 0                  # report-only

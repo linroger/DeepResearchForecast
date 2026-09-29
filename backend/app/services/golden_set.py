@@ -12,12 +12,19 @@ recompute its own label so a mistyped outcome fails loudly.
   probes and briefs: exactly ``id``, ``question``, ``resolution_criteria`` and
   ``as_of_date``. Everything else is grader-only.
 - ``leak_findings(q)`` is structural, never a marker-word list (a word list
-  flags legitimate criteria such as a Fed "cut" or "convicted"): the criteria
-  must be one sentence starting ``YES if`` (a line break always ends a
-  sentence); every parenthetical in the question or criteria must be listed
-  verbatim in ``reviewed_parentheticals``; no ``resolution_note`` sentence and no
-  ``resolution_evidence.raw_value`` string or number may appear in the visible
-  text. Each rule fails closed: an ambiguous shape is flagged for review.
+  flags legitimate criteria such as a Fed "cut" or "convicted"): the question
+  must be one sentence ending in '?' and the criteria one sentence starting
+  ``YES if`` (a line break always ends a sentence); every bracketed aside in the
+  question or criteria must be listed verbatim in ``reviewed_parentheticals``; no
+  ``resolution_note`` sentence and no ``resolution_evidence.raw_value`` string or
+  number may appear in the visible text. The rules lean to failing closed (an
+  ambiguous shape is flagged for review) but stay heuristics, with known gaps: a
+  lone capital between a capitalized word and a word that is not a common
+  sentence opener reads as a middle initial ("Proposition A. Voters approved it."
+  stays one sentence); a one-letter raw string is not matched; and an outcome
+  restated in words other than the note's, inside a single sentence with no
+  bracket and no raw_value, is invisible to a structural lint. Human review of
+  the migrated text remains the backstop.
 - ``validate_question(q, strict)`` checks the contract; ``strict`` also requires
   ``verification == 'verified'`` and non-empty ``resolution_evidence``.
 - ``recompute_label(q)`` recomputes YES / NO / AMBIGUOUS / UNVERIFIABLE from the
@@ -111,12 +118,16 @@ MARKET_VOID_BAND = 0.01
 MARKET_DEFAULT_FIELD = "resolved_yes_price"
 OCCURRENCE_DEFAULT_FIELD = "occurred"
 
+LEAK_QUESTION_FORM = "question_not_ending_with_question_mark"
 LEAK_CRITERIA_FORM = "criteria_not_yes_if"
 LEAK_EXTRA_SENTENCE = "extra_sentence"
 LEAK_UNREVIEWED_PARENTHETICAL = "unreviewed_parenthetical"
 LEAK_UNBALANCED_PARENTHESIS = "unbalanced_parenthesis"
 LEAK_OUTCOME_IN_VISIBLE_TEXT = "outcome_in_visible_text"
 CRITERIA_PREFIX = "YES if "
+# A resolution_note sentence needs this many words to be matched against the visible
+# text: one word ("Yes.", "53.") would match legitimate criteria, so it is rejected.
+MIN_NOTE_WORDS = 2
 
 # balance_audit advisory thresholds (report-only; nothing gates on them).
 DEFAULT_MAX_CATEGORY_SHARE = 0.25
@@ -159,6 +170,12 @@ def forecaster_view(q: Dict[str, Any]) -> Dict[str, Any]:
 def is_ambiguous(q: Any) -> bool:
     """True when the row's ``scoring_status`` is 'ambiguous' (never scored)."""
     return isinstance(q, dict) and str(q.get("scoring_status") or "").strip() == SCORING_AMBIGUOUS
+
+
+def is_evidence_backed(q: Any) -> bool:
+    """True when the row carries a non-empty ``resolution_evidence`` object."""
+    evidence = q.get("resolution_evidence") if isinstance(q, dict) else None
+    return isinstance(evidence, dict) and bool(evidence)
 
 
 def expected_label(q: Dict[str, Any]) -> Optional[str]:
@@ -222,24 +239,38 @@ def _finite(value: Any) -> Optional[float]:
 
 # ================================================================== leak lint
 
-# Sentence breaks. Western terminal punctuation ends a sentence when whitespace and
-# more text follow, or when a capitalized word follows with no space at all
-# ("seats.They won 53"); decimals ("3.5"), domains ("example.com"), tickers
-# ("BRK.B") and initials ("U.S.") are never breaks of that second form. The
-# lookbehind anchors each match to the first mark of a run, so the scan stays linear
-# on long punctuation runs. A CJK terminator ends a sentence with or without
+# Sentence breaks, found on NFKC-folded text without format characters (see _fold),
+# so compatibility forms such as '．' '｡' '…' '！' read as '.' '。' '...' '!'.
+# Western terminal punctuation ends a sentence when whitespace and more text follow,
+# or with no space at all before a capitalized word ("seats.They won 53", also behind
+# a quote: 'seats."They', 'seats.“They'); '!' and '?' also end one before a numeral
+# ("seats!53"). Decimals ("3.5"), domains ("example.com"), tickers ("BRK.B") and
+# initials ("U.S.") are never breaks of that no-space form. The lookbehind anchors
+# each match to the first mark of a run, so the scan stays linear on long punctuation
+# runs. A CJK, Devanagari or Arabic terminator ends a sentence with or without
 # following whitespace, and a line break always ends one (split_sentences splits
 # lines first).
-_CJK_TERMINATORS = "。！？"
-_CLOSERS = r"[\"'”’)\]）」』]"
+_ALWAYS_TERMINATORS = "。।॥۔؟"
+# Quotes of either direction (a German '“' closes, an English '“' opens) and closing
+# brackets may sit between a terminator and the next sentence.
+_QUOTES = "\"'“”‘’«»‹›„‚"
+_CLOSERS = "[" + _QUOTES + ")\\]}」』】〕〗〙〛〉》]"
 _SENTENCE_BREAK = re.compile(
-    r"(?<![.!?。！？])(?:[.!?]+" + _CLOSERS + r"*(?:(?P<gap>\s+)(?=\S)|(?=[^\W\d_]))"
-    r"|[。！？]+" + _CLOSERS + r"*\s*(?=\S))")
-_OPENERS = "(\"'[“‘（「『"
+    r"(?<![.!?" + _ALWAYS_TERMINATORS + r"])(?:[.!?]+" + _CLOSERS + r"*(?:(?P<gap>\s+)(?=\S)|(?=[^\W_]))"
+    r"|[" + _ALWAYS_TERMINATORS + r"]+" + _CLOSERS + r"*\s*(?=\S))")
+_OPENERS = "(\"'[{“‘«‹„‚「『【〔"
 _INITIALS = re.compile(r"(?:[^\W\d_]\.)*[^\W\d_]")
 # Longest token worth testing as an abbreviation or initial; a longer one is a word,
 # so the break stands (this also bounds the backward scan per candidate break).
 _MAX_ABBREVIATION_TOKEN = 24
+_NEXT_WORD = re.compile(r"[^\W\d_]{1,%d}" % _MAX_ABBREVIATION_TOKEN)
+# Words that open a sentence but never follow a middle initial as a surname: after
+# "Proposition A." or "Plan B." they mean the lone capital ended its sentence.
+_SENTENCE_OPENERS = frozenset({
+    "a", "an", "the", "this", "that", "these", "those", "there", "it", "its", "they", "their",
+    "them", "he", "his", "she", "her", "we", "our", "you", "your", "in", "on", "at", "by", "for",
+    "from", "after", "before", "with", "as", "but", "and", "or", "so", "yet", "however", "then",
+})
 # Titles precede a name, so a capitalized word after them never opens a sentence.
 _TITLE_ABBREVIATIONS = frozenset({
     "mr", "mrs", "ms", "dr", "prof", "st", "gov", "sen", "rep", "gen", "vs",
@@ -258,6 +289,8 @@ _NUMBER_ABBREVIATION = "no"
 # still matches the raw value it spells, while a decimal stays one word: a raw 3 is
 # never found inside "3.47", nor a raw 5 inside a "3.5" threshold.
 _WORD = re.compile(r"\d+(?:[.,]\d+)*|[^\W\d_]+")
+# One plain numeral: digits with an optional decimal part, or comma-grouped thousands.
+_NUMERAL = re.compile(r"\d+(?:\.\d+)?|\d{1,3}(?:,\d{3})+(?:\.\d+)?")
 
 
 def _token_before(text: str, lo: int, hi: int) -> Optional[Tuple[str, int]]:
@@ -273,18 +306,20 @@ def _token_before(text: str, lo: int, hi: int) -> Optional[Tuple[str, int]]:
     return text[i:hi], i
 
 
-def _is_abbreviation(text: str, lo: int, hi: int, following: str) -> bool:
+def _is_abbreviation(text: str, lo: int, hi: int, after: int) -> bool:
     """True when the '.' at ``text[hi]`` closes an abbreviation or initial, not a sentence.
 
-    ``following`` is the first character after the break. Fails closed: an
-    abbreviation that can also end a sentence hides the break only when the next
-    word cannot open one, and a lone capital is an initial only after a capitalized
-    word ("Donald J. Trump", never "group A. They won.").
+    ``after`` is where the next sentence would start. Fails closed: an abbreviation
+    that can also end a sentence hides the break only when the next word cannot open
+    one, and a lone capital is an initial only after a capitalized word and before a
+    word that is not a sentence opener ("Donald J. Trump"; never "group A. They won."
+    or "Proposition A. It passed.").
     """
     found = _token_before(text, lo, hi)
     if found is None:
         return False
     token, token_start = found
+    following = text[after:after + 1]
     word = token.lstrip(_OPENERS)
     key = word.casefold()
     if key == _NUMBER_ABBREVIATION:
@@ -301,24 +336,33 @@ def _is_abbreviation(text: str, lo: int, hi: int, following: str) -> bool:
     while j > lo and text[j - 1].isspace() and token_start - j < _MAX_ABBREVIATION_TOKEN:
         j -= 1
     previous = _token_before(text, lo, j) if j < token_start else None
-    return previous is not None and previous[0].lstrip(_OPENERS)[:1].isupper()
+    if previous is None or not previous[0].lstrip(_OPENERS)[:1].isupper():
+        return False
+    start = after
+    while start < len(text) and start - after < _MAX_ABBREVIATION_TOKEN and text[start] in _OPENERS:
+        start += 1                                     # 'Plan B. “It passed.”'
+    next_word = _NEXT_WORD.match(text, start)
+    return next_word is None or next_word.group().casefold() not in _SENTENCE_OPENERS
 
 
 def _is_sentence_break(text: str, lo: int, match: "re.Match[str]") -> bool:
     mark = text[match.start()]
-    if mark in _CJK_TERMINATORS:
+    if mark in _ALWAYS_TERMINATORS:
         return True
     following = text[match.end():match.end() + 2]
     if match.group("gap") is None:
-        # no whitespace: only a capitalized word ("They") or an uncased letter (CJK)
-        # opens a sentence; "U.S.", "ASP.NET" and "BRK.B" do not
+        # no whitespace: a capitalized word ("They") or an uncased letter (CJK) opens a
+        # sentence, and after '!' or '?' a numeral does too; "U.S.", "ASP.NET",
+        # "BRK.B" and "3.5" do not
         first, second = following[:1], following[1:2]
+        if first.isdigit():
+            return mark != "."
         if not ((first.isupper() and second.islower())
                 or (first.isalpha() and not first.isupper() and not first.islower())):
             return False
     if mark != ".":
         return True                                    # '!' and '?' end a sentence
-    return not _is_abbreviation(text, lo, match.start(), following[:1])
+    return not _is_abbreviation(text, lo, match.start(), match.end())
 
 
 def _split_line(line: str) -> List[str]:
@@ -335,31 +379,48 @@ def _split_line(line: str) -> List[str]:
     return sentences
 
 
+def _fold(text: str) -> str:
+    """NFKC-folded ``text`` without format characters (zero-width spaces, bidi marks, soft hyphens)."""
+    return "".join(ch for ch in unicodedata.normalize("NFKC", text) if unicodedata.category(ch) != "Cf")
+
+
 def split_sentences(text: str) -> List[str]:
     """Split prose into sentences (stripped, terminal punctuation kept).
 
-    A line break always ends a sentence. Linear in the length of ``text``.
+    The text is NFKC-folded and stripped of format characters first, so each
+    sentence comes back in that folded form. A line break always ends a sentence.
+    Linear in the length of ``text``.
     """
     sentences: List[str] = []
-    for line in (text or "").splitlines():
+    for line in _fold(text or "").splitlines():
         sentences += _split_line(line)
     return sentences
 
 
-_OPEN_PARENS = "(（"
-_CLOSE_PARENS = ")）"
+def _bracket(ch: str) -> int:
+    """+1 for an opening bracket, -1 for a closing one, 0 for anything else.
+
+    Brackets are the Unicode open / close punctuation (Ps / Pe): '(' '[' '{', their
+    full-width and small forms, '【】' '〔〕' '《》' '「」' and the rest. The few
+    quotation marks filed there ('„' '‚' '〝' '〞' ...) are quotes, not asides.
+    """
+    category = unicodedata.category(ch)
+    if category not in ("Ps", "Pe") or "QUOTATION" in unicodedata.name(ch, ""):
+        return 0
+    return 1 if category == "Ps" else -1
 
 
 def parentheticals(text: str) -> Tuple[List[str], bool]:
-    """Top-level ``(...)`` / ``（...）`` spans of ``text`` verbatim, and whether they balance."""
+    """Top-level bracketed spans of ``text`` verbatim (see ``_bracket``), and whether they balance."""
     spans: List[str] = []
     depth, start, balanced = 0, 0, True
     for i, ch in enumerate(text or ""):
-        if ch in _OPEN_PARENS:
+        side = _bracket(ch)
+        if side > 0:
             if depth == 0:
                 start = i
             depth += 1
-        elif ch in _CLOSE_PARENS:
+        elif side < 0:
             if depth == 0:
                 balanced = False
                 continue
@@ -383,14 +444,30 @@ def _contains_phrase(haystack: str, needle: str) -> bool:
     return bool(needle) and f" {needle} " in f" {haystack} "
 
 
+def _number_in_text(phrase: str) -> Optional[numbers.Real]:
+    """The number a normalized phrase spells when it is one plain numeral ("5", "3.50", "100,000")."""
+    if not _NUMERAL.fullmatch(phrase):
+        return None
+    number = Decimal(phrase.replace(",", ""))
+    if _finite(float(number)) is None:
+        return None
+    return int(number) if number == number.to_integral_value() else float(number)
+
+
 def _value_phrases(value: Any) -> List[str]:
     """Normalized spellings of a raw string or number.
 
     A number is matched as written plainly, with thousands separators and as a float
     literal: 100000 -> "100000", "100,000", "100000.0"; 1e-05 -> "0.00001", "1e-05".
+    A string is matched as written and, when it is one numeral ("5", "$5",
+    "100000"), by every spelling of that number. A single letter ("A") is skipped: it
+    would match the article in any criteria.
     """
     if isinstance(value, str):
         phrase = _normalize(value)
+        number = _number_in_text(phrase)
+        if number is not None:                         # one numeral, however short
+            return sorted({phrase} | set(_value_phrases(number)))
         return [phrase] if len(phrase) > 1 else []
     number = _finite(value)
     if number is None:
@@ -448,21 +525,50 @@ def _finding(code: str, field: str, text: str) -> Dict[str, str]:
     return {"code": code, "field": field, "text": text}
 
 
+def _note_phrases(note: Any) -> List[Tuple[str, str]]:
+    """``(phrase, sentence)`` for each resolution_note sentence long enough to match.
+
+    A one-word sentence ("Yes.") would match every ``YES if`` criteria, so it is not
+    matched here; ``validate_question`` rejects it instead.
+    """
+    if not isinstance(note, str):
+        return []
+    phrases = [(_normalize(sentence), sentence) for sentence in split_sentences(note)]
+    return [(phrase, sentence) for phrase, sentence in phrases if len(phrase.split()) >= MIN_NOTE_WORDS]
+
+
+def _is_question(text: str) -> bool:
+    """True when ``text`` ends in '?', ignoring closing quotes and brackets ('... "Why?"')."""
+    folded = _fold(text)
+    end = len(folded)
+    while end and (folded[end - 1].isspace() or folded[end - 1] in _QUOTES or _bracket(folded[end - 1]) < 0):
+        end -= 1
+    return folded[end - 1:end] == "?"
+
+
 def leak_findings(q: Dict[str, Any]) -> List[Dict[str, str]]:
     """Structural leak findings over the forecaster-visible text: ``[{code, field, text}]``.
 
-    - ``criteria_not_yes_if`` / ``extra_sentence``: the criteria must be a single
-      sentence starting ``YES if`` (outcome prose usually rides in a second sentence;
-      a line break always starts one);
-    - ``unreviewed_parenthetical`` / ``unbalanced_parenthesis``: every parenthetical in
-      the question or criteria must be listed verbatim in ``reviewed_parentheticals``;
-    - ``outcome_in_visible_text``: a ``resolution_note`` sentence, or a raw_value string
-      or number of the ``resolution_evidence``, appears in the question or criteria
-      (whole words, punctuation-insensitive; a number glued to a unit still counts).
+    - ``question_not_ending_with_question_mark`` / ``criteria_not_yes_if`` /
+      ``extra_sentence``: the question must be a single sentence ending in '?' and
+      the criteria a single sentence starting ``YES if`` (outcome prose usually rides
+      in a second sentence; a line break always starts one);
+    - ``unreviewed_parenthetical`` / ``unbalanced_parenthesis``: every bracketed aside
+      in the question or criteria must be listed verbatim in ``reviewed_parentheticals``;
+    - ``outcome_in_visible_text``: a ``resolution_note`` sentence of at least two
+      words, or a raw_value string or number of the ``resolution_evidence``, appears
+      in the question or criteria (whole words, punctuation-insensitive; a number
+      glued to a unit still counts).
     """
     visible = {field: q[field] for field in ("question", "resolution_criteria")
                if isinstance(q.get(field), str)}
     findings: List[Dict[str, str]] = []
+    question = visible.get("question")
+    if question is not None:
+        if not _is_question(question):
+            findings.append(_finding(LEAK_QUESTION_FORM, "question", question.strip()[-80:].lstrip()))
+        for extra in split_sentences(question)[1:]:
+            findings.append(_finding(LEAK_EXTRA_SENTENCE, "question", extra))
     criteria = visible.get("resolution_criteria")
     if criteria is not None:
         if not criteria.strip().startswith(CRITERIA_PREFIX):
@@ -480,10 +586,8 @@ def leak_findings(q: Dict[str, Any]) -> List[Dict[str, str]]:
                      for span in spans if span not in reviewed_set]
 
     normalized = {field: _normalize(text) for field, text in visible.items()}
-    note = q.get("resolution_note")
-    note_phrases = ([(_normalize(s), s) for s in split_sentences(note)]
-                    if isinstance(note, str) else [])
-    for phrase, original in note_phrases + _raw_value_phrases(q.get("resolution_evidence")):
+    phrases = _note_phrases(q.get("resolution_note")) + _raw_value_phrases(q.get("resolution_evidence"))
+    for phrase, original in phrases:
         for field, text in normalized.items():
             if _contains_phrase(text, phrase):
                 findings.append(_finding(LEAK_OUTCOME_IN_VISIBLE_TEXT, field, original))
@@ -620,6 +724,17 @@ def _date_errors(q: Dict[str, Any]) -> List[str]:
     return errors
 
 
+def _note_errors(q: Dict[str, Any], status: Any) -> List[str]:
+    note = q.get("resolution_note")
+    errors = [f"resolution_note sentence {sentence!r} is too short to lint for leaks "
+              f"(fewer than {MIN_NOTE_WORDS} words): write the outcome as a full sentence"
+              for sentence in (split_sentences(note) if isinstance(note, str) else [])
+              if 0 < len(_normalize(sentence).split()) < MIN_NOTE_WORDS]
+    if status == SCORING_AMBIGUOUS and not is_evidence_backed(q) and not _nonempty_str(note):
+        errors.append("an ambiguous row without resolution_evidence must say why in resolution_note")
+    return errors
+
+
 def _reviewed_errors(q: Dict[str, Any]) -> List[str]:
     reviewed = q.get("reviewed_parentheticals")
     if reviewed is None:
@@ -630,8 +745,8 @@ def _reviewed_errors(q: Dict[str, Any]) -> List[str]:
     errors: List[str] = []
     for item in reviewed:
         if not (isinstance(item, str) and len(item) >= 2
-                and item[0] in _OPEN_PARENS and item[-1] in _CLOSE_PARENS):
-            errors.append(f"reviewed parenthetical {item!r} must be a verbatim '(...)' span")
+                and _bracket(item[0]) > 0 and _bracket(item[-1]) < 0):
+            errors.append(f"reviewed parenthetical {item!r} must be a verbatim bracketed span such as '(...)'")
         elif item not in visible:
             errors.append(f"reviewed parenthetical {item!r} does not appear in the question or criteria")
     return errors
@@ -645,8 +760,11 @@ def validate_question(q: Any, strict: bool = False) -> List[str]:
     resolution_date (its UTC calendar date; 23:59:59Z at 'day' precision);
     enumerated statuses; evidence shape (a window that does not end before it
     starts) and tolerance shape (numeric_threshold evidence only); zero leak
-    findings; a boolean resolved_outcome unless scoring_status is 'ambiguous'
-    (boolean or null there). ``strict`` also requires ``verification ==
+    findings; every resolution_note sentence at least ``MIN_NOTE_WORDS`` words
+    long (so the leak lint can match it); a boolean resolved_outcome unless
+    scoring_status is 'ambiguous' (boolean or null there, and without evidence
+    the reason goes in resolution_note: one edited field must not silently pull a
+    row out of scoring). ``strict`` also requires ``verification ==
     'verified'`` and non-empty ``resolution_evidence``. Whether the evidence
     recomputes the recorded label is ``recompute_mismatch``'s job.
     """
@@ -671,6 +789,7 @@ def validate_question(q: Any, strict: bool = False) -> List[str]:
     for field in ("resolution_note", "primary_entity"):
         if q.get(field) is not None and not isinstance(q[field], str):
             errors.append(f"{field} must be a string or null")
+    errors += _note_errors(q, status)
     errors += _date_errors(q)
     errors += _reviewed_errors(q)
     evidence = q.get("resolution_evidence")
@@ -869,11 +988,6 @@ def recompute_label(q: Dict[str, Any]) -> str:
     if kind == KIND_OCCURRENCE:
         return _occurrence_label(raw, rule)
     return LABEL_UNVERIFIABLE
-
-
-def is_evidence_backed(q: Any) -> bool:
-    evidence = q.get("resolution_evidence") if isinstance(q, dict) else None
-    return isinstance(evidence, dict) and bool(evidence)
 
 
 def recompute_mismatch(q: Dict[str, Any]) -> Optional[str]:

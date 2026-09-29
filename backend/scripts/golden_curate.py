@@ -12,19 +12,24 @@
 - leak lint: ``golden_set.leak_findings`` over the forecaster-visible text;
 - recompute: ``golden_set.recompute_label`` for every evidence-backed row, and
   each disagreement with the recorded outcome;
+- scoring status: how many rows are scored and which are ambiguous (never
+  scored by golden_eval), each with its evidence, recomputed label and reason;
 - balance: ``golden_set.balance_audit`` (advisory, never gates).
 
 A v1 file is audited against the v2 contract too, which lists the rows whose
 visible text leaks and what its migration still needs.
 
 Exit status: 0 = audited (without ``--strict`` the audit is report-only);
-1 = the golden file cannot be read or declares an unsupported schema;
+1 = nothing audited: the golden file cannot be read or declares an unsupported
+schema, or the JSON and markdown outputs name the same file;
 2 = ``--strict`` and at least one violation (a row with validation errors,
 leak findings or a recompute mismatch, or a duplicate id).
 
 ``--markdown`` without a path writes the markdown next to ``-o`` (same name,
-``.md``), or ``golden_audit.md`` without ``-o``. With neither output the JSON
-report goes to stdout.
+``.md``), or ``golden_audit.md`` without ``-o``. When the markdown path is the
+``-o`` file itself (``-o audit.md --markdown``) nothing is written (exit 1), so the
+summary never replaces the JSON report. With neither output the JSON report goes
+to stdout.
 """
 
 from __future__ import annotations
@@ -57,6 +62,14 @@ def _row_key(q: Any, index: int) -> str:
     return qid or f"#{index}"
 
 
+def _scoring_status(q: Dict[str, Any]) -> str:
+    """The row's scoring status as golden_eval applies it: a missing status is scored."""
+    if golden_set.is_ambiguous(q):
+        return golden_set.SCORING_AMBIGUOUS
+    status = q.get("scoring_status")
+    return golden_set.SCORING_SCORED if status is None else str(status)
+
+
 def audit_golden(payload: Any, *, strict: bool = False, golden_path: str = "") -> Dict[str, Any]:
     """Audit a loaded golden file (pure): validation, leak lint, recompute and balance.
 
@@ -64,6 +77,9 @@ def audit_golden(payload: Any, *, strict: bool = False, golden_path: str = "") -
     unsupported schema version. ``violation_ids`` lists every row with
     validation errors, leak findings or a recompute mismatch, plus duplicate
     ids; only ``--strict`` turns them into a failing exit status.
+    ``scoring_status`` counts the rows per status and lists each ambiguous row
+    (golden_eval never scores it) with whether it is evidence-backed, its
+    recomputed label and its stated reason (``resolution_note``).
     """
     version = golden_set.schema_version(payload)
     questions = payload.get("questions") if isinstance(payload, dict) else payload
@@ -77,14 +93,26 @@ def audit_golden(payload: Any, *, strict: bool = False, golden_path: str = "") -
     labels: Dict[str, str] = {}
     mismatches: Dict[str, str] = {}
     verification: Counter = Counter()
+    statuses: Counter = Counter()
+    ambiguous: Dict[str, Dict[str, Any]] = {}
     for key, q in zip(keys, questions, strict=True):
         row_errors = golden_set.validate_question(q, strict=strict)
         if row_errors:
             errors.setdefault(key, []).extend(row_errors)
         if not isinstance(q, dict):
             verification["(not an object)"] += 1
+            statuses["(not an object)"] += 1
             continue
         verification[str(q.get("verification") or "(missing)")] += 1
+        statuses[_scoring_status(q)] += 1
+        if golden_set.is_ambiguous(q):
+            backed = golden_set.is_evidence_backed(q)
+            note = q.get("resolution_note")
+            ambiguous[key] = {
+                "evidence_backed": backed,
+                "recomputed_label": golden_set.recompute_label(q) if backed else None,
+                "reason": note if isinstance(note, str) and note.strip() else None,
+            }
         findings = golden_set.leak_findings(q)
         if findings:
             leaks.setdefault(key, []).extend(findings)
@@ -111,6 +139,7 @@ def audit_golden(payload: Any, *, strict: bool = False, golden_path: str = "") -
             "labels": labels,
             "mismatches": mismatches,
         },
+        "scoring_status": {"counts": dict(sorted(statuses.items())), "ambiguous": ambiguous},
         "balance": golden_set.balance_audit(questions),
         "violation_ids": violation_ids,
         "n_violations": len(violation_ids),
@@ -158,6 +187,17 @@ def render_audit_markdown(report: Dict[str, Any]) -> str:
               + (f" ({', '.join(f'{k} {v}' for k, v in counts.items())})" if counts else "")]
     lines += [f"- mismatch `{qid}`: {_cell(msg)}" for qid, msg in (rec.get("mismatches") or {}).items()]
 
+    scoring = report.get("scoring_status") or {}
+    lines += ["", "## Scoring status", "", "| status | rows |", "|---|---|"]
+    lines += [f"| {_cell(status)} | {n} |" for status, n in (scoring.get("counts") or {}).items()]
+    ambiguous = scoring.get("ambiguous") or {}
+    if ambiguous:
+        lines += ["", "Ambiguous rows (never scored):", "",
+                  "| id | evidence-backed | recomputed label | reason |", "|---|---|---|---|"]
+        lines += [f"| {_cell(qid)} | {'yes' if row.get('evidence_backed') else 'no'} | "
+                  f"{row.get('recomputed_label') or '-'} | {_cell(row.get('reason') or '(none)')} |"
+                  for qid, row in ambiguous.items()]
+
     bal = report.get("balance") or {}
     lines += ["", "## Balance (advisory only)", "", "| metric | value |", "|---|---|",
               f"| questions | {bal.get('n')} |",
@@ -180,6 +220,14 @@ def render_audit_markdown(report: Dict[str, Any]) -> str:
 
 
 def cmd_audit(args) -> int:
+    md_path: Optional[str] = args.markdown
+    if md_path == _MARKDOWN_BESIDE_JSON:
+        md_path = os.path.splitext(args.out)[0] + ".md" if args.out else DEFAULT_MARKDOWN
+    if args.out and md_path and os.path.realpath(args.out) == os.path.realpath(md_path):
+        # the markdown would silently replace the JSON report (e.g. -o audit.md --markdown)
+        print(f"error: the JSON report (-o) and the markdown summary would both be written to {args.out}; "
+              "give -o a .json name or pass --markdown PATH", file=sys.stderr)
+        return EXIT_UNREADABLE
     try:
         with open(args.golden, encoding="utf-8") as f:
             payload = json.load(f)
@@ -188,9 +236,6 @@ def cmd_audit(args) -> int:
         print(f"error: cannot audit {args.golden}: {exc}", file=sys.stderr)
         return EXIT_UNREADABLE
 
-    md_path: Optional[str] = args.markdown
-    if md_path == _MARKDOWN_BESIDE_JSON:
-        md_path = os.path.splitext(args.out)[0] + ".md" if args.out else DEFAULT_MARKDOWN
     if args.out:
         write_json_atomic(args.out, report)
         print(f"wrote {args.out}")
