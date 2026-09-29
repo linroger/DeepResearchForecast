@@ -21,12 +21,18 @@ Honesty rules (all fail closed):
   known-at after it, or, on the upper-bound basis, a research-time market price
   strictly inside (0.01, 0.99) with a market end after the as-of date. Anything
   else is ``'unknown'`` and never scored.
-- ``scoring_eligible`` needs a complete, byte-bound anchor at the configured
-  equivalence floor whose end date matches the binary's resolution date, a
-  proven-prospective item and a YES/NO settlement. UMA proposals or disputes,
-  open markets and unconverged prices stay pending; 50/50 settlements are
-  recorded but never scored; items still unsettled ``grace_days`` after their
-  resolution date get one never-scored terminal event.
+- ``scoring_eligible`` needs a production primary forecast target, a complete,
+  byte-bound anchor at the configured equivalence floor whose end date matches
+  the binary's resolution date, a proven-prospective item and a YES/NO
+  settlement. UMA proposals or disputes, open markets and unconverged prices
+  stay pending; 50/50 settlements are recorded but never scored; items still
+  unsettled ``grace_days`` after their resolution date get one never-scored
+  terminal event, and an item whose market the source never answered for is
+  never ended.
+- The resolution date is the LATEST ISO date the binary names
+  (``settlement_resolution_date``): a baseline date written before the deadline
+  must not trigger a premature terminal or end-date mismatch, which are
+  append-only facts.
 """
 
 from __future__ import annotations
@@ -37,13 +43,17 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from ..utils.point_in_time import parse_stamp_strict
-from ..utils.prediction_markets import parse_market_end
+from ..utils.prediction_markets import current_uma_status, parse_market_end
 from .forecast_extractor import (
     _MARKET_EQUIVALENCE_RANK,
     _market_anchor_complete,
     audit_market_anchor_integrity,
 )
-from .forecast_ledger import MARKET_RESOLUTION_EVENT_SCHEMA_VERSION, binary_resolution_date
+from .forecast_ledger import (
+    _ISO_DATE_RE,
+    MARKET_RESOLUTION_EVENT_SCHEMA_VERSION,
+    binary_resolution_date,
+)
 
 BASIS_SOURCE = "source"
 BASIS_ATTESTED = "attested"
@@ -52,6 +62,9 @@ SOURCE_KIND_MARKET = "polymarket"
 SOURCE_KIND_TERMINAL = "terminal"
 TERMINAL_MARKET_ID = "terminal"
 TERMINAL_REASON = "unresolvable_after_grace"
+# The forecast target is an ensemble member, what-if, comparison, revision or evaluation
+# commit: its settlement must never label production calibration (I-21).
+NOT_PRODUCTION_PRIMARY = "not_production_primary"
 ITEM_KIND_BINARY = "binary"
 # A market may end up to a week after the binary's resolution date (settlement lag);
 # a later end means the market resolves a different window.
@@ -82,7 +95,10 @@ def _end_of_utc_day(value: Any) -> Optional[datetime]:
     if moment is None:
         return None
     start = datetime(moment.year, moment.month, moment.day, tzinfo=timezone.utc)
-    return start + timedelta(days=1) - timedelta(microseconds=1)
+    try:
+        return start + timedelta(days=1) - timedelta(microseconds=1)
+    except OverflowError:  # 9999-12-31: no representable end of day → unreadable stamp
+        return None
 
 
 def _latest_instant(value: Any) -> Optional[datetime]:
@@ -111,18 +127,47 @@ def known_at(resolution: Optional[Dict[str, Any]], processed_at: str) -> Tuple[s
     return processed.isoformat(), BASIS_PROCESSING_UPPER_BOUND, closed is not None
 
 
+def settlement_resolution_date(binary: Any) -> Optional[str]:
+    """The binary's resolution date for settlement: the LATEST real calendar date
+    (``YYYY-MM-DD``) named in ``resolution_criteria``, ``resolution_source`` or
+    ``statement``, else 31 Dec of ``horizon_year``; None when there is neither.
+
+    ``forecast_ledger.binary_resolution_date`` takes the FIRST date, so a
+    baseline written before the deadline ('exceeds the 2024-12-31 level by
+    2027-06-30') would read as the resolution date. Settlement writes
+    append-only facts from this date (a grace terminal, an end-date mismatch):
+    a late date only delays them, an early one records them wrongly for good,
+    so the latest date wins (the rule of resolution_date_for_horizon).
+    """
+    if not isinstance(binary, dict):
+        return None
+    named: List[str] = []
+    for key in ("resolution_criteria", "resolution_source", "statement"):
+        for match in _ISO_DATE_RE.finditer(str(binary.get(key) or "")):
+            try:
+                date.fromisoformat(match.group(1))
+            except ValueError:
+                continue  # '2026-02-30' is not a date; it can be neither deadline nor baseline
+            named.append(match.group(1))
+    if named:
+        return max(named)
+    return binary_resolution_date({"horizon_year": binary.get("horizon_year")})
+
+
 def market_eligibility(binary: Any, anchor: Any,
                        min_equivalence: str = "exact") -> Tuple[bool, Optional[str]]:
     """``(ok, reason)``: may this anchor's market settlement label ``binary``?
 
     Reasons, checked in order: ``anchor_incomplete`` (forecast_extractor's
-    completeness contract), ``binding_invalid`` (the anchor-integrity audit:
-    wrong proposition, or a contract hash that no longer matches the binary's
-    statement and criteria), ``equivalence_<level>`` below the
-    ``min_equivalence`` floor (unknown floors act as ``exact``),
+    completeness contract, which admits only an ``exact`` or ``near``
+    equivalence, so a ``loose`` or missing one always stops here),
+    ``binding_invalid`` (the anchor-integrity audit: wrong proposition, or a
+    contract hash that no longer matches the binary's statement and criteria),
+    ``equivalence_<level>`` below the ``min_equivalence`` floor (unknown floors
+    act as ``exact``; a ``loose`` floor therefore admits what ``near`` does),
     ``end_date_unverifiable`` (an unparseable market end or a binary without a
     resolution date) and ``end_date_mismatch`` (the market ends more than
-    END_DATE_TOLERANCE after the binary's resolution date).
+    END_DATE_TOLERANCE after the binary's ``settlement_resolution_date``).
     """
     if not isinstance(binary, dict) or not isinstance(anchor, dict):
         return False, "anchor_incomplete"
@@ -139,7 +184,7 @@ def market_eligibility(binary: Any, anchor: Any,
         level = equivalence if equivalence in _MARKET_EQUIVALENCE_RANK else "missing"
         return False, f"equivalence_{level}"
     market_end = parse_market_end(anchor.get("endDate"))
-    resolution_end = parse_market_end(binary_resolution_date(binary))
+    resolution_end = parse_market_end(settlement_resolution_date(binary))
     if market_end is None or resolution_end is None:
         return False, "end_date_unverifiable"
     if market_end > resolution_end + END_DATE_TOLERANCE:
@@ -213,7 +258,8 @@ def _market_event(report_id: str, forecast_id: str, binary: Dict[str, Any],
     yes_price = _finite(resolution.get("resolved_yes_price"))
     y: Optional[int] = None
     if status != "ambiguous":
-        uma = str(resolution.get("uma_status") or "").lower()
+        # The CURRENT stage: a status history ending in 'resolved' is no longer pending.
+        uma = current_uma_status(resolution.get("uma_status"))
         if any(marker in uma for marker in _UMA_PENDING_MARKERS):
             return None, "uma_pending"
         if status != "settled":
@@ -226,8 +272,10 @@ def _market_event(report_id: str, forecast_id: str, binary: Dict[str, Any],
     prospective = prospective_status(known_iso, basis, meta.get("as_of"),
                                      meta.get("created_at"), anchor)
     eligible, eligibility_reason = market_eligibility(binary, anchor, min_equivalence)
-    if status == "ambiguous":
-        ineligible_reason: Optional[str] = "ambiguous_settlement"
+    if meta.get("production_primary") is False:
+        ineligible_reason: Optional[str] = NOT_PRODUCTION_PRIMARY
+    elif status == "ambiguous":
+        ineligible_reason = "ambiguous_settlement"
     elif not eligible:
         ineligible_reason = eligibility_reason
     elif prospective is not True:
@@ -310,8 +358,8 @@ def _terminal_event(report_id: str, forecast_id: str, binary: Dict[str, Any],
 
 def _grace_expired(binary: Dict[str, Any], processed: datetime,
                    grace_days: int) -> Optional[str]:
-    """The binary's resolution date when date + grace lies before the processing day."""
-    resolution_date = binary_resolution_date(binary)
+    """The binary's settlement resolution date when date + grace lies before the processing day."""
+    resolution_date = settlement_resolution_date(binary)
     if not resolution_date:
         return None
     try:
@@ -332,18 +380,56 @@ def _settled_forecast_ids(report_id: str, events: Optional[Iterable[Any]]) -> Se
     return out
 
 
+def recorded_items(events: Optional[Iterable[Any]]) -> Set[Tuple[str, str]]:
+    """``(report_id, forecast_id)`` pairs that already hold any resolutions row: a
+    settled, ambiguous or terminal event, or a legacy settled row. Such an item is
+    final; nothing a later sweep decides can be appended for it as a new fact."""
+    out: Set[Tuple[str, str]] = set()
+    for event in events or []:
+        if isinstance(event, dict):
+            out.add((str(event.get("report_id") or ""), str(event.get("forecast_id") or "")))
+    return out
+
+
+def has_open_items(report_id: Any, binaries: Any, recorded: Set[Tuple[str, str]]) -> bool:
+    """True when some binary of the target can still receive an event: it has an id,
+    no row in ``recorded`` (see ``recorded_items``) and either a market anchor to
+    settle on or a resolution date whose grace period can expire. A target with no
+    such binary has nothing left to settle and must not use up a sweep's cap."""
+    rid = str(report_id or "").strip()
+    for binary in binaries if isinstance(binaries, list) else []:
+        if not isinstance(binary, dict):
+            continue
+        forecast_id = str(binary.get("id") or "").strip()
+        if not forecast_id or (rid, forecast_id) in recorded:
+            continue
+        anchor = binary.get("market_anchor")
+        if (isinstance(anchor, dict) and str(anchor.get("market_id") or "").strip()) or (
+                settlement_resolution_date(binary)):
+            return True
+    return False
+
+
 def settle_binaries(report_id: Any, binaries: Any, resolutions: Any, *,
                     target_meta: Optional[Dict[str, Any]] = None, processed_at: str,
                     min_equivalence: str = "exact", grace_days: int = 180,
-                    existing_events: Optional[Iterable[Any]] = None) -> Dict[str, Any]:
+                    existing_events: Optional[Iterable[Any]] = None,
+                    answered_market_ids: Optional[Iterable[Any]] = None) -> Dict[str, Any]:
     """Settlement decisions for one forecast target's binaries.
 
     ``resolutions`` maps market_id to ``prediction_markets._parse_resolution``
-    output; ``target_meta`` is ``{as_of, created_at, commit_id}`` of the
-    forecast origin; ``processed_at`` (offset-aware, ``ValueError`` otherwise)
-    is the only clock, so every decision is replayable. ``existing_events`` are
-    the ledger's resolutions rows: an item that already holds a non-terminal
-    event never gets a terminal one.
+    output; ``target_meta`` is ``{as_of, created_at, commit_id,
+    production_primary}`` of the forecast origin, where ``production_primary``
+    False (a non-production, revision or evaluation target) makes every market
+    event ineligible ``not_production_primary`` and True/None (proven, or a
+    legacy report with no ledger row) changes nothing; ``processed_at``
+    (offset-aware, ``ValueError`` otherwise) is the only clock, so every
+    decision is replayable. ``existing_events`` are the ledger's resolutions
+    rows: an item that already holds a non-terminal event never gets a
+    terminal one. ``answered_market_ids`` are the markets the source answered
+    for (``PolymarketClient.fetch_resolutions_answered``: every id of a request
+    batch that succeeded, returned or confirmed missing); None means only the
+    markets present in ``resolutions``.
 
     Returns ``{events, terminal, pending_by_reason, ineligible_by_reason}``.
     ``events`` are settled or ambiguous market events (append-ready rows with
@@ -351,9 +437,8 @@ def settle_binaries(report_id: Any, binaries: Any, resolutions: Any, *,
     (market_id 'terminal', never scored). Pending reasons: ``no_resolution_data``,
     ``market_open``, ``uma_pending``, ``not_converged``, ``no_yes_outcome``,
     ``no_market_anchor`` and ``missing_forecast_id``. An anchored item without
-    resolution data turns terminal only when ``resolutions`` holds data for
-    some market, i.e. the source answered; an empty map (source unreachable)
-    never ends an item.
+    resolution data turns terminal only when the source answered for its
+    market: a failed request batch (source unreachable) never ends an item.
     """
     processed = parse_stamp_strict(processed_at, allow_date=False)
     if processed is None:
@@ -362,6 +447,8 @@ def settle_binaries(report_id: Any, binaries: Any, resolutions: Any, *,
     rid = str(report_id or "").strip()
     meta = target_meta if isinstance(target_meta, dict) else {}
     by_market = resolutions if isinstance(resolutions, dict) else {}
+    answered = {str(mid or "").strip() for mid in (
+        answered_market_ids if answered_market_ids is not None else by_market)}
     grace = max(0, int(grace_days))
     already_settled = _settled_forecast_ids(rid, existing_events)
     events: List[Dict[str, Any]] = []
@@ -391,7 +478,7 @@ def settle_binaries(report_id: Any, binaries: Any, resolutions: Any, *,
             reason = "no_market_anchor"
         resolution_date = _grace_expired(binary, processed, grace)
         if (resolution_date and forecast_id not in already_settled
-                and (reason != "no_resolution_data" or by_market)):
+                and (reason != "no_resolution_data" or market_id in answered)):
             terminal.append(_terminal_event(rid, forecast_id, binary, anchor, meta=meta,
                                             processed_at=processed_iso,
                                             resolution_date=resolution_date,

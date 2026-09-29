@@ -28,7 +28,7 @@ import random
 import re
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import httpx
 
@@ -342,12 +342,34 @@ def _parse_closed_time(value: Any) -> Optional[str]:
     return moment.isoformat() if moment is not None else None
 
 
+def current_uma_status(value: Any) -> str:
+    """EVAL-2: the current UMA stage of a Gamma ``uma_status``, lower-cased ('' when absent).
+
+    ``umaResolutionStatuses`` (the fallback key) is a stage history, a JSON-encoded
+    list such as ``'["proposed","resolved"]'`` or a list; its LAST entry is the current
+    stage, so an earlier proposal or dispute never keeps a resolved market pending. Any
+    other value is a single stage and is returned as it is."""
+    if isinstance(value, list):
+        stages: List[Any] = value
+    else:
+        text = str(value if value is not None else "").strip()
+        try:
+            parsed = json.loads(text) if text.startswith("[") else None
+        except ValueError:
+            parsed = None
+        if not isinstance(parsed, list):
+            return text.lower()
+        stages = parsed
+    last = stages[-1] if stages else None
+    return str(last).strip().lower() if last is not None else ""
+
+
 def _resolution_status(closed: bool, resolved: bool, uma_status: Optional[str],
                        prices: List[Any]) -> str:
     """'settled' (a YES/NO outcome converged), 'ambiguous' (UMA-resolved 50/50) or 'unknown'."""
     if resolved:
         return "settled"
-    if closed and uma_status and _UMA_RESOLVED_RE.search(uma_status) and prices:
+    if closed and _UMA_RESOLVED_RE.search(current_uma_status(uma_status)) and prices:
         values = [_coerce_float(p) for p in prices]
         if all(v is not None and abs(v - 0.5) <= _AMBIGUOUS_PRICE_TOLERANCE + 1e-9
                for v in values):
@@ -558,11 +580,14 @@ class PolymarketClient:
             out.append(m2)
         return out
 
-    def _fetch_fresh_markets(self, ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    def _fetch_fresh_markets(self, ids: List[str],
+                             answered: Optional[Set[str]] = None) -> Dict[str, Dict[str, Any]]:
         """按 id 批量拉 Gamma /markets，返回 {market_id: raw_row}；任一批失败只丢那一批。
 
         Gamma `/markets` 支持重复 id 参数（?id=a&id=b）批量取；httpx 会把 {"id": [...]}
         编码为重复 key。响应通常是市场对象数组，也容忍 {"markets": [...]} / {"data": [...]} 包装。
+        EVAL-2：传入 ``answered`` 时，把**请求成功且响应是市场列表**那几批的全部 id 加进去
+        （无论 Gamma 是否返回该行——缺行即确认「无此市场」）；失败批次的 id 不在其中。
         """
         out: Dict[str, Dict[str, Any]] = {}
         try:
@@ -580,6 +605,10 @@ class PolymarketClient:
                 raw_rows = data.get("markets") or data.get("data") or []
             else:
                 raw_rows = []
+            if answered is not None and (isinstance(data, list) or (
+                    isinstance(data, dict)
+                    and any(isinstance(data.get(key), list) for key in ("markets", "data")))):
+                answered.update(batch)
             for raw in raw_rows if isinstance(raw_rows, list) else []:
                 if isinstance(raw, dict):
                     mid = str(raw.get("id") or "").strip()
@@ -656,6 +685,15 @@ class PolymarketClient:
         Degrade-safe：未启用 / 空输入 / 整批网络失败 → {}；单条字段缺失/形状异常 →
         该市场 resolved=False（unknown），绝不抛异常、绝不阻断监测主流程。
         """
+        return self.fetch_resolutions_answered(market_ids)[0]
+
+    def fetch_resolutions_answered(
+            self, market_ids: List[str]) -> Tuple[Dict[str, Dict[str, Any]], Set[str]]:
+        """EVAL-2：``(fetch_resolutions 的结果, 判定源确实应答过的 market id 集合)``。
+
+        应答 = 该 id 所在批次请求成功且响应是市场列表（返回了该行，或确认无此市场）。
+        失败批次（网络 / 5xx / 非列表响应）与未启用时的 id 都不在集合里：结算据此只让
+        「确认无数据」的条目走到 grace terminal，绝不因一次瞬时失败永久终结条目。"""
         ids: List[str] = []
         seen: set = set()
         for mid in market_ids or []:
@@ -663,15 +701,16 @@ class PolymarketClient:
             if s and s not in seen:
                 seen.add(s)
                 ids.append(s)
+        answered: Set[str] = set()
         if not self.enabled or not ids:
-            return {}
-        fresh = self._fetch_fresh_markets(ids)
+            return {}, answered
+        fresh = self._fetch_fresh_markets(ids, answered=answered)
         out: Dict[str, Dict[str, Any]] = {}
         for mid, raw in fresh.items():
             parsed = _parse_resolution(raw)
             if parsed is not None:
                 out[mid] = parsed
-        return out
+        return out, answered
 
     @staticmethod
     def _normalize_market(raw: Any, matched_query: str,

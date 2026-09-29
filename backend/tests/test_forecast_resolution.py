@@ -214,6 +214,11 @@ def test_market_eligibility_rules():
         False, "equivalence_near")
     assert fr.market_eligibility(near, near["market_anchor"], "near") == (True, None)
     assert fr.market_eligibility(near, near["market_anchor"], "loose") == (True, None)
+    # A loose (or missing) equivalence fails completeness first, whatever the floor: 'loose'
+    # admits exactly what 'near' does.
+    for level in ("loose", None):
+        weak = dict(exact["market_anchor"], resolution_equivalence=level)
+        assert fr.market_eligibility(exact, weak, "loose") == (False, "anchor_incomplete")
     # An unknown floor acts as the strictest one.
     assert fr.market_eligibility(near, near["market_anchor"], "bogus") == (
         False, "equivalence_near")
@@ -240,6 +245,54 @@ def test_market_eligibility_rules():
         equivalence="exact", match_confidence=0.9, binary=undated)
     assert fr.market_eligibility(undated, undated["market_anchor"], "exact") == (
         False, "end_date_unverifiable")
+
+
+def test_settlement_resolution_date_is_the_latest_named_date():
+    """A baseline date named before the deadline never triggers a premature terminal or an
+    end-date mismatch (both are append-only facts)."""
+    baseline = {"id": "G1", "proposition_id": "prop-G1", "probability": 0.6,
+                "statement": "Euro-area GDP exceeds its 2024-12-31 level by 2027-06-30.",
+                "resolution_criteria": ("Resolves YES if Eurostat GDP exceeds the 2024-12-31 "
+                                        "level by 2027-06-30."),
+                "horizon_year": 2027}
+    assert fl.binary_resolution_date(baseline) == "2024-12-31"  # first date: the baseline
+    assert fr.settlement_resolution_date(baseline) == "2027-06-30"
+    # Invalid calendar dates are ignored; no date at all falls back to horizon_year's end.
+    assert fr.settlement_resolution_date(
+        {"resolution_criteria": "by 2026-02-30", "horizon_year": 2027}) == "2027-12-31"
+    assert fr.settlement_resolution_date(
+        {"statement": "by 2026-03-01", "resolution_source": "2026-09-30 release"}) == "2026-09-30"
+    assert fr.settlement_resolution_date({"statement": "someday"}) is None
+    assert fr.settlement_resolution_date(None) is None
+
+    # Unanchored: no terminal before 2027-06-30 + grace (processing day 2026-09-29 is far off).
+    early = fr.settle_binaries("r1", [baseline], {}, processed_at=PROCESSED, grace_days=180)
+    assert early["terminal"] == [] and early["pending_by_reason"] == {"no_market_anchor": 1}
+    boundary = fr.settle_binaries("r1", [baseline], {}, processed_at="2027-12-27T12:00:00+00:00",
+                                  grace_days=180)
+    assert boundary["terminal"] == []
+    late = fr.settle_binaries("r1", [baseline], {}, processed_at="2027-12-28T12:00:00+00:00",
+                              grace_days=180)
+    assert [t["evidence"]["resolution_date"] for t in late["terminal"]] == ["2027-06-30"]
+
+    # Exact anchor whose market ends on the real deadline: eligible, never end_date_mismatch.
+    anchored = dict(baseline)
+    anchored["market_anchor"] = _build_market_anchor(
+        0.6, {"market_id": "m-gdp", "question": "Euro-area GDP above end-2024 by June 2027?",
+              "implied_yes_prob": 0.55, "url": "https://polymarket.com/event/m-gdp",
+              "end_date": "2027-06-30T12:00:00Z"},
+        equivalence="exact", match_confidence=0.9, binary=anchored)
+    assert fr.market_eligibility(anchored, anchored["market_anchor"], "exact") == (True, None)
+    open_market = fr.settle_binaries(
+        "r1", [anchored], {"m-gdp": _resolved("m-gdp", 0.55, closed=False, uma=None)},
+        target_meta=META, processed_at=PROCESSED)
+    assert open_market["terminal"] == [] and open_market["pending_by_reason"] == {
+        "market_open": 1}
+    settled = fr.settle_binaries(
+        "r1", [anchored],
+        {"m-gdp": _resolved("m-gdp", 1.0, closed_time="2027-07-01T09:00:00Z")},
+        target_meta=META, processed_at="2027-07-02T00:00:00+00:00")["events"][0]
+    assert (settled["scoring_eligible"], settled["ineligible_reason"]) == (True, None)
 
 
 # ------------------------------------------------------------------ prospective proof
@@ -271,6 +324,12 @@ def test_prospective_requires_lower_bound_proof():
     assert fr.prospective_status(CLOSED_AT, "source", None, None, anchor) == "unknown"
     assert fr.prospective_status(CLOSED_AT, "source", "May 2026", None, anchor) == "unknown"
     assert fr.prospective_status(CLOSED_AT, "source", as_of, "yesterday", anchor) == "unknown"
+    # A stamp with no representable end of day is unreadable, never an OverflowError.
+    assert fr.prospective_status(CLOSED_AT, "source", "9999-12-31", None, {}) == "unknown"
+    assert fr.prospective_status(CLOSED_AT, "source", None, "9999-12-31", {}) == "unknown"
+    far = fr.settle_binaries("r1", [_binary()], {"m-1": _resolved("m-1", 1.0)},
+                             target_meta={"as_of": "9999-12-31"}, processed_at=PROCESSED)
+    assert far["events"][0]["ineligible_reason"] == "prospective_unknown"
 
     # scoring_eligible only when prospective is True.
     resolutions = {"m-1": _resolved("m-1", 1.0)}
@@ -357,12 +416,19 @@ def test_pending_reasons_and_grace_terminal():
     assert boundary["terminal"] == [] and boundary["pending_by_reason"] == {
         "no_market_anchor": 1}
     # Long after the markets' dates: anchored items with live data turn terminal too, but an
-    # item with no data only when the source answered for some market.
+    # item with no data only when the source answered for ITS market (confirmed missing).
     late = "2027-12-31T00:00:00+00:00"
     after = fr.settle_binaries("r1", binaries[:5], resolutions, processed_at=late,
-                               grace_days=180)
+                               grace_days=180, answered_market_ids=[*resolutions, "m-missing"])
     assert sorted(t["forecast_id"] for t in after["terminal"]) == ["F1", "F2", "F3", "F4", "F5"]
     assert after["terminal"][0]["evidence"]["anchor_market_id"] == "m-open"
+    # Its request batch failed (not answered), or no answered set at all: F5 stays pending
+    # although the source answered for the other markets.
+    for answered in (list(resolutions), None):
+        failed = fr.settle_binaries("r1", binaries[:5], resolutions, processed_at=late,
+                                    grace_days=180, answered_market_ids=answered)
+        assert sorted(t["forecast_id"] for t in failed["terminal"]) == ["F1", "F2", "F3", "F4"]
+        assert failed["pending_by_reason"] == {"no_resolution_data": 1}
     unreachable = fr.settle_binaries("r1", [binaries[4]], {}, processed_at=late,
                                      grace_days=180)
     assert unreachable["terminal"] == [] and unreachable["pending_by_reason"] == {
@@ -377,6 +443,35 @@ def test_pending_reasons_and_grace_terminal():
                               grace_days=180, existing_events=prior)
     assert sorted(t["forecast_id"] for t in kept["terminal"]) == ["F2", "F3"]
     assert kept["pending_by_reason"] == {"market_open": 1}
+
+
+def test_uma_status_history_uses_current_stage():
+    """``umaResolutionStatuses`` is a history: its last entry is the current stage."""
+    assert pm.current_uma_status('["proposed","resolved"]') == "resolved"
+    assert pm.current_uma_status(["proposed", "Disputed"]) == "disputed"
+    assert pm.current_uma_status("Proposed") == "proposed"
+    assert pm.current_uma_status("[]") == "" and pm.current_uma_status(None) == ""
+    assert pm.current_uma_status("[not json") == "[not json"
+
+    def history(market_id, yes, stages):
+        raw = _gamma(market_id, yes, uma=None)
+        raw["umaResolutionStatuses"] = json.dumps(stages)
+        return pm._parse_resolution(raw)
+
+    resolved = history("m-1", 1.0, ["proposed", "resolved"])
+    assert resolved["uma_status"] == '["proposed", "resolved"]'  # passthrough unchanged
+    assert resolved["resolution_status"] == "settled"
+    event = fr.settle_binaries("r1", [_binary()], {"m-1": resolved}, target_meta=META,
+                               processed_at=PROCESSED)["events"]
+    assert [(e["resolution_status"], e["scoring_eligible"]) for e in event] == [("settled", True)]
+    # A proposal or dispute that is still the current stage keeps the item pending.
+    for stages in (["proposed"], ["proposed", "resolved", "disputed"]):
+        out = fr.settle_binaries("r1", [_binary()], {"m-1": history("m-1", 1.0, stages)},
+                                 target_meta=META, processed_at=PROCESSED)
+        assert out["events"] == [] and out["pending_by_reason"] == {"uma_pending": 1}, stages
+    # A 50/50 settlement whose history ends 'resolved' is ambiguous; one still proposed is not.
+    assert history("m-1", 0.5, ["proposed", "resolved"])["resolution_status"] == "ambiguous"
+    assert history("m-1", 0.5, ["resolved", "proposed"])["resolution_status"] == "unknown"
 
 
 def test_ambiguous_settlement_event_not_scored(tmp_path):
@@ -594,15 +689,78 @@ def test_target_meta_from_commit_row_else_meta_json(tmp_path):
     (folder / "meta.json").write_text(json.dumps({"created_at": "2026-05-02T10:00:00+02:00"}),
                                       encoding="utf-8")
     assert mon.target_meta_for("r1", ledger_dir=led, report_folder=str(folder)) == {
-        "as_of": None, "created_at": "2026-05-02T08:00:00+00:00", "commit_id": None}
+        "as_of": None, "created_at": "2026-05-02T08:00:00+00:00", "commit_id": None,
+        "production_primary": None}
     assert mon.target_meta_for("r1", ledger_dir=led, report_folder=None) == {
-        "as_of": None, "created_at": None, "commit_id": None}
+        "as_of": None, "created_at": None, "commit_id": None, "production_primary": None}
+    # A legacy schema_version 1 production row proves nothing: meta.json as before.
+    assert fl.append_forecast(_forecast([_binary()]), report_id="r1", d=led) is not None
+    assert mon.target_meta_for("r1", ledger_dir=led, report_folder=str(folder))[
+        "production_primary"] is None
     _, row = _commit(_forecast([_binary()]), "r1", d=led)
     assert mon.target_meta_for("r1", ledger_dir=led, report_folder=str(folder)) == {
         "as_of": "2026-05-01", "created_at": "2026-05-02T08:00:00+00:00",
-        "commit_id": row["commit_id"]}
+        "commit_id": row["commit_id"], "production_primary": True}
     assert mon._local_stamp_to_utc("not a date") is None
     assert mon._local_stamp_to_utc(None) is None
+
+
+def test_non_production_targets_never_record_settlement(reports_dir):
+    """Ensemble, revision and evaluation reports settle in memory but write nothing (I-21)."""
+    client = _Client({mid: _resolved(mid, 1.0) for mid in ("m-1", "m-rev", "m-ens", "m-eval")})
+    reports = {
+        "r-prod": _forecast([_binary()]),
+        "r-rev": _forecast([_binary(market_id="m-rev")]),
+        "r-ens": _forecast([_binary(market_id="m-ens")]),
+        "r-eval": _forecast([_binary(market_id="m-eval")]),
+    }
+    for rid, forecast in reports.items():
+        _write_sealed_report(rid, forecast)
+    _, primary = _commit(reports["r-prod"], "r-prod")
+    status, revision = _commit(reports["r-rev"], "r-rev")  # same question + as-of → revision
+    assert status == "revision"
+    _, ensemble = _commit(reports["r-ens"], "r-ens", record_class="ensemble_member",
+                          target_variant={"seed": 2})
+    _, evaluation = _commit(reports["r-eval"], "r-eval", record_class="evaluation")
+    # Ensemble members are primaries of their own target in the PRODUCTION ledger file;
+    # evaluation commits are redirected to the evaluation ledger.
+    assert ensemble["calibration_role"] == "primary"
+    assert all(r.get("report_id") != "r-eval" for r in fl.read_ledger())
+    assert [r["report_id"] for r in fl.read_ledger(fl.evaluation_ledger_dir())] == ["r-eval"]
+
+    for rid, row in (("r-rev", revision), ("r-ens", ensemble), ("r-eval", evaluation)):
+        meta = mon.target_meta_for(rid, report_folder=ReportManager._get_report_folder(rid))
+        assert meta == {"as_of": "2026-05-01", "created_at": "2026-05-02T08:00:00+00:00",
+                        "commit_id": row["commit_id"], "production_primary": False}, rid
+        res = mon.run_monitor(rid, client=client, as_of=PROCESSED)
+        assert "skipped" not in res, rid
+        assert res["settlement"]["not_recorded"] == "not_production_primary"
+        assert res["settlement"]["settled_eligible"] == 0 and res["settlement"]["appended"] == 0
+        assert res["settlement"]["ineligible_by_reason"] == {"not_production_primary": 1}
+        assert res["newly_recorded_count"] == 0 and res["newly_terminal_count"] == 0
+        assert "- Not recorded in resolutions.jsonl: not_production_primary" in (
+            res["monitor_report_md"])
+        assert fl.read_market_resolutions() == [], rid
+    # An unpublished-terminal row alone also marks the report as no production primary.
+    assert fl.record_unpublished_terminal(report_id="r-unpub", question_sha256=None,
+                                          record_class="production", run_ref=None,
+                                          reasons=["audit failed"])[0] == "recorded"
+    assert mon.target_meta_for("r-unpub")["production_primary"] is False
+
+    # The production primary itself still records one scoring-eligible event, and the
+    # running market Brier counts only it.
+    res = mon.run_monitor("r-prod", client=client, as_of=PROCESSED)
+    assert "not_recorded" not in res["settlement"] and res["newly_recorded_count"] == 1
+    rows = fl.read_market_resolutions()
+    assert [(r["report_id"], r["scoring_eligible"], r["target_commit_id"]) for r in rows] == [
+        ("r-prod", True, primary["commit_id"])]
+    assert fl.market_brier_summary()["n_resolved"] == 1
+    # The pure decision marks every market event of a non-production target, even eligible ones.
+    blocked = fr.settle_binaries("r-ens", [_binary()], {"m-1": _resolved("m-1", 1.0)},
+                                 target_meta=dict(META, production_primary=False),
+                                 processed_at=PROCESSED)["events"][0]
+    assert (blocked["scoring_eligible"], blocked["ineligible_reason"]) == (
+        False, "not_production_primary")
 
 
 def test_normalize_processed_at():
@@ -679,6 +837,79 @@ def test_settle_sweep_newest_first_cap_and_degraded(tmp_path):
     down = mon.settle_ledger(client=Down(), ledger_dir=str(tmp_path / "led2"), as_of=PROCESSED)
     assert down["degraded"] is True and down["pending_by_reason"] == {"no_resolution_data": 1}
     assert fl.read_market_resolutions(str(tmp_path / "led2")) == []
+
+
+def test_settle_sweep_skips_finished_targets_before_the_cap(tmp_path):
+    led = str(tmp_path / "ledger")
+    _commit(_forecast([_binary(market_id="m-old")]), "r-old", d=led, question="Old question?")
+    _commit(_forecast([_binary(market_id="m-new")]), "r-new", d=led, question="New question?")
+    client = _Client({"m-old": _resolved("m-old", 1.0), "m-new": _resolved("m-new", 1.0)})
+    first = mon.settle_ledger(client=client, ledger_dir=led, as_of=PROCESSED, max_targets=1)
+    assert first["targets"] == 1 and first["appended"] == 1
+    # The newer target is finished now, so it no longer uses up the cap: the older one is due.
+    second = mon.settle_ledger(client=client, ledger_dir=led, as_of=PROCESSED, max_targets=1)
+    assert second["targets"] == 1 and second["appended"] == 1
+    assert client.calls == [("resolutions", ["m-new"]), ("resolutions", ["m-old"])]
+    assert mon.settle_ledger(client=client, ledger_dir=led, as_of=PROCESSED)["targets"] == 0
+
+    # has_open_items: an item is final once any resolutions row holds it (market, ambiguous,
+    # terminal or legacy); an item with neither an anchor nor a date can never settle.
+    recorded = fr.recorded_items([{"report_id": "r", "forecast_id": "F1", "market_id": "terminal"},
+                                  "junk"])
+    assert recorded == {("r", "F1")}
+    undated = {"id": "F2", "statement": "someday", "probability": 0.5}
+    dated = {"id": "F3", "statement": "by 2027-01-01", "probability": 0.5}
+    assert fr.has_open_items("r", [_binary("F1")], recorded) is False
+    assert fr.has_open_items("r", [_binary("F1"), undated, {"statement": "no id"}],
+                             recorded) is False
+    assert fr.has_open_items("r", [_binary("F1"), dated], recorded) is True
+    assert fr.has_open_items("other", [_binary("F1")], recorded) is True
+    assert fr.has_open_items("r", None, recorded) is False
+
+
+def test_failed_request_batch_never_ends_an_item(monkeypatch, tmp_path):
+    """One failed Gamma chunk keeps its past-grace items pending; a chunk that answered
+    without a market confirms it missing, so that item may turn terminal."""
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_ENABLED", True, raising=False)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_REQUOTE_CHUNK", 1, raising=False)
+
+    class Response:
+        def __init__(self, payload, status_code=200):
+            self.payload, self.status_code = payload, status_code
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise pm.httpx.HTTPStatusError(f"HTTP {self.status_code}",
+                                               request=None, response=None)
+
+        def json(self):
+            return self.payload
+
+    def fake_get(url, params=None, timeout=None, headers=None):
+        (mid,) = params["id"]
+        if mid == "m-fail":
+            return Response(None, status_code=400)
+        return Response([_gamma(mid, 1.0)] if mid == "m-ok" else [])
+
+    monkeypatch.setattr(pm.httpx, "get", fake_get)
+    client = pm.PolymarketClient()
+    resolutions, answered = client.fetch_resolutions_answered(["m-fail", "m-ok", "m-gone"])
+    assert set(resolutions) == {"m-ok"} and answered == {"m-ok", "m-gone"}
+    assert client.fetch_resolutions(["m-ok"]) == {"m-ok": resolutions["m-ok"]}
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_ENABLED", False, raising=False)
+    assert pm.PolymarketClient().fetch_resolutions_answered(["m-ok"]) == ({}, set())
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_ENABLED", True, raising=False)
+
+    led = str(tmp_path / "ledger")
+    _commit(_forecast([_binary("F1", market_id="m-fail"), _binary("F2", market_id="m-ok"),
+                       _binary("F3", market_id="m-gone")]), "r1", d=led)
+    out = mon.settle_ledger(client=pm.PolymarketClient(), ledger_dir=led,
+                            as_of="2027-12-31T00:00:00+00:00")
+    assert out["settled"] == 1 and out["terminal"] == 1
+    assert out["pending_by_reason"] == {"no_resolution_data": 1}
+    rows = fl.read_market_resolutions(led)
+    assert sorted((r["forecast_id"], r["market_id"]) for r in rows) == [
+        ("F2", "m-ok"), ("F3", "terminal")]
 
 
 def test_settle_sweep_skips_a_failing_row(monkeypatch, tmp_path):

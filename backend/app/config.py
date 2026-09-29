@@ -338,13 +338,16 @@ class Config:
     # does it on demand); the sweep only appends idempotent, fail-closed settlement events.
     RESOLUTION_SETTLE_LEDGER = os.environ.get('RESOLUTION_SETTLE_LEDGER', 'true').strip().lower() == 'true'
     # Weakest market-anchor resolution_equivalence a settlement event may be scoring-eligible at
-    # (exact|near|loose; unknown values act as exact). Default exact: a near market resolves a
-    # different proposition, so its outcome must never label ours.
+    # (exact|near|loose; unknown values act as exact). loose behaves exactly like near: an anchor
+    # with a loose or missing equivalence always fails the completeness check (anchor_incomplete).
+    # Default exact: a near market resolves a different proposition, so its outcome must never
+    # label ours.
     RESOLUTION_MARKET_MIN_EQUIVALENCE = os.environ.get('RESOLUTION_MARKET_MIN_EQUIVALENCE', 'exact').strip().lower()
     # Days after a binary's resolution date before an item still lacking a settlement gets one
     # never-scored terminal event ('unresolvable_after_grace'), so nothing stays pending forever.
     RESOLUTION_PENDING_GRACE_DAYS = int(os.environ.get('RESOLUTION_PENDING_GRACE_DAYS', '180') or '180')
-    # Cap on the newest production primary commit rows one settle sweep visits.
+    # Cap on the newest production primary commit rows one settle sweep visits; rows whose
+    # binaries all hold a settlement or terminal event already are skipped before the cap.
     RESOLUTION_SETTLE_MAX_TARGETS = int(os.environ.get('RESOLUTION_SETTLE_MAX_TARGETS', '200') or '200')
     # NEXTSTEPS P3-8：把已实现关系按价投影一个「到预测时点的轨迹」（allied→likely_persists /
     # adversarial→persists_or_escalates / transactional→contingent），喂进报告信号包帮助情景分叉
