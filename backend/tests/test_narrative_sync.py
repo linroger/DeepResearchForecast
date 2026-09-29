@@ -100,17 +100,75 @@ def test_ffe1_full_archived_headline_keeps_the_sum_statement():
         0.34, "基准情景（概率约0.34）下，",
     ),
 ], ids=["report_47c6", "report_d428"])
-def test_archived_decimal_headlines_are_synced(headline, final_a, expected):
-    before = _rows(("A. 基准", 0.40), ("B. 电力受限", 0.30), ("C. 财务紧缩", 0.20),
-                   ("D. 上行", 0.10))
+@pytest.mark.parametrize("d_before", [0.10, 0.13], ids=["D_at_10", "D_at_13"])
+def test_archived_decimal_headlines_are_synced(headline, final_a, expected, d_before):
+    """D's pre-move value is not in the archive (final D=0.08).  Reconstructed at 0.13
+    it equals the cited base rate, and '基率仅13%' / '历史基率13%' must stay untouched."""
+    before = _rows(("A. 基准", 0.40), ("B. 电力受限", 0.30),
+                   ("C. 财务紧缩", round(0.30 - d_before, 2)), ("D. 上行", d_before))
     after = _rows(("A. 基准", final_a), ("B. 电力受限", 0.28), ("C. 财务紧缩", 0.17),
                   ("D. 上行", 0.08), ("E. 兜底", 0.12))
 
-    new_text, edits, _ = sync_probability_numbers(headline, before, after)
+    new_text, edits, skipped = sync_probability_numbers(headline, before, after)
 
     assert new_text == headline.replace("0.40", f"{final_a:.2f}", 1)
     assert new_text.startswith(expected)
     assert [(e["from"], e["to"]) for e in edits] == [("0.40", f"{final_a:.2f}")]
+    assert skipped == ({"quantity": 1} if d_before == 0.13 else {})
+
+
+_QUANTITY_BEFORE = _rows(("A", 0.40), ("D", 0.13), ("C", 0.47))
+_QUANTITY_AFTER = _rows(("A", 0.35), ("D", 0.08), ("C", 0.57))
+
+
+@pytest.mark.parametrize("text", [
+    # rates and base rates (report_47c6 / d428 headlines and the 47c6 rationale)
+    "管道兑现基率仅13%意味着公告数字需大幅打折。", "管道兑现率按历史基率13%大幅打折",
+    "LBNL 13%兑现率 vs 公告管线", "利润率13%", "失业率13%", "EV渗透率超过40%",
+    "the base rate is 13%.", "13% base rate", "the 13% hurdle rate", "CAGR约13%", "13% CAGR",
+    "13% IRR", "IRR ~13%", "margin of about 13%", "通胀约13%",
+    # thresholds and comparators
+    "EV share above 40% by 2030", "≥40%的装机", "over 40%", "低于13%", "逾40%", "不足13%",
+    "40%或以上", "40% or more", "市场份额40%以上", "at least 40% of capex",
+    # shares, tariffs, 'of' quantities and changes
+    "a 40% tariff on imports", "a 40% import tariff", "40% of respondents", "占全球装机的40%",
+    "分别占约40%", "比例为40%", "增速放缓至40%", "涨幅达40%", "prices rose by 40%",
+    "shares up 13%",
+])
+def test_quantity_figures_are_never_rewritten(text):
+    new_text, edits, skipped = sync_probability_numbers(text, _QUANTITY_BEFORE, _QUANTITY_AFTER)
+
+    assert (new_text, edits, skipped) == (text, [], {"quantity": 1})
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("基准情景占主导（40%）", "基准情景占主导（35%）"),        # 占 not adjacent to the number
+    ("高通胀情景（40%）", "高通胀情景（35%）"),                # quantity word inside a name
+    ("仅13%概率超预期上行", "仅8%概率超预期上行"),            # 概率 is not a rate noun
+    ("40%的概率", "35%的概率"),
+    ("几率40%", "几率35%"),
+    ("基准情景（概率0.40）", "基准情景（概率0.35）"),
+    ("Base holds 40% of the probability mass", "Base holds 35% of the probability mass"),
+    ("a 40% chance of recession", "a 35% chance of recession"),
+    ("Soft landing (40%) — rate cuts follow", "Soft landing (35%) — rate cuts follow"),
+    ("Escalation (40%): tariffs rise", "Escalation (35%): tariffs rise"),
+    ("Bear case at 13%", "Bear case at 8%"),
+    ("Bear (40%) over Bull (47%)", "Bear (35%) over Bull (57%)"),
+])
+def test_probabilities_next_to_quantity_words_are_still_synced(text, expected):
+    assert sync_probability_numbers(text, _QUANTITY_BEFORE, _QUANTITY_AFTER)[0] == expected
+
+
+def test_non_ascii_digits_are_never_tokens():
+    before = _rows(("A", 0.40), ("Z", 0.0), ("C", 0.60))
+    after = _rows(("A", 0.35), ("Z", 0.05), ("C", 0.60))
+    text = "基准（４０％）、尾部（４0%）、阿拉伯数字（٤٠%）、下行（40%）"
+
+    new_text, edits, skipped = sync_probability_numbers(text, before, after)
+
+    assert new_text == text.replace("下行（40%）", "下行（35%）")
+    assert [(e["from"], e["to"]) for e in edits] == [("40%", "35%")]
+    assert skipped == {}
 
 
 def test_b283_quantity_and_range_guards():
@@ -271,6 +329,7 @@ def test_details_keep_first_original_and_log_is_capped():
     synchronize_forecast_narratives(out, headline_before=_rows(("A", 0.40), ("B", 0.60)))
     assert out["headline"] == "A 35%."
     assert len(out["quality"]["narrative_sync"]) == NARRATIVE_SYNC_LOG_CAP
+    assert "narrative_sync_dropped" not in out["quality"]
 
     out["scenarios"] = _rows(("A", 0.30), ("B", 0.70))
     out["headline"] = "A 35% but 35% and 65%-70%."
@@ -278,7 +337,13 @@ def test_details_keep_first_original_and_log_is_capped():
     assert out["headline"] == "A 30% but 30% and 65%-70%."
     assert out["headline_detail"] == "A 40%."                  # first original wins
     assert len(out["quality"]["narrative_sync"]) == NARRATIVE_SYNC_LOG_CAP
+    assert out["quality"]["narrative_sync_dropped"] == 2      # the cap never drops silently
     assert out["quality"]["narrative_sync_skipped"] == {"range": 3}
+
+    out["scenarios"] = _rows(("A", 0.25), ("B", 0.75))
+    synchronize_forecast_narratives(out, headline_before=_rows(("A", 0.30), ("B", 0.70)))
+    assert out["headline"] == "A 25% but 25% and 65%-70%."
+    assert out["quality"]["narrative_sync_dropped"] == 4
 
 
 def test_nothing_to_sync_leaves_forecast_untouched():
@@ -303,7 +368,101 @@ def test_unpairable_rows_never_map():
               {"name": "B", "probability": None}, {"name": "C", "probability": "0.30"},
               {"name": "D", "probability": True}]
     after = _rows(("A", 0.35), ("B", 0.45), ("C", 0.20))
-    assert sync_probability_numbers("A 40%, A 20%, B 30%, C 30%, D 100%", before, after)[1] == []
+    text = "A 40%, A 20%, B 30%, C 30%, D 100%"
+    assert sync_probability_numbers(text, before, after) == (text, [], {"unpaired": 2})
+
+
+def _step(out, before, after):
+    """One probability move: ``out`` now carries ``after``; sync against ``before``."""
+    out["scenarios"] = copy.deepcopy(after)
+    synchronize_forecast_narratives(out, headline_before=before, rationale_before=before,
+                                    summary_before_by_name=before)
+
+
+def test_ambiguous_value_stays_blocked_in_later_passes():
+    """Pass 1 cannot tell Base's 40% from Bear's; pass 2 must not map both onto Base's move."""
+    step0 = _rows(("Base", 0.40), ("Bear", 0.40), ("Other", 0.20))
+    step1 = _rows(("Base", 0.40), ("Bear", 0.35), ("Other", 0.25))
+    step2 = _rows(("Base", 0.30), ("Bear", 0.35), ("Other", 0.35))
+    out = {"headline": "Base (40%) vs Bear (40%); Other 20%."}
+
+    _step(out, step0, step1)
+    assert out["headline"] == "Base (40%) vs Bear (40%); Other 25%."
+    assert out["quality"]["narrative_sync_blocked"] == {"headline": [40]}
+    unblocked = copy.deepcopy(out)
+    del unblocked["quality"]["narrative_sync_blocked"]
+
+    _step(out, step1, step2)
+    assert out["headline"] == "Base (40%) vs Bear (40%); Other 35%."
+    assert out["quality"]["narrative_sync_skipped"] == {"ambiguous": 4}
+    assert out["quality"]["narrative_sync_blocked"] == {"headline": [40]}
+    assert out["headline_detail"] == "Base (40%) vs Bear (40%); Other 20%."
+
+    _step(unblocked, step1, step2)                             # the record is what guards it
+    assert unblocked["headline"] == "Base (30%) vs Bear (30%); Other 35%."
+
+
+def test_unpaired_value_stays_blocked_in_later_passes():
+    """A renamed scenario's stale 40% must not take the next move of whoever now holds 40%."""
+    step0 = _rows(("X", 0.40), ("Y", 0.35), ("Z", 0.25))
+    step1 = _rows(("X (revised)", 0.25), ("Y", 0.40), ("Z", 0.35))
+    step2 = _rows(("X (revised)", 0.25), ("Y", 0.30), ("Z", 0.45))
+    out = {"headline": "X (40%), Y (35%), Z (25%)."}
+
+    _step(out, step0, step1)
+    assert out["headline"] == "X (40%), Y (40%), Z (35%)."
+    assert out["quality"]["narrative_sync_skipped"] == {"unpaired": 1}
+    assert out["quality"]["narrative_sync_blocked"] == {"headline": [40]}
+    unblocked = copy.deepcopy(out)
+    del unblocked["quality"]["narrative_sync_blocked"]
+
+    _step(out, step1, step2)
+    assert out["headline"] == "X (40%), Y (40%), Z (45%)."
+    assert out["quality"]["narrative_sync_skipped"] == {"unpaired": 1, "ambiguous": 2}
+
+    _step(unblocked, step1, step2)
+    assert unblocked["headline"] == "X (30%), Y (30%), Z (45%)."
+
+
+def test_summary_blocks_are_keyed_by_scenario_name():
+    step0 = [{"name": "Bear", "probability": 0.40, "summary": "Bear (40%) ties Base (40%)."},
+             {"name": "Base", "probability": 0.40, "summary": "Base path."},
+             {"name": "Other", "probability": 0.20, "summary": "Other paths."}]
+    step1 = _rows(("Bear", 0.35), ("Base", 0.45), ("Other", 0.20))
+    step2 = _rows(("Bear", 0.40), ("Base", 0.45), ("Other", 0.15))
+    step3 = _rows(("Bear", 0.30), ("Base", 0.45), ("Other", 0.25))
+
+    def move(out, before, after):
+        for row, new in zip(out["scenarios"], after, strict=True):
+            row["probability"] = new["probability"]
+        synchronize_forecast_narratives(out, summary_before_by_name=before)
+
+    out = {"headline": "Outlook.", "scenarios": copy.deepcopy(step0)}
+    move(out, step0, step1)                  # Bear 40→35 while Base also held 40
+    assert out["quality"]["narrative_sync_blocked"] == {"summary:bear": [40]}
+    move(out, step1, step2)
+    unblocked = copy.deepcopy(out)
+    del unblocked["quality"]["narrative_sync_blocked"]
+
+    move(out, step2, step3)                  # Bear 40→30; 40 is Bear's alone by now
+    assert out["scenarios"][0]["summary"] == "Bear (40%) ties Base (40%)."
+    assert out["quality"]["narrative_sync_skipped"] == {"ambiguous": 4}
+    assert "narrative_sync" not in out["quality"]
+
+    move(unblocked, step2, step3)
+    assert unblocked["scenarios"][0]["summary"] == "Bear (30%) ties Base (30%)."
+
+
+def test_many_sentences_resolve_each_token_to_its_own_sentence():
+    before = _rows(("A", 0.40), ("B", 0.30), ("C", 0.20), ("D", 0.10))
+    after = _rows(("A", 0.35), ("B", 0.25), ("C", 0.25), ("D", 0.15))
+    unit = "A（40%）。B（30%）与C（20%）合计50%。"
+
+    new_text, edits, skipped = sync_probability_numbers(unit * 2000, before, after)
+
+    assert new_text == "A（35%）。B（30%）与C（20%）合计50%。" * 2000
+    assert len(edits) == 2000
+    assert skipped == {"sum": 4000}
 
 
 # ------------------------------------------------------------------ call sites
@@ -525,6 +684,36 @@ def test_premortem_and_pooling(monkeypatch):
     assert spine["confidence_rationale"] == "基准概率0.50。"
     assert [row["summary"] for row in spine["scenarios"]] == ["基准（50%）。", "下行（40%）。", "兜底。"]
     assert len(spine["quality"]["narrative_sync"]) == 5
+
+
+def test_pooling_then_critique_keeps_an_ambiguous_value_blocked(monkeypatch):
+    """K=2 pooling leaves the shared '40%' stale; the critique that follows must not map
+    both onto Base's move (Bear would be shown with Base's new 30%)."""
+    monkeypatch.setattr(Config, "REPORT_SPINE_SELFCONSISTENCY_K", 2, raising=False)
+    draw0 = {"headline": "Base (40%) vs Bear (40%); Other 20%.", "horizon": "2030",
+             "confidence": "medium", "confidence_rationale": "Spine view.",
+             "scenarios": _criteria(_rows(("Base", 0.40), ("Bear", 0.40),
+                                          ("Other / Status Quo", 0.20)))}
+    draw1 = copy.deepcopy(draw0)
+    draw1["scenarios"][1]["probability"] = 0.30
+    draw1["scenarios"][2]["probability"] = 0.30
+    spine = FE.derive_forecast_spine(FakeLLMClient(json_responses=[draw0, draw1]),
+                                     central_question="q")
+    assert {row["name"]: row["probability"] for row in spine["scenarios"]} == {
+        "Base": 0.40, "Bear": 0.35, "Other / Status Quo": 0.25}
+    assert spine["headline"] == "Base (40%) vs Bear (40%); Other 25%."
+    assert spine["quality"]["narrative_sync_blocked"] == {"headline": [40]}
+
+    critique = {"confidence": "medium", "scenarios": _criteria(_rows(
+        ("Base", 0.30), ("Bear", 0.35), ("Other / Status Quo", 0.35)))}
+    out = FE.self_critique_forecast(spine, FakeLLMClient(json_responses=[critique]))
+
+    assert out["critiqued"] is True
+    assert {row["name"]: row["probability"] for row in out["scenarios"]} == {
+        "Base": 0.30, "Bear": 0.35, "Other / Status Quo": 0.35}
+    assert out["headline"] == "Base (40%) vs Bear (40%); Other 35%."
+    assert out["headline_detail"] == "Base (40%) vs Bear (40%); Other 20%."
+    assert out["quality"]["narrative_sync_skipped"] == {"ambiguous": 4}
 
 
 def test_premortem_and_pooling_flag_off_match_the_unsynced_path(monkeypatch):

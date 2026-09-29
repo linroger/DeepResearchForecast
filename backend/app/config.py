@@ -701,7 +701,8 @@ class Config:
     # 转移与 K>1 自洽池化都会移动情景概率，但 headline / confidence_rationale / 情景 summary 仍写着
     # 移动前的数字（已发布的 report_ffe1ea6bf50d 标题「基准情景（40%）」对应 A=0.35），而该标题被钉进
     # 每章提示词、大纲摘要、摘要标题与看板。开启后每个移动概率的步骤按「移动前→移动后」唯一值映射
-    # 逐数字改写（歧义值/区间/数量/合计语境一律跳过并计数），原文存 *_detail，逐处编辑记入
+    # 逐数字改写（歧义值/无法按名配对的值/区间/数量/合计语境一律跳过并计数；无法归属的值记入
+    # quality.narrative_sync_blocked，后续步骤在同一字段不再映射），原文存 *_detail，逐处编辑记入
     # forecast.quality.narrative_sync。默认开是安全的：零 token、纯确定性、只改叙事文本，从不改概率；
     # 设 false 逐字节复现旧 forecast.json。
     REPORT_NARRATIVE_SYNC = os.environ.get('REPORT_NARRATIVE_SYNC', 'true').strip().lower() == 'true'
