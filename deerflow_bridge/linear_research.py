@@ -56,6 +56,7 @@ answered (see ``_Engine._require_model_output``).
 from __future__ import annotations
 
 import bisect
+import calendar
 import datetime as _dt
 import difflib
 import functools
@@ -71,6 +72,7 @@ import threading
 import time
 import traceback
 import unicodedata
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
@@ -84,6 +86,7 @@ __all__ = [
     "ENGINE_CORE",
     "ENGINE_VERSION",
     "Preset",
+    "classify_quant_row",
     "detect_language",
     "parse_report_scenarios",
     "postprocess_notes",
@@ -479,6 +482,14 @@ Field rules:
 - contested_claims: at most $max_contested claims on which the report shows sources disagreeing; status is contested, resolved or single-origin; sources are the markers of each position.
 - Write text values in $language.""")
 
+# Field rules the facts task appends after _T_FACTS's own (``_Engine._facts_task``).
+# RESEARCH_QUANT_TYPING: the legacy extraction contract's date semantics
+# (deerflow_research quant schema), which v3's one-line schema lost — models put
+# a forecast's target date in as_of_date, so it counted as fresh evidence.
+_FACTS_DATE_RULE = ("Dates: as_of_date is when the source published or last revised the number (YYYY, YYYY-MM "
+                    "or YYYY-MM-DD; never pad a year to -01-01); period_end is the period the number measures "
+                    "or, for a forecast or target, its target date; never put a target date in as_of_date.")
+
 _PROMPT_TEMPLATES: Mapping[str, string.Template] = {
     "pre_brief": _T_PRE_BRIEF,
     "scope": _T_SCOPE,
@@ -684,6 +695,12 @@ def _parse_knob(raw: str, default: Any) -> Any:
     if not math.isfinite(number):
         return None
     return int(number) if isinstance(default, int) else number
+
+
+def _env_flag(env: Mapping[str, Any] | None, name: str, default: bool) -> bool:
+    """Boolean knob from the run env: truthy/falsy words, anything else -> default."""
+    parsed = _parse_knob((env or {}).get(name, ""), bool(default))
+    return default if parsed is None else parsed
 
 
 def scheduled_tool_calls(values: Mapping[str, Any]) -> tuple[int, int]:
@@ -5602,19 +5619,41 @@ class _Engine:
             rows.append(entry)
         return rows
 
+    def _facts_task_addenda(self) -> list[str]:
+        """Field rules the enabled knobs append to the facts task, in canonical
+        order: the date rule (RESEARCH_QUANT_TYPING) first, later rules after it."""
+        addenda: list[str] = []
+        if _env_flag(self.env, "RESEARCH_QUANT_TYPING", False):
+            addenda.append(_FACTS_DATE_RULE)
+        return addenda
+
+    def _facts_task(self) -> str:
+        """The facts extraction task: ``_T_FACTS`` plus one field-rule line per
+        addendum (none: exactly the template)."""
+        task = _render(_T_FACTS, max_events=MAX_TIMELINE_ROWS, max_quant=MAX_QUANT_ROWS,
+                       max_contested=MAX_CONTESTED_ROWS, language=self.language)
+        return task + "".join(f"\n- {rule}" for rule in self._facts_task_addenda())
+
     def _structured(self, report_body: str, deadline: rg.Deadline) -> tuple[dict | None, dict | None]:
         """Actors + facts extraction over one shared cached report prefix,
         memoized by report hash so a resumed finalize never pays twice.
 
+        The facts memo also records the task's hash when addenda extend it
+        (``task_sha256``): it is reused only for the same task, and a memo
+        without the hash only while the task has no addenda.
+
         A reply still cut by the output cap after the wider retry keeps its
         repaired complete part and flags ``meta.<kind>_truncated``."""
         report_sha = _sha256(report_body)
+        facts_task = self._facts_task()
+        facts_task_sha = _sha256(facts_task) if self._facts_task_addenda() else None
         results: dict[str, dict] = {}
         truncated: list[str] = []
         for kind in ("actors", "facts"):
             cached = _read_json(self.work / "extract" / f"{kind}.json")
             if isinstance(cached, dict) and cached.get("report_sha256") == report_sha \
-                    and isinstance(cached.get("result"), dict):
+                    and isinstance(cached.get("result"), dict) \
+                    and (kind != "facts" or cached.get("task_sha256") == facts_task_sha):
                 results[kind] = cached["result"]
                 if cached.get("truncated"):
                     truncated.append(kind)
@@ -5625,9 +5664,7 @@ class _Engine:
             tasks = {
                 "actors": (_render(_T_ACTORS, actor_cap=self.actor_prompt_cap, language=self.language),
                            ("actors",)),
-                "facts": (_render(_T_FACTS, max_events=MAX_TIMELINE_ROWS, max_quant=MAX_QUANT_ROWS,
-                                  max_contested=MAX_CONTESTED_ROWS, language=self.language),
-                          ("quantitative_facts",)),
+                "facts": (facts_task, ("quantitative_facts",)),
             }
             if len(todo) >= 2:
                 self.gateway.prime(rg.build_messages(ENGINE_CORE, shared, PRIME_TASK), kind="json",
@@ -5644,8 +5681,10 @@ class _Engine:
                 results[kind], cut = result
                 if cut:
                     truncated.append(kind)
-                self.write_json(self.work / "extract" / f"{kind}.json",
-                                {"report_sha256": report_sha, "result": results[kind], "truncated": cut})
+                memo = {"report_sha256": report_sha, "result": results[kind], "truncated": cut}
+                if kind == "facts" and facts_task_sha:
+                    memo["task_sha256"] = facts_task_sha
+                self.write_json(self.work / "extract" / f"{kind}.json", memo)
         for kind in truncated:
             self.meta[f"{kind}_truncated"] = True
             self.log("warn", f"v3: the {kind} extraction reply was truncated at its output cap even with the "
@@ -5747,7 +5786,14 @@ class _Engine:
             quant = enriched
         ref_date = _parse_iso_date(plan.as_of) or _dt.datetime.now(_dt.timezone.utc).date()
         stale_days = _positive_int(self.env.get("RESEARCH_STALE_DAYS"), DEFAULT_STALE_DAYS)
-        quant_hist = self.bridge_call("annotate_recency_rows", quant, ref_date, stale_days, date_key="as_of_date")
+        verify = _env_flag(self.env, "RESEARCH_VERIFIED_FACTS", True)
+        typing = _env_flag(self.env, "RESEARCH_QUANT_TYPING", False)
+        if verify or typing:
+            self._quant_provenance(quant, ref_date, verify=verify, typing=typing)
+        # Typed runs count forecast target dates as future-dated, never as fresh.
+        recency = {"future_bucket": True} if typing else {}
+        quant_hist = self.bridge_call("annotate_recency_rows", quant, ref_date, stale_days, date_key="as_of_date",
+                                      **recency)
         timeline_hist = self.bridge_call("annotate_recency_rows", timeline, ref_date, stale_days, date_key="date")
         if isinstance(quant_hist, dict):
             self.meta["quant_freshness"] = quant_hist
@@ -5774,6 +5820,69 @@ class _Engine:
                 "timeline_count": len(timeline), "quantitative_count": len(quant),
                 "contested_count": len(contested), "has_situation_brief": bool(obj["situation_brief"]),
                 "_actors_obj": obj}
+
+    def _quant_provenance(self, quant: list[dict], as_of: _dt.date, *, verify: bool, typing: bool) -> None:
+        """Page verification (RESEARCH_VERIFIED_FACTS) and reported/projected
+        typing (RESEARCH_QUANT_TYPING) of the quant rows, in place, summarised
+        in ``meta.quant_provenance`` with only the enabled parts: ``rows``;
+        typing adds ``class_hist`` and the ``future_dated_reported`` /
+        ``as_of_is_target`` flag counts; verification adds
+        ``verification_hist`` (rows without a label as ``unchecked``) and
+        ``verified_ratio`` (verified / labelled rows; None when none is).
+
+        Degrades safe: a failure is recorded in ``analytics_errors`` and the
+        run goes on; a row it left without ``verification`` counts as
+        unchecked, never as verified."""
+        try:
+            if verify:
+                self._verify_quant_rows(quant)
+            if typing:
+                for row in quant:
+                    row.update(classify_quant_row(row, as_of))
+        except Exception as exc:  # noqa: BLE001 — provenance labels never fail a finished report
+            self.analytics_errors.append({"helper": "quant_provenance", "error": f"{type(exc).__name__}: {exc}"[:300]})
+            self.log("warn", f"v3: quantitative provenance failed ({type(exc).__name__}: {exc})")
+            return
+        summary: dict[str, Any] = {"rows": len(quant)}
+        if typing:
+            summary["class_hist"] = dict(sorted(Counter(row["epistemic_class"] for row in quant).items()))
+        if verify:
+            labels = Counter(row.get("verification", "unchecked") for row in quant)
+            checked = len(quant) - labels["unchecked"]
+            summary["verification_hist"] = dict(sorted(labels.items()))
+            summary["verified_ratio"] = round(labels["verified"] / checked, 3) if checked else None
+        if typing:
+            for flag in ("future_dated_reported", "as_of_is_target"):
+                summary[flag] = sum(1 for row in quant if flag in row.get("epistemic_flags", ()))
+        self.meta["quant_provenance"] = summary
+        self.log("ok", "v3: quantitative provenance: " + json.dumps(summary, ensure_ascii=False))
+
+    def _verify_quant_rows(self, quant: list[dict]) -> None:
+        """Stamp each row's ``verification`` against the source its
+        ``source_url`` resolves to in the ledger (values are never modified):
+
+        * ``verified`` — every number of the value is on the fetched page;
+        * ``unverified`` — the page was fetched but a number is not on it;
+        * ``snippet_only`` — the cited source was never fetched;
+        * ``none`` — no resolvable source.
+
+        A value without a checkable number on a fetched page gets no label
+        (absent = unchecked).  ``verified`` mirrors the label as a bool."""
+        for row in quant:
+            url = row.get("source_url")
+            source = self.ledger.find(url) if url else None
+            pages = self.page_numbers(source["sid"]) if source and source.get("fetched") else None
+            if source is None:
+                verification = "none"
+            elif pages is None:
+                verification = "snippet_only"
+            else:
+                ok, detail = verify_quant_row(row, pages, str(source.get("snippet") or ""))
+                if detail == "not_checkable":
+                    continue
+                verification = "verified" if ok else "unverified"
+            row["verification"] = verification
+            row["verified"] = verification == "verified"
 
     def forecast_inputs(self) -> dict:
         return {"scenarios": [{"name": s.name, "probability": round(s.weight / 100.0, 4),
@@ -6101,6 +6210,134 @@ def normalize_quant(value: Any, sources: Sequence[Mapping[str, Any]]) -> list[di
         if len(rows) >= MAX_QUANT_ROWS:
             break
     return rows
+
+
+# A stated date or period, matched whole: (pattern, precision).  "FY2025" is
+# taken as the calendar year.
+_PERIOD_FORMS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})"), "day"),
+    (re.compile(r"(\d{4})-(\d{1,2})"), "month"),
+    (re.compile(r"(\d{4})[-\s]?Q([1-4])", re.I), "quarter"),
+    (re.compile(r"(\d{4})[-\s]?H([12])", re.I), "half"),
+    (re.compile(r"(?:FY\s?)?(\d{4})", re.I), "year"),
+)
+_MONTHS_PER = {"month": 1, "quarter": 3, "half": 6}
+
+
+def _period_bounds(value: Any) -> tuple[_dt.date | None, _dt.date | None, str]:
+    """``(first day, last day, precision)`` of a stated date or period;
+    ``(None, None, "none")`` for anything else (see :func:`_period_end_date`)."""
+    text = str(value or "").strip()
+    for pattern, precision in _PERIOD_FORMS:
+        match = pattern.fullmatch(text)
+        if match is None:
+            continue
+        year = int(match.group(1))
+        try:
+            if precision == "day":
+                day = _dt.date(year, int(match.group(2)), int(match.group(3)))
+                return day, day, precision
+            if precision == "year":
+                return _dt.date(year, 1, 1), _dt.date(year, 12, 31), precision
+            months = _MONTHS_PER[precision]
+            last = months * int(match.group(2))
+            return (_dt.date(year, last - months + 1, 1),
+                    _dt.date(year, last, calendar.monthrange(year, last)[1]), precision)
+        except ValueError:  # month 13, Feb 30, year 0
+            return None, None, "none"
+    return None, None, "none"
+
+
+def _period_end_date(value: Any) -> _dt.date | None:
+    """The LAST day of a stated date or period, so a period never counts as
+    known before it ends: YYYY and FYyyyy → Dec 31, YYYY-MM → the month's last
+    day, YYYY-Qn / YYYY-Hn → the quarter's / half's last day, an ISO date →
+    itself; None for anything else."""
+    return _period_bounds(value)[1]
+
+
+def classify_quant_row(row: Mapping[str, Any], as_of: _dt.date) -> dict:
+    """Reported/projected typing of one quantitative row against the research
+    as-of date — the program's one classifier (report, forecasting and
+    hindcast consumers reuse it).  Returns only NEW keys; evidence fields are
+    never rewritten.
+
+    The reference date is the end of ``period_end``, else of ``as_of_date``
+    (:func:`_period_end_date`).  ``actual`` is reported, or unknown with flag
+    ``future_dated_reported`` when its reference date is after as-of;
+    ``forecast`` and ``target`` are projected; ``estimate`` is projected when
+    its reference date is after as-of, else reported; a missing or other type
+    is unknown.
+
+    Target repair: no source publishes after the as-of date, so a projected
+    row whose ``as_of_date`` lies wholly after it (its FIRST day is later)
+    holds a target date there and is flagged ``as_of_is_target``; when
+    ``period_end`` gives no date, that ``as_of_date`` becomes its
+    ``target_date``.  A coarse date of the current period ("2026" in 2026)
+    may be a publication date and is left alone.
+
+    Keys: ``epistemic_class`` (reported/projected/unknown), ``date_precision``
+    of the reference date (day/month/quarter/half/year/none), ``target_date``
+    (repair only) and ``epistemic_flags`` (only when non-empty).
+    """
+    if isinstance(as_of, _dt.datetime):
+        as_of = as_of.date()
+    _, period, period_precision = _period_bounds(row.get("period_end"))
+    stated_start, stated_end, stated_precision = _period_bounds(row.get("as_of_date"))
+    reference, precision = (period, period_precision) if period else (stated_end, stated_precision)
+    after_as_of = reference is not None and reference > as_of
+    value_type = str(row.get("value_type") or "").strip().lower()
+    flags: list[str] = []
+    if value_type == "actual":
+        epistemic_class = "unknown" if after_as_of else "reported"
+        if after_as_of:
+            flags.append("future_dated_reported")
+    elif value_type in ("forecast", "target"):
+        epistemic_class = "projected"
+    elif value_type == "estimate":
+        epistemic_class = "projected" if after_as_of else "reported"
+    else:
+        epistemic_class = "unknown"
+    out: dict[str, Any] = {"epistemic_class": epistemic_class, "date_precision": precision}
+    if epistemic_class == "projected" and stated_start is not None and stated_start > as_of:
+        flags.append("as_of_is_target")
+        if period is None:
+            out["target_date"] = str(row.get("as_of_date")).strip()
+    if flags:
+        out["epistemic_flags"] = flags
+    return out
+
+
+def verify_quant_row(row: Mapping[str, Any], page_numbers: frozenset[str] | None,
+                     snippet: str) -> tuple[bool, str]:
+    """Whether a quantitative row's number is on its cited source, under the
+    rules of a VERIFIED finding (:func:`_number_on_pages`: a percentage as a
+    page percentage, a unit-bearing figure in its unit class, any scale).
+
+    Every number token of ``"{value} {unit}"`` on the fetched page
+    (``page_numbers``: its :func:`page_number_set`; None when never fetched)
+    → ``(True, "page")``; else all in the search ``snippet`` →
+    ``(False, "snippet_only")``; else ``(False, "none")``.  A value without a
+    checkable number (>= 2 digits or a decimal) → ``(False, "not_checkable")``.
+    """
+    text = f"{row.get('value')} {row.get('unit') or ''}"
+    tokens = fact_number_tokens(text)
+    if not tokens:
+        return False, "not_checkable"
+    values = fact_number_values(text)
+    percents = fact_percent_tokens(text)
+    units = fact_unit_tokens(text)
+
+    def found(available: frozenset[str]) -> bool:
+        return all(_number_on_pages(token, available, values.get(token, frozenset()),
+                                    percent=token in percents, units=units.get(token, frozenset()))
+                   for token in tokens)
+
+    if page_numbers is not None and found(page_numbers):
+        return True, "page"
+    if snippet and found(page_number_set(snippet)):
+        return False, "snippet_only"
+    return False, "none"
 
 
 def normalize_contested(value: Any, sources: Sequence[Mapping[str, Any]]) -> list[dict]:

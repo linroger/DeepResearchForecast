@@ -9910,12 +9910,21 @@ def flag_implausible_quant(facts: Any, ref_date: "_dt.date | None") -> list:
     return flags
 
 
-def annotate_recency_rows(rows: Any, ref_date: "_dt.date", stale_days: int, date_key: str = "date") -> dict:
+def annotate_recency_rows(rows: Any, ref_date: "_dt.date", stale_days: int, date_key: str = "date",
+                          future_bucket: bool = False) -> dict:
     """R2-RES-4: annotate each row IN PLACE with ``staleness_days`` + ``is_stale`` and
     return a freshness histogram. ``ref_date`` is the research as-of date; a row older
     than ``stale_days`` is flagged stale. Undated rows are counted but not annotated.
+
+    ``future_bucket`` (RESEARCH-4, v3 RESEARCH_QUANT_TYPING): a row dated after
+    ``ref_date`` (typically a forecast's target date) is no fresh evidence — it gets
+    ``staleness_days=None``, ``is_stale=False``, ``is_future_dated=True`` and counts
+    under ``future_dated`` instead of ``fresh_le_90``.  Without it the histogram keys
+    and row annotations are exactly the legacy ones.
     """
     hist = {"fresh_le_90": 0, "recent_le_365": 0, "stale_gt_365": 0, "undated": 0, "n_stale": 0}
+    if future_bucket:
+        hist["future_dated"] = 0
     if not isinstance(rows, list):
         return hist
     for r in rows:
@@ -9926,6 +9935,12 @@ def annotate_recency_rows(rows: Any, ref_date: "_dt.date", stale_days: int, date
             hist["undated"] += 1
             continue
         age = (ref_date - d).days
+        if future_bucket and age < 0:
+            r["staleness_days"] = None
+            r["is_stale"] = False
+            r["is_future_dated"] = True
+            hist["future_dated"] += 1
+            continue
         r["staleness_days"] = age
         is_stale = age > stale_days
         r["is_stale"] = is_stale

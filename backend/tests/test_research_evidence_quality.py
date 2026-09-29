@@ -198,6 +198,36 @@ def test_annotate_recency_mutates_rows_and_histograms():
     assert hist == {"fresh_le_90": 1, "recent_le_365": 1, "stale_gt_365": 1, "undated": 1, "n_stale": 1}
 
 
+_LEGACY_RECENCY_KEYS = {"fresh_le_90", "recent_le_365", "stale_gt_365", "undated", "n_stale"}
+
+
+def test_annotate_recency_legacy_keys_unchanged_without_future_bucket():
+    ref = dt.date(2026, 6, 1)
+    rows = [{"date": "2026-05-01"}, {"date": "2027-01-01"}, {"title": "undated"}]
+    hist = dr.annotate_recency_rows(rows, ref, 365, date_key="date")
+    assert set(hist) == _LEGACY_RECENCY_KEYS
+    # Legacy semantics kept: a future-dated row has a negative age and counts as fresh.
+    assert hist == {"fresh_le_90": 2, "recent_le_365": 0, "stale_gt_365": 0, "undated": 1, "n_stale": 0}
+    assert rows[1] == {"date": "2027-01-01", "staleness_days": -214, "is_stale": False}
+    assert dr.annotate_recency_rows(None, ref, 365) == dict.fromkeys(_LEGACY_RECENCY_KEYS, 0)
+
+
+def test_annotate_recency_future_bucket_keeps_future_rows_out_of_fresh():
+    ref = dt.date(2026, 6, 1)
+    rows = [{"date": "2026-05-01"}, {"as_of_date": "2029-12-31"}, {"date": "2024-01-01"}, {"title": "undated"}]
+    hist = dr.annotate_recency_rows(rows, ref, 365, date_key="date", future_bucket=True)
+    assert hist == {"fresh_le_90": 1, "recent_le_365": 0, "stale_gt_365": 1, "undated": 1, "n_stale": 1,
+                    "future_dated": 1}
+    assert rows[1] == {"as_of_date": "2029-12-31", "staleness_days": None, "is_stale": False,
+                       "is_future_dated": True}
+    # Rows dated on or before the reference date are annotated exactly as before.
+    assert rows[0] == {"date": "2026-05-01", "staleness_days": 31, "is_stale": False}
+    same_day = [{"date": "2026-06-01"}]
+    assert dr.annotate_recency_rows(same_day, ref, 365, future_bucket=True)["fresh_le_90"] == 1
+    assert same_day[0] == {"date": "2026-06-01", "staleness_days": 0, "is_stale": False}
+    assert dr.annotate_recency_rows(None, ref, 365, future_bucket=True)["future_dated"] == 0
+
+
 # --- R2-RES-9 gap threading -------------------------------------------------
 
 def test_parse_gaps_from_notes_lifts_gap_section_only():

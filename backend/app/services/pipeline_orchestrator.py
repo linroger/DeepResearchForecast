@@ -2305,6 +2305,9 @@ class DeerFlowResearchRunner:
             # effective watchdog budget (explicit timeout / .env / depth tier)
             # rather than only an operator-set .env value it may not match.
             env["DEERFLOW_RESEARCH_TIMEOUT"] = str(max(1, int(budget)))
+            # Quantitative-row provenance knobs (RESEARCH-4): Config decides, never ambient env.
+            env["RESEARCH_VERIFIED_FACTS"] = "true" if Config.RESEARCH_VERIFIED_FACTS else "false"
+            env["RESEARCH_QUANT_TYPING"] = "true" if Config.RESEARCH_QUANT_TYPING else "false"
         if isinstance(skill_sync_result, dict):
             # The child re-hashes the exact live directories before constructing
             # a research client.  This binds source/deployed manifest identities,
