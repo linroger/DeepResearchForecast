@@ -13896,6 +13896,27 @@ class PipelineOrchestrator:
                                         _rpath, _existing.rstrip() + "\n\n" + _appendix.rstrip() + "\n")
                 except Exception as _ste:  # noqa: BLE001 — 阶段遥测为观测增益，失败不影响管线终态
                     logger.debug(f"[{state.pipeline_id}] 阶段级遥测处理失败（忽略）: {_ste}")
+                # EVAL-15: 确定性分阶段记分卡侧车 <pipeline_dir>/stage_scorecard.json（纯投影、
+                # 绝不是门：不改 status/pipeline_health，不写报告目录）。独立 try/except——
+                # 任何失败只记日志，不得跳过下方的 LLMMeter.reset。旋钮关闭 = 无文件、无 options 键。
+                if getattr(Config, "STAGE_SCORECARD_ENABLED", True):
+                    _scorecard_summary = None
+                    try:
+                        from .stage_scorecard import summarize_checks, write_stage_scorecard
+                        _scorecard_summary = summarize_checks(
+                            write_stage_scorecard(state.pipeline_id, state=state.to_dict()))
+                    except Exception as _sce:  # noqa: BLE001 — 记分卡为观测增益，失败不影响管线终态
+                        logger.warning("[%s] 分阶段记分卡写入失败（忽略）: %s",
+                                       state.pipeline_id, _sce)
+                    # 上一 attempt 的摘要不得冒充本次结果：本次失败时移除（宁缺毋错）。
+                    if _scorecard_summary is not None:
+                        state.options["stage_scorecard_summary"] = _scorecard_summary
+                    else:
+                        state.options.pop("stage_scorecard_summary", None)
+                    try:
+                        PipelineManager.save(state)
+                    except Exception as _sse:  # noqa: BLE001
+                        logger.debug(f"[{state.pipeline_id}] 保存记分卡摘要失败（忽略）: {_sse}")
                 LLMMeter.reset(state.pipeline_id)
             except Exception as _te:
                 logger.debug(f"[{state.pipeline_id}] 写入 run_telemetry 失败（忽略）: {_te}")

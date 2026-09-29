@@ -229,3 +229,59 @@ def test_docdrift_strict_clean_when_documented(monkeypatch, tmp_path):
     ])
     assert _run_main(monkeypatch, ["--strict"], config=FAKE_CONFIG,
                     example=documented, tmp_path=tmp_path) == 0
+
+
+# --------------------------------------------------------------- EVAL-15 honesty pins
+HONESTY_CONFIG = FAKE_CONFIG + """
+    REPORT_PUBLISH_GATE = os.environ.get('REPORT_PUBLISH_GATE', 'True').strip().lower() == 'true'
+    REPORT_PUBLISH_GATE_MIN_COVERAGE = float(os.environ.get('REPORT_PUBLISH_GATE_MIN_COVERAGE', '0.75') or '0.75')
+"""
+
+
+def test_honesty_pins_flagged(monkeypatch, tmp_path, capsys):
+    import json
+
+    env = _write(tmp_path, ".env", [
+        "REPORT_PUBLISH_GATE_MIN_COVERAGE=0.05",   # relaxes the publish gate → honesty-critical
+        "REPORT_PUBLISH_GATE=true",                # matches default → not divergent
+        "ONTOLOGY_TEMPLATE=general_forecast",      # divergent, neither critical class
+    ])
+    rows = ed.find_divergent_pins(env, HONESTY_CONFIG, FAKE_EXAMPLE)
+    assert [r["var"] for r in rows] == ["REPORT_PUBLISH_GATE_MIN_COVERAGE", "ONTOLOGY_TEMPLATE"]
+    gate = rows[0]
+    assert gate["honesty_critical"] is True and gate["critical"] is False
+    assert gate["pinned"] == "0.05" and gate["current_default"] == "0.75"
+    assert rows[1]["honesty_critical"] is False
+
+    # Reported loudly by --pins, and --pins --strict exits 1 on it alone.
+    assert _run_main(monkeypatch, ["--pins"], env_file=env, config=HONESTY_CONFIG,
+                     tmp_path=tmp_path) == 0
+    out = capsys.readouterr().out
+    assert "honesty-critical" in out and "‼H" in out
+    assert "(0 performance-critical, 1 honesty-critical)" in out
+    assert _run_main(monkeypatch, ["--pins", "--strict"], env_file=env, config=HONESTY_CONFIG,
+                     tmp_path=tmp_path) == 1
+    capsys.readouterr()
+    assert _run_main(monkeypatch, ["--pins", "--json"], env_file=env, config=HONESTY_CONFIG,
+                     tmp_path=tmp_path) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["honesty_critical_count"] == 1 and payload["critical_count"] == 0
+
+    # Doc-drift mode is unchanged: documented honesty knobs exit 0 under --strict.
+    documented = "\n".join([
+        "REPORT_SECTION_CONCURRENCY=6", "OASIS_SEMAPHORE=24", "ONTOLOGY_TEMPLATE=social_opinion",
+        "REPORT_BILINGUAL=true", "REPORT_AGENT_SECTION_MAX_TOKENS=32768",
+        "LLM_API_KEY=", "DEMO_API_KEY=", "REPORT_PUBLISH_GATE=true",
+        "REPORT_PUBLISH_GATE_MIN_COVERAGE=0.75",
+    ])
+    assert _run_main(monkeypatch, ["--strict"], env_file=env, config=HONESTY_CONFIG,
+                     example=documented, tmp_path=tmp_path) == 0
+
+
+def test_honesty_critical_vars_have_real_config_defaults():
+    # Every honesty-critical knob has a code default in the real config.py, so a
+    # divergent pin is always judged against it (never silently skipped).
+    defaults = ed.config_defaults()
+    assert ed.HONESTY_CRITICAL_VARS <= set(defaults)
+    assert defaults["REPORT_PUBLISH_GATE_MIN_COVERAGE"] == "0.75"
+    assert not ed.HONESTY_CRITICAL_VARS & ed.PERF_CRITICAL_VARS
