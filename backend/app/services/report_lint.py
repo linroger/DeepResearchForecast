@@ -225,9 +225,15 @@ LEAKAGE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     # ZH
     ("sim_agent_zh", re.compile(
         r"模拟代理人|模拟推演|模拟世界|本次模拟|模拟中|模拟的")),
+    # 轮次/逐轮 are also real-world words (融资轮次 funding rounds, 谈判轮次): like
+    # the English round_n / across-rounds patterns, only a numbered round, "across
+    # rounds", or a sentence that ties rounds to the simulation is mechanics.
     ("sim_mechanics_zh", re.compile(
-        r"次动作|逐轮|轮次|峰值轮次|最活跃\s*Agent|派系图|派系聚类|因果图"
-        r"|上帝视角|采访实录|模拟量化")),
+        r"次动作|峰值轮次|最活跃\s*Agent|派系图|派系聚类|因果图"
+        r"|上帝视角|采访实录|模拟量化"
+        r"|第\s*\d+\s*轮次|轮次\s*\d+|跨轮次"
+        r"|(?:模拟|推演|仿真|智能体|Agent)[^。！？\n]{0,40}(?:轮次|逐轮)"
+        r"|(?:轮次|逐轮)[^。！？\n]{0,40}(?:模拟|推演|仿真|智能体|Agent)")),
     ("sim_inference_terms_zh", re.compile(
         r"(?:(?:模拟|推演|智能体)[^。！？\n]{0,60}(?:共识形成|揭示性偏好|行为信号)"
         r"|(?:共识形成|揭示性偏好|行为信号)[^。！？\n]{0,60}(?:模拟|推演|智能体))")),

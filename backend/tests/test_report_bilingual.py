@@ -1165,9 +1165,40 @@ def test_outdated_translation_updates_in_place_and_survives_a_failed_update(repo
     assert state["translation"]["translator_version"] == ReportAgent._TRANSLATOR_VERSION
 
 
-def test_date_aware_variant_without_a_version_stamp_is_not_outdated(reports_tmp):
+def _translate_outlook_partially(user: str) -> str:
+    """Leaves both body sentences in English, so the variant audit rejects it."""
+    return (
+        _translate_outlook(user)
+        .replace("基准情景为 42%，升级路径为 21%。",
+                 "The Outlook base case holds at 42% while the escalation path sits at 21%.")
+        .replace("次级细节权重为 15%。", "Secondary Outlook detail with 15% weighting.")
+    )
+
+
+def test_a_rejected_update_keeps_its_text_and_audit_for_diagnosis(reports_tmp):
+    rid = "report_rejected_update"
+    old_zh = _publish_old_variant(rid)
+    result = ReportManager.generate_translation_variant(
+        rid, "zh", llm_client=_TransLLM(translate=_translate_outlook_partially), force=True
+    )
+    assert result["available"] is True and result["updated"] is False
+    with open(ReportManager._get_report_translation_path(rid, "zh"), encoding="utf-8") as f:
+        assert f.read() == old_zh
+    assert ReportManager.is_publishable(rid, "zh")
+    base = ReportManager._get_report_translation_path(rid, "zh")[: -len(".md")]
+    with open(base + ".rejected.md", encoding="utf-8") as f:
+        assert "Secondary Outlook detail" in f.read()
+    rejected_audit = ReportManager._get_report_final_audit_path(rid, "zh")[: -len(".json")]
+    with open(rejected_audit + ".rejected.json", encoding="utf-8") as f:
+        assert json.load(f)["hard_passed"] is False
+
+
+def test_date_aware_variant_without_a_version_stamp_is_dated_by_its_facts(
+    reports_tmp, monkeypatch
+):
     """Variants audited by the date-aware engine before the stamp existed record
-    date facts in their number parity; they must not be offered as outdated."""
+    date facts in their number parity: they are the 2026-09-29.1 engine's, current
+    while that engine was, and outdated once the amount-aware engine replaced it."""
     rid = "report_version_inferred"
     _publish_old_variant(rid)
     audit_path = ReportManager._get_report_final_audit_path(rid, "zh")
@@ -1176,6 +1207,12 @@ def test_date_aware_variant_without_a_version_stamp_is_not_outdated(reports_tmp)
     audit["number_parity"] = {"passed": True, "source": {"date:2025-09": 1}, "variant": {"date:2025-09": 1}}
     with open(audit_path, "w", encoding="utf-8") as f:
         json.dump(audit, f)
+    state = ReportManager.translation_status(rid, "zh")
+    assert state["available"] is True
+    assert state["translation"]["translator_version"] == "2026-09-29.1"
+    assert state["outdated"] is True and state["can_update"] is True
+
+    monkeypatch.setattr(ReportAgent, "_TRANSLATOR_VERSION", "2026-09-29.1")
     state = ReportManager.translation_status(rid, "zh")
     assert state["available"] is True and state["outdated"] is False
 

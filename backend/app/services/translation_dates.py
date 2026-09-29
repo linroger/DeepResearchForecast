@@ -33,6 +33,8 @@ from __future__ import annotations
 import re
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
+from .translation_quantities import QUANTITY_TOKEN_RULE
+
 MONTH_NAMES: Tuple[str, ...] = (
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December",
@@ -271,12 +273,14 @@ def numeral_word_rule(target_code: Optional[str], text: str) -> str:
 def translation_prompt_rules(target_code: Optional[str], text: str) -> str:
     """Extra prompt rules for one translation request ("" when none apply).
 
-    Kept empty for inputs without dates or Chinese numerals so historical prompts
-    (and the fakes that fingerprint them) are unchanged.
+    Kept empty for inputs without dates, amounts or Chinese numerals so historical
+    prompts (and the fakes that fingerprint them) are unchanged.
     """
     rules = []
     if "⟦D" in (text or ""):
         rules.append(DATE_TOKEN_RULE)
+    if "⟦Q" in (text or ""):
+        rules.append(QUANTITY_TOKEN_RULE)
     numeral = numeral_word_rule(target_code, text)
     if numeral:
         rules.append(numeral)

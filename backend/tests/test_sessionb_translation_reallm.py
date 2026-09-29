@@ -42,8 +42,11 @@ from app.services.report_agent import ReportAgent, _REFS_HEADINGS  # noqa: E402
 # it tries to add a stray decimal (which the guard must neutralise).
 # --------------------------------------------------------------------------------------
 def _cjk_word(word: str) -> str:
+    # U+4E07 is 万, a Chinese magnitude: "160 hours" must not become "160 万…", which
+    # reads as 1.6 million.  Real translations never put a magnitude there.
     glyphs = "".join(
-        chr(0x4E00 + (ord(ch.lower()) - 97) % 40) for ch in word[:3] if ch.isalpha()
+        (chr(0x4E00 + (ord(ch.lower()) - 97) % 40) if ch.lower() != "h" else "丨")
+        for ch in word[:3] if ch.isalpha()
     )
     return glyphs or "词"
 

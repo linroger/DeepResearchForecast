@@ -30,6 +30,7 @@ from ..utils.logger import get_logger
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
 from . import translation_dates as _tdates
+from . import translation_quantities as _tq
 from .zep_tools import (
     ZepToolsService, 
     SearchResult, 
@@ -5535,9 +5536,10 @@ class ReportAgent:
         r"(?:\.\d+)?(?:\s*%)?",
         re.IGNORECASE | re.DOTALL,
     )
-    # Same token grammar plus whole date expressions (translation_dates), placed
-    # after comments/code/link targets/URLs (their bytes stay untouched) and before
-    # citations/numbers (so a date's numerals are captured by the date, not loose).
+    # Same token grammar plus whole date expressions (translation_dates) and amounts
+    # with a magnitude word (translation_quantities), placed after comments/code/link
+    # targets/URLs (their bytes stay untouched) and before citations/numbers (so a
+    # date's or an amount's numerals are captured whole, not loose).
     # Fused letter-digit identifiers (FY2030, Q3, H1, H100, 5G, 10k, 1e) are kept
     # verbatim too: translated, they get restructured ("FY2030" → "2030财年") and a
     # numeral the source never had as a number trips the integrity guards.
@@ -5553,6 +5555,7 @@ class ReportAgent:
         r"|(?<=\]\()[^)\s]+(?=\))"
         r"|https?://[^\s<>()]+"
         r"|" + _tdates.DATE_PATTERN
+        + r"|" + _tq.QUANTITY_PATTERN
         + r"|[\[【]\s*S\d+(?:-[A-Za-z])?\s*[\]】]"
         r"|" + _TRANSLATION_ALNUM_IDENTIFIER
         + r"|(?<![A-Za-z0-9_])[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)"
@@ -5595,7 +5598,10 @@ class ReportAgent:
         as one ``⟦D…⟧`` token whose restored bytes are the date written in the
         target language ("December 2024" → "2024年12月").  Without it a faithful
         Chinese rendering adds the month numeral and every numeric-integrity
-        guard rejects the sentence.  ``None`` keeps the historical grammar.
+        guard rejects the sentence.  Amounts with a magnitude word become one
+        ``⟦Q…⟧`` token the same way ("$3.7 billion" → "37亿美元"): with only the
+        numeral frozen the model wrote "3.7亿美元", ten times too small.  ``None``
+        keeps the historical grammar.
         """
         import base64
 
@@ -5627,8 +5633,25 @@ class ReportAgent:
             protected = cls._TRANSLATION_INLINE_PROTECTED_RE.sub(_inline, protected)
             return protected, mapping
 
+        def _quantity(match: "re.Match") -> str:
+            raw = match.group(0)
+            quantity = _tq.interpret_quantity_match(match)
+            if quantity is None:
+                # Not an amount after all ("2025 万科" is a year before a name):
+                # protect its numerals as plain numbers.
+                return cls._TRANSLATION_INLINE_PROTECTED_RE.sub(_inline, raw)
+            rendered = (
+                raw if quantity.lang == date_target
+                else _tq.render_quantity(quantity, date_target)
+            )
+            placeholder = f"⟦Q{cls._translation_placeholder_suffix(len(mapping))}⟧"
+            mapping.append((placeholder, rendered))
+            return placeholder
+
         def _inline_with_dates(match: "re.Match") -> str:
             raw = match.group(0)
+            if match.group("qty") is not None:
+                return _quantity(match)
             if match.group("date") is None:
                 return _token(raw)
             expression = _tdates.interpret_date_match(match)
@@ -5721,6 +5744,8 @@ class ReportAgent:
         for placeholder, raw in mapping:
             if placeholder.startswith("⟦D"):
                 restored = _tdates.strip_redundant_date_unit(restored, placeholder, raw)
+            elif placeholder.startswith("⟦Q"):
+                restored = _tq.strip_redundant_quantity_unit(restored, placeholder, raw)
         for placeholder, raw in mapping:
             count = restored.count(placeholder)
             if count:
@@ -6217,16 +6242,21 @@ class ReportAgent:
 
         Identical to ``_translation_number_multiset`` except that each recognized
         date counts as ONE canonical fact ("December 2024" and "2024年12月" are both
-        ``date:2024-12``) and a bare month adds nothing.  English spells months out
-        while Chinese writes them as numerals, so a loose-numeral comparison can
-        never accept a faithful date translation.  Same-language checks (PDF text
+        ``date:2024-12``) and a bare month adds nothing, and each amount with a
+        magnitude word counts by its value ("$3.7 billion" and "37亿美元" are both
+        ``qty:3700000000``; "3.7亿美元" is not).  English spells months out and
+        scales by thousands while Chinese writes months as numerals and scales by
+        ten-thousands, so a loose-numeral comparison can neither accept a faithful
+        translation nor catch a wrong magnitude.  Same-language checks (PDF text
         extraction) keep the plain numeral multiset.
         """
         from collections import Counter
 
         masked, facts = _tdates.mask_dates(md or "")
+        masked, amounts = _tq.mask_quantities(masked)
         counts: "Counter[str]" = Counter(cls._translation_number_multiset(masked))
         counts.update(facts)
+        counts.update(amounts)
         return dict(counts)
 
     @classmethod
@@ -6235,8 +6265,13 @@ class ReportAgent:
         from collections import Counter
 
         masked, facts = _tdates.mask_dates(md or "")
+        masked, amounts = _tq.mask_quantities(masked)
         counts: "Counter[str]" = Counter(cls._folded_number_multiset(masked))
         counts.update(facts)
+        # A sub-million amount's fact is its grouped numeral; fold it like one.
+        counts.update(
+            fact if fact.startswith("qty:") else fact.replace(",", "") for fact in amounts
+        )
         return dict(counts)
 
     @classmethod
@@ -6273,6 +6308,36 @@ class ReportAgent:
         reference_text = "\n".join(refs)
         heading = refs[0].split("\n", 1)[0].strip() if refs else ""
         return body, reference_text, heading
+
+    @classmethod
+    def _reattach_translation_references(cls, document: str, body: str, refs: str) -> str:
+        """Rebuild ``document`` from its (linted) body with References where they were.
+
+        ``body``/``refs`` are the ``_translation_reference_parts`` of ``document``.  A
+        forecast report ends with References, but a research dossier carries sections
+        after it (the Visual Annex); appending References at the end would reorder
+        the headings and fail the variant's heading-sequence parity.  When the sections
+        that followed References can no longer be located in ``body`` the block is
+        appended, and the audit decides.
+        """
+        rebuilt_body = (body or "").rstrip()
+        if not (refs or "").strip():
+            return rebuilt_body + "\n"
+        chunks = cls._split_markdown_h2_sections(document or "")
+        positions = [
+            i for i, chunk in enumerate(chunks)
+            if chunk.split("\n", 1)[0].strip() in _REFS_HEADINGS
+        ]
+        trailing = len(chunks) - 1 - positions[-1] if positions else 0
+        body_chunks = cls._split_markdown_h2_sections(rebuilt_body)
+        if 0 < trailing < len(body_chunks):
+            split_at = len(body_chunks) - trailing
+            expected = chunks[positions[-1] + 1].split("\n", 1)[0].strip()
+            if body_chunks[split_at].split("\n", 1)[0].strip() == expected:
+                head = "\n".join(body_chunks[:split_at]).rstrip()
+                tail = "\n".join(body_chunks[split_at:]).rstrip()
+                return head + "\n\n" + refs.rstrip() + "\n\n" + tail + "\n"
+        return rebuilt_body + "\n\n" + refs.rstrip() + "\n"
 
     @staticmethod
     def _localize_translation_references(chunk_md: str, target_lang: str) -> str:
@@ -6796,7 +6861,9 @@ class ReportAgent:
     # an older engine are reported as outdated and can be regenerated in place.
     # 2026-09-29.1: dates as atomic tokens + date-aware parity (older variants dropped
     # months: "September 2025" → "2025年"), whole-line residual repair.
-    _TRANSLATOR_VERSION = "2026-09-29.1"
+    # 2026-09-29.2: amounts as atomic tokens + value-aware parity (older Chinese
+    # variants wrote "$3.7 billion" as "3.7亿美元", ten times too small).
+    _TRANSLATOR_VERSION = "2026-09-29.2"
 
     # Last-resort prompts for a line that survived the segment rounds; two wordings
     # so the second attempt is a genuinely different request.
@@ -7167,10 +7234,7 @@ class ReportAgent:
                 # Lint emptied the body (degenerate) — keep the pre-lint bytes and let
                 # the audit fail closed rather than publish an empty variant.
                 return current
-            rebuilt = linted_body.rstrip()
-            if refs.strip():
-                rebuilt += "\n\n" + refs.rstrip()
-            rebuilt = rebuilt.rstrip() + "\n"
+            rebuilt = self._reattach_translation_references(current, linted_body, refs)
             # Re-derive the exact body view the audit will lint and check its fixed point.
             audit_body, _audit_refs, _audit_heading = self._translation_reference_parts(rebuilt)
             _relinted, rep2 = _rl.lint_report(audit_body, lint_lang, mode="final", spine=spine)
@@ -7178,6 +7242,174 @@ class ReportAgent:
             if not rep2.get("changed"):
                 break
         return current
+
+    def _translate_chunks_with_integrity(
+        self,
+        chunks: List[str],
+        tgt_code: str,
+        tgt_name: str,
+        *,
+        label: str,
+        progress: Optional[Callable[[int, str], None]] = None,
+    ) -> Tuple[List[str], List[Dict[str, Any]]]:
+        """Translate H2 sections, then repair every section that fails its integrity check.
+
+        Shared by the forecast-report and research-dossier translators.  Sections are
+        translated concurrently (REPORT_TRANSLATION_CONCURRENCY); the References block
+        is localized deterministically without an LLM call.  A section whose headings,
+        tables, facts, citations or fences drift, or that keeps source-language prose,
+        is re-translated once with its exact failure (and citation inventory) in the
+        prompt; only a strictly better candidate replaces the current one.  The final
+        read-only audit stays the publication authority.
+
+        Returns the translated sections (same order as ``chunks``) and, for sections
+        whose citation tokens still drift, the per-tag source/target counts.
+        """
+        try:
+            conc = max(1, int(getattr(Config, "REPORT_TRANSLATION_CONCURRENCY", 4) or 4))
+        except (TypeError, ValueError):
+            conc = 4
+
+        def _report(percent: int, message: str) -> None:
+            if progress is not None:
+                progress(percent, message)
+
+        def _run_all(items: List[Tuple[int, str]], work: Callable, on_done: Callable) -> None:
+            if conc > 1 and len(items) > 1:
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                parent_context = contextvars.copy_context()
+                with ThreadPoolExecutor(max_workers=min(conc, len(items))) as ex:
+                    futures = [
+                        ex.submit(parent_context.copy().run, work, item) for item in items
+                    ]
+                    for done, future in enumerate(as_completed(futures), 1):
+                        on_done(done, future.result())
+            else:
+                for done, item in enumerate(items, 1):
+                    on_done(done, work(item))
+
+        def _is_references(chunk: str) -> bool:
+            return chunk.split("\n", 1)[0].strip() in _REFS_HEADINGS
+
+        translated: List[Optional[str]] = [None] * len(chunks)
+
+        def _first_pass(pair: Tuple[int, str]) -> Tuple[int, str]:
+            i, ch = pair
+            if _is_references(ch):
+                return i, self._localize_translation_references(ch, tgt_code)
+            return i, self._translate_section(ch, tgt_name)
+
+        def _translated(done: int, outcome: Tuple[int, str]) -> None:
+            i, text = outcome
+            translated[i] = text
+            _report(
+                5 + int(55 * done / len(chunks)),
+                f"translated {done}/{len(chunks)} report sections",
+            )
+
+        _run_all(list(enumerate(chunks)), _first_pass, _translated)
+
+        def _retry_rules(ch: str, quality: Dict[str, Any], citation_retry: bool) -> str:
+            marker_inventory = self._translation_marker_multiset(ch)
+            inventory = "，".join(
+                f"[{tag}] x{count}" for tag, count in sorted(
+                    marker_inventory.items(), key=lambda item: (len(item[0]), item[0])
+                )
+            ) or "(none)"
+            residual = " | ".join(quality["residual"][:12]) or "(none)"
+            language_rule = (
+                "Translate every natural-language phrase, including prose in table cells, "
+                "blockquotes, lists, scenario statements, and forecast statements. Leave "
+                "only proper names and product/publication names in the source language."
+            )
+            return (
+                "6. INTEGRITY RETRY — the prior candidate failed: "
+                f"{', '.join(quality['hard']) or 'residual source-language prose'}. "
+                f"{language_rule} "
+                f"{('CITATION TOKEN INVENTORY: ' + inventory + '. ') if citation_retry else ''}"
+                f"Residual examples: {residual}. Preserve every numeric and citation token "
+                "byte-identical; do not add, drop, merge, or renumber any token."
+            )
+
+        def _integrity_pass(pair: Tuple[int, str]) -> Tuple[int, str, Dict[str, Any]]:
+            i, ch = pair
+            cur = translated[i] if translated[i] is not None else ch
+            quality = self._translation_chunk_quality(ch, cur, tgt_code)
+            citation_retry = bool(
+                "citation tokens" in quality["hard"]
+                and getattr(Config, "REPORT_TRANSLATION_CITATION_PARITY", True)
+            )
+            non_citation_hard = [
+                item for item in quality["hard"] if item != "citation tokens"
+            ]
+            if non_citation_hard or quality["residual"] or citation_retry:
+                try:
+                    retry = self._translate_section(
+                        ch, tgt_name, extra_rules=_retry_rules(ch, quality, citation_retry)
+                    )
+                except Exception as exc:  # noqa: BLE001 — one bounded retry only
+                    logger.warning(f"双语报告：完整性重译失败，保留首译: {exc}")
+                    retry = ""
+                if retry:
+                    retry_quality = self._translation_chunk_quality(ch, retry, tgt_code)
+                    if (len(retry_quality["hard"]), len(retry_quality["residual"])) < (
+                        len(quality["hard"]),
+                        len(quality["residual"]),
+                    ):
+                        cur = retry
+                        quality = retry_quality
+            return i, cur, quality
+
+        outcomes: Dict[int, Tuple[str, Dict[str, Any]]] = {}
+
+        def _audited(done: int, outcome: Tuple[int, str, Dict[str, Any]]) -> None:
+            index, cur, quality = outcome
+            outcomes[index] = (cur, quality)
+            _report(
+                65 + int(25 * done / len(chunks)),
+                f"audited {done}/{len(chunks)} translated sections",
+            )
+
+        # The per-section retries are independent, so they run with the same
+        # concurrency as the first pass (sequential retries made large reports
+        # spend as long here as on the translation itself).
+        _run_all(
+            [(i, ch) for i, ch in enumerate(chunks) if not _is_references(ch)],
+            _integrity_pass,
+            _audited,
+        )
+
+        citation_drift: List[Dict[str, Any]] = []
+        for i, ch in enumerate(chunks):
+            if i not in outcomes:
+                continue
+            cur, quality = outcomes[i]
+            translated[i] = cur
+            if "citation tokens" in quality["hard"]:
+                src_ms = self._translation_marker_multiset(ch)
+                dst_ms = self._translation_marker_multiset(cur)
+                diff = {
+                    tag: {"src": src_ms.get(tag, 0), "dst": dst_ms.get(tag, 0)}
+                    for tag in set(src_ms) | set(dst_ms)
+                    if src_ms.get(tag, 0) != dst_ms.get(tag, 0)
+                }
+                citation_drift.append({"chunk": i, "diff": diff})
+            if quality["hard"] or quality["residual"]:
+                logger.warning(
+                    "双语报告：章节完整性重试后仍有问题 report=%s chunk=%s hard=%s residual=%s",
+                    label,
+                    i,
+                    quality["hard"],
+                    len(quality["residual"]),
+                )
+        if citation_drift:
+            logger.warning(
+                f"双语报告引用对账告警: {label} {len(citation_drift)} 个章节的"
+                f"引用记号多重集在重译后仍漂移: "
+                f"{[d['chunk'] for d in citation_drift][:8]}")
+        return [
+            text if text is not None else chunks[i] for i, text in enumerate(translated)
+        ], citation_drift
 
     def _generate_bilingual_report(
         self,
@@ -7301,164 +7533,12 @@ class ReportAgent:
         chunks = self._split_markdown_h2_sections(md)
         if not chunks:
             return
-        try:
-            conc = max(1, int(getattr(Config, "REPORT_TRANSLATION_CONCURRENCY", 4) or 4))
-        except (TypeError, ValueError):
-            conc = 4
-
-        translated: List[Optional[str]] = [None] * len(chunks)
-
-        def _work(pair: Tuple[int, str]) -> Tuple[int, str]:
-            i, ch = pair
-            first = ch.split("\n", 1)[0].strip()
-            if first in _REFS_HEADINGS:
-                return i, self._localize_translation_references(ch, str(tgt_code))
-            return i, self._translate_section(ch, tgt_name)
-
-        if conc > 1 and len(chunks) > 1:
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            parent_context = contextvars.copy_context()
-            with ThreadPoolExecutor(max_workers=min(conc, len(chunks))) as ex:
-                futures = [
-                    ex.submit(parent_context.copy().run, _work, pair)
-                    for pair in enumerate(chunks)
-                ]
-                completed = 0
-                for future in as_completed(futures):
-                    i, tr = future.result()
-                    translated[i] = tr
-                    completed += 1
-                    _progress(
-                        5 + int(55 * completed / len(chunks)),
-                        f"translated {completed}/{len(chunks)} report sections",
-                    )
-        else:
-            for i, ch in enumerate(chunks):
-                _, translated[i] = _work((i, ch))
-                _progress(
-                    5 + int(55 * (i + 1) / len(chunks)),
-                    f"translated {i + 1}/{len(chunks)} report sections",
-                )
-
-        # 逐 H2 块做一次有界完整性修复。结构/数字/引用漂移，或长段源语言残留，都会触发
-        # 同一轮重译；只有严格改进的候选才会替换首译。References 已在上方确定性处理，不花
-        # LLM 调用。最终整篇只读审计仍是发布权威。
-        citation_drift: List[Dict[str, Any]] = []
-
-        def _integrity_pass(pair: Tuple[int, str]) -> Tuple[int, str, Dict[str, Any]]:
-            i, ch = pair
-            cur = translated[i] if translated[i] is not None else ch
-            quality = self._translation_chunk_quality(ch, cur, str(tgt_code))
-            citation_retry = bool(
-                "citation tokens" in quality["hard"]
-                and getattr(Config, "REPORT_TRANSLATION_CITATION_PARITY", True)
-            )
-            non_citation_hard = [
-                item for item in quality["hard"] if item != "citation tokens"
-            ]
-            if non_citation_hard or quality["residual"] or citation_retry:
-                marker_inventory = self._translation_marker_multiset(ch)
-                inventory = "，".join(
-                    f"[{tag}] x{count}" for tag, count in sorted(
-                        marker_inventory.items(), key=lambda item: (len(item[0]), item[0])
-                    )
-                ) or "(none)"
-                residual = " | ".join(quality["residual"][:12]) or "(none)"
-                language_rule = (
-                    "Translate every natural-language phrase, including prose in table cells, "
-                    "blockquotes, lists, scenario statements, and forecast statements. Leave "
-                    "only proper names and product/publication names in the source language."
-                )
-                extra = (
-                    "6. INTEGRITY RETRY — the prior candidate failed: "
-                    f"{', '.join(quality['hard']) or 'residual source-language prose'}. "
-                    f"{language_rule} "
-                    f"{('CITATION TOKEN INVENTORY: ' + inventory + '. ') if citation_retry else ''}"
-                    f"Residual examples: {residual}. Preserve every numeric and citation token "
-                    "byte-identical; do not add, drop, merge, or renumber any token."
-                )
-                try:
-                    retry = self._translate_section(ch, tgt_name, extra_rules=extra)
-                except Exception as exc:  # noqa: BLE001 — one bounded retry only
-                    logger.warning(f"双语报告：完整性重译失败，保留首译: {exc}")
-                    retry = ""
-                if retry:
-                    retry_quality = self._translation_chunk_quality(
-                        ch, retry, str(tgt_code)
-                    )
-                    current_rank = (len(quality["hard"]), len(quality["residual"]))
-                    retry_rank = (
-                        len(retry_quality["hard"]),
-                        len(retry_quality["residual"]),
-                    )
-                    if retry_rank < current_rank:
-                        cur = retry
-                        quality = retry_quality
-            return i, cur, quality
-
-        # The per-section retries are independent, so they run with the same
-        # concurrency as the first pass (sequential retries made large reports
-        # spend as long here as on the translation itself).
-        audit_pairs = [
-            (i, ch) for i, ch in enumerate(chunks)
-            if ch.split("\n", 1)[0].strip() not in _REFS_HEADINGS
-        ]
-        outcomes: Dict[int, Tuple[str, Dict[str, Any]]] = {}
-
-        def _record(done: int, outcome: Tuple[int, str, Dict[str, Any]]) -> None:
-            index, cur, quality = outcome
-            outcomes[index] = (cur, quality)
-            _progress(
-                65 + int(25 * done / len(chunks)),
-                f"audited {done}/{len(chunks)} translated sections",
-            )
-
-        if conc > 1 and len(audit_pairs) > 1:
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            audit_context = contextvars.copy_context()
-            with ThreadPoolExecutor(max_workers=min(conc, len(audit_pairs))) as ex:
-                audit_futures = [
-                    ex.submit(audit_context.copy().run, _integrity_pass, pair)
-                    for pair in audit_pairs
-                ]
-                for done, future in enumerate(as_completed(audit_futures), 1):
-                    _record(done, future.result())
-        else:
-            for done, pair in enumerate(audit_pairs, 1):
-                _record(done, _integrity_pass(pair))
-
-        for i, ch in enumerate(chunks):
-            if i not in outcomes:
-                continue
-            cur, quality = outcomes[i]
-            translated[i] = cur
-            if "citation tokens" in quality["hard"]:
-                src_ms = self._translation_marker_multiset(ch)
-                dst_ms = self._translation_marker_multiset(cur)
-                diff = {
-                    tag: {"src": src_ms.get(tag, 0), "dst": dst_ms.get(tag, 0)}
-                    for tag in set(src_ms) | set(dst_ms)
-                    if src_ms.get(tag, 0) != dst_ms.get(tag, 0)
-                }
-                citation_drift.append({"chunk": i, "diff": diff})
-            if quality["hard"] or quality["residual"]:
-                logger.warning(
-                    "双语报告：章节完整性重试后仍有问题 report=%s chunk=%s hard=%s residual=%s",
-                    report_id,
-                    i,
-                    quality["hard"],
-                    len(quality["residual"]),
-                )
-        if citation_drift:
-            logger.warning(
-                f"双语报告引用对账告警: {report_id} {len(citation_drift)} 个章节的"
-                f"引用记号多重集在重译后仍漂移: "
-                f"{[d['chunk'] for d in citation_drift][:8]}")
+        translated, citation_drift = self._translate_chunks_with_integrity(
+            chunks, str(tgt_code), tgt_name, label=report_id, progress=_progress,
+        )
 
         # 逐章 strip 后以空行拼接，保证 H2 章节间有标准 markdown 空行分隔（各段已含自身标题）。
-        translated_md = "\n\n".join(
-            (t if t is not None else chunks[i]) for i, t in enumerate(translated)
-        ).strip() + "\n"
+        translated_md = "\n\n".join(translated).strip() + "\n"
         # Chart images keep the builder's English title as alt text, which pandoc
         # prints as the figure caption; a Chinese variant gets the Chinese titles.
         from .report_visualizer import localize_chart_alt_text
@@ -7563,6 +7643,12 @@ class ReportAgent:
             else:
                 _remove_stale_variant()
                 write_json_atomic(audit_path, audit)
+            # The rejected text is kept for diagnosis only: nothing serves, exports or
+            # audits full_report.<lang>.rejected.md.
+            try:
+                write_text_atomic(out_path[: -len(".md")] + ".rejected.md", translated_md)
+            except OSError as exc:
+                logger.warning("双语报告：未通过审计的译文留存失败（忽略）: %s", exc)
             ReportManager._set_translation_runtime_status(
                 report_id,
                 str(tgt_code),
@@ -7698,37 +7784,12 @@ class ReportAgent:
         if not chunks:
             return {"available": False, "reason": "empty document"}
 
-        translated: List[str] = []
-        for chunk in chunks:
-            first = chunk.split("\n", 1)[0].strip()
-            if first in _REFS_HEADINGS:
-                translated.append(
-                    self._localize_translation_references(chunk, str(tgt_code))
-                )
-            else:
-                translated.append(self._translate_section(chunk, tgt_name))
-
-        # One bounded, structure-preserving integrity retry per drifting/residual chunk.
-        for i, chunk in enumerate(chunks):
-            if chunk.split("\n", 1)[0].strip() in _REFS_HEADINGS:
-                continue
-            quality = self._translation_chunk_quality(chunk, translated[i], str(tgt_code))
-            if quality["hard"] or quality["residual"]:
-                try:
-                    retry = self._translate_section(chunk, tgt_name)
-                except Exception as exc:  # noqa: BLE001 — one bounded retry only
-                    logger.warning("研究报告翻译：整章重译失败，保留首译: %s", exc)
-                    retry = ""
-                if retry:
-                    retry_quality = self._translation_chunk_quality(
-                        chunk, retry, str(tgt_code)
-                    )
-                    if (len(retry_quality["hard"]), len(retry_quality["residual"])) < (
-                        len(quality["hard"]),
-                        len(quality["residual"]),
-                    ):
-                        translated[i] = retry
-
+        # Same engine as the forecast report: concurrent sections plus targeted
+        # integrity retries (a dossier used to get one plain sequential retry, so a
+        # dropped sentence in one dense section failed the whole translation).
+        translated, _citation_drift = self._translate_chunks_with_integrity(
+            chunks, str(tgt_code), tgt_name, label=label,
+        )
         translated_md = "\n\n".join(translated).strip() + "\n"
 
         def _collapse(text: str) -> str:
