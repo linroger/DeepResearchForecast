@@ -20,6 +20,8 @@ INTENDED WORKFLOW (the whole point — read this before using):
   1. For each golden question, build a research brief and run the pipeline with an
      AS-OF constraint at/near the question's ``as_of_date`` (the knowledge cutoff a
      fair forecaster should be scored at — do NOT let it peek past the outcome).
+     As-of runs must set PREDICTION_MARKETS_ENABLED=false (or use hindcast market
+     admission once available): live Polymarket odds leak the outcome.
   2. Set each produced binary forecast's ``id`` to the golden question's ``id``
      (matching is by id), or curate the golden ``id``s to match your forecast ids.
   3. Score the pipeline's ``forecast.json`` against the golden set:

@@ -26,6 +26,7 @@ import re
 import sys
 import time
 import types
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -869,6 +870,8 @@ def test_prediction_market_section_append_is_idempotent(tmp_path, monkeypatch):
     monkeypatch.setattr(dr, "_PM_TRANSPORT_UNAVAILABLE", False)
     monkeypatch.setattr(dr, "_pm_resolve_queries", lambda *_a, **_k: [])
     monkeypatch.setattr(dr, "score_market_relevance", lambda *_a, **_k: {})
+    # TIME-3: pin the endDate clock to the capture day so the 2026-12-31 end never ages out.
+    monkeypatch.setattr(dr, "_pm_now", lambda: datetime(2026, 7, 11, tzinfo=timezone.utc))
     monkeypatch.setenv("PREDICTION_MARKETS_ENABLED", "true")
     monkeypatch.setenv("PREDICTION_MARKETS_PRICE_HISTORY", "false")
     report_path = tmp_path / dr.REPORT_FILENAME

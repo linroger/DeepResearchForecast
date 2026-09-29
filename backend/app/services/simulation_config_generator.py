@@ -1357,6 +1357,8 @@ class SimulationConfigGenerator:
 
         开关关 / 无 simulation_id / 无对应管线 / 文件缺失 / 解析失败 → []（degrade-safe，
         world_brief 与今日逐字节一致）。
+        TIME-3（PREDICTION_MARKETS_END_DATE_GATE，默认开）：截止日已过（market_clock_now()）或
+        已盖 window_ended 章的市场不作为模拟先验（其近定盘价会被当成开放信念），剔除数记日志。
         """
         if not self._market_priors_enabled() or not simulation_id:
             return []
@@ -1375,7 +1377,13 @@ class SimulationConfigGenerator:
                     with open(path, "r", encoding="utf-8") as f:
                         payload = json.load(f)
                     markets = payload.get("markets") if isinstance(payload, dict) else payload
-                    return [m for m in (markets or []) if isinstance(m, dict)]
+                    from ..utils.prediction_markets import drop_window_ended_rows
+                    rows, ended = drop_window_ended_rows(
+                        [m for m in (markets or []) if isinstance(m, dict)])
+                    if ended:
+                        logger.info(f"市场先验：剔除 {ended} 个已过截止日的市场"
+                                    "（PREDICTION_MARKETS_END_DATE_GATE）")
+                    return rows
                 break  # 找到对应管线即停（无论有无市场文件）
         except Exception as e:  # noqa: BLE001 — 加载失败 → 空，绝不阻断配置生成
             logger.debug(f"读取 handoff prediction_markets.json 失败（降级跳过）: {e}")

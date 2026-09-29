@@ -23,10 +23,12 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import random
 import re
 import time
-from typing import Any, Dict, List, Optional
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -141,6 +143,138 @@ def _fresh_yes_price(raw: Any) -> Optional[float]:
     if prob is None or not (0.0 < prob < 1.0):
         return None
     return prob
+
+
+# ------------------------------------------------------------ endDate hygiene
+# TIME-3: a market whose endDate has passed can stay open (closed=false) at a near-settled
+# price such as 0.03 while it awaits UMA resolution, and so passes every closed / 0-1 gate.
+# Its price still informs evidence, but it must never anchor a binary forecast or seed SIM
+# priors. Every comparison takes an injected ``now`` (market_clock_now() by default) so the
+# checks are replayable and tests never depend on the wall clock.
+_END_DATE_GRACE_MAX_HOURS = 168.0
+_ISO_DATE_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
+_DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def market_clock_now() -> datetime:
+    """Current UTC instant used for every endDate comparison (the single test monkeypatch point)."""
+    return datetime.now(timezone.utc)
+
+
+def _as_utc(moment: datetime) -> datetime:
+    """Aware UTC view of ``moment``; a naive datetime is read as UTC."""
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc)
+
+
+def parse_market_end(value: Any) -> Optional[datetime]:
+    """Parse a Polymarket endDate into an aware UTC datetime; anything unusable → None.
+
+    This is the program's only endDate parser. Strings only (extended ``YYYY-MM-DD`` prefix):
+      * a trailing ``Z`` means UTC; offsets and fractional seconds are accepted;
+      * a date-only ``YYYY-MM-DD`` means the end of that UTC day (23:59:59.999999);
+      * a naive timestamp is read as UTC; an aware one is converted to UTC.
+    Never raises (bad calendar values, overflow and non-strings all return None).
+    """
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not _ISO_DATE_PREFIX_RE.match(text):
+        return None
+    try:
+        if _DATE_ONLY_RE.match(text):
+            day = date.fromisoformat(text)
+            return datetime(day.year, day.month, day.day, 23, 59, 59, 999999,
+                            tzinfo=timezone.utc)
+        if text[-1] in "Zz":
+            text = text[:-1] + "+00:00"
+        return _as_utc(datetime.fromisoformat(text))
+    except (ValueError, OverflowError):
+        return None
+
+
+def _clamp_grace_hours(value: Any) -> float:
+    """Grace hours as a finite float in [0, 168]; anything unusable → 0."""
+    hours = _coerce_float(value)
+    if hours is None or not math.isfinite(hours):
+        return 0.0
+    return max(0.0, min(_END_DATE_GRACE_MAX_HOURS, hours))
+
+
+def _row_market_end(row: Any) -> Optional[datetime]:
+    """Parsed end of a normalized market row (``end_date``, then raw ``endDate``)."""
+    if not isinstance(row, dict):
+        return None
+    return parse_market_end(row.get("end_date") or row.get("endDate"))
+
+
+def market_window_ended(row: Any, *, now: datetime, grace_hours: float = 0.0) -> bool:
+    """True iff the row's end date plus the grace period lies before ``now``.
+
+    Missing or unparseable end dates are tolerated (False): the gate only removes markets
+    it can prove are past their resolution window. Never raises."""
+    end = _row_market_end(row)
+    if end is None or not isinstance(now, datetime):
+        return False
+    try:
+        return end + timedelta(hours=_clamp_grace_hours(grace_hours)) < _as_utc(now)
+    except OverflowError:
+        return False
+
+
+def end_date_gate_settings() -> Tuple[bool, float]:
+    """(PREDICTION_MARKETS_END_DATE_GATE, grace hours clamped to [0, 168]) from Config."""
+    return (bool(_cfg("PREDICTION_MARKETS_END_DATE_GATE", True)),
+            _clamp_grace_hours(_cfg("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", 0.0)))
+
+
+def stamp_window_ended(rows: Any, *, now: datetime,
+                       grace_hours: float = 0.0) -> Tuple[List[Dict[str, Any]], int]:
+    """Shallow-copy the dict rows; rows whose window ended gain ``window_ended=True`` and
+    ``window_ended_at`` (the parsed end, ISO UTC). Rows are never dropped. Returns the
+    copies and how many were stamped."""
+    out: List[Dict[str, Any]] = []
+    stamped = 0
+    for m in rows or []:
+        if not isinstance(m, dict):
+            continue
+        m2 = dict(m)
+        end = _row_market_end(m2)
+        if end is not None and market_window_ended(m2, now=now, grace_hours=grace_hours):
+            m2["window_ended"] = True
+            m2["window_ended_at"] = end.isoformat()
+            stamped += 1
+        out.append(m2)
+    return out, stamped
+
+
+def exclude_window_ended(rows: Any, *, now: datetime,
+                         grace_hours: float = 0.0) -> Tuple[List[Any], List[Dict[str, Any]]]:
+    """Split rows into (eligible, excluded) for anchoring or SIM priors: a row is excluded
+    when its window ended at ``now`` or it already carries a ``window_ended`` stamp (e.g.
+    from the research snapshot). Both lists keep the input objects and their order."""
+    kept: List[Any] = []
+    excluded: List[Dict[str, Any]] = []
+    for m in rows or []:
+        if isinstance(m, dict) and (m.get("window_ended") is True
+                                    or market_window_ended(m, now=now,
+                                                           grace_hours=grace_hours)):
+            excluded.append(m)
+            continue
+        kept.append(m)
+    return kept, excluded
+
+
+def drop_window_ended_rows(rows: Any) -> Tuple[List[Any], int]:
+    """SIM-prior view of a market snapshot: under PREDICTION_MARKETS_END_DATE_GATE drop rows
+    whose window ended at market_clock_now() (or already stamped) and return how many were
+    dropped. Gate off → the rows unchanged and 0, so priors stay byte-identical."""
+    gate, grace = end_date_gate_settings()
+    if not gate:
+        return list(rows or []), 0
+    kept, excluded = exclude_window_ended(rows, now=market_clock_now(), grace_hours=grace)
+    return kept, len(excluded)
 
 
 def _parse_resolution(raw: Any) -> Optional[Dict[str, Any]]:
@@ -577,15 +711,35 @@ def _requote_move(m: Dict[str, Any]) -> Optional[str]:
     return f"{r * 100:.0f}%→{c * 100:.0f}%"
 
 
+def _window_ended_label(m: Dict[str, Any], zh: bool) -> str:
+    """TIME-3: suffix for a row stamped ``window_ended`` (its endDate passed, awaiting
+    settlement); unstamped rows → "" so their cells stay byte-identical."""
+    if m.get("window_ended") is not True:
+        return ""
+    end = parse_market_end(m.get("window_ended_at")) or _row_market_end(m)
+    day = end.date().isoformat() if end is not None else ""
+    if zh:
+        return f" — 已过截止日 {day}，待结算" if day else " — 已过截止日，待结算"
+    return (f" — window ended {day}, awaiting settlement" if day
+            else " — window ended, awaiting settlement")
+
+
 def render_markets_block(markets: List[Dict[str, Any]], lang: str = "en") -> str:
     """把市场快照渲染为确定性的 markdown 表（无 LLM；空列表 → ""，注入自动跳过）。
 
     若任一行经过重报价（有 price_at_research 且现价与之不同）→ 追加一列 Δ 展示
     '研究期价→现价'（如 34%→41%）；没有任何行发生移动时不加该列，与旧渲染逐字节一致。
+    TIME-3：PREDICTION_MARKETS_END_DATE_GATE 开时先按 market_clock_now() 盖 window_ended 章
+    （浅拷贝，调用方不变）；已盖章的行在问题单元格后追加「window ended YYYY-MM-DD, awaiting
+    settlement」——行仍保留（其价格仍是证据），未盖章的输出逐字节不变。旗标关 → 不盖章也
+    不标注（即便输入行带研究期的 window_ended 章），与旧渲染逐字节一致。
     """
     rows = [m for m in (markets or []) if isinstance(m, dict)]
     if not rows:
         return ""
+    gate, grace = end_date_gate_settings()
+    if gate:
+        rows, _ = stamp_window_ended(rows, now=market_clock_now(), grace_hours=grace)
     zh = str(lang or "").lower().startswith("zh")
     show_delta = any(_requote_move(m) for m in rows)  # 有价格移动才加 Δ 列
     title = "### Prediction Market Signals (Polymarket)"
@@ -616,7 +770,8 @@ def render_markets_block(markets: List[Dict[str, Any]], lang: str = "en") -> str
         url = str(m.get("url") or "").strip()
         if url:  # 有事件 URL → 市场问题渲染为可点链接（读者可核对实时价格/规则）
             q_cell = f"[{q_cell}]({_esc_cell(url)})"
-        cells = [str(i), f"{q_cell} ({_esc_cell(m.get('market_id') or '')})",
+        cells = [str(i), f"{q_cell} ({_esc_cell(m.get('market_id') or '')})"
+                 + (_window_ended_label(m, zh) if gate else ""),
                  _esc_cell(m.get("exchange") or "—"), pct]
         if show_delta:
             cells.append(_requote_move(m) or "—")  # 未移动/无锚点的行留占位符

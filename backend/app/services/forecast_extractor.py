@@ -18,6 +18,7 @@ import logging
 import math
 import re
 import unicodedata
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils.probability_parse import (
@@ -1770,6 +1771,13 @@ _MARKET_DIVERGENCE_INSTRUCTIONS = (
     "\"adjustment_rationale\": \"...must mention the market and its implied probability...\"} , ... ] }"
 )
 
+# TIME-3（PREDICTION_MARKETS_END_DATE_GATE）：给匹配器今天的日期，截止日与预测日期不一致的
+# 市场至多判 near——已过截止日的市场已在调用方剔除，此行约束剩余市场的时间窗对齐。
+_MARKET_MATCH_TODAY_RULE = (
+    "\n\nToday (UTC): {today}. A market can only match a forecast whose resolution window it "
+    "covers; a market whose end date differs from the forecast's date is at most near, never exact."
+)
+
 _MARKET_EQUIVALENCE_RANK = {"exact": 3, "near": 2, "loose": 1}
 # 理由「提及市场」的判据：命中关键词（market/Polymarket/市场/预测市场/implied）即算。
 _MARKET_MENTION_RE = re.compile(r"market|polymarket|市场|預測|预测市场|implied", re.I)
@@ -1847,12 +1855,16 @@ def _build_market_anchor(prob: Optional[float], market: Dict[str, Any], *,
 
 
 def anchor_binaries_to_markets(binaries: List[Dict[str, Any]], markets: Optional[List[Dict[str, Any]]],
-                               llm, *, language: str = "English", max_markets: int = 24) -> int:
+                               llm, *, language: str = "English", max_markets: int = 24,
+                               now: Optional[datetime] = None) -> int:
     """PM-2：一次批处理 LLM 匹配 + 确定性回填 market_anchor（就地改写 binaries）。返回锚定条数。
 
     只接受 resolution_equivalence 严格度 ≥ FORECAST_MARKET_ANCHOR_MIN_EQUIVALENCE（默认 near，
     即 exact/near 采纳、loose 丢弃）的匹配。旗标 FORECAST_MARKET_ANCHORING 关闭 / 无市场 /
-    无二元 / 匹配调用异常或非法 JSON → 不加锚点（今日行为，degrade-safe）。"""
+    无二元 / 匹配调用异常或非法 JSON → 不加锚点（今日行为，degrade-safe）。
+    TIME-3：给出 ``now``（仅 PREDICTION_MARKETS_END_DATE_GATE 开时由 extract_binary_forecasts
+    传入）→ MARKETS 表后追加「Today (UTC)」一行，要求截止日与预测日期不一致的市场至多判 near；
+    未给出 → 提示词逐字节不变。"""
     if not _cfg("FORECAST_MARKET_ANCHORING", True):
         return 0
     bins = [b for b in (binaries or []) if isinstance(b, dict) and str(b.get("statement") or "").strip()]
@@ -1881,6 +1893,9 @@ def anchor_binaries_to_markets(binaries: List[Dict[str, Any]], markets: Optional
     user = (_MARKET_MATCH_INSTRUCTIONS + f"\n\nWrite any prose in {language}."
             + "\n\n[FORECASTS]\n" + "\n".join(flines)
             + "\n\n[MARKETS]\n" + "\n".join(mlines))
+    if now is not None:
+        today = (now if now.tzinfo is None else now.astimezone(timezone.utc)).date().isoformat()
+        user += _MARKET_MATCH_TODAY_RULE.format(today=today)
     try:
         raw = llm.chat_json(messages=[{"role": "user", "content": user}],
                             temperature=0.1, max_tokens=1500)
@@ -2785,7 +2800,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              markets: Optional[List[Dict[str, Any]]] = None,
                              scenarios: Optional[List[Dict[str, Any]]] = None,
                              ensemble_client_factory: Optional[Any] = None,
-                             horizon_date: Optional[str] = None) -> Dict[str, Any]:
+                             horizon_date: Optional[str] = None,
+                             now: Optional[datetime] = None) -> Dict[str, Any]:
     """Extract/derive >=min_count INDEPENDENT binary forecasts from the dossier.
 
     Returns ``{"binary_forecasts": [...], "binary_quality": {...}}``. Degrade-safe:
@@ -2802,6 +2818,9 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     PM-2：抽取后跑一次确定性市场匹配（anchor_binaries_to_markets）+ 10pp 分歧有界重述
     （enforce_market_divergence），并把对照负载放进返回值 ``market_comparison``（供落
     market_comparison.json）。RQ-2：dossier 切片改为 head+tail（结论在文末）。
+    TIME-3（PREDICTION_MARKETS_END_DATE_GATE，默认开）：截止日已过（``now`` 缺省
+    market_clock_now()）或已盖 window_ended 章的市场不进入锚点查找表与确定性匹配，
+    剔除数记 binary_quality.market_window_ended_excluded；旗标关 → 与旧路径逐字节一致。
     """
     content = (report_markdown or "")
     _bbudget = int(_cfg("FORECAST_BINARY_EXTRACT_BUDGET", 48000))
@@ -2819,9 +2838,24 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                      and bool((signal_pack or "").strip()))
     market_aware = (bool(_cfg("PREDICTION_MARKETS_ENABLED", True))
                     and bool((market_pack or "").strip()))
+    # TIME-3：锚定资格按截止日过滤（证据面不动——market_pack 仍含已标注的过期市场）。
+    anchor_markets = markets
+    window_ended_rows: List[Dict[str, Any]] = []
+    anchor_now: Optional[datetime] = None
+    from ..utils.prediction_markets import (
+        end_date_gate_settings, exclude_window_ended, market_clock_now)
+    _end_gate, _end_grace = end_date_gate_settings()
+    if _end_gate:
+        anchor_now = now or market_clock_now()
+        anchor_markets, window_ended_rows = exclude_window_ended(
+            markets or [], now=anchor_now, grace_hours=_end_grace)
+        if window_ended_rows:
+            logger.info("二元预测锚定：剔除 %d 个已过截止日的市场（PREDICTION_MARKETS_END_DATE_GATE）",
+                        len(window_ended_rows))
+    window_ended_ids = {str(m.get("market_id") or "").strip() for m in window_ended_rows} - {""}
     # market_id → 隐含概率查找表（用我们抓取的快照回填模型转录的锚点，不盲信模型数字）。
     market_lookup: Dict[str, float] = {}
-    for m in (markets or []):
+    for m in (anchor_markets or []):
         if not isinstance(m, dict):
             continue
         mid = str(m.get("market_id") or "").strip()
@@ -2965,12 +2999,25 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                     spread_threshold=_thr if _thr is not None else 0.15)
         except Exception as _ee:  # noqa: BLE001 — 集成为增强，绝不阻断二元抽取
             logger.warning(f"多模型预测集成失败（忽略，保留主模型结果）: {_ee}")
+    # TIME-3：模型自愿转录的锚点若指向已过截止日的市场（它仍在 market_pack 里、带标注），
+    # 在确定性锚定前弹出——过期市场绝不成为任何二元的 market_anchor。
+    if window_ended_ids:
+        _dropped = 0
+        for b in binaries:
+            _anchor = b.get("market_anchor")
+            if (isinstance(_anchor, dict)
+                    and str(_anchor.get("market_id") or "").strip() in window_ended_ids):
+                b.pop("market_anchor")
+                _dropped += 1
+        if _dropped:
+            logger.info("二元预测锚定：弹出 %d 条指向已过截止日市场的模型自报锚点", _dropped)
     # PM-2：确定性市场锚定 + 10pp 分歧有界重述 + 对照负载。任何失败 → 保留无锚点结果
     # （_normalize_binaries 已回填的模型自愿锚点仍在），即今日行为（degrade-safe）。
     market_comparison: Optional[Dict[str, Any]] = None
-    if binaries and (markets or []):
+    if binaries and (anchor_markets or []):
         try:
-            anchor_binaries_to_markets(binaries, markets, llm, language=language)
+            anchor_binaries_to_markets(binaries, anchor_markets, llm, language=language,
+                                       now=anchor_now)
             enforce_market_divergence(binaries, llm, language=language)
             market_comparison = build_market_comparison(binaries)
         except Exception as _ae:  # noqa: BLE001 — 锚定为增强，绝不阻断二元抽取
@@ -3009,6 +3056,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     _bq_prov = out["binary_quality"]
     if isinstance(_bq_prov, dict):
         _bq_prov["provenance_downgrades"] = provenance_downgrades
+        if window_ended_rows:
+            _bq_prov["market_window_ended_excluded"] = len(window_ended_rows)
         if provenance_downgrades:
             _bq_prov.setdefault("issues", []).append(
                 f"{provenance_downgrades} forecast(s) claimed a simulation signal that was never "

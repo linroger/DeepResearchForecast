@@ -6,11 +6,14 @@ Offline: no LLM/network. Covers:
   （fake handoff dir → 命中；缺 simulation_id / 开关关 / 文件缺失 → []）。
 - oasis_profile_generator：市场感知提示（分析师/媒体角色+话题重叠→'markets ... at NN%'；
   非该类角色 / 无重叠 / 无市场 / 开关关 → ""）；_generate_profile_with_llm 提示词注入的角色门控。
+- TIME-3 endDate gate: expired (or research-stamped) markets never reach the world brief
+  or persona hints under PREDICTION_MARKETS_END_DATE_GATE; with the gate off they are kept.
 """
 
 import json
 import os
 import sys
+from datetime import datetime, timezone
 
 import pytest
 
@@ -22,6 +25,7 @@ from app.config import Config  # noqa: E402
 from app.services import pipeline_orchestrator as po  # noqa: E402
 from app.services.oasis_profile_generator import OasisProfileGenerator  # noqa: E402
 from app.services.simulation_config_generator import SimulationConfigGenerator  # noqa: E402
+from app.utils import prediction_markets as pm  # noqa: E402
 
 
 # --------------------------------------------------------------------------- fixtures
@@ -258,3 +262,93 @@ def test_prompt_injects_hint_for_media_role(monkeypatch):
 def test_prompt_no_hint_for_non_media_role(monkeypatch):
     prompt = _run("Company", monkeypatch)
     assert "市场先验感知" not in prompt
+
+
+# ===========================================================================
+# Part 6 — TIME-3 endDate gate (PREDICTION_MARKETS_END_DATE_GATE)
+# ===========================================================================
+# An expired-but-open ladder child (endDate passed, still priced at 3% while it awaits
+# settlement) must never seed SIM priors under the gate; with the gate off it is kept.
+# The clock is pinned (market_clock_now) so these tests never depend on the wall clock.
+_TIME3_NOW = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+_EXPIRED = {"market_id": "A",
+            "question": "Will the US relax AI chip export controls to China by September 2026?",
+            "implied_yes_prob": 0.03, "relevance_score": 9.5, "volume": 150000.0,
+            "end_date": "2026-09-30T00:00:00Z"}
+_LIVE = dict(MARKETS[1], market_id="B", end_date="2027-03-31T00:00:00Z")
+
+
+@pytest.fixture
+def end_date_gate(monkeypatch):
+    """Pin the market clock and enable SIM priors; returns a gate on/off setter."""
+    monkeypatch.setattr(pm, "market_clock_now", lambda: _TIME3_NOW)
+    monkeypatch.setattr(Config, "SIM_WORLD_BRIEF", True, raising=False)
+    monkeypatch.setattr(Config, "SIM_MARKET_PRIORS", True, raising=False)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GRACE_HOURS", 0.0, raising=False)
+
+    def _set(enabled):
+        monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GATE", enabled, raising=False)
+    _set(True)
+    return _set
+
+
+def _profile_gen_for_graph() -> OasisProfileGenerator:
+    gen = _profile_gen()
+    gen.graph_id = "g1"  # _fake_handoff's pipeline carries graph_id g1
+    return gen
+
+
+def test_end_date_gate_drops_expired_rows_from_world_brief(monkeypatch, tmp_path, end_date_gate):
+    _fake_handoff(monkeypatch, tmp_path, {"markets": [_EXPIRED, _LIVE]})
+    rows = _config_gen()._load_prediction_markets("sim1")
+    assert [m["market_id"] for m in rows] == ["B"]
+    brief = _config_gen()._build_world_brief(
+        QUESTION, None, ["AI芯片出口管制"], prediction_markets=rows)
+    assert "市场定价" in brief and "58%" in brief
+    assert "by September 2026" not in brief and "3%" not in brief
+
+
+def test_end_date_gate_all_expired_leaves_no_world_brief_block(monkeypatch, tmp_path,
+                                                              end_date_gate):
+    # A row stamped upstream by the research snapshot is dropped even if its end_date
+    # would not have passed yet at the pinned clock.
+    stamped = dict(_LIVE, window_ended=True)
+    _fake_handoff(monkeypatch, tmp_path, {"markets": [_EXPIRED, stamped]})
+    rows = _config_gen()._load_prediction_markets("sim1")
+    assert rows == []
+    brief = _config_gen()._build_world_brief(
+        QUESTION, None, ["AI芯片出口管制"], prediction_markets=rows)
+    assert "市场定价" not in brief
+
+
+def test_end_date_gate_off_keeps_expired_rows_in_world_brief(monkeypatch, tmp_path,
+                                                            end_date_gate):
+    end_date_gate(False)
+    _fake_handoff(monkeypatch, tmp_path, {"markets": [_EXPIRED, _LIVE]})
+    rows = _config_gen()._load_prediction_markets("sim1")
+    assert rows == [_EXPIRED, _LIVE]  # the pre-gate rows, unchanged
+    brief = _config_gen()._build_world_brief(
+        QUESTION, None, ["AI芯片出口管制"], prediction_markets=rows)
+    assert "by September 2026" in brief and "3%" in brief
+
+
+def test_end_date_gate_drops_expired_rows_from_persona_hint(monkeypatch, tmp_path,
+                                                           end_date_gate):
+    _fake_handoff(monkeypatch, tmp_path, {"markets": [_EXPIRED]})
+    gen = _profile_gen_for_graph()
+    assert gen._prediction_markets() == []
+    assert gen._market_awareness_hint(
+        "Jane Analyst", "Journalist",
+        "Covers semiconductor export controls and China chip policy.", actor=None) == ""
+
+
+def test_end_date_gate_off_keeps_expired_rows_in_persona_hint(monkeypatch, tmp_path,
+                                                             end_date_gate):
+    end_date_gate(False)
+    _fake_handoff(monkeypatch, tmp_path, {"markets": [_EXPIRED]})
+    gen = _profile_gen_for_graph()
+    assert gen._prediction_markets() == [_EXPIRED]
+    hint = gen._market_awareness_hint(
+        "Jane Analyst", "Journalist",
+        "Covers semiconductor export controls and China chip policy.", actor=None)
+    assert "by September 2026" in hint and "3%" in hint

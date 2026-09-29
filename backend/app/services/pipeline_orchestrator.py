@@ -1993,7 +1993,10 @@ def _synthesis_provider_unavailable(error: Any) -> bool:
 # child.  A work package that forwards a Config knob adds exactly one entry,
 # keeping each table alphabetical; every name must exist on Config and be
 # documented in .env.example (test_orchestrator_research_wiring checks both).
-RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = ()
+RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
+    ("PREDICTION_MARKETS_END_DATE_GATE", "bool"),
+    ("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", "float"),
+)
 RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_AS_OF_PIN", "bool"),
     ("RESEARCH_QUANT_TYPING", "bool"),

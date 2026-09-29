@@ -14996,6 +14996,113 @@ def _pm_fetch_price_history(clob_token_id: Any, interval: str = "1d",
     return _pm_parse_price_history(data, days)
 
 
+# TIME-3 endDate hygiene. A market past its endDate can stay open (closed=false) at a
+# near-settled price while it awaits UMA resolution. The final snapshot stamps such rows
+# (window_ended / window_ended_at) and never drops them — their prices are still evidence —
+# so backend anchoring and SIM priors can exclude them. These helpers mirror the backend
+# parse_market_end / market_window_ended in app/utils/prediction_markets.py; keep them
+# 逐条一致 (test_market_end_date_gate.py asserts parity on one shared vector table).
+_PM_END_DATE_GRACE_MAX_HOURS = 168.0
+_PM_ISO_DATE_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
+_PM_DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _pm_now() -> _dt.datetime:
+    """Current UTC instant for endDate comparisons (the bridge's test monkeypatch point)."""
+    return _dt.datetime.now(_dt.timezone.utc)
+
+
+def _pm_as_utc(moment: _dt.datetime) -> _dt.datetime:
+    """Aware UTC view of ``moment``; a naive datetime is read as UTC."""
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=_dt.timezone.utc)
+    return moment.astimezone(_dt.timezone.utc)
+
+
+def _pm_parse_market_end(value: Any) -> _dt.datetime | None:
+    """Parse a Polymarket endDate into an aware UTC datetime; anything unusable → None.
+
+    Mirrors backend parse_market_end: strings only (extended ``YYYY-MM-DD`` prefix); a
+    trailing ``Z`` means UTC; offsets and fractional seconds are accepted; a date-only
+    ``YYYY-MM-DD`` means 23:59:59.999999 UTC that day; naive → UTC. Never raises."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not _PM_ISO_DATE_PREFIX_RE.match(text):
+        return None
+    try:
+        if _PM_DATE_ONLY_RE.match(text):
+            day = _dt.date.fromisoformat(text)
+            return _dt.datetime(day.year, day.month, day.day, 23, 59, 59, 999999,
+                                tzinfo=_dt.timezone.utc)
+        if text[-1] in "Zz":
+            text = text[:-1] + "+00:00"
+        return _pm_as_utc(_dt.datetime.fromisoformat(text))
+    except (ValueError, OverflowError):
+        return None
+
+
+def _pm_clamp_grace_hours(value: Any) -> float:
+    """Grace hours as a finite float in [0, 168]; anything unusable → 0 (mirrors backend)."""
+    hours = _pm_float(value)
+    if hours is None or not math.isfinite(hours):
+        return 0.0
+    return max(0.0, min(_PM_END_DATE_GRACE_MAX_HOURS, hours))
+
+
+def _pm_end_date_grace_hours() -> float:
+    """PREDICTION_MARKETS_END_DATE_GRACE_HOURS from the env (forwarded from Config), with
+    the same semantics as backend end_date_gate_settings(): finite, clamped to [0, 168]."""
+    try:
+        hours = float(os.environ.get("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", "0") or 0)
+    except ValueError:
+        return 0.0
+    return _pm_clamp_grace_hours(hours)
+
+
+def _pm_market_window_ended(row: Any, now: _dt.datetime, grace_hours: float = 0.0) -> bool:
+    """True iff the row's end (``end_date``, then ``endDate``) plus grace lies before ``now``.
+    Missing/unparseable end dates → False. Mirrors backend market_window_ended; never raises."""
+    if not isinstance(row, dict) or not isinstance(now, _dt.datetime):
+        return False
+    end = _pm_parse_market_end(row.get("end_date") or row.get("endDate"))
+    if end is None:
+        return False
+    try:
+        return end + _dt.timedelta(hours=_pm_clamp_grace_hours(grace_hours)) < _pm_as_utc(now)
+    except OverflowError:
+        return False
+
+
+def _pm_stamp_window_ended(markets: list[dict], now: _dt.datetime,
+                           grace_hours: float) -> tuple[list[dict], int]:
+    """Shallow-copy the rows; ended rows gain window_ended=True and window_ended_at (the
+    parsed end, ISO UTC). Rows are never dropped. Returns the copies and the stamped count."""
+    out: list[dict] = []
+    stamped = 0
+    for m in markets:
+        row = dict(m)
+        if _pm_market_window_ended(row, now, grace_hours):
+            row["window_ended"] = True
+            row["window_ended_at"] = _pm_parse_market_end(
+                row.get("end_date") or row.get("endDate")).isoformat()
+            stamped += 1
+        out.append(row)
+    return out, stamped
+
+
+def _pm_window_ended_label(m: dict) -> str:
+    """Suffix for a stamped row in the research section (same English label as the backend
+    market pack); unstamped rows → "" so the table stays byte-identical."""
+    if m.get("window_ended") is not True:
+        return ""
+    end = (_pm_parse_market_end(m.get("window_ended_at"))
+           or _pm_parse_market_end(m.get("end_date") or m.get("endDate")))
+    if end is None:
+        return " — window ended, awaiting settlement"
+    return f" — window ended {end.date().isoformat()}, awaiting settlement"
+
+
 def _pm_normalize_market(raw: Any, matched_query: str, min_volume: float,
                          event_title: str = "", event_slug: str = "") -> dict | None:
     """单条 Polymarket 市场规整化（镜像 backend 规则）；已关闭/无价/定盘价/低量 → None。"""
@@ -15259,10 +15366,11 @@ def _pm_render_section(markets: list[dict], as_of: str) -> str:
     for i, m in enumerate(markets, 1):
         prob = _pm_float(m.get("implied_yes_prob"))
         vol = _pm_float(m.get("volume"))
-        lines.append("| {i} | {q} ({mid}) | {ex} | {p} | {v} |".format(
+        lines.append("| {i} | {q} ({mid}){ended} | {ex} | {p} | {v} |".format(
             i=i,
             q=_cell(str(m.get("question") or "")[:160]),
             mid=_cell(m.get("market_id") or ""),
+            ended=_pm_window_ended_label(m),
             ex=_cell(m.get("exchange") or "—"),
             p=(f"{prob * 100:.0f}%" if prob is not None else "—"),
             v=(f"{vol:,.0f}" if vol is not None else "—"),
@@ -15686,6 +15794,15 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
     # Cross-call tool capture can contain more rows than a single refresh.  Keep
     # the same case-level diversity and size contract after reconciliation.
     markets = _pm_cap_per_event(markets, max_per_event, max_total)
+    # TIME-3: stamp (never drop) markets whose endDate already passed so the backend can keep
+    # them out of binary anchoring and SIM priors; gate off → no stamp, no status key.
+    end_date_passed_count: int | None = None
+    if _env_flag("PREDICTION_MARKETS_END_DATE_GATE", True):
+        markets, end_date_passed_count = _pm_stamp_window_ended(
+            markets, _pm_now(), _pm_end_date_grace_hours())
+        if end_date_passed_count:
+            plog.write("warn", f"prediction markets: {end_date_passed_count} market(s) past "
+                               "their endDate (kept, labelled; never anchors or SIM priors)")
     as_of = _utcnow()
     payload = {"as_of": as_of, "source": "polymarket", "queries": queries, "markets": markets}
     if tool_candidates:
@@ -15710,6 +15827,8 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
             )
         ),
     }
+    if end_date_passed_count is not None:
+        payload["status"]["end_date_passed_count"] = end_date_passed_count
     # TRANSPORT-DIAG: additive——失败查询的具体错误类名[:HTTP 状态] 计数，使断网可诊断
     #（真实事故里只有 failure 计数、无错误类别，41/41 全灭无从归因）。
     if refresh_diagnostics.get("transport_error_classes"):

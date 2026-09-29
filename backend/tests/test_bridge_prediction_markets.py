@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import sys
+from datetime import datetime, timezone
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _BRIDGE_DIR = os.path.join(_REPO_ROOT, "deerflow_bridge")
@@ -1194,6 +1195,8 @@ def test_collector_preserves_report_vetted_tool_market_when_refresh_has_no_queri
     )
     monkeypatch.setattr(d, "_pm_resolve_queries", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(d, "score_market_relevance", lambda *_args, **_kwargs: {})
+    # TIME-3: pin the endDate clock to the capture day so the 2026-12-31 end never ages out.
+    monkeypatch.setattr(d, "_pm_now", lambda: datetime(2026, 7, 11, tzinfo=timezone.utc))
     monkeypatch.setenv("PREDICTION_MARKETS_ENABLED", "true")
     monkeypatch.setenv("PREDICTION_MARKETS_PRICE_HISTORY", "false")
 
@@ -1292,3 +1295,94 @@ def test_collect_price_history_fetches_yes_leg_not_index_zero(monkeypatch, tmp_p
     n = d._collect_market_price_history(Path(str(tmp_path)), markets, _Plog())
     assert calls == ["tok-yes"]
     assert n == 1
+
+
+# ---------------------------------------------------------------- TIME-3 endDate gate
+_TIME3_NOW = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+_TIME3_AS_OF = "2026-10-01T12:00:00Z"
+
+
+def _time3_raw(mid, question, yes, end_date):
+    return {"id": mid, "question": question, "closed": False,
+            "outcomes": '["Yes","No"]',
+            "outcomePrices": json.dumps([str(yes), str(round(1 - yes, 4))]),
+            "volume": "50000", "liquidity": "1000", "endDate": end_date}
+
+
+def _collect_time3(tmp_path, monkeypatch, gate, grace_hours=None):
+    """Run the collector over one active ladder event (patched network, pinned clocks):
+    child A's endDate passed a day ago (still priced 3%), child B ends in 2027."""
+    event = {"title": "Fed rate cuts", "slug": "fed-rate-cuts", "markets": [
+        _time3_raw("A", "Will the Fed cut rates 3 times in 2026?", 0.03, "2026-09-30T12:00:00Z"),
+        _time3_raw("B", "Will the Fed cut rates 4 times by April 2027?", 0.62,
+                   "2027-04-19T12:00:00Z"),
+    ]}
+    monkeypatch.setattr(d, "_polymarket_get", lambda *_a, **_k: {"events": [event]})
+    monkeypatch.setattr(d, "_pm_resolve_queries", lambda *_a, **_k: ["Fed rate cuts"])
+    monkeypatch.setattr(d, "score_market_relevance", lambda *_a, **_k: {})
+    monkeypatch.setattr(d, "_PM_TRANSPORT_UNAVAILABLE", False)
+    monkeypatch.setattr(d, "_pm_now", lambda: _TIME3_NOW)
+    monkeypatch.setattr(d, "_utcnow", lambda: _TIME3_AS_OF)
+    monkeypatch.setenv("PREDICTION_MARKETS_ENABLED", "true")
+    monkeypatch.setenv("PREDICTION_MARKETS_PRICE_HISTORY", "false")
+    monkeypatch.setenv("PREDICTION_MARKETS_END_DATE_GATE", "true" if gate else "false")
+    if grace_hours is None:
+        monkeypatch.delenv("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", raising=False)
+    else:
+        monkeypatch.setenv("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", grace_hours)
+
+    class Log:
+        def __init__(self):
+            self.rows = []
+
+        def write(self, level, message):
+            self.rows.append((level, message))
+
+    log = Log()
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    d._collect_prediction_markets(
+        tmp_path, "How many times will the Fed cut rates by 2027?", "# Report\n\nBody.\n",
+        {}, log, model_name="test")
+    payload = json.loads((tmp_path / d.PREDICTION_MARKETS_FILENAME).read_text(encoding="utf-8"))
+    report = (tmp_path / d.REPORT_FILENAME).read_text(encoding="utf-8")
+    return payload, report, log
+
+
+def test_collector_stamps_expired_ladder_child_and_labels_section(tmp_path, monkeypatch):
+    payload, report, log = _collect_time3(tmp_path, monkeypatch, gate=True)
+    rows = {row["market_id"]: row for row in payload["markets"]}
+    assert set(rows) == {"A", "B"}  # stamped, never dropped: its price is still evidence
+    assert rows["A"]["window_ended"] is True
+    assert rows["A"]["window_ended_at"] == "2026-09-30T12:00:00+00:00"
+    assert "window_ended" not in rows["B"] and "window_ended_at" not in rows["B"]
+    assert payload["status"]["end_date_passed_count"] == 1
+    assert payload["status"]["selected_count"] == 2
+    assert ("Will the Fed cut rates 3 times in 2026? (A) — window ended 2026-09-30, "
+            "awaiting settlement |") in report
+    assert report.count("window ended") == 1
+    assert any(level == "warn" and "past their endDate" in msg for level, msg in log.rows)
+
+
+def test_collector_grace_hours_keep_a_just_ended_market_unstamped(tmp_path, monkeypatch):
+    # The forwarded grace (48h) covers child A's 24h-old endDate → nothing is stamped.
+    payload, report, _log = _collect_time3(tmp_path, monkeypatch, gate=True, grace_hours="48")
+    assert payload["status"]["end_date_passed_count"] == 0
+    assert all("window_ended" not in row for row in payload["markets"])
+    assert "window ended" not in report
+
+
+def test_collector_gate_off_writes_no_stamp_key_or_label(tmp_path, monkeypatch):
+    off_payload, off_report, _ = _collect_time3(tmp_path / "off", monkeypatch, gate=False)
+    assert "end_date_passed_count" not in off_payload["status"]
+    assert all("window_ended" not in row and "window_ended_at" not in row
+               for row in off_payload["markets"])
+    assert "window ended" not in off_report
+    # The gate is purely additive: removing its stamps, status key and labels from the
+    # gate-on artifacts yields exactly the gate-off (pre-gate) bytes.
+    on_payload, on_report, _ = _collect_time3(tmp_path / "on", monkeypatch, gate=True)
+    for row in on_payload["markets"]:
+        row.pop("window_ended", None)
+        row.pop("window_ended_at", None)
+    del on_payload["status"]["end_date_passed_count"]
+    assert on_payload == off_payload
+    assert on_report.replace(" — window ended 2026-09-30, awaiting settlement", "") == off_report
