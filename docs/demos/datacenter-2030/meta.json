@@ -7,5 +7,30 @@
   "personas": 18,
   "has_actors": true,
   "research_engine": "linear-v2 (salvage)",
-  "model": "glm-5.3"
+  "model": "glm-5.3",
+  "report_assets": [
+    "charts/binary_forecast_dotplot.png",
+    "charts/scenario_probabilities.png",
+    "charts/timeline_lanes.png"
+  ],
+  "report_languages": {
+    "zh": "report.md",
+    "en": "report.en.md"
+  },
+  "artifact_sha256": {
+    "report.md": "9c392be1eca68be47bb40bb0727f515922fd7ccedce63ba35c081cf1e9a273e6",
+    "report.en.md": "e02d8fe286431d47fc1d8c4e1cdb21a85be3671cf471ba79bb9fe2eb42f2bfe2",
+    "charts/binary_forecast_dotplot.png": "84a7eb32e10f6b30cc5b5de6c9dc70b6312fdcb383e9d352b307afc8ec6a9c8c",
+    "charts/scenario_probabilities.png": "100f6895d2c2a5b6dcdb00efeb23b375b88a26758f505131ef67adfa41b4e65b",
+    "charts/timeline_lanes.png": "43ef848aae7caf7a19f03a776ba9a888bdfbb62255e96ccd3fece7622538e74e"
+  },
+  "publication": {
+    "hard_passed": true,
+    "publish_passed": true,
+    "scenario_contract_valid": true,
+    "citation_coverage": 0.07,
+    "semantic_citations_passed": true,
+    "markdown_sha256": "9da5cbebefe57f2dd61bd3b322e41536314633e847806d75ff92d83ef84d19bb",
+    "forecast_sha256": "f8f4b416d1b2927b5872df2c811d940e7ea4ff33fa91d52272e855a66f99ef7f"
+  }
 }
