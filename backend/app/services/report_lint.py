@@ -787,6 +787,8 @@ def check_scenario_probabilities(md: str, spine: Optional[Dict[str, Any]]) -> Li
     for s in (spine.get("scenarios") or []):
         if not isinstance(s, dict):
             continue
+        if s.get("probability") is None:
+            continue  # REPORT-1：待复核（null）概率无可比对的值，不当作 0% 比对
         name = str(s.get("name") or "").strip()
         try:
             p = round(float(s.get("probability") or 0.0) * 100)

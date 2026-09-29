@@ -160,9 +160,17 @@ def aggregate_forecasts(forecasts: List[Dict[str, Any]]) -> Dict[str, Any]:
     而非误报 0）。
     """
     runs = [f for f in (forecasts or []) if isinstance(f, dict)]
+    # REPORT-1：概率待复核（needs_review，含 null 概率）的 run 不参与池化——null 绝不以 0
+    # 计入均值；仅当确有剔除时才记 n_runs_excluded（格式良好的集成输出逐字节不变）。
+    excluded = sum(1 for f in runs if f.get("probability_status") == "needs_review")
+    if excluded:
+        runs = [f for f in runs if f.get("probability_status") != "needs_review"]
     n = len(runs)
     if n == 0:
-        return {"n_runs": 0, "scenarios": [], "agreement": None, "schema_version": 1}
+        empty: Dict[str, Any] = {"n_runs": 0, "scenarios": [], "agreement": None, "schema_version": 1}
+        if excluded:
+            empty["n_runs_excluded"] = excluded
+        return empty
 
     semantic = bool(_cfg("ENSEMBLE_SEMANTIC_ALIGN", True))
     aligned: Optional[List[Dict[str, Any]]] = None
@@ -243,7 +251,7 @@ def aggregate_forecasts(forecasts: List[Dict[str, Any]]) -> Dict[str, Any]:
         del s["_point"]
     agg.sort(key=lambda s: s["probability"], reverse=True)
 
-    return {
+    result: Dict[str, Any] = {
         "n_runs": n,
         "scenarios": agg,
         # R2-CAL-9: TV-distance + support；W9-5：语义对齐时按对齐桶计算，
@@ -256,6 +264,9 @@ def aggregate_forecasts(forecasts: List[Dict[str, Any]]) -> Dict[str, Any]:
         "horizon": runs[0].get("horizon", ""),
         "schema_version": 1,
     }
+    if excluded:
+        result["n_runs_excluded"] = excluded
+    return result
 
 
 def pool_binary_forecasts(primary: List[Dict[str, Any]],
