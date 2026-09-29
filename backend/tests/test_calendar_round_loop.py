@@ -601,6 +601,30 @@ def test_inband_verdict_counts_heartbeat_only_rounds_as_missing(tmp_path, monkey
     assert any("in-band 世界演化完成" in m and "validity=valid" in m for m in logs)
 
 
+def test_inband_verdict_counts_trailing_heartbeat_only_round_as_missing(tmp_path, monkeypatch):
+    """末轮全平台死轮（只 heartbeat、其后再无 deliver）：只有 heartbeat 抬升最高已见轮，
+    该轮仍须按 missing 入账（钉住 heartbeat 对 _max_seen_round 的更新）。"""
+    sim_dir = str(tmp_path)
+    _patch_runtime(monkeypatch, sim_dir, [])
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit([]))
+    evo = rps._InbandWorldEvolution(_calendar_config(), sim_dir, 1, lambda _m: None)
+    for rn in (0, 1):
+        evo.deliver("twitter", rn, _ROUND_DATES[rn],
+                    [{"agent_id": 0, "agent_name": "Actor0",
+                      "action_args": {"content": "Actor0 strategic move"}}], [])
+    evo.heartbeat("twitter", 2)  # 第 3 轮：死轮，无动作交付
+    evo.platform_done("twitter")
+
+    traj = _read_traj(sim_dir)
+    acct = traj["round_accounting"]
+    assert acct["unaccounted_rounds"] == 1 and acct["counts"]["missing"] == 1
+    assert acct["rounds_accounted"] == 3 and acct["valid_transitions"] == 2
+    assert acct["valid_coverage"] == pytest.approx(0.666667)
+    assert traj["validity"] == "valid" and traj["validity_reasons"] == []
+    raw = traj["outcome"]["round_accounting"]
+    assert raw["rounds_accounted"] == 2 and "unaccounted_rounds" not in raw
+
+
 def test_inband_verdict_failure_keeps_trajectory(tmp_path, monkeypatch):
     """裁定 helper 异常只丢裁定键，绝不丢轨迹（degrade-safe）。"""
     sim_dir = str(tmp_path)

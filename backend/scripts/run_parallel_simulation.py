@@ -3545,9 +3545,10 @@ class _InbandWorldEvolution:
                            ("horizon_defaulted", self._horizon_defaulted)):
                 if fv is not None:
                     result[fk] = fv
-            # SIM-1：与 post-hoc 决策通道同一个有效性裁定（诚实对齐，无开关）。未入账轮
+            # SIM-1：与 post-hoc 决策通道同一套有效性裁定规则（诚实对齐，无开关）。未入账轮
             # （本进程见过但 WorldState 未步进）按 missing 计入分母——有损续跑只覆盖部分
-            # 轮次时不再被判 valid。嵌套 outcome.round_accounting 保留 WorldState 原始口径。
+            # 轮次时不再被判 valid（post-hoc 只入账动作日志中出现的轮次，见
+            # decision_channel_verdict）。嵌套 outcome.round_accounting 保留 WorldState 原始口径。
             # 裁定失败只丢裁定键，绝不丢轨迹。
             try:
                 accounted = len(self._ws.round_statuses)

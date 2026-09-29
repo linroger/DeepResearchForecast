@@ -254,13 +254,47 @@ def test_build_all_records_skip_and_mounts_no_fallback(viz, tmp_path):
     assert "worldstate_trajectory" not in {it["id"] for it in items}
     with open(tmp_path / "viz_manifest.json", encoding="utf-8") as f:
         manifest = json.load(f)
-    assert {"builder": "worldstate_trajectory", "reason": "trajectory_not_valid",
-            "validity": "invalid"} in manifest["skipped"]
+    ws_skips = [s for s in manifest["skipped"] if s["builder"] == "worldstate_trajectory"]
+    # Recorded once: the matplotlib fallback re-sets the note but must not duplicate it.
+    assert ws_skips == [{"builder": "worldstate_trajectory", "reason": "trajectory_not_valid",
+                         "validity": "invalid"}]
+    assert "worldstate_trajectory" not in viz._skip_notes
     assert not (tmp_path / "charts" / "worldstate_trajectory.png").exists()
 
     items = viz.build_all("sim1-report", str(tmp_path / "valid"),
                           {"world_state_trajectory": _traj("valid", [])})
     assert "worldstate_trajectory" in {it["id"] for it in items}
+
+
+@pytest.mark.skipif(not rv.MATPLOTLIB_AVAILABLE, reason="matplotlib not installed")
+def test_build_all_matplotlib_only_host_records_skip_reason(viz, tmp_path, monkeypatch):
+    """Without plotly _attempt never calls the builder; the matplotlib fallback's skip
+    note must still reach viz_manifest.json, and a valid trajectory still gets its PNG."""
+    monkeypatch.setattr(ReportVisualizer, "_interactive_ok", lambda self: False)
+    items = viz.build_all("sim1-report", str(tmp_path),
+                          {"world_state_trajectory": _traj("inconclusive",
+                                                           ["low_valid_coverage"])})
+    assert "worldstate_trajectory" not in {it["id"] for it in items}
+    with open(tmp_path / "viz_manifest.json", encoding="utf-8") as f:
+        manifest = json.load(f)
+    ws_skips = [s for s in manifest["skipped"] if s["builder"] == "worldstate_trajectory"]
+    assert ws_skips == [
+        {"builder": "worldstate_trajectory", "reason": "plotly_unavailable_or_disabled"},
+        {"builder": "worldstate_trajectory", "reason": "trajectory_not_valid",
+         "validity": "inconclusive"},
+    ]
+    assert "worldstate_trajectory" not in viz._skip_notes
+    assert not (tmp_path / "charts" / "worldstate_trajectory.png").exists()
+
+    valid_dir = tmp_path / "valid"
+    items = viz.build_all("sim1-report", str(valid_dir),
+                          {"world_state_trajectory": _traj("valid", [])})
+    ws_items = [it for it in items if it["id"] == "worldstate_trajectory"]
+    assert len(ws_items) == 1 and ws_items[0]["type"] == "png"
+    with open(valid_dir / "viz_manifest.json", encoding="utf-8") as f:
+        manifest = json.load(f)
+    assert [s for s in manifest["skipped"] if s["builder"] == "worldstate_trajectory"] == [
+        {"builder": "worldstate_trajectory", "reason": "plotly_unavailable_or_disabled"}]
 
 
 # ------------------------------------------------ _log_decision_channel_outcome

@@ -545,8 +545,17 @@ def decision_channel_verdict(accounting: Dict[str, Any], *,
     the frozen policy's rule "missing data yields inconclusive, not convergence".
     With ``0`` the returned accounting equals the input (no new key).
 
-      - valid        — every accounted round succeeded (committed/abstained) at
-                       policy coverage, no provider failures
+    The two producers share the verdict rule but not the round set they account:
+    post-hoc ``run_decision_channel`` replays only rounds present in the action log
+    and always passes ``0``, so a round without any action never reaches its
+    denominator, whereas the in-band producer books every round it saw but never
+    stepped. The same run can therefore be ``inconclusive`` in-band and ``valid``
+    post-hoc.
+
+      - valid        — no failed rounds and at least
+                       ``CONVERGENCE_POLICY_V1["min_valid_coverage"]`` of the
+                       accounted rounds (including unaccounted rounds booked as
+                       missing) are committed/abstained
       - inconclusive — some usable rounds, but provider failures (``failed_rounds``)
                        or silent/missing rounds (``low_valid_coverage``) keep the run
                        below the frozen convergence policy's evidence bar
@@ -787,8 +796,10 @@ def run_decision_channel(
     ws.converged_at = converged_at
     out = ws.outcome()
     out["converged_at"] = converged_at
-    # Foglamp WP1 (1C/1D, I-11/I-16): typed run-level validity verdict, shared with
-    # the in-band calendar producer (SIM-1) — see decision_channel_verdict.
+    # Foglamp WP1 (1C/1D, I-11/I-16): typed run-level validity verdict. The rule is
+    # shared with the in-band calendar producer (SIM-1), but this path accounts only
+    # rounds present in the action log (unaccounted_rounds=0) — see
+    # decision_channel_verdict.
     verdict = decision_channel_verdict(ws.round_accounting())
     result = {
         "outcome": out,
