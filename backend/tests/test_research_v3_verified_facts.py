@@ -130,6 +130,9 @@ def test_merge_supports_is_ordered_deduplicated_and_capped():
     assert lr._merge_supports(entry, ["fifth"], 3) == [] and entry["supports"] == ["first", "second", "third"]
     empty = {}
     assert lr._merge_supports(empty, [], 8) == [] and empty == {"supports": []}
+    # The cap bounds the additions only: an earlier writer's spans are never dropped.
+    full = {"supports": ["a", "b", "c", "d", "a"]}
+    assert lr._merge_supports(full, ["e"], 3) == [] and full["supports"] == ["a", "b", "c", "d"]
 
 
 @pytest.mark.parametrize("ref, expected", [("S2", "S2"), ("[S2]", "S2"), ("2", "S2"), ("s1", "S1"),
@@ -148,14 +151,19 @@ def test_normalize_quant_keeps_the_normalised_ref_only_when_asked(ref, expected)
     "Queue wait (years) for grid connection in euros",
     "Queue waits of several years for grid connections, costed in euros and dollars",
     "Monthly queue months quarters percents thousands millions billions yuans",
+    "Queue of hours, days and weeks: tonnes, barrels, units, people and points",
+    "Queue hour week tonne barrel unit person point gigawatts megawatt decades",
 ])
 def test_unit_words_never_anchor_singular_or_plural(text):
-    """A unit or scale word belongs to the number: "years" / "euros" (5
-    letters, never singularised) are as excluded as "year" / "euro"."""
+    """A unit, scale or period word belongs to the number: "years" / "days"
+    (5 letters or fewer, never singularised) are as excluded as "year" /
+    "day"."""
     words, _ = lr.evidence_anchor_terms(text)
     units = {"year", "years", "euro", "euros", "dollar", "dollars", "month", "months", "quarter", "quarters",
              "percent", "percents", "thousand", "thousands", "million", "millions", "billion", "billions",
-             "yuan", "yuans"}
+             "yuan", "yuans", "hour", "hours", "days", "week", "weeks", "tonne", "tonnes", "barrel", "barrels",
+             "unit", "units", "people", "person", "point", "points", "gigawatt", "gigawatts", "megawatt",
+             "decade", "decades"}
     assert not words & units and "queue" in words
 
 
@@ -288,6 +296,13 @@ def test_verified_number_only(tmp_path):
                                              "verification": "verified", "source_ref": "S1", "future_dated": False,
                                              "evidence_window": {"text": None, "basis": "number_only"}}]
     assert quant[0].get("evidence_window") is None      # nothing stamped before the step applies it
+    # A source sources.json publishes as cited (a shell page) is never searched: no number_only claim.
+    stated = [_verified("Installed capacity", "176", "GW", url, source_ref="S1")]
+    assert lr._Engine._verified_evidence(engine, stated, sources, order, AS_OF)["windows"] == {1: [HARNESS_WINDOW]}
+    sources[0]["source_origin"] = "cited"
+    evidence = lr._Engine._verified_evidence(engine, stated, sources, order, AS_OF)
+    assert evidence["stamps"] == [{"evidence_window": {"text": None, "basis": "source_not_fetched"}}]
+    assert evidence["windows"] == {} and evidence["payload"]["counts"]["windows"] == 0
 
 
 def test_supports_cover_every_figure_before_second_windows(tmp_path):
@@ -339,8 +354,10 @@ def test_supports_are_capped_per_source_and_drops_counted(tmp_path):
     engine.out_dir, engine.analytics_errors = tmp_path, []
     engine.log = lambda kind, message: logs.append((kind, message))
     engine.write_json = lambda path, obj, internal=True: path.write_text(json.dumps(obj), encoding="utf-8")
-    assert lr._Engine._publish_evidence(engine, evidence, sources, "sources.json") is True
+    lr._Engine._publish_windows(engine, evidence, sources, "sources.json")
+    assert lr._Engine._publish_evidence(engine, evidence) is True
     assert sources[0]["supports"] == lines[:8] and sources[1]["supports"] == []
+    assert _load(tmp_path / "sources.json") == sources
     assert ("warn", "v3: 4 evidence window(s) of 1 source(s) not added to sources.json (cap 8 per source; "
                     "their figures keep them with published false)") in logs
     assert _load(tmp_path / lr.VERIFIED_FACTS_FILENAME)["counts"]["windows_dropped"] == 4
@@ -400,6 +417,7 @@ def test_future_dated_uses_the_publication_bound(tmp_path):
              ("2026-10-5", "actual", True), ("2026-9-29", "actual", False), ("2026-13-01", "actual", False)]
     rows = [{"metric": "m", "value": "1", "value_type": kind, "as_of_date": date} for date, kind, _ in dates]
     evidence = lr._Engine._verified_evidence(engine, rows, [], [], bound)
+    assert evidence["payload"]["future_dated_after"] == bound.isoformat()
     assert evidence["stamps"] == [{"future_dated": True} if future else {} for _, _, future in dates]
     assert [row["future_dated"] for row in evidence["payload"]["quant"]] == [future for _, _, future in dates]
     # The same day reading as RESEARCH-4 typing: its flag agrees on every actual.
@@ -474,8 +492,10 @@ def test_end_to_end_and_idempotent(tmp_path, bridge, monkeypatch, fixed_as_of):
     rc, meta, plog, _, _ = v3.run_engine(tmp_path, bridge, v3.World(), out_dir=out)
     assert rc == 0, meta.get("error")
     payload = _load(out / lr.VERIFIED_FACTS_FILENAME)
-    assert list(payload) == ["schema", "as_of", "report_sha256", "quantitative_sha256", "facts", "quant", "counts"]
+    assert list(payload) == ["schema", "as_of", "future_dated_after", "report_sha256", "quantitative_sha256",
+                             "facts", "quant", "counts"]
     assert payload["schema"] == "drf.verified_facts/v1" and payload["as_of"] == AS_OF.isoformat()
+    assert payload["future_dated_after"] == NEXT_DAY      # the bound future_dated is read against
     # The QA'd report (the harness's chart step embeds nothing, so it is also the file on disk).
     assert payload["report_sha256"] == _load(out / "v3" / "qa.json")["report_sha256"]
     assert payload["quantitative_sha256"] == hashlib.sha256((out / "quantitative.json").read_bytes()).hexdigest()
@@ -634,6 +654,34 @@ def test_evidence_failure_degrades_safe(tmp_path, bridge, monkeypatch, fixed_as_
     assert row["verification"] == "verified" and not {"evidence_window", "future_dated"} & set(row)
 
 
+def test_supports_rewrite_failure_publishes_nothing(tmp_path, bridge, monkeypatch, fixed_as_of):
+    """The sources.json rewrite runs before any row is stamped or any
+    structured file is written: when it fails, no quantitative.json row
+    claims a published window that sources.json lacks, and the projection
+    an earlier attempt left goes."""
+    out = tmp_path / "out"
+    rc, _, _, _, _ = v3.run_engine(tmp_path, bridge, v3.World(), out_dir=out)
+    assert rc == 0 and (out / lr.VERIFIED_FACTS_FILENAME).is_file()
+    assert _load(out / "quantitative.json")[0]["evidence_window"]["published"] is True
+    real = lr._Engine.write_json
+
+    def write_json(self, path, obj, *, internal=True):
+        if path.name == "sources.json" and any(row.get("supports") for row in obj):
+            raise OSError("disk full")
+        return real(self, path, obj, internal=internal)
+
+    monkeypatch.setattr(lr._Engine, "write_json", write_json)
+    silent = v3.ScriptedModel(lambda call: pytest.fail(f"unexpected model call: {v3.role_of(call)}"))
+    rc, meta, plog, _, _ = v3.run_engine(tmp_path, bridge, v3.World(), out_dir=out, model=silent)
+    assert rc == 0 and meta["status"] == "completed"
+    assert {"helper": "verified_facts:supports", "error": "OSError: disk full"} in meta["analytics_errors"]
+    assert any(m.startswith("v3: adding evidence windows to sources.json failed (OSError") for m in plog.of("warn"))
+    assert all(row["supports"] == [] for row in _load(out / "sources.json"))
+    (row,) = _load(out / "quantitative.json")
+    assert row["verification"] == "verified" and not {"evidence_window", "future_dated"} & set(row)
+    assert not (out / lr.VERIFIED_FACTS_FILENAME).exists() and "verified_facts" not in meta
+
+
 def test_publish_failure_degrades_safe(tmp_path, bridge, monkeypatch, fixed_as_of):
     out = tmp_path / "out"
     rc, _, _, _, _ = v3.run_engine(tmp_path, bridge, v3.World(), out_dir=out)
@@ -652,6 +700,11 @@ def test_publish_failure_degrades_safe(tmp_path, bridge, monkeypatch, fixed_as_o
     assert {"helper": "verified_facts:publish", "error": "OSError: disk full"} in meta["analytics_errors"]
     # No stale projection of the earlier attempt survives, and meta claims none.
     assert not (out / lr.VERIFIED_FACTS_FILENAME).exists() and "verified_facts" not in meta
+    # The windows went into sources.json first, so every published window is there.
+    supports = {span for row in _load(out / "sources.json") for span in row["supports"]}
+    windows = [row["evidence_window"] for row in _load(out / "quantitative.json") if "evidence_window" in row]
+    assert windows and all(window["text"] in supports for window in windows if window["published"])
+    assert any(window["published"] for window in windows)
 
 
 # ================================================================== parent wiring

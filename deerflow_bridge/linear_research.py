@@ -2953,19 +2953,27 @@ def numeric_sentences(text: str, limit: int = 2, terms: Sequence[str] = ()) -> l
 # numbers and words of every span it is given.  A window is therefore one page
 # sentence that states every number of the figure AND shares at least
 # EVIDENCE_WINDOW_MIN_ANCHORS of its anchor words (Latin words) or CJK
-# bigrams.  A unit or scale word belongs to the number, never to the anchors.
+# bigrams.  The unit words below (scale, share, currency, period, measure and
+# count) belong to the number, never to the anchors; the list is not
+# exhaustive, and a unit word it does not name counts as an anchor.
 _ANCHOR_LATIN_RE = re.compile(r"[a-z\u00e0-\u00f6\u00f8-\u00ff]{4,}")  # casefolded Latin-1 letters
 _ANCHOR_CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
-_ANCHOR_UNIT_WORDS = frozenset({"thousand", "million", "billion", "trillion", "percent", "percentage",
-                                "dollar", "euro", "yuan", "year", "month", "quarter"})
+_ANCHOR_UNIT_WORDS = frozenset({
+    "hundred", "thousand", "million", "billion", "trillion", "percent", "percentage", "point",
+    "dollar", "euro", "yuan", "renminbi", "pound", "rupee", "peso", "franc", "ruble",
+    "minute", "hour", "day", "week", "month", "quarter", "year", "decade",
+    "ton", "tonne", "barrel", "gallon", "litre", "liter", "metre", "meter", "kilometre", "kilometer", "mile",
+    "kilogram", "hectare", "acre", "watt", "kilowatt", "megawatt", "gigawatt", "terawatt",
+    "unit", "people", "person",
+})
 
 
 def evidence_anchor_terms(text: Any) -> tuple[frozenset[str], frozenset[str]]:
     """``(Latin words, CJK bigrams)`` a window is anchored on: casefolded
     Latin words of >= 4 letters (a plural "s" dropped from words over 5
     letters, as the report's citation checker reads them) minus stopwords and
-    unit words, singular or plural ("years", "euros"), and the 2-grams of
-    every CJK run; citation markers ignored."""
+    the listed unit words, singular or plural ("years", "euros", "days"), and
+    the 2-grams of every CJK run; citation markers ignored."""
     value = _CITE_RE.sub(" ", unicodedata.normalize("NFKC", str(text or ""))).casefold()
     words: set[str] = set()
     for word in _ANCHOR_LATIN_RE.findall(value):
@@ -5926,7 +5934,7 @@ class _Engine:
             self.log("ok", f"wrote {sources_name} ({len(sources)} sources)")
             actors_raw, facts_raw = self._structured(strip_references(report), deadline)
             counts = self._write_structured(actors_raw, facts_raw, sources, order)
-            if not self._publish_evidence(counts.pop("_evidence", None), sources, sources_name):
+            if not self._publish_evidence(counts.pop("_evidence", None)):
                 counts.pop("verified_facts", None)
             self._analytics(sources, counts.pop("_actors_obj"))
             self.bridge_call("_collect_prediction_markets", self.out_dir, self.question, report,
@@ -6130,17 +6138,19 @@ class _Engine:
         return parsed, truncated
 
     def _write_structured(self, actors_raw: dict | None, facts_raw: dict | None,
-                          sources: Sequence[Mapping[str, Any]], order: Sequence[int]) -> dict:
+                          sources: list[dict], order: Sequence[int]) -> dict:
         """actors/timeline/quantitative/contested — ALWAYS all four (possibly
         empty) so no stale file of an earlier attempt survives.
 
         With RESEARCH_VERIFIED_FACTS the quant rows also keep ``source_ref``
         and get ``future_dated`` / ``evidence_window`` (see
         :meth:`_verified_evidence`, over the ledger sids of ``order``, the
-        report's citation order); the returned counts then carry
-        ``verified_facts`` and the private ``_evidence`` (the sources.json
-        windows and the verified_facts.json payload) that
-        :meth:`_publish_evidence` publishes."""
+        report's citation order), whose windows :meth:`_evidence_step`
+        publishes in sources.json (``sources`` then holds the rewritten rows)
+        before any row is stamped or any of the four files is written; the
+        returned counts then carry ``verified_facts`` and the private
+        ``_evidence`` (the verified_facts.json payload) that
+        :meth:`_publish_evidence` writes."""
         plan = self.plan
         verify = _env_flag(self.env, "RESEARCH_VERIFIED_FACTS", True)
         if getattr(self.args, "no_actors", False):
@@ -6321,12 +6331,15 @@ class _Engine:
             stamps.append({"verification": verification, "verified": verification == "verified"})
         _stamp_rows(quant, stamps)
 
-    def _evidence_step(self, quant: list[dict], sources: Sequence[Mapping[str, Any]], order: Sequence[int],
+    def _evidence_step(self, quant: list[dict], sources: list[dict], order: Sequence[int],
                        as_of: _dt.date) -> dict | None:
-        """:meth:`_verified_evidence` with its row stamps applied; degrades
-        safe: a failure is recorded in ``analytics_errors``
-        (``verified_facts``), stamps no row, publishes nothing and the run
-        goes on."""
+        """:meth:`_verified_evidence`, its windows published in sources.json
+        (:meth:`_publish_windows`), then its row stamps applied: no row
+        claims a ``published`` window unless sources.json holds it.  Degrades
+        safe: a failure of either step is recorded in ``analytics_errors``
+        (``verified_facts`` / ``verified_facts:supports``), stamps no row,
+        leaves sources.json as finalize wrote it, publishes nothing and the
+        run goes on."""
         try:
             evidence = self._verified_evidence(quant, sources, order, as_of)
         except Exception as exc:  # noqa: BLE001 — evidence windows never fail a finished report
@@ -6335,8 +6348,42 @@ class _Engine:
             self.log("warn", f"v3: verified facts failed ({error}); no evidence windows and no "
                              f"{VERIFIED_FACTS_FILENAME}")
             return None
+        sources_name = self._filename("SOURCES_FILENAME", "sources.json")
+        try:
+            self._publish_windows(evidence, sources, sources_name)
+        except Exception as exc:  # noqa: BLE001 — evidence windows never fail a finished report
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "verified_facts:supports", "error": error[:300]})
+            self.log("warn", f"v3: adding evidence windows to {sources_name} failed ({error}); no evidence "
+                             f"windows and no {VERIFIED_FACTS_FILENAME}")
+            return None
         _stamp_rows(quant, evidence.pop("stamps"))
         return evidence
+
+    def _publish_windows(self, evidence: Mapping[str, Any], sources: list[dict], sources_name: str) -> None:
+        """The windows of :meth:`_verified_evidence` join their rows'
+        ``supports`` (:func:`_merge_supports`) in ONE atomic sources.json
+        rewrite: the same rows in the same order, so the report's positional
+        [S#] are unaffected; the selection is deterministic, so a resumed
+        finalize writes the same bytes.  ``sources`` takes the rewritten rows
+        only once the file is written: a failed write raises with ``sources``
+        and sources.json as they were.  Windows the per-source cap left out
+        are logged."""
+        counts = evidence["payload"]["counts"]
+        if evidence["windows"]:
+            rows = list(sources)
+            for position, spans in evidence["windows"].items():
+                rows[position - 1] = dict(rows[position - 1])
+                _merge_supports(rows[position - 1], spans, EVIDENCE_WINDOWS_PER_SOURCE)
+            self.write_json(self.out_dir / sources_name, rows, internal=False)
+            sources[:] = rows
+            self.log("ok", f"v3: added {counts['windows']} evidence window(s) to the supports of "
+                           f"{len(evidence['windows'])} source(s) in {sources_name}")
+        if counts["windows_dropped"]:
+            self.log("warn", f"v3: {counts['windows_dropped']} evidence window(s) of "
+                             f"{len(evidence['dropped'])} source(s) not added to {sources_name} (cap "
+                             f"{EVIDENCE_WINDOWS_PER_SOURCE} per source; their figures keep them with "
+                             "published false)")
 
     def _verified_evidence(self, quant: Sequence[Mapping[str, Any]], sources: Sequence[Mapping[str, Any]],
                            order: Sequence[int], as_of: _dt.date) -> dict:
@@ -6346,13 +6393,17 @@ class _Engine:
         * Quant rows (labelled by :meth:`_verify_quant_rows`): an ``actual``
           whose ``as_of_date`` is a day (an ISO date, or date-time, read as
           typing reads it: :func:`_period_bounds`) after ``as_of`` (the last
-          day a cited source can have published on) gets ``future_dated``; a
-          ``verified`` row gets ``evidence_window`` — ``{"text": <its best
-          window>, "basis": "number_and_anchor", "published": <bool>}`` on the
-          fetched page of its source (anchors: metric, series, definition),
-          else ``{"text": None, "basis": "number_only"}``: the number is on
-          the page but no sentence states it next to its metric, and nothing
-          is published.
+          day a cited source can have published on, recorded as the
+          projection's ``future_dated_after``) gets ``future_dated``; a year
+          or month is never future-dated.  A ``verified`` row gets
+          ``evidence_window`` — ``{"text": <its best window>, "basis":
+          "number_and_anchor", "published": <bool>}`` on the fetched page of
+          its source (anchors: metric, series, definition), else ``{"text":
+          None, "basis": "number_only"}``: the number is on the page but no
+          sentence states it next to its metric, and nothing is published;
+          or ``{"text": None, "basis": "source_not_fetched"}`` when
+          sources.json does not publish its source as fetched (a stored page
+          demoted as a shell): no window was looked for.
         * Findings: every fact of ``self.records`` in KIQ order as a claim
           (``K3-F2``: KIQ K3's second fact) with its status (the fact's tag),
           numbers, the positional refs and source ids of its sources in
@@ -6414,11 +6465,14 @@ class _Engine:
             window: tuple[int, str] | None = None
             if row.get("verification") == "verified":
                 source = self.ledger.find(row.get("source_url")) if row.get("source_url") else None
-                anchors = " ".join(str(row.get(key) or "") for key in ("metric", "series", "definition"))
-                found = best_windows([source["sid"]], _quant_number_text(row), anchors) if source else []
-                window = found[0] if found else None
-                stamp["evidence_window"] = ({"text": window[1], "basis": "number_and_anchor"} if window
-                                            else {"text": None, "basis": "number_only"})
+                if source is None or source["sid"] not in fetched:
+                    stamp["evidence_window"] = {"text": None, "basis": "source_not_fetched"}
+                else:
+                    anchors = " ".join(str(row.get(key) or "") for key in ("metric", "series", "definition"))
+                    found = best_windows([source["sid"]], _quant_number_text(row), anchors)
+                    window = found[0] if found else None
+                    stamp["evidence_window"] = ({"text": window[1], "basis": "number_and_anchor"} if window
+                                                else {"text": None, "basis": "number_only"})
             stamps.append(stamp)
             row_windows.append(window)
 
@@ -6482,16 +6536,14 @@ class _Engine:
         # the published file's hash.  _write_structured stamps
         # quantitative_sha256.
         payload = {"schema": VERIFIED_FACTS_SCHEMA, "as_of": self.plan.as_of,
+                   "future_dated_after": as_of.isoformat(),
                    "report_sha256": self.qa.get("report_sha256"), "quantitative_sha256": None,
                    "facts": facts, "quant": quant_rows, "counts": counts}
         return {"stamps": stamps, "windows": windows, "dropped": dropped, "payload": payload}
 
-    def _publish_evidence(self, evidence: dict | None, sources: list[dict], sources_name: str) -> bool:
-        """Publish :meth:`_verified_evidence`: its windows join the rows'
-        ``supports`` (:func:`_merge_supports`) in ONE atomic sources.json
-        rewrite (the same rows in the same order, so the report's positional
-        [S#] are unaffected; the selection is deterministic, so a resumed
-        finalize writes the same bytes), then verified_facts.json is written.
+    def _publish_evidence(self, evidence: dict | None) -> bool:
+        """Write the verified_facts.json projection of :meth:`_evidence_step`
+        (whose windows sources.json already holds, :meth:`_publish_windows`).
 
         Without evidence (the knob off, or the step failed) nothing is
         published and a verified_facts.json an earlier attempt left is
@@ -6503,19 +6555,8 @@ class _Engine:
             if evidence is None:
                 path.unlink(missing_ok=True)
                 return False
-            for position, spans in evidence["windows"].items():
-                _merge_supports(sources[position - 1], spans, EVIDENCE_WINDOWS_PER_SOURCE)
             payload = evidence["payload"]
             counts = payload["counts"]
-            if evidence["windows"]:
-                self.write_json(self.out_dir / sources_name, sources, internal=False)
-                self.log("ok", f"v3: added {counts['windows']} evidence window(s) to the supports of "
-                               f"{len(evidence['windows'])} source(s) in {sources_name}")
-            if counts["windows_dropped"]:
-                self.log("warn", f"v3: {counts['windows_dropped']} evidence window(s) of "
-                                 f"{len(evidence['dropped'])} source(s) not added to {sources_name} (cap "
-                                 f"{EVIDENCE_WINDOWS_PER_SOURCE} per source; their figures keep them with "
-                                 "published false)")
             self.write_json(path, payload, internal=False)
             self.log("ok", f"wrote {VERIFIED_FACTS_FILENAME} ({counts['facts']} findings, {counts['verified']} "
                            f"verified; {counts['quant_verified']} of {len(payload['quant'])} quantitative rows "
@@ -6853,13 +6894,14 @@ def _source_for_ref(ref: Any, sources: Sequence[Mapping[str, Any]]) -> Mapping[s
 
 def _merge_supports(entry: MutableMapping[str, Any], spans: Iterable[Any], cap: int) -> list[str]:
     """The only writer of a sources.json row's ``supports`` evidence spans:
-    the row's own spans first, then ``spans`` in the given order, each
-    distinct non-empty text once and at most ``cap`` in all (earlier spans
-    win).  Returns the spans it added."""
+    the row's own spans first, every one of them (the cap never drops what
+    an earlier writer merged), then ``spans`` in the given order while the
+    row holds fewer than ``cap``; each distinct non-empty text once.
+    Returns the spans it added."""
     merged: list[str] = []
     for span in entry.get("supports") or []:
         text = str(span or "").strip()
-        if text and text not in merged and len(merged) < cap:
+        if text and text not in merged:
             merged.append(text)
     kept = len(merged)
     for span in spans:
