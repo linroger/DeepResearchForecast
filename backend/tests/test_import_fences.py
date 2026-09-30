@@ -4,9 +4,9 @@ client or a data-vendor SDK.
 DRF's accounting and honesty rest on every model and network call going through a metered
 transport: LLMClient (usage ledger, budget, typed transport errors), the research gateway
 ledger, and cached_fetch / search_tools (fetch cache, spend ceilings, circuit breakers).
-Nothing stopped a new module - least of all a report-stage module, which must stay
-deterministic over the frozen evidence - from importing openai, httpx or DeerFlow's
-create_chat_model directly and bypassing all of that.
+Nothing stopped a new module - least of all a report-stage module, whose model calls must go
+through LLMClient - from importing openai, httpx or DeerFlow's create_chat_model directly and
+bypassing all of that.
 
 This test walks the non-test source tree (SCAN_ROOTS in _import_fence_policy.py) and collects
 every import that reaches a fenced capability: module-level or function-local (with the
@@ -14,14 +14,15 @@ enclosing def/class qualname), ``from a import b`` expanded to ``a.b``, a star o
 of a fenced parent, literal ``importlib.import_module`` / ``__import__`` targets, and the
 string values of the dynamic import tables. Each hit needs an ALLOW row (file, capability,
 optional scope / symbol pins, a reason and the ledger that meters the call). It also pins that
-the report-stage modules (and the eval/diagnostic modules as they land) reach no capability at
-all, that a ``claude -p`` / ``codex exec`` argv literal appears only in llm_client.py, that no
-ALLOW row is stale, and that the scanner still finds its landing baseline, so a broken scanner
-cannot pass silently.
+the report-stage modules (and the eval/diagnostic modules as they land) import no capability
+directly, that a ``claude -p`` / ``codex exec`` argv literal appears only in llm_client.py, that
+no ALLOW row is stale, and that the scanner still finds its landing baseline, so a broken
+scanner cannot pass silently.
 
 Non-goals (follow-ups): ``camel.agents`` (the sim's reaction agent reuses an oasis_llm model
-backend), re-export laundering (``from app.utils.prediction_markets import httpx``) and
-dynamic imports whose target is not a literal.
+backend), re-export laundering (``from app.utils.prediction_markets import httpx``), transitive
+egress through an allowlisted transport (report_agent fetches and re-quotes Polymarket markets
+through prediction_markets.PolymarketClient) and dynamic imports whose target is not a literal.
 
 Offline: ast over source text, except the sim-script check, which executes the three sim
 scripts' module level with oasis stubbed and camel.models / camel.types blocked.
@@ -137,8 +138,19 @@ class _FenceVisitor(ast.NodeVisitor):
                          for capability in sorted(capabilities))
 
     def _visit_scope(self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) -> None:
+        """Only the body belongs to the def/class scope. Decorators, default arguments,
+        annotations, type parameters and class bases/keywords belong to the enclosing scope (they
+        run when the def or class statement executes), so a scope pin must not admit an import
+        made there."""
+        if isinstance(node, ast.ClassDef):
+            header: list[ast.AST] = [*node.decorator_list, *node.bases, *node.keywords]
+        else:
+            header = [*node.decorator_list, node.args, *([node.returns] if node.returns else [])]
+        for child in (*header, *node.type_params):
+            self.visit(child)
         self._scope.append(node.name)
-        self.generic_visit(node)
+        for statement in node.body:
+            self.visit(statement)
         self._scope.pop()
 
     visit_FunctionDef = visit_AsyncFunctionDef = visit_ClassDef = _visit_scope
@@ -193,11 +205,15 @@ class _FenceVisitor(ast.NodeVisitor):
     visit_List = visit_Tuple = _visit_sequence
 
 
-def scan_source(source: str, path: str) -> FileScan:
-    """Scan one file's source; ``path`` is the repo-relative name hits are reported under."""
+def scan_source(source: str | bytes, path: str) -> FileScan:
+    """Scan one file's source; ``path`` is the repo-relative name hits are reported under.
+
+    Pass raw bytes for a file on disk: ast.parse then decodes them as the interpreter does (a
+    UTF-8 BOM, a PEP 263 coding cookie), so a valid file is never reported unparseable.
+    """
     try:
         tree = ast.parse(source, filename=path)
-    except (SyntaxError, ValueError) as exc:
+    except (SyntaxError, ValueError) as exc:   # bytes that fail to decode raise SyntaxError
         return FileScan(path, error=f"{type(exc).__name__}: {exc}")
     visitor = _FenceVisitor(path)
     visitor.visit(tree)
@@ -224,8 +240,8 @@ def scan_tree(repo_root: Path) -> tuple[FileScan, ...]:
     for file in iter_source_files(repo_root):
         rel = file.relative_to(repo_root).as_posix()
         try:
-            source = file.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as exc:
+            source = file.read_bytes()
+        except OSError as exc:
             scans.append(FileScan(rel, error=f"{type(exc).__name__}: {exc}"))
             continue
         scans.append(scan_source(source, rel))
@@ -316,6 +332,13 @@ def _write(root: Path, rel: str, source: str) -> None:
      {("aiohttp", "http_client", policy.MODULE_SCOPE)}),
     ("class C:\n    async def m(self):\n        def inner():\n            import aiohttp\n",
      {("aiohttp", "http_client", "C.m.inner")}),
+    # decorators, defaults and class bases/keywords run in the enclosing scope, not the def's
+    ("import importlib\n@deco(importlib.import_module('httpx'))\ndef f():\n    pass\n",
+     {("httpx", "http_client", policy.MODULE_SCOPE)}),
+    ("class C:\n    def m(self, x=__import__('requests')) -> None:\n        import aiohttp\n",
+     {("requests", "http_client", "C"), ("aiohttp", "http_client", "C.m")}),
+    ("class C(__import__('openai').OpenAI, metaclass=M):\n    import anthropic\n",
+     {("openai", "llm_sdk", policy.MODULE_SCOPE), ("anthropic", "llm_sdk", "C")}),
     ("try:\n    from langchain_anthropic import ChatAnthropic\nexcept ImportError:\n    pass\n",
      {("langchain_anthropic.ChatAnthropic", "llm_sdk", policy.MODULE_SCOPE)}),
     ("_PROVIDER_MODULES = {'serper': 'deerflow.community.serper.tools', 'x': 'json'}\n",
@@ -370,8 +393,34 @@ def test_scope_and_symbol_pins_are_enforced():
               "    def _synthesize():\n"
               "        from deerflow.models import create_chat_model\n")
     assert unapproved((scan_source(nested, "deerflow_bridge/deerflow_research.py"),)) == []
+    # a decorator argument runs at import time, outside the pinned def
+    decorated = ("import importlib\n"
+                 "@retry(importlib.import_module('httpx'))\n"
+                 "def _http_get():\n"
+                 "    import httpx\n")
+    assert unapproved((scan_source(decorated, "deerflow_bridge/market_tools.py"),)) == [
+        f"deerflow_bridge/market_tools.py:2: httpx [http_client] in {policy.MODULE_SCOPE}"]
     # the same import in a file with no ALLOW row
     assert unapproved((scan_source(gateway, "deerflow_bridge/research_budget.py"),)) != []
+
+
+def test_scan_tree_decodes_files_like_the_interpreter(tmp_path):
+    """Files are read as bytes: a UTF-8 BOM or a PEP 263 coding cookie is not a parse failure,
+    while a file the interpreter cannot decode still fails closed."""
+    undecodable = "backend/app/services/bad.py"
+    bom = "backend/app/services/bom.py"
+    latin = "backend/app/services/latin.py"
+    (tmp_path / bom).parent.mkdir(parents=True)
+    (tmp_path / undecodable).write_bytes(b"label = '\xe9'\n")
+    (tmp_path / bom).write_bytes(b"\xef\xbb\xbfimport openai\n")
+    (tmp_path / latin).write_bytes(b"# -*- coding: latin-1 -*-\nlabel = '\xe9'\nimport httpx\n")
+    scans = scan_tree(tmp_path)
+    assert [scan.path for scan in scans] == [undecodable, bom, latin]
+    assert [bool(scan.error) for scan in scans] == [True, False, False]
+    assert unapproved(scans) == [
+        f"{undecodable}: unparseable, the fence cannot vouch for it ({scans[0].error})",
+        f"{bom}:1: openai [llm_sdk] in {policy.MODULE_SCOPE}",
+        f"{latin}:3: httpx [http_client] in {policy.MODULE_SCOPE}"]
 
 
 # ---------------------------------------------------------------------------
@@ -415,8 +464,10 @@ def test_report_stage_modules_have_no_egress(tree_scans):
     fenced = policy.REPORT_STAGE_MODULES + present
     found = egress_in(tree_scans, fenced)
     assert found == [], (
-        "report-stage and eval/diagnostic modules must reach models only through LLMClient:\n"
-        + "\n".join(found))
+        "report-stage and eval/diagnostic modules must import no capability directly (their "
+        "model calls go through LLMClient; transitive egress through an allowlisted transport, "
+        "e.g. report_agent -> prediction_markets.PolymarketClient fetch/re-quote, is out of "
+        "scope):\n" + "\n".join(found))
     licensed = sorted({row["file"] for row in policy.ALLOW} & set(
         policy.REPORT_STAGE_MODULES + policy.NO_EGRESS_MODULES))
     assert licensed == [], f"ALLOW rows must never license a no-egress module: {licensed}"
@@ -516,7 +567,10 @@ def test_sim_scripts_import_without_camel_models(script, monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "path", list(sys.path))
     root_logger = logging.getLogger()
     monkeypatch.setattr(root_logger, "filters", list(root_logger.filters))
-    monkeypatch.delenv("TOKENIZERS_PARALLELISM", raising=False)
+    # delenv records no undo for an absent variable, so set it first: teardown then restores the
+    # original state, absent or not, after the script's setdefault.
+    monkeypatch.setenv("TOKENIZERS_PARALLELISM", "unset-by-test")
+    monkeypatch.delenv("TOKENIZERS_PARALLELISM")
 
     name = f"_import_fence_{path.stem}"
     spec = importlib.util.spec_from_file_location(name, path)

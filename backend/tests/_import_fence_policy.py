@@ -87,8 +87,9 @@ ALLOW = (
         "reason": "The OASIS/camel model adapter: builds camel OpenAIModel backends (openai "
                   "provider path, Kimi user-agent client swap) and fakes ChatCompletion objects "
                   "for the CLI bridge.",
-        "ledger": "run_parallel_simulation's sim usage accumulator (_SIM_LLM_USAGE, persisted "
-                  "in the sim telemetry snapshot); the CLI path goes through LLMClient",
+        "ledger": "run_parallel_simulation's _SIM_LLM_USAGE accumulator (persisted in the sim "
+                  "telemetry snapshot); the single-platform twitter/reddit runners are "
+                  "unmetered; the CLI bridge and the direct-path fallback go through LLMClient",
     },
     # --- graphiti client adapters (local models or LLMClient-backed) ---------------------------
     {
@@ -301,8 +302,11 @@ ALLOW = (
     },
 )
 
-# Report-stage modules must reach no capability at all: they draft from the frozen evidence and
-# reach models only through LLMClient. A missing file fails the test (a rename must update this).
+# Report-stage modules must import no capability directly: their model calls go through LLMClient.
+# This is a direct-import fence only. Transitive egress through an allowlisted transport is out of
+# scope: report_agent reaches Polymarket through utils.prediction_markets.PolymarketClient (the
+# live fetch fallback when the research handoff has no prediction_markets.json, and the PM-3
+# re-quote). A missing file fails the test (a rename must update this).
 REPORT_STAGE_MODULES = (
     "backend/app/services/report_agent.py",
     "backend/app/services/forecast_extractor.py",
