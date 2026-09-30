@@ -1975,8 +1975,12 @@ class ReportAgent:
                 # W9-8: 优先用研究 handoff 的全量 quantitative.json 渲染「关键指标」表
                 # （tier+时效排序过滤，上限 REPORT_KEY_METRICS_MAX），替代 actors 内嵌的
                 # 20 行副本；全量列表缺省/渲染为空/旗标关闭 → 回退内嵌副本（行为不变）。
+                # REPORT-8：研究行带页面核验标签时先用「已核验指标」块替代关键指标表；
+                # 无标签/旗标关闭/构建失败 → 空串，照旧走关键指标表 / 内嵌副本（逐字节不变）。
                 qb = ""
-                if getattr(Config, "REPORT_EVIDENCE_BLOCKS", True):
+                if getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True):
+                    qb = self._build_verified_figures_block()
+                if not qb and getattr(Config, "REPORT_EVIDENCE_BLOCKS", True):
                     try:
                         qb = self._build_key_metrics_block()
                     except Exception:  # noqa: BLE001 — 关键指标表为可选增强
@@ -2172,6 +2176,50 @@ class ReportAgent:
                 self._md_cell(r.get("source"), 60),
             ]) + " |")
         return "\n".join(lines)
+
+    def _build_verified_figures_block(self) -> str:
+        """REPORT-8：研究 quantitative.json 带页面核验标签（verification）时渲染「已核验指标」块。
+
+        在所引页面核验到数字的已报告值一张表、预期/目标值单列并标注「不是已发生的结果」，其余行只
+        计数（verified_facts.build_verified_figures_block，确定性、行数/字符数受
+        REPORT_VERIFIED_FACTS_MAX_ROWS / _MAX_CHARS 约束）。[S#] 只取报告引用索引
+        （_build_sources_index 的记号映射，纯函数、不改 __init__ 顺序）里存在的记号，绝不自造；
+        行按 actors.as_of_date 分型。结果字典缓存在 self._verified_figures（Part 2 综合注入同一块），
+        返回渲染文本。无任何行带标签（旧引擎/复用研究）→ ""（调用方回退关键指标表）；任何异常
+        → ""（绝不从 __init__ 抛出：构造抛错会触发编排器丢弃全部研究产物的 TypeError 回退）。"""
+        self._verified_figures = None
+        try:
+            rows = getattr(self, "quantitative", None)
+            if not isinstance(rows, list) or not any(
+                    isinstance(r, dict) and "verification" in r for r in rows):
+                return ""
+            from . import verified_facts as _vf
+            from ..utils.dates import parse_as_of
+
+            def _knob(name: str, default: int) -> int:
+                try:
+                    return int(getattr(Config, name, default))
+                except (TypeError, ValueError):
+                    return default
+
+            actors = getattr(self, "actors", None)
+            as_of = parse_as_of(actors.get("as_of_date")) if isinstance(actors, dict) else None
+            result = _vf.build_verified_figures_block(
+                rows,
+                tag_for=_vf.citation_tag_resolver(self._build_sources_index()[1]),
+                lang=getattr(self, "output_language", None) or "English",
+                max_rows=_knob("REPORT_VERIFIED_FACTS_MAX_ROWS", 40),
+                max_chars=_knob("REPORT_VERIFIED_FACTS_MAX_CHARS", 6000),
+                as_of=as_of.date() if as_of is not None else None,
+            )
+        except Exception as exc:  # noqa: BLE001 — 已核验指标块为增强，失败回退关键指标表
+            logger.warning(f"已核验指标块构建失败（回退关键指标表）: {exc}")
+            return ""
+        self._verified_figures = result
+        logger.info(
+            f"已核验指标块：已核验 {len(result['rows'])} 条、预期 {len(result['projections'])} 条、"
+            f"超限未列 {result['omitted']} 条、未收录 {result['excluded']}（sha256 {result['sha256'][:12]}）")
+        return result["rendered"]
 
     def _build_contested_table_block(self, max_claims: int = 15) -> str:
         """W9-8: 争议性关键论断块（contested.json 全量，上限 15 条）。
@@ -9803,6 +9851,17 @@ class ReportAgent:
             parts.append("[Section key points]\n" + key_points)
         if not parts:
             return ""  # 没有任何可综合的输入 → 跳过（绝不让模型凭空写）
+        # REPORT-8：与各章节提示词同一份「已核验指标」块（_build_verified_figures_block 的缓存，
+        # 字符数已受 REPORT_VERIFIED_FACTS_MAX_CHARS 约束），附引用与来源冲突规则；块为空/旗标
+        # 关闭 → 提示词逐字节不变。块本身不构成综合输入（上方判空在前）。
+        figures_rule = ""
+        verified = getattr(self, "_verified_figures", None)
+        verified_block = (verified.get("rendered") or "") if isinstance(verified, dict) else ""
+        if getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True) and verified_block:
+            parts.append("[Verified-on-page figures — exact numbers and their sources]\n" + verified_block)
+            figures_rule = (
+                " When stating an exact figure, use the verified-figures table and keep its [S#]; "
+                "if sources conflict, present both with their sources and never a reconciled number.")
         prompt = (
             "You are the lead forecaster assembling 'Part 2 — Framework & Synthesis' of a "
             "three-part forecast submission (Part 1 = the binary-forecast table, Part 3 = the "
@@ -9815,7 +9874,8 @@ class ReportAgent:
             "top-level heading (the system adds it); no placeholders or meta commentary. "
             "NEVER mention the simulation, agents, rounds, action counts, factions, causal graphs, "
             "or this report's own drafting process; attribute analytical viewpoints to our "
-            "scenario analysis instead — the subject is always the real world.\n\n"
+            "scenario analysis instead — the subject is always the real world."
+            + figures_rule + "\n\n"
             + "\n\n".join(parts)
         )
         text = self.llm.chat(

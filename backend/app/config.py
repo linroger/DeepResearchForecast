@@ -551,6 +551,14 @@ class Config:
     REPORT_KEY_METRICS_MAX = int(os.environ.get('REPORT_KEY_METRICS_MAX', '40') or '40')          # 关键指标表行数上限
     REPORT_CONTESTED_TABLE_MAX = int(os.environ.get('REPORT_CONTESTED_TABLE_MAX', '15') or '15')  # 争议声明表行数上限
     REPORT_CHRONOLOGY_MAX_EVENTS = int(os.environ.get('REPORT_CHRONOLOGY_MAX_EVENTS', '25') or '25')  # 紧凑时间线事件上限
+    # REPORT-8：已核验指标块。研究 quantitative 行带页面核验标签（verification，RESEARCH-4/REPORT-7）时，
+    # 背景块改钉「已核验指标」表替代无核验状态的「关键量化指标」表：只收在所引页面核验到数字的已报告值，
+    # 预期/目标值单列并标注「不是已发生的结果」，[S#] 只取报告引用索引内的记号（绝不自造），其余行只计数；
+    # Part 2 综合注入同一块并附「来源冲突并列呈现、不调和」规则。默认开且安全：无任何行带标签（旧引擎 /
+    # 复用研究）或关闭 → 关键指标表与各提示词逐字节不变；构建失败回退关键指标表（degrade-safe）。
+    REPORT_VERIFIED_FACTS_BLOCK = os.environ.get('REPORT_VERIFIED_FACTS_BLOCK', 'true').strip().lower() == 'true'
+    REPORT_VERIFIED_FACTS_MAX_ROWS = int(os.environ.get('REPORT_VERIFIED_FACTS_MAX_ROWS', '40') or '40')  # 已核验指标块行数上限（超限先丢预期、再丢陈旧、再丢最旧）
+    REPORT_VERIFIED_FACTS_MAX_CHARS = int(os.environ.get('REPORT_VERIFIED_FACTS_MAX_CHARS', '6000') or '6000')  # 已核验指标块字符上限（表头与规则段不截断）；Part 2 注入同一块，故也是 Part 2 注入的上限
     # W9-8：KG 结构先验进报告——因果骨架的 chokepoint 支点优先取 graph_priors_structural.json 的
     # 结构咽喉/介数中心度（研究显著度回退）；关系名册每个 actor 附「结构影响力（KG 中心度）」行
     # （按 actors 别名组折叠去重）。关闭=纯显著度选点、不加中心度行（行为与历史一致）。
