@@ -66,21 +66,29 @@ def clean_env(monkeypatch):
 def test_extract_knobs_types_representative_config_knobs():
     assert KNOBS["REPORT_NATIVE_TOOLS"] == {
         "kind": "bool", "default": "true", "line": KNOBS["REPORT_NATIVE_TOOLS"]["line"],
-        "attr": "REPORT_NATIVE_TOOLS", "form": "in", "tokens": ("true",), "blank": None}
+        "attr": "REPORT_NATIVE_TOOLS", "form": "in", "tokens": ("true",),
+        "ops": (("call", "strip"), ("call", "lower"))}
     assert (KNOBS["GRAPH_MAX_ENTITIES"]["kind"], KNOBS["GRAPH_MAX_ENTITIES"]["default"]) == ("int", "400")
+    assert KNOBS["GRAPH_MAX_ENTITIES"]["ops"] == ()                    # int(os.environ.get(...)): no fallback
     assert (KNOBS["FORECAST_PROB_FLOOR"]["kind"], KNOBS["FORECAST_PROB_FLOOR"]["default"]) == ("float", "0.03")
+    assert KNOBS["FORECAST_PROB_FLOOR"]["ops"] == (("or", ("0.03",)),)
     # max(1, int(os.environ.get(...) or ...)) and a parse inside a class-body try block.
     assert (KNOBS["N_FORECAST_SEEDS"]["kind"], KNOBS["N_FORECAST_SEEDS"]["default"]) == ("int", "1")
+    assert KNOBS["N_FORECAST_SEEDS"]["ops"] == (("or", ("1",)),)
     assert KNOBS["GRAPH_CHOKEPOINT_MAX_NODES"]["kind"] == "int"
-    # A nested fallback read is typed too; the outer read has no literal default.
+    # A nested fallback read is typed too, through both fallbacks; the outer read has no
+    # literal default.
     assert KNOBS["SIM_AUDIENCE_SIZE"]["kind"] == "int" and KNOBS["SIM_AUDIENCE_AGENTS"]["default"] is None
     assert KNOBS["SIM_AUDIENCE_SIZE"]["attr"] == "SIM_AUDIENCE_AGENTS"
-    # The env name, not the attribute, keys the table.
+    assert KNOBS["SIM_AUDIENCE_SIZE"]["ops"] == (("or", ("0",)), ("or", ("0",)))
+    # The env name, not the attribute, keys the table; FLASK_DEBUG's parse does not strip.
     assert KNOBS["FLASK_DEBUG"]["attr"] == "DEBUG" and KNOBS["FLASK_DEBUG"]["kind"] == "bool"
+    assert KNOBS["FLASK_DEBUG"]["ops"] == (("call", "lower"),)
     # Fail-closed and bridge-compatible boolean forms.
     assert (KNOBS["APP_HOST_CHECK"]["form"], KNOBS["APP_HOST_CHECK"]["tokens"]) == (
         "not_in", ("false", "0", "no", "off"))
-    assert (KNOBS["RESEARCH_FORECAST_INPUTS"]["form"], KNOBS["RESEARCH_FORECAST_INPUTS"]["blank"]) == ("in", "true")
+    assert (KNOBS["RESEARCH_FORECAST_INPUTS"]["form"], KNOBS["RESEARCH_FORECAST_INPUTS"]["ops"]) == (
+        "in", (("call", "strip"), ("call", "lower"), ("or", ("true",))))
     # An enum membership test is not a boolean; module-level reads are str knobs.
     assert KNOBS["SIMULATION_FORECAST_EFFECT"]["kind"] == "str"
     assert KNOBS["DRF_TEST_PROCESS"] == {"kind": "str", "default": None,
@@ -100,6 +108,8 @@ def test_extract_knobs_reads_source_text_and_ignores_comments():
         "    E = (os.environ.get('E_TRUTHY', '').strip().lower() or 'true') in ('1', 'true', 'yes', 'on')",
         "    F = os.environ['F_STR']",
         "    G = os.environ.get('G_ENUM', 'x').strip().lower() in ('x', 'y')",
+        "    H = os.environ.get('H_NEW', os.environ.get('H_OLD', 'false')).lower() == 'True'",
+        "    I = int((os.environ.get('I_INT') or '').strip() or '7')",
         "    # os.environ.get('COMMENT_ONLY', 'ignored')",
         "    def method(self):",
         "        return int(os.environ.get('IN_METHOD', '1'))",
@@ -107,9 +117,17 @@ def test_extract_knobs_reads_source_text_and_ignores_comments():
     knobs = ca.extract_knobs(source=source)
     assert {name: knob["kind"] for name, knob in knobs.items()} == {
         "MODULE_FLAG": "str", "A_BOOL": "bool", "B_INT": "int", "C_FLOAT": "float", "D_GUARD": "bool",
-        "E_TRUTHY": "bool", "F_STR": "str", "G_ENUM": "str", "IN_METHOD": "str"}
+        "E_TRUTHY": "bool", "F_STR": "str", "G_ENUM": "str", "H_NEW": "bool", "H_OLD": "bool",
+        "I_INT": "int", "IN_METHOD": "str"}
     assert knobs["A_BOOL"]["default"] == "True" and knobs["B_INT"]["default"] == "3"
-    assert knobs["E_TRUTHY"]["default"] == "" and knobs["E_TRUTHY"]["blank"] == "true"
+    assert knobs["B_INT"]["ops"] == (("or", ("3",)),) and knobs["C_FLOAT"]["ops"] == ()
+    assert knobs["E_TRUTHY"]["default"] == "" and knobs["E_TRUTHY"]["ops"] == (
+        ("call", "strip"), ("call", "lower"), ("or", ("true",)))
+    # Ops are replayed in source order; comparison tokens are kept verbatim (exact match).
+    assert knobs["H_OLD"]["ops"] == knobs["H_NEW"]["ops"] == (("call", "lower"),)
+    assert knobs["H_NEW"]["tokens"] == ("True",) and knobs["H_NEW"]["default"] is None
+    assert knobs["I_INT"]["ops"] == (("or", ("",)), ("call", "strip"), ("or", ("7",)))
+    assert ca._read_as(knobs["I_INT"], "   ") == "7" and ca._read_as(knobs["I_INT"], " 5 ") == "5"
     assert knobs["IN_METHOD"]["attr"] is None and knobs["B_INT"]["line"] == 5
 
 
@@ -146,6 +164,39 @@ def test_unknown_boolean_token_is_an_error():
     assert issue.level == "error"
     assert issue.message == ("REPORT_NATIVE_TOOLS=maybe is not a boolean (read as false); "
                              "write canonical true/false")
+
+
+def test_boolean_audit_reads_the_value_exactly_as_config_parses_it():
+    """FLASK_DEBUG is parsed with .lower() only: 'True ' is read as false, so it is an error."""
+    issue = _only(ca.audit_env({"FLASK_DEBUG": "True "}, KNOBS))
+    assert issue == ca.Issue("error", "FLASK_DEBUG",
+                             "FLASK_DEBUG='True ' is read as false; write canonical true/false")
+    assert ca.audit_env({"FLASK_DEBUG": "TRUE"}, KNOBS) == []
+    assert ca.audit_env({"FLASK_DEBUG": "false "}, KNOBS) == []      # read as false, as meant
+    # A stripping parse reads the same padded value as meant.
+    assert ca.audit_env({"REPORT_NATIVE_TOOLS": "True "}, KNOBS) == []
+
+
+_BOOL_TOKENS = ["true", "True ", " true", "TRUE", "1", "yes", "on", "false", "FALSE ", "0", "off", "",
+                "  ", "maybe"]
+
+
+def test_boolean_audit_model_matches_a_fresh_config_for_every_knob(monkeypatch):
+    """Every boolean knob, every token: _bool_reads predicts the value a freshly executed
+    config.py reads (so an error is reported exactly when Config misreads the token)."""
+    single = [name for name, knob in KNOBS.items() if knob["kind"] == "bool"
+              and knob["attr"] and sum(k["attr"] == knob["attr"] for k in KNOBS.values()) == 1]
+    assert len(single) == sum(knob["kind"] == "bool" for knob in KNOBS.values())
+    spec = importlib.util.spec_from_file_location("_infra14_bool_probe", BACKEND / "app" / "config.py")
+    mismatches = []
+    for token in _BOOL_TOKENS:
+        for name in single:
+            monkeypatch.setenv(name, token)
+        probe = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(probe)  # a fresh Config; app.config itself is untouched
+        mismatches += [(name, token) for name in single
+                       if getattr(probe.Config, KNOBS[name]["attr"]) is not ca._bool_reads(KNOBS[name], token)]
+    assert mismatches == []
 
 
 def test_blank_boolean_is_an_error_only_when_it_flips_the_default():
@@ -189,6 +240,31 @@ def test_sanitize_numeric_env_pops_non_finite_float(value):
     assert "is not a finite number" in issue.message and environ == {}
 
 
+@pytest.mark.parametrize("name, read_as", [
+    ("SIM_AUDIENCE_SIZE", "0"), ("ODDPOOL_MAX_MARKETS", "20"), ("LLM_RUN_BUDGET_USD", "0"),
+    ("PREDICTION_MARKETS_MAX", "20"),
+])
+def test_blank_number_is_a_warning_when_its_parse_has_an_or_fallback(name, read_as):
+    """int(os.environ.get('X', 'd') or 'd') reads a blank as 'd' (it never crashed): the value
+    stays, so Config is unchanged, and the audit only warns (it refuses no run)."""
+    environ = {name: ""}
+    assert ca.sanitize_numeric_env(environ, KNOBS) == [] and environ == {name: ""}
+    assert _only(ca.audit_env(environ, KNOBS)) == ca.Issue(
+        "warning", name, f"{name} is blank; it is read as {read_as}. Write a number or remove the line")
+    # Whitespace is not blank to `or`: int('   ') raises, so that value is still popped.
+    environ = {name: "   "}
+    assert _only(ca.sanitize_numeric_env(environ, KNOBS)).level == "error" and environ == {}
+
+
+def test_blank_number_without_a_fallback_stays_an_error():
+    """int(os.environ.get('X', 'd')) raised on a blank before INFRA-14: popped, an error."""
+    for name in ("DEERFLOW_RESEARCH_TIMEOUT", "REPORT_AGENT_MAX_REFLECTION_ROUNDS"):
+        environ = {name: ""}
+        issue = _only(ca.sanitize_numeric_env(environ, KNOBS))
+        assert issue.level == "error" and issue.message.startswith(f"{name} is blank") and environ == {}
+        assert _only(ca.audit_env({name: ""}, KNOBS)).level == "error"
+
+
 def test_sanitize_numeric_env_keeps_valid_numbers():
     environ = {"GRAPH_MAX_ENTITIES": " 250 ", "GRAPH_PRUNE_MIN_CORE_COVERAGE": "0.5", "LLM_HTTP_TIMEOUT_S": "90"}
     assert ca.sanitize_numeric_env(environ, KNOBS) == []
@@ -223,12 +299,13 @@ def test_malformed_numeric_env_never_crashes_the_config_import():
     cases = [{"GRAPH_MAX_ENTITIES": "abc"},
              {"GRAPH_MAX_ENTITIES": "", "GRAPH_PRUNE_MIN_CORE_COVERAGE": "nan",
               "REPORT_AGENT_MAX_TOOL_CALLS": "twelve"},
-             {"GRAPH_MAX_ENTITIES": "250"}]
+             {"GRAPH_MAX_ENTITIES": "250"},
+             {"SIM_AUDIENCE_SIZE": "", "LLM_RUN_BUDGET_USD": ""}]
     proc = subprocess.run([sys.executable, "-c", _CONFIG_IMPORT_CHILD, json.dumps(cases)],
                           cwd=str(BACKEND), capture_output=True, text=True, timeout=120)
     assert proc.returncode == 0, proc.stderr
     line = [ln for ln in proc.stdout.splitlines() if ln.startswith("<<<JSON>>>")][-1]
-    abc, blank, valid = json.loads(line[len("<<<JSON>>>"):])
+    abc, blank, valid, guarded = json.loads(line[len("<<<JSON>>>"):])
     assert (abc["GRAPH_MAX_ENTITIES"], abc["left_in_environ"]) == (400, [])
     assert abc["import_issues"] == [["error", "GRAPH_MAX_ENTITIES",
                                      "GRAPH_MAX_ENTITIES=abc is not an integer; it is ignored and "
@@ -239,6 +316,9 @@ def test_malformed_numeric_env_never_crashes_the_config_import():
     assert sorted(issue[1] for issue in blank["import_issues"]) == [
         "GRAPH_MAX_ENTITIES", "GRAPH_PRUNE_MIN_CORE_COVERAGE", "REPORT_AGENT_MAX_TOOL_CALLS"]
     assert (valid["GRAPH_MAX_ENTITIES"], valid["import_issues"], valid["errors"]) == (250, [], [])
+    # A blank the parse's `or` fallback reads is left alone and refuses nothing.
+    assert (guarded["left_in_environ"], guarded["import_issues"], guarded["errors"]) == (
+        ["LLM_RUN_BUDGET_USD", "SIM_AUDIENCE_SIZE"], [], [])
 
 
 # ───────────────────────────── range / enum / coupled / cost table ───────────
@@ -254,6 +334,8 @@ def test_malformed_numeric_env_never_crashes_the_config_import():
     ("REPORT_MAX_CITATIONS_PER_SOURCE", "0", False),
     ("LLM_RUN_BUDGET_USD", "-1", False),
     ("LLM_RUN_BUDGET_TOKENS", "0", True),
+    ("LLM_HTTP_TIMEOUT_S", "-5", False),
+    ("LLM_HTTP_TIMEOUT_S", "0", True),         # the client reads 0 as 600
 ])
 def test_range_rules(name, value, ok):
     issues = ca.audit_env({name: value}, KNOBS)
@@ -301,9 +383,15 @@ def test_coupled_rules_use_the_effective_values():
     ("[1, 2]", False),
     ('{"openai": [-1, 2]}', False),
     ('{"openai": [1]}', False),
-    ('{"openai": ["5", "15"]}', False),
-    ('{"openai": [true, 1]}', False),
+    ('{"openai": {"in": 1, "out": 2}}', False),
+    # telemetry._cost_overrides reads what float() parses and ignores items after the pair.
+    ('{"openai": ["5", " 15 "]}', True),
+    ('{"openai": [5, 15, 0]}', True),
+    ('{"openai": ["five", 15]}', False),
+    ('{"openai": [true, 1]}', False),          # float(true) == 1.0: a misread, not a price
     ('{"openai": [NaN, 1]}', False),
+    ('{"openai": [1e400, 1]}', False),         # inf
+    ('{"openai": [1' + "0" * 400 + ', 1]}', False),   # float() overflows
 ])
 def test_cost_table_must_be_an_object_of_non_negative_price_pairs(value, ok):
     issues = ca.audit_env({"LLM_COST_PER_MTOK": value}, KNOBS)
@@ -348,9 +436,13 @@ def test_promoted_knobs_are_declared_documented_and_not_grandfathered():
     assert Config.RESEARCH_EVIDENCE_GRADING is True and Config.RESEARCH_FORECAST_INPUTS is True
     assert Config.CONFIG_STRICT_VALIDATION is True
     assert (KNOBS["LLM_HTTP_TIMEOUT_S"]["kind"], KNOBS["RESEARCH_EVIDENCE_GRADING"]["kind"]) == ("float", "bool")
+    # Promoted in review: an operator .env sets it, and report_agent's getattr default was 3.
+    assert Config.REPORT_TRANSLATION_CONTAMINATION_RETRIES == 3
+    assert (KNOBS["REPORT_TRANSLATION_CONTAMINATION_RETRIES"]["kind"],
+            KNOBS["REPORT_TRANSLATION_CONTAMINATION_RETRIES"]["default"]) == ("int", "3")
     documented = ed.documented_env_vars()
     for name in ("CONFIG_STRICT_VALIDATION", "LLM_HTTP_TIMEOUT_S", "RESEARCH_EVIDENCE_GRADING",
-                 "RESEARCH_FORECAST_INPUTS"):
+                 "RESEARCH_FORECAST_INPUTS", "REPORT_TRANSLATION_CONTAMINATION_RETRIES"):
         assert name in documented, name
         assert name not in ca.GRANDFATHERED_GHOST_KNOBS, name
     for name in ca.GRANDFATHERED_GHOST_KNOBS:
@@ -560,6 +652,50 @@ def test_run_accepts_an_integral_max_rounds(client, route, max_rounds, expected)
     assert po.PipelineManager.load(pipeline_id)["options"]["max_rounds"] == expected
 
 
+@pytest.mark.parametrize("route", ["/api/research/run", "/api/v1/run"])
+def test_run_maps_a_start_config_refusal_to_400(client, monkeypatch, route):
+    """The environment changed after preflight: start() refuses, and the route answers 400
+    with the errors (preflight is stubbed clean by the fixture), never a 500."""
+    monkeypatch.setenv("SIM_TEMPORAL_MODE", "weeks")
+    response = _post(client, route)
+    assert response.status_code == 400
+    body = response.get_json()
+    assert body["preflight_errors"] == ["SIM_TEMPORAL_MODE=weeks is not one of calendar, hours"]
+    assert body["error"].startswith("configuration errors refuse this run") and "traceback" not in body
+
+
+@pytest.fixture
+def fork_calls(client, monkeypatch):
+    calls = []
+
+    def fork(cls, base_pipeline_id, overlay):
+        calls.append(dict(overlay))
+        return types.SimpleNamespace(pipeline_id="pipe_fork00000001", task_id="task_1", status="running")
+
+    monkeypatch.setattr(research_api.PipelineManager, "load", classmethod(lambda cls, pid: {"mode": "full"}))
+    monkeypatch.setattr(po.PipelineOrchestrator, "fork", classmethod(fork))
+    return calls
+
+
+@pytest.mark.parametrize("max_rounds", [True, 3.5, "ten", [4]])
+def test_scenario_fork_rejects_a_bool_or_non_integral_max_rounds(client, fork_calls, max_rounds):
+    response = client.post("/api/research/pipe_base00000001/scenario",
+                           data=json.dumps({"label": "what-if", "max_rounds": max_rounds}),
+                           content_type="application/json")
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "max_rounds 必须是整数"
+    assert fork_calls == []
+
+
+@pytest.mark.parametrize("max_rounds", [None, 6, 6.0, "6"])
+def test_scenario_fork_accepts_an_integral_max_rounds(client, fork_calls, max_rounds):
+    overlay = {"label": "what-if", "max_rounds": max_rounds}
+    response = client.post("/api/research/pipe_base00000001/scenario", data=json.dumps(overlay),
+                           content_type="application/json")
+    assert response.status_code == 200, response.get_json()
+    assert fork_calls == [overlay]
+
+
 def test_resume_preflight_checks_the_pinned_research_model(client, monkeypatch):
     seen = []
 
@@ -621,6 +757,18 @@ def test_schedule_create_normalises_like_the_run_api(schedules):
         None, None, None, {})
 
 
+@pytest.mark.parametrize("mode, expected", [("FULL", {"mode": "full"}), (" research_only ", {"mode": "research_only"}),
+                                            ("", {}), ("  ", {}), (None, {"mode": None})])
+def test_schedule_create_normalises_the_mode_like_the_run_api(schedules, mode, expected):
+    record = sr.ScheduleStore.create(QUESTION, interval_minutes=60, options={"mode": mode})
+    assert record["options"] == expected
+
+
+def test_schedule_create_rejects_a_non_string_mode(schedules):
+    with pytest.raises(ValueError, match="options.mode must be one of full, research_only, got 1"):
+        sr.ScheduleStore.create(QUESTION, interval_minutes=60, options={"mode": 1})
+
+
 def test_schedule_cli_add_reports_invalid_options(schedules, capsys):
     assert sr.main(["add", "--prompt", QUESTION, "--interval-minutes", "60", "--depth", "bogus"]) == 2
     assert "depth must be one of" in capsys.readouterr().err
@@ -676,6 +824,17 @@ def test_launch_starts_a_valid_schedule_with_normalised_options(schedules, orche
                                    "language": "", "model": "claude"}]
     stored = sr.ScheduleStore.load(record["schedule_id"])
     assert "last_error" not in stored and stored["run_pipeline_ids"] == [pipeline_id]
+
+
+@pytest.mark.parametrize("stored_mode, launched_mode", [("", "full"), ("FULL", "full"),
+                                                        ("Research_Only", "research_only")])
+def test_launch_normalises_a_stored_mode(schedules, orchestrator, stored_mode, launched_mode):
+    """_launch used str(mode or 'full'): a blank or upper-case stored mode still launches."""
+    record = sr.ScheduleStore.create(QUESTION, interval_minutes=30)
+    record["options"] = {"mode": stored_mode}
+    sr.ScheduleStore.save(record)
+    assert sr.Scheduler._launch(sr.ScheduleStore.load(record["schedule_id"]), NOW) == "pipe_000000000001"
+    assert orchestrator.calls[0]["mode"] == launched_mode
 
 
 def test_launch_records_a_start_refusal(schedules, orchestrator):

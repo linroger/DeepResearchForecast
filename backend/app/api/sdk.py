@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
 
 from ..config import Config
-from ..config_audit import parse_int_option
+from ..config_audit import ConfigurationError, parse_int_option
 from ..services import forecast_ledger, forecast_resolution
 from ..services.pipeline_orchestrator import (
     PipelineManager,
@@ -176,6 +176,10 @@ def v1_run():
             # start() re-checks the admission before creating anything; any other
             # ValueError is an internal fault (500 below).
             return _err(str(e))
+        except ConfigurationError as e:
+            # INFRA-14: start() re-checks the config audit (the environment changed after
+            # preflight); a refusal lists its errors like preflight does, never a 500.
+            return jsonify({"success": False, "error": str(e), "preflight_errors": e.errors}), 400
         return _ok({
             "pipeline_id": state.pipeline_id,
             "task_id": state.task_id,

@@ -21,7 +21,7 @@ from flask import jsonify, request
 
 from . import research_bp
 from ..config import Config
-from ..config_audit import parse_int_option
+from ..config_audit import ConfigurationError, parse_int_option
 from ..services.pipeline_orchestrator import (
     PipelineManager,
     PipelineOrchestrator,
@@ -137,6 +137,10 @@ def run_pipeline():
             # start() re-checks the admission before creating anything; any other
             # ValueError is an internal fault (500 below).
             return jsonify({"success": False, "error": str(e)}), 400
+        except ConfigurationError as e:
+            # INFRA-14: start() re-checks the config audit (the environment changed after
+            # preflight); a refusal lists its errors like preflight does, never a 500.
+            return jsonify({"success": False, "error": str(e), "preflight_errors": e.errors}), 400
         return jsonify({
             "success": True,
             "data": {
@@ -257,6 +261,12 @@ def fork_scenario(pipeline_id: str):
         overlay = request.get_json(silent=True) or {}
         if not (overlay.get("label") or "").strip():
             return jsonify({"success": False, "error": "缺少情景标签 label"}), 400
+        if overlay.get("max_rounds") is not None:
+            # INFRA-14: strict like the run routes (fork() would read true as 1 and 3.5 as 3).
+            try:
+                parse_int_option(overlay["max_rounds"], "max_rounds")
+            except ValueError:
+                return jsonify({"success": False, "error": "max_rounds 必须是整数"}), 400
         preflight_errors = preflight_pipeline(mode="full")
         if preflight_errors:
             return jsonify({

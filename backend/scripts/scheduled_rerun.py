@@ -165,8 +165,9 @@ def validate_run_options(*, depth: Optional[str], model: Optional[str], language
     depth: None/'' (Config default) or quick/standard/deep, any case.  model: None/''
     or one of Config.SUPPORTED_DEERFLOW_MODELS, any case.  language: None (Config
     default), '' or 'auto' (the model chooses; stored as ''), Chinese or English.
-    options: an object whose optional mode is full/research_only and whose optional
-    max_rounds is a strict integer (a bool or 3.5 is refused, as by the API).
+    options: an object whose optional mode is full/research_only, any case (a blank
+    mode is dropped: full), and whose optional max_rounds is a strict integer (a bool
+    or 3.5 is refused, as by the API).
     """
     if depth is not None and not isinstance(depth, str):
         raise ValueError(f"depth must be one of {', '.join(_VALID_DEPTHS)}, got {depth!r}")
@@ -187,8 +188,17 @@ def validate_run_options(*, depth: Optional[str], model: Optional[str], language
     if not isinstance(options, dict):
         raise ValueError(f"options must be an object, got {type(options).__name__}")
     options = dict(options)
-    if options.get("mode") is not None and options["mode"] not in _VALID_MODES:
-        raise ValueError(f"options.mode must be one of {', '.join(_VALID_MODES)}, got {options['mode']!r}")
+    mode = options.get("mode")
+    if mode is not None:
+        # Normalised like the run API ('FULL' is full); a blank mode is the default
+        # (full), as _launch always read it, so it is dropped.
+        normalised = mode.strip().lower() if isinstance(mode, str) else None
+        if normalised == "":
+            options.pop("mode")
+        elif normalised in _VALID_MODES:
+            options["mode"] = normalised
+        else:
+            raise ValueError(f"options.mode must be one of {', '.join(_VALID_MODES)}, got {mode!r}")
     if options.get("max_rounds") is not None:
         options["max_rounds"] = parse_int_option(options["max_rounds"], "options.max_rounds")
     return depth, model, language, options

@@ -8,12 +8,15 @@ module is the single parser of config.py's knobs and the audit over an environme
 
 * ``extract_knobs`` walks config.py's AST (no import, no regex): every literal
   ``os.environ`` read in the module, typed from its ``Config`` assignment as
-  bool / int / float / str with its literal default.  ``scripts/check_env_drift.py``
-  and ``tests/_hermetic.py`` read the same table.
-* ``sanitize_numeric_env`` runs in config.py before ``class Config``: a blank,
-  unparseable or non-finite value of an int/float knob is popped from the
-  environment, so the code default applies and the import never crashes, and is
-  reported as an error.
+  bool / int / float / str with its literal default and the str methods /
+  ``or '<literal>'`` fallbacks its parse applies (replayed, so the audit reads a
+  value exactly as Config does).  ``scripts/check_env_drift.py`` and
+  ``tests/_hermetic.py`` read the same table.
+* ``sanitize_numeric_env`` runs in config.py before ``class Config``: a value of
+  an int/float knob that its parse would raise on (blank without an ``or``
+  fallback, unparseable) or read as non-finite is popped from the environment,
+  so the code default applies and the import never crashes, and is reported as
+  an error.  A blank value the parse's own fallback reads is only a warning.
 * ``audit_env`` reports non-canonical booleans, enum / range / coupled-pair
   violations, a malformed ``LLM_COST_PER_MTOK`` and grandfathered ghost knobs
   set in the environment.
@@ -83,6 +86,9 @@ RANGE_RULES: dict[str, Range] = {
     # Every LLM_RUN_BUDGET_* knob (0 = no budget).
     "LLM_RUN_BUDGET_TOKENS": _NON_NEGATIVE,
     "LLM_RUN_BUDGET_USD": _NON_NEGATIVE,
+    # Seconds; llm_client._build_openai_client reads 0 as 600 but passes a negative value
+    # through as the client's timeout.
+    "LLM_HTTP_TIMEOUT_S": _NON_NEGATIVE,
 }
 
 # Accepted values (compared after .strip().lower(), as Config reads them).
@@ -131,7 +137,6 @@ GRANDFATHERED_GHOST_KNOBS: dict[str, str] = {
     "REPORT_SPINE_INPUT_CAP_INPUTS": "forecast-spine prompt budget constant",
     "REPORT_SPINE_INPUT_CAP_SIGNAL": "forecast-spine prompt budget constant",
     "REPORT_SPINE_MAX_TOKENS": "forecast-spine completion budget constant",
-    "REPORT_TRANSLATION_CONTAMINATION_RETRIES": "internal translation repair bound",
     "REPORT_VIZ_PLOTLYJS_INLINE": "report-visualizer override read only through Config attributes",
     "SCHEDULER_DEFAULT_MAX_RUNS": "scheduled_rerun reads its knobs with getattr defaults by design",
     "SIM_AUDIENCE_ACTIVE_CAP": "legacy attribute-injection hook of the simulation config generator",
@@ -173,66 +178,82 @@ def _env_read(node: ast.AST) -> Optional[tuple[str, Optional[str]]]:
     return None
 
 
-def _env_chain(node: ast.AST) -> Optional[tuple[str, Optional[str]]]:
-    """``(env name, blank fallback)`` for an env read wrapped in str methods and
-    ``or '<literal>'`` fallbacks (``(os.environ.get('X', '').strip().lower() or 'true')``)."""
-    blank = None
+def _env_chains(node: ast.AST) -> list[tuple[str, tuple[tuple[str, Any], ...]]]:
+    """``[(env name, ops)]`` for each env read whose value ``node`` evaluates to.
+
+    The value may pass through str methods (``.strip().lower()``), ``or '<literal>'``
+    fallbacks and the default slot of an outer read (``os.environ.get('NEW',
+    os.environ.get('OLD', 'd'))``, read with the outer name unset).  ``ops`` lists
+    them in application order, each ``('call', method)`` or ``('or', literals)``;
+    ``_read_as`` replays them on a raw value.
+    """
+    outer: list[tuple[str, Any]] = []
     while True:
         if (isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or)
-                and len(node.values) == 2 and _is_str(node.values[1])):
-            if blank is None:
-                blank = node.values[1].value
+                and all(_is_str(value) for value in node.values[1:])):
+            outer.append(("or", tuple(value.value for value in node.values[1:])))
             node = node.values[0]
         elif (isinstance(node, ast.Call) and not node.args and not node.keywords
               and isinstance(node.func, ast.Attribute) and node.func.attr in _STR_METHODS):
+            outer.append(("call", node.func.attr))
             node = node.func.value
         else:
             break
     read = _env_read(node)
-    return (read[0], blank) if read else None
+    if read is None:
+        return []
+    ops = tuple(reversed(outer))
+    chains = [(read[0], ops)]
+    if isinstance(node, ast.Call) and len(node.args) > 1 and not _is_str(node.args[1]):
+        chains.extend((name, inner + ops) for name, inner in _env_chains(node.args[1]))
+    return chains
 
 
-def _bool_spec(node: ast.Compare) -> Optional[tuple[str, dict[str, Any]]]:
-    """The knob a boolean comparison parses and how, else None.
+def _bool_specs(node: ast.Compare) -> list[tuple[str, dict[str, Any]]]:
+    """The knobs a boolean comparison parses and how (empty when it is not one).
 
-    ``form`` 'in': the value is true iff its token is in ``tokens``
-    (``== 'true'`` is 'in' ('true',)); 'not_in': true iff it is not.  ``blank``
-    is the ``or '<literal>'`` token a blank value is read as.
+    ``form`` 'in': the value is true iff the string Config compares (``ops``
+    applied) is one of ``tokens`` (``== 'true'`` is 'in' ('true',)); 'not_in':
+    true iff it is not.  Tokens are kept verbatim: the comparison is exact.
     """
     if len(node.ops) != 1:
-        return None
-    chain = _env_chain(node.left)
-    if chain is None:
-        return None
+        return []
     op, right = node.ops[0], node.comparators[0]
     if isinstance(op, (ast.Eq, ast.NotEq)) and _is_str(right):
-        tokens = (right.value.lower(),)
+        tokens = (right.value,)
         form = "in" if isinstance(op, ast.Eq) else "not_in"
     elif (isinstance(op, (ast.In, ast.NotIn)) and isinstance(right, (ast.Tuple, ast.List, ast.Set))
           and right.elts and all(_is_str(elt) for elt in right.elts)):
-        tokens = tuple(elt.value.lower() for elt in right.elts)
+        tokens = tuple(elt.value for elt in right.elts)
         form = "in" if isinstance(op, ast.In) else "not_in"
     else:
-        return None
-    if not set(tokens) <= _BOOL_VOCABULARY:
-        return None                     # an enum membership test, not a boolean
-    name, blank = chain
-    return name, {"kind": "bool", "form": form, "tokens": tokens, "blank": blank}
+        return []
+    if not {token.lower() for token in tokens} <= _BOOL_VOCABULARY:
+        return []                       # an enum membership test, not a boolean
+    return [(name, {"kind": "bool", "form": form, "tokens": tokens, "ops": ops})
+            for name, ops in _env_chains(node.left)]
 
 
 def _classify(node: ast.AST, out: dict[str, dict[str, Any]]) -> None:
-    """Type every env read inside a Config assignment's value expression."""
+    """Type every env read inside a Config assignment's value expression.
+
+    An int/float knob carries ``ops`` (see ``_env_chains``) when its value reaches
+    ``int()`` / ``float()`` through them, else None (the parse is not modelled
+    beyond ``int(raw)`` / ``float(raw)``).
+    """
     if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
             and node.func.id in ("int", "float") and len(node.args) == 1):
+        chains = dict(_env_chains(node.args[0]))
         for sub in ast.walk(node.args[0]):
             read = _env_read(sub)
             if read is not None:
-                out.setdefault(read[0], {"kind": node.func.id})
+                out.setdefault(read[0], {"kind": node.func.id, "ops": chains.get(read[0])})
         return
     if isinstance(node, ast.Compare):
-        spec = _bool_spec(node)
-        if spec is not None:
-            out.setdefault(spec[0], spec[1])
+        specs = _bool_specs(node)
+        if specs:
+            for name, spec in specs:
+                out.setdefault(name, spec)
             return
     for child in ast.iter_child_nodes(node):
         _classify(child, out)
@@ -266,8 +287,9 @@ def extract_knobs(config_source_path: str = CONFIG_SOURCE_PATH, *,
     DRF_TEST_PROCESS are 'str' with ``attr`` None); ``default`` is the first
     literal default among the name's reads (None when there is none); ``line`` is
     the first read; ``attr`` the Config attribute it feeds.  A bool also carries
-    ``form`` / ``tokens`` / ``blank`` (see ``_bool_spec``).  Insertion order is
-    source order.  Raises OSError / SyntaxError on an unreadable source.
+    ``form`` / ``tokens`` / ``ops`` (see ``_bool_specs``), an int/float ``ops``
+    (see ``_classify``).  Insertion order is source order.  Raises OSError /
+    SyntaxError on an unreadable source.
     """
     if source is None:
         with open(config_source_path, encoding="utf-8") as fh:
@@ -306,9 +328,11 @@ def extract_knobs(config_source_path: str = CONFIG_SOURCE_PATH, *,
 # ---------------------------------------------------------------------------
 
 def _shown(raw: str) -> str:
-    """A value as quoted in a message (bounded; knob values here are never secrets)."""
+    """A value as quoted in a message (bounded; knob values here are never secrets).
+    A value with surrounding whitespace is repr-quoted so the whitespace shows."""
     text = str(raw)
-    return text if len(text) <= 60 else text[:57] + "..."
+    text = text if len(text) <= 60 else text[:57] + "..."
+    return text if text == text.strip() else repr(text)
 
 
 def _default_text(knob: Mapping[str, Any]) -> str:
@@ -316,30 +340,46 @@ def _default_text(knob: Mapping[str, Any]) -> str:
     return "the code default" if default is None else f"the default {default!r}"
 
 
+def _read_as(knob: Mapping[str, Any], raw: str) -> str:
+    """The string Config's parse sees for the env value ``raw``: the knob's ``ops``
+    (str methods, ``or`` fallbacks) replayed in order; ``raw`` itself without ops."""
+    value = raw
+    for op, arg in knob.get("ops") or ():
+        if op == "call":
+            value = getattr(value, arg)()
+        else:                           # 'or': the first truthy of value, *literals, else the last
+            for literal in arg:
+                if value:
+                    break
+                value = literal
+    return value
+
+
 def _bool_reads(knob: Mapping[str, Any], raw: str) -> bool:
-    """How Config reads ``raw`` for this boolean knob."""
-    token = raw.strip().lower() or (knob.get("blank") or "")
+    """How Config reads ``raw`` for this boolean knob (its exact comparison)."""
+    seen = _read_as(knob, raw)
     tokens = knob.get("tokens") or ("true",)
-    return token in tokens if knob.get("form", "in") == "in" else token not in tokens
+    return seen in tokens if knob.get("form", "in") == "in" else seen not in tokens
 
 
 def _bool_issue(name: str, knob: Mapping[str, Any], raw: str) -> Optional[Issue]:
-    token = raw.strip().lower()
-    read_word = "true" if _bool_reads(knob, raw) else "false"
+    token = raw.strip().lower()         # what the operator meant; _bool_reads is what Config reads
+    reads = _bool_reads(knob, raw)
+    read_word = "true" if reads else "false"
     if not token:
         default = knob.get("default")
-        if default is not None and not default.strip():
-            return None                 # blank is this knob's own default
         default_value = _bool_reads(knob, default or "")
-        if _bool_reads(knob, raw) != default_value:
+        if reads != default_value:
             return Issue(ERROR, name, (
                 f"{name} is blank, which is read as {read_word} instead of its default "
                 f"{'true' if default_value else 'false'}; write canonical true/false or remove the line"))
+        if default is not None and not default.strip():
+            return None                 # blank is this knob's own default
         return Issue(WARNING, name, (
             f"{name} is blank; its default ({read_word}) applies. Write canonical true/false "
             "or remove the line"))
     if token in _BOOL_VOCABULARY:
-        if _bool_reads(knob, raw) != (token in TRUE_TOKENS):
+        if reads != (token in TRUE_TOKENS):
             return Issue(ERROR, name, f"{name}={_shown(raw)} is read as {read_word}; write canonical true/false")
         return None
     return Issue(ERROR, name, (
@@ -358,9 +398,11 @@ def _parse_number(kind: str, raw: str) -> float:
 
 
 def _numeric_problem(name: str, knob: Mapping[str, Any], raw: str) -> Optional[str]:
-    """Why ``raw`` cannot be this int/float knob's value, else None."""
+    """Why Config's ``int()`` / ``float()`` of ``raw`` (``ops`` applied) raises or is
+    not finite, else None.  A blank value that the parse's own ``or '<literal>'``
+    fallback replaces parses (see ``_numeric_issue``)."""
     try:
-        _parse_number(knob["kind"], raw)
+        _parse_number(knob["kind"], _read_as(knob, raw))
     except (ValueError, OverflowError):
         applies = f"it is ignored and {_default_text(knob)} applies"
         if not raw.strip():
@@ -388,12 +430,19 @@ def _in_range(value: float, rule: Range) -> bool:
 
 
 def _numeric_issue(name: str, knob: Mapping[str, Any], raw: str) -> Optional[Issue]:
+    """Error: Config cannot parse the value (sanitize_numeric_env pops it) or it is
+    outside RANGE_RULES.  Warning: a blank value the parse reads through its own
+    ``or '<literal>'`` fallback (it worked before INFRA-14 and still does)."""
     problem = _numeric_problem(name, knob, raw)
     if problem is not None:
         return Issue(ERROR, name, problem)
+    seen = _read_as(knob, raw)
     rule = RANGE_RULES.get(name)
-    if rule is not None and not _in_range(_parse_number(knob["kind"], raw), rule):
+    if rule is not None and not _in_range(_parse_number(knob["kind"], seen), rule):
         return Issue(ERROR, name, f"{name}={_shown(raw)} is outside its valid range {_describe(rule)}")
+    if not raw.strip():
+        return Issue(WARNING, name, (
+            f"{name} is blank; it is read as {seen.strip()}. Write a number or remove the line"))
     return None
 
 
@@ -404,8 +453,27 @@ def _enum_issue(name: str, raw: str) -> Optional[Issue]:
     return Issue(ERROR, name, f"{name}={_shown(raw)} is not one of {', '.join(choices)}")
 
 
+def _is_price(value: Any) -> bool:
+    """A price telemetry reads as meant: ``float()`` parses it (a number or numeric
+    string) to a finite value >= 0.  A JSON boolean is refused: float(true) == 1.0
+    would be read as $1/Mtok, which no one means."""
+    if isinstance(value, bool):
+        return False
+    try:
+        price = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return math.isfinite(price) and price >= 0
+
+
 def _cost_table_issue(raw: str) -> Optional[Issue]:
-    """LLM_COST_PER_MTOK: blank, or a JSON object of [input, output] non-negative prices."""
+    """LLM_COST_PER_MTOK: blank, or a JSON object of [input, output, ...] $/Mtok prices.
+
+    Mirrors telemetry._cost_overrides, which skips a non-object table and every entry
+    that is not a list of >= 2 items whose first two float() parses: each of those is
+    an error here, and so is a price telemetry would misread (negative, non-finite, a
+    boolean).  Extra items after the pair are ignored there, so they are here too.
+    """
     text = raw.strip()
     if not text:
         return None
@@ -418,10 +486,7 @@ def _cost_table_issue(raw: str) -> Optional[Issue]:
     if not isinstance(table, dict):
         return Issue(ERROR, name, f"{name} must be a JSON object of provider: [input, output] $/Mtok prices")
     for provider, pair in table.items():
-        valid = (isinstance(pair, list) and len(pair) == 2
-                 and all(isinstance(price, (int, float)) and not isinstance(price, bool)
-                         and math.isfinite(price) and price >= 0 for price in pair))
-        if not valid:
+        if not (isinstance(pair, list) and len(pair) >= 2 and all(_is_price(price) for price in pair[:2])):
             return Issue(ERROR, name, (
                 f"{name} entry {provider!r} must be [input, output] non-negative $/Mtok prices, "
                 f"got {_shown(json.dumps(pair))}"))
@@ -430,7 +495,8 @@ def _cost_table_issue(raw: str) -> Optional[Issue]:
 
 def _effective_number(name: str, knobs: Mapping[str, Mapping[str, Any]],
                       environ: Mapping[str, str]) -> Optional[float]:
-    """The value Config ends up with: a parseable env value, else the literal default."""
+    """The value Config ends up with: a parseable env value, else the literal default
+    (each read through the knob's ``ops``, as Config's parse sees it)."""
     knob = knobs.get(name)
     if knob is None or knob.get("kind") not in ("int", "float"):
         return None
@@ -438,7 +504,7 @@ def _effective_number(name: str, knobs: Mapping[str, Mapping[str, Any]],
         if raw is None:
             continue
         try:
-            return _parse_number(knob["kind"], raw)
+            return _parse_number(knob["kind"], _read_as(knob, raw))
         except (ValueError, OverflowError):
             continue
     return None
@@ -463,7 +529,8 @@ def audit_env(environ: Mapping[str, str], knobs: Mapping[str, Mapping[str, Any]]
     Booleans: a canonical-vocabulary token Config reads against its meaning
     (``X=1`` is read as false) or a token outside the vocabulary is an error; a
     blank value is an error when it flips the default, else a warning.  Numbers:
-    blank / unparseable / non-finite, or outside RANGE_RULES, is an error.
+    blank / unparseable / non-finite, or outside RANGE_RULES, is an error, except
+    that a blank value the parse's own ``or '<literal>'`` fallback reads is a warning.
     ENUM_RULES, COUPLED_RULES and the LLM_COST_PER_MTOK shape are errors; a
     grandfathered ghost knob set in the environment is a warning.
     """
@@ -495,7 +562,9 @@ def audit_env(environ: Mapping[str, str], knobs: Mapping[str, Mapping[str, Any]]
 
 def sanitize_numeric_env(environ: MutableMapping[str, str],
                          knobs: Mapping[str, Mapping[str, Any]]) -> list[Issue]:
-    """Pop every blank, unparseable or non-finite int/float knob value from ``environ``.
+    """Pop every int/float knob value Config's parse would raise on (or read as
+    non-finite) from ``environ``: blank (unless the parse's ``or '<literal>'``
+    fallback replaces it), unparseable or non-finite.
 
     config.py calls this before ``class Config`` so ``int(os.environ.get(...))``
     sees the default instead of raising at import; each popped value is an error.

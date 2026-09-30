@@ -934,6 +934,12 @@ class Config:
     REPORT_BILINGUAL = os.environ.get('REPORT_BILINGUAL', 'true').strip().lower() == 'true'
     # 逐章节翻译的并发度（ThreadPoolExecutor 线程数）；下限 1（串行）。默认 4。
     REPORT_TRANSLATION_CONCURRENCY = max(1, int(os.environ.get('REPORT_TRANSLATION_CONCURRENCY', '4') or '4'))
+    # Rounds of report_agent._repair_variant_contamination (re-translate the source-language
+    # lines a translated variant kept; clamped to 1-5 there).  INFRA-14 declared it: the
+    # report agent read it with a getattr default of 3, so an .env value never reached it.
+    # The default 3 is that getattr default, so an unset knob changes nothing.
+    REPORT_TRANSLATION_CONTAMINATION_RETRIES = int(
+        os.environ.get('REPORT_TRANSLATION_CONTAMINATION_RETRIES', '3') or '3')
 
     # —— PM-2：确定性逐预测市场锚定（forecast_extractor 经 getattr 读取）——
     # 抽取二元预测后跑一次批处理 LLM 匹配（陈述表 × 相关性门控市场表），确定性回填
