@@ -1828,7 +1828,12 @@ class ReportAgent:
 
         self.llm = llm_client or LLMClient()
         self.zep_tools = zep_tools or ZepToolsService()
-        
+        # INFRA-11: opinion_shift / trace_cascade resolve actor names against the research roster
+        # (aliases included) under ACTOR_NAME_MATCH_STRICT. Only a tools object that declares the
+        # slot (ZepToolsService.__init__) receives it; without actors it matches graph/log names.
+        if actors and hasattr(self.zep_tools, "actor_roster"):
+            self.zep_tools.actor_roster = actors
+
         # 工具定义
         self.tools = self._define_tools()
         # interview_agents 需要 OASIS 模拟环境在线（IPC）。报告阶段几乎总在模拟结束、环境关闭之后运行，

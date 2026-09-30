@@ -641,6 +641,16 @@ class Config:
     # 反事实事件）会写入 base 与兄弟分叉共享的观察图；分叉准入时对此记 warning（点名共享图谱）。
     # 关闭 = 旧行为（分叉不带钉，每个读点回退当前环境值）。
     FORK_INHERIT_SAFETY_POLICY = os.environ.get('FORK_INHERIT_SAFETY_POLICY', 'true').strip().lower() == 'true'
+    # INFRA-11：严格的 actor 名匹配（名字身份查找歧义即失败，不再猜）。开启时报告工具 opinion_shift 先按
+    # 研究名册解析目标（标准化精确名/别名，规范名优先于他人别名 → 名册与动作日志两边合并的 ≥4 字符包含），
+    # 多个候选时返回点名全部候选的说明而不是把各自轨迹混在一起（旧的无界子串匹配让 'US' 同时命中
+    # Russia/Australia），经别名/包含解析时在输出标题里点名解析结果；trace_cascade 的节点名解析先查名册
+    # 别名（不用被两个 actor 争用的别名），包含匹配下限从 2 字符提到 4 字符并要求唯一命中；实体消解的
+    # actor_alias_map 排除被两个不同 actor 同时认领的别名（记日志），不再后写者胜。默认开：主要把原先的
+    # 错配变成「未解析/歧义」；注意它也不再解析短于 4 字符的唯一包含（如 'Fed' → 'Federal Reserve'），
+    # 除非该短名正是名册里的精确名或别名。关闭 = 旧匹配。
+    # （actor id 的非拉丁名修复不受此旋钮控制：拉丁名 id 本就不变。）
+    ACTOR_NAME_MATCH_STRICT = os.environ.get('ACTOR_NAME_MATCH_STRICT', 'true').strip().lower() == 'true'
 
     # —— EXECPLAN2 第三波改进旋钮（剩余 L-effort 新能力；全部默认关，留空即保持当前行为）——
     # 预测质量回归评测开关（EXECPLAN2 I-7-7）：opt-in，绝不进默认 CI。开启后 eval_forecast_quality.py
