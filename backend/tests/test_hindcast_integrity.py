@@ -12,9 +12,11 @@ Offline: FakeLLMClient / stubs, per-test data directories.
 """
 
 import copy
+import datetime as dt
 import hashlib
 import json
 import os
+import sys
 
 import pytest
 
@@ -36,14 +38,21 @@ ENFORCEMENT = containment.ENFORCEMENT
 BLOCK = containment.BLOCK
 
 
-def _audit_payload(status="date_verified", **over):
+# The cited re-check each verdict follows from (under the pin's undated policy, drop).
+_CITED = {
+    "date_verified": {"checked": 1, "admitted": 1, "same_day": 0, "unverifiable": 0, "late": 0},
+    "date_verified_with_unverifiable": {"checked": 2, "admitted": 1, "same_day": 0, "unverifiable": 1, "late": 0},
+    "violated": {"checked": 2, "admitted": 1, "same_day": 0, "unverifiable": 0, "late": 1},
+}
+
+
+def _audit_payload(status="date_verified", *, cited=None, **over):
     payload = {
         "schema": "drf-point-in-time/v1", "as_of": "2024-06-01", "same_day_policy": "exclude",
         "undated_policy": "drop",
         "streams": {"search": {"checked": 4, "admitted": 1, "same_day": 0, "unverifiable": 1, "late": 2},
                     "fetch": {"checked": 2, "admitted": 1, "same_day": 0, "unverifiable": 1, "late": 0},
-                    "cited": {"checked": 1, "admitted": 1, "same_day": 0, "unverifiable": 0,
-                              "late": 1 if status == "violated" else 0}},
+                    "cited": dict(cited if cited is not None else _CITED.get(status, _CITED["date_verified"]))},
         "wall": {"sids_withheld": 1, "digest_lines_dropped": 1, "digest_markers_stripped": 2},
         "parametric_suspects": {"timeline": 0, "quant": 0},
         "leak_guard": "source_publication_dates_only", "parametric_knowledge": "not_guarded",
@@ -123,6 +132,12 @@ def test_research_audit_is_recorded_in_the_pin_once_per_research_generation(mani
     json.dumps(_audit_payload(same_day_policy="include")),
     json.dumps(_audit_payload(undated_policy="flag")),
     json.dumps({key: value for key, value in _audit_payload().items() if key != "as_of"}),
+    # A verdict its own cited counts do not imply (hand-edited) vouches for nothing.
+    json.dumps(_audit_payload("date_verified", cited=_CITED["violated"])),
+    json.dumps(_audit_payload("date_verified", cited=_CITED["date_verified_with_unverifiable"])),
+    json.dumps(_audit_payload("violated", cited=_CITED["date_verified"])),
+    json.dumps(_audit_payload(cited=dict(_CITED["date_verified"], checked=3))),
+    json.dumps(_audit_payload(streams={})),
 ])
 def test_an_unrecognised_audit_vouches_for_nothing(env, tmp_path, content):
     state = _state("pipe_bad", PIN, tmp_path)
@@ -180,23 +195,43 @@ def test_enforcement_record_mapping():
     audited = dict(PIN, research_audit={"status": "date_verified", "sha256": "ab"})
     assert hp.as_of_enforcement_record(audited) == dict(ENFORCEMENT, retrieval_clamped=True,
                                                          audit_status="date_verified")
-    # The gates must have run for retrieval to count as clamped; an unknown verdict is no audit.
-    ungated = dict(audited, pit=dict(GATED, gates=False))
-    assert hp.as_of_enforcement_record(ungated) == dict(ENFORCEMENT, audit_status="date_verified")
+    # Without the gates no audit vouches for the retrieval (as in forecast.json); an unknown
+    # verdict is no audit.
+    for pit in (dict(GATED, gates=False), dict(GATED, gates="true"), None):
+        assert hp.as_of_enforcement_record(dict(audited, pit=pit)) == ENFORCEMENT
     assert hp.as_of_enforcement_record(dict(PIN, research_audit={"status": "clean"})) == ENFORCEMENT
 
 
 def test_research_audit_record():
     assert hp.research_audit_record(_audit_payload(), "ab", pin=PIN) == {"status": "date_verified", "sha256": "ab"}
     assert hp.research_audit_record(_audit_payload("violated"), "cd", pin=PIN)["status"] == "violated"
+    assert hp.research_audit_record(_audit_payload("date_verified_with_unverifiable"), "ef", pin=PIN) == {
+        "status": "date_verified_with_unverifiable", "sha256": "ef"}
     for payload, digest in ((_audit_payload(), ""), (_audit_payload(), None), (_audit_payload(status=None), "ab"),
                             ({"status": "date_verified"}, "ab"), (None, "ab")):
         assert hp.research_audit_record(payload, digest, pin=PIN) is None
+    # The verdict is re-derived from the audit's own cited counts; a disagreeing or
+    # malformed count vouches for nothing.
+    nothing_cited = dict(_CITED["date_verified"], checked=0, admitted=0)
+    for status, cited in (("date_verified", _CITED["violated"]), ("date_verified", nothing_cited),
+                          ("date_verified_with_unverifiable", _CITED["date_verified"]),
+                          ("violated", _CITED["date_verified_with_unverifiable"]),
+                          ("date_verified", dict(_CITED["date_verified"], admitted=True)),
+                          ("date_verified", dict(_CITED["date_verified"], admitted=-1, same_day=2)),
+                          ("date_verified", {"checked": 1, "admitted": 1})):
+        assert hp.research_audit_record(_audit_payload(status, cited=cited), "ab", pin=PIN) is None
+    assert hp.research_audit_record(_audit_payload("date_verified_with_unverifiable", cited=nothing_cited),
+                                    "ab", pin=PIN)["status"] == "date_verified_with_unverifiable"
     # The audit must be of this pin: its as-of and the policies the research was launched with.
     flagged = dict(PIN, pit=dict(GATED, undated="flag", same_day="include"))
     assert hp.research_audit_record(_audit_payload(), "ab", pin=flagged) is None
+    # Under the flag policy undated pages may back the report: never plain date_verified.
     assert hp.research_audit_record(_audit_payload(undated_policy="flag", same_day_policy="include"), "ab",
-                                    pin=flagged) == {"status": "date_verified", "sha256": "ab"}
+                                    pin=flagged) is None
+    assert hp.research_audit_record(
+        _audit_payload("date_verified_with_unverifiable", cited=_CITED["date_verified"], undated_policy="flag",
+                       same_day_policy="include"), "ab", pin=flagged) == {
+        "status": "date_verified_with_unverifiable", "sha256": "ab"}
     # A hand-edited policy value reads strict, as it did for the research launch.
     odd = dict(PIN, pit=dict(GATED, undated="sometimes", same_day=None))
     assert hp.research_audit_record(_audit_payload(), "ab", pin=odd) == {"status": "date_verified", "sha256": "ab"}
@@ -227,6 +262,17 @@ def test_forecast_block_maps_the_audit_to_integrity(status, integrity):
 @pytest.mark.parametrize("audit", [None, {}, {"status": "clean"}, {"verdict": "clean"}, "violated"])
 def test_forecast_block_without_an_audit_stays_labelled(audit):
     assert hp.hindcast_forecast_block(PIN, research_audit=audit) == BLOCK
+
+
+@pytest.mark.parametrize("pin", [UNGATED_PIN, dict(PIN, pit=None), dict(PIN, pit=dict(GATED, gates="true")),
+                                 {key: value for key, value in PIN.items() if key != "pit"}])
+@pytest.mark.parametrize("status", ["date_verified", "violated"])
+def test_forecast_block_ignores_an_audit_on_an_ungated_pin(pin, status):
+    """A hand-edited or migrated pin carrying an audit without gates: forecast.json and
+    run.json agree that nothing was date-gated or verified."""
+    audit = {"status": status, "sha256": "ab"}
+    assert hp.hindcast_forecast_block(pin, research_audit=audit) == BLOCK
+    assert hp.as_of_enforcement_record(dict(pin, research_audit=audit)) == ENFORCEMENT
 
 
 @pytest.mark.parametrize("audit, integrity", [
@@ -280,3 +326,66 @@ def test_research_stage_stamps_the_pin_before_the_report_reads_it(monkeypatch, t
     assert saved["options"][hp.HINDCAST_POLICY_OPTION]["research_audit"] == audit
     resolved = _run_json(result.pid)["resolved"]
     assert resolved["as_of_enforcement"] == dict(ENFORCEMENT, retrieval_clamped=clamped, audit_status=status)
+
+
+# ───────────────────────────── the two processes' contract ───────────────────
+def _child_engine():
+    """The v3 child's ``linear_research``, imported as the v3 engine tests do (the parent
+    and the child share no code, so this test pins their audit contract together)."""
+    bridge_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                              "deerflow_bridge")
+    if bridge_dir not in sys.path:
+        sys.path.insert(0, bridge_dir)
+    import linear_research
+
+    return linear_research
+
+
+_SOURCES = {
+    "clean": [{"url": "https://a.example/x", "date": "2024-04-15"}],
+    "undated": [{"url": "https://a.example/x", "date": "2024-04-15"}, {"url": "https://b.example/y"}],
+    "same_day": [{"url": "https://a.example/x", "date": "2024-06-01"}],
+    "late": [{"url": "https://a.example/2024/07/02/x", "date": "2024-04-15"}],
+    "nothing": [],
+}
+_VERDICTS = {
+    ("exclude", "drop"): {"clean": "date_verified", "undated": "date_verified_with_unverifiable",
+                          "same_day": "violated", "late": "violated",
+                          "nothing": "date_verified_with_unverifiable"},
+    ("include", "flag"): {"clean": "date_verified_with_unverifiable",
+                          "undated": "date_verified_with_unverifiable",
+                          "same_day": "date_verified_with_unverifiable", "late": "violated",
+                          "nothing": "date_verified_with_unverifiable"},
+}
+
+
+@pytest.mark.parametrize("same_day, undated", sorted(_VERDICTS))
+def test_the_child_audit_is_what_the_parent_records(same_day, undated):
+    """A real ``linear_research.point_in_time_payload``, written and read back as bytes, is
+    recorded by ``research_audit_record`` with the child's own verdict, and maps to the
+    matching forecast.json integrity and run.json attestation."""
+    lr = _child_engine()
+    assert (lr.POINT_IN_TIME_FILENAME, lr.POINT_IN_TIME_SCHEMA) == (hp.POINT_IN_TIME_FILENAME,
+                                                                    hp.POINT_IN_TIME_SCHEMA)
+    assert (lr.PIT_STATUS_VERIFIED, lr.PIT_STATUS_VERIFIED_UNVERIFIABLE, lr.PIT_STATUS_VIOLATED) == (
+        hp.AUDIT_DATE_VERIFIED, hp.AUDIT_DATE_VERIFIED_WITH_UNVERIFIABLE, hp.AUDIT_VIOLATED)
+    pin = dict(PIN, pit=dict(GATED, same_day=same_day, undated=undated))
+    # The child's gates, parsed from the env the parent launches the research with.
+    policy = lr._pit_policy({**hp.pit_research_env(pin["pit"]), "RESEARCH_AS_OF": pin["as_of"]})
+    assert (policy.as_of, policy.same_day, policy.undated) == (dt.date(2024, 6, 1), same_day, undated)
+    integrity = {"date_verified": "date_verified", "violated": "leak_suspected",
+                 "date_verified_with_unverifiable": "date_verified_with_unverifiable"}
+    for name, sources in _SOURCES.items():
+        payload = lr.point_in_time_payload(policy, gate_counts={"fetch_admitted": 1}, sources=sources,
+                                           suspects={"timeline": 0, "quant": 0}, wall={"sids_withheld": 0})
+        status = _VERDICTS[(same_day, undated)][name]
+        assert payload["status"] == status, name
+        raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        digest = hashlib.sha256(raw).hexdigest()
+        record = hp.research_audit_record(json.loads(raw.decode("utf-8")), digest, pin=pin)
+        assert record == {"status": status, "sha256": digest}, name
+        audited = dict(pin, research_audit=record)
+        block = hp.hindcast_forecast_block(audited, research_audit=record)
+        assert (block["retrieval"], block["integrity"]) == ("date_gated", integrity[status]), name
+        assert hp.as_of_enforcement_record(audited) == dict(
+            ENFORCEMENT, retrieval_clamped=status != "violated", audit_status=status), name

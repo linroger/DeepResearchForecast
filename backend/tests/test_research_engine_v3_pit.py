@@ -25,6 +25,7 @@ import types
 import pytest
 
 import test_research_engine_v3 as v3
+from app.services import hindcast_policy as hp
 
 # The shared fixtures (hermetic env, real bridge with network steps stubbed).
 _hermetic_env = v3._hermetic_env
@@ -323,12 +324,12 @@ def test_point_in_time_json_records_the_exact_counters_of_the_run(tmp_path, brid
     assert audit["streams"]["search"] == {
         "checked": 4 * searches, "admitted": searches, "same_day": 0, "unverifiable": searches,
         "late": 2 * searches, "no_in_window_results": 0, "bounded_queries": 0, "unbounded_queries": searches,
-        "scope": "run", "attempts_counted": 1}
+        "scope": "run", "attempts_counted": 1, "attempts_started": 1}
     # Fetch: per KIQ, the brief withheld undated and the survey admitted.
     assert audit["streams"]["fetch"] == {
         "checked": 2 * kiqs, "admitted": kiqs, "same_day": 0, "unverifiable": kiqs, "late": 0,
         "undated_withheld": kiqs, "undated_admitted": 0, "refused_before_fetch": 0, "withheld_repeats": 0,
-        "scope": "run", "attempts_counted": 1}
+        "scope": "run", "attempts_counted": 1, "attempts_started": 1}
     assert (gates["search_admitted_shown"], gates["fetch_undated_withheld"]) == (searches, kiqs)
     # Cited: an independent re-check of sources.json; every cited survey predates the as-of.
     assert audit["streams"]["cited"] == _independent_cited(sources) == {
@@ -344,6 +345,12 @@ def test_point_in_time_json_records_the_exact_counters_of_the_run(tmp_path, brid
     assert {key: meta["point_in_time"][key] for key in ("as_of", "hindcast", "markets")} == {
         "as_of": AS_OF, "hindcast": True, "markets": "withheld"}
     assert any("wrote point_in_time.json (date_verified" in message for kind, message in plog.lines if kind == "ok")
+    assert not any("counts are partial" in message for kind, message in plog.lines)
+    # The parent records the audit the engine wrote, bytes as on disk.
+    raw = (out / lr.POINT_IN_TIME_FILENAME).read_bytes()
+    pin = {"as_of": AS_OF, "pit": {"gates": True, "same_day": "exclude", "undated": "drop"}}
+    assert hp.research_audit_record(json.loads(raw), hashlib.sha256(raw).hexdigest(), pin=pin) == {
+        "status": "date_verified", "sha256": hashlib.sha256(raw).hexdigest()}
 
 
 def test_parametric_suspects_are_counted_and_kept(tmp_path, bridge, monkeypatch):
@@ -370,6 +377,10 @@ def test_undated_flag_policy_labels_the_verdict(tmp_path, bridge, monkeypatch):
     assert audit["streams"]["cited"]["unverifiable"] >= 1 and audit["streams"]["cited"]["late"] == 0
     assert audit["streams"]["fetch"]["undated_admitted"] == len(world.briefs)
     assert audit["status"] == "date_verified_with_unverifiable"
+    raw = (out / lr.POINT_IN_TIME_FILENAME).read_bytes()
+    pin = {"as_of": AS_OF, "pit": {"gates": True, "same_day": "exclude", "undated": "flag"}}
+    assert hp.research_audit_record(json.loads(raw), "ab", pin=pin) == {
+        "status": "date_verified_with_unverifiable", "sha256": "ab"}
 
 
 def test_a_late_row_in_sources_json_is_re_audited_as_violated(tmp_path, bridge, monkeypatch):
@@ -425,7 +436,9 @@ def test_a_resumed_attempt_audits_the_gate_counts_of_the_whole_run(tmp_path, bri
     assert rc == 0, meta.get("error")
     first = _load(out / lr.POINT_IN_TIME_FILENAME)
     saved = _load(out / "v3" / lr.PIT_COUNTS_FILENAME)
-    assert saved == {"attempts": 1, "counts": lr.pit_sum_counts(meta["tools"]["pit"])}
+    assert saved == {"attempts": 1, "attempts_closed": 1, "counts_complete": True,
+                     "counts": lr.pit_sum_counts(meta["tools"]["pit"])}
+    assert _load(out / "v3" / "state.json")[lr.PIT_ATTEMPTS_KEY] == 1
     assert first["streams"]["search"]["checked"] > 0 and first["streams"]["fetch"]["checked"] > 0
     # A second attempt resumes the work dir: it reuses every research phase (no search,
     # no fetch, so its own gate counts are all zero) and finalizes again.
@@ -435,17 +448,120 @@ def test_a_resumed_attempt_audits_the_gate_counts_of_the_whole_run(tmp_path, bri
     assert not any(meta["tools"]["pit"].values())
     second = _load(out / lr.POINT_IN_TIME_FILENAME)
     for stream in ("search", "fetch"):
-        assert second["streams"][stream] == dict(first["streams"][stream], attempts_counted=2)
+        assert second["streams"][stream] == dict(first["streams"][stream], attempts_counted=2, attempts_started=2)
+        assert second["streams"][stream]["scope"] == "run"
     assert second["streams"]["cited"] == first["streams"]["cited"]
     assert second["status"] == first["status"] == "date_verified"
-    assert _load(out / "v3" / lr.PIT_COUNTS_FILENAME) == {"attempts": 2, "counts": saved["counts"]}
-    # An unreadable file of earlier counts is logged; the audit then counts this attempt only.
-    (out / "v3" / lr.PIT_COUNTS_FILENAME).write_text("{truncated", encoding="utf-8")
+    assert _load(out / "v3" / lr.PIT_COUNTS_FILENAME) == {"attempts": 2, "attempts_closed": 2,
+                                                          "counts_complete": True, "counts": saved["counts"]}
+    assert not any("counts are partial" in message for kind, message in plog.lines)
+
+
+class _Killed(BaseException):
+    """Stands in for a SIGKILL (the research watchdog, a user cancel): the attempt stops
+    where it is and never reaches its exit path."""
+
+
+def test_a_killed_attempt_leaves_partial_not_whole_run_counts(tmp_path, bridge, monkeypatch):
+    with monkeypatch.context() as patch:
+        def killed(self):
+            raise _Killed()
+
+        patch.setattr(lr._Engine, "phase_synthesize", killed)
+        patch.setattr(lr._Engine, "attach_telemetry", lambda self: None)
+        with pytest.raises(_Killed):
+            run_pit_engine(tmp_path, bridge, monkeypatch)
+    out = tmp_path / "out"
+    # Every phase exit and KIQ record saved the killed attempt's counts; it never closed them.
+    saved = _load(out / "v3" / lr.PIT_COUNTS_FILENAME)
+    assert (saved["attempts"], saved["attempts_closed"], saved["counts_complete"]) == (1, 0, True)
+    assert saved["counts"]["search_admitted_shown"] > 0 and saved["counts"]["fetch_admitted"] > 0
+    assert _load(out / "v3" / "state.json")[lr.PIT_ATTEMPTS_KEY] == 1
+    # The resumed attempt finishes finalize: its audit keeps the killed attempt's counts
+    # but says they are partial (a lower bound), and its verdict is unaffected.
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    audit = _load(out / lr.POINT_IN_TIME_FILENAME)
+    expected = lr.pit_gate_streams(lr.pit_sum_counts(saved["counts"], meta["tools"]["pit"]), attempts=2,
+                                   attempts_started=2, complete=False)
+    for stream in ("search", "fetch"):
+        assert audit["streams"][stream] == expected[stream]
+        assert audit["streams"][stream]["scope"] == "partial" and audit["streams"][stream]["checked"] > 0
+    assert audit["status"] == "date_verified"
+    assert meta["point_in_time"]["audit"]["streams"]["search"]["scope"] == "partial"
+    assert any("counts are partial (0 of the 1 earlier attempts saved their final counts)" in message
+               for kind, message in plog.lines if kind == "warn")
+    assert any("search and fetch counts partial" in message for kind, message in plog.lines)
+    # Partial stays partial: a later attempt still cannot vouch for the whole run.
     rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
     assert rc == 0, meta.get("error")
     third = _load(out / lr.POINT_IN_TIME_FILENAME)
-    assert third["streams"]["search"]["checked"] == 0 and third["streams"]["search"]["attempts_counted"] == 1
-    assert any(lr.PIT_COUNTS_FILENAME + " unreadable" in message for kind, message in plog.lines if kind == "warn")
+    assert {key: third["streams"]["search"][key] for key in ("scope", "attempts_counted", "attempts_started")} == {
+        "scope": "partial", "attempts_counted": 3, "attempts_started": 3}
+    assert any("already lost" in message for kind, message in plog.lines if kind == "warn")
+
+
+@pytest.mark.parametrize("loss", ["missing", "truncated"])
+def test_lost_earlier_counts_are_reported_partial(tmp_path, bridge, monkeypatch, loss):
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    first = _load(out / lr.POINT_IN_TIME_FILENAME)
+    path = out / "v3" / lr.PIT_COUNTS_FILENAME
+    if loss == "missing":
+        path.unlink()
+    else:
+        path.write_text("{truncated", encoding="utf-8")
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    second = _load(out / lr.POINT_IN_TIME_FILENAME)
+    # Only this attempt's (zero) counts are known: never reported as the whole run's.
+    for stream in ("search", "fetch"):
+        assert second["streams"][stream]["checked"] == 0
+        assert {key: second["streams"][stream][key] for key in ("scope", "attempts_counted", "attempts_started")} \
+            == {"scope": "partial", "attempts_counted": 1, "attempts_started": 2}
+    assert second["status"] == first["status"] == "date_verified"
+    reason = f"no {lr.PIT_COUNTS_FILENAME}" if loss == "missing" else f"{lr.PIT_COUNTS_FILENAME} unreadable"
+    assert any(reason in message for kind, message in plog.lines if kind == "warn")
+    assert _load(path)["counts_complete"] is False
+    # The loss is remembered by the next attempt.
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    third = _load(out / lr.POINT_IN_TIME_FILENAME)
+    assert {key: third["streams"]["fetch"][key] for key in ("scope", "attempts_counted", "attempts_started")} == {
+        "scope": "partial", "attempts_counted": 2, "attempts_started": 3}
+
+
+_SAVED = {"attempts": 2, "attempts_closed": 2, "counts_complete": True, "counts": {"fetch_admitted": 3}}
+
+
+@pytest.mark.parametrize("saved, resumed, before, expected, why", [
+    # A fresh work dir starts from nothing, complete.
+    (None, False, None, lr.PitPriorCounts(started=1), ""),
+    (json.dumps(_SAVED), True, 2, lr.PitPriorCounts(attempts=2, closed=2, counts={"fetch_admitted": 3}, started=3),
+     ""),
+    (None, True, 1, lr.PitPriorCounts(started=2, complete=False), "no pit_counts.json"),
+    ("{truncated", True, 1, lr.PitPriorCounts(started=2, complete=False), "pit_counts.json unreadable"),
+    # The last attempt was killed after saving at a phase exit, or before saving at all.
+    (json.dumps(dict(_SAVED, attempts_closed=1)), True, 2,
+     lr.PitPriorCounts(attempts=2, closed=1, counts={"fetch_admitted": 3}, started=3, complete=False),
+     "1 of the 2 earlier attempts saved their final counts"),
+    (json.dumps(_SAVED), True, 3,
+     lr.PitPriorCounts(attempts=2, closed=2, counts={"fetch_admitted": 3}, started=4, complete=False),
+     "2 of the 3 earlier attempts saved their final counts"),
+    (json.dumps(dict(_SAVED, counts_complete=False)), True, 2,
+     lr.PitPriorCounts(attempts=2, closed=2, counts={"fetch_admitted": 3}, started=3, complete=False),
+     "already lost"),
+    # No counter in state.json: never fewer attempts started than counted.
+    (json.dumps(_SAVED), True, None,
+     lr.PitPriorCounts(attempts=2, closed=2, counts={"fetch_admitted": 3}, started=3, complete=False),
+     "state.json records no pit_attempts_started"),
+] + [(json.dumps(dict(_SAVED, **bad)), True, 2, lr.PitPriorCounts(started=3, complete=False), "unreadable")
+     for bad in ({"attempts": 0}, {"attempts": True}, {"attempts_closed": 3}, {"attempts_closed": -1},
+                 {"counts_complete": "yes"}, {"counts": [1]})])
+def test_pit_prior_counts(saved, resumed, before, expected, why):
+    prior, reason = lr.pit_prior_counts(saved, resumed=resumed, started_before=before)
+    assert prior == expected
+    assert (why in reason) if why else reason == ""
 
 
 def test_pit_sum_counts():
@@ -478,6 +594,7 @@ def test_live_run_writes_no_audit_and_an_unwalled_digest(tmp_path, bridge, monke
     assert rc == 0, meta.get("error")
     assert not (out / lr.POINT_IN_TIME_FILENAME).exists()
     assert not (out / "v3" / lr.PIT_COUNTS_FILENAME).exists()
+    assert lr.PIT_ATTEMPTS_KEY not in _load(out / "v3" / "state.json")
     assert "point_in_time" not in meta and "pit" not in meta["tools"]
     sources = _load(out / "sources.json")
     assert sources and all("pit_status" not in row for row in sources)
@@ -592,6 +709,46 @@ def test_deterministic_sections_draw_on_walled_records():
     assert blind._fallback_section(blind._outline(1)) == f"- {lr._text('English', 'no_evidence')}"
     # Without the gates the records are used as they are.
     assert lr._Engine._report_records(types.SimpleNamespace(records={"K1": record}, pit=None)) == {"K1": record}
+
+
+def test_citation_clusters_group_the_markers_of_one_claim():
+    assert lr._citation_clusters("a [S1][S2], b [S3], [S4]; c [S5] d") == [[1, 2], [3, 4], [5]]
+    assert lr._citation_clusters("电量 [S1]，[S2] 增长 [S3]") == [[1, 2], [3]]
+    assert lr._citation_clusters("no markers") == []
+
+
+def test_published_findings_keep_no_claim_only_an_inadmissible_source_backs():
+    """The digest (writer input) strips a failing marker wherever it stands, as the spec
+    says; the deterministic sections publish a finding only when each of its claims keeps
+    an admissible source, so a sub-claim only a withheld source backs is never published
+    uncited next to an admissible marker."""
+    interleaved = {"text": "Capacity reached 176 GW [S1], while a brief projects 250 GW [S2]", "tag": "REPORTED",
+                   "sids": [1, 2]}
+    leading = {"text": "A brief projects 250 GW [S2]; capacity reached 176 GW [S1]", "tag": "REPORTED",
+               "sids": [1, 2]}
+    shared = {"text": "Capacity reached 176 GW [S1] and demand grew 12% [S3][S2]", "tag": "VERIFIED",
+              "sids": [1, 2, 3]}
+    record = {"id": "K1", "facts": [interleaved, leading, shared]}
+
+    def admissible(sid):
+        return sid != 2
+
+    walled, dropped, stripped = lr.pit_wall_record(record, admissible, strict=True)
+    assert [fact["text"] for fact in walled["facts"]] == ["Capacity reached 176 GW [S1] and demand grew 12% [S3]"]
+    assert (dropped, stripped) == (2, 1)
+    digest, dropped, stripped = lr.pit_wall_record(record, admissible)
+    assert [fact["text"] for fact in digest["facts"]] == [
+        "Capacity reached 176 GW [S1], while a brief projects 250 GW",
+        "A brief projects 250 GW; capacity reached 176 GW [S1]",
+        "Capacity reached 176 GW [S1] and demand grew 12% [S3]"]
+    assert (dropped, stripped) == (0, 3)
+    engine = _walled_fallback_engine({"K1": record}, admissible)
+    body = engine._fallback_section(engine._outline(1))
+    assert body == "- Capacity reached 176 GW [S1] and demand grew 12% [S3]"
+    assert "250 GW" not in body
+    # Everything admissible: the strict wall changes nothing.
+    unchanged, dropped, stripped = lr.pit_wall_record(record, lambda sid: True, strict=True)
+    assert (unchanged["facts"], dropped, stripped) == (record["facts"], 0, 0)
 
 
 @pytest.mark.parametrize("typing", [False, True])
