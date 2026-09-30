@@ -306,8 +306,9 @@ for cand in (_backend, os.path.join(os.getcwd(), "backend"), os.getcwd()):
 
 try:
     from app.config import Config  # type: ignore
+    from app.utils.provider_overrides import openai_compat_request_overrides  # type: ignore
 except Exception as exc:  # pragma: no cover - defensive
-    emit("warn", f"deep probe skipped — cannot import Config ({type(exc).__name__})")
+    emit("warn", f"deep probe skipped — cannot import the backend Config or provider helper ({type(exc).__name__})")
     sys.exit(0)
 
 PULL = os.environ.get("DOCTOR_DEEP_PULL") == "1"
@@ -334,18 +335,21 @@ def probe_openai_compat(label, provider, api_key, base_url, model):
     except Exception:
         emit("warn", f"{label}: openai SDK unavailable — skipped live test")
         return
+    # INFRA-6: the UA, disable-thinking body and temperature rule come from the helper the
+    # pipeline and backend/scripts/preflight.py use, so this probe sends the production request
+    # shape (thinking off, temperature 0; Kimi K2.7 Code only accepts 0.6 with thinking off).
+    overrides = openai_compat_request_overrides(provider, 0, force_disable_thinking=True)
     client_kwargs = {"api_key": api_key, "base_url": base_url, "timeout": 25, "max_retries": 0}
-    if provider == "kimi":
-        client_kwargs["default_headers"] = {"User-Agent": getattr(Config, "LLM_USER_AGENT", "claude-cli/1.0.0")}
+    if overrides["default_headers"]:
+        client_kwargs["default_headers"] = overrides["default_headers"]
     kwargs = {
         "model": model,
         "messages": [{"role": "user", "content": "Reply with exactly: pong"}],
-        "temperature": 0,
+        "temperature": overrides["temperature"],
         "max_tokens": 16,
     }
-    extra = getattr(Config, "_DISABLE_THINKING_EXTRA_BODY", {}).get(provider)
-    if extra:
-        kwargs["extra_body"] = extra
+    if overrides["extra_body"]:
+        kwargs["extra_body"] = overrides["extra_body"]
     started = time.monotonic()
     try:
         OpenAI(**client_kwargs).chat.completions.create(**kwargs)

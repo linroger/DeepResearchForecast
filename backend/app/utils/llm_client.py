@@ -20,6 +20,11 @@ from typing import Optional, Dict, Any, List, Tuple
 from ..config import Config
 from .llm_text import flatten_content, has_dangling_think, normalize_finish_reason, strip_think
 from .logger import get_logger
+from .provider_overrides import (
+    FALLBACK_REASONING_EFFORTS,
+    openai_compat_request_overrides,
+    provider_temperature,
+)
 
 logger = get_logger('mirofish.llm_client')
 
@@ -561,6 +566,8 @@ class LLMClient:
         # 的第二个客户端（如本地廉价抽取 + 远端旗舰合成）。仅在 tiered routing 开启且配齐
         # LLM_FAST_PROVIDER/BASE_URL/API_KEY 时才会真正实例化；否则保持 None（同提供方切模型）。
         self._fast_openai_client = None
+        # INFRA-6: the provider the fast-tier second client was built for (its serving provider).
+        self._fast_openai_provider: Optional[str] = None
         # S9: set True on a fallback client so failover never recurses.
         self._is_fallback = False
         # EVAL-10: per-instance isolation for callers whose calls must stay independent and
@@ -590,9 +597,11 @@ class LLMClient:
             _http_timeout_s = 600.0
         client_kwargs["timeout"] = _http_timeout_s
         # Kimi-for-coding 网关按 User-Agent 校验 coding-agent 身份；
-        # 不带可识别的 UA 会被拒绝（access_terminated_error）。
-        if provider == "kimi":
-            client_kwargs["default_headers"] = {"User-Agent": Config.LLM_USER_AGENT}
+        # 不带可识别的 UA 会被拒绝（access_terminated_error）。INFRA-6: 头部规则取自
+        # provider_overrides（与 OASIS 建模、设置页/preflight 探针同源）。
+        headers = openai_compat_request_overrides(provider)["default_headers"]
+        if headers:
+            client_kwargs["default_headers"] = headers
         # R2-EXEC-6: 当 LLM_HTTP2 开启时，注入一个调优过的 httpx 客户端（HTTP/2 多路复用 +
         # 更大 keepalive 池）并把 SDK 自带重试关掉（max_retries=0，由 chat() 的退避循环统一负责）。
         # 默认（未配置 LLM_HTTP2 / 为 false）返回 None → 沿用 OpenAI SDK 自带 httpx 客户端，
@@ -712,10 +721,27 @@ class LLMClient:
         if self._fast_openai_client is None:
             try:
                 self._fast_openai_client = self._build_openai_client(fp, fk, fb)
+                self._fast_openai_provider = fp
             except Exception as exc:  # 误配置不应中断调用，记录后回退主客户端
                 logger.warning(f"fast-tier 第二客户端构建失败，回退主客户端: {exc}")
                 return None
         return self._fast_openai_client
+
+    def _serving_endpoint(self, fast_tier: bool) -> Tuple[Any, str]:
+        """INFRA-6: ``(OpenAI client, provider)`` that serve one OpenAI-compatible call.
+
+        ``fast_tier`` is the call's _tier_route() flag. When the fast-tier second client serves
+        the call, its provider is LLM_FAST_PROVIDER: the request then carries that provider's
+        extra_body and temperature rule, and the call metadata and meter attribute the call to
+        it. Otherwise this client's own endpoint and provider serve it (a routing-pinned client
+        never gets fast_tier, see _tier_route).
+        """
+        if fast_tier:
+            fast_client = self._fast_provider_client()
+            if fast_client is not None:
+                provider = getattr(self, "_fast_openai_provider", None) or Config.LLM_FAST_PROVIDER
+                return fast_client, provider
+        return self._openai_client, self.provider
 
     # ------------------------------------------------------------------
     # INFRA-1: 逐调用元数据（线程本地，按客户端 id() 归属）
@@ -723,8 +749,10 @@ class LLMClient:
     def last_call_meta(self) -> Optional[Dict[str, Any]]:
         """Metadata of this client's last successful call on the calling thread.
 
-        Keys: client_id, provider, model, served_model, finish_reason (normalized, see
-        llm_text.FINISH_REASONS), raw_finish_reason, usage {prompt_tokens, completion_tokens,
+        Keys: client_id, provider (the provider whose endpoint served the call:
+        LLM_FAST_PROVIDER when the fast-tier second client served it, INFRA-6), model,
+        served_model, finish_reason (normalized, see llm_text.FINISH_REASONS),
+        raw_finish_reason, usage {prompt_tokens, completion_tokens,
         total_tokens, reasoning_tokens, cached_tokens}, usage_source ('provider' = reported by
         the API, 'cli' = Claude CLI envelope, 'none' = not reported, all zeros), think_stripped,
         served_by ('primary' | 'fallback' | 'cache') and cacheable. chat_json adds
@@ -755,9 +783,10 @@ class LLMClient:
                          raw_finish_reason: Any = None, usage: Optional[Dict[str, int]] = None,
                          usage_source: str = "none", served_model: Any = None,
                          think_stripped: bool = False, dangling: bool = False,
-                         served_by: str = "primary") -> None:
+                         served_by: str = "primary", provider: Optional[str] = None) -> None:
         """Record a completed call as the calling thread's last call.
 
+        ``provider`` is the serving provider (INFRA-6); None means this client's own provider.
         Never raises: a failure here is logged at debug level and leaves no metadata, so it
         can never mask the completion itself.
         """
@@ -765,7 +794,7 @@ class LLMClient:
             raw = getattr(raw_finish_reason, "value", raw_finish_reason)
             meta: Optional[Dict[str, Any]] = {
                 "client_id": id(self),
-                "provider": getattr(self, "provider", None),
+                "provider": provider or getattr(self, "provider", None),
                 "model": model,
                 "served_model": served_model if isinstance(served_model, str) and served_model else None,
                 "finish_reason": finish_reason,
@@ -891,9 +920,14 @@ class LLMClient:
             cache_key = self._cache_key(model, messages, temperature, max_tokens, response_format)
             hit = LLMCache.get(cache_key)
             if hit is not None:
+                # INFRA-6: a replayed reply is attributed to the provider this route's real call
+                # is served by (LLM_FAST_PROVIDER for a fast-tier route on the second client).
+                hit_provider = (self._serving_endpoint(route[1])[1]
+                                if self.provider in OPENAI_COMPATIBLE_PROVIDERS else self.provider)
                 if Config.LLM_TELEMETRY_ENABLED:
-                    LLMMeter.record(self.provider, model, 0, 0, 0.0, cached=True, stage=stage, run_id=run_id)
-                self._stamp_call_meta(model=model, finish_reason="unknown", served_by="cache")
+                    LLMMeter.record(hit_provider, model, 0, 0, 0.0, cached=True, stage=stage, run_id=run_id)
+                self._stamp_call_meta(model=model, finish_reason="unknown", served_by="cache",
+                                      provider=hit_provider)
                 return hit
 
         last_error: Optional[Exception] = None
@@ -1000,7 +1034,9 @@ class LLMClient:
                 pt = sum(estimate_tokens(str(m.get("content", ""))) for m in messages)
                 ct = estimate_tokens(result)
             # 用解析后的 model 计量，使 by_model 维度区分 fast/strong 用量与成本。
-            LLMMeter.record(self.provider, model, pt, ct, latency_ms, cached=False, stage=stage,
+            # INFRA-6: 成本按实际服务的提供方计（fast-tier 第二客户端服务时为 LLM_FAST_PROVIDER）。
+            meter_provider = (meta.get("provider") if meta else None) or self.provider
+            LLMMeter.record(meter_provider, model, pt, ct, latency_ms, cached=False, stage=stage,
                             run_id=run_id, finish_reason=meta.get("finish_reason") if meta else None)
         if cache_on and cache_key is not None:
             # INFRA-1 (LLM_TRANSPORT_STRICT): 截断(length)/审查/中止/悬空 <think> 的回复不入缓存
@@ -1299,11 +1335,8 @@ class LLMClient:
         # One _routing_pinned() read decides both (_tier_route), so a settings hot-switch
         # mid-call cannot pair a tier alias with this client's own endpoint (or the reverse).
         model, fast_tier = self._tier_route(tier)
-        client = self._openai_client
-        if fast_tier:
-            fast_client = self._fast_provider_client()
-            if fast_client is not None:
-                client = fast_client
+        # INFRA-6: the serving provider's request overrides, metadata and meter entry.
+        client, serving_provider = self._serving_endpoint(fast_tier)
         kwargs: Dict[str, Any] = {
             "model": model,
             "messages": messages,
@@ -1312,9 +1345,9 @@ class LLMClient:
             "tools": tools_schema,
             "tool_choice": "auto",
         }
-        extra_body = self._apply_reasoning_options(kwargs)
+        extra_body = self._apply_reasoning_options(kwargs, serving_provider)
         # Kimi K2.7 Code 网关按推理开关硬校验温度（开=1/关=0.6），覆盖调用方温度。
-        kwargs["temperature"] = self._coerce_temperature(temperature, extra_body)
+        kwargs["temperature"] = self._coerce_temperature(temperature, serving_provider, extra_body)
         # LLM-1: 此前原生工具路径完全绕过 chat() 的韧性/观测栈（无重试、无熔断记账、无计量、
         # 无预算门）——REPORT_NATIVE_TOOLS 默认开时每章一次裸调用。对齐 chat()：瞬时错误退避重试、
         # 422 记入熔断、成功后计量+预算检查。原生工具没有 CLI 回退（CLI 无 tools=），最终失败原样
@@ -1330,7 +1363,7 @@ class LLMClient:
                 # INFRA-1: 无 choices 的错误信封（MiniMax base_resp 配额等）按瞬时错误重试（审查信封
                 # 为 LLMContentFiltered，记 422 后快速失败），不再在下方 choices[0] 处抛 IndexError。
                 if not getattr(_resp, "choices", None):
-                    raise _empty_choices_error(_resp, self.provider, model, _usage_from_response(_resp))
+                    raise _empty_choices_error(_resp, serving_provider, model, _usage_from_response(_resp))
                 response = _resp
                 _cb_reset(self.provider)
                 break
@@ -1364,7 +1397,7 @@ class LLMClient:
             try:
                 _pt = usage["prompt_tokens"] if usage else 0
                 _ct = usage["completion_tokens"] if usage else 0
-                LLMMeter.record(self.provider, model, _pt, _ct,
+                LLMMeter.record(serving_provider, model, _pt, _ct,
                                 (time.monotonic() - _started) * 1000.0,
                                 cached=False, stage=_stage, run_id=_run_id, finish_reason=finish)
             except Exception:  # noqa: BLE001 — 计量失败不影响返回
@@ -1393,7 +1426,7 @@ class LLMClient:
         self._stamp_call_meta(
             model=model, finish_reason=finish, raw_finish_reason=raw_finish, usage=usage,
             usage_source="provider", served_model=served_model, think_stripped=think_stripped,
-            dangling=has_dangling_think(raw_content),
+            dangling=has_dangling_think(raw_content), provider=serving_provider,
         )
         return {
             "content": content,
@@ -1533,30 +1566,33 @@ class LLMClient:
         cleaned = self._clean_content(raw)
         return cleaned, cleaned != raw.strip()
 
-    def _coerce_temperature(self, temperature: float, extra_body: Optional[Dict]) -> float:
-        """按提供方约束修正采样温度。
+    def _coerce_temperature(self, temperature: float, provider: str,
+                            extra_body: Optional[Dict]) -> float:
+        """按提供方约束修正采样温度（``provider`` 为实际服务本次请求的提供方）。
 
         Kimi K2.7 Code 网关（api.kimi.com/coding，model=kimi-k2.7 / kimi-for-coding）对
         temperature 做硬校验，只接受单一允许值：开启推理时必须 ``1``，关闭推理
         (thinking.type=disabled) 时必须 ``0.6``，传入其它值一律 400 invalid_request_error。
         本仓库各调用点（report/oasis/graphiti/zep）会传 0.0~0.7 等任意温度并对失败重试
-        （graphiti 还做升温重试），全部会被网关拒绝。故在此对 kimi 提供方按本次实际发送的
-        ``extra_body``（是否关推理）强制为网关允许值；其它提供方原样返回，行为不变。
+        （graphiti 还做升温重试），全部会被网关拒绝。故对 kimi 提供方按本次实际发送的
+        ``extra_body``（_apply_reasoning_options 的返回值，是否关推理）强制为网关允许值；其它
+        提供方原样返回，行为不变。INFRA-6: 规则本身在 provider_overrides.provider_temperature
+        （与 openai_compat_request_overrides 同源）；按已发送的 extra_body 判定而非再读一次
+        推理开关，推理体与温度不会在同一请求内错配。
         """
-        if self.provider != 'kimi':
-            return temperature
-        thinking_disabled = bool(extra_body and (extra_body.get("thinking") or {}).get("type") == "disabled")
-        return 0.6 if thinking_disabled else 1.0
+        return provider_temperature(provider, temperature, extra_body)
 
-    def _apply_reasoning_options(self, kwargs: Dict[str, Any]) -> Optional[Dict]:
-        """Apply reasoning controls for the provider actually serving this request.
+    def _apply_reasoning_options(self, kwargs: Dict[str, Any], provider: str) -> Optional[Dict]:
+        """Apply reasoning controls for ``provider``, the provider actually serving this request.
 
-        A fallback client intentionally retains the global primary configuration, so request
-        options must be resolved from ``self.provider`` rather than Config.LLM_PROVIDER.
-        Quotio's Antigravity alias additionally accepts the OpenAI-compatible
-        ``reasoning_effort`` field.
+        A fallback client intentionally retains the global primary configuration, and the
+        fast-tier second client serves as LLM_FAST_PROVIDER, so request options are resolved
+        from the serving provider rather than Config.LLM_PROVIDER (INFRA-6: through
+        provider_overrides, the rules every OpenAI-compatible caller shares). Quotio's
+        Antigravity alias additionally accepts the OpenAI-compatible ``reasoning_effort``
+        field. Returns the extra_body sent, or None when the request carries none.
         """
-        extra_body = Config.reasoning_extra_body(self.provider)
+        extra_body = openai_compat_request_overrides(provider)["extra_body"] or None
         if extra_body:
             kwargs["extra_body"] = extra_body
         if self._is_fallback:
@@ -1564,10 +1600,12 @@ class LLMClient:
                 os.environ.get("LLM_FALLBACK_REASONING_EFFORT", "") or ""
             ).strip().lower()
             if reasoning_effort:
-                if reasoning_effort not in {"minimal", "low", "medium", "high"}:
+                # Config.validate rejects an invalid value at startup; this per-call guard
+                # covers processes that never ran it (sim / script children).
+                if reasoning_effort not in FALLBACK_REASONING_EFFORTS:
                     raise ValueError(
                         "LLM_FALLBACK_REASONING_EFFORT must be one of "
-                        "minimal/low/medium/high"
+                        + "/".join(FALLBACK_REASONING_EFFORTS)
                     )
                 kwargs["reasoning_effort"] = reasoning_effort
         return extra_body
@@ -1591,11 +1629,9 @@ class LLMClient:
         # ``route`` is chat()'s once-per-call _tier_route() result, so the request carries the
         # model chat() caches and meters under (None = resolve it here, one read).
         model, fast_tier = route if route is not None else self._tier_route(tier)
-        client = self._openai_client
-        if fast_tier:
-            fast_client = self._fast_provider_client()
-            if fast_client is not None:
-                client = fast_client
+        # INFRA-6: the serving provider (LLM_FAST_PROVIDER on the fast-tier second client) owns
+        # the request overrides, the failure attribution and the call metadata below.
+        client, serving_provider = self._serving_endpoint(fast_tier)
         kwargs: Dict[str, Any] = {
             "model": model,
             "messages": messages,
@@ -1606,11 +1642,11 @@ class LLMClient:
             kwargs["response_format"] = response_format
 
         # 推理模型(kimi/minimax/deepseek/qwen/glm)：默认关闭推理，避免 reasoning 吃光
-        # max_tokens 导致 content 为空。reasoning_extra_body() 对非推理提供方返回 None。
-        extra_body = self._apply_reasoning_options(kwargs)
+        # max_tokens 导致 content 为空。非推理提供方不带 extra_body。
+        extra_body = self._apply_reasoning_options(kwargs, serving_provider)
 
         # Kimi K2.7 Code 网关按推理开关硬校验温度（开=1/关=0.6），覆盖调用方温度。
-        kwargs["temperature"] = self._coerce_temperature(temperature, extra_body)
+        kwargs["temperature"] = self._coerce_temperature(temperature, serving_provider, extra_body)
 
         response = client.chat.completions.create(**kwargs)
         # 捕获精确 token 用量供计量（I-5-0）；无 usage 字段时为 None，chat() 走粗估。
@@ -1620,7 +1656,7 @@ class LLMClient:
         # 而非 choices[0] 的 IndexError。
         choices = getattr(response, "choices", None)
         if not choices:
-            raise _empty_choices_error(response, self.provider, model, usage)
+            raise _empty_choices_error(response, serving_provider, model, usage)
         choice = choices[0]
         raw_content = flatten_content(getattr(getattr(choice, "message", None), "content", None))
         raw_finish = getattr(choice, "finish_reason", None)
@@ -1633,11 +1669,12 @@ class LLMClient:
         # 关闭时沿用历史判据（原文判空，返回 _clean_content 结果）。
         empty = not content if strict else not raw_content.strip()
         if empty:
-            raise _completion_failure(self.provider, finish, raw_finish, usage, max_tokens)
+            raise _completion_failure(serving_provider, finish, raw_finish, usage, max_tokens)
         self._stamp_call_meta(
             model=model, finish_reason=finish, raw_finish_reason=raw_finish, usage=usage,
             usage_source="provider", served_model=getattr(response, "model", None),
             think_stripped=think_stripped, dangling=has_dangling_think(raw_content, json_reply=json_reply),
+            provider=serving_provider,
         )
         return content
 

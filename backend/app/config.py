@@ -2102,6 +2102,17 @@ class Config:
         if cls.PROVIDER_META.get(cls.LLM_PROVIDER, {}).get('needs_key') and not cls.LLM_API_KEY:
             errors.append(f"LLM_PROVIDER={cls.LLM_PROVIDER} 时必须配置 LLM_API_KEY")
 
+        # INFRA-6: 非法的 LLM_FALLBACK_REASONING_EFFORT 以前只在每次回退调用时抛 ValueError
+        # （每次都记错误日志，且不进确定性冷却），回退形同虚设。改为启动期报错（run.py 退出 1）：
+        # 即便当前未配置 LLM_FALLBACK_PROVIDER，拼错的值也会阻止启动——这是有意的。
+        from .utils.provider_overrides import FALLBACK_REASONING_EFFORTS
+        _fb_effort = (os.environ.get('LLM_FALLBACK_REASONING_EFFORT', '') or '').strip()
+        if _fb_effort and _fb_effort.lower() not in FALLBACK_REASONING_EFFORTS:
+            errors.append(
+                f"LLM_FALLBACK_REASONING_EFFORT 必须是 {'/'.join(FALLBACK_REASONING_EFFORTS)} 之一"
+                f"（或留空），当前为 '{_fb_effort}'"
+            )
+
         # 知识图谱已迁移到本地 Graphiti——不再需要 ZEP_API_KEY。
         # 仅校验 GRAPH_BACKEND 取值合法；嵌入式后端无需任何外部服务或 Key。
         _valid_backends = ('auto', 'falkordblite', 'falkordb', 'kuzu')
