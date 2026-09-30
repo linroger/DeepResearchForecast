@@ -16609,9 +16609,13 @@ def _legacy_only_mode(args: Any) -> str:
 # (TIME-1), which describes the v3 actors.json as_of_date the legacy extraction
 # rewrites with its own as-of, and verified_facts (REPORT-7), whose quant counts
 # describe that same rewritten quantitative.json (the salvage also removes
-# verified_facts.json, which indexes that file's rows).
+# verified_facts.json, which indexes that file's rows), and the v3 quant sanity
+# keys (TIME-4), which describe the quantitative.json and contested.json the
+# salvage rewrites (it records its own unit warnings and implausible facts).
 _SALVAGE_VOLATILE_META_KEYS = frozenset({"status", "error", "traceback", "finished_at", "quant_provenance",
-                                         "as_of_model_disagreement", "verified_facts"})
+                                         "as_of_model_disagreement", "verified_facts", "quant_unit_warnings",
+                                         "quant_implausible", "quant_reconcile_contested",
+                                         "quant_sanity_truncated"})
 
 
 def _prior_v3_meta(out_dir: Path) -> dict[str, Any] | None:
