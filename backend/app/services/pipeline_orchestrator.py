@@ -91,6 +91,7 @@ from ..utils.canonical_json import canonical_json_sha256
 from ..utils.dates import date_period, parse_as_of
 from ..utils.logger import get_logger
 from ..utils import model_provenance
+from ..utils.numeric_guards import normalize_mode as _numeric_guard_mode
 
 logger = get_logger('mirofish.pipeline')
 
@@ -816,6 +817,11 @@ def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
     check. Only an ``admission`` or ``fork_admission`` capture snapshots the
     ambient BACKBONE_CHECK_* knobs; any other origin (a legacy resume) records it
     disabled, so a resume never turns the check on from the current environment.
+
+    ``numeric_guard_mode`` (TIME-5) is the normalised NUMERIC_GUARD_MODE (off |
+    shadow) of the shadow numeric-coherence guard, so a reload never changes the
+    shape of an admitted run's forecast.json. A run pinned before the key existed
+    reads the ambient value (``_pinned_safety`` default).
     """
     return {
         "version": SAFETY_POLICY_VERSION,
@@ -836,7 +842,19 @@ def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
             backbone_sensitivity.capture_policy(Config)
             if origin in ("admission", "fork_admission")
             else dict(backbone_sensitivity.DISABLED_POLICY)),
+        "numeric_guard_mode": _pinned_numeric_guard_mode(),
     }
+
+
+def _pinned_numeric_guard_mode() -> str:
+    """TIME-5: the NUMERIC_GUARD_MODE a capture pins (off | shadow). An invalid
+    ambient value is pinned as shadow with a warning here: ReportAgent only ever
+    sees the normalised pin, so its own invalid-mode warning cannot fire."""
+    raw = getattr(Config, "NUMERIC_GUARD_MODE", "shadow")
+    mode, valid = _numeric_guard_mode(raw)
+    if not valid:
+        logger.warning("NUMERIC_GUARD_MODE=%r 不是 off|shadow，按 shadow 钉住", raw)
+    return mode
 
 
 def fork_safety_policy_v1(base_options: Any) -> Optional[dict[str, Any]]:
@@ -10850,6 +10868,9 @@ class PipelineOrchestrator:
             "actors": actors,
             "sources": research.get("sources"),
             "research_report": report_md,
+            # TIME-5：数值一致性影子检查模式读准入钉（服务重载不改变已准入运行）。
+            "numeric_guard_mode": self._pinned_safety(
+                state, "numeric_guard_mode", Config.NUMERIC_GUARD_MODE),
         }
         # TIME-6：回测运行的种子报告同样扣下市场——钉随构造参数直接交给报告，不依赖报告侧
         # 按模拟 id 的所属管线查找（种子模拟不是任何管线自己的 simulation_id）。
@@ -15761,6 +15782,9 @@ class PipelineOrchestrator:
                     "research_report": report_md,
                     "scenario_label": _scenario_label,
                     "base_simulation_id": _base_sim_id,
+                    # TIME-5：数值一致性影子检查模式读准入钉（API 重生成路径读当前 Config）。
+                    "numeric_guard_mode": cls._pinned_safety(
+                        state, "numeric_guard_mode", Config.NUMERIC_GUARD_MODE),
                 }
                 # TIME-6：回测运行把钉交给报告（不读/不重报价/不现抓预测市场，盖 hindcast 章）；
                 # 实时运行不加该参数，构造调用逐字节不变。

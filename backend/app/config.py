@@ -933,6 +933,22 @@ class Config:
     BACKBONE_CHECK_PROVIDERS = os.environ.get('BACKBONE_CHECK_PROVIDERS', '').strip()
     # 越界阈值：任一情景 |Δp| ≥ 此值或领先情景不一致即算越界（取值须在 (0, 1]，否则记 unchecked）。
     BACKBONE_CHECK_MAX_ABS_DELTA = float(os.environ.get('BACKBONE_CHECK_MAX_ABS_DELTA', '0.15') or '0.15')
+    # TIME-5（P13）已发布二元阈值的数值一致性影子检查：off | shadow（默认 shadow）。shadow 时二元抽取提示词
+    # 多索取一个可选 latest_actual 字段（同指标在 dossier 里的最新实际值；每条约 50 个输出 token，不加
+    # LLM 调用，二元抽取的 max_tokens 按条数相应放宽），utils.numeric_guards 做确定性检查（scale_mismatch /
+    # status_quo_contradiction / inverted_interval），只盖 binary['numeric_guard'] 章并汇总进
+    # forecast.quality.numeric_guards。检查本身不改概率、正文、发布门、终审与
+    # REPORT_FINAL_AUDIT_POLICY_VERSION；但追加的提示词规则会改变模型起草，二元与概率可能与 off 不同——
+    # 需要与改动前完全一致的生成时设 off。准入时钉进 safety_policy_v1.numeric_guard_mode（服务重载不改变
+    # 已准入运行，并进入 EVAL-18 配置指纹）；API 重生成读当前值。非法值按 shadow 运行并告警。enforce 刻意
+    # 不实现（须前瞻证据，ADR 0002 I-21）。off → 提示词、forecast.json 与正文逐字节回到旧行为。
+    NUMERIC_GUARD_MODE = os.environ.get('NUMERIC_GUARD_MODE', 'shadow').strip().lower()
+    # 阈值与最新实际值中点之比 ≥ 此值（或 ≤ 其倒数）且单位类 / 币种相同 → scale_mismatch（误解析级）。
+    # 取值须 > 1，否则回落 300。
+    NUMERIC_GUARD_SCALE_RATIO = float(os.environ.get('NUMERIC_GUARD_SCALE_RATIO', '300') or '300')
+    # 现状判定边际 m：最新实际值越过阈值 K 至少 m·|K| 才算「已满足 / 已违背」（概率落在 0.5 另一侧即
+    # status_quo_contradiction）。取值须在 [0, 1)，否则回落 0.25。
+    NUMERIC_GUARD_STATUS_QUO_MARGIN = float(os.environ.get('NUMERIC_GUARD_STATUS_QUO_MARGIN', '0.25') or '0.25')
     REPORT_QUOTE_AUDIT_V2 = os.environ.get('REPORT_QUOTE_AUDIT_V2', 'true').strip().lower() == 'true'
     REPORT_COMPACT_RETRIEVAL_QUERY = os.environ.get('REPORT_COMPACT_RETRIEVAL_QUERY', 'true').strip().lower() == 'true'
     # RQ-2 报告修复门：质量门失败时按维度单次定向修复（引用回填 / 引文接地 / 占位符解析），

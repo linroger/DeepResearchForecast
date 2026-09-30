@@ -25,6 +25,7 @@ from enum import Enum
 
 from ..config import Config
 from ..utils import absence as _absence
+from ..utils import numeric_guards as _numeric_guards
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient, llm_call_timeout
 from ..utils.logger import get_logger
@@ -1664,6 +1665,7 @@ class ReportAgent:
         graph_priors_structural: Optional[Dict[str, Any]] = None,
         scenario_spine: Optional[List[Dict[str, Any]]] = None,
         hindcast: Optional[Dict[str, Any]] = None,
+        numeric_guard_mode: Optional[str] = None,
     ):
         """
         初始化Report Agent
@@ -1696,6 +1698,11 @@ class ReportAgent:
             由 _hindcast_pin 按模拟 id 查回所属管线的钉（覆盖 API 重生成/对话）；两者皆无 = 实时运行，
             行为逐字节不变。有钉时报告阶段不读/不重报价/不现抓预测市场，forecast.json 盖 hindcast 章。
             只有真正的回测钉（本版本且 hindcast 为真）才算数：as_of 等于今天的实时钉、{} 或其他值一律视为未传入。
+
+        TIME-5 numeric_guard_mode: 已发布二元阈值数值一致性影子检查的模式（off | shadow）。编排器主报告 /
+            种子报告传入准入时钉住的 safety_policy_v1.numeric_guard_mode；缺省 None（API 重生成 / 对话路径）
+            读当前 Config.NUMERIC_GUARD_MODE。非法值按 shadow 运行并告警。检查本身不改任何产物内容；
+            shadow 在二元提示词里多索取 latest_actual，模型起草的二元与概率可能因此与 off 不同。
         """
         self.graph_id = graph_id
         self.simulation_id = simulation_id
@@ -1735,6 +1742,8 @@ class ReportAgent:
         # 懒缓存一次；查找抛错时记下，市场据此失败即扣下。测试经 __new__ 构造时三者缺失，读取一律走 getattr。
         # 须在下方各块构建之前赋值：REPORT_CHRONOLOGY_ASOF_SPLIT 的时间线块按回测钉的 as_of 切分（RESEARCH-13）。
         self.hindcast: Optional[Dict[str, Any]] = as_hindcast_pin(hindcast)
+        # TIME-5：数值一致性影子检查模式（见 docstring）。测试经 __new__ 构造时缺失，读取一律走 getattr。
+        self._numeric_guard_mode = self._normalize_numeric_guard_mode(numeric_guard_mode)
         self._hindcast_pin_cache: Any = _HINDCAST_PIN_UNRESOLVED
         self._hindcast_lookup_failed = False
         # RESEARCH-12：(问题规范, 判定日是否采用) 懒缓存（_question_spec_for_run；None = 尚未核对）。
@@ -3848,6 +3857,16 @@ class ReportAgent:
             logger.debug(f"model_provenance 构建失败（忽略）: {exc}")
             return None
 
+    @staticmethod
+    def _normalize_numeric_guard_mode(value: Optional[str] = None) -> str:
+        """TIME-5：off | shadow。None → 当前 Config.NUMERIC_GUARD_MODE；非法值 → shadow 并告警。"""
+        raw = value if value is not None else getattr(
+            Config, "NUMERIC_GUARD_MODE", _numeric_guards.MODE_SHADOW)
+        mode, valid = _numeric_guards.normalize_mode(raw)
+        if not valid:
+            logger.warning(f"NUMERIC_GUARD_MODE={raw!r} 不是 off|shadow，按 shadow 运行")
+        return mode
+
     def _finalize_structured_forecast(self, report_id: str, report_markdown: str,
                                       report: Optional["Report"] = None) -> None:
         """Persist the final forecast.json.
@@ -3875,6 +3894,9 @@ class ReportAgent:
         # TIME-6：回测钉——时间范围一致性校验以 as_of 年为「今年」，落盘前盖 forecast['hindcast'] 章；
         # 实时运行为 None，行为逐字节不变。
         _hindcast = self._hindcast_pin()
+        # TIME-5：本次运行的数值一致性检查模式（编排器钉住值；__new__ 构造的 agent 读当前 Config）。
+        _ng_mode = (getattr(self, "_numeric_guard_mode", None)
+                    or self._normalize_numeric_guard_mode())
         if self._forecast_spine and self._forecast_spine.get("scenarios"):
             forecast = dict(self._forecast_spine)        # 骨架已由信号驱动且 MECE
         else:
@@ -4016,6 +4038,10 @@ class ReportAgent:
                         report_id, "binary", strip_market_table=_strip_market)
                     if _binary_pack:
                         _ebf_pack_kwargs["context_pack"] = _binary_pack
+                # TIME-5：shadow 时二元抽取顺带索取 latest_actual；off 时不传此参数（调用形状逐字节不变）。
+                _ebf_guard_kwargs: Dict[str, Any] = (
+                    {"numeric_guard_mode": _ng_mode}
+                    if _ng_mode == _numeric_guards.MODE_SHADOW else {})
                 # B2: 需求书解析出的 binary_min_count 参与生效——取 spec 与 Config 的较大者
                 # （需求书写明「15+ binary forecasts」时不被 Config 默认静默压低）。
                 _bres = _ebf(
@@ -4031,6 +4057,7 @@ class ReportAgent:
                     horizon_date=_hz_date,
                     **_ebf_eval_kwargs,
                     **_ebf_pack_kwargs,
+                    **_ebf_guard_kwargs,
                 )
                 if isinstance(_bres.get("target_binding"), dict):
                     _target_binding = _bres["target_binding"]
@@ -4123,6 +4150,42 @@ class ReportAgent:
             except Exception as _be:  # noqa: BLE001 — additive; never break finalization
                 logger.warning(f"二元预测抽取失败（忽略，不影响情景预测）: {_be}")
                 _binary_extraction_failed = True
+        # TIME-5（NUMERIC_GUARD_MODE，默认 shadow）：已发布二元阈值的数值一致性影子检查——每条二元盖
+        # binary['numeric_guard'] 章（阈值 vs 同指标最新实际值：status_quo_contradiction / scale_mismatch /
+        # inverted_interval），汇总并入 forecast.quality.numeric_guards（无二元 → not_run，情景区间照查）。
+        # 只合并进既有 dict，绝不重赋 forecast['binary_quality']；检查本身不改概率、正文、发布门、终审与
+        # 政策版本，不发 LLM 调用（shadow 追加在二元提示词里的 latest_actual 规则属于抽取，可能改变起草）。
+        # 回测运行以钉住的 as_of 为「今天」且要求日期可读（所述期间结束晚于 as_of、或无可读日期的实际值
+        # 都不绑定）；as_of 读不出时不回落系统日期（那会把 as_of 之后的信息当作已知）→ status 'error'。
+        # 失败 → status 'error'。
+        if _ng_mode == _numeric_guards.MODE_SHADOW:
+            _ng_today = None
+            _ng_error = None
+            if _hindcast is not None:
+                try:
+                    _ng_today = datetime.strptime(str(_hindcast.get("as_of"))[:10], "%Y-%m-%d").date()
+                except (TypeError, ValueError):
+                    _ng_error = "hindcast_as_of_unreadable"
+            try:
+                if _ng_error is not None:
+                    logger.warning(f"数值一致性影子检查跳过：回测钉 as_of 不可读（{_hindcast.get('as_of')!r}）")
+                    forecast.setdefault("quality", {})["numeric_guards"] = {
+                        "mode": _ng_mode, "status": "error", "error": _ng_error}
+                else:
+                    forecast.setdefault("quality", {})["numeric_guards"] = _numeric_guards.stamp_forecast(
+                        forecast, quant_rows=getattr(self, "quantitative", None) or [], mode=_ng_mode,
+                        scale_ratio=getattr(Config, "NUMERIC_GUARD_SCALE_RATIO",
+                                            _numeric_guards.DEFAULT_SCALE_RATIO),
+                        margin=getattr(Config, "NUMERIC_GUARD_STATUS_QUO_MARGIN",
+                                       _numeric_guards.DEFAULT_STATUS_QUO_MARGIN),
+                        today=_ng_today, require_as_of=_hindcast is not None)
+            except Exception as _nge:  # noqa: BLE001 — 影子诊断，绝不阻断定稿
+                logger.warning(f"数值一致性影子检查失败（忽略，不影响产物）: {_nge}")
+                try:
+                    forecast.setdefault("quality", {})["numeric_guards"] = {
+                        "mode": _ng_mode, "status": "error", "error": type(_nge).__name__}
+                except Exception:  # noqa: BLE001 — quality 形状异常时放弃记录
+                    pass
         # RQ-2：质量门失败 → 按维度单次定向修复（引用回填 / 引文接地 / 占位符解析），
         # 重跑受影响审计一次并把 before/after 记进 forecast['quality']['repair']（合并，不覆盖）。
         # 置于发布门之前 ⇒ 发布门只对修复后的审计结果打分一次，避免二次降级。任何失败仅告警。
