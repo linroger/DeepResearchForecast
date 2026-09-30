@@ -67,6 +67,7 @@ if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
 from app.config import Config  # noqa: E402
+from app.config_audit import parse_int_option  # noqa: E402
 from app.services.ensemble import _norm_name  # noqa: E402 — 复用情景名归一化，保证 diff 与集成口径一致
 from app.services.pipeline_orchestrator import (  # noqa: E402
     PipelineManager,
@@ -149,6 +150,60 @@ def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# INFRA-14: the run options a schedule may carry, with the vocabularies POST
+# /api/research/run admits (a schedule used to launch whatever it stored).
+_VALID_MODES = ("full", "research_only")
+_VALID_DEPTHS = ("quick", "standard", "deep")
+_VALID_LANGUAGES = ("Chinese", "English", "auto")
+
+
+def validate_run_options(*, depth: Optional[str], model: Optional[str], language: Optional[str],
+                         options: Optional[dict[str, Any]]
+                         ) -> tuple[Optional[str], Optional[str], Optional[str], dict[str, Any]]:
+    """Normalise a schedule's run options the way the run API does; ValueError when invalid.
+
+    depth: None/'' (Config default) or quick/standard/deep, any case.  model: None/''
+    or one of Config.SUPPORTED_DEERFLOW_MODELS, any case.  language: None (Config
+    default), '' or 'auto' (the model chooses; stored as ''), Chinese or English.
+    options: an object whose optional mode is full/research_only, any case (a blank
+    mode is dropped: full), and whose optional max_rounds is a strict integer (a bool
+    or 3.5 is refused, as by the API).
+    """
+    if depth is not None and not isinstance(depth, str):
+        raise ValueError(f"depth must be one of {', '.join(_VALID_DEPTHS)}, got {depth!r}")
+    depth = (depth or "").strip().lower() or None
+    if depth is not None and depth not in _VALID_DEPTHS:
+        raise ValueError(f"depth must be one of {', '.join(_VALID_DEPTHS)}, got {depth!r}")
+    if model is not None and not isinstance(model, str):
+        raise ValueError(f"model must be one of {', '.join(Config.SUPPORTED_DEERFLOW_MODELS)}, got {model!r}")
+    model = (model or "").strip().lower() or None
+    if model is not None and model not in Config.SUPPORTED_DEERFLOW_MODELS:
+        raise ValueError(f"model must be one of {', '.join(Config.SUPPORTED_DEERFLOW_MODELS)}, got {model!r}")
+    if language is not None:
+        if not isinstance(language, str) or (language.strip() and language.strip() not in _VALID_LANGUAGES):
+            raise ValueError(f"language must be one of {', '.join(_VALID_LANGUAGES)}, got {language!r}")
+        language = "" if language.strip() in ("", "auto") else language.strip()
+    if options is None:
+        options = {}
+    if not isinstance(options, dict):
+        raise ValueError(f"options must be an object, got {type(options).__name__}")
+    options = dict(options)
+    mode = options.get("mode")
+    if mode is not None:
+        # Normalised like the run API ('FULL' is full); a blank mode is the default
+        # (full), as _launch always read it, so it is dropped.
+        normalised = mode.strip().lower() if isinstance(mode, str) else None
+        if normalised == "":
+            options.pop("mode")
+        elif normalised in _VALID_MODES:
+            options["mode"] = normalised
+        else:
+            raise ValueError(f"options.mode must be one of {', '.join(_VALID_MODES)}, got {mode!r}")
+    if options.get("max_rounds") is not None:
+        options["max_rounds"] = parse_int_option(options["max_rounds"], "options.max_rounds")
+    return depth, model, language, options
+
+
 # ---------------------------------------------------------------------------
 # 调度定义持久化（uploads/schedules/<id>/schedule.json）
 # ---------------------------------------------------------------------------
@@ -200,10 +255,14 @@ class ScheduleStore:
 
         interval_minutes 必须 >0。max_runs=None 时取 SCHEDULER_DEFAULT_MAX_RUNS
         （0=不限）。next_run_at 立即置为「现在」，使首次 tick 即触发首跑。
+        INFRA-14：depth/model/language/options 按运行 API 的取值域校验并归一化
+        （validate_run_options），非法即 ValueError，绝不落盘一条无法启动的调度。
         """
         prompt = (prompt or "").strip()
         if not prompt:
             raise ValueError("prompt 不能为空")
+        depth, model, language, options = validate_run_options(
+            depth=depth, model=model, language=language, options=options)
         interval_minutes = int(interval_minutes)
         if interval_minutes <= 0:
             raise ValueError("interval_minutes 必须为正整数（分钟）")
@@ -688,20 +747,32 @@ class Scheduler:
     def _launch(cls, record: dict[str, Any], now: datetime) -> Optional[str]:
         """对一条调度起一次管线，更新 last/next_run_at + run 列表 + 漂移摘要。"""
         sid = record["schedule_id"]
-        opts = record.get("options") or {}
+        interval = int(record.get("interval_minutes") or 60)
+        # INFRA-14: re-validate the stored options (a record written before validation
+        # existed, or edited by hand); an invalid schedule is skipped, never launched.
+        try:
+            depth, model, language, opts = validate_run_options(
+                depth=record.get("depth"), model=record.get("research_model"),
+                language=record.get("research_language"), options=record.get("options"))
+        except ValueError as e:
+            logger.error("[scheduler] 调度 %s 的运行参数非法，跳过：%s", sid, e)
+            record["last_error"] = f"invalid schedule: {e}"
+            record["next_run_at"] = (now + timedelta(minutes=interval)).isoformat()
+            ScheduleStore.save(record)
+            return None
         try:
             state = PipelineOrchestrator.start(
                 record["prompt"],
                 mode=str(opts.get("mode") or "full"),
                 project_name=record.get("project_name"),
-                depth=record.get("depth") or None,
+                depth=depth,
                 max_rounds=opts.get("max_rounds"),
-                language=record.get("research_language"),
-                model=record.get("research_model") or None,
+                language=language,
+                model=model,
             )
         except Exception as e:  # noqa: BLE001 — 起管线失败不应杀循环；记录并推迟到下次。
             logger.error("[scheduler] 调度 %s 起管线失败：%s", sid, e, exc_info=True)
-            interval = int(record.get("interval_minutes") or 60)
+            record["last_error"] = f"launch failed: {e}"
             record["next_run_at"] = (now + timedelta(minutes=interval)).isoformat()
             record["updated_at"] = _utcnow()
             ScheduleStore.save(record)
@@ -711,7 +782,7 @@ class Scheduler:
         prev_pid = (record.get("run_pipeline_ids") or [None])[-1]
 
         record["last_run_at"] = now.isoformat()
-        interval = int(record.get("interval_minutes") or 60)
+        record.pop("last_error", None)
         record["next_run_at"] = (now + timedelta(minutes=interval)).isoformat()
         record.setdefault("run_pipeline_ids", []).append(new_pid)
         ScheduleStore.save(record)
@@ -840,17 +911,21 @@ def main(argv: Optional[list[str]] = None) -> int:
     cmd = args.cmd
 
     if cmd == "add":
-        rec = ScheduleStore.create(
-            args.prompt,
-            interval_minutes=args.interval_minutes,
-            depth=args.depth,
-            options={"max_rounds": args.max_rounds} if args.max_rounds is not None else {},
-            max_runs=args.max_runs,
-            project_name=args.project_name,
-            language=args.language,
-            model=args.model,
-            enabled=not args.disabled,
-        )
+        try:
+            rec = ScheduleStore.create(
+                args.prompt,
+                interval_minutes=args.interval_minutes,
+                depth=args.depth,
+                options={"max_rounds": args.max_rounds} if args.max_rounds is not None else {},
+                max_runs=args.max_runs,
+                project_name=args.project_name,
+                language=args.language,
+                model=args.model,
+                enabled=not args.disabled,
+            )
+        except ValueError as e:
+            print(f"调度参数非法: {e}", file=sys.stderr)
+            return 2
         _print_json(rec)
         return 0
 

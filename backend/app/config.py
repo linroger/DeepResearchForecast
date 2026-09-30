@@ -7,6 +7,20 @@ import os
 import threading
 from dotenv import load_dotenv
 
+try:
+    from .config_audit import ERROR, WARNING, Issue, audit_env, extract_knobs, sanitize_numeric_env
+except ImportError:
+    # Loaded by path outside the app package (tests exec a private copy of this file
+    # with spec_from_file_location): load the stdlib-only audit module beside it.
+    import importlib.util as _importlib_util
+    _audit_spec = _importlib_util.spec_from_file_location(
+        '_drf_config_audit', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config_audit.py'))
+    _config_audit = _importlib_util.module_from_spec(_audit_spec)
+    _audit_spec.loader.exec_module(_config_audit)
+    ERROR, WARNING, Issue = _config_audit.ERROR, _config_audit.WARNING, _config_audit.Issue
+    audit_env, extract_knobs = _config_audit.audit_env, _config_audit.extract_knobs
+    sanitize_numeric_env = _config_audit.sanitize_numeric_env
+
 # 加载项目根目录的 .env 文件
 # 路径: MiroFish/.env (相对于 backend/app/config.py)
 project_root_env = os.path.join(os.path.dirname(__file__), '../../.env')
@@ -22,6 +36,20 @@ elif os.path.exists(project_root_env):
 else:
     # 如果根目录没有 .env，尝试加载环境变量（用于生产环境）
     load_dotenv(override=True)
+
+# INFRA-14 config audit (app/config_audit.py).  The knob table is parsed once from this
+# file's source.  Before class Config reads anything, a blank, unparseable or non-finite
+# int/float value is popped from os.environ, so its code default applies and the import
+# never crashes; each one stays an error in CONFIG_IMPORT_ISSUES (see Config.config_issues).
+# An unreadable source (a bytecode-only deployment) only disables the audit.
+try:
+    CONFIG_KNOBS = extract_knobs(__file__)
+except (OSError, SyntaxError, ValueError) as _audit_exc:
+    CONFIG_KNOBS = {}
+    CONFIG_IMPORT_ISSUES = [Issue(WARNING, 'CONFIG_STRICT_VALIDATION',
+                                  f'config audit unavailable: cannot parse config.py ({_audit_exc})')]
+else:
+    CONFIG_IMPORT_ISSUES = sanitize_numeric_env(os.environ, CONFIG_KNOBS)
 
 
 class Config:
@@ -113,6 +141,11 @@ class Config:
     # 协议协商失败时回退 http1（degrade-safe）。LLM_HTTP_KEEPALIVE 抬高最大 keepalive 连接数（原 20）。
     LLM_HTTP2 = os.environ.get('LLM_HTTP2', 'True').strip().lower() == 'true'
     LLM_HTTP_KEEPALIVE = int(os.environ.get('LLM_HTTP_KEEPALIVE', '128') or '128')
+    # INFRA-14: hard per-call HTTP timeout (seconds) of the OpenAI-compatible client
+    # (llm_client._build_openai_client), so a stream that dies mid-read cannot wedge a
+    # pipeline thread.  Declared here so .env reaches it; 600 is the value the client
+    # already used (0 also means 600 there), so the default is unchanged.
+    LLM_HTTP_TIMEOUT_S = float(os.environ.get('LLM_HTTP_TIMEOUT_S', '600') or '600')
 
     # —— 双层模型路由（EXECPLAN2 I-6-2）——
     # 把机械型结构化调用（子查询分解 / 受访者选择 / 访谈问题生成 / JSON 修复重试 /
@@ -901,6 +934,12 @@ class Config:
     REPORT_BILINGUAL = os.environ.get('REPORT_BILINGUAL', 'true').strip().lower() == 'true'
     # 逐章节翻译的并发度（ThreadPoolExecutor 线程数）；下限 1（串行）。默认 4。
     REPORT_TRANSLATION_CONCURRENCY = max(1, int(os.environ.get('REPORT_TRANSLATION_CONCURRENCY', '4') or '4'))
+    # Rounds of report_agent._repair_variant_contamination (re-translate the source-language
+    # lines a translated variant kept; clamped to 1-5 there).  INFRA-14 declared it: the
+    # report agent read it with a getattr default of 3, so an .env value never reached it.
+    # The default 3 is that getattr default, so an unset knob changes nothing.
+    REPORT_TRANSLATION_CONTAMINATION_RETRIES = int(
+        os.environ.get('REPORT_TRANSLATION_CONTAMINATION_RETRIES', '3') or '3')
 
     # —— PM-2：确定性逐预测市场锚定（forecast_extractor 经 getattr 读取）——
     # 抽取二元预测后跑一次批处理 LLM 匹配（陈述表 × 相关性门控市场表），确定性回填
@@ -1491,6 +1530,15 @@ class Config:
     # research child.
     RESEARCH_FORECAST_INPUTS = (os.environ.get('RESEARCH_FORECAST_INPUTS', '').strip().lower() or 'true') in (
         '1', 'true', 'yes', 'on')
+    # Evidence-grading switch (EXECPLAN2 I-0-0/I-0-1): source tiers, dates and Admiralty
+    # grades plus contested claims in the legacy bridge's extraction, and the report
+    # agent's contested-claims block and tiered source index.  INFRA-14 declared it
+    # (the report agent read it with a getattr default, so .env never reached the
+    # backend) and forwards it to every research child.  Parsed like its sibling above
+    # and the bridge (blank = true, else 1/true/yes/on), so the default and every
+    # child's reading stay as they were.
+    RESEARCH_EVIDENCE_GRADING = (os.environ.get('RESEARCH_EVIDENCE_GRADING', 'true').strip().lower()
+                                 or 'true') in ('1', 'true', 'yes', 'on')
     # RESEARCH-11 v3 forecast inputs: the facts extraction also asks for the drivers
     # and dated leading indicators (precision-preserving dates, never padded) that
     # fill actors.json forecast_inputs.drivers / .indicators, which v3 wrote empty.
@@ -2006,9 +2054,42 @@ class Config:
     def _is_placeholder(cls, value) -> bool:
         return bool(value) and str(value).strip().lower() in cls._PLACEHOLDER_VALUES
 
+    # INFRA-14: strict config validation.  On (default), the errors of config_issues()
+    # (a non-canonical boolean such as X=1, a blank or malformed number, an enum / range /
+    # coupled-pair violation, a malformed LLM_COST_PER_MTOK) refuse pipeline admission:
+    # preflight_pipeline lists them and PipelineOrchestrator.start raises
+    # ConfigurationError.  The server still starts (run.py prints every issue as a WARN
+    # line).  false downgrades them to warnings.  A clean environment has no issue, so
+    # the default changes nothing.  Parsed fail-closed like APP_HOST_CHECK: only an
+    # explicit false/0/no/off turns it off, so an ambiguous value cannot disable the audit.
+    CONFIG_STRICT_VALIDATION = os.environ.get('CONFIG_STRICT_VALIDATION', 'true').strip().lower() not in (
+        'false', '0', 'no', 'off')
+
     @classmethod
-    def validate(cls):
-        """验证必要配置"""
+    def config_issues(cls) -> list:
+        """INFRA-14: the config audit's issues (config_audit.Issue: level, knob, message).
+
+        The import-time numeric sanitisation issues plus audit_env over the current
+        os.environ (apply_provider writes land there too).  With
+        CONFIG_STRICT_VALIDATION off every error is returned as a warning.
+        """
+        issues = list(CONFIG_IMPORT_ISSUES) + audit_env(os.environ, CONFIG_KNOBS)
+        if not cls.CONFIG_STRICT_VALIDATION:
+            issues = [issue._replace(level=WARNING) for issue in issues]
+        return issues
+
+    @classmethod
+    def config_errors(cls) -> list:
+        """INFRA-14: the messages of the config_issues() that refuse a run (none when not strict)."""
+        return [issue.message for issue in cls.config_issues() if issue.level == ERROR]
+
+    @classmethod
+    def validate(cls, *, include_audit: bool = True):
+        """验证必要配置
+
+        INFRA-14: include_audit (default) appends config_errors(); run.py passes False,
+        so its startup exit gate is unchanged and the audit only refuses pipeline runs.
+        """
         errors = []
 
         if cls.LLM_PROVIDER not in cls.SUPPORTED_LLM_PROVIDERS:
@@ -2050,6 +2131,8 @@ class Config:
             _sem_val = getattr(cls, _sem_name, None)
             if not isinstance(_sem_val, int) or _sem_val < 1:
                 errors.append(f"{_sem_name} 必须是 >=1 的整数，当前为 '{_sem_val}'")
+        if include_audit:
+            errors.extend(cls.config_errors())
         return errors
 
 

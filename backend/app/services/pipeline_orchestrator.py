@@ -47,6 +47,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
 from ..config import Config
+from ..config_audit import ConfigurationError
 from ..models.project import ProjectManager, ProjectStatus
 from ..models.task import TaskManager
 from ..services.hindcast_policy import (
@@ -2285,6 +2286,7 @@ def _synthesis_provider_unavailable(error: Any) -> bool:
 RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
     ("PREDICTION_MARKETS_END_DATE_GATE", "bool"),
     ("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", "float"),
+    ("RESEARCH_EVIDENCE_GRADING", "bool"),
     ("RESEARCH_FORECAST_INPUTS", "bool"),
     ("RESEARCH_SOURCE_TAXONOMY", "bool"),
 )
@@ -7627,6 +7629,10 @@ def preflight_pipeline(mode: str = "full", model: Optional[str] = None) -> list[
         if not os.path.exists(os.path.expanduser('~/.codex/auth.json')) and shutil.which('codex') is None:
             errors.append("DEERFLOW_MODEL=codex 需要 Codex 登录凭据（~/.codex/auth.json）：安装 `codex` CLI 并登录")
 
+    # 5) INFRA-14 config audit: non-canonical booleans, malformed numbers, enum / range /
+    #    coupled-pair violations (empty when CONFIG_STRICT_VALIDATION is off).
+    errors.extend(Config.config_errors())
+
     return errors
 
 
@@ -8755,7 +8761,13 @@ class PipelineOrchestrator:
 
         两类准入拒绝（as_of 与 evaluation）都抛 RunAdmissionError（ValueError 子类）：运行 API
         只把它映射为 400；创建目录/任务之后抛出的 ValueError 是内部故障，仍是 500。
+
+        INFRA-14：CONFIG_STRICT_VALIDATION 开启（默认）且配置审计有错误时，在任何准入与
+        目录/任务之前抛 ConfigurationError（RuntimeError 子类，errors 列出各条原因）。
         """
+        config_errors = Config.config_errors()
+        if config_errors:
+            raise ConfigurationError(config_errors)
         admission_actor_policy: Optional[dict[str, Any]] = None
         hindcast_pin: Optional[dict[str, Any]] = None
         if as_of is not None:

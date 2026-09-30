@@ -36,6 +36,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import functools
+import importlib.util
 import json
 import os
 import re
@@ -43,6 +45,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CONFIG = os.path.join(ROOT, "backend", "app", "config.py")
+CONFIG_AUDIT = os.path.join(ROOT, "backend", "app", "config_audit.py")
 ENV_EXAMPLE = os.path.join(ROOT, ".env.example")
 ENV_FILE = os.path.join(ROOT, ".env")  # ENV-1：运行时 .env（可能不存在——纯 advisory）
 
@@ -56,7 +59,6 @@ _IGNORE = {
     "ZEP_API_KEY",
 }
 
-_ENV_READ_RE = re.compile(r"os\.environ(?:\.get\(\s*['\"]([A-Z0-9_]+)['\"]|\[\s*['\"]([A-Z0-9_]+)['\"]\s*\])")
 _ENV_DOC_RE = re.compile(r"^\s*#?\s*([A-Z][A-Z0-9_]+)=", re.M)
 
 
@@ -107,21 +109,28 @@ HONESTY_CRITICAL_VARS = {
 # names that merely contain 'KEY' (e.g. MONKEY) are not falsely masked.
 _SECRET_SEGMENTS = {"KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL", "CREDENTIALS"}
 
-# Extract `os.environ.get('VAR', 'default')` literals from config.py source text.
-# re.S so the whitespace gap tolerates the multi-line `.get(\n 'VAR',\n 'default')`
-# form (e.g. APP_CORS_ORIGINS). The default literal itself is single-line and
-# quote-free internally ([^'\"]*), which covers every default in config.py.
-_CONFIG_DEFAULT_RE = re.compile(
-    r"os\.environ\.get\(\s*['\"]([A-Z][A-Z0-9_]+)['\"]\s*,\s*(['\"])([^'\"]*)\2",
-    re.S,
-)
+
+@functools.lru_cache(maxsize=1)
+def _config_audit():
+    """backend/app/config_audit.py, loaded by path: it is stdlib only, and importing
+    the app package would pull in Flask and the whole backend."""
+    spec = importlib.util.spec_from_file_location("_drf_env_drift_config_audit", CONFIG_AUDIT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def config_knobs(text: str | None = None) -> dict:
+    """Env name -> knob for every literal env read in config.py (``text`` overrides
+    the file), from config_audit.extract_knobs: the single parser of Config's knobs
+    (INFRA-14), an AST walk, so comments and docstrings never count."""
+    if text is None:
+        return _config_audit().extract_knobs(CONFIG)
+    return _config_audit().extract_knobs(source=text)
 
 
 def config_env_vars() -> set:
-    text = open(CONFIG, encoding="utf-8").read()
-    out = set()
-    for m in _ENV_READ_RE.finditer(text):
-        out.add(m.group(1) or m.group(2))
+    out = set(config_knobs())
     out -= _IGNORE
     return {v for v in out if not any(p.match(v) for p in _IGNORE_PATTERNS)}
 
@@ -135,18 +144,12 @@ def documented_env_vars() -> set:
 
 def config_defaults(text: str | None = None) -> dict:
     """var -> default literal string, introspected from config.py source text
-    the same way config_env_vars() does (regex over source — no import, so this
-    stays offline and needs no backend deps). First occurrence wins (the real
-    assignment precedes any doc-comment mention). Vars whose `os.environ.get`
-    has no default literal (or use os.environ[...]) are simply absent here."""
-    if text is None:
-        text = open(CONFIG, encoding="utf-8").read()
-    out: dict = {}
-    for m in _CONFIG_DEFAULT_RE.finditer(text):
-        var = m.group(1)
-        if var not in out:                # first (real) definition wins
-            out[var] = m.group(3)
-    return out
+    the same way config_env_vars() does (config_knobs: no import, so this stays
+    offline and needs no backend deps). The first literal default among a var's
+    reads wins. Vars whose reads have no literal default (`os.environ.get('X')`,
+    `os.environ[...]`, a computed default) are simply absent here."""
+    return {var: knob["default"] for var, knob in config_knobs(text).items()
+            if knob["default"] is not None}
 
 
 def parse_env_text(text: str) -> dict:

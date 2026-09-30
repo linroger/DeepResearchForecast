@@ -42,6 +42,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
 
 from ..config import Config
+from ..config_audit import ConfigurationError, parse_int_option
 from ..services import forecast_ledger, forecast_resolution
 from ..services.pipeline_orchestrator import (
     PipelineManager,
@@ -123,9 +124,10 @@ def v1_run():
 
         max_rounds = data.get('max_rounds')
         if max_rounds is not None:
+            # INFRA-14: strict — a JSON true (int(True) == 1) or 3.5 (int() truncates) is refused.
             try:
-                max_rounds = int(max_rounds)
-            except (TypeError, ValueError):
+                max_rounds = parse_int_option(max_rounds, 'max_rounds')
+            except ValueError:
                 return _err("max_rounds 必须是整数")
 
         language = (data.get('language') or '').strip() or None
@@ -174,6 +176,10 @@ def v1_run():
             # start() re-checks the admission before creating anything; any other
             # ValueError is an internal fault (500 below).
             return _err(str(e))
+        except ConfigurationError as e:
+            # INFRA-14: start() re-checks the config audit (the environment changed after
+            # preflight); a refusal lists its errors like preflight does, never a 500.
+            return jsonify({"success": False, "error": str(e), "preflight_errors": e.errors}), 400
         return _ok({
             "pipeline_id": state.pipeline_id,
             "task_id": state.task_id,
