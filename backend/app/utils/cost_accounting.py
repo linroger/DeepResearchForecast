@@ -14,11 +14,15 @@ Config fingerprint
     when the stage completes), the run options max_rounds / research_language, and the
     three forecast knobs no pin covers (FORECAST_ENSEMBLE_MODELS, FORECAST_MARKET_ANCHORING,
     PREDICTION_MARKETS_ENABLED). ``config_hash = 'sha256:' + canonical_json_sha256(fp)``.
-    The report stage computes it exactly once, pins ``{config_hash, fingerprint}`` in
-    ``options['config_hash_v1']`` and stamps the same hash on its ledger commit rows;
-    :func:`build_cost_card` reuses that pin (``config.source == 'report_stage'``) and only
+    The report stage computes it exactly once, pins ``{config_hash, fingerprint, report_id}``
+    in ``options['config_hash_v1']`` and stamps the same hash on its ledger commit rows; a
+    reused report keeps that pin only when it is the report the pin was computed for.
+    :func:`build_cost_card` reuses the pin (``config.source == 'report_stage'``) and only
     recomputes it for runs that ended before the report stage or predate the pin
-    (``config.source == 'recomputed'``). A ledger row and its pipeline's cost card
+    (``config.source == 'recomputed'``). A recomputed fingerprint has ``forecast: None``:
+    the forecast knobs are read from the pipeline's own process at the report stage, and
+    re-reading them later (the offline CLI's environment) would make the hook's card and a
+    rebuilt card of the same pipeline disagree. A ledger row and its pipeline's cost card
     therefore always join on the same hash, and the cost-quality join accrues
     prospectively as ledger rows resolve.
 
@@ -27,10 +31,28 @@ Cost card (``drf-cost-card/v1``)
     are labelled through ``cost_basis``). Per-stage numbers come from run_telemetry.json's
     ``cumulative_by_stage`` (EVAL-17, summed across resumed attempts), else its ``by_stage``;
     the latter covers only the latest attempt when the file records a previous one
-    (``attempts.scope == 'last_attempt_only'``). ``totals`` is the sum of the stage rows.
+    (``attempts.scope == 'last_attempt_only'``). The meter's ``cost_basis`` and ``by_model``
+    describe the latest attempt only, so a stage that earlier attempts also spent in is
+    labelled ``cost_basis: 'unknown'`` (as are the totals), and the estimated-cost-share
+    check, which cannot see earlier attempts, adds the reason
+    ``estimated_cost_share_last_attempt_only``. ``totals`` is the sum of the stage rows:
+    integer fields exactly; ``usd`` (rows rounded to 6 decimals) and ``wall_s`` (rows
+    rounded to 1 decimal) are the exact decimal sums of the rows' values, i.e.
+    ``round(sum, 6)`` / ``round(sum, 1)``, so compare them with that rounding (or as
+    ``decimal.Decimal`` of the JSON values), not with a bare float sum.
     ``completeness.reasons`` names every known gap in the metering; the card is complete
     only when there is none. No key contains the substring 'token': security.redact_secrets
     masks such keys, so token counts use a ``tok_`` prefix.
+
+Attempt record (``options['cost_card_attempt_v1']``)
+    Pinned by the orchestrator at every attempt start (:func:`cost_card_attempt_record`):
+    the attempt marker (``resume_count``, ``started_at``), the process-wide unattributed LLM
+    calls at that moment and the sha256 of the run_telemetry.json the attempt started from.
+    The card compares the baseline with the telemetry's ``unattributed_process``; when the
+    telemetry file is still the one the attempt started from (the attempt died before its
+    first flush) the baseline belongs to another process's counter, so it is not used and
+    the card says ``run_telemetry_predates_attempt``. A card never borrows another attempt's
+    baseline.
 
 Compute-matched norm (the rule for any A/B)
     Compare two methods only at matched stage-level spend. A variant that wins while it
@@ -55,8 +77,12 @@ from .telemetry import cost_is_estimated
 COST_CARD_SCHEMA = "drf-cost-card/v1"
 COST_CARD_FILENAME = "cost_card.json"
 CONFIG_FINGERPRINT_VERSION = "drf-config-fingerprint/v1"
-# ``state.options`` key of ``{"config_hash", "fingerprint"}``, pinned by the report stage.
+# ``state.options`` key of ``{"config_hash", "fingerprint", "report_id"}``, pinned by the
+# report stage.
 CONFIG_HASH_OPTION = "config_hash_v1"
+# ``state.options`` key of the attempt record (:func:`cost_card_attempt_record`), pinned by
+# the orchestrator at every attempt start.
+COST_CARD_ATTEMPT_OPTION = "cost_card_attempt_v1"
 CONFIG_HASH_PREFIX = "sha256:"
 CONFIG_SOURCE_PINNED = "report_stage"
 CONFIG_SOURCE_RECOMPUTED = "recomputed"
@@ -83,6 +109,8 @@ COMPUTE_MATCH_TOL = 0.15
 
 SCOPE_CUMULATIVE = "cumulative"
 SCOPE_LAST_ATTEMPT_ONLY = "last_attempt_only"
+# cost_basis of spend earlier attempts contributed: the meter keeps no basis for it.
+COST_BASIS_UNKNOWN = "unknown"
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:
@@ -127,13 +155,15 @@ def _default_config() -> Any:
 
 
 def config_fingerprint(options: Any, run_manifest: Any, *, report_producer: Any = None,
-                       config: Any = None) -> dict[str, Any]:
+                       config: Any = None, forecast_knobs: bool = True) -> dict[str, Any]:
     """The configuration fingerprint of one run (see the module docstring).
 
     ``options`` is ``state.options``; ``run_manifest`` the parsed run.json (None when
     missing); ``report_producer`` the ``{provider, model_name}`` pair producing the report
     (None: no report, or an unknown producer); ``config`` defaults to ``app.config.Config``.
-    Missing inputs are recorded as None, so a fingerprint is always produced.
+    ``forecast_knobs=False`` records ``forecast: None`` instead of reading the three forecast
+    knobs (a recomputation outside the report stage, whose process read them). Missing
+    inputs are recorded as None, so a fingerprint is always produced.
     """
     opts = _mapping(options)
     resolved = _mapping(_mapping(run_manifest).get("resolved"))
@@ -143,7 +173,10 @@ def config_fingerprint(options: Any, run_manifest: Any, *, report_producer: Any 
     engine = (research.get("engine")
               or _mapping(shape.get("provenance")).get("research_engine")
               or _mapping(opts.get("actor_intelligence_policy_v1")).get("research_engine"))
-    cfg = config if config is not None else _default_config()
+    forecast: Optional[dict[str, Any]] = None
+    if forecast_knobs:
+        cfg = config if config is not None else _default_config()
+        forecast = {key: _plain(getattr(cfg, attr, None)) for key, attr in FORECAST_KNOBS}
     return {
         "version": CONFIG_FINGERPRINT_VERSION,
         "run_shape_sha256": _plain(shape.get("sha256")),
@@ -160,7 +193,7 @@ def config_fingerprint(options: Any, run_manifest: Any, *, report_producer: Any 
             "max_rounds": _plain(opts.get("max_rounds")),
             "research_language": _plain(opts.get("research_language")),
         },
-        "forecast": {key: _plain(getattr(cfg, attr, None)) for key, attr in FORECAST_KNOBS},
+        "forecast": forecast,
     }
 
 
@@ -170,11 +203,16 @@ def config_hash(fingerprint: Mapping[str, Any]) -> str:
 
 
 def config_hash_record(options: Any, run_manifest: Any, *, report_producer: Any = None,
-                       config: Any = None) -> dict[str, Any]:
-    """The ``options['config_hash_v1']`` value: ``{"config_hash", "fingerprint"}``."""
+                       report_id: Any = None, config: Any = None) -> dict[str, Any]:
+    """The ``options['config_hash_v1']`` value: ``{"config_hash", "fingerprint", "report_id"}``.
+
+    ``report_id`` names the report the pin was computed for (provenance, outside the
+    fingerprint): a reused report keeps a pin only when it is that report.
+    """
     fingerprint = config_fingerprint(options, run_manifest, report_producer=report_producer,
                                      config=config)
-    return {"config_hash": config_hash(fingerprint), "fingerprint": fingerprint}
+    return {"config_hash": config_hash(fingerprint), "fingerprint": fingerprint,
+            "report_id": str(report_id) if report_id else None}
 
 
 def pinned_config_hash(options: Any) -> Optional[str]:
@@ -194,16 +232,25 @@ def pinned_config_hash(options: Any) -> Optional[str]:
         return None
 
 
-def resolve_config(options: Any, run_manifest: Any, *,
-                   config: Any = None) -> tuple[dict[str, Any], str]:
+def pinned_for_report(options: Any, report_id: Any) -> bool:
+    """Whether ``options`` holds a valid config_hash pin computed for ``report_id``."""
+    if not report_id or pinned_config_hash(options) is None:
+        return False
+    return _mapping(options)[CONFIG_HASH_OPTION].get("report_id") == str(report_id)
+
+
+def resolve_config(options: Any, run_manifest: Any) -> tuple[dict[str, Any], str]:
     """``(card config block, config_hash)``: the report stage's pin when present, else a
-    recomputation without a report producer (the run never reached the report stage)."""
+    recomputation without a report producer (the run never reached the report stage, or
+    predates the pin) and without the forecast knobs (``forecast: None``, module docstring).
+    """
     pinned = pinned_config_hash(options)
     if pinned is not None:
-        fingerprint = copy.deepcopy(options[CONFIG_HASH_OPTION]["fingerprint"])
-        return {"source": CONFIG_SOURCE_PINNED, "fingerprint": fingerprint}, pinned
-    fingerprint = config_fingerprint(options, run_manifest, config=config)
-    return ({"source": CONFIG_SOURCE_RECOMPUTED, "fingerprint": fingerprint},
+        record = options[CONFIG_HASH_OPTION]
+        return ({"source": CONFIG_SOURCE_PINNED, "report_id": _plain(record.get("report_id")),
+                 "fingerprint": copy.deepcopy(record["fingerprint"])}, pinned)
+    fingerprint = config_fingerprint(options, run_manifest, forecast_knobs=False)
+    return ({"source": CONFIG_SOURCE_RECOMPUTED, "report_id": None, "fingerprint": fingerprint},
             config_hash(fingerprint))
 
 
@@ -223,6 +270,28 @@ def _stage_counters(run_telemetry: Mapping[str, Any]) -> tuple[Mapping[str, Any]
             SCOPE_LAST_ATTEMPT_ONLY if resumed else SCOPE_CUMULATIVE)
 
 
+def _earlier_attempt_calls(run_telemetry: Mapping[str, Any]) -> tuple[dict[str, int], int]:
+    """Calls earlier attempts contributed to the card's numbers: ``({stage: calls}, total)``.
+
+    Only a file with ``cumulative_by_stage`` has any: its rows span the attempts while its
+    ``cost_basis`` and ``by_model`` describe the latest one. The total also counts
+    ``cumulative_total`` beyond ``total``, which a partial per-stage split can miss.
+    """
+    cumulative = run_telemetry.get("cumulative_by_stage")
+    if not isinstance(cumulative, Mapping):
+        return {}, 0
+    latest = _mapping(run_telemetry.get("by_stage"))
+    by_stage: dict[str, int] = {}
+    for name, counter in cumulative.items():
+        earlier = (_count(_mapping(counter).get("calls"))
+                   - _count(_mapping(latest.get(name)).get("calls")))
+        if earlier > 0:
+            by_stage[str(name)] = earlier
+    overall = (_count(_mapping(run_telemetry.get("cumulative_total")).get("calls"))
+               - _count(_mapping(run_telemetry.get("total")).get("calls")))
+    return by_stage, max(sum(by_stage.values()), overall)
+
+
 def _stage_row(counter: Any, wall_s: float, cost_basis: Optional[str]) -> dict[str, Any]:
     c = _mapping(counter)
     calls = _count(c.get("calls"))
@@ -236,12 +305,16 @@ def _stage_row(counter: Any, wall_s: float, cost_basis: Optional[str]) -> dict[s
         "tok_total": tok_in + tok_out,
         "wall_s": round(wall_s, 1),
         "usd": round(_amount(c.get("cost_usd")), 6),
-        # The meter keeps providers per model, not per stage: the attempt-level basis.
+        # The meter keeps providers per model, not per stage: the attempt-level basis
+        # ('unknown' for a stage earlier attempts also spent in).
         "cost_basis": cost_basis if calls else None,
     }
 
 
 def _sum_stages(stages: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    """Field-wise sum of the rows: exact for the integer fields; ``wall_s`` / ``usd`` are
+    rounded back to the rows' 1 / 6 decimals, which makes them the exact decimal sums of the
+    rows' values (a bare float sum can differ in the last binary digit)."""
     totals: dict[str, Any] = {field: sum(row[field] for row in stages.values())
                               for field in STAGE_FIELDS}
     totals["wall_s"] = round(totals["wall_s"], 1)
@@ -292,13 +365,18 @@ def _seed_count(safety: Mapping[str, Any]) -> Optional[int]:
 def _completeness_reasons(*, run_telemetry: Mapping[str, Any], stages: Mapping[str, Any],
                           scope: str, walls: Mapping[str, float], options: Mapping[str, Any],
                           stage_status: Any, unattributed: Mapping[str, Optional[int]],
-                          estimated_share: Optional[float]) -> list[str]:
+                          estimated_share: Optional[float], earlier_calls: int,
+                          telemetry_predates_attempt: bool) -> list[str]:
     reasons: list[str] = []
     if not run_telemetry:
         reasons.append("run_telemetry_missing")
-    elif run_telemetry.get("in_flight"):
-        # The final flush never landed: the file is a mid-attempt snapshot.
-        reasons.append("run_telemetry_in_flight")
+    else:
+        if telemetry_predates_attempt:
+            # The attempt died before its first flush: the file is an earlier attempt's.
+            reasons.append("run_telemetry_predates_attempt")
+        if run_telemetry.get("in_flight"):
+            # The final flush never landed: the file is a mid-attempt snapshot.
+            reasons.append("run_telemetry_in_flight")
     if scope == SCOPE_LAST_ATTEMPT_ONLY:
         reasons.append(SCOPE_LAST_ATTEMPT_ONLY)
     else:
@@ -325,6 +403,10 @@ def _completeness_reasons(*, run_telemetry: Mapping[str, Any], stages: Mapping[s
             reasons.append(f"unattributed_process_unknown_baseline:{end}")
     if estimated_share is not None and estimated_share > ESTIMATED_COST_SHARE_LIMIT:
         reasons.append(f"estimated_cost_share:{estimated_share}")
+    if earlier_calls:
+        # by_model covers the latest attempt only, so the share above cannot see what the
+        # earlier attempts spent; the check must not pass silently for them.
+        reasons.append(f"estimated_cost_share_last_attempt_only:earlier_calls={earlier_calls}")
     return reasons
 
 
@@ -334,43 +416,73 @@ def _baseline_calls(value: Any) -> Optional[int]:
     return value
 
 
+def cost_card_attempt_record(*, resume_count: Any, started_at: Any,
+                             unattributed_calls_at_start: Any,
+                             run_telemetry_sha256: Any) -> dict[str, Any]:
+    """The ``options['cost_card_attempt_v1']`` value pinned at an attempt start.
+
+    ``resume_count`` / ``started_at`` mark the attempt, ``unattributed_calls_at_start`` is
+    the process-wide unattributed LLM calls then (None: unknown) and
+    ``run_telemetry_sha256`` the sha256 of the run_telemetry.json bytes the attempt started
+    from (None: no file yet). See the module docstring.
+    """
+    return {
+        "resume_count": _count(resume_count),
+        "started_at": _plain(started_at),
+        "unattributed_calls_at_start": _baseline_calls(unattributed_calls_at_start),
+        "run_telemetry_sha256_at_start": (run_telemetry_sha256
+                                          if isinstance(run_telemetry_sha256, str) else None),
+    }
+
+
 def build_cost_card(*, pipeline_id: str, mode: Optional[str], run_telemetry: Any,
                     stage_walls: Any, run_manifest: Any, options: Any,
                     status: Optional[str] = None, stage_status: Any = None,
-                    unattributed_calls_at_start: Optional[int] = None,
-                    created_at: Optional[str] = None, config: Any = None) -> dict[str, Any]:
+                    run_telemetry_sha256: Optional[str] = None,
+                    created_at: Optional[str] = None) -> dict[str, Any]:
     """The ``drf-cost-card/v1`` card of one pipeline.
 
     ``run_telemetry`` / ``run_manifest`` are the parsed run_telemetry.json / run.json (None
-    when missing), ``stage_walls`` ``{stage: seconds}``, ``options`` the pipeline's options,
-    ``stage_status`` ``{stage: status}`` and ``unattributed_calls_at_start`` the process-wide
-    unattributed LLM calls when the attempt started (None: unknown). Never raises on
-    malformed inputs: unreadable numbers count as 0 and gaps become completeness reasons.
+    when missing), ``run_telemetry_sha256`` the sha256 of the run_telemetry.json bytes
+    parsed, ``stage_walls`` ``{stage: seconds}``, ``options`` the pipeline's options (with
+    the report stage's ``config_hash_v1`` pin and the attempt start's
+    ``cost_card_attempt_v1`` record) and ``stage_status`` ``{stage: status}``. Never raises
+    on malformed inputs: unreadable numbers count as 0 and gaps become completeness reasons.
     """
     tel = _mapping(run_telemetry)
     opts = _mapping(options)
-    config_block, chash = resolve_config(opts, run_manifest, config=config)
+    config_block, chash = resolve_config(opts, run_manifest)
     counters, scope = _stage_counters(tel)
+    earlier_by_stage, earlier_calls = _earlier_attempt_calls(tel)
     walls: dict[str, float] = {str(name): _amount(seconds)
                                for name, seconds in _mapping(stage_walls).items()}
     basis = tel.get("cost_basis") if isinstance(tel.get("cost_basis"), str) else None
-    stages = {name: _stage_row(counters.get(name), walls.get(name, 0.0), basis)
+    stages = {name: _stage_row(counters.get(name), walls.get(name, 0.0),
+                               COST_BASIS_UNKNOWN if earlier_by_stage.get(name) else basis)
               for name in _ordered_stages(set(counters) | set(walls))}
     totals = _sum_stages(stages)
-    totals["cost_basis"] = basis if totals["calls"] else None
+    totals["cost_basis"] = ((COST_BASIS_UNKNOWN if earlier_calls else basis)
+                            if totals["calls"] else None)
     research = stages.get("research") or {}
     cache_ratio = (round(research["tok_in_cache_read"] / research["tok_in"], 4)
                    if research.get("tok_in") else None)
+    attempt = _mapping(opts.get(COST_CARD_ATTEMPT_OPTION))
+    start_sha = attempt.get("run_telemetry_sha256_at_start")
+    predates = isinstance(start_sha, str) and start_sha == run_telemetry_sha256
     unattributed_process = tel.get("unattributed_process")
     unattributed = {
-        "calls_at_attempt_start": _baseline_calls(unattributed_calls_at_start),
+        # The baseline counts the attempt's own process; a file from an earlier attempt
+        # counted another process's (possibly restarted) counter.
+        "calls_at_attempt_start": (None if predates else
+                                   _baseline_calls(attempt.get("unattributed_calls_at_start"))),
         "calls_at_end": (_count(unattributed_process.get("calls"))
                          if isinstance(unattributed_process, Mapping) else None),
     }
     estimated_share = _estimated_cost_share(tel.get("by_model"))
     reasons = _completeness_reasons(
         run_telemetry=tel, stages=stages, scope=scope, walls=walls, options=opts,
-        stage_status=stage_status, unattributed=unattributed, estimated_share=estimated_share)
+        stage_status=stage_status, unattributed=unattributed, estimated_share=estimated_share,
+        earlier_calls=earlier_calls, telemetry_predates_attempt=predates)
     return {
         "schema": COST_CARD_SCHEMA,
         "pipeline_id": str(pipeline_id),
@@ -384,7 +496,9 @@ def build_cost_card(*, pipeline_id: str, mode: Optional[str], run_telemetry: Any
         "totals": totals,
         "research_cache_hit_ratio": cache_ratio,
         "attempts": {"scope": scope,
-                     "resumed": isinstance(tel.get("previous_attempt"), Mapping)},
+                     "resumed": isinstance(tel.get("previous_attempt"), Mapping),
+                     "resume_count": _baseline_calls(attempt.get("resume_count")),
+                     "started_at": _plain(attempt.get("started_at"))},
         "lineage": {"base_pipeline_id": _plain(opts.get("base_pipeline_id")) or None},
         "unattributed_process": unattributed,
         "completeness": {"complete": not reasons, "reasons": reasons,

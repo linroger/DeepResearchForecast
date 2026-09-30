@@ -570,10 +570,13 @@ class Config:
     # <pipeline_dir>/cost_card.json (drf-cost-card/v1: per-stage calls/tokens/wall first, USD
     # secondary, completeness reasons), and the report stage pins the run's config fingerprint
     # in options.config_hash_v1 and stamps that config_hash on its ledger commit rows, so cost
-    # and forecast quality can later be joined per configuration. Default on, like the other
-    # observation sidecars (RECORD_RUN_MANIFEST, STAGE_SCORECARD_ENABLED): it only projects
-    # durable artifacts in its own try/except, never writes the report folder and never changes
-    # status or health. Off = no file, no options key, no ledger stamp (byte-identical).
+    # and forecast quality can later be joined per configuration. Each attempt start removes
+    # the previous attempt's card and pins its unattributed-spend baseline in
+    # options.cost_card_attempt_v1 (so an orphan rebuild never borrows another attempt's
+    # baseline). Default on, like the other observation sidecars (RECORD_RUN_MANIFEST,
+    # STAGE_SCORECARD_ENABLED): it only projects durable artifacts in its own try/except,
+    # never writes the report folder and never changes status or health. Off = no file, no
+    # options keys, no ledger stamp (byte-identical).
     # Backfill: scripts/cost_card.py build <pipeline_id>.
     COST_CARD_ENABLED = os.environ.get('COST_CARD_ENABLED', 'true').strip().lower() == 'true'
     # INFRA-7：run-shape 准入钉（与 safety_policy_v1 并列的第二份准入快照）。开启时 start/fork/批次分叉

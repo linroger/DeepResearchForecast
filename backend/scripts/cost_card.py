@@ -3,14 +3,16 @@
 Rebuilds the drf-cost-card/v1 card (app/utils/cost_accounting.py) from the durable
 files a pipeline leaves behind, with the same gatherer the orchestrator's ``_run``
 finally block uses (pipeline_orchestrator.pipeline_cost_card): pipeline_state.json
-(options with the report stage's ``config_hash_v1`` pin, stage timestamps and
-statuses), run_telemetry.json and run.json. Offline: it reads files under
-uploads/ only - no network, no LLM, no Flask.
+(options with the report stage's ``config_hash_v1`` pin and the attempt start's
+``cost_card_attempt_v1`` record, stage timestamps and statuses), run_telemetry.json
+and run.json. Offline: it reads files under uploads/ only - no network, no LLM,
+no Flask. The main use is an attempt reconciled as an orphan, which never reached
+the finally block that writes its card.
 
 The unattributed-spend baseline (process-wide unattributed LLM calls when the
-attempt started) exists only in memory while the attempt runs, so it is carried
-over from the card already on disk when there is one; otherwise the card reports
-an unknown baseline.
+attempt started) comes only from that attempt's ``cost_card_attempt_v1`` record,
+never from a card already on disk (it may be another attempt's). Without a
+record (a pipeline older than the record) the card reports an unknown baseline.
 
 Usage:
     python scripts/cost_card.py build <pipeline_id> [-o]
@@ -47,18 +49,6 @@ def card_path(pipeline_id: str) -> str:
     return os.path.join(PipelineManager._dir(pipeline_id), COST_CARD_FILENAME)
 
 
-def _existing_baseline(pipeline_id: str) -> Optional[int]:
-    """calls_at_attempt_start of the card already on disk (None when absent/unreadable)."""
-    try:
-        with open(card_path(pipeline_id), encoding="utf-8") as handle:
-            card = json.load(handle)
-    except (OSError, ValueError):
-        return None
-    block = card.get("unattributed_process") if isinstance(card, dict) else None
-    value = block.get("calls_at_attempt_start") if isinstance(block, dict) else None
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
-
-
 def load_state(pipeline_id: str) -> PipelineState:
     """The pipeline's state; ValueError for an invalid id, an unreadable or newer-schema state."""
     if not PipelineManager._PIPELINE_ID_RE.fullmatch(str(pipeline_id or "")):
@@ -74,8 +64,7 @@ def load_state(pipeline_id: str) -> PipelineState:
 
 def rebuild(pipeline_id: str) -> dict[str, Any]:
     """The pipeline's cost card rebuilt from its durable files (nothing is written)."""
-    return pipeline_cost_card(load_state(pipeline_id),
-                              unattributed_calls_at_start=_existing_baseline(pipeline_id))
+    return pipeline_cost_card(load_state(pipeline_id))
 
 
 def _cmd_build(args: argparse.Namespace) -> int:
