@@ -1017,6 +1017,23 @@ def fold_binary_items(events: Optional[Iterable[Any]], targets: Optional[Iterabl
     return {key: _fold(items) for key, items in grouped.items()}
 
 
+def _judged_against_row(item: Dict[str, Any], row: Dict[str, Any]) -> Dict[str, Any]:
+    """EVAL-4: the fold candidate of an attestation recorded against the report itself
+    (``target_source`` TARGET_SOURCE_REPORT: the report had no production primary row
+    yet, so its origin was the report creation stamp with no as-of date) for the one row
+    it binds to: prospective and eligibility are re-derived from that row's origin (its
+    as-of date and creation stamp). An item that is not a settled outcome is returned as
+    is. A new dict; ``item`` is untouched."""
+    if item.get("resolution_status") != "settled":
+        return item
+    prospective = prospective_status(item.get("outcome_known_at"), item.get("known_at_basis"),
+                                     row.get("as_of_date"), row.get("created_at"), None)
+    eligible = prospective is True
+    return dict(item, prospective=prospective, scoring_eligible=eligible,
+                ineligible_reason=None if eligible else (
+                    "not_prospective" if prospective is False else "prospective_unknown"))
+
+
 def resolved_view(entries: Optional[Iterable[Any]], events: Optional[Iterable[Any]]
                   ) -> List[Dict[str, Any]]:
     """Copies of the production primary commit rows of ``entries``, each with its folded
@@ -1033,17 +1050,20 @@ def resolved_view(entries: Optional[Iterable[Any]], events: Optional[Iterable[An
     so a hand-marked ``resolved`` on disk never counts; only a grace terminal leaves
     ``resolved`` False. Other rows are left out. Never mutates ``entries`` or ``events``
     and never touches disk. EVAL-4: superseded manual attestations and retractions
-    never label a row (``standing_events``).
+    never label a row (``standing_events``), and an attestation recorded against the
+    report itself (``target_source`` TARGET_SOURCE_REPORT) is judged against the row it
+    binds to (``_judged_against_row``); every other event keeps the writer's facts.
     """
     def key(value: Any) -> str:
         return str(value or "").strip()
 
-    by_report: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    by_report: Dict[str, List[Tuple[Dict[str, Any], bool]]] = defaultdict(list)
     for event in standing_events(events):
         if isinstance(event, dict) and event.get("item_kind") == ITEM_KIND_SCENARIO_SET:
             item = _event_item(event)
             if item["report_id"]:
-                by_report[item["report_id"]].append(item)
+                by_report[item["report_id"]].append(
+                    (item, event.get("target_source") == TARGET_SOURCE_REPORT))
     rows = [row for row in entries or [] if is_production_primary_commit(row)]
     n_by_report = Counter(key(row.get("report_id")) for row in rows)
     n_by_commit = Counter((key(row.get("report_id")), key(row.get("commit_id"))) for row in rows)
@@ -1052,12 +1072,15 @@ def resolved_view(entries: Optional[Iterable[Any]], events: Optional[Iterable[An
         report_id, commit_id = key(row.get("report_id")), key(row.get("commit_id"))
         bound: List[Dict[str, Any]] = []
         ambiguous: List[Dict[str, Any]] = []
-        for item in by_report.get(report_id, []):
+        for item, provisional in by_report.get(report_id, []):
             target = key(item["target_commit_id"])
             if target and target != commit_id:
                 continue
             unique = (n_by_commit[(report_id, commit_id)] if target else n_by_report[report_id]) == 1
-            (bound if unique else ambiguous).append(item)
+            if unique:
+                bound.append(_judged_against_row(item, row) if provisional else item)
+            else:
+                ambiguous.append(item)
         out = copy.deepcopy(row)
         out.update(_VIEW_DEFAULTS)
         if bound or ambiguous:
@@ -1174,8 +1197,12 @@ TARGET_MISSING_REPORT_ID = "missing_report_id"
 TARGET_NOT_PUBLISHABLE = "not_publishable"
 TARGET_NOT_SEALED = "not_sealed"
 TARGET_EVALUATION_RUN = "evaluation_run"
+# load_manual_target's ``source`` values, kept on each manual event as ``target_source``.
+TARGET_SOURCE_LEDGER = "ledger"
+TARGET_SOURCE_REPORT = "report"
 # A scenario-set attestation of a report-fallback target (manual_not_bindable_reason).
-MANUAL_NOT_BINDABLE = "recorded_not_bindable: no production primary commit row"
+MANUAL_NOT_BINDABLE = ("recorded_not_bindable: enters no calibration while the report has no "
+                       "production primary ledger row")
 # The fields that make two attestations of one item the same one (a repeat is a no-op).
 _ATTESTATION_FIELDS = ("item_kind", "outcome", "outcome_known_at", "evidence")
 # A manual binary whose target probability is missing or outside [0, 1]: recorded, never scored
@@ -1365,6 +1392,18 @@ def _forecast_id_for(item: Any) -> str:
     return SCENARIO_SET_FORECAST_ID if item_id == SCENARIO_ITEM else item_id
 
 
+def disagreeing_attestations(events: Optional[Iterable[Any]], report_id: Any, item: Any,
+                             outcome: Any) -> List[Dict[str, Any]]:
+    """The standing manual attestations (``standing_events``) of one item of ``report_id``
+    (``item`` 'scenario' or a binary id) whose outcome differs from ``outcome`` under
+    ``ensemble._norm_name``, in ledger order. ``POST /api/v1/resolve`` refuses to write a
+    resolved.json that contradicts one."""
+    wanted = _norm_name(outcome) if isinstance(outcome, str) else ""
+    return [row for row in manual_events(standing_events(events), report_id,
+                                         _forecast_id_for(item))
+            if _norm_name(row.get("outcome")) != wanted]
+
+
 def validate_manual_revision(existing_events: Optional[Iterable[Any]], report_id: Any,
                              item: Any, *, supersedes: Any = None,
                              retract: bool = False) -> Tuple[bool, List[str]]:
@@ -1425,7 +1464,11 @@ def build_manual_event(*, target: Dict[str, Any], item: str, outcome: Any,
       scoring_eligible exactly when prospective is True (and, for a binary, its
       probability is valid), resolution_status 'settled';
     - a retraction has outcome, y and outcome_known_at None, resolution_status
-      'retracted', retracted True and is never scoring-eligible.
+      'retracted', retracted True and is never scoring-eligible;
+    - target_commit_id and target_source are the target's commit id and ``source``
+      (TARGET_SOURCE_LEDGER or TARGET_SOURCE_REPORT): a scenario attestation recorded
+      against the report itself is judged again against the production primary row it
+      later binds to (``resolved_view``).
 
     Raises ``ValueError`` when ``processed_at`` (the only clock, also the ``now`` of
     validation) is not an offset-aware ISO date-time, or when
@@ -1504,11 +1547,48 @@ def build_manual_event(*, target: Dict[str, Any], item: str, outcome: Any,
         "resolution_status": RESOLUTION_RETRACTED if retract else "settled",
         "report_publishable_at_issue": True,
         "target_commit_id": target.get("commit_id"),
+        "target_source": target.get("source"),
         "evidence": evidence_record,
         "terminal_reason": None,
         "supersedes": pointer,
         "retracted": bool(retract),
     }
+
+
+def _same_attestation(recorded: Dict[str, Any], event: Dict[str, Any]) -> bool:
+    """Do two manual rows of one item attest the same thing (``_ATTESTATION_FIELDS``, and
+    both or neither a retraction)?"""
+    return (is_retraction(recorded) == is_retraction(event)
+            and all(recorded.get(field) == event.get(field) for field in _ATTESTATION_FIELDS))
+
+
+def _is_recorded_revision(target: Any, item: Any, outcome: Any, outcome_known_at: Any,
+                          evidence: Any, *, rows: List[Dict[str, Any]],
+                          latest: Optional[Dict[str, Any]], supersedes: Any, retract: bool,
+                          processed_at: str) -> bool:
+    """Is this correction or retraction a retry of the one that already is the item's
+    latest revision?
+
+    That is the case when ``latest`` itself supersedes the event ``supersedes`` names and
+    the revision, replayed against the ledger as it stood before ``latest`` was
+    appended, gets ``latest``'s market id and attests the same thing
+    (``_same_attestation``). A retry whose first response was lost is then a no-op,
+    like a repeated first attestation, instead of a revision error. The caller has
+    validated the attestation itself (``validate_manual_settlement``).
+    """
+    pointer = str(supersedes or "").strip()
+    if not pointer or latest is None or str(latest.get("supersedes") or "").strip() != pointer:
+        return False
+    before = [row for row in rows if row is not latest]
+    report_id = target.get("report_id") if isinstance(target, dict) else None
+    if not validate_manual_revision(before, report_id, item, supersedes=pointer, retract=retract)[0]:
+        return False
+    replay = build_manual_event(target=target, item=item, outcome=outcome,
+                                outcome_known_at=outcome_known_at, evidence=evidence,
+                                supersedes=pointer, retract=retract, processed_at=processed_at,
+                                existing_events=before)
+    return (replay["market_id"] == str(latest.get("market_id") or "").strip()
+            and _same_attestation(latest, replay))
 
 
 def plan_manual_settlement(target: Any, item: Any, outcome: Any, outcome_known_at: Any,
@@ -1525,8 +1605,11 @@ def plan_manual_settlement(target: Any, item: Any, outcome: Any, outcome_known_a
     - ``exists``: the item already holds a manual attestation, no ``supersedes`` names
       it and the new one differs from its latest revision. Its first-write-wins key
       would drop the new one silently, so the caller must correct explicitly;
-    - ``noop``: the same attestation (``_ATTESTATION_FIELDS``) already is the item's
-      latest revision; nothing to write;
+    - ``noop``: the same attestation (``_ATTESTATION_FIELDS``, and both or neither a
+      retraction) already is the item's latest revision, so there is nothing to write:
+      a repeated first attestation, or a retried correction or retraction whose
+      ``supersedes`` names the event that latest revision superseded
+      (``_is_recorded_revision``);
     - ``append``: ``event`` (``build_manual_event``) is the one row to append.
 
     Raises ``ValueError`` when ``processed_at`` is not an offset-aware ISO date-time.
@@ -1541,6 +1624,11 @@ def plan_manual_settlement(target: Any, item: Any, outcome: Any, outcome_known_a
     result: Dict[str, Any] = {"status": "invalid", "errors": [], "event": None, "latest": latest}
     _, errors = validate_manual_settlement(target, item, outcome, outcome_known_at, evidence,
                                            retract=retract, now=processed)
+    if not errors and _is_recorded_revision(target, item, outcome, outcome_known_at, evidence,
+                                            rows=rows, latest=latest, supersedes=supersedes,
+                                            retract=retract, processed_at=processed.isoformat()):
+        result["status"] = "noop"
+        return result
     _, revision_errors = validate_manual_revision(rows, report_id, item,
                                                   supersedes=supersedes, retract=retract)
     result["errors"] = errors + revision_errors
@@ -1551,8 +1639,7 @@ def plan_manual_settlement(target: Any, item: Any, outcome: Any, outcome_known_a
                                supersedes=supersedes, retract=retract,
                                processed_at=processed.isoformat(), existing_events=rows)
     if event["supersedes"] is None and manual:
-        if (latest is not None and not is_retraction(latest)
-                and all(latest.get(field) == event.get(field) for field in _ATTESTATION_FIELDS)):
+        if latest is not None and _same_attestation(latest, event):
             result["status"] = "noop"
         else:
             latest_id = latest.get("market_id") if latest is not None else None
@@ -1665,7 +1752,7 @@ def load_manual_target(report_id: Any, *, ledger_dir: Optional[str] = None,
                 "as_of": row.get("as_of_date"), "created_at": row.get("created_at"),
                 "scenarios": copy.deepcopy(row.get("scenarios") or []),
                 "binary_forecasts": copy.deepcopy(row.get("binary_forecasts") or []),
-                "source": "ledger"}, None
+                "source": TARGET_SOURCE_LEDGER}, None
     if any("row_type" in row or not is_production_calibration_row(row) for row in rows):
         return None, NOT_PRODUCTION_PRIMARY
     try:
@@ -1687,7 +1774,7 @@ def load_manual_target(report_id: Any, *, ledger_dir: Optional[str] = None,
             "created_at": _report_created_at(rid),
             "scenarios": copy.deepcopy(forecast.get("scenarios") or []),
             "binary_forecasts": copy.deepcopy(forecast.get("binary_forecasts") or []),
-            "source": "report"}, None
+            "source": TARGET_SOURCE_REPORT}, None
 
 
 def manual_not_bindable_reason(target: Any, item: Any) -> Optional[str]:
@@ -1695,9 +1782,12 @@ def manual_not_bindable_reason(target: Any, item: Any) -> Optional[str]:
     target (``load_manual_target`` source 'report'), else None. ``resolved_view`` labels
     production primary commit rows only, so such an event is recorded but enters no
     calibration while the report has no such row; callers must say so instead of
-    reporting a plain success. Binary events fold without a commit row
+    reporting a plain success. Once exactly one such row exists (a later commit, e.g.
+    ``ledger_commit.recommit_reused_report``), the event labels it, judged against that
+    row's origin (``resolved_view``). Binary events fold without a commit row
     (``fold_binary_items``), so they are never affected."""
     item_id = item.strip() if isinstance(item, str) else ""
-    if isinstance(target, dict) and target.get("source") == "report" and item_id == SCENARIO_ITEM:
+    if (isinstance(target, dict) and target.get("source") == TARGET_SOURCE_REPORT
+            and item_id == SCENARIO_ITEM):
         return MANUAL_NOT_BINDABLE
     return None

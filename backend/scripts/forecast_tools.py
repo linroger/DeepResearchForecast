@@ -25,9 +25,10 @@ Examples:
     python backend/scripts/forecast_tools.py resolve --report-id R --scenario --retract \
         --supersedes manual:r1 --evidence "The cited result was later annulled by the court."
 
-resolve exit codes: 0 appended, identical repeat (no-op) or --dry-run; 1 the ledger did not
-take the event; 2 invalid attestation (nothing written); 4 no settleable target (no
-production primary ledger row and no report publishable at issue with a sealed forecast).
+resolve exit codes: 0 appended, identical repeat or retried revision (no-op) or --dry-run;
+1 resolutions.jsonl could not be written; 2 invalid attestation, or a different one already
+recorded (nothing written); 4 no settleable target (no production primary ledger row and no
+report publishable at issue with a sealed forecast).
 """
 
 from __future__ import annotations
@@ -83,6 +84,28 @@ def _print_json(payload) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
+def _plan_resolve(args, target, item, outcome):
+    """forecast_resolution.plan_manual_settlement against the ledger as it is now."""
+    return forecast_resolution.plan_manual_settlement(
+        target, item, outcome, args.known_at, args.evidence,
+        existing_events=forecast_ledger.read_market_resolutions(args.ledger_dir),
+        supersedes=args.supersedes, retract=args.retract,
+        processed_at=datetime.now(timezone.utc).isoformat())
+
+
+def _refused(plan) -> int:
+    for error in plan["errors"]:
+        print(f"error: {error}", file=sys.stderr)
+    return EXIT_INVALID
+
+
+def _already_recorded(plan) -> int:
+    print(f"no-op: the same attestation is already recorded as "
+          f"{plan['latest'].get('market_id')!r}", file=sys.stderr)
+    _print_json(plan["latest"])
+    return 0
+
+
 def cmd_resolve(args) -> int:
     """EVAL-4: attest one outcome of a report as a manual settlement event.
 
@@ -91,10 +114,13 @@ def cmd_resolve(args) -> int:
     ledger row, else the report itself when publishable at issue and sealed);
     forecast_resolution.plan_manual_settlement validates the attestation and its
     revision chain before anything is written, and the event is appended through the
-    ledger's first-write-wins lock. The appended event (or, for an identical repeat,
-    the recorded one; for --dry-run, the one that would be appended) goes to stdout; a
-    scenario attestation that no production primary ledger row can carry into
-    calibration is still written, with a warning on stderr.
+    ledger's first-write-wins lock. When the lock refuses it, the attempt is judged
+    again against the ledger as it is then, as POST /api/v1/resolve does: a concurrent
+    writer that recorded the same attestation makes it a no-op, a different one exit 2.
+    The appended event (or, for an identical repeat or a retried revision, the recorded
+    one; for --dry-run, the one that would be appended) goes to stdout; a scenario
+    attestation that no production primary ledger row carries into calibration yet is
+    still written, with a warning on stderr.
     """
     if args.scenario is not None:
         if args.outcome is not None:
@@ -122,32 +148,29 @@ def cmd_resolve(args) -> int:
         print(f"error: no settleable forecast target for {args.report_id!r}: {reason}",
               file=sys.stderr)
         return EXIT_NO_TARGET
-    plan = forecast_resolution.plan_manual_settlement(
-        target, item, outcome, args.known_at, args.evidence,
-        existing_events=forecast_ledger.read_market_resolutions(args.ledger_dir),
-        supersedes=args.supersedes, retract=args.retract,
-        processed_at=datetime.now(timezone.utc).isoformat())
+    plan = _plan_resolve(args, target, item, outcome)
     if plan["status"] in ("invalid", "exists"):
-        for error in plan["errors"]:
-            print(f"error: {error}", file=sys.stderr)
-        return EXIT_INVALID
+        return _refused(plan)
     unbound = forecast_resolution.manual_not_bindable_reason(target, item)
     if unbound and not args.retract:
-        print(f"warning: {unbound}: the report has no production primary ledger row, so "
-              f"this scenario attestation enters no calibration", file=sys.stderr)
+        print(f"warning: {unbound}; once the report has exactly one, this scenario "
+              f"attestation labels it, judged against that row's origin", file=sys.stderr)
     if plan["status"] == "noop":
-        print(f"no-op: the same attestation is already recorded as "
-              f"{plan['latest'].get('market_id')!r}", file=sys.stderr)
-        _print_json(plan["latest"])
-        return 0
+        return _already_recorded(plan)
     if args.dry_run:
         print("dry run: nothing written", file=sys.stderr)
         _print_json(plan["event"])
         return 0
     written = forecast_ledger.append_settlement_event(plan["event"], d=args.ledger_dir)
     if written is None:
-        print(f"error: the ledger did not take {plan['event']['market_id']!r} (the key is "
-              f"already recorded or resolutions.jsonl is not writable)", file=sys.stderr)
+        # The first-write-wins key may have gone to a concurrent writer: decide again.
+        plan = _plan_resolve(args, target, item, outcome)
+        if plan["status"] in ("invalid", "exists"):
+            return _refused(plan)
+        if plan["status"] == "noop":
+            return _already_recorded(plan)
+        print(f"error: the ledger did not take {plan['event']['market_id']!r} "
+              f"(resolutions.jsonl could not be written)", file=sys.stderr)
         return EXIT_NOT_APPENDED
     _print_json(written)
     return 0

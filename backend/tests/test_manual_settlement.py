@@ -1,12 +1,15 @@
 """EVAL-4: the manual settlement path.
 
 Covers ``forecast_tools resolve`` (scenario and binary attestations, validation exit
-codes, no-op repeats, the supersede / retract protocol), the fold honouring the latest
-standing revision (``forecast_resolution.standing_events``), the shared target helper
-``load_manual_target`` and the hardened ``POST /api/v1/resolve`` (unmatched outcomes
-refused without a file, attested events recorded through the same builder, the legacy
-resolved.json-only path). Offline: per-test ledger directories and reports directories,
-hand-built commit rows through the real EVAL-1 writer, no LLM, no network.
+codes, no-op repeats and retried revisions, lost append races, the supersede / retract
+protocol), the fold honouring the latest standing revision
+(``forecast_resolution.standing_events``), the shared target helper
+``load_manual_target`` (a report-fallback attestation judged against the row it later
+binds to), the monitor's needs-manual list and the hardened ``POST /api/v1/resolve``
+(unmatched outcomes refused without a file, attested events recorded through the same
+builder, the legacy resolved.json-only path, which never contradicts a standing
+attestation). Offline: per-test ledger directories and reports directories, hand-built
+commit rows through the real EVAL-1 writer, no LLM, no network.
 """
 
 import copy
@@ -124,8 +127,8 @@ def test_cli_scenario_normalised_match(capsys, ledger):
         ("attested", KNOWN_AT, True, True, None)
     assert (event["resolution_status"], event["supersedes"], event["retracted"]) == \
         ("settled", None, False)
-    assert (event["schema_version"], event["target_commit_id"], event["model_p"], event["y"]) == \
-        (2, row["commit_id"], None, None)
+    assert (event["schema_version"], event["target_commit_id"], event["target_source"],
+            event["model_p"], event["y"]) == (2, row["commit_id"], "ledger", None, None)
     assert event["evidence"] == {"url": URL, "note": None}
     # Exactly one attested event was appended, and it is the one printed.
     assert fl.read_market_resolutions(ledger) == [event]
@@ -252,7 +255,8 @@ def test_supersede_chain_and_retract(capsys, ledger):
     # The fold uses the latest revision only: no conflict with the superseded original.
     assert (view()["resolved"], view()["outcome"], view()["resolution_status"]) == \
         (True, "Escalation", "settled")
-    # --supersedes must name the latest manual event; re-running a correction is refused.
+    # --supersedes must name the latest manual event: a different correction of the
+    # superseded original, or a pointer to nothing, is refused.
     before = _resolutions_bytes(ledger)
     assert _attest(capsys, ledger, "Escalation", "--supersedes", "manual")[0] == 2
     assert _attest(capsys, ledger, "Status quo", "--supersedes", "manual:r7")[0] == 2
@@ -308,6 +312,83 @@ def test_supersede_chain_and_retract(capsys, ledger):
     assert ("r1", "F1") not in fr.fold_binary_items(events)
     only_market = fr.fold_binary_items(events + [market])[("r1", "F1")]
     assert (only_market["source_kind"], only_market["n_events"]) == ("polymarket", 1)
+
+
+def test_retried_correction_or_retraction_is_a_noop(capsys, ledger):
+    """Re-running a correction or retraction that already succeeded (its response was lost)
+    is a no-op that prints the recorded row, like a repeated first attestation; a pointer
+    that is stale for any other reason is still a revision error."""
+    _commit(ledger)
+    assert _attest(capsys, ledger, "Status quo")[0] == 0
+    correction = ("Escalation", "--supersedes", "manual")
+    code, fix, _ = _attest(capsys, ledger, *correction, evidence=NOTE)
+    assert (code, fix["market_id"]) == (0, "manual:r1")
+    before = _resolutions_bytes(ledger)
+    code, again, err = _attest(capsys, ledger, *correction, evidence=NOTE)
+    assert (code, again) == (0, fix) and "no-op" in err and "'manual:r1'" in err
+    assert _resolutions_bytes(ledger) == before
+    # The same pointer with another attestation is not a retry of manual:r1.
+    for outcome, evidence in (("Escalation", URL), ("De-escalation", NOTE)):
+        code, out, err = _attest(capsys, ledger, outcome, "--supersedes", "manual",
+                                 evidence=evidence)
+        assert (code, out) == (2, None) and "latest manual event" in err
+    code, _, err = _resolve(capsys, ledger, "--scenario", "--retract", "--supersedes", "manual",
+                            "--evidence", NOTE)
+    assert code == 2 and "latest manual event" in err
+    assert _resolutions_bytes(ledger) == before
+
+    retraction_args = ("--scenario", "--retract", "--supersedes", "manual:r1", "--evidence", NOTE)
+    code, retraction, _ = _resolve(capsys, ledger, *retraction_args)
+    assert (code, retraction["market_id"], retraction["retracted"]) == (0, "manual:r2", True)
+    before = _resolutions_bytes(ledger)
+    code, again, err = _resolve(capsys, ledger, *retraction_args)
+    assert (code, again) == (0, retraction) and "no-op" in err
+    # Once the chain has moved on, the earlier correction is stale, not a retry.
+    assert _attest(capsys, ledger, *correction, evidence=NOTE)[0] == 2
+    assert _resolutions_bytes(ledger) == before
+
+    # Binaries retry the same way.
+    binary = ("--binary", "F1", "--known-at", KNOWN_AT, "--evidence", URL)
+    assert _resolve(capsys, ledger, *binary, "--outcome", "YES")[0] == 0
+    code, fix, _ = _resolve(capsys, ledger, *binary, "--outcome", "NO", "--supersedes", "manual")
+    assert (code, fix["market_id"], fix["outcome"]) == (0, "manual:r1", "NO")
+    code, again, err = _resolve(capsys, ledger, *binary, "--outcome", "no", "--supersedes",
+                                "manual")
+    assert (code, again) == (0, fix) and "no-op" in err
+    assert [e["market_id"] for e in fl.read_market_resolutions(ledger)] == \
+        ["manual", "manual:r1", "manual:r2", "manual", "manual:r1"]
+
+
+def test_cli_lost_append_race_is_judged_against_the_ledger(capsys, ledger, monkeypatch):
+    """When the ledger's first-write-wins lock refuses the event, the CLI decides again
+    against the ledger as it is then, like POST /api/v1/resolve."""
+    _commit(ledger)
+    real_append = fl.append_settlement_event
+
+    def lose_to(**changes):
+        """A concurrent writer takes the key first (with ``changes``); ours is refused."""
+        def append(event, *, d=None):
+            real_append(dict(event, **changes), d=d)
+            return None
+        return append
+
+    # The winner recorded the same attestation: a no-op, exit 0, the recorded row printed.
+    monkeypatch.setattr(fl, "append_settlement_event", lose_to())
+    code, event, err = _attest(capsys, ledger, "Status quo")
+    assert code == 0 and "no-op" in err
+    assert fl.read_market_resolutions(ledger) == [event]
+    # The winner recorded a different revision under our key: invalid, exit 2.
+    monkeypatch.setattr(fl, "append_settlement_event",
+                        lose_to(outcome="De-escalation", resolved_outcome="De-escalation"))
+    code, out, err = _attest(capsys, ledger, "Escalation", "--supersedes", "manual")
+    assert (code, out) == (2, None) and "latest manual event" in err
+    assert [e["outcome"] for e in fl.read_market_resolutions(ledger)] == \
+        ["Status quo", "De-escalation"]
+    # Nobody took the key, the write itself failed: exit 1.
+    monkeypatch.setattr(fl, "append_settlement_event", lambda event, *, d=None: None)
+    code, out, err = _attest(capsys, ledger, "Status quo", "--supersedes", "manual:r1")
+    assert (code, out) == (tools.EXIT_NOT_APPENDED, None) and "could not be written" in err
+    assert len(fl.read_market_resolutions(ledger)) == 2
 
 
 def test_standing_events_leaves_other_rows_untouched():
@@ -422,6 +503,32 @@ def test_standing_attestation_spares_only_an_unanchored_item_its_terminal(capsys
     item = fr.fold_binary_items(fl.read_market_resolutions(ledger))[("r1", "F1")]
     assert (item["resolution_status"], item["scoring_eligible"]) == ("terminal", False)
     assert _due(ledger, now) == {}
+
+
+def test_monitor_needs_manual_skips_standing_attestations(capsys, ledger, tmp_path):
+    """The monitor's needs-manual list asks for no binary that already holds a standing
+    manual attestation; a retracted one is asked for again."""
+    _commit(ledger)
+    forecast = {"scenarios": copy.deepcopy(SCENARIOS), "binary_forecasts": copy.deepcopy(BINARIES)}
+
+    def needs_manual():
+        res = mon.run_monitor("r1", forecast=forecast, report_folder=str(tmp_path / "report"),
+                              client=object(), ledger_dir=ledger, dry_run=True,
+                              publishable_fn=lambda rid: True)
+        assert res["needs_manual_count"] == len(res["needs_manual"])
+        return [item["forecast_id"] for item in res["needs_manual"]]
+
+    assert needs_manual() == ["F1", "F3"]
+    assert _resolve(capsys, ledger, "--binary", "F1", "--outcome", "YES", "--known-at",
+                    KNOWN_AT, "--evidence", URL)[0] == 0
+    assert needs_manual() == ["F3"]
+    assert _resolve(capsys, ledger, "--binary", "F1", "--retract", "--supersedes", "manual",
+                    "--evidence", NOTE)[0] == 0
+    assert needs_manual() == ["F1", "F3"]
+    # The pure check: attested ids are skipped, None filters nothing.
+    assert [n["forecast_id"] for n in mon.detect_needs_manual(
+        BINARIES, set(), "2026-01-01", attested={"F3"})] == ["F1"]
+    assert len(mon.detect_needs_manual(BINARIES, set(), "2026-01-01", attested=None)) == 2
 
 
 def test_monitor_shares_the_settlement_helpers(monkeypatch):
@@ -583,6 +690,49 @@ def test_load_manual_target_ledger_then_report(capsys, ledger, reports, monkeypa
         fh.write(json.dumps({"report_id": "r-legacy", "scenarios": SCENARIOS}) + "\n")
     assert fr.load_manual_target("r-legacy", ledger_dir=ledger, publishable_fn=lambda rid: True,
                                  load_forecast_fn=lambda rid: sealed)[1] is None
+
+
+def test_report_fallback_attestation_is_judged_against_the_row_it_binds_to(capsys, ledger,
+                                                                          reports):
+    """A scenario attestation recorded against the report itself (no ledger row yet) labels
+    the production primary row committed later, judged against that row's origin rather
+    than the report creation stamp it was recorded against."""
+    _write_sealed_report("r-old", _forecast([]))  # meta.json created_at 2026-05-02T08:00Z
+    code, event, err = _resolve(capsys, ledger, "--scenario", "Adopted", "--known-at",
+                                "2026-07-01T00:00:00Z", "--evidence", URL, report_id="r-old")
+    assert code == 0
+    assert (event["target_commit_id"], event["target_source"], event["prospective"],
+            event["scoring_eligible"]) == (None, "report", True, True)
+    assert "enters no calibration while the report has no production primary ledger row" in err
+    events = fl.read_market_resolutions(ledger)
+    assert fr.resolved_view(fl.read_ledger(ledger), events) == []
+    assert fl.calibration_summary(ledger, fold_settlements=True)["n_resolved"] == 0
+
+    # A resumed pipeline commits the report's row after the outcome was known: the event
+    # binds, and against the row's origin it is not prospective.
+    late = _commit(ledger, "r-old", as_of="2026-05-01",
+                   committed_at="2026-08-01T00:00:00+00:00", forecast=_forecast([]))
+    (row,) = fr.resolved_view([late], events)
+    assert (row["resolved"], row["outcome"], row["prospective"], row["scoring_eligible"],
+            row["ineligible_reason"]) == (True, "Adopted", False, False, "not_prospective")
+    assert fl.calibration_summary(ledger, fold_settlements=True)["n_resolved"] == 0
+    # A row whose origin precedes the known-at makes it prospective; one whose as-of day
+    # contains the known-at does not, whatever its creation stamp.
+    early = dict(late, created_at="2026-05-03T00:00:00+00:00")
+    (row,) = fr.resolved_view([early], events)
+    assert (row["prospective"], row["scoring_eligible"], row["ineligible_reason"]) == \
+        (True, True, None)
+    assert fr.admissible(row) == (True, None)
+    (row,) = fr.resolved_view([dict(early, as_of_date="2026-07-01")], events)
+    assert (row["prospective"], row["scoring_eligible"]) == (False, False)
+    (row,) = fr.resolved_view([dict(early, created_at="not a stamp")], events)
+    assert (row["prospective"], row["ineligible_reason"]) == ("unknown", "prospective_unknown")
+    # The recorded event is never rewritten, and only the report-fallback marker triggers
+    # the re-derivation: an event without it keeps the writer's facts.
+    assert fl.read_market_resolutions(ledger) == events and events[0]["prospective"] is True
+    unmarked = [dict(events[0], target_source=None)]
+    (row,) = fr.resolved_view([late], unmarked)
+    assert (row["prospective"], row["scoring_eligible"]) == (True, True)
 
 
 # ─────────────────────────────── calibration ─────────────────────────────────
@@ -768,6 +918,40 @@ def test_v1_resolve_without_known_at_legacy_file_only(client):
     assert (record["outcome"], record["scoring"]) == ("other", data["scoring"])
     assert not os.path.exists(os.path.join(fl.ledger_dir(), "resolutions.jsonl"))
     assert fl.calibration_summary(fold_settlements=True)["n_resolved"] == 0
+
+
+def test_v1_resolve_legacy_path_never_contradicts_a_standing_attestation(client, capsys):
+    """Without attestation fields, POST /api/v1/resolve refuses an outcome that differs from
+    the scenario set's standing manual attestation (409, resolved.json untouched); after a
+    CLI correction the ledger decides, and after a retraction nothing stands."""
+    _commit_report("r-api")
+    body = {"outcome_known_at": KNOWN_AT, "evidence": URL}
+    assert _post(client, "r-api", outcome="Base case", **body)[0] == 200
+    with open(_resolved_path("r-api"), "rb") as fh:
+        before = fh.read()
+    status, payload = _post(client, "r-api", outcome="Other")
+    assert status == 409 and "manual='Base case'" in payload["error"]
+    assert "--supersedes" in payload["error"]
+    with open(_resolved_path("r-api"), "rb") as fh:
+        assert fh.read() == before
+    # An agreeing legacy call is the old behaviour: resolved.json rewritten, nothing recorded.
+    status, payload = _post(client, "r-api", outcome=" base-case ")
+    assert status == 200 and payload["data"]["settlement"]["recorded"] is False
+    assert len(fl.read_market_resolutions()) == 1
+
+    # A CLI correction moves the standing attestation; resolved.json follows on request.
+    assert _resolve(capsys, fl.ledger_dir(), "--scenario", "Other", "--known-at", KNOWN_AT,
+                    "--evidence", NOTE, "--supersedes", "manual", report_id="r-api")[0] == 0
+    status, payload = _post(client, "r-api", outcome="Base case")
+    assert status == 409 and "manual:r1='Other'" in payload["error"]
+    assert _post(client, "r-api", outcome="other")[0] == 200
+    with open(_resolved_path("r-api"), encoding="utf-8") as fh:
+        assert json.load(fh)["outcome"] == "other"
+    # A retracted attestation no longer stands: any matched outcome is written again.
+    assert _resolve(capsys, fl.ledger_dir(), "--scenario", "--retract", "--supersedes",
+                    "manual:r1", "--evidence", NOTE, report_id="r-api")[0] == 0
+    assert _post(client, "r-api", outcome="Base case")[0] == 200
+    assert len(fl.read_market_resolutions()) == 3
 
 
 def test_v1_resolve_unpublished_still_409(client):

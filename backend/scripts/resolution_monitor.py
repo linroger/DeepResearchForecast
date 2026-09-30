@@ -415,15 +415,20 @@ def build_resolution_records(anchored: List[Dict[str, Any]],
 
 def detect_needs_manual(binaries: List[Dict[str, Any]],
                         resolved_market_ids: set,
-                        as_of: str) -> List[Dict[str, Any]]:
+                        as_of: str, *,
+                        attested: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
     """指标检查：判定日期已过（≤ as_of）但无市场判定可依的二元预测 → 需人工判定。
 
     「有市场判定可依」= 该预测锚点市场已 resolved。无锚点、或锚点市场尚未判定，且判定日期
-    已过 → 列入清单。纯函数（对**全部**二元预测扫描，不止锚定的那些）。"""
+    已过 → 列入清单。纯函数（对**全部**二元预测扫描，不止锚定的那些）。
+    EVAL-4：attested = 本报告在账本里已有有效人工证明（forecast_resolution.attested_items）
+    的预测 id——已判定，不再催（None = 不过滤）。"""
     out: List[Dict[str, Any]] = []
     for b in binaries or []:
         if not isinstance(b, dict):
             continue
+        if attested and str(b.get("id") or "").strip() in attested:
+            continue  # 已有人工证明
         rd = binary_resolution_date(b)
         if not rd or str(rd) > str(as_of):
             continue  # 无日期 或 尚未到期 → 不催
@@ -920,19 +925,22 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
                     if isinstance(r, dict) and r.get("resolved")}
 
     # EVAL-2：结算判定（纯函数）。市场事件 = 已判定 / 50-50 模糊判定；terminal 单列。
+    existing_events = _ledger.read_market_resolutions(ledger_dir)
     settlement = _settlement.settle_binaries(
         report_id, binaries, resolutions, target_meta=target_meta,
         processed_at=processed_at, min_equivalence=market_min_equivalence(),
         grace_days=pending_grace_days(),
-        existing_events=_ledger.read_market_resolutions(ledger_dir),
+        existing_events=existing_events,
         answered_market_ids=answered)
     records = [e for e in settlement["events"] if e.get("resolution_status") == "settled"]
     # 非生产 primary 目标（ensemble / what-if / comparison / revision / evaluation）：结算
     # 照算照报，但一条也不写进生产 resolutions.jsonl（I-21；键先写者赢，写错无法更正）。
     record_settlement = (target_meta or {}).get("production_primary") is not False
 
-    # (4) 指标检查：过期却无市场判定的预测 → 需人工判定。
-    needs_manual = detect_needs_manual(binaries, resolved_ids, as_of_day)
+    # (4) 指标检查：过期却无市场判定、也无有效人工证明（EVAL-4）的预测 → 需人工判定。
+    attested = {forecast_id for rid, forecast_id in _settlement.attested_items(existing_events)
+                if rid == str(report_id).strip()}
+    needs_manual = detect_needs_manual(binaries, resolved_ids, as_of_day, attested=attested)
 
     # ── 写盘（dry-run 跳过全部写操作）──
     newly_recorded: List[Dict[str, Any]] = []

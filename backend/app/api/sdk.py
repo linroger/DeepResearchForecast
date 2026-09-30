@@ -319,7 +319,11 @@ def v1_resolve(report_id: str):
       scenario_set 事件（与 CLI 同一构造器），再写 resolved.json：账本未接受时按最新账本
       重判——并发请求已写入相同证明 → 视同 no-op；不同证明 → 409；账本不可写 → 500；
       后两者都不写 resolved.json。只给其一 → 400。
-    - 两者都不带：保持只写 resolved.json 的旧行为。
+    - 两者都不带：保持只写 resolved.json 的旧行为；但该情景集在账本里仍有效的人工证明
+      （forecast_resolution.disagreeing_attestations）与 outcome 不同 → 409，不写 resolved.json
+      （须先用 forecast_tools resolve --supersedes 更正/撤回该证明）。
+    - resolved.json 只是本端点的评分快照，校准只读账本：CLI 的更正/撤回只改账本、不改
+      resolved.json，之后按新结果再调用本端点即可刷新它。
 
     返回:
         {report_id, outcome, scoring: {brier, realized_probability, log_loss, ...},
@@ -328,7 +332,7 @@ def v1_resolve(report_id: str):
         reason：None（已入账）；'already_recorded'（相同证明已在账）；缺证明时为
         _SETTLEMENT_NEEDS_ATTESTATION；目标是无生产 primary 账本行的报告本身时为
         forecast_resolution.MANUAL_NOT_BINDABLE（已入账，但 resolved_view 只标注生产 primary
-        commit 行，故不进任何校准）。
+        commit 行，故在该报告有这样一行之前不进任何校准；之后按该行的起点重判 prospective）。
     """
     try:
         report = ReportManager.get_report(report_id)
@@ -389,6 +393,16 @@ def v1_resolve(report_id: str):
                 return _err("；".join(plan["errors"]), 400)
             if plan["status"] == "exists":
                 return _err("；".join(plan["errors"]) + _SUPERSEDES_HINT, 409)
+        else:
+            # 旧路径（不带证明）不得写出与账本里仍有效的人工证明相左的 resolved.json。
+            standing = forecast_resolution.disagreeing_attestations(
+                forecast_ledger.read_market_resolutions(), report_id,
+                forecast_resolution.SCENARIO_ITEM, outcome)
+            if standing:
+                attested = "，".join(f"{row.get('market_id')}={row.get('outcome')!r}"
+                                    for row in standing)
+                return _err(f"该情景集在账本中已有不同的人工证明（{attested}），未写入判定"
+                            + _SUPERSEDES_HINT, 409)
 
         scoring = score_forecast(forecast, outcome)
 
@@ -404,8 +418,8 @@ def v1_resolve(report_id: str):
         settlement = {"recorded": False, "event_key": None,
                       "reason": _SETTLEMENT_NEEDS_ATTESTATION}
         if plan is not None and plan["status"] == "append":
-            # 先入账、后写 resolved.json：并发的另一请求若抢先写入了不同证明，本请求 409 且
-            # 不落盘，resolved.json 永不与账本里的人工证明相左。
+            # 先入账、后写 resolved.json：并发的另一请求若抢先写入了不同证明，本请求 409，
+            # 不为它写 resolved.json。
             if forecast_ledger.append_settlement_event(plan["event"]) is None:
                 plan = _plan_scenario_attestation(target, outcome, known_at, evidence)
                 if plan["status"] == "exists":
