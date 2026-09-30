@@ -48,6 +48,29 @@ def _cfg(name: str, default: Any) -> Any:
         return default
 
 
+def _reply_truncated(llm: Any) -> bool:
+    """INFRA-3: True when ``llm``'s last reply on this thread was cut by the output cap.
+
+    Reads ``last_call_meta`` (the INFRA-1 method, or a plain dict on a fake): truncated means
+    finish_reason 'length', or chat_json accepted the reply only after closing its brackets
+    (json_truncation_repaired, INFRA-2). A client without call metadata, or any error, reads
+    as not truncated.
+    """
+    try:
+        fn = getattr(llm, "last_call_meta", None)
+        meta = fn() if callable(fn) else (fn if isinstance(fn, dict) else None)
+        return bool(isinstance(meta, dict)
+                    and (meta.get("finish_reason") == "length" or meta.get("json_truncation_repaired")))
+    except Exception:  # noqa: BLE001 — metadata is advisory; never break extraction
+        return False
+
+
+def _drop_truncated_reply(llm: Any) -> bool:
+    """INFRA-3 (LLM_JSON_TRUNCATION_FAIL_CLOSED): whether the caller must not use ``llm``'s
+    last reply as forecast content because the output cap cut it."""
+    return bool(_cfg("LLM_JSON_TRUNCATION_FAIL_CLOSED", True)) and _reply_truncated(llm)
+
+
 def forecast_language_rule(language: str) -> str:
     """Output-language directive for the structured-forecast prompts.
 
@@ -1193,9 +1216,18 @@ def extract_structured_forecast(report_markdown: str, llm,
         temperature=0.2,
         max_tokens=int(_cfg("FORECAST_EXTRACT_MAX_TOKENS", 4096)),
     )
+    truncated = _drop_truncated_reply(llm)
     if not isinstance(raw, dict):
         raw = {}
-    return _assemble_forecast(raw)
+    out = _assemble_forecast(raw)
+    if truncated:
+        # INFRA-3: the post-hoc extractor is the last resort after a failed spine, so a reply
+        # the output cap cut is kept but never silently: forecast.quality records it.
+        logger.warning("成稿后预测抽取回复被 max_tokens 截断，已在 quality.llm_truncation 标注")
+        quality = dict(out.get("quality") or {})
+        quality["llm_truncation"] = {"posthoc_reply_truncated": True}
+        out["quality"] = quality
+    return out
 
 
 def _assemble_forecast(raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -3226,11 +3258,14 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     # 行只用于池化已匹配的主模型行、本就不会单独发布，故另记一槽，不计入「扣下」条数。
     review_sink: List[Dict[str, Any]] = []
     secondary_review_sink: List[Dict[str, Any]] = []
+    # INFRA-3 (LLM_JSON_TRUNCATION_FAIL_CLOSED): draws whose reply the output cap cut.
+    truncated_draws = 0
 
     def _draw(instr_min: int, exclude: List[str], *, low_p: bool = False,
               client: Any = None, targets: Optional[List[Dict[str, Any]]] = None,
               repair: bool = False,
               review_to: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+        nonlocal truncated_draws
         # ITEM 12：client 指定时用该（副模型）客户端抽取，否则用主 llm——集成各模型共用同一提示词。
         _llm = client if client is not None else llm
         # EVAL-13：默认只索取 exclude 里尚未出现的目标陈述（无目标 → 空，提示词不变）。已按
@@ -3293,6 +3328,11 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         raw = _llm.chat_json(messages=[{"role": "user", "content": user}],
                              temperature=0.25, max_tokens=4096)
         items = raw.get("binary_forecasts") if isinstance(raw, dict) else None
+        if _drop_truncated_reply(_llm):
+            # INFRA-3: the cap cut this reply, most likely inside its last forecast: drop it.
+            truncated_draws += 1
+            logger.warning("二元预测抽取回复被 max_tokens 截断，丢弃列表最后一项")
+            items = items[:-1] if isinstance(items, list) else items
         if review_to is None:
             review_to = review_sink if client is None else secondary_review_sink
         return _normalize_binaries(items or [], allowed_themes=themes,
@@ -3427,6 +3467,9 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
             _bq_prov["market_table_strip_skipped"] = market_table_strip_skipped
         if market_pack_truncated:
             _bq_prov["market_pack_truncated"] = True
+        if truncated_draws:
+            _bq_prov["llm_truncation_trimmed"] = True
+            _bq_prov["llm_truncation_trimmed_draws"] = truncated_draws
         if provenance_downgrades:
             _bq_prov.setdefault("issues", []).append(
                 f"{provenance_downgrades} forecast(s) claimed a simulation signal that was never "
@@ -3726,12 +3769,21 @@ def _spine_prompt_head(labels: List[str], *, base_rates_supplied: bool) -> str:
 
 
 def _spine_draw(llm, user: str, temperature: float, max_tokens: int) -> Dict[str, Any]:
-    """One spine LLM draw → assembled forecast dict (degrade-safe on bad replies)."""
+    """One spine LLM draw → assembled forecast dict (degrade-safe on bad replies).
+
+    INFRA-3 (LLM_JSON_TRUNCATION_FAIL_CLOSED): a reply the output cap cut yields an empty
+    draw marked ``_llm_truncated``; derive_forecast_spine pops the marker and discards it.
+    """
     raw = llm.chat_json(
         messages=[{"role": "user", "content": user}],
         temperature=temperature,
         max_tokens=max_tokens,
     )
+    if _drop_truncated_reply(llm):
+        logger.warning("预测骨架 draw 的回复被 max_tokens 截断，整份丢弃（不采纳截断 JSON）")
+        draw = _assemble_forecast({})
+        draw["_llm_truncated"] = True
+        return draw
     if not isinstance(raw, dict):
         raw = {}
     return _assemble_forecast(raw)
@@ -4019,7 +4071,18 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
     k = max(1, k)
 
     strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
-    first = _spine_draw(llm, user, 0.2, max_tokens)
+    # INFRA-3: a draw whose reply the output cap cut comes back empty and marked; it is
+    # counted and handled like any empty draw (retried first, never pooled).
+    truncated_draws = 0
+
+    def _draw(prompt: str, temperature: float) -> Dict[str, Any]:
+        nonlocal truncated_draws
+        d = _spine_draw(llm, prompt, temperature, max_tokens)
+        if d.pop("_llm_truncated", False):
+            truncated_draws += 1
+        return d
+
+    first = _draw(user, 0.2)
     if strict:
         # REPORT-1：骨架为空或概率不可读 → 携重试提示重试一次（提示改变缓存键，重试不会
         # 被首轮缓存回复原样应答）；仍不可读 → 情景置空但保留 probability_review，让上层
@@ -4027,7 +4090,7 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
         if not first.get("scenarios") or first.get("probability_status") == PROB_REVIEW:
             logger.warning("预测骨架首轮无可用情景（为空或概率不可读），携重试提示重试一次")
             first_review = first.get("probability_review")
-            first = _spine_draw(llm, user + _SPINE_RETRY_NOTE, 0.2, max_tokens)
+            first = _draw(user + _SPINE_RETRY_NOTE, 0.2)
             if (first_review and not first.get("scenarios")
                     and not first.get("probability_review")):
                 # 首轮不可读、重试为空：保留首轮的复核摘要，上层仍能记录骨架被弃的原因。
@@ -4041,7 +4104,7 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
     elif not first.get("scenarios"):
         # R2-CAL-11：骨架为空 → 告警并重试一次后再让上层回退成稿后抽取。
         logger.warning("预测骨架首轮无情景，重试一次")
-        first = _spine_draw(llm, user, 0.2, max_tokens)
+        first = _draw(user, 0.2)
 
     draws = [first]
     if k > 1 and first.get("scenarios"):
@@ -4049,7 +4112,7 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
         follow = spine_follow_prompt(user, names)
         for i in range(1, k):
             temp = min(0.9, 0.2 + 0.15 * i)  # varied temperature for diversity
-            d = _spine_draw(llm, follow, temp, max_tokens)
+            d = _draw(follow, temp)
             if d.get("scenarios") and not (strict and d.get("probability_status") == PROB_REVIEW):
                 draws.append(d)
 
@@ -4062,6 +4125,12 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
             summary_before_by_name=base_rows,
         )
     out["derived_from"] = "spine"
+    if truncated_draws:
+        # INFRA-3: every discarded draw is on record; all discarded = no scenarios, so the
+        # caller falls back to the post-hoc extractor exactly as for any failed spine.
+        quality = dict(out.get("quality") or {})
+        quality["llm_truncation"] = {"spine_draws_discarded": truncated_draws}
+        out["quality"] = quality
 
     # R2-CAL-3 echo + R2-CAL-18 per-scenario model-vs-sim divergence.
     if anchor_ws and base_distribution and out.get("scenarios"):
@@ -4439,6 +4508,10 @@ def self_critique_forecast(forecast: Dict[str, Any], llm, language: str = "") ->
             temperature=0.2,
             max_tokens=2048,
         )
+        if _drop_truncated_reply(llm):
+            # INFRA-3: a critique the output cap cut is not applied; the input stands uncritiqued.
+            logger.warning("红队评审回复被 max_tokens 截断，丢弃评审、保留原预测")
+            return _critique_attempted(forecast, single_pass)
         if not isinstance(raw, dict):
             return _critique_attempted(forecast, single_pass)
         critique_scenarios = raw.get("scenarios")
@@ -4618,6 +4691,10 @@ def premortem_forecast(forecast: Dict[str, Any], llm, language: str = "") -> Dic
             temperature=0.3,
             max_tokens=1024,
         )
+        if _drop_truncated_reply(llm):
+            # INFRA-3: a pre-mortem the output cap cut moves no probability.
+            logger.warning("事前验尸回复被 max_tokens 截断，丢弃、保留原预测")
+            return forecast
         if not isinstance(raw, dict):
             return forecast
         out = dict(forecast)

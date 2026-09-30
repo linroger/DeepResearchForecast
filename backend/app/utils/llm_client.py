@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from typing import Optional, Dict, Any, List, Tuple
 
 from ..config import Config
+from .llm_recovery import next_max_tokens
 from .llm_text import flatten_content, has_dangling_think, normalize_finish_reason, strip_think
 from .logger import get_logger
 # INFRA-8: claude_cli_model_arg lives with the other model-provenance helpers; it stays
@@ -328,6 +329,25 @@ class LLMContentFiltered(_CompletionDiagnostics, Exception):
 
 class LLMAbortedCompletion(_CompletionDiagnostics, RuntimeError):
     """The provider aborted the generation (finish_reason 'error') before any text."""
+
+
+class _LengthEscalation:
+    """INFRA-3: one chat() call's max_tokens escalation state (see _chat_openai_escalating).
+
+    chat() creates it once per call and hands it to every transport attempt, so an attempt that
+    a transient error interrupts mid-escalation resumes at the escalated cap, and one call never
+    escalates more than LLM_MAX_ESCALATIONS times in total.
+    """
+
+    __slots__ = ("max_tokens", "escalations", "recovered", "rejected_ms")
+
+    def __init__(self, max_tokens: Optional[int]) -> None:
+        self.max_tokens = max_tokens
+        self.escalations = 0
+        # True when the reply chat() returns came from an escalated attempt.
+        self.recovered = False
+        # Wall-clock of the rejected attempts; each was metered with its own latency.
+        self.rejected_ms = 0.0
 
 
 # The DISABLE_THINKING knob that governs each reasoning provider (Config.reasoning_extra_body).
@@ -937,6 +957,11 @@ class LLMClient:
         LLMAbortedCompletion（均为 RuntimeError，照常退避重试；鉴权失败/余额不足/参数非法等
         确定性错误信封除外——不重试，直接回退）；审查拦截抛 LLMContentFiltered
         （非 RuntimeError：不重试，直接尝试一次回退）。本次调用的 finish_reason/usage 等见 last_call_meta()。
+
+        INFRA-3（LLM_LENGTH_ESCALATION，默认开）：OpenAI 兼容提供方的空回复若因 max_tokens 截断
+        （finish_reason=length），立即以更大的 max_tokens 重发（见 _chat_openai_escalating）；升档耗尽
+        则不再退避重试、直接转回退。被拒尝试的超预算 BudgetExceeded 原样抛出。升档后得到的回复
+        仅在 finish_reason=stop 时以原始缓存键入缓存。
         """
         # EXECPLAN2 I-6-2: 解析本次调用实际使用的模型（fast/strong）。关闭路由时 = self.model。
         # EVAL-10: one routing read per call; the cache key, the meter and every transport retry
@@ -945,7 +970,9 @@ class LLMClient:
         model = route[0]
         # EXECPLAN2 I-6-0/I-5-0/I-5-3: 内容寻址缓存命中直接返回；否则正常调用后记录
         # token/延迟/成本计量并做预算检查。计量默认开（开销极小），缓存/预算默认关。
-        from .telemetry import LLMMeter, LLMCache, get_run_context, check_budget, estimate_tokens
+        from .telemetry import (
+            BudgetExceeded, LLMCache, LLMMeter, check_budget, estimate_tokens, get_run_context,
+        )
         run_id, stage = get_run_context()
         cache_key = None
         # EVAL-10: use_cache=False opts this client out of LLMCache entirely (get and put).
@@ -972,6 +999,8 @@ class LLMClient:
         # by_model 归属错乱。置位后跳过外层计量。
         served_by_fallback = False
         started = time.monotonic()
+        # INFRA-3: one escalation budget for the whole call, shared by every retry below.
+        escalation = _LengthEscalation(max_tokens)
         self._clear_own_call_meta()
         # Circuit breaker: if the primary is in a content-filter/quota cooldown, skip the doomed
         # primary attempt entirely and go straight to the fallback (prevents the futile-call flood).
@@ -1002,8 +1031,9 @@ class LLMClient:
                 break
             try:
                 if self.provider in OPENAI_COMPATIBLE_PROVIDERS:
-                    result = self._chat_openai(messages, temperature, max_tokens, response_format,
-                                               tier=tier, route=route)
+                    result = self._chat_openai_escalating(messages, temperature, max_tokens,
+                                                          response_format, tier=tier, route=route,
+                                                          escalation=escalation)
                 elif self.provider == "codex-cli":
                     # CLI 订阅提供方只有单一订阅模型，tier 在此为 no-op。
                     result = self._chat_codex_cli(messages, temperature, max_tokens, response_format)
@@ -1011,6 +1041,10 @@ class LLMClient:
                     result = self._chat_claude_cli(messages, temperature, max_tokens, response_format)
                 _cb_reset(self.provider)  # primary succeeded → clear its 422/429 streaks
                 break
+            except BudgetExceeded:
+                # INFRA-3: a metered rejected attempt put the run over budget. BudgetExceeded is
+                # a RuntimeError; it must abort the call, not enter the retry loop below.
+                raise
             except (RuntimeError, *_RETRYABLE_API_ERRORS) as exc:
                 last_error = exc
                 if _is_deterministic_auth_error(exc):
@@ -1027,6 +1061,10 @@ class LLMClient:
                         "LLM provider rejection is deterministic; skipping retries: %s",
                         _err_brief(exc),
                     )
+                    break
+                if getattr(exc, "escalation_exhausted", False):
+                    # INFRA-3: max_tokens escalation gave up; a same-cap retry would be cut the
+                    # same way, so fail over now.
                     break
                 if attempt < MAX_RETRIES - 1:
                     delay = _retry_delay(exc, attempt)
@@ -1058,7 +1096,8 @@ class LLMClient:
         # token 记到错误的调用上。回退接管时 _try_fallback 已把回退方元数据转写为本客户端的。
         meta = self._own_call_meta()
         if Config.LLM_TELEMETRY_ENABLED and not served_by_fallback:
-            latency_ms = (time.monotonic() - started) * 1000.0
+            # INFRA-3: rejected length attempts were metered with their own latency.
+            latency_ms = (time.monotonic() - started) * 1000.0 - escalation.rejected_ms
             # 仅 API 上报的精确 usage 顶替粗估；Claude CLI 信封的 usage 含 CLI 自身的系统提示/缓存，
             # 计入会抬高 run 预算口径，故 CLI 仍按文本长度粗估（与历史一致）。
             usage = meta["usage"] if meta and meta.get("usage_source") == "provider" else None
@@ -1079,7 +1118,12 @@ class LLMClient:
         if cache_on and cache_key is not None:
             # INFRA-1 (LLM_TRANSPORT_STRICT): 截断(length)/审查/中止/悬空 <think> 的回复不入缓存
             # ——否则同一 prompt 会从 LLMCache 永久重放这份残缺回复。无元数据时同样不缓存（失败安全）。
-            if _transport_strict() and not (meta and meta.get("cacheable")):
+            if escalation.recovered and not (meta and meta.get("finish_reason") == "stop"):
+                # INFRA-3: an escalated reply is replayed under the original key only when complete.
+                logger.debug(
+                    "升档回复不入缓存（finish_reason=%s）", meta.get("finish_reason") if meta else None,
+                )
+            elif _transport_strict() and not (meta and meta.get("cacheable")):
                 logger.debug(
                     "LLM 回复不入缓存（finish_reason=%s，无元数据=%s）",
                     meta.get("finish_reason") if meta else None, meta is None,
@@ -1653,6 +1697,123 @@ class LLMClient:
     # ------------------------------------------------------------------
     # openai 提供方
     # ------------------------------------------------------------------
+    def _chat_openai_escalating(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+        response_format: Optional[Dict] = None,
+        tier: str = "strong",
+        route: Optional[Tuple[str, bool]] = None,
+        escalation: Optional[_LengthEscalation] = None,
+    ) -> str:
+        """INFRA-3 (LLM_LENGTH_ESCALATION): _chat_openai, re-sent with a larger max_tokens while
+        the reply is empty because the output cap cut it (EmptyCompletion, finish_reason 'length').
+
+        Each rejected attempt is metered with the usage its exception carries (the provider
+        spent those tokens) and the run budget is checked (BudgetExceeded propagates). The next
+        cap comes from llm_recovery.next_max_tokens, clamped to the serving provider's ceiling
+        and context window, and the request is re-sent at once, without backoff. When
+        LLM_MAX_ESCALATIONS is used up or no headroom is left, the EmptyCompletion is re-raised
+        with ``escalation_exhausted = True`` so chat() fails over instead of retrying. Any other
+        failure propagates unchanged. ``escalation`` is chat()'s per-call state (None: a fresh
+        one starting at ``max_tokens``). Off: exactly one _chat_openai call.
+        """
+        if not getattr(Config, "LLM_LENGTH_ESCALATION", True):
+            return self._chat_openai(messages, temperature, max_tokens, response_format,
+                                     tier=tier, route=route)
+        state = escalation if escalation is not None else _LengthEscalation(max_tokens)
+        # Every attempt of the ladder carries one route, so all are metered under one model.
+        route = route if route is not None else self._tier_route(tier)
+        try:
+            limit = max(0, int(getattr(Config, "LLM_MAX_ESCALATIONS", 2)))
+        except (TypeError, ValueError):
+            limit = 2
+        while True:
+            attempt_started = time.monotonic()
+            try:
+                result = self._chat_openai(messages, temperature, state.max_tokens, response_format,
+                                           tier=tier, route=route)
+            except EmptyCompletion as exc:
+                if exc.finish_reason != "length":
+                    raise
+                latency_ms = (time.monotonic() - attempt_started) * 1000.0
+                state.rejected_ms += latency_ms
+                self._meter_rejected_attempt(exc, messages, route[0], latency_ms)
+                sent = state.max_tokens
+                raised = self._escalated_max_tokens(exc, sent) if state.escalations < limit else None
+                if raised is None:
+                    exc.escalation_exhausted = True
+                    self._record_recovery("exhausted")
+                    logger.warning(
+                        f"LLM 空回复（finish_reason=length，max_tokens={sent}）升档已耗尽"
+                        f"（{state.escalations}/{limit} 次），转回退提供方"
+                    )
+                    raise
+                state.escalations += 1
+                state.max_tokens = raised
+                logger.warning(
+                    f"LLM 空回复（finish_reason=length，推理耗尽输出上限），max_tokens {sent}→{raised} "
+                    f"立即重发（第 {state.escalations}/{limit} 次升档）"
+                )
+                continue
+            if state.escalations:
+                state.recovered = True
+                self._record_recovery("recovered")
+                logger.info(f"LLM 升档后得到回复（max_tokens={state.max_tokens}）")
+            return result
+
+    def _meter_rejected_attempt(self, exc: EmptyCompletion, messages: List[Dict[str, str]],
+                                model: str, latency_ms: float) -> None:
+        """INFRA-3: meter one rejected empty length reply, then check the run budget.
+
+        The attempt is recorded like any call, with the usage the exception carries; without
+        provider usage the prompt is estimated from the messages and the whole sent cap counts
+        as completion (a length finish means the cap was spent). BudgetExceeded propagates.
+        """
+        from .telemetry import LLMMeter, check_budget, estimate_tokens, get_run_context
+        run_id, stage = get_run_context()
+        if Config.LLM_TELEMETRY_ENABLED:
+            if exc.usage:
+                pt = _as_int(_field(exc.usage, "prompt_tokens"))
+                ct = _as_int(_field(exc.usage, "completion_tokens"))
+            else:
+                pt = sum(estimate_tokens(str(m.get("content", ""))) for m in messages)
+                ct = _as_int(exc.sent_max_tokens)
+            provider = exc.provider or self.provider
+            LLMMeter.record(provider, model, pt, ct, latency_ms, cached=False, stage=stage,
+                            run_id=run_id, finish_reason=exc.finish_reason,
+                            requested_model=self._requested_label(provider, model))
+        if Config.LLM_RUN_BUDGET_TOKENS or Config.LLM_RUN_BUDGET_USD:
+            check_budget(run_id)  # 超预算抛 BudgetExceeded，中止升档
+
+    @staticmethod
+    def _escalated_max_tokens(exc: EmptyCompletion, sent: Optional[int]) -> Optional[int]:
+        """INFRA-3: the next cap for a rejected attempt sent with ``sent``; None = no headroom.
+
+        The ceiling is the serving provider's PROVIDER_META max_output_tokens, else
+        LLM_MAX_TOKENS_CEILING; the context-window clamp uses the prompt tokens the provider
+        reported for the rejected attempt (none reported: no window clamp).
+        """
+        provider = exc.provider or ""
+        try:
+            ceiling = int(Config.PROVIDER_META.get(provider, {}).get("max_output_tokens") or 0)
+        except (TypeError, ValueError):
+            ceiling = 0
+        if ceiling <= 0:
+            ceiling = int(getattr(Config, "LLM_MAX_TOKENS_CEILING", 32768) or 32768)
+        return next_max_tokens(
+            sent, ceiling=ceiling, context_window=Config.context_window_for(provider),
+            prompt_tokens=_as_int(_field(exc.usage, "prompt_tokens")) or None,
+        )
+
+    @staticmethod
+    def _record_recovery(outcome: str) -> None:
+        """Count one length-escalation episode in LLMMeter (run and stage from the calling context)."""
+        if Config.LLM_TELEMETRY_ENABLED:
+            from .telemetry import LLMMeter
+            LLMMeter.record_recovery("length_escalation", outcome)
+
     def _chat_openai(
         self,
         messages: List[Dict[str, str]],

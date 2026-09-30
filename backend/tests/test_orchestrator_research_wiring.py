@@ -739,7 +739,7 @@ def _exercise_prepare_run_resume(
         monkeypatch, tmp_path, *, rebuild_prepare, corrupt_run=False,
         corrupt_prepare_seal=False, report_simulation_id=None, lineage_flags=True,
         report_preflight_failures=0, real_run_manifest=False, extra_options=None,
-        prior_run_manifest=None, report_interrupt=None):
+        prior_run_manifest=None, report_interrupt=None, report_preflight_error=None):
     """Run the real orchestrator state machine with every external service faked.
 
     The persisted report was generated for ``report_simulation_id`` (default:
@@ -747,8 +747,9 @@ def _exercise_prepare_run_resume(
     ``report_generations`` (the simulation id it was generated for) instead
     of running the real ReportAgent.  ``lineage_flags`` sets both INFRA-7
     knobs (RUN_SHAPE_PIN, RESUME_LINEAGE_GUARDS).  The first
-    ``report_preflight_failures`` REPORT preflight probes raise (a provider
-    outage).  ``real_run_manifest`` keeps the real run.json writers, and
+    ``report_preflight_failures`` REPORT preflight probes raise
+    ``report_preflight_error`` (default: a provider outage).
+    ``real_run_manifest`` keeps the real run.json writers, and
     ``run_manifest_at_start`` then holds run.json's simulation block as RUN
     starts each simulation; ``prior_run_manifest`` is an earlier attempt's
     run.json.  ``report_interrupt`` ends the first report generation early,
@@ -797,7 +798,7 @@ def _exercise_prepare_run_resume(
             def chat(self, messages, **kwargs):
                 preflight["calls"] += 1
                 if preflight["calls"] <= report_preflight_failures:
-                    raise RuntimeError("provider outage")
+                    raise report_preflight_error or RuntimeError("provider outage")
                 return "pong"
 
         monkeypatch.setattr(_po.Config, "REPORT_LLM_PREFLIGHT", True, raising=False)
