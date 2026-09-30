@@ -11217,6 +11217,7 @@ class PipelineOrchestrator:
         organic = db_rows
         organic_source = "db_rows"
         summary_health = None
+        schedule_issue = None
         try:
             _sum_path = os.path.join(SimulationRunner.RUN_STATE_DIR, sim_id, "run_summary.json")
             if os.path.exists(_sum_path):
@@ -11230,6 +11231,11 @@ class PipelineOrchestrator:
                     _sh = _summary.get("simulation_health")
                     if isinstance(_sh, str) and _sh:
                         summary_health = _sh
+                    # SIM-3（SIM_SCHEDULE_AUDIT）：run_summary 记下的永不触发的定时事件 → degraded
+                    # issue（绝不判失败）；无该键 / 计数为 0 → 不加 issue。
+                    if getattr(Config, "SIM_SCHEDULE_AUDIT", True):
+                        from .sim_schedule_audit import unreachable_issue
+                        schedule_issue = unreachable_issue(_summary.get("schedule_audit"))
         except Exception:  # noqa: BLE001 — 老 run 无 summary → 沿用 db 口径
             pass
         err = None
@@ -11275,6 +11281,9 @@ class PipelineOrchestrator:
             issues.append(
                 f"{dead_letters} graph-feedback episode(s) in the dead-letter queue — "
                 "report may read an episode-starved graph (replay via replay_zep_dead_letters.py)")
+        if schedule_issue:
+            meta["schedule_audit_unreachable"] = schedule_issue[0]
+            issues.append(schedule_issue[1])
         health = "degraded" if issues else "ok"
         return health, issues, meta
 
