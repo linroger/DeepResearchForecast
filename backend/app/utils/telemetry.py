@@ -347,9 +347,11 @@ def _structured_counts() -> Dict[str, int]:
 
 
 # INFRA-3: outcomes of one transport recovery episode (kind 'length_escalation': an empty reply
-# cut by max_tokens re-sent with a larger cap). recovered = an escalated attempt returned text;
-# exhausted = escalation gave up (attempts or headroom used up) and the call went on to failover.
-RECOVERY_OUTCOMES = ("recovered", "exhausted")
+# cut by max_tokens re-sent with a larger cap). recovered = an escalated attempt returned a
+# complete reply; partial = it returned text that the raised cap cut again (finish_reason
+# length); exhausted = escalation gave up (attempts or headroom used up, or the provider refused
+# the raised cap) and the call went on to failover.
+RECOVERY_OUTCOMES = ("recovered", "partial", "exhausted")
 
 
 # TEL-1: '_global' 桶只该接住零星的无归属调用（reset 从不清它，跨 run 累积）。它一旦变大，

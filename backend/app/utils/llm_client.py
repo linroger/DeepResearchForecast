@@ -339,7 +339,7 @@ class _LengthEscalation:
     escalates more than LLM_MAX_ESCALATIONS times in total.
     """
 
-    __slots__ = ("max_tokens", "escalations", "recovered", "rejected_ms")
+    __slots__ = ("max_tokens", "escalations", "recovered", "rejected_ms", "last_empty")
 
     def __init__(self, max_tokens: Optional[int]) -> None:
         self.max_tokens = max_tokens
@@ -348,6 +348,8 @@ class _LengthEscalation:
         self.recovered = False
         # Wall-clock of the rejected attempts; each was metered with its own latency.
         self.rejected_ms = 0.0
+        # The last rejected empty length reply: re-raised when an escalated cap is refused.
+        self.last_empty: Optional[EmptyCompletion] = None
 
 
 # The DISABLE_THINKING knob that governs each reasoning provider (Config.reasoning_extra_body).
@@ -960,8 +962,9 @@ class LLMClient:
 
         INFRA-3（LLM_LENGTH_ESCALATION，默认开）：OpenAI 兼容提供方的空回复若因 max_tokens 截断
         （finish_reason=length），立即以更大的 max_tokens 重发（见 _chat_openai_escalating）；升档耗尽
-        则不再退避重试、直接转回退。被拒尝试的超预算 BudgetExceeded 原样抛出。升档后得到的回复
-        仅在 finish_reason=stop 时以原始缓存键入缓存。
+        （或升档后的 max_tokens 被提供方以 400 拒绝）则不再退避重试、直接转回退。被拒尝试（含回退
+        提供方的调用）触发的超预算 BudgetExceeded 原样抛出。升档后得到的回复仅在 finish_reason=stop
+        时以原始缓存键入缓存。
         """
         # EXECPLAN2 I-6-2: 解析本次调用实际使用的模型（fast/strong）。关闭路由时 = self.model。
         # EVAL-10: one routing read per call; the cache key, the meter and every transport retry
@@ -1202,6 +1205,12 @@ class LLMClient:
             logger.info(f"回退提供方 {fb_provider} 成功接管本次调用")
             return out
         except Exception as e:  # noqa: BLE001 — fallback failed too; caller raises the primary error
+            from .telemetry import BudgetExceeded
+            if isinstance(e, BudgetExceeded) and getattr(Config, "LLM_LENGTH_ESCALATION", True):
+                # INFRA-3: the fallback's own metering (a rejected escalation attempt, or its
+                # post-call check) put the run over budget; that aborts the call rather than
+                # surfacing the primary's error. Off: legacy (swallowed, primary error raised).
+                raise
             # 确定性失败（401 凭据坏 / 400 invalid-model 类）进入进程级冷却：重试修不好，
             # 并行 worker 不该反复对同一注定失败的回退发起昂贵调用。服务重启或修好配置自然清零。
             if _is_deterministic_auth_error(e) or _is_deterministic_invalid_request_error(e):
@@ -1715,9 +1724,13 @@ class LLMClient:
         cap comes from llm_recovery.next_max_tokens, clamped to the serving provider's ceiling
         and context window, and the request is re-sent at once, without backoff. When
         LLM_MAX_ESCALATIONS is used up or no headroom is left, the EmptyCompletion is re-raised
-        with ``escalation_exhausted = True`` so chat() fails over instead of retrying. Any other
-        failure propagates unchanged. ``escalation`` is chat()'s per-call state (None: a fresh
-        one starting at ``max_tokens``). Off: exactly one _chat_openai call.
+        with ``escalation_exhausted = True`` so chat() fails over instead of retrying. An
+        escalated cap the provider refuses as an invalid request (a 400: past its real output
+        cap) ends the ladder the same way, with the last EmptyCompletion: the 400 is an artefact
+        of the escalation, and read as such it would put a fallback provider into the
+        deterministic-failure cooldown of _try_fallback. Any other failure propagates unchanged.
+        ``escalation`` is chat()'s per-call state (None: a fresh one starting at ``max_tokens``).
+        Off: exactly one _chat_openai call.
         """
         if not getattr(Config, "LLM_LENGTH_ESCALATION", True):
             return self._chat_openai(messages, temperature, max_tokens, response_format,
@@ -1740,6 +1753,7 @@ class LLMClient:
                 latency_ms = (time.monotonic() - attempt_started) * 1000.0
                 state.rejected_ms += latency_ms
                 self._meter_rejected_attempt(exc, messages, route[0], latency_ms)
+                state.last_empty = exc
                 sent = state.max_tokens
                 raised = self._escalated_max_tokens(exc, sent) if state.escalations < limit else None
                 if raised is None:
@@ -1757,10 +1771,28 @@ class LLMClient:
                     f"立即重发（第 {state.escalations}/{limit} 次升档）"
                 )
                 continue
+            except Exception as err:  # noqa: BLE001 — only a refused escalated cap is rewritten
+                last_empty = state.last_empty
+                if not (state.escalations and last_empty is not None
+                        and _is_deterministic_invalid_request_error(err)):
+                    raise
+                last_empty.escalation_exhausted = True
+                self._record_recovery("exhausted")
+                logger.warning(
+                    f"LLM 升档后的 max_tokens={state.max_tokens} 被提供方拒绝（{_err_brief(err)}），"
+                    f"升档结束，按空回复转回退提供方"
+                )
+                raise last_empty from err
             if state.escalations:
                 state.recovered = True
-                self._record_recovery("recovered")
-                logger.info(f"LLM 升档后得到回复（max_tokens={state.max_tokens}）")
+                meta = self._own_call_meta()
+                if meta and meta.get("finish_reason") == "length":
+                    # The escalated reply has text but the raised cap cut it again.
+                    self._record_recovery("partial")
+                    logger.warning(f"LLM 升档后的回复仍被截断（max_tokens={state.max_tokens}）")
+                else:
+                    self._record_recovery("recovered")
+                    logger.info(f"LLM 升档后得到回复（max_tokens={state.max_tokens}）")
             return result
 
     def _meter_rejected_attempt(self, exc: EmptyCompletion, messages: List[Dict[str, str]],

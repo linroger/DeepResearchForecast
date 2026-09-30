@@ -71,6 +71,12 @@ def _drop_truncated_reply(llm: Any) -> bool:
     return bool(_cfg("LLM_JSON_TRUNCATION_FAIL_CLOSED", True)) and _reply_truncated(llm)
 
 
+def _count_truncation(counts: Optional[Dict[str, int]], key: str) -> None:
+    """INFRA-3: tally one truncated reply of pass ``key`` into the caller's sink (None: skip)."""
+    if counts is not None:
+        counts[key] = counts.get(key, 0) + 1
+
+
 def forecast_language_rule(language: str) -> str:
     """Output-language directive for the structured-forecast prompts.
 
@@ -703,6 +709,8 @@ def _sync_forecast_narratives(
 _NARRATIVE_SYNC_QUALITY_KEYS = frozenset({
     "narrative_sync", "narrative_sync_skipped", "narrative_sync_blocked", "narrative_sync_dropped",
 })
+# quality 里不交给评审 / 验尸的簿记键：叙事同步日志，以及 INFRA-3 的截断丢弃计数。
+_LLM_VIEW_DROPPED_QUALITY_KEYS = _NARRATIVE_SYNC_QUALITY_KEYS | {"llm_truncation"}
 
 
 def _llm_forecast_view(forecast: Dict[str, Any]) -> Dict[str, Any]:
@@ -716,15 +724,17 @@ def _llm_forecast_view(forecast: Dict[str, Any]) -> Dict[str, Any]:
     副本与原对象键序、取值完全相同，提示词逐字节不变。INFRA-2 的 critique_attempted 簿记标记
     同样去掉（旗标关闭时不存在），评审 / 验尸提示词不因单次评审旗标而改变。RESEARCH-13 的
     context_pack 摘要（证据包簿记，仅在最终落盘前写入）同样去掉：它绝不进入评审输入。
+    INFRA-3 的 quality.llm_truncation（截断 draw 的丢弃计数，截断失败即关闭旗标关闭时不存在）
+    同理去掉。
     """
     dropped = {"headline_detail", "critique_attempted", "context_pack"}
     if not forecast.get("residual_scenario_added"):
         dropped.add("confidence_rationale_detail")
     view = {key: value for key, value in forecast.items() if key not in dropped}
     quality = view.get("quality")
-    if isinstance(quality, dict) and not _NARRATIVE_SYNC_QUALITY_KEYS.isdisjoint(quality):
+    if isinstance(quality, dict) and not _LLM_VIEW_DROPPED_QUALITY_KEYS.isdisjoint(quality):
         kept = {key: value for key, value in quality.items()
-                if key not in _NARRATIVE_SYNC_QUALITY_KEYS}
+                if key not in _LLM_VIEW_DROPPED_QUALITY_KEYS}
         if kept:
             view["quality"] = kept
         else:
@@ -2171,7 +2181,8 @@ def _build_market_anchor(prob: Optional[float], market: Dict[str, Any], *,
 
 def anchor_binaries_to_markets(binaries: List[Dict[str, Any]], markets: Optional[List[Dict[str, Any]]],
                                llm, *, language: str = "English", max_markets: int = 24,
-                               now: Optional[datetime] = None) -> int:
+                               now: Optional[datetime] = None,
+                               truncation_counts: Optional[Dict[str, int]] = None) -> int:
     """PM-2：一次批处理 LLM 匹配 + 确定性回填 market_anchor（就地改写 binaries）。返回锚定条数。
 
     只接受 resolution_equivalence 严格度 ≥ FORECAST_MARKET_ANCHOR_MIN_EQUIVALENCE（默认 near，
@@ -2179,7 +2190,9 @@ def anchor_binaries_to_markets(binaries: List[Dict[str, Any]], markets: Optional
     无二元 / 匹配调用异常或非法 JSON → 不加锚点（今日行为，degrade-safe）。
     TIME-3：给出 ``now``（仅 PREDICTION_MARKETS_END_DATE_GATE 开时由 extract_binary_forecasts
     传入）→ MARKETS 表后追加「Today (UTC)」一行，要求截止日与预测日期不一致的市场至多判 near；
-    未给出 → 提示词逐字节不变。"""
+    未给出 → 提示词逐字节不变。
+    INFRA-3（LLM_JSON_TRUNCATION_FAIL_CLOSED）：匹配回复被 max_tokens 截断时丢弃最后一条匹配（多半
+    被截在半途），并在 ``truncation_counts['market_match']`` 计数（给出时）。"""
     if not _cfg("FORECAST_MARKET_ANCHORING", True):
         return 0
     bins = [b for b in (binaries or []) if isinstance(b, dict) and str(b.get("statement") or "").strip()]
@@ -2218,6 +2231,11 @@ def anchor_binaries_to_markets(binaries: List[Dict[str, Any]], markets: Optional
         logger.warning(f"预测市场匹配调用失败（忽略，不加锚点）: {_me}")
         return 0
     matches = raw.get("matches") if isinstance(raw, dict) else None
+    if _drop_truncated_reply(llm):
+        # INFRA-3: the cap cut this reply, most likely inside its last match: drop it.
+        _count_truncation(truncation_counts, "market_match")
+        logger.warning("预测市场匹配回复被 max_tokens 截断，丢弃最后一条匹配")
+        matches = matches[:-1] if isinstance(matches, list) else matches
     if not isinstance(matches, list):
         return 0
     bin_by_id = {str(b.get("id")): b for b in bins}
@@ -2274,7 +2292,8 @@ def _stamp_market_influence(binary: Dict[str, Any], anchor: Dict[str, Any], *,
 
 
 def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
-                              language: str = "English") -> int:
+                              language: str = "English",
+                              truncation_counts: Optional[Dict[str, int]] = None) -> int:
     """PM-2 的 10pp 规则：锚定后 |divergence|>0.10 且理由未提及市场的预测做一次有界重述。
 
     重述须在理由中引用市场；否则不接受（绝不静默移动概率）。就地改写 binaries，重算
@@ -2284,7 +2303,11 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
     LOOP-017 P0（影响边界）：只有 ``match_confidence >=
     FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE``（默认 0.6；缺失/None 一律不合格）的锚点
     才有**移动概率**的资格——低置信匹配仍可作为校准展示锚点，但绝不拉动发布概率。
-    被采纳且确实移动了概率的重述会盖 ``market_influence`` 印章（见 _stamp_market_influence）。"""
+    被采纳且确实移动了概率的重述会盖 ``market_influence`` 印章（见 _stamp_market_influence）。
+
+    INFRA-3（LLM_JSON_TRUNCATION_FAIL_CLOSED）：重述回复被 max_tokens 截断时丢弃最后一条重述——
+    它多半停在理由半途，而截断前已完整的概率与引用市场的理由足以通过下方检查。计数记在
+    ``truncation_counts['market_divergence']``（给出时）。"""
     if not _cfg("FORECAST_MARKET_DIVERGENCE_REVISION", True):
         return 0
     min_conf = _coerce_float(_cfg("FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE", 0.6))
@@ -2326,6 +2349,11 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
         logger.warning(f"预测市场分歧重述调用失败（忽略，保留原概率/理由）: {_re}")
         return 0
     revs = raw.get("revisions") if isinstance(raw, dict) else None
+    if _drop_truncated_reply(llm):
+        # INFRA-3: the cap cut this reply, most likely inside its last revision: drop it.
+        _count_truncation(truncation_counts, "market_divergence")
+        logger.warning("预测市场分歧重述回复被 max_tokens 截断，丢弃最后一条重述")
+        revs = revs[:-1] if isinstance(revs, list) else revs
     if not isinstance(revs, list):
         return 0
     by_id = {str(b.get("id")): b for b in candidates}
@@ -3417,11 +3445,14 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     # PM-2：确定性市场锚定 + 10pp 分歧有界重述 + 对照负载。任何失败 → 保留无锚点结果
     # （_normalize_binaries 已回填的模型自愿锚点仍在），即今日行为（degrade-safe）。
     market_comparison: Optional[Dict[str, Any]] = None
+    # INFRA-3: truncated replies of the market passes, by pass (see _count_truncation).
+    market_truncation: Dict[str, int] = {}
     if binaries and (anchor_markets or []):
         try:
             anchor_binaries_to_markets(binaries, anchor_markets, llm, language=language,
-                                       now=anchor_now)
-            enforce_market_divergence(binaries, llm, language=language)
+                                       now=anchor_now, truncation_counts=market_truncation)
+            enforce_market_divergence(binaries, llm, language=language,
+                                      truncation_counts=market_truncation)
             market_comparison = build_market_comparison(binaries)
         except Exception as _ae:  # noqa: BLE001 — 锚定为增强，绝不阻断二元抽取
             logger.warning(f"预测市场锚定失败（忽略，保留无锚点结果）: {_ae}")
@@ -3470,6 +3501,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         if truncated_draws:
             _bq_prov["llm_truncation_trimmed"] = True
             _bq_prov["llm_truncation_trimmed_draws"] = truncated_draws
+        if market_truncation:
+            _bq_prov["llm_truncation_market_trimmed"] = dict(market_truncation)
         if provenance_downgrades:
             _bq_prov.setdefault("issues", []).append(
                 f"{provenance_downgrades} forecast(s) claimed a simulation signal that was never "

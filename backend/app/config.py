@@ -119,9 +119,11 @@ class Config:
     # INFRA-3：推理模型把 max_tokens 全耗在推理上、回复为空且 finish_reason=length 时，chat() 立即
     # （不退避）以更大的 max_tokens 重发：max(当前×2, 1024)，封顶 PROVIDER_META 的 max_output_tokens
     # （未配置时 LLM_MAX_TOKENS_CEILING）与「上下文窗口 − prompt − 1024」，至多 LLM_MAX_ESCALATIONS 次。
-    # 被拒的空回复照样计量（token 已花掉）并做预算检查（BudgetExceeded 中止）；升档耗尽则直接转回退
-    # 提供方，不再做同一请求的主提供方退避重试。默认开是安全的：只作用于原本必然失败的空截断回复，
-    # 正常回复逐字节不变，花费受次数与上限约束。false 恢复旧行为（同一 max_tokens 退避重试 3 次）。
+    # 被拒的空回复照样计量（token 已花掉）并做预算检查（BudgetExceeded 中止，回退提供方里的超预算
+    # 同样中止、不再被吞掉换成主提供方的错误）；升档耗尽（或升档后的 max_tokens 被提供方以 400 拒绝，
+    # 此时按空回复处理，不让回退提供方进入确定性失败冷却）则直接转回退提供方，不再做同一请求的主
+    # 提供方退避重试。默认开是安全的：只作用于原本必然失败的空截断回复，正常回复逐字节不变，花费
+    # 受次数与上限约束。false 恢复旧行为（同一 max_tokens 退避重试 3 次）。
     LLM_LENGTH_ESCALATION = os.environ.get('LLM_LENGTH_ESCALATION', 'true').strip().lower() == 'true'
     try:
         LLM_MAX_ESCALATIONS = max(0, int(os.environ.get('LLM_MAX_ESCALATIONS', '2') or '2'))

@@ -1,10 +1,12 @@
 """INFRA-3: max_tokens escalation on empty length-truncated replies, and fail-closed handling
 of truncated JSON in forecast extraction.
 
-Covers LLMClient._chat_openai_escalating inside chat() (LLM_LENGTH_ESCALATION /
+Covers LLMClient._chat_openai_escalating inside chat() and failover (LLM_LENGTH_ESCALATION /
 LLM_MAX_ESCALATIONS / LLM_MAX_TOKENS_CEILING), LLMMeter.record_recovery, the report preflight
 that treats an empty length reply as a reachable provider, and the forecast_extractor
-LLM_JSON_TRUNCATION_FAIL_CLOSED paths (spine, binaries, critique, premortem, post-hoc).
+LLM_JSON_TRUNCATION_FAIL_CLOSED paths (spine, binaries, market match and divergence passes,
+critique, premortem, post-hoc) with the report agent carrying a lost spine's count into
+forecast.json.
 Every OpenAI response is a SimpleNamespace fed through a fake transport, and the forecast
 paths use FakeLLMClient subclasses: no network, no real LLM.
 """
@@ -306,6 +308,97 @@ def test_transient_error_mid_escalation_resumes_at_the_escalated_cap(run_meter, 
     assert script.max_tokens == [512, 1024, 1024]
     assert len(sleeps) == 1
     assert tel.LLMMeter.snapshot(run_meter)["recovery"] == {"length_escalation": {"recovered": 1}}
+
+
+def _bad_request(message="Error code: 400 - max_tokens exceeds the model's output limit"):
+    import httpx
+    import openai
+
+    request = httpx.Request("POST", "http://127.0.0.1:1/v1/chat/completions")
+    return openai.BadRequestError(message, response=httpx.Response(400, request=request), body=None)
+
+
+def test_refused_escalated_cap_ends_the_ladder_with_the_empty_reply(run_meter, sleeps):
+    script = _Script(_empty_length(90, 512), _bad_request())
+    with pytest.raises(lc.EmptyCompletion) as ei:
+        _client(script).chat(_MESSAGES, max_tokens=512)
+    # The 400 answers the raised cap, not the request: the caller sees the typed empty
+    # reply (so a report preflight still reads the provider as reachable), with the 400 as cause.
+    assert ei.value.escalation_exhausted is True and ei.value.finish_reason == "length"
+    assert ei.value.sent_max_tokens == 512
+    assert getattr(ei.value.__cause__, "status_code", None) == 400
+    assert script.max_tokens == [512, 1024]
+    assert sleeps == []
+    assert tel.LLMMeter.snapshot(run_meter)["recovery"] == {"length_escalation": {"exhausted": 1}}
+
+    # A 400 on a request that was never escalated is the provider's verdict and stays one.
+    import openai
+
+    refused = _Script(_bad_request())
+    with pytest.raises(openai.BadRequestError):
+        _client(refused).chat([{"role": "user", "content": "plain"}], max_tokens=512)
+    assert refused.max_tokens == [512]
+
+
+def test_fallback_escalation_past_its_output_cap_never_cools_the_fallback_down(
+        monkeypatch, run_meter, sleeps):
+    primary = _Script(_empty_length(90, 4096))
+    fallback = _Script(_empty_length(90, 4096), _empty_length(90, 8192), _bad_request(),
+                       _resp("fallback answer", "stop", _usage(12, 4)))
+    client = _with_fallback(monkeypatch, primary, fallback)
+
+    with pytest.raises(lc.EmptyCompletion) as ei:
+        client.chat(_MESSAGES, max_tokens=4096)
+    assert ei.value.provider == "minimax", "the primary's error surfaces when both fail"
+    assert fallback.max_tokens == [4096, 8192, 16384]
+    # The fallback failed on an escalation artefact, not on its credentials or model name:
+    # no process-wide deterministic-failure cooldown.
+    assert lc._FB_AUTH_UNAVAILABLE_UNTIL == {}
+
+    # So the next, unrelated call still fails over.
+    assert client.chat([{"role": "user", "content": "next"}], max_tokens=4096) == "fallback answer"
+    assert len(fallback.calls) == 4
+    assert sleeps == []
+
+
+def test_partial_reply_after_escalation_is_not_counted_as_recovered(run_meter):
+    script = _Script(_empty_length(90, 512), _resp("partial {", "length", _usage(95, 1024)))
+    client = _client(script)
+    assert client.chat(_MESSAGES, max_tokens=512) == "partial {"
+    assert client.last_call_meta()["finish_reason"] == "length"
+    assert script.max_tokens == [512, 1024]
+    snap = tel.LLMMeter.snapshot(run_meter)
+    assert snap["recovery"] == {"length_escalation": {"partial": 1}}
+    assert snap["recovery_by_stage"] == {"length_escalation": {"report": {"partial": 1}}}
+
+
+@pytest.mark.parametrize("escalation_on", [True, False])
+def test_fallback_over_budget_raises_budget_exceeded(monkeypatch, run_meter, escalation_on):
+    monkeypatch.setattr(Config, "LLM_LENGTH_ESCALATION", escalation_on, raising=False)
+    monkeypatch.setattr(Config, "LLM_RUN_BUDGET_TOKENS", 100, raising=False)
+    primary = _Script(RuntimeError("connection reset by peer"))
+    fallback = _Script(_resp("fallback answer", "stop", _usage(90, 512)))
+    client = _with_fallback(monkeypatch, primary, fallback)
+
+    if escalation_on:
+        with pytest.raises(tel.BudgetExceeded):
+            client.chat(_MESSAGES, max_tokens=512)
+    else:
+        # Legacy: the fallback's BudgetExceeded is swallowed and the primary's error raised.
+        with pytest.raises(RuntimeError, match="connection reset") as ei:
+            client.chat(_MESSAGES, max_tokens=512)
+        assert not isinstance(ei.value, tel.BudgetExceeded)
+    assert len(primary.calls) == lc.MAX_RETRIES and len(fallback.calls) == 1
+
+
+def test_fallback_rejected_escalation_over_budget_raises_budget_exceeded(monkeypatch, run_meter):
+    monkeypatch.setattr(Config, "LLM_RUN_BUDGET_TOKENS", 100, raising=False)
+    primary = _Script(RuntimeError("connection reset by peer"))
+    fallback = _Script(_empty_length(90, 512), _resp("never sent"))
+    client = _with_fallback(monkeypatch, primary, fallback)
+    with pytest.raises(tel.BudgetExceeded):
+        client.chat(_MESSAGES, max_tokens=512)
+    assert fallback.max_tokens == [512], "the rejected attempt is metered, then the budget stops it"
 
 
 def test_non_length_empty_reply_is_not_escalated(run_meter):
@@ -620,3 +713,154 @@ def test_truncated_post_hoc_extraction_is_flagged_not_silent(monkeypatch):
     legacy = fe.extract_structured_forecast("report", _MetaLLM([(reply, _CUT)]))
     assert legacy == fe.extract_structured_forecast("report", FakeLLMClient(json_responses=[reply]))
     assert "llm_truncation" not in (legacy.get("quality") or {})
+
+
+# ---------------------------------------------------------------- market passes fail closed
+_MARKETS = [
+    {"market_id": "mkt-a", "question": "Will Alpha exceed 10% by 2027?", "implied_yes_prob": 0.6,
+     "end_date": "2099-12-31"},
+    {"market_id": "mkt-b", "question": "Will Beta exceed 500 units by 2027?",
+     "implied_yes_prob": 0.3, "end_date": "2099-12-31"},
+]
+_MATCHES = {"matches": [
+    {"forecast_id": "F1", "market_id": "mkt-a", "resolution_equivalence": "exact", "confidence": 0.9},
+    {"forecast_id": "F2", "market_id": "mkt-b", "resolution_equivalence": "exact", "confidence": 0.9},
+]}
+_MARKET_RATIONALE = "The market implies {pct}; I move toward it but keep the base-rate view."
+
+
+def _market_binaries():
+    return [dict(_binary("F1", "Alpha exceeds 10% by 2027", 0.2), adjustment_rationale="base rate"),
+            dict(_binary("F2", "Beta exceeds 500 units by 2027", 0.8),
+                 adjustment_rationale="base rate")]
+
+
+def _anchored_binaries():
+    binaries = _market_binaries()
+    assert fe.anchor_binaries_to_markets(binaries, _MARKETS, _MetaLLM([(_MATCHES, _STOP)])) == 2
+    return binaries
+
+
+# The cut lands inside F2's rationale: its probability is complete and the fragment already
+# names the market, so without the fail-closed drop it would pass every check below.
+_REVISIONS = {"revisions": [
+    {"id": "F1", "probability": 0.45, "adjustment_rationale": _MARKET_RATIONALE.format(pct="60%")},
+    {"id": "F2", "probability": 0.55, "adjustment_rationale": "The market implies 30%; I mo"},
+]}
+
+
+def test_truncated_market_match_reply_drops_its_last_match(monkeypatch):
+    binaries, counts = _market_binaries(), {}
+    anchored = fe.anchor_binaries_to_markets(binaries, _MARKETS, _MetaLLM([(_MATCHES, _CUT)]),
+                                             truncation_counts=counts)
+    assert anchored == 1
+    assert binaries[0]["market_anchor"]["market_id"] == "mkt-a"
+    assert "market_anchor" not in binaries[1]
+    assert counts == {"market_match": 1}
+
+    complete, counts = _market_binaries(), {}
+    assert fe.anchor_binaries_to_markets(complete, _MARKETS, _MetaLLM([(_MATCHES, _STOP)]),
+                                         truncation_counts=counts) == 2
+    assert counts == {}
+
+    monkeypatch.setattr(Config, "LLM_JSON_TRUNCATION_FAIL_CLOSED", False, raising=False)
+    legacy, counts = _market_binaries(), {}
+    assert fe.anchor_binaries_to_markets(legacy, _MARKETS, _MetaLLM([(_MATCHES, _CUT)]),
+                                         truncation_counts=counts) == 2
+    assert legacy == complete and counts == {}
+
+
+def test_truncated_divergence_revision_never_moves_the_cut_item(monkeypatch):
+    binaries, counts = _anchored_binaries(), {}
+    revised = fe.enforce_market_divergence(binaries, _MetaLLM([(_REVISIONS, _REPAIRED)]),
+                                           truncation_counts=counts)
+    assert revised == 1
+    assert binaries[0]["probability"] == 0.45 and "market_influence" in binaries[0]
+    # The cut revision is dropped: probability, rationale and influence stamp stay untouched.
+    assert binaries[1]["probability"] == 0.8
+    assert binaries[1]["adjustment_rationale"] == "base rate"
+    assert "market_influence" not in binaries[1]
+    assert counts == {"market_divergence": 1}
+
+    monkeypatch.setattr(Config, "LLM_JSON_TRUNCATION_FAIL_CLOSED", False, raising=False)
+    legacy = _anchored_binaries()
+    assert fe.enforce_market_divergence(legacy, _MetaLLM([(_REVISIONS, _REPAIRED)])) == 2
+    assert legacy[1]["probability"] == 0.55
+    assert legacy[1]["adjustment_rationale"] == "The market implies 30%; I mo"
+
+
+def test_market_truncation_is_recorded_in_binary_quality(monkeypatch):
+    monkeypatch.setattr(Config, "FORECAST_ENSEMBLE_MODELS", "", raising=False)
+    llm = _MetaLLM([(_BINARIES, _STOP), (_MATCHES, _CUT), (_REVISIONS, _CUT)])
+    out = fe.extract_binary_forecasts("dossier", llm, min_count=2, language="English",
+                                      markets=_MARKETS)
+    by_id = {row["id"]: row for row in out["binary_forecasts"]}
+    assert by_id["F1"]["market_anchor"]["market_id"] == "mkt-a"
+    assert "market_anchor" not in by_id["F2"]
+    assert out["binary_quality"]["llm_truncation_market_trimmed"] == {
+        "market_match": 1, "market_divergence": 1}
+    assert "llm_truncation_trimmed" not in out["binary_quality"]
+
+    monkeypatch.setattr(Config, "LLM_JSON_TRUNCATION_FAIL_CLOSED", False, raising=False)
+    legacy = fe.extract_binary_forecasts(
+        "dossier", _MetaLLM([(_BINARIES, _STOP), (_MATCHES, _CUT), (_REVISIONS, _CUT)]),
+        min_count=2, language="English", markets=_MARKETS)
+    assert "llm_truncation_market_trimmed" not in legacy["binary_quality"]
+
+
+# ---------------------------------------------------------------- truncation bookkeeping
+def test_llm_truncation_never_reaches_the_critic():
+    forecast = dict(_forecast(), quality={"llm_truncation": {"spine_draws_discarded": 1}})
+    assert "quality" not in fe._llm_forecast_view(forecast)
+    kept = dict(_forecast(), quality={"llm_truncation": {"spine_draws_discarded": 1},
+                                      "grounding": 0.9})
+    assert fe._llm_forecast_view(kept)["quality"] == {"grounding": 0.9}
+
+    llm = _MetaLLM([({"scenarios": _rows([0.45, 0.3, 0.25])}, _STOP)])
+    fe.self_critique_forecast(forecast, llm)
+    prompt = llm.calls[0]["messages"][-1]["content"]
+    assert "llm_truncation" not in prompt and "spine_draws_discarded" not in prompt
+
+
+@pytest.fixture
+def report_env(monkeypatch, tmp_path, spine_config):
+    from app.services.report_agent import ReportManager
+
+    monkeypatch.setattr(Config, "UPLOAD_FOLDER", str(tmp_path), raising=False)
+    monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path / "reports"), raising=False)
+    for name, value in {"FORECAST_LEDGER_DIR": str(tmp_path / "ledger"),
+                        "REPORT_PUBLISH_GATE": False, "REPORT_REPAIR_PASSES": False,
+                        "REPORT_FORECAST_SELF_CRITIQUE": False,
+                        "REPORT_CRITIQUE_BEFORE_PROSE": False, "REPORT_FORECAST_LEDGER": False,
+                        "FORECAST_EMIT_BINARY": False}.items():
+        monkeypatch.setattr(Config, name, value, raising=False)
+    return tmp_path
+
+
+def test_spine_lost_to_truncation_is_recorded_in_the_post_hoc_forecast(report_env):
+    from tests.test_forecast_needs_review import _agent
+
+    llm = _MetaLLM([(_spine([0.6, 0.3, 0.1]), _CUT), (_spine([0.6, 0.3, 0.1]), _CUT),
+                    (_spine([0.5, 0.3, 0.2]), _CUT)])
+    agent = _agent(llm=llm)
+    agent._derive_and_pin_forecast_spine("report_cut")
+    assert agent._forecast_spine is None
+    assert agent._spine_llm_truncation == {"spine_draws_discarded": 2}
+
+    agent._finalize_structured_forecast("report_cut", "# T\n\nBody text.")
+    path = os.path.join(str(report_env), "reports", "report_cut", "forecast.json")
+    with open(path, encoding="utf-8") as fh:
+        forecast = json.load(fh)
+    assert _probs(forecast) == [0.5, 0.3, 0.2]
+    assert forecast["quality"]["llm_truncation"] == {
+        "posthoc_reply_truncated": True, "spine_draws_discarded": 2}
+
+
+def test_spine_that_survives_truncation_carries_its_own_count(report_env):
+    from tests.test_forecast_needs_review import _agent
+
+    agent = _agent(llm=_MetaLLM([(_spine([0.6, 0.3, 0.1]), _CUT), (_spine([0.5, 0.3, 0.2]), _STOP)]))
+    agent._derive_and_pin_forecast_spine("report_kept")
+    assert _probs(agent._forecast_spine) == [0.5, 0.3, 0.2]
+    assert agent._forecast_spine["quality"]["llm_truncation"] == {"spine_draws_discarded": 1}
+    assert agent._spine_llm_truncation is None
