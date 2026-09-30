@@ -353,8 +353,24 @@ def anchored_forecasts(forecast: Optional[Dict[str, Any]]) -> List[Dict[str, Any
 binary_resolution_date = _ledger.binary_resolution_date
 
 
+# EVAL-6：锚点的价时溯源键（market_anchor.price_time / price_time_basis），成对透传。
+_PRICE_TIME_KEYS = ("price_time", "price_time_basis")
+
+
+def _carry_price_time(src: Dict[str, Any], dst: Dict[str, Any]) -> None:
+    """src 的 price_time 与 price_time_basis 都是非空字符串时，把这一对原样拷进 dst；
+    缺任一键（或手改 / 畸形锚点只剩半对）则两键都不写，price_track 里绝不出现半对溯源。"""
+    if all(isinstance(src.get(key), str) and src[key].strip() for key in _PRICE_TIME_KEYS):
+        for key in _PRICE_TIME_KEYS:
+            dst[key] = src[key]
+
+
 def build_price_rows(anchored: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """把锚定预测拍平成 requote_markets 的输入行（每条预测一行，携带回填所需上下文）。"""
+    """把锚定预测拍平成 requote_markets 的输入行（每条预测一行，携带回填所需上下文）。
+
+    EVAL-6：锚点带完整的 price_time + price_time_basis 一对（price_at_research 的取价时刻与
+    来源）时原样带上，供 price_track 溯源；锚点没有或只剩半对则两键都不出现（旧锚点的行逐字节
+    不变）。"""
     rows: List[Dict[str, Any]] = []
     for b in anchored:
         a = b.get("market_anchor") or {}
@@ -364,14 +380,16 @@ def build_price_rows(anchored: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         research = _coerce_float(a.get("price_at_research"))
         if research is None:
             research = _coerce_float(a.get("implied_yes_prob"))
-        rows.append({
+        row = {
             "market_id": mid,
             "question": a.get("question"),
             "implied_yes_prob": _coerce_float(a.get("implied_yes_prob")),
             "price_at_research": research,
             "forecast_id": b.get("id"),
             "statement": b.get("statement"),
-        })
+        }
+        _carry_price_time(a, row)
+        rows.append(row)
     return rows
 
 
@@ -666,16 +684,21 @@ def read_price_track(report_folder: str) -> List[Dict[str, Any]]:
 
 def _price_snapshot(report_id: str, as_of: str,
                     requoted: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """把重报价后的行压成一条精简快照（只留价格追踪需要的字段）。"""
+    """把重报价后的行压成一条精简快照（只留价格追踪需要的字段）。
+
+    EVAL-6：行带完整的 price_time + price_time_basis 一对（见 build_price_rows）时一并记下，
+    标定 price_at_research 的取价时刻；没有或只剩半对则条目形状不变。"""
     markets = []
     for m in requoted or []:
-        markets.append({
+        entry = {
             "market_id": m.get("market_id"),
             "price_at_research": _coerce_float(m.get("price_at_research")),
             "implied_yes_prob": _coerce_float(m.get("implied_yes_prob")),
             "price_delta": _coerce_float(m.get("price_delta")),
             "requote_failed": bool(m.get("requote_failed")),
-        })
+        }
+        _carry_price_time(m, entry)
+        markets.append(entry)
     return {"at": as_of, "report_id": report_id, "markets": markets}
 
 

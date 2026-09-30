@@ -2845,9 +2845,16 @@ class ReportAgent:
                     rows = [m for m in (markets or []) if isinstance(m, dict)]
                     if rows:
                         self._market_status = _absence.present("research_snapshot")
+                        # EVAL-6：快照 payload 的顶层 as_of 记进每行 snapshot_as_of（行已带则保留），
+                        # 锚点据此标定研究期价（as_of 是快照落盘时刻，只是取价时刻的上界）；
+                        # MARKET_ANCHOR_PRICE_TIME 关 → 行不变。
+                        from ..utils.prediction_markets import stamp_snapshot_as_of
+                        rows = stamp_snapshot_as_of(
+                            rows[:max_n],
+                            payload.get("as_of") if isinstance(payload, dict) else None)
                         # PM-3：handoff-PLUS-refresh——研究期快照拉进来后对其做一次实时重报价，
                         # 保留 price_at_research 并算 Δ；重报价未生效时用研究期价并置 _markets_stale。
-                        return self._requote_snapshot(rows[:max_n])
+                        return self._requote_snapshot(rows)
                     self._market_status = _absence.market_status(payload, enabled=True)
                 break  # 找到对应管线即停（无论有无市场文件），转现抓兜底
         except Exception as e:  # noqa: BLE001 — handoff 读取失败转现抓兜底
@@ -2861,6 +2868,7 @@ class ReportAgent:
                 PolymarketClient,
                 derive_market_queries_llm,
                 score_market_relevance,
+                stamp_snapshot_as_of,
             )
             client = PolymarketClient()
             if not client.enabled or not getattr(self, "llm", None):
@@ -2908,6 +2916,9 @@ class ReportAgent:
             candidates = client.snapshot_for_queries(
                 queries, max_total=max_n, min_volume=min_vol,
                 max_per_event=max_per_event)
+            # 现抓时刻只取一次、紧跟抓价（早于相关性打分的 LLM 调用）：既写恢复工件的 as_of，
+            # 也作每行 snapshot_as_of（EVAL-6，无 report_id 时行照样带上）。
+            fetched_at = datetime.now(timezone.utc).isoformat()
             scored = score_market_relevance(_market_llm, question, candidates)
             markets = [row for row in scored if row.get("relevance_score") is not None]
             if markets:
@@ -2919,7 +2930,7 @@ class ReportAgent:
                         write_json_atomic(
                             os.path.join(ReportManager._get_report_folder(report_id),
                                          "prediction_markets_recovered.json"),
-                            {"as_of": datetime.now(timezone.utc).isoformat(),
+                            {"as_of": fetched_at,
                              "source": "report_fallback", "queries": queries,
                              "markets": markets,
                              "status": {"attempted": True,
@@ -2930,6 +2941,7 @@ class ReportAgent:
                     except Exception as persist_error:  # noqa: BLE001 — observability only
                         logger.debug(f"写入报告期预测市场恢复工件失败（忽略）: {persist_error}")
                 self._market_status = _absence.present("report_fallback")
+                markets = stamp_snapshot_as_of(markets, fetched_at)
             self._markets_stale = False  # PM-3：现抓即实时价，不陈旧
             return markets
         except Exception as e:  # noqa: BLE001 — 市场信号为可选增强

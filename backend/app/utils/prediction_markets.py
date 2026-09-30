@@ -159,7 +159,8 @@ _DATE_ONLY_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})[Zz]?$")
 
 
 def market_clock_now() -> datetime:
-    """Current UTC instant used for every endDate comparison (the single test monkeypatch point)."""
+    """Current UTC instant used for every endDate comparison and every requote ``quoted_at``
+    stamp (the single test monkeypatch point)."""
     return datetime.now(timezone.utc)
 
 
@@ -279,6 +280,65 @@ def drop_window_ended_rows(rows: Any) -> Tuple[List[Any], int]:
         return list(rows or []), 0
     kept, excluded = exclude_window_ended(rows, now=market_clock_now(), grace_hours=grace)
     return kept, len(excluded)
+
+
+# EVAL-6 (MARKET_ANCHOR_PRICE_TIME): when a row's implied_yes_prob was observed. A requote
+# stamps ``quoted_at``; a research or report-time snapshot row carries ``snapshot_as_of``,
+# which dates the price by the snapshot's as_of: an upper bound on when it was observed.
+PRICE_TIME_BASIS_REQUOTE = "requote"
+PRICE_TIME_BASIS_SNAPSHOT = "snapshot"
+
+
+def price_time_enabled() -> bool:
+    """MARKET_ANCHOR_PRICE_TIME from Config (default on)."""
+    return bool(_cfg("MARKET_ANCHOR_PRICE_TIME", True))
+
+
+def stamp_snapshot_as_of(rows: Any, as_of: Any) -> List[Dict[str, Any]]:
+    """Shallow copies of the dict rows, each dated by the snapshot time ``as_of``.
+
+    ``as_of`` is when the snapshot was written or fetched, an upper bound on when each row's
+    price was observed (a research snapshot also holds agent-tool rows priced earlier in the
+    run). A row that lacks ``snapshot_as_of`` gains ``as_of``; a row that already carries one
+    keeps its own. A blank or non-string ``as_of`` stamps nothing. MARKET_ANCHOR_PRICE_TIME
+    off → the dict rows themselves, untouched, so every artifact stays byte-identical.
+    Never raises."""
+    kept = [m for m in (rows or []) if isinstance(m, dict)]
+    if not price_time_enabled() or not isinstance(as_of, str) or not as_of.strip():
+        return kept
+    out: List[Dict[str, Any]] = []
+    for m in kept:
+        m2 = dict(m)
+        if not m2.get("snapshot_as_of"):
+            m2["snapshot_as_of"] = as_of
+        out.append(m2)
+    return out
+
+
+def market_price_time(row: Any) -> Optional[Tuple[str, str]]:
+    """``(price_time, basis)`` dating a market row's implied_yes_prob, or None when unknown.
+
+    ``quoted_at`` (stamped by requote_markets on a fresh price and kept through a later
+    failed requote, whose retained price is still that quote) → basis 'requote'; otherwise
+    ``snapshot_as_of`` (the research snapshot's as_of or the report-time fetch time) →
+    basis 'snapshot'. A 'snapshot' time is an upper bound on when the price was observed,
+    not the exact moment: the research bridge takes its as_of when it writes the snapshot,
+    after merging agent-tool rows that may have been priced hours earlier, and rows carry
+    no per-row observation time yet. Only a zone-aware ISO date-time counts
+    (parse_stamp_strict, no bare dates) and it is returned exactly as stored. A row whose
+    quoted_at is present but unusable is unknown, never 'snapshot': its price came from a
+    requote, so the snapshot time would misdate it. Never raises."""
+    if not isinstance(row, dict):
+        return None
+    quoted_at = row.get("quoted_at")
+    if quoted_at is not None:
+        if parse_stamp_strict(quoted_at, allow_date=False) is None:
+            return None
+        return quoted_at, PRICE_TIME_BASIS_REQUOTE
+    snapshot_as_of = row.get("snapshot_as_of")
+    if parse_stamp_strict(snapshot_as_of, allow_date=False) is None:
+        return None
+    return snapshot_as_of, PRICE_TIME_BASIS_SNAPSHOT
 
 
 def _parse_resolution(raw: Any) -> Optional[Dict[str, Any]]:
@@ -542,7 +602,10 @@ class PolymarketClient:
           * price_at_research ← 原 implied_yes_prob（若已有 price_at_research 则沿用，幂等重入）；
           * implied_yes_prob  ← Gamma /markets 拉到的当前 "Yes" 价（覆盖旧值）；
           * price_delta       ← 现价 − 研究期价（有研究期价时才写）；
-          * 未知 / 已关闭 / 无可解析价 / 未启用 → 保留旧价并置 requote_failed=True。
+          * quoted_at         ← 本批取价时刻（UTC ISO，EVAL-6：仅 MARKET_ANCHOR_PRICE_TIME 开
+            且拿到现价时写）；
+          * 未知 / 已关闭 / 无可解析价 / 未启用 → 保留旧价并置 requote_failed=True（已有的
+            quoted_at 原样保留：留下的旧价仍是那次报价，照旧由它定时）。
         批量走 Gamma `/markets?id=<id>&id=<id>...`（httpx 把 list 值编码为重复 id 参数），
         超过 chunk 大小时分批（PREDICTION_MARKETS_REQUOTE_CHUNK，默认 20）。
         Degrade-safe：任一批失败只丢那一批的新价（对应行标 requote_failed），整体绝不抛。
@@ -559,6 +622,8 @@ class PolymarketClient:
                 seen_ids.add(mid)
                 ids.append(mid)
         fresh = self._fetch_fresh_markets(ids) if (self.enabled and ids) else {}
+        # EVAL-6：整批一个取价时刻（现价到手之后取），只盖在拿到现价的行上。
+        quoted_at = market_clock_now().isoformat() if price_time_enabled() else None
         out: List[Dict[str, Any]] = []
         for m in rows:
             m2 = dict(m)  # 浅拷贝：绝不原地污染调用方传入的行
@@ -572,11 +637,14 @@ class PolymarketClient:
             prob = _fresh_yes_price(fresh.get(mid)) if mid else None
             if prob is None:
                 # 未知/已关闭/无价/未启用 → 保留旧价，标记失败，清掉可能残留的旧 delta。
+                # 已有的 quoted_at 不动：它仍标定留下的旧价（EVAL-6）。
                 m2["requote_failed"] = True
                 m2.pop("price_delta", None)
             else:
                 m2["implied_yes_prob"] = round(prob, 4)
                 m2.pop("requote_failed", None)
+                if quoted_at is not None:
+                    m2["quoted_at"] = quoted_at
                 if research is not None:
                     m2["price_delta"] = round(prob - research, 4)
                 else:

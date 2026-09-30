@@ -275,8 +275,10 @@ def test_requote_markets_unchanged_for_expired_but_open_market(monkeypatch, pinn
     monkeypatch.setattr(pm.httpx, "get", lambda *a, **k: _FakeResponse([raw]))
     research_row = {"market_id": "A", "implied_yes_prob": 0.03,
                     "end_date": "2026-09-30T12:00:00Z"}
+    # EVAL-6 (MARKET_ANCHOR_PRICE_TIME, default on) dates the fresh price with the pinned clock.
     expected = [{"market_id": "A", "implied_yes_prob": 0.02, "price_at_research": 0.03,
-                 "price_delta": -0.01, "end_date": "2026-09-30T12:00:00Z"}]
+                 "quoted_at": NOW.isoformat(), "price_delta": -0.01,
+                 "end_date": "2026-09-30T12:00:00Z"}]
     assert PolymarketClient().requote_markets([research_row]) == expected
     gate(enabled=False)
     assert PolymarketClient().requote_markets([research_row]) == expected
