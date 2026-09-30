@@ -9,13 +9,15 @@ v3 finalize and in the extract-only salvage:
   a ~1000x gap is also a probable unit-scale error in meta.quant_unit_warnings;
   v3 compares rows only within one scope (period end and length, geography,
   reported or projected), so a trajectory, a series over time, a year next to
-  its fourth quarter, a multi-year total next to its last year or two regions
-  never disagree, and the claim and warning name their scope; probable
-  unit-scale errors come first under the cap;
+  its fourth quarter (in any spelling), a multi-year total next to its last
+  year or two regions never disagree, and the claim and warning name their
+  scope; probable unit-scale errors come first under the cap; the series name
+  is no part of the scope (two entities on one generic metric can reconcile);
 * claimed actuals dated after the as-of are listed in meta.quant_implausible
   (v3: typed rows by epistemic_class, otherwise value_type actual or absent;
   the bound is a pinned run's as-of, else the day after the plan's), and v3
-  also lists claimed actuals whose period_end ends after it;
+  also lists, once per row, those the bridge helper leaves out: an as_of_date
+  it cannot read ("Q4 2026", "FY2027") and a period_end that ends after it;
 * the extract-only reference date is never after today and ignores a year-
   or month-only extraction;
 * capped meta lists keep their totals in meta.quant_sanity_truncated, and an
@@ -188,7 +190,9 @@ def test_quantitative_json_unchanged_and_flag_off_byte_identical(tmp_path, bridg
 @pytest.mark.parametrize("mode", ["missing", "raising"])
 def test_sanity_helpers_degrade_safe(tmp_path, bridge, monkeypatch, fixed_as_of, mode):
     """A bridge without (or with failing) helpers: analytics_errors records
-    them, contested.json keeps the model claims and the run completes."""
+    them, contested.json keeps the model claims and the run completes; the
+    future-dated actual is still listed (v3's own check, which fails closed
+    without the helper's list)."""
     for helper in SANITY_HELPERS:
         if mode == "missing":
             monkeypatch.delattr(bridge, helper)
@@ -202,7 +206,10 @@ def test_sanity_helpers_degrade_safe(tmp_path, bridge, monkeypatch, fixed_as_of,
     errors = [error for error in meta["analytics_errors"] if error["helper"] in SANITY_HELPERS]
     assert errors == [{"helper": helper, "error": expected} for helper in SANITY_HELPERS]
     assert _load(out / "meta.json")["analytics_errors"] == meta["analytics_errors"]
-    assert NEW_META_KEYS.isdisjoint(meta)
+    assert NEW_META_KEYS.intersection(meta) == {"quant_implausible"}
+    assert meta["quant_implausible"] == [
+        "Operating capacity: as_of 2027-06-30 starts AFTER research cutoff 2026-09-29 "
+        "(claimed-actual with future date)"]
     assert (out / "contested.json").read_bytes() == _dump(_model_contested(out))
     assert meta["status"] == "completed"
 
@@ -329,6 +336,12 @@ UNFINISHED_FACTS = [
     _v3_fact("Battery pack price", "115", "USD/kWh", "2024", "Global"),                # ended: never
     # Its as_of_date is after the as-of too: the helper's one flag only.
     dict(_fact("Operating capacity", "185", "GW", "2027-06-30"), period_end="2027-06-30"),
+    # Review round 3: an as_of_date the helper cannot read (it reads "2026-Q4"
+    # as 2026-01-01): v3's one flag instead.
+    dict(_fact("Grid backlog", "40", "GW", "Q4 2026"), period_end="2026-Q4"),
+    dict(_fact("Chip exports", "8", "USD billion", "2026-Q4"), period_end="2026-Q4"),
+    # Part of the current year in free text, not its whole year: not known to be unfinished.
+    _v3_fact("EV sales", "0.8", "million units", "first half of 2026", "US"),
 ]
 
 
@@ -343,17 +356,21 @@ def test_claimed_actuals_for_an_unfinished_period_are_implausible(tmp_path, brid
         "Data-centre revenue: period_end 2027-Q3 ends AFTER research cutoff 2026-09-29 "
         "(claimed-actual for an unfinished period)",
         "Quantum funding: period_end 2026 ends AFTER research cutoff 2026-09-29 "
-        "(claimed-actual for an unfinished period)"]
+        "(claimed-actual for an unfinished period)",
+        "Grid backlog: as_of Q4 2026 starts AFTER research cutoff 2026-09-29 (claimed-actual with future date)",
+        "Chip exports: as_of 2026-Q4 starts AFTER research cutoff 2026-09-29 (claimed-actual with future date)"]
     assert _load(out / "meta.json")["quant_implausible"] == meta["quant_implausible"]
-    assert any(line.startswith("v3: quant sanity: 3 implausible/future-dated fact(s)") for line in plog.of("warn"))
+    assert any(line.startswith("v3: quant sanity: 5 implausible/future-dated fact(s)") for line in plog.of("warn"))
     quant = _load(out / "quantitative.json")
     assert [(row["metric"], row["period_end"]) for row in quant] == [
         (fact["metric"], fact["period_end"]) for fact in UNFINISHED_FACTS]
     if typing:
-        # The program classifier types the flagged rows as it reads them.
+        # The program classifier types the flagged rows as it reads them (it
+        # reads "first half of 2026" as the year, so that row is typed future
+        # dated although the v3 check cannot tell).
         assert [row["epistemic_class"] for row in quant] == [
-            "unknown", "unknown", "projected", "projected", "reported", "unknown"]
-        assert all("future_dated_reported" in quant[index]["epistemic_flags"] for index in (0, 1, 5))
+            "unknown", "unknown", "projected", "projected", "reported", "unknown", "unknown", "unknown", "unknown"]
+        assert all("future_dated_reported" in quant[index]["epistemic_flags"] for index in (0, 1, 5, 6, 7, 8))
 
 
 def test_an_actual_published_the_day_after_the_plan_date_is_not_implausible(tmp_path, bridge, fixed_as_of):
@@ -406,31 +423,102 @@ UNFINISHED_ROW = {"metric": "Data-centre revenue", "value": "51.2", "unit": "USD
                   "as_of_date": "2026-08-27", "value_type": "actual"}
 
 
-@pytest.mark.parametrize("change, flagged", [
-    ({}, True),
-    ({"epistemic_class": "unknown", "epistemic_flags": ["future_dated_reported"]}, True),
-    ({"value_type": None}, True),
-    ({"period_end": "2026"}, True),
-    ({"period_end": "Q4 2026", "as_of_date": None}, True),
-    ({"period_end": "2026-09-30"}, True),
-    ({"period_end": AS_OF.isoformat()}, False),          # ends on the cutoff
-    ({"period_end": "2025"}, False),
-    ({"period_end": "cumulative"}, False),               # unreadable: no end
-    ({"period_end": "n/a"}, False),
-    ({"period_end": None}, False),
-    ({"as_of_date": "2027-01-01"}, False),               # the helper's date check owns it
-    ({"as_of_date": "2027"}, False),
-    ({"value_type": "forecast"}, False),
-    ({"value_type": "estimate"}, False),
-    ({"epistemic_class": "projected"}, False),
+def _future_dated_entry(row: dict, kind: str | None) -> list[str]:
+    """The one entry _future_dated_flags writes for ``row`` (none for None)."""
+    if kind == "as_of":
+        return [f"Data-centre revenue: as_of {row['as_of_date']} starts AFTER research cutoff {AS_OF.isoformat()} "
+                "(claimed-actual with future date)"]
+    if kind == "period":
+        return [f"Data-centre revenue: period_end {row['period_end']} ends AFTER research cutoff "
+                f"{AS_OF.isoformat()} (claimed-actual for an unfinished period)"]
+    return []
+
+
+@pytest.mark.parametrize("change, kind", [
+    ({}, "period"),
+    ({"epistemic_class": "unknown", "epistemic_flags": ["future_dated_reported"]}, "period"),
+    ({"value_type": None}, "period"),
+    ({"period_end": "2026"}, "period"),
+    ({"period_end": "Q4 2026", "as_of_date": None}, "period"),
+    ({"period_end": "2026-09-30"}, "period"),
+    ({"period_end": "fiscal 2026"}, "period"),          # a whole year in free text
+    ({"period_end": AS_OF.isoformat()}, None),          # ends on the cutoff
+    ({"period_end": "2025"}, None),
+    ({"period_end": "cumulative"}, None),               # unreadable: no end
+    ({"period_end": "n/a"}, None),
+    ({"period_end": None}, None),
+    # Review round 3: part of a year in free text is not its whole year; it is
+    # known to end after the cutoff only when its years start after it.
+    ({"period_end": "first half of 2026"}, None),
+    ({"period_end": "2026 YTD"}, None),
+    ({"period_end": "Q3 FY2026"}, None),
+    ({"period_end": "first half of 2027"}, "period"),
+    ({"period_end": "Q1 FY2027"}, "period"),
+    # The helper's date check owns a date it reads as after the cutoff ...
+    ({"as_of_date": "2027-01-01"}, None),
+    ({"as_of_date": "2027"}, None),
+    ({"as_of_date": "2026-10"}, None),
+    # ... and v3 one it reads too early ("2026-Q4" is its Jan 1) or not at all
+    # (review round 3), with or without an unfinished period.
+    ({"as_of_date": "2026-Q4"}, "as_of"),
+    ({"as_of_date": "Q4 2026"}, "as_of"),
+    ({"as_of_date": "FY2027"}, "as_of"),
+    ({"as_of_date": "October 2026"}, "as_of"),
+    ({"as_of_date": "2026年10月"}, "as_of"),
+    ({"as_of_date": "2026年底"}, "as_of"),
+    ({"as_of_date": "Q4 2026", "period_end": "2025"}, "as_of"),
+    ({"as_of_date": "FY2027", "period_end": None}, "as_of"),
+    # A date of the current period may be a publication date.
+    ({"as_of_date": "2026-3Q", "period_end": None}, None),
+    ({"as_of_date": "2026", "period_end": None}, None),
+    # A projection word exempts a date as in the helper, never a period.
+    ({"as_of_date": "Q4 2026", "metric": "Data-centre revenue guidance", "period_end": "2025"}, None),
+    ({"as_of_date": "2027-01-01", "definition": "expected shipments"}, "period"),
+    ({"value_type": "forecast"}, None),
+    ({"value_type": "estimate"}, None),
+    ({"epistemic_class": "projected"}, None),
 ])
-def test_unfinished_period_flags(change, flagged):
+def test_future_dated_flags(change, kind):
     row = {**UNFINISHED_ROW, **change}
     before = copy.deepcopy(row)
-    flags = lr._unfinished_period_flags([row], AS_OF)
+    flags = lr._future_dated_flags([row], AS_OF, helper_ran=True)
     assert row == before
-    assert flags == ([f"Data-centre revenue: period_end {row['period_end']} ends AFTER research cutoff "
-                      f"{AS_OF.isoformat()} (claimed-actual for an unfinished period)"] if flagged else [])
+    assert flags == _future_dated_entry(row, kind)
+    # One entry per row across the helper and v3 (none when neither dates it
+    # after the cutoff); each flagged actual is one the program classifier
+    # types future_dated_reported.
+    helper_flags = dr.flag_implausible_quant([dict(row)], AS_OF)
+    assert len(helper_flags) + len(flags) == (1 if kind is not None or lr._helper_flags_date(row, AS_OF) else 0)
+    if kind is not None and row.get("value_type") == "actual":
+        assert "future_dated_reported" in lr.classify_quant_row(row, AS_OF).get("epistemic_flags", [])
+
+
+@pytest.mark.parametrize("as_of_date", ["2027-01-01", "2027", "2026-10-15T00:00:00Z", "2026-Q4", "Q4 2026"])
+def test_future_dated_flags_without_the_helper(as_of_date):
+    """No helper list (missing, failing, another shape): every claimed actual
+    dated after the cutoff gets v3's entry, a projection-worded one none."""
+    row = {**UNFINISHED_ROW, "as_of_date": as_of_date, "period_end": None}
+    assert lr._future_dated_flags([row], AS_OF, helper_ran=False) == _future_dated_entry(row, "as_of")
+    assert lr._future_dated_flags([dict(row, unit="USD billion (target)")], AS_OF, helper_ran=False) == []
+
+
+HELPER_DATES = ["2027-01-15", "2027-1-5", " 2027-01-15", "2027-01-15T00:00:00Z", "2027-01", "2027-1", "2027",
+                "2026-09-28", "2026-09-29", "2026-10", "2026-Q4", "2026-3Q", "Q4 2026", "FY2027", "October 2026",
+                "2026年10月", "2026年底", "2027-02-30", "2027-13", "2027-13-01", "0000", "", None, 0, 2027,
+                "２０２７", "2027/01/15", "20270115", "2027 (est.)"]
+
+
+@pytest.mark.parametrize("as_of_date", HELPER_DATES)
+@pytest.mark.parametrize("words", [{}, {"metric": "Revenue guidance"}, {"definition": "Expected shipments"},
+                                   {"unit": "GW target"}, {"metric": "x" * 60 + " forecast"}])
+def test_helper_date_test_matches_the_bridge(as_of_date, words):
+    """_helper_flags_date is flag_implausible_quant's own future-date test
+    (the parity the one-entry-per-row guarantee rests on): its date reading is
+    the bridge's _parse_date, and a projection word within the metric's first
+    60 characters, the definition or the unit exempts the row."""
+    row = {"metric": "Revenue", "value_type": "actual", "as_of_date": as_of_date, **words}
+    assert lr._helper_date(as_of_date) == dr._parse_date(as_of_date)
+    assert lr._helper_flags_date(row, AS_OF) is bool(dr.flag_implausible_quant([row], AS_OF))
 
 
 @pytest.mark.parametrize("first, second, same", [
@@ -452,6 +540,33 @@ def test_unfinished_period_flags(change, flagged):
     ({"period_end": "2025-Q4"}, {"period_end": "2025-12-31"}, False),
     ({"period_end": "2025-2030"}, {"period_end": "2030"}, False),
     ({"period_end": "2025-2030"}, {"period_end": "2020-2030"}, False),
+    # Review round 3: free text read only by the years it names is those
+    # years only when it says nothing else (a qualifier, a range word) ...
+    ({"period_end": "2025"}, {"period_end": "fiscal 2025"}, True),
+    ({"period_end": "2025"}, {"period_end": "CY2025"}, True),
+    ({"period_end": "2025"}, {"period_end": "full-year 2025"}, True),
+    ({"period_end": "2025"}, {"period_end": "2025年"}, True),
+    ({"period_end": "2030"}, {"period_end": "2030E"}, True),
+    ({"period_end": "2024"}, {"period_end": "2024A"}, True),
+    ({"period_end": "2025-2030"}, {"period_end": "2025 to 2030"}, True),
+    ({"period_end": "2025-2030"}, {"period_end": "2025至2030年"}, True),
+    ({"period_end": "2025-2026"}, {"period_end": "2025/26"}, True),
+    # ... else it is part of them, keyed by its own text.
+    ({"period_end": "FY2025"}, {"period_end": "Q4 FY2025"}, False),
+    ({"period_end": "FY2025"}, {"period_end": "FY2025 Q4"}, False),
+    ({"period_end": "2025"}, {"period_end": "Q3 2025 YTD"}, False),
+    ({"period_end": "2025"}, {"period_end": "2025 YTD"}, False),
+    ({"period_end": "2025"}, {"period_end": "H1 FY2025"}, False),
+    ({"period_end": "2025"}, {"period_end": "first half of 2025"}, False),
+    ({"period_end": "2025"}, {"period_end": "9M 2025"}, False),
+    ({"period_end": "2025"}, {"period_end": "Jan-Sep 2025"}, False),
+    ({"period_end": "2025"}, {"period_end": "Q4 2025 annualized"}, False),
+    ({"period_end": "2025"}, {"period_end": "week ending 2025-06-30"}, False),
+    ({"period_end": "2025"}, {"period_end": "mid-2025"}, False),
+    ({"period_end": "2025"}, {"period_end": "2025-13"}, False),
+    ({"period_end": "2020"}, {"period_end": "2020s"}, False),
+    ({"period_end": "2025-2026"}, {"period_end": "H2 2025-H1 2026"}, False),
+    ({"period_end": "Q4 FY2025"}, {"period_end": "q4  fy2025"}, True),
     # Unreadable periods by their text; a placeholder is no period.
     ({"period_end": "Cumulative"}, {"period_end": " cumulative "}, True),
     ({"period_end": "cumulative"}, {"period_end": "2025"}, False),
@@ -483,6 +598,51 @@ def test_unfinished_period_flags(change, flagged):
 ])
 def test_quant_scope(first, second, same):
     assert (lr._quant_scope(first)[0] == lr._quant_scope(second)[0]) is same
+
+
+@pytest.mark.parametrize("value, expected", [
+    ("2025", (dt.date(2025, 1, 1), dt.date(2025, 12, 31), "year")),
+    ("fiscal 2025", (dt.date(2025, 1, 1), dt.date(2025, 12, 31), "year")),
+    ("2025 to 2030", (dt.date(2025, 1, 1), dt.date(2030, 12, 31), "year")),
+    ("Q4 2025", (dt.date(2025, 10, 1), dt.date(2025, 12, 31), "quarter")),
+    ("first half of 2026", (dt.date(2026, 1, 1), dt.date(2026, 12, 31), "part")),
+    ("Q4 FY2025", (dt.date(2025, 1, 1), dt.date(2025, 12, 31), "part")),
+    ("cumulative", (None, None, "none")),
+    (None, (None, None, "none")),
+])
+def test_strict_period_bounds(value, expected):
+    """_loose_period_bounds, except that part of the years free text names is
+    precision part (the bounds still those years', within which it lies)."""
+    assert lr._strict_period_bounds(value) == expected
+    if expected[2] != "part":
+        assert lr._strict_period_bounds(value) == lr._loose_period_bounds(value)
+
+
+# pipe_6c4190b31f0b (the one real v3 handoff): a generic metric with the
+# entity measured in series, each its own source.  In that run the geographies
+# differed ("United States/United Kingdom"); here they agree.
+ENTITY_ROWS = [
+    {"metric": "physical qubits", "series": "Quantinuum Helios", "value": "98", "unit": "qubits",
+     "as_of_date": "2025-11-01", "geography": "United States", "region": "United States", "source": "Quantinuum",
+     "value_type": "actual"},
+    {"metric": "physical qubits", "series": "QuEra Gemini", "value": "260", "unit": "qubits",
+     "as_of_date": "2025-01-01", "geography": "United States", "region": "United States", "source": "QuEra",
+     "value_type": "actual"},
+]
+
+
+def test_two_entities_on_a_generic_metric_share_a_scope():
+    """The series is no part of the scope (review round 3, a documented
+    trade-off): v3 models mostly put the source there, and keyed by it two
+    sources on one quantity would never meet; so two entities' readings of a
+    generic metric in one scope reconcile as a disagreement.  Here the series
+    even contains the source, so no series-versus-source test parts them."""
+    assert lr._quant_scope(ENTITY_ROWS[0]) == lr._quant_scope(ENTITY_ROWS[1])
+    assert all(row["source"].casefold() in row["series"].casefold() for row in ENTITY_ROWS)
+    stub = _SanityStub(dr)
+    extra = lr._Engine._quant_sanity(stub, copy.deepcopy(ENTITY_ROWS), AS_OF)
+    assert [claim["claim"] for claim in extra] == ["physical qubits (as of 2025, United States)"]
+    assert stub.meta == {"quant_reconcile_contested": 1}
 
 
 @pytest.mark.parametrize("row, label", [
@@ -626,11 +786,12 @@ def test_quant_sanity_keeps_the_scopes_before_a_failed_reconcile():
 
 
 def test_quant_sanity_period_flags_follow_the_helper_under_one_cap():
-    """The unfinished-period flags follow the helper's under the one cap (the
+    """v3's future-dated flags follow the helper's under the one cap (the
     truncation total counts both), and stand without the helper."""
     rows = [dict(UNFINISHED_ROW, metric=f"Revenue {index}") for index in range(2)]
-    period_flags = lr._unfinished_period_flags(rows, AS_OF)
+    period_flags = lr._future_dated_flags(rows, AS_OF, helper_ran=True)
     assert len(period_flags) == 2
+    assert period_flags == lr._future_dated_flags(rows, AS_OF, helper_ran=False)
     helper_flags = [f"flag {index}" for index in range(19)]
     stub = _SanityStub(types.SimpleNamespace(reconcile_quantitative=lambda rows: ([], []),
                                              flag_implausible_quant=lambda rows, as_of: list(helper_flags)))

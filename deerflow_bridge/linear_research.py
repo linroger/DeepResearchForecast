@@ -8352,9 +8352,10 @@ class _Engine:
           (:func:`_claimed_actual`) against ``as_of``, the last day a cited
           source can have published on: future-dated actuals and extreme
           growth rates go to ``meta.quant_implausible``, followed by the
-          claimed actuals for a period that ends after ``as_of``
-          (:func:`_unfinished_period_flags`; the helper reads only
-          ``as_of_date``, and a v3 row states its period in ``period_end``).
+          claimed actuals dated after ``as_of`` that it leaves out
+          (:func:`_future_dated_flags`: it reads only a YYYY-MM-DD, YYYY-MM
+          or YYYY prefix of ``as_of_date``, and a v3 row states its period
+          in ``period_end``).
 
         Each meta list keeps at most QUANT_SANITY_MAX_FLAGS entries;
         ``meta.quant_sanity_truncated`` records the total before any cut, by
@@ -8397,9 +8398,9 @@ class _Engine:
             self.log("ok", f"v3: quant reconcile: +{len(extra)} contested claim(s) from numeric "
                            f"disagreement{capped}")
         claimed = [dict(row) for row in quant if _claimed_actual(row)]
-        unfinished = _unfinished_period_flags(claimed, as_of)
         implausible = self.bridge_call("flag_implausible_quant", claimed, as_of)
-        implausible = [*(implausible if isinstance(implausible, list) else ()), *unfinished]
+        helper_ran = isinstance(implausible, list)
+        implausible = [*(implausible if helper_ran else ()), *_future_dated_flags(quant, as_of, helper_ran=helper_ran)]
         if implausible:
             self.meta["quant_implausible"] = implausible[:QUANT_SANITY_MAX_FLAGS]
             if len(implausible) > QUANT_SANITY_MAX_FLAGS:
@@ -9430,7 +9431,7 @@ def classify_quant_row(row: Mapping[str, Any], as_of: _dt.date) -> dict:
 def _claimed_actual(row: Mapping[str, Any]) -> bool:
     """Whether a quantitative row presents its value as an actual — the rows
     the future-dated checks (``flag_implausible_quant``,
-    :func:`_unfinished_period_flags`) apply to.  A row
+    :func:`_future_dated_flags`) apply to.  A row
     :func:`classify_quant_row` typed (RESEARCH_QUANT_TYPING) is one when it is
     ``reported`` or flagged ``future_dated_reported`` (an actual or estimate
     dated after as-of, typed unknown); any other row when its ``value_type``
@@ -9441,29 +9442,120 @@ def _claimed_actual(row: Mapping[str, Any]) -> bool:
     return row.get("value_type") in (None, "actual")
 
 
-def _unfinished_period_flags(rows: Sequence[Mapping[str, Any]], as_of: _dt.date) -> list[str]:
+# flag_implausible_quant's future-date test (deerflow_research.py) as the bridge
+# runs it, so :func:`_future_dated_flags` adds an entry for exactly the rows it
+# leaves out (a parity test pins the two): the first YYYY-MM-DD, YYYY-MM or YYYY
+# prefix of as_of_date gives its date (the bridge's _parse_date; an invalid date
+# is none), and a projection word in the metric's first 60 characters, the
+# definition or the unit exempts the row.
+_HELPER_DATE_PREFIXES = (re.compile(r"\s*(\d{4})-(\d{1,2})-(\d{1,2})"), re.compile(r"\s*(\d{4})-(\d{1,2})(?!\d)"),
+                         re.compile(r"\s*(\d{4})(?!\d)"))
+_HELPER_PROJECTION_WORDS = ("projection", "projected", "forecast", "estimate", "estimated", "expected", "target",
+                            "outlook", "guidance", "by 20", "预测", "预计", "目标", "展望")
+
+
+def _helper_date(value: Any) -> _dt.date | None:
+    """The date ``flag_implausible_quant`` reads from an ``as_of_date``:
+    "2026-Q4" is 2026-01-01, and "Q4 2026", "FY2027" or "October 2026" none."""
+    text = str(value or "")
+    for pattern in _HELPER_DATE_PREFIXES:
+        match = pattern.match(text)
+        if match is not None:
+            parts = [int(part) for part in match.groups()] + [1, 1]
+            try:
+                return _dt.date(parts[0], parts[1], parts[2])
+            except ValueError:
+                return None
+    return None
+
+
+def _helper_exempts(row: Mapping[str, Any]) -> bool:
+    """Whether ``flag_implausible_quant`` takes ``row`` for a projection,
+    whose date it never flags."""
+    context = " ".join((str(row.get("metric") or "")[:60], str(row.get("definition") or ""),
+                        str(row.get("unit") or ""))).lower()
+    return any(word in context for word in _HELPER_PROJECTION_WORDS)
+
+
+def _helper_flags_date(row: Mapping[str, Any], as_of: _dt.date) -> bool:
+    """Whether ``flag_implausible_quant`` lists ``row`` as a claimed actual
+    dated after ``as_of``."""
+    stated = _helper_date(row.get("as_of_date"))
+    return stated is not None and stated > as_of and not _helper_exempts(row)
+
+
+# What free text read only by the years it names (:func:`_loose_period_bounds`)
+# may say besides them and still state whole years: a year qualifier ("fiscal
+# 2025", "CY2025", "2030E", "2024A", "by 2030", "2025年", "2025财年"), a range
+# word ("2025 to 2030", "2025至2030年") or punctuation.  Any other word or digit
+# ("Q4 FY2025", "2025 YTD", "first half of 2025", "9M 2025", "Jan-Sep 2025",
+# "week ending 2025-06-30", "mid-2025") names part of them.
+_WHOLE_YEAR_WORDS = frozenset({
+    "fy", "cy", "fiscal", "financial", "calendar", "full", "annual", "year", "by", "in", "the", "end", "of", "e",
+    "a", "est", "to", "through", "thru", "and", "from", "between", "until", "年", "财", "財", "度", "全", "至", "到",
+    "-", "–", "—", "/", "~", "～", ",", "，", ".", "(", ")", "（", "）", "'", "’"})
+_PERIOD_WORD_RE = re.compile(r"[a-z]+|\S", re.I)
+
+
+def _strict_period_bounds(value: Any) -> tuple[_dt.date | None, _dt.date | None, str]:
+    """:func:`_loose_period_bounds` for the quantitative sanity checks, which
+    must not read part of a year as the whole year: free text it reads only
+    by the years it names is precision ``part`` unless it says nothing else
+    (:data:`_WHOLE_YEAR_WORDS`); the bounds are still those years', within
+    which the period lies ("first half of 2026" lies in 2026)."""
+    text = str(value or "").strip()
+    start, end, precision = _loose_period_bounds(text)
+    if end is None or precision != "year" or _period_bounds(text)[1] is not None:
+        return start, end, precision
+    # The text without the years it was read by; a two-digit tail the reading
+    # does not take for a range's end ("-13" in "2025-13") stays in it.
+    pieces: list[str] = []
+    position = 0
+    for match in _PERIOD_YEAR_RE.finditer(text):
+        year, closing = int(match.group(1)), match.group(2)
+        pieces.append(text[position:match.start()])
+        position = match.end() if closing and year - year % 100 + int(closing) > year else match.end(1)
+    rest = " ".join([*pieces, text[position:]])
+    if any(ch.isdigit() for ch in rest) or any(word.casefold() not in _WHOLE_YEAR_WORDS
+                                               for word in _PERIOD_WORD_RE.findall(rest)):
+        return start, end, "part"
+    return start, end, precision
+
+
+def _future_dated_flags(rows: Sequence[Mapping[str, Any]], as_of: _dt.date, *, helper_ran: bool) -> list[str]:
     """``meta.quant_implausible`` entries, in ``flag_implausible_quant``'s
-    style, for the claimed actuals among ``rows`` whose ``period_end`` ends
-    after ``as_of`` (read as :func:`classify_quant_row` reads it, which types
-    such a row ``future_dated_reported``): an actual for a period that has
-    not ended.  The bridge helper reads only ``as_of_date``, so a row whose
-    ``as_of_date`` already starts after ``as_of`` is left to its date check
-    (one entry per row; YYYY, YYYY-MM and YYYY-MM-DD, the forms the facts
-    prompt asks for, read the same first day in both).  Pure: reads the
-    rows, never changes one."""
+    style, for the claimed actuals among ``rows`` dated after ``as_of`` that
+    the helper's future-date test leaves out, at most one per row:
+
+    * an ``as_of_date`` whose first day is after ``as_of``, read as
+      :func:`classify_quant_row` reads it (which then flags the row
+      ``future_dated_reported``; the helper reads "2026-Q4" as its Jan 1,
+      and "Q4 2026", "FY2027", "October 2026" or "2026年10月" not at all),
+      unless a projection word exempts the row as it does in the helper;
+    * else a ``period_end`` that ends after ``as_of`` (the helper reads only
+      ``as_of_date``): an actual for a period that has not ended.  Part of a
+      year in free text (:func:`_strict_period_bounds`: "first half of
+      2026") is known to end after ``as_of`` only when its years start
+      after it.
+
+    While ``helper_ran`` (it returned its list) a row it lists itself
+    (:func:`_helper_flags_date`) gets no entry here; without that list any
+    such row does.  Pure: reads the rows, never changes one."""
     flags: list[str] = []
     for row in rows:
-        if not _claimed_actual(row):
+        if not _claimed_actual(row) or (helper_ran and _helper_flags_date(row, as_of)):
             continue
-        period_text = _collapse(row.get("period_end"), 80)
-        end = _loose_period_bounds(period_text)[1]
-        if end is None or end <= as_of:
-            continue
+        metric = str(row.get("metric") or "")[:60]
         stated = _loose_period_bounds(row.get("as_of_date"))[0]
-        if stated is not None and stated > as_of:
+        if stated is not None and stated > as_of and not _helper_exempts(row):
+            flags.append(f"{metric}: as_of {_collapse(row.get('as_of_date'), 80)} starts AFTER research cutoff "
+                         f"{as_of.isoformat()} (claimed-actual with future date)")
             continue
-        flags.append(f"{str(row.get('metric') or '')[:60]}: period_end {period_text} ends AFTER research cutoff "
-                     f"{as_of.isoformat()} (claimed-actual for an unfinished period)")
+        start, end, precision = _strict_period_bounds(row.get("period_end"))
+        ends_by = start if precision == "part" else end
+        if ends_by is not None and ends_by > as_of:
+            flags.append(f"{metric}: period_end {_collapse(row.get('period_end'), 80)} ends AFTER research cutoff "
+                         f"{as_of.isoformat()} (claimed-actual for an unfinished period)")
     return flags
 
 
@@ -9478,7 +9570,9 @@ def _quant_scope(row: Mapping[str, Any]) -> tuple[tuple[Any, ...], str]:
       ("2025-2030", "FY2025-29") by its first day too, and a year or a day
       as a point ("2030" is "2030-12-31" and "by 2030") — so a year never
       meets its fourth quarter, second half or December, nor a multi-year
-      total its last year; an unreadable period by its own text.  Else the
+      total its last year; by its own text a period that is unreadable or
+      part of a year in free text ("Q4 FY2025", "2025 YTD", "first half of
+      2025", :func:`_strict_period_bounds`).  Else the
       year of ``as_of_date``, which without a period is when the number was
       current, so two sources' readings of one figure published months apart
       still meet (a sub-annual series states its periods in ``period_end``);
@@ -9490,8 +9584,15 @@ def _quant_scope(row: Mapping[str, Any]) -> tuple[tuple[Any, ...], str]:
       (RESEARCH_QUANT_TYPING), else projected for a ``forecast`` or
       ``target`` value_type and reported for any other.
 
-    ``series`` is no part of it: it names the source's series, so different
-    sources on one quantity carry different series.  The label names each
+    ``series`` is no part of it.  v3's facts task gives it no meaning, and
+    its models mostly name the source, or the source's series, there; keyed
+    by it, two sources' readings of one quantity — the disagreements and
+    unit-scale errors this check is for — would never meet.  The price: a
+    model that names the entity measured there instead (often its own
+    source as well, so no series-versus-source test tells the two apart)
+    leaves two entities' readings of one generic metric in one scope
+    ("physical qubits": Quantinuum Helios 98, QuEra Gemini 260) to
+    reconcile as a disagreement.  The label names each
     part a reader needs to tell scopes apart: the period as the row states
     it ("as of 2025" for an ``as_of_date`` year), the geography as stated,
     and the class unless reported ("projected", else "unclassified"); ""
@@ -9499,8 +9600,8 @@ def _quant_scope(row: Mapping[str, Any]) -> tuple[tuple[Any, ...], str]:
     period_text = _collapse(row.get("period_end"), 80)
     period: tuple[Any, ...] | None
     if any(ch.isalnum() for ch in period_text) and period_text.casefold() not in _NO_PERIOD:
-        start, end, precision = _loose_period_bounds(period_text)
-        if start is None or end is None:
+        start, end, precision = _strict_period_bounds(period_text)
+        if start is None or end is None or precision == "part":
             period = ("text", period_text.casefold())
         elif start.year < end.year:
             period = ("period", end.isoformat(), ("range", start.isoformat()))

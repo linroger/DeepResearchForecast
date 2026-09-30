@@ -1647,11 +1647,13 @@ class Config:
                                  or 'true') in ('1', 'true', 'yes', 'on')
     # Quantitative sanity checks of the research child (TIME-4): quantitative rows on the
     # same metric and unit (v3: also the same period end and length, geography and
-    # reported/projected class) that disagree by > 10% become contested.json claims (origin
-    # quant_reconcile; v3 adds at most 10, probable unit-scale errors first), a ~1000x gap
-    # is also a probable unit-scale error in meta.quant_unit_warnings, and claimed actuals
-    # dated after the research as-of (v3: also those for a period ending after it) or with
-    # > 150% growth are listed in meta.quant_implausible.  Read-only:
+    # reported/projected class, but not the series name, so two entities' readings of one
+    # generic metric can still reconcile) that disagree by > 10% become contested.json
+    # claims (origin quant_reconcile; v3 adds at most 10, probable unit-scale errors first),
+    # a ~1000x gap is also a probable unit-scale error in meta.quant_unit_warnings, and
+    # claimed actuals dated after the research as-of (v3: also those whose as_of_date the
+    # bridge cannot read, or for a period ending after it) or with > 150% growth are listed
+    # in meta.quant_implausible.  Read-only:
     # quantitative.json never changes.  The legacy engine has always run them under this
     # bridge-read name (its full run lists quant_implausible regardless of the knob);
     # TIME-4 restores them in v3 and the extract-only salvage.  Parsed like the bridge
