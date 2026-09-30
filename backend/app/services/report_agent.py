@@ -1741,6 +1741,9 @@ class ReportAgent:
         # 测试经 __new__ 构造时二者缺失，读取一律走 getattr。
         self.backbone_check_policy: Optional[Dict[str, Any]] = None
         self._backbone_sensitivity: Optional[Dict[str, Any]] = None
+        # RESEARCH-13: 概率提示词证据包的摘要（无正文，kind → digest），_finalize 在最终落盘前写入
+        # forecast.context_pack。旗标全关时始终为空。测试经 __new__ 构造时缺失，读取一律走 getattr。
+        self._context_pack_digests: Dict[str, Dict[str, Any]] = {}
         # TIME-6: 回测钉（见 docstring）；只存真正的回测钉，其余一律视为未传入。按模拟 id 的查找结果
         # 懒缓存一次；查找抛错时记下，市场据此失败即扣下。测试经 __new__ 构造时三者缺失，读取一律走 getattr。
         self.hindcast: Optional[Dict[str, Any]] = as_hindcast_pin(hindcast)
@@ -2186,7 +2189,8 @@ class ReportAgent:
         """W9-8: 紧凑时间线块（timeline.json 取最近 max_events 条、按时间升序渲染）。
 
         注入命中背景/时间线关键词的章节提示词；图表侧另有全量 plotly 时间线。
-        无数据返回空串（注入自动跳过）。"""
+        无数据返回空串（注入自动跳过）。RESEARCH-13：REPORT_CHRONOLOGY_ASOF_SPLIT 开启时改按
+        as_of 切分渲染（_build_chronology_split_block）；关闭时逐字节不变。"""
         rows = (self.timeline_events
                 if isinstance(getattr(self, "timeline_events", None), list) else None)
         if not rows:
@@ -2194,6 +2198,10 @@ class ReportAgent:
         evts = [r for r in rows if isinstance(r, dict) and r.get("date") and r.get("event")]
         if not evts:
             return ""
+        if getattr(Config, "REPORT_CHRONOLOGY_ASOF_SPLIT", False):
+            split_block = self._build_chronology_split_block(rows)
+            if split_block is not None:
+                return split_block
         evts.sort(key=lambda r: str(r.get("date") or ""))
         recent = evts[-max_events:]
         lines = ["## 关键事件时间线（研究实证，按时序——叙事因果链须与之一致）"]
@@ -2204,6 +2212,43 @@ class ReportAgent:
                 continue
             seen.add(key)
             lines.append(f"- {self._md_cell(r['date'], 16)}：{self._md_cell(r['event'], 160)}")
+        return "\n".join(lines) if len(lines) > 1 else ""
+
+    def _build_chronology_split_block(self, rows: List[Any]) -> Optional[str]:
+        """RESEARCH-13（REPORT_CHRONOLOGY_ASOF_SPLIT）：时间线块按 as_of 切分。
+
+        已发生（整个日期区间在 as_of 当日或之前，最近 15 条，按时序）与单列的「已排期」子列表
+        （日期晚于 as_of；与证据包同一实时运行门，回溯运行扣下并注明条数）；无日期/跨越 as_of 的
+        条目只计数。as_of 无效或切分失败 → None，调用方渲染旧块（degrade-safe）。"""
+        try:
+            from . import forecast_context_packer as _cp
+            as_of_raw, _source = self._context_pack_as_of()
+            now = datetime.now(timezone.utc)
+            as_of = _cp.validate_pack_as_of(as_of_raw, now)
+            if as_of is None:
+                return None
+            split = _cp.split_chronology(
+                rows, as_of, now,
+                window_days=int(getattr(Config, "FORECAST_SCHEDULED_LIVE_WINDOW_DAYS", 30)))
+        except Exception as exc:  # noqa: BLE001 — 切分为增强，失败回退旧时间线块
+            logger.warning(f"时间线 as_of 切分失败（回退旧时间线块）: {exc}")
+            return None
+        day = as_of.isoformat()
+        lines = [f"## 关键事件时间线（研究实证，按时序；日期在 {day} 当日或之前——叙事因果链须与之一致）"]
+        lines.extend(f"- {self._md_cell(r['date'], 16)}：{self._md_cell(r['event'], 160)}"
+                     for r in split["past"])
+        if split["scheduled"]:
+            lines.append(f"### 已排期（日期在 {day} 之后：尚未发生，是催化剂而非已发生的事实）")
+            lines.extend(f"- {self._md_cell(r['date'], 16)}：{self._md_cell(r['event'], 160)}"
+                         for r in split["scheduled"])
+        notes = []
+        if split["post_as_of_rows_withheld"]:
+            notes.append(f"{split['post_as_of_rows_withheld']} 条日期在 {day} 之后的条目"
+                         "（回溯运行，可能含事后信息）未列出")
+        if split["undated"] or split["straddle"]:
+            notes.append(f"{split['undated']} 条无日期、{split['straddle']} 条跨越 {day} 的条目未列出")
+        if notes:
+            lines.append("（" + "；".join(notes) + "）")
         return "\n".join(lines) if len(lines) > 1 else ""
 
     def _kg_structural_note(self, name: str, row: Dict[str, Any]) -> str:
@@ -3127,6 +3172,94 @@ class ReportAgent:
     # ──────────────────────────────────────────────────────────────
     # NEXTSTEPS P0-1 / P2-1 / P2-3: forecast spine + finalization + publish gate
     # ──────────────────────────────────────────────────────────────
+    def _context_pack_as_of(self) -> Tuple[Any, str]:
+        """RESEARCH-13: the cutoff of the dated lanes and where it came from.
+
+        A hindcast's pinned as-of (TIME-6) wins over the research actors' ``as_of_date`` (the
+        research run date): a row dated after the cutoff must never be shown as a past
+        development. The packer validates the value (a day, not after today)."""
+        pin = self._hindcast_pin()
+        if pin is not None and pin.get("as_of"):
+            return pin["as_of"], "hindcast_pin"
+        actors = self.actors if isinstance(getattr(self, "actors", None), dict) else {}
+        return actors.get("as_of_date"), "actors"
+
+    def _context_pack_timeline(self) -> List[Dict[str, Any]]:
+        """RESEARCH-13: the research timeline (timeline.json), else the actors' key_events."""
+        rows = getattr(self, "timeline_events", None)
+        if isinstance(rows, list) and rows:
+            return rows
+        actors = self.actors if isinstance(getattr(self, "actors", None), dict) else {}
+        events = actors.get("key_events")
+        return events if isinstance(events, list) else []
+
+    def _context_pack_result(self, kind: str, *, now: Optional[datetime] = None,
+                             strip_market_table: bool = False) -> Tuple[Any, Dict[str, Any]]:
+        """RESEARCH-13: build the ``kind`` ('binary' | 'spine') evidence pack, no IO.
+
+        Returns ``(PackResult, provenance)``. ``strip_market_table`` removes the research
+        bridge's machine market table first (REPORT-10, the same view the legacy draw gets).
+        Shared with backend/scripts/context_pack_replay.py so the replay packs exactly what
+        a report would."""
+        from . import forecast_context_packer as _cp
+        from ..utils import actors as _actors
+        now = now or datetime.now(timezone.utc)
+        as_of_raw, as_of_source = self._context_pack_as_of()
+        timeline = self._context_pack_timeline()
+        window = int(getattr(Config, "FORECAST_SCHEDULED_LIVE_WINDOW_DAYS", 30))
+        report = str(getattr(self, "research_report", "") or "")
+        provenance: Dict[str, Any] = {"as_of_source": as_of_source}
+        if kind == "binary":
+            if strip_market_table:
+                from .forecast_extractor import strip_machine_market_table
+                report, provenance["market_table_stripped"] = strip_machine_market_table(report)
+            result = _cp.build_binary_pack(
+                report, timeline, as_of_raw, now,
+                budget=int(getattr(Config, "FORECAST_CONTEXT_PACK_BINARY_BUDGET", 48000)),
+                lang="en", window_days=window)
+        elif kind == "spine":
+            result = _cp.build_spine_pack(
+                report, _actors.situation_brief_block(getattr(self, "actors", None)),
+                self._build_key_metrics_block(), timeline, as_of_raw, now,
+                budget=int(getattr(Config, "FORECAST_CONTEXT_PACK_SPINE_BUDGET", 14000)),
+                lang="zh", window_days=window)
+        else:
+            raise ValueError(f"unknown context pack kind: {kind!r}")
+        return result, provenance
+
+    def _forecast_context_pack(self, report_id: str, kind: str, *,
+                               strip_market_table: bool = False) -> Optional[str]:
+        """RESEARCH-13 (P09): the ``kind`` evidence pack text for its probability prompt.
+
+        Writes ``<report_folder>/context_pack_<kind>.json`` atomically (schema
+        drf.context_pack/1, with the text) and keeps the digest without the text in
+        ``self._context_pack_digests[kind]``; ``applied`` says whether the prompt got the
+        pack. Degrade-safe: a fallback status or any error is logged and returns None, so
+        the caller runs its legacy prompt (the digest records why)."""
+        digests = getattr(self, "_context_pack_digests", None)
+        if not isinstance(digests, dict):
+            digests = {}
+            self._context_pack_digests = digests
+        try:
+            result, provenance = self._context_pack_result(
+                kind, strip_market_table=strip_market_table)
+            record = dict(result.digest(kind), applied=result.ok, **provenance)
+            write_json_atomic(
+                os.path.join(ReportManager._get_report_folder(report_id),
+                             f"context_pack_{kind}.json"),
+                dict(record, text=result.text))
+        except Exception as exc:  # noqa: BLE001 — 证据包为增强：失败回退旧提示词
+            logger.warning(f"证据包 {kind} 构建失败（回退旧提示词）: {exc}")
+            digests[kind] = {"kind": kind, "status": f"error:{type(exc).__name__}",
+                             "applied": False}
+            return None
+        digests[kind] = record
+        if not result.ok:
+            logger.warning(f"证据包 {kind} 未启用（{result.status}），回退旧提示词")
+            return None
+        logger.info(f"证据包 {kind}: {len(result.text)} 字（as_of 来源 {provenance['as_of_source']}）")
+        return result.text
+
     def _derive_and_pin_forecast_spine(self, report_id: str) -> None:
         """NEXTSTEPS P0-1: derive the structured forecast spine BEFORE section prose,
         persist forecast.json early, and pin a compact spine block into every section
@@ -3196,6 +3329,13 @@ class ReportAgent:
                 "signal_pack": signal_pack,
                 "market_block": market_pack,
             }
+            # RESEARCH-13（FORECAST_CONTEXT_PACK_SPINE，默认关）：研究证据包取代 [态势简报] 切片。
+            # 放进 spine_kwargs，EVAL-11 影子检查重建的提示词与发布骨架所用的逐字节一致；包构建
+            # 失败/回退时不加此键，提示词与旧路径逐字节相同。
+            if getattr(Config, "FORECAST_CONTEXT_PACK_SPINE", False):
+                _spine_pack = self._forecast_context_pack(report_id, "spine")
+                if _spine_pack:
+                    spine_kwargs["context_pack"] = _spine_pack
             spine = _fe.derive_forecast_spine(
                 self.llm if spine_calls is None else spine_calls, **spine_kwargs)
             if not spine or not spine.get("scenarios"):
@@ -3604,6 +3744,19 @@ class ReportAgent:
                 # EVAL-13：仅评估运行的钉住目标作为目标命题传入（生产调用形状逐字节不变）。
                 _ebf_eval_kwargs: Dict[str, Any] = (
                     {"target_propositions": _eval_targets} if _eval_targets else {})
+                # RESEARCH-13（FORECAST_CONTEXT_PACK_BINARY，默认关）：按节取舍的 dossier 摘录 + as_of
+                # 时间线通道取代 head+tail 切片与 [Situation brief]。REPORT-10 删表条件与抽取器同口径
+                # （旗标开 + 注入了市场包），打包前先删机器市场表。回退/失败 → 不传此参数（调用形状不变）。
+                _ebf_pack_kwargs: Dict[str, Any] = {}
+                if getattr(Config, "FORECAST_CONTEXT_PACK_BINARY", False):
+                    _strip_market = (
+                        bool(getattr(Config, "FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE", False))
+                        and bool(getattr(Config, "PREDICTION_MARKETS_ENABLED", True))
+                        and bool(str(_mkt or "").strip()))
+                    _binary_pack = self._forecast_context_pack(
+                        report_id, "binary", strip_market_table=_strip_market)
+                    if _binary_pack:
+                        _ebf_pack_kwargs["context_pack"] = _binary_pack
                 # B2: 需求书解析出的 binary_min_count 参与生效——取 spec 与 Config 的较大者
                 # （需求书写明「15+ binary forecasts」时不被 Config 默认静默压低）。
                 _bres = _ebf(
@@ -3618,6 +3771,7 @@ class ReportAgent:
                     scenarios=forecast.get("scenarios") or None,
                     horizon_date=_hz_date,
                     **_ebf_eval_kwargs,
+                    **_ebf_pack_kwargs,
                 )
                 if isinstance(_bres.get("target_binding"), dict):
                     _target_binding = _bres["target_binding"]
@@ -3796,6 +3950,11 @@ class ReportAgent:
             _bq = dict(_bq0) if isinstance(_bq0, dict) else {}
             _bq["backbone_sensitivity"] = _backbone
             forecast["quality"] = _bq
+        # RESEARCH-13：证据包摘要（无正文；包文在 context_pack_<kind>.json）只在最终落盘前写入——
+        # 绝不进入骨架早落版与批判 / 验尸输入。旗标全关时无摘要、不加键（forecast.json 逐字节不变）。
+        _pack_digests = getattr(self, "_context_pack_digests", None)
+        if isinstance(_pack_digests, dict) and _pack_digests:
+            forecast["context_pack"] = {kind: dict(d) for kind, d in _pack_digests.items()}
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）

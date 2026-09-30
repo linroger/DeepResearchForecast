@@ -938,6 +938,28 @@ class Config:
     # 情景抽取 max_tokens 2048→4096（5 情景 × anchor/rationale/criteria 常被 2048 截断成断裂 JSON）。
     FORECAST_EXTRACT_MAX_TOKENS = int(os.environ.get('FORECAST_EXTRACT_MAX_TOKENS', '4096') or '4096')
 
+    # —— RESEARCH-13（P09）：概率提示词的确定性证据包（forecast_context_packer，零 LLM 调用）——
+    # 二元抽取：以按 H2 节分类的 dossier 摘录（可判定/二元预测节 > 执行摘要 > 情景 > 正文，
+    # References / Visual Annex / How to Read 永不入包，Sources/方法论只吃剩余预算）加一条按 as_of
+    # 过滤、由新到旧的「近期进展」时间线通道，取代 48k head+tail 切片 + situation_brief[:2000]；
+    # 包文与摘要落 reports/<id>/context_pack_binary.json，摘要（无正文）记 forecast.context_pack。
+    # 默认关：改变概率权威看到的证据可能移动概率，按回放指标 + 人工抽查晋升；关 → 提示词逐字节不变。
+    FORECAST_CONTEXT_PACK_BINARY = os.environ.get('FORECAST_CONTEXT_PACK_BINARY', 'false').strip().lower() == 'true'
+    # 骨架：以「研究证据包（按时点标注）」（执行摘要/情景节、局势简报、as_of 切分的时间线、关键指标，
+    # 按份额填充）取代 [态势简报] 的 2000 字切片；EVAL-11 影子检查重建的提示词同样带包。默认关，理由同上。
+    FORECAST_CONTEXT_PACK_SPINE = os.environ.get('FORECAST_CONTEXT_PACK_SPINE', 'false').strip().lower() == 'true'
+    # 二元包 dossier 摘录的字符预算（与旧切片同为 48000；时间线通道不计入，约 5k 字封顶）。
+    FORECAST_CONTEXT_PACK_BINARY_BUDGET = int(os.environ.get('FORECAST_CONTEXT_PACK_BINARY_BUDGET', '48000') or '48000')
+    # 骨架证据包的总字符预算。
+    FORECAST_CONTEXT_PACK_SPINE_BUDGET = int(os.environ.get('FORECAST_CONTEXT_PACK_SPINE_BUDGET', '14000') or '14000')
+    # 「已排期」（日期晚于 as_of 的时间线条目）只在 as_of 距今不超过此天数的实时运行中展示；回溯运行
+    # 的此类条目可能是事后写成的，一律扣下并计数（post_as_of_rows_withheld）。只影响上面两个包与下面的
+    # 章节时间线切分，三者默认都关。
+    FORECAST_SCHEDULED_LIVE_WINDOW_DAYS = int(os.environ.get('FORECAST_SCHEDULED_LIVE_WINDOW_DAYS', '30') or '30')
+    # 章节提示词的「关键事件时间线」块按 as_of 切分：已发生（日期在 as_of 当日或之前，最近 15 条）与
+    # 单列的「已排期」子列表（同一实时运行门）；无日期/跨越 as_of 的条目只计数。默认关：关 → 块逐字节不变。
+    REPORT_CHRONOLOGY_ASOF_SPLIT = os.environ.get('REPORT_CHRONOLOGY_ASOF_SPLIT', 'false').strip().lower() == 'true'
+
     # LLM提供方（默认使用 Claude Code CLI 订阅）
     # claude-cli: 通过本机 `claude` CLI 调用（使用 Claude Code 订阅，无需 API Key）
     # codex-cli:  通过本机 `codex` CLI 调用（使用 Codex 订阅，无需 API Key）
