@@ -6,7 +6,8 @@ LLM_MAX_ESCALATIONS / LLM_MAX_TOKENS_CEILING), LLMMeter.record_recovery, the rep
 that treats an empty length reply as a reachable provider, and the forecast_extractor
 LLM_JSON_TRUNCATION_FAIL_CLOSED paths (spine, binaries, market match and divergence passes,
 critique, premortem, post-hoc) with the report agent carrying a lost spine's count into
-forecast.json.
+forecast.json, the bracket repair's report of a cut list item that decides which items are
+dropped, and LLMClient.discard_last_reply taking a rejected truncated reply out of LLMCache.
 Every OpenAI response is a SimpleNamespace fed through a fake transport, and the forecast
 paths use FakeLLMClient subclasses: no network, no real LLM.
 """
@@ -372,6 +373,44 @@ def test_partial_reply_after_escalation_is_not_counted_as_recovered(run_meter):
     assert snap["recovery_by_stage"] == {"length_escalation": {"report": {"partial": 1}}}
 
 
+@pytest.mark.parametrize("after_escalation", [
+    _resp(content="", finish="stop", usage=_usage(40, 0)),
+    RuntimeError("connection reset by peer"),
+], ids=["empty_stop_reply", "transport_errors"])
+def test_escalation_ended_by_another_failure_counts_as_failed(run_meter, sleeps, after_escalation):
+    script = _Script(_empty_length(90, 512), after_escalation)
+    with pytest.raises(RuntimeError) as ei:
+        _client(script).chat(_MESSAGES, max_tokens=512)
+    assert not getattr(ei.value, "escalation_exhausted", False)
+    # The escalated attempt fails another way: chat()'s backoff retries keep the raised cap.
+    assert script.max_tokens == [512] + [1024] * lc.MAX_RETRIES
+    assert len(sleeps) == lc.MAX_RETRIES - 1
+    snap = tel.LLMMeter.snapshot(run_meter)
+    assert snap["recovery"] == {"length_escalation": {"failed": 1}}
+    assert snap["recovery_by_stage"] == {"length_escalation": {"report": {"failed": 1}}}
+
+
+def test_content_filtered_escalation_counts_as_failed_and_fails_over(monkeypatch, run_meter, sleeps):
+    primary = _Script(_empty_length(90, 512), _resp(content="", finish="content_filter",
+                                                    usage=_usage(90, 0)))
+    fallback = _Script(_resp("fallback answer", "stop", _usage(12, 4)))
+    client = _with_fallback(monkeypatch, primary, fallback)
+    assert client.chat(_MESSAGES, max_tokens=512) == "fallback answer"
+    assert primary.max_tokens == [512, 1024] and len(fallback.calls) == 1
+    assert sleeps == []
+    assert tel.LLMMeter.snapshot(run_meter)["recovery"] == {"length_escalation": {"failed": 1}}
+
+
+def test_budget_exceeded_mid_escalation_counts_as_failed(monkeypatch, run_meter):
+    monkeypatch.setattr(Config, "LLM_RUN_BUDGET_TOKENS", 1000, raising=False)
+    script = _Script(_empty_length(90, 512), _empty_length(90, 1024), _resp("never sent"))
+    with pytest.raises(tel.BudgetExceeded):
+        _client(script).chat(_MESSAGES, max_tokens=512)
+    # 602 tokens pass the budget and escalate; the escalated attempt's 1114 more stop the call.
+    assert script.max_tokens == [512, 1024]
+    assert tel.LLMMeter.snapshot(run_meter)["recovery"] == {"length_escalation": {"failed": 1}}
+
+
 @pytest.mark.parametrize("escalation_on", [True, False])
 def test_fallback_over_budget_raises_budget_exceeded(monkeypatch, run_meter, escalation_on):
     monkeypatch.setattr(Config, "LLM_LENGTH_ESCALATION", escalation_on, raising=False)
@@ -506,18 +545,31 @@ def test_report_preflight_still_fails_on_other_empty_replies(monkeypatch, tmp_pa
     assert result.report_generations == []
 
 
+def test_report_preflight_with_escalation_off_keeps_the_legacy_failure(monkeypatch, tmp_path):
+    monkeypatch.setattr(Config, "LLM_LENGTH_ESCALATION", False, raising=False)
+    error = lc.EmptyCompletion("LLM returned empty content (finish_reason=length, provider=glm).",
+                               finish_reason="length", raw_finish_reason="length",
+                               sent_max_tokens=64, provider="glm")
+    result = _preflight_run(monkeypatch, tmp_path, error)
+    assert result.state.status == "failed"
+    assert "报告前置探测失败" in result.state.error
+    assert result.report_generations == []
+
+
 # ---------------------------------------------------------------- forecast fail-closed
 class _MetaLLM(FakeLLMClient):
     """FakeLLMClient whose chat_json replies each come with scripted call metadata.
 
     ``replies`` is a list of (json reply, meta) pairs served in order; ``last_call_meta`` is a
-    method, like LLMClient.last_call_meta (INFRA-1), returning the last served meta.
+    method, like LLMClient.last_call_meta (INFRA-1), returning the last served meta, and
+    ``discards`` counts discard_last_reply() calls.
     """
 
     def __init__(self, replies):
         super().__init__()
         self._replies = list(replies)
         self._meta = None
+        self.discards = 0
 
     def chat_json(self, messages, temperature=0.3, max_tokens=4096, tier=None, **kwargs):
         super().chat_json(messages, temperature=temperature, max_tokens=max_tokens, tier=tier,
@@ -527,6 +579,10 @@ class _MetaLLM(FakeLLMClient):
 
     def last_call_meta(self):
         return None if self._meta is None else dict(self._meta)
+
+    def discard_last_reply(self):
+        self.discards += 1
+        return True
 
 
 _STOP = {"finish_reason": "stop"}
@@ -587,6 +643,7 @@ def test_truncated_spine_draw_is_discarded_and_retried(spine_config):
     assert "_llm_truncated" not in out
     assert len(llm.calls) == 2
     assert llm.calls[1]["messages"][0]["content"].endswith(fe._SPINE_RETRY_NOTE)
+    assert llm.discards == 1, "the rejected reply leaves LLMCache"
 
 
 def test_truncated_self_consistency_draw_is_never_pooled(spine_config, monkeypatch):
@@ -649,14 +706,16 @@ def test_truncated_binary_draw_drops_its_last_item(monkeypatch):
     assert statements == ["Alpha exceeds 10% by 2027", "Beta exceeds 500 units by 2027"]
     assert out["binary_quality"]["llm_truncation_trimmed"] is True
     assert out["binary_quality"]["llm_truncation_trimmed_draws"] == 1
+    assert out["binary_quality"]["llm_truncation_items_dropped"] == 1
     assert len([c for c in llm.calls if c["kind"] == "chat_json"]) == 1
 
 
 def test_binary_fail_closed_off_keeps_every_item(monkeypatch):
     monkeypatch.setattr(Config, "FORECAST_ENSEMBLE_MODELS", "", raising=False)
     monkeypatch.setattr(Config, "LLM_JSON_TRUNCATION_FAIL_CLOSED", False, raising=False)
-    out = fe.extract_binary_forecasts("dossier", _MetaLLM([(_BINARIES, _CUT)]), min_count=2,
-                                      language="English")
+    cut = _MetaLLM([(_BINARIES, _CUT)])
+    out = fe.extract_binary_forecasts("dossier", cut, min_count=2, language="English")
+    assert cut.discards == 0, "flag off: the cache is left alone"
     legacy = fe.extract_binary_forecasts("dossier", FakeLLMClient(json_responses=[_BINARIES]),
                                          min_count=2, language="English")
     assert out == legacy
@@ -756,7 +815,7 @@ def test_truncated_market_match_reply_drops_its_last_match(monkeypatch):
     assert anchored == 1
     assert binaries[0]["market_anchor"]["market_id"] == "mkt-a"
     assert "market_anchor" not in binaries[1]
-    assert counts == {"market_match": 1}
+    assert counts == {"market_match": 1, "market_match_items_dropped": 1}
 
     complete, counts = _market_binaries(), {}
     assert fe.anchor_binaries_to_markets(complete, _MARKETS, _MetaLLM([(_MATCHES, _STOP)]),
@@ -780,7 +839,7 @@ def test_truncated_divergence_revision_never_moves_the_cut_item(monkeypatch):
     assert binaries[1]["probability"] == 0.8
     assert binaries[1]["adjustment_rationale"] == "base rate"
     assert "market_influence" not in binaries[1]
-    assert counts == {"market_divergence": 1}
+    assert counts == {"market_divergence": 1, "market_divergence_items_dropped": 1}
 
     monkeypatch.setattr(Config, "LLM_JSON_TRUNCATION_FAIL_CLOSED", False, raising=False)
     legacy = _anchored_binaries()
@@ -798,7 +857,8 @@ def test_market_truncation_is_recorded_in_binary_quality(monkeypatch):
     assert by_id["F1"]["market_anchor"]["market_id"] == "mkt-a"
     assert "market_anchor" not in by_id["F2"]
     assert out["binary_quality"]["llm_truncation_market_trimmed"] == {
-        "market_match": 1, "market_divergence": 1}
+        "market_match": 1, "market_match_items_dropped": 1,
+        "market_divergence": 1, "market_divergence_items_dropped": 1}
     assert "llm_truncation_trimmed" not in out["binary_quality"]
 
     monkeypatch.setattr(Config, "LLM_JSON_TRUNCATION_FAIL_CLOSED", False, raising=False)
@@ -806,6 +866,146 @@ def test_market_truncation_is_recorded_in_binary_quality(monkeypatch):
         "dossier", _MetaLLM([(_BINARIES, _STOP), (_MATCHES, _CUT), (_REVISIONS, _CUT)]),
         min_count=2, language="English", markets=_MARKETS)
     assert "llm_truncation_market_trimmed" not in legacy["binary_quality"]
+
+
+# ---------------------------------------------------------------- truncation precision
+@pytest.mark.parametrize("text, value, repaired, partial_item", [
+    # The last '}' closes F2: the parser already left the cut F3 out, F1 and F2 are complete.
+    ('{"b": [{"id": "F1"}, {"id": "F2"}, {"id": "F3", "statement": "Gam',
+     {"b": [{"id": "F1"}, {"id": "F2"}]}, True, False),
+    # No '}' at all: the first item itself is cut.
+    ('{"b": [{"id": "F1", "statement": "Al', {"b": [{"id": "F1", "statement": "Al"}]}, True, True),
+    # The last '}' closes an object nested inside the cut F2.
+    ('{"b": [{"id": "F1"}, {"id": "F2", "anchor": {"p": 0.5}, "statement": "x',
+     {"b": [{"id": "F1"}, {"id": "F2", "anchor": {"p": 0.5}}]}, True, True),
+    # The last '}' sits inside a string of the cut F1.
+    ('{"b": [{"id": "F1", "r": "has } brace", "s": "cut', {"b": [{"id": "F1", "r": "has }"}]},
+     True, True),
+    # The cut falls after the list, in a later key.
+    ('{"b": [{"id": "F1"}], "notes": "abc', {"b": [{"id": "F1"}]}, True, False),
+    ('{"tags": ["a", "b', {"tags": ["a", "b"]}, True, True),
+    ('{"a": [1, 2,', {"a": [1, 2]}, True, False),
+    ('{"a": [1, 2', {"a": [1, 2]}, True, True),
+    ('{"a": 1,', {"a": 1}, True, False),
+    ('{"a": [1, 2]}', {"a": [1, 2]}, False, False),
+])
+def test_bracket_repair_reports_whether_it_closed_a_cut_list_item(text, value, repaired,
+                                                                  partial_item):
+    assert lc.LLMClient._parse_json_response_detail(text) == (value, repaired, partial_item)
+    assert lc.LLMClient._parse_json_response_ex(text) == (value, repaired)
+
+
+def test_chat_json_marks_whether_the_repair_closed_a_cut_item(run_meter):
+    client = _client(_Script(_resp('{"b": [{"id": "F1"}, {"id": "F2", "s": "x', "length")))
+    assert client.chat_json(_MESSAGES) == {"b": [{"id": "F1"}]}
+    meta = client.last_call_meta()
+    assert meta["json_truncation_repaired"] is True and meta["json_truncation_partial_item"] is False
+
+    cut_item = _client(_Script(_resp('{"b": [{"id": "F1", "s": "x', "length")))
+    cut_item.chat_json([{"role": "user", "content": "first item cut"}])
+    assert cut_item.last_call_meta()["json_truncation_partial_item"] is True
+
+
+_REPAIRED_WHOLE = dict(_REPAIRED, json_truncation_partial_item=False)
+_REPAIRED_CUT_ITEM = dict(_REPAIRED, json_truncation_partial_item=True)
+
+
+@pytest.mark.parametrize("meta, kept", [
+    (_REPAIRED_WHOLE, 3), (_REPAIRED_CUT_ITEM, 2), (_REPAIRED, 2), (_CUT, 2),
+], ids=["repair_kept_whole_items", "repair_closed_a_cut_item", "repair_unknown", "length_cut"])
+def test_binary_draw_drops_only_an_item_the_cut_left_incomplete(monkeypatch, meta, kept):
+    monkeypatch.setattr(Config, "FORECAST_ENSEMBLE_MODELS", "", raising=False)
+    llm = _MetaLLM([(_BINARIES, meta)])
+    out = fe.extract_binary_forecasts("dossier", llm, min_count=2, language="English")
+    assert len(out["binary_forecasts"]) == kept
+    quality = out["binary_quality"]
+    assert quality["llm_truncation_trimmed"] is True and quality["llm_truncation_trimmed_draws"] == 1
+    assert quality["llm_truncation_items_dropped"] == 3 - kept
+    assert llm.discards == 1
+
+
+def test_real_client_binary_reply_cut_between_items_keeps_the_complete_ones(monkeypatch):
+    monkeypatch.setattr(Config, "FORECAST_ENSEMBLE_MODELS", "", raising=False)
+    text = json.dumps(_BINARIES)
+    cut = text[:text.index("Gamma") + 3]  # inside F3's statement
+    out = fe.extract_binary_forecasts(
+        "dossier", _client(_Script(_resp(cut, "length", _usage(50, 4096)))), min_count=2,
+        language="English")
+    assert [row["statement"] for row in out["binary_forecasts"]] == [
+        "Alpha exceeds 10% by 2027", "Beta exceeds 500 units by 2027"]
+    assert out["binary_quality"]["llm_truncation_trimmed_draws"] == 1
+    assert out["binary_quality"]["llm_truncation_items_dropped"] == 0
+
+
+def test_real_client_revision_cut_inside_its_second_item_keeps_the_first(monkeypatch):
+    text = json.dumps({"revisions": [
+        _REVISIONS["revisions"][0],
+        {"id": "F2", "probability": 0.55, "adjustment_rationale": _MARKET_RATIONALE.format(pct="30%")},
+    ]})
+    cut = text[:text.rindex("I move")]  # inside F2's rationale
+    binaries, counts = _anchored_binaries(), {}
+    revised = fe.enforce_market_divergence(
+        binaries, _client(_Script(_resp(cut, "length", _usage(60, 2048)))),
+        truncation_counts=counts)
+    assert revised == 1
+    assert binaries[0]["probability"] == 0.45 and "market_influence" in binaries[0]
+    assert binaries[1]["probability"] == 0.8 and binaries[1]["adjustment_rationale"] == "base rate"
+    assert counts == {"market_divergence": 1}
+
+
+# ---------------------------------------------------------------- truncated replies leave the cache
+_CUT_SPINE = '{"headline": "h", "scenarios": [{"name": "Rapid adoption path", "probability": 0.9'
+
+
+@pytest.mark.parametrize("repair_turn", [True, False])
+def test_discard_last_reply_drops_only_this_clients_last_chat_json_reply(monkeypatch, run_meter,
+                                                                          repair_turn):
+    monkeypatch.setattr(Config, "LLM_JSON_REPAIR_TURN", repair_turn, raising=False)
+    script = _Script(_resp('{"a": 1}', "stop", _usage(5, 5)))
+    client, other = _client(script), _client(script)
+    assert client.discard_last_reply() is False                    # no call yet
+    assert client.chat_json(_MESSAGES) == {"a": 1}
+    assert len(tel.LLMCache._store) == 1
+    assert other.discard_last_reply() is False                     # not its reply
+    assert client.discard_last_reply() is True
+    assert tel.LLMCache._store == {}
+
+    assert client.chat_json(_MESSAGES) == {"a": 1}
+    client.chat([{"role": "user", "content": "plain"}])
+    assert client.discard_last_reply() is False, "a later call retires the note"
+    assert len(tel.LLMCache._store) == 2
+
+
+def test_rejected_spine_reply_is_not_replayed_to_the_identical_retry(spine_config, monkeypatch):
+    # FORECAST_PROB_STRICT_PARSE=false: the R2-CAL-11 retry resends the identical request, and
+    # a cut reply that says finish_reason stop (a claude-cli envelope, some gateways) is
+    # cacheable under LLM_TRANSPORT_STRICT.
+    monkeypatch.setattr(Config, "FORECAST_PROB_STRICT_PARSE", False, raising=False)
+    complete = json.dumps(_spine([0.5, 0.3, 0.2]))
+    script = _Script(_resp(_CUT_SPINE, "stop", _usage(50, 900)), _resp(complete, "stop", _usage(52, 900)))
+    out = fe.derive_forecast_spine(_client(script), central_question="Will adoption accelerate?")
+    assert _probs(out) == [0.5, 0.3, 0.2]
+    assert len(script.calls) == 2, "the retry reached the provider, not the cached cut reply"
+    assert out["quality"]["llm_truncation"] == {"spine_draws_discarded": 1}
+    assert list(tel.LLMCache._store.values()) == [complete]
+
+
+def test_rejected_critique_reply_is_not_replayed_on_resume(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_CRITIQUE_SINGLE_PASS", True, raising=False)
+    critique = json.dumps({"scenarios": _rows([0.45, 0.3, 0.25]), "confidence": "low"})
+    cut = critique[:critique.index("Gradual")]  # inside the second scenario
+    script = _Script(_resp(cut, "stop", _usage(80, 700)))
+    for _run in range(2):  # the second run is a resumed REPORT with the same forecast view
+        out = fe.self_critique_forecast(_forecast(), _client(script))
+        assert "critiqued" not in out and _probs(out) == [0.5, 0.3, 0.2]
+    assert len(script.calls) == 2, "the resumed critique asked the provider again"
+    assert tel.LLMCache._store == {}
+
+    monkeypatch.setattr(Config, "LLM_JSON_TRUNCATION_FAIL_CLOSED", False, raising=False)
+    legacy = _Script(_resp(cut, "stop", _usage(80, 700)))
+    for _run in range(2):
+        fe.self_critique_forecast(_forecast(), _client(legacy))
+    assert len(legacy.calls) == 1, "flag off: the cached reply is replayed (legacy)"
 
 
 # ---------------------------------------------------------------- truncation bookkeeping

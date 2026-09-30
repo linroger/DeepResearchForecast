@@ -48,6 +48,17 @@ def _cfg(name: str, default: Any) -> Any:
         return default
 
 
+def _last_call_meta(llm: Any) -> Optional[Dict[str, Any]]:
+    """INFRA-3: ``llm``'s last call metadata on this thread: the value of the INFRA-1
+    ``last_call_meta`` method, or a plain dict on a fake. None when absent or unreadable."""
+    try:
+        fn = getattr(llm, "last_call_meta", None)
+        meta = fn() if callable(fn) else fn
+    except Exception:  # noqa: BLE001 — metadata is advisory; never break extraction
+        return None
+    return meta if isinstance(meta, dict) else None
+
+
 def _reply_truncated(llm: Any) -> bool:
     """INFRA-3: True when ``llm``'s last reply on this thread was cut by the output cap.
 
@@ -56,25 +67,56 @@ def _reply_truncated(llm: Any) -> bool:
     (json_truncation_repaired, INFRA-2). A client without call metadata, or any error, reads
     as not truncated.
     """
-    try:
-        fn = getattr(llm, "last_call_meta", None)
-        meta = fn() if callable(fn) else (fn if isinstance(fn, dict) else None)
-        return bool(isinstance(meta, dict)
-                    and (meta.get("finish_reason") == "length" or meta.get("json_truncation_repaired")))
-    except Exception:  # noqa: BLE001 — metadata is advisory; never break extraction
-        return False
+    meta = _last_call_meta(llm)
+    return bool(meta and (meta.get("finish_reason") == "length" or meta.get("json_truncation_repaired")))
 
 
 def _drop_truncated_reply(llm: Any) -> bool:
-    """INFRA-3 (LLM_JSON_TRUNCATION_FAIL_CLOSED): whether the caller must not use ``llm``'s
-    last reply as forecast content because the output cap cut it."""
-    return bool(_cfg("LLM_JSON_TRUNCATION_FAIL_CLOSED", True)) and _reply_truncated(llm)
+    """INFRA-3 (LLM_JSON_TRUNCATION_FAIL_CLOSED): whether the output cap cut ``llm``'s last
+    reply, so the caller must not take it (or, for a list, a cut item) as forecast content.
+
+    Such a reply also leaves LLMCache (LLMClient.discard_last_reply): otherwise an identical
+    retry, or the same call in a resumed run, would replay the reply just rejected.
+    """
+    if not (bool(_cfg("LLM_JSON_TRUNCATION_FAIL_CLOSED", True)) and _reply_truncated(llm)):
+        return False
+    try:
+        discard = getattr(llm, "discard_last_reply", None)
+        if callable(discard):
+            discard()
+    except Exception as exc:  # noqa: BLE001 — cache hygiene never breaks extraction
+        logger.debug(f"截断回复移出 LLMCache 失败（忽略）: {exc}")
+    return True
 
 
-def _count_truncation(counts: Optional[Dict[str, int]], key: str) -> None:
-    """INFRA-3: tally one truncated reply of pass ``key`` into the caller's sink (None: skip)."""
-    if counts is not None:
-        counts[key] = counts.get(key, 0) + 1
+def _trim_cut_item(llm: Any, items: Any) -> Tuple[Any, int]:
+    """INFRA-3: ``items``, parsed from ``llm``'s truncated last reply, without the item the cut
+    left incomplete, plus the number of items dropped (0 or 1).
+
+    When chat_json closed the reply's brackets itself, its metadata says whether that repair
+    closed a list element the cut left open (json_truncation_partial_item). False means every
+    item is complete as the model wrote it (the cut fell between items, or the parser already
+    left the cut item out), so all are kept. Otherwise the last item is dropped as the likely
+    cut one: also when the metadata cannot tell (finish_reason 'length' with no local repair,
+    or a client that does not report partial items). A non-list or empty ``items`` is returned
+    unchanged.
+    """
+    if not isinstance(items, list) or not items:
+        return items, 0
+    meta = _last_call_meta(llm) or {}
+    if meta.get("json_truncation_repaired") and meta.get("json_truncation_partial_item") is False:
+        return items, 0
+    return items[:-1], 1
+
+
+def _count_truncation(counts: Optional[Dict[str, int]], key: str, dropped: int) -> None:
+    """INFRA-3: tally one truncated reply of pass ``key``, and the ``dropped`` items cut from it
+    (under ``key + '_items_dropped'``), into the caller's sink (None: skip)."""
+    if counts is None:
+        return
+    counts[key] = counts.get(key, 0) + 1
+    if dropped:
+        counts[f"{key}_items_dropped"] = counts.get(f"{key}_items_dropped", 0) + dropped
 
 
 def forecast_language_rule(language: str) -> str:
@@ -2191,8 +2233,9 @@ def anchor_binaries_to_markets(binaries: List[Dict[str, Any]], markets: Optional
     TIME-3：给出 ``now``（仅 PREDICTION_MARKETS_END_DATE_GATE 开时由 extract_binary_forecasts
     传入）→ MARKETS 表后追加「Today (UTC)」一行，要求截止日与预测日期不一致的市场至多判 near；
     未给出 → 提示词逐字节不变。
-    INFRA-3（LLM_JSON_TRUNCATION_FAIL_CLOSED）：匹配回复被 max_tokens 截断时丢弃最后一条匹配（多半
-    被截在半途），并在 ``truncation_counts['market_match']`` 计数（给出时）。"""
+    INFRA-3（LLM_JSON_TRUNCATION_FAIL_CLOSED）：匹配回复被 max_tokens 截断时丢弃被截在半途的那条
+    匹配（见 _trim_cut_item：本地补括号时只在补全合上了被截断的列表项时丢弃，无从判断时丢最后一条），
+    并在 ``truncation_counts['market_match']`` 计数（给出时；丢弃条数记 market_match_items_dropped）。"""
     if not _cfg("FORECAST_MARKET_ANCHORING", True):
         return 0
     bins = [b for b in (binaries or []) if isinstance(b, dict) and str(b.get("statement") or "").strip()]
@@ -2232,10 +2275,10 @@ def anchor_binaries_to_markets(binaries: List[Dict[str, Any]], markets: Optional
         return 0
     matches = raw.get("matches") if isinstance(raw, dict) else None
     if _drop_truncated_reply(llm):
-        # INFRA-3: the cap cut this reply, most likely inside its last match: drop it.
-        _count_truncation(truncation_counts, "market_match")
-        logger.warning("预测市场匹配回复被 max_tokens 截断，丢弃最后一条匹配")
-        matches = matches[:-1] if isinstance(matches, list) else matches
+        # INFRA-3: the cap cut this reply; a match it cut mid-way is dropped (_trim_cut_item).
+        matches, _dropped = _trim_cut_item(llm, matches)
+        _count_truncation(truncation_counts, "market_match", _dropped)
+        logger.warning(f"预测市场匹配回复被 max_tokens 截断，丢弃被截断的匹配 {_dropped} 条")
     if not isinstance(matches, list):
         return 0
     bin_by_id = {str(b.get("id")): b for b in bins}
@@ -2305,9 +2348,10 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
     才有**移动概率**的资格——低置信匹配仍可作为校准展示锚点，但绝不拉动发布概率。
     被采纳且确实移动了概率的重述会盖 ``market_influence`` 印章（见 _stamp_market_influence）。
 
-    INFRA-3（LLM_JSON_TRUNCATION_FAIL_CLOSED）：重述回复被 max_tokens 截断时丢弃最后一条重述——
-    它多半停在理由半途，而截断前已完整的概率与引用市场的理由足以通过下方检查。计数记在
-    ``truncation_counts['market_divergence']``（给出时）。"""
+    INFRA-3（LLM_JSON_TRUNCATION_FAIL_CLOSED）：重述回复被 max_tokens 截断时丢弃被截在半途的那条
+    重述（见 _trim_cut_item）——它多半停在理由半途，而截断前已完整的概率与引用市场的理由足以通过
+    下方检查。计数记在 ``truncation_counts['market_divergence']``（给出时；丢弃条数记
+    market_divergence_items_dropped）。"""
     if not _cfg("FORECAST_MARKET_DIVERGENCE_REVISION", True):
         return 0
     min_conf = _coerce_float(_cfg("FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE", 0.6))
@@ -2350,10 +2394,10 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
         return 0
     revs = raw.get("revisions") if isinstance(raw, dict) else None
     if _drop_truncated_reply(llm):
-        # INFRA-3: the cap cut this reply, most likely inside its last revision: drop it.
-        _count_truncation(truncation_counts, "market_divergence")
-        logger.warning("预测市场分歧重述回复被 max_tokens 截断，丢弃最后一条重述")
-        revs = revs[:-1] if isinstance(revs, list) else revs
+        # INFRA-3: the cap cut this reply; a revision it cut mid-way is dropped (_trim_cut_item).
+        revs, _dropped = _trim_cut_item(llm, revs)
+        _count_truncation(truncation_counts, "market_divergence", _dropped)
+        logger.warning(f"预测市场分歧重述回复被 max_tokens 截断，丢弃被截断的重述 {_dropped} 条")
     if not isinstance(revs, list):
         return 0
     by_id = {str(b.get("id")): b for b in candidates}
@@ -3286,14 +3330,16 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     # 行只用于池化已匹配的主模型行、本就不会单独发布，故另记一槽，不计入「扣下」条数。
     review_sink: List[Dict[str, Any]] = []
     secondary_review_sink: List[Dict[str, Any]] = []
-    # INFRA-3 (LLM_JSON_TRUNCATION_FAIL_CLOSED): draws whose reply the output cap cut.
+    # INFRA-3 (LLM_JSON_TRUNCATION_FAIL_CLOSED): draws whose reply the output cap cut, and the
+    # items dropped from them as cut mid-way (see _trim_cut_item).
     truncated_draws = 0
+    truncated_items_dropped = 0
 
     def _draw(instr_min: int, exclude: List[str], *, low_p: bool = False,
               client: Any = None, targets: Optional[List[Dict[str, Any]]] = None,
               repair: bool = False,
               review_to: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
-        nonlocal truncated_draws
+        nonlocal truncated_draws, truncated_items_dropped
         # ITEM 12：client 指定时用该（副模型）客户端抽取，否则用主 llm——集成各模型共用同一提示词。
         _llm = client if client is not None else llm
         # EVAL-13：默认只索取 exclude 里尚未出现的目标陈述（无目标 → 空，提示词不变）。已按
@@ -3357,10 +3403,11 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              temperature=0.25, max_tokens=4096)
         items = raw.get("binary_forecasts") if isinstance(raw, dict) else None
         if _drop_truncated_reply(_llm):
-            # INFRA-3: the cap cut this reply, most likely inside its last forecast: drop it.
+            # INFRA-3: the cap cut this reply; a forecast it cut mid-way is dropped.
+            items, _dropped = _trim_cut_item(_llm, items)
             truncated_draws += 1
-            logger.warning("二元预测抽取回复被 max_tokens 截断，丢弃列表最后一项")
-            items = items[:-1] if isinstance(items, list) else items
+            truncated_items_dropped += _dropped
+            logger.warning(f"二元预测抽取回复被 max_tokens 截断，丢弃被截断的预测 {_dropped} 条")
         if review_to is None:
             review_to = review_sink if client is None else secondary_review_sink
         return _normalize_binaries(items or [], allowed_themes=themes,
@@ -3501,6 +3548,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         if truncated_draws:
             _bq_prov["llm_truncation_trimmed"] = True
             _bq_prov["llm_truncation_trimmed_draws"] = truncated_draws
+            _bq_prov["llm_truncation_items_dropped"] = truncated_items_dropped
         if market_truncation:
             _bq_prov["llm_truncation_market_trimmed"] = dict(market_truncation)
         if provenance_downgrades:

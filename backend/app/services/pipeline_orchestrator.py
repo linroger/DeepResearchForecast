@@ -15713,15 +15713,17 @@ class PipelineOrchestrator:
                         )
                     except Exception as _pf_err:  # noqa: BLE001
                         from ..utils.llm_client import EmptyCompletion as _PreflightEmpty
-                        if not (isinstance(_pf_err, _PreflightEmpty)
+                        if not (bool(getattr(Config, "LLM_LENGTH_ESCALATION", True))
+                                and isinstance(_pf_err, _PreflightEmpty)
                                 and _pf_err.finish_reason == "length"):
                             raise RuntimeError(
                                 "报告前置探测失败：主/回退 LLM 提供方均不可用 —— 中止报告阶段以免"
                                 f"烧掉全部章节成本（稍后 resume 可从 REPORT 续跑）: {str(_pf_err)[:200]}"
                             ) from _pf_err
-                        # INFRA-3: an empty reply cut by the probe's output cap (a reasoning model
-                        # thinking past it) proves the provider answered, so the probe passes. A
-                        # model that never produces text still fails the report stage loudly.
+                        # INFRA-3 (LLM_LENGTH_ESCALATION): an empty reply cut by the probe's output
+                        # cap (a reasoning model thinking past it, even after escalation) proves the
+                        # provider answered, so the probe passes. A model that never produces text
+                        # still fails the report stage loudly. Off: legacy (the probe fails).
                         logger.info("[%s] 报告前置探测：提供方可达（空回复被 max_tokens 截断，"
                                     "finish_reason=length），继续报告阶段", state.pipeline_id)
                 if bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):

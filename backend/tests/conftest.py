@@ -59,7 +59,8 @@ class FakeLLMClient:
 
     Returns scripted responses in order (or a default), and records every call
     so tests can assert what was sent. Mirrors the real public surface (chat,
-    chat_json, chat_with_tools, supports_native_tools, last_call_meta); every
+    chat_json, chat_with_tools, supports_native_tools, last_call_meta,
+    discard_last_reply); every
     parameter name of the real methods is accepted, which
     test_suite_isolation.py pins with a signature-subset meta-test.
     """
@@ -105,6 +106,9 @@ class FakeLLMClient:
 
     def last_call_meta(self):
         return None
+
+    def discard_last_reply(self):
+        return False
 
 
 @pytest.fixture(autouse=True)

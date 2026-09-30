@@ -350,8 +350,10 @@ def _structured_counts() -> Dict[str, int]:
 # cut by max_tokens re-sent with a larger cap). recovered = an escalated attempt returned a
 # complete reply; partial = it returned text that the raised cap cut again (finish_reason
 # length); exhausted = escalation gave up (attempts or headroom used up, or the provider refused
-# the raised cap) and the call went on to failover.
-RECOVERY_OUTCOMES = ("recovered", "partial", "exhausted")
+# the raised cap) and the call went on to failover; failed = an escalated attempt ended in
+# another failure (an empty non-length reply, a content filter, transport retries used up, the
+# run budget) and the call went on to failover or aborted. An escalating call counts once.
+RECOVERY_OUTCOMES = ("recovered", "partial", "exhausted", "failed")
 
 
 # TEL-1: '_global' 桶只该接住零星的无归属调用（reset 从不清它，跨 run 累积）。它一旦变大，
