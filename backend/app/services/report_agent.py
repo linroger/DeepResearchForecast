@@ -3677,11 +3677,11 @@ class ReportAgent:
         report stage, filled here: at construction the run.json report stamp still describes
         a previous attempt's report. The report stage records this agent's LLM provider /
         model and, from LLMMeter's stage 'report' in the current run context, the labels its
-        calls requested (tier routing and failover included) and the ids served
-        (model_provenance.stage_record; without a recorded call, the effective label of the
-        agent's provider / model and no served ids). None when ``run_provenance`` is unset
-        (API paths, seed reports) or RECORD_MODEL_PROVENANCE is off; any failure also
-        degrades to None (logged).
+        calls requested (tier routing and failover included) and the ids served, overall and
+        per request (model_provenance.stage_record; without a recorded call, the effective
+        label of the agent's provider / model, marked requested_source 'configured', and no
+        served ids). None when ``run_provenance`` is unset (API paths, seed reports) or
+        RECORD_MODEL_PROVENANCE is off; any failure also degrades to None (logged).
         """
         run_prov = getattr(self, "run_provenance", None)
         if not isinstance(run_prov, dict) or not getattr(Config, "RECORD_MODEL_PROVENANCE", True):

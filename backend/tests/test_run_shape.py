@@ -1161,7 +1161,8 @@ def test_failed_report_rebuild_after_run_recompute_is_not_reused_next_attempt(
     resolved = final["resolved"]
     # Reused stages keep the stamp of the attempt that produced them; INFRA-8 adds the
     # requested label of a stamped pair that lacks it (served ids unknown).
-    no_calls = {"requested_models": [], "served_models": []}
+    no_calls = {"requested_source": "configured", "requested_models": [], "served_models": [],
+                "model_resolution": {}}
     assert resolved["ontology"] == {"provider": "provider-0", "model_name": "model-0",
                                     "requested_model": "model-0", **no_calls}
     assert resolved["graph"] == {"provider": "provider-0", "model_name": "model-0",
@@ -1174,7 +1175,8 @@ def test_failed_report_rebuild_after_run_recompute_is_not_reused_next_attempt(
 
 _PRODUCER_A = {"provider": "provider-a", "model_name": "model-a"}
 # INFRA-8: what a reused stage restamped with producer A gains (its served ids are unknown).
-_REUSED_MODEL_KEYS_A = {"requested_model": "model-a", "requested_models": [], "served_models": []}
+_REUSED_MODEL_KEYS_A = {"requested_model": "model-a", "requested_source": "configured",
+                        "requested_models": [], "served_models": [], "model_resolution": {}}
 
 
 def _switch_provider_and_resume(monkeypatch, pid):
@@ -1306,13 +1308,14 @@ def test_run_manifest_keeps_attempts_and_reused_stage_stamps(roots, monkeypatch)
     assert len(manifest["attempts"]) == 2
     assert all(row["drift_knobs"] == [] for row in manifest["attempts"])
     resolved = manifest["resolved"]
-    # INFRA-8 merges each recomputing attempt's requested / served models next to the pair.
+    # INFRA-8 merges each recomputing attempt's requested / served models next to the pair
+    # (no call recorded here: the configured pair, marked as such).
+    no_calls = {"requested_source": "configured", "requested_models": [], "served_models": [],
+                "model_resolution": {}}
     assert resolved["ontology"] == {"provider": "provider-a", "model_name": "model-a",
-                                    "requested_model": "model-a", "requested_models": [],
-                                    "served_models": []}
+                                    "requested_model": "model-a", **no_calls}
     assert resolved["graph"] == {"provider": "provider-b", "model_name": "model-b",
-                                 "requested_model": "model-b", "requested_models": [],
-                                 "served_models": []}
+                                 "requested_model": "model-b", **no_calls}
     assert "run_shape" in manifest
     records = state.options["stage_reuse_v1"]
     assert [(r["stage"], r["reused"]) for r in records] == [

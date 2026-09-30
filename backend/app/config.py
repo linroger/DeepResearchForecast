@@ -589,11 +589,15 @@ class Config:
     # its own into sim_llm_telemetry.json); research v3 ledger rows and usage summaries carry
     # model/served_model and the v3 work-dir identity gains the resolved model id (a side
     # without one stays compatible, so existing work dirs still resume); run.json resolved
-    # blocks gain requested_model/requested_models/served_models; forecast.json gains a
-    # 'model_provenance' block. Both children get this value from Config (research-child
-    # registry, simulation env). Default on: it only adds recorded keys and changes no call,
-    # routing or gate; the one behavioural effect is that a research resume no longer reuses a
-    # v3 work dir produced by a different resolved model id. Off = byte-identical to before.
+    # blocks gain requested_model/requested_source/requested_models/served_models/
+    # model_resolution; forecast.json gains a 'model_provenance' block. The per-call labels and
+    # served ids of LLMClient calls come from LLMMeter, so they need LLM_TELEMETRY_ENABLED=true;
+    # a stage with no recorded call names the configured provider/model pair instead, marked
+    # requested_source='configured' (tier routing or failover may have sent another model).
+    # Both children get this value from Config (research-child registry, simulation env).
+    # Default on: it only adds recorded keys and changes no call, routing or gate; the one
+    # behavioural effect is that a research resume no longer reuses a v3 work dir produced by
+    # a different resolved model id. Off = byte-identical to before.
     RECORD_MODEL_PROVENANCE = os.environ.get('RECORD_MODEL_PROVENANCE', 'true').strip().lower() == 'true'
     # INFRA-9：分叉继承安全政策钉。开启时情景分叉（PipelineOrchestrator.fork）与批次问题分叉
     # （scripts/batch_runs.fork_question）深拷贝 base 的 options.safety_policy_v1（origin=fork_inherited）；

@@ -3,10 +3,10 @@
 Covers the pure helpers (app.utils.model_provenance), the LLMMeter ``model_resolution``
 snapshot block, LLMClient's per-call requested label and served id, the research gateway
 ledger rows and ``models`` summary, the v3 work-dir identity (resolved ``model_id``,
-backward compatible), the orchestrator's run.json stamps and ``run_provenance``, the
-forecast.json ``model_provenance`` block, Config.validation_warnings with its preflight
-rows, and GET /preflight's unknown-model 400. RECORD_MODEL_PROVENANCE off leaves every
-artifact as it was before.
+backward compatible), the orchestrator's run.json stamps (the simulation child runs of one
+simulation included) and ``run_provenance``, the forecast.json ``model_provenance`` block,
+Config.validation_warnings with its preflight rows, and GET /preflight's unknown-model 400
+and model normalisation. RECORD_MODEL_PROVENANCE off leaves every artifact as it was before.
 
 Offline: fake OpenAI clients, a patched CLI subprocess, scripted LangChain stand-ins and
 FakeLLMClient; no network, no real LLM.
@@ -126,13 +126,22 @@ def test_stage_record_follows_the_requested_labels_the_calls_recorded():
                "minimax:MiniMax-M3": {"calls": 2, "served": {}},
                "junk": "not-an-entry", "zero:calls": {"calls": 0}}
     # EVAL-10 tier routing: the stage sent the strong model, not LLM_MODEL_NAME.
-    assert mp.stage_record(entries, "minimax", "MiniMax-M3") == {
-        "requested_model": "MiniMax-M3-Pro",
+    record = mp.stage_record(entries, "minimax", "MiniMax-M3")
+    assert record == {
+        "requested_model": "MiniMax-M3-Pro", "requested_source": "metered",
         "requested_models": ["minimax:MiniMax-M3-Pro", "deepseek:fast-m", "minimax:MiniMax-M3"],
-        "served_models": ["MiniMax-M3-Pro-0901", "fast-m-0925"]}
-    # No recorded call: the effective label of the configured pair, nothing else claimed.
+        "served_models": ["MiniMax-M3-Pro-0901", "fast-m-0925"],
+        "model_resolution": {
+            "minimax:MiniMax-M3-Pro": {"calls": 5, "served": {"MiniMax-M3-Pro-0901": 5}},
+            "deepseek:fast-m": {"calls": 2, "served": {"fast-m-0925": 2}},
+            "minimax:MiniMax-M3": {"calls": 2, "served": {}}}}
+    # The per-request map keeps the order of requested_models (which id answered which request).
+    assert list(record["model_resolution"]) == record["requested_models"]
+    # No recorded call: the effective label of the configured pair, marked as configured and
+    # nothing else claimed.
     assert mp.stage_record({}, "claude-cli", "glm-5.3") == {
-        "requested_model": "cli-default", "requested_models": [], "served_models": []}
+        "requested_model": "cli-default", "requested_source": "configured",
+        "requested_models": [], "served_models": [], "model_resolution": {}}
     assert mp.stage_record(None, "kimi", "kimi-k2.7")["requested_model"] == "kimi-k2.7"
     # A label may itself contain ':' (the provider part never does).
     assert mp.requested_label_of("openrouter:vendor/model:free") == "vendor/model:free"
@@ -146,13 +155,49 @@ def test_stage_record_follows_the_requested_labels_the_calls_recorded():
 
 
 def test_reused_stage_record_fills_only_a_stamped_pair_without_model_keys():
+    unknown_served = {"requested_source": "configured", "requested_models": [],
+                      "served_models": [], "model_resolution": {}}
     assert mp.reused_stage_record({"provider": "kimi", "model_name": "kimi-k2.7"}) == {
-        "requested_model": "kimi-k2.7", "requested_models": [], "served_models": []}
+        "requested_model": "kimi-k2.7", **unknown_served}
     assert mp.reused_stage_record({"provider": "claude-cli", "model_name": "glm"}) == {
-        "requested_model": "cli-default", "requested_models": [], "served_models": []}
+        "requested_model": "cli-default", **unknown_served}
     assert mp.reused_stage_record({"provider": "kimi", "model_name": "k", "requested_model": "k"}) is None
     assert mp.reused_stage_record({"provider": None, "model_name": None}) is None
     assert mp.reused_stage_record(None) is None
+
+
+def test_sim_stash_keys_merge_the_resumed_child_runs_of_one_simulation_once_per_token():
+    first = {"minimax:MiniMax-M3": {"calls": 40, "served": {"MiniMax-M3-0901": 40}}}
+    resumed = {"deepseek:deepseek-v4": {"calls": 10, "served": {"deepseek-v4-0925": 10}}}
+    keys = mp.sim_stash_model_keys(None, "sim_a", "tok-1", first, resumed=False)
+    assert keys == {"simulation_id": "sim_a", "model_resolution_tokens": ["tok-1"],
+                    "model_resolution": first}
+    # A SIM_RESUME child run of the same simulation adds its calls to the earlier rounds'.
+    merged = mp.sim_stash_model_keys({"provider": "minimax", **keys}, "sim_a", "tok-2", resumed,
+                                     resumed=True)
+    assert merged == {"simulation_id": "sim_a", "model_resolution_tokens": ["tok-1", "tok-2"],
+                      "model_resolution": {**first, **resumed}}
+    # The same child run again (its marker save failed and rolled back) adds nothing.
+    assert mp.sim_stash_model_keys(merged, "sim_a", "tok-2", resumed, resumed=True) == merged
+    # A fresh start of the same simulation discarded the earlier rounds: it replaces them,
+    # and recording it again changes nothing either.
+    fresh = {"simulation_id": "sim_a", "model_resolution_tokens": ["tok-3"],
+             "model_resolution": resumed}
+    assert mp.sim_stash_model_keys(merged, "sim_a", "tok-3", resumed, resumed=False) == fresh
+    assert mp.sim_stash_model_keys(fresh, "sim_a", "tok-3", resumed, resumed=False) == fresh
+    # Another simulation, or a stash without the stamp, starts afresh even when resumed.
+    assert mp.sim_stash_model_keys(merged, "sim_b", "tok-4", resumed, resumed=True) == {
+        "simulation_id": "sim_b", "model_resolution_tokens": ["tok-4"], "model_resolution": resumed}
+    assert mp.sim_stash_model_keys({"simulation_id": "sim_a", "model_resolution": first},
+                                   "sim_a", "tok-5", None, resumed=True) == {
+        "simulation_id": "sim_a", "model_resolution_tokens": ["tok-5"]}
+    # The prior stash is never mutated in place.
+    assert keys["model_resolution_tokens"] == ["tok-1"]
+    assert keys["model_resolution"] == {
+        "minimax:MiniMax-M3": {"calls": 40, "served": {"MiniMax-M3-0901": 40}}}
+    assert mp.sim_stash_of(merged, "sim_a") is merged
+    assert mp.sim_stash_of(merged, "sim_b") is None and mp.sim_stash_of(merged, None) is None
+    assert mp.sim_stash_of({"model_resolution": first}, "sim_a") is None
 
 
 def test_resolved_block_mapping_matches_run_shape():
@@ -165,7 +210,8 @@ def test_run_provenance_subset_leaves_the_report_to_the_agent():
     resolved = {
         "research": {"model": "glm", "depth": "deep", "model_id": "glm-5.3", "served_models": []},
         "ontology": {"provider": "kimi", "model_name": "k2", "requested_model": "k2",
-                     "served_models": ["k2-0905"]},
+                     "requested_source": "metered", "served_models": ["k2-0905"],
+                     "model_resolution": {"kimi:k2": {"calls": 1, "served": {"k2-0905": 1}}}},
         "simulation": {"max_agents": 7, "requested_model": "k2", "served_models": []},
         "report": {"provider": "old", "model_name": "stale"},
         "graph": "not-a-block",
@@ -176,6 +222,7 @@ def test_run_provenance_subset_leaves_the_report_to_the_agent():
     assert set(prov["stages"]) == {"research", "ontology", "run"}
     assert prov["stages"]["research"] == {"model": "glm", "model_id": "glm-5.3", "served_models": []}
     assert prov["stages"]["run"] == {"requested_model": "k2", "served_models": []}
+    assert prov["stages"]["ontology"] == resolved["ontology"]
     assert mp.run_provenance(None, {})["pin_drift"] is None
     full = mp.forecast_model_provenance(prov, {"requested_model": "r", "served_models": ["s"]})
     assert full["stages"]["report"] == {"requested_model": "r", "served_models": ["s"]}
@@ -554,9 +601,20 @@ RESEARCH_RESOLUTION = {"model": "glm", "model_id": "glm-5.3",
 # The simulation child's own per-call record (sim_llm_telemetry.json model_resolution).
 SIM_RESOLUTION = {"minimax:MiniMax-M3": {"calls": 40, "served": {"MiniMax-M3-0901": 40}},
                   "minimax:MiniMax-M3-Pro": {"calls": 3, "served": {}}}
-RUN_RECORD = {"requested_model": "MiniMax-M3",
+RUN_RECORD = {"requested_model": "MiniMax-M3", "requested_source": "metered",
               "requested_models": ["minimax:MiniMax-M3", "minimax:MiniMax-M3-Pro"],
-              "served_models": ["MiniMax-M3-0901"]}
+              "served_models": ["MiniMax-M3-0901"], "model_resolution": SIM_RESOLUTION}
+SIM_ID = "sim_infra8_first"
+# The RUN stash _record_sim_run_telemetry leaves for SIM_ID's child run.
+SIM_STASH = {"provider": "minimax", "model": "MiniMax-M3-0901", "simulation_id": SIM_ID,
+             "model_resolution_tokens": ["tok-first"], "model_resolution": SIM_RESOLUTION}
+
+
+def _kimi_record(served):
+    """What a recomputed stage of the pipeline_roots provider (kimi / kimi-k2.7) records."""
+    return {"requested_model": "kimi-k2.7", "requested_source": "metered",
+            "requested_models": ["kimi:kimi-k2.7"], "served_models": [served],
+            "model_resolution": {"kimi:kimi-k2.7": {"calls": 1, "served": {served: 1}}}}
 
 
 def _first_attempt(pid, state):
@@ -569,8 +627,8 @@ def _first_attempt(pid, state):
         tel.LLMMeter.record("kimi", "kimi-k2.7", 5, 5, 1.0, stage=stage, run_id=pid,
                             served_model="kimi-k2.7-0901")
         orch._complete_stage(state, stage)
-    state.options["sim_llm_telemetry"] = {"provider": "minimax", "model": "MiniMax-M3-0901",
-                                          "model_resolution": SIM_RESOLUTION}
+    state.simulation_id = SIM_ID
+    state.options["sim_llm_telemetry"] = json.loads(json.dumps(SIM_STASH))
     orch._complete_stage(state, po.STAGE_RUN)
     return orch
 
@@ -585,12 +643,8 @@ def test_recomputed_stages_merge_requested_and_served_models_into_run_json(pipel
     assert resolved["research"]["served_models"] == ["glm-5.3-0930"]
     # INFRA-7's provider pair stays; INFRA-8 merges next to it.
     assert resolved["ontology"] == {"provider": "kimi", "model_name": "kimi-k2.7",
-                                    "requested_model": "kimi-k2.7",
-                                    "requested_models": ["kimi:kimi-k2.7"],
-                                    "served_models": ["kimi-k2.7-0901"]}
-    assert resolved["prepare"] == {"requested_model": "kimi-k2.7",
-                                   "requested_models": ["kimi:kimi-k2.7"],
-                                   "served_models": ["kimi-k2.7-0901"]}
+                                    **_kimi_record("kimi-k2.7-0901")}
+    assert resolved["prepare"] == _kimi_record("kimi-k2.7-0901")
     assert {key: resolved["simulation"][key] for key in RUN_RECORD} == RUN_RECORD
     assert "max_agents" in resolved["simulation"]
 
@@ -612,13 +666,13 @@ def test_reused_stages_keep_the_stamp_of_the_attempt_that_produced_them(pipeline
     resolved = _manifest(pid)["resolved"]
     assert resolved["research"]["model_id"] == "glm-5.3"
     assert resolved["ontology"]["served_models"] == ["kimi-k2.7-0901"]
-    assert resolved["prepare"] == {"requested_model": "kimi-k2.7",
-                                   "requested_models": ["kimi:kimi-k2.7"],
-                                   "served_models": ["kimi-k2.7-0901"]}
-    assert resolved["graph"] == {"provider": "deepseek", "model_name": "deepseek-v4",
-                                 "requested_model": "deepseek-v4",
-                                 "requested_models": ["deepseek:deepseek-v4"],
-                                 "served_models": ["deepseek-v4-0925"]}
+    assert resolved["prepare"] == _kimi_record("kimi-k2.7-0901")
+    assert resolved["graph"] == {
+        "provider": "deepseek", "model_name": "deepseek-v4", "requested_model": "deepseek-v4",
+        "requested_source": "metered", "requested_models": ["deepseek:deepseek-v4"],
+        "served_models": ["deepseek-v4-0925"],
+        "model_resolution": {"deepseek:deepseek-v4": {"calls": 1,
+                                                      "served": {"deepseek-v4-0925": 1}}}}
 
 
 def test_research_recomputed_without_a_model_resolution_is_recorded_as_unknown(pipeline_roots):
@@ -682,10 +736,9 @@ def test_flag_off_leaves_run_json_and_the_agent_as_before(pipeline_roots, monkey
     assert not hasattr(agent, "run_provenance")
 
 
-def test_stage_requested_model_follows_tier_routing(pipeline_roots, monkeypatch):
-    """LLM_TIERED_ROUTING (default on) sends LLM_STRONG_MODEL: run.json names that model as
-    requested, not LLM_MODEL_NAME, next to INFRA-7's configured pair."""
-    pid = "pipe_infra8_tiered"
+def _tiered_ontology_call(pipeline_roots, monkeypatch, pid):
+    """One ONTOLOGY call under LLM_TIERED_ROUTING with LLM_STRONG_MODEL set, then the stage's
+    completion. Returns the models the transport sent and run.json's ontology block."""
     state = _state(pipeline_roots, pid)
     monkeypatch.delenv("LLM_FALLBACK_PROVIDER", raising=False)
     for name, value in {"LLM_PROVIDER": "minimax", "LLM_MODEL_NAME": "MiniMax-M3",
@@ -703,11 +756,31 @@ def test_stage_requested_model_follows_tier_routing(pipeline_roots, monkeypatch)
     finally:
         tel.set_run_context(None)
     orch._complete_stage(state, po.STAGE_ONTOLOGY)
+    return sent, _manifest(pid)["resolved"]["ontology"]
+
+
+def test_stage_requested_model_follows_tier_routing(pipeline_roots, monkeypatch):
+    """LLM_TIERED_ROUTING (default on) sends LLM_STRONG_MODEL: run.json names that model as
+    requested, not LLM_MODEL_NAME, next to INFRA-7's configured pair."""
+    sent, ontology = _tiered_ontology_call(pipeline_roots, monkeypatch, "pipe_infra8_tiered")
     assert sent == ["MiniMax-M3-Pro"]
-    assert _manifest(pid)["resolved"]["ontology"] == {
+    assert ontology == {
         "provider": "minimax", "model_name": "MiniMax-M3",
-        "requested_model": "MiniMax-M3-Pro", "requested_models": ["minimax:MiniMax-M3-Pro"],
-        "served_models": ["MiniMax-M3-Pro-0901"]}
+        "requested_model": "MiniMax-M3-Pro", "requested_source": "metered",
+        "requested_models": ["minimax:MiniMax-M3-Pro"], "served_models": ["MiniMax-M3-Pro-0901"],
+        "model_resolution": {"minimax:MiniMax-M3-Pro": {"calls": 1,
+                                                        "served": {"MiniMax-M3-Pro-0901": 1}}}}
+
+
+def test_without_llm_telemetry_a_stage_marks_its_configured_pair(pipeline_roots, monkeypatch):
+    """LLM_TELEMETRY_ENABLED=false meters no call, so the stage cannot know the tier-routed
+    model it sent: run.json names the configured pair and says so (requested_source)."""
+    monkeypatch.setattr(Config, "LLM_TELEMETRY_ENABLED", False, raising=False)
+    sent, ontology = _tiered_ontology_call(pipeline_roots, monkeypatch, "pipe_infra8_no_meter")
+    assert sent == ["MiniMax-M3-Pro"]
+    assert ontology == {"provider": "minimax", "model_name": "MiniMax-M3",
+                        "requested_model": "MiniMax-M3", "requested_source": "configured",
+                        "requested_models": [], "served_models": [], "model_resolution": {}}
 
 
 def test_run_requested_model_is_never_the_sim_telemetry_model(pipeline_roots, monkeypatch):
@@ -716,19 +789,24 @@ def test_run_requested_model_is_never_the_sim_telemetry_model(pipeline_roots, mo
     monkeypatch.setattr(Config, "LLM_PROVIDER", "claude-cli", raising=False)
     monkeypatch.setattr(Config, "LLM_MODEL_NAME", "glm-5.3", raising=False)
     state = _state(pipeline_roots, "pipe_infra8_cli_sim",
-                   sim_llm_telemetry={"provider": "claude-cli", "model": "claude-cli", "calls": 9})
+                   sim_llm_telemetry={"provider": "claude-cli", "model": "claude-cli", "calls": 9,
+                                      "simulation_id": "sim_cli"})
+    state.simulation_id = "sim_cli"
     record = po.PipelineOrchestrator()._stage_model_record(state, po.STAGE_RUN)
-    assert record == {"requested_model": "cli-default", "requested_models": [], "served_models": []}
+    assert record == {"requested_model": "cli-default", "requested_source": "configured",
+                      "requested_models": [], "served_models": [], "model_resolution": {}}
     monkeypatch.setattr(Config, "LLM_MODEL_NAME", "claude-sonnet-4-5", raising=False)
     record = po.PipelineOrchestrator()._stage_model_record(state, po.STAGE_RUN)
     assert record["requested_model"] == "claude-sonnet-4-5"
     # An OpenAI-compatible simulation's dominant served snapshot id is not the request either.
     monkeypatch.setattr(Config, "LLM_PROVIDER", "minimax", raising=False)
     monkeypatch.setattr(Config, "LLM_MODEL_NAME", "MiniMax-M3", raising=False)
-    state.options["sim_llm_telemetry"] = {"provider": "minimax", "model": "MiniMax-M3-0901"}
+    state.options["sim_llm_telemetry"] = {"provider": "minimax", "model": "MiniMax-M3-0901",
+                                          "simulation_id": "sim_cli"}
     assert po.PipelineOrchestrator()._stage_model_record(state, po.STAGE_RUN)["requested_model"] == "MiniMax-M3"
     # A provider the parent guessed from the model name is not trusted as the provider.
-    state.options["sim_llm_telemetry"] = {"provider": "claude", "model": "claude"}
+    state.options["sim_llm_telemetry"] = {"provider": "claude", "model": "claude",
+                                          "simulation_id": "sim_cli"}
     assert po.PipelineOrchestrator()._stage_model_record(state, po.STAGE_RUN)["requested_model"] == "MiniMax-M3"
 
 
@@ -739,6 +817,7 @@ def sim_root(tmp_path, monkeypatch):
     root = tmp_path / "simulations"
     root.mkdir()
     monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(root))
+    monkeypatch.setattr(SimulationRunner, "_run_states", {})
     return root
 
 
@@ -753,12 +832,24 @@ def _write_sim_telemetry(sim_root, sim_id, **fields):
     (sim_dir / "sim_llm_telemetry.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _write_run_state(sim_root, sim_id, resumed_from_round):
+    """The run_state.json a child start leaves (SimulationRunner.start_simulation), read back
+    from disk as a later attempt would."""
+    from app.services.simulation_runner import SimulationRunner
+
+    (sim_root / sim_id / "run_state.json").write_text(json.dumps(
+        {"runner_status": "completed", "resumed_from_round": resumed_from_round}),
+        encoding="utf-8")
+    SimulationRunner._run_states.pop(sim_id, None)
+
+
 def test_sim_ingestion_stashes_the_child_record_and_meters_no_bogus_resolution(
         pipeline_roots, sim_root):
     pid = "pipe_infra8_sim_ingest"
     state = _state(pipeline_roots, pid)
     child_record = {"claude-cli:cli-default": {"calls": 12, "served": {"claude-opus-4-8": 12}}}
     _write_sim_telemetry(sim_root, "sim_infra8", model_resolution=child_record)
+    state.simulation_id = "sim_infra8"
     orch = po.PipelineOrchestrator()
     orch._write_run_manifest(state)
     orch._record_sim_run_telemetry(state, "sim_infra8")
@@ -766,7 +857,10 @@ def test_sim_ingestion_stashes_the_child_record_and_meters_no_bogus_resolution(
     # The synthetic aggregate keeps its spend and by_model key but claims no requested model.
     assert snap["by_stage"]["run"]["calls"] == 1 and "claude-cli:claude-cli" in snap["by_model"]
     assert "model_resolution" not in snap
-    assert state.options["sim_llm_telemetry"]["model_resolution"] == child_record
+    stash = state.options["sim_llm_telemetry"]
+    assert stash["model_resolution"] == child_record
+    assert stash["simulation_id"] == "sim_infra8"
+    assert stash["model_resolution_tokens"] == ["tok-sim_infra8"]
     orch._complete_stage(state, po.STAGE_RUN)
     simulation = _manifest(pid)["resolved"]["simulation"]
     assert simulation["requested_model"] == "cli-default"
@@ -785,6 +879,81 @@ def test_sim_ingestion_with_the_flag_off_stashes_as_before(pipeline_roots, sim_r
         "total_tokens", "by_source", "wall_s"}
 
 
+FIRST_CHILD = {"minimax:MiniMax-M3": {"calls": 30, "served": {"MiniMax-M3-0901": 30}}}
+SECOND_CHILD = {"minimax:MiniMax-M3-Pro": {"calls": 10, "served": {"MiniMax-M3-Pro-0901": 10}}}
+
+
+def _two_child_runs(pipeline_roots, sim_root, pid, resumed_from_round):
+    """Two child runs of one simulation, the second started in a later attempt after the
+    operator switched LLM_MODEL_NAME (``resumed_from_round`` None = a fresh start). Returns
+    the RUN stash and run.json's simulation block after RUN completes."""
+    state = _state(pipeline_roots, pid)
+    state.simulation_id = "sim_two_runs"
+    _write_sim_telemetry(sim_root, "sim_two_runs", provider="minimax", model="MiniMax-M3-0901",
+                         model_resolution=FIRST_CHILD)
+    _write_run_state(sim_root, "sim_two_runs", None)
+    orch = po.PipelineOrchestrator()
+    orch._write_run_manifest(state)
+    orch._record_sim_run_telemetry(state, "sim_two_runs")
+    # The second child rewrites the telemetry file with its own counters and token.
+    tel_path = sim_root / "sim_two_runs" / "sim_llm_telemetry.json"
+    payload = json.loads(tel_path.read_text(encoding="utf-8"))
+    payload.update(meter_run_token="tok-second", model="MiniMax-M3-Pro-0901",
+                   model_resolution=SECOND_CHILD)
+    tel_path.write_text(json.dumps(payload), encoding="utf-8")
+    _write_run_state(sim_root, "sim_two_runs", resumed_from_round)
+    orch._record_sim_run_telemetry(state, "sim_two_runs")
+    orch._record_sim_run_telemetry(state, "sim_two_runs")  # a later boundary: already recorded
+    stash = state.options["sim_llm_telemetry"]
+    assert stash["model"] == "MiniMax-M3-Pro-0901"  # the token summary is the latest child's
+    assert tel.LLMMeter.snapshot(pid)["by_stage"]["run"]["calls"] == 2  # both spends metered
+    orch._complete_stage(state, po.STAGE_RUN)
+    return stash, _manifest(pid)["resolved"]["simulation"]
+
+
+def test_a_resumed_simulation_child_adds_to_the_run_record(pipeline_roots, sim_root):
+    """SIM_RESUME starts a new child (new meter_run_token) whose telemetry covers only the
+    resumed rounds; RUN keeps the model that served the earlier rounds as well."""
+    stash, simulation = _two_child_runs(pipeline_roots, sim_root, "pipe_infra8_sim_resume", 6)
+    assert stash["model_resolution_tokens"] == ["tok-sim_two_runs", "tok-second"]
+    assert stash["model_resolution"] == {**FIRST_CHILD, **SECOND_CHILD}
+    assert simulation["requested_model"] == "MiniMax-M3"
+    assert simulation["requested_models"] == ["minimax:MiniMax-M3", "minimax:MiniMax-M3-Pro"]
+    assert simulation["served_models"] == ["MiniMax-M3-0901", "MiniMax-M3-Pro-0901"]
+    assert simulation["model_resolution"] == {**FIRST_CHILD, **SECOND_CHILD}
+
+
+def test_a_fresh_restart_of_the_simulation_replaces_the_run_record(pipeline_roots, sim_root):
+    """Without a resume the restarted child discards the earlier rounds (SIM_RESUME off, the
+    default), so their model no longer describes the RUN output."""
+    stash, simulation = _two_child_runs(pipeline_roots, sim_root, "pipe_infra8_sim_restart", None)
+    assert stash["model_resolution_tokens"] == ["tok-second"]
+    assert stash["model_resolution"] == SECOND_CHILD
+    assert simulation["requested_model"] == "MiniMax-M3-Pro"
+    assert simulation["requested_models"] == ["minimax:MiniMax-M3-Pro"]
+    assert simulation["served_models"] == ["MiniMax-M3-Pro-0901"]
+    assert simulation["model_resolution"] == SECOND_CHILD
+
+
+def test_run_record_ignores_the_stash_of_an_earlier_simulation(pipeline_roots, sim_root):
+    """A recomputed RUN whose telemetry is unreadable does not inherit the model record of
+    the simulation an earlier attempt ran."""
+    pid = "pipe_infra8_stale_stash"
+    state = _state(pipeline_roots, pid, sim_llm_telemetry=json.loads(json.dumps(SIM_STASH)))
+    state.simulation_id = "sim_rebuilt"
+    orch = po.PipelineOrchestrator()
+    orch._write_run_manifest(state)
+    orch._record_sim_run_telemetry(state, "sim_rebuilt")  # no sim_llm_telemetry.json: no-op
+    assert state.options["sim_llm_telemetry"]["simulation_id"] == SIM_ID
+    assert orch._reused_stage_model_record(state, po.STAGE_RUN, {}) is None
+    orch._complete_stage(state, po.STAGE_RUN)
+    simulation = _manifest(pid)["resolved"]["simulation"]
+    # The configured pair of this attempt (pipeline_roots: kimi / kimi-k2.7), not SIM_STASH's.
+    assert {key: simulation[key] for key in RUN_RECORD} == {
+        "requested_model": "kimi-k2.7", "requested_source": "configured",
+        "requested_models": [], "served_models": [], "model_resolution": {}}
+
+
 def test_research_synthetic_records_claim_no_requested_model(pipeline_roots):
     pid = "pipe_infra8_research_meter"
     state = _state(pipeline_roots, pid)
@@ -801,8 +970,8 @@ def test_reused_stages_without_model_keys_are_filled_from_their_stamp(pipeline_r
     """INFRA-7 restamps a reused ONTOLOGY (early stamp after save_project) or REPORT (pending
     mint) with its producer pair only; the reuse completion adds the requested label."""
     pid = "pipe_infra8_reuse_fill"
-    state = _state(pipeline_roots, pid, sim_llm_telemetry={
-        "provider": "minimax", "model": "MiniMax-M3-0901", "model_resolution": SIM_RESOLUTION})
+    state = _state(pipeline_roots, pid, sim_llm_telemetry=json.loads(json.dumps(SIM_STASH)))
+    state.simulation_id = SIM_ID
     orch = po.PipelineOrchestrator()
     orch._write_run_manifest(state)
     orch._stamp_produced_artifact(state, po.STAGE_ONTOLOGY)
@@ -815,7 +984,8 @@ def test_reused_stages_without_model_keys_are_filled_from_their_stamp(pipeline_r
     for stage in (po.STAGE_ONTOLOGY, po.STAGE_GRAPH, po.STAGE_RUN, po.STAGE_REPORT):
         second._complete_stage(state, stage, reused=True)
     resolved = _manifest(pid)["resolved"]
-    unknown_served = {"requested_models": [], "served_models": []}
+    unknown_served = {"requested_source": "configured", "requested_models": [],
+                      "served_models": [], "model_resolution": {}}
     assert resolved["ontology"] == {"provider": "kimi", "model_name": "kimi-k2.7",
                                     "requested_model": "kimi-k2.7", **unknown_served}
     assert resolved["report"] == {"provider": "kimi", "model_name": "kimi-k2.7",
@@ -1003,10 +1173,11 @@ def test_forecast_json_carries_model_provenance_when_run_provenance_is_set(forec
         block = forecast["model_provenance"]
         assert block["version"] == "model-provenance/v1" and block["pin_drift"] is None
         assert block["stages"]["research"]["model_id"] == "glm-5.3"
-        assert block["stages"]["report"] == {"provider": "fake", "model_name": "fake-1",
-                                             "requested_model": "fake-1",
-                                             "requested_models": ["fake:fake-1"],
-                                             "served_models": ["fake-1-0930"]}
+        assert block["stages"]["report"] == {
+            "provider": "fake", "model_name": "fake-1", "requested_model": "fake-1",
+            "requested_source": "metered", "requested_models": ["fake:fake-1"],
+            "served_models": ["fake-1-0930"],
+            "model_resolution": {"fake:fake-1": {"calls": 1, "served": {"fake-1-0930": 1}}}}
     assert "report" not in agent.run_provenance["stages"]
 
 
@@ -1027,7 +1198,35 @@ def test_report_stage_names_the_tier_routed_model_it_requested():
         tel.LLMMeter.reset(rid)
     assert block["stages"]["report"] == {
         "provider": "minimax", "model_name": "MiniMax-M3", "requested_model": "MiniMax-M3-Pro",
-        "requested_models": ["minimax:MiniMax-M3-Pro"], "served_models": ["MiniMax-M3-Pro-0901"]}
+        "requested_source": "metered", "requested_models": ["minimax:MiniMax-M3-Pro"],
+        "served_models": ["MiniMax-M3-Pro-0901"],
+        "model_resolution": {"minimax:MiniMax-M3-Pro": {"calls": 1,
+                                                        "served": {"MiniMax-M3-Pro-0901": 1}}}}
+
+
+def test_report_stage_keeps_which_served_id_answered_which_request():
+    """A shadow-check or ensemble model's served id is kept under its own request, not only
+    in the flat served_models list."""
+    from app.services.report_agent import ReportAgent
+
+    agent = ReportAgent.__new__(ReportAgent)
+    agent.llm = SimpleNamespace(provider="minimax", model="MiniMax-M3")
+    agent.run_provenance = json.loads(json.dumps(RUN_PROVENANCE))
+    rid = "run-infra8-report-shadow"
+    tel.set_run_context(rid, "report")
+    try:
+        for _ in range(3):
+            tel.LLMMeter.record("minimax", "MiniMax-M3", 5, 5, 1.0, served_model="MiniMax-M3-0901")
+        tel.LLMMeter.record("deepseek", "deepseek-v4", 5, 5, 1.0, served_model="deepseek-v4-0925")
+        report = agent._model_provenance_block()["stages"]["report"]
+    finally:
+        tel.set_run_context(None)
+        tel.LLMMeter.reset(rid)
+    assert report["requested_model"] == "MiniMax-M3"
+    assert report["served_models"] == ["MiniMax-M3-0901", "deepseek-v4-0925"]
+    assert report["model_resolution"] == {
+        "minimax:MiniMax-M3": {"calls": 3, "served": {"MiniMax-M3-0901": 3}},
+        "deepseek:deepseek-v4": {"calls": 1, "served": {"deepseek-v4-0925": 1}}}
 
 
 def test_forecast_json_has_no_model_provenance_without_run_provenance(forecast_env):
@@ -1137,3 +1336,23 @@ def test_preflight_endpoint_refuses_an_unknown_model(api_client):
     ok = api_client.get("/api/research/preflight?model=GLM")
     assert ok.status_code == 200 and ok.get_json()["data"]["ready"] is True
     assert api_client.get("/api/research/preflight").status_code == 200
+
+
+def test_preflight_endpoint_checks_the_normalised_model_in_both_forms(monkeypatch):
+    scripts = os.path.join(_BACKEND, "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import preflight
+
+    seen = []
+    monkeypatch.setattr(research_api, "preflight_pipeline", lambda **kw: seen.append(kw) or [])
+    monkeypatch.setattr(preflight, "environment_report",
+                        lambda **kw: seen.append(("full", kw)) or {"ready": True})
+    app = Flask(__name__)
+    app.register_blueprint(research_bp, url_prefix="/api/research")
+    client = app.test_client()
+    assert client.get("/api/research/preflight?model=GLM&mode=research_only").status_code == 200
+    assert client.get("/api/research/preflight").status_code == 200
+    assert client.get("/api/research/preflight?model=GLM&format=full").status_code == 200
+    assert seen == [{"mode": "research_only", "model": "glm"}, {"mode": "full", "model": None},
+                    ("full", {"mode": "full", "model": "glm", "deep": False})]

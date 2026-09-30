@@ -47,7 +47,14 @@ RESOLVED_BLOCK_FOR_STAGE: Dict[str, str] = {
 EXTRA_RESOLVED_BLOCKS = ("prepare",)
 # Keys of a resolved block that describe models (the forecast.json ``stages`` subset).
 PROVENANCE_KEYS = ("provider", "model_name", "model", "model_id", "requested_model",
-                   "requested_models", "served_models")
+                   "requested_source", "requested_models", "served_models", "model_resolution")
+# ``requested_source`` of a stage record: 'metered' = requested_model comes from the stage's
+# per-call records (LLMMeter, or the simulation child's own); 'configured' = no call was
+# recorded (e.g. LLM_TELEMETRY_ENABLED=false, a reused stage stamped only with its producer
+# pair), so requested_model is the effective label of the configured provider / model, which
+# tier routing (EVAL-10) or failover may not have sent.
+REQUESTED_SOURCE_METERED = "metered"
+REQUESTED_SOURCE_CONFIGURED = "configured"
 
 _CLAUDE_ALIASES = ("opus", "sonnet", "haiku")
 
@@ -170,15 +177,19 @@ def resolution_entries(model_resolution: Any, stage: str) -> Dict[str, Dict[str,
 
 
 def stage_record(entries: Any, provider: Optional[str], model: Optional[str]) -> Dict[str, Any]:
-    """``{requested_model, requested_models, served_models}`` of one stage from the
-    ``model_resolution`` entries its calls recorded (``{'provider:label': {calls, served}}``).
+    """``{requested_model, requested_source, requested_models, served_models,
+    model_resolution}`` of one stage from the ``model_resolution`` entries its calls recorded
+    (``{'provider:label': {calls, served}}``).
 
     ``requested_models`` lists every ``provider:label`` the stage's calls requested, most calls
     first (ties by key), so tier routing (EVAL-10: the strong / fast model, possibly served by
     LLM_FAST_PROVIDER) and failover show as the models actually sent. ``requested_model`` is
-    the label of the most-called one. ``served_models`` merges every served id. A stage that
-    recorded no call falls back to the effective label of ``provider`` / ``model`` (the
-    configured pair) with empty ``requested_models`` and ``served_models``.
+    the label of the most-called one. ``served_models`` merges every served id;
+    ``model_resolution`` keeps the sanitized entries in the same order, so which served id
+    answered which request (a failover model, a FORECAST_ENSEMBLE_MODELS client, a shadow
+    check) survives. ``requested_source`` is 'metered'. A stage that recorded no call falls
+    back to the effective label of ``provider`` / ``model`` (the configured pair) with
+    ``requested_source`` 'configured' and nothing else claimed.
     """
     clean: Dict[str, Dict[str, Any]] = {}
     merge_resolution_entries(clean, entries)
@@ -189,8 +200,10 @@ def stage_record(entries: Any, provider: Optional[str], model: Optional[str]) ->
     return {
         "requested_model": (requested_label_of(keys[0]) if keys
                             else effective_model_label(provider, model)),
+        "requested_source": REQUESTED_SOURCE_METERED if keys else REQUESTED_SOURCE_CONFIGURED,
         "requested_models": keys,
         "served_models": served_model_list(served),
+        "model_resolution": {key: clean[key] for key in keys},
     }
 
 
@@ -199,16 +212,56 @@ def reused_stage_record(block: Any) -> Optional[Dict[str, Any]]:
 
     A reused ONTOLOGY / GRAPH / REPORT whose block INFRA-7 restamped with its producer pair
     (the early ONTOLOGY stamp after save_project, a pending report mint) never passed through
-    a recomputing completion. Its requested label is the effective label of that pair and
-    its served ids are unknown (empty). None as well when the block names no pair.
+    a recomputing completion. Its requested label is the effective label of that pair
+    (``requested_source`` 'configured') and its served ids are unknown (empty). None as well
+    when the block names no pair.
     """
     if not isinstance(block, Mapping) or "requested_model" in block:
         return None
     provider, model = block.get("provider"), block.get("model_name")
     if not (provider or model):
         return None
-    return {"requested_model": effective_model_label(provider, model),
-            "requested_models": [], "served_models": []}
+    return stage_record(None, provider, model)
+
+
+def sim_stash_model_keys(prior: Any, simulation_id: str, meter_run_token: str,
+                         entries: Any, *, resumed: bool) -> Dict[str, Any]:
+    """The INFRA-8 keys of the orchestrator's RUN stash (``options.sim_llm_telemetry``) after
+    ingesting one simulation child run and its ``model_resolution`` ``entries``.
+
+    ``{simulation_id, model_resolution_tokens, model_resolution}``, the last only when a call
+    was recorded. A child run that ``resumed`` the simulation the ``prior`` stash describes
+    (SIM_RESUME continued it from a round checkpoint, e.g. in a later attempt) adds its
+    entries to the prior ones, so the models that served the earlier rounds stay on record.
+    ``model_resolution_tokens`` lists the meter_run_tokens already merged, so one child run
+    is never added twice. A fresh start of the simulation discards the earlier rounds, so it
+    replaces the prior record, as does a child run of another simulation; a prior stash
+    without these keys is never merged.
+    """
+    merged: Dict[str, Dict[str, Any]] = {}
+    tokens: List[str] = []
+    if resumed and isinstance(prior, Mapping) and prior.get("simulation_id") == simulation_id:
+        prior_tokens = prior.get("model_resolution_tokens")
+        if isinstance(prior_tokens, list):
+            tokens = [token for token in prior_tokens if isinstance(token, str)]
+            merge_resolution_entries(merged, prior.get("model_resolution"))
+    if meter_run_token not in tokens:
+        merge_resolution_entries(merged, entries)
+        tokens.append(meter_run_token)
+    out: Dict[str, Any] = {"simulation_id": simulation_id, "model_resolution_tokens": tokens}
+    if merged:
+        out["model_resolution"] = merged
+    return out
+
+
+def sim_stash_of(stash: Any, simulation_id: Any) -> Optional[Mapping[str, Any]]:
+    """``stash`` when it is the RUN stash of ``simulation_id`` (stamped by
+    sim_stash_model_keys), else None: a stash of an earlier simulation, or one that predates
+    the stamp, says nothing about this simulation's models."""
+    if (isinstance(stash, Mapping) and isinstance(simulation_id, str) and simulation_id
+            and stash.get("simulation_id") == simulation_id):
+        return stash
+    return None
 
 
 def merge_research_model_resolutions(parts: Iterable[Any]) -> Optional[Dict[str, Any]]:

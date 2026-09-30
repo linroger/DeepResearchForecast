@@ -9864,7 +9864,8 @@ class PipelineOrchestrator:
         simulation child's own record (:meth:`_sim_model_record`). Every other stage: the
         requested labels and served ids this attempt's LLMMeter recorded for the stage
         (model_provenance.stage_record: tier routing and failover included), falling back to
-        the current provider pair (the pair INFRA-7 stamps) when the stage made no call.
+        the current provider pair (the pair INFRA-7 stamps, ``requested_source``
+        'configured') when the stage recorded no call, e.g. with LLM_TELEMETRY_ENABLED off.
         """
         if stage == STAGE_RESEARCH:
             record = getattr(self, "_research_model_provenance", None)
@@ -9883,24 +9884,38 @@ class PipelineOrchestrator:
         """INFRA-8: RUN's requested labels and served ids from the simulation child.
 
         The child records them per call (sim_llm_telemetry.json ``model_resolution``, stashed
-        in ``options.sim_llm_telemetry``): the direct camel calls with the id the provider
+        in ``options.sim_llm_telemetry`` and merged across the child runs a SIM_RESUME
+        continuation chains together): the direct camel calls with the id the provider
         reported, and every LLMClient call (CLI bridge, failover, decision channel) with its
-        own requested label and served id. Without that record (a child that predates it)
-        the requested label is the effective label of the simulation provider and the model
-        oasis_llm sends (LLM_MODEL_NAME), with no served ids. The telemetry's ``model`` is
-        never used: it is the dominant by_model key, i.e. a served id or, for the CLI bridge,
-        the provider name.
+        own requested label and served id. Only a stash of the current simulation
+        (``state.simulation_id``) counts: one left by an earlier simulation (this RUN's
+        telemetry was unreadable) is ignored. Without the child's record the requested label
+        is the effective label of the simulation provider and the model oasis_llm sends
+        (LLM_MODEL_NAME), with no served ids (``requested_source`` 'configured'). The
+        telemetry's ``model`` is never used: it is the dominant by_model key, i.e. a served
+        id or, for the CLI bridge, the provider name.
         """
         from ..utils.llm_client import CLI_PROVIDERS, OPENAI_COMPATIBLE_PROVIDERS
         pair = _current_provider_pair()
-        sim_tel = state.options.get("sim_llm_telemetry")
-        sim_tel = sim_tel if isinstance(sim_tel, dict) else {}
+        sim_tel = model_provenance.sim_stash_of(
+            state.options.get("sim_llm_telemetry"), state.simulation_id) or {}
         provider = sim_tel.get("provider")
         if provider not in (*CLI_PROVIDERS, *OPENAI_COMPATIBLE_PROVIDERS):
             # Missing, or the pricing key _record_sim_run_telemetry guessed from the model.
             provider = pair.get("provider")
         return model_provenance.stage_record(
             sim_tel.get("model_resolution"), provider, pair.get("model_name"))
+
+    @staticmethod
+    def _sim_child_resumed(simulation_id: str) -> bool:
+        """INFRA-8: whether the latest child run of ``simulation_id`` continued its earlier
+        rounds from a round checkpoint (SIM_RESUME: the run state's ``resumed_from_round``) or
+        started afresh, discarding them. False when the run state is unavailable."""
+        try:
+            run_state = SimulationRunner.get_run_state(simulation_id)
+        except Exception:  # noqa: BLE001 — 未知按全新运行处理（只记本次子进程）
+            return False
+        return getattr(run_state, "resumed_from_round", None) is not None
 
     def _reused_stage_model_record(self, state: "PipelineState", stage: str,
                                    block: dict[str, Any]) -> Optional[dict[str, Any]]:
@@ -9911,8 +9926,8 @@ class PipelineOrchestrator:
         early ONTOLOGY stamp after save_project, a pending report mint) gets the effective
         label of its stamped pair with unknown served ids; only with RUN_SHAPE_PIN on, since
         the legacy stage-entry stamp names the current provider, not the producer. A reused
-        RUN gets the simulation child's own record when the stash holds one. Other stages
-        stay as carried forward.
+        RUN gets the simulation child's own record when the stash of the current simulation
+        holds one. Other stages stay as carried forward.
         """
         if "requested_model" in block:
             return None
@@ -9921,8 +9936,9 @@ class PipelineOrchestrator:
                 return None
             return model_provenance.reused_stage_record(block)
         if stage == STAGE_RUN:
-            sim_tel = state.options.get("sim_llm_telemetry")
-            if isinstance(sim_tel, dict) and sim_tel.get("model_resolution"):
+            sim_tel = model_provenance.sim_stash_of(
+                state.options.get("sim_llm_telemetry"), state.simulation_id)
+            if sim_tel is not None and sim_tel.get("model_resolution"):
                 return self._sim_model_record(state)
         return None
 
@@ -12404,6 +12420,7 @@ class PipelineOrchestrator:
                                            SIM_METER_LEGACY_MARKER_OPTION)
                                if key in state.options}
                 if stage == STAGE_RUN:
+                    _prior_stash = state.options.get("sim_llm_telemetry")
                     state.options["sim_llm_telemetry"] = {
                         "provider": provider,
                         "model": model,
@@ -12418,12 +12435,14 @@ class PipelineOrchestrator:
                     }
                     if bool(getattr(Config, "RECORD_MODEL_PROVENANCE", True)):
                         # INFRA-8: the child's own per-call requested label -> served ids
-                        # (absent from a child that predates it or recorded no call).
-                        _sim_resolution: dict[str, Any] = {}
-                        model_provenance.merge_resolution_entries(
-                            _sim_resolution, tel.get("model_resolution"))
-                        if _sim_resolution:
-                            state.options["sim_llm_telemetry"]["model_resolution"] = _sim_resolution
+                        # (absent from a child that predates it or recorded no call), tagged
+                        # with its simulation and, when the child resumed that simulation
+                        # (SIM_RESUME), merged into its earlier child runs once per
+                        # meter_run_token; a fresh start replaces them.
+                        state.options["sim_llm_telemetry"].update(
+                            model_provenance.sim_stash_model_keys(
+                                _prior_stash, sid, token, tel.get("model_resolution"),
+                                resumed=self._sim_child_resumed(sid)))
                     state.options[SIM_METER_LEGACY_MARKER_OPTION] = {
                         "simulation_id": sid,
                         "meter_run_token": token,

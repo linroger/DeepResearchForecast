@@ -409,6 +409,8 @@ def preflight():
             "success": False,
             "error": f"model 必须是 {', '.join(Config.SUPPORTED_DEERFLOW_MODELS)} 之一",
         }), 400
+    if model:
+        model = model.lower()  # 与 POST /run 同样归一，两种响应都按该模型体检
 
     if (request.args.get('format') or '').strip().lower() == 'full':
         # 复用 backend/scripts/preflight.py 的 environment_report()（同一引擎，零漂移）。
@@ -426,7 +428,7 @@ def preflight():
         except Exception as e:
             logger.warning(f"preflight format=full 降级到精简响应: {e}")
 
-    errors = preflight_pipeline(mode=mode)
+    errors = preflight_pipeline(mode=mode, model=model)
     return jsonify({"success": True, "data": {"ready": not errors, "errors": errors, "mode": mode}})
 
 
