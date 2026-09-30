@@ -74,6 +74,12 @@ def test_scenario_stats():
     one = ps.probability_shape([1.0])["scenarios"]
     assert (one["n"], one["max_probability"], one["normalized_entropy"], one["tv_from_uniform"]) == (
         1, 1.0, None, 0.0)
+    # a degenerate 1/0 split has entropy 0.0, never a "-0.0" in the sealed JSON
+    degenerate = ps.probability_shape(_named([1.0, 0.0]))
+    assert degenerate["scenarios"]["normalized_entropy"] == 0.0
+    assert math.copysign(1, degenerate["scenarios"]["normalized_entropy"]) == 1
+    assert degenerate["scenarios"]["tv_from_uniform"] == 0.5
+    assert '"normalized_entropy": 0.0' in json.dumps(degenerate)
     # entropy / TV renormalise (rounding residue); the peak stays the raw published value
     rounded = ps.probability_shape(_named([0.34, 0.33, 0.32]))["scenarios"]
     assert rounded["max_probability"] == 0.34 and 0.99 < rounded["normalized_entropy"] <= 1.0
@@ -232,10 +238,12 @@ class _RouterLLM(FakeLLMClient):
         return self._router(messages[-1]["content"])
 
 
-def _router(critique_reply):
+def _router(critique_reply, premortem_reply=None):
     def route(content):
         if content.startswith(fe._CRITIQUE_INSTRUCTIONS):
             return json.loads(json.dumps(critique_reply))
+        if premortem_reply is not None and content.startswith(fe._PREMORTEM_INSTRUCTIONS):
+            return json.loads(json.dumps(premortem_reply))
         return _spine()
     return route
 
@@ -315,10 +323,11 @@ def _read_forecast(tmp_path, report_id):
         return json.load(handle)
 
 
-def _run_report(tmp_path, report_id, critique_reply=None, *, spine_first=True):
+def _run_report(tmp_path, report_id, critique_reply=None, *, spine_first=True,
+                premortem_reply=None):
     reply = {"scenarios": _scenario_rows(_CRITIQUE_P), "confidence": "low"} if (
         critique_reply is None) else critique_reply
-    llm = _RouterLLM(_router(reply))
+    llm = _RouterLLM(_router(reply, premortem_reply))
     (tmp_path / "reports" / report_id).mkdir(parents=True)
     agent = _agent(llm)
     if spine_first:
@@ -402,6 +411,43 @@ def test_finalize_writes_shape_gate_unchanged(report_env, monkeypatch):
     assert [c["messages"] for c in llm_off.calls] == [c["messages"] for c in llm.calls]
     row_off = _commit("r_shape_off", forecast_off, "2026-09-02")
     assert "objective_signals" not in row_off and "objective_signals_dropped" not in row_off
+
+
+# The pre-mortem shaves 0.05 off the critiqued peak (0.40 -> 0.35) toward the residual.
+_PREMORTEM_REPLY = {"underweighted_scenario": _NAMES[2], "missed_signals": ["Grid delays"],
+                    "overconfident_scenario": _NAMES[0]}
+
+
+@pytest.mark.parametrize("premortem", [False, True])
+def test_red_team_prompts_do_not_see_the_snapshot(report_env, monkeypatch, premortem):
+    """The snapshot is stamped after the critique and the pre-mortem: both prompts serialize
+    quality (_llm_forecast_view), so an earlier stamp would leak pre_critique_scenarios into
+    them. Prompts are identical with the telemetry on and off, pre-mortem on or off."""
+    monkeypatch.setattr(Config, "REPORT_PREMORTEM", premortem, raising=False)
+    llm, forecast = _run_report(report_env, "r_pm", premortem_reply=_PREMORTEM_REPLY)
+    monkeypatch.setattr(Config, "FORECAST_PROBABILITY_SHAPE", False, raising=False)
+    llm_off, forecast_off = _run_report(report_env, "r_pm_off", premortem_reply=_PREMORTEM_REPLY)
+
+    prompts = [c["messages"] for c in llm.calls]
+    assert prompts == [c["messages"] for c in llm_off.calls]
+    contents = [message["content"] for messages in prompts for message in messages]
+    assert not any("pre_critique_scenarios" in content for content in contents)
+    assert sum(content.startswith(fe._CRITIQUE_INSTRUCTIONS) for content in contents) == 1
+    assert sum(content.startswith(fe._PREMORTEM_INSTRUCTIONS) for content in contents) == (
+        1 if premortem else 0)
+
+    quality = forecast["quality"]
+    assert [row["probability"] for row in quality["pre_critique_scenarios"]] == list(_SPINE_P)
+    assert ("premortem" in forecast) is premortem
+    # critique_delta spans the whole red-team step: critique, then pre-mortem when on
+    peak = max(s["probability"] for s in forecast["scenarios"])
+    assert peak == (0.35 if premortem else 0.4)
+    assert quality["probability_shape"]["scenarios"]["critique_delta"]["max_probability"] == (
+        round(peak - 0.5, 4))
+    on_minus_telemetry = json.loads(json.dumps(forecast))
+    del on_minus_telemetry["quality"]["probability_shape"]
+    del on_minus_telemetry["quality"]["pre_critique_scenarios"]
+    assert on_minus_telemetry == forecast_off
 
 
 def test_spine_path_early_forecast_carries_the_snapshot(report_env):

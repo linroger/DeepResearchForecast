@@ -1,6 +1,7 @@
 """NEXTSTEPS P2-4: forecast ledger (append / read / calibration / due) — offline."""
 
 import json
+import math
 import os
 import threading
 import time
@@ -302,3 +303,17 @@ def test_shape_summary_empty_and_malformed_rows(tmp_path):
     (group,) = summary["groups"]
     assert group["binary_symmetric_guard"] is None and (group["n"], group["n_with_shape"]) == (3, 2)
     assert all(m == {"n": 0, "mean": None, "median": None} for m in group["metrics"].values())
+
+
+def test_shape_summary_never_prints_negative_zero():
+    # mean -0.0000333 and a -0.0 median round to 0.0, not "-0.0"
+    rows = [{"report_id": f"r{i}", "objective_signals": {"probability_shape": {
+        "policy": {"binary_symmetric_guard": False},
+        "scenarios": {"critique_delta": {"normalized_entropy": delta}}}}}
+        for i, delta in enumerate((-0.0001, -0.0, -0.0))]
+    summary = forecast_ledger.shape_summary(entries=rows)
+    (group,) = summary["groups"]
+    metric = group["metrics"]["scenarios.critique_delta.normalized_entropy"]
+    assert metric == {"n": 3, "mean": 0.0, "median": 0.0}
+    assert math.copysign(1, metric["mean"]) == math.copysign(1, metric["median"]) == 1
+    assert "-0.0" not in json.dumps(summary)

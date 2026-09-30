@@ -8,7 +8,10 @@ published numbers alone:
 
 - scenarios: ``n``, ``max_probability`` (the same peak the publish gate records as
   ``quality.max_probability``), ``normalized_entropy`` (H / ln n, None when n < 2)
-  and ``tv_from_uniform`` (0.5 * sum |p - 1/n|); with the pre-critique snapshot
+  and ``tv_from_uniform`` (0.5 * sum |p - 1/n|), both over the readable probabilities
+  renormalised to sum 1 (identical for a valid partition; with an unreadable row left
+  out or a partition off 1, they measure the shape, not the missing mass, while the
+  peak stays the raw published value); with the pre-critique snapshot
   (``quality.pre_critique_scenarios``, see :func:`stamp_pre_critique`) also the same
   stats before the critique and the post - pre ``critique_delta``;
 - binaries: the 0.40-0.60 ``midband_share`` (the band ``_binary_quality`` gates on),
@@ -42,7 +45,9 @@ _DELTA_STATS = ("max_probability", "normalized_entropy")
 
 
 def _round(value: Optional[float]) -> Optional[float]:
-    return None if value is None else round(value, _DIGITS)
+    # "+ 0.0" turns -0.0 (the entropy of a degenerate 1/0 split, or a tiny negative
+    # value rounded to zero) into 0.0, so sealed artifacts never print "-0.0".
+    return None if value is None else round(value, _DIGITS) + 0.0
 
 
 def _unit_probability(value: Any) -> Optional[float]:

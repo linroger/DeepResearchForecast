@@ -440,8 +440,10 @@ def _finite_number(value: Any) -> Optional[float]:
 def _distribution(values: List[float]) -> Dict[str, Any]:
     if not values:
         return {"n": 0, "mean": None, "median": None}
-    return {"n": len(values), "mean": round(statistics.fmean(values), 4),
-            "median": round(statistics.median(values), 4)}
+    # "+ 0.0" turns -0.0 (e.g. a small negative mean of critique deltas rounded to
+    # zero) into 0.0, so the summary never prints "-0.0".
+    return {"n": len(values), "mean": round(statistics.fmean(values), 4) + 0.0,
+            "median": round(statistics.median(values), 4) + 0.0}
 
 
 def shape_summary(d: Optional[str] = None, entries: Optional[List[Dict[str, Any]]] = None,
