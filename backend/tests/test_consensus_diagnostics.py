@@ -27,6 +27,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,7 @@ from app.config import Config
 from app.services import actor_context
 from app.services import consensus_evidence as ce
 from app.services import report_agent as ra
+from app.services.hindcast_policy import HINDCAST_POLICY_VERSION
 from test_orchestrator_research_wiring import _launch_capturing_child
 
 # The shared fixtures (hermetic env, real bridge with network steps stubbed,
@@ -253,6 +255,33 @@ def test_numbers_beyond_the_float_range_are_dropped_not_raised():
         "low", "high", "n_forecasters"]
     assert row["forecaster"] == "Poll" and not {"low", "high", "n_forecasters"} & set(row)
     assert lr._forecaster_count(9_999_999) == 9_999_999 and lr._forecaster_count(10_000_000) is None
+
+
+def test_a_bound_longer_than_a_value_is_refused_before_any_check():
+    """Low/high text over a row value's 80-char cap is refused before any
+    check, so a kept bound is always the text that was checked (never a cut
+    that ends mid-number); a long digit run costs linear time, not
+    quadratic (a 20,000-digit bound took ~11 s per row)."""
+    long_number = "1" * 100
+    report = f"Forecasts range from {long_number} to {long_number}1 units."
+    numbers = lr.page_number_set(report)
+    assert lr._checked_bound(long_number, numbers) is None
+    row = _row(value="250,000")
+    assert lr.attribute_forecast_row(row, {"low": long_number, "high": long_number + "1"}, report,
+                                     numbers) == ["low", "high"]
+    assert not {"low", "high"} & set(row)
+    # The kept text is the collapsed text the check read.
+    assert lr._checked_bound(" 38,000\n", lr.page_number_set(REPORT)) == ("38,000", 38000.0)
+
+    huge = "1" * 20000
+    started = time.perf_counter()
+    assert lr._RANGE_PAIR_RE.search(huge + "x") is None and lr._magnitude(huge) is None
+    assert lr.attribute_forecast_row(_row(), {"low": huge, "high": huge}, REPORT,
+                                     lr.page_number_set(REPORT)) == ["low", "high"]
+    assert time.perf_counter() - started < 2.0
+    # Anchoring the pair at a digit run keeps every reading.
+    assert lr._magnitude("1.2-1.5 trillion") == pytest.approx(1.35e12) and lr._magnitude("52–56%") == 54
+    assert lr._magnitude("about 3 to 5") == 4 and lr._magnitude("-2.5") == -2.5
 
 
 def test_actual_rows_lose_the_added_keys():
@@ -521,10 +550,12 @@ def test_humanoid_2030_groups_the_three_global_forecasters():
     assert group["stale"] is True and group["events_since"] == 0 and group["revisions"] == []
     # Morgan Stanley's China figure is its own (single-forecaster) key; the actual is no projection.
     assert all("Morgan Stanley" not in g["forecasters"] for g in diag["groups"])
-    assert diag["counts"] == {"rows": 5, "projected": 4, "eligible": 4, "no_value": 0, "no_target_year": 0,
-                              "no_forecaster": 0}
+    assert diag["counts"] == {"rows": 5, "projected": 4, "eligible": 4, "no_value": 0, "ambiguous_scale": 0,
+                              "no_target_year": 0, "no_forecaster": 0}
+    assert diag["leakage_guard"] is True
     assert ce.quality_summary(diag) == {"schema": ce.SCHEMA, "groups_n": 1, "wide_groups_n": 1,
-                                        "forecasters_n": 3, "excluded_n": 0, "sha256": diag["sha256"]}
+                                        "forecasters_n": 3, "excluded_n": 0, "excluded_by_reason": {},
+                                        "leakage_guard": True, "sha256": diag["sha256"]}
 
 
 def test_metric_without_a_family_groups_on_the_forecaster_free_metric():
@@ -549,6 +580,26 @@ def test_a_projection_dated_after_the_as_of_is_excluded():
     coarse = ce.build_dispersion_diagnostics([_forecast("x", "5", "A", "2026"), _forecast("x", "6", "B", "2026")],
                                              [], "2026-07-15")
     assert coarse["excluded"] == [] and coarse["groups"][0]["n_forecasters"] == 2
+
+
+def test_a_target_date_misplaced_in_as_of_date_is_excluded_under_its_own_reason():
+    """A row the research typing read as holding a target date in as_of_date
+    (its as_of_is_target flag, or the target_date its repair copied) stays
+    excluded, but not as a post-as-of vintage: after_as_of counts only those."""
+    rows = [_forecast("humanoid shipments", "38000", "Omdia", "2024-07-01"),
+            _forecast("humanoid shipments", "250000", "Goldman Sachs", "2025-06-01"),
+            _forecast("humanoid shipments", "900000", "Flagged", "2029-12-31",
+                      epistemic_flags=["as_of_is_target"]),
+            _forecast("humanoid shipments", "800000", "Repaired", "2030-06", target_date="2030-06"),
+            _forecast("humanoid shipments", "700000", "Leaky Bank", "2026-08-01", target_date="2030-12-31")]
+    diag = ce.build_dispersion_diagnostics(rows, [], "2026-07-15")
+    assert [(item["as_of_date"], item["reason"]) for item in diag["excluded"]] == [
+        ("2026-08-01", "after_as_of"), ("2029-12-31", "as_of_is_target"), ("2030-06", "as_of_is_target")]
+    (group,) = diag["groups"]
+    assert group["forecasters"] == ["Goldman Sachs", "Omdia"]
+    summary = ce.quality_summary(diag)
+    assert summary["excluded_n"] == 3
+    assert summary["excluded_by_reason"] == {"after_as_of": 1, "as_of_is_target": 2}
 
 
 def test_free_text_dates_are_read_and_an_unreadable_as_of_date_fails_closed():
@@ -581,8 +632,10 @@ def test_free_text_dates_are_read_and_an_unreadable_as_of_date_fails_closed():
 
     dated = ce.build_dispersion_diagnostics(rows[:2], timeline, "2026-07-15")
     assert (dated["groups"][0]["stale"], dated["groups"][0]["events_since"]) == (True, 2)
-    # Without a full as-of day the guard is off: nothing is excluded.
-    assert ce.build_dispersion_diagnostics(rows, timeline, None)["excluded"] == []
+    # Without a full as-of day the guard is off: nothing is excluded, and the digest says so.
+    unguarded = ce.build_dispersion_diagnostics(rows, timeline, None)
+    assert unguarded["excluded"] == [] and unguarded["leakage_guard"] is False
+    assert ce.quality_summary(unguarded)["leakage_guard"] is False
 
 
 def test_a_publication_year_is_no_target_year():
@@ -606,13 +659,38 @@ def test_the_scale_word_belongs_to_the_number_value_num_reads():
     the scale word right after that number scales it."""
     assert ce._value_scale("250,000 (1 million by 2035)") == 1.0
     assert ce._value_scale("1.2-1.5 trillion") == 1e12 and ce._value_scale("$5 to $7bn") == 1e9
-    assert ce._value_scale("$1.2T") == 1e12 and ce._value_scale("1.2T") == 1.0 and ce._value_scale("3000亿元") == 1e8
+    assert ce._value_scale("$1.2T") == 1e12 and ce._value_scale("3000亿元") == 1e8
     rows = [_forecast("humanoid shipments", "250,000 (1 million by 2035)", "Goldman Sachs", "2025-06-01"),
             _forecast("humanoid shipments", "38,000", "Omdia", "2024-07-01"),
             _forecast("humanoid shipments", "1.1-1.3 million", "Bank of America", "2025-04-30")]
     (group,) = ce.build_dispersion_diagnostics(rows, [], "2026-07-15")["groups"]
     assert (group["min"], group["median"], group["max"]) == (38000, 250000, 1200000)
     assert group["spread_ratio"] == pytest.approx(31.5789, abs=1e-4)
+
+
+def test_a_bare_scale_letter_is_ambiguous_unless_the_unit_settles_it():
+    """k/m/b/t without a currency sign may be a scale or a unit ("38k"
+    units, "100 m"): such a row never enters the statistics (it once read
+    "38k" as 38 and reported a 6,579x spread), unless the unit gives the
+    scale or is that letter."""
+    assert ce._value_scale("38k", "unit") is None and ce._value_scale("1.2T", "usd") is None
+    assert ce._value_scale("$38k", "usd") == 1e3 and ce._value_scale("38 k", "unit", 1e3) == 1.0
+    assert ce._value_scale("100 m", "m") == 1.0 and ce._value_scale("1.2 million", "unit") == 1e6
+    rows = [_forecast("humanoid shipments", "38k", "Omdia", "2024-07-01"),
+            _forecast("humanoid shipments", "250,000", "Goldman Sachs", "2025-06-01",
+                      low="38k", high="1.2 million")]
+    diag = ce.build_dispersion_diagnostics(rows, [], "2026-07-15")
+    assert diag["groups"] == [] and diag["ranges"] == []
+    assert (diag["counts"]["ambiguous_scale"], diag["counts"]["eligible"]) == (1, 1)
+    settled = [_forecast("pipe length", "100 m", "A", "2024-07-01", unit="m"),
+               _forecast("pipe length", "250", "B", "2025-06-01", unit="m"),
+               _forecast("pipe length", "$38k", "C", "2025-06-01", unit="m")]
+    (group,) = ce.build_dispersion_diagnostics(settled, [], "2026-07-15")["groups"]
+    assert (group["min"], group["max"], group["n_forecasters"]) == (100, 38000, 3)
+    thousands = [_forecast("output", "38k", "A", "2024-07-01", unit="thousand units"),
+                 _forecast("output", "250", "B", "2025-06-01", unit="thousand units")]
+    (group,) = ce.build_dispersion_diagnostics(thousands, [], "2026-07-15")["groups"]
+    assert (group["min"], group["max"]) == (38000, 250000)
 
 
 def test_values_beyond_the_float_range_never_sink_the_payload():
@@ -672,6 +750,24 @@ def test_staleness_counts_timeline_events_after_the_newest_vintage():
     assert (group["stale"], group["events_since"]) == (True, 2)
     (unknown,) = ce.build_dispersion_diagnostics(rows, timeline, None)["groups"]
     assert (unknown["stale"], unknown["events_since"]) == (None, None)
+
+
+def test_a_coarse_newest_vintage_counts_from_its_first_day():
+    """A vintage stated as "2026" may date from January 1: staleness and
+    later events count from there (fail closed), and newest_as_of names the
+    vintage staleness measured."""
+    rows = [_forecast("capex", "5", "A", "2026"), _forecast("capex", "6", "B", "2024-01-01")]
+    timeline = [{"date": "2026-05-01", "event": "after the coarse vintage began"}]
+    (group,) = ce.build_dispersion_diagnostics(rows, timeline, "2026-12-01")["groups"]
+    assert (group["stale"], group["events_since"], group["newest_as_of"]) == (True, 1, "2026")
+    (quiet,) = ce.build_dispersion_diagnostics(rows, [], "2026-03-01")["groups"]
+    assert (quiet["stale"], quiet["events_since"]) == (False, 0)            # 59 days from January 1
+    # The newest vintage is the latest first day, even when an older period ends later ("2026"),
+    # and staleness measures that same vintage: the July event follows it.
+    spans = [_forecast("capex", "5", "A", "2026-06-15"), _forecast("capex", "6", "B", "2026")]
+    (group,) = ce.build_dispersion_diagnostics(spans, [{"date": "2026-07-01", "event": "e"}],
+                                               "2026-07-15")["groups"]
+    assert (group["newest_as_of"], group["stale"], group["events_since"]) == ("2026-06-15", True, 1)
 
 
 def test_rates_have_no_spread_ratio_and_ranges_are_listed_apart():
@@ -772,10 +868,33 @@ def test_shadow_mode_writes_the_digest_and_the_sidecar(report_env, monkeypatch):
     assert ce.FILENAME in written
     sidecar = packs._read(report_env, "report_shadow", ce.FILENAME)
     assert sidecar["schema"] == ce.SCHEMA and sidecar["as_of"] == packs.AS_OF.isoformat()
-    assert sidecar["excluded"][0]["reason"] == "after_as_of"
+    assert sidecar["excluded"][0]["reason"] == "after_as_of" and sidecar["leakage_guard"] is True
     assert final["quality"]["consensus"] == {
         "schema": ce.SCHEMA, "groups_n": 1, "wide_groups_n": 1, "forecasters_n": 3, "excluded_n": 1,
-        "sha256": sidecar["sha256"]}
+        "excluded_by_reason": {"after_as_of": 1}, "leakage_guard": True, "sha256": sidecar["sha256"]}
+
+
+def test_shadow_mode_falls_back_to_the_hindcast_pin_as_of(report_env, monkeypatch):
+    """actors.as_of_date that is no full day (legacy or salvaged research)
+    yields to the hindcast pin's as-of; with neither, the digest says no
+    leakage guard ran."""
+    monkeypatch.setattr(Config, "REPORT_CONSENSUS_DIAGNOSTICS", "shadow", raising=False)
+    llm = packs._RouterLLM()
+    agent = _report_agent(llm)
+    agent.actors = dict(agent.actors, as_of_date=str(packs.AS_OF.year))
+    agent.hindcast = {"version": HINDCAST_POLICY_VERSION, "hindcast": True, "as_of": packs.AS_OF.isoformat()}
+    _agent, _llm, _early, final = packs._run(report_env, "report_pinned", llm=llm, agent=agent)
+    sidecar = packs._read(report_env, "report_pinned", ce.FILENAME)
+    assert sidecar["as_of"] == packs.AS_OF.isoformat() and sidecar["leakage_guard"] is True
+    assert final["quality"]["consensus"]["excluded_by_reason"] == {"after_as_of": 1}
+
+    llm = packs._RouterLLM()
+    agent = _report_agent(llm)
+    agent.actors = dict(agent.actors, as_of_date="")
+    _agent, _llm, _early, final = packs._run(report_env, "report_unguarded", llm=llm, agent=agent)
+    consensus = final["quality"]["consensus"]
+    assert (consensus["leakage_guard"], consensus["excluded_n"]) == (False, 0)
+    assert packs._read(report_env, "report_unguarded", ce.FILENAME)["as_of"] is None
 
 
 def test_shadow_mode_changes_no_prompt_call_count_or_probability(report_env, monkeypatch):

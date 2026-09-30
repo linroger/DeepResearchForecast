@@ -1102,11 +1102,13 @@ class Config:
     # research quantitative rows typed projected are grouped by metric family (else the
     # forecaster-free metric), region, target year and unit; a group with >= 2 forecasters
     # records min/max/median, the max/min spread ratio, vintages, staleness and
-    # same-forecaster revisions, and rows dated after the research as-of are excluded
-    # (leakage guard).  The payload goes to reports/<id>/consensus_evidence.json and its
-    # digest to forecast.quality.consensus.  Deterministic, zero model calls, and no prompt,
-    # probability or publish-gate input changes.  Default off (no key, no file: forecast.json
-    # byte-identical); blank or any other value is off.
+    # same-forecaster revisions, and rows dated after the research as-of (actors.as_of_date,
+    # else the hindcast pin's) are excluded (leakage guard; leakage_guard=false in the
+    # digest when neither is a full day).  The payload goes to
+    # reports/<id>/consensus_evidence.json and its digest to forecast.quality.consensus.
+    # Deterministic, zero model calls, and no prompt, probability or publish-gate input
+    # changes.  Default off (no key, no file: forecast.json byte-identical); blank or any
+    # other value is off.
     REPORT_CONSENSUS_DIAGNOSTICS = os.environ.get('REPORT_CONSENSUS_DIAGNOSTICS', 'off').strip().lower()
 
     # LLM提供方（默认使用 Claude Code CLI 订阅）

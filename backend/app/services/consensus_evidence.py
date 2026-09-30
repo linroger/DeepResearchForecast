@@ -19,11 +19,13 @@ The rules are DRF constructions (the dispersion threshold is uncalibrated):
   reads them (quant_typing's copy of its period parser): the strict forms,
   then a whole free-text month, quarter or half ("August 2026", "2026年8月",
   "2026年底"), then the years free text names;
-* leakage guard (with a full as-of day), fail closed: a projection whose
-  ``as_of_date`` begins after the as-of date is excluded (``after_as_of``),
-  even when that date is a target date misplaced there (the publication date
-  is then unknown), and so is one whose ``as_of_date`` states something no
-  reading can date (``unparsed_as_of``: "FY29"); a blank or placeholder
+* leakage guard (with a full as-of day; ``leakage_guard`` says whether it
+  ran), fail closed: a projection whose ``as_of_date`` begins after the
+  as-of date is excluded, as ``as_of_is_target`` when the research typing
+  read that date as a target date misplaced there (its ``as_of_is_target``
+  flag, or a ``target_date`` equal to it: the publication date is unknown),
+  else as ``after_as_of``; so is one whose ``as_of_date`` states something
+  no reading can date (``unparsed_as_of``: "FY29"); a blank or placeholder
   ("n/a", "unknown") ``as_of_date`` is an undated vintage;
 * group key: the metric family, else the metric without years, forecast
   words and the row's own forecaster/analyst tokens; the region, else the
@@ -36,15 +38,21 @@ The rules are DRF constructions (the dispersion threshold is uncalibrated):
   number ``value_num`` is read from (the bridge's reading: the first range,
   else the first number; "1.2 million", "$1.2T", "1.2-1.5 trillion"), else
   the one of ``unit`` ("USD billion"), multiplies it, so "1.2 million" units
-  and "250,000" units compare and "250,000 (1 million by 2035)" stays 250,000;
+  and "250,000" units compare and "250,000 (1 million by 2035)" stays 250,000.
+  A bare k/m/b/t is a scale only after a currency sign ("$1.2T"); otherwise
+  ("38k" units, "100 m") it may be a scale or a unit, and unless the unit
+  gives the scale or is that letter, the row is counted ``ambiguous_scale``
+  and kept out of the statistics;
 * a group is reported when it has >= 2 distinct forecasters (forecaster,
   else analyst, else source).  Each forecaster adds one point, the median of
   its newest vintage, so a revised forecast never counts twice;
 * ``spread_ratio`` is max / min for a positive level quantity (not a rate,
   share or percentage); a group is wide at :data:`WIDE_SPREAD_RATIO`;
-* ``stale``: the newest vintage is older than ``stale_days`` at the as-of
-  date, or dated timeline events fall after it and on or before the as-of
-  date (``events_since``);
+* ``stale``: the newest vintage (by first day, as ``newest_as_of``) is older
+  than ``stale_days`` at the as-of date, or dated timeline events fall after
+  it and on or before the as-of date (``events_since``).  Vintages and
+  events count from their first day, so a coarse vintage ("2026") never
+  hides staleness (fail closed);
 * revisions: one forecaster's consecutive vintages (different as_of_date)
   under one key, up / down / unchanged.  They are listed per group and, for
   every key including single-forecaster ones, at the top level;
@@ -72,9 +80,11 @@ FILENAME = "consensus_evidence.json"
 DEFAULT_STALE_DAYS = 120
 # A group whose max/min spread is at least this counts as wide (uncalibrated DRF constant).
 WIDE_SPREAD_RATIO = 2.0
-# Leakage-guard exclusion reasons: published after the as-of date, or a
-# stated publication date no reading can date.
+# Leakage-guard exclusion reasons: published after the as-of date; a target
+# date misplaced in as_of_date (the research typing's as_of_is_target: the
+# publication date is unknown); a stated publication date no reading can date.
 AFTER_AS_OF = "after_as_of"
+AS_OF_IS_TARGET = "as_of_is_target"
 UNPARSED_AS_OF = "unparsed_as_of"
 
 # Metric words that name the forecast rather than the quantity.
@@ -99,8 +109,9 @@ _RATE_METRIC_TOKENS = frozenset({
     "utilization", "utilisation", "ratio",
 })
 _LOOSE_NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
-# Scale words: after the number value_num is read from (a single letter only
-# after a currency sign, as the research number checks read it) or as a unit token.
+# Scale words: after the number value_num is read from (a single letter is a
+# scale only after a currency sign, as the research number checks read it) or
+# as a unit token.
 _SCALE_FACTORS = {
     "thousand": 1e3, "million": 1e6, "mn": 1e6, "mln": 1e6, "billion": 1e9, "bn": 1e9, "bln": 1e9,
     "trillion": 1e12, "tn": 1e12, "trn": 1e12, "万": 1e4, "亿": 1e8, "万亿": 1e12,
@@ -136,7 +147,7 @@ def _states_date(text: str) -> bool:
     return any(ch.isalnum() for ch in text) and text.casefold() not in _NO_PERIOD
 
 
-def _as_of_day(value: Any) -> _Date:
+def as_of_full_day(value: Any) -> _Date:
     """The as-of date: a date, or a full YYYY-MM-DD day; None otherwise (a
     coarse or missing as-of disables the leakage guard and staleness)."""
     if isinstance(value, _dt.datetime):
@@ -169,12 +180,13 @@ def _loose_number(value: Any) -> Optional[float]:
     return _number(found.group(0)) if found else None
 
 
-def _bound(value: Any, unit_scale: float) -> Optional[float]:
-    """A within-row low/high at full scale: its own scale word, else the unit's."""
+def _bound(value: Any, unit: str, unit_scale: float) -> Optional[float]:
+    """A within-row low/high at full scale: its own scale word, else the
+    unit's; None when its scale is ambiguous (:func:`_value_scale`)."""
     number = _loose_number(value)
-    if number is None:
+    own = _value_scale(value, unit, unit_scale)
+    if number is None or own is None:
         return None
-    own = _value_scale(value)
     number *= own if own != 1.0 else unit_scale
     return number if math.isfinite(number) else None
 
@@ -206,17 +218,23 @@ def _unit_and_scale(value: Any) -> Tuple[str, float]:
     return " ".join(tokens), scale
 
 
-def _value_scale(value: Any) -> float:
+def _value_scale(value: Any, unit: str = "", unit_scale: float = 1.0) -> Optional[float]:
     """The factor of the scale word right after the number a text ``value``
     is read from (its first range, else its first number: the bridge's
-    value_num), a single letter only after a currency sign; 1 without one."""
+    value_num); 1 without one.  A bare letter (k/m/b/t) is a scale only after
+    a currency sign ("$1.2T"); without one it may be a scale or a unit ("38k"
+    units, "100 m"), so it is ignored (1) when the unit gives the scale
+    (``unit_scale``) or is that letter (``unit``, a :func:`_unit_and_scale`
+    key: "100 m", unit "m"), and otherwise the scale is unknown: None."""
     if not isinstance(value, str):
         return 1.0
     text = unicodedata.normalize("NFKC", value)
     found = _VALUE_RANGE_RE.search(text) or _VALUE_FIRST_RE.search(text)
     if found is None:
         return 1.0
-    letter = found.group("letter") if found.group("currency") else None
+    letter = found.group("letter")
+    if letter and not found.group("currency"):
+        return 1.0 if unit_scale != 1.0 or unit == letter.casefold() else None
     word = found.group("word") or found.group("cjk") or letter
     return _SCALE_FACTORS[word.casefold()] if word else 1.0
 
@@ -249,6 +267,16 @@ def _target_year(row: Mapping[str, Any]) -> Optional[int]:
         return None
     published = {int(named) for named in _YEAR_RE.findall(_date_text(row.get("as_of_date")))}
     return None if year in published else year
+
+
+def _as_of_is_target(row: Mapping[str, Any], date_text: str) -> bool:
+    """True when the research typing read the row's as_of_date (``date_text``)
+    as a target date misplaced there: its ``as_of_is_target`` flag, or the
+    ``target_date`` its repair copied from that date."""
+    flags = row.get("epistemic_flags")
+    if isinstance(flags, (list, tuple)) and "as_of_is_target" in flags:
+        return True
+    return bool(date_text) and _date_text(row.get("target_date")).casefold() == date_text.casefold()
 
 
 def _forecaster(row: Mapping[str, Any]) -> str:
@@ -317,14 +345,16 @@ def _point(entries: List[Dict[str, Any]]) -> float:
     return vintages[-1][1]
 
 
-def _staleness(newest_last: _Date, as_of: _Date, event_days: List[_dt.date],
+def _staleness(newest_first: _Date, as_of: _Date, event_days: List[_dt.date],
                stale_days: int) -> Tuple[Optional[bool], Optional[int]]:
     """``(stale, events_since)``; both None without an as-of or a dated vintage.
-    An event counts from its first day, a vintage until its last day."""
-    if as_of is None or newest_last is None:
+    The newest vintage and each event count from their first day: a coarse
+    vintage ("2026") may have been published on January 1, so its unknown
+    day never hides staleness (fail closed)."""
+    if as_of is None or newest_first is None:
         return None, None
-    events_since = sum(1 for day in event_days if newest_last < day <= as_of)
-    return (as_of - newest_last).days > stale_days or events_since > 0, events_since
+    events_since = sum(1 for day in event_days if newest_first < day <= as_of)
+    return (as_of - newest_first).days > stale_days or events_since > 0, events_since
 
 
 def _key_record(key: _Key) -> Dict[str, Any]:
@@ -332,8 +362,9 @@ def _key_record(key: _Key) -> Dict[str, Any]:
 
 
 def _build(quantitative: Any, timeline: Any, as_of: Any, stale_days: int) -> Dict[str, Any]:
-    as_of_day = _as_of_day(as_of)
-    counts = {"rows": 0, "projected": 0, "eligible": 0, "no_value": 0, "no_target_year": 0, "no_forecaster": 0}
+    as_of_day = as_of_full_day(as_of)
+    counts = {"rows": 0, "projected": 0, "eligible": 0, "no_value": 0, "ambiguous_scale": 0, "no_target_year": 0,
+              "no_forecaster": 0}
     excluded: List[Dict[str, Any]] = []
     ranges: List[Dict[str, Any]] = []
     buckets: Dict[_Key, List[Dict[str, Any]]] = {}
@@ -348,15 +379,21 @@ def _build(quantitative: Any, timeline: Any, as_of: Any, stale_days: int) -> Dic
         as_of_text = date_text[:40]
         first, last = _loose_period_bounds(date_text)
         if as_of_day is not None:
-            reason = (AFTER_AS_OF if first is not None and first > as_of_day
-                      else UNPARSED_AS_OF if first is None and _states_date(date_text) else None)
+            reason = None
+            if first is not None and first > as_of_day:
+                reason = AS_OF_IS_TARGET if _as_of_is_target(row, date_text) else AFTER_AS_OF
+            elif first is None and _states_date(date_text):
+                reason = UNPARSED_AS_OF
             if reason:
                 excluded.append({"metric": _clean(row.get("metric")), "as_of_date": as_of_text, "reason": reason})
                 continue
         value = _number(row.get("value_num"))
         unit, unit_scale = _unit_and_scale(row.get("unit"))
         if value is not None:
-            value_scale = _value_scale(row.get("value"))
+            value_scale = _value_scale(row.get("value"), unit, unit_scale)
+            if value_scale is None:                          # "38k" units: a scale or a unit
+                counts["ambiguous_scale"] += 1
+                continue
             value *= value_scale if value_scale != 1.0 else unit_scale
         if value is None or not math.isfinite(value):   # unparsed, or beyond the float range at full scale
             counts["no_value"] += 1
@@ -367,7 +404,7 @@ def _build(quantitative: Any, timeline: Any, as_of: Any, stale_days: int) -> Dic
         year = _target_year(row)
         name = _forecaster(row)
         key = (key_metric, _norm_text(row.get("region") or row.get("geography")), year, unit)
-        low, high = (_bound(row.get(side), unit_scale) for side in ("low", "high"))
+        low, high = (_bound(row.get(side), unit, unit_scale) for side in ("low", "high"))
         if low is not None and high is not None and low <= high:
             count = row.get("n_forecasters")
             ranges.append({**_key_record(key), "row_metric": _clean(row.get("metric")), "forecaster": name,
@@ -404,8 +441,8 @@ def _build(quantitative: Any, timeline: Any, as_of: Any, stale_days: int) -> Dic
         low, high = min(points), max(points)
         ratio = high / low if low > 0 and _is_level(key[0], key[3]) else None
         dated = sorted((e for e in buckets[key] if e["as_of_first"] is not None), key=_vintage_order)
-        stale, events_since = _staleness(max((e["as_of_last"] for e in dated), default=None), as_of_day,
-                                         event_days, stale_days)
+        stale, events_since = _staleness(dated[-1]["as_of_first"] if dated else None, as_of_day, event_days,
+                                         stale_days)
         groups.append({
             "key": _key_record(key),
             "n_rows": len(buckets[key]),
@@ -428,6 +465,7 @@ def _build(quantitative: Any, timeline: Any, as_of: Any, stale_days: int) -> Dic
     return {
         "schema": SCHEMA,
         "as_of": as_of_day.isoformat() if as_of_day else None,
+        "leakage_guard": as_of_day is not None,
         "stale_days": stale_days,
         "wide_spread_ratio": WIDE_SPREAD_RATIO,
         "counts": counts,
@@ -444,8 +482,9 @@ def build_dispersion_diagnostics(quantitative: Any, timeline: Any, as_of: Any, *
     docstring), schema :data:`SCHEMA`, with ``sha256`` over the canonical
     JSON of the rest.  ``timeline`` is timeline.json's ``[{date, event}]``;
     ``as_of`` the research as-of date (a date or YYYY-MM-DD; anything else
-    disables the leakage guard and staleness).  Never raises: a failure
-    yields an empty payload that names the error."""
+    disables the leakage guard and staleness, and ``leakage_guard`` is then
+    false).  Never raises: a failure yields an empty payload that names the
+    error."""
     days = stale_days if isinstance(stale_days, int) and not isinstance(stale_days, bool) and stale_days >= 0 \
         else DEFAULT_STALE_DAYS
     try:
@@ -465,10 +504,17 @@ def build_dispersion_diagnostics(quantitative: Any, timeline: Any, as_of: Any, *
 def quality_summary(diagnostics: Mapping[str, Any]) -> Dict[str, Any]:
     """The digest recorded in ``forecast.quality.consensus``: ``schema``,
     ``groups_n``, ``wide_groups_n`` (spread_ratio >= :data:`WIDE_SPREAD_RATIO`),
-    ``forecasters_n`` (distinct across the groups), ``excluded_n`` and
-    ``sha256`` (of the full payload); ``error`` when the build failed."""
+    ``forecasters_n`` (distinct across the groups), ``excluded_n`` with its
+    ``excluded_by_reason`` counts, ``leakage_guard`` (false: no full as-of
+    day, so no row was checked against one) and ``sha256`` (of the full
+    payload); ``error`` when the build failed."""
     groups = [group for group in diagnostics.get("groups") or [] if isinstance(group, Mapping)]
     forecasters = {_norm_text(name) for group in groups for name in group.get("forecasters") or []}
+    excluded = [item for item in diagnostics.get("excluded") or [] if isinstance(item, Mapping)]
+    reasons: Dict[str, int] = {}
+    for item in excluded:
+        reason = str(item.get("reason") or "")
+        reasons[reason] = reasons.get(reason, 0) + 1
     summary = {
         "schema": diagnostics.get("schema", SCHEMA),
         "groups_n": len(groups),
@@ -476,7 +522,9 @@ def quality_summary(diagnostics: Mapping[str, Any]) -> Dict[str, Any]:
                              if isinstance(group.get("spread_ratio"), (int, float))
                              and group["spread_ratio"] >= WIDE_SPREAD_RATIO),
         "forecasters_n": len(forecasters),
-        "excluded_n": len(diagnostics.get("excluded") or []),
+        "excluded_n": len(excluded),
+        "excluded_by_reason": dict(sorted(reasons.items())),
+        "leakage_guard": diagnostics.get("leakage_guard") is True,
         "sha256": diagnostics.get("sha256"),
     }
     if diagnostics.get("error"):

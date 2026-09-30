@@ -9240,9 +9240,13 @@ _UNSTATED_ANSWERS = frozenset({"", "0", "n/a", "na", "none", "null", "unknown", 
 _STATED_RANGE_RE = re.compile(r"[~≈]?\s*[$€£¥]?\s*(?P<low>\d[\d,]*(?:\.\d+)?)\s*(?:-|–|—|to)\s*"
                               r"[$€£¥]?\s*(?P<high>\d[\d,]*(?:\.\d+)?)\s*%?", re.I)
 # Two numbers of a value joined as a range (the bridge's value_num reads such
-# a value as their midpoint), and a value that opens with a minus sign.
-_RANGE_PAIR_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:[-–—~]|to)\s*(\d+(?:\.\d+)?)")
+# a value as their midpoint), and a value that opens with a minus sign.  The
+# first number starts a digit run: the leftmost match is the same, and a long
+# run is scanned once instead of once per digit (quadratic).
+_RANGE_PAIR_RE = re.compile(r"(?<!\d)(\d+(?:\.\d+)?)\s*(?:[-–—~]|to)\s*(\d+(?:\.\d+)?)")
 _NEGATIVE_LEAD_RE = re.compile(r"\s*[-−]\s*[$€£¥]?\s*\d")
+# The longest low/high text kept: the cap of a row's text value.
+_BOUND_TEXT_CHARS = 80
 # The count nouns that make a stated number a forecaster count.
 _FORECASTER_NOUNS = r"(?:forecasters|economists|analysts|respondents|experts|institutions)\b"
 _FORECASTER_NOUNS_ZH = r"(?:位|家|名)(?:经济学家|分析师|机构|专家|受访者)"
@@ -9305,16 +9309,22 @@ def _stated_in_report(text: str, report_numbers: frozenset[str]) -> bool:
 def _checked_bound(value: Any, report_numbers: frozenset[str]) -> tuple[Any, float] | None:
     """``(kept value, its number)`` of a stated low/high whose numbers are all
     the report's; None otherwise.  A number stays a number; text is kept as
-    written (collapsed, <= 80 chars, like ``value``)."""
+    written (collapsed), and text longer than a row's text value (80 chars)
+    is refused before any check, so the kept text is always the checked text
+    (a cut could end mid-number)."""
     if isinstance(value, bool) or not isinstance(value, (int, float, str)):
         return None
+    if isinstance(value, str):
+        value = _collapse(value)
+        if len(value) > _BOUND_TEXT_CHARS:
+            return None
     number = _magnitude(value)
     if number is None:
         return None
     text = format(Decimal(repr(value)), "f") if isinstance(value, float) else str(value)
     if not _stated_in_report(text, report_numbers):
         return None
-    return (value if isinstance(value, (int, float)) else _collapse(value, 80)), number
+    return value, number
 
 
 def _forecaster_count(value: Any) -> int | None:
