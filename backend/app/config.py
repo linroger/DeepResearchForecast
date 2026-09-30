@@ -660,6 +660,21 @@ class Config:
     # 仅当本旋钮开启（或 CLI 显式 --to-ledger）时才把已解析黄金题作为二元(YES/NO)预测追加进校准账本，
     # 让 report_visualizer 校准曲线累积黄金题结局。默认关=不污染生产账本（degrade-safe）。
     GOLDEN_EVAL_LEDGER = os.environ.get('GOLDEN_EVAL_LEDGER', 'False').strip().lower() == 'true'  # EVAL-1
+    # EVAL-8: golden_eval headline tiering. On, score-forecast-file classifies every matched row from
+    # the run's provenance (--pipeline-dir / --run-created-at): only a prospective row (the run, from
+    # creation through its last recorded activity, came before the question resolved and within
+    # GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS of its as_of_date, and was no pinned hindcast) counts
+    # toward the headline; every other row is characterization only, a headline without such rows is
+    # withheld, and score-ledger splits golden rows by golden_tier the same way. Default on is safe: the
+    # scorer is offline and characterization-only, the legacy 'metrics' block is unchanged, and a
+    # headline that cannot be backed is withheld, never invented.
+    # false = the pre-EVAL-8 reports (no headline / characterization keys, no golden_tier on rows).
+    GOLDEN_HEADLINE_GATE = os.environ.get('GOLDEN_HEADLINE_GATE', 'true').strip().lower() == 'true'
+    # EVAL-8: how many days after a golden question's as_of_date a run may still be active and count as
+    # prospective (keeps information sets comparable across code versions); must be 0-3650. golden_eval
+    # refuses a value it cannot read (the import audit's default 7) instead of scoring with it.
+    GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS = int(
+        os.environ.get('GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS', '7') or '7')
     # EVAL-13: under an evaluation run whose pin carries a target proposition, a target the binary
     # extraction did not produce verbatim gets exactly one bounded repair draw that asks only for
     # that statement; the row is kept only on a normalized match, never fabricated. Default on is

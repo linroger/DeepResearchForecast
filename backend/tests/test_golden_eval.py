@@ -314,6 +314,9 @@ def test_score_ledger_over_golden_entries(tmp_path):
 LEGACY_REPORT_SHA256 = "a52690dbee3ebbc2a2b2188d0bd3739ed061b1d99c723c486d4927c60c807177"
 EVAL7_REPORT_KEYS = {"duplicate_forecast_ids", "promotion_eligible"}
 EVAL7_ROW_KEYS = {"cluster", "horizon_days", "horizon_bucket"}
+# EVAL-8 (GOLDEN_HEADLINE_GATE, default on) adds these, additively as well.
+EVAL8_REPORT_KEYS = {"headline", "metrics_scope", "characterization"}
+EVAL8_ROW_KEYS = {"tier", "tier_reasons"}
 
 
 @pytest.fixture
@@ -387,9 +390,10 @@ def test_rigor_block_additive_legacy_unchanged(tmp_path):
     report = json.loads(out.read_text(encoding="utf-8"))
 
     legacy = {k: v for k, v in report.items()
-              if k not in EVAL7_REPORT_KEYS | {"forecast_path", "golden_path"}}
+              if k not in EVAL7_REPORT_KEYS | EVAL8_REPORT_KEYS | {"forecast_path", "golden_path"}}
     legacy["metrics"] = {k: v for k, v in report["metrics"].items() if k != "rigor"}
-    legacy["matched"] = [{k: v for k, v in r.items() if k not in EVAL7_ROW_KEYS} for r in report["matched"]]
+    legacy["matched"] = [{k: v for k, v in r.items() if k not in EVAL7_ROW_KEYS | EVAL8_ROW_KEYS}
+                         for r in report["matched"]]
     canon = json.dumps(legacy, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     assert hashlib.sha256(canon.encode("utf-8")).hexdigest() == LEGACY_REPORT_SHA256
     m = report["metrics"]
@@ -454,7 +458,9 @@ def test_score_forecast_file_constant_09_on_committed_set(tmp_path):
     assert rigor["promotion_eligible"] is False and report["promotion_eligible"] is False
 
     text = md.read_text(encoding="utf-8")
-    assert text.splitlines()[0] == ge.CHARACTERIZATION_BANNER
+    # EVAL-8: the withheld-headline line (no run provenance given) sits above the banner
+    assert text.splitlines()[0].startswith("HEADLINE WITHHELD: ")
+    assert text.splitlines()[2] == ge.CHARACTERIZATION_BANNER
     assert ge.CHARACTERIZATION_BANNER == ("Characterization only - answer-bearing golden set; "
                                           "not a skill estimate (ADR 0002 I-21)")
     for section in ("## Caveats", "## Reference & skill", "## Direction & hedging", "## By horizon"):
