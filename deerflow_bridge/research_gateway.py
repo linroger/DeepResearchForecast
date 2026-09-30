@@ -2378,9 +2378,17 @@ class SourceLedger:
     reloaded from ``path``).  Rows are deduplicated by :func:`canonical_url`.
     Disk writes are atomic and debounced (at most once per second; the engine
     calls :meth:`flush` at phase end).
+
+    With ``keep_snippets`` (set by the engine when RESEARCH_EVIDENCE_QUOTES is
+    not off) every distinct cleaned snippet a row is seen with is also kept,
+    in ``snippets`` (at most SNIPPETS_PER_ROW, each at most 500 chars), so an
+    evidence quote copied from any search result shown can be located; the
+    first-seen ``snippet`` field is unchanged.  Off, no sighting is added.
     """
 
     FLUSH_INTERVAL_S = 1.0
+    SNIPPETS_PER_ROW = 4
+    keep_snippets = False
 
     def __init__(self, path: str | os.PathLike[str], *, bridge: Any = None,
                  clock: Callable[[], float] = time.monotonic) -> None:
@@ -2484,6 +2492,8 @@ class SourceLedger:
                 if clean_snippet and not row.get("snippet"):
                     row["snippet"] = clean_snippet
                     changed = True
+                if self._keep_snippet(row, clean_snippet):
+                    changed = True
                 if changed:
                     self._touch()
                 return dict(row)
@@ -2505,10 +2515,22 @@ class SourceLedger:
                 "snippet": clean_snippet,
                 "first_seen_by": str(by or ""),
             }
+            self._keep_snippet(row, clean_snippet)
             self._rows[sid] = row
             self._by_canonical[canonical] = sid
             self._touch()
             return dict(row)
+
+    def _keep_snippet(self, row: dict[str, Any], snippet: str) -> bool:
+        """Append a new distinct snippet sighting to ``row["snippets"]`` (a
+        new list: copies handed out earlier never change) while
+        ``keep_snippets`` is on and the row holds fewer than
+        SNIPPETS_PER_ROW; True when the row changed."""
+        kept = row.get("snippets") if isinstance(row.get("snippets"), list) else []
+        if not self.keep_snippets or not snippet or snippet in kept or len(kept) >= self.SNIPPETS_PER_ROW:
+            return False
+        row["snippets"] = [*kept, snippet]
+        return True
 
     def mark_fetched(self, sid: int, *, content_sha256: str, chars: int, page_path: str,
                      title: str | None = None) -> dict | None:

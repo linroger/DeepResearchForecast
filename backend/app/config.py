@@ -1357,6 +1357,26 @@ class Config:
     # run first; off = byte-identical tool text, caches and meta.  The parent forwards
     # it to every research child (search_tools / cached_fetch / linear_research).
     RESEARCH_SOURCE_TAXONOMY = os.environ.get('RESEARCH_SOURCE_TAXONOMY', 'false').strip().lower() == 'true'
+    # RESEARCH-7: verbatim evidence-span contract for v3 findings (off | audit | enforce).
+    # Not off: the KIQ task asks each finding for an EVIDENCE: "<verbatim passage>" clause,
+    # the source ledger keeps every distinct search snippet of a row, and each quote is
+    # located deterministically (zero model calls) in the stored page / search text of the
+    # cited sources; KIQ facts get evidence, evidence_status, evidence_near_miss,
+    # claimed_tag and a REPORTED-number audit, and meta.evidence is written.  audit changes
+    # no tag; enforce demotes a fact whose quotes are not on what the agent was shown
+    # (UNVERIFIED) or a VERIFIED fact whose numbers lie outside its quoted passages
+    # (REPORTED).  Default off (byte-identical prompts, facts, ledger and sources.json):
+    # longer notes cost ~2-3% more units and GLM may paraphrase; enforce needs an
+    # owner-approved audit run (located share >= 0.8, QA passing) first.  Blank or an
+    # unknown value is off.  The parent forwards it to the v3 child.
+    RESEARCH_EVIDENCE_QUOTES = os.environ.get('RESEARCH_EVIDENCE_QUOTES', 'off').strip().lower()
+    # RESEARCH-7: with RESEARCH_EVIDENCE_QUOTES not off, up to 3 located verbatim quotes of
+    # a source (<= 280 chars, page quotes first) become its sources.json `supports`, ahead
+    # of the REPORT-7 evidence windows.  Default false: supports feed the report's
+    # semantic-citation and quote-grounding checks (publish-gate inputs), so the gate delta
+    # is measured in an audit run first; off = supports exactly as before.  Forwarded to
+    # the v3 child.
+    RESEARCH_EVIDENCE_SUPPORTS = os.environ.get('RESEARCH_EVIDENCE_SUPPORTS', 'false').strip().lower() == 'true'
     # PAR-2：编排器级「多角度并行研究轨」。>1 时研究阶段并行跑 K 个 DeerFlowResearchRunner
     # 子进程，每个带角度特化前缀（轨1=基线证据扫描，即原始 brief 逐字；轨2=基率/参照类/历史
     # 类比；轨3=行为者激励+反面证伪+市场定价），各写入 handoff/track_<k>/，随后确定性合并回

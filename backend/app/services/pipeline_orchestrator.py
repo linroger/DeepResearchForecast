@@ -1506,11 +1506,12 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 # (deerflow_research.py runs with sys.path[0]==deer-flow/): the config-reflected
 # tools (`use: market_tools:...` / `search_tools:...` / `cached_fetch:...`), the
 # LOOP-007 budget control plane they share, and the deep-research engine v3
-# (linear_research.py phases + research_gateway.py LLM gateway/research tools).
+# (linear_research.py phases + research_gateway.py LLM gateway/research tools +
+# evidence_spans.py verbatim evidence-span matching).
 # setup.sh deploys the same set; test_deerflow_bridge_sync_guard pins the parity.
 _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
-    "research_budget.py", "linear_research.py", "research_gateway.py",
+    "research_budget.py", "linear_research.py", "research_gateway.py", "evidence_spans.py",
 )
 
 
@@ -1680,8 +1681,9 @@ def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
         # setup.sh copies them, but a bridge-only edit (no ./setup.sh rerun) would
         # otherwise drift exactly like deerflow_research.py did; mirror that guard here.
         # Engine v3 is imported by bare name the same way: linear_research.py (the
-        # phases) and research_gateway.py (LLM gateway + research tools) must both
-        # sit next to the deployed script or the v3 dispatch raises ImportError.
+        # phases), research_gateway.py (LLM gateway + research tools) and
+        # evidence_spans.py (evidence-quote matching) must all sit next to the
+        # deployed script or the v3 dispatch raises ImportError.
         for _tool_mod in _DEPLOYED_BRIDGE_MODULES:
             _tool_src = os.path.join(bridge_dir, _tool_mod)
             if os.path.isfile(_tool_src):
@@ -2149,6 +2151,8 @@ RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
 )
 RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_AS_OF_PIN", "bool"),
+    ("RESEARCH_EVIDENCE_QUOTES", "str"),
+    ("RESEARCH_EVIDENCE_SUPPORTS", "bool"),
     ("RESEARCH_QUANT_TYPING", "bool"),
     ("RESEARCH_VERIFIED_FACTS", "bool"),
 )
