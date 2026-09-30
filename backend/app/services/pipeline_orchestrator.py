@@ -2326,6 +2326,7 @@ RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_AS_OF_PIN", "bool"),
     ("RESEARCH_EVIDENCE_QUOTES", "str"),
     ("RESEARCH_EVIDENCE_SUPPORTS", "bool"),
+    ("RESEARCH_FORECASTER_ATTRIBUTION", "bool"),
     ("RESEARCH_QUANT_TYPING", "bool"),
     ("RESEARCH_QUESTION_SPEC", "bool"),
     ("RESEARCH_SOURCE_DATES", "bool"),

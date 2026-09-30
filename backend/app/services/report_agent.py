@@ -4343,6 +4343,26 @@ class ReportAgent:
         _question_spec, _qspec_applied = self._question_spec_for_run()
         if _question_spec is not None:
             forecast["question_spec"] = _qspec.summary(_question_spec, horizon_applied=_qspec_applied)
+        # RESEARCH-6（REPORT_CONSENSUS_DIAGNOSTICS=shadow）：研究定量行的跨来源预测离散度诊断（确定性、
+        # 零模型调用），全文落 consensus_evidence.json（先落盘），摘要记 forecast.quality.consensus。只记录：
+        # 不改概率 / 提示词 / 发布门；off（默认）或无效值时不加键、不写文件（forecast.json 逐字节不变）。
+        # as-of 取 actors.as_of_date；它缺失或不是整日（旧版/抢救研究）时退回回测钉的 as_of；两者皆无则
+        # 泄漏守卫与陈旧度不运行，摘要记 leakage_guard=false。
+        if getattr(Config, "REPORT_CONSENSUS_DIAGNOSTICS", "off") == "shadow" and getattr(self, "quantitative", None):
+            try:
+                from . import consensus_evidence as _consensus
+                _consensus_actors = self.actors if isinstance(getattr(self, "actors", None), dict) else {}
+                _consensus_as_of = _consensus_actors.get("as_of_date")
+                if _consensus.as_of_full_day(_consensus_as_of) is None:
+                    _consensus_as_of = (self._hindcast_pin() or {}).get("as_of")
+                _consensus_diag = _consensus.build_dispersion_diagnostics(
+                    self.quantitative, getattr(self, "timeline_events", None), _consensus_as_of)
+                write_json_atomic(
+                    os.path.join(ReportManager._get_report_folder(report_id), _consensus.FILENAME),
+                    _consensus_diag)
+                forecast.setdefault("quality", {})["consensus"] = _consensus.quality_summary(_consensus_diag)
+            except Exception as _cde:  # noqa: BLE001 — 影子诊断，绝不影响产物
+                logger.warning(f"跨来源预测离散度诊断失败（忽略）: {_cde}")
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
