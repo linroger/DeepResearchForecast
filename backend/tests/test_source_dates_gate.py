@@ -197,6 +197,26 @@ def test_metadata_ties_take_the_latest_day_and_in_document_ties_the_first(items)
     assert sd.page_availability(_head(*(f"Published: {value}" for value in items))) == dt.date.fromisoformat(items[0])
 
 
+def test_relative_head_datelines_are_candidates_only_when_asked_for():
+    text = ("# Title\n\nPublished: 2024-05-01\nUpdated 3 hours ago\nLast updated: 2 days ago\n"
+            "Posted yesterday\nDate: just  now\nPosted today's top stories\nDate 3 days ago\n\nBody text.")
+    # TIME-2's display reads absolute datelines only (a relative one never becomes a shown date).
+    assert sd.from_text_head(text) == [(3, "text_head", "published", "2024-05-01")]
+    relative = sd.from_text_head(text, relative=True)
+    # In line order, with the dateline's role; "today's" and an unlabelled bare "Date" are no datelines.
+    assert relative == [(3, "text_head", "published", "2024-05-01"), (3, "text_head", "modified", "3 hours ago"),
+                        (3, "text_head", "modified", "2 days ago"), (3, "text_head", "published", "yesterday"),
+                        (3, "text_head", "published", "just now")]
+    assert [sd.resolve_upper(candidate[3], now=NOW) for candidate in relative] == [
+        dt.date(2024, 5, 1), dt.date(2026, 9, 30), dt.date(2026, 9, 28), dt.date(2026, 9, 29), dt.date(2026, 9, 30)]
+    # An "Updated <relative>" dateline is a modified date: it makes a page dated in window late.
+    assert sd.gate(sd.page_availability(relative, now=NOW), AS_OF) == "late"
+    assert sd.page_availability(sd.from_text_head(text), now=NOW) == dt.date(2024, 5, 1)
+    # A relative published dateline is a published candidate like any head dateline.
+    first = sd.from_text_head("Posted 3 years ago\nPublished: 2024-09-01", relative=True)
+    assert sd.page_availability(first, now=NOW) == dt.date(2023, 10, 1)
+
+
 @pytest.mark.parametrize("as_of", [None, "", "2024-6-1", "not a date", 20240601])
 def test_an_unusable_as_of_gates_everything_late(as_of):
     assert sd.gate(dt.date(2000, 1, 1), as_of) == "late"

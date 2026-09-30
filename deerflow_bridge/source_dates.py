@@ -182,10 +182,12 @@ _TEXT_DATE = (
 )
 _PUBLISHED_LABELS = r"first\s+published|published(?:\s+(?:time|date|on|at))?|posted(?:\s+(?:on|at))?|date"
 _MODIFIED_LABELS = r"last\s+updated|updated(?:\s+(?:on|at))?|last\s+modified|modified(?:\s+(?:on|at))?"
-_HEAD_LINE_RE = re.compile(
+# A head dateline's label, up to where its date starts.
+_HEAD_LABEL = (
     r"[\s*_>#|-]{0,6}(?P<label>" + _MODIFIED_LABELS + "|" + _PUBLISHED_LABELS
     + r"|发布时间|发布日期|发表于|更新时间)[\s*_]{0,3}(?P<sep>[:：]?)[\s*_]{0,3}(?:(?:on|at)\s{1,3})?"
-    r"(?:" + _WEEKDAY + r")?(?P<date>" + _TEXT_DATE + r")", re.I)
+    r"(?:" + _WEEKDAY + r")?")
+_HEAD_LINE_RE = re.compile(_HEAD_LABEL + r"(?P<date>" + _TEXT_DATE + r")", re.I)
 _MODIFIED_LABEL_RE = re.compile(r"updated|modified|更新", re.I)
 
 _SCRIPT_TAG_RE = re.compile(r"<script\b[^<>]{0,500}>", re.I)
@@ -466,18 +468,25 @@ def from_html(raw: Any) -> list[Candidate]:
     return out
 
 
-def from_text_head(text: Any, max_lines: int = TEXT_HEAD_LINES) -> list[Candidate]:
+def from_text_head(text: Any, max_lines: int = TEXT_HEAD_LINES, *, relative: bool = False) -> list[Candidate]:
     """Rank-3 candidates of the datelines among a page's first ``max_lines``
     lines: Published / Posted / First published / Date (published) and
     Updated / Last updated / Last modified (modified), 发布时间 / 发布日期 /
     发表于 (published) and 更新时间 (modified), each followed directly by a
     date.  A bare "Date" line needs a colon ("Date of birth 1950" is no
-    dateline)."""
+    dateline).  With ``relative`` (the point-in-time page verdict only), a
+    dateline dated relative to now ("Updated 3 hours ago", "Posted
+    yesterday") is a candidate too, in its line's place: only
+    :func:`resolve_upper` reads its value, so no displayed date comes from
+    it."""
     out: list[Candidate] = []
     if not isinstance(text, str):
         return out
     for line in text.split("\n", max(0, int(max_lines)))[:max(0, int(max_lines))]:
-        match = _HEAD_LINE_RE.match(line[:_TEXT_LINE_CHARS])
+        head = line[:_TEXT_LINE_CHARS]
+        match = _HEAD_LINE_RE.match(head)
+        if match is None and relative:
+            match = _HEAD_RELATIVE_RE.match(head)
         if match is None:
             continue
         label = match["label"]
@@ -574,9 +583,13 @@ _NO_FUTURE_LIMIT = _dt.date(9999, 12, 31)
 _QUARTER_RE = re.compile(r"q(?P<q1>[1-4])[\s-]{0,3}(?P<y1>\d{4})|(?P<y2>\d{4})[\s-]{0,3}q(?P<q2>[1-4])", re.I)
 _HALF_RE = re.compile(r"h(?P<h1>[12])[\s-]{0,3}(?P<y1>\d{4})|(?P<y2>\d{4})[\s-]{0,3}h(?P<h2>[12])", re.I)
 # Search providers (Serper, Google news rows) report recent rows relative to now.
-_RELATIVE_RE = re.compile(
-    r"(?P<n>\d{1,4}|an?|one)\s{1,3}(?P<unit>sec(?:ond)?|min(?:ute)?|hour|hr|day|week|month|year)s?\s{1,3}ago",
-    re.I)
+_RELATIVE_AGO = r"(?P<n>\d{1,4}|an?|one)\s{1,3}(?P<unit>sec(?:ond)?|min(?:ute)?|hour|hr|day|week|month|year)s?\s{1,3}ago"
+_RELATIVE_RE = re.compile(_RELATIVE_AGO, re.I)
+# A head dateline dated relative to now ("Updated 3 hours ago"), which only the
+# point-in-time page verdict reads (from_text_head(relative=True)); the date ends
+# at a word boundary ("today's" is no date).
+_HEAD_RELATIVE_RE = re.compile(
+    _HEAD_LABEL + r"(?P<date>" + _RELATIVE_AGO + r"|just\s{1,3}now|today|yesterday)(?![\w'’])", re.I)
 # Days per unit, rounded down so the day read is never earlier than the real one:
 # the upper bound errs late, which the gate reads as not yet available.
 _RELATIVE_UNIT_DAYS = {"sec": 0, "second": 0, "min": 0, "minute": 0, "hour": 0, "hr": 0,

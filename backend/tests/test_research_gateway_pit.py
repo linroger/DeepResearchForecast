@@ -110,12 +110,13 @@ def test_pit_policy_validates_its_fields(tmp_path):
         rg.ResearchTools(rg.SourceLedger(tmp_path / "l.json"), tmp_path / "pages", pit={"as_of": AS_OF})
 
 
-def test_set_pit_sticks_except_unverifiable_to_admitted_and_anything_to_late(tmp_path):
+def test_set_pit_sticks_except_unverifiable_to_an_admission_and_anything_to_late(tmp_path):
     path = tmp_path / "l.json"
     ledger = rg.SourceLedger(path)
     late = ledger.register("https://a.example/x", "A")["sid"]
     flagged = ledger.register("https://b.example/y", "B")["sid"]
     withheld = ledger.register("https://c.example/z", "C")["sid"]
+    same_day = ledger.register("https://d.example/w", "D")["sid"]
     assert ledger.set_pit(late, "late")["pit_status"] == "late"
     # A recorded withhold is never re-admitted.
     for status in ("admitted", "same_day", "unverifiable", "undated_withheld"):
@@ -131,12 +132,17 @@ def test_set_pit_sticks_except_unverifiable_to_admitted_and_anything_to_late(tmp
     assert ledger.set_pit(withheld, "undated_withheld")["pit_status"] == "undated_withheld"
     assert ledger.set_pit(withheld, "admitted")["pit_status"] == "undated_withheld"
     assert ledger.set_pit(withheld, "late")["pit_status"] == "late"
+    # A same-day admission (same_day == "include") promotes an unverifiable source too, and sticks.
+    assert ledger.set_pit(same_day, "unverifiable")["pit_status"] == "unverifiable"
+    assert ledger.set_pit(same_day, "same_day")["pit_status"] == "same_day"
+    assert ledger.set_pit(same_day, "admitted")["pit_status"] == "same_day"
     assert ledger.set_pit(99, "late") is None
     with pytest.raises(ValueError):
         ledger.set_pit(late, "maybe")
     ledger.flush()
     reloaded = rg.SourceLedger(path)
-    assert [reloaded.get(sid)["pit_status"] for sid in (late, flagged, withheld)] == ["late", "late", "late"]
+    assert [reloaded.get(sid)["pit_status"] for sid in (late, flagged, withheld, same_day)] == [
+        "late", "late", "late", "same_day"]
 
 
 def test_tools_without_a_policy_have_no_gates(tmp_path):
@@ -420,6 +426,34 @@ def test_undated_pages_are_withheld_under_drop_and_flagged_under_flag(tmp_path):
         "[S1] Grid connection report — site0.example (tier 3) — undated — ")
 
 
+@pytest.mark.parametrize("same_day, date, status, label", [
+    ("exclude", "2024-05-01", "admitted", ""),
+    ("include", "2024-06-01", "same_day", " — same-day"),
+])
+def test_a_page_stored_undated_is_admitted_once_a_sighting_dates_it_in_window(tmp_path, same_day, date, status, label):
+    rows = {"grid first": [hit(0)], "grid second": [hit(0, published=date)]}
+    url = "https://site0.example/page-0"
+    tools, ledger = make_tools(tmp_path, pit=policy(undated="flag", same_day=same_day),
+                               search_fn=lambda query, n: json.dumps({"results": rows[query]}),
+                               fetch_fn=CountingFetch(UNDATED_PAGE))
+    tools.search("grid first", agent_id="k1")
+    assert tools.fetch(url, agent_id="k1").split("\n", 1)[0].startswith(
+        "[S1] Grid connection report — site0.example (tier 3) — undated — full page")
+    assert ledger.get(1)["pit_status"] == "unverifiable"
+
+    assert tools.search("grid second", agent_id="k1").split("\n", 1)[0] == (
+        f"[S1] Grid connection report — site0.example (tier 3) — published {date}{label}")
+    row = ledger.get(1)
+    assert (row["pit_status"], row["published"], row["fetched"]) == (status, date, True)
+    # The stored copy's header no longer calls the page undated beside its date.
+    header = tools.fetch(url, agent_id="k2").split("\n", 1)[0]
+    assert header.startswith(
+        f"[S1] Grid connection report — site0.example (tier 3) — published {date}{label} — full page")
+    assert " — undated" not in header
+    ledger.flush()
+    assert rg.SourceLedger(ledger.path).get(1)["pit_status"] == status
+
+
 def test_admitted_and_same_day_pages_are_stored_with_their_status(tmp_path):
     tools, ledger = make_tools(tmp_path, pit=policy(), fetch_fn=CountingFetch(dated_page("Published: 2024-05-01")))
     text = tools.fetch("https://a.example/story", agent_id="k1")
@@ -600,6 +634,40 @@ def test_a_source_sighted_late_while_its_page_is_fetched_is_withheld(tmp_path, m
     resumed = rg.ResearchTools(rg.SourceLedger(ledger.path), tools.pages_dir, clock=lambda: NOW, pit=policy())
     assert resumed.fetch(_STORY_URL, agent_id="k1") == rg.MSG_OUT_OF_WINDOW_SOURCE
     assert all(not stored.get("fetched") and not stored.get("page_path") for stored in resumed.ledger.rows())
+
+
+def test_a_late_record_saved_before_the_fetch_registers_its_row_withholds_the_page(tmp_path, monkeypatch):
+    """A URL first seen by this fetch: its page's own dates admit it, and another
+    agent's search sights it late ("3 days ago") after the fetch's verdict but
+    before the fetch registers a row, so the sighting saves a row-less late
+    record that marks no row."""
+    rows = {"grid late": [hit(0, "2024/05/story", date="3 days ago")]}
+    tools, ledger = make_tools(tmp_path, pit=policy(), search_fn=lambda query, n: json.dumps({"results": rows[query]}),
+                               fetch_fn=CountingFetch(dated_page("Published: 2024-05-10")))
+    withhold = tools._pit_withhold
+    sighted: list[tuple[str, int]] = []
+
+    def withhold_then_sighting(url, key, verdict):
+        answer = withhold(url, key, verdict)
+        if answer is None:
+            sighted.append((tools.search("grid late", agent_id="k2"), len(ledger)))
+        return answer
+
+    monkeypatch.setattr(tools, "_pit_withhold", withhold_then_sighting)
+    assert tools.fetch(_STORY_URL, agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
+
+    assert [(text.split(":", 1)[0], rows_then) for text, rows_then in sighted] == [("NO_IN_WINDOW_RESULTS", 0)]
+    row = ledger.get(1)
+    # The row the fetch registered takes the late record: nothing is stored.
+    assert (row["pit_status"], row["fetched"], row["page_path"]) == ("late", False, None)
+    assert pages_on_disk(tools) == []
+    pit = tools.stats()["pit"]
+    assert (pit["fetch_late_withheld"], pit["fetch_units_spent_withheld"], pit["fetch_admitted"]) == (1, 1, 0)
+    assert tools.outcome_counts()["fetch_ok"] == 0
+    assert tools.fetch(_STORY_URL, agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
+    ledger.flush()
+    resumed = rg.ResearchTools(rg.SourceLedger(ledger.path), tools.pages_dir, clock=lambda: NOW, pit=policy())
+    assert resumed.fetch(_STORY_URL, agent_id="k1") == rg.MSG_OUT_OF_WINDOW_SOURCE
 
 
 def test_a_source_withheld_undated_stays_withheld_after_a_dated_sighting(tmp_path):
@@ -806,6 +874,49 @@ def test_page_head_datelines_gate_even_without_the_text_date_fallback(tmp_path):
     assert tools.fetch("https://a.example/story", agent_id="k1").startswith(
         "[S1] Grid connection report — a.example (tier 3) — published 2024-01-01; updated 2024-03-01 — full page")
     assert ledger.get(1)["pit_status"] == "admitted"
+
+
+@pytest.mark.parametrize("head", [
+    ("Published: 2024-05-01", "Updated 3 hours ago"),
+    ("Last updated: 2 days ago",),
+    ("Posted yesterday",),
+])
+def test_a_relative_page_head_dateline_after_as_of_withholds_the_page(tmp_path, head):
+    tools, ledger = make_tools(tmp_path, pit=policy(), search_fn=searcher(hit(0, published="2024-05-01")),
+                               fetch_fn=CountingFetch(dated_page(*head)))
+    tools.search("grid queues", agent_id="k1")
+    assert tools.fetch(_SITE0, agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
+    row = ledger.get(1)
+    assert (row["pit_status"], row["fetched"]) == ("late", False) and pages_on_disk(tools) == []
+
+    # A relative dateline before the as-of admits the page, and is never a shown date.
+    fetch = CountingFetch(dated_page("Published: 2024-05-01", "Updated 3 years ago"))
+    tools, ledger = make_tools(tmp_path, pit=policy(), fetch_fn=fetch, name="ok")
+    assert tools.fetch(_SITE0, agent_id="k1").startswith(
+        "[S1] Grid connection report — site0.example (tier 3) — published 2024-05-01 — full page")
+    assert (ledger.get(1)["pit_status"], ledger.get(1).get("modified_at")) == ("admitted", None)
+
+
+def test_an_undated_page_gets_the_verdict_of_its_relatively_dated_search_rows(tmp_path):
+    tools, ledger = make_tools(tmp_path, pit=policy(), search_fn=searcher(hit(0, date="3 years ago")),
+                               fetch_fn=CountingFetch(UNDATED_PAGE))
+    assert tools.search("grid queues", agent_id="k1").split("\n", 1)[0] == "[S1] Hit 0 — site0.example (tier 3)"
+    # The ledger records no date for a relative one (TIME-2 shows none) ...
+    assert ledger.get(1).get("published") is None
+    # ... yet the undated page gets the verdict its search row got, not a pit_undated withhold.
+    assert tools.fetch(_SITE0, agent_id="k1").startswith(
+        "[S1] Grid connection report — site0.example (tier 3) — full page")
+    assert (ledger.get(1)["pit_status"], ledger.get(1)["fetched"]) == ("admitted", True)
+    assert tools.stats()["pit"]["fetch_admitted"] == 1
+
+    # The page's own later date still wins.
+    late, _ledger = make_tools(tmp_path, pit=policy(), search_fn=searcher(hit(0, date="3 years ago")),
+                               fetch_fn=CountingFetch(dated_page("Published: 2024-08-01")), name="late")
+    late.search("grid queues", agent_id="k1")
+    assert late.fetch(_SITE0, agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
+    # Without that sighting the same undated page is withheld under drop.
+    fresh, _ledger = make_tools(tmp_path, pit=policy(), fetch_fn=CountingFetch(UNDATED_PAGE), name="fresh")
+    assert fresh.fetch(_SITE0, agent_id="k1") == rg.MSG_FETCH_WITHHELD_UNDATED
 
 
 @pytest.mark.parametrize("meta", [
