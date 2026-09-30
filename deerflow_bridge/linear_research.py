@@ -585,6 +585,14 @@ _FACTS_FORECAST_INPUTS_RULE = (
     f"with at most {MAX_FORECAST_INDICATORS} leading indicators or signposts the report names; date_or_trigger "
     "is the date the report gives, at the precision it gives (YYYY, YYYY-MM or YYYY-MM-DD; never pad a year to "
     "-01-01 or a month to -01), or the triggering event when the report gives no date.")
+# RESEARCH_FORECASTER_ATTRIBUTION: who made each forecast, and the range and
+# forecaster count the report states (attribute_forecast_row keeps a bound or
+# count only when the report text states it).
+_FACTS_FORECASTER_RULE = (
+    "For value_type estimate, forecast or target rows also give: forecaster (who made the forecast: "
+    "institution, poll or analyst group) and write metric without the forecaster's name; low and high only "
+    "when the report states a range or the lowest and highest individual forecasts; n_forecasters only when "
+    'the report states how many forecasters. Never compute these; use "" or 0 when not stated.')
 
 # The line the KIQ task appends with RESEARCH_EVIDENCE_QUOTES on (``_Engine._kiq_task_addenda``).
 _KIQ_EVIDENCE_RULE = ('Evidence: end each finding with EVIDENCE: "<a passage copied character for character '
@@ -6002,6 +6010,10 @@ class _Engine:
         # facts task also asks for forecast_inputs drivers and dated indicators.
         self.v3_forecast_inputs = (_env_flag(self.env, "RESEARCH_V3_FORECAST_INPUTS", False)
                                    and _env_flag(self.env, "RESEARCH_FORECAST_INPUTS", True))
+        # RESEARCH_FORECASTER_ATTRIBUTION (default off): the facts task also asks
+        # projected rows for their forecaster, stated range and forecaster count,
+        # which _write_structured checks against the report (attribute_forecast_row).
+        self.forecaster_attribution = _env_flag(self.env, "RESEARCH_FORECASTER_ATTRIBUTION", False)
         # Fetched rows whose stored page is a shell, published as cited (_source_rows).
         self.shell_sources_demoted = 0
         # sid -> reason for the shells a resumed work dir stored as fetched pages
@@ -7848,8 +7860,9 @@ class _Engine:
             self.write_text(self.out_dir / report_name, report)
             self.log("ok", f"wrote {report_name} ({len(report)} chars)")
             self.log("ok", f"wrote {sources_name} ({len(sources)} sources)")
-            actors_raw, facts_raw = self._structured(strip_references(report), deadline)
-            counts = self._write_structured(actors_raw, facts_raw, sources, order)
+            report_body = strip_references(report)
+            actors_raw, facts_raw = self._structured(report_body, deadline)
+            counts = self._write_structured(actors_raw, facts_raw, sources, order, report_body)
             if not self._publish_evidence(counts.pop("_evidence", None)):
                 counts.pop("verified_facts", None)
             self._analytics(sources, counts.pop("_actors_obj"))
@@ -8082,12 +8095,15 @@ class _Engine:
     def _facts_task_addenda(self) -> list[str]:
         """Field rules the enabled knobs append to the facts task, in canonical
         order: the date rule (RESEARCH_QUANT_TYPING) first, then the forecast
-        inputs (RESEARCH_V3_FORECAST_INPUTS), later rules after them."""
+        inputs (RESEARCH_V3_FORECAST_INPUTS), then the forecaster fields
+        (RESEARCH_FORECASTER_ATTRIBUTION), later rules after them."""
         addenda: list[str] = []
         if _env_flag(self.env, "RESEARCH_QUANT_TYPING", False):
             addenda.append(_FACTS_DATE_RULE)
         if self.v3_forecast_inputs:
             addenda.append(_FACTS_FORECAST_INPUTS_RULE)
+        if self.forecaster_attribution:
+            addenda.append(_FACTS_FORECASTER_RULE)
         return addenda
 
     def _facts_task(self) -> str:
@@ -8209,9 +8225,14 @@ class _Engine:
         return parsed, truncated
 
     def _write_structured(self, actors_raw: dict | None, facts_raw: dict | None,
-                          sources: list[dict], order: Sequence[int]) -> dict:
+                          sources: list[dict], order: Sequence[int], report_body: str = "") -> dict:
         """actors/timeline/quantitative/contested — ALWAYS all four (possibly
         empty) so no stale file of an earlier attempt survives.
+
+        With RESEARCH_FORECASTER_ATTRIBUTION the quant rows get their
+        forecaster, range and forecaster count (:meth:`_attribute_forecasters`,
+        checked against ``report_body``, the report the facts were extracted
+        from) before the bridge enriches them.
 
         With RESEARCH_VERIFIED_FACTS the quant rows also keep ``source_ref``
         and get ``future_dated`` / ``evidence_window`` (see
@@ -8237,7 +8258,12 @@ class _Engine:
             self.meta["structured_facts_degraded"] = True
         facts_raw = facts_raw or {}
         timeline = normalize_events(facts_raw.get("key_events"))
-        quant = normalize_quant(facts_raw.get("quantitative_facts"), sources, keep_ref=verify)
+        if self.forecaster_attribution:
+            quant = self._attribute_forecasters(
+                normalize_quant(facts_raw.get("quantitative_facts"), sources, keep_ref=verify, with_items=True),
+                report_body)
+        else:
+            quant = normalize_quant(facts_raw.get("quantitative_facts"), sources, keep_ref=verify)
         contested = normalize_contested(facts_raw.get("contested_claims"), sources)
         actors_raw = actors_raw or {}
         as_of = str(actors_raw.get("as_of_date") or "")
@@ -8339,6 +8365,39 @@ class _Engine:
             counts["verified_facts"] = dict(evidence["payload"]["counts"])
             counts["_evidence"] = evidence
         return counts
+
+    def _attribute_forecasters(self, pairs: Sequence[tuple[dict, Any]], report_body: str) -> list[dict]:
+        """The quant rows of ``pairs`` (``normalize_quant(..., with_items=True)``:
+        each row with the extracted item it came from) after
+        :func:`attribute_forecast_row` against ``report_body``, summarised in
+        ``meta.forecaster_attribution``: ``rows``, ``with_forecaster``,
+        ``with_range`` (rows with low/high), ``with_n`` and ``fields_dropped``
+        (dropped field name -> count).  Degrade-safe: the rows are attributed
+        as copies, so a failure is recorded in ``analytics_errors``
+        (``forecaster_attribution``), returns the rows as normalize_quant made
+        them, writes no summary and the run goes on."""
+        rows = [row for row, _ in pairs]
+        try:
+            numbers = page_number_set(report_body)
+            attributed = [dict(row) for row in rows]
+            dropped: Counter[str] = Counter()
+            for row, (_, item) in zip(attributed, pairs, strict=True):
+                dropped.update(attribute_forecast_row(row, item, report_body, numbers))
+        except Exception as exc:  # noqa: BLE001 — attribution never fails a finished report
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "forecaster_attribution", "error": error[:300]})
+            self.log("warn", f"v3: forecaster attribution failed ({error}); quantitative rows kept unattributed")
+            return rows
+        summary = {
+            "rows": len(attributed),
+            "with_forecaster": sum(1 for row in attributed if "forecaster" in row),
+            "with_range": sum(1 for row in attributed if "low" in row),
+            "with_n": sum(1 for row in attributed if "n_forecasters" in row),
+            "fields_dropped": dict(sorted(dropped.items())),
+        }
+        self.meta["forecaster_attribution"] = summary
+        self.log("ok", "v3: forecaster attribution: " + json.dumps(summary, ensure_ascii=False))
+        return attributed
 
     def _count_parametric_suspects(self, timeline: Sequence[Mapping[str, Any]],
                                    quant: Sequence[Mapping[str, Any]], *, typing: bool) -> None:
@@ -9126,13 +9185,19 @@ def _merge_supports(entry: MutableMapping[str, Any], spans: Iterable[Any], cap: 
     return merged[kept:]
 
 
-def normalize_quant(value: Any, sources: Sequence[Mapping[str, Any]], *, keep_ref: bool = False) -> list[dict]:
+def normalize_quant(value: Any, sources: Sequence[Mapping[str, Any]], *, keep_ref: bool = False,
+                    with_items: bool = False) -> list:
     """Quantitative rows; ``source_ref`` (positional [S#]) resolves url and tier.
 
     With ``keep_ref`` (RESEARCH_VERIFIED_FACTS) a resolved ref is also kept as
     ``source_ref`` in its normalised form ``"S<n>"``: the row's position in
-    sources.json, which the report's [S#] cite."""
+    sources.json, which the report's [S#] cite.
+
+    With ``with_items`` (RESEARCH_FORECASTER_ATTRIBUTION) the result is
+    ``(row, extracted item)`` pairs built in the same loop, so a caller reads
+    each row's own item (skipped items and the row cap never shift them)."""
     rows: list[dict] = []
+    items: list[dict] = []
     for item in value if isinstance(value, list) else []:
         if not isinstance(item, dict):
             continue
@@ -9158,9 +9223,187 @@ def normalize_quant(value: Any, sources: Sequence[Mapping[str, Any]], *, keep_re
             row["tier"] = source.get("tier")
             row.setdefault("source", _collapse(source.get("title"), 200))
         rows.append(row)
+        items.append(item)
         if len(rows) >= MAX_QUANT_ROWS:
             break
-    return rows
+    return list(zip(rows, items, strict=True)) if with_items else rows
+
+
+# RESEARCH_FORECASTER_ATTRIBUTION (attribute_forecast_row): the keys only a
+# projected row may carry, the value types that are projections, and the
+# answers that state nothing (the facts rule asks for "" or 0).
+_CONSENSUS_KEYS = ("forecaster", "low", "high", "n_forecasters", "range_kind")
+_ATTRIBUTION_FIELDS = ("forecaster", "low", "high", "n_forecasters")
+_PROJECTED_VALUE_TYPES = frozenset({"estimate", "forecast", "target"})
+_UNSTATED_ANSWERS = frozenset({"", "0", "n/a", "na", "none", "null", "unknown", "not stated"})
+# A value written as a range, whole: "52-56", "52–56%", "$1.2 to 1.5".
+_STATED_RANGE_RE = re.compile(r"[~≈]?\s*[$€£¥]?\s*(?P<low>\d[\d,]*(?:\.\d+)?)\s*(?:-|–|—|to)\s*"
+                              r"[$€£¥]?\s*(?P<high>\d[\d,]*(?:\.\d+)?)\s*%?", re.I)
+# Two numbers of a value joined as a range (the bridge's value_num reads such
+# a value as their midpoint), and a value that opens with a minus sign.
+_RANGE_PAIR_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:[-–—~]|to)\s*(\d+(?:\.\d+)?)")
+_NEGATIVE_LEAD_RE = re.compile(r"\s*[-−]\s*[$€£¥]?\s*\d")
+# The count nouns that make a stated number a forecaster count.
+_FORECASTER_NOUNS = r"(?:forecasters|economists|analysts|respondents|experts|institutions)\b"
+_FORECASTER_NOUNS_ZH = r"(?:位|家|名)(?:经济学家|分析师|机构|专家|受访者)"
+
+
+def _unstated(value: Any) -> bool:
+    """True for an extraction answer that states nothing: missing, ``""``, 0
+    or a placeholder word ("n/a", "unknown")."""
+    if value is None:
+        return True
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value == 0
+    return isinstance(value, str) and _collapse(value).casefold() in _UNSTATED_ANSWERS
+
+
+def _magnitude(value: Any) -> float | None:
+    """A value read as one number at full scale, so a row's bounds compare with
+    its value whatever scale words each uses: a number as it is; text as the
+    bridge's value_num reads it (its first two numbers joined as a range give
+    their midpoint, else the first number, a leading minus kept) at the scale
+    its words give ("1.2 million" = 1,200,000, "$1.2T" = 1.2e12; in "1.2-1.5
+    trillion" the second number's scale also covers a smaller unscaled first
+    one); None without a number."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value) if math.isfinite(value) else None
+    text = _join_digit_groups(_number_text(str(value or ""), strip_dates=False))
+    found = _number_values_at(text)
+    if not found:
+        return None
+    pair = _RANGE_PAIR_RE.search(re.sub(r"[,$€£¥]", "", text))
+    if pair and len(found) >= 2 and (_canonical_number(pair.group(1)), _canonical_number(pair.group(2))) \
+            == (found[0][1], found[1][1]):
+        (_, first_token, first_full), (_, second_token, second_full) = found[0], found[1]
+        first, second = Decimal(first_full[1:]), Decimal(second_full[1:])
+        if first == Decimal(first_token) and second != Decimal(second_token) \
+                and Decimal(first_token) <= Decimal(second_token):
+            first *= second / Decimal(second_token)
+        return float((first + second) / 2)
+    number = float(found[0][2][1:])
+    return -number if _NEGATIVE_LEAD_RE.match(text) else number
+
+
+def _stated_in_report(text: str, report_numbers: frozenset[str]) -> bool:
+    """True when ``text`` states a number and every number of it is a number of
+    the report (``report_numbers``: its :func:`page_number_set`), as written or
+    at the same full value (``1.2 trillion`` = ``1,200 billion``)."""
+    pairs = _number_values(_join_digit_groups(_number_text(text, strip_dates=True)))
+    return bool(pairs) and all(token in report_numbers or full in report_numbers for token, full in pairs)
+
+
+def _checked_bound(value: Any, report_numbers: frozenset[str]) -> tuple[Any, float] | None:
+    """``(kept value, its number)`` of a stated low/high whose numbers are all
+    the report's; None otherwise.  A number stays a number; text is kept as
+    written (collapsed, <= 80 chars, like ``value``)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    number = _magnitude(value)
+    if number is None:
+        return None
+    text = format(Decimal(repr(value)), "f") if isinstance(value, float) else str(value)
+    if not _stated_in_report(text, report_numbers):
+        return None
+    return (value if isinstance(value, (int, float)) else _collapse(value, 80)), number
+
+
+def _forecaster_count(value: Any) -> int | None:
+    """A stated forecaster count as an integer >= 2 (a whole number, or text of
+    digits); None for anything else."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float):
+        value = int(value) if value.is_integer() else None
+    elif isinstance(value, str):
+        text = unicodedata.normalize("NFKC", value).strip().replace(",", "")
+        value = int(text) if re.fullmatch(r"\d{1,7}", text) else None
+    return value if isinstance(value, int) and value >= 2 else None
+
+
+def _report_states_count(count: int, report_body: str) -> bool:
+    """True when the report states ``count`` as a number of forecasters: next
+    to a count noun ("40 economists", "1,200 respondents", "40位经济学家") or as
+    a sample size ("n = 40").  A bare number is never enough (a small count
+    is on almost any page)."""
+    text = unicodedata.normalize("NFKC", str(report_body or ""))
+    spellings = "|".join(re.escape(spelling) for spelling in sorted({str(count), f"{count:,}"}, key=len,
+                                                                    reverse=True))
+    number = rf"(?<![\d.,])(?:{spellings})"
+    patterns = (rf"{number}\s+{_FORECASTER_NOUNS}", rf"\bn\s*=\s*(?:{spellings})(?!\d|[.,]\d)",
+                rf"{number}\s*{_FORECASTER_NOUNS_ZH}")
+    return any(re.search(pattern, text, re.I) for pattern in patterns)
+
+
+def attribute_forecast_row(row: dict, raw_item: Any, report_body: str,
+                           report_numbers: frozenset[str]) -> list[str]:
+    """Forecaster attribution of one normalized quant row, in place, from the
+    extracted item it came from (RESEARCH_FORECASTER_ATTRIBUTION).  Returns the
+    names of the fields the extraction stated but the row does not keep.
+
+    A row whose value_type is not estimate, forecast or target never carries
+    the consensus keys (:data:`_CONSENSUS_KEYS`): they are removed, and every
+    field the extraction stated for it counts as dropped.  A projected row
+    keeps
+
+    * ``forecaster`` (<= 200 chars), also written to ``analyst`` so the
+      bridge's publisher fallback does not replace it (``source`` is kept);
+    * ``low`` and ``high`` only as a pair: each states a number, every number
+      of it is one of the report's (``report_numbers``, the
+      :func:`page_number_set` of ``report_body``), low <= high, and
+      low <= central value <= high when the value reads as a number;
+      otherwise both are dropped;
+    * ``n_forecasters`` only as an integer >= 2 that the report states with a
+      count noun (:func:`_report_states_count`);
+    * ``range_kind``: ``across_forecasters`` for kept bounds with a kept
+      count; ``stated_range`` when the extraction stated no bounds and the
+      value is a range ("52-56", "52–56", "52 to 56") whose two numbers pass
+      the same report and order checks: they become low and high as written.
+
+    Answers that state nothing (:func:`_unstated`: the facts rule's "" or 0)
+    are neither kept nor dropped.  Nothing is computed from other rows."""
+    for key in _CONSENSUS_KEYS:
+        row.pop(key, None)
+    raw = raw_item if isinstance(raw_item, Mapping) else {}
+    stated = [key for key in _ATTRIBUTION_FIELDS if not _unstated(raw.get(key))]
+    if str(row.get("value_type") or "") not in _PROJECTED_VALUE_TYPES:
+        return stated
+    dropped: list[str] = []
+    if "forecaster" in stated:
+        forecaster = _collapse(raw["forecaster"], 200) if isinstance(raw["forecaster"], str) else ""
+        if forecaster:
+            row["forecaster"] = row["analyst"] = forecaster
+        else:
+            dropped.append("forecaster")
+    bounds_stated = [key for key in ("low", "high") if key in stated]
+    if bounds_stated:
+        low, high = (_checked_bound(raw.get(key), report_numbers) for key in ("low", "high"))
+        central = _magnitude(row.get("value"))
+        if (low is not None and high is not None and low[1] <= high[1]
+                and (central is None or low[1] <= central <= high[1])):
+            row["low"], row["high"] = low[0], high[0]
+        else:
+            dropped.extend(bounds_stated)
+    elif isinstance(row.get("value"), str):
+        match = _STATED_RANGE_RE.fullmatch(row["value"].strip())
+        if match:
+            low_text, high_text = match.group("low"), match.group("high")
+            low_n, high_n = _magnitude(low_text), _magnitude(high_text)
+            if (low_n is not None and high_n is not None and low_n <= high_n
+                    and _stated_in_report(low_text, report_numbers)
+                    and _stated_in_report(high_text, report_numbers)):
+                row["low"], row["high"], row["range_kind"] = low_text, high_text, "stated_range"
+    if "n_forecasters" in stated:
+        count = _forecaster_count(raw["n_forecasters"])
+        if count is not None and _report_states_count(count, report_body):
+            row["n_forecasters"] = count
+        else:
+            dropped.append("n_forecasters")
+    if "low" in row and "n_forecasters" in row and "range_kind" not in row:
+        row["range_kind"] = "across_forecasters"
+    return dropped
 
 
 def _stamp_rows(rows: list[dict], stamps: Sequence[Mapping[str, Any]]) -> None:

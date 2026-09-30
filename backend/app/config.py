@@ -1098,6 +1098,16 @@ class Config:
     # 章节提示词的「关键事件时间线」块按 as_of 切分：已发生（日期在 as_of 当日或之前，最近 15 条）与
     # 单列的「已排期」子列表（同一实时运行门）；无日期/跨越 as_of 的条目只计数。默认关：关 → 块逐字节不变。
     REPORT_CHRONOLOGY_ASOF_SPLIT = os.environ.get('REPORT_CHRONOLOGY_ASOF_SPLIT', 'false').strip().lower() == 'true'
+    # RESEARCH-6: cross-source forecast-dispersion diagnostics (off | shadow).  shadow: the
+    # research quantitative rows typed projected are grouped by metric family (else the
+    # forecaster-free metric), region, target year and unit; a group with >= 2 forecasters
+    # records min/max/median, the max/min spread ratio, vintages, staleness and
+    # same-forecaster revisions, and rows dated after the research as-of are excluded
+    # (leakage guard).  The payload goes to reports/<id>/consensus_evidence.json and its
+    # digest to forecast.quality.consensus.  Deterministic, zero model calls, and no prompt,
+    # probability or publish-gate input changes.  Default off (no key, no file: forecast.json
+    # byte-identical); blank or any other value is off.
+    REPORT_CONSENSUS_DIAGNOSTICS = os.environ.get('REPORT_CONSENSUS_DIAGNOSTICS', 'off').strip().lower()
 
     # LLM提供方（默认使用 Claude Code CLI 订阅）
     # claude-cli: 通过本机 `claude` CLI 调用（使用 Claude Code 订阅，无需 API Key）
@@ -1604,6 +1614,18 @@ class Config:
     # Default false: it changes role-prompt bytes (PREPARE recomputes their SHAs) and chart
     # markers, and only acts on rows RESEARCH_QUANT_TYPING stamped; off = byte-identical.
     QUANT_TYPED_RENDERING = os.environ.get('QUANT_TYPED_RENDERING', 'false').strip().lower() == 'true'
+    # RESEARCH-6: forecaster attribution in v3 fact extraction.  On, the facts task asks each
+    # estimate/forecast/target row for its forecaster (also written to `analyst`, so charts
+    # split by forecaster rather than by publisher) with a forecaster-free metric, plus the
+    # range (low/high) and forecaster count (n_forecasters) the report states.  Every kept
+    # bound must be made of the report's own numbers and a count must stand next to a count
+    # noun ("40 economists"); a value written as a range becomes low/high (range_kind
+    # stated_range); meta.forecaster_attribution counts kept and dropped fields.  Default
+    # false: the fields add ~5-10% extraction output and the forecaster names change which
+    # quant rows match an actor in PREPARE context packs; off = byte-identical facts prompt,
+    # quantitative.json and meta.  The parent forwards it to the v3 child.
+    RESEARCH_FORECASTER_ATTRIBUTION = os.environ.get(
+        'RESEARCH_FORECASTER_ATTRIBUTION', 'false').strip().lower() == 'true'
     # RESEARCH-1：抓取层抽取空壳检测（诚实性检查，故默认开 = fail closed）。开启时 reader 空壳
     # （"Markdown Content: undefined"）、"page unavailable" 页、bot wall 与短付费墙预告不再算成功
     # 读取：不进 72h 源缓存、触发 provider 回退、v3 工具层返回 FETCH_FAILED(<reason>) 且绝不标记
