@@ -2045,7 +2045,13 @@ def _build_market_anchor(prob: Optional[float], market: Dict[str, Any], *,
     """确定性组装 rich market_anchor：隐含概率取我们的快照价，divergence 本地计算。
 
     price_at_research 记研究时点的快照价（与 implied_yes_prob 同源，供日后与实时价对比）。
-    市场缺 id / 隐含概率非法 → None（不加锚点，degrade-safe）。"""
+    市场缺 id / 隐含概率非法 → None（不加锚点，degrade-safe）。
+
+    EVAL-6（MARKET_ANCHOR_PRICE_TIME，默认开）：市场行能定出取价时刻时追加 price_time +
+    price_time_basis（见 prediction_markets.market_price_time）——行带 quoted_at → basis
+    'requote'，否则带 snapshot_as_of → basis 'snapshot'，都没有 → 两键都不写。basis 为
+    'requote' 时 price_at_research 实为报告期重报价（字段名沿用历史叫法），并非研究期价。
+    旗标关 → 锚点逐字节复现旧形状。"""
     mid = str((market or {}).get("market_id") or "").strip()
     ip = _coerce_float((market or {}).get("implied_yes_prob"))
     p = _coerce_float(prob)
@@ -2058,6 +2064,11 @@ def _build_market_anchor(prob: Optional[float], market: Dict[str, Any], *,
         "price_at_research": round(ip, 4),
         "divergence": round((p if p is not None else 0.0) - ip, 4),
     }
+    if _cfg("MARKET_ANCHOR_PRICE_TIME", True):
+        from ..utils.prediction_markets import market_price_time
+        price_time = market_price_time(market)
+        if price_time is not None:
+            anchor["price_time"], anchor["price_time_basis"] = price_time
     url = str(market.get("url") or "").strip()
     if url:
         anchor["url"] = url
