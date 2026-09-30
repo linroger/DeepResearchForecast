@@ -152,7 +152,7 @@ def test_safety_policy_pinned_at_admission_shape():
     for key in ("sim_graph_feedback", "sim_typed_feedback_edges",
                 "sim_interview_graph_feedback", "n_forecast_seeds",
                 "report_spine_selfconsistency_k", "ensemble_extremize_a",
-                "simulation_forecast_effect", "pinned_at"):
+                "simulation_forecast_effect", "numeric_guard_mode", "pinned_at"):
         assert key in pol, f"safetyPolicyV1 missing {key}"
     assert json.dumps(pol)  # snapshot must be JSON-serializable
 
@@ -175,6 +175,95 @@ def test_pinned_policy_beats_ambient_config(monkeypatch):
     assert PipelineOrchestrator._pinned_safety(state, "unknown_key", "dflt") == "dflt"
     bare = PipelineState(pipeline_id="pipe_bare", prompt="q")
     assert PipelineOrchestrator._pinned_safety(bare, "sim_graph_feedback", False) is False
+
+
+def test_numeric_guard_mode_is_pinned_normalised(monkeypatch):
+    """TIME-5: the admission snapshot pins NUMERIC_GUARD_MODE as off | shadow."""
+    from app.services.pipeline_orchestrator import capture_safety_policy_v1
+
+    assert capture_safety_policy_v1("admission")["numeric_guard_mode"] == "shadow"
+    for ambient, pinned in (("OFF", "off"), ("shadow", "shadow"), ("enforce", "shadow"), ("", "shadow")):
+        monkeypatch.setattr(Config, "NUMERIC_GUARD_MODE", ambient, raising=False)
+        for origin in ("admission", "resume_reconstructed_safe", "fork_admission"):
+            assert capture_safety_policy_v1(origin)["numeric_guard_mode"] == pinned, (ambient, origin)
+
+
+def test_pinned_numeric_guard_mode_beats_ambient_config_for_seed_reports(monkeypatch, tmp_path):
+    """TIME-5: a seed report's ReportAgent gets the run's pinned mode, not the ambient
+    Config; a pin captured before the key existed falls back to the ambient value."""
+    from app.services import pipeline_orchestrator as po
+    from app.services.report_agent import ReportManager
+
+    monkeypatch.setattr(Config, "UPLOAD_FOLDER", str(tmp_path), raising=False)
+    monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path / "reports"), raising=False)
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"), raising=False)
+    monkeypatch.setattr(Config, "SIM_GRAPH_FEEDBACK", False, raising=False)
+    monkeypatch.setattr(Config, "NUMERIC_GUARD_MODE", "shadow", raising=False)
+    constructed = []
+
+    class _Sim:
+        simulation_id = "sim_seed"
+
+    class _SimManager:
+        def create_simulation(self, *a, **k):
+            return _Sim()
+
+        def prepare_simulation(self, **k):
+            return None
+
+    class _RunState:
+        current_round = 1
+        runner_status = po.RunnerStatus.COMPLETED
+
+    class _Runner:
+        start_simulation = staticmethod(lambda **k: None)
+        get_run_state = staticmethod(lambda sim_id: _RunState())
+        write_run_summary = staticmethod(lambda sim_id: None)
+
+    class _FakeAgent:
+        def __init__(self, **kwargs):
+            constructed.append(kwargs)
+            self.ledger_context = None
+            self.evaluation_context = None
+
+        def generate_report(self, report_id=None, **kw):
+            return None
+
+    monkeypatch.setattr(po, "SimulationManager", _SimManager)
+    monkeypatch.setattr(po, "SimulationRunner", _Runner)
+    monkeypatch.setattr(po, "ReportAgent", _FakeAgent)
+    monkeypatch.setattr(po.PipelineOrchestrator, "_run", classmethod(lambda cls, state: None))
+    for pin, expected in (({"numeric_guard_mode": "off"}, "off"), ({}, "shadow")):
+        state = po.PipelineState(pipeline_id="pipe_ens", prompt="q")
+        state.options["safety_policy_v1"] = {"version": "safety-policy/v1", "origin": "admission", **pin}
+        po.PipelineOrchestrator()._run_one_seed(
+            state, type("P", (), {"project_id": "proj"})(), "graph_1", None, {}, "report md",
+            seed=11, max_rounds=None)
+        assert constructed[-1]["numeric_guard_mode"] == expected, pin
+
+
+def test_report_stage_passes_the_pinned_numeric_guard_mode(monkeypatch, tmp_path):
+    """TIME-5: the real _run state machine (every service faked) builds the report agent
+    with the pinned mode even when the ambient Config says otherwise."""
+    from app.services import pipeline_orchestrator as po
+    from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
+
+    created = []
+
+    class _Recording(po.ReportAgent):
+        def __new__(cls, *args, **kwargs):
+            agent = super().__new__(cls)
+            created.append(agent)
+            return agent
+
+    monkeypatch.setattr(po, "ReportAgent", _Recording)
+    monkeypatch.setattr(Config, "NUMERIC_GUARD_MODE", "shadow", raising=False)
+    policy = dict(po.capture_safety_policy_v1("admission"), numeric_guard_mode="off")
+    result = _exercise_prepare_run_resume(
+        monkeypatch, tmp_path, rebuild_prepare=True, real_run_manifest=True,
+        extra_options={"safety_policy_v1": policy})
+    assert result.report_generations, "the stage must build a fresh report"
+    assert created[-1].kwargs["numeric_guard_mode"] == "off"
 
 
 # ==================================================== 1C round validity states

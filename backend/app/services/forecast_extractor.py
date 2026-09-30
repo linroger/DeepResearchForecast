@@ -21,6 +21,7 @@ import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..utils.numeric_guards import sanitize_latest_actual
 from ..utils.probability_parse import (
     PROB_OK,
     PROB_REVIEW,
@@ -1314,6 +1315,16 @@ _BINARY_MARKET_RULE = (
 # PM-2：二元 _draw 提示词里市场包的字符上限（4000→8000，让相关性门控后的更多市场进入锚定视野）。
 _BINARY_MARKET_PACK_CHARS = 8000
 
+# TIME-5（NUMERIC_GUARD_MODE=shadow）：每条数值型二元顺带抄出同一指标在 dossier 里的最新**实际值**
+# （每条约 30 个输出 token，不加调用），供 utils.numeric_guards 做现状 / 量级一致性影子检查。
+# 追加在市场规则之后；off（或未传）→ 提示词逐字节不变。
+_BINARY_LATEST_ACTUAL_RULE = (
+    "\nLATEST ACTUAL: For each forecast whose resolution hinges on a numeric metric, also include "
+    "\"latest_actual\": {value, unit, as_of (YYYY-MM-DD), source_ref (S<n>)} — the most recent "
+    "ACTUAL (never a forecast, estimate or target) value of that same metric stated in the dossier, "
+    "copied exactly; use null when the dossier has none."
+)
+
 # ------------------------------------------------- source 溯源确定性校验（编造溯源修复）
 # 取证（report_9147b3f6a0a9 6/12、report_c83f21765b96 9/20、report_1b70ace5c9e8 8/13）：模型把
 # source 标成 "world-state outcome shares"，而 41 次模拟中 world_state_trajectory.json 从未存在
@@ -1762,7 +1773,8 @@ def _strict_horizon_year(value: Any) -> Optional[int]:
 def _normalize_binaries(items: Any, *, start_index: int = 1,
                         allowed_themes: Optional[List[str]] = None,
                         market_lookup: Optional[Dict[str, float]] = None,
-                        review_sink: Optional[list] = None) -> List[Dict[str, Any]]:
+                        review_sink: Optional[list] = None,
+                        keep_latest_actual: bool = False) -> List[Dict[str, Any]]:
     """Clamp/round each probability INDEPENDENTLY (no sum-normalization), dedup by
     statement, attach an objective-criteria quality flag. Drops rows missing a
     statement or a numeric probability.
@@ -1776,7 +1788,10 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
     以快照价回填 implied_yes_prob（不盲信模型转录），divergence 一律由本函数确定性
     计算（本预测概率 − 市场隐含概率）。锚点非法/缺失时不加字段（degrade-safe）。
     REPORT-1（FORECAST_PROB_STRICT_PARSE）：不可读概率的行扣下并追加
-    {statement, raw, reason} 到 ``review_sink``（若给出），绝不钳制。"""
+    {statement, raw, reason} 到 ``review_sink``（若给出），绝不钳制。
+    TIME-5 ``keep_latest_actual``（仅 NUMERIC_GUARD_MODE=shadow 的抽取为真）：保留模型给出的
+    latest_actual 对象，只留 {value, unit, as_of, source_ref} 四个字符串字段（各截 80 字）；
+    非对象 / 无 value → 不加字段。缺省 False → 行逐字节不变。"""
     strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
     out: List[Dict[str, Any]] = []
     seen: set = set()
@@ -1921,6 +1936,10 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
                     "implied_yes_prob": round(ip, 4),
                     "divergence": round(row["probability"] - ip, 4),
                 }
+        if keep_latest_actual:
+            latest_actual = sanitize_latest_actual(it.get("latest_actual"))
+            if latest_actual is not None:
+                row["latest_actual"] = latest_actual
         out.append(row)
     return out
 
@@ -3101,6 +3120,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              now: Optional[datetime] = None,
                              target_propositions: Optional[List[Dict[str, Any]]] = None,
                              context_pack: Optional[str] = None,
+                             numeric_guard_mode: Optional[str] = None,
                              ) -> Dict[str, Any]:
     """Extract/derive >=min_count INDEPENDENT binary forecasts from the dossier.
 
@@ -3138,8 +3158,12 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     forecast_context_packer 建好的证据包：as_of 时间线通道 + 按节分类的 dossier 摘录）给出时，
     [Research dossier] 之后放包文而非 head+tail 切片，且不再注入 [Situation brief]（包内的
     时间线通道取代它）；指令文本与各块位置不变。None → 提示词逐字节不变。
+    TIME-5 ``numeric_guard_mode``（ReportAgent 传入钉住的 NUMERIC_GUARD_MODE）：'shadow' 时每轮
+    _draw 在市场规则之后追加 _BINARY_LATEST_ACTUAL_RULE，_normalize_binaries 保留净化后的
+    latest_actual（供 utils.numeric_guards 影子检查）；None / 'off' → 提示词与行逐字节不变。
     """
     target_rows = _clean_target_propositions(target_propositions)
+    latest_actual_rule = str(numeric_guard_mode or "").strip().lower() == "shadow"
     market_aware = (bool(_cfg("PREDICTION_MARKETS_ENABLED", True))
                     and bool((market_pack or "").strip()))
     content = (report_markdown or "")
@@ -3260,6 +3284,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
             )
         if market_aware:
             user += _BINARY_MARKET_RULE
+        if latest_actual_rule:
+            user += _BINARY_LATEST_ACTUAL_RULE
         if exclude:
             user += "\n\nDo NOT repeat these already-captured forecasts (produce NEW, distinct ones):\n" + \
                 "\n".join(f"- {s}" for s in exclude[:30])
@@ -3297,7 +3323,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
             review_to = review_sink if client is None else secondary_review_sink
         return _normalize_binaries(items or [], allowed_themes=themes,
                                    market_lookup=market_lookup or None,
-                                   review_sink=review_to)
+                                   review_sink=review_to,
+                                   keep_latest_actual=latest_actual_rule)
 
     def _merge(base: List[Dict[str, Any]], extra: List[Dict[str, Any]]) -> None:
         seen = {_binary_key(b["statement"]) for b in base}
