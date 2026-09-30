@@ -389,6 +389,15 @@ def test_config_hash_order_invariant_and_changes_with_pinned_seeds(monkeypatch):
     seeds["safety_policy_v1"]["n_forecast_seeds"] = 3
     assert ca.config_hash_record(seeds, MANIFEST, report_producer=producer,
                                  config=_CFG)["config_hash"] != base["config_hash"]
+    # So is REPORT-11's probability-moving binary guard: guard-on and guard-off runs
+    # never share a config_hash (a pin from before the key existed fingerprints None).
+    guarded = _options()
+    guarded["safety_policy_v1"]["forecast_binary_symmetric_guard"] = True
+    guarded_record = ca.config_hash_record(guarded, MANIFEST, report_producer=producer,
+                                           config=_CFG)
+    assert guarded_record["fingerprint"]["safety_policy"]["forecast_binary_symmetric_guard"] is True
+    assert base["fingerprint"]["safety_policy"]["forecast_binary_symmetric_guard"] is None
+    assert guarded_record["config_hash"] != base["config_hash"]
     # ...the ambient knob is not re-read, nor is provenance (origin / pinned_at).
     monkeypatch.setattr(Config, "N_FORECAST_SEEDS", 7, raising=False)
     stamped = _options()
