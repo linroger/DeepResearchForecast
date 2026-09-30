@@ -13,6 +13,7 @@ import json
 import os
 import re
 import socket
+from datetime import datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -239,7 +240,8 @@ def test_resumed_run_never_labels_earlier_spend_with_the_last_attempts_basis():
            "previous_attempt": {"total": research, "report_id": None, "status": "failed"},
            "cumulative_total": _counter(45, 100_000, 12_000, 3.2),
            "cumulative_by_stage": {"research": research, "report": report}}
-    card = _card(tel, walls={}, stage_status={}, options=_options(stage_reuse_v1=None))
+    walls = {"research": 1_200.0, "report": 300.0}
+    card = _card(tel, walls=walls, stage_status={}, options=_options(stage_reuse_v1=None))
     assert card["stages"]["research"]["cost_basis"] == "unknown"
     assert card["stages"]["research"]["usd"] == 3.2
     assert card["stages"]["report"]["cost_basis"] == "subscription"
@@ -251,7 +253,7 @@ def test_resumed_run_never_labels_earlier_spend_with_the_last_attempts_basis():
     # A last attempt with no call at all: the snapshot says 'api' without any volume.
     idle = dict(tel, total=_counter(0, 0, 0), by_stage={}, by_model={}, cost_basis="api",
                 cumulative_total=research, cumulative_by_stage={"research": research})
-    card = _card(idle, walls={}, stage_status={}, options=_options(stage_reuse_v1=None))
+    card = _card(idle, walls=walls, stage_status={}, options=_options(stage_reuse_v1=None))
     assert card["stages"]["research"]["cost_basis"] == card["totals"]["cost_basis"] == "unknown"
     assert card["completeness"] == {
         "complete": False, "estimated_cost_share": None,
@@ -259,7 +261,7 @@ def test_resumed_run_never_labels_earlier_spend_with_the_last_attempts_basis():
                     "wall_last_execution_only:research"]}
     # A partial per-stage split still counts the earlier calls cumulative_total holds.
     partial = dict(tel, cumulative_by_stage={"report": report}, cumulative_by_stage_partial=True)
-    card = _card(partial, walls={}, stage_status={}, options=_options(stage_reuse_v1=None))
+    card = _card(partial, walls=walls, stage_status={}, options=_options(stage_reuse_v1=None))
     assert card["stages"]["report"]["cost_basis"] == "subscription"
     assert card["totals"]["cost_basis"] == "unknown"
     assert card["completeness"]["reasons"] == [
@@ -299,7 +301,8 @@ def test_completeness_reasons():
         "seeds_without_ensemble_sim:n_forecast_seeds=3"]
     metered = _telemetry()
     metered["by_stage"]["ensemble_sim"] = _counter(5, 10, 10)
-    assert _card(metered, options=seeds)["completeness"]["complete"] is True
+    assert _card(metered, options=seeds, walls=dict(WALLS, ensemble=1_200.0))[
+        "completeness"]["complete"] is True
     not_entered = _options()
     not_entered["safety_policy_v1"]["n_forecast_seeds"] = 3
     assert _card(options=not_entered)["completeness"]["complete"] is True
@@ -575,7 +578,8 @@ def test_compute_matched_fails_closed_on_incomplete_cards():
     neutral = copy.deepcopy(_card())
     neutral["completeness"] = {"complete": False, "reasons": [
         "estimated_cost_share:0.3", "estimated_cost_share_last_attempt_only:earlier_calls=2",
-        "wall_last_execution_only:report", "wall_spans_attempts:report"]}
+        "wall_last_execution_only:report", "wall_spans_attempts:report",
+        "wall_earlier_execution_only:report", "wall_unmeasured:report"]}
     assert ca.compute_matched(neutral, _card(), "report")["matched"] is True
     # An unknown reason, or no readable reason list, fails closed.
     unknown = copy.deepcopy(_card())
@@ -585,6 +589,28 @@ def test_compute_matched_fails_closed_on_incomplete_cards():
     bare = {"schema": ca.COST_CARD_SCHEMA, "stages": {"report": {"tok_total": 5}}}
     assert ca.compute_matched(_card(), bare, "report")["reasons"] == [
         "control:completeness_missing"]
+    # Review probe: a complete flag that disagrees with the reason list (an edited or
+    # foreign card) fails closed too; built cards always agree.
+    for completeness in ({"complete": False, "reasons": []}, {"reasons": []},
+                         {"complete": 1, "reasons": []},
+                         {"complete": True, "reasons": ["wall_spans_attempts:report"]}):
+        edited = copy.deepcopy(_card())
+        edited["completeness"] = completeness
+        result = ca.compute_matched(_card(), edited, "report")
+        assert (result["matched"], result["comparable"], result["reasons"]) == (
+            False, False, ["control:completeness_inconsistent"]), completeness
+    # Review probe: a misspelt or unknown stage name would read as 0 tokens on both cards
+    # and pass as matched; it raises instead.
+    big = report_card(1_000_000)
+    for typo in ("reprot", "Report", "", None, ["report"]):
+        with pytest.raises(ValueError, match="stage"):
+            ca.compute_matched(big, control, typo)
+    # A known stage neither run executed is the documented 0/0 match, and a stage outside
+    # STAGE_ORDER is compared when either card has a row for it.
+    assert ca.compute_matched(control, control, "ensemble") == _matched(
+        0, 0, matched=True, rel_gap=0.0)
+    assert ca.compute_matched(_card(), control, "_unstaged") == _matched(
+        15, 0, matched=False, rel_gap=None)
 
 
 # ------------------------------------------------------------ the _run hook
@@ -740,6 +766,13 @@ def _window(start, end):
             "finished_at": f"2026-09-30T{end}:00+00:00"}
 
 
+def _walls_of(windows):
+    """The seconds of ``windows``, as pipeline_orchestrator._stage_windows derives them."""
+    return {stage: (datetime.fromisoformat(span["finished_at"])
+                    - datetime.fromisoformat(span["started_at"])).total_seconds()
+            for stage, span in windows.items()}
+
+
 def test_wall_windows_against_their_calls():
     """Attempt 3 started at 03:00. research ran once (attempt 1) and is reused; report
     failed in attempt 1, succeeded in attempt 2 and is reused; graph was re-executed in
@@ -761,18 +794,42 @@ def test_wall_windows_against_their_calls():
         resume_count=2, started_at="2026-09-30T03:00:00+00:00",
         unattributed_calls_at_start=3, run_telemetry_sha256=None)
 
-    def reasons(opts, stage_windows=windows):
+    def build(opts, stage_windows=windows):
         card = ca.build_cost_card(
-            pipeline_id="pipe_w", mode="full", run_telemetry=tel, stage_walls={},
-            stage_windows=stage_windows, run_manifest=MANIFEST, options=opts,
-            stage_status=STAGE_STATUS)
+            pipeline_id="pipe_w", mode="full", run_telemetry=tel,
+            stage_walls=_walls_of(stage_windows), stage_windows=stage_windows,
+            run_manifest=MANIFEST, options=opts, stage_status=STAGE_STATUS)
         assert card["attempts"]["wall_scope"] == "last_execution"
+        return card
+
+    def reasons(opts, stage_windows=windows):
+        card = build(opts, stage_windows)
         return [r for r in card["completeness"]["reasons"] if r.startswith("wall_")]
 
     # research: covered by its only execution. graph: spans the attempt boundary. run and
     # report (still flagged in the attempt that reuses it): earlier executions uncovered.
     assert reasons(options) == ["wall_spans_attempts:graph", "wall_last_execution_only:run",
                                 "wall_last_execution_only:report"]
+    # Review probe: graph re-executed without its window being reset, then the attempt was
+    # cancelled or orphaned, which keep attempt 1's finished_at. The window (whose record
+    # matches) is attempt 1's execution only and times none of this attempt's 30 calls.
+    cancelled = dict(windows, graph=_window("00:20", "00:40"))
+    card = build(options, cancelled)
+    assert (card["stages"]["graph"]["calls"], card["stages"]["graph"]["wall_s"]) == (60, 1200.0)
+    assert [r for r in card["completeness"]["reasons"] if r.startswith("wall_")] == [
+        "wall_earlier_execution_only:graph", "wall_last_execution_only:run",
+        "wall_last_execution_only:report"]
+    # Wall reasons are token-neutral: the rows stay comparable.
+    assert ca.compute_matched(card, card, "graph")["comparable"] is True
+    # Review probe: a zero-length window (a legacy reuse's bookkeeping interval) cannot time
+    # the row's calls, whatever its record says.
+    zero = dict(windows, research=_window("00:00", "00:00"))
+    card = build(options, zero)
+    assert (card["stages"]["research"]["calls"], card["stages"]["research"]["wall_s"]) == (4, 0.0)
+    assert [r for r in card["completeness"]["reasons"] if r.startswith("wall_")] == [
+        "wall_unmeasured:research", "wall_spans_attempts:graph",
+        "wall_last_execution_only:run", "wall_last_execution_only:report"]
+    assert ca.compute_matched(card, card, "research")["comparable"] is True
     # Without a record for the current window the card cannot show coverage: fail closed.
     for broken in ({}, {"started_at": "2026-09-30T00:05:00+00:00", "earlier_calls": 0},
                    {"started_at": windows["research"]["started_at"], "earlier_calls": None},
@@ -780,9 +837,10 @@ def test_wall_windows_against_their_calls():
         opts = copy.deepcopy(options)
         opts[ca.COST_CARD_WINDOWS_OPTION]["research"] = broken
         assert "wall_last_execution_only:research" in reasons(opts)
-    # A stage whose earlier calls have no window at all (reset, not yet re-run).
+    # A stage whose earlier calls have no window at all (reset, not yet re-run): no wall.
     no_research = {k: v for k, v in windows.items() if k != "research"}
-    assert "wall_last_execution_only:research" in reasons(options, no_research)
+    assert reasons(options, no_research)[:2] == ["wall_last_execution_only:research",
+                                                 "wall_unmeasured:research"]
     # Seed simulations are timed by the ensemble window.
     seeds = _telemetry(by_stage={}, previous_attempt={"total": _counter(1, 1, 1)},
                        cumulative_by_stage={"ensemble_sim": _counter(5, 10, 10)})
@@ -797,8 +855,13 @@ def test_wall_windows_against_their_calls():
                               stage_walls={"ensemble": 3600.0}, stage_windows=ensemble,
                               run_manifest=MANIFEST, options=options, stage_status={})
     assert not [r for r in card["completeness"]["reasons"] if r.startswith("wall_")]
-    # One attempt: the windows are the only executions.
+    # One attempt: the windows are the only executions, yet a row with calls and no
+    # measured wall is still named.
     assert _card()["attempts"]["wall_scope"] == "cumulative"
+    unmeasured = _card(walls={k: v for k, v in WALLS.items() if k != "report"})
+    assert unmeasured["attempts"]["wall_scope"] == "cumulative"
+    assert unmeasured["completeness"]["reasons"] == ["wall_unmeasured:report"]
+    assert ca.compute_matched(unmeasured, _card(), "report")["matched"] is True
 
 
 def test_cost_card_window_record():
@@ -1150,7 +1213,8 @@ def _terminal_fixture(pid, *, status="completed"):
     state.options.update(_options())
     state.options[ca.CONFIG_HASH_OPTION] = ca.config_hash_record(
         state.options, MANIFEST, report_producer={"provider": "glm", "model_name": "glm-5"})
-    for stage, seconds in (("research", 300), ("report", 900)):
+    for stage, seconds in (("research", 300), ("ontology", 60), ("graph", 1_800),
+                           ("run", 600), ("report", 900)):
         state.stages[stage] = po.StageState(
             name=stage, status="completed", started_at="2026-09-30T00:00:00+00:00",
             finished_at=f"2026-09-30T00:{seconds // 60:02d}:00+00:00")
@@ -1258,9 +1322,10 @@ def test_cli_rebuilds_an_orphaned_attempt_with_its_own_baseline(roots, monkeypat
     card = _load(path)
     assert card["status"] == "failed" and card["attempts"]["resume_count"] == 1
     assert card["unattributed_process"] == {"calls_at_attempt_start": 0, "calls_at_end": 3}
+    # The report call attempt 2 made has no closed report window: its wall is unmeasured.
     assert card["completeness"]["reasons"] == [
         "run_telemetry_in_flight", "unattributed_process_growth:+3",
-        "estimated_cost_share_last_attempt_only:earlier_calls=1"]
+        "estimated_cost_share_last_attempt_only:earlier_calls=1", "wall_unmeasured:report"]
 
 
 def test_cli_rebuild_of_an_attempt_that_died_before_its_first_flush(roots, monkeypatch):

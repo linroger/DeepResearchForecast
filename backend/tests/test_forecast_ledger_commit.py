@@ -1476,9 +1476,10 @@ def test_evaluation_lane_never_scores_revisions_or_unpublished_rows():
     assert not fl._is_scorable_row(revision) and not fl._is_scorable_row(unpublished)
 
 
-def test_report_stage_helper_wires_context_and_receipt(report_env):
+def test_report_stage_helper_wires_context_and_receipt(report_env, monkeypatch):
     """_run's report branch delegates to _generate_stage_report: a real ReportAgent
     receives the pipeline context and its receipt lands in state.options."""
+    monkeypatch.setattr(Config, "COST_CARD_ENABLED", True, raising=False)
     orch = po.PipelineOrchestrator()
     state = po.PipelineState(pipeline_id="pipe_stage", prompt=QUESTION)
     state.options["as_of_date_validated"] = "2026-08-20"
@@ -1489,7 +1490,7 @@ def test_report_stage_helper_wires_context_and_receipt(report_env):
         state, agent, "sim_stage", report_id="r_stage",
         progress_callback=lambda stage, pct, msg: progress.append(stage))
     assert report.status == ReportStatus.COMPLETED and "completed" in progress
-    # EVAL-18 (COST_CARD_ENABLED, default on): the report stage pins the run's config_hash.
+    # EVAL-18 (COST_CARD_ENABLED, pinned on): the report stage pins the run's config_hash.
     config_hash = state.options["config_hash_v1"]["config_hash"]
     assert agent.ledger_context == {"pipeline_id": "pipe_stage", "simulation_id": "sim_stage",
                                     "seed": int(Config.SIM_SEED or 0), "run_kind": "pipeline",

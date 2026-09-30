@@ -573,7 +573,10 @@ class Config:
     # and forecast quality can later be joined per configuration. Each attempt start removes
     # the previous attempt's card and pins its unattributed-spend baseline in
     # options.cost_card_attempt_v1 (so an orphan rebuild never borrows another attempt's
-    # baseline). Default on, like the other observation sidecars (RECORD_RUN_MANIFEST,
+    # baseline), and each stage wall window's opening is pinned in
+    # options.cost_card_windows_v1 (its start and the calls earlier attempts had made in the
+    # stage, so the card can name the walls that do not time all of a row's calls).
+    # Default on, like the other observation sidecars (RECORD_RUN_MANIFEST,
     # STAGE_SCORECARD_ENABLED): it only projects durable artifacts in its own try/except,
     # never writes the report folder and never changes status or health. Off = no file, no
     # options keys, no ledger stamp (byte-identical).

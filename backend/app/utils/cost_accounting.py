@@ -15,7 +15,9 @@ Config fingerprint
     three forecast knobs no pin covers (FORECAST_ENSEMBLE_MODELS, FORECAST_MARKET_ANCHORING,
     PREDICTION_MARKETS_ENABLED). FORECAST_ENSEMBLE_MODELS is recorded as the model list the
     forecast extractor applies (split on commas, stripped, lower-cased, empties and repeats
-    dropped, order kept), so spellings of one ensemble share a hash.
+    dropped), so spellings of one ensemble share a hash. The order is kept deliberately: the
+    extractor draws the models in that order, and each binary's ``ensemble`` record
+    (models / probs) and its pooling follow it; only the ``pooled_models`` summary is sorted.
     ``config_hash = 'sha256:' + canonical_json_sha256(fp)``.
     The report stage computes it exactly once, pins ``{config_hash, fingerprint, report_id}``
     in ``options['config_hash_v1']`` and stamps the same hash on its ledger commit rows; a
@@ -54,10 +56,11 @@ Wall time across attempts (``attempts.wall_scope``)
     ``ensemble_sim``, run inside that window), not a sum over attempts: a resume reopens
     the window of the stage it re-executes and the ensemble reopens its own. With one
     attempt that window is the stage's only execution (``wall_scope: 'cumulative'``);
-    after a resume it is the latest (``'last_execution'``). Two reasons name the rows whose
-    wall does not match their calls. ``wall_last_execution_only:<stage>``: the row's calls
-    include calls earlier attempts made outside its window (or it has no window). This is
-    decided from the window record the orchestrator pins when the window opens
+    after a resume it is the latest (``'last_execution'``). ``wall_scope`` describes the
+    attempt; four reasons name the rows whose wall does not match their calls.
+    ``wall_last_execution_only:<stage>``: the row's calls include calls earlier attempts
+    made outside its window (or it has no window). This is decided from the window record
+    the orchestrator pins when the window opens
     (``options['cost_card_windows_v1'][stage] = {started_at, earlier_calls}``, the calls
     earlier attempts had already made in the stage), so a stage reused since its only
     execution is not flagged; without a record for the current window the card cannot show
@@ -65,6 +68,13 @@ Wall time across attempts (``attempts.wall_scope``)
     it. ``wall_spans_attempts:<stage>``: the window opened before the current attempt
     started and closed after it, so it includes the time between attempts (a completed
     stage re-executed without its window being reset).
+    ``wall_earlier_execution_only:<stage>``: the current attempt made calls in the stage
+    although the window closed before the attempt started, so the wall is an earlier
+    execution's and times none of them (a completed stage re-executed without its window
+    being reset whose attempt then ended by cancel or as an orphan, which keep the earlier
+    ``finished_at``). ``wall_unmeasured:<stage>``: the row has calls but a wall of 0 s (a
+    zero-length window, such as the one a legacy reuse writes, or no closed window at
+    all), which no metered call can take.
 
 Attempt record (``options['cost_card_attempt_v1']``)
     Pinned by the orchestrator at every attempt start (:func:`cost_card_attempt_record`):
@@ -89,10 +99,13 @@ Compute-matched norm (the rule for any A/B)
     (``TOKEN_NEUTRAL_REASONS``) and the stage-scoped reasons of other stages
     (``unmetered_stage:<other stage>``; ``seeds_without_ensemble_sim`` concerns the ensemble
     stages) leave a stage comparable; any other reason, an unknown one included, blocks
-    every stage. When a pair is not comparable, fix the metering or rerun; when it is
-    comparable but not matched, either equalise the budget (for example give the control
-    as many samples as the variant) or report the result as a cost-quality trade-off,
-    never as a win.
+    every stage, and so does a card without a reason list (``completeness_missing``) or
+    whose ``complete`` flag disagrees with it (``completeness_inconsistent``). A stage name
+    that is neither a known stage nor a row of either card raises ValueError (a misspelt
+    stage would read as 0 tokens on both cards and pass as matched). When a pair is not
+    comparable, fix the metering or rerun; when it is comparable but not matched, either
+    equalise the budget (for example give the control as many samples as the variant) or
+    report the result as a cost-quality trade-off, never as a win.
 """
 
 from __future__ import annotations
@@ -147,7 +160,8 @@ COMPUTE_MATCH_TOL = 0.15
 # intact, so compute_matched ignores them (every other reason blocks, see the docstring).
 TOKEN_NEUTRAL_REASONS = frozenset({
     "estimated_cost_share", "estimated_cost_share_last_attempt_only",
-    "wall_last_execution_only", "wall_spans_attempts"})
+    "wall_last_execution_only", "wall_spans_attempts", "wall_earlier_execution_only",
+    "wall_unmeasured"})
 
 SCOPE_CUMULATIVE = "cumulative"
 SCOPE_LAST_ATTEMPT_ONLY = "last_attempt_only"
@@ -206,8 +220,9 @@ def _instant(value: Any) -> Optional[datetime]:
 
 def _model_list(value: Any) -> Optional[list[str]]:
     """FORECAST_ENSEMBLE_MODELS as the forecast extractor applies it: split on commas,
-    stripped, lower-cased, empties and repeats dropped, order kept (the pooled record lists
-    the models in that order). None when the knob is unset."""
+    stripped, lower-cased, empties and repeats dropped. The order is kept deliberately: it is
+    the draw order, which each binary's ``ensemble`` record (models / probs) and its pooling
+    follow (only the ``pooled_models`` summary is sorted). None when the knob is unset."""
     if value is None:
         return None
     items = value if isinstance(value, (list, tuple)) else str(value).split(",")
@@ -488,35 +503,49 @@ def _window_stages(window: str) -> tuple[str, ...]:
     return (window,) + tuple(stage for stage, owner in WALL_WINDOW_OF.items() if owner == window)
 
 
-def _wall_reasons(*, stage_names: Iterable[str], earlier_by_stage: Mapping[str, int],
+def _wall_reasons(*, stage_calls: Mapping[str, int], earlier_by_stage: Mapping[str, int],
+                  latest_by_stage: Mapping[str, int], walls: Mapping[str, float],
                   windows: Mapping[str, Any], attempt_started_at: Any,
                   records: Mapping[str, Any]) -> list[str]:
     """The rows whose wall window does not match their calls (module docstring).
 
-    ``windows`` holds ``{stage: {started_at, finished_at}}`` for the windows whose seconds
-    are the rows' ``wall_s``; ``records`` the window records pinned when they opened.
+    ``stage_calls`` holds every row's calls, ``earlier_by_stage`` / ``latest_by_stage`` the
+    part earlier attempts / this attempt made (``latest_by_stage`` empty when unknown),
+    ``walls`` the seconds behind the rows' ``wall_s``, ``windows``
+    ``{stage: {started_at, finished_at}}`` for those seconds and ``records`` the window
+    records pinned when the windows opened.
     """
     attempt_start = _instant(attempt_started_at)
     timed = set(STAGE_ORDER) | set(windows)
+    calls: dict[str, int] = {}
     earlier: dict[str, int] = {}
-    for stage in stage_names:
+    latest: dict[str, int] = {}
+    for stage, count in stage_calls.items():
         window = WALL_WINDOW_OF.get(stage, stage)
         if window in timed:
+            calls[window] = calls.get(window, 0) + count
             earlier[window] = earlier.get(window, 0) + earlier_by_stage.get(stage, 0)
+            latest[window] = latest.get(window, 0) + latest_by_stage.get(stage, 0)
     reasons: list[str] = []
-    for window in _ordered_stages(set(earlier) | set(windows)):
+    for window in _ordered_stages(set(calls) | set(windows)):
         span = _mapping(windows.get(window))
         started = span.get("started_at")
         start, finish = _instant(started), _instant(span.get("finished_at"))
-        if (attempt_start is not None and start is not None and finish is not None
-                and start < attempt_start <= finish):
-            reasons.append(f"wall_spans_attempts:{window}")
+        if attempt_start is not None and start is not None and finish is not None:
+            if start < attempt_start <= finish:
+                reasons.append(f"wall_spans_attempts:{window}")
+            elif finish < attempt_start and latest.get(window, 0) > 0:
+                # This attempt spent in the stage after its window had closed.
+                reasons.append(f"wall_earlier_execution_only:{window}")
         record = _mapping(records.get(window))
         # Covered: the record of this very window says no earlier attempt had spent in it.
         covered = (started is not None and record.get("started_at") == started
                    and _baseline_calls(record.get("earlier_calls")) == 0)
         if earlier.get(window, 0) > 0 and not covered:
             reasons.append(f"wall_last_execution_only:{window}")
+        if calls.get(window, 0) > 0 and walls.get(window, 0.0) <= 0.0:
+            # No call takes 0 s: a zero-length window, or no closed window at all.
+            reasons.append(f"wall_unmeasured:{window}")
     return reasons
 
 
@@ -611,9 +640,15 @@ def build_cost_card(*, pipeline_id: str, mode: Optional[str], run_telemetry: Any
                          if isinstance(unattributed_process, Mapping) else None),
     }
     estimated_share = _estimated_cost_share(tel.get("by_model"))
+    # This attempt's calls per stage; unknown when the file predates the attempt (its
+    # by_stage is an earlier attempt's).
+    latest_by_stage = ({} if predates else
+                       {str(name): _count(_mapping(counter).get("calls"))
+                        for name, counter in _mapping(tel.get("by_stage")).items()})
     wall_reasons = _wall_reasons(
-        stage_names=stages, earlier_by_stage=earlier_by_stage, windows=windows,
-        attempt_started_at=attempt.get("started_at"),
+        stage_calls={name: row["calls"] for name, row in stages.items()},
+        earlier_by_stage=earlier_by_stage, latest_by_stage=latest_by_stage, walls=walls,
+        windows=windows, attempt_started_at=attempt.get("started_at"),
         records=_mapping(opts.get(COST_CARD_WINDOWS_OPTION)))
     reasons = _completeness_reasons(
         run_telemetry=tel, stages=stages, scope=scope, walls=walls, options=opts,
@@ -649,9 +684,22 @@ def build_cost_card(*, pipeline_id: str, mode: Optional[str], run_telemetry: Any
     }
 
 
-def _stage_spend(card: Any, stage: str, label: str) -> int:
+def _require_card(card: Any, label: str) -> None:
     if not isinstance(card, Mapping) or card.get("schema") != COST_CARD_SCHEMA:
         raise ValueError(f"{label} is not a {COST_CARD_SCHEMA} card")
+
+
+def _require_stage(stage: Any, *cards: Mapping[str, Any]) -> None:
+    """ValueError unless ``stage`` is a known stage or a row of one of ``cards``: a
+    misspelt name would read as 0 tokens on both cards and pass as matched."""
+    if isinstance(stage, str) and (stage in STAGE_ORDER or any(
+            stage in _mapping(card.get("stages")) for card in cards)):
+        return
+    raise ValueError(f"stage {stage!r} is neither a known stage ({', '.join(STAGE_ORDER)}) "
+                     "nor a row of either card")
+
+
+def _stage_spend(card: Mapping[str, Any], stage: str) -> int:
     return _count(_mapping(_mapping(card.get("stages")).get(stage)).get("tok_total"))
 
 
@@ -671,11 +719,18 @@ def _blocks_stage(reason: str, stage: str) -> bool:
 
 def _comparability_gaps(card: Mapping[str, Any], stage: str, label: str) -> list[str]:
     """``card``'s completeness reasons that make its ``stage`` tokens unreliable, each
-    prefixed with ``label``; a card without a readable reason list is one gap."""
-    reasons = _mapping(card.get("completeness")).get("reasons")
+    prefixed with ``label``; a card without a readable reason list is one gap, and so is a
+    ``complete`` flag that is not exactly ``not reasons`` (as :func:`build_cost_card` sets
+    it): such a card was edited or built elsewhere, so its list may omit a gap."""
+    completeness = _mapping(card.get("completeness"))
+    reasons = completeness.get("reasons")
     if not isinstance(reasons, list):
         return [f"{label}:completeness_missing"]
-    return [f"{label}:{reason}" for reason in map(str, reasons) if _blocks_stage(reason, stage)]
+    gaps = [f"{label}:{reason}" for reason in map(str, reasons) if _blocks_stage(reason, stage)]
+    consistent = completeness.get("complete") is (not reasons)
+    if not consistent:
+        gaps.append(f"{label}:completeness_inconsistent")
+    return gaps
 
 
 def compute_matched(variant_card: Any, control_card: Any, stage: str,
@@ -685,11 +740,13 @@ def compute_matched(variant_card: Any, control_card: Any, stage: str,
     Returns ``{matched, variant_tok, control_tok, rel_gap, comparable, reasons}``.
     ``rel_gap`` is the signed ``(variant - control) / control`` (None when only the variant
     spent anything). ``comparable`` is False when either card has a completeness reason
-    that can undercount the stage's tokens; ``reasons`` lists those (``variant:<reason>`` /
+    that can undercount the stage's tokens, or no reason list / a ``complete`` flag that
+    disagrees with it; ``reasons`` lists those (``variant:<reason>`` /
     ``control:<reason>``). ``matched`` requires a comparable pair with
     ``|variant - control| <= tol * control``; two runs that spent nothing in the stage are
-    matched. A stage missing from a card spent 0. Raises ValueError for a negative or
-    non-finite ``tol`` or an input that is not a cost card.
+    matched. A known stage (``STAGE_ORDER``) missing from a card spent 0. Raises ValueError
+    for a negative or non-finite ``tol``, an input that is not a cost card, or a ``stage``
+    that is neither a known stage nor a row of either card.
     """
     try:
         tolerance = float(tol)
@@ -697,8 +754,11 @@ def compute_matched(variant_card: Any, control_card: Any, stage: str,
         raise ValueError(f"tol must be a number, got {tol!r}") from exc
     if not math.isfinite(tolerance) or tolerance < 0:
         raise ValueError(f"tol must be finite and >= 0, got {tol!r}")
-    variant = _stage_spend(variant_card, stage, "variant_card")
-    control = _stage_spend(control_card, stage, "control_card")
+    _require_card(variant_card, "variant_card")
+    _require_card(control_card, "control_card")
+    _require_stage(stage, variant_card, control_card)
+    variant = _stage_spend(variant_card, stage)
+    control = _stage_spend(control_card, stage)
     if control:
         rel_gap: Optional[float] = round((variant - control) / control, 4)
         within = abs(variant - control) <= tolerance * control
