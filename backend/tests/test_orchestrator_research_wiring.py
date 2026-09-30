@@ -1800,11 +1800,13 @@ def test_v3_engine_forces_single_outer_track_and_logs_once(monkeypatch):
 
 
 def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options=None,
-                               runner_kwargs=None, expect_status="completed"):
+                               runner_kwargs=None, expect_status="completed",
+                               handoff_files=None):
     """Run the real ``_run`` state machine for a fresh research-only pipeline
     with the research subprocess layer faked; return which topology ran (and,
     for a single lane, the engine the stage asked the runner for).
-    ``runner_kwargs`` (a list) collects each single-lane runner call's kwargs."""
+    ``runner_kwargs`` (a list) collects each single-lane runner call's kwargs;
+    ``handoff_files`` ({name: text}) are written to the handoff dir before the run."""
     monkeypatch.setattr(_po.Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"),
                         raising=False)
     monkeypatch.setattr(_po.Config, "UPLOAD_FOLDER", str(tmp_path / "uploads"),
@@ -1836,11 +1838,7 @@ def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options
     engines = []
     report = "Evidence-backed research report with citations [S1]. " * 20
 
-    def fake_single(prompt, handoff_dir, **kwargs):
-        calls.append(("single", kwargs.get("budget_lane_id")))
-        engines.append(kwargs.get("research_engine"))
-        if runner_kwargs is not None:
-            runner_kwargs.append(kwargs)
+    def research_result(handoff_dir):
         with open(os.path.join(handoff_dir, "research_report.md"), "w",
                   encoding="utf-8") as fh:
             fh.write(report)
@@ -1852,13 +1850,26 @@ def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options
             "research_telemetry": {"tokens_in": 0, "tokens_out": 0},
         }
 
+    def fake_single(prompt, handoff_dir, **kwargs):
+        calls.append(("single", kwargs.get("budget_lane_id")))
+        engines.append(kwargs.get("research_engine"))
+        if runner_kwargs is not None:
+            runner_kwargs.append(kwargs)
+        return research_result(handoff_dir)
+
     def fake_parallel(self, state, handoff_dir, upd, n_tracks):
         calls.append(("parallel", n_tracks))
         return fake_single(state.prompt, handoff_dir)
 
+    def fake_synthesis_recovery(self, state, handoff_dir, upd, manifest_path):
+        calls.append(("synthesis_recovery", os.path.basename(manifest_path)))
+        return research_result(handoff_dir)
+
     monkeypatch.setattr(_po.DeerFlowResearchRunner, "run", staticmethod(fake_single))
     monkeypatch.setattr(
         _po.PipelineOrchestrator, "_run_parallel_research_tracks", fake_parallel)
+    monkeypatch.setattr(
+        _po.PipelineOrchestrator, "_run_research_synthesis_recovery", fake_synthesis_recovery)
 
     pid = f"pipe_topology_{engine}_{tracks}"
     _po.PipelineManager.ensure_dirs(pid)
@@ -1868,6 +1879,9 @@ def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options
     )
     state.handoff_dir = _po.PipelineManager.handoff_dir(pid)
     os.makedirs(state.handoff_dir, exist_ok=True)
+    for name, text in (handoff_files or {}).items():
+        with open(os.path.join(state.handoff_dir, name), "w", encoding="utf-8") as fh:
+            fh.write(text)
     _po.PipelineOrchestrator._run(state)
     assert state.status == expect_status, state.error
     if options is not None:
@@ -2551,6 +2565,28 @@ def test_research_stage_refuses_a_pinned_hindcast_on_the_legacy_engine(monkeypat
     assert persisted["stages"][_po.STAGE_RESEARCH]["status"] == "failed"
 
 
+def test_research_stage_refuses_a_pinned_hindcast_synthesis_recovery(monkeypatch, tmp_path):
+    """A global-synthesis manifest (written only by legacy parallel lanes) in a pinned
+    hindcast's handoff dir never reaches the legacy synthesis child, which runs without
+    the as-of: the stage fails closed before any spend, with a named, resumable error."""
+    manifest = {"evidence_synthesis_manifest.json": "{}"}
+    calls, engines = _drive_research_only_stage(
+        monkeypatch, tmp_path, engine="v3", tracks=1,
+        options={_hp.HINDCAST_POLICY_OPTION: _hindcast_pin()}, handoff_files=manifest,
+        expect_status="failed")
+    assert calls == [] and engines == []
+    persisted = _po.PipelineManager.load("pipe_topology_v3_1")
+    assert "hindcast_synthesis_refused" in persisted["error"]
+    assert HINDCAST_AS_OF in persisted["error"]
+    assert persisted["stages"][_po.STAGE_RESEARCH]["status"] == "failed"
+
+    # Control: the same handoff dir without a pin takes the recovery branch.
+    calls, _engines = _drive_research_only_stage(
+        monkeypatch, tmp_path / "live", engine="v3", tracks=1, options={},
+        handoff_files=manifest)
+    assert calls == [("synthesis_recovery", "evidence_synthesis_manifest.json")]
+
+
 def _anchor_state(**options):
     return _po.PipelineState(pipeline_id="pipe_hindcast_anchor", prompt="Will X happen?",
                              options=dict(options))
@@ -2580,7 +2616,8 @@ def test_hindcast_graph_anchor_is_the_pin_and_records_later_sources():
     assert state.options["hindcast_violations"] == ["https://late.example/a",
                                                     "https://month.example/a"]
     # The check's coverage is explicit: source rows, the URL-less one included.
-    assert state.options["hindcast_source_dates"] == {"dated": 6, "undated": 1, "after_as_of": 4}
+    assert state.options["hindcast_source_dates"] == {"dated": 6, "undated": 1, "after_as_of": 4,
+                                                     "ambiguous": 0}
     # EVAL-1: the pinned date is the ledger pre-registration anchor.
     assert state.options["as_of_date_validated"] == HINDCAST_AS_OF
     # Without the pin, the R2-RES-7 validator would have rolled the anchor forward.
@@ -2604,7 +2641,8 @@ def test_hindcast_graph_anchor_rebuild_drops_stale_violations_and_caps_them():
         f"https://late.example/{i}" for i in range(_po.HINDCAST_VIOLATIONS_MAX)]
     assert _po.HINDCAST_VIOLATIONS_MAX == 50
     # The URL list is capped; the count of later-dated rows is not.
-    assert state.options["hindcast_source_dates"] == {"dated": 80, "undated": 0, "after_as_of": 80}
+    assert state.options["hindcast_source_dates"] == {"dated": 80, "undated": 0, "after_as_of": 80,
+                                                     "ambiguous": 0}
 
 
 def test_hindcast_graph_anchor_records_that_undated_sources_were_not_checked():
@@ -2615,9 +2653,52 @@ def test_hindcast_graph_anchor_records_that_undated_sources_were_not_checked():
     undated = [{"title": "t", "url": f"https://undated.example/{i}", "tier": "S1"} for i in range(3)]
     _po.PipelineOrchestrator._pin_hindcast_graph_anchor(state, pin, undated)
     assert "hindcast_violations" not in state.options
-    assert state.options["hindcast_source_dates"] == {"dated": 0, "undated": 3, "after_as_of": 0}
+    assert state.options["hindcast_source_dates"] == {"dated": 0, "undated": 3, "after_as_of": 0,
+                                                     "ambiguous": 0}
     _po.PipelineOrchestrator._pin_hindcast_graph_anchor(state, pin, None)
-    assert state.options["hindcast_source_dates"] == {"dated": 0, "undated": 0, "after_as_of": 0}
+    assert state.options["hindcast_source_dates"] == {"dated": 0, "undated": 0, "after_as_of": 0,
+                                                     "ambiguous": 0}
+
+
+def test_hindcast_graph_anchor_reads_coarse_source_dates_at_their_precision():
+    """A year or month is not its first day: one that starts on or before the pin but
+    ends after it is ambiguous (neither cleared nor a violation), one that ends by the
+    pin is cleared, and one that starts after it is a violation."""
+    pin = _hindcast_pin()
+    state = _anchor_state()
+    sources = [
+        _dated("https://year.example/a", "2024"),                   # 2024: spans the pin
+        _dated("https://month.example/a", "2024-06"),               # June 2024: spans it
+        _dated("https://cjk-month.example/a", "2024年6月"),          # June 2024: spans it
+        _dated("https://may.example/a", "2024-05"),                 # ends before the pin
+        _dated("https://last-year.example/a", "2023"),              # ends before the pin
+        _dated("https://next-month.example/a", "2024-07"),          # starts after the pin
+        # A declared precision widens a date, never narrows it (v3 date_precision).
+        dict(_dated("https://declared-month.example/a", "2024-06-01"), date_precision="month"),
+        dict(_dated("https://declared-day.example/a", "2024"), date_precision="day"),
+        dict(_dated("https://bad-precision.example/a", "2024-05-31"), date_precision="decade"),
+    ]
+
+    anchor = _po.PipelineOrchestrator._pin_hindcast_graph_anchor(state, pin, sources)
+
+    assert anchor == datetime(2024, 6, 1, tzinfo=timezone.utc)
+    assert state.options["hindcast_violations"] == ["https://next-month.example/a"]
+    assert state.options["hindcast_source_dates"] == {"dated": 9, "undated": 0, "after_as_of": 1,
+                                                     "ambiguous": 5}
+    assert state.options["as_of_date_validated"] == HINDCAST_AS_OF
+
+    # A month or year that ends on the pin is cleared, not ambiguous.
+    end_of_june = _hindcast_pin("2024-06-30")
+    _po.PipelineOrchestrator._pin_hindcast_graph_anchor(
+        state, end_of_june, [_dated("https://month.example/a", "2024-06")])
+    assert state.options["hindcast_source_dates"] == {"dated": 1, "undated": 0, "after_as_of": 0,
+                                                     "ambiguous": 0}
+    new_years_eve = _hindcast_pin("2024-12-31")
+    _po.PipelineOrchestrator._pin_hindcast_graph_anchor(
+        state, new_years_eve, [_dated("https://year.example/a", "2024")])
+    assert state.options["hindcast_source_dates"] == {"dated": 1, "undated": 0, "after_as_of": 0,
+                                                     "ambiguous": 0}
+    assert "hindcast_violations" not in state.options
 
 
 @pytest.mark.parametrize("bad_as_of", ["2024-6-1", None, "2999-01-01"])
@@ -2751,7 +2832,8 @@ def test_graph_stage_anchors_a_pinned_hindcast_at_its_as_of(monkeypatch, tmp_pat
     assert seen["reference_time"] == pinned
     assert seen["validator_calls"] == 0
     assert state.options["hindcast_violations"] == ["https://late.example/a"]
-    assert state.options["hindcast_source_dates"] == {"dated": 2, "undated": 0, "after_as_of": 1}
+    assert state.options["hindcast_source_dates"] == {"dated": 2, "undated": 0, "after_as_of": 1,
+                                                     "ambiguous": 0}
     assert state.options["as_of_date_validated"] == HINDCAST_AS_OF
     assert "as_of_date_correction" not in state.options
 

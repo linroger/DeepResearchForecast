@@ -6,11 +6,15 @@
 * Graphiti 边的 ``valid_at`` 双时态打点（T2.2 / T2.3）。
 * ``actors.events_to_schedule`` 把 key_events 映射到模拟轮次（T1.3 / T3.8）。
 
+``date_period`` 另给出同一日期按其精度覆盖的日历区间（日/月/年），供回测把粗粒度来源日
+与钉日比较（TIME-7）。
+
 设计原则与 actors.py 一致：**永不抛异常**，无法解析一律返回 ``None``。
 """
 
 from __future__ import annotations
 
+import calendar
 import re
 from datetime import date, datetime, timezone
 from typing import Optional
@@ -22,6 +26,8 @@ _CJK_YM = re.compile(r"(\d{4})\s*年\s*(\d{1,2})\s*月")
 _NUM_YMD = re.compile(r"(\d{4})[\-/\.](\d{1,2})[\-/\.](\d{1,2})")
 _NUM_YM = re.compile(r"(\d{4})[\-/\.](\d{1,2})")
 _YEAR = re.compile(r"\b(\d{4})\b")
+# date_period 的精度，从细到粗。
+_PRECISIONS = ("day", "month", "year")
 
 
 def _make(y: int, m: int, d: int) -> Optional[datetime]:
@@ -67,3 +73,41 @@ def parse_as_of(value: Optional[object]) -> Optional[datetime]:
     if m:
         return _make(int(m.group(1)), 1, 1)
     return None
+
+
+def date_period(value: Optional[object], precision: Optional[object] = None) -> Optional[tuple[date, date]]:
+    """The calendar period ``(first day, last day)`` of the date :func:`parse_as_of`
+    reads from ``value`` (in UTC), or ``None`` when it reads none.
+
+    The period follows the date's own precision: a full date (or a ``datetime`` /
+    ``date``) is one day, a year-month (``YYYY-MM`` / ``YYYY年MM月``, or a full date
+    whose day does not exist in its month, which parse_as_of reads as the month's
+    first day) is that month, and a bare ``YYYY`` is that year.  ``precision`` (a
+    declared ``'day'`` / ``'month'`` / ``'year'``, such as a sources.json
+    ``date_precision``) can only widen the period: the coarser of the two is used, so
+    a coarse date is never read as a single day.  Any other ``precision`` is ignored.
+    Never raises.
+    """
+    start = parse_as_of(value)
+    if start is None:
+        return None
+    day = start.astimezone(timezone.utc).date()
+    if isinstance(value, (datetime, date)):
+        own = "day"
+    else:
+        text = str(value).strip()
+        full = _CJK_YMD.search(text) or _NUM_YMD.search(text)
+        if full:
+            own = "day" if day.day == int(full.group(3)) else "month"
+        elif _CJK_YM.search(text) or _NUM_YM.search(text):
+            own = "month"
+        else:
+            own = "year"
+    rank = _PRECISIONS.index(own)
+    if isinstance(precision, str) and precision in _PRECISIONS:
+        rank = max(rank, _PRECISIONS.index(precision))
+    if rank == 0:
+        return day, day
+    if rank == 1:
+        return day.replace(day=1), day.replace(day=calendar.monthrange(day.year, day.month)[1])
+    return date(day.year, 1, 1), date(day.year, 12, 31)

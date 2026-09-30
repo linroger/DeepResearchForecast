@@ -266,10 +266,37 @@ def test_admission_refusals_are_value_errors(monkeypatch):
         po.admit_hindcast_as_of(AS_OF)
 
 
-def test_as_of_today_is_admitted_but_pinned_live(env):
-    today = datetime.now(timezone.utc).date().isoformat()
-    state = _start(as_of=today)
+# A microsecond before UTC midnight: a second, unfrozen clock read would see the next day.
+FROZEN_NOW = datetime(2025, 3, 14, 23, 59, 59, 999999, tzinfo=timezone.utc)
+
+
+@pytest.fixture
+def frozen_today(monkeypatch):
+    """Freeze "today" for admission (``validate_as_of``) and the pin
+    (``capture_hindcast_policy_v1``) at FROZEN_NOW, so the test never reads the wall clock."""
+    from app.utils import point_in_time
+
+    class _FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return FROZEN_NOW.astimezone(tz) if tz is not None else FROZEN_NOW.replace(tzinfo=None)
+
+    monkeypatch.setattr(point_in_time, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(hp, "datetime", _FrozenDatetime)
+    return FROZEN_NOW.date()
+
+
+def test_as_of_today_is_admitted_but_pinned_live(env, frozen_today):
+    # Admission reads the frozen day: the next one is refused before anything exists.
+    with pytest.raises(po.RunAdmissionError, match="as_of cannot be in the future"):
+        po.PipelineOrchestrator.start(QUESTION, as_of=(frozen_today + timedelta(days=1)).isoformat())
+    assert not os.path.exists(Config.PIPELINE_DATA_DIR)
+
+    state = _start(as_of=frozen_today.isoformat())
     options = po.PipelineManager.load(state.pipeline_id)["options"]
+    # The pin reads the same frozen instant (a later wall-clock read would make it a hindcast).
+    assert options[hp.HINDCAST_POLICY_OPTION]["pinned_at"] == FROZEN_NOW.isoformat()
+    assert options[hp.HINDCAST_POLICY_OPTION]["as_of"] == frozen_today.isoformat()
     assert options[hp.HINDCAST_POLICY_OPTION]["hindcast"] is False
     assert hp.hindcast_policy(options) is None
 

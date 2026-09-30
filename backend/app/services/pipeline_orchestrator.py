@@ -83,7 +83,7 @@ from ..utils.actors import (
     valid_scenario_distribution,
 )
 from ..utils.canonical_json import canonical_json_sha256
-from ..utils.dates import parse_as_of
+from ..utils.dates import date_period, parse_as_of
 from ..utils.logger import get_logger
 
 logger = get_logger('mirofish.pipeline')
@@ -12561,30 +12561,39 @@ class PipelineOrchestrator:
         source date, and in a hindcast a source dated after the as-of is a leak, never newer
         evidence.  Such sources are recorded, never adopted: up to
         ``HINDCAST_VIOLATIONS_MAX`` of their URLs go to ``state.options['hindcast_violations']``
-        (only when there is one; every graph build re-decides).  The check can only see
+        (only when there is one; every graph build re-decides).  A source date is read at
+        its precision (``utils.dates.date_period``: a day, a month or a year, the coarser of
+        the row's ``date_precision`` and its text): it is after the as-of only when its whole
+        period is, and a month or year that starts on or before the as-of but ends after it
+        is ambiguous, neither cleared nor recorded as a violation.  The check can only see
         dated sources (v3 dates them only with RESEARCH_SOURCE_DATES), so its coverage is
         always recorded in ``state.options['hindcast_source_dates']`` = ``{'dated',
-        'undated', 'after_as_of'}`` (source rows; ``after_as_of`` is not capped): no
-        violations with every source undated means "not checked", never "no leak".  The
-        pinned date is also the ledger pre-registration anchor (EVAL-1
-        ``as_of_date_validated``).  A pin whose as-of is not a canonical, non-future date
-        raises ValueError: the graph stage fails closed rather than anchor a hindcast
-        anywhere else.
+        'undated', 'after_as_of', 'ambiguous'}`` (source rows; ``after_as_of`` and
+        ``ambiguous`` count dated rows and are not capped): no violations with every source
+        undated or ambiguous means "not checked", never "no leak".  The pinned date is also
+        the ledger pre-registration anchor (EVAL-1 ``as_of_date_validated``).  A pin whose
+        as-of is not a canonical, non-future date raises ValueError: the graph stage fails
+        closed rather than anchor a hindcast anywhere else.
         """
         from ..utils.point_in_time import validate_as_of
         anchor = datetime.strptime(validate_as_of(pin.get("as_of")), "%Y-%m-%d").replace(
             tzinfo=timezone.utc)
+        pin_day = anchor.date()
         violations: list[str] = []
-        coverage = {"dated": 0, "undated": 0, "after_as_of": 0}
+        coverage = {"dated": 0, "undated": 0, "after_as_of": 0, "ambiguous": 0}
         for source in sources if isinstance(sources, list) else []:
             if not isinstance(source, dict):
                 continue
-            dated = parse_as_of(source.get("date"))
-            if dated is None:
+            period = date_period(source.get("date"), source.get("date_precision"))
+            if period is None:
                 coverage["undated"] += 1
                 continue
             coverage["dated"] += 1
-            if dated <= anchor:
+            first_day, last_day = period
+            if last_day <= pin_day:
+                continue
+            if first_day <= pin_day:
+                coverage["ambiguous"] += 1
                 continue
             coverage["after_as_of"] += 1
             url = source.get("url")
@@ -12603,6 +12612,10 @@ class PipelineOrchestrator:
                         "later-dated check covers only dated sources (RESEARCH_SOURCE_DATES)",
                         state.pipeline_id, coverage["undated"],
                         coverage["undated"] + coverage["dated"])
+        if coverage["ambiguous"]:
+            logger.info("[%s] hindcast: %d source(s) dated only to a month or year that spans "
+                        "the pinned as-of %s; the later-dated check can neither clear nor flag "
+                        "them", state.pipeline_id, coverage["ambiguous"], pin_day)
         cls._record_validated_as_of(state, anchor, True)
         return anchor
 
@@ -13744,6 +13757,18 @@ class PipelineOrchestrator:
                     state.research_pid = pid
                     PipelineManager.save(state)
 
+                # TIME-7: a pinned hindcast reaches research only through the v3 single-lane
+                # launch below, the one path that dates the child to its as-of.  The global
+                # synthesis recovery re-runs the legacy synthesis child without it, and its
+                # manifest is written only by legacy parallel lanes, which a hindcast never
+                # runs: fail closed before any spend.
+                _hindcast_pin = hindcast_policy(state.options)
+                if _hindcast_pin is not None and _synthesis_recovery_manifest:
+                    raise RuntimeError(
+                        "hindcast_synthesis_refused: pinned hindcast (as_of "
+                        f"{_hindcast_pin.get('as_of')}) cannot recover a legacy global synthesis, "
+                        "which runs without the as-of; remove evidence_synthesis_manifest.json "
+                        "from its handoff dir and resume to re-run v3 research")
                 if _synthesis_recovery_manifest:
                     research = self._run_research_synthesis_recovery(
                         state,
@@ -13761,7 +13786,6 @@ class PipelineOrchestrator:
                     # TIME-7: a pinned hindcast is re-checked at launch (config drift or a
                     # resume could select legacy, which would roll the as-of forward): fail
                     # closed before any spend; the stage stays resumable once v3 is back.
-                    _hindcast_pin = hindcast_policy(state.options)
                     if _hindcast_pin is not None and _research_engine != RESEARCH_ENGINE_V3:
                         raise RuntimeError(
                             "hindcast_engine_mismatch: pinned hindcast (as_of "
