@@ -2095,6 +2095,23 @@ class Config:
     # REPORT-4：默认开——消除 conflict/contamination 的纠正往返与 contamination-adoption 失败模式；
     # 每章遇异常自动 per-section 回退到 ReAct（degrade-safe）。
     REPORT_NATIVE_TOOLS = os.environ.get('REPORT_NATIVE_TOOLS', 'true').strip().lower() == 'true'
+    # INFRA-5：报告工具调用边界（默认开）。ReAct / chat 的 <tool_call> 改为宽容解析：块内多个对象取首个、
+    # 缺右括号补齐、tool/params/arguments/args/input 键名归一、与 name 并列的扁平参数上提进 parameters、
+    # 字符串化的 parameters 解码；仍无法解析的块不再静默丢弃，而是回给模型一条纠正性 Observation。
+    # 派发前校验必填参数 / as_of / limit，被拒调用不计入工具预算（超出 REPORT_TOOL_MAX_REJECTED_PER_SECTION
+    # 后才计）。原生路径 arguments 解析失败或参数无效时以 role=tool 'ERROR: …' 回包、不执行不计费，并按模型
+    # 原文回填 assistant.tool_calls。默认开是安全的：格式良好、参数齐全的调用解析与派发不变，只影响此前被丢弃
+    # 或以空参数白跑的调用；false 恢复旧的严格正则解析与不校验直接派发（原生路径对未知工具名的 fail-closed
+    # 拒绝与 agent_log 的 tool_unknown 行不受此开关控制）。
+    REPORT_TOOL_ARG_REPAIR = os.environ.get('REPORT_TOOL_ARG_REPAIR', 'true').strip().lower() == 'true'
+    # INFRA-5：每章可免费（不计工具预算）被拒的工具调用次数；超出后被拒调用照常计入预算，防止模型在无效
+    # 调用上无限空转。仅在 REPORT_TOOL_ARG_REPAIR 开启（或原生路径拒绝调用）时生效。
+    REPORT_TOOL_MAX_REJECTED_PER_SECTION = int(os.environ.get('REPORT_TOOL_MAX_REJECTED_PER_SECTION', '6') or '6')
+    # INFRA-5：原生工具循环迭代用尽、被迫无工具收尾时，把已检索到的工具结果（首尾截取到
+    # REPORT_NATIVE_FINAL_EVIDENCE_CHARS 字符）附进收尾提示，而非丢弃全部证据凭空成文。默认开是安全的：
+    # 只改变迭代用尽后的兜底回合；false 恢复旧的「仅原始提示」收尾。
+    REPORT_NATIVE_FINAL_WITH_EVIDENCE = os.environ.get('REPORT_NATIVE_FINAL_WITH_EVIDENCE', 'true').strip().lower() == 'true'
+    REPORT_NATIVE_FINAL_EVIDENCE_CHARS = int(os.environ.get('REPORT_NATIVE_FINAL_EVIDENCE_CHARS', '12000') or '12000')
     # 并发生成报告章节（EXECPLAN2 I-6-3）：>1 时正文章节走线程池并行，摘要/结论章节最后串行
     # （依赖正文全文）。章节级 LLM 并发受 OASIS 信号量同源约束。
     # REPORT-1：1→3。正文章节相互独立，并行 ~2.5-3.5x 加速；正文段自动走 brief 上下文避免 O(N²) token。
