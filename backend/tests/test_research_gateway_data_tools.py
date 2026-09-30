@@ -8,7 +8,10 @@ separate data budgets with a refund for invalid input; the vendor's absences, fa
 results answered with sentinels that register nothing and never raise or touch the search/fetch
 failure accounting; a data URL never adopts or overwrites a web row; and without data_fns the tools'
 stats and the ledger are byte-identical to before.  data_tool_schema_list extends
-AGENT_TOOLS_SCHEMA without modifying it and imports data_tools only when called.
+AGENT_TOOLS_SCHEMA without modifying it and imports data_tools only when called.  In a gated hindcast
+(TIME-8) a data result is admitted by its vintage date, so the TIME-9 citation wall admits its row,
+and one dated after the as-of date (or undated) is refused; no web sighting or fetch re-dates, marks
+late or replaces a data row.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ import hashlib
 import json
 import sys
 import threading
+import time
 from pathlib import Path
 from types import MappingProxyType
 
@@ -45,7 +49,7 @@ DATA_LIMITS = rg.ToolLimits(max_data_total=10, max_data_per_agent=5)
 
 
 def ok_result(series_id="CPIAUCSL", *, url=CPI_URL, title=CPI_TITLE, page=CPI_PAGE,
-              model_text=None, provenance=None, supports=None, facts=None) -> dtools.DataResult:
+              model_text=None, provenance=None, supports=None, facts=None, date=VINTAGE) -> dtools.DataResult:
     return dtools.DataResult(
         status="ok", key=f"fred:{series_id}@{VINTAGE}", url=url, title=title,
         model_text=(page.strip() + "\n[S1] is how the vendor labels a footnote.") if model_text is None
@@ -54,7 +58,7 @@ def ok_result(series_id="CPIAUCSL", *, url=CPI_URL, title=CPI_TITLE, page=CPI_PA
         supports=tuple(supports if supports is not None
                        else (f"CPI ({series_id}), FRED/ALFRED values as published on {VINTAGE}: 323.5 in "
                              "August 2026.",)),
-        date=VINTAGE,
+        date=date,
         provenance=provenance if provenance is not None else {
             "vendor": "fred", "series_id": series_id, "vintage": VINTAGE, "observation_start": "2016-09-30",
             "observation_end": VINTAGE, "units": "Index 1982-1984=100", "frequency": "Monthly",
@@ -67,6 +71,13 @@ def ok_result(series_id="CPIAUCSL", *, url=CPI_URL, title=CPI_TITLE, page=CPI_PA
 def failed(status: str, detail: str = "", key: str = "") -> dtools.DataResult:
     return dtools.DataResult(status=status, key=key, url="", title="", model_text=f"FRED: {detail}", page_text="",
                              supports=(), date=None, provenance={}, facts=(), detail=detail)
+
+
+class Unprintable:
+    """A vendor value whose text cannot be read."""
+
+    def __str__(self):
+        raise RuntimeError("unprintable")
 
 
 class DataFn:
@@ -86,6 +97,18 @@ class DataFn:
         return answer
 
 
+AS_OF = dt.date(2024, 6, 1)
+NOW = dt.datetime(2026, 9, 30, 12, 0, tzinfo=dt.timezone.utc)
+
+
+def pinned(day: str, series_id: str = "CPIAUCSL") -> dtools.DataResult:
+    """An ok result of the vintage ``day`` (its URL and date), as TIME-13 pins a hindcast's requests."""
+    return ok_result(series_id, url=f"https://alfred.stlouisfed.org/series?seid={series_id}&vintage={day}",
+                     date=day, provenance={"vendor": "fred", "series_id": series_id, "vintage": day,
+                                           "observation_start": "2014-06-01", "observation_end": day,
+                                           "fetched_at": "2026-09-30T17:00:00Z"})
+
+
 def search_payload() -> str:
     return json.dumps({"results": [{"title": f"Result {i}", "url": f"https://source{i}.org/doc{i}",
                                     "content": f"Snippet {i} with 2030 data"} for i in range(1, 4)]})
@@ -95,10 +118,10 @@ def web_page(n: int = 1) -> str:
     return f"Article {n}\n\n" + "The grid reached 4.2 GW of storage in 2025. " * 30
 
 
-def make_tools(tmp_path, *, limits=DATA_LIMITS, name="sources.json", **kwargs):
+def make_tools(tmp_path, *, limits=DATA_LIMITS, name="sources.json", search_fn=None, fetch_fn=None, **kwargs):
     ledger = rg.SourceLedger(tmp_path / name)
-    tools = rg.ResearchTools(ledger, tmp_path / "pages", search_fn=lambda query, n: search_payload(),
-                             fetch_fn=lambda url: web_page(), limits=limits, **kwargs)
+    tools = rg.ResearchTools(ledger, tmp_path / "pages", search_fn=search_fn or (lambda query, n: search_payload()),
+                             fetch_fn=fetch_fn or (lambda url: web_page()), limits=limits, **kwargs)
     return tools, ledger
 
 
@@ -142,6 +165,8 @@ def test_ok_result_registers_a_fetched_s1_data_row_citable_like_a_fetched_page(t
     result = ok_result()
     assert row["data"] == {**dict(result.provenance), "date": VINTAGE, "supports": list(result.supports),
                            "facts": [dict(fact) for fact in result.facts]}
+    # Without source dates and gates the row carries no TIME-2 date and no point-in-time verdict.
+    assert not {"published", "date_source", "date_rank", "pit_status"} & set(row)
     # Verifiable like a fetched page: the stored text is the page, and the facts' numbers are on it.
     assert tools.page_text(1) == stored
     assert (tmp_path / "pages" / f"{digest[:16]}.txt").read_text("utf-8") == stored
@@ -246,6 +271,46 @@ def test_concurrent_identical_requests_reach_the_vendor_once(tmp_path):
     assert tools.stats()["data"]["data_calls"] == 1 and tools.stats()["data"]["cached_data"] == 3
 
 
+def test_followers_of_a_failed_request_get_the_retry_answer_from_run_memory(tmp_path):
+    entered, release = threading.Event(), threading.Event()
+    calls: list[dict] = []
+    lock = threading.Lock()
+
+    def flaky(**kwargs):
+        with lock:
+            calls.append(kwargs)
+            first = len(calls) == 1
+        if first:
+            entered.set()
+            release.wait(5)
+            raise TimeoutError("slow")
+        return ok_result()
+
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": flaky})
+    answers: list[str] = []
+
+    def ask(agent):
+        answers.append(tools.data("macro_series", {"series": "cpi"}, agent_id=agent))
+
+    owner = threading.Thread(target=ask, args=("K1",))
+    owner.start()
+    assert entered.wait(5)
+    followers = [threading.Thread(target=ask, args=(f"K{i}",)) for i in range(2, 5)]
+    for thread in followers:
+        thread.start()
+    time.sleep(0.3)  # the followers now wait on the failing owner's flight
+    release.set()
+    for thread in [owner, *followers]:
+        thread.join(10)
+    # The failed call and its one retry reach the vendor; every other caller gets the retry's answer.
+    assert len(calls) == 2 and len(answers) == 4 and len(ledger) == 1
+    assert sorted(answer == rg.MSG_DATA_UNAVAILABLE for answer in answers) == [False, False, False, True]
+    assert all(lr.tool_output_sids("web_fetch", answer) == (1, [1])
+               for answer in answers if answer != rg.MSG_DATA_UNAVAILABLE)
+    data = tools.stats()["data"]
+    assert (data["data_calls"], data["cached_data"], data["data_failures"]) == (2, 2, 1)
+
+
 def test_data_budgets_are_per_agent_and_run_wide_and_default_to_none(tmp_path):
     fn = DataFn()
     tools, _ = make_tools(tmp_path, data_fns={"macro_series": fn},
@@ -290,6 +355,20 @@ def test_invalid_input_refunds_the_unit_and_names_the_argument(tmp_path):
     assert tools.stats()["data"] == {**data_stats(data_invalid=2), "per_agent": {"K1": data_stats(data_invalid=2)}}
     # Both units were refunded, so the agent's single unit still buys a real answer.
     assert tools.data("macro_series", {"series": "cpi"}, agent_id="K1").startswith("[S1] ")
+    assert_web_accounting_untouched(tools)
+
+
+def test_an_invalid_request_is_remembered_for_the_run(tmp_path):
+    fn = DataFn(failed("invalid_input", "'bank of japan rate' is not a FRED series; pass an alias"))
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": fn})
+    first = tools.data("macro_series", {"series": "bank of japan rate"}, agent_id="K1")
+    assert first == "INVALID_SERIES: 'bank of japan rate' is not a FRED series; pass an alias"
+    # The same request (normalized, case-insensitive) is answered from run memory: no vendor call, no unit.
+    again = tools.data("macro_series", {"series": " Bank of Japan  Rate"}, agent_id="K2")
+    assert again == f"(cached result; this data request was already made)\n{first}"
+    assert len(fn.calls) == 1 and len(ledger) == 0
+    assert tools.stats()["data"] == {**data_stats(data_invalid=1, cached_data=1), "per_agent": {
+        "K1": data_stats(data_invalid=1), "K2": data_stats(cached_data=1)}}
     assert_web_accounting_untouched(tools)
 
 
@@ -362,6 +441,10 @@ def test_a_retry_that_succeeds_forgets_the_failure(tmp_path):
     (dataclasses.replace(ok_result(), page_text="  \n"), "incomplete_result"),
     (dataclasses.replace(ok_result(), url=""), "incomplete_result"),
     (dataclasses.replace(ok_result(), url="not a url"), "invalid_url"),
+    (dataclasses.replace(ok_result(), provenance=None), "malformed_result"),
+    (dataclasses.replace(ok_result(), provenance=("vendor", "fred")), "malformed_result"),
+    (dataclasses.replace(ok_result(), provenance={"vendor": "fred", "fetched_at": Unprintable()}), "malformed_result"),
+    (dataclasses.replace(ok_result(), facts=({"value": Unprintable()},)), "malformed_result"),
 ])
 def test_unusable_results_fail_closed_register_nothing_and_are_final(tmp_path, answer, reason):
     fn = DataFn(answer)
@@ -372,6 +455,8 @@ def test_unusable_results_fail_closed_register_nothing_and_are_final(tmp_path, a
     assert tools.data("macro_series", {"series": "cpi"}, agent_id="K1") == expected.replace(
         "): the answer", "): this request already failed in this run; the answer")
     assert len(fn.calls) == 1 and len(ledger) == 0
+    # Checked before the page is stored: no half-recorded source and no orphan page.
+    assert list((tmp_path / "pages").glob("*.txt")) == []
     assert tools.stats()["data"]["data_failures"] == 1
     assert_web_accounting_untouched(tools)
 
@@ -449,6 +534,7 @@ def test_a_data_url_colliding_with_a_web_row_is_refused_and_leaves_the_web_row_u
     assert text == ("DATA_UNAVAILABLE(collision): the answer could not be recorded as a citable source; do not "
                     "estimate or fabricate the value.")
     assert ledger.rows() == [web] and "data" not in ledger.get(1)
+    assert list((tmp_path / "pages").glob("*.txt")) == []
     assert tools.data("macro_series", {"series": "cpi"}, agent_id="K1").startswith(
         "DATA_UNAVAILABLE(collision): this request already failed in this run;")
     assert len(fn.calls) == 1 and tools.stats()["data"]["data_failures"] == 1
@@ -463,6 +549,106 @@ def test_a_web_sighting_of_a_data_row_leaves_it_unchanged(tmp_path):
     assert ledger.get(1) == before and len(ledger) == 1
     # The same data URL registered again as data is the same row.
     assert ledger.register(CPI_URL, "Another title", "", "data", "K3", tier="S1") == before
+
+
+def test_web_fetch_of_a_data_url_serves_its_stored_vintage_page_never_the_live_page(tmp_path):
+    live: list[str] = []
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": DataFn()}, vintage_as_of="2026-10-01",
+                               fetch_fn=lambda url: live.append(url) or web_page())
+    tools.data("macro_series", {"series": "cpi"}, agent_id="K1")
+    before = ledger.get(1)
+    text = tools.fetch(CPI_URL, focus="CPI", agent_id="K2")
+    head, body = text.split("\n", 1)
+    assert head.startswith(f"[S1] {CPI_TITLE} — alfred.stlouisfed.org (tier 1) — full page")
+    # The vendor's record pinned to its vintage: no LIVE PAGE line, labelled as official data.
+    assert "LIVE PAGE" not in text
+    assert body.startswith(f"{rg.UNTRUSTED_BEGIN} — official data\n") and "Latest: 323.5 (2026-08-01)" in body
+    assert live == [] and ledger.get(1) == before
+    assert (tools.stats()["fetches"], tools.stats()["cached_fetches"]) == (0, 1)
+    # A web page is still served as it is now.
+    assert "\nLIVE PAGE: served as it is now, not as of 2026-10-01;" in tools.fetch("https://source1.org/doc1",
+                                                                                 agent_id="K2")
+
+
+def test_a_data_row_whose_page_is_unreadable_is_never_fetched_live(tmp_path):
+    live: list[str] = []
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": DataFn()},
+                               fetch_fn=lambda url: live.append(url) or web_page())
+    tools.data("macro_series", {"series": "cpi"}, agent_id="K1")
+    before = ledger.get(1)
+    (tmp_path / before["page_path"]).unlink()
+    for _ in range(2):
+        assert tools.fetch(CPI_URL, agent_id="K2") == "FETCH_FAILED(official_data_row): try another source."
+    assert live == [] and ledger.get(1) == before and tools.page_text(1) is None
+    assert tools.stats()["fetches"] == 0 and tools.stats()["failures"] == 2
+
+
+@pytest.mark.parametrize("pit", [None, rg.PitPolicy(as_of=dt.date(2024, 6, 1)),
+                                 rg.PitPolicy(as_of=dt.date(2024, 6, 1), undated="flag")])
+def test_a_live_fetch_racing_a_data_registration_never_overwrites_the_data_row(tmp_path, pit):
+    result = pinned("2024-05-31")
+    holder: dict = {}
+
+    def fetch_while_the_data_row_registers(url):
+        holder["answer"] = holder["tools"].data("macro_series", {"series": "cpi"}, agent_id="K1")
+        return web_page()
+
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": DataFn(result)}, pit=pit,
+                               fetch_fn=fetch_while_the_data_row_registers, clock=lambda: NOW)
+    holder["tools"] = tools
+    text = tools.fetch(result.url, agent_id="K2")
+    assert holder["answer"].startswith("[S1] ")
+    row = ledger.get(1)
+    stored = result.page_text.strip()
+    assert (row["via"], row["tier"], row["title"]) == ("data", "S1", result.title)
+    assert row["content_sha256"] == hashlib.sha256(stored.encode("utf-8")).hexdigest()
+    assert tools.page_text(1) == stored and row["data"]["vintage"] == "2024-05-31"
+    if pit is not None:
+        assert row["pit_status"] == rg.PIT_ADMITTED and lr.pit_row_admissible(row, pit)
+    # The web page never becomes the row's page: the answer is the stored data page or a withhold.
+    assert "The grid reached" not in text
+
+
+def test_a_search_sighting_dated_late_never_redates_a_gated_data_row_or_marks_it_late(tmp_path):
+    result = pinned("2024-05-31")
+
+    def search(query, n):
+        return json.dumps({"results": [{"title": "ALFRED CPI", "url": result.url, "content": "CPI vintages",
+                                        "published": "2025-02-01"}]})
+
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": DataFn(result)}, search_fn=search,
+                               pit=rg.PitPolicy(as_of=AS_OF), clock=lambda: NOW)
+    tools.data("macro_series", {"series": "cpi"}, agent_id="K1")
+    before = ledger.get(1)
+    assert before["pit_status"] == rg.PIT_ADMITTED
+    # The search row is dated after the as-of date, so it is not shown; the data row stays as it was.
+    assert tools.search("cpi vintages", agent_id="K2").startswith("NO_IN_WINDOW_RESULTS: 1 result was dated")
+    assert ledger.get(1) == before and lr.pit_row_admissible(ledger.get(1), tools.pit)
+    # The ledger keeps a data row's dates and verdict whoever asks.
+    assert ledger.set_pit(1, rg.PIT_LATE) == before
+    assert ledger.set_dates(1, published="2025-02-01", precision="day", date_source="search_provider", rank=99,
+                            modified="2025-03-01", rejected=("future",)) == before
+    assert ledger.get(1) == before
+    # A web row is re-dated and marked late as before.
+    web = ledger.register("https://example.org/report", "Report", "", "search", "K2")
+    assert ledger.set_pit(web["sid"], rg.PIT_LATE)["pit_status"] == rg.PIT_LATE
+
+
+def test_an_ungated_search_sighting_leaves_a_dated_data_row_alone(tmp_path):
+    def search(query, n):
+        return json.dumps({"results": [{"title": "ALFRED CPI", "url": CPI_URL, "content": "CPI vintages",
+                                        "published": "2099-01-01"}]})
+
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": DataFn()}, search_fn=search,
+                               source_dates=True, clock=lambda: NOW)
+    tools.data("macro_series", {"series": "cpi"}, agent_id="K1")
+    before = ledger.get(1)
+    assert (before["published"], before["date_precision"], before["date_source"]) == (VINTAGE, "day",
+                                                                                     "official_data")
+    assert "pit_status" not in before
+    text = tools.search("cpi vintages", agent_id="K2")
+    assert text.startswith(f"[S1] {CPI_TITLE} — alfred.stlouisfed.org (tier 1) — published {VINTAGE}\n")
+    assert ledger.get(1) == before and "date_rejected" not in ledger.get(1)
 
 
 def test_ledger_register_tier_override_applies_only_when_creating(tmp_path):
@@ -495,6 +681,69 @@ def test_set_data_stores_plain_json_that_survives_a_reload(tmp_path):
     rows[0]["data"] = "garbage"
     (tmp_path / "sources.json").write_text(json.dumps(rows), "utf-8")
     assert "data" not in rg.SourceLedger(tmp_path / "sources.json").get(sid)
+
+
+# ================================================================ point-in-time gates (TIME-8) for official data
+
+@pytest.mark.parametrize("day, same_day, undated, status, counter", [
+    ("2024-05-31", "exclude", "drop", rg.PIT_ADMITTED, "data_admitted"),
+    ("2024-06-01", "include", "drop", rg.PIT_SAME_DAY, "data_same_day"),
+    ("2023-12-29", "exclude", "flag", rg.PIT_ADMITTED, "data_admitted"),
+])
+def test_a_gated_data_row_records_its_vintage_date_and_passes_the_citation_wall(tmp_path, day, same_day, undated,
+                                                                                  status, counter):
+    fn = DataFn(pinned(day))
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": fn}, clock=lambda: NOW,
+                               pit=rg.PitPolicy(as_of=AS_OF, same_day=same_day, undated=undated))
+    text = tools.data("macro_series", {"series": "cpi"}, agent_id="K1")
+    assert lr.tool_output_sids("web_fetch", text) == (1, [1])
+    row = ledger.get(1)
+    assert (row["pit_status"], row["published"], row["date_precision"], row["date_source"]) == (
+        status, day, "day", "official_data")
+    # The TIME-9 citation wall (default undated policy included) admits the row, also after a reload.
+    assert lr.pit_row_admissible(row, tools.pit)
+    ledger.flush()
+    assert lr.pit_row_admissible(rg.SourceLedger(ledger.path).get(1), tools.pit)
+    pit_counts = tools.stats()["pit"]
+    assert pit_counts[counter] == 1
+    assert sum(pit_counts[name] for name in rg.PIT_DATA_COUNTERS) == 1
+    assert tools.stats()["data"]["data_calls"] == 1 and tools.stats()["data"]["data_failures"] == 0
+
+
+@pytest.mark.parametrize("day, same_day, undated, reason, counter", [
+    ("2024-06-01", "exclude", "drop", "out_of_window", "data_late_refused"),
+    ("2024-07-15", "include", "flag", "out_of_window", "data_late_refused"),
+    (None, "exclude", "flag", "undated", "data_undated_refused"),
+    ("vintage unknown", "include", "drop", "undated", "data_undated_refused"),
+])
+def test_a_gated_data_result_dated_after_the_as_of_or_undated_is_refused_and_final(tmp_path, day, same_day,
+                                                                                    undated, reason, counter):
+    fn = DataFn(dataclasses.replace(pinned("2024-05-31"), date=day))
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": fn}, clock=lambda: NOW,
+                               pit=rg.PitPolicy(as_of=AS_OF, same_day=same_day, undated=undated))
+    expected = (f"DATA_UNAVAILABLE({reason}): the answer could not be recorded as a citable source; do not "
+                "estimate or fabricate the value.")
+    assert tools.data("macro_series", {"series": "cpi"}, agent_id="K1") == expected
+    assert tools.data("macro_series", {"series": "cpi"}, agent_id="K2") == expected.replace(
+        "): the answer", "): this request already failed in this run; the answer")
+    # Fail closed: nothing registered, no page stored, no vendor text shown, never retried.
+    assert len(fn.calls) == 1 and len(ledger) == 0
+    assert list((tmp_path / "pages").glob("*.txt")) == []
+    pit_counts = tools.stats()["pit"]
+    assert pit_counts[counter] == 1 and sum(pit_counts[name] for name in rg.PIT_DATA_COUNTERS) == 1
+    assert tools.stats()["data"]["data_failures"] == 1
+    assert_web_accounting_untouched(tools)
+
+
+def test_the_pit_counters_gain_the_data_gate_only_with_data_tools(tmp_path):
+    plain, _ = make_tools(tmp_path / "plain", pit=rg.PitPolicy(as_of=AS_OF), clock=lambda: NOW)
+    assert list(plain.stats()["pit"]) == list(rg.PIT_COUNTERS) and "data" not in plain.stats()
+    gated, _ = make_tools(tmp_path / "gated", pit=rg.PitPolicy(as_of=AS_OF), clock=lambda: NOW,
+                          data_fns={"macro_series": DataFn()})
+    assert list(gated.stats()["pit"]) == [*rg.PIT_COUNTERS, *rg.PIT_DATA_COUNTERS]
+    assert not set(rg.PIT_DATA_COUNTERS) & set(rg.PIT_COUNTERS)
+    ungated, _ = make_tools(tmp_path / "ungated", data_fns={"macro_series": DataFn()})
+    assert "pit" not in ungated.stats()
 
 
 # ================================================================ without data_fns nothing changes

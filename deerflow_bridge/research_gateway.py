@@ -2453,6 +2453,14 @@ def _fallback_valid_url(url: str) -> bool:
 
 
 _VALID_TIERS = ("S1", "S2", "S3")
+# TIME-12: an official-data row's publication date (SourceLedger.set_data) is the
+# vendor's own vintage or filing date, labelled as such and ranked above every
+# source_dates rank (1-7), so no web date could outrank it (set_dates leaves a
+# data row unchanged anyway).
+DATA_DATE_SOURCE = "official_data"
+DATA_DATE_RANK = 8
+# A TIME-2 date value's length -> its precision (YYYY, YYYY-MM, YYYY-MM-DD).
+_DATE_PRECISIONS = {4: "year", 7: "month", 10: "day"}
 
 
 class SourceLedger:
@@ -2482,7 +2490,12 @@ class SourceLedger:
     identity with a web row: a data registration colliding with a search or
     fetch row is refused, and a later search/fetch registration of a data
     row's URL changes nothing on it, so its title, snippet, tier and
-    ``via`` stay the vendor's.  Without data tools no row carries either.
+    ``via`` stay the vendor's.  Its dates and point-in-time verdict are the
+    vendor's too: :meth:`set_data` records them, and :meth:`set_dates` /
+    :meth:`set_pit` leave a data row unchanged, so no search or fetch
+    sighting re-dates it or marks it late (a web date describes the live
+    page at that URL, not the stored vintage).  Without data tools no row
+    carries either.
     """
 
     FLUSH_INTERVAL_S = 1.0
@@ -2661,20 +2674,41 @@ class SourceLedger:
             self._touch()
             return dict(row)
 
-    def set_data(self, sid: int, data: Mapping[str, Any]) -> dict | None:
+    def set_data(self, sid: int, data: Mapping[str, Any], *, published: str | None = None,
+                 pit_status: str | None = None) -> dict | None:
         """Record an official-data row's provenance, date, support sentences
         and structured facts as ``data`` (TIME-12), replacing any earlier
         value; returns a copy of the row, or ``None`` for an unknown sid.  The
         value is stored as plain JSON (tuples become lists, anything that is
         not JSON becomes its text), so the ledger stays serializable, and it
-        persists across reloads."""
+        persists across reloads.
+
+        In the same update, ``published`` (a TIME-2 date value, the vendor's
+        vintage or filing date) becomes the row's publication date, with
+        ``date_source`` :data:`DATA_DATE_SOURCE` and the precision its form
+        shows, and ``pit_status`` (a gated hindcast: ``admitted`` or
+        ``same_day``, the data gate's verdict) its point-in-time verdict; a
+        recorded ``late`` never changes.  These are the only writes of a data
+        row's dates and verdict (:meth:`set_dates` and :meth:`set_pit` leave
+        it unchanged).  Invalid values raise ValueError before anything is
+        written."""
         if not isinstance(data, Mapping):
             raise TypeError("data must be a mapping")
+        if published is not None and not (isinstance(published, str) and _DATE_VALUE_RE.fullmatch(published)):
+            raise ValueError(f"published must be YYYY, YYYY-MM or YYYY-MM-DD, not {published!r}")
+        if pit_status is not None and pit_status not in (PIT_ADMITTED, PIT_SAME_DAY):
+            raise ValueError(f"a data row is admitted or same_day, not {pit_status!r}")
+        plain = _plain_json(data)
         with self._lock:
             row = self._rows.get(_as_int(sid) or 0)
             if row is None:
                 return None
-            row["data"] = _plain_json(data)
+            row["data"] = plain
+            if published is not None:
+                row.update(published=published, date_precision=_DATE_PRECISIONS[len(published)],
+                           date_source=DATA_DATE_SOURCE, date_rank=DATA_DATE_RANK)
+            if pit_status is not None and row.get("pit_status") != PIT_LATE:
+                row["pit_status"] = pit_status
             self._touch()
             return dict(row)
 
@@ -2690,11 +2724,14 @@ class SourceLedger:
         ``modified_at`` keeps its first value, with the extractor label it came
         from as ``modified_source``; ``date_rejected`` is the sorted,
         de-duplicated rejection reasons (at most 3).  The row is written only
-        when something changed."""
+        when something changed.  An official-data row is returned unchanged:
+        its date is the vendor's (:meth:`set_data`)."""
         with self._lock:
             row = self._rows.get(_as_int(sid) or 0)
             if row is None:
                 return None
+            if row.get("via") == "data":
+                return dict(row)
             changed = False
             if published and int(rank) > (_as_int(row.get("date_rank")) or 0):
                 row.update(published=str(published), date_precision=str(precision or ""),
@@ -2727,13 +2764,18 @@ class SourceLedger:
         the source was available, and any status becomes ``late`` once a date
         shows it was not (a known later date always wins, so the gates fail
         closed; ``late`` itself never changes).  The row is written only when
-        the status changed, and persists across reloads."""
+        the status changed, and persists across reloads.  An official-data
+        row is returned unchanged: its verdict is the data gate's, recorded
+        with its vintage date (:meth:`set_data`), which a web sighting's date
+        does not describe."""
         if status not in PIT_STATUSES:
             raise ValueError(f"unknown pit_status {status!r}")
         with self._lock:
             row = self._rows.get(_as_int(sid) or 0)
             if row is None:
                 return None
+            if row.get("via") == "data":
+                return dict(row)
             current = row.get("pit_status")
             if current != status and (current is None or status == PIT_LATE
                                       or (current == PIT_UNVERIFIABLE and status in (PIT_ADMITTED, PIT_SAME_DAY))):
@@ -3853,6 +3895,11 @@ PIT_COUNTERS = (
     "fetch_same_day", "fetch_late_withheld", "fetch_undated_withheld", "fetch_undated_admitted",
     "fetch_units_spent_withheld", "search_admitted_shown", "search_same_day_shown",
 )
+# TIME-12: the official-data gate's decisions (ResearchTools.data), appended to
+# stats()["pit"] only when the run has data tools (so a gated run without them
+# keeps exactly PIT_COUNTERS): results registered admitted or same-day, and
+# results refused as dated after the as-of date or undated.
+PIT_DATA_COUNTERS = ("data_admitted", "data_same_day", "data_late_refused", "data_undated_refused")
 # Beside the ledger: URLs withheld at fetch, or sighted late by a search, before
 # they had a ledger row (so no pit_status can hold the verdict), kept so a
 # resumed attempt refuses them free and no later search row registers them.
@@ -3863,6 +3910,12 @@ _GATE_ADMIT, _GATE_SAME_DAY, _GATE_LATE, _GATE_UNVERIFIABLE = "admit", "same_day
 _PIT_UNDATED_ADMISSION = (PIT_UNVERIFIABLE, "fetch_undated_admitted")
 _PIT_ADMISSIONS = {_GATE_ADMIT: (PIT_ADMITTED, "fetch_admitted"), _GATE_SAME_DAY: (PIT_SAME_DAY, "fetch_same_day"),
                    _GATE_UNVERIFIABLE: _PIT_UNDATED_ADMISSION}
+# Per verdict of an official-data result the gates register (TIME-12): its
+# pit_status and PIT_DATA_COUNTERS counter.  Any other verdict is refused, an
+# undated result under either undated policy: the data tools date every answer
+# (a vintage or filing date), so one without a readable date breaks their contract.
+_DATA_PIT_ADMISSIONS = {_GATE_ADMIT: (PIT_ADMITTED, "data_admitted"),
+                        _GATE_SAME_DAY: (PIT_SAME_DAY, "data_same_day")}
 # Trusted suffix of a gated search row / page header, per verdict.
 _PIT_ROW_LABELS = {_GATE_SAME_DAY: " — same-day", _GATE_UNVERIFIABLE: " — undated"}
 _PIT_STATUS_LABELS = {PIT_SAME_DAY: " — same-day", PIT_UNVERIFIABLE: " — undated"}
@@ -4219,6 +4272,38 @@ def _data_detail(result: Any) -> str:
     return detail or "no detail given"
 
 
+def _data_payload(result: Any, date: Any) -> dict | None:
+    """An ok data result's ``data`` block as plain JSON (:func:`_plain_json`):
+    its provenance with its date, support sentences and facts; ``None`` when
+    the provenance is not a mapping or a value cannot be read (a malformed
+    result, refused before anything is recorded)."""
+    provenance = getattr(result, "provenance", None)
+    if not isinstance(provenance, Mapping):
+        return None
+    supports, facts = getattr(result, "supports", None), getattr(result, "facts", None)
+    try:
+        return _plain_json({
+            **provenance,
+            "date": date,
+            "supports": list(supports) if isinstance(supports, (list, tuple)) else [],
+            "facts": list(facts) if isinstance(facts, (list, tuple)) else [],
+        })
+    except Exception:  # noqa: BLE001 — an unreadable vendor value is a malformed result, never a half-recorded row
+        return None
+
+
+def _calendar_date_value(value: Any) -> str | None:
+    """``value`` when it is a real calendar TIME-2 date value (``YYYY``,
+    ``YYYY-MM`` or ``YYYY-MM-DD``), else ``None``."""
+    if not isinstance(value, str) or not _DATE_VALUE_RE.fullmatch(value):
+        return None
+    try:
+        _dt.date.fromisoformat({4: f"{value}-01-01", 7: f"{value}-01"}.get(len(value), value))
+    except ValueError:
+        return None
+    return value
+
+
 class ResearchTools:
     """Model-visible ``web_search``/``web_fetch`` for the v3 agents.
 
@@ -4255,7 +4340,8 @@ class ResearchTools:
       UTC now that future dates are rejected against);
     * with ``vintage_as_of`` (a hindcast's RESEARCH_AS_OF, TIME-7) every
       fetched page carries a trusted LIVE PAGE line between its row header and
-      the untrusted block: the page is served as it is now, not as of that date;
+      the untrusted block: the page is served as it is now, not as of that date
+      (an official-data row's page, pinned to its vintage, does not);
     * with ``pit`` (a gated hindcast's :class:`PitPolicy`, TIME-8; source dates
       are then always on) no source known to be available only after the
       as-of date gets an ``[S<n>]`` id or a stored page: a late search row is
@@ -4277,9 +4363,15 @@ class ResearchTools:
       only when it enables them) :meth:`data` answers ``macro_series`` /
       ``company_filings`` calls: run-level dedup with singleflight, units
       reserved against ``max_data_total`` / ``max_data_per_agent`` apart
-      from searches and fetches, and every result registered as a fetched
+      from searches and fetches, and every ok result registered as a fetched
       S1 ledger row with its provenance (:meth:`SourceLedger.set_data`), its
-      page stored like a fetched page.  Data outcomes never touch the
+      page stored like a fetched page.  With ``pit`` an ok result is gated
+      by its date (the vintage or filing date) before its page is stored:
+      admitted or same-day, it is registered with that ``pit_status`` and
+      date, so the citation wall admits it; dated after the as-of date or
+      undated, it is refused and registers nothing (``stats()["pit"]`` gains
+      :data:`PIT_DATA_COUNTERS`).  A web_fetch of a data row's URL is served
+      its stored page, never the live page.  Data outcomes never touch the
       search/fetch counters, failures or outcome classes; ``stats()["data"]``
       counts them.  Without ``data_fns`` nothing changes.
     """
@@ -4371,6 +4463,9 @@ class ResearchTools:
                 raise TypeError(f"data function for {tool_name} must be callable")
             if fn is not None:
                 self._data_fns[tool_name] = fn
+        if pit is not None and self._data_fns:
+            # The data gate's decisions join the gate counters only with data tools.
+            self._pit_counts.update(dict.fromkeys(PIT_DATA_COUNTERS, 0))
         self._data_totals = _DataCounters()
         self._data_agents: dict[str, _DataCounters] = {}
         # data key -> (row header or "", body) of an answer repeated from run memory.
@@ -4581,7 +4676,9 @@ class ResearchTools:
         not a render slot reaches it: a ledger row gets the dates of its late
         rows and is marked late, and a source without one is remembered as a
         row-less late record, so no later sighting gives it an [S<n>] and its
-        fetch is refused before any budget."""
+        fetch is refused before any budget.  An official-data row keeps the
+        vendor's date and verdict (the ledger leaves it unchanged): its late
+        search row is only not shown."""
         entries: list[tuple[str, str | None, Mapping[str, Any]] | None] = []
         groups: dict[str, list[Mapping[str, Any]]] = {}
         for item in results:
@@ -5058,7 +5155,9 @@ class ResearchTools:
 
     # ------------------------------------------------------------------ fetch
     def fetch(self, url: Any, *, focus: str = "", agent_id: str, kiq_text: str = "") -> str:
-        """Model-visible, query-focused excerpt of one page."""
+        """Model-visible, query-focused excerpt of one page.  The URL of an
+        official-data row (TIME-12) is answered from its stored page only,
+        never fetched live (:meth:`_data_row_page`)."""
         agent_id = str(agent_id or "agent")
         url = str(url or "").strip()
         self._log("tool", f"web_fetch {url[:160]}")
@@ -5145,8 +5244,25 @@ class ResearchTools:
         except (OSError, KeyError, TypeError):
             return None
 
+    def _data_row_page(self, url: str, terms: list[str], context_terms: list[str], agent_id: str) -> str:
+        """The web_fetch answer for the URL of an official-data row: its
+        stored page (the vendor's record, a free stored copy), else
+        FETCH_FAILED(official_data_row) with the row unchanged.  A data row's
+        page is never replaced by the live web page, so its facts stay
+        verifiable against the record they came from."""
+        stored = self._stored_page(url)
+        if stored is not None and stored[0].get("via") == "data":
+            with self._lock:
+                self._count(agent_id, "cached_fetches")
+            return self._render_page(stored[0], stored[1], terms, context_terms, cached=True)
+        return self._fetch_failed(agent_id, "official_data_row", infra=False)
+
     def _fetch_uncached(self, url: str, key: str, terms: list[str], context_terms: list[str],
                         agent_id: str) -> str:
+        known = self.ledger.find(url)
+        if known is not None and known.get("via") == "data":
+            # An official-data row whose page could not be read (or that is being recorded).
+            return self._data_row_page(url, terms, context_terms, agent_id)
         if not self._reserve(agent_id, "fetch"):
             self._outcome("fetch_budget")
             self._log("result", "web_fetch → FETCH_BUDGET_EXHAUSTED")
@@ -5201,6 +5317,9 @@ class ResearchTools:
             row = self.ledger.register(url, "", "", "fetch", agent_id)
             if row is None:
                 return self._fetch_unregistered(key, agent_id)
+            if row.get("via") == "data":
+                # An official-data row recorded while this page was fetched: never replaced.
+                return self._data_row_page(url, terms, context_terms, agent_id)
             row = self._pit_admit(row, verdict)
             if row is None:
                 return self._pit_withhold(url, key, _GATE_LATE)
@@ -5216,6 +5335,9 @@ class ResearchTools:
             row = self.ledger.register(url, "", "", "fetch", agent_id)
             if row is None:
                 return self._fetch_unregistered(key, agent_id)
+            if row.get("via") == "data":
+                # An official-data row recorded while this page was fetched: never replaced.
+                return self._data_row_page(url, terms, context_terms, agent_id)
         with self._lock:
             self._failed_fetches.pop(key, None)
             self._failure_class.pop(key, None)
@@ -5302,9 +5424,13 @@ class ResearchTools:
                       "different focus to read other parts.")
         # The precise model-directed filter (D7), not the bridge's legacy
         # sanitizer, which blanks ordinary policy prose ("override the veto").
-        body = (delimit_untrusted(_WEB_EXCERPT_LABEL, neutralize_citation_markers(excerpt))
+        # An official-data row's page (TIME-12) is the vendor's record pinned to
+        # its vintage, not a live page: labelled as such, with no LIVE PAGE line.
+        official = row.get("via") == "data"
+        body = (delimit_untrusted(_DATA_LABEL if official else _WEB_EXCERPT_LABEL,
+                                  neutralize_citation_markers(excerpt))
                 or "(no readable text on this page)")
-        if self.vintage_as_of:
+        if self.vintage_as_of and not official:
             # Trusted engine text on the second line: the row header stays line 0
             # (tool_output_sids) and the page itself stays inside the untrusted block.
             body = (f"LIVE PAGE: served as it is now, not as of {self.vintage_as_of}; "
@@ -5326,10 +5452,12 @@ class ResearchTools:
         result's page text and whose ``data`` holds its provenance, date,
         support sentences and facts; the answer is that row's header (line 0,
         like a fetch) and the result's text as untrusted evidence data.  An
-        invalid request refunds its unit; the vendor's absences (no vintage,
-        not found, not a filer, no XBRL facts) are answered as such, and a
-        service that did not answer, or a result that could not be recorded,
-        as DATA_UNAVAILABLE; none of them registers a source."""
+        invalid request refunds its unit; it and the vendor's absences (no
+        vintage, not found, not a filer, no XBRL facts) are answered as such
+        and remembered for the run, and a service that did not answer, or a
+        result that could not be recorded (gated: one dated after the as-of
+        date or undated, :meth:`_data_register`), as DATA_UNAVAILABLE; none of
+        them registers a source."""
         agent_id = str(agent_id or "agent")
         tool = str(name or "")
         fn = self._data_fns.get(tool)
@@ -5355,25 +5483,37 @@ class ResearchTools:
             return error
         key = _data_key(tool, normalized)
         self._log("tool", f"{tool} " + " ".join(f"{field_name}={value}" for field_name, value in normalized.items()))
+        # Run memory is read again by each flight's owner and after the flights, so
+        # a request answered while this call waited (a retry after an earlier
+        # owner's failure) never reaches the vendor again: data units are scarce.
         for _ in range(2):
-            with self._lock:
-                cached = self._data_cache.get(key)
-                if cached is not None:
-                    self._data_count(agent_id, "cached_data")
-            if cached is not None:
-                self._log("result", f"{tool} → cached")
-                head, body = cached
-                return f"{head}\n{_CACHED_DATA_NOTE}\n{body}" if head else f"{_CACHED_DATA_NOTE}\n{body}"
-            known = self._known_data_failure(tool, key, agent_id)
-            if known is not None:
-                return known
+            remembered = self._data_memory(tool, key, agent_id)
+            if remembered is not None:
+                return remembered
             with self._singleflight(self._inflight_data, key) as owner:
                 if owner:
+                    remembered = self._data_memory(tool, key, agent_id)
+                    if remembered is not None:
+                        return remembered
                     return self._data_uncached(tool, fn, normalized, key, agent_id)
-        known = self._known_data_failure(tool, key, agent_id)
-        if known is not None:
-            return known
+        remembered = self._data_memory(tool, key, agent_id)
+        if remembered is not None:
+            return remembered
         return self._data_uncached(tool, fn, normalized, key, agent_id)
+
+    def _data_memory(self, tool: str, key: str, agent_id: str) -> str | None:
+        """The answer to a data request from run memory (``None`` when it
+        should be asked): a repeated answer, or a failure that is not retried
+        (:meth:`_known_data_failure`); free, counted as cached data."""
+        with self._lock:
+            cached = self._data_cache.get(key)
+            if cached is not None:
+                self._data_count(agent_id, "cached_data")
+        if cached is None:
+            return self._known_data_failure(tool, key, agent_id)
+        self._log("result", f"{tool} → cached")
+        head, body = cached
+        return f"{head}\n{_CACHED_DATA_NOTE}\n{body}" if head else f"{_CACHED_DATA_NOTE}\n{body}"
 
     def _known_data_failure(self, tool: str, key: str, agent_id: str) -> str | None:
         """The answer to a data request that already failed in this run
@@ -5418,11 +5558,15 @@ class ResearchTools:
             return self._data_failed(tool, key, agent_id, type(exc).__name__, transient=True)
         status = getattr(result, "status", None)
         if status == _DATA_INVALID:
+            text = f"{_INVALID_DATA_LABELS[tool]}: {_data_detail(result)}"
             with self._lock:
                 self._data_count(agent_id, "data_calls", -1)  # refunded: the request, not the service, failed
                 self._data_count(agent_id, "data_invalid")
+            # As deterministic as an absence: a repeat is answered from run memory,
+            # so a refunded request never reaches the vendor twice.
+            self._data_answered(key, "", text)
             self._log("result", f"{tool} → {_INVALID_DATA_LABELS[tool]}")
-            return f"{_INVALID_DATA_LABELS[tool]}: {_data_detail(result)}"
+            return text
         if status == _DATA_NO_VINTAGE or status in _DATA_ABSENT_STATUSES:
             item = _collapse(_clean_web_text(getattr(result, "key", "") or ""), 120) or " ".join(args.values())
             text = (_NO_VINTAGE_TEXT.format(key=item) if status == _DATA_NO_VINTAGE
@@ -5438,12 +5582,45 @@ class ResearchTools:
 
     def _data_register(self, tool: str, result: Any, key: str, agent_id: str) -> str:
         """Store an ``ok`` result's page, register it as a fetched S1 data row
-        and return its answer (or the failure when it cannot be recorded)."""
+        and return its answer (or the failure when it cannot be recorded).
+
+        Every refusal is decided before the page is stored or a row
+        registered, so a refused result leaves nothing behind (all final): an
+        incomplete result, an invalid URL, a URL a search/fetch row holds (a
+        data row never adopts one), a data block that is not plain JSON
+        (:func:`_data_payload`) and, gated (TIME-8), a result whose date is not
+        in the window: ``source_dates.gate`` of that date for the as-of date
+        (:meth:`_pit_verdict`) must admit it, or admit it same-day, else it is
+        refused as ``out_of_window`` or ``undated``.  The gate reads the
+        vendor's date alone: a web sighting of the URL dates the live page,
+        not the stored vintage.  The date (a real TIME-2 value, when source
+        dates are on) and the verdict are recorded with the provenance
+        (:meth:`SourceLedger.set_data`), so the citation wall admits the row."""
         url, page = getattr(result, "url", None), getattr(result, "page_text", None)
         model_text = getattr(result, "model_text", None)
         if not (isinstance(url, str) and url.strip() and isinstance(page, str) and page.strip()
                 and isinstance(model_text, str)):
             return self._data_failed(tool, key, agent_id, "incomplete_result", transient=False)
+        url = url.strip()
+        if not self.ledger.valid_url(url):
+            return self._data_failed(tool, key, agent_id, "invalid_url", transient=False)
+        known = self.ledger.find(url)
+        if known is not None and known.get("via") != "data":
+            # A search/fetch row holds the URL: a data row never adopts or overwrites one.
+            return self._data_failed(tool, key, agent_id, "collision", transient=False)
+        date = getattr(result, "date", None)
+        payload = _data_payload(result, date)
+        if payload is None:
+            return self._data_failed(tool, key, agent_id, "malformed_result", transient=False)
+        pit_status = pit_counter = None
+        if self.pit is not None:
+            verdict = self._pit_verdict([date], url)
+            if verdict not in _DATA_PIT_ADMISSIONS:
+                late = verdict == _GATE_LATE
+                self._pit_count("data_late_refused" if late else "data_undated_refused")
+                return self._data_failed(tool, key, agent_id, "out_of_window" if late else "undated",
+                                         transient=False)
+            pit_status, pit_counter = _DATA_PIT_ADMISSIONS[verdict]
         stripped = page.strip()
         digest = hashlib.sha256(stripped.encode("utf-8")).hexdigest()
         page_path = f"{self.pages_dir.name}/{digest[:16]}.txt"
@@ -5455,20 +5632,14 @@ class ResearchTools:
             return self._data_failed(tool, key, agent_id, f"storage_{type(exc).__name__}", transient=True)
         row = self.ledger.register(url, getattr(result, "title", ""), "", "data", agent_id, tier="S1")
         if row is None:
-            # The URL is invalid, or it already names a search/fetch row, which a data
-            # row must never adopt: either way the answer cannot be cited.
-            reason = "collision" if self.ledger.valid_url(url.strip()) else "invalid_url"
-            return self._data_failed(tool, key, agent_id, reason, transient=False)
+            # A search/fetch row registered the URL since the check above: never adopted.
+            return self._data_failed(tool, key, agent_id, "collision", transient=False)
         row = self.ledger.mark_fetched(row["sid"], content_sha256=digest, chars=len(stripped),
                                        page_path=page_path) or row
-        provenance = getattr(result, "provenance", None)
-        supports, facts = getattr(result, "supports", None), getattr(result, "facts", None)
-        row = self.ledger.set_data(row["sid"], {
-            **(provenance if isinstance(provenance, Mapping) else {}),
-            "date": getattr(result, "date", None),
-            "supports": list(supports) if isinstance(supports, (list, tuple)) else [],
-            "facts": list(facts) if isinstance(facts, (list, tuple)) else [],
-        }) or row
+        published = _calendar_date_value(date) if self.source_dates else None
+        row = self.ledger.set_data(row["sid"], payload, published=published, pit_status=pit_status) or row
+        if pit_counter is not None:
+            self._pit_count(pit_counter)
         head = f"[S{row['sid']}] {row['title']} — {row['domain']} ({tier_label(row['tier'])}) — {_DATA_LABEL}"
         body = (delimit_untrusted(_DATA_LABEL, neutralize_citation_markers(model_text))
                 or "(no readable text in this result)")
