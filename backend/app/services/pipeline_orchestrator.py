@@ -2305,6 +2305,7 @@ RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_QUESTION_SPEC", "bool"),
     ("RESEARCH_SOURCE_DATES", "bool"),
     ("RESEARCH_SOURCE_DATE_TEXT_FALLBACK", "bool"),
+    ("RESEARCH_V3_CITATION_STATS", "bool"),
     ("RESEARCH_V3_FORECAST_INPUTS", "bool"),
     ("RESEARCH_VERIFIED_FACTS", "bool"),
 )

@@ -269,6 +269,15 @@ class Config:
     # Increment whenever a hard publication rule changes. Byte-matched audits
     # from an older policy are drafts until replayed under the current rules.
     REPORT_FINAL_AUDIT_POLICY_VERSION = 3
+    # RESEARCH-9: persist what the publish stabilizer did to citations before the
+    # read-only audit (markers before, dangling / semantic / overuse strips, the
+    # quantitative repair's added citations and removed sentences) as
+    # final_audit.json pre_audit_repairs and forecast.json quality.citation_finalization.
+    # Telemetry only, so default on: the Markdown, full_report.md and every gate
+    # are unchanged; off = neither key is written.
+    REPORT_FINALIZATION_TELEMETRY = os.environ.get(
+        'REPORT_FINALIZATION_TELEMETRY', 'true'
+    ).strip().lower() == 'true'
     # NEXTSTEPS P2-2：在报告末尾追加一个**确定性**的「如何验证本预测」章节——逐情景列可证伪判定
     # 标准 + 来自 forecast_inputs 的带日期/触发观察指标，并把指标-情景映射写进 forecast.json 供
     # 解析调度器使用。默认开；无结构化预测/无情景时自动跳过（degrade-safe）。
@@ -1688,6 +1697,15 @@ class Config:
     # Forwarded to the v3 child.
     RESEARCH_V3_FORECAST_INPUTS = os.environ.get(
         'RESEARCH_V3_FORECAST_INPUTS', 'false').strip().lower() == 'true'
+    # RESEARCH-9 v3 citation stats: the QA phase records qa.json citation_stats
+    # (markers before QA and published, orphan markers renumbering dropped, stale
+    # groups, cited fetched vs snippet sources and their marker share, unused fetched
+    # pages, writer bibliographies, scaffold echo lines, prose numbers no evidence
+    # traces), mirrored into meta.research_qa and meta.research_quality.  Detection
+    # only, so default on: research_report.md and sources.json are byte-identical
+    # either way; off = no key.  Forwarded to the v3 child.
+    RESEARCH_V3_CITATION_STATS = os.environ.get(
+        'RESEARCH_V3_CITATION_STATS', 'true').strip().lower() == 'true'
     # RESEARCH-7: verbatim evidence-span contract for v3 findings (off | audit | enforce).
     # Not off: the KIQ task asks each finding for an EVIDENCE: "<verbatim passage>" clause,
     # the source ledger keeps every distinct search snippet of a row, and each quote is
