@@ -181,7 +181,7 @@ _HEAD_LINE_RE = re.compile(
 _MODIFIED_LABEL_RE = re.compile(r"updated|modified|更新", re.I)
 
 _SCRIPT_TAG_RE = re.compile(r"<script\b[^<>]{0,500}>", re.I)
-_SCRIPT_CLOSE = "</script"
+_SCRIPT_CLOSE_RE = re.compile(r"</script", re.I)
 _LD_DATE_RE = re.compile(r'"(?P<key>datePublished|dateModified)"\s{0,20}:\s{0,20}"(?P<value>[^"\\]{1,80})"')
 _META_TAG_RE = re.compile(r"<meta\b[^<>]{0,1000}>", re.I)
 _TIME_TAG_RE = re.compile(r"<time\b[^<>]{0,500}>", re.I)
@@ -410,17 +410,17 @@ def _json_ld_candidates(text: str) -> list[Candidate]:
         tag = _SCRIPT_TAG_RE.search(text, pos)
         if tag is None:
             break
-        close = text.find(_SCRIPT_CLOSE, tag.end())
-        end = len(text) if close < 0 else close
+        close = _SCRIPT_CLOSE_RE.search(text, tag.end())
+        end = len(text) if close is None else close.start()
         if "ld+json" in tag.group(0).lower():
             for match in _LD_DATE_RE.finditer(text, tag.end(), end):
                 role = ROLE_PUBLISHED if match["key"] == "datePublished" else ROLE_MODIFIED
                 out.append((RANK_JSON_LD, SOURCE_JSON_LD, role, _clip(match["value"])))
                 if len(out) >= _MAX_CANDIDATES:
                     break
-        if close < 0:
+        if close is None:
             break
-        pos = close + len(_SCRIPT_CLOSE)
+        pos = close.end()
     return out
 
 

@@ -2387,8 +2387,9 @@ class SourceLedger:
     first-seen ``snippet`` field is unchanged.  Off, no sighting is added.
 
     :meth:`set_dates` (RESEARCH_SOURCE_DATES, TIME-2) adds ``published``,
-    ``date_precision``, ``date_source``, ``date_rank``, ``modified_at`` and
-    ``date_rejected``; a row without them is exactly the row before TIME-2.
+    ``date_precision``, ``date_source``, ``date_rank``, ``modified_at``,
+    ``modified_source`` and ``date_rejected``; a row without them is exactly
+    the row before TIME-2.
     """
 
     FLUSH_INTERVAL_S = 1.0
@@ -2555,14 +2556,15 @@ class SourceLedger:
 
     def set_dates(self, sid: int, *, published: str | None, precision: str | None,
                   date_source: str | None, rank: int, modified: str | None = None,
-                  rejected: Sequence[str] = ()) -> dict | None:
+                  modified_source: str | None = None, rejected: Sequence[str] = ()) -> dict | None:
         """Record a source's publication dates (TIME-2); returns a copy of the
         row, or ``None`` for an unknown sid.
 
         ``published`` (with ``date_precision``, ``date_source``, ``date_rank``)
         is replaced only by a strictly higher-ranked date, so a provider date
         is never overwritten by a URL or search date, and a tie keeps the first;
-        ``modified_at`` keeps its first value; ``date_rejected`` is the sorted,
+        ``modified_at`` keeps its first value, with the extractor label it came
+        from as ``modified_source``; ``date_rejected`` is the sorted,
         de-duplicated rejection reasons (at most 3).  The row is written only
         when something changed."""
         with self._lock:
@@ -2576,6 +2578,8 @@ class SourceLedger:
                 changed = True
             if modified and not row.get("modified_at"):
                 row["modified_at"] = str(modified)
+                if modified_source:
+                    row["modified_source"] = str(modified_source)
                 changed = True
             reasons = {str(reason) for reason in rejected if reason}
             if reasons:
@@ -3792,10 +3796,11 @@ class ResearchTools:
       failed fetch says whether the service or the page failed;
     * with ``source_dates`` (RESEARCH_SOURCE_DATES, TIME-2) every search row
       and fetched page gets a publication date in the ledger
-      (:meth:`SourceLedger.set_dates`) from the fetch's provider metadata,
-      and with ``date_text_fallback`` also the page's head datelines and URL
-      path (search rows: the provider's row date and the URL path), shown in
-      its row header outside the untrusted block.  ``fetch_fn`` may return
+      (:meth:`SourceLedger.set_dates`), a fetched page from the fetch's
+      provider metadata and a search row from the provider's row date, and
+      with ``date_text_fallback`` also from the page's head datelines and
+      either one's URL path, shown in its row header outside the untrusted
+      block.  ``fetch_fn`` may return
       ``(text, metadata)``; the default one then does (``clock`` returns the
       UTC now that future dates are rejected against).
     """
@@ -3907,7 +3912,8 @@ class ResearchTools:
                 row["sid"], published=published.value if published else None,
                 precision=published.precision if published else None,
                 date_source=published.source if published else None, rank=resolved["rank"],
-                modified=modified.value if modified else None, rejected=resolved["rejected"])
+                modified=modified.value if modified else None,
+                modified_source=modified.source if modified else None, rejected=resolved["rejected"])
         except Exception as exc:  # noqa: BLE001 — dating never breaks a search or fetch
             with self._lock:
                 self._dates_skipped += 1
@@ -3916,7 +3922,9 @@ class ResearchTools:
         return updated or row
 
     def _search_row_dates(self, row: dict, item: Mapping[str, Any]) -> dict:
-        """A search row's dates: the provider's row date (rank 1) and the URL path (rank 2)."""
+        """A search row's dates: the provider's row date (rank 1) and, with
+        ``date_text_fallback``, the URL path (rank 2), the same heuristic the
+        fallback gates for a fetched page."""
         def candidates(module: Any) -> list:
             found = []
             for key in ("published", "publishedDate", "published_date", "date"):
@@ -3925,7 +3933,9 @@ class ResearchTools:
                     found.append((module.RANK_SEARCH, module.SOURCE_SEARCH, module.ROLE_PUBLISHED,
                                   str(value)[:module.RAW_CHARS]))
                     break
-            return found + module.from_url(row["url"])
+            if self.date_text_fallback:
+                found += module.from_url(row["url"])
+            return found
 
         return self._stamp_dates(row, candidates)
 

@@ -185,6 +185,15 @@ def test_json_ld_dates():
                                   (6, "json_ld", "modified", "2025-06-01")]
     # Outside an ld+json script the same keys are not JSON-LD.
     assert sd.from_html('<script>var x = {"datePublished": "2025-05-09"};</script>') == []
+    # Close tags match in any case: an upper-case </SCRIPT> ends its own script,
+    # so the JSON-LD block after it is still read.
+    for close in ("</SCRIPT>", "</Script >", "</script>"):
+        page = (f'<SCRIPT>var x = 1;{close}<script type="application/ld+json">'
+                '{"datePublished": "2025-05-09"}</script>')
+        assert sd.from_html(page) == [(6, "json_ld", "published", "2025-05-09")], close
+    assert sd.from_html('<SCRIPT TYPE="application/ld+json">{"datePublished": "2025-05-09"}</SCRIPT>'
+                        '<script>var y = {"dateModified": "2025-06-01"};</script>') == [
+        (6, "json_ld", "published", "2025-05-09")]
 
 
 def test_meta_tags_in_both_attribute_orders():
@@ -317,6 +326,7 @@ def test_resolve_without_a_parseable_candidate():
 
 _ADVERSARIAL = {
     "script_open": '<script type="application/ld+json">' * 6000,
+    "script_pairs": '<SCRIPT type="application/ld+json"></ScRiPt>' * 4500,
     "ld_no_close": '<script type="application/ld+json">' + '"datePublished": "' * 11000,
     "meta_open": "<meta " * 34000,
     "meta_attributes": "<meta " + "a=" * 100000,

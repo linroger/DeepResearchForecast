@@ -36,8 +36,9 @@ PAGE = ("# Grid connection report\n\n"
         "The agency expects demand growth to continue while grid approvals remain the binding constraint.")
 # meta.json keys that differ between two runs of the same code (wall clock).
 _VOLATILE_META = frozenset({"finished_at", "phases"})
-_DATE_KEYS = ("date_precision", "date_source", "modified_at", "date_rejected")
-_LEDGER_DATE_KEYS = ("published", "date_precision", "date_source", "date_rank", "modified_at", "date_rejected")
+_DATE_KEYS = ("date_precision", "date_source", "modified_at", "modified_source", "date_rejected")
+_LEDGER_DATE_KEYS = ("published", "date_precision", "date_source", "date_rank", "modified_at", "modified_source",
+                     "date_rejected")
 
 
 @pytest.fixture(autouse=True)
@@ -75,13 +76,14 @@ def test_set_dates_upgrades_by_rank_and_never_downgrades(tmp_path):
         row = ledger.set_dates(sid, published="2020-01-01", precision="day", date_source=source, rank=rank)
         assert row["published"] == "2025-05" and row["date_rank"] == 2
     row = ledger.set_dates(sid, published="2025-05-09", precision="day", date_source="provider_meta", rank=7,
-                           modified="2025-06-01")
-    assert (row["published"], row["date_source"], row["date_rank"], row["modified_at"]) == (
-        "2025-05-09", "provider_meta", 7, "2025-06-01")
-    # modified_at keeps its first value; rejections are sorted, unique, at most 3.
+                           modified="2025-06-01", modified_source="provider_meta")
+    assert (row["published"], row["date_source"], row["date_rank"], row["modified_at"], row["modified_source"]) == (
+        "2025-05-09", "provider_meta", 7, "2025-06-01", "provider_meta")
+    # modified_at (and its source) keeps its first value; rejections are sorted, unique, at most 3.
     row = ledger.set_dates(sid, published=None, precision=None, date_source=None, rank=0, modified="2026-01-01",
-                           rejected=["future", "unparseable", "future"])
-    assert row["modified_at"] == "2025-06-01" and row["date_rejected"] == ["future", "unparseable"]
+                           modified_source="text_head", rejected=["future", "unparseable", "future"])
+    assert (row["modified_at"], row["modified_source"]) == ("2025-06-01", "provider_meta")
+    assert row["date_rejected"] == ["future", "unparseable"]
     row = ledger.set_dates(sid, published=None, precision=None, date_source=None, rank=0,
                            rejected=["pre_1900", "zzz", "aaa"])
     assert row["date_rejected"] == ["aaa", "future", "pre_1900"]
@@ -127,7 +129,7 @@ def test_modified_date_is_shown_only_when_later(tmp_path):
     tools, ledger = _tools(tmp_path, fetch_fn=lambda url: (PAGE, meta))
     out = tools.fetch("https://x.org/stats", agent_id="K1")
     assert " — published 2019-03-01; updated 2025-06-01 — full page" in _header(out)
-    assert ledger.get(1)["modified_at"] == "2025-06-01"
+    assert (ledger.get(1)["modified_at"], ledger.get(1)["modified_source"]) == ("2025-06-01", "provider_meta")
     same, _ = _tools(tmp_path, fetch_fn=lambda url: (PAGE, {"publishedTime": "2025-06", "modifiedTime": "2025-06-10"}),
                      name="same")
     assert "updated" not in _header(same.fetch("https://x.org/b", agent_id="K1"))
@@ -230,6 +232,29 @@ def test_search_rows_are_dated_from_the_provider_and_the_url(tmp_path):
     assert (ledger.get(2)["date_source"], ledger.get(2)["date_rank"]) == ("url_path", 2)
     assert ledger.get(3)["date_rejected"] == ["future"] and "published" not in ledger.get(3)
     assert not any(key in ledger.get(4) for key in _LEDGER_DATE_KEYS)
+
+
+def test_search_url_dates_follow_the_text_fallback_switch(tmp_path):
+    # Review round 2: RESEARCH_SOURCE_DATE_TEXT_FALLBACK=false turns the URL-path
+    # heuristic off for search rows too; the provider's row date still counts.
+    rows = [{"title": "Provider dated", "url": "https://a.org/2024/01/02/x", "content": "alpha",
+             "published": "May 9, 2025"},
+            {"title": "URL dated", "url": "https://b.org/2025/04/30/y", "content": "beta"}]
+    off, ledger = _tools(tmp_path, search_fn=_search(*rows), fallback=False)
+    headers = [line for line in off.search("grid queues", agent_id="K1").splitlines() if line.startswith("[S")]
+    assert headers == ["[S1] Provider dated — a.org (tier 3) — published 2025-05-09",
+                       "[S2] URL dated — b.org (tier 3)"]
+    assert (ledger.get(1)["published"], ledger.get(1)["date_source"], ledger.get(1)["date_rank"]) == (
+        "2025-05-09", "search_provider", 1)
+    assert not any(key in ledger.get(2) for key in _LEDGER_DATE_KEYS)
+    # A fetch with the fallback off does not date the row from its URL either.
+    off.fetch("https://b.org/2025/04/30/y", agent_id="K1")
+    assert "published" not in ledger.get(2)
+    # With the fallback on, the URL outranks the provider's row date.
+    on, on_ledger = _tools(tmp_path, search_fn=_search(*rows), name="on")
+    on.search("grid queues", agent_id="K1")
+    assert (on_ledger.get(1)["published"], on_ledger.get(1)["date_source"]) == ("2024-01-02", "url_path")
+    assert (on_ledger.get(2)["published"], on_ledger.get(2)["date_source"]) == ("2025-04-30", "url_path")
 
 
 def test_dated_headers_parse_to_the_same_sids(tmp_path):
@@ -346,12 +371,14 @@ def test_production_tools_factory_reads_both_knobs(tmp_path, monkeypatch):
 def test_source_rows_date_fields_and_digest_and_references_rendering():
     dated = {"sid": 1, "url": "https://a.org/x", "title": "A", "domain": "a.org", "tier": "S2", "fetched": True,
              "published": "2025-05-09", "date_precision": "day", "date_source": "provider_meta", "date_rank": 7,
-             "modified_at": "2025-06-01", "date_rejected": ["future"]}
+             "modified_at": "2025-06-01", "modified_source": "json_ld", "date_rejected": ["future"]}
     undated = {"sid": 2, "url": "https://b.org/y", "title": "B", "domain": "b.org", "tier": "S3", "fetched": False,
                "date_rejected": ["unparseable"]}
     assert lr._source_date_fields(dated) == {"date": "2025-05-09", "date_precision": "day",
                                              "date_source": "provider_meta", "modified_at": "2025-06-01",
-                                             "date_rejected": ["future"]}
+                                             "modified_source": "json_ld", "date_rejected": ["future"]}
+    assert list(lr._source_date_fields(dated)) == ["date", "date_precision", "date_source", "modified_at",
+                                                   "modified_source", "date_rejected"]
     assert lr._source_date_fields(undated) == {}
     assert lr._source_date_fields({"published": "May 2025"}) == {}
     rows = {1: dated, 2: undated}
@@ -384,7 +411,8 @@ def test_source_date_summary_counts():
 
 def test_quant_source_dates_stamp_and_flag_never_drop():
     sources = [{"url": "https://a.org/x", "date": "2025-05-09"},
-               {"url": "https://b.org/y", "date": "2019-03-01", "modified_at": "2025-06-01"},
+               {"url": "https://b.org/y", "date": "2019-03-01", "modified_at": "2025-06-01",
+                "modified_source": "provider_meta"},
                {"url": "https://c.org/z", "date": None}]
     quant = [{"metric": "m1", "value": 1, "as_of_date": "2025-06-01", "source_url": "https://a.org/x"},
              {"metric": "m2", "value": 2, "as_of_date": "2025-05", "source_url": "https://a.org/x"},
@@ -405,6 +433,47 @@ def test_quant_source_dates_stamp_and_flag_never_drop():
     assert [row.get("as_of_after_source") for row in quant] == [True, None, None, True, None, None,
                                                                 None, None, None, True]
     assert len(quant) == 10
+
+
+def test_only_a_metadata_modified_date_widens_the_source_window():
+    # Review round 2: a page-head "Updated:" line (possibly site chrome) must not
+    # suppress as_of_after_source; a structured-metadata modified date may.
+    assert lr._SOURCE_DATE_METADATA_SOURCES == {rg._source_dates().SOURCE_PROVIDER_META,
+                                                rg._source_dates().SOURCE_JSON_LD,
+                                                rg._source_dates().SOURCE_META_TAG,
+                                                rg._source_dates().SOURCE_TIME_TAG}
+    flags = {}
+    for modified_source in ("provider_meta", "json_ld", "meta_tag", "time_tag", "text_head", "url_path",
+                            "search_provider", None, ["provider_meta"]):
+        source = {"url": "https://b.org/y", "date": "2019-03-01", "modified_at": "2025-06-01"}
+        if modified_source is not None:
+            source["modified_source"] = modified_source
+        quant = [{"metric": "m", "value": 1, "as_of_date": "2025-05-01", "source_url": "https://b.org/y"}]
+        lr.quant_source_dates(quant, [source])
+        flags[str(modified_source)] = quant[0].get("as_of_after_source")
+    assert flags == {"provider_meta": None, "json_ld": None, "meta_tag": None, "time_tag": None,
+                     "text_head": True, "url_path": True, "search_provider": True, "None": True,
+                     "['provider_meta']": True}
+
+
+def test_a_page_head_updated_line_never_suppresses_the_flag_end_to_end(tmp_path):
+    """Tool fetch -> ledger row -> sources.json fields -> quant flag."""
+    chrome = PAGE.replace("\n\n", "\n\nLast updated: 2025-06-01\n\n", 1)
+    cases = {"chrome": (chrome, {"publishedTime": "2019-03-01"}),
+             "metadata": (PAGE, {"publishedTime": "2019-03-01", "modifiedTime": "2025-06-01"})}
+    results = {}
+    for name, (page, meta) in cases.items():
+        tools, ledger = _tools(tmp_path, fetch_fn=lambda url, page=page, meta=meta: (page, meta), name=name)
+        tools.fetch("https://b.org/y", agent_id="K1")
+        row = ledger.get(1)
+        source = {"url": row["url"], "date": None, **lr._source_date_fields(row)}
+        quant = [{"metric": "m", "value": 1, "as_of_date": "2025-05-01", "value_type": "actual",
+                  "source_url": row["url"]}]
+        lr.quant_source_dates(quant, [source])
+        results[name] = (source["date"], source["modified_at"], source["modified_source"],
+                         quant[0].get("as_of_after_source"))
+    assert results == {"chrome": ("2019-03-01", "2025-06-01", "text_head", True),
+                       "metadata": ("2019-03-01", "2025-06-01", "provider_meta", None)}
 
 
 # =============================================================== full engine runs
@@ -551,7 +620,8 @@ def test_dated_run_publishes_dates_everywhere(tmp_path, bridge, monkeypatch):
             # +05:00 at 01:00 is the previous UTC day.
             assert (row["date"], row["date_source"]) == ("2025-05-09", "provider_meta")
         if "agency2-" in row["url"] and ledger[row["url"]]["fetched"]:
-            assert row["modified_at"] == "2025-06-01" and row["date_source"] == "url_path"
+            assert (row["modified_at"], row["modified_source"], row["date_source"]) == (
+                "2025-06-01", "text_head", "url_path")
     assert any(row["date"] for row in sources)
 
     # Every ledger date is on or before the run's UTC date; future provider dates were rejected.

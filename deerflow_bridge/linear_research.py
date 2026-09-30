@@ -4592,6 +4592,11 @@ _SOURCE_DATE_RE = re.compile(r"\d{4}(?:-\d{2}(?:-\d{2})?)?")
 # Quant value types whose as_of_date may follow their source's date by design
 # (quant_source_dates never flags them as_of_after_source).
 _SOURCE_DATE_PROJECTED_TYPES = frozenset({"forecast", "target", "estimate"})
+# source_dates labels of the structured-metadata extractors (provider metadata,
+# JSON-LD, <meta>, <time>: ranks 4-7).  Only a modified date read from one of
+# them widens a source's window in quant_source_dates; a page-head "Updated:"
+# line may be site chrome, so it never suppresses as_of_after_source.
+_SOURCE_DATE_METADATA_SOURCES = frozenset({"provider_meta", "json_ld", "meta_tag", "time_tag"})
 
 
 def _date_value(value: Any) -> str:
@@ -4612,7 +4617,7 @@ def _source_date_fields(row: Mapping[str, Any]) -> dict[str, Any]:
         return {}
     fields: dict[str, Any] = {"date": published, "date_precision": row.get("date_precision"),
                               "date_source": row.get("date_source")}
-    for key in ("modified_at", "date_rejected"):
+    for key in ("modified_at", "modified_source", "date_rejected"):
         if row.get(key):
             fields[key] = row[key]
     return fields
@@ -4640,9 +4645,12 @@ def source_date_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 def quant_source_dates(quant: list[dict], sources: Sequence[Mapping[str, Any]]) -> int:
     """Stamp each quantitative row whose ``source_url`` is a dated sources.json
     row with its ``source_date`` (TIME-2), and flag ``as_of_after_source``
-    when the row's ``as_of_date`` starts after the source's latest date (its
-    ``modified_at`` when later than ``date``) ends: a value dated after its
-    source last changed.  Only a row that reports a value (``actual`` or no
+    when the row's ``as_of_date`` starts after the source's latest date ends:
+    a value dated after its source last changed.  The latest date is
+    ``date``, or ``modified_at`` when later and read from structured metadata
+    (``modified_source`` in _SOURCE_DATE_METADATA_SOURCES): a page-head
+    "Updated:" line, which may be site chrome, never widens the window, so
+    the flag fails closed.  Only a row that reports a value (``actual`` or no
     type) is flagged: a ``forecast`` / ``target`` names a later period by
     design, and an ``estimate`` dated after its source is a projection too
     (:func:`classify_quant_row` reads it as projected), so those rows get
@@ -4660,8 +4668,10 @@ def quant_source_dates(quant: list[dict], sources: Sequence[Mapping[str, Any]]) 
         row["source_date"] = source["date"]
         if str(row.get("value_type") or "").strip().lower() in _SOURCE_DATE_PROJECTED_TYPES:
             continue
-        ends = [_period_bounds(value)[1] for value in (source.get("date"), source.get("modified_at"))
-                if _date_value(value)]
+        latest_dates = [source.get("date")]
+        if str(source.get("modified_source") or "") in _SOURCE_DATE_METADATA_SOURCES:
+            latest_dates.append(source.get("modified_at"))
+        ends = [_period_bounds(value)[1] for value in latest_dates if _date_value(value)]
         latest = max((end for end in ends if end is not None), default=None)
         stated_start = _loose_period_bounds(row.get("as_of_date"))[0]
         if latest is not None and stated_start is not None and stated_start > latest:
@@ -7237,8 +7247,9 @@ class _Engine:
 
         With RESEARCH_SOURCE_DATES a dated ledger row (TIME-2) publishes its
         ``date`` and, right after it, ``date_precision``, ``date_source`` and,
-        when present, ``modified_at`` / ``date_rejected``; an undated row keeps
-        ``date`` None and no other date key."""
+        when present, ``modified_at`` / ``modified_source`` /
+        ``date_rejected``; an undated row keeps ``date`` None and no other
+        date key."""
         rows: list[dict] = []
         demoted = 0
         quotes = self._evidence_support_quotes() if self.evidence_supports else {}
