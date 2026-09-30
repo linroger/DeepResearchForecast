@@ -8590,7 +8590,8 @@ class PipelineOrchestrator:
         no record for this window (the card then flags it whenever earlier attempts spent
         in it). Knob off → nothing at all.
         """
-        if not bool(getattr(Config, "COST_CARD_ENABLED", True)) or not self._tel_path:
+        if (not bool(getattr(Config, "COST_CARD_ENABLED", True))
+                or not getattr(self, "_tel_path", None)):
             return
         try:
             from ..utils.cost_accounting import COST_CARD_WINDOWS_OPTION, cost_card_window_record

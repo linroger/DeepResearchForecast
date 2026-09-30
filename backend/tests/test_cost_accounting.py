@@ -999,6 +999,12 @@ def test_write_cost_card_never_raises(roots, monkeypatch):
     orch._note_cost_card_window(state, "report", started)
     assert state.options[ca.COST_CARD_WINDOWS_OPTION] == {
         "report": {"started_at": started, "earlier_calls": 0}}
+    # An instance built without __init__ (as the seed-ensemble tests do) has no telemetry
+    # attributes at all: still no record and no exception.
+    bare = po.PipelineOrchestrator.__new__(po.PipelineOrchestrator)
+    fresh = _report_state("pipe_eval18bare")
+    bare._note_cost_card_window(fresh, "ensemble", started)
+    assert ca.COST_CARD_WINDOWS_OPTION not in fresh.options
 
 
 def test_telemetry_failure_still_writes_the_card(roots, monkeypatch):
