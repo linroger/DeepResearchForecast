@@ -6236,6 +6236,7 @@ class _Engine:
         refused = tools.get("search_refused")
         if refused:
             detail += f"; search provider refused: {refused[0]} {refused[1]}"
+        detail += _pit_starvation_detail(self.tools.stats().get("pit"))
         self.state.reset_kiqs()
         self.records.clear()
         self.state.set_phase("gather", "failed", f"no sourced evidence ({detail})")
@@ -8997,6 +8998,30 @@ def _pit_policy(env: Mapping[str, Any] | None) -> rg.PitPolicy | None:
                         undated="flag" if undated == "flag" else "drop",
                         provider_bounds=_env_flag(env, "RESEARCH_PIT_PROVIDER_BOUNDS", True),
                         overfetch=max(1, min(4, overfetch)) if overfetch is not None else 1)
+
+
+def _pit_starvation_detail(pit: Any) -> str:
+    """The point-in-time part of an ``evidence_unavailable`` detail (TIME-8):
+    what the gates of a gated hindcast kept out (withheld pages are neither
+    fetches nor failures, so the failure counts alone read as healthy), and
+    the undated policy that would admit them when undated withholds dominate.
+    ``pit`` is the tools' ``stats()["pit"]``; "" without the gates."""
+    if not isinstance(pit, Mapping):
+        return ""
+
+    def count(name: str) -> int:
+        value = pit.get(name)
+        return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+    late, undated = count("fetch_late_withheld"), count("fetch_undated_withheld")
+    detail = (f"; point-in-time gates withheld {late} late and {undated} undated pages, refused "
+              f"{count('fetch_prefetch_refused')} fetches before fetching and dropped "
+              f"{count('search_late_dropped')} late search rows ({count('no_in_window_results')} searches "
+              "had no in-window result)")
+    if undated > late:
+        detail += ("; undated withholds dominate: a hindcast admitted with PIT_UNDATED_POLICY=flag stores "
+                   "undated pages labelled unverifiable")
+    return detail
 
 
 def _default_tools_factory(ledger: rg.SourceLedger, pages_dir: Path, bridge: Any, plog: Any,

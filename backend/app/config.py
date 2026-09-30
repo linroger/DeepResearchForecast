@@ -655,8 +655,10 @@ class Config:
     PIT_UNDATED_POLICY = ('flag' if os.environ.get('PIT_UNDATED_POLICY', 'drop').strip().lower()
                           == 'flag' else 'drop')
     # TIME-8: ask the search provider for a date bound (Firecrawl tbs cd_max at the
-    # as-of; other providers cannot and are counted unbounded).  The primary control;
-    # the row gate still runs on every result.  Default on; only 0/false/no/off disable it.
+    # as-of; other providers cannot and are counted unbounded; a bounded request the
+    # provider rejects is retried once unbounded).  The primary control; the row gate
+    # still runs on every result, and gated search cache entries are keyed apart from
+    # live ones either way.  Default on; only 0/false/no/off disable it.
     PIT_PROVIDER_DATE_BOUNDS = os.environ.get(
         'PIT_PROVIDER_DATE_BOUNDS', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
     # TIME-8: rows requested per gated search = 5 x this (clamped 1..4), so dropped late

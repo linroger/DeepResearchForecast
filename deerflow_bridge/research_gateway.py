@@ -2600,9 +2600,11 @@ class SourceLedger:
         a copy of the row, or ``None`` for an unknown sid.
 
         A recorded status sticks (a withheld source is never re-admitted by a
-        later sighting), except that ``unverifiable`` becomes ``admitted`` once
-        a date shows the source was available.  The row is written only when
-        the status changed, and persists across reloads."""
+        later sighting), with two exceptions: ``unverifiable`` becomes
+        ``admitted`` once a date shows the source was available, and any status
+        becomes ``late`` once a date shows it was not (a known later date always
+        wins, so the gates fail closed; ``late`` itself never changes).  The row
+        is written only when the status changed, and persists across reloads."""
         if status not in PIT_STATUSES:
             raise ValueError(f"unknown pit_status {status!r}")
         with self._lock:
@@ -2610,7 +2612,8 @@ class SourceLedger:
             if row is None:
                 return None
             current = row.get("pit_status")
-            if current is None or (current == PIT_UNVERIFIABLE and status == PIT_ADMITTED):
+            if current != status and (current is None or status == PIT_LATE
+                                      or (current == PIT_UNVERIFIABLE and status == PIT_ADMITTED)):
                 row["pit_status"] = status
                 self._touch()
             return dict(row)
@@ -3553,16 +3556,25 @@ PIT_UNDATED_WITHHELD = "undated_withheld"
 PIT_UNVERIFIABLE = "unverifiable"
 PIT_STATUSES = (PIT_ADMITTED, PIT_SAME_DAY, PIT_LATE, PIT_UNDATED_WITHHELD, PIT_UNVERIFIABLE)
 # ResearchTools.stats()["pit"] counters (present only when the gates are on).
+# fetch_prefetch_refused counts fetches refused by a URL path date or a recorded
+# withhold (a ledger pit_status, or a row-less withhold of an earlier attempt);
+# fetch_withheld_repeat counts re-asks of a page withheld after a fetch in this run.
 PIT_COUNTERS = (
     "searches_bounded", "searches_unbounded", "search_late_dropped", "search_undated_shown",
-    "no_in_window_results", "fetch_prefetch_refused", "fetch_admitted", "fetch_same_day",
-    "fetch_late_withheld", "fetch_undated_withheld", "fetch_undated_admitted", "fetch_units_spent_withheld",
+    "no_in_window_results", "fetch_prefetch_refused", "fetch_withheld_repeat", "fetch_admitted",
+    "fetch_same_day", "fetch_late_withheld", "fetch_undated_withheld", "fetch_undated_admitted",
+    "fetch_units_spent_withheld",
 )
+# Beside the ledger: URLs withheld at fetch before they had a ledger row (so no
+# pit_status can hold the verdict), kept so a resumed attempt refuses them free.
+PIT_WITHHELD_FILE = "pit_withheld.json"
 # source_dates.gate verdicts (the module is imported lazily; see _source_dates).
 _GATE_ADMIT, _GATE_SAME_DAY, _GATE_LATE, _GATE_UNVERIFIABLE = "admit", "same_day", "late", "unverifiable"
 # Trusted suffix of a gated search row / page header, per verdict.
 _PIT_ROW_LABELS = {_GATE_SAME_DAY: " — same-day", _GATE_UNVERIFIABLE: " — undated"}
 _PIT_STATUS_LABELS = {PIT_SAME_DAY: " — same-day", PIT_UNVERIFIABLE: " — undated"}
+# The [S<n>] id opening each entry of a rendered search text.
+_SEARCH_ENTRY_SID_RE = re.compile(r"^\[S(\d+)\] ", re.M)
 # RESEARCH_FETCH_CALL_TIMEOUT_S: hard wall-clock bound of one production
 # web_fetch (``_default_fetch_fn``).  ``asyncio.run`` waits for the loop's
 # default executor at shutdown, so a hung ``to_thread`` parse, SDK call or DNS
@@ -3674,21 +3686,27 @@ def _extraction_failure_reason(text: str) -> str | None:
     return _extraction_classifier(text)
 
 
-def _default_search_fn(query: str, max_results: int, as_of: str | None = None) -> str:
+def _default_search_fn(query: str, max_results: int, as_of: str | None = None,
+                       provider_bound: bool = True) -> str:
     """``search_tools.web_search_impl`` (never raises; returns JSON text).
 
     A revisit reason is passed so the lane-level compact-repeat envelope of
     research_budget can never replace a payload: run-level dedup already lives
     in :class:`ResearchTools`.  ``as_of`` (TIME-8, a gated hindcast's
-    ``YYYY-MM-DD``) is forwarded only when given, and only to a deployed
-    search_tools that accepts it (an older one searches unbounded: its payload
-    then carries no provider date bound).
+    ``YYYY-MM-DD``: its own search cache entries and, unless ``provider_bound``
+    is False, a provider date bound) is forwarded only when given, and only to
+    a deployed search_tools that accepts it (an older one searches unbounded:
+    its payload then carries no provider date bound).
     """
     search_tools = importlib.import_module("search_tools")
-    if as_of is not None and _accepts_keyword(search_tools.web_search_impl, "as_of"):
-        return search_tools.web_search_impl(query, max_results, revisit_reason=_ENGINE_REVISIT_REASON,
-                                            as_of=as_of)
-    return search_tools.web_search_impl(query, max_results, revisit_reason=_ENGINE_REVISIT_REASON)
+    impl = search_tools.web_search_impl
+    if as_of is not None and _accepts_keyword(impl, "as_of"):
+        if provider_bound:
+            return impl(query, max_results, revisit_reason=_ENGINE_REVISIT_REASON, as_of=as_of)
+        if _accepts_keyword(impl, "provider_bound"):
+            return impl(query, max_results, revisit_reason=_ENGINE_REVISIT_REASON, as_of=as_of,
+                        provider_bound=False)
+    return impl(query, max_results, revisit_reason=_ENGINE_REVISIT_REASON)
 
 
 def _run_fetch_coroutine(factory: Callable[[], Any]) -> Any:
@@ -3872,7 +3890,7 @@ class PitPolicy:
 
 
 class _AgentCounters:
-    __slots__ =("searches", "fetches", "cached_searches", "cached_fetches", "failures")
+    __slots__ = ("searches", "fetches", "cached_searches", "cached_fetches", "failures")
 
     def __init__(self) -> None:
         self.searches = self.fetches = self.cached_searches = 0
@@ -3924,12 +3942,16 @@ class ResearchTools:
       as-of date gets an ``[S<n>]`` id or a stored page: a late search row is
       skipped before it is registered (render slots are filled window-first,
       and a search whose rows were all late says that is not evidence), a URL
-      dated late is refused before any budget is reserved, and a page whose
-      resolved dates are late (or, under ``undated == "drop"``, absent) is
-      withheld before it is stored.  Withholds are remembered for the run,
-      never booked as fetch failures and recorded as the ledger row's
-      ``pit_status`` (:meth:`SourceLedger.set_pit`) when the row exists;
-      ``stats()["pit"]`` counts every gate decision.
+      dated late is refused before any budget is reserved, and a page any of
+      whose dates is late (or, under ``undated == "drop"``, that has none) is
+      withheld before it is stored.  A later sighting that dates an already
+      registered source late marks it late too (its fetch is then refused, and
+      cached search texts showing it are dropped).  Withholds are never
+      retried and never booked as fetch failures; they are recorded as the
+      ledger row's ``pit_status`` (:meth:`SourceLedger.set_pit`), or, for a
+      URL without a row, in :data:`PIT_WITHHELD_FILE` beside the ledger, so a
+      resumed attempt refuses them too; ``stats()["pit"]`` counts every gate
+      decision.
     """
 
     def __init__(self, ledger: SourceLedger, pages_dir: str | os.PathLike[str], *,
@@ -3989,10 +4011,20 @@ class ResearchTools:
         if pit is not None:
             self.source_dates = True
         self._pit_counts: dict[str, int] = dict.fromkeys(PIT_COUNTERS, 0)
-        # canonical URL -> the text a point-in-time withhold answered (never retried).
+        # canonical URL -> the text a withhold after a fetch in this run answered (never retried).
         self._pit_withheld: dict[str, str] = {}
-        # Inspected once: only a search function taking as_of gets a provider date bound.
+        # canonical URL -> (URL, pit_status) of a URL withheld without a ledger row, in
+        # this or an earlier attempt (persisted in PIT_WITHHELD_FILE beside the ledger).
+        self._pit_saved_lock = threading.Lock()
+        ledger_path = getattr(ledger, "path", None)
+        self._pit_saved_path = (Path(ledger_path).with_name(PIT_WITHHELD_FILE)
+                                if pit is not None and isinstance(ledger_path, (str, os.PathLike)) else None)
+        self._pit_saved: dict[str, tuple[str, str]] = self._load_pit_saved()
+        # Inspected once: only a search function taking as_of gets the as-of (its
+        # cache scope and, with provider bounds, a provider date bound); one also
+        # taking provider_bound is told when the policy wants no bound.
         self._search_takes_as_of = pit is not None and _accepts_keyword(self._search_fn, "as_of")
+        self._search_takes_unbounded = pit is not None and _accepts_keyword(self._search_fn, "provider_bound")
 
     # ---------------------------------------------------------------- helpers
     def _log(self, kind: str, message: str) -> None:
@@ -4137,53 +4169,88 @@ class ResearchTools:
             self._log("warn", f"point-in-time dates unreadable for {url[:120]} ({type(exc).__name__})")
             return _GATE_UNVERIFIABLE
 
-    def _pit_search_verdict(self, item: Mapping[str, Any]) -> str:
-        """A search row's verdict, decided before it is registered: every date
-        field the provider sent, the URL path date and, for a source already in
-        the ledger, its recorded dates (a source withheld as late stays late)."""
+    def _pit_status(self, key: str, row: Mapping[str, Any] | None) -> str | None:
+        """The recorded withhold of a source: its ledger row's pit_status, else
+        a row-less withhold (:data:`PIT_WITHHELD_FILE`) of its canonical URL."""
+        status = row.get("pit_status") if row is not None else None
+        if status:
+            return str(status)
+        with self._pit_saved_lock:
+            saved = self._pit_saved.get(key)
+        return saved[1] if saved is not None else None
+
+    def _pit_search_verdict(self, item: Mapping[str, Any]) -> tuple[str, dict | None]:
+        """A search row's verdict, decided before it is registered, and the
+        source's ledger row (None when it has none): every date field the
+        provider sent, the URL path date and, for a source already in the
+        ledger, its recorded dates (a source recorded as late stays late)."""
         url = str(item.get("url") or "").strip()
         known = self.ledger.find(url) if url else None
-        if known is not None and known.get("pit_status") == PIT_LATE:
-            return _GATE_LATE
+        if url and self._pit_status(canonical_url(url), known) == PIT_LATE:
+            return _GATE_LATE, known
         values = [item.get(key) for key in ("published", "publishedDate", "published_date", "date")
                   if item.get(key) is not None and not isinstance(item.get(key), (bool, Mapping, list))]
         if known is not None:
             values += [known.get("published"), known.get("modified_at")]
-        return self._pit_verdict(values, url)
+        return self._pit_verdict(values, url), known
 
     def _pit_page_verdict(self, url: str, text: str, fetch_meta: Mapping[str, Any]) -> str:
-        """A fetched page's verdict, decided before it is stored: the dates
-        TIME-2 resolves for it (metadata, and with ``date_text_fallback`` its
-        head datelines, published and modified), the URL path date and the
-        dates its ledger row already holds, the latest of them all counting."""
+        """A fetched page's verdict, decided before it is stored, on the latest
+        of every date known for it: each metadata and page-head dateline
+        candidate (published or modified, whatever its rank, and whatever
+        ``date_text_fallback`` says: the gate fails closed), read as the latest
+        day it is consistent with (a date after today counts, as after any
+        as-of), the URL path date and the dates its ledger row already holds.
+        The TIME-2 pick (:meth:`_page_dates`) stays the displayed date only."""
         module = _source_dates()
         if module is None:
             return _GATE_UNVERIFIABLE
         try:
-            candidates = module.from_fetch_meta(fetch_meta)
-            if self.date_text_fallback:
-                candidates += module.from_text_head(text) + module.from_url(url)
-            resolved = module.resolve(candidates, now=self._clock())
+            candidates = module.from_fetch_meta(fetch_meta) + module.from_text_head(text)
         except Exception as exc:  # noqa: BLE001 — an unreadable date is no date
             self._log("warn", f"point-in-time dates unreadable for {url[:120]} ({type(exc).__name__})")
             return _GATE_UNVERIFIABLE
-        values: list[Any] = [resolved["published"], resolved["modified"]]
+        values: list[Any] = [candidate[3] for candidate in candidates]
         known = self.ledger.find(url)
         if known is not None:
             values += [known.get("published"), known.get("modified_at")]
         return self._pit_verdict(values, url)
 
+    def _pit_mark_late(self, sid: int) -> None:
+        """Record a registered source as late (pit_status; any later fetch is
+        refused) and drop the cached search texts that show it, so a repeated
+        query re-renders without it instead of serving its row and snippet."""
+        row = self.ledger.set_pit(sid, PIT_LATE)
+        if row is None or row.get("pit_status") != PIT_LATE:
+            return
+        sid = str(row["sid"])
+        with self._lock:
+            stale = [key for key, text in self._search_cache.items()
+                     if sid in _SEARCH_ENTRY_SID_RE.findall(text)]
+            for key in stale:
+                del self._search_cache[key]
+
+    def _shows_late_source(self, text: str) -> bool:
+        """True when a rendered search text shows a source now marked late."""
+        for sid in _SEARCH_ENTRY_SID_RE.findall(text):
+            row = self.ledger.get(int(sid))
+            if row is not None and row.get("pit_status") == PIT_LATE:
+                return True
+        return False
+
     def _pit_refusal(self, url: str, key: str) -> str | None:
         """The answer to a fetch the gates refuse before any budget is reserved
-        (``None`` when it may be fetched): a URL withheld earlier in this run,
-        a URL whose path date is late, or a ledger row already withheld (late,
-        or undated under ``drop``; e.g. after a resume).  Never counted as a
-        fetch or a failure."""
+        (``None`` when it may be fetched): a URL withheld after a fetch earlier
+        in this run (counted as a repeat), else a URL whose path date is late
+        or a source whose withhold is recorded (a ledger pit_status of late or
+        undated_withheld, or a row-less withhold; e.g. after a resume), counted
+        as refused before a fetch.  Never counted as a fetch or a failure."""
         with self._lock:
             text = self._pit_withheld.get(key)
+        counter = "fetch_withheld_repeat"
         if text is None:
-            row = self.ledger.find(url)
-            status = row.get("pit_status") if row is not None else None
+            counter = "fetch_prefetch_refused"
+            status = self._pit_status(key, self.ledger.find(url))
             if self._pit_verdict((), url) == _GATE_LATE:
                 text = MSG_OUT_OF_WINDOW
             elif status == PIT_LATE:
@@ -4192,9 +4259,7 @@ class ResearchTools:
                 text = MSG_FETCH_WITHHELD_UNDATED
             else:
                 return None
-            with self._lock:
-                text = self._pit_withheld.setdefault(key, text)
-        self._pit_count("fetch_prefetch_refused")
+        self._pit_count(counter)
         self._log("result", f"web_fetch → {text.split(':', 1)[0]} (point in time, not fetched)")
         return text
 
@@ -4202,8 +4267,9 @@ class ResearchTools:
         """The FETCH_WITHHELD answer for a fetched page the gates keep out
         (``None`` when it may be stored).  The page is not stored and not
         marked fetched; its reserved fetch unit stays spent; the withhold is
-        remembered for the run and recorded as the ledger row's pit_status when
-        the row exists (a URL first seen here gets no row, hence no [S<n>])."""
+        remembered for the run and recorded as the ledger row's pit_status, or,
+        for a URL first seen here (it gets no row, hence no [S<n>]), in
+        :data:`PIT_WITHHELD_FILE`."""
         if verdict == _GATE_LATE:
             text, status, counter = MSG_FETCH_WITHHELD_LATE, PIT_LATE, "fetch_late_withheld"
         elif verdict == _GATE_UNVERIFIABLE and self.pit.undated == "drop":
@@ -4211,7 +4277,11 @@ class ResearchTools:
         else:
             return None
         row = self.ledger.find(url)
-        if row is not None:
+        if row is None:
+            self._save_pit_withhold(url, key, status)
+        elif status == PIT_LATE:
+            self._pit_mark_late(row["sid"])
+        else:
             self.ledger.set_pit(row["sid"], status)
         with self._lock:
             self._pit_withheld[key] = text
@@ -4219,6 +4289,51 @@ class ResearchTools:
             self._pit_counts["fetch_units_spent_withheld"] += 1
         self._log("result", f"web_fetch → {text.split(':', 1)[0]}")
         return text
+
+    def _load_pit_saved(self) -> dict[str, tuple[str, str]]:
+        """The row-less withholds :data:`PIT_WITHHELD_FILE` holds (canonical
+        URL -> (URL, pit_status); canonical identities are recomputed, as the
+        ledger does).  Empty without the gates, without the file or when it is
+        unreadable (those URLs are then fetched again and withheld again)."""
+        if self._pit_saved_path is None:
+            return {}
+        try:
+            data = json.loads(self._pit_saved_path.read_text("utf-8"))
+        except FileNotFoundError:
+            return {}
+        except (OSError, ValueError) as exc:
+            self._log("warn", f"point-in-time withholds unreadable ({type(exc).__name__}); "
+                              "they are fetched again")
+            return {}
+        saved: dict[str, tuple[str, str]] = {}
+        for entry in data if isinstance(data, list) else []:
+            if not isinstance(entry, Mapping):
+                continue
+            url, status = str(entry.get("url") or "").strip(), entry.get("pit_status")
+            if url and status in (PIT_LATE, PIT_UNDATED_WITHHELD):
+                key = canonical_url(url)
+                if key not in saved or status == PIT_LATE:
+                    saved[key] = (url, status)
+        return saved
+
+    def _save_pit_withhold(self, url: str, key: str, status: str) -> None:
+        """Record a row-less withhold for this run and in :data:`PIT_WITHHELD_FILE`
+        (atomic; a write failure is logged and the run continues: the withhold
+        still holds for this run).  A recorded late withhold never changes."""
+        with self._pit_saved_lock:
+            previous = self._pit_saved.get(key)
+            if previous is not None and previous[1] in (status, PIT_LATE):
+                return
+            self._pit_saved[key] = (url, status)
+            if self._pit_saved_path is None:
+                return
+            entries = [{"url": saved_url, "pit_status": saved_status}
+                       for _key, (saved_url, saved_status) in sorted(self._pit_saved.items())]
+            try:
+                _atomic_write_text(self._pit_saved_path, json.dumps(entries, ensure_ascii=False, indent=1))
+            except OSError as exc:
+                self._log("warn", f"point-in-time withholds not saved ({type(exc).__name__}); "
+                                  "a resumed attempt fetches them again")
 
     def _pit_admit(self, row: dict, verdict: str) -> dict:
         """Record a stored page's verdict (admitted, same-day, or unverifiable
@@ -4321,7 +4436,10 @@ class ResearchTools:
             # later fetch's higher-ranked date reaches the ledger, sources.json,
             # the digest and the fetch header, not this cached search text.
             with self._lock:
-                self._search_cache[key] = text
+                # Gated (TIME-8): never a text showing a source marked late while it
+                # was rendered (checked under the lock _pit_mark_late drops texts under).
+                if self.pit is None or not self._shows_late_source(text):
+                    self._search_cache[key] = text
         else:
             self._failure(agent_id)
         label = text.split(":", 1)[0].split("(", 1)[0]
@@ -4331,14 +4449,19 @@ class ResearchTools:
     def _call_search(self, clean: str) -> Any:
         """One backend search.  Gated (TIME-8): ``overfetch`` times the rows, so
         the render slots can be filled with in-window rows, and the as-of date
-        for a provider bound when the policy asks for one and the search
-        function accepts it."""
+        for a search function that accepts it: it scopes the search's cache
+        entries to the as-of whatever the policy says, and asks the provider
+        for a date bound unless the policy turns provider bounds off (then
+        ``provider_bound=False``, for a function that accepts it)."""
         pit = self.pit
         if pit is None:
             return self._search_fn(clean, SEARCH_RESULTS_PER_QUERY)
         rows = SEARCH_RESULTS_PER_QUERY * pit.overfetch
-        if pit.provider_bounds and self._search_takes_as_of:
-            return self._search_fn(clean, rows, as_of=pit.as_of.isoformat())
+        if self._search_takes_as_of:
+            if pit.provider_bounds:
+                return self._search_fn(clean, rows, as_of=pit.as_of.isoformat())
+            if self._search_takes_unbounded:
+                return self._search_fn(clean, rows, as_of=pit.as_of.isoformat(), provider_bound=False)
         return self._search_fn(clean, rows)
 
     def _render_search(self, raw: Any, agent_id: str) -> tuple[str, bool, int]:
@@ -4346,9 +4469,11 @@ class ResearchTools:
 
         Gated (TIME-8), each row's verdict is decided before it is registered:
         a late row gets no sid and no render slot (the SEARCH_RESULTS_PER_QUERY
-        and SEARCH_RENDER_CHARS caps apply to the rows that remain), an undated
-        or same-day row is labelled, and a payload whose every row was late
-        answers NO_IN_WINDOW_RESULTS (cacheable, like an empty search)."""
+        and SEARCH_RENDER_CHARS caps apply to the rows that remain; a late
+        sighting of a source already registered records its date and marks it
+        late), an undated or same-day row is labelled, and a payload whose
+        every row was late answers NO_IN_WINDOW_RESULTS (cacheable, like an
+        empty search)."""
         # Every empty answer (a "no results" error, an empty or unusable result
         # list) gets the same text: the coverage variant with absence discipline.
         no_results = MSG_NO_RESULTS_COVERAGE if self.absence_discipline else MSG_NO_RESULTS
@@ -4380,15 +4505,26 @@ class ResearchTools:
                 break
             if not isinstance(item, Mapping):
                 continue
-            verdict = self._pit_search_verdict(item) if self.pit is not None else None
+            verdict, known = self._pit_search_verdict(item) if self.pit is not None else (None, None)
             if verdict == _GATE_LATE:
                 late += 1
+                if known is not None and known.get("pit_status") != PIT_LATE:
+                    # A source registered while its date was unknown (or in window):
+                    # this sighting dates it late, so it is never fetched.
+                    if self.source_dates:
+                        self._search_row_dates(known, item)
+                    self._pit_mark_late(known["sid"])
                 continue
             snippet = _collapse(_clean_web_text(item.get("content") or item.get("snippet") or ""),
                                 SEARCH_SNIPPET_CHARS)
             row = self.ledger.register(item.get("url"), item.get("title"), snippet, "search", agent_id)
             if row is None:
                 continue
+            if self.pit is not None and known is None:
+                # A URL withheld undated before it had a row keeps that verdict.
+                saved = self._pit_status(row["canonical"], None)
+                if saved is not None:
+                    row = self.ledger.set_pit(row["sid"], saved) or row
             if self.source_dates:
                 row = self._search_row_dates(row, item)
             entry = (f"[S{row['sid']}] {row['title']} — {row['domain']} ({tier_label(row['tier'])})"

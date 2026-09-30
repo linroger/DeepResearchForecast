@@ -2886,9 +2886,21 @@ def test_capture_pins_configs_pit_gates_normalized(monkeypatch):
     ({}, {}),
     ({"gates": False, "same_day": "include"}, {}),
     ({"gates": "true"}, {}),  # only a real True turns the gates on
+    # A pin missing a key reads it as its admission default (provider bounds on).
     ({"gates": True}, {"RESEARCH_PIT_GATES": "true", "RESEARCH_PIT_SAME_DAY": "exclude",
-                       "RESEARCH_PIT_UNDATED": "drop", "RESEARCH_PIT_PROVIDER_BOUNDS": "false",
+                       "RESEARCH_PIT_UNDATED": "drop", "RESEARCH_PIT_PROVIDER_BOUNDS": "true",
                        "RESEARCH_PIT_OVERFETCH": "1", "RESEARCH_SOURCE_DATES": "true"}),
+    ({"gates": True, "provider_bounds": None}, {"RESEARCH_PIT_GATES": "true", "RESEARCH_PIT_SAME_DAY": "exclude",
+                                                "RESEARCH_PIT_UNDATED": "drop", "RESEARCH_PIT_PROVIDER_BOUNDS": "true",
+                                                "RESEARCH_PIT_OVERFETCH": "1", "RESEARCH_SOURCE_DATES": "true"}),
+    # Only a real False turns the provider bound off.
+    ({"gates": True, "provider_bounds": "false"}, {"RESEARCH_PIT_GATES": "true", "RESEARCH_PIT_SAME_DAY": "exclude",
+                                                   "RESEARCH_PIT_UNDATED": "drop",
+                                                   "RESEARCH_PIT_PROVIDER_BOUNDS": "true",
+                                                   "RESEARCH_PIT_OVERFETCH": "1", "RESEARCH_SOURCE_DATES": "true"}),
+    ({"gates": True, "provider_bounds": False}, {"RESEARCH_PIT_GATES": "true", "RESEARCH_PIT_SAME_DAY": "exclude",
+                                                 "RESEARCH_PIT_UNDATED": "drop", "RESEARCH_PIT_PROVIDER_BOUNDS": "false",
+                                                 "RESEARCH_PIT_OVERFETCH": "1", "RESEARCH_SOURCE_DATES": "true"}),
     ({"gates": True, "same_day": "include", "undated": "flag", "provider_bounds": False, "overfetch": 3},
      {**_PIT_CHILD_ENV, "RESEARCH_SOURCE_DATES": "true"}),
     ({"gates": True, "same_day": "INCLUDE", "undated": "keep", "provider_bounds": True, "overfetch": "x"},

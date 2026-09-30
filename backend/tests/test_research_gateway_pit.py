@@ -108,25 +108,33 @@ def test_pit_policy_validates_its_fields(tmp_path):
         rg.ResearchTools(rg.SourceLedger(tmp_path / "l.json"), tmp_path / "pages", pit={"as_of": AS_OF})
 
 
-def test_set_pit_sticks_except_unverifiable_to_admitted_and_survives_a_reload(tmp_path):
+def test_set_pit_sticks_except_unverifiable_to_admitted_and_anything_to_late(tmp_path):
     path = tmp_path / "l.json"
     ledger = rg.SourceLedger(path)
     late = ledger.register("https://a.example/x", "A")["sid"]
     flagged = ledger.register("https://b.example/y", "B")["sid"]
+    withheld = ledger.register("https://c.example/z", "C")["sid"]
     assert ledger.set_pit(late, "late")["pit_status"] == "late"
     # A recorded withhold is never re-admitted.
     for status in ("admitted", "same_day", "unverifiable", "undated_withheld"):
         assert ledger.set_pit(late, status)["pit_status"] == "late"
     assert ledger.set_pit(flagged, "unverifiable")["pit_status"] == "unverifiable"
-    assert ledger.set_pit(flagged, "late")["pit_status"] == "unverifiable"
+    assert ledger.set_pit(flagged, "undated_withheld")["pit_status"] == "unverifiable"
     assert ledger.set_pit(flagged, "admitted")["pit_status"] == "admitted"
-    assert ledger.set_pit(flagged, "unverifiable")["pit_status"] == "admitted"
+    for status in ("unverifiable", "same_day", "undated_withheld"):
+        assert ledger.set_pit(flagged, status)["pit_status"] == "admitted"
+    # A known later date always wins (fail closed), from any status.
+    assert ledger.set_pit(flagged, "late")["pit_status"] == "late"
+    assert ledger.set_pit(flagged, "admitted")["pit_status"] == "late"
+    assert ledger.set_pit(withheld, "undated_withheld")["pit_status"] == "undated_withheld"
+    assert ledger.set_pit(withheld, "admitted")["pit_status"] == "undated_withheld"
+    assert ledger.set_pit(withheld, "late")["pit_status"] == "late"
     assert ledger.set_pit(99, "late") is None
     with pytest.raises(ValueError):
         ledger.set_pit(late, "maybe")
     ledger.flush()
     reloaded = rg.SourceLedger(path)
-    assert (reloaded.get(late)["pit_status"], reloaded.get(flagged)["pit_status"]) == ("late", "admitted")
+    assert [reloaded.get(sid)["pit_status"] for sid in (late, flagged, withheld)] == ["late", "late", "late"]
 
 
 def test_tools_without_a_policy_have_no_gates(tmp_path):
@@ -288,6 +296,20 @@ def test_default_search_fn_forwards_as_of_only_when_given(monkeypatch):
         web_search_impl=lambda query, max_results=10, revisit_reason="": old.append(max_results) or "{}"))
     assert rg._default_search_fn("q", 15, as_of="2024-06-01") == "{}" and old == [15]
 
+    # Provider bounds off: the as-of still scopes the search (provider_bound=False).
+    scoped = []
+
+    def scoped_impl(query, max_results=10, revisit_reason="", as_of=None, provider_bound=True):
+        scoped.append((as_of, provider_bound))
+        return "{}"
+
+    monkeypatch.setattr(rg.importlib, "import_module", lambda name: types.SimpleNamespace(
+        web_search_impl=scoped_impl))
+    rg._default_search_fn("q", 15, as_of="2024-06-01", provider_bound=False)
+    rg._default_search_fn("q", 15, as_of="2024-06-01")
+    rg._default_search_fn("q", 5, provider_bound=False)
+    assert scoped == [("2024-06-01", False), ("2024-06-01", True), (None, True)]
+
 
 # =============================================================== fetch gate
 
@@ -329,9 +351,11 @@ def test_a_page_updated_after_as_of_is_withheld_and_stays_withheld(tmp_path):
     assert (stats["fetches"], stats["failures"]) == (1, 0)
     outcomes = tools.outcome_counts()
     assert (outcomes["fetch_ok"], outcomes["fetch_content"], outcomes["fetch_unavailable"]) == (0, 0, 0)
+    # The re-ask is a repeat of a withhold, not a refusal before a fetch.
     assert {key: stats["pit"][key] for key in ("fetch_late_withheld", "fetch_units_spent_withheld",
-                                               "fetch_prefetch_refused")} == {
-        "fetch_late_withheld": 1, "fetch_units_spent_withheld": 1, "fetch_prefetch_refused": 1}
+                                               "fetch_withheld_repeat", "fetch_prefetch_refused")} == {
+        "fetch_late_withheld": 1, "fetch_units_spent_withheld": 1, "fetch_withheld_repeat": 1,
+        "fetch_prefetch_refused": 0}
 
     ledger.flush()
     reloaded = rg.SourceLedger(ledger.path)
@@ -341,6 +365,7 @@ def test_a_page_updated_after_as_of_is_withheld_and_stays_withheld(tmp_path):
                                clock=lambda: NOW, pit=policy())
     assert resumed.fetch(url, agent_id="k1") == rg.MSG_OUT_OF_WINDOW_SOURCE
     assert fetch.urls == [url] and resumed.stats()["fetches"] == 0
+    assert resumed.stats()["pit"]["fetch_prefetch_refused"] == 1
     # ... and never shows it in a search again.
     assert resumed.search("grid queues", agent_id="k1").startswith("NO_IN_WINDOW_RESULTS: 1 result was")
 
@@ -428,6 +453,220 @@ def test_unreadable_dates_are_undated_not_admitted(tmp_path, monkeypatch):
     # Without the dating module nothing can be verified: labelled at search, withheld at fetch.
     assert tools.search("grid queues", agent_id="k1").split("\n", 1)[0].endswith(" — undated")
     assert tools.fetch("https://site0.example/page-0", agent_id="k1") == rg.MSG_FETCH_WITHHELD_UNDATED
+
+
+def _by_query(query, n):
+    """First sighting of site0 undated; a later query dates it after the as-of."""
+    rows = {"grid first": [hit(0)], "grid other": [hit(1, published="2024-05-01")],
+            "grid second": [hit(0, published="2024-08-01"), hit(2, published="2024-05-02")]}[query]
+    return json.dumps({"query": query, "results": rows})
+
+
+@pytest.mark.parametrize("undated, page", [
+    ("drop", dated_page("Published: 2024-01-01")),  # its own dates would admit it
+    ("flag", UNDATED_PAGE),                         # flag would store it as unverifiable
+])
+def test_a_late_sighting_of_a_registered_source_refuses_its_fetch(tmp_path, undated, page):
+    fetch = CountingFetch(page)
+    tools, ledger = make_tools(tmp_path, pit=policy(undated=undated), search_fn=_by_query, fetch_fn=fetch)
+    url = "https://site0.example/page-0"
+
+    assert tools.search("grid first", agent_id="k1").split("\n", 1)[0].endswith(" — undated")
+    assert "pit_status" not in ledger.get(1)
+    assert entry_titles(tools.search("grid second", agent_id="k1")) == ["[S2] Hit 2"]
+
+    row = ledger.get(1)
+    # The late date is recorded and the source is marked late.
+    assert (row["pit_status"], row["published"], row["fetched"]) == ("late", "2024-08-01", False)
+    before = tools.stats()
+    assert tools.fetch(url, agent_id="k1") == rg.MSG_OUT_OF_WINDOW_SOURCE
+    after = tools.stats()
+    assert fetch.urls == [] and pages_on_disk(tools) == []
+    assert (after["fetches"], after["failures"]) == (before["fetches"], before["failures"]) == (0, 0)
+    assert after["pit"]["fetch_prefetch_refused"] == 1 and after["pit"]["search_late_dropped"] == 1
+    ledger.flush()
+    assert rg.SourceLedger(ledger.path).get(1)["pit_status"] == "late"
+
+
+def test_a_late_sighting_after_a_store_marks_the_source_late_and_drops_its_cached_searches(tmp_path):
+    fetch = CountingFetch(UNDATED_PAGE)
+    tools, ledger = make_tools(tmp_path, pit=policy(undated="flag"), search_fn=_by_query, fetch_fn=fetch)
+    url = "https://site0.example/page-0"
+    tools.search("grid first", agent_id="k1")
+    tools.search("grid other", agent_id="k1")
+    assert tools.fetch(url, agent_id="k1").startswith("[S1] ")
+    assert ledger.get(1)["pit_status"] == "unverifiable"
+
+    tools.search("grid second", agent_id="k1")
+
+    assert ledger.get(1)["pit_status"] == "late"
+    # The stored copy is no longer served, and nothing is fetched.
+    assert tools.fetch(url, agent_id="k2") == rg.MSG_OUT_OF_WINDOW_SOURCE and fetch.urls == [url]
+    # The cached search text that showed [S1] is gone: the query is searched and rendered again.
+    again = tools.search("grid first", agent_id="k2")
+    assert not again.startswith(rg._CACHED_SEARCH_NOTE) and "[S1]" not in again
+    assert again.startswith("NO_IN_WINDOW_RESULTS: 1 result was")
+    # A cached text that never showed it is kept.
+    assert tools.search("grid other", agent_id="k2").startswith(rg._CACHED_SEARCH_NOTE)
+
+
+def test_a_withheld_late_page_leaves_no_cached_search_text_behind(tmp_path):
+    fetch = CountingFetch(dated_page("Published: 2024-05-01", "Updated: 2024-07-15"))
+    tools, _ledger = make_tools(tmp_path, pit=policy(), search_fn=searcher(hit(0, published="2024-05-01"), hit(1)),
+                                fetch_fn=fetch)
+    first = tools.search("grid queues", agent_id="k1")
+    assert entry_titles(first) == ["[S1] Hit 0", "[S2] Hit 1"]
+    assert tools.fetch("https://site0.example/page-0", agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
+
+    again = tools.search("grid queues", agent_id="k2")
+
+    assert not again.startswith(rg._CACHED_SEARCH_NOTE)
+    assert entry_titles(again) == ["[S2] Hit 1"] and "snippet 0" not in again
+    assert tools.stats()["searches"] == 2
+
+
+def test_a_search_text_showing_a_source_marked_late_meanwhile_is_not_cached(tmp_path, monkeypatch):
+    tools, ledger = make_tools(tmp_path, pit=policy(), search_fn=searcher(hit(0, published="2024-05-01"), hit(1)))
+    render = tools._render_search
+
+    def render_then_withhold(raw, agent_id):
+        rendered = render(raw, agent_id)
+        # A concurrent fetch withholds [S1] after this text was rendered, before it is cached.
+        tools._pit_mark_late(1)
+        return rendered
+
+    monkeypatch.setattr(tools, "_render_search", render_then_withhold)
+    assert entry_titles(tools.search("grid queues", agent_id="k1")) == ["[S1] Hit 0", "[S2] Hit 1"]
+    monkeypatch.setattr(tools, "_render_search", render)
+    again = tools.search("grid queues", agent_id="k2")
+    assert not again.startswith(rg._CACHED_SEARCH_NOTE) and entry_titles(again) == ["[S2] Hit 1"]
+    assert ledger.get(1)["pit_status"] == "late"
+
+
+@pytest.mark.parametrize("result", [
+    # A lower-ranked page-head dateline after the as-of beats a metadata date before it.
+    (dated_page("Updated: 2024-07-15"), {"article:published_time": "2024-01-01",
+                                          "article:modified_time": "2024-02-01"}),
+    (dated_page("Published: 2024-07-15"), {"article:published_time": "2024-01-01"}),
+    # An HTML <time> candidate (rank 4) after the as-of counts too.
+    (UNDATED_PAGE, {"article:published_time": "2024-01-01",
+                    "html_dates": [[4, "time_tag", "published", "2024-09-01"]]}),
+    # A date after today is after any as-of (TIME-2's display pick rejects it as future).
+    (UNDATED_PAGE, {"article:published_time": "2024-01-01", "article:modified_time": "2026-12-01"}),
+    (UNDATED_PAGE, {"article:modified_time": "2026-12-01"}),
+])
+@pytest.mark.parametrize("undated", ["drop", "flag"])
+def test_any_known_date_after_as_of_withholds_the_page(tmp_path, result, undated):
+    tools, ledger = make_tools(tmp_path, pit=policy(undated=undated), fetch_fn=CountingFetch(result))
+    assert tools.fetch("https://a.example/story", agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
+    assert pages_on_disk(tools) == [] and len(ledger) == 0
+    pit = tools.stats()["pit"]
+    assert (pit["fetch_late_withheld"], pit["fetch_undated_withheld"], pit["fetch_undated_admitted"]) == (1, 0, 0)
+
+
+def test_page_head_datelines_gate_even_without_the_text_date_fallback(tmp_path):
+    fetch = CountingFetch((dated_page("Updated: 2024-07-15"), {"article:published_time": "2024-01-01"}))
+    tools, _ledger = make_tools(tmp_path, pit=policy(), fetch_fn=fetch)
+    tools.date_text_fallback = False
+    assert tools.fetch("https://a.example/story", agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
+
+    # Every date before the as-of: admitted, and the displayed date is still TIME-2's pick.
+    admitted = CountingFetch((dated_page("Updated: 2024-03-01"), {"article:published_time": "2024-01-01"}))
+    tools, ledger = make_tools(tmp_path, pit=policy(), fetch_fn=admitted, name="ok")
+    assert tools.fetch("https://a.example/story", agent_id="k1").startswith(
+        "[S1] Grid connection report — a.example (tier 3) — published 2024-01-01; updated 2024-03-01 — full page")
+    assert ledger.get(1)["pit_status"] == "admitted"
+
+
+def test_a_withhold_without_a_row_holds_across_a_resume(tmp_path):
+    late_url, undated_url = "https://a.example/story", "https://b.example/data"
+    pages = {late_url: dated_page("Published: 2024-08-01"), undated_url: UNDATED_PAGE}
+    fetched: list[str] = []
+
+    def fetch(url):
+        fetched.append(url)
+        return pages[url]
+
+    tools, ledger = make_tools(tmp_path, pit=policy(), fetch_fn=fetch)
+    assert tools.fetch(late_url, agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
+    assert tools.fetch(undated_url, agent_id="k1") == rg.MSG_FETCH_WITHHELD_UNDATED
+    assert len(ledger) == 0
+    saved = json.loads((tmp_path / "t" / rg.PIT_WITHHELD_FILE).read_text(encoding="utf-8"))
+    assert saved == [{"url": late_url, "pit_status": "late"}, {"url": undated_url, "pit_status": "undated_withheld"}]
+
+    rows = [{"title": "Late", "url": late_url, "content": "late"},
+            {"title": "Data", "url": undated_url, "content": "data"}]
+    resumed = rg.ResearchTools(rg.SourceLedger(ledger.path), tmp_path / "t" / "pages", search_fn=searcher(*rows),
+                               fetch_fn=fetch, clock=lambda: NOW, pit=policy())
+    # Refused before any budget, never fetched again.
+    assert resumed.fetch(late_url, agent_id="k1") == rg.MSG_OUT_OF_WINDOW_SOURCE
+    assert resumed.fetch(undated_url + "/", agent_id="k1") == rg.MSG_FETCH_WITHHELD_UNDATED
+    assert fetched == [late_url, undated_url] and resumed.stats()["fetches"] == 0
+    assert resumed.stats()["pit"]["fetch_prefetch_refused"] == 2
+    # A search never gives the late URL an [S<n>]; the undated one keeps its verdict on its new row.
+    assert entry_titles(resumed.search("grid queues", agent_id="k1")) == ["[S1] Data"]
+    assert [(row["url"], row["pit_status"]) for row in resumed.ledger.rows()] == [(undated_url, "undated_withheld")]
+    assert resumed.stats()["pit"]["search_late_dropped"] == 1
+
+
+def test_an_unreadable_withhold_file_is_ignored(tmp_path):
+    path = tmp_path / "t" / rg.PIT_WITHHELD_FILE
+    path.parent.mkdir(parents=True)
+    path.write_text("not json", encoding="utf-8")
+    fetch = CountingFetch(dated_page("Published: 2024-05-01"))
+    tools, _ledger = make_tools(tmp_path, pit=policy(), fetch_fn=fetch)
+    assert tools.fetch("https://a.example/story", agent_id="k1").startswith("[S1] ")
+    # Without the gates the file is never read or written.
+    live, _ledger = make_tools(tmp_path, fetch_fn=CountingFetch(dated_page("Published: 2025-01-01")), name="live")
+    live.fetch("https://c.example/story", agent_id="k1")
+    assert not (tmp_path / "live" / rg.PIT_WITHHELD_FILE).exists()
+
+
+def test_an_unbounded_gated_search_keeps_the_as_of_for_its_cache_scope(tmp_path):
+    calls = []
+
+    def scoped(query, max_results, as_of=None, provider_bound=True):
+        calls.append((as_of, provider_bound))
+        return json.dumps({"results": [hit(0, published="2024-01-02")], "date_bound": "unsupported"})
+
+    unbounded, _ledger = make_tools(tmp_path, pit=policy(provider_bounds=False), search_fn=scoped, name="nb")
+    unbounded.search("q one", agent_id="a")
+    bounded, _ledger = make_tools(tmp_path, pit=policy(), search_fn=scoped, name="b")
+    bounded.search("q one", agent_id="a")
+    live, _ledger = make_tools(tmp_path, search_fn=scoped, name="live")
+    live.search("q one", agent_id="a")
+    assert calls == [("2024-06-01", False), ("2024-06-01", True), (None, True)]
+    assert unbounded.stats()["pit"]["searches_unbounded"] == 1
+
+
+def test_evidence_unavailable_names_what_the_gates_withheld():
+    assert lr._pit_starvation_detail(None) == ""
+    counts = dict.fromkeys(rg.PIT_COUNTERS, 0)
+    counts.update(fetch_late_withheld=1, fetch_undated_withheld=4, fetch_prefetch_refused=2,
+                  search_late_dropped=7, no_in_window_results=3)
+    undated = lr._pit_starvation_detail(counts)
+    assert undated == ("; point-in-time gates withheld 1 late and 4 undated pages, refused 2 fetches before "
+                       "fetching and dropped 7 late search rows (3 searches had no in-window result); undated "
+                       "withholds dominate: a hindcast admitted with PIT_UNDATED_POLICY=flag stores undated "
+                       "pages labelled unverifiable")
+    counts.update(fetch_late_withheld=5)
+    assert "PIT_UNDATED_POLICY" not in lr._pit_starvation_detail(counts)
+
+    phases = []
+    engine = types.SimpleNamespace(
+        _tool_failures=lambda: {"searches": 3, "search_failed": 0, "fetches": 0, "fetch_failed": 0},
+        tools=types.SimpleNamespace(stats=lambda: {"pit": counts}),
+        state=types.SimpleNamespace(reset_kiqs=lambda: None, set_phase=lambda *args: phases.append(args)),
+        records={})
+    with pytest.raises(lr._EngineFailure) as failure:
+        lr._Engine._fail_without_evidence(engine)
+    assert str(failure.value) == ("evidence_unavailable: no sourced evidence after gathering (0 of 3 searches "
+                                  "and 0 of 0 fetches failed" + lr._pit_starvation_detail(counts) + ")")
+    # Without the gates the detail is unchanged.
+    engine.tools = types.SimpleNamespace(stats=lambda: {"searches": 3})
+    with pytest.raises(lr._EngineFailure) as failure:
+        lr._Engine._fail_without_evidence(engine)
+    assert str(failure.value).endswith("(0 of 3 searches and 0 of 0 fetches failed)")
 
 
 # =============================================================== no policy: unchanged

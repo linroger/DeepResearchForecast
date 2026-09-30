@@ -111,7 +111,8 @@ def pit_research_env(pit: Any) -> dict[str, str]:
     ``RESEARCH_PIT_GATES`` / ``_SAME_DAY`` / ``_UNDATED`` / ``_PROVIDER_BOUNDS`` /
     ``_OVERFETCH`` plus ``RESEARCH_SOURCE_DATES=true`` (the gates read source dates).
     Values are normalized the way :func:`capture_pit_policy_v1` writes them, so a
-    hand-edited pin still reads strict.  The caller writes this only for a pinned
+    hand-edited pin still reads strict (a missing or unreadable ``provider_bounds``
+    reads as its default, on).  The caller writes this only for a pinned
     hindcast and removes every ambient ``RESEARCH_PIT_*`` key first.
     """
     if not isinstance(pit, Mapping) or pit.get("gates") is not True:
@@ -120,7 +121,8 @@ def pit_research_env(pit: Any) -> dict[str, str]:
         "RESEARCH_PIT_GATES": "true",
         "RESEARCH_PIT_SAME_DAY": "include" if pit.get("same_day") == "include" else "exclude",
         "RESEARCH_PIT_UNDATED": "flag" if pit.get("undated") == "flag" else "drop",
-        "RESEARCH_PIT_PROVIDER_BOUNDS": "true" if pit.get("provider_bounds") is True else "false",
+        # The provider bound is off only when the pin says False (its default is on).
+        "RESEARCH_PIT_PROVIDER_BOUNDS": "false" if pit.get("provider_bounds") is False else "true",
         "RESEARCH_PIT_OVERFETCH": str(_pit_overfetch(pit.get("overfetch", 1))),
         "RESEARCH_SOURCE_DATES": "true",
     }

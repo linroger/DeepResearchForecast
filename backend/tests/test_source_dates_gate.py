@@ -79,8 +79,11 @@ def test_relative_dates_resolve_against_the_clock(value, expected):
 
 
 def test_relative_dates_default_to_the_wall_clock():
-    today = dt.datetime.now(dt.timezone.utc).date()
-    assert sd.resolve_upper("yesterday") == today - dt.timedelta(days=1)
+    # Read before and after the call: a run crossing midnight UTC sees either day.
+    before = dt.datetime.now(dt.timezone.utc).date()
+    resolved = sd.resolve_upper("yesterday")
+    after = dt.datetime.now(dt.timezone.utc).date()
+    assert resolved in {before - dt.timedelta(days=1), after - dt.timedelta(days=1)}
 
 
 def test_availability_is_the_later_of_published_and_modified():
