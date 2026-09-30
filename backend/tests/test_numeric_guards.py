@@ -401,6 +401,9 @@ EV_SHARE = "The US EV share of new vehicle sales fails to recover above 10% by t
     ("Brent does not close the year above $100", "<=", 100.0, "settle"),
     ("Bitcoin does not trade above $150,000 at any point in 2026", "<=", 150000.0, "touch"),
     ("Resolves YES unless the rate exceeds 5%", "<=", 5.0, "unknown"),
+    ("Brent will likely not exceed $100 in 2027", "<=", 100.0, "unknown"),
+    ("Brent ends 2027 without exceeding $100", "<=", 100.0, "unknown"),
+    ("Brent ends 2027 without ever exceeding $100", "<=", 100.0, "unknown"),
     ("出口同比未超过10%", "<=", 10.0, "unknown"),
     ("人民币兑美元汇率不会跌破7.5", ">=", 7.5, "unknown"),
     ("上证指数没有突破3500点", "<=", 3500.0, "unknown"),
@@ -419,6 +422,11 @@ def test_negated_comparators_are_inverted(statement, comparator, threshold, even
     ("It is not clear whether Brent exceeds $100 in 2027", ">"),
     ("Brent does not fail to exceed $100 in 2027", ">"),  # two negators cancel
     ("If tariffs are not repealed, imports exceed $3 trillion in 2027", ">"),
+    # "not" / "without" inside the metric's noun phrase, not on the comparator (review round 2)
+    ("Share of global EVs not sold in China exceeds 40% in 2027", ">"),
+    ("Loans not performing exceed 5% of the book", ">"),
+    ("Loans that are not performing exceed 5% of the book", ">"),
+    ("Without subsidies EV share exceeds 30%", ">"),
     ("未来一年出口同比超过10%", ">"),
     ("出口不断突破10%", ">"),
     ("关税税率不超过20%", "<="),  # 不超过 is itself the comparator
@@ -518,6 +526,12 @@ def test_decline_verbs_do_not_suppress_level_comparators():
     ("US unemployment is 5% or more in 2027", ">=", 5.0, "unknown"),
     ("US unemployment is 4% or less in 2027", "<=", 4.0, "unknown"),
     ("Brent stays above $100 for at least 30 consecutive days in 2027", ">", 100.0, "touch"),
+    # report_1c312b400d33 F1 (review round 2): "equals or exceeds" is inclusive
+    ("The US realized average effective tariff rate equals or exceeds 10% in both FY2026 and FY2027 "
+     "per the NY Fed Liberty Street AETR series.", ">=", 10.0, "average"),
+    ("Brent meets or exceeds $100 in 2027", ">=", 100.0, "unknown"),
+    ("US unemployment is equal to or above 5% in 2027", ">=", 5.0, "unknown"),
+    ("US unemployment is equal to or below 4% in 2027", "<=", 4.0, "unknown"),
 ])
 def test_suffix_and_inclusive_comparators(statement, comparator, threshold, event):
     claim = ng.parse_threshold_claim(statement, "")
@@ -569,3 +583,99 @@ def test_live_runs_bind_undated_actuals_and_ended_periods():
         assert ng.check_binary(binary, today=TODAY)["latest_actual"] is not None, as_of
     assert ng.check_binary(dict(F13, latest_actual=dict(F13["latest_actual"], as_of="2026-Q4")),
                            today=TODAY)["latest_actual"] is None
+
+
+# ── latest actuals state one figure (review round 2) ──────────────────────────
+TARIFF_2026 = "The US effective tariff rate exceeds 10% at year-end 2026"  # its latest actual is 13.0%
+
+
+def _tariff_row(value):
+    # report_1c312b400d33's research quantitative.json states the rate as '2.6 → 13.0' (unit %)
+    return {"metric": "US effective tariff rate", "value": value, "unit": "%", "as_of_date": "2026-06-30",
+            "value_type": "actual", "source_ref": "S4"}
+
+
+@pytest.mark.parametrize("value", [
+    "2.6 → 13.0", "from 2.6% to 13.0%", "2.6% -> 13.0%", "rose from 2.6% to 13%", "2.6 ⇒ 13.0",
+    "从2.6%到13%", "由2.6%升至13%", "13% vs 2.6% a year earlier",
+])
+def test_a_trajectory_never_binds_as_the_latest_actual(value):
+    # llm_field path: the oldest figure (2.6) would read as a false "already violates > 10"
+    field = ng.check_binary(_binary(TARIFF_2026, 0.7, value=value, unit="%"), today=TODAY)
+    assert (field["status"], field["latest_actual"], field["findings"]) == ("unbound", None, []), value
+    # quant_row path: the same value in a research row
+    row = ng.check_binary(_binary(TARIFF_2026, 0.7), quant_rows=[_tariff_row(value)], today=TODAY)
+    assert (row["status"], row["latest_actual"], row["findings"]) == ("unbound", None, []), value
+
+
+def test_a_refused_field_falls_back_to_a_single_figure_row():
+    binary = _binary(TARIFF_2026, 0.7, value="2.6 → 13.0", unit="%")
+    stamp = ng.check_binary(binary, quant_rows=[_tariff_row("13.0")], today=TODAY)
+    assert stamp["latest_actual"]["basis"] == "quant_row" and stamp["latest_actual"]["value"] == "13.0"
+    assert stamp["status"] == "ok" and stamp["findings"] == []
+    # a year beside the figure is a date, not a second figure; a lone year-like value is the figure
+    dated = dict(F13, latest_actual=dict(F13["latest_actual"], value="$0.75 trillion (2025)", unit=""))
+    assert ng.check_binary(dated, today=TODAY)["status"] == "flagged"
+    lone = _binary("China EV subsidies exceed 3000亿元 in 2027", 0.2, value="2000", unit="亿元")
+    assert ng.check_binary(lone, today=TODAY)["latest_actual"]["basis"] == "llm_field"
+
+
+# ── non-finite numbers (review round 2) ───────────────────────────────────────
+def test_non_finite_numbers_are_no_quantity_and_the_stamp_is_strict_json():
+    for text, unit in (("$1e999", ""), ("9" * 400, ""), ("$1e300 trillion", ""), ("5", "tn " * 60)):
+        assert ng.parse_quantity(text, unit) is None, (text[:20], unit[:20])
+    assert ng.parse_threshold_claim("Capex exceeds $1e999 in 2027", "") is None
+    forecast = {"binary_forecasts": [
+        _binary("Capex exceeds $1e999 in 2027", 0.3, value="1e999"),
+        _binary("Brent is above $100 in 2027", 0.8, value="1e999"),
+        {k: v for k, v in F13.items() if k != "latest_actual"},
+    ]}
+    summary = ng.stamp_forecast(forecast, quant_rows=[_capex_row("1e999", metric="US single-year data-centre capex")],
+                                today=TODAY)
+    assert summary["by_status"] == {"not_numeric": 1, "unbound": 2}
+    json.dumps({"forecast": forecast, "summary": summary}, allow_nan=False)
+    # a huge but finite threshold keeps a capped raw
+    claim = ng.parse_threshold_claim("Capex exceeds $1" + "0" * 305 + " in 2027", "")
+    assert claim["threshold"] == 1e305 and len(claim["raw"]) == 300
+
+
+# ── day-precise as_of dates (review round 2) ───────────────────────────────────
+@pytest.mark.parametrize("as_of,binds", [
+    ("Sep 15, 2026", True), ("15 September 2026", True), ("Sept. 3rd, 2026", True),
+    ("09/15/2026", True), ("15/09/2026", True),
+    ("Sep 25, 2026", False), ("09/25/2026", False), ("Sep 2026", False),
+    ("09/10/2026", False),  # Sep 10 or 9 Oct: the later reading is not yet known
+])
+def test_day_precise_as_of_dates_bind_within_their_month(as_of, binds):
+    today = dt.date(2026, 9, 20)
+    binary = dict(F13, latest_actual=dict(F13["latest_actual"], as_of=as_of))
+    assert (ng.check_binary(binary, today=today)["latest_actual"] is not None) is binds, as_of
+
+
+# ── linear pairing keeps the naive reading (review round 2) ────────────────────
+def _disjoint_spans(rng, count):
+    cuts = sorted(rng.sample(range(200), 2 * count))
+    return [(cuts[i], cuts[i + 1]) for i in range(0, 2 * count, 2)]
+
+
+def test_linear_pairing_matches_the_naive_scan():
+    import random
+
+    rng = random.Random(5)
+    overlapped = 0
+    for _ in range(300):
+        comparators = [(start, end, ">", bool(rng.getrandbits(1))) for start, end in _disjoint_spans(rng, 6)]
+        spans = _disjoint_spans(rng, 6)
+        naive_kept = [item for item in comparators
+                      if not any(item[0] < end and start < item[1] for start, end in spans)]
+        assert ng._outside_spans(comparators, spans) == naive_kept
+        overlapped += len(naive_kept) < len(comparators)
+        hits = [{"start": start, "date": rng.random() < 0.2, "year_like": rng.random() < 0.3}
+                for start in sorted(rng.sample(range(200), 15))]
+        starts = [hit["start"] for hit in hits]
+        end, next_start, strict = sorted(rng.sample(range(200), 2)) + [bool(rng.getrandbits(1))]
+        naive = next((h for h in hits if h["start"] >= end and (strict or h["date"] or not h["year_like"])),
+                     None)
+        expected = naive if naive is not None and naive["start"] < next_start else None
+        assert ng._first_hit(hits, starts, end, next_start, strict) is expected
+    assert overlapped > 100  # the layouts do exercise overlaps

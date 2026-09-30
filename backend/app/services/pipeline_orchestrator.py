@@ -842,9 +842,19 @@ def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
             backbone_sensitivity.capture_policy(Config)
             if origin in ("admission", "fork_admission")
             else dict(backbone_sensitivity.DISABLED_POLICY)),
-        "numeric_guard_mode": _numeric_guard_mode(
-            getattr(Config, "NUMERIC_GUARD_MODE", "shadow"))[0],
+        "numeric_guard_mode": _pinned_numeric_guard_mode(),
     }
+
+
+def _pinned_numeric_guard_mode() -> str:
+    """TIME-5: the NUMERIC_GUARD_MODE a capture pins (off | shadow). An invalid
+    ambient value is pinned as shadow with a warning here: ReportAgent only ever
+    sees the normalised pin, so its own invalid-mode warning cannot fire."""
+    raw = getattr(Config, "NUMERIC_GUARD_MODE", "shadow")
+    mode, valid = _numeric_guard_mode(raw)
+    if not valid:
+        logger.warning("NUMERIC_GUARD_MODE=%r 不是 off|shadow，按 shadow 钉住", raw)
+    return mode
 
 
 def fork_safety_policy_v1(base_options: Any) -> Optional[dict[str, Any]]:

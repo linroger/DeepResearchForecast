@@ -9,6 +9,7 @@ Offline: FakeLLMClient routed by prompt, no network.
 """
 
 import copy
+import hashlib
 import json
 import os
 
@@ -146,11 +147,30 @@ def _gate(forecast):
     return gated.get("confidence"), quality
 
 
+def _sha256(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+# The default-mode (no numeric_guard_mode) binary draw of the fixture below, recorded by running
+# the same call on the pre-TIME-5 base (feat/finharness-transplants @ 948a792): sha256 of the
+# draw's messages and of the extracted rows.  A mismatch means the default binary draw no longer
+# matches the pre-change one; when another work package changes that prompt or the row shape on
+# purpose, re-pin both digests from its tree.
+_PRE_CHANGE_PROMPT_SHA256 = "2131fb196b62dfad61b4f9bc89a3f2a0138f4253fa161980351ded61ee0c85c1"
+_PRE_CHANGE_ROWS_SHA256 = "3fd05ccdc68d5e78bc7aa931639d97f1586af11cb7d62292bc22e9a82de75d64"
+
+
 # ── extractor level ───────────────────────────────────────────────────────────
 def test_extractor_off_is_identical_to_the_pre_change_call():
     responses = [{"binary_forecasts": [copy.deepcopy(_F13), copy.deepcopy(_CPI)]}] * 4
     baseline_llm = FakeLLMClient(json_responses=copy.deepcopy(responses))
     baseline = fe.extract_binary_forecasts("# Dossier\n\nBody.", baseline_llm, min_count=2)
+    # the default call is the pre-change call, pinned by the base's recorded digests
+    assert [(c["kind"], c["temperature"], c["max_tokens"]) for c in baseline_llm.calls] == [
+        ("chat_json", 0.25, 4096)]
+    assert _sha256([c["messages"] for c in baseline_llm.calls]) == _PRE_CHANGE_PROMPT_SHA256
+    assert _sha256(baseline) == _PRE_CHANGE_ROWS_SHA256
+    # and every non-shadow mode is the default call
     for mode in (None, "off", "OFF", "enforce"):
         llm = FakeLLMClient(json_responses=copy.deepcopy(responses))
         out = fe.extract_binary_forecasts("# Dossier\n\nBody.", llm, min_count=2,

@@ -178,14 +178,26 @@ def test_pinned_policy_beats_ambient_config(monkeypatch):
 
 
 def test_numeric_guard_mode_is_pinned_normalised(monkeypatch):
-    """TIME-5: the admission snapshot pins NUMERIC_GUARD_MODE as off | shadow."""
+    """TIME-5: the admission snapshot pins NUMERIC_GUARD_MODE as off | shadow; an
+    invalid ambient value is pinned as shadow with a warning at capture (ReportAgent
+    only sees the normalised pin, so the warning must come from here)."""
+    from app.services import pipeline_orchestrator as po
     from app.services.pipeline_orchestrator import capture_safety_policy_v1
 
+    warnings = []
+    monkeypatch.setattr(po.logger, "warning", lambda msg, *args, **kwargs: warnings.append(msg % args))
     assert capture_safety_policy_v1("admission")["numeric_guard_mode"] == "shadow"
-    for ambient, pinned in (("OFF", "off"), ("shadow", "shadow"), ("enforce", "shadow"), ("", "shadow")):
+    assert warnings == []
+    for ambient, pinned, warns in (("OFF", "off", False), ("shadow", "shadow", False),
+                                   ("enforce", "shadow", True), ("", "shadow", True)):
         monkeypatch.setattr(Config, "NUMERIC_GUARD_MODE", ambient, raising=False)
         for origin in ("admission", "resume_reconstructed_safe", "fork_admission"):
+            del warnings[:]
             assert capture_safety_policy_v1(origin)["numeric_guard_mode"] == pinned, (ambient, origin)
+            guard_warnings = [w for w in warnings if "NUMERIC_GUARD_MODE" in w]
+            assert len(guard_warnings) == (1 if warns else 0), (ambient, origin, warnings)
+            if warns:
+                assert repr(ambient) in guard_warnings[0] and "shadow" in guard_warnings[0]
 
 
 def test_pinned_numeric_guard_mode_beats_ambient_config_for_seed_reports(monkeypatch, tmp_path):

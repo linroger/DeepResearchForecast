@@ -26,12 +26,14 @@ only where they are ranges ("~" before a figure means "approximately", "from
 40% to 30%" is a trajectory, "the 2026 ~$700B level" is a year and an amount).
 
 Binding order: the binary's own ``latest_actual`` field (drafted together with
-the binary under NUMERIC_GUARD_MODE=shadow) when its value parses, its as_of is
-already known (the stated period has ended by ``today``) and its unit is
-compatible; else the single research quantitative row that states an actual
-(see :func:`_row_is_actual`) whose metric tokens (Latin words plus CJK bigrams)
-match the claim's metric span with Jaccard >= 0.5 and a margin >= 0.15 over
-the runner-up, with a compatible unit; else ``unbound``.  Units are compatible
+the binary under NUMERIC_GUARD_MODE=shadow) when its value states exactly one
+figure (a trajectory such as "2.6 → 13.0" or "from 2.6% to 13.0%" never binds:
+see :func:`_actual_quantity`), its as_of is already known (the stated period
+has ended by ``today``) and its unit is compatible; else the single research
+quantitative row that states an actual (see :func:`_row_is_actual`) in one
+figure, whose metric tokens (Latin words plus CJK bigrams) match the claim's
+metric span with Jaccard >= 0.5 and a margin >= 0.15 over the runner-up, with
+a compatible unit; else ``unbound``.  Units are compatible
 when unit class and currency are equal and the class is not ``unknown``: a
 measure such as GW or tonnes never binds, because the guard cannot tell GW
 from GWh.
@@ -49,6 +51,7 @@ error yields ``unchecked`` / ``None`` / ``[]`` / an ``error`` summary).
 
 from __future__ import annotations
 
+import bisect
 import datetime as _dt
 import math
 import re
@@ -360,8 +363,14 @@ def _inherit(side: Dict[str, Any], other: Mapping[str, Any]) -> Dict[str, Any]:
     return dict(side, marks=marks)
 
 
-def _side_value(side: Mapping[str, Any]) -> float:
-    return float(side["value"] * Decimal(side["marks"].get("scale") or 1))
+def _side_value(side: Mapping[str, Any]) -> Optional[float]:
+    """The side's base-unit value, or None when it is no finite float ("$1e999",
+    a 400-digit number): an infinity is no quantity and is not valid JSON."""
+    try:
+        value = float(side["value"] * Decimal(side["marks"].get("scale") or 1))
+    except ArithmeticError:  # decimal.Overflow on an absurd exponent
+        return None
+    return value if math.isfinite(value) else None
 
 
 def _range_blocked(masked: str, side_a: Mapping[str, Any], sep: re.Match, side_b: Mapping[str, Any]) -> bool:
@@ -386,8 +395,8 @@ def _scan(text: str, *, and_ranges: bool = False) -> List[Dict[str, Any]]:
     for a calendar date, else also ``{lo, hi, unit_class, currency,
     scale_explicit, range, has_marks, duration}``.  ``and_ranges`` also reads "A
     and B" as a range (the body of a between-claim).  A number glued to letters
-    that are no unit ("28nm") is skipped, and "from A to B" is two figures (a
-    trajectory), never a range."""
+    that are no unit ("28nm") or with no finite value ("1e999") is skipped, and
+    "from A to B" is two figures (a trajectory), never a range."""
     source = str(text or "")
     masked = _mask_dates(source)
     hits: List[Dict[str, Any]] = []
@@ -450,10 +459,13 @@ def _scan(text: str, *, and_ranges: bool = False) -> List[Dict[str, Any]]:
                 continue
             year_like = False
         end = (side_b or side_a)["end"]
-        marks = side_a["marks"]
-        unit_class = _unit_class(marks)
         lo = _side_value(side_a)
         hi = _side_value(side_b) if side_b is not None else lo
+        if lo is None or hi is None:
+            pos = max(end, number.end())  # not a finite quantity: skipped
+            continue
+        marks = side_a["marks"]
+        unit_class = _unit_class(marks)
         hits.append({
             "start": side_start, "end": end, "raw": source[side_start:end].strip(), "date": False,
             "year_like": year_like, "lo": lo, "hi": hi, "unit_class": unit_class,
@@ -490,19 +502,27 @@ def _unit_marks(unit: str) -> Dict[str, Any]:
     return total
 
 
-def _quantity(hit: Mapping[str, Any], unit: str = "") -> Dict[str, Any]:
+def _quantity(hit: Mapping[str, Any], unit: str = "") -> Optional[Dict[str, Any]]:
+    """The hit in base units with the scale and currency ``unit`` supplies, or
+    None when that scale leaves no finite value."""
     lo, hi = float(hit["lo"]), float(hit["hi"])
     unit_class, currency = hit["unit_class"], hit["currency"]
     extra = _unit_marks(unit) if unit else None
     if extra:
         if not hit["scale_explicit"] and extra["scale"]:
-            lo, hi = lo * extra["scale"], hi * extra["scale"]
+            try:
+                lo, hi = lo * extra["scale"], hi * extra["scale"]
+            except OverflowError:  # a unit string stacking scale words past float range
+                return None
         if unit_class == "count":
             unit_class = _unit_class(extra)
         if unit_class == "currency" and currency is None:
             currency = extra["currency"]
+    if not (math.isfinite(lo) and math.isfinite(hi)):
+        return None
     return {"lo": lo, "hi": hi, "unit_class": unit_class,
-            "currency": currency if unit_class == "currency" else None, "raw": hit["raw"]}
+            "currency": currency if unit_class == "currency" else None,
+            "raw": hit["raw"][:_CLAIM_TEXT_MAX_CHARS]}
 
 
 def _readable(value: Any) -> Optional[str]:
@@ -538,6 +558,31 @@ def parse_quantity(text: Any, unit: Any = "") -> Optional[Dict[str, Any]]:
         return None
 
 
+# A trajectory marker in a latest-actual value: an arrow ("2.6 → 13.0", "2.6% ->
+# 13.0%") or "from ... to" / 从(由)...至(到).
+_TRAJECTORY_MARK_RE = re.compile(r"→|->|⇒|⟶|➔|➝|\bfrom\b.{0,80}?\bto\b|[从由].{0,80}?[至到]", re.I | re.S)
+
+
+def _actual_quantity(value: Any, unit: Any = "") -> Optional[Dict[str, Any]]:
+    """The one figure a latest-actual value states (a written range such as
+    "735–760" is one figure), or None.
+
+    A trajectory ("2.6 → 13.0", "from 2.6% to 13.0%", "从2.6%到13%") or two or
+    more figures ("13% vs 2.6% a year earlier") never bind: which one is the
+    latest is a guess, and binding the oldest turns a supported forecast into a
+    false contradiction.  A year-like token beside the figure ("$0.75T (2025)")
+    is a date, not a second figure; a lone year-like value ("2000", unit 亿元)
+    is the figure."""
+    source = _readable(value)
+    if source is None or _TRAJECTORY_MARK_RE.search(source):
+        return None
+    quantities = [hit for hit in _scan(source) if not hit["date"]]
+    figures = [hit for hit in quantities if not hit["year_like"]] or quantities
+    if len(figures) != 1:
+        return None
+    return _quantity(figures[0], _readable(unit) or "")
+
+
 # ── Threshold claims ─────────────────────────────────────────────────────────
 # (pattern, comparator, strict): a strict comparator ("over", "under", "top")
 # pairs only with a number right after it, so "over the next 3 years" is not a
@@ -548,10 +593,13 @@ _COMPARATORS: Tuple[Tuple[re.Pattern, str, bool], ...] = tuple(
     (re.compile(pattern, re.I), comparator, strict) for pattern, comparator, strict in (
         (r"\bat\s+most\b|\bno\s+(?:more|greater|higher)\s+than\b|\bnot\s+(?:more|greater|higher)\s+than\b"
          r"|\bat\s+or\s+(?:below|under)\b|\bequal\s+to\s+or\s+(?:less|lower|fewer)\s+than\b"
-         r"|\b(?:less|lower|fewer)\s+than\s+or\s+equal\s+to\b", "<=", False),
+         r"|\b(?:less|lower|fewer)\s+than\s+or\s+equal\s+to\b|\bequal\s+to\s+or\s+(?:below|under)\b",
+         "<=", False),
         (r"\bat\s+least\b|\bno\s+(?:less|fewer|lower)\s+than\b|\bnot\s+(?:less|fewer|lower)\s+than\b"
          r"|\bat\s+or\s+(?:above|over)\b|\bequal\s+to\s+or\s+(?:greater|more|higher)\s+than\b"
-         r"|\b(?:greater|more|higher)\s+than\s+or\s+equal\s+to\b", ">=", False),
+         r"|\b(?:greater|more|higher)\s+than\s+or\s+equal\s+to\b|\bequal\s+to\s+or\s+(?:above|over)\b"
+         r"|\b(?:equal(?:s|ed|led)?(?:\s+to)?|meet(?:s|ing)?|met)\s+or\s+"
+         r"(?:exceed(?:s|ed|ing)?|surpass(?:es|ed|ing)?)\b", ">=", False),
         (r"\bbetween\b", "between", False),
         (r"\b(?:ris(?:e|es|ing|en)|rose|climb(?:s|ed|ing)?|trad(?:e|es|ed|ing)|clos(?:e|es|ed|ing)"
          r"|settl(?:e|es|ed|ing)|stay(?:s|ed|ing)?|remain(?:s|ed|ing)?|break(?:s|ing)?|broke)\s+above\b"
@@ -584,23 +632,34 @@ _SUFFIX_COMPARATORS: Tuple[Tuple[re.Pattern, str], ...] = tuple(
 _NEGATED = {">": "<=", ">=": "<", "<": ">=", "<=": ">", "between": "between"}
 _NEGATION_WINDOW = 60
 # EN negators, read within three words before the comparator that open no new
-# clause ("fails to recover above", "won't exceed", "whether or not" and "not
-# only" excluded); ZH negators right before it, after at most an adverb
-# ("不会再跌破", "未超过") -- or, for a suffix comparator, before the verb that
-# states the level ("未达到1万亿元以上").
-_EN_NEGATOR = (r"(?:(?<![A-Za-z'’])(?:never|(?<!or )not(?!\s+(?:only|just|merely|necessarily)\b)|cannot|unless"
-               r"|no\s+longer|fail(?:s|ed|ing)?\s+to|without)(?![A-Za-z])"
-               r"|(?<![A-Za-z'’])[A-Za-z]+n['’]t(?![A-Za-z]))")
+# clause ("fails to recover above", "won't exceed", "unless the rate exceeds";
+# "whether or not" and "not only" excluded).  A bare "not" negates only after an
+# auxiliary or modal ("does not exceed", "will likely not exceed") outside a
+# relative clause: "EVs not sold in China", "loans not performing" and "loans
+# that are not performing" name the metric.  "without" negates only within one
+# word of the comparator ("without ever exceeding"), never a condition such as
+# "without subsidies EV share exceeds".  ZH negators right before it, after at
+# most an adverb ("不会再跌破", "未超过") -- or, for a suffix comparator, before
+# the verb that states the level ("未达到1万亿元以上").
+_EN_AUX = (r"(?:do|does|did|will|would|shall|should|can|could|may|might|must|is|are|was|were|am|be|been"
+           r"|has|have|had)")
+_EN_AUX_ADVERB = r"(?:still|yet|also|even|likely|probably|possibly|certainly|definitely|really|actually)"
+_EN_NOT = (r"(?<!\bthat )(?<!\bwhich )(?<!\bwho )" + _EN_AUX + r"(?:\s+" + _EN_AUX_ADVERB + r")?\s+not"
+           r"(?!\s+(?:only|just|merely|necessarily)\b)")
+_EN_NEGATOR = (r"(?:(?<![A-Za-z'’])(?:never|cannot|unless|no\s+longer|fail(?:s|ed|ing)?\s+to|" + _EN_NOT + r")"
+               r"|(?<![A-Za-z'’])[A-Za-z]+n['’]t)(?![A-Za-z])")
+_EN_WITHOUT = r"(?<![A-Za-z'’])without(?![A-Za-z])"
 _EN_CLAUSE_BREAK = r"(?:and|or|but|nor|while|whereas|whether|if|when|although|though|because|which|that|who|so|then)"
+_EN_WORD = r"\s+(?!" + _EN_CLAUSE_BREAK + r"\b)[A-Za-z][A-Za-z'’\-]*"
 _NEGATION_EN_RE = re.compile(
-    _EN_NEGATOR + r"(?:\s+(?!" + _EN_CLAUSE_BREAK + r"\b)[A-Za-z][A-Za-z'’\-]*){0,3}\s+$", re.I)
+    r"(?:" + _EN_NEGATOR + r"(?:" + _EN_WORD + r"){0,3}|" + _EN_WITHOUT + r"(?:" + _EN_WORD + r")?)\s+$", re.I)
 _ZH_NEGATOR = r"(?:从来没有|从未|从不|并未|尚未|未能|未曾|没有|没能|不会|不能|不再|不得|无法|未|没|不)"
 _ZH_ADVERB = r"(?:再次|再度|能够|可能|再|能|会|曾|有)?"
 _NEGATION_ZH_RE = re.compile(_ZH_NEGATOR + _ZH_ADVERB + r"\s*$")
 _NEGATION_ZH_LEVEL_RE = re.compile(
     _ZH_NEGATOR + _ZH_ADVERB
     + r"(?:达到|达|维持在|保持在|维持|保持|站上|站稳|回到|回升至|升至|涨至|增至|降至|跌至|处于|在|为|是)?\s*$")
-_NEGATOR_RE = re.compile(_EN_NEGATOR + "|" + _ZH_NEGATOR, re.I)
+_NEGATOR_RE = re.compile(_EN_NEGATOR + "|" + _EN_WITHOUT + "|" + _ZH_NEGATOR, re.I)
 _NEVER_RE = re.compile(r"\bnever\b|从来没有|从未|从不", re.I)
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 _STRICT_GAP_RE = re.compile(r"\s*(?:(?:about|around|approximately|approx\.?|roughly|nearly|almost|some|~|≈"
@@ -728,14 +787,47 @@ def _suffix_comparators(clause: str, hits: List[Dict[str, Any]]) -> List[Tuple[D
     return found
 
 
+def _outside_spans(comparators: List[Tuple[int, int, str, bool]],
+                   spans: List[Tuple[int, int]]) -> List[Tuple[int, int, str, bool]]:
+    """The comparators that overlap none of ``spans`` -- both sorted by start --
+    in one sweep: a span that ends before one comparator starts ends before
+    every later one too."""
+    kept = []
+    index = 0
+    for item in comparators:
+        while index < len(spans) and spans[index][1] <= item[0]:
+            index += 1
+        if index < len(spans) and spans[index][0] < item[1]:
+            continue
+        kept.append(item)
+    return kept
+
+
+def _first_hit(hits: List[Dict[str, Any]], starts: List[int], end: int, next_start: int,
+               strict: bool) -> Optional[Dict[str, Any]]:
+    """The first hit a comparator ending at ``end`` introduces before the next
+    comparator (``next_start``), found by bisection.  A bare year after the
+    comparator is a reference ("exceeds its 2019 peak of $5B", "the 2026 ~$700B
+    level"): the figure it introduces is the threshold.  A strict comparator
+    pairs only with the number right after it."""
+    for index in range(bisect.bisect_left(starts, end), len(hits)):
+        hit = hits[index]
+        if hit["start"] >= next_start:
+            return None
+        if strict or hit["date"] or not hit.get("year_like"):
+            return hit
+    return None
+
+
 def _pairs(clause: str) -> List[Dict[str, Any]]:
     """Comparator-number pairs in one clause (see :func:`_pair`): a comparator
     before its number, then a suffix comparator after a number no comparator
-    before it claimed.  A size-of-change construction yields no pair."""
+    before it claimed.  A size-of-change construction yields no pair.  Linear
+    in the clause: each hit is looked at by the one comparator before it."""
     hits = _scan(clause)
+    starts = [hit["start"] for hit in hits]  # increasing: _scan reads left to right
     suffixes = _suffix_comparators(clause, hits)
-    comparators = [item for item in _comparator_matches(clause)
-                   if not any(item[0] < end and start < item[1] for _h, _c, start, end in suffixes)]
+    comparators = _outside_spans(_comparator_matches(clause), [(start, end) for _h, _c, start, end in suffixes])
     pairs: List[Dict[str, Any]] = []
     for index, (start, end, comparator, strict) in enumerate(comparators):
         next_start = comparators[index + 1][0] if index + 1 < len(comparators) else len(clause)
@@ -748,12 +840,8 @@ def _pairs(clause: str) -> List[Dict[str, Any]]:
             if hit is None or not hit.get("range"):
                 continue
         else:
-            # A bare year after the comparator is a reference ("exceeds its 2019 peak of $5B",
-            # "the 2026 ~$700B level"): the figure it introduces is the threshold.  A strict
-            # comparator pairs only with the number right after it.
-            hit = next((h for h in hits if h["start"] >= end
-                        and (strict or h["date"] or not h.get("year_like"))), None)
-            if hit is None or hit["start"] >= next_start:
+            hit = _first_hit(hits, starts, end, next_start, strict)
+            if hit is None:
                 continue
         if not _gap_ok(clause[end:hit["start"]], strict=strict, cjk=cjk) or not _is_threshold_hit(hit):
             continue
@@ -806,7 +894,7 @@ def _parse_threshold_claim(statement: Any, criteria: Any) -> Optional[Dict[str, 
         "negated": pair["negated"],
         "text": chosen.strip()[:_CLAIM_TEXT_MAX_CHARS],
         "metric": chosen[:pair["start"]].strip()[:_CLAIM_TEXT_MAX_CHARS],
-        "raw": hit["raw"],
+        "raw": hit["raw"][:_CLAIM_TEXT_MAX_CHARS],
     }
 
 
@@ -880,8 +968,12 @@ _PERIOD_QUARTER_RE = re.compile(
     r"(?<![A-Za-z\d])(?:Q([1-4])[\s,/-]*" + _YEAR + r"|" + _YEAR + r"[\s/-]*Q([1-4]))(?!\d)", re.I)
 _PERIOD_HALF_RE = re.compile(
     r"(?<![A-Za-z\d])(?:H([12])[\s,/-]*" + _YEAR + r"|" + _YEAR + r"[\s/-]*H([12]))(?!\d)", re.I)
+# A slash date with the year last: US month/day or day-first ("09/15/2026", "15/09/2026").
+_PERIOD_SLASH_DAY_RE = re.compile(r"(?<![\d/])(\d{1,2})/(\d{1,2})/" + _YEAR + r"(?!\d)")
+# A month name with an optional day before or after it ("Sep 15, 2026", "15 September 2026").
 _PERIOD_MONTH_NAME_RE = re.compile(
-    r"\b(" + _MONTHS + r")\b\.?[\s,]*(?:\d{1,2}(?:st|nd|rd|th)?[\s,]*)?" + _YEAR + r"(?!\d)", re.I)
+    r"(?:(?<!\d)(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?)?\b(" + _MONTHS + r")\b\.?[\s,]*"
+    r"(?:(\d{1,2})(?:st|nd|rd|th)?\b[\s,]*)?" + _YEAR + r"(?!\d)", re.I)
 _PERIOD_YEAR_RE = re.compile(r"(?<!\d)" + _YEAR + r"(?!\d)")
 _MONTH_ABBREVIATIONS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 
@@ -891,17 +983,35 @@ def _month_end(year: int, month: int) -> _dt.date:
     return following - _dt.timedelta(days=1)
 
 
+def _slash_day(match: re.Match) -> Optional[_dt.date]:
+    """The later valid reading of a slash date (month/day or day/month), so an
+    ambiguous "03/04/2026" is never known too early; None when neither is a date."""
+    first, second, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
+    readings = []
+    for month, day in ((first, second), (second, first)):
+        try:
+            readings.append(_dt.date(year, month, day))
+        except ValueError:
+            continue
+    return max(readings) if readings else None
+
+
 def _period_end(text: str) -> Optional[_dt.date]:
     """The LAST day of the date or period ``text`` states -- an ISO day, a
-    year-month (年月), a quarter, a half, a month name, else December 31 of the
-    latest year named -- or None without a 19xx/20xx year or with an impossible
-    date.  A period is known only once it has ended: "2026", "FY2026" and
-    "2026-Q4" end on 2026-12-31 (the rule quant_typing applies under
-    RESEARCH-4)."""
+    slash day (:func:`_slash_day`), a year-month (年月), a quarter, a half, a
+    month name (with its day when one is given: "Sep 15, 2026"), else December
+    31 of the latest year named -- or None without a 19xx/20xx year or with an
+    impossible date.  A period is known only once it has ended: "2026",
+    "FY2026" and "2026-Q4" end on 2026-12-31 (the rule quant_typing applies
+    under RESEARCH-4)."""
     try:
         match = _PERIOD_DAY_RE.search(text)
         if match:
             return _dt.date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        match = _PERIOD_SLASH_DAY_RE.search(text)
+        day = _slash_day(match) if match else None
+        if day is not None:
+            return day
         match = _PERIOD_MONTH_RE.search(text)
         if match:
             return _month_end(int(match.group(1)), int(match.group(2)))
@@ -913,8 +1023,9 @@ def _period_end(text: str) -> Optional[_dt.date]:
                 return _month_end(int(year), int(part) * months)
         match = _PERIOD_MONTH_NAME_RE.search(text)
         if match:
-            month = _MONTH_ABBREVIATIONS.index(match.group(1)[:3].lower()) + 1
-            return _month_end(int(match.group(2)), month)
+            month = _MONTH_ABBREVIATIONS.index(match.group(2)[:3].lower()) + 1
+            year, day = int(match.group(4)), match.group(1) or match.group(3)
+            return _dt.date(year, month, int(day)) if day else _month_end(year, month)
         years = [int(year) for year in _PERIOD_YEAR_RE.findall(text)]
         return _dt.date(max(years), 12, 31) if years else None
     except ValueError:  # month 13, Feb 30
@@ -990,7 +1101,8 @@ def _row_is_actual(row: Mapping[str, Any], today: _dt.date, *, require_date: boo
 def _prepare_rows(quant_rows: Any, today: _dt.date, *,
                   require_date: bool = False) -> List[Tuple[Mapping[str, Any], Dict[str, Any], frozenset]]:
     """Research rows eligible as a latest actual (:func:`_row_is_actual`) whose
-    value parses and whose metric has tokens."""
+    value states one figure (:func:`_actual_quantity`) and whose metric has
+    tokens."""
     prepared = []
     for row in list(quant_rows or ()):
         if not isinstance(row, Mapping):
@@ -999,7 +1111,7 @@ def _prepare_rows(quant_rows: Any, today: _dt.date, *,
             if not _row_is_actual(row, today, require_date=require_date):
                 continue
             value = row.get("value")
-            quantity = _parse_quantity("" if value is None else value, row.get("unit") or "")
+            quantity = _actual_quantity("" if value is None else value, row.get("unit") or "")
             if quantity is None:
                 continue
             tokens = _metric_tokens(row.get("metric") or row.get("definition") or "")
@@ -1016,7 +1128,7 @@ def _bind(binary: Mapping[str, Any], claim: Mapping[str, Any], prepared: List[Tu
     """``(latest_actual record, parsed quantity)`` or ``(None, None)``."""
     field = sanitize_latest_actual(binary.get("latest_actual"))
     if field is not None and not _not_yet_known(field["as_of"], today, require_date=require_date):
-        quantity = _parse_quantity(field["value"], field["unit"])
+        quantity = _actual_quantity(field["value"], field["unit"])
         if quantity is not None and _compatible(claim, quantity):
             return dict(field, basis=BASIS_LLM_FIELD), quantity
     claim_tokens = _metric_tokens(claim.get("metric"))
