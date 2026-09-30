@@ -8084,6 +8084,23 @@ def _actions_simulation_end_present(path: str, tail_bytes: int = 262144) -> bool
         return False
 
 
+def seed_scenario_pin(primary_fc: Any) -> Optional[list]:
+    """W9-5：主跑情景脊柱钉给额外种子的内容——只含 ``{name, resolution_criteria}``。
+
+    REPORT-10（信息墙）：钉的是命名与判定标准，绝不携带主跑的概率/理由——种子报告在同一组
+    命名情景上独立给出概率（集成聚合才是独立抽样）。无命名情景 → None（种子自由起名）；
+    坏数据（非 dict、scenarios 不可迭代等）同样回退 None（脊柱纯增强）。纯函数。
+    """
+    try:
+        return [
+            {"name": s.get("name"), "resolution_criteria": s.get("resolution_criteria")}
+            for s in (primary_fc.get("scenarios") or [])
+            if isinstance(s, dict) and s.get("name")
+        ] or None
+    except Exception:  # noqa: BLE001 — 脊柱纯增强，坏数据回退自由起名
+        return None
+
+
 # ---------------------------------------------------------------------------
 # 编排器
 # ---------------------------------------------------------------------------
@@ -9575,15 +9592,7 @@ class PipelineOrchestrator:
 
         # W9-5：主跑的情景脊柱（名 + 判定标准）钉给每个额外种子——种子间共享同一组命名情景
         # （概率自由），集成聚合才有稳定的对齐坐标（此前 3 种子自由起名 → 11 桶全 support=1）。
-        _spine: Optional[list] = None
-        try:
-            _spine = [
-                {"name": s.get("name"), "resolution_criteria": s.get("resolution_criteria")}
-                for s in (primary_fc.get("scenarios") or [])
-                if isinstance(s, dict) and s.get("name")
-            ] or None
-        except Exception:  # noqa: BLE001 — 脊柱纯增强，坏数据回退自由起名
-            _spine = None
+        _spine = seed_scenario_pin(primary_fc)
 
         # W9-2：集成 checkpoint + 遥测阶段带 + 心跳。此前集成运行在「report 完成之后」的
         # 无保护窗口：无 checkpoint、心跳陈旧、墙钟不归属任何阶段——两条失败跑都死在这里。

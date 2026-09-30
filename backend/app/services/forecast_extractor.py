@@ -1080,6 +1080,43 @@ def slice_head_tail(text: str, budget: int, head_ratio: float = 0.6) -> str:
     return t[:head_n] + "\n…(中段略)…\n" + t[-tail_n:]
 
 
+# REPORT-10：研究桥（deerflow_research._collect_prediction_markets，v3 引擎经
+# linear_research.phase_finalize 同样调用）把机器抓取的 Polymarket 表以此 H2 节 upsert 到
+# research_report.md 末尾。标题匹配与节边界与桥的 _strip_markdown_h2_section 同口径。
+_MACHINE_MARKET_HEADING_RE = re.compile(r"^##[ \t]+Prediction Market Signals[ \t]*$")
+_MARKDOWN_H1_H2_BOUNDARY_RE = re.compile(r"^#{1,2}[ \t]")
+
+
+def strip_machine_market_table(text: str) -> Tuple[str, int]:
+    """REPORT-10：删除 dossier 里每个机器写入的 ``## Prediction Market Signals`` H2 节。
+
+    节从该标题行延伸到下一个 ``#``/``##`` 标题或文末（其下的 ``### …`` 子标题属于该节，
+    一并删除）。围栏感知（markdown_fence_transition）：围栏代码块内的 ``## `` 行既不开启
+    也不结束一个节。这是 DRF 自有的重实现，镜像研究桥 upsert 的契约（桥在追加新表前用
+    同一匹配删掉旧表）。返回 ``(text, n_removed)``；未命中 → 原文不变、0。纯函数、离线。
+    """
+    src = text or ""
+    kept: List[str] = []
+    removed = 0
+    skipping = False
+    fence_state: MarkdownFenceState = None
+    for line in src.split("\n"):
+        was_in_fence = fence_state is not None
+        fence_state, is_fence_line = markdown_fence_transition(line, fence_state)
+        if not (is_fence_line or was_in_fence):
+            if _MACHINE_MARKET_HEADING_RE.match(line.rstrip()):
+                skipping = True
+                removed += 1
+                continue
+            if skipping and _MARKDOWN_H1_H2_BOUNDARY_RE.match(line):
+                skipping = False
+        if not skipping:
+            kept.append(line)
+    if not removed:
+        return src, 0
+    return "\n".join(kept), removed
+
+
 def extract_structured_forecast(report_markdown: str, llm,
                                 situation_brief: Optional[str] = None) -> Dict[str, Any]:
     """Run one LLM pass to produce a validated structured forecast object.
@@ -2116,8 +2153,9 @@ def _stamp_market_influence(binary: Dict[str, Any], anchor: Dict[str, Any], *,
     与 market_anchor **分离**存放：对账（reconcile_forecast_contract）可依据命题/完整性
     弹出锚点，但影响印章必须存活——它是恢复被错误匹配移动的概率的唯一凭据，也是
     build_market_comparison ``influences`` 审计面的数据源。重复重述时保留最初的
-    prior_probability（真实的未受影响值），只滚动 revised/修订时市场价。任何后续 pass
-    都不得弹出此键（取证事故：锚点被弹出后，修订概率永久保留而市场溯源全部消失）。"""
+    prior_probability（分歧重述之前的值；起草时已参考市场价格，并非独立于市场的估计），
+    只滚动 revised/修订时市场价。任何后续 pass 都不得弹出此键（取证事故：锚点被弹出后，
+    修订概率永久保留而市场溯源全部消失）。"""
     market_id = str(anchor.get("market_id") or "").strip()
     record: Dict[str, Any] = {
         "market_id": market_id,
@@ -3011,9 +3049,23 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     绝不编造；与已有行 _binary_key 相同的近似逐字副本不补抽、不重复入列（记 near_match）。
     返回值增 ``target_binding`` = {bound{qid: fid}, missing[qid], method, repair_draw
     [, near_match{qid: fid}]}。None/空 → 提示词与输出逐字节不变。
+    REPORT-10（FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE，默认关）：market_aware 时切片前用
+    strip_machine_market_table 删掉 dossier 里的机器市场表，删除节数记
+    binary_quality.market_table_stripped；旗标关或未注入市场包 → 提示词逐字节不变。
     """
     target_rows = _clean_target_propositions(target_propositions)
+    market_aware = (bool(_cfg("PREDICTION_MARKETS_ENABLED", True))
+                    and bool((market_pack or "").strip()))
     content = (report_markdown or "")
+    # REPORT-10（FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE，默认关）：注入实时市场包时，dossier
+    # 末尾那份研究期的机器市场表是同一批价格的第二份（可能过时）副本——在切片前删掉，市场价
+    # 只经 market_pack 一个入口进入 _draw，且该表不再占用 head+tail 的尾部预算。
+    market_table_stripped = 0
+    if market_aware and bool(_cfg("FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE", False)):
+        content, market_table_stripped = strip_machine_market_table(content)
+        if market_table_stripped:
+            logger.info("二元预测抽取：dossier 视图删除 %d 个机器市场表节（市场价仅经实时市场包注入）",
+                        market_table_stripped)
     _bbudget = int(_cfg("FORECAST_BINARY_EXTRACT_BUDGET", 48000))
     _bhr = _coerce_float(_cfg("FORECAST_EXTRACT_HEAD_RATIO", 0.6))
     content = slice_head_tail(content, _bbudget, _bhr if _bhr is not None else 0.6)
@@ -3027,8 +3079,6 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     sim_sensitive = (_sim_effect == "legacy_prompt"
                      and bool(_cfg("FORECAST_SIM_SENSITIVITY", True))
                      and bool((signal_pack or "").strip()))
-    market_aware = (bool(_cfg("PREDICTION_MARKETS_ENABLED", True))
-                    and bool((market_pack or "").strip()))
     # TIME-3：锚定资格按截止日过滤（证据面不动——market_pack 仍含已标注的过期市场）。
     anchor_markets = markets
     window_ended_rows: List[Dict[str, Any]] = []
@@ -3267,6 +3317,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         _bq_prov["provenance_downgrades"] = provenance_downgrades
         if window_ended_rows:
             _bq_prov["market_window_ended_excluded"] = len(window_ended_rows)
+        if market_table_stripped:
+            _bq_prov["market_table_stripped"] = market_table_stripped
         if provenance_downgrades:
             _bq_prov.setdefault("issues", []).append(
                 f"{provenance_downgrades} forecast(s) claimed a simulation signal that was never "
