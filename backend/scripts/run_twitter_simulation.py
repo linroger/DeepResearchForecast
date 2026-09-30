@@ -117,8 +117,6 @@ def setup_oasis_logging(log_dir: str):
 from app.utils.oasis_llm import create_oasis_model, get_oasis_semaphore
 
 try:
-    from camel.models import ModelFactory
-    from camel.types import ModelPlatformType
     import oasis
     from oasis import (
         ActionType,
@@ -128,7 +126,7 @@ try:
     )
 except ImportError as e:
     print(f"错误: 缺少依赖 {e}")
-    print("请先安装: pip install oasis-ai camel-ai")
+    print("请先安装 camel-oasis（提供 oasis 模块）: cd backend && uv sync --python 3.12")
     sys.exit(1)
 
 # EXECPLAN F-9-0: 单平台脚本必须写 twitter/actions.jsonl 才能让 SimulationRunner
