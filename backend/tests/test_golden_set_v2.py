@@ -652,8 +652,12 @@ def test_load_golden_set_v1_compat_and_recompute_mismatch_raises(tmp_path, monke
     assert ge.main() == 0 and out.exists()
 
 
-def test_v1_score_report_byte_identical_to_pre_eval9(tmp_path):
+def test_v1_score_report_byte_identical_to_pre_eval9(tmp_path, monkeypatch):
     """A v1 golden file scores to exactly the bytes the pre-EVAL-9 code wrote (no new keys)."""
+    from app.config import Config
+
+    # EVAL-8's headline keys and banner are additive and gated; they are pinned in test_golden_tiering.
+    monkeypatch.setattr(Config, "GOLDEN_HEADLINE_GATE", False, raising=False)
     golden = {"questions": [
         {"id": "q1", "question": "Q1?", "resolution_criteria": "x", "resolved_outcome": True,
          "resolution_date": "2024-11-06", "category": "elections", "difficulty": "easy", "as_of_date": "2024-11-01"},

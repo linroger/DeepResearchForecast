@@ -50,12 +50,15 @@ INTENDED WORKFLOW (the whole point — read this before using):
      ``id``.
   3. Score the pipeline's primary report ``forecast.json`` (with
      N_FORECAST_SEEDS>1 the seed members are diagnostics, not the scored
-     artifact) against the golden set:
+     artifact) against the golden set, naming the run that produced it:
          python backend/scripts/golden_eval.py score-forecast-file \
              --forecast backend/uploads/reports/<report_id>/forecast.json \
-             -o eval_report.json --markdown eval_report.md [--bootstrap 1000]
+             --pipeline-dir backend/uploads/pipelines/<pipeline_id> \
+             -o eval_report.json --markdown eval_report.md [--bootstrap 1000] \
+             [--require-headline]
   4. Commit ``eval_report.json`` and DIFF it across code versions. Read the
-     ``metrics.rigor`` block (EVAL-7) before the raw numbers: the golden set is
+     ``headline`` (EVAL-8, below) first, then the ``metrics.rigor`` block (EVAL-7)
+     before the raw numbers: the golden set is
      imbalanced (24/30 YES), so a constant base-rate forecast already scores the
      climatology Brier and always-YES earns 80% resolution accuracy with MCC 0.
      BSS vs climatology, MCC, hedge share and the optional question-clustered
@@ -77,6 +80,31 @@ INTENDED WORKFLOW (the whole point — read this before using):
   Its top-level ``mean_brier`` is the multi-class sum over scenarios
   (``brier_scale: multiclass_sum``, 2x the binary Brier for YES/NO rows); the
   golden section is binary (``golden.brier_scale: binary``).
+
+HEADLINE TIERS (EVAL-8, GOLDEN_HEADLINE_GATE, default on): a Brier over rows the
+run could look up is recall, not skill. Each matched row gets a ``tier`` from the
+run's provenance (``--pipeline-dir``: run.json ``created_at``, else
+pipeline_state.json ``created_at``, plus the TIME-7 hindcast pin; or
+``--run-created-at`` with a UTC offset), compared on UTC dates (``classify_tier``):
+``prospective`` (run before the resolution date and no later than as_of_date +
+GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS), ``late_origin`` (before resolution, after
+that window), ``hindcast_retrieval_exposed`` (run on or after the resolution date:
+live-web research at as_of = today and model memory both see the outcome),
+``hindcast_pit`` (a pinned hindcast run, whatever the dates; TIME-9's integrity
+verdict is recorded) or ``unknown`` (no usable provenance). ``headline`` scores the
+prospective rows only (status ``ok``, else ``withheld_no_eligible_rows`` /
+``withheld_no_provenance``); every other tier is under ``characterization.by_tier``;
+``metrics`` still covers every matched row (``metrics_scope:
+all_matched_characterization``). The markdown opens with a ``HEADLINE:`` or
+``HEADLINE WITHHELD:`` line, and ``--require-headline`` exits 5 unless the status is
+``ok``. Every question of the committed 2024-2025 set resolved before any run of
+this code, so its headline is always withheld. ``--to-ledger`` stamps each row's
+``golden_tier``; score-ledger builds its headline from ``golden_tier ==
+'prospective'`` rows (rows without the key are ``unknown``).
+Deferred (no evidence yet; inert until point-in-time research exists): a
+``model_knowledge_cutoffs`` registry with post_cutoff / straddles tiers,
+``--reclassify``, a ``harvest-holdout`` refill, ``list_closed_markets`` and an AS_OF
+prompt block.
 
 Golden files declaring ``_meta.schema_version: 2`` (EVAL-9) are also checked
 against the v2 contract on load (``golden_set.validate_question``: outcome-free
@@ -101,11 +129,12 @@ import json
 import math
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.services import eval_stats, golden_set  # noqa: E402
+from app.services import eval_stats, golden_set, hindcast_policy  # noqa: E402
 from app.utils.atomic import write_json_atomic, write_text_atomic  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -124,6 +153,11 @@ CHARACTERIZATION_BANNER = ("Characterization only - answer-bearing golden set; "
 ANSWER_BEARING_CAVEAT = ("answer-bearing golden set resolved before current model cutoffs; "
                          "replay research is live-web with as_of = today: "
                          "characterization only (ADR 0002 I-21)")
+# EVAL-8: replaces ANSWER_BEARING_CAVEAT in the headline metrics, which cover only
+# prospective rows (see classify_tier).
+HEADLINE_CAVEAT = ("prospective rows only: each run started before its question's resolution date "
+                   "and within the lead tolerance of its as_of (an event decided inside that window "
+                   "could still be visible); promotion stays off (ADR 0002 I-21)")
 BOOTSTRAP_METHOD = "question-clustered percentile bootstrap"
 BOOTSTRAP_SEED = eval_stats.DEFAULT_BOOTSTRAP_SEED
 # Two-sided alpha of the bootstrap percentile CI (95%). It is also the largest
@@ -133,6 +167,38 @@ BOOTSTRAP_ALPHA = 0.05
 # EVAL-9: exit status when an evidence-backed golden row's recomputed label
 # disagrees with its recorded outcome (3 stays "nothing matched").
 EXIT_RECOMPUTE_MISMATCH = 4
+# EVAL-8: exit status of --require-headline when the headline status is not "ok".
+EXIT_HEADLINE_WITHHELD = 5
+
+# EVAL-8 headline tiers (see classify_tier), in the canonical order of tier_counts,
+# characterization.by_tier and the markdown tier table. Only prospective rows are
+# headline-eligible.
+TIER_PROSPECTIVE = "prospective"
+TIER_LATE_ORIGIN = "late_origin"
+TIER_HINDCAST_EXPOSED = "hindcast_retrieval_exposed"
+TIER_HINDCAST_PIT = "hindcast_pit"
+TIER_UNKNOWN = "unknown"
+TIERS = (TIER_PROSPECTIVE, TIER_LATE_ORIGIN, TIER_HINDCAST_EXPOSED, TIER_HINDCAST_PIT, TIER_UNKNOWN)
+HEADLINE_OK = "ok"
+HEADLINE_NO_ELIGIBLE_ROWS = "withheld_no_eligible_rows"
+HEADLINE_NO_PROVENANCE = "withheld_no_provenance"
+HEADLINE_GATE_DISABLED = "gate_disabled"
+# What the legacy top-level ``metrics`` block covers once the headline exists.
+METRICS_SCOPE = "all_matched_characterization"
+DEFAULT_LEAD_TOLERANCE_DAYS = 7
+# The run provenance files of a pipeline directory (PipelineManager.manifest_path /
+# state_path); run.json is preferred for created_at.
+RUN_MANIFEST_FILE = "run.json"
+PIPELINE_STATE_FILE = "pipeline_state.json"
+FORECAST_FILE_SOURCE = "forecast.json"
+RUN_CREATED_AT_ARG = "--run-created-at"
+# Markdown banner wording of each withheld tier.
+_TIER_BANNER = {
+    TIER_LATE_ORIGIN: "late origin (run started after as_of + the lead tolerance)",
+    TIER_HINDCAST_EXPOSED: "hindcast (live retrieval + model memory exposed)",
+    TIER_HINDCAST_PIT: "point-in-time hindcast (model memory exposed)",
+    TIER_UNKNOWN: "unknown provenance",
+}
 
 
 # ============================================================ pure scoring core
@@ -400,6 +466,133 @@ def rigor_ci(scored: List[Dict[str, Any]], B: int, seed: int = BOOTSTRAP_SEED) -
     }
 
 
+def _check_tolerance(days: Any) -> int:
+    """``days`` as a lead tolerance: an integer >= 0 (ValueError otherwise, fail loud)."""
+    if isinstance(days, bool) or not isinstance(days, int) or days < 0:
+        raise ValueError(f"lead tolerance must be an integer >= 0 days, got {days!r}")
+    return days
+
+
+def parse_run_created_at(value: Any) -> Tuple[Optional[datetime], Optional[str]]:
+    """EVAL-8: a run creation stamp as an aware UTC datetime, else ``(None, reason)``.
+
+    Strict: an ISO-8601 string with a UTC offset (``Z`` or ``+HH:MM``, as
+    ``pipeline_orchestrator._utcnow`` writes it). A naive stamp is rejected: its
+    zone is unknowable, and a shifted day can move a row across the as_of +
+    tolerance or the resolution boundary.
+    """
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None, "no run created_at"
+    if not isinstance(value, str):
+        return None, f"run created_at {value!r} is not an ISO-8601 string"
+    try:
+        parsed = datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None, f"run created_at {value!r} is not ISO-8601"
+    if parsed.utcoffset() is None:
+        return None, f"run created_at {value!r} has no UTC offset (naive stamps are rejected)"
+    try:
+        return parsed.astimezone(timezone.utc), None
+    except OverflowError:
+        return None, f"run created_at {value!r} is out of range in UTC"
+
+
+def classify_tier(q: Dict[str, Any], *, run_created_at: Any, lead_tolerance_days: int,
+                  hindcast: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """EVAL-8: the headline tier of one golden row, ``{'tier', 'reasons'}``.
+
+    ``q`` needs canonical ``as_of_date`` / ``resolution_date``; the run date is the
+    UTC date of ``run_created_at`` (see ``parse_run_created_at``). In order:
+
+    - ``hindcast_pit``: ``hindcast`` is set (the run was pinned as a TIME-7
+      hindcast), whatever the dates; the result also carries TIME-9's
+      ``integrity`` verdict when the pin records one.
+    - ``unknown``: no usable run stamp, or no canonical resolution date.
+    - ``hindcast_retrieval_exposed``: run date >= resolution date; the run's
+      live-web research (as_of = today) and the models' memory can see the outcome.
+    - ``unknown``: no canonical as_of date.
+    - ``late_origin``: before resolution, but after as_of + ``lead_tolerance_days``.
+    - ``prospective``: before resolution and on or before as_of +
+      ``lead_tolerance_days`` (keeps information sets comparable across code
+      versions). Only this tier is headline-eligible.
+    """
+    tolerance = _check_tolerance(lead_tolerance_days)
+    if hindcast is not None:
+        out: Dict[str, Any] = {"tier": TIER_HINDCAST_PIT, "reasons": [
+            f"run pinned as a point-in-time hindcast at as_of {hindcast.get('as_of') or 'unknown'} "
+            f"({hindcast.get('source')}): characterization only"]}
+        if hindcast.get("integrity"):
+            out["integrity"] = hindcast["integrity"]
+        return out
+    run_at, why = parse_run_created_at(run_created_at)
+    if run_at is None:
+        return {"tier": TIER_UNKNOWN, "reasons": [why]}
+    run_day = run_at.date()
+    resolution = eval_stats.parse_iso_date(q.get("resolution_date"))
+    if resolution is None:
+        return {"tier": TIER_UNKNOWN, "reasons": ["question has no canonical resolution_date"]}
+    if run_day >= resolution:
+        return {"tier": TIER_HINDCAST_EXPOSED, "reasons": [
+            f"run {run_day.isoformat()} is on or after resolution {resolution.isoformat()}: "
+            "live retrieval and model memory can see the outcome"]}
+    as_of = eval_stats.parse_iso_date(q.get("as_of_date"))
+    if as_of is None:
+        return {"tier": TIER_UNKNOWN, "reasons": ["question has no canonical as_of_date"]}
+    latest = as_of + timedelta(days=tolerance)
+    if run_day > latest:
+        return {"tier": TIER_LATE_ORIGIN, "reasons": [
+            f"run {run_day.isoformat()} is after as_of {as_of.isoformat()} + {tolerance} days "
+            f"({latest.isoformat()})"]}
+    return {"tier": TIER_PROSPECTIVE, "reasons": [
+        f"run {run_day.isoformat()} precedes resolution {resolution.isoformat()} and is no later "
+        f"than as_of {as_of.isoformat()} + {tolerance} days"]}
+
+
+def summarize_tiers(rows: List[Dict[str, Any]], *, has_provenance: bool, bins: int = DEFAULT_BINS,
+                    context: Optional[Dict[str, Any]] = None) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """EVAL-8: ``(headline, characterization)`` over scored rows that carry ``tier``.
+
+    ``headline``: ``status`` (``ok`` when any row is prospective, else
+    ``withheld_no_provenance`` without provenance and ``withheld_no_eligible_rows``
+    otherwise), ``tier_counts`` (every tier, canonical order), the ``context`` keys,
+    and ``metrics`` = ``score_pairs`` over the prospective rows only (the n = 0
+    block when withheld). ``characterization.by_tier``: ``score_pairs`` for each
+    other tier that has rows. The headline caveats carry HEADLINE_CAVEAT in place of
+    the all-matched ANSWER_BEARING_CAVEAT.
+    """
+    groups = {tier: [r for r in rows if r.get("tier") == tier] for tier in TIERS}
+    prospective = groups[TIER_PROSPECTIVE]
+    if prospective:
+        status = HEADLINE_OK
+    elif not has_provenance:
+        status = HEADLINE_NO_PROVENANCE
+    else:
+        status = HEADLINE_NO_ELIGIBLE_ROWS
+    headline: Dict[str, Any] = {"status": status, "tier_counts": {t: len(groups[t]) for t in TIERS}}
+    headline.update(context or {})
+    metrics = score_pairs(prospective, bins=bins)
+    rigor = metrics["rigor"]
+    rigor["caveats"] = [HEADLINE_CAVEAT if c == ANSWER_BEARING_CAVEAT else c for c in rigor["caveats"]]
+    headline["metrics"] = metrics
+    characterization = {"by_tier": {t: score_pairs(groups[t], bins=bins)
+                                    for t in TIERS if t != TIER_PROSPECTIVE and groups[t]}}
+    return headline, characterization
+
+
+def headline_banner(headline: Dict[str, Any]) -> str:
+    """The markdown's first line: ``HEADLINE: ...`` or ``HEADLINE WITHHELD: k/n <tier> ...``."""
+    counts = headline.get("tier_counts") or {}
+    n = sum(counts.values())
+    if headline.get("status") == HEADLINE_OK:
+        m = headline.get("metrics") or {}
+        reference = (m.get("rigor") or {}).get("reference") or {}
+        return (f"HEADLINE: mean Brier {_fmt(m.get('mean_brier'))} over "
+                f"{counts.get(TIER_PROSPECTIVE, 0)}/{n} prospective rows "
+                f"(BSS vs climatology {_fmt(reference.get('bss'))})")
+    parts = [f"{counts[t]}/{n} {_TIER_BANNER[t]}" for t in TIERS if t != TIER_PROSPECTIVE and counts.get(t)]
+    return "HEADLINE WITHHELD: " + ("; ".join(parts) if parts else "no scored rows")
+
+
 def load_golden_file(path: str = GOLDEN_PATH) -> Tuple[int, List[Dict[str, Any]]]:
     """Load + validate a golden file; returns ``(schema_version, questions)``.
 
@@ -567,6 +760,131 @@ def match_forecasts(binary_forecasts: List[Dict[str, Any]],
     }
 
 
+# ============================================================ run provenance (EVAL-8)
+# Reads the run's own records; never the network. A hindcast is recognised from any
+# of them (fail closed): the pipeline_state.json pin, run.json as_of_enforcement or
+# the forecast's hindcast stamp.
+
+def _read_json_object(path: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """``(object, None)`` for a JSON object file, else ``(None, why)``."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return None, "missing"
+    except (OSError, ValueError) as exc:
+        return None, f"unreadable ({exc.__class__.__name__})"
+    if not isinstance(data, dict):
+        return None, "not a JSON object"
+    return data, None
+
+
+def _integrity_of_audit_status(status: Any) -> str:
+    """TIME-9 integrity for a run.json ``as_of_enforcement.audit_status``.
+
+    That record carries ``audit_status`` only for a gated pin with a recognised
+    research audit, so the verdict is mapped through the same
+    ``hindcast_forecast_block`` that stamps a hindcast forecast (``labelled`` when
+    there is none).
+    """
+    return hindcast_policy.hindcast_forecast_block(
+        {"pit": {"gates": True}}, research_audit={"status": status})["integrity"]
+
+
+def forecast_hindcast_stamp(forecast_obj: Any) -> Optional[Dict[str, Any]]:
+    """The hindcast record of a forecast stamped ``hindcast`` by a pinned run (TIME-6), else None."""
+    for obj in (forecast_obj, forecast_obj.get("forecast") if isinstance(forecast_obj, dict) else None):
+        if isinstance(obj, dict) and obj.get("hindcast") is not None:
+            block = obj["hindcast"] if isinstance(obj["hindcast"], dict) else {}
+            return {"as_of": block.get("as_of"), "source": FORECAST_FILE_SOURCE,
+                    "integrity": block.get("integrity")}
+    return None
+
+
+def load_pipeline_provenance(pipeline_dir: str) -> Dict[str, Any]:
+    """EVAL-8: ``{run_created_at, source, hindcast, notes}`` from a pipeline directory.
+
+    ``run_created_at`` is run.json's ``created_at`` (``_build_run_manifest``), else
+    pipeline_state.json's, whichever first parses as a UTC-aware stamp (normalized
+    to UTC ISO-8601); ``source`` names that file. ``hindcast`` is the TIME-7 pin in
+    pipeline_state.json ``options.hindcast_policy_v1`` with TIME-9's integrity
+    verdict (``hindcast_forecast_block`` over its ``research_audit``), or, when the
+    state file cannot be read, run.json ``resolved.as_of_enforcement`` (written only
+    for a pinned run). A pin value that is neither a hindcast pin nor a live
+    (as-of = today) one cannot be ruled out, so the run stamp is withheld (every row
+    ``unknown``). ``notes`` says why a file or stamp was not used. A path that is
+    not a directory raises ValueError (a mistyped ``--pipeline-dir`` fails loud).
+    """
+    if not os.path.isdir(pipeline_dir):
+        raise ValueError(f"--pipeline-dir {pipeline_dir!r} is not a directory")
+    notes: List[str] = []
+    docs: Dict[str, Optional[Dict[str, Any]]] = {}
+    for name in (RUN_MANIFEST_FILE, PIPELINE_STATE_FILE):
+        docs[name], why = _read_json_object(os.path.join(pipeline_dir, name))
+        if why:
+            notes.append(f"{name}: {why}")
+    stamp: Optional[str] = None
+    source: Optional[str] = None
+    for name in (RUN_MANIFEST_FILE, PIPELINE_STATE_FILE):
+        doc = docs[name]
+        if doc is None:
+            continue
+        parsed, why = parse_run_created_at(doc.get("created_at"))
+        if parsed is not None:
+            stamp, source = parsed.isoformat(), name
+            break
+        notes.append(f"{name}: {why}")
+    hindcast: Optional[Dict[str, Any]] = None
+    state = docs[PIPELINE_STATE_FILE]
+    if state is not None:
+        options = state.get("options")
+        raw = options.get(hindcast_policy.HINDCAST_POLICY_OPTION) if isinstance(options, dict) else None
+        pin = hindcast_policy.hindcast_policy(options)
+        live_pin = (isinstance(raw, dict) and raw.get("version") == hindcast_policy.HINDCAST_POLICY_VERSION
+                    and raw.get("hindcast") is False)
+        if pin is not None:
+            block = hindcast_policy.hindcast_forecast_block(pin, research_audit=pin.get("research_audit"))
+            hindcast = {"as_of": pin.get("as_of"), "source": PIPELINE_STATE_FILE,
+                        "integrity": block["integrity"]}
+        elif raw is not None and not live_pin:
+            notes.append(f"{PIPELINE_STATE_FILE}: options.{hindcast_policy.HINDCAST_POLICY_OPTION} is not a "
+                         "recognised pin, so a hindcast cannot be ruled out: run stamp withheld")
+            stamp = source = None
+    else:
+        resolved = (docs[RUN_MANIFEST_FILE] or {}).get("resolved")
+        enforcement = resolved.get("as_of_enforcement") if isinstance(resolved, dict) else None
+        if isinstance(enforcement, dict):
+            hindcast = {"as_of": enforcement.get("as_of"), "source": RUN_MANIFEST_FILE,
+                        "integrity": _integrity_of_audit_status(enforcement.get("audit_status"))}
+    return {"run_created_at": stamp, "source": source, "hindcast": hindcast, "notes": notes}
+
+
+def resolve_run_provenance(*, pipeline_dir: Optional[str] = None, run_created_at: Optional[str] = None,
+                           forecast_obj: Any = None) -> Dict[str, Any]:
+    """EVAL-8: the scored run's provenance, ``{run_created_at, source, hindcast, notes}``.
+
+    From ``--pipeline-dir`` (``load_pipeline_provenance``) or ``--run-created-at``
+    (mutually exclusive: ValueError when both are given). A forecast stamped
+    ``hindcast`` marks the run a hindcast even without either. Nothing given and no
+    stamp: every field empty (the headline is then ``withheld_no_provenance``).
+    """
+    if pipeline_dir and run_created_at:
+        raise ValueError("--pipeline-dir and --run-created-at are mutually exclusive")
+    if pipeline_dir:
+        provenance = load_pipeline_provenance(pipeline_dir)
+    else:
+        provenance = {"run_created_at": None, "source": None, "hindcast": None, "notes": []}
+        if run_created_at is not None:
+            parsed, why = parse_run_created_at(run_created_at)
+            if parsed is not None:
+                provenance["run_created_at"], provenance["source"] = parsed.isoformat(), RUN_CREATED_AT_ARG
+            else:
+                provenance["notes"].append(f"{RUN_CREATED_AT_ARG}: {why}")
+    if provenance["hindcast"] is None:
+        provenance["hindcast"] = forecast_hindcast_stamp(forecast_obj)
+    return provenance
+
+
 # =============================================================== markdown render
 
 def _fmt(v: Any) -> str:
@@ -684,6 +1002,43 @@ def _render_metrics(m: Dict[str, Any], lines: List[str], heading: str = "##") ->
         lines.append("")
 
 
+def _render_headline(report: Dict[str, Any], lines: List[str], heading: str = "##") -> None:
+    """EVAL-8 Headline section: status, provenance, the tier table and, when the
+    status is ok, the headline metric sections one level below ``heading``."""
+    h = report.get("headline") or {}
+    by_tier = (report.get("characterization") or {}).get("by_tier") or {}
+    counts = h.get("tier_counts") or {}
+    lines += ["", f"{heading} Headline", "", f"- status: `{h.get('status')}`"]
+    if "run_created_at" in h:
+        source = h.get("run_created_at_source")
+        lines.append(f"- run created_at: {h.get('run_created_at') or '—'}" + (f" ({source})" if source else ""))
+    if "lead_tolerance_days" in h:
+        lines.append("- prospective: the run started before the resolution date and no later than "
+                     f"as_of + {h['lead_tolerance_days']} days")
+    if "tier_source" in h:
+        lines.append(f"- tiers from each golden row's `{h['tier_source']}` (rows without it count as unknown)")
+    hindcast = h.get("hindcast")
+    if isinstance(hindcast, dict):
+        lines.append(f"- pinned hindcast (as_of {hindcast.get('as_of') or '—'}, from {hindcast.get('source')}; "
+                     f"integrity {hindcast.get('integrity') or '—'}): characterization only")
+    for note in h.get("provenance_notes") or []:
+        lines.append(f"- provenance note: {note}")
+    if any(counts.values()):
+        lines += ["", "| tier | n | mean Brier | resolution accuracy (p >= 0.5) | counts toward |",
+                  "|---|---|---|---|---|"]
+        for tier in TIERS:
+            if not counts.get(tier):
+                continue
+            tm = (h.get("metrics") if tier == TIER_PROSPECTIVE else by_tier.get(tier)) or {}
+            lines.append(f"| {tier} | {counts[tier]} | {_fmt(tm.get('mean_brier'))} | "
+                         f"{_fmt(tm.get('resolution_accuracy'))} | "
+                         f"{'headline' if tier == TIER_PROSPECTIVE else 'characterization'} |")
+    if h.get("status") == HEADLINE_OK:
+        _render_metrics(h.get("metrics") or {}, lines, heading=heading + "#")
+        if lines[-1] == "":
+            lines.pop()  # the section after this one opens with its own blank line
+
+
 def _render_ledger_markdown(report: Dict[str, Any]) -> str:
     """Markdown for a score-ledger report (EVAL-7).
 
@@ -692,6 +1047,10 @@ def _render_ledger_markdown(report: Dict[str, Any]) -> str:
     production summary on its multi-class-sum Brier scale and the golden section
     on the binary scale, each labelled, with the golden metric and rigor sections
     nested one level under the golden heading.
+
+    EVAL-8: with a ``headline`` the golden section opens with its HEADLINE line and
+    a Headline subsection; the golden metric sections after it cover every scored
+    golden row (characterization).
     """
     g = report.get("golden") or {}
     lines: List[str] = [
@@ -704,6 +1063,13 @@ def _render_ledger_markdown(report: Dict[str, Any]) -> str:
         f"on a YES/NO row) | {_fmt(report.get('mean_brier'))} |",
         f"| calibration error | {_fmt(report.get('calibration_error'))} |", "",
         f"## Golden section ({g.get('brier_scale', 'binary')} Brier)"]
+    headline = report.get("headline")
+    if isinstance(headline, dict):
+        lines += ["", headline_banner(headline)]
+        _render_headline(report, lines, heading="###")
+        if g.get("n"):
+            lines += ["", "The sections below cover every scored golden row (characterization; "
+                          "the headline counts prospective rows only)."]
     if g.get("n"):
         _render_metrics(g, lines, heading="###")
     else:
@@ -718,11 +1084,17 @@ def render_markdown(report: Dict[str, Any]) -> str:
     Reference & skill, Direction & hedging and By horizon sections render the
     ``metrics.rigor`` block when present. A score-ledger report gets its own
     layout (``_render_ledger_markdown``).
+
+    EVAL-8: a report with a ``headline`` opens with its ``HEADLINE:`` /
+    ``HEADLINE WITHHELD:`` line above that banner, adds a Headline section before
+    the all-matched sections and a tier column to the per-question table.
     """
     if report.get("mode") == "score-ledger":
         return _render_ledger_markdown(report)
     m = report.get("metrics", {})
-    lines: List[str] = [CHARACTERIZATION_BANNER, "", "# Golden-question forecast evaluation", ""]
+    headline = report.get("headline")
+    lines: List[str] = [headline_banner(headline), ""] if isinstance(headline, dict) else []
+    lines += [CHARACTERIZATION_BANNER, "", "# Golden-question forecast evaluation", ""]
     lines.append(f"- source: `{report.get('forecast_path', '')}`")
     lines.append(f"- golden: `{report.get('golden_path', '')}` "
                  f"({report.get('golden_count', 0)} questions)")
@@ -739,15 +1111,23 @@ def render_markdown(report: Dict[str, Any]) -> str:
     excluded = (report.get("exclusions") or {}).get("ambiguous") or []
     if excluded:
         lines.append(f"- excluded, ambiguous resolution (never scored): {', '.join(excluded)}")
+    if report.get("metrics_scope"):
+        lines.append(f"- metrics scope: `{report['metrics_scope']}` (the Overall and later sections cover "
+                     "every matched row; the headline counts prospective rows only)")
+    if isinstance(headline, dict):
+        _render_headline(report, lines)
     _render_metrics(m, lines)
 
     rows = report.get("matched") or []
     if rows:
+        tiered = any("tier" in r for r in rows)
         lines += ["## Per-question", "",
-                  "| id | category | p(YES) | outcome | Brier |", "|---|---|---|---|---|"]
+                  "| id | category | p(YES) | outcome | Brier |" + (" tier |" if tiered else ""),
+                  "|---|---|---|---|---|" + ("---|" if tiered else "")]
         for r in rows:
             lines.append(f"| {r['id']} | {r.get('category') or '—'} | {r['probability']:.2f} | "
-                         f"{'YES' if r['outcome'] else 'NO'} | {_fmt(r.get('brier'))} |")
+                         f"{'YES' if r['outcome'] else 'NO'} | {_fmt(r.get('brier'))} |"
+                         + (f" {r.get('tier') or '—'} |" if tiered else ""))
         lines.append("")
     return "\n".join(lines)
 
@@ -765,6 +1145,59 @@ def _ledger_enabled(args) -> bool:
     return bool(env_on or getattr(args, "to_ledger", False))
 
 
+def _headline_gate_enabled() -> bool:
+    """EVAL-8 GOLDEN_HEADLINE_GATE; an unreadable Config keeps the gate on (fail closed)."""
+    try:
+        from app.config import Config
+    except Exception:  # noqa: BLE001
+        return True
+    return bool(getattr(Config, "GOLDEN_HEADLINE_GATE", True))
+
+
+def _lead_tolerance_days() -> int:
+    """EVAL-8 GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS (ValueError unless an integer >= 0)."""
+    try:
+        from app.config import Config
+    except Exception:  # noqa: BLE001
+        return DEFAULT_LEAD_TOLERANCE_DAYS
+    return _check_tolerance(getattr(Config, "GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS",
+                                    DEFAULT_LEAD_TOLERANCE_DAYS))
+
+
+def _tier_matched(matched: List[Dict[str, Any]], forecast_obj: Any, args,
+                  bootstrap_b: int) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """EVAL-8: stamp ``tier`` / ``tier_reasons`` on every matched row (in place) from the
+    run provenance of ``args`` and return ``(headline, characterization)``.
+
+    ``--pipeline-dir`` / ``--run-created-at`` are read with getattr (as is
+    ``--require-headline`` by the caller), so programmatic callers without them keep
+    working (no provenance: the headline is withheld). With ``--bootstrap`` an ok
+    headline gets its own CI.
+    """
+    tolerance = _lead_tolerance_days()
+    provenance = resolve_run_provenance(pipeline_dir=getattr(args, "pipeline_dir", None),
+                                        run_created_at=getattr(args, "run_created_at", None),
+                                        forecast_obj=forecast_obj)
+    for row in matched:
+        tiering = classify_tier(row, run_created_at=provenance["run_created_at"],
+                                lead_tolerance_days=tolerance, hindcast=provenance["hindcast"])
+        row["tier"], row["tier_reasons"] = tiering["tier"], tiering["reasons"]
+    context: Dict[str, Any] = {"run_created_at": provenance["run_created_at"],
+                               "run_created_at_source": provenance["source"],
+                               "lead_tolerance_days": tolerance}
+    if provenance["hindcast"] is not None:
+        context["hindcast"] = provenance["hindcast"]
+    if provenance["notes"]:
+        context["provenance_notes"] = provenance["notes"]
+    has_provenance = provenance["run_created_at"] is not None or provenance["hindcast"] is not None
+    headline, characterization = summarize_tiers(matched, has_provenance=has_provenance,
+                                                 bins=args.bins, context=context)
+    if bootstrap_b and headline["status"] == HEADLINE_OK:
+        prospective = [r for r in matched if r["tier"] == TIER_PROSPECTIVE]
+        headline["metrics"]["rigor"]["ci"] = rigor_ci(prospective, bootstrap_b)
+    return headline, characterization
+
+
 def _append_matched_to_ledger(matched: List[Dict[str, Any]], ledger_dir: Optional[str]) -> int:
     """Append each matched (probability, known outcome) as a resolved golden binary
     forecast so an EVALUATION calibration curve accumulates. Returns count appended.
@@ -774,6 +1207,9 @@ def _append_matched_to_ledger(matched: List[Dict[str, Any]], ledger_dir: Optiona
     a production-dir target (default or explicit) is transparently redirected to
     the isolated evaluation ledger, and production ``calibration_summary`` /
     ``recalibration_param`` exclude golden/characterization rows by record type.
+
+    EVAL-8: each row's ``tier`` (set only under GOLDEN_HEADLINE_GATE) becomes the
+    ledger row's ``golden_tier``; untiered rows are appended exactly as before.
     """
     from app.services.forecast_ledger import append_golden_result
     appended = 0
@@ -783,7 +1219,7 @@ def _append_matched_to_ledger(matched: List[Dict[str, Any]], ledger_dir: Optiona
             question_id=r["id"], probability=r["probability"], resolved_outcome=r["outcome"],
             question=r.get("question"), category=r.get("category"),
             resolution_date=r.get("resolution_date"), as_of_date=r.get("as_of_date"),
-            d=ledger_dir,
+            d=ledger_dir, golden_tier=r.get("tier"),
         )
         if e:
             appended += 1
@@ -830,6 +1266,10 @@ def cmd_score_forecast_file(args) -> int:
     if bootstrap_b:
         metrics["rigor"]["ci"] = rigor_ci(match["matched"], bootstrap_b)
 
+    # EVAL-8: tier the rows before the ledger append, which records each row's tier.
+    tiering = (_tier_matched(match["matched"], forecast_obj, args, bootstrap_b)
+               if _headline_gate_enabled() else None)
+
     ledger_appended = 0
     if _ledger_enabled(args) and match["matched"]:
         ledger_appended = _append_matched_to_ledger(match["matched"], args.ledger_dir)
@@ -839,7 +1279,15 @@ def cmd_score_forecast_file(args) -> int:
         "forecast_path": args.forecast,
         "golden_path": args.golden,
         "golden_count": len(questions),
-        "metrics": metrics,
+    }
+    if tiering is not None:
+        report["headline"] = tiering[0]
+    report["metrics"] = metrics
+    if tiering is not None:
+        # The legacy block keeps every matched row: characterization, not the headline.
+        report["metrics_scope"] = METRICS_SCOPE
+        report["characterization"] = tiering[1]
+    report.update({
         "matched": match["matched"],
         "unmatched_forecast_ids": match["unmatched_forecast_ids"],
         "unmatched_golden_ids": match["unmatched_golden_ids"],
@@ -847,12 +1295,17 @@ def cmd_score_forecast_file(args) -> int:
         "duplicate_forecast_ids": match["duplicate_forecast_ids"],
         "ledger_appended": ledger_appended,
         "promotion_eligible": False,
-    }
+    })
     # EVAL-9: a v2 golden set always reports its exclusions; a v1 report keeps its
     # exact pre-EVAL-9 keys unless a row really was excluded.
     if version == golden_set.SCHEMA_VERSION or any(match["exclusions"].values()):
         report["exclusions"] = match["exclusions"]
     _write_outputs(report, args.out, args.markdown)
+    # EVAL-8: --require-headline fails closed on any status but ok (gate_disabled included).
+    status = tiering[0]["status"] if tiering is not None else HEADLINE_GATE_DISABLED
+    if getattr(args, "require_headline", False) and status != HEADLINE_OK:
+        print(f"error: --require-headline: headline status is {status}", file=sys.stderr)
+        return EXIT_HEADLINE_WITHHELD
     # Non-zero exit only when NOTHING matched — a signal the ids are misaligned, not
     # a quality gate (there is no committed golden baseline to gate against here).
     return 0 if match["matched"] else 3
@@ -893,7 +1346,9 @@ def cmd_score_ledger(args) -> int:
 
     # Golden-tagged entries carry a category → a per-category binary breakdown, using
     # the YES-scenario probability as the model's p and outcome=='YES' as the label.
+    gate = _headline_gate_enabled()
     golden_scored: List[Dict[str, Any]] = []
+    tier_stamped = 0
     for e in golden_entries:
         if not (e.get("golden") and e.get("resolved") and e.get("scenarios")):
             continue
@@ -910,6 +1365,13 @@ def cmd_score_ledger(args) -> int:
             "as_of_date": e.get("as_of_date"),
             "resolution_date": e.get("resolution_date"),
         })
+        if gate:
+            # EVAL-8: the tier the row was scored under; a row without one (or with a
+            # value that is no tier) is unknown and never counts toward the headline.
+            tier = e.get("golden_tier")
+            golden_scored[-1]["tier"] = tier if tier in TIERS else TIER_UNKNOWN
+            if "golden_tier" in e:
+                tier_stamped += 1
 
     golden: Dict[str, Any] = score_pairs(golden_scored, bins=args.bins) if golden_scored else {"n": 0}
     # EVAL-7: the two Brier numbers are on different scales. The top-level one sums
@@ -929,6 +1391,12 @@ def cmd_score_ledger(args) -> int:
         "golden": golden,
         "promotion_eligible": False,
     }
+    if gate:
+        # EVAL-8: the golden headline counts golden_tier 'prospective' rows only; a
+        # ledger whose golden rows carry no golden_tier at all has no provenance.
+        report["headline"], report["characterization"] = summarize_tiers(
+            golden_scored, has_provenance=bool(tier_stamped) or not golden_scored, bins=args.bins,
+            context={"tier_source": "golden_tier"})
     _write_outputs(report, args.out, args.markdown)
     return 0
 
@@ -961,6 +1429,17 @@ def main() -> int:
     a.add_argument("--bootstrap", type=_non_negative_int, default=0, metavar="B",
                    help="add a question-clustered percentile bootstrap 95%% CI on Brier and BSS "
                         f"with B resamples (seed {BOOTSTRAP_SEED}; default 0 = off)")
+    provenance = a.add_mutually_exclusive_group()
+    provenance.add_argument("--pipeline-dir", default=None, metavar="DIR",
+                            help="the pipeline directory of the run that wrote --forecast (its run.json, else "
+                                 "pipeline_state.json, created_at and hindcast pin decide each row's "
+                                 "headline tier; EVAL-8)")
+    provenance.add_argument("--run-created-at", default=None, metavar="ISO",
+                            help="the run's creation time as ISO-8601 with a UTC offset "
+                                 "(e.g. 2026-09-28T10:00:00+00:00) when no pipeline directory is at hand")
+    a.add_argument("--require-headline", action="store_true",
+                   help=f"exit {EXIT_HEADLINE_WITHHELD} unless the headline status is ok "
+                        "(withheld or GOLDEN_HEADLINE_GATE=false)")
     a.set_defaults(func=cmd_score_forecast_file)
 
     b = sub.add_parser("score-ledger",
