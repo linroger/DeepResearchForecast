@@ -584,6 +584,29 @@ def append_market_resolution(*, report_id: str, forecast_id: str, market_id: str
         return None
 
 
+# EVAL-4: the named parameters of append_market_resolution; every other field of a complete
+# settlement event travels in its ``extra``.
+_RESOLUTION_BASE_KEYS = ("report_id", "forecast_id", "market_id", "resolved_outcome",
+                         "resolved_yes_price", "model_p", "market_p_at_research",
+                         "brier_contribution", "resolved_at")
+
+
+def append_settlement_event(event: Any, *, d: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """EVAL-4: append one complete settlement event (``forecast_resolution.build_manual_event``)
+    through ``append_market_resolution``: same idempotency key, lock and first-write-wins.
+    Returns the written row; None for a non-dict event, a key already recorded or a failed
+    write."""
+    if not isinstance(event, dict):
+        return None
+    extra = {k: v for k, v in event.items() if k not in _RESOLUTION_BASE_KEYS}
+    return append_market_resolution(
+        report_id=event.get("report_id"), forecast_id=event.get("forecast_id"),
+        market_id=event.get("market_id"), resolved_outcome=event.get("resolved_outcome"),
+        model_p=event.get("model_p"), market_p_at_research=event.get("market_p_at_research"),
+        brier_contribution=event.get("brier_contribution"), resolved_at=event.get("resolved_at"),
+        resolved_yes_price=event.get("resolved_yes_price"), d=d, extra=extra)
+
+
 def _is_market_brier_row(e: Any) -> bool:
     """EVAL-2: a market-settled row (legacy rows carry no source_kind). Grace terminals
     (source_kind 'terminal'), other label sources and 50/50 ambiguous settlements are

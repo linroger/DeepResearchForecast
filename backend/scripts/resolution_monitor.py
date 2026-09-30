@@ -175,15 +175,10 @@ def normalize_processed_at(value: Any) -> str:
     return moment.isoformat()
 
 
-def _local_stamp_to_utc(value: Any) -> Optional[str]:
-    """meta.json 的 created_at 由 datetime.now().isoformat() 写出（主机本地时间、无时区）：
-    无时区按本地时间读并换算 UTC；带时区直接换算；其他 → None。"""
-    if not isinstance(value, str) or not value.strip():
-        return None
-    try:
-        return datetime.fromisoformat(value.strip()).astimezone(timezone.utc).isoformat()
-    except (ValueError, OverflowError, OSError):
-        return None
+# meta.json 的 created_at 由 datetime.now().isoformat() 写出（主机本地时间、无时区）：
+# 无时区按本地时间读并换算 UTC；带时区直接换算；其他 → None。与人工结算（EVAL-4
+# load_manual_target）共用同一实现，两处永不分叉。
+_local_stamp_to_utc = _settlement.local_stamp_to_utc
 
 
 def _read_json(path: str) -> Optional[Any]:
@@ -420,15 +415,20 @@ def build_resolution_records(anchored: List[Dict[str, Any]],
 
 def detect_needs_manual(binaries: List[Dict[str, Any]],
                         resolved_market_ids: set,
-                        as_of: str) -> List[Dict[str, Any]]:
+                        as_of: str, *,
+                        attested: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
     """指标检查：判定日期已过（≤ as_of）但无市场判定可依的二元预测 → 需人工判定。
 
     「有市场判定可依」= 该预测锚点市场已 resolved。无锚点、或锚点市场尚未判定，且判定日期
-    已过 → 列入清单。纯函数（对**全部**二元预测扫描，不止锚定的那些）。"""
+    已过 → 列入清单。纯函数（对**全部**二元预测扫描，不止锚定的那些）。
+    EVAL-4：attested = 本报告在账本里已有有效人工证明（forecast_resolution.attested_items）
+    的预测 id——已判定，不再催（None = 不过滤）。"""
     out: List[Dict[str, Any]] = []
     for b in binaries or []:
         if not isinstance(b, dict):
             continue
+        if attested and str(b.get("id") or "").strip() in attested:
+            continue  # 已有人工证明
         rd = binary_resolution_date(b)
         if not rd or str(rd) > str(as_of):
             continue  # 无日期 或 尚未到期 → 不催
@@ -719,17 +719,11 @@ def _commit_target_meta(row: Dict[str, Any], *,
             "commit_id": row.get("commit_id"), "production_primary": production_primary}
 
 
-def _report_ledger_rows(report_id: str, ledger_dir: Optional[str]) -> List[Dict[str, Any]]:
-    """一份报告在生产账本与 evaluation 账本里的全部行。evaluation 类行按 Foglamp WP1 的
-    record_class 重定向（forecast_ledger._route_dir，此处复用同一规则）落在
-    evaluation_ledger_dir()；注入的非缺省 ledger_dir 不重定向，evaluation 行就在它自己里面。
-    两处都读才能认出 evaluation / golden 报告。"""
-    dirs: List[str] = []
-    for d in (ledger_dir or _ledger.ledger_dir(), _ledger._route_dir(ledger_dir, "evaluation")):
-        if os.path.abspath(d) not in {os.path.abspath(x) for x in dirs}:
-            dirs.append(d)
-    return [row for d in dirs for row in _ledger.read_ledger(d)
-            if isinstance(row, dict) and row.get("report_id") == report_id]
+# 一份报告在生产账本与 evaluation 账本里的全部行。evaluation 类行按 Foglamp WP1 的
+# record_class 重定向（forecast_ledger._route_dir）落在 evaluation_ledger_dir()；注入的非缺省
+# ledger_dir 不重定向，evaluation 行就在它自己里面。两处都读才能认出 evaluation / golden 报告。
+# 与人工结算（EVAL-4 load_manual_target）共用同一实现，两处永不分叉。
+_report_ledger_rows = _settlement.report_ledger_rows
 
 
 def _registers_binaries(row: Dict[str, Any], binaries: List[Dict[str, Any]]) -> bool:
@@ -778,24 +772,10 @@ def target_meta_for(report_id: str, *, ledger_dir: Optional[str] = None,
             "production_primary": None}
 
 
-# resolutions.jsonl 的基础字段（append_market_resolution 的具名参数）；其余事件字段走 extra。
-_EVENT_BASE_KEYS = ("report_id", "forecast_id", "market_id", "resolved_outcome",
-                    "resolved_yes_price", "model_p", "market_p_at_research",
-                    "brier_contribution", "resolved_at")
-
-
 def _append_event(event: Dict[str, Any], ledger_dir: Optional[str]) -> Optional[Dict[str, Any]]:
-    """把一条结算事件幂等追加进 resolutions.jsonl；重复/失败 → None。"""
-    extra = {k: v for k, v in event.items() if k not in _EVENT_BASE_KEYS}
-    return _ledger.append_market_resolution(
-        report_id=event.get("report_id"), forecast_id=event.get("forecast_id"),
-        market_id=event.get("market_id"), resolved_outcome=event.get("resolved_outcome"),
-        model_p=event.get("model_p"),
-        market_p_at_research=event.get("market_p_at_research"),
-        brier_contribution=event.get("brier_contribution"),
-        resolved_at=event.get("resolved_at"),
-        resolved_yes_price=event.get("resolved_yes_price"),
-        d=ledger_dir, extra=extra)
+    """把一条结算事件幂等追加进 resolutions.jsonl；重复/失败 → None。与人工结算共用
+    forecast_ledger.append_settlement_event（同一基础字段拆分、幂等键与锁）。"""
+    return _ledger.append_settlement_event(event, d=ledger_dir)
 
 
 def _fetch_resolutions(client: Any,
@@ -945,19 +925,22 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
                     if isinstance(r, dict) and r.get("resolved")}
 
     # EVAL-2：结算判定（纯函数）。市场事件 = 已判定 / 50-50 模糊判定；terminal 单列。
+    existing_events = _ledger.read_market_resolutions(ledger_dir)
     settlement = _settlement.settle_binaries(
         report_id, binaries, resolutions, target_meta=target_meta,
         processed_at=processed_at, min_equivalence=market_min_equivalence(),
         grace_days=pending_grace_days(),
-        existing_events=_ledger.read_market_resolutions(ledger_dir),
+        existing_events=existing_events,
         answered_market_ids=answered)
     records = [e for e in settlement["events"] if e.get("resolution_status") == "settled"]
     # 非生产 primary 目标（ensemble / what-if / comparison / revision / evaluation）：结算
     # 照算照报，但一条也不写进生产 resolutions.jsonl（I-21；键先写者赢，写错无法更正）。
     record_settlement = (target_meta or {}).get("production_primary") is not False
 
-    # (4) 指标检查：过期却无市场判定的预测 → 需人工判定。
-    needs_manual = detect_needs_manual(binaries, resolved_ids, as_of_day)
+    # (4) 指标检查：过期却无市场判定、也无有效人工证明（EVAL-4）的预测 → 需人工判定。
+    attested = {forecast_id for rid, forecast_id in _settlement.attested_items(existing_events)
+                if rid == str(report_id).strip()}
+    needs_manual = detect_needs_manual(binaries, resolved_ids, as_of_day, attested=attested)
 
     # ── 写盘（dry-run 跳过全部写操作）──
     newly_recorded: List[Dict[str, Any]] = []
@@ -1055,8 +1038,12 @@ def settle_targets(entries: List[Dict[str, Any]], limit: int,
     grace terminal 也要先联网确认；逾期行按最早逾期日、再按账本先后（老的在前）排，其余
     行新到旧。否则长期未收盘的新目标会一直占满上限，老目标永远查不到、也永远结不了。
     超限的行 deferred_by_cap 计数，其锚定条目留待下轮；它们已过 grace 的无锚点条目照常
-    结算——terminal 不需要网络。"""
+    结算——terminal 不需要网络。
+    EVAL-4：人工证明不算入账——锚定条目照常查市场，直到市场判定或 grace terminal 关闭其
+    市场通道，与人工证明不符的市场判定折叠为 conflict；持有有效（未被更正/撤回）人工证明的
+    无锚点条目无需 terminal，不再可处理。"""
     recorded = _settlement.recorded_items(existing)
+    attested = _settlement.attested_items(existing)
     cap = max(0, int(limit))
     overdue: List[Tuple[str, int, Dict[str, Any], List[Dict[str, Any]]]] = []
     current: List[Tuple[Dict[str, Any], List[Dict[str, Any]]]] = []
@@ -1065,7 +1052,7 @@ def settle_targets(entries: List[Dict[str, Any]], limit: int,
             continue
         due = _settlement.due_binaries(row.get("report_id"), row.get("binary_forecasts"),
                                        recorded, processed_at=processed_at,
-                                       grace_days=grace_days)
+                                       grace_days=grace_days, attested=attested)
         if not due:
             continue
         since = _settlement.overdue_since(due, processed_at)

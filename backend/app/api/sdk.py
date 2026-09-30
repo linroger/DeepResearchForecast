@@ -37,10 +37,12 @@ backtest 评分器），从而杜绝 v1 与底层路由的语义漂移（见 des
 import json
 import os
 import traceback
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
 from ..config import Config
+from ..services import forecast_ledger, forecast_resolution
 from ..services.pipeline_orchestrator import (
     PipelineManager,
     PipelineOrchestrator,
@@ -63,6 +65,17 @@ sdk_bp = Blueprint('sdk_v1', __name__)
 _VALID_DEPTH = {"quick", "standard", "deep"}
 _VALID_MODE = {"full", "research_only"}
 _VALID_LANGUAGES = {"Chinese", "English", "auto"}
+# EVAL-4：未携带 outcome_known_at + evidence 的判定只写 resolved.json，不进校准账本。
+_SETTLEMENT_NEEDS_ATTESTATION = "outcome_known_at and evidence required to enter calibration"
+_SUPERSEDES_HINT = "（请用 forecast_tools resolve --supersedes 更正或撤回）"
+
+
+def _plan_scenario_attestation(target, outcome, known_at, evidence):
+    """EVAL-4：按当前账本规划一条情景集人工证明（forecast_resolution.plan_manual_settlement）。"""
+    return forecast_resolution.plan_manual_settlement(
+        target, forecast_resolution.SCENARIO_ITEM, outcome, known_at, evidence,
+        existing_events=forecast_ledger.read_market_resolutions(),
+        processed_at=datetime.now(timezone.utc).isoformat())
 
 
 def _ok(data, status: int = 200):
@@ -308,10 +321,37 @@ def v1_resolve(report_id: str):
     calibration_report 跨多条已判定预测做校准。
 
     请求 (application/json):
-        outcome: str   实际发生的情景名（须匹配 forecast.scenarios[*].name；模糊匹配交由评分器处理）
+        outcome: str            实际发生的情景名（按评分器的 ensemble._norm_name 归一后须恰好
+                                匹配 forecast.scenarios[*].name 之一）
+        outcome_known_at: str   可选（EVAL-4）：结果为人所知的时刻（YYYY-MM-DD 或带 Z/时区偏移的
+                                ISO 时刻，不得晚于当前）
+        evidence: str           可选（EVAL-4）：http(s) URL 或不少于 20 字符的说明
+
+    EVAL-4（人工结算）：
+    - outcome 未匹配任何情景（或同时匹配多个）→ 400，且不写 resolved.json（此前会落盘并被
+      计为全错）。
+    - 同时携带 outcome_known_at 与 evidence：先校验这两项（validate_manual_attestation，
+      与目标无关，非法 → 400）；判定目标取 load_manual_target（生产 primary 账本行，否则发布时
+      可发布且已封印的报告本身；取不到 → 409）；再按 forecast_resolution 的人工结算规则校验
+      （非法 → 400）；该情景集已有不同的人工证明 → 409（须用 forecast_tools resolve
+      --supersedes 更正/撤回）。通过后先向 resolutions.jsonl 追加一条 attested 基准的
+      scenario_set 事件（与 CLI 同一构造器），再写 resolved.json：账本未接受时按最新账本
+      重判——并发请求已写入相同证明 → 视同 no-op；不同证明 → 409；账本不可写 → 500；
+      后两者都不写 resolved.json。只给其一 → 400。
+    - 两者都不带：保持只写 resolved.json 的旧行为；但该情景集在账本里仍有效的人工证明
+      （forecast_resolution.disagreeing_attestations）与 outcome 不同 → 409，不写 resolved.json
+      （须先用 forecast_tools resolve --supersedes 更正/撤回该证明）。
+    - resolved.json 只是本端点的评分快照，校准只读账本：CLI 的更正/撤回只改账本、不改
+      resolved.json，之后按新结果再调用本端点即可刷新它。
 
     返回:
-        {report_id, outcome, scoring: {brier, realized_probability, log_loss, ...}}
+        {report_id, outcome, scoring: {brier, realized_probability, log_loss, ...},
+         settlement: {recorded, event_key, reason}}
+        event_key 为该事件的 market_id（'manual' 或 'manual:r<n>'，即 --supersedes 的取值）。
+        reason：None（已入账）；'already_recorded'（相同证明已在账）；缺证明时为
+        _SETTLEMENT_NEEDS_ATTESTATION；目标是无生产 primary 账本行的报告本身时为
+        forecast_resolution.MANUAL_NOT_BINDABLE（已入账，但 resolved_view 只标注生产 primary
+        commit 行，故在该报告有这样一行之前不进任何校准；之后按该行的起点重判 prospective）。
     """
     try:
         report = ReportManager.get_report(report_id)
@@ -347,9 +387,44 @@ def v1_resolve(report_id: str):
         if not outcome:
             return _err("缺少 outcome（实际发生的情景名）")
 
+        # EVAL-4：未匹配 / 多重匹配的 outcome 会被评分器当作全错，绝不落盘。
+        _, unmatched = forecast_resolution.match_scenario_name(forecast.get("scenarios"), outcome)
+        if unmatched is not None:
+            names = [str(s.get("name")) for s in (forecast.get("scenarios") or [])
+                     if isinstance(s, dict)]
+            return _err(f"outcome 须恰好匹配一个情景名（{unmatched}）：{names}", 400)
+
+        known_at = data.get('outcome_known_at')
+        evidence = data.get('evidence')
+        target = plan = None
+        if known_at is not None or evidence is not None:
+            if known_at is None or evidence is None:
+                return _err("outcome_known_at 与 evidence 须同时提供", 400)
+            # 与目标无关的输入先校验：非法输入一律 400，不因缺目标先报 409。
+            ok, errors = forecast_resolution.validate_manual_attestation(known_at, evidence)
+            if not ok:
+                return _err("；".join(errors), 400)
+            target, reason = forecast_resolution.load_manual_target(report_id)
+            if target is None:
+                return _err(f"该报告没有可入账校准的预测目标：{reason}", 409)
+            plan = _plan_scenario_attestation(target, outcome, known_at, evidence)
+            if plan["status"] == "invalid":
+                return _err("；".join(plan["errors"]), 400)
+            if plan["status"] == "exists":
+                return _err("；".join(plan["errors"]) + _SUPERSEDES_HINT, 409)
+        else:
+            # 旧路径（不带证明）不得写出与账本里仍有效的人工证明相左的 resolved.json。
+            standing = forecast_resolution.disagreeing_attestations(
+                forecast_ledger.read_market_resolutions(), report_id,
+                forecast_resolution.SCENARIO_ITEM, outcome)
+            if standing:
+                attested = "，".join(f"{row.get('market_id')}={row.get('outcome')!r}"
+                                    for row in standing)
+                return _err(f"该情景集在账本中已有不同的人工证明（{attested}），未写入判定"
+                            + _SUPERSEDES_HINT, 409)
+
         scoring = score_forecast(forecast, outcome)
 
-        from datetime import datetime
         record = {
             "report_id": report_id,
             "simulation_id": report.simulation_id,
@@ -359,16 +434,38 @@ def v1_resolve(report_id: str):
             # 内嵌当时的预测快照，便于把多条 resolved.json 直接喂给 backtest 校准（{forecast, outcome}）。
             "forecast": forecast,
         }
+        settlement = {"recorded": False, "event_key": None,
+                      "reason": _SETTLEMENT_NEEDS_ATTESTATION}
+        if plan is not None and plan["status"] == "append":
+            # 先入账、后写 resolved.json：并发的另一请求若抢先写入了不同证明，本请求 409，
+            # 不为它写 resolved.json。
+            if forecast_ledger.append_settlement_event(plan["event"]) is None:
+                plan = _plan_scenario_attestation(target, outcome, known_at, evidence)
+                if plan["status"] == "exists":
+                    return _err("；".join(plan["errors"]) + _SUPERSEDES_HINT, 409)
+                if plan["status"] != "noop":
+                    return _err("结算账本未接受该事件（resolutions.jsonl 未写入），未写入判定", 500)
+            else:
+                settlement = {
+                    "recorded": True, "event_key": plan["event"]["market_id"],
+                    "reason": forecast_resolution.manual_not_bindable_reason(
+                        target, forecast_resolution.SCENARIO_ITEM)}
+        if plan is not None and plan["status"] == "noop":
+            settlement = {"recorded": False, "event_key": plan["latest"].get("market_id"),
+                          "reason": "already_recorded"}
         # 原子落盘（write_json_atomic：tmp + fsync + os.replace），避免轮询读取读到半截文件。
         write_json_atomic(_resolved_path(report_id), record)
+
         logger.info(
             f"[v1] 预测已判定: {report_id} outcome='{outcome}' "
-            f"brier={scoring.get('brier')} matched={scoring.get('outcome_matched_a_scenario')}"
+            f"brier={scoring.get('brier')} matched={scoring.get('outcome_matched_a_scenario')} "
+            f"settlement={settlement}"
         )
         return _ok({
             "report_id": report_id,
             "outcome": outcome,
             "scoring": scoring,
+            "settlement": settlement,
         })
     except Exception as e:
         logger.error(f"[v1] 判定预测失败: {e}", exc_info=True)
