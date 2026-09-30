@@ -246,6 +246,24 @@ def test_prompt_contains_post_replies_reasons_and_rules():
     assert "written in" not in reddit
 
 
+def test_prompt_period_context_follows_response_round_header():
+    """SIM-6：本期上下文紧接 '# RESPONSE ROUND' 两行头部（其后空一行）；空上下文逐字节不变。"""
+    cand = {**_thread(7, 2, "IBM says Starling remains on schedule for 2029."),
+            "reasons": ["it touches your priorities (roadmap)"]}
+    base = rps.build_reaction_prompt(0, "BIS", [cand], AGENT_NAMES, "twitter", "2027-H1", "English")
+    assert rps.build_reaction_prompt(0, "BIS", [cand], AGENT_NAMES, "twitter", "2027-H1",
+                                     "English", "") == base
+    context = ("## THIS PERIOD — scheduled events (research timeline)\n"
+               "[2027-02-01] Export rule published\n## WHAT CHANGED LAST PERIOD\nIBM: roadmap")
+    prompt = rps.build_reaction_prompt(0, "BIS", [cand], AGENT_NAMES, "twitter", "2027-H1",
+                                       "English", context)
+    lines, base_lines = prompt.split("\n"), base.split("\n")
+    assert lines[:3] == base_lines[:3] and lines[0] == "# RESPONSE ROUND — 2027-H1"
+    assert "\n".join(lines[3:7]) == context
+    assert lines[7] == ""
+    assert lines[8:] == base_lines[3:]
+
+
 # ---------------------------------------------------------------------------
 # 4) 回应执行（辅助 agent 替身，真实库表 + 动作日志）
 # ---------------------------------------------------------------------------
@@ -450,7 +468,8 @@ def _loop_config():
     return cfg
 
 
-def test_round_loop_runs_reaction_phase_every_round(tmp_path, monkeypatch):
+@pytest.mark.parametrize("period_v2", [None, "false"])
+def test_round_loop_runs_reaction_phase_every_round(tmp_path, monkeypatch, period_v2):
     sim_dir = str(tmp_path)
     with open(os.path.join(sim_dir, "twitter_profiles.csv"), "w", encoding="utf-8") as f:
         f.write("agent_id\n")
@@ -475,6 +494,10 @@ def test_round_loop_runs_reaction_phase_every_round(tmp_path, monkeypatch):
     monkeypatch.delenv("SIM_ENGAGEMENT_SAMPLER", raising=False)
     monkeypatch.delenv("SIM_OUTPUT_LANGUAGE", raising=False)
     monkeypatch.setenv("SIM_DECISION_CHANNEL_INBAND", "false")
+    if period_v2 is None:
+        monkeypatch.delenv("SIM_PERIOD_CONTEXT_V2", raising=False)
+    else:
+        monkeypatch.setenv("SIM_PERIOD_CONTEXT_V2", period_v2)
 
     logger = PlatformActionLogger("twitter", sim_dir)
     asyncio.run(rps.run_twitter_simulation(_loop_config(), sim_dir, action_logger=logger))
@@ -496,6 +519,17 @@ def test_round_loop_runs_reaction_phase_every_round(tmp_path, monkeypatch):
     assert notes and all("separate response step" in n and "in English." in n for n in notes)
     # 第 2 轮的回应里出现「别人回复了你的帖子」
     assert any("other actors replied to your post" in c["prompt"] for c in calls[3:])
+    # SIM-6：无状态的回应辅助 agent 拿到本期到期事件与上一时段变化（V2 关 → 提示不变）
+    from app.services import sim_period_context as spc
+    assert len(calls) == 6
+    if period_v2 is None:
+        for idx, call in enumerate(calls):
+            first, second = spc.WORLD_CLOCK_FIRST_PERIOD, spc.WORLD_CLOCK_SUMMARY_NOT_PRODUCED
+            assert ("## THIS PERIOD — scheduled events (research timeline)\n"
+                    + spc.WORLD_CLOCK_NO_EVENTS + "\n## WHAT CHANGED LAST PERIOD\n"
+                    + (first if idx < 3 else second) + "\n\n[1] post_id=") in call["prompt"]
+    else:
+        assert all("## THIS PERIOD" not in c["prompt"] for c in calls)
 
 
 def test_round_loop_reaction_phase_off_restores_old_behavior(tmp_path, monkeypatch):

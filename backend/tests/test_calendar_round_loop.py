@@ -39,6 +39,7 @@ import run_parallel_simulation as rps  # noqa: E402
 from action_logger import PlatformActionLogger  # noqa: E402
 from oasis import LLMAction, ManualAction  # noqa: E402
 import app.services.decision_channel as dc  # noqa: E402
+from app.services import sim_period_context as spc  # noqa: E402
 
 
 # ===========================================================================
@@ -284,14 +285,28 @@ def _world_clock_roles(env):
 # ===========================================================================
 # 1+2+3+4+5+6) 日历全链路：轮数/时段字段/激活/注入/in-band 演化产物
 # ===========================================================================
-@pytest.mark.parametrize("absence_markers", ["false", "true"])
-def test_calendar_loop_full_run(tmp_path, monkeypatch, absence_markers):
+def _set_knob(monkeypatch, name, value):
+    """value None → 删除环境变量，取 Config 默认（开）。"""
+    if value is None:
+        monkeypatch.delenv(name, raising=False)
+    else:
+        monkeypatch.setenv(name, value)
+
+
+@pytest.mark.parametrize("period_v2,absence_markers", [
+    (None, None), ("true", "false"), ("false", "true"), ("false", "false")])
+def test_calendar_loop_full_run(tmp_path, monkeypatch, period_v2, absence_markers):
     sim_dir = str(tmp_path)
     envs, calls = [], []
     _patch_runtime(monkeypatch, sim_dir, envs)
     monkeypatch.setattr(dc, "elicit_round", _fake_elicit(calls))
-    # REPORT-6：false = 旧头部逐字节（"(none)" / "(first period)"）；true = 默认的具名空段标记
-    monkeypatch.setenv("SIM_ABSENCE_MARKERS", absence_markers)
+    # REPORT-6：false = 旧占位逐字节（"(none)" / "(first period)"）；true/默认 = 具名空段标记。
+    # SIM-6：SIM_PERIOD_CONTEXT_V2 只管事件段标题（预期事件，非 CONFIRMED）与摘要分段。
+    _set_knob(monkeypatch, "SIM_PERIOD_CONTEXT_V2", period_v2)
+    _set_knob(monkeypatch, "SIM_ABSENCE_MARKERS", absence_markers)
+    v2_on = period_v2 != "false"
+    markers_on = absence_markers != "false"
+    heading = spc.SCHEDULED_EVENTS_HEADING_V2 if v2_on else "## CONFIRMED EVENTS THIS PERIOD"
 
     # max_rounds=1 必须被日历模式忽略（cap 已在配置生成期粗化消化，绝不截断预测期）
     _run(_calendar_config(), sim_dir, max_rounds=1)
@@ -331,18 +346,21 @@ def test_calendar_loop_full_run(tmp_path, monkeypatch, absence_markers):
         "# WORLD CLOCK — 2026-Q3 (2026-07-12 → 2026-09-30) | round 1/3 | "
         "one quarter per round | forecast horizon 2027-03-31 (2 periods remain)")
     assert "OVER THIS ENTIRE quarter" in r1[0]
-    if absence_markers == "false":
-        assert r1[0].endswith("## CONFIRMED EVENTS THIS PERIOD\n(none)\n"
-                              "## WHAT CHANGED LAST PERIOD\n(first period)")
+    if v2_on:
+        assert ("## SCHEDULED EVENTS THIS PERIOD (research timeline — expected; "
+                "outcomes not known in advance)\n") in r1[0]
+        assert "CONFIRMED" not in "".join(notes)
+    if not markers_on:
+        assert r1[0].endswith(heading + "\n(none)\n## WHAT CHANGED LAST PERIOD\n(first period)")
     else:
-        assert ("## CONFIRMED EVENTS THIS PERIOD\n" + rps._WORLD_CLOCK_NO_EVENTS) in r1[0]
+        assert (heading + "\n" + spc.WORLD_CLOCK_NO_EVENTS) in r1[0]
         assert r1[0].endswith("## WHAT CHANGED LAST PERIOD\n"
                               "(first period — nothing has happened in this simulation yet)")
         assert "(none)" not in r1[0]
     # 第 2 轮：日程事件到期 + 上一时段演化摘要（含定性动量线，绝无数字份额）
     assert "[2026-11-05] 事件A发生" in r2[0]
     assert "(first period" not in r2[0]
-    assert rps._WORLD_CLOCK_NO_EVENTS not in r2[0]  # 有到期事件 → 不出空段标记
+    assert spc.WORLD_CLOCK_NO_EVENTS not in r2[0]  # 有到期事件 → 不出空段标记
     assert "Momentum: A strengthened this period." in r2[0]
     assert "%" not in r2[0].split("## WHAT CHANGED LAST PERIOD")[1]  # herding guard
     r3 = [n for n in notes if "round 3/3" in n]
@@ -368,6 +386,15 @@ def test_calendar_loop_full_run(tmp_path, monkeypatch, absence_markers):
         assert r["leader"] == "A"
         assert set(r["delta"]) == {"A", "B"}
         assert isinstance(r["digest"], str)
+    # SIM-6：V2 摘要分段（事件/帖文各自整行封顶）；关 → 旧的平铺摘要
+    if v2_on:
+        assert digest_rows[1]["digest"].startswith(
+            "### Scheduled events last period\n[2026-11-05] 事件A发生\n"
+            "### Most-influential actor posts last period (peer claims, unverified)\n")
+        assert "### Scheduled events" not in digest_rows[0]["digest"]  # 无事件 → 无事件小节
+    else:
+        assert digest_rows[1]["digest"].startswith("[2026-11-05] 事件A发生\nActor")
+        assert all("###" not in r["digest"] for r in digest_rows)
 
     # ---- world_state_trajectory.json：schema v3（spec §6）----
     with open(os.path.join(sim_dir, "world_state_trajectory.json"), encoding="utf-8") as f:
@@ -401,7 +428,7 @@ def test_calendar_loop_full_run(tmp_path, monkeypatch, absence_markers):
     assert traj["validity_reasons"] == []
     assert "unaccounted_rounds" not in traj["round_accounting"]  # 全部轮次已步进
     # REPORT-6：摘要来源状态计数是附加键，与空段标记同一开关（关 → 轨迹键集不变）
-    if absence_markers == "false":
+    if not markers_on:
         assert "delta_state_counts" not in traj
     else:
         assert traj["delta_state_counts"] == {"stepped": 3, "quiet": 0, "failed": 0}
@@ -432,13 +459,15 @@ def test_world_clock_delivered_as_user_role(tmp_path, monkeypatch):
 # ===========================================================================
 # 6b) 世界演化故障注入：该轮照常完成、下一轮空摘要、绝不崩溃
 # ===========================================================================
-@pytest.mark.parametrize("absence_markers", ["false", "true"])
+@pytest.mark.parametrize("period_v2,absence_markers", [
+    (None, None), ("true", "false"), ("false", "true"), ("false", "false")])
 def test_world_evolution_failure_round_completes_with_empty_digest(tmp_path, monkeypatch,
-                                                                   absence_markers):
+                                                                   period_v2, absence_markers):
     sim_dir = str(tmp_path)
     envs = []
     _patch_runtime(monkeypatch, sim_dir, envs)
-    monkeypatch.setenv("SIM_ABSENCE_MARKERS", absence_markers)
+    _set_knob(monkeypatch, "SIM_PERIOD_CONTEXT_V2", period_v2)
+    _set_knob(monkeypatch, "SIM_ABSENCE_MARKERS", absence_markers)
 
     def _boom(roster, period_ctx):
         raise RuntimeError("elicit 爆炸（故障注入）")
@@ -455,19 +484,19 @@ def test_world_evolution_failure_round_completes_with_empty_digest(tmp_path, mon
     assert len(ends) == 3
     notes = _world_clock_notes(env)
     assert all(any(f"round {r}/3" in n for n in notes) for r in (1, 2, 3))
+    if period_v2 == "false":  # V2 关：无补报块，旧头部逐字节收尾于 WHAT CHANGED 段
+        assert all(n.endswith("## WHAT CHANGED LAST PERIOD\n" + _what_changed(n)) for n in notes)
     if absence_markers == "false":
-        # 旧行为（开关关，逐字节）：每轮演化失败 → 下一轮世界时钟头回落 "(first period)"
+        # 旧占位（开关关，逐字节）：每轮演化失败 → 下一轮世界时钟头回落 "(first period)"
         for n in notes:
-            assert n.endswith("## WHAT CHANGED LAST PERIOD\n(first period)")
+            assert _what_changed(n) == "(first period)"
     else:
         # REPORT-6：只有第 1 轮自称首轮；此后失败轮如实标"摘要不可用"，绝不再称首轮
         for n in notes:
             if "round 1/3" in n:
-                assert n.endswith("## WHAT CHANGED LAST PERIOD\n"
-                                  "(first period — nothing has happened in this simulation yet)")
+                assert _what_changed(n) == spc.WORLD_CLOCK_FIRST_PERIOD
             else:
-                assert n.endswith("## WHAT CHANGED LAST PERIOD\n"
-                                  + rps._WORLD_CLOCK_SUMMARY_UNAVAILABLE)
+                assert _what_changed(n) == spc.WORLD_CLOCK_SUMMARY_UNAVAILABLE
                 assert "unavailable in this run" in n
                 assert "(first period" not in n
     # 步进从未成功 → 不落轨迹/digest（post-hoc 决策通道可按旧门控回退）
@@ -806,9 +835,9 @@ def test_inband_legacy_elicit_double_adds_no_validation_keys(tmp_path, monkeypat
 # ===========================================================================
 # 7d) REPORT-6：世界时钟空段具名标记（SIM_ABSENCE_MARKERS，默认开）
 # ===========================================================================
-_ABSENCE_MARKERS = (rps._WORLD_CLOCK_NO_EVENTS, rps._WORLD_CLOCK_FIRST_PERIOD,
-                    rps._WORLD_CLOCK_QUIET_PERIOD, rps._WORLD_CLOCK_SUMMARY_UNAVAILABLE,
-                    rps._WORLD_CLOCK_SUMMARY_NOT_PRODUCED)
+_ABSENCE_MARKERS = (spc.WORLD_CLOCK_NO_EVENTS, spc.WORLD_CLOCK_FIRST_PERIOD,
+                    spc.WORLD_CLOCK_QUIET_PERIOD, spc.WORLD_CLOCK_SUMMARY_UNAVAILABLE,
+                    spc.WORLD_CLOCK_SUMMARY_NOT_PRODUCED)
 _EVENT_DUE = [{"date": "2026-11-05", "content": "事件A发生"}]
 _ACTOR0_POST = [{"agent_id": 0, "agent_name": "Actor0",
                  "action_args": {"content": "Actor0 strategic move"}}]
@@ -826,7 +855,9 @@ def _clock_text(round_num, fired_events, world_delta, **kw):
 
 
 def _what_changed(note):
-    return note.split("## WHAT CHANGED LAST PERIOD\n", 1)[1]
+    """WHAT CHANGED LAST PERIOD 段正文（去掉 SIM-6 追加在记忆条末尾的漏报补报块）。"""
+    body = note.split("## WHAT CHANGED LAST PERIOD\n", 1)[1]
+    return body.split("\n\n" + spc.CATCHUP_HEADING, 1)[0]
 
 
 def _notes_for_round(env, r):
@@ -874,21 +905,21 @@ def test_absence_marker_selection(monkeypatch):
         return _what_changed(_clock_text(round_num, [], delta, delta_state=state))
 
     for state in ("not_stepped", "stepped", "quiet", "failed", "no_inband"):
-        assert wc(0, "", state) == rps._WORLD_CLOCK_FIRST_PERIOD
+        assert wc(0, "", state) == spc.WORLD_CLOCK_FIRST_PERIOD
         assert wc(1, "  Actor1: announced a deal ", state) == "Actor1: announced a deal"
-    assert wc(1, "", "quiet") == rps._WORLD_CLOCK_QUIET_PERIOD
-    assert wc(2, "", "failed") == rps._WORLD_CLOCK_SUMMARY_UNAVAILABLE
-    assert wc(2, "", "not_stepped") == rps._WORLD_CLOCK_SUMMARY_UNAVAILABLE
+    assert wc(1, "", "quiet") == spc.WORLD_CLOCK_QUIET_PERIOD
+    assert wc(2, "", "failed") == spc.WORLD_CLOCK_SUMMARY_UNAVAILABLE
+    assert wc(2, "", "not_stepped") == spc.WORLD_CLOCK_SUMMARY_UNAVAILABLE
     # 双平台错峰：另一平台刚步进（stepped）但本平台上一轮末取到的摘要为空 → 失败关闭为不可用
-    assert wc(2, "", "stepped") == rps._WORLD_CLOCK_SUMMARY_UNAVAILABLE
-    assert wc(2, "", "no_inband") == rps._WORLD_CLOCK_SUMMARY_NOT_PRODUCED
+    assert wc(2, "", "stepped") == spc.WORLD_CLOCK_SUMMARY_UNAVAILABLE
+    assert wc(2, "", "no_inband") == spc.WORLD_CLOCK_SUMMARY_NOT_PRODUCED
     # CONFIRMED EVENTS 空段 → 具名标记；有到期事件 → 事件原样、无标记
     text = _clock_text(1, [], "", delta_state="failed")
-    assert ("## CONFIRMED EVENTS THIS PERIOD\n" + rps._WORLD_CLOCK_NO_EVENTS + "\n") in text
+    assert ("## CONFIRMED EVENTS THIS PERIOD\n" + spc.WORLD_CLOCK_NO_EVENTS + "\n") in text
     assert "(none)" not in text
     text = _clock_text(1, _EVENT_DUE, "", delta_state="failed")
     assert "## CONFIRMED EVENTS THIS PERIOD\n[2026-11-05] 事件A发生\n" in text
-    assert rps._WORLD_CLOCK_NO_EVENTS not in text
+    assert spc.WORLD_CLOCK_NO_EVENTS not in text
     # 未给 delta_state 的调用方 → 旧文本（开关开也不变）
     assert _clock_text(1, [], "").endswith(
         "## CONFIRMED EVENTS THIS PERIOD\n(none)\n## WHAT CHANGED LAST PERIOD\n(first period)")
@@ -896,7 +927,7 @@ def test_absence_marker_selection(monkeypatch):
     monkeypatch.setenv("SIM_WORLD_DELTA", "false")
     text = _clock_text(1, [], "", delta_state="failed")
     assert "## WHAT CHANGED LAST PERIOD" not in text
-    assert text.endswith("## CONFIRMED EVENTS THIS PERIOD\n" + rps._WORLD_CLOCK_NO_EVENTS)
+    assert text.endswith("## CONFIRMED EVENTS THIS PERIOD\n" + spc.WORLD_CLOCK_NO_EVENTS)
 
 
 def test_inband_delta_state_tracks_step_outcomes(tmp_path, monkeypatch):
@@ -961,7 +992,7 @@ def test_quiet_period_named_as_quiet(tmp_path, monkeypatch):
     assert evo.latest_delta() == "" and evo.latest_delta_state() == "quiet"
     assert not any("摘要生成失败" in m for m in logs)
     note = _clock_text(1, [], evo.latest_delta(), delta_state=evo.latest_delta_state())
-    assert _what_changed(note) == rps._WORLD_CLOCK_QUIET_PERIOD
+    assert _what_changed(note) == spc.WORLD_CLOCK_QUIET_PERIOD
     assert "(first period" not in note
     evo.platform_done("twitter")
     traj = _read_traj(sim_dir)
@@ -982,14 +1013,14 @@ def test_empty_digest_with_content_fails_closed(tmp_path, monkeypatch, capsys):
 
     assert len(calls) == 3  # 每轮都成功 elicit 并步进
     r1 = _notes_for_round(env, 1)
-    assert r1 and all(_what_changed(n) == rps._WORLD_CLOCK_FIRST_PERIOD for n in r1)
+    assert r1 and all(_what_changed(n) == spc.WORLD_CLOCK_FIRST_PERIOD for n in r1)
     for r in (2, 3):
         notes = _notes_for_round(env, r)
         assert notes
         for n in notes:
-            assert _what_changed(n) == rps._WORLD_CLOCK_SUMMARY_UNAVAILABLE
+            assert _what_changed(n) == spc.WORLD_CLOCK_SUMMARY_UNAVAILABLE
             assert "unavailable in this run" in n
-            assert rps._WORLD_CLOCK_QUIET_PERIOD not in n and "(first period" not in n
+            assert spc.WORLD_CLOCK_QUIET_PERIOD not in n and "(first period" not in n
     traj = _read_traj(sim_dir)
     assert traj["delta_state_counts"] == {"stepped": 0, "quiet": 0, "failed": 3}
     assert len(traj["trajectory"]) - 1 == 3  # WorldState 照常步进，只是摘要不可用
@@ -1006,12 +1037,12 @@ def test_no_inband_named_as_not_produced(tmp_path, monkeypatch):
     env = envs[0]
 
     r1 = _notes_for_round(env, 1)
-    assert r1 and all(_what_changed(n) == rps._WORLD_CLOCK_FIRST_PERIOD for n in r1)
+    assert r1 and all(_what_changed(n) == spc.WORLD_CLOCK_FIRST_PERIOD for n in r1)
     for r in (2, 3):
         notes = _notes_for_round(env, r)
         assert notes
         for n in notes:
-            assert _what_changed(n) == rps._WORLD_CLOCK_SUMMARY_NOT_PRODUCED
+            assert _what_changed(n) == spc.WORLD_CLOCK_SUMMARY_NOT_PRODUCED
             assert "not produced in this run" in n and "(first period" not in n
     assert not os.path.exists(os.path.join(sim_dir, "world_state_trajectory.json"))
 
@@ -1045,7 +1076,7 @@ def test_delta_state_counts_mixed_run(tmp_path, monkeypatch):
 
     r2, r3 = _notes_for_round(env, 2), _notes_for_round(env, 3)
     assert r2 and all("Momentum: A strengthened this period." in _what_changed(n) for n in r2)
-    assert r3 and all(_what_changed(n) == rps._WORLD_CLOCK_SUMMARY_UNAVAILABLE for n in r3)
+    assert r3 and all(_what_changed(n) == spc.WORLD_CLOCK_SUMMARY_UNAVAILABLE for n in r3)
     traj = _read_traj(sim_dir)
     counts = traj["delta_state_counts"]
     assert counts == {"stepped": 1, "quiet": 0, "failed": 2}
@@ -1143,9 +1174,9 @@ def test_event_posts_labelled_by_default_and_verbatim_when_off(tmp_path, monkeyp
     else:
         assert args == {"content": "[2026-11-05] 事件A发生", "is_scheduled_event": True}
     assert _event_feed_posts(sim_dir) == [args["content"]]  # 帖文与落账同一字符串
-    # 世界时钟的 CONFIRMED EVENTS 段仍是研究时间线原文
+    # 世界时钟的事件段仍是研究时间线原文（不带 feed 来源前缀；SIM-6 默认标题为预期事件）
     notes = [n for n in _world_clock_notes(envs[0]) if "round 2/3" in n]
-    assert notes and "## CONFIRMED EVENTS THIS PERIOD\n[2026-11-05] 事件A发生" in notes[0]
+    assert notes and (spc.SCHEDULED_EVENTS_HEADING_V2 + "\n[2026-11-05] 事件A发生") in notes[0]
 
 
 def test_event_without_poster_or_content_is_skipped_and_logged(tmp_path, monkeypatch, capsys):
@@ -1168,6 +1199,289 @@ def test_event_without_poster_or_content_is_skipped_and_logged(tmp_path, monkeyp
     assert "第 2 轮定时事件缺发帖者，跳过: '[2026-11-05] 事件A发生'" in out
     assert "第 2 轮定时事件缺内容，跳过: '2026-11-06'" in out
     assert "第 2 轮定时事件（发帖者 9）注入失败，跳过: KeyError: 9" in out
+
+
+# ===========================================================================
+# 10) SIM-6：逐时段上下文如实送达（SIM_PERIOD_CONTEXT_V2，默认开）
+# ===========================================================================
+def _script_active(monkeypatch, schedule):
+    """get_active_agents_for_round 替身：schedule[round_num]（0 基）= 本轮活跃 agent id。"""
+
+    def _active(env, config, current_hour, round_num, last_active_ids=None, calendar=False):
+        return [(aid, env.agent_graph.get_agent(aid)) for aid in schedule[round_num]]
+
+    monkeypatch.setattr(rps, "get_active_agents_for_round", _active)
+
+
+def _agent_notes(env, aid):
+    return [c for c, _r in env.agent_graph.get_agent(aid).memory_notes
+            if c.startswith("# WORLD CLOCK")]
+
+
+def test_period_context_v2_off_is_legacy(tmp_path, monkeypatch):
+    """两个开关都关：agent 可见文本逐字节是旧文本——CONFIRMED 标题、"(none)"/"(first period)"、
+    无补报块、无落后标注、平铺摘要；死轮事件不暂存。"""
+    sim_dir = str(tmp_path)
+    envs, calls = [], []
+    _patch_runtime(monkeypatch, sim_dir, envs)
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit(calls))
+    monkeypatch.setenv("SIM_PERIOD_CONTEXT_V2", "false")
+    monkeypatch.setenv("SIM_ABSENCE_MARKERS", "false")
+    _script_active(monkeypatch, {0: [0, 1], 1: [0, 1], 2: [0, 1, 2]})
+    _run(_calendar_config(), sim_dir)
+    env = envs[0]
+
+    r1 = _notes_for_round(env, 1)
+    assert r1 and all(n.endswith("## CONFIRMED EVENTS THIS PERIOD\n(none)\n"
+                                 "## WHAT CHANGED LAST PERIOD\n(first period)") for n in r1)
+    r2 = _notes_for_round(env, 2)
+    assert r2 and all("## CONFIRMED EVENTS THIS PERIOD\n[2026-11-05] 事件A发生\n"
+                      "## WHAT CHANGED LAST PERIOD\nActor" in n for n in r2)
+    notes = _world_clock_notes(env)
+    for n in notes:
+        for v2_text in ("SCHEDULED EVENTS THIS PERIOD", "EARLIER SCHEDULED EVENTS",
+                        "latest available digest covers", "SCENARIO ASSUMPTION", "###",
+                        "\n\n"):
+            assert v2_text not in n
+    # 旧的平铺摘要（无分段标题）
+    digest_rows = _read_jsonl(os.path.join(sim_dir, "world_digest.jsonl"))
+    assert digest_rows[1]["digest"].startswith("[2026-11-05] 事件A发生\nActor")
+    assert all("###" not in r["digest"] for r in digest_rows)
+
+
+def test_sampled_agent_gets_missed_event_catchup(tmp_path, monkeypatch):
+    """sampled agent 2 缺席第 1、2 轮（事件在第 2 轮触发）→ 第 3 轮首次激活时补报；
+    主角 0 每轮在场，从无补报块；补报在注入成功后才记为已告知。"""
+    sim_dir = str(tmp_path)
+    envs, calls = [], []
+    _patch_runtime(monkeypatch, sim_dir, envs)
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit(calls))
+    monkeypatch.delenv("SIM_PERIOD_CONTEXT_V2", raising=False)
+    _script_active(monkeypatch, {0: [0, 1], 1: [0, 1], 2: [0, 1, 2]})
+    _run(_calendar_config(), sim_dir)
+    env = envs[0]
+
+    (note2,) = _agent_notes(env, 2)
+    assert "| round 3/3 |" in note2
+    block = note2.split("\n\n")[-1]
+    assert block == ("## EARLIER SCHEDULED EVENTS YOU HAVE NOT BEEN BRIEFED ON\n"
+                     "[2026-11-05] 事件A发生")
+    assert "EARLIER SCHEDULED EVENTS" in note2 and "[2026-11-05] 事件A发生" in note2
+    # 补报块追加在 WHAT CHANGED 段之后（空一行），头部其余部分不变
+    assert note2.index(spc.WHAT_CHANGED_HEADING) < note2.index(spc.CATCHUP_HEADING)
+    for aid in (0, 1):
+        notes = _agent_notes(env, aid)
+        assert len(notes) == 3
+        assert all("EARLIER SCHEDULED EVENTS" not in n for n in notes)
+    # 本期事件在第 2 轮的记忆条里仍以预期事件标题出现（agent 0/1 已被告知）
+    assert (spc.SCHEDULED_EVENTS_HEADING_V2 + "\n[2026-11-05] 事件A发生") in _agent_notes(env, 0)[1]
+
+
+def test_catchup_budget_knob_and_failed_injection_not_marked(monkeypatch):
+    """SIM_EVENT_CATCHUP_MAX_CHARS 非法 → 默认 1200；注入失败的 agent 不记为已告知（下轮重补）。"""
+    monkeypatch.setenv("SIM_EVENT_CATCHUP_MAX_CHARS", "lots")
+    cu = rps._build_event_catchup(_calendar_config()["event_config"], lambda _m: None)
+    assert cu is not None and cu._max_chars == 1200
+    monkeypatch.setenv("SIM_EVENT_CATCHUP_MAX_CHARS", "80")
+    cu = rps._build_event_catchup(_calendar_config()["event_config"], lambda _m: None)
+    assert cu._max_chars == 80
+
+    class _Broken(_FakeAgent):
+        def update_memory(self, msg, role):
+            raise RuntimeError("memory full")
+
+    good, broken = _FakeAgent(0, "Actor0"), _Broken(1, "Actor1")
+    env = types.SimpleNamespace(agent_graph=_FakeGraph([good, broken]))
+    state = {}
+    rps._world_clock_round(
+        env, [(0, good), (1, broken)], 2, _ROUND_DATES[2], _calendar_config()["temporal_config"],
+        _calendar_config()["event_config"], "", 0, {}, None, cu, state,
+        v2=True, response_step=False, language="")
+    assert "EARLIER SCHEDULED EVENTS" in good.memory_notes[0][0]
+    assert cu.missed(0, 3) == [] and len(cu.missed(1, 3)) == 1
+    assert "period_context" not in state  # 回应阶段关 → 不给本期上下文
+
+
+@pytest.mark.parametrize("period_v2", ["true", "false"])
+def test_dead_round_event_carried_into_next_digest(tmp_path, monkeypatch, period_v2):
+    """事件轮（第 2 轮）全员缺席：V2 开 → 事件随心跳暂存，进入下一次步进（第 3 轮）的摘要；
+    轨迹行数不变（死轮从不步进）。第 3 轮头部注明摘要覆盖的是更早时段，缺席者补报事件。"""
+    sim_dir = str(tmp_path)
+    envs, calls = [], []
+    _patch_runtime(monkeypatch, sim_dir, envs)
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit(calls))
+    monkeypatch.setenv("SIM_PERIOD_CONTEXT_V2", period_v2)
+    _script_active(monkeypatch, {0: [0, 1], 1: [], 2: [0, 1]})
+    _run(_calendar_config(), sim_dir)
+    env = envs[0]
+
+    digest_rows = _read_jsonl(os.path.join(sim_dir, "world_digest.jsonl"))
+    assert [r["round"] for r in digest_rows] == [1, 3]
+    traj = _read_traj(sim_dir)
+    assert [row["round"] for row in traj["trajectory"]] == [0, 1, 3]  # 无新增轨迹行
+    r3 = _notes_for_round(env, 3)
+    assert len(r3) == 2
+    if period_v2 == "true":
+        assert digest_rows[1]["digest"].startswith(
+            "### Scheduled events last period\n[2026-11-05] 事件A发生\n")
+        for n in r3:
+            # 摘要出自第 1 轮（2026-Q3），不是刚过去的死轮时段
+            assert (spc.WHAT_CHANGED_HEADING + "\n(latest available digest covers 2026-Q3; "
+                    "no digest of the most recent period is available)\n###") in n
+            assert n.endswith(spc.CATCHUP_HEADING + "\n[2026-11-05] 事件A发生")
+    else:
+        assert "事件A发生" not in digest_rows[1]["digest"]
+        assert all("latest available digest covers" not in n and "EARLIER" not in n for n in r3)
+
+
+def test_inject_period_context_v2_direct():
+    """v2：预期事件标题 + 情景标注 + 落后标注 + 逐 agent 补报；返回成功注入的 id；
+    v2=False 与不带新参数的旧调用逐字节相同。"""
+    events = [{"date": "2026-11-05", "content": "事件A发生"},
+              {"date": "2026-11-20", "content": "Export ban extended",
+               "is_scenario_injection": True}]
+    legacy = _clock_text(2, events, "Actor1: deal", delta_state="stepped")
+    assert _clock_text(2, events, "Actor1: deal", delta_state="stepped", v2=False,
+                       delta_stale_label="2026-Q3") == legacy  # 落后标注只在 v2 下渲染
+    assert "## CONFIRMED EVENTS THIS PERIOD\n[2026-11-05] 事件A发生\n[2026-11-20] Export" in legacy
+
+    note = _clock_text(2, events, "Actor1: deal", delta_state="stepped", v2=True,
+                       delta_stale_label="2026-Q3", per_agent_suffix={0: "CATCH", 5: "other"})
+    assert note.startswith(legacy.split("## CONFIRMED EVENTS")[0])  # 框架行不变
+    assert note.endswith(
+        spc.SCHEDULED_EVENTS_HEADING_V2 + "\n[2026-11-05] 事件A发生\n"
+        "SCENARIO ASSUMPTION (what-if, not observed): [2026-11-20] Export ban extended\n"
+        "## WHAT CHANGED LAST PERIOD\n(latest available digest covers 2026-Q3; no digest of "
+        "the most recent period is available)\nActor1: deal\n\nCATCH")
+    assert "CONFIRMED" not in note
+
+    agents = [_FakeAgent(i, f"Actor{i}") for i in range(2)]
+    env = types.SimpleNamespace(agent_graph=_FakeGraph(agents))
+    ids = rps._inject_period_context(env, [0, 1, 7], 1, _ROUND_DATES[1],
+                                     _calendar_config()["temporal_config"], [], "", v2=True,
+                                     delta_state="failed")
+    assert ids == [0, 1]  # 7 不在图中 → 跳过、不计入
+    assert rps._inject_period_context(env, [0], 1, None, {}, [], "") == []
+
+
+def test_inject_period_context_v2_renderer_failure_falls_back_to_legacy(monkeypatch):
+    legacy = _clock_text(1, _EVENT_DUE, "", delta_state="failed")
+    real = spc.render_event_lines
+
+    def _flaky(events, *, markers, scenario_labels=True):
+        if scenario_labels:
+            raise RuntimeError("renderer 爆炸（故障注入）")
+        return real(events, markers=markers, scenario_labels=False)
+
+    monkeypatch.setattr(spc, "render_event_lines", _flaky)
+    assert _clock_text(1, _EVENT_DUE, "", delta_state="failed", v2=True) == legacy
+
+
+def test_reaction_period_context_shares_the_world_clock_renderer(monkeypatch):
+    """回应阶段本期上下文：与世界时钟同一渲染器——情景标注、落后标注、具名占位；
+    SIM_WORLD_DELTA 关 → 无变化段；SIM_ABSENCE_MARKERS 关 → 旧占位。"""
+    monkeypatch.delenv("SIM_ABSENCE_MARKERS", raising=False)
+    monkeypatch.delenv("SIM_WORLD_DELTA", raising=False)
+    due = [{"date": "2026-12-01", "content": "Export ban extended", "is_scenario_injection": True}]
+    ctx = rps._reaction_period_context(due, "Actor1: deal", "stepped", 2, "2026-Q3")
+    assert ctx == (
+        "## THIS PERIOD — scheduled events (research timeline)\n"
+        "SCENARIO ASSUMPTION (what-if, not observed): [2026-12-01] Export ban extended\n"
+        "## WHAT CHANGED LAST PERIOD\n(latest available digest covers 2026-Q3; no digest of "
+        "the most recent period is available)\nActor1: deal")
+    assert rps._reaction_period_context([], "", "failed", 2, "").endswith(
+        spc.WORLD_CLOCK_NO_EVENTS + "\n## WHAT CHANGED LAST PERIOD\n"
+        + spc.WORLD_CLOCK_SUMMARY_UNAVAILABLE)
+    monkeypatch.setenv("SIM_ABSENCE_MARKERS", "false")
+    assert rps._reaction_period_context([], "", "failed", 2, "").endswith(
+        "(none)\n## WHAT CHANGED LAST PERIOD\n(first period)")
+    monkeypatch.setenv("SIM_WORLD_DELTA", "false")
+    assert rps._reaction_period_context([], "x", "stepped", 2, "") == (
+        spc.THIS_PERIOD_HEADING + "\n(none)")
+
+
+def test_period_stale_label():
+    periods = dict(enumerate(_ROUND_DATES))
+    assert rps._period_stale_label("digest", 1, 2, periods) == "2026-Q3"
+    assert rps._period_stale_label("digest", 2, 2, periods) == ""      # 正是上一时段的摘要
+    assert rps._period_stale_label("digest", 0, 2, periods) == ""      # 尚未步进
+    assert rps._period_stale_label("   ", 1, 2, periods) == ""         # 无摘要 → 由占位负责
+    assert rps._period_stale_label("digest", 3, 2, periods) == ""
+    assert rps._period_stale_label("digest", 1, 2, {}) == "round 1"    # 缺时段表 → 轮号
+    assert rps._period_stale_label("digest", "x", 2, periods) == ""
+
+
+def _evo(sim_dir, monkeypatch, platforms=1):
+    _patch_runtime(monkeypatch, sim_dir, [])
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit([]))
+    return rps._InbandWorldEvolution(_calendar_config(), sim_dir, platforms, lambda _m: None)
+
+
+def test_inband_heartbeat_events_dedup_into_existing_buffer(tmp_path, monkeypatch):
+    """双平台：twitter 交付第 1 轮（含事件）、reddit 该轮死轮心跳带同一事件 → 去重并入同一缓冲。"""
+    monkeypatch.delenv("SIM_PERIOD_CONTEXT_V2", raising=False)
+    sim_dir = str(tmp_path)
+    evo = _evo(sim_dir, monkeypatch, platforms=2)
+    ev = {"round": 0, "date": "2026-08-01", "content": "[2026-08-01] 事件0"}
+    evo.deliver("twitter", 0, _ROUND_DATES[0], _ACTOR0_POST, [ev])
+    assert evo.latest_delta_round() == 0 and 0 in evo._pending  # 等 reddit 水位
+    evo.heartbeat("reddit", 0, [dict(ev), dict(ev)])
+    assert evo._carry_events == {}
+    rows = _read_jsonl(os.path.join(sim_dir, "world_digest.jsonl"))
+    assert [r["round"] for r in rows] == [1]
+    assert rows[0]["digest"].count("[2026-08-01] 事件0") == 1
+    assert evo.latest_delta_round() == 1
+
+
+def test_inband_carried_events_merge_only_into_a_later_round(tmp_path, monkeypatch):
+    monkeypatch.delenv("SIM_PERIOD_CONTEXT_V2", raising=False)
+    sim_dir = str(tmp_path)
+    evo = _evo(sim_dir, monkeypatch)
+    ev = {"round": 1, "date": "2026-11-05", "content": "[2026-11-05] 事件A发生"}
+    evo.heartbeat("twitter", 1, [ev, ev])      # 全平台死轮：无缓冲 → 暂存
+    assert evo._carry_events == {1: [ev, ev]} and evo.latest_delta_round() == 0
+    evo.deliver("twitter", 0, _ROUND_DATES[0], _ACTOR0_POST, [])
+    assert evo._carry_events == {1: [ev, ev]}  # 更早的轮次不并入
+    evo.deliver("twitter", 2, _ROUND_DATES[2], _ACTOR0_POST, [ev])
+    assert evo._carry_events == {}
+    rows = _read_jsonl(os.path.join(sim_dir, "world_digest.jsonl"))
+    assert [r["round"] for r in rows] == [1, 3]
+    assert "事件A发生" not in rows[0]["digest"]
+    assert rows[1]["digest"].count("[2026-11-05] 事件A发生") == 1  # 与本轮同一事件去重
+    evo.platform_done("twitter")
+    assert [row["round"] for row in _read_traj(sim_dir)["trajectory"]] == [0, 1, 3]
+
+
+def test_inband_latest_delta_round_tracks_successful_steps(tmp_path, monkeypatch):
+    monkeypatch.delenv("SIM_PERIOD_CONTEXT_V2", raising=False)
+    sim_dir = str(tmp_path)
+    evo = _evo(sim_dir, monkeypatch)
+    assert evo.latest_delta_round() == 0
+    evo.deliver("twitter", 0, _ROUND_DATES[0], _ACTOR0_POST, [])
+    assert (evo.latest_delta_round(), evo.latest_delta_state()) == (1, "stepped")
+    evo.heartbeat("twitter", 1)
+    assert evo.latest_delta_round() == 1
+
+    def _boom(roster, period_ctx):
+        raise RuntimeError("elicit 爆炸（故障注入）")
+
+    monkeypatch.setattr(dc, "elicit_round", _boom)
+    evo.deliver("twitter", 2, _ROUND_DATES[2], _ACTOR0_POST, [])
+    # 失败步进不改轮号；摘要清空、状态 failed（世界时钟据此标"不可用"而非落后）
+    assert (evo.latest_delta_round(), evo.latest_delta_state(), evo.latest_delta()) == (
+        1, "failed", "")
+
+
+def test_inband_v2_off_ignores_heartbeat_events(tmp_path, monkeypatch):
+    monkeypatch.setenv("SIM_PERIOD_CONTEXT_V2", "false")
+    sim_dir = str(tmp_path)
+    evo = _evo(sim_dir, monkeypatch)
+    ev = {"round": 1, "date": "2026-11-05", "content": "[2026-11-05] 事件A发生"}
+    evo.heartbeat("twitter", 1, [ev])
+    assert evo._carry_events == {}
+    evo.deliver("twitter", 2, _ROUND_DATES[2], _ACTOR0_POST, [])
+    rows = _read_jsonl(os.path.join(sim_dir, "world_digest.jsonl"))
+    assert "事件A发生" not in rows[0]["digest"] and "###" not in rows[0]["digest"]
 
 
 if __name__ == "__main__":

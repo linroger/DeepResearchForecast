@@ -9,18 +9,55 @@ Herding guard (judge-vetoed): **no numeric shares or percentages ever appear** i
 agent-facing text. The full quantitative shares live in ``world_digest.jsonl`` and
 the trajectory artifacts, never here. The momentum line is strictly qualitative
 ("strengthened|weakened|held") regardless of what extra keys ``leader_move`` carries.
+
+SIM-6 (SIM_PERIOD_CONTEXT_V2): ``sectioned=True`` gives events and peer posts their
+own whole-line caps and omission markers instead of the legacy silent ``char_cap``
+prefix cut, so oversized event text can never starve the posts or vice versa.
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Callable, List, Optional, Sequence, Tuple
 
 _DIRECTION_WORD = {"up": "strengthened", "down": "weakened", "flat": "held"}
+_POST_CLIP = 140
+# Sectioned layout (SIM-6). The scenario prefix mirrors sim_period_context's label; it is
+# kept inline so this module stays dependency-free.
+_SCENARIO_PREFIX = "SCENARIO ASSUMPTION (what-if, not observed): "
+_EVENTS_HEADING = "### Scheduled events last period"
+_POSTS_HEADING = "### Most-influential actor posts last period (peer claims, unverified)"
+
+
+def _more_marker(n: int) -> str:
+    return f"(+{n} more omitted)"
+
+
+def fit_whole_lines(lines: Sequence[str], budget: int,
+                    marker: Callable[[int], str]) -> Tuple[List[str], int]:
+    """Longest prefix of whole ``lines`` that fits ``budget`` characters when joined by
+    newlines, reserving room for ``marker(n_omitted)`` whenever a line is dropped.
+
+    Returns ``(kept, n_omitted)``. Lines are never cut; the first line that does not
+    fit ends the prefix. When not even the marker fits, nothing is kept (the caller
+    still shows the marker, so the omission is never silent)."""
+    lines = list(lines)
+    if len("\n".join(lines)) <= budget:
+        return lines, 0
+    kept = 0
+    used = -1  # length of "\n".join(lines[:kept]); -1 so the first line adds no newline
+    for idx, line in enumerate(lines[:-1]):
+        used_next = used + 1 + len(line)
+        if used_next + 1 + len(marker(len(lines) - idx - 1)) > budget:
+            break
+        used, kept = used_next, idx + 1
+    return lines[:kept], len(lines) - kept
 
 
 def build_world_delta(round_actions: list, fired_events: list,
                       leader_move: Optional[dict] = None,
-                      top_k: int = 5, char_cap: int = 900) -> str:
+                      top_k: int = 5, char_cap: int = 900, *,
+                      sectioned: bool = False, event_char_cap: int = 600,
+                      post_char_cap: int = 600) -> str:
     """Build the qualitative delta digest for one completed period.
 
     Sections in order: fired events as ``[{date}] {content}`` lines; the top-k
@@ -30,9 +67,17 @@ def build_world_delta(round_actions: list, fired_events: list,
     line — never any numeric share. Output is truncated to ``char_cap`` characters.
     Any error or fully empty input returns ``""`` (the header then renders its own
     placeholder) — this function must never break a running round.
+
+    ``sectioned=True`` (SIM-6) ignores ``char_cap``: a non-empty event section under
+    ``### Scheduled events last period`` (scenario injections prefixed
+    ``SCENARIO ASSUMPTION (what-if, not observed): ``) capped at ``event_char_cap``,
+    then a non-empty post section under ``### Most-influential actor posts last period
+    (peer claims, unverified)`` capped at ``post_char_cap`` — each cap keeps whole
+    lines and ends with ``(+N more omitted)`` — then the momentum line, never cut.
+    A post clipped at 140 characters ends with an ellipsis.
     """
     try:
-        lines: list = []
+        event_lines: list = []
 
         # --- fired scheduled events this period ---------------------------------
         for ev in fired_events or []:
@@ -43,9 +88,13 @@ def build_world_delta(round_actions: list, fired_events: list,
                 continue
             date = str(ev.get("date", "") or "").strip()
             if date and not content.startswith(f"[{date}]"):
-                lines.append(f"[{date}] {content}")
+                line = f"[{date}] {content}"
             else:  # content already carries the "[{date}] " prefix (config-gen §4)
-                lines.append(content)
+                line = content
+            if (sectioned and ev.get("is_scenario_injection")
+                    and not line.startswith(_SCENARIO_PREFIX)):
+                line = _SCENARIO_PREFIX + line
+            event_lines.append(line)
 
         # --- top-k organic posts by author influence_weight ----------------------
         posts = []
@@ -63,16 +112,34 @@ def build_world_delta(round_actions: list, fired_events: list,
                        or act.get("name") or "unknown").strip() or "unknown"
             posts.append((-weight, idx, name, content))
         posts.sort()  # weight desc, then input order — deterministic tie-break
+        post_lines = []
         for _, _, name, content in posts[: max(0, int(top_k))]:
-            lines.append(f"{name}: {content[:140]}")
+            clipped = content[:_POST_CLIP]
+            if sectioned and len(content) > _POST_CLIP:
+                clipped += "…"
+            post_lines.append(f"{name}: {clipped}")
 
         # --- qualitative momentum (direction only; no shares/percentages ever) ---
+        momentum = ""
         if isinstance(leader_move, dict):
             leader = str(leader_move.get("leader", "") or "").strip()
             word = _DIRECTION_WORD.get(str(leader_move.get("direction", "") or ""))
             if leader and word:
-                lines.append(f"Momentum: {leader} {word} this period.")
+                momentum = f"Momentum: {leader} {word} this period."
 
+        if sectioned:
+            lines: list = []
+            for heading, section, cap in ((_EVENTS_HEADING, event_lines, event_char_cap),
+                                          (_POSTS_HEADING, post_lines, post_char_cap)):
+                if not section:
+                    continue
+                kept, omitted = fit_whole_lines(section, int(cap), _more_marker)
+                lines += [heading, *kept] + ([_more_marker(omitted)] if omitted else [])
+            if momentum:
+                lines.append(momentum)
+            return "\n".join(lines)
+
+        lines = event_lines + post_lines + ([momentum] if momentum else [])
         if not lines:
             return ""
         return "\n".join(lines)[: max(0, int(char_cap))]
