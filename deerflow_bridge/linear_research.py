@@ -190,6 +190,11 @@ EVIDENCE_WINDOWS_PER_FACT = 2
 EVIDENCE_WINDOWS_PER_SOURCE = 8
 VERIFIED_FACTS_FILENAME = "verified_facts.json"
 VERIFIED_FACTS_SCHEMA = "drf.verified_facts/v1"
+# Point-in-time research audit (TIME-9; a gated hindcast only, ``tools.pit``):
+# the report cites only sources admissible as of the as-of date, and finalize
+# writes this file, whose verdict the parent stamps into the hindcast pin.
+POINT_IN_TIME_FILENAME = "point_in_time.json"
+POINT_IN_TIME_SCHEMA = "drf-point-in-time/v1"
 # Verbatim evidence spans (RESEARCH-7, RESEARCH_EVIDENCE_QUOTES = off | audit |
 # enforce; default off).  Not off: the KIQ task asks each finding for an
 # EVIDENCE clause quoting its source verbatim, the ledger keeps every distinct
@@ -4316,15 +4321,23 @@ def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str) -> tup
 
 
 def build_digest(records: Sequence[Mapping[str, Any]], ledger_get: Callable[[int], Mapping[str, Any] | None],
-                 digest_cap: int, language: str, *, dates: bool = False) -> tuple[str, int]:
+                 digest_cap: int, language: str, *, dates: bool = False,
+                 admissible: Callable[[int], bool] | None = None) -> tuple[str, int]:
     """Digest + SOURCE INDEX of every source the digest cites (ledger order).
 
     KIQs in natural order (K1 < K2 < K10, then follow-ups); each block gets
     ``min(12000, max(3000, digest_cap / n))`` chars and loses its
     lowest-priority lines first.  With ``dates`` (RESEARCH_SOURCE_DATES) a
     dated source's index entry ends ``, published X`` inside its parentheses.
-    Returns ``(text, dropped_line_count)``.
+    With ``admissible`` (a gated hindcast's citation wall, TIME-9) each record
+    is first walled (:func:`pit_wall_record`: failing markers stripped, a line
+    whose every marker failed left out) and the SOURCE INDEX lists only
+    admissible sources.
+    Returns ``(text, dropped_line_count)``; the count is of lines the caps dropped.
     """
+    if admissible is not None:
+        admissible = _memoized_sid_check(admissible)
+        records = [pit_wall_record(record, admissible)[0] for record in records]
     ordered = sorted(records, key=lambda r: _natural_key(str(r.get("id"))))
     per_kiq = int(min(12000, max(3000, digest_cap / max(1, len(ordered)))))
     blocks: list[str] = []
@@ -4335,6 +4348,8 @@ def build_digest(records: Sequence[Mapping[str, Any]], ledger_get: Callable[[int
         dropped += lost
     digest = "\n\n".join(blocks) if blocks else f"- {_text(language, 'no_findings')}"
     cited = sorted({int(n) for n in _CITE_RE.findall(digest)})
+    if admissible is not None:
+        cited = [sid for sid in cited if admissible(sid)]
     index_lines = []
     for sid in cited:
         row = ledger_get(sid)
@@ -4806,6 +4821,222 @@ def quant_source_dates(quant: list[dict], sources: Sequence[Mapping[str, Any]]) 
             row["as_of_after_source"] = True
             flagged += 1
     return flagged
+
+
+# ---------------------------------------------------------------------------
+# Point-in-time citation wall and research audit (TIME-9, a gated hindcast)
+# ---------------------------------------------------------------------------
+
+# Ledger pit_status of a source the gates withheld: never citable.
+_PIT_WITHHELD_STATUSES = frozenset({rg.PIT_LATE, rg.PIT_UNDATED_WITHHELD})
+# The pit_status a stored page got from the page gate (a verdict on its dates).
+_PIT_PAGE_STATUSES = frozenset({rg.PIT_ADMITTED, rg.PIT_SAME_DAY, rg.PIT_UNVERIFIABLE})
+# source_dates.gate verdict -> point_in_time.json stream counter.
+_PIT_STREAM_KEYS = {rg._GATE_ADMIT: "admitted", rg._GATE_SAME_DAY: "same_day",
+                    rg._GATE_UNVERIFIABLE: "unverifiable", rg._GATE_LATE: "late"}
+PIT_STATUS_VIOLATED = "violated"
+PIT_STATUS_VERIFIED = "date_verified"
+PIT_STATUS_VERIFIED_UNVERIFIABLE = "date_verified_with_unverifiable"
+
+
+def pit_date_verdict(published: Any, modified: Any, url: Any, pit: rg.PitPolicy) -> str:
+    """``source_dates.gate`` of a source for ``pit``'s as-of and same-day
+    policy, from the dates it is recorded or published with: the later of
+    ``source_dates.availability(published, modified)`` and its URL path date
+    (the gates' own availability rule).  ``admit``, ``same_day``, ``late`` or
+    ``unverifiable``; ``unverifiable`` too when the module cannot be imported
+    or fails (an unreadable date is no date).  Never raises."""
+    module = rg._source_dates()
+    if module is None:
+        return rg._GATE_UNVERIFIABLE
+    try:
+        days = [module.availability(published, modified), module.url_date(url)]
+        known = [day for day in days if day is not None]
+        return module.gate(max(known) if known else None, pit.as_of, same_day=pit.same_day)
+    except Exception:  # noqa: BLE001 — an unreadable date is no date
+        return rg._GATE_UNVERIFIABLE
+
+
+def pit_row_admissible(row: Mapping[str, Any], pit: rg.PitPolicy) -> bool:
+    """Whether a gated hindcast's report may cite a ledger row (the TIME-9
+    citation wall).  Never a source the gates withheld (``pit_status``
+    ``late`` or ``undated_withheld``) or one whose recorded dates
+    (:func:`pit_date_verdict`) show it late; under the ``drop`` undated policy
+    never a source the page gate did not judge (seen only in search rows)
+    without a readable date either.  A stored page keeps the page gate's
+    verdict: admitted, same-day or (``flag``) unverifiable."""
+    status = row.get("pit_status")
+    if status in _PIT_WITHHELD_STATUSES:
+        return False
+    verdict = pit_date_verdict(row.get("published"), row.get("modified_at"), row.get("url"), pit)
+    if verdict == rg._GATE_LATE:
+        return False
+    return not (verdict == rg._GATE_UNVERIFIABLE and pit.undated == "drop" and status not in _PIT_PAGE_STATUSES)
+
+
+def _memoized_sid_check(check: Callable[[int], bool]) -> Callable[[int], bool]:
+    """``check`` answered once per sid (the wall reads each source's dates once)."""
+    verdicts: dict[int, bool] = {}
+
+    def memo(sid: int) -> bool:
+        if sid not in verdicts:
+            verdicts[sid] = bool(check(sid))
+        return verdicts[sid]
+    return memo
+
+
+def _pit_wall_text(text: str, admissible: Callable[[int], bool]) -> tuple[str | None, int]:
+    """``(text without its [S<n>] markers of inadmissible sources, markers
+    removed)``; the text is ``None`` when it cited sources and every one
+    failed, and unchanged when none did (a marker-less line is kept)."""
+    markers = [int(n) for n in _CITE_RE.findall(text)]
+    failed = sum(1 for sid in markers if not admissible(sid))
+    if not failed:
+        return text, 0
+    if failed == len(markers):
+        return None, failed
+    kept = _CITE_RE.sub(lambda m: m.group(0) if admissible(int(m.group(1))) else "", text)
+    return _tidy_spaces(kept).strip(), failed
+
+
+def pit_wall_record(record: Mapping[str, Any], admissible: Callable[[int], bool]) -> tuple[dict, int, int]:
+    """A KIQ record as a gated hindcast's evidence digest shows it (TIME-9):
+    each sourced finding, conflict and open question loses its markers of
+    inadmissible sources, and one whose every marker failed is left out.
+    Returns ``(a copy of the record, lines left out, markers removed from
+    the lines kept)``; the record's other fields (``sids``, evidence) are
+    unchanged, as is ``record`` itself."""
+    out = dict(record)
+    dropped = stripped = 0
+    facts: list[Any] = []
+    for fact in record.get("facts") or []:
+        if not _is_sourced(fact):
+            facts.append(fact)
+            continue
+        text, failed = _pit_wall_text(str(fact.get("text") or ""), admissible)
+        if text is None:
+            dropped += 1
+            continue
+        stripped += failed
+        facts.append(dict(fact, text=text) if failed else fact)
+    out["facts"] = facts
+    for key in ("conflicts", "open_questions"):
+        kept: list[Any] = []
+        for item in record.get(key) or []:
+            text, failed = _pit_wall_text(str(item), admissible)
+            if text is None:
+                dropped += 1
+                continue
+            stripped += failed
+            kept.append(text if failed else item)
+        out[key] = kept
+    return out, dropped, stripped
+
+
+def pit_cited_audit(sources: Sequence[Any], pit: rg.PitPolicy) -> dict[str, int]:
+    """point_in_time.json's ``cited`` stream: an independent re-check of the
+    published sources.json rows with ``source_dates.gate``
+    (:func:`pit_date_verdict` of each row's ``date``, ``modified_at`` and URL),
+    not the gates' own verdicts.  ``checked`` rows split into ``admitted``,
+    ``same_day``, ``unverifiable`` (a row that is not an object counts here)
+    and ``late``."""
+    counts = {"checked": 0, "admitted": 0, "same_day": 0, "unverifiable": 0, "late": 0}
+    for row in sources:
+        verdict = (pit_date_verdict(row.get("date"), row.get("modified_at"), row.get("url"), pit)
+                   if isinstance(row, Mapping) else rg._GATE_UNVERIFIABLE)
+        counts["checked"] += 1
+        counts[_PIT_STREAM_KEYS.get(verdict, "unverifiable")] += 1
+    return counts
+
+
+def pit_audit_status(cited: Mapping[str, Any], undated: str) -> str:
+    """The research audit verdict: ``violated`` when a cited source is late,
+    else ``date_verified_with_unverifiable`` when one is undated or the undated
+    policy is ``flag`` (undated pages may back the report), else
+    ``date_verified``.  Honest naming: the dates of the sources are verified,
+    not the model's own knowledge."""
+    if cited.get("late"):
+        return PIT_STATUS_VIOLATED
+    if cited.get("unverifiable") or undated == "flag":
+        return PIT_STATUS_VERIFIED_UNVERIFIABLE
+    return PIT_STATUS_VERIFIED
+
+
+def pit_gate_streams(counts: Mapping[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """point_in_time.json's ``search`` and ``fetch`` streams: the gates' own
+    decisions (``ResearchTools.stats()["pit"]``, counted by the attempt that
+    ran them: ``scope`` ``attempt``).  Search counts the result rows a render
+    slot reached (admitted, same-day and undated rows shown; late rows
+    dropped); fetch counts the pages judged after a fetch (undated ones
+    withheld under ``drop``, stored under ``flag``) and, apart, the fetches
+    refused before any budget and the re-asks of a withheld page."""
+    def n(name: str) -> int:
+        value = (counts or {}).get(name)
+        return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+    search = {"admitted": n("search_admitted_shown"), "same_day": n("search_same_day_shown"),
+              "unverifiable": n("search_undated_shown"), "late": n("search_late_dropped")}
+    undated_withheld, undated_admitted = n("fetch_undated_withheld"), n("fetch_undated_admitted")
+    fetch = {"admitted": n("fetch_admitted"), "same_day": n("fetch_same_day"),
+             "unverifiable": undated_withheld + undated_admitted, "late": n("fetch_late_withheld")}
+    return {
+        "search": {"checked": sum(search.values()), **search,
+                   "no_in_window_results": n("no_in_window_results"),
+                   "bounded_queries": n("searches_bounded"), "unbounded_queries": n("searches_unbounded"),
+                   "scope": "attempt"},
+        "fetch": {"checked": sum(fetch.values()), **fetch,
+                  "undated_withheld": undated_withheld, "undated_admitted": undated_admitted,
+                  "refused_before_fetch": n("fetch_prefetch_refused"), "withheld_repeats": n("fetch_withheld_repeat"),
+                  "scope": "attempt"},
+    }
+
+
+def parametric_suspects(timeline: Sequence[Mapping[str, Any]], quant: Sequence[Mapping[str, Any]],
+                        as_of: _dt.date, *, typing: bool) -> dict[str, int]:
+    """Rows the extraction may have taken from the model's own knowledge of
+    what came after ``as_of`` (TIME-9; counted, never dropped): timeline
+    events whose date starts after it, and quantitative rows claimed as
+    actuals whose ``as_of_date`` starts after it.  With typing
+    (RESEARCH_QUANT_TYPING) a row is a claimed actual when
+    :func:`classify_quant_row` does not read it as projected; without,
+    when its ``value_type`` is ``actual`` or missing."""
+    def after(value: Any) -> bool:
+        start = _loose_period_bounds(value)[0]
+        return start is not None and start > as_of
+
+    def claimed_actual(row: Mapping[str, Any]) -> bool:
+        if typing:
+            return classify_quant_row(row, as_of)["epistemic_class"] != "projected"
+        return row.get("value_type") in (None, "actual")
+
+    return {"timeline": sum(1 for row in timeline if after(row.get("date"))),
+            "quant": sum(1 for row in quant if claimed_actual(row) and after(row.get("as_of_date")))}
+
+
+def point_in_time_payload(pit: rg.PitPolicy, *, gate_counts: Mapping[str, Any] | None, sources: Sequence[Any],
+                          suspects: Mapping[str, int] | None, wall: Mapping[str, int]) -> dict[str, Any]:
+    """point_in_time.json (``drf-point-in-time/v1``): the as-of and policies,
+    the gate streams (:func:`pit_gate_streams`) and the independent ``cited``
+    re-check (:func:`pit_cited_audit`), what the citation wall kept out of
+    the report (``wall``), the parametric suspects, what the audit does not
+    guard (the model's own knowledge; live page text is labelled, not an
+    archived copy) and the verdict (:func:`pit_audit_status`)."""
+    cited = pit_cited_audit(sources, pit)
+    streams = pit_gate_streams(gate_counts)
+    streams["cited"] = cited
+    return {
+        "schema": POINT_IN_TIME_SCHEMA,
+        "as_of": pit.as_of.isoformat(),
+        "same_day_policy": pit.same_day,
+        "undated_policy": pit.undated,
+        "streams": streams,
+        "wall": dict(wall),
+        "parametric_suspects": dict(suspects) if suspects is not None else None,
+        "leak_guard": "source_publication_dates_only",
+        "parametric_knowledge": "not_guarded",
+        "live_page_text": "labelled_not_archived",
+        "status": pit_audit_status(cited, pit.undated),
+    }
 
 
 def render_references(order: Sequence[int], ledger_get: Callable[[int], Mapping[str, Any] | None], *,
@@ -5570,6 +5801,13 @@ class _Engine:
         # these dates, so they keep them on.
         pit = getattr(self.tools, "pit", None)
         pit = pit if isinstance(pit, rg.PitPolicy) else None
+        # TIME-9: under the gates the report cites only admissible sources (the
+        # citation wall: _citable_sids, the digest) and finalize writes
+        # point_in_time.json; None (every other run) changes nothing.
+        self.pit = pit
+        # The parametric suspects _write_structured counts under the gates (None
+        # when it has not, or the count failed).
+        self.parametric_suspects: dict[str, int] | None = None
         self.source_dates = _env_flag(self.env, "RESEARCH_SOURCE_DATES", False) or pit is not None
         if pit is not None:
             self.log("stage", f"point-in-time gates on (as of {pit.as_of.isoformat()}; same-day "
@@ -6623,7 +6861,8 @@ class _Engine:
         if not raw:
             records = [self.records[k.id] for k in self.kiqs if k.id in self.records]
             raw, dropped = build_digest(records, self.ledger.get, self.preset.digest_cap, self.language,
-                                        dates=self.source_dates)
+                                        dates=self.source_dates,
+                                        admissible=self._pit_admissible if self.pit is not None else None)
             self.meta["digest_dropped_lines"] = dropped
             if dropped:
                 self.log("warn", f"v3: evidence digest dropped {dropped} lower-priority lines to fit its caps")
@@ -7108,17 +7347,34 @@ class _Engine:
               "created_at": _iso_now()}
         return qa, final
 
-    def _citable_sids(self) -> set[int]:
-        """Sources the report may cite: the evidence digest's markers (the
-        SOURCE INDEX writers were shown) plus the sources of recorded findings
-        (deterministic sections cite those).  Any other marker names a ledger
-        row no writer was shown — a guess that would attach the claim to an
-        unrelated page — and is removed before References are built."""
+    def _evidence_sids(self) -> set[int]:
+        """The evidence digest's markers (the SOURCE INDEX writers were shown)
+        plus the sources of recorded findings (deterministic sections cite
+        those)."""
         sids = {int(n) for n in _CITE_RE.findall(_read_text(self.work / "digest.md") or "")}
         for record in self.records.values():
             for fact in record.get("facts") or []:
                 sids.update(int(sid) for sid in fact.get("sids") or [] if isinstance(sid, int))
         return sids
+
+    def _citable_sids(self) -> set[int]:
+        """Sources the report may cite: :meth:`_evidence_sids`.  Any other
+        marker names a ledger row no writer was shown — a guess that would
+        attach the claim to an unrelated page — and is removed before
+        References are built.  In a gated hindcast (TIME-9) only the admissible
+        ones (:meth:`_pit_admissible`), so References and sources.json list
+        only sources available as of the as-of date."""
+        sids = self._evidence_sids()
+        if self.pit is not None:
+            sids = {sid for sid in sids if self._pit_admissible(sid)}
+        return sids
+
+    def _pit_admissible(self, sid: int) -> bool:
+        """The citation wall of a gated hindcast (TIME-9): whether the ledger
+        row ``sid`` may be cited as of the as-of date (:func:`pit_row_admissible`);
+        False for an unknown sid or without the gates."""
+        row = self.ledger.get(sid)
+        return row is not None and self.pit is not None and pit_row_admissible(row, self.pit)
 
     def _repairs(self, sections: list[dict], context: str, deadline: rg.Deadline) -> list[dict]:
         """At most 3 section rewrites for empty, deterministic-fallback or
@@ -7371,6 +7627,10 @@ class _Engine:
                 self.state.set_phase("finalize", "failed", "report too short")
                 raise _EngineFailure(f"report_too_short: {len(report.strip())} chars < {MIN_REPORT_CHARS}")
             report_name = self._filename("REPORT_FILENAME", "research_report.md")
+            if self.pit is not None:
+                # TIME-9: an earlier attempt's audit never describes this attempt's sources.
+                with suppress(OSError):
+                    (self.out_dir / POINT_IN_TIME_FILENAME).unlink(missing_ok=True)
             order = [int(sid) for sid in self.qa.get("citation_order") or []]
             sources = self._source_rows(order)
             sources_name = self._filename("SOURCES_FILENAME", "sources.json")
@@ -7398,6 +7658,8 @@ class _Engine:
             else:
                 self.bridge_call("_collect_prediction_markets", self.out_dir, self.question, report,
                                  self.meta, self.reporter, model_name=self.model_name)
+            if self.pit is not None:
+                self._write_point_in_time(sources_name)
             self.bridge_call("_render_research_charts", self.out_dir, self.meta, self.reporter,
                              question=self.question)
             final_text = _read_text(self.out_dir / report_name) or report
@@ -7417,6 +7679,54 @@ class _Engine:
         self.log("done", f"research complete (v3: {n_kiqs} KIQs, {len(sources)} sources, "
                          f"{self.meta['report_chars']} chars)")
         return 0
+
+    def _pit_wall_counts(self) -> dict[str, int]:
+        """What the citation wall kept out of the report (TIME-9): the
+        evidence's sources that are not admissible (``sids_withheld``), and the
+        evidence digest's lines left out and markers stripped
+        (:func:`pit_wall_record` over the records the digest is built from)."""
+        admissible = _memoized_sid_check(self._pit_admissible)
+        lines = markers = 0
+        for record in (self.records[k.id] for k in self.kiqs if k.id in self.records):
+            _, dropped, stripped = pit_wall_record(record, admissible)
+            lines += dropped
+            markers += stripped
+        withheld = sum(1 for sid in self._evidence_sids() if not admissible(sid))
+        return {"sids_withheld": withheld, "digest_lines_dropped": lines, "digest_markers_stripped": markers}
+
+    def _write_point_in_time(self, sources_name: str) -> None:
+        """point_in_time.json (TIME-9, a gated hindcast): the research audit of
+        :func:`point_in_time_payload` over the published sources.json as it
+        is on disk (after every rewrite of this finalize), the gates' counts of
+        this attempt and the parametric suspects; mirrored (without its
+        schema and as-of) into ``meta.point_in_time.audit``.  Fails closed
+        without breaking the run: a failure is recorded in
+        ``analytics_errors`` (``point_in_time``), no point_in_time.json is left
+        (so no verdict vouches for the report) and the mirror says
+        ``unavailable``."""
+        path = self.out_dir / POINT_IN_TIME_FILENAME
+        block = self.meta.setdefault("point_in_time", {})
+        try:
+            sources = _read_json(self.out_dir / sources_name)
+            if not isinstance(sources, list):
+                raise ValueError(f"{sources_name} is not a JSON list")
+            payload = point_in_time_payload(self.pit, gate_counts=self.tools.stats().get("pit"), sources=sources,
+                                            suspects=self.parametric_suspects, wall=self._pit_wall_counts())
+            self.write_json(path, payload, internal=False)
+        except Exception as exc:  # noqa: BLE001 — the audit never fails a finished report; it fails closed
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "point_in_time", "error": error[:300]})
+            self.log("warn", f"v3: point-in-time audit failed ({error}); no {POINT_IN_TIME_FILENAME}")
+            with suppress(OSError):
+                path.unlink(missing_ok=True)
+            block["audit"] = {"status": "unavailable"}
+            return
+        block["audit"] = {key: value for key, value in payload.items() if key not in ("schema", "as_of")}
+        cited = payload["streams"]["cited"]
+        self.log("ok" if payload["status"] != PIT_STATUS_VIOLATED else "warn",
+                 f"wrote {POINT_IN_TIME_FILENAME} ({payload['status']}; cited {cited['checked']}: "
+                 f"{cited['admitted']} admitted, {cited['same_day']} same-day, {cited['unverifiable']} undated, "
+                 f"{cited['late']} late; {payload['wall']['sids_withheld']} sources kept out of the report)")
 
     def _source_id(self, url: str) -> str:
         func = getattr(self.bridge, "stable_source_id", None)
@@ -7447,7 +7757,8 @@ class _Engine:
         ``date`` and, right after it, ``date_precision``, ``date_source`` and,
         when present, ``modified_at`` / ``modified_source`` /
         ``date_rejected``; an undated row keeps ``date`` None and no other
-        date key."""
+        date key.  In a gated hindcast (TIME-9) every row also carries the
+        ledger's ``pit_status``."""
         rows: list[dict] = []
         demoted = 0
         quotes = self._evidence_support_quotes() if self.evidence_supports else {}
@@ -7470,6 +7781,9 @@ class _Engine:
             }
             if self.source_dates:
                 entry.update(_source_date_fields(row))
+            if self.pit is not None:
+                # TIME-9: the gates' verdict (None: a source seen only in search rows).
+                entry["pit_status"] = row.get("pit_status")
             entry.update({"source_origin": "fetched" if fetched else "cited",
                           "reachable": True if fetched else None})
             if shell is not None:
@@ -7715,6 +8029,8 @@ class _Engine:
             # can cite a source published the next day (no target date, no
             # future-dated actual).
             self._quant_provenance(quant, ref_date + _dt.timedelta(days=1), verify=verify, typing=typing)
+        if self.pit is not None:
+            self._count_parametric_suspects(timeline, quant, typing=typing)
         # Typed runs count forecast target dates as future-dated, never as fresh
         # (by date, and by the as_of_is_target / published_after_as_of flags
         # when typing stamped them).
@@ -7769,6 +8085,20 @@ class _Engine:
             counts["verified_facts"] = dict(evidence["payload"]["counts"])
             counts["_evidence"] = evidence
         return counts
+
+    def _count_parametric_suspects(self, timeline: Sequence[Mapping[str, Any]],
+                                   quant: Sequence[Mapping[str, Any]], *, typing: bool) -> None:
+        """:func:`parametric_suspects` against the gates' as-of (TIME-9) into
+        :attr:`parametric_suspects`; the rows are counted, never dropped or
+        changed.  Degrade-safe: a failure is recorded in ``analytics_errors``
+        (``point_in_time:suspects``), the count stays None and the run goes on."""
+        try:
+            self.parametric_suspects = parametric_suspects(timeline, quant, self.pit.as_of, typing=typing)
+        except Exception as exc:  # noqa: BLE001 — an uncounted suspect never fails a finished report
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "point_in_time:suspects", "error": error[:300]})
+            self.log("warn", f"v3: parametric suspects not counted ({error})")
+            self.parametric_suspects = None
 
     def _quant_source_dates(self, quant: list[dict], sources: Sequence[Mapping[str, Any]]) -> None:
         """:func:`quant_source_dates` (RESEARCH_SOURCE_DATES), degrade-safe: a

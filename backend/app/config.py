@@ -674,8 +674,11 @@ class Config:
     # live runs are unaffected whatever these say.  On, a source whose latest known
     # publication/update date is after the as-of never gets an [S<n>] id or a stored
     # page: late search rows are dropped before registration, URL-dated-late fetches
-    # are refused without budget and late pages are withheld before storage.  An
-    # honesty check, so default on and parsed fail-closed: only 0/false/no/off disable it.
+    # are refused without budget and late pages are withheld before storage.  TIME-9:
+    # the report then cites only sources admissible as of the as-of, and the research
+    # audit (point_in_time.json) sets forecast.json hindcast.integrity and run.json
+    # as_of_enforcement.  An honesty check, so default on and parsed fail-closed: only
+    # 0/false/no/off disable it.
     PIT_GATES = os.environ.get('PIT_GATES', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
     # TIME-8: whether a source available on the as-of day itself is admitted.  exclude
     # (default, strict: evidence must predate the as-of) | include.  Anything else is exclude.

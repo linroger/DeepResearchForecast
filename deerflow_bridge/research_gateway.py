@@ -3564,12 +3564,15 @@ PIT_OVERFETCH_MAX = 4
 # fetch_prefetch_refused counts fetches refused by a URL path date or a recorded
 # verdict (a ledger pit_status, or a row-less record: a late search sighting, or a
 # withhold of an earlier attempt);
-# fetch_withheld_repeat counts re-asks of a page withheld after a fetch in this run.
+# fetch_withheld_repeat counts re-asks of a page withheld after a fetch in this run;
+# search_admitted_shown / search_same_day_shown count the rows shown under those
+# verdicts (TIME-9: with search_undated_shown and search_late_dropped, every row
+# a render slot reached, for the research audit's search stream).
 PIT_COUNTERS = (
     "searches_bounded", "searches_unbounded", "search_late_dropped", "search_undated_shown",
     "no_in_window_results", "fetch_prefetch_refused", "fetch_withheld_repeat", "fetch_admitted",
     "fetch_same_day", "fetch_late_withheld", "fetch_undated_withheld", "fetch_undated_admitted",
-    "fetch_units_spent_withheld",
+    "fetch_units_spent_withheld", "search_admitted_shown", "search_same_day_shown",
 )
 # Beside the ledger: URLs withheld at fetch, or sighted late by a search, before
 # they had a ledger row (so no pit_status can hold the verdict), kept so a
@@ -4639,7 +4642,7 @@ class ResearchTools:
             return no_results, True, 0
         rendered: list[str] = []
         total = 0
-        late = undated = 0
+        late = undated = admitted = same_day = 0
         verdicts = self._pit_search_verdicts(results) if self.pit is not None else None
         for index, item in enumerate(results):
             if len(rendered) >= SEARCH_RESULTS_PER_QUERY:
@@ -4688,10 +4691,16 @@ class ResearchTools:
             total += cost
             if verdict == _GATE_UNVERIFIABLE:
                 undated += 1
+            elif verdict == _GATE_ADMIT:
+                admitted += 1
+            elif verdict == _GATE_SAME_DAY:
+                same_day += 1
         if self.pit is not None:
             with self._lock:
                 self._pit_counts["search_late_dropped"] += late
                 self._pit_counts["search_undated_shown"] += undated
+                self._pit_counts["search_admitted_shown"] += admitted
+                self._pit_counts["search_same_day_shown"] += same_day
                 if late and not rendered:
                     self._pit_counts["no_in_window_results"] += 1
         if not rendered:

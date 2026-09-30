@@ -53,10 +53,12 @@ from ..models.task import TaskManager
 from ..services.hindcast_policy import (
     HINDCAST_POLICY_OPTION,
     PIT_RESEARCH_ENV_PREFIX,
+    POINT_IN_TIME_FILENAME,
     as_of_enforcement_record,
     capture_hindcast_policy_v1,
     hindcast_policy,
     pit_research_env,
+    research_audit_record,
 )
 from ..services.graph_builder import (
     GraphBuilderService,
@@ -3565,6 +3567,8 @@ _RESEARCH_CONTRACT_FILES = (
     "prediction_markets.json", "market_price_history.json",
     "research_report_judge.json", "research_progress.log", "meta.json",
     "charts.json",
+    # TIME-9: a gated hindcast's research audit (sealed when present).
+    POINT_IN_TIME_FILENAME,
 )
 
 _RESEARCH_JUDGE_DIMS = (
@@ -10147,6 +10151,79 @@ class PipelineOrchestrator:
         pin = hindcast_policy(state.options)
         return {"hindcast": pin} if pin is not None else {}
 
+    def _record_research_audit(self, state: "PipelineState", handoff_dir: str) -> None:
+        """TIME-9: stamp the gated research's audit into the hindcast pin before any report reads it.
+
+        Under a hindcast pin whose ``pit.gates`` ran, the handoff's ``point_in_time.json`` (the
+        audit of the research this run consumes) becomes the pin's ``research_audit`` (``{'status',
+        'sha256'}``, :func:`hindcast_policy.research_audit_record`, hashed and parsed from the
+        same bytes).  It is recorded once per research generation: a resume that reuses the
+        research finds the same bytes and changes nothing, and a re-run research replaces the
+        audit of the research it replaced.  No other pin field is touched.  A missing,
+        unreadable or unrecognised audit records none and drops a stale one, so the report
+        stays ``labelled`` rather than vouched for (fail closed).  When the audit changes,
+        run.json's ``resolved.as_of_enforcement`` is refreshed from the pin.  Never raises;
+        the stage completion that follows saves the state.
+        """
+        pin = hindcast_policy(state.options)
+        stored = state.options.get(HINDCAST_POLICY_OPTION) if pin is not None else None
+        if not isinstance(stored, dict):
+            return
+        pit = pin.get("pit")
+        audit: Optional[dict[str, Any]] = None
+        if isinstance(pit, dict) and pit.get("gates") is True:
+            path = os.path.join(handoff_dir, POINT_IN_TIME_FILENAME)
+            try:
+                with open(path, "rb") as fh:
+                    raw = fh.read()
+                audit = research_audit_record(json.loads(raw.decode("utf-8")), hashlib.sha256(raw).hexdigest())
+                if audit is None:
+                    logger.warning("[%s] %s is not a recognised research audit; the hindcast stays labelled",
+                                   state.pipeline_id, POINT_IN_TIME_FILENAME)
+            except FileNotFoundError:
+                logger.warning("[%s] gated hindcast research wrote no %s; the hindcast stays labelled",
+                               state.pipeline_id, POINT_IN_TIME_FILENAME)
+            except Exception as exc:  # noqa: BLE001 — an unreadable audit vouches for nothing
+                logger.warning("[%s] %s unreadable (%s); the hindcast stays labelled",
+                               state.pipeline_id, POINT_IN_TIME_FILENAME, exc)
+        previous = stored.get("research_audit")
+        if audit == previous and (audit is not None or "research_audit" not in stored):
+            return
+        if audit is None:
+            stored.pop("research_audit", None)
+        else:
+            if previous is not None:
+                logger.warning("[%s] research regenerated: research audit %s replaced by %s",
+                               state.pipeline_id, previous, audit)
+            stored["research_audit"] = audit
+            logger.info("[%s] research audit recorded in the hindcast pin: %s",
+                        state.pipeline_id, audit["status"])
+        self._refresh_as_of_enforcement(state)
+
+    def _refresh_as_of_enforcement(self, state: "PipelineState") -> None:
+        """TIME-9: rewrite run.json ``resolved.as_of_enforcement`` from the current hindcast pin.
+
+        Best-effort like every run.json writer (a failure is logged at debug level); a
+        missing run.json is left missing (the attempt-start writer owns creating it and
+        builds the same record from the pin).
+        """
+        pin = hindcast_policy(state.options)
+        if pin is None or not bool(getattr(Config, "RECORD_RUN_MANIFEST", True)):
+            return
+        try:
+            from ..utils.security import redact_secrets
+            from ..utils.atomic import write_json_atomic
+            path = PipelineManager.manifest_path(state.pipeline_id)
+            manifest = _read_json(path)
+            if not isinstance(manifest, dict):
+                return
+            resolved = manifest.setdefault("resolved", {})
+            resolved["as_of_enforcement"] = as_of_enforcement_record(pin)
+            manifest["updated_at"] = _utcnow()
+            write_json_atomic(path, redact_secrets(manifest))
+        except Exception as e:  # noqa: BLE001 — run.json is an observation artifact
+            logger.debug("[%s] run.json as_of_enforcement 更新跳过: %s", state.pipeline_id, e)
+
     @classmethod
     def _assign_evaluation_context(cls, agent: Any, state: "PipelineState") -> None:
         """EVAL-13: give a report agent this run's evaluation context.
@@ -11119,6 +11196,9 @@ class PipelineOrchestrator:
             # question (drf.question_spec/v1), written at plan time; optional (absent
             # with the knob off, on legacy runs and older handoffs).
             specs.append(("question_spec", os.path.join(hd, "question_spec.json")))
+            # TIME-9: a gated hindcast's research audit (drf-point-in-time/v1); optional
+            # (only a gated hindcast's v3 research writes it).
+            specs.append(("point_in_time", os.path.join(hd, POINT_IN_TIME_FILENAME)))
             specs.append(("prediction_markets", os.path.join(hd, "prediction_markets.json")))
             specs.append(("market_price_history", os.path.join(hd, "market_price_history.json")))
             specs.append(("prediction_market_candidates",
@@ -14145,6 +14225,9 @@ class PipelineOrchestrator:
             # single manifest-last generation.  The producer generation stays
             # valid throughout this operation and is restored on install error.
             _finalize_research_contract(handoff_dir, research)
+            # TIME-9: a gated hindcast's research audit joins the pin before any report reads it
+            # (forecast.json hindcast.integrity, run.json as_of_enforcement).
+            self._record_research_audit(state, handoff_dir)
             # R2-RES-3: 由 dossier 覆盖度 + 来源层级 + 研究质量记分牌派生一个咨询性
             # forecast_confidence_penalty 写入 options，供发布门后续消费（gate refine 推迟；
             # 此处纯写值，不读不阻断，永不 wedge）。

@@ -24,8 +24,17 @@ point-in-time evidence gates of the hindcast's v3 research, read from Config onc
 at admission.  :func:`pit_research_env` turns it into the research child's
 ``RESEARCH_PIT_*`` env; a pin without ``pit`` (admitted before TIME-8) runs without
 gates.  With ``pit.gates`` on, search and fetch are date-gated rather than only
-labelled; the ``search`` / ``fetch`` labels above and the report's integrity label
-stay as they are until the research audit (TIME-9) can vouch for the gates.
+labelled; the pin's ``search`` / ``fetch`` labels above stay as admitted.
+
+TIME-9 adds the research audit: the gated v3 child writes ``point_in_time.json``
+(an independent date re-check of the sources its report cites), and the parent
+records its verdict once per research generation as the pin's ``research_audit``
+(:func:`research_audit_record`: ``status`` plus the file's ``sha256``) before the
+report stage reads the pin.  :func:`hindcast_forecast_block` maps that verdict to
+``forecast['hindcast']['integrity']`` and :func:`as_of_enforcement_record` to
+run.json's ``retrieval_clamped`` / ``audit_status``; without a (valid) audit both
+keep their TIME-6 values.  A violated audit fails nothing: a hindcast is
+evaluation-only and the verdict labels it.
 
 Pure and stdlib-only apart from :func:`capture_pit_policy_v1`, which reads Config;
 nothing here touches the network or the filesystem.
@@ -45,6 +54,19 @@ PIT_RESEARCH_ENV_PREFIX = "RESEARCH_PIT_"
 # The one backend clamp of PIT_SEARCH_OVERFETCH (the v3 child's PitPolicy bound is
 # research_gateway.PIT_OVERFETCH_MAX; the processes share no code).
 PIT_OVERFETCH_MAX = 4
+# TIME-9: the gated v3 child's research audit (linear_research.POINT_IN_TIME_FILENAME
+# / POINT_IN_TIME_SCHEMA; the processes share no code) and the verdicts it can state.
+POINT_IN_TIME_FILENAME = "point_in_time.json"
+POINT_IN_TIME_SCHEMA = "drf-point-in-time/v1"
+AUDIT_DATE_VERIFIED = "date_verified"
+AUDIT_DATE_VERIFIED_WITH_UNVERIFIABLE = "date_verified_with_unverifiable"
+AUDIT_VIOLATED = "violated"
+# research_audit.status -> forecast['hindcast']['integrity'].
+_AUDIT_INTEGRITY = {
+    AUDIT_DATE_VERIFIED: "date_verified",
+    AUDIT_DATE_VERIFIED_WITH_UNVERIFIABLE: "date_verified_with_unverifiable",
+    AUDIT_VIOLATED: "leak_suspected",
+}
 
 
 def capture_hindcast_policy_v1(as_of: str, *, research_engine: str,
@@ -156,21 +178,48 @@ def hindcast_policy(options: Any) -> Optional[dict[str, Any]]:
     return as_hindcast_pin(options.get(HINDCAST_POLICY_OPTION))
 
 
+def research_audit_record(payload: Any, sha256: Any) -> Optional[dict[str, Any]]:
+    """The pin's ``research_audit`` for a parsed ``point_in_time.json`` (TIME-9), or None.
+
+    ``{'status', 'sha256'}`` when ``payload`` is an object of POINT_IN_TIME_SCHEMA
+    whose ``status`` is one of the audit verdicts and ``sha256`` is the file's hex
+    digest; anything else vouches for nothing (None: the report stays labelled).
+    """
+    if not isinstance(payload, Mapping) or payload.get("schema") != POINT_IN_TIME_SCHEMA:
+        return None
+    status = payload.get("status")
+    if status not in _AUDIT_INTEGRITY or not isinstance(sha256, str) or not sha256:
+        return None
+    return {"status": status, "sha256": sha256}
+
+
+def _audit_status(research_audit: Any) -> Optional[str]:
+    """The verdict of a research audit, or None for a missing or unrecognised one."""
+    if not isinstance(research_audit, Mapping):
+        return None
+    status = research_audit.get("status")
+    return status if status in _AUDIT_INTEGRITY else None
+
+
 def hindcast_forecast_block(pin: Mapping[str, Any], *,
                             research_audit: Optional[Mapping[str, Any]] = None) -> dict[str, Any]:
     """``forecast['hindcast']``: how a hindcast report was contained and what was not checked.
 
-    Markets were withheld, retrieval ran live and is labelled rather than clamped,
-    and contamination was not assessed, so the forecast is characterization-only.
-    ``research_audit`` is the pin's research audit; TIME-9 maps it to ``integrity``.
-    Until then every hindcast is reported as ``integrity: 'labelled'``.
+    Markets were withheld and contamination was not assessed, so the forecast is
+    characterization-only.  ``research_audit`` is the pin's research audit (TIME-9):
+    with a recognised verdict, retrieval was ``date_gated`` and ``integrity`` is
+    ``date_verified``, ``date_verified_with_unverifiable`` or, for a ``violated``
+    audit, ``leak_suspected``.  Without one (no gates, an audit that was not
+    written, or an unrecognised value) retrieval is ``live_labelled`` and
+    ``integrity`` ``labelled``, exactly as before TIME-9.
     """
+    status = _audit_status(research_audit)
     return {
         "as_of": pin.get("as_of"),
         "policy_version": pin.get("version"),
         "markets": "withheld",
-        "retrieval": "live_labelled",
-        "integrity": "labelled",
+        "retrieval": "date_gated" if status is not None else "live_labelled",
+        "integrity": _AUDIT_INTEGRITY[status] if status is not None else "labelled",
         "contamination": "not_assessed",
         "characterization_only": True,
     }
@@ -179,13 +228,23 @@ def hindcast_forecast_block(pin: Mapping[str, Any], *,
 def as_of_enforcement_record(pin: Mapping[str, Any]) -> dict[str, Any]:
     """``run.json`` ``resolved.as_of_enforcement`` for a pinned hindcast run.
 
-    Retrieval is not clamped to the as-of date (TIME-9 updates the flag when it
-    is); live market data is withheld from the report stage.
+    Live market data is withheld from the report stage.  Retrieval counts as
+    clamped to the as-of date only when the pin's gates ran (``pit.gates``) and its
+    research audit (TIME-9) is not ``violated``; the audit's verdict is then
+    recorded as ``audit_status``.  Without a recognised audit the record is the
+    TIME-6 one (not clamped, no ``audit_status``).
     """
-    return {
+    record: dict[str, Any] = {
         "schema": AS_OF_ENFORCEMENT_SCHEMA,
         "as_of": pin.get("as_of"),
         "retrieval_clamped": False,
         "live_data_withheld": True,
         "research_engine": pin.get("research_engine"),
     }
+    status = _audit_status(pin.get("research_audit"))
+    if status is not None:
+        pit = pin.get("pit")
+        gates = isinstance(pit, Mapping) and pit.get("gates") is True
+        record["retrieval_clamped"] = gates and status != AUDIT_VIOLATED
+        record["audit_status"] = status
+    return record

@@ -1,0 +1,461 @@
+"""TIME-9: point-in-time citation wall and research audit of a gated v3 hindcast.
+
+Under TIME-8's gates (``tools.pit``) the report cites only sources admissible as
+of the as-of date: ``_citable_sids`` (hence renumbering, References and
+sources.json) and the evidence digest (markers stripped, a line built only on
+inadmissible sources left out, SOURCE INDEX filtered) apply the same wall.
+Finalize writes ``point_in_time.json`` (the gates' search/fetch streams, an
+independent re-check of the published sources.json dates, the wall's counts,
+the parametric suspects and the verdict) and mirrors it into
+``meta.point_in_time.audit``.  A live run writes no audit and builds its digest
+exactly as before.  Offline: scripted model, injected search/fetch, zero network.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import hashlib
+import json
+import os
+import re
+import threading
+
+import pytest
+
+import test_research_engine_v3 as v3
+
+# The shared fixtures (hermetic env, real bridge with network steps stubbed).
+_hermetic_env = v3._hermetic_env
+bridge = v3.bridge
+lr = v3.lr
+rg = v3.rg
+
+AS_OF = "2024-06-01"
+POLICY = rg.PitPolicy(as_of=dt.date(2024, 6, 1))
+_PIT_ENV = ("RESEARCH_PIT_GATES", "RESEARCH_PIT_SAME_DAY", "RESEARCH_PIT_UNDATED",
+            "RESEARCH_PIT_PROVIDER_BOUNDS", "RESEARCH_PIT_OVERFETCH", "RESEARCH_SOURCE_DATES",
+            "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", "RESEARCH_AS_OF")
+_TITLE_SID_RE = r"^\[S(\d+)\] {title} "
+
+
+@pytest.fixture(autouse=True)
+def _pit_env(monkeypatch):
+    for name in _PIT_ENV:
+        monkeypatch.delenv(name, raising=False)
+
+
+def pit_search(query: str, n: int) -> str:
+    """Per query: an undated brief (shown labelled undated; never admissible
+    under ``drop``), a release dated late by its URL path, a survey dated
+    before the as-of and a note dated on it (late under ``exclude``)."""
+    digest = int(hashlib.sha1(query.encode("utf-8")).hexdigest(), 16) % 10**8
+    rows = [
+        {"title": f"Undated brief {digest}", "url": f"https://undated-{digest}.example/brief",
+         "content": "Capacity statistics: 176 GW installed; brief."},
+        {"title": f"Late release {digest}", "url": f"https://late-{digest}.example/2024/07/01/release",
+         "content": "Capacity statistics: 190 GW installed; release."},
+        {"title": f"Dated survey {digest}", "url": f"https://dated-{digest}.example/survey",
+         "content": "Capacity statistics: 176 GW installed; survey.", "published": "2024-04-15"},
+        {"title": f"Same-day note {digest}", "url": f"https://sameday-{digest}.example/note",
+         "content": "Capacity statistics: 180 GW installed; note.", "published": AS_OF},
+    ]
+    return json.dumps({"query": query, "results": rows})
+
+
+class PitWorld(v3.World):
+    """Each KIQ agent searches, fetches the undated brief (withheld under
+    ``drop``) and the dated survey (admitted), then writes notes with a
+    finding cited only by the brief, one cited only by the survey and a
+    mixed finding and conflict.  Writers also cite a withheld brief."""
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.briefs: set[int] = set()
+        self._brief_lock = threading.Lock()
+
+    @staticmethod
+    def _sid(texts, title: str) -> int | None:
+        for text in texts:
+            match = re.search(_TITLE_SID_RE.format(title=re.escape(title)), text, re.M)
+            if match:
+                return int(match.group(1))
+        return None
+
+    @staticmethod
+    def _url(texts, host: str) -> str | None:
+        for text in texts:
+            match = re.search(rf"https://{host}-\d+\.example/\S+", text)
+            if match:
+                return match.group(0)
+        return None
+
+    def agent(self, call):
+        messages = call["messages"]
+        tool_results = [content for kind, content in messages if kind == "tool"]
+        last_kind, last = messages[-1]
+        kid = re.search(r"Investigate (\S+):", messages[2][1]).group(1)
+        if last_kind == "human" and last.startswith("STOP"):
+            return v3.ai(self.notes(tool_results))
+        if not tool_results:
+            return v3.ai(tool_calls=[{"name": "web_search", "args": {"query": f"{kid} capacity survey"},
+                                      "id": f"{kid}-c1"}])
+        for step, host in ((1, "undated"), (2, "dated")):
+            if len(tool_results) == step:
+                url = self._url(tool_results[:1], host)
+                if url:
+                    return v3.ai(tool_calls=[{"name": "web_fetch", "args": {"url": url, "focus": "capacity"},
+                                              "id": f"{kid}-c{step + 1}"}])
+        return v3.ai(self.notes(tool_results))
+
+    def notes(self, tool_results) -> str:
+        brief = self._sid(tool_results, "Undated brief")
+        survey = self._sid(tool_results, "Dated survey")
+        if brief is None or survey is None:
+            return super().notes(tool_results)
+        with self._brief_lock:
+            self.briefs.add(brief)
+        return "\n".join([
+            "## Findings",
+            f"- Installed capacity reached 176 GW in 2023 per the survey [S{survey}] (REPORTED)",
+            f"- A brief says operators plan 250 GW of capacity by 2030 [S{brief}] (REPORTED)",
+            f"- Analysts expect 12% annual demand growth through 2027 [S{brief}][S{survey}] (REPORTED)",
+            "## Conflicts",
+            f"- Sources differ on 2030 capacity [S{brief}][S{survey}]",
+            "## Open questions",
+            "- Grid connection timelines remain unclear",
+        ])
+
+    def writer(self, call):
+        reply = super().writer(call)
+        withheld = min(self.briefs) if self.briefs else None
+        if withheld is None:
+            return reply
+        guess = f"\n\nA later brief put installed capacity at 300 GW [S{withheld}]."
+        return v3.ai(re.sub(r"(\n\n## |\Z)", lambda m: guess + m.group(1), reply.content, count=1), out=1500)
+
+    def facts(self, call):
+        return v3.ai(json.dumps({
+            "key_events": [{"date": "2023-12-31", "event": "Capacity reached 176 GW"},
+                           {"date": "2024-09-15", "event": "A record hyperscaler order was announced"}],
+            "quantitative_facts": [
+                {"metric": "Installed capacity", "value": "176", "unit": "GW", "as_of_date": "2023-12-31",
+                 "value_type": "actual", "source_ref": "S1"},
+                {"metric": "Installed capacity", "value": "195", "unit": "GW", "as_of_date": "2024-08",
+                 "value_type": "actual", "source_ref": "S1"},
+                {"metric": "Grid queue", "value": "41", "unit": "months", "as_of_date": "2024-07-15",
+                 "source_ref": "S1"},
+                {"metric": "Installed capacity", "value": "250", "unit": "GW", "as_of_date": "2027",
+                 "value_type": "forecast", "source_ref": "S1"},
+            ],
+            "contested_claims": [],
+        }))
+
+
+def run_pit_engine(root, bridge, monkeypatch, *, gated: bool = True, undated: str = "drop"):
+    monkeypatch.setenv("RESEARCH_LINEAR_WORKERS", "1")
+    monkeypatch.setattr(lr, "_utc_date", lambda: "2026-10-01")
+    if gated:
+        monkeypatch.setenv("RESEARCH_AS_OF", AS_OF)
+        monkeypatch.setenv("RESEARCH_PIT_GATES", "true")
+        monkeypatch.setenv("RESEARCH_PIT_UNDATED", undated)
+    world = PitWorld()
+    out = root / "out"
+    out.mkdir(parents=True, exist_ok=True)
+    model = v3.ScriptedModel(world)
+    plog = v3.FakePlog()
+    meta = {"status": "running", "question": "q", "research_engine": "v3"}
+
+    def write_meta():
+        (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+
+    def gateway_factory(args, plog_arg, bridge_arg, preset):
+        return rg.ModelGateway(model, plog_arg, max_concurrency=preset.workers, budget_units=preset.budget_units,
+                               reserve_share=lr.RESERVE_SHARE, sleep=lambda seconds: None)
+
+    def tools_factory(ledger, pages_dir, bridge_arg, plog_arg, limits):
+        # Built like production (_default_tools_factory), with offline search/fetch.
+        return rg.ResearchTools(ledger, pages_dir, search_fn=pit_search, fetch_fn=v3.page_text,
+                                bridge=bridge_arg, plog=plog_arg, limits=limits,
+                                vintage_as_of=lr._hindcast_as_of(os.environ), pit=lr._pit_policy(os.environ))
+
+    question = "Will global data-centre capacity exceed 250 GW by the end of 2027?"
+    rc = lr.run(question, out, v3.make_args(), meta, plog, write_meta, bridge=bridge,
+                gateway_factory=gateway_factory, tools_factory=tools_factory)
+    return rc, meta, plog, world, out
+
+
+def _load(path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _spy_digest(monkeypatch):
+    calls = []
+    real = lr.build_digest
+
+    def spy(*args, **kwargs):
+        result = real(*args, **kwargs)
+        calls.append((args, kwargs, result))
+        return result
+
+    monkeypatch.setattr(lr, "build_digest", spy)
+    return calls, real
+
+
+def _independent_cited(sources):
+    """The cited stream recomputed here from the source_dates module directly."""
+    sd = rg._source_dates()
+    counts = {"checked": 0, "admitted": 0, "same_day": 0, "unverifiable": 0, "late": 0}
+    names = {"admit": "admitted", "same_day": "same_day", "unverifiable": "unverifiable", "late": "late"}
+    for row in sources:
+        days = [sd.availability(row.get("date"), row.get("modified_at")), sd.url_date(row.get("url"))]
+        known = [day for day in days if day is not None]
+        counts["checked"] += 1
+        counts[names[sd.gate(max(known) if known else None, AS_OF, same_day="exclude")]] += 1
+    return counts
+
+
+# =============================================================== the wall, end to end
+
+def test_gated_hindcast_report_cites_only_admissible_sources(tmp_path, bridge, monkeypatch):
+    calls, real_digest = _spy_digest(monkeypatch)
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    ledger = {row["sid"]: row for row in _load(out / "v3" / "sources_ledger.json")}
+    sources = _load(out / "sources.json")
+    report = (out / "research_report.md").read_text(encoding="utf-8")
+
+    # The scripted agents fetched every brief: withheld undated, never stored.
+    assert world.briefs and {ledger[sid]["pit_status"] for sid in world.briefs} == {"undated_withheld"}
+    # A writer cited a withheld brief; renumbering removed it, so neither the report,
+    # its References nor sources.json name any brief, late release or same-day note.
+    assert "A later brief put installed capacity at 300 GW." in report
+    for text in (report, json.dumps(sources)):
+        assert not any(domain in text for domain in ("undated-", "//late-", "sameday-"))
+    # Every [S<n>] marker (body and References) is positional into sources.json, and
+    # every published source is admissible as of the as-of date.
+    markers = {int(n) for n in re.findall(r"\[S(\d+)\]", report)}
+    assert markers == set(range(1, len(sources) + 1))
+    by_url = {row["url"]: row for row in ledger.values()}
+    assert all(lr.pit_row_admissible(by_url[row["url"]], POLICY) for row in sources)
+    assert {row["pit_status"] for row in sources} <= {"admitted", None}
+    assert all(lr.pit_date_verdict(row.get("date"), row.get("modified_at"), row["url"], POLICY) == "admit"
+               for row in sources)
+
+    # The digest: the brief-only finding is gone, the mixed finding and the conflict
+    # keep only the survey, and the SOURCE INDEX lists no brief.
+    (args, kwargs, (digest_text, _dropped)), = calls
+    assert kwargs["admissible"] is not None
+    digest = (out / "v3" / "digest.md").read_text(encoding="utf-8")
+    assert digest == digest_text
+    assert "250 GW of capacity by 2030" not in digest
+    assert digest.count("Analysts expect 12% annual demand growth") == len(world.briefs)
+    assert digest.count("Sources differ on 2030 capacity") == len(world.briefs)
+    assert not any(f"[S{sid}]" in digest for sid in world.briefs)
+    index = digest.split("SOURCE INDEX", 1)[1]
+    assert re.findall(r"^\[S(\d+)\]", index, re.M)
+    assert all(lr.pit_row_admissible(ledger[int(sid)], POLICY) for sid in re.findall(r"^\[S(\d+)\]", index, re.M))
+    # Without the wall the same records would have shown the briefs.
+    unwalled, _ = real_digest(*args, **{key: value for key, value in kwargs.items() if key != "admissible"})
+    assert unwalled != digest and any(f"[S{sid}]" in unwalled for sid in world.briefs)
+
+
+def test_point_in_time_json_records_the_exact_counters_of_the_run(tmp_path, bridge, monkeypatch):
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    audit = _load(out / lr.POINT_IN_TIME_FILENAME)
+    sources = _load(out / "sources.json")
+    gates = meta["tools"]["pit"]
+    kiqs = len(world.briefs)
+    assert kiqs == meta["kiqs"]["completed"] >= 4
+
+    assert list(audit) == ["schema", "as_of", "same_day_policy", "undated_policy", "streams", "wall",
+                           "parametric_suspects", "leak_guard", "parametric_knowledge", "live_page_text",
+                           "status"]
+    assert (audit["schema"], audit["as_of"], audit["same_day_policy"], audit["undated_policy"]) == (
+        "drf-point-in-time/v1", AS_OF, "exclude", "drop")
+    assert (audit["leak_guard"], audit["parametric_knowledge"], audit["live_page_text"]) == (
+        "source_publication_dates_only", "not_guarded", "labelled_not_archived")
+
+    # Search: every fresh search showed one undated brief and one dated survey and
+    # dropped the late release and the same-day note.
+    searches = meta["tools"]["searches"] - meta["tools"]["cached_searches"]
+    assert searches > kiqs
+    assert audit["streams"]["search"] == {
+        "checked": 4 * searches, "admitted": searches, "same_day": 0, "unverifiable": searches,
+        "late": 2 * searches, "no_in_window_results": 0, "bounded_queries": 0, "unbounded_queries": searches,
+        "scope": "attempt"}
+    # Fetch: per KIQ, the brief withheld undated and the survey admitted.
+    assert audit["streams"]["fetch"] == {
+        "checked": 2 * kiqs, "admitted": kiqs, "same_day": 0, "unverifiable": kiqs, "late": 0,
+        "undated_withheld": kiqs, "undated_admitted": 0, "refused_before_fetch": 0, "withheld_repeats": 0,
+        "scope": "attempt"}
+    assert (gates["search_admitted_shown"], gates["fetch_undated_withheld"]) == (searches, kiqs)
+    # Cited: an independent re-check of sources.json; every cited survey predates the as-of.
+    assert audit["streams"]["cited"] == _independent_cited(sources) == {
+        "checked": len(sources), "admitted": len(sources), "same_day": 0, "unverifiable": 0, "late": 0}
+    # The wall: each KIQ's brief cited by its findings was kept out; one brief-only
+    # finding per KIQ left the digest; the mixed finding and conflict lost the brief.
+    assert audit["wall"] == {"sids_withheld": kiqs, "digest_lines_dropped": kiqs,
+                             "digest_markers_stripped": 2 * kiqs}
+    assert audit["status"] == "date_verified"
+    assert meta["point_in_time"]["audit"] == {key: value for key, value in audit.items()
+                                              if key not in ("schema", "as_of")}
+    # TIME-7's block is extended, not replaced.
+    assert {key: meta["point_in_time"][key] for key in ("as_of", "hindcast", "markets")} == {
+        "as_of": AS_OF, "hindcast": True, "markets": "withheld"}
+    assert any("wrote point_in_time.json (date_verified" in message for kind, message in plog.lines if kind == "ok")
+
+
+def test_parametric_suspects_are_counted_and_kept(tmp_path, bridge, monkeypatch):
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    audit = _load(out / lr.POINT_IN_TIME_FILENAME)
+    # The event of 2024-09-15, the actual dated 2024-08 and the untyped row dated
+    # 2024-07-15; never the 2023 actual or the 2027 forecast.
+    assert audit["parametric_suspects"] == {"timeline": 1, "quant": 2}
+    quant = _load(out / "quantitative.json")
+    timeline = _load(out / "timeline.json")
+    assert sorted(row["as_of_date"] for row in quant) == ["2023-12-31", "2024-07-15", "2024-08", "2027"]
+    assert sorted(row["date"] for row in timeline) == ["2023-12-31", "2024-09-15"]
+
+
+def test_undated_flag_policy_labels_the_verdict(tmp_path, bridge, monkeypatch):
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch, undated="flag")
+    assert rc == 0, meta.get("error")
+    audit = _load(out / lr.POINT_IN_TIME_FILENAME)
+    sources = _load(out / "sources.json")
+    assert audit["undated_policy"] == "flag"
+    # Stored undated briefs may be cited; the re-check counts them undated.
+    assert audit["streams"]["cited"] == _independent_cited(sources)
+    assert audit["streams"]["cited"]["unverifiable"] >= 1 and audit["streams"]["cited"]["late"] == 0
+    assert audit["streams"]["fetch"]["undated_admitted"] == len(world.briefs)
+    assert audit["status"] == "date_verified_with_unverifiable"
+
+
+def test_a_late_row_in_sources_json_is_re_audited_as_violated(tmp_path, bridge, monkeypatch):
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    audit = _load(out / lr.POINT_IN_TIME_FILENAME)
+    sources = _load(out / "sources.json")
+    assert lr.pit_audit_status(lr.pit_cited_audit(sources, POLICY), "drop") == audit["status"] == "date_verified"
+    injected = sources + [{"url": "https://wire.example/story", "date": "2024-07-02"}]
+    (out / "sources.json").write_text(json.dumps(injected), encoding="utf-8")
+    cited = lr.pit_cited_audit(_load(out / "sources.json"), POLICY)
+    assert cited["late"] == 1 and cited["checked"] == len(sources) + 1
+    assert lr.pit_audit_status(cited, "drop") == "violated"
+    reaudit = lr.point_in_time_payload(POLICY, gate_counts=meta["tools"]["pit"], sources=injected,
+                                       suspects=audit["parametric_suspects"], wall=audit["wall"])
+    assert reaudit["status"] == "violated"
+    assert reaudit["streams"]["search"] == audit["streams"]["search"]
+
+
+def test_a_failed_audit_leaves_no_point_in_time_json(tmp_path, bridge, monkeypatch):
+    (tmp_path / "out").mkdir(parents=True)
+    # An earlier attempt's audit never survives this attempt's finalize.
+    (tmp_path / "out" / lr.POINT_IN_TIME_FILENAME).write_text('{"status": "date_verified"}', encoding="utf-8")
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("audit exploded")
+
+    monkeypatch.setattr(lr, "point_in_time_payload", boom)
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    assert not (out / lr.POINT_IN_TIME_FILENAME).exists()
+    assert meta["point_in_time"]["audit"] == {"status": "unavailable"}
+    assert any(error["helper"] == "point_in_time" for error in meta["analytics_errors"])
+
+
+# =============================================================== live runs unchanged
+
+def test_live_run_writes_no_audit_and_an_unwalled_digest(tmp_path, bridge, monkeypatch):
+    calls, real_digest = _spy_digest(monkeypatch)
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch, gated=False)
+    assert rc == 0, meta.get("error")
+    assert not (out / lr.POINT_IN_TIME_FILENAME).exists()
+    assert "point_in_time" not in meta and "pit" not in meta["tools"]
+    sources = _load(out / "sources.json")
+    assert sources and all("pit_status" not in row for row in sources)
+    # The live digest is the pre-TIME-9 call's bytes: no wall is passed.
+    (args, kwargs, (digest_text, _dropped)), = calls
+    assert kwargs == {"dates": False, "admissible": None}
+    assert real_digest(*args, dates=False) == (digest_text, _dropped)
+    assert (out / "v3" / "digest.md").read_text(encoding="utf-8") == digest_text
+    # Live, the briefs and the late releases are ordinary sources.
+    assert "undated-" in digest_text and "//late-" in json.dumps(_load(out / "v3" / "sources_ledger.json"))
+
+
+# =============================================================== pure helpers
+
+def _row(sid, url, **fields):
+    return {"sid": sid, "url": url, "fetched": False, **fields}
+
+
+@pytest.mark.parametrize("row, undated, expected", [
+    (_row(1, "https://a.example/x", published="2024-04-15"), "drop", True),
+    (_row(2, "https://a.example/x"), "drop", False),                             # snippet-only, undated
+    (_row(3, "https://a.example/x"), "flag", True),
+    (_row(4, "https://a.example/2024/03/02/x"), "drop", True),                   # URL date admits
+    (_row(5, "https://a.example/2024/07/02/x"), "flag", False),                  # URL date late
+    (_row(6, "https://a.example/x", published="2024-06-01"), "flag", False),     # same day, excluded
+    (_row(7, "https://a.example/x", published="2024-03-01", modified_at="2024-06-20"), "flag", False),
+    (_row(8, "https://a.example/x", pit_status="late", published="2024-01-01"), "flag", False),
+    (_row(9, "https://a.example/x", pit_status="undated_withheld"), "flag", False),
+    (_row(10, "https://a.example/x", pit_status="admitted", fetched=True), "drop", True),
+    (_row(11, "https://a.example/x", pit_status="unverifiable", fetched=True), "drop", True),
+])
+def test_pit_row_admissible(row, undated, expected):
+    assert lr.pit_row_admissible(row, rg.PitPolicy(as_of=dt.date(2024, 6, 1), undated=undated)) is expected
+
+
+def test_same_day_include_admits_the_as_of_day():
+    row = _row(1, "https://a.example/x", published="2024-06-01")
+    include = rg.PitPolicy(as_of=dt.date(2024, 6, 1), same_day="include")
+    assert lr.pit_row_admissible(row, include)
+    assert lr.pit_cited_audit([{"url": row["url"], "date": "2024-06-01"}], include) == {
+        "checked": 1, "admitted": 0, "same_day": 1, "unverifiable": 0, "late": 0}
+
+
+def test_pit_audit_status():
+    clean = {"checked": 2, "admitted": 2, "same_day": 0, "unverifiable": 0, "late": 0}
+    assert lr.pit_audit_status(clean, "drop") == "date_verified"
+    assert lr.pit_audit_status(clean, "flag") == "date_verified_with_unverifiable"
+    assert lr.pit_audit_status(dict(clean, unverifiable=1), "drop") == "date_verified_with_unverifiable"
+    assert lr.pit_audit_status(dict(clean, late=1, unverifiable=1), "flag") == "violated"
+    assert lr.pit_cited_audit(["not a row"], POLICY)["unverifiable"] == 1
+
+
+def test_build_digest_wall_strips_and_drops_markers():
+    ledger = {1: {"sid": 1, "title": "Survey", "domain": "a.example", "tier": "S2", "fetched": True},
+              2: {"sid": 2, "title": "Brief", "domain": "b.example", "tier": "S3", "fetched": False}}
+    record = {"id": "K1", "question": "What is capacity?",
+              "facts": [{"text": "Capacity reached 176 GW [S1][S2]", "tag": "VERIFIED", "sids": [1, 2]},
+                        {"text": "A brief claims 250 GW [S2]", "tag": "REPORTED", "sids": [2]},
+                        {"text": "No marker here", "tag": "REPORTED"}],
+              "conflicts": ["Sources differ [S2]", "Scope differs [S1] and [S2]"],
+              "open_questions": ["Grid timelines?"]}
+    text, dropped = lr.build_digest([record], ledger.get, 20000, "English", admissible=lambda sid: sid == 1)
+    assert dropped == 0
+    assert "- Capacity reached 176 GW [S1] (VERIFIED)" in text
+    assert "250 GW" not in text and "Sources differ" not in text
+    assert "- Scope differs [S1] and" in text and "Grid timelines?" in text
+    assert text.split("SOURCE INDEX\n", 1)[1] == "[S1] Survey — a.example (" + rg.tier_label("S2") + ", fetched)"
+    assert record["facts"][0]["text"] == "Capacity reached 176 GW [S1][S2]"   # the record is unchanged
+    # Everything admissible: byte-identical to the digest without the wall.
+    assert lr.build_digest([record], ledger.get, 20000, "English", admissible=lambda sid: True) == \
+        lr.build_digest([record], ledger.get, 20000, "English")
+    walled, lines, markers = lr.pit_wall_record(record, lambda sid: sid == 1)
+    assert (lines, markers) == (2, 2) and walled["open_questions"] == ["Grid timelines?"]
+
+
+@pytest.mark.parametrize("typing", [False, True])
+def test_parametric_suspects_count_post_as_of_claims_only(typing):
+    timeline = [{"date": "2024-07-01", "event": "a"}, {"date": "2024", "event": "b"},
+                {"date": "2024-06-01", "event": "c"}, {"date": "Q3 2024", "event": "d"}]
+    quant = [{"metric": "m", "value": 1, "as_of_date": "2024-08", "value_type": "actual"},
+             {"metric": "m", "value": 1, "as_of_date": "2024-08"},
+             {"metric": "m", "value": 1, "as_of_date": "2025", "value_type": "forecast"},
+             {"metric": "m", "value": 1, "as_of_date": "2024-05", "value_type": "actual"},
+             {"metric": "m", "value": 1, "as_of_date": "2024-08", "period_end": "2023", "value_type": "estimate"}]
+    counts = lr.parametric_suspects(timeline, quant, dt.date(2024, 6, 1), typing=typing)
+    # A reported estimate published after the as-of is a claimed actual only to the classifier.
+    assert counts == {"timeline": 2, "quant": 3 if typing else 2}
