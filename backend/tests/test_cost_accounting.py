@@ -1085,8 +1085,12 @@ def test_ledger_row_joins_cost_card_after_report_stage_restamp(roots, monkeypatc
     assert report.status == ReportStatus.COMPLETED
     state.report_id = "r_join"
     orch._complete_stage(state, po.STAGE_REPORT, "done")
-    assert _load(po.PipelineManager.manifest_path(pid))["resolved"]["report"] == {
+    stamped = _load(po.PipelineManager.manifest_path(pid))["resolved"]["report"]
+    assert {k: stamped.get(k) for k in ("provider", "model_name")} == {
         "provider": "provider-now", "model_name": "model-now"}   # restamped at completion
+    # INFRA-8 adds its model provenance to the same block; the fingerprint below still
+    # carries only the provider pair, so provenance never changes the config_hash.
+    assert stamped.get("requested_model") == "model-now"
     state.status = "completed"
     orch._write_cost_card(state)
     card = _load(os.path.join(po.PipelineManager._dir(pid), ca.COST_CARD_FILENAME))
