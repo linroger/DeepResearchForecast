@@ -1161,7 +1161,9 @@ def test_failed_report_rebuild_after_run_recompute_is_not_reused_next_attempt(
     # Reused stages keep the stamp of the attempt that produced them.
     assert resolved["ontology"] == {"provider": "provider-0", "model_name": "model-0"}
     assert resolved["graph"] == {"provider": "provider-0", "model_name": "model-0"}
-    assert resolved["report"] == {"provider": "provider-b", "model_name": "model-b"}
+    # INFRA-8 merges the recomputing attempt's requested / served models next to the pair.
+    assert resolved["report"] == {"provider": "provider-b", "model_name": "model-b",
+                                  "requested_model": "model-b", "served_models": []}
     assert resolved["simulation"] == first["resolved"]["simulation"]
 
 
@@ -1297,8 +1299,11 @@ def test_run_manifest_keeps_attempts_and_reused_stage_stamps(roots, monkeypatch)
     assert len(manifest["attempts"]) == 2
     assert all(row["drift_knobs"] == [] for row in manifest["attempts"])
     resolved = manifest["resolved"]
-    assert resolved["ontology"] == {"provider": "provider-a", "model_name": "model-a"}
-    assert resolved["graph"] == {"provider": "provider-b", "model_name": "model-b"}
+    # INFRA-8 merges each recomputing attempt's requested / served models next to the pair.
+    assert resolved["ontology"] == {"provider": "provider-a", "model_name": "model-a",
+                                    "requested_model": "model-a", "served_models": []}
+    assert resolved["graph"] == {"provider": "provider-b", "model_name": "model-b",
+                                 "requested_model": "model-b", "served_models": []}
     assert "run_shape" in manifest
     records = state.options["stage_reuse_v1"]
     assert [(r["stage"], r["reused"]) for r in records] == [

@@ -583,6 +583,16 @@ class Config:
     # options.lineage_rebuilt）在打断后的下次 resume 被复用而非再生成。默认开：以重算成本换取不复用陈旧产物
     # （fail closed）；关闭 = 旧的逐阶段存在性复用。
     RESUME_LINEAGE_GUARDS = os.environ.get('RESUME_LINEAGE_GUARDS', 'true').strip().lower() == 'true'
+    # INFRA-8: model provenance. On, LLMMeter records per stage which model each call requested
+    # (the effective label: a claude-cli call without --model is 'cli-default') and which model
+    # the provider reported serving it (snapshot 'model_resolution'); research v3 ledger rows and
+    # usage summaries carry model/served_model and the v3 work-dir identity gains the resolved
+    # model id (a side without one stays compatible, so existing work dirs still resume);
+    # run.json resolved blocks gain requested_model/served_models; forecast.json gains a
+    # 'model_provenance' block. Default on: it only adds recorded keys and changes no call,
+    # routing or gate; the one behavioural effect is that a research resume no longer reuses a
+    # v3 work dir produced by a different resolved model id. Off = byte-identical to before.
+    RECORD_MODEL_PROVENANCE = os.environ.get('RECORD_MODEL_PROVENANCE', 'true').strip().lower() == 'true'
     # INFRA-9：分叉继承安全政策钉。开启时情景分叉（PipelineOrchestrator.fork）与批次问题分叉
     # （scripts/batch_runs.fork_question）深拷贝 base 的 options.safety_policy_v1（origin=fork_inherited）；
     # base 无钉（Foglamp WP1 之前准入）时在分叉准入时捕获当前环境政策（默认 Config 下即安全政策，
@@ -2232,6 +2242,39 @@ class Config:
         if include_audit:
             errors.extend(cls.config_errors())
         return errors
+
+    @classmethod
+    def validation_warnings(cls) -> list:
+        """INFRA-8: model settings that silently do nothing (warnings only, never refuse a run).
+
+        - LLM_FALLBACK_MODEL set while LLM_FALLBACK_PROVIDER is empty: failover is off, so the
+          fallback model is never used.
+        - LLM_FAST_MODEL / LLM_STRONG_MODEL set for a CLI primary (claude-cli / codex-cli) with
+          a value that resolves to 'cli-default' (claude-cli is given --model only for a claude
+          id/alias, codex-cli never): such a call runs on the CLI account's default model.
+
+        run.py prints them at startup; scripts/preflight.py lists them as WARN rows.
+        """
+        from .utils.model_provenance import CLI_DEFAULT_LABEL, effective_model_label
+        warnings = []
+        fb_model = (os.environ.get('LLM_FALLBACK_MODEL', '') or '').strip()
+        fb_provider = (os.environ.get('LLM_FALLBACK_PROVIDER', '') or '').strip()
+        if fb_model and not fb_provider:
+            warnings.append(
+                f"LLM_FALLBACK_MODEL={fb_model} is set but LLM_FALLBACK_PROVIDER is empty: "
+                "failover is off and the fallback model is never used"
+            )
+        provider = (cls.LLM_PROVIDER or '').strip().lower()
+        if provider in ('claude-cli', 'codex-cli'):
+            for name in ('LLM_FAST_MODEL', 'LLM_STRONG_MODEL'):
+                value = getattr(cls, name, None)
+                if value and effective_model_label(provider, value) == CLI_DEFAULT_LABEL:
+                    warnings.append(
+                        f"{name}={value} is set for LLM_PROVIDER={provider} but resolves to "
+                        f"{CLI_DEFAULT_LABEL}: the CLI is not given this model and runs on its "
+                        "account default"
+                    )
+        return warnings
 
 
 # ------------------------------------------------------------------

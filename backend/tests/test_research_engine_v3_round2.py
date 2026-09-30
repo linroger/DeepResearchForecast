@@ -883,6 +883,13 @@ def test_r2_parent_pipeline_accepts_a_v3_research_run(tmp_path, monkeypatch, wor
     assert isinstance(state.options.get("research_lint"), dict)
     telemetry = state.options["research_telemetry"]
     assert telemetry["tokens_in"] > 0 and telemetry["tokens_cached"] > 0
+    # INFRA-8: every lane's model resolution (meta.json) reaches the parent telemetry and
+    # run.json; the scripted model reports no served id and no deerflow config resolves an id.
+    assert telemetry["model_resolution"]["model"] == "minimax"
+    assert telemetry["model_resolution"]["models"]["fake-model"]["calls"] > 0
+    research_block = json.loads(Path(po.PipelineManager.manifest_path(pid)).read_text(
+        encoding="utf-8"))["resolved"]["research"]
+    assert research_block["model_id"] is None and research_block["served_models"] == []
     quality = state.options["research_quality"]
     assert isinstance(quality["score"], float)
     if world == "cut":

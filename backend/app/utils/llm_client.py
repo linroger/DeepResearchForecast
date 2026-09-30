@@ -22,6 +22,13 @@ from typing import Optional, Dict, Any, List, Tuple
 from ..config import Config
 from .llm_text import flatten_content, has_dangling_think, normalize_finish_reason, strip_think
 from .logger import get_logger
+# INFRA-8: claude_cli_model_arg lives with the other model-provenance helpers; it stays
+# importable from here (backbone_sensitivity, eval_forecast_quality).
+from .model_provenance import (
+    claude_cli_model_arg,
+    effective_model_label,
+    served_models_from_claude_envelope,
+)
 from .provider_overrides import (
     FALLBACK_REASONING_EFFORTS,
     openai_compat_request_overrides,
@@ -453,27 +460,15 @@ def _cli_envelope_usage(envelope: Any) -> tuple:
             usage = _usage_dict(fresh + cache_read + cache_write, _as_int(u.get("output_tokens")),
                                 cached=cache_read)
         served = envelope.get("model") if isinstance(envelope.get("model"), str) else None
-        per_model = envelope.get("modelUsage")
-        if not served and isinstance(per_model, dict) and per_model:
-            served = max(per_model, key=lambda name: _as_int(_field(per_model[name], "outputTokens")))
+        # INFRA-8: every model the envelope's modelUsage reports; the one that produced the
+        # most output is recorded as the call's served model.
+        served_ids = served_models_from_claude_envelope(envelope)
+        if not served and served_ids:
+            per_model = envelope["modelUsage"]
+            served = max(served_ids, key=lambda name: _as_int(_field(per_model[name], "outputTokens")))
         return usage, served
     except Exception:  # noqa: BLE001 — envelope shape drift must not fail a served call
         return None, None
-
-
-def claude_cli_model_arg(model: Optional[str]) -> Optional[str]:
-    """The ``--model`` value the Claude CLI is given for ``model``, or None (the CLI then runs
-    on the account's default model).
-
-    Only claude model ids/aliases pass through; anything else (e.g. another provider's
-    LLM_MODEL_NAME inherited by a claude-cli client) is dropped defensively. Callers that
-    attribute output to a model (the eval judge identity) use this to record the model the
-    CLI was actually asked for rather than ``LLMClient.model``.
-    """
-    m = (model or "").strip()
-    if m and (m.startswith("claude") or m in ("opus", "sonnet", "haiku")):
-        return m
-    return None
 
 
 def _empty_choices_error(response: Any, provider: str, model: Optional[str],
@@ -771,6 +766,17 @@ class LLMClient:
                 return fast_client, provider
         return self._openai_client, self.provider
 
+    def _requested_label(self, serving_provider: str, model: str) -> str:
+        """INFRA-8: the requested-model label LLMMeter records for one call of this client.
+
+        A CLI call ignores the tier route: claude-cli is given --model from this client's own
+        model (or nothing: 'cli-default'), codex-cli never. An OpenAI-compatible call sends the
+        routed ``model`` (EVAL-10 _tier_route) to ``serving_provider`` (INFRA-6).
+        """
+        if self.provider in CLI_PROVIDERS:
+            return effective_model_label(self.provider, getattr(self, "model", None))
+        return effective_model_label(serving_provider, model)
+
     # ------------------------------------------------------------------
     # INFRA-1: 逐调用元数据（线程本地，按客户端 id() 归属）
     # ------------------------------------------------------------------
@@ -953,7 +959,8 @@ class LLMClient:
                 hit_provider = (self._serving_endpoint(route[1])[1]
                                 if self.provider in OPENAI_COMPATIBLE_PROVIDERS else self.provider)
                 if Config.LLM_TELEMETRY_ENABLED:
-                    LLMMeter.record(hit_provider, model, 0, 0, 0.0, cached=True, stage=stage, run_id=run_id)
+                    LLMMeter.record(hit_provider, model, 0, 0, 0.0, cached=True, stage=stage, run_id=run_id,
+                                    requested_model=self._requested_label(hit_provider, model))
                 self._stamp_call_meta(model=model, finish_reason="unknown", served_by="cache",
                                       provider=hit_provider)
                 return hit
@@ -1064,8 +1071,11 @@ class LLMClient:
             # 用解析后的 model 计量，使 by_model 维度区分 fast/strong 用量与成本。
             # INFRA-6: 成本按实际服务的提供方计（fast-tier 第二客户端服务时为 LLM_FAST_PROVIDER）。
             meter_provider = (meta.get("provider") if meta else None) or self.provider
+            # INFRA-8: requested label vs the model the provider reported serving the call.
             LLMMeter.record(meter_provider, model, pt, ct, latency_ms, cached=False, stage=stage,
-                            run_id=run_id, finish_reason=meta.get("finish_reason") if meta else None)
+                            run_id=run_id, finish_reason=meta.get("finish_reason") if meta else None,
+                            served_model=meta.get("served_model") if meta else None,
+                            requested_model=self._requested_label(meter_provider, model))
         if cache_on and cache_key is not None:
             # INFRA-1 (LLM_TRANSPORT_STRICT): 截断(length)/审查/中止/悬空 <think> 的回复不入缓存
             # ——否则同一 prompt 会从 LLMCache 永久重放这份残缺回复。无元数据时同样不缓存（失败安全）。
@@ -1421,13 +1431,17 @@ class LLMClient:
         raw_finish = getattr(choice, "finish_reason", None)
         finish = normalize_finish_reason(raw_finish)
         usage = _usage_from_response(response)
+        served_model = getattr(response, "model", None)
+        served_model = served_model if isinstance(served_model, str) and served_model else None
         if Config.LLM_TELEMETRY_ENABLED:
             try:
                 _pt = usage["prompt_tokens"] if usage else 0
                 _ct = usage["completion_tokens"] if usage else 0
                 LLMMeter.record(serving_provider, model, _pt, _ct,
                                 (time.monotonic() - _started) * 1000.0,
-                                cached=False, stage=_stage, run_id=_run_id, finish_reason=finish)
+                                cached=False, stage=_stage, run_id=_run_id, finish_reason=finish,
+                                served_model=served_model,
+                                requested_model=self._requested_label(serving_provider, model))
             except Exception:  # noqa: BLE001 — 计量失败不影响返回
                 pass
         if Config.LLM_RUN_BUDGET_TOKENS or Config.LLM_RUN_BUDGET_USD:
@@ -1449,8 +1463,6 @@ class LLMClient:
                                "raw_arguments": raw_args, "arguments_error": args_error})
         raw_content = flatten_content(getattr(msg, "content", None))
         content, think_stripped = self._normalize_reply_text(raw_content, _transport_strict())
-        served_model = getattr(response, "model", None)
-        served_model = served_model if isinstance(served_model, str) and served_model else None
         self._stamp_call_meta(
             model=model, finish_reason=finish, raw_finish_reason=raw_finish, usage=usage,
             usage_source="provider", served_model=served_model, think_stripped=think_stripped,

@@ -28,6 +28,7 @@ from ..utils import absence as _absence
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient, llm_call_timeout
 from ..utils.logger import get_logger
+from ..utils.model_provenance import REPORT_STAGE, forecast_model_provenance, stage_record
 from ..utils.security import UnsafeIdError, contained_child, is_safe_id, safe_id
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
@@ -1752,6 +1753,11 @@ class ReportAgent:
         # RESEARCH-13: 概率提示词证据包的摘要（无正文，kind → digest），_finalize 在最终落盘前写入
         # forecast.context_pack。旗标全关时始终为空。测试经 __new__ 构造时缺失，读取一律走 getattr。
         self._context_pack_digests: Dict[str, Dict[str, Any]] = {}
+        # INFRA-8: upstream model provenance (model-provenance/v1: research..run stages + pin
+        # drift), assigned by the orchestrator's report stage after construction. None (API
+        # paths, seed reports) = forecast.json carries no model_provenance. Tests building the
+        # agent via __new__ lack it; read with getattr.
+        self.run_provenance: Optional[Dict[str, Any]] = None
 
         self.llm = llm_client or LLMClient()
         self.zep_tools = zep_tools or ZepToolsService()
@@ -3444,6 +3450,10 @@ class ReportAgent:
                 if _early_hindcast is not None:
                     _early = dict(_early, hindcast=hindcast_forecast_block(
                         _early_hindcast, research_audit=_early_hindcast.get("research_audit")))
+                # INFRA-8：骨架版同样自述产出模型（成稿失败时留下的这份也如实标注）；未设 run_provenance 时不加键。
+                _early_provenance = self._model_provenance_block()
+                if _early_provenance is not None:
+                    _early = dict(_early, model_provenance=_early_provenance)
                 write_text_atomic(fpath, json.dumps(_early, ensure_ascii=False, indent=2))
             except Exception as _pe:  # noqa: BLE001 — 早落失败不影响主流程
                 logger.warning(f"预测骨架早落 forecast.json 失败（忽略）: {_pe}")
@@ -3654,6 +3664,32 @@ class ReportAgent:
                      + " ｜" + _note).strip(" ｜"))
         except Exception:  # noqa: BLE001
             pass
+
+    def _model_provenance_block(self) -> Optional[Dict[str, Any]]:
+        """INFRA-8: forecast.json ``model_provenance``, or None to omit the key.
+
+        The orchestrator's ``run_provenance`` (research..run stages, pin drift) plus the
+        report stage, filled here: at construction the run.json report stamp still describes
+        a previous attempt's report. The report stage records this agent's LLM provider /
+        model, its effective requested label and the ids LLMMeter saw served for stage
+        'report' in the current run context (none without a run context). None when
+        ``run_provenance`` is unset (API paths, seed reports) or RECORD_MODEL_PROVENANCE is
+        off; any failure also degrades to None (logged).
+        """
+        run_prov = getattr(self, "run_provenance", None)
+        if not isinstance(run_prov, dict) or not getattr(Config, "RECORD_MODEL_PROVENANCE", True):
+            return None
+        try:
+            run_id = get_run_context()[0]
+            resolution = LLMMeter.snapshot(run_id).get("model_resolution") if run_id else None
+            llm = getattr(self, "llm", None)
+            provider, model = getattr(llm, "provider", None), getattr(llm, "model", None)
+            report_stage = {"provider": provider, "model_name": model,
+                            **stage_record(provider, model, resolution, REPORT_STAGE)}
+            return forecast_model_provenance(run_prov, report_stage)
+        except Exception as exc:  # noqa: BLE001 — provenance is observability; never block the forecast
+            logger.debug(f"model_provenance 构建失败（忽略）: {exc}")
+            return None
 
     def _finalize_structured_forecast(self, report_id: str, report_markdown: str,
                                       report: Optional["Report"] = None) -> None:
@@ -4021,6 +4057,11 @@ class ReportAgent:
         _pack_digests = getattr(self, "_context_pack_digests", None)
         if isinstance(_pack_digests, dict) and _pack_digests:
             forecast["context_pack"] = {kind: dict(d) for kind, d in _pack_digests.items()}
+        # INFRA-8：模型出处在稳定器 / 终审之前落盘，之后每条读-改-写路径都保留它（终审封印前再刷新
+        # 报告阶段）。未设 run_provenance（API 路径 / 种子报告）或旗标关闭时不加键。
+        _model_provenance = self._model_provenance_block()
+        if _model_provenance is not None:
+            forecast["model_provenance"] = _model_provenance
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
@@ -9495,6 +9536,11 @@ class ReportAgent:
             }
             # ``audit`` is already referenced by quality.final_audit; adding the
             # compact gate result above therefore persists in both artifacts.
+            # INFRA-8: refresh the model provenance (the report stage's served models now
+            # include every report-stage call) inside the sealed bytes; unset -> key untouched.
+            _model_provenance = self._model_provenance_block()
+            if _model_provenance is not None:
+                forecast["model_provenance"] = _model_provenance
             forecast_serialized = json.dumps(
                 forecast, ensure_ascii=False, indent=2, allow_nan=False
             )
