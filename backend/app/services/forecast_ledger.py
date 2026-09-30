@@ -306,35 +306,43 @@ def _calibration_selection(d: Optional[str], entries: Optional[List[Dict[str, An
     calibration_summary and recalibration_param → ``(resolved, n_unscoreable, excluded)``.
 
     ``fold_settlements`` None follows ``_settlement_fold_default``. Folding replaces the
-    production primary commit rows by ``forecast_resolution.resolved_view`` over the
-    settlement ``events`` (read from ``d`` only when neither ``entries`` nor ``events`` is
-    given, so explicit entries keep a call hermetic). A candidate is a resolved row with
-    scenarios that passes the record-class rule (silently, as before). With the fold on or
-    an ``as_of`` given, it must pass ``forecast_resolution.admissible`` — the only
-    point-in-time gate; it must always pass ``is_scoreable_resolution``. ``excluded``
-    counts every candidate either check rejected, by reason; ``n_unscoreable`` those the
+    ledger by ``forecast_resolution.resolved_view`` over the settlement ``events`` (read
+    from ``d`` only when neither ``entries`` nor ``events`` is given, so explicit entries
+    keep a call hermetic): only production primary commit rows remain, labelled by events
+    alone. A candidate is a resolved row with scenarios that passes the record-class rule
+    (silently, as before). Under the fold, a candidate outside the view (a legacy row, a
+    commit row without the primary role) is counted as ``not_production_primary`` without
+    reading any of its own settlement fields, so a hand-edited row never scores. With the
+    fold on or an ``as_of`` given, a candidate must pass ``forecast_resolution.admissible``
+    — the only point-in-time gate; it must always pass ``is_scoreable_resolution``.
+    ``excluded`` counts every candidate rejected, by reason; ``n_unscoreable`` those the
     scoreability check rejected.
     """
     from . import forecast_resolution as fr  # lazy: forecast_resolution imports this module
+
+    def candidate(e: Any) -> bool:
+        return (isinstance(e, dict) and bool(e.get("resolved")) and bool(e.get("scenarios"))
+                and (_is_scorable_row(e) if include_evaluation
+                     else is_production_calibration_row(e)))
 
     if fold_settlements is None:
         fold = _settlement_fold_default(include_evaluation)
     else:
         fold = bool(fold_settlements)
     led = entries if entries is not None else read_ledger(d)
+    excluded: Counter = Counter()
     if fold:
         if events is None:
             events = [] if entries is not None else read_market_resolutions(d)
-        led = fr.resolved_view(led, events) + [e for e in led
-                                               if not is_production_primary_commit(e)]
+        n_outside = sum(1 for e in led if not is_production_primary_commit(e) and candidate(e))
+        if n_outside:
+            excluded[fr.NOT_PRODUCTION_PRIMARY] = n_outside
+        led = fr.resolved_view(led, events)
     gated = fold or as_of is not None
     resolved: List[Dict[str, Any]] = []
-    excluded: Counter = Counter()
     n_unscoreable = 0
     for e in led:
-        if not isinstance(e, dict) or not e.get("resolved") or not e.get("scenarios"):
-            continue
-        if not (_is_scorable_row(e) if include_evaluation else is_production_calibration_row(e)):
+        if not candidate(e):
             continue
         if gated:
             ok, reason = fr.admissible(e, as_of)
@@ -626,8 +634,9 @@ def binary_calibration_summary(d: Optional[str] = None, *, as_of: Any = None,
     that multi-class sum is twice the binary Brier for a YES/NO pair, so ``mean_brier``
     is halved onto the binary 0-1 scale. Returns ``{n_resolved, mean_brier,
     calibration_error, excluded, as_of, scale: 'binary'}``; ``excluded`` counts by
-    reason every folded item that is not scored (admissibility reasons,
-    ``no_binary_outcome``, ``invalid_model_probability``).
+    reason every folded item that is not scored (admissibility reasons, ``not_settled``
+    for a status other than 'settled', ``no_binary_outcome``,
+    ``invalid_model_probability``).
     """
     from . import forecast_resolution as fr  # lazy: forecast_resolution imports this module
 
@@ -641,6 +650,9 @@ def binary_calibration_summary(d: Optional[str] = None, *, as_of: Any = None,
         ok, reason = fr.admissible(item, as_of)
         if not ok:
             excluded[reason] += 1
+            continue
+        if item.get("resolution_status") != "settled":
+            excluded["not_settled"] += 1
             continue
         outcome = str(item.get("outcome") or "").strip().upper()
         if outcome not in ("YES", "NO"):

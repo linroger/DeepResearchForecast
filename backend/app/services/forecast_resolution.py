@@ -62,6 +62,7 @@ being scored as an all-miss.
 from __future__ import annotations
 
 import copy
+import json
 import math
 import re
 from collections import Counter, defaultdict
@@ -703,6 +704,9 @@ def settle_binaries(report_id: Any, binaries: Any, resolutions: Any, *,
 ITEM_KIND_SCENARIO_SET = "scenario_set"
 # The folded status of an item whose scoring-eligible events disagree on the outcome.
 RESOLUTION_CONFLICT = "conflict"
+# resolved_view: a scenario_set attestation that does not identify exactly one production
+# primary commit row labels none of them (never one outcome scored twice).
+AMBIGUOUS_TARGET = "ambiguous_target"
 # Fields resolved_view fills on each production primary commit row, from its folded
 # scenario_set events only (a row with no event gets the unresolved defaults).
 _VIEW_DEFAULTS: Dict[str, Any] = {
@@ -857,12 +861,14 @@ def _fold_tier(item: Dict[str, Any]) -> int:
     return 1
 
 
-def _fold_order(item: Dict[str, Any]) -> Tuple[bool, datetime, str, str]:
-    """Earliest effective known-at first (an unverifiable stamp last); ties by stamp text
-    and market id, so the fold never depends on the order events were appended."""
+def _fold_order(item: Dict[str, Any]) -> Tuple[bool, datetime, str, str, str]:
+    """Earliest effective known-at first (an unverifiable stamp last); ties by stamp text,
+    market id and finally the whole item's canonical JSON, a total order, so the fold
+    never depends on the order events were appended."""
     known = effective_known_at(item)
     return (known is None, known or _LATEST_ORDER_KEY,
-            str(item.get("processed_at") or ""), str(item.get("market_id") or ""))
+            str(item.get("processed_at") or ""), str(item.get("market_id") or ""),
+            json.dumps(item, sort_keys=True, default=str))
 
 
 def _fold(items: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -921,30 +927,47 @@ def resolved_view(entries: Optional[Iterable[Any]], events: Optional[Iterable[An
     ``resolution_status`` and ``ineligible_reason``.
 
     An event belongs to a row by ``report_id`` and, when it names one, by
-    ``target_commit_id``. A row with no event gets the unresolved defaults, so a hand-marked
-    ``resolved`` on disk never counts; only a grace terminal leaves ``resolved`` False.
-    Other rows are left out. Never mutates ``entries`` or ``events`` and never touches disk.
+    ``target_commit_id``, and binds only when it identifies exactly one row: an event
+    without a target when the report has a single production primary row, one naming a
+    commit when a single production primary row carries it. A row reached only by events
+    that fail this is resolved but never scoring-eligible (``ambiguous_target``), so one
+    attestation is never scored twice. A row with no event gets the unresolved defaults,
+    so a hand-marked ``resolved`` on disk never counts; only a grace terminal leaves
+    ``resolved`` False. Other rows are left out. Never mutates ``entries`` or ``events``
+    and never touches disk.
     """
+    def key(value: Any) -> str:
+        return str(value or "").strip()
+
     by_report: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for event in events or []:
         if isinstance(event, dict) and event.get("item_kind") == ITEM_KIND_SCENARIO_SET:
             item = _event_item(event)
             if item["report_id"]:
                 by_report[item["report_id"]].append(item)
+    rows = [row for row in entries or [] if is_production_primary_commit(row)]
+    n_by_report = Counter(key(row.get("report_id")) for row in rows)
+    n_by_commit = Counter((key(row.get("report_id")), key(row.get("commit_id"))) for row in rows)
     view: List[Dict[str, Any]] = []
-    for row in entries or []:
-        if not is_production_primary_commit(row):
-            continue
-        commit_id = str(row.get("commit_id") or "").strip()
-        candidates = [item for item in by_report.get(str(row.get("report_id") or "").strip(), [])
-                      if not item["target_commit_id"]
-                      or str(item["target_commit_id"]).strip() == commit_id]
+    for row in rows:
+        report_id, commit_id = key(row.get("report_id")), key(row.get("commit_id"))
+        bound: List[Dict[str, Any]] = []
+        ambiguous: List[Dict[str, Any]] = []
+        for item in by_report.get(report_id, []):
+            target = key(item["target_commit_id"])
+            if target and target != commit_id:
+                continue
+            unique = (n_by_commit[(report_id, commit_id)] if target else n_by_report[report_id]) == 1
+            (bound if unique else ambiguous).append(item)
         out = copy.deepcopy(row)
         out.update(_VIEW_DEFAULTS)
-        if candidates:
-            folded = _fold(candidates)
-            out.update({key: folded.get(key) for key in _VIEW_DEFAULTS})
+        if bound or ambiguous:
+            folded = _fold(bound or ambiguous)
+            out.update({field: folded.get(field) for field in _VIEW_DEFAULTS})
             out["resolved"] = folded["resolution_status"] != "terminal"
+            if not bound:
+                out.update({"outcome": None, "scoring_eligible": False,
+                            "ineligible_reason": AMBIGUOUS_TARGET})
         view.append(out)
     return view
 

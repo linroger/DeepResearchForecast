@@ -202,6 +202,10 @@ def test_fold_precedence_and_conflict():
     assert (f5["market_id"], f5["outcome_known_at"]) == ("m-early", "2026-07-01T00:00:00+00:00")
     # The fold never depends on the order events were appended.
     assert fr.fold_binary_items(list(reversed(events))) == items
+    # Even events tied on known-at, processed_at and market id fold to one fact.
+    twins = [_event("F6", model_p=0.2), _event("F6", model_p=0.9)]
+    assert fr.fold_binary_items(twins) == fr.fold_binary_items(twins[::-1])
+    assert fr.fold_binary_items(twins)[("r1", "F6")]["model_p"] == 0.2
 
 
 def test_legacy_rows_need_v2_target_proof():
@@ -280,6 +284,25 @@ def test_resolved_view_fills_copies_and_never_mutates():
                                                _scenario_event("Stalled", market_id="m-x")])
     assert (conflict["resolved"], conflict["resolution_status"], conflict["outcome"]) == \
         (True, "conflict", None)
+    # An attestation binds to exactly one production primary row, never scored twice.
+    twin = _commit_row("r1", commit_id="c-9")
+    for row in fr.resolved_view([primary, twin], [_scenario_event()]):
+        assert (row["resolved"], row["outcome"], row["scoring_eligible"],
+                row["ineligible_reason"]) == (True, None, False, "ambiguous_target")
+        assert fr.admissible(row, "2026-12-31") == (False, "ambiguous_target")
+    twins = fl.calibration_summary(entries=[primary, twin], events=[_scenario_event()],
+                                   fold_settlements=True)
+    assert (twins["n_resolved"], twins["excluded"]) == (0, {"ambiguous_target": 2})
+    # Naming the commit resolves the ambiguity; the untargeted attestation still binds nowhere.
+    named, bare = fr.resolved_view([primary, twin], [_scenario_event(target_commit_id="c-1"),
+                                                     _scenario_event("Stalled", market_id="m-x")])
+    assert (named["outcome"], named["scoring_eligible"], named["resolution_status"]) == \
+        ("Adopted", True, "settled")
+    assert (bare["outcome"], bare["ineligible_reason"]) == (None, "ambiguous_target")
+    # A commit id two primary rows share is no target either.
+    dup = fr.resolved_view([primary, copy.deepcopy(primary)],
+                           [_scenario_event(target_commit_id="c-1")])
+    assert [row["ineligible_reason"] for row in dup] == ["ambiguous_target"] * 2
 
 
 # ─────────────────────── scenario calibration consumers ──────────────────────
@@ -329,7 +352,21 @@ def test_calibration_summary_fold_toggle(monkeypatch, tmp_path):
     legacy = {"report_id": "legacy", "resolved": True, "outcome": "Adopted",
               "scenarios": copy.deepcopy(SCENARIOS)}
     out = fl.calibration_summary(entries=[row, legacy], events=[event], fold_settlements=True)
-    assert out["n_resolved"] == 1 and out["excluded"] == {"not_scoring_eligible": 1}
+    assert out["n_resolved"] == 1 and out["excluded"] == {"not_production_primary": 1}
+    # ... even one that declares settlement facts itself, and a commit row without a role:
+    # rows outside the view are never read for eligibility or stamps.
+    forged = dict(legacy, scoring_eligible=True, prospective=True, known_at_basis="attested",
+                  outcome_known_at="2026-01-01T00:00:00Z", resolution_status="settled")
+    roleless = dict(forged, row_type="commit", schema_version=2, commit_id="c-x",
+                    record_class="production")
+    for entries in ([forged], [roleless], [forged, roleless]):
+        out = fl.calibration_summary(entries=entries, events=[event], fold_settlements=True)
+        assert (out["n_resolved"], out["excluded"]) == \
+            (0, {"not_production_primary": len(entries)})
+    # A revision stays silent, exactly as before (record-class rule).
+    revision = dict(forged, row_type="commit", calibration_role="revision")
+    assert fl.calibration_summary(entries=[revision], events=[event],
+                                  fold_settlements=True)["excluded"] == {}
     # An as_of alone applies the gate to the raw rows (fold off): the same exclusion.
     assert fl.calibration_summary(entries=[legacy], as_of="2026-03-02")["excluded"] == \
         {"not_scoring_eligible": 1}
@@ -385,7 +422,7 @@ def test_recalibration_param_same_gate():
                                     fold_settlements=True)
     # One admitted forecast with two scenarios → two (logit, hit) points; thin → identity.
     assert (folded["n"], folded["slope"], folded["fitted"]) == (2, 1.0, False)
-    assert folded["excluded"] == {"not_scoring_eligible": 1}
+    assert folded["excluded"] == {"not_production_primary": 1}
     same_day = fl.recalibration_param(entries=[row], events=events, fold_settlements=True,
                                       as_of="2026-03-01")
     assert (same_day["n"], same_day["excluded"]) == (0, {"known_on_or_after_as_of": 1})
@@ -439,6 +476,9 @@ def test_binary_calibration_summary_scale_and_exclusions():
     assert cut["excluded"]["known_on_or_after_as_of"] == 3  # F1, F2 and F8
     assert fl.binary_calibration_summary(events=events, entries=[],
                                          as_of="2026-07-03")["n_resolved"] == 2
+    # An eligible item whose status is not 'settled' is never scored.
+    unknown = fl.binary_calibration_summary(events=[_event("F1", status="unknown")], entries=[])
+    assert (unknown["n_resolved"], unknown["excluded"]) == (0, {"not_settled": 1})
     # From disk: resolutions.jsonl + ledger.jsonl of the default (per-test) ledger dir.
     empty = fl.binary_calibration_summary()
     assert (empty["n_resolved"], empty["mean_brier"], empty["excluded"]) == (0, None, {})
@@ -486,7 +526,8 @@ def test_monitor_folded_calibration_after_eligible_settlement(tmp_path, capsys):
     assert binary["excluded"] == {"equivalence_near": 1}
     assert res["calibration"]["n_resolved"] == 0 and res["calibration"]["excluded"] == {}
     md = res["monitor_report_md"]
-    assert "- Market-resolved binary forecasts: **2**; mean Brier (binary, 0-1): **" in md
+    assert ("- Market-resolved binary forecasts (all settlements, ungated; not calibration): "
+            "**2**; mean Brier (binary, 0-1): **") in md
     assert "- Scenario forecasts resolved: **0**; mean Brier (multi-class sum, 0-2): **—**" in md
     assert ("- Binary forecasts scored (settlement fold, point-in-time gate): **1**; "
             "mean Brier (binary, 0-1): **0.49**") in md
@@ -498,6 +539,15 @@ def test_monitor_folded_calibration_after_eligible_settlement(tmp_path, capsys):
     printed = json.loads(out[out.index("{\n"):] if not out.startswith("{") else out)
     assert printed["binary_calibration"]["n_resolved"] == 1
     assert printed["scenario_calibration"]["n_resolved"] == 0
+
+
+def test_monitor_primary_predicate_is_the_ledgers():
+    rows = [_commit_row("r1"), _commit_row("r1", role="revision"),
+            _commit_row("r1", record_class="ensemble_member"), dict(_commit_row("r1"), golden=True),
+            {"report_id": "legacy", "resolved": True}, None, "row"]
+    assert [mon._is_production_primary(r) for r in rows] == \
+        [fl.is_production_primary_commit(r) for r in rows] == \
+        [True, False, False, False, False, False, False]
 
 
 def test_monitor_render_without_binary_block_keeps_legacy_lines():
