@@ -83,15 +83,20 @@ INTENDED WORKFLOW (the whole point — read this before using):
 
 HEADLINE TIERS (EVAL-8, GOLDEN_HEADLINE_GATE, default on): a Brier over rows the
 run could look up is recall, not skill. Each matched row gets a ``tier`` from the
-run's provenance (``--pipeline-dir``: run.json ``created_at``, else
-pipeline_state.json ``created_at``, plus the TIME-7 hindcast pin; or
-``--run-created-at`` with a UTC offset), compared on UTC dates (``classify_tier``):
-``prospective`` (run before the resolution date and no later than as_of_date +
-GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS), ``late_origin`` (before resolution, after
-that window), ``hindcast_retrieval_exposed`` (run on or after the resolution date:
-live-web research at as_of = today and model memory both see the outcome),
-``hindcast_pit`` (a pinned hindcast run, whatever the dates; TIME-9's integrity
-verdict is recorded) or ``unknown`` (no usable provenance). ``headline`` scores the
+run's provenance, compared on UTC dates (``classify_tier``). ``--pipeline-dir``
+reads run.json ``created_at`` (else pipeline_state.json's), the run's last
+recorded activity in pipeline_state.json (a resume keeps created_at but stamps
+resumed_at and new stage windows) and the TIME-7 hindcast pin; its state must name
+the scored forecast's report directory as ``report_id``, and records that cannot
+rule out a later resume, a hindcast or another report withhold the run stamp (fail
+closed). ``--run-created-at`` (ISO-8601 with a UTC offset) is taken as given.
+Tiers: ``prospective`` (the run, through its last activity, before the resolution
+date and no later than as_of_date + GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS,
+0-3650), ``late_origin`` (before resolution, after that window),
+``hindcast_retrieval_exposed`` (on or after the resolution date: live-web research
+at as_of = today and model memory both see the outcome), ``hindcast_pit`` (a
+pinned hindcast run, whatever the dates; TIME-9's integrity verdict is recorded)
+or ``unknown`` (no usable provenance). ``headline`` scores the
 prospective rows only (status ``ok``, else ``withheld_no_eligible_rows`` /
 ``withheld_no_provenance``); every other tier is under ``characterization.by_tier``;
 ``metrics`` still covers every matched row (``metrics_scope:
@@ -129,7 +134,7 @@ import json
 import math
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -155,9 +160,14 @@ ANSWER_BEARING_CAVEAT = ("answer-bearing golden set resolved before current mode
                          "characterization only (ADR 0002 I-21)")
 # EVAL-8: replaces ANSWER_BEARING_CAVEAT in the headline metrics, which cover only
 # prospective rows (see classify_tier).
-HEADLINE_CAVEAT = ("prospective rows only: each run started before its question's resolution date "
-                   "and within the lead tolerance of its as_of (an event decided inside that window "
-                   "could still be visible); promotion stays off (ADR 0002 I-21)")
+HEADLINE_CAVEAT = ("prospective rows only: each run, from its creation through its last recorded "
+                   "activity, came before its question's resolution date and within the lead tolerance "
+                   "of its as_of (an event decided inside that window could still be visible); "
+                   "promotion stays off (ADR 0002 I-21)")
+# EVAL-8: the paragraph under the banner when the headline is ok, so the banner and the
+# HEADLINE line above it do not read as a contradiction.
+HEADLINE_SCOPE_NOTE = ("The banner covers the all-matched sections; the HEADLINE line scores only the "
+                       "prospective rows, whose run came before the resolution date.")
 BOOTSTRAP_METHOD = "question-clustered percentile bootstrap"
 BOOTSTRAP_SEED = eval_stats.DEFAULT_BOOTSTRAP_SEED
 # Two-sided alpha of the bootstrap percentile CI (95%). It is also the largest
@@ -186,15 +196,26 @@ HEADLINE_GATE_DISABLED = "gate_disabled"
 # What the legacy top-level ``metrics`` block covers once the headline exists.
 METRICS_SCOPE = "all_matched_characterization"
 DEFAULT_LEAD_TOLERANCE_DAYS = 7
+# Ten years: far above any sensible lead, so a larger value is a configuration mistake.
+MAX_LEAD_TOLERANCE_DAYS = 3650
 # The run provenance files of a pipeline directory (PipelineManager.manifest_path /
 # state_path); run.json is preferred for created_at.
 RUN_MANIFEST_FILE = "run.json"
 PIPELINE_STATE_FILE = "pipeline_state.json"
 FORECAST_FILE_SOURCE = "forecast.json"
 RUN_CREATED_AT_ARG = "--run-created-at"
+# pipeline_state.json stamps that date the run's activity. The orchestrator writes
+# them (_utcnow, UTC-aware) only while the run executes: a resume keeps created_at and
+# stamps options.resumed_at, a forced report regeneration stamps
+# options.force_report_regen, and every stage attempt (and the multi-seed ensemble)
+# stamps started_at / finished_at. updated_at is left out: bookkeeping writes such as
+# orphan reaping or salvage move it without retrieving anything.
+_ACTIVITY_STATE_KEYS = ("created_at", "heartbeat_at", "last_progress_at")
+_ACTIVITY_OPTION_KEYS = ("resumed_at", "force_report_regen")
+_ACTIVITY_WINDOW_KEYS = ("started_at", "finished_at")
 # Markdown banner wording of each withheld tier.
 _TIER_BANNER = {
-    TIER_LATE_ORIGIN: "late origin (run started after as_of + the lead tolerance)",
+    TIER_LATE_ORIGIN: "late origin (run active after as_of + the lead tolerance)",
     TIER_HINDCAST_EXPOSED: "hindcast (live retrieval + model memory exposed)",
     TIER_HINDCAST_PIT: "point-in-time hindcast (model memory exposed)",
     TIER_UNKNOWN: "unknown provenance",
@@ -467,14 +488,17 @@ def rigor_ci(scored: List[Dict[str, Any]], B: int, seed: int = BOOTSTRAP_SEED) -
 
 
 def _check_tolerance(days: Any) -> int:
-    """``days`` as a lead tolerance: an integer >= 0 (ValueError otherwise, fail loud)."""
-    if isinstance(days, bool) or not isinstance(days, int) or days < 0:
-        raise ValueError(f"lead tolerance must be an integer >= 0 days, got {days!r}")
+    """``days`` as a lead tolerance: an integer in 0..MAX_LEAD_TOLERANCE_DAYS (ValueError
+    otherwise, fail loud)."""
+    if (isinstance(days, bool) or not isinstance(days, int)
+            or not 0 <= days <= MAX_LEAD_TOLERANCE_DAYS):
+        raise ValueError(f"lead tolerance must be an integer from 0 to {MAX_LEAD_TOLERANCE_DAYS} days, "
+                         f"got {days!r}")
     return days
 
 
-def parse_run_created_at(value: Any) -> Tuple[Optional[datetime], Optional[str]]:
-    """EVAL-8: a run creation stamp as an aware UTC datetime, else ``(None, reason)``.
+def _parse_utc_stamp(value: Any, label: str) -> Tuple[Optional[datetime], Optional[str]]:
+    """``value`` as an aware UTC datetime, else ``(None, reason)`` naming ``label``.
 
     Strict: an ISO-8601 string with a UTC offset (``Z`` or ``+HH:MM``, as
     ``pipeline_orchestrator._utcnow`` writes it). A naive stamp is rejected: its
@@ -482,32 +506,43 @@ def parse_run_created_at(value: Any) -> Tuple[Optional[datetime], Optional[str]]
     tolerance or the resolution boundary.
     """
     if value is None or (isinstance(value, str) and not value.strip()):
-        return None, "no run created_at"
+        return None, f"no {label}"
     if not isinstance(value, str):
-        return None, f"run created_at {value!r} is not an ISO-8601 string"
+        return None, f"{label} {value!r} is not an ISO-8601 string"
     try:
         parsed = datetime.fromisoformat(value.strip())
     except ValueError:
-        return None, f"run created_at {value!r} is not ISO-8601"
+        return None, f"{label} {value!r} is not ISO-8601"
     if parsed.utcoffset() is None:
-        return None, f"run created_at {value!r} has no UTC offset (naive stamps are rejected)"
+        return None, f"{label} {value!r} has no UTC offset (naive stamps are rejected)"
     try:
         return parsed.astimezone(timezone.utc), None
     except OverflowError:
-        return None, f"run created_at {value!r} is out of range in UTC"
+        return None, f"{label} {value!r} is out of range in UTC"
+
+
+def parse_run_created_at(value: Any) -> Tuple[Optional[datetime], Optional[str]]:
+    """EVAL-8: a run creation stamp as an aware UTC datetime, else ``(None, reason)``
+    (see ``_parse_utc_stamp``)."""
+    return _parse_utc_stamp(value, "run created_at")
 
 
 def classify_tier(q: Dict[str, Any], *, run_created_at: Any, lead_tolerance_days: int,
-                  hindcast: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                  hindcast: Optional[Dict[str, Any]] = None,
+                  run_last_activity_at: Any = None) -> Dict[str, Any]:
     """EVAL-8: the headline tier of one golden row, ``{'tier', 'reasons'}``.
 
-    ``q`` needs canonical ``as_of_date`` / ``resolution_date``; the run date is the
-    UTC date of ``run_created_at`` (see ``parse_run_created_at``). In order:
+    ``q`` needs canonical ``as_of_date`` / ``resolution_date``. The run date is the
+    UTC date of ``run_created_at`` (see ``parse_run_created_at``) or, when
+    ``run_last_activity_at`` is given, of the later of the two: a run resumed or
+    regenerated in place keeps its created_at, but its research and report took
+    their information on the later date. In order:
 
     - ``hindcast_pit``: ``hindcast`` is set (the run was pinned as a TIME-7
       hindcast), whatever the dates; the result also carries TIME-9's
       ``integrity`` verdict when the pin records one.
-    - ``unknown``: no usable run stamp, or no canonical resolution date.
+    - ``unknown``: no usable run stamp (a given last activity that does not parse
+      included), or no canonical resolution date.
     - ``hindcast_retrieval_exposed``: run date >= resolution date; the run's
       live-web research (as_of = today) and the models' memory can see the outcome.
     - ``unknown``: no canonical as_of date.
@@ -527,24 +562,34 @@ def classify_tier(q: Dict[str, Any], *, run_created_at: Any, lead_tolerance_days
     run_at, why = parse_run_created_at(run_created_at)
     if run_at is None:
         return {"tier": TIER_UNKNOWN, "reasons": [why]}
-    run_day = run_at.date()
+    created_day = run_day = run_at.date()
+    if run_last_activity_at is not None:
+        active_at, why = _parse_utc_stamp(run_last_activity_at, "run last activity")
+        if active_at is None:
+            return {"tier": TIER_UNKNOWN, "reasons": [why]}
+        run_day = max(run_day, active_at.date())
+    run = (f"run {run_day.isoformat()}" if run_day == created_day
+           else f"run last active {run_day.isoformat()} (created {created_day.isoformat()})")
     resolution = eval_stats.parse_iso_date(q.get("resolution_date"))
     if resolution is None:
         return {"tier": TIER_UNKNOWN, "reasons": ["question has no canonical resolution_date"]}
     if run_day >= resolution:
         return {"tier": TIER_HINDCAST_EXPOSED, "reasons": [
-            f"run {run_day.isoformat()} is on or after resolution {resolution.isoformat()}: "
+            f"{run} is on or after resolution {resolution.isoformat()}: "
             "live retrieval and model memory can see the outcome"]}
     as_of = eval_stats.parse_iso_date(q.get("as_of_date"))
     if as_of is None:
         return {"tier": TIER_UNKNOWN, "reasons": ["question has no canonical as_of_date"]}
-    latest = as_of + timedelta(days=tolerance)
+    try:
+        latest = as_of + timedelta(days=tolerance)
+    except OverflowError:  # as_of within the tolerance of date.max
+        latest = date.max
     if run_day > latest:
         return {"tier": TIER_LATE_ORIGIN, "reasons": [
-            f"run {run_day.isoformat()} is after as_of {as_of.isoformat()} + {tolerance} days "
+            f"{run} is after as_of {as_of.isoformat()} + {tolerance} days "
             f"({latest.isoformat()})"]}
     return {"tier": TIER_PROSPECTIVE, "reasons": [
-        f"run {run_day.isoformat()} precedes resolution {resolution.isoformat()} and is no later "
+        f"{run} precedes resolution {resolution.isoformat()} and is no later "
         f"than as_of {as_of.isoformat()} + {tolerance} days"]}
 
 
@@ -763,7 +808,8 @@ def match_forecasts(binary_forecasts: List[Dict[str, Any]],
 # ============================================================ run provenance (EVAL-8)
 # Reads the run's own records; never the network. A hindcast is recognised from any
 # of them (fail closed): the pipeline_state.json pin, run.json as_of_enforcement or
-# the forecast's hindcast stamp.
+# the forecast's hindcast stamp. A pipeline stamp dates the run only when
+# pipeline_state.json shows its whole activity and names the scored forecast's report.
 
 def _read_json_object(path: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """``(object, None)`` for a JSON object file, else ``(None, why)``."""
@@ -801,19 +847,122 @@ def forecast_hindcast_stamp(forecast_obj: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-def load_pipeline_provenance(pipeline_dir: str) -> Dict[str, Any]:
-    """EVAL-8: ``{run_created_at, source, hindcast, notes}`` from a pipeline directory.
+def _pipeline_hindcast(state: Optional[Dict[str, Any]],
+                       run: Optional[Dict[str, Any]]) -> Tuple[Optional[Dict[str, Any]], List[str]]:
+    """``(hindcast, problems)`` from a pipeline's pipeline_state.json and run.json.
+
+    ``hindcast`` is the TIME-7 pin in pipeline_state.json ``options.hindcast_policy_v1``
+    with TIME-9's integrity verdict (``hindcast_forecast_block`` over its
+    ``research_audit``), else run.json ``resolved.as_of_enforcement`` (written only for
+    a pinned run). Both records are always read: either one marks the run a hindcast,
+    and the state pin's verdict wins when both do. ``problems`` names every record
+    that can neither be read as a pin nor ruled out as one (``options`` that is not an
+    object, a pin value that is neither a hindcast pin nor a live one, an
+    as_of_enforcement that is not an object).
+    """
+    hindcast: Optional[Dict[str, Any]] = None
+    problems: List[str] = []
+    option = hindcast_policy.HINDCAST_POLICY_OPTION
+    options = state.get("options") if state is not None else None
+    if options is not None and not isinstance(options, dict):
+        problems.append(f"{PIPELINE_STATE_FILE}: options is not an object, so a hindcast cannot be ruled out")
+    elif options is not None:
+        raw = options.get(option)
+        pin = hindcast_policy.hindcast_policy(options)
+        live_pin = (isinstance(raw, dict) and raw.get("version") == hindcast_policy.HINDCAST_POLICY_VERSION
+                    and raw.get("hindcast") is False)
+        if pin is not None:
+            block = hindcast_policy.hindcast_forecast_block(pin, research_audit=pin.get("research_audit"))
+            hindcast = {"as_of": pin.get("as_of"), "source": PIPELINE_STATE_FILE,
+                        "integrity": block["integrity"]}
+        elif raw is not None and not live_pin:
+            problems.append(f"{PIPELINE_STATE_FILE}: options.{option} is not a recognised pin, "
+                            "so a hindcast cannot be ruled out")
+    resolved = run.get("resolved") if run is not None else None
+    enforcement = resolved.get("as_of_enforcement") if isinstance(resolved, dict) else None
+    if isinstance(enforcement, dict):
+        if hindcast is None:
+            hindcast = {"as_of": enforcement.get("as_of"), "source": RUN_MANIFEST_FILE,
+                        "integrity": _integrity_of_audit_status(enforcement.get("audit_status"))}
+    elif enforcement is not None:
+        problems.append(f"{RUN_MANIFEST_FILE}: resolved.as_of_enforcement is not an object, "
+                        "so a hindcast cannot be ruled out")
+    return hindcast, problems
+
+
+def _last_state_activity(state: Dict[str, Any]) -> Tuple[Optional[datetime], Optional[str], Optional[str]]:
+    """``(latest, field, None)`` over pipeline_state.json's activity stamps
+    (``_ACTIVITY_*_KEYS`` and every ``stages.<name>`` window; ``(None, None, None)`` when
+    there are none), or ``(None, None, why)`` when a stamp or its container is malformed.
+    ``options`` that is not an object is left to ``_pipeline_hindcast``.
+    """
+    fields: List[Tuple[str, Any]] = [(key, state.get(key)) for key in _ACTIVITY_STATE_KEYS]
+    options = state.get("options")
+    if isinstance(options, dict):
+        fields += [(f"options.{key}", options.get(key)) for key in _ACTIVITY_OPTION_KEYS]
+        wall = options.get("ensemble_wall")
+        if wall is not None and not isinstance(wall, dict):
+            return None, None, "options.ensemble_wall is not an object"
+        fields += [(f"options.ensemble_wall.{key}", (wall or {}).get(key)) for key in _ACTIVITY_WINDOW_KEYS]
+    stages = state.get("stages")
+    if stages is not None and not isinstance(stages, dict):
+        return None, None, "stages is not an object"
+    for name, stage in (stages or {}).items():
+        if not isinstance(stage, dict):
+            return None, None, f"stages.{name} is not an object"
+        fields += [(f"stages.{name}.{key}", stage.get(key)) for key in _ACTIVITY_WINDOW_KEYS]
+    latest: Optional[datetime] = None
+    latest_field: Optional[str] = None
+    for field, raw in fields:
+        if raw is None:
+            continue
+        parsed, why = _parse_utc_stamp(raw, field)
+        if parsed is None:
+            return None, None, why
+        if latest is None or parsed > latest:
+            latest, latest_field = parsed, field
+    return latest, latest_field, None
+
+
+def _report_link_problem(state: Dict[str, Any], forecast_path: Optional[str]) -> Optional[str]:
+    """Why pipeline_state.json does not name the scored forecast's report, else None.
+
+    A pipeline writes its forecast to uploads/reports/<report_id>/forecast.json, so the
+    scored file's directory must be the state's ``report_id`` (forecast.json itself
+    carries no report id).
+    """
+    report_id = state.get("report_id")
+    if not isinstance(report_id, str) or not report_id:
+        return f"{PIPELINE_STATE_FILE} names no report_id, so the scored forecast cannot be tied to this run"
+    if not forecast_path:
+        return "no forecast path to tie to this run's report"
+    scored = os.path.basename(os.path.dirname(os.path.abspath(forecast_path)))
+    if scored != report_id:
+        return (f"{PIPELINE_STATE_FILE} report_id {report_id!r} is not the scored forecast's report "
+                f"directory {scored!r}")
+    return None
+
+
+def load_pipeline_provenance(pipeline_dir: str, *, forecast_path: Optional[str] = None) -> Dict[str, Any]:
+    """EVAL-8: the run provenance of a pipeline directory, ``{run_created_at, source,
+    run_last_activity_at, run_last_activity_source, pipeline_id, hindcast, notes}``.
 
     ``run_created_at`` is run.json's ``created_at`` (``_build_run_manifest``), else
     pipeline_state.json's, whichever first parses as a UTC-aware stamp (normalized
-    to UTC ISO-8601); ``source`` names that file. ``hindcast`` is the TIME-7 pin in
-    pipeline_state.json ``options.hindcast_policy_v1`` with TIME-9's integrity
-    verdict (``hindcast_forecast_block`` over its ``research_audit``), or, when the
-    state file cannot be read, run.json ``resolved.as_of_enforcement`` (written only
-    for a pinned run). A pin value that is neither a hindcast pin nor a live
-    (as-of = today) one cannot be ruled out, so the run stamp is withheld (every row
-    ``unknown``). ``notes`` says why a file or stamp was not used. A path that is
-    not a directory raises ValueError (a mistyped ``--pipeline-dir`` fails loud).
+    to UTC ISO-8601); ``source`` names that file. ``run_last_activity_at`` is the
+    latest of that stamp and pipeline_state.json's activity stamps (its created_at,
+    resumes, a forced report regeneration, heartbeats, stage and ensemble windows),
+    with the file and field it came from: a resume keeps created_at, so created_at
+    alone can date a run before resolution whose research and report ran after it.
+    ``hindcast`` is ``_pipeline_hindcast``'s. ``pipeline_id`` is the state's (else
+    run.json's).
+
+    The run stamps are withheld, fail closed (every row is then ``unknown`` unless
+    ``hindcast`` is set), when pipeline_state.json cannot be read (run.json alone
+    cannot rule out a later resume), an activity stamp is malformed, the state does
+    not name ``forecast_path``'s report directory as its ``report_id``, or a hindcast
+    cannot be ruled out. ``notes`` says why a file or stamp was not used. A path that
+    is not a directory raises ValueError (a mistyped ``--pipeline-dir`` fails loud).
     """
     if not os.path.isdir(pipeline_dir):
         raise ValueError(f"--pipeline-dir {pipeline_dir!r} is not a directory")
@@ -823,61 +972,70 @@ def load_pipeline_provenance(pipeline_dir: str) -> Dict[str, Any]:
         docs[name], why = _read_json_object(os.path.join(pipeline_dir, name))
         if why:
             notes.append(f"{name}: {why}")
-    stamp: Optional[str] = None
+    created: Optional[datetime] = None
     source: Optional[str] = None
     for name in (RUN_MANIFEST_FILE, PIPELINE_STATE_FILE):
         doc = docs[name]
         if doc is None:
             continue
-        parsed, why = parse_run_created_at(doc.get("created_at"))
-        if parsed is not None:
-            stamp, source = parsed.isoformat(), name
+        created, why = parse_run_created_at(doc.get("created_at"))
+        if created is not None:
+            source = name
             break
         notes.append(f"{name}: {why}")
-    hindcast: Optional[Dict[str, Any]] = None
-    state = docs[PIPELINE_STATE_FILE]
-    if state is not None:
-        options = state.get("options")
-        raw = options.get(hindcast_policy.HINDCAST_POLICY_OPTION) if isinstance(options, dict) else None
-        pin = hindcast_policy.hindcast_policy(options)
-        live_pin = (isinstance(raw, dict) and raw.get("version") == hindcast_policy.HINDCAST_POLICY_VERSION
-                    and raw.get("hindcast") is False)
-        if pin is not None:
-            block = hindcast_policy.hindcast_forecast_block(pin, research_audit=pin.get("research_audit"))
-            hindcast = {"as_of": pin.get("as_of"), "source": PIPELINE_STATE_FILE,
-                        "integrity": block["integrity"]}
-        elif raw is not None and not live_pin:
-            notes.append(f"{PIPELINE_STATE_FILE}: options.{hindcast_policy.HINDCAST_POLICY_OPTION} is not a "
-                         "recognised pin, so a hindcast cannot be ruled out: run stamp withheld")
-            stamp = source = None
-    else:
-        resolved = (docs[RUN_MANIFEST_FILE] or {}).get("resolved")
-        enforcement = resolved.get("as_of_enforcement") if isinstance(resolved, dict) else None
-        if isinstance(enforcement, dict):
-            hindcast = {"as_of": enforcement.get("as_of"), "source": RUN_MANIFEST_FILE,
-                        "integrity": _integrity_of_audit_status(enforcement.get("audit_status"))}
-    return {"run_created_at": stamp, "source": source, "hindcast": hindcast, "notes": notes}
+    run, state = docs[RUN_MANIFEST_FILE], docs[PIPELINE_STATE_FILE]
+    pipeline_id = next((doc["pipeline_id"] for doc in (state, run) if doc is not None
+                        and isinstance(doc.get("pipeline_id"), str) and doc["pipeline_id"]), None)
+    hindcast, problems = _pipeline_hindcast(state, run)
+    last, last_source = created, source
+    if created is not None:
+        if state is None:
+            problems.append(f"{PIPELINE_STATE_FILE} cannot be read, so a resume or report regeneration "
+                            "after created_at cannot be ruled out")
+        else:
+            active, field, why = _last_state_activity(state)
+            if why:
+                problems.append(f"{PIPELINE_STATE_FILE}: {why}, so the run's last activity cannot be dated")
+            elif active is not None and active > created:
+                last, last_source = active, f"{PIPELINE_STATE_FILE} {field}"
+            link = _report_link_problem(state, forecast_path)
+            if link:
+                problems.append(link)
+    notes += [f"{problem}: run stamp withheld" for problem in problems]
+    if problems:
+        created = last = None
+        source = last_source = None
+    return {"run_created_at": created.isoformat() if created else None, "source": source,
+            "run_last_activity_at": last.isoformat() if last else None,
+            "run_last_activity_source": last_source, "pipeline_id": pipeline_id,
+            "hindcast": hindcast, "notes": notes}
 
 
 def resolve_run_provenance(*, pipeline_dir: Optional[str] = None, run_created_at: Optional[str] = None,
-                           forecast_obj: Any = None) -> Dict[str, Any]:
-    """EVAL-8: the scored run's provenance, ``{run_created_at, source, hindcast, notes}``.
+                           forecast_obj: Any = None, forecast_path: Optional[str] = None) -> Dict[str, Any]:
+    """EVAL-8: the scored run's provenance, ``{run_created_at, source, run_last_activity_at,
+    run_last_activity_source, pipeline_id, hindcast, notes}``.
 
-    From ``--pipeline-dir`` (``load_pipeline_provenance``) or ``--run-created-at``
-    (mutually exclusive: ValueError when both are given). A forecast stamped
+    From ``--pipeline-dir`` (``load_pipeline_provenance``, which must tie the run to
+    ``forecast_path``) or ``--run-created-at`` (mutually exclusive: ValueError when
+    both are given; the command-line stamp is taken as given, with a note that later
+    activity was not checked, and has no last activity). A forecast stamped
     ``hindcast`` marks the run a hindcast even without either. Nothing given and no
     stamp: every field empty (the headline is then ``withheld_no_provenance``).
     """
     if pipeline_dir and run_created_at:
         raise ValueError("--pipeline-dir and --run-created-at are mutually exclusive")
     if pipeline_dir:
-        provenance = load_pipeline_provenance(pipeline_dir)
+        provenance = load_pipeline_provenance(pipeline_dir, forecast_path=forecast_path)
     else:
-        provenance = {"run_created_at": None, "source": None, "hindcast": None, "notes": []}
+        provenance = {"run_created_at": None, "source": None, "run_last_activity_at": None,
+                      "run_last_activity_source": None, "pipeline_id": None, "hindcast": None, "notes": []}
         if run_created_at is not None:
             parsed, why = parse_run_created_at(run_created_at)
             if parsed is not None:
                 provenance["run_created_at"], provenance["source"] = parsed.isoformat(), RUN_CREATED_AT_ARG
+                provenance["notes"].append(f"{RUN_CREATED_AT_ARG}: taken as given; a later resume or report "
+                                           "regeneration of the run is not checked")
             else:
                 provenance["notes"].append(f"{RUN_CREATED_AT_ARG}: {why}")
     if provenance["hindcast"] is None:
@@ -1009,12 +1167,17 @@ def _render_headline(report: Dict[str, Any], lines: List[str], heading: str = "#
     by_tier = (report.get("characterization") or {}).get("by_tier") or {}
     counts = h.get("tier_counts") or {}
     lines += ["", f"{heading} Headline", "", f"- status: `{h.get('status')}`"]
+    if "pipeline_dir" in h:
+        lines.append(f"- pipeline: `{h.get('pipeline_id') or '—'}` (`{h['pipeline_dir']}`)")
     if "run_created_at" in h:
         source = h.get("run_created_at_source")
         lines.append(f"- run created_at: {h.get('run_created_at') or '—'}" + (f" ({source})" if source else ""))
+    if h.get("run_last_activity_at"):
+        source = h.get("run_last_activity_source")
+        lines.append(f"- run last activity: {h['run_last_activity_at']}" + (f" ({source})" if source else ""))
     if "lead_tolerance_days" in h:
-        lines.append("- prospective: the run started before the resolution date and no later than "
-                     f"as_of + {h['lead_tolerance_days']} days")
+        lines.append("- prospective: the run, from creation through its last recorded activity, came before "
+                     f"the resolution date and no later than as_of + {h['lead_tolerance_days']} days")
     if "tier_source" in h:
         lines.append(f"- tiers from each golden row's `{h['tier_source']}` (rows without it count as unknown)")
     hindcast = h.get("hindcast")
@@ -1050,11 +1213,16 @@ def _render_ledger_markdown(report: Dict[str, Any]) -> str:
 
     EVAL-8: with a ``headline`` the golden section opens with its HEADLINE line and
     a Headline subsection; the golden metric sections after it cover every scored
-    golden row (characterization).
+    golden row (characterization). An ok headline adds HEADLINE_SCOPE_NOTE under
+    the banner.
     """
     g = report.get("golden") or {}
-    lines: List[str] = [
-        CHARACTERIZATION_BANNER, "", "# Forecast-ledger evaluation", "",
+    headline = report.get("headline")
+    lines: List[str] = [CHARACTERIZATION_BANNER, ""]
+    if isinstance(headline, dict) and headline.get("status") == HEADLINE_OK:
+        lines += [HEADLINE_SCOPE_NOTE, ""]
+    lines += [
+        "# Forecast-ledger evaluation", "",
         f"- production ledger: `{report.get('ledger_dir', '')}` ({report.get('n_entries', 0)} entries, "
         f"{report.get('n_resolved', 0)} resolved)",
         f"- golden section ledger: `{report.get('eval_ledger_dir', '')}` ({g.get('n', 0)} scored golden rows)",
@@ -1063,7 +1231,6 @@ def _render_ledger_markdown(report: Dict[str, Any]) -> str:
         f"on a YES/NO row) | {_fmt(report.get('mean_brier'))} |",
         f"| calibration error | {_fmt(report.get('calibration_error'))} |", "",
         f"## Golden section ({g.get('brier_scale', 'binary')} Brier)"]
-    headline = report.get("headline")
     if isinstance(headline, dict):
         lines += ["", headline_banner(headline)]
         _render_headline(report, lines, heading="###")
@@ -1086,15 +1253,19 @@ def render_markdown(report: Dict[str, Any]) -> str:
     layout (``_render_ledger_markdown``).
 
     EVAL-8: a report with a ``headline`` opens with its ``HEADLINE:`` /
-    ``HEADLINE WITHHELD:`` line above that banner, adds a Headline section before
-    the all-matched sections and a tier column to the per-question table.
+    ``HEADLINE WITHHELD:`` line above that banner (an ok one also puts
+    HEADLINE_SCOPE_NOTE under it), adds a Headline section before the all-matched
+    sections and a tier column to the per-question table.
     """
     if report.get("mode") == "score-ledger":
         return _render_ledger_markdown(report)
     m = report.get("metrics", {})
     headline = report.get("headline")
     lines: List[str] = [headline_banner(headline), ""] if isinstance(headline, dict) else []
-    lines += [CHARACTERIZATION_BANNER, "", "# Golden-question forecast evaluation", ""]
+    lines += [CHARACTERIZATION_BANNER, ""]
+    if isinstance(headline, dict) and headline.get("status") == HEADLINE_OK:
+        lines += [HEADLINE_SCOPE_NOTE, ""]
+    lines += ["# Golden-question forecast evaluation", ""]
     lines.append(f"- source: `{report.get('forecast_path', '')}`")
     lines.append(f"- golden: `{report.get('golden_path', '')}` "
                  f"({report.get('golden_count', 0)} questions)")
@@ -1171,20 +1342,27 @@ def _tier_matched(matched: List[Dict[str, Any]], forecast_obj: Any, args,
 
     ``--pipeline-dir`` / ``--run-created-at`` are read with getattr (as is
     ``--require-headline`` by the caller), so programmatic callers without them keep
-    working (no provenance: the headline is withheld). With ``--bootstrap`` an ok
-    headline gets its own CI.
+    working (no provenance: the headline is withheld). The headline context names
+    the pipeline that supplied the provenance. With ``--bootstrap`` an ok headline
+    gets its own CI.
     """
     tolerance = _lead_tolerance_days()
-    provenance = resolve_run_provenance(pipeline_dir=getattr(args, "pipeline_dir", None),
+    pipeline_dir = getattr(args, "pipeline_dir", None)
+    provenance = resolve_run_provenance(pipeline_dir=pipeline_dir,
                                         run_created_at=getattr(args, "run_created_at", None),
-                                        forecast_obj=forecast_obj)
+                                        forecast_obj=forecast_obj, forecast_path=args.forecast)
     for row in matched:
         tiering = classify_tier(row, run_created_at=provenance["run_created_at"],
-                                lead_tolerance_days=tolerance, hindcast=provenance["hindcast"])
+                                lead_tolerance_days=tolerance, hindcast=provenance["hindcast"],
+                                run_last_activity_at=provenance["run_last_activity_at"])
         row["tier"], row["tier_reasons"] = tiering["tier"], tiering["reasons"]
     context: Dict[str, Any] = {"run_created_at": provenance["run_created_at"],
                                "run_created_at_source": provenance["source"],
+                               "run_last_activity_at": provenance["run_last_activity_at"],
+                               "run_last_activity_source": provenance["run_last_activity_source"],
                                "lead_tolerance_days": tolerance}
+    if pipeline_dir:
+        context["pipeline_dir"], context["pipeline_id"] = pipeline_dir, provenance["pipeline_id"]
     if provenance["hindcast"] is not None:
         context["hindcast"] = provenance["hindcast"]
     if provenance["notes"]:
@@ -1432,11 +1610,13 @@ def main() -> int:
     provenance = a.add_mutually_exclusive_group()
     provenance.add_argument("--pipeline-dir", default=None, metavar="DIR",
                             help="the pipeline directory of the run that wrote --forecast (its run.json, else "
-                                 "pipeline_state.json, created_at and hindcast pin decide each row's "
-                                 "headline tier; EVAL-8)")
+                                 "pipeline_state.json, created_at, the run's last recorded activity and its "
+                                 "hindcast pin decide each row's headline tier; its report_id must be "
+                                 "--forecast's report directory; EVAL-8)")
     provenance.add_argument("--run-created-at", default=None, metavar="ISO",
                             help="the run's creation time as ISO-8601 with a UTC offset "
-                                 "(e.g. 2026-09-28T10:00:00+00:00) when no pipeline directory is at hand")
+                                 "(e.g. 2026-09-28T10:00:00+00:00) when no pipeline directory is at hand; "
+                                 "taken as given (a later resume or report regeneration is not checked)")
     a.add_argument("--require-headline", action="store_true",
                    help=f"exit {EXIT_HEADLINE_WITHHELD} unless the headline status is ok "
                         "(withheld or GOLDEN_HEADLINE_GATE=false)")

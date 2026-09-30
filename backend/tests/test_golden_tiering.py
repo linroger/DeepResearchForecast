@@ -2,9 +2,10 @@
 
 A golden Brier is a skill estimate only over rows the run could not look up. Every
 matched row is tiered from the run's provenance (run.json / pipeline_state.json
-created_at, the TIME-7 hindcast pin, or --run-created-at): only ``prospective``
-rows (run before the resolution date and no later than as_of + the lead
-tolerance, never a pinned hindcast) reach the ``headline``; every other row is
+created_at, dated through the run's last recorded activity, from a pipeline that
+wrote the scored report; the TIME-7 hindcast pin; or --run-created-at): only
+``prospective`` rows (run before the resolution date and no later than as_of +
+the lead tolerance, never a pinned hindcast) reach the ``headline``; every other row is
 under ``characterization.by_tier``; ``metrics`` keeps every matched row. A
 headline without eligible rows is withheld and ``--require-headline`` exits 5.
 With GOLDEN_HEADLINE_GATE=false every output is byte-identical to the pre-EVAL-8
@@ -44,6 +45,8 @@ PRE_EVAL8_LEDGER_SHA256 = "a312724ad670735bcf223039ac3aa37ca9c472628d6005279769a
 PRE_EVAL8_LEDGER_REPORT_SHA256 = "778291cba47ea9b07e477d68925a7017b90ae75164801722d7c3e14a03fdb5a3"
 PRE_EVAL8_LEDGER_MARKDOWN_SHA256 = "5bc6e7c6e1a1b6a955556794374d811ab1cf128785a09b1c363601add18b6f34"
 RUN_AT = "2026-09-28T10:00:00+00:00"
+# The report directory the scored forecasts sit in, named as report_id by _state().
+REPORT_ID = "report_eval8"
 
 
 @pytest.fixture(autouse=True)
@@ -71,6 +74,13 @@ def _q(qid, as_of, resolution, outcome, category="c", difficulty="easy"):
             "as_of_date": as_of, "resolution_date": resolution, "category": category, "difficulty": difficulty}
 
 
+def _report_forecast(tmp_path, fc, report_id=REPORT_ID):
+    """``fc`` written where a pipeline writes it: reports/<report_id>/forecast.json."""
+    d = tmp_path / "reports" / report_id
+    d.mkdir(parents=True, exist_ok=True)
+    return _write_json(d / "forecast.json", fc)
+
+
 def _mixed_files(tmp_path):
     """Two prospective rows (as_of + 3 and the inclusive + 7), one late origin, one hindcast
     for a run on 2026-09-28."""
@@ -82,7 +92,7 @@ def _mixed_files(tmp_path):
     ]}
     fc = {"binary_forecasts": [{"id": "p1", "probability": 0.8}, {"id": "p2", "probability": 0.3},
                                {"id": "l1", "probability": 0.6}, {"id": "h1", "probability": 0.9}]}
-    return _write_json(tmp_path / "mixed_golden.json", golden), _write_json(tmp_path / "mixed_fc.json", fc)
+    return _write_json(tmp_path / "mixed_golden.json", golden), _report_forecast(tmp_path, fc)
 
 
 def _legacy_files(tmp_path):
@@ -98,6 +108,13 @@ def _legacy_files(tmp_path):
         {"id": "q1", "probability": 0.9}, {"id": "q2", "probability": 0.5}, {"id": "q3", "probability": 0.4},
         {"id": "q4", "probability": 0.75}, {"id": "q5", "probability": 0.62}, {"id": "zzz", "probability": 0.3}]}
     return _write_json(tmp_path / "golden.json", golden), _write_json(tmp_path / "forecast.json", fc)
+
+
+def _state(**kw):
+    """A pipeline_state.json created at RUN_AT that wrote REPORT_ID (``kw`` overrides keys)."""
+    state = {"pipeline_id": "pipe_eval8", "created_at": RUN_AT, "report_id": REPORT_ID, "options": {}}
+    state.update(kw)
+    return state
 
 
 def _pipeline_dir(tmp_path, name="pipe_eval8", run=None, state=None):
@@ -177,19 +194,41 @@ def test_classify_tier_boundaries():
                                   hindcast={"as_of": None, "source": "forecast.json", "integrity": None})
     assert no_verdict["tier"] == "hindcast_pit" and "integrity" not in no_verdict
 
-    for bad_tolerance in (-1, 1.5, True, "7", None):
+    for bad_tolerance in (-1, 1.5, True, "7", None, ge.MAX_LEAD_TOLERANCE_DAYS + 1, 10 ** 9):
         with pytest.raises(ValueError, match="lead tolerance"):
             ge.classify_tier(q, run_created_at=RUN_AT, lead_tolerance_days=bad_tolerance)
+    # the largest tolerance is accepted, and as_of + tolerance past date.max clamps instead of raising
+    assert ge.MAX_LEAD_TOLERANCE_DAYS == 3650
+    assert tier("2026-11-30T00:00:00+00:00", tolerance=3650) == "prospective"
+    far = {"as_of_date": "9999-12-01", "resolution_date": "9999-12-31"}
+    assert tier("9999-12-30T00:00:00+00:00", tolerance=3650, question=far) == "prospective"
+    assert ge.classify_tier(far, run_created_at="9999-12-30T00:00:00+00:00",
+                            lead_tolerance_days=3650)["reasons"][0].endswith("as_of 9999-12-01 + 3650 days")
+
+    # the run is dated by the later of created_at and its last activity (a resume keeps created_at)
+    def active(created, last):
+        return ge.classify_tier(q, run_created_at=created, lead_tolerance_days=7, run_last_activity_at=last)
+
+    assert active("2026-10-03T00:00:00+00:00", "2026-10-09T00:00:00+00:00") == {"tier": "late_origin", "reasons": [
+        "run last active 2026-10-09 (created 2026-10-03) is after as_of 2026-10-01 + 7 days (2026-10-08)"]}
+    assert active("2026-10-03T00:00:00+00:00", "2026-12-01T00:00:00Z")["tier"] == HINDCAST
+    assert active("2026-10-03T00:00:00+00:00", "2026-10-03T23:00:00+00:00")["reasons"][0].startswith(
+        "run 2026-10-03 precedes")                                   # same day: worded as before
+    assert active("2026-10-03T00:00:00+00:00", "2026-09-01T00:00:00+00:00")["tier"] == "prospective"
+    stale = active("2026-10-03T00:00:00+00:00", "2026-10-04T00:00:00")
+    assert stale == {"tier": "unknown", "reasons": [
+        "run last activity '2026-10-04T00:00:00' has no UTC offset (naive stamps are rejected)"]}
+    assert active(None, "2026-10-04T00:00:00+00:00")["reasons"] == ["no run created_at"]
 
 
 # ------------------------------------------------------- committed set, 2026 run
 def test_committed_set_all_hindcast_withheld(tmp_path, monkeypatch):
     """Acceptance: a 2026 run over the committed 2024-25 set has no headline; every row is characterization."""
     ids = [q["id"] for q in ge.load_golden_set()]
-    fpath = _write_json(tmp_path / "const.json", {"binary_forecasts": [{"id": i, "probability": 0.9} for i in ids]})
+    fpath = _report_forecast(tmp_path, {"binary_forecasts": [{"id": i, "probability": 0.9} for i in ids]})
     stamp = "2026-09-28T09:15:00.123456+00:00"                      # pipeline_orchestrator._utcnow format
     pdir = _pipeline_dir(tmp_path, run={"pipeline_id": "pipe_eval8", "created_at": stamp, "resolved": {}},
-                         state={"pipeline_id": "pipe_eval8", "created_at": stamp, "options": {}})
+                         state=_state(created_at=stamp))
 
     rc, report, text = _score(tmp_path, ge.GOLDEN_PATH, fpath, pipeline_dir=pdir)
     assert rc == 0
@@ -197,6 +236,8 @@ def test_committed_set_all_hindcast_withheld(tmp_path, monkeypatch):
     assert h["status"] == "withheld_no_eligible_rows"
     assert h["tier_counts"] == {"prospective": 0, "late_origin": 0, HINDCAST: 30, "hindcast_pit": 0, "unknown": 0}
     assert (h["run_created_at"], h["run_created_at_source"], h["lead_tolerance_days"]) == (stamp, "run.json", 7)
+    assert (h["run_last_activity_at"], h["run_last_activity_source"]) == (stamp, "run.json")
+    assert (h["pipeline_id"], h["pipeline_dir"]) == ("pipe_eval8", pdir)
     assert h["metrics"]["n"] == 0 and h["metrics"]["mean_brier"] is None
     assert "hindcast" not in h and "provenance_notes" not in h
     by_tier = report["characterization"]["by_tier"]
@@ -212,6 +253,7 @@ def test_committed_set_all_hindcast_withheld(tmp_path, monkeypatch):
     assert lines[0] == "HEADLINE WITHHELD: 30/30 hindcast (live retrieval + model memory exposed)"
     assert lines[1] == "" and lines[2] == ge.CHARACTERIZATION_BANNER
     assert "## Headline" in lines and "- status: `withheld_no_eligible_rows`" in lines
+    assert f"- pipeline: `pipe_eval8` (`{pdir}`)" in lines and ge.HEADLINE_SCOPE_NOTE not in lines
     assert f"| {HINDCAST} | 30 | 0.1700 | 0.8000 | characterization |" in lines
     assert lines.index("## Headline") < lines.index("## Overall")
     assert "### Overall" not in lines                                # no headline metrics when withheld
@@ -243,6 +285,9 @@ def test_prospective_synthetic_row_headline_ok(tmp_path, monkeypatch):
     assert h["status"] == "ok"
     assert h["tier_counts"] == {"prospective": 2, "late_origin": 1, HINDCAST: 1, "hindcast_pit": 0, "unknown": 0}
     assert (h["run_created_at"], h["run_created_at_source"]) == (RUN_AT, "--run-created-at")
+    assert h["run_last_activity_at"] is None and "pipeline_dir" not in h
+    assert h["provenance_notes"] == ["--run-created-at: taken as given; a later resume or report "
+                                     "regeneration of the run is not checked"]
     hm = h["metrics"]
     assert hm["n"] == 2 and hm["mean_brier"] == 0.065                # (0.2^2 + 0.3^2) / 2 over p1, p2 only
     assert hm["rigor"]["reference"]["bss"] == 0.74
@@ -259,6 +304,8 @@ def test_prospective_synthetic_row_headline_ok(tmp_path, monkeypatch):
     lines = text.splitlines()
     assert lines[0] == "HEADLINE: mean Brier 0.0650 over 2/4 prospective rows (BSS vs climatology 0.7400)"
     assert lines[2] == ge.CHARACTERIZATION_BANNER
+    # an ok headline says, right under the banner, which lines the banner covers
+    assert lines[3:7] == ["", ge.HEADLINE_SCOPE_NOTE, "", "# Golden-question forecast evaluation"]
     assert "| prospective | 2 | 0.0650 | 1.0000 | headline |" in lines
     assert "| late_origin | 1 | 0.1600 | 1.0000 | characterization |" in lines
     # the headline metrics nest under ## Headline; the all-matched sections follow at ##
@@ -270,8 +317,12 @@ def test_prospective_synthetic_row_headline_ok(tmp_path, monkeypatch):
     rc0, zero, text0 = _score(tmp_path, gpath, fpath, name="zero", run_created_at=RUN_AT)
     assert rc0 == 0 and zero["headline"]["status"] == "withheld_no_eligible_rows"
     assert zero["headline"]["tier_counts"]["late_origin"] == 3 and zero["headline"]["lead_tolerance_days"] == 0
-    assert text0.splitlines()[0] == ("HEADLINE WITHHELD: 3/4 late origin (run started after as_of + the lead "
+    assert text0.splitlines()[0] == ("HEADLINE WITHHELD: 3/4 late origin (run active after as_of + the lead "
                                      "tolerance); 1/4 hindcast (live retrieval + model memory exposed)")
+    assert text0.splitlines()[2:5] == [ge.CHARACTERIZATION_BANNER, "", "# Golden-question forecast evaluation"]
+    monkeypatch.setattr(Config, "GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS", 10 ** 9, raising=False)
+    with pytest.raises(ValueError, match="lead tolerance"):
+        _score(tmp_path, gpath, fpath, name="huge", run_created_at=RUN_AT)
     monkeypatch.setattr(Config, "GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS", -1, raising=False)
     with pytest.raises(ValueError, match="lead tolerance"):
         _score(tmp_path, gpath, fpath, name="negative", run_created_at=RUN_AT)
@@ -284,8 +335,7 @@ def test_hindcast_pin_never_headline_eligible(tmp_path):
     run = {"created_at": RUN_AT, "resolved": {}}
 
     pdir = _pipeline_dir(tmp_path, "pipe_pin", run=run,
-                         state={"created_at": RUN_AT, "options": {"hindcast_policy_v1": _gated_pin("2026-09-25",
-                                                                                                   "date_verified")}})
+                         state=_state(options={"hindcast_policy_v1": _gated_pin("2026-09-25", "date_verified")}))
     rc, report, text = _score(tmp_path, gpath, fpath, name="pin", pipeline_dir=pdir, require_headline=True)
     assert rc == 5
     h = report["headline"]
@@ -300,16 +350,26 @@ def test_hindcast_pin_never_headline_eligible(tmp_path):
 
     # without a research audit the verdict is TIME-6's 'labelled'; a violated audit is leak_suspected
     unaudited = _pipeline_dir(tmp_path, "pipe_unaudited", run=run,
-                              state={"created_at": RUN_AT, "options": {"hindcast_policy_v1": _gated_pin("2026-09-25")}})
+                              state=_state(options={"hindcast_policy_v1": _gated_pin("2026-09-25")}))
     assert _score(tmp_path, gpath, fpath, name="unaudited",
                   pipeline_dir=unaudited)[1]["headline"]["hindcast"]["integrity"] == "labelled"
     # pipeline_state.json unreadable: run.json's as_of_enforcement still marks the hindcast
     enforcement = hp.as_of_enforcement_record(_gated_pin("2026-09-25", "violated"))
-    manifest_only = _pipeline_dir(tmp_path, "pipe_manifest", run={"created_at": RUN_AT, "resolved": {
-        "as_of_enforcement": enforcement}})
+    enforced_run = {"created_at": RUN_AT, "resolved": {"as_of_enforcement": enforcement}}
+    manifest_only = _pipeline_dir(tmp_path, "pipe_manifest", run=enforced_run)
     mh = _score(tmp_path, gpath, fpath, name="manifest", pipeline_dir=manifest_only)[1]["headline"]
     assert mh["hindcast"] == {"as_of": "2026-09-25", "source": "run.json", "integrity": "leak_suspected"}
     assert mh["tier_counts"]["hindcast_pit"] == 4 and "pipeline_state.json: missing" in mh["provenance_notes"]
+    # ... and it is read even when the state is readable and carries no pin
+    unpinned = _pipeline_dir(tmp_path, "pipe_unpinned", run=enforced_run, state=_state())
+    uh = _score(tmp_path, gpath, fpath, name="unpinned", pipeline_dir=unpinned, require_headline=True)
+    assert uh[0] == 5 and uh[1]["headline"]["status"] == "withheld_no_eligible_rows"
+    assert uh[1]["headline"]["hindcast"] == mh["hindcast"] and uh[1]["headline"]["tier_counts"]["hindcast_pit"] == 4
+    # both records: the state pin's verdict wins
+    both = _pipeline_dir(tmp_path, "pipe_both", run=enforced_run,
+                         state=_state(options={"hindcast_policy_v1": _gated_pin("2026-09-25", "date_verified")}))
+    assert _score(tmp_path, gpath, fpath, name="both", pipeline_dir=both)[1]["headline"]["hindcast"] == {
+        "as_of": "2026-09-25", "source": "pipeline_state.json", "integrity": "date_verified"}
     # no pipeline dir: the forecast's own hindcast stamp marks it
     with open(fpath, encoding="utf-8") as fh:
         stamped = json.load(fh)
@@ -324,16 +384,167 @@ def test_hindcast_pin_never_headline_eligible(tmp_path):
     # an as-of equal to today is pinned but live: tiered by its dates
     live_pin = hp.capture_hindcast_policy_v1("2026-09-28", research_engine="v3", today_utc=date(2026, 9, 28))
     assert live_pin["hindcast"] is False
-    live = _pipeline_dir(tmp_path, "pipe_live", run=run,
-                         state={"created_at": RUN_AT, "options": {"hindcast_policy_v1": live_pin}})
+    live = _pipeline_dir(tmp_path, "pipe_live", run=run, state=_state(options={"hindcast_policy_v1": live_pin}))
     lh = _score(tmp_path, gpath, fpath, name="live", pipeline_dir=live)[1]["headline"]
     assert lh["status"] == "ok" and lh["tier_counts"]["prospective"] == 2 and "hindcast" not in lh
-    # a pin value that is neither cannot rule a hindcast out: the run stamp is withheld
-    odd = _pipeline_dir(tmp_path, "pipe_odd", run=run,
-                        state={"created_at": RUN_AT, "options": {"hindcast_policy_v1": {"hindcast": True}}})
-    oh = _score(tmp_path, gpath, fpath, name="odd", pipeline_dir=odd)[1]["headline"]
-    assert oh["status"] == "withheld_no_provenance" and oh["tier_counts"]["unknown"] == 4
-    assert oh["run_created_at"] is None and "not a recognised pin" in oh["provenance_notes"][0]
+    assert "provenance_notes" not in lh
+    # a record that is neither a pin nor ruled out as one withholds the run stamp: an odd pin value,
+    # options that is not an object, an as_of_enforcement that is not an object
+    for name, pipe_run, state, note in (
+            ("odd", run, _state(options={"hindcast_policy_v1": {"hindcast": True}}),
+             "pipeline_state.json: options.hindcast_policy_v1 is not a recognised pin"),
+            ("list_options", run, _state(options=[["hindcast_policy_v1", {"hindcast": True}]]),
+             "pipeline_state.json: options is not an object"),
+            ("odd_enforcement", {"created_at": RUN_AT, "resolved": {"as_of_enforcement": "2026-09-25"}}, _state(),
+             "run.json: resolved.as_of_enforcement is not an object")):
+        odd = _pipeline_dir(tmp_path, f"pipe_{name}", run=pipe_run, state=state)
+        rc_odd, odd_report, _ = _score(tmp_path, gpath, fpath, name=name, pipeline_dir=odd, require_headline=True)
+        oh = odd_report["headline"]
+        assert rc_odd == 5 and oh["status"] == "withheld_no_provenance" and oh["tier_counts"]["unknown"] == 4, name
+        assert oh["run_created_at"] is None and "hindcast" not in oh, name
+        assert oh["provenance_notes"] == [f"{note}, so a hindcast cannot be ruled out: run stamp withheld"], name
+
+
+# ------------------------------------------------- resumed / regenerated runs
+def test_resumed_run_dated_by_last_activity(tmp_path):
+    """A run created before resolution but resumed or regenerated in place after it is a hindcast:
+    the run is dated by its last recorded activity, not by created_at (review round 1)."""
+    gpath = _write_json(tmp_path / "resume_golden.json", {"questions": [_q("r1", "2026-09-25", "2026-10-10", True)]})
+    fpath = _report_forecast(tmp_path, {"binary_forecasts": [{"id": "r1", "probability": 0.8}]})
+    created = "2026-09-28T09:00:00+00:00"
+    run = {"pipeline_id": "pipe_eval8", "created_at": created}
+    stages = {"research": {"status": "completed", "started_at": "2026-09-28T09:01:00+00:00",
+                           "finished_at": "2026-09-28T10:30:00+00:00"},
+              "report": {"status": "completed", "started_at": "2026-09-28T11:00:00+00:00",
+                         "finished_at": "2026-09-28T12:00:00+00:00"},
+              "simulation": {"status": "pending", "started_at": None, "finished_at": None}}
+
+    # untouched after creation: prospective, dated by the report stage's finish
+    clean = _pipeline_dir(tmp_path, "pipe_clean", run=run, state=_state(created_at=created, stages=stages))
+    rc, report, text = _score(tmp_path, gpath, fpath, name="clean", pipeline_dir=clean, require_headline=True)
+    h = report["headline"]
+    assert rc == 0 and h["status"] == "ok" and h["tier_counts"]["prospective"] == 1
+    assert (h["run_created_at"], h["run_last_activity_at"], h["run_last_activity_source"]) == (
+        created, "2026-09-28T12:00:00+00:00", "pipeline_state.json stages.report.finished_at")
+    assert "provenance_notes" not in h
+    assert ("- run last activity: 2026-09-28T12:00:00+00:00 (pipeline_state.json stages.report.finished_at)"
+            in text.splitlines())
+
+    # the review probe: resumed 2026-11-01, research and report re-ran after the 2026-10-10 resolution
+    resumed_stages = {"research": {"status": "completed", "started_at": "2026-11-01T07:05:00+00:00",
+                                   "finished_at": "2026-11-01T09:00:00+00:00"},
+                      "report": {"status": "completed", "started_at": "2026-11-01T09:10:00+00:00",
+                                 "finished_at": "2026-11-02T08:00:00+00:00"}}
+    resumed = _pipeline_dir(tmp_path, "pipe_resumed", run=run, state=_state(
+        created_at=created, stages=resumed_stages,
+        options={"resumed_at": "2026-11-01T07:00:00+00:00", "resume_count": 1}))
+    rc5, report5, text5 = _score(tmp_path, gpath, fpath, name="resumed", pipeline_dir=resumed,
+                                 require_headline=True)
+    h5 = report5["headline"]
+    assert rc5 == 5 and h5["status"] == "withheld_no_eligible_rows"
+    assert h5["tier_counts"] == {"prospective": 0, "late_origin": 0, HINDCAST: 1, "hindcast_pit": 0, "unknown": 0}
+    assert (h5["run_created_at"], h5["run_last_activity_at"], h5["run_last_activity_source"]) == (
+        created, "2026-11-02T08:00:00+00:00", "pipeline_state.json stages.report.finished_at")
+    assert report5["matched"][0]["tier_reasons"] == [
+        "run last active 2026-11-02 (created 2026-09-28) is on or after resolution 2026-10-10: "
+        "live retrieval and model memory can see the outcome"]
+    assert text5.splitlines()[0] == "HEADLINE WITHHELD: 1/1 hindcast (live retrieval + model memory exposed)"
+
+    # each activity stamp alone dates the run: the state's own created_at (later than run.json's), a
+    # resume that reached no stage yet, a forced report regeneration, a heartbeat, progress, the
+    # ensemble window, a stage still running
+    after = "2026-10-10T00:00:00+00:00"
+    for i, (extra, field) in enumerate((
+            ({"created_at": after}, "created_at"),
+            ({"options": {"resumed_at": after}}, "options.resumed_at"),
+            ({"options": {"force_report_regen": after}}, "options.force_report_regen"),
+            ({"heartbeat_at": after}, "heartbeat_at"),
+            ({"last_progress_at": after}, "last_progress_at"),
+            ({"options": {"ensemble_wall": {"started_at": created, "finished_at": after}}},
+             "options.ensemble_wall.finished_at"),
+            ({"stages": {**stages, "graph": {"status": "running", "started_at": after, "finished_at": None}}},
+             "stages.graph.started_at"))):
+        pdir = _pipeline_dir(tmp_path, f"pipe_after_{i}", run=run, state=_state(**{"created_at": created, **extra}))
+        ha = _score(tmp_path, gpath, fpath, name=f"after_{i}", pipeline_dir=pdir)[1]["headline"]
+        assert ha["tier_counts"][HINDCAST] == 1 and ha["status"] == "withheld_no_eligible_rows", field
+        assert (ha["run_last_activity_at"], ha["run_last_activity_source"]) == (
+            after, f"pipeline_state.json {field}"), field
+
+    # a resume before resolution but after as_of + 7 moved the information set: late origin
+    late = _pipeline_dir(tmp_path, "pipe_late", run=run, state=_state(
+        created_at=created, options={"resumed_at": "2026-10-03T00:00:00+00:00"}))
+    lh = _score(tmp_path, gpath, fpath, name="late", pipeline_dir=late)[1]["headline"]
+    assert lh["status"] == "withheld_no_eligible_rows" and lh["tier_counts"]["late_origin"] == 1
+
+    # fail closed: a malformed activity record, or no readable pipeline_state.json (run.json alone
+    # cannot rule a resume out), withholds the run stamp
+    for i, (state, note) in enumerate((
+            (_state(created_at="2026-09-28 09:00:00"),
+             "pipeline_state.json: created_at '2026-09-28 09:00:00' has no UTC offset (naive stamps are "
+             "rejected), so the run's last activity cannot be dated"),
+            (_state(created_at=created, options={"resumed_at": "2026-11-01T07:00:00"}),
+             "pipeline_state.json: options.resumed_at '2026-11-01T07:00:00' has no UTC offset (naive stamps "
+             "are rejected), so the run's last activity cannot be dated"),
+            (_state(created_at=created, heartbeat_at=1790000000),
+             "pipeline_state.json: heartbeat_at 1790000000 is not an ISO-8601 string, so the run's last "
+             "activity cannot be dated"),
+            (_state(created_at=created, stages=[stages]),
+             "pipeline_state.json: stages is not an object, so the run's last activity cannot be dated"),
+            (_state(created_at=created, stages={"report": "completed"}),
+             "pipeline_state.json: stages.report is not an object, so the run's last activity cannot be dated"),
+            (_state(created_at=created, options={"ensemble_wall": [after]}),
+             "pipeline_state.json: options.ensemble_wall is not an object, so the run's last activity cannot "
+             "be dated"),
+            (None, "pipeline_state.json cannot be read, so a resume or report regeneration after created_at "
+                   "cannot be ruled out"))):
+        pdir = _pipeline_dir(tmp_path, f"pipe_malformed_{i}", run=run, state=state)
+        rc_m, rep_m, _ = _score(tmp_path, gpath, fpath, name=f"malformed_{i}", pipeline_dir=pdir,
+                                require_headline=True)
+        hm = rep_m["headline"]
+        assert rc_m == 5 and hm["status"] == "withheld_no_provenance" and hm["tier_counts"]["unknown"] == 1, note
+        assert hm["run_created_at"] is None and hm["run_last_activity_at"] is None, note
+        assert hm["provenance_notes"][-1] == f"{note}: run stamp withheld"
+
+
+def test_pipeline_must_name_the_scored_report(tmp_path):
+    """The pipeline dir must be the run that wrote the scored forecast (its report_id is the forecast's
+    report directory), and the headline names it (review round 1)."""
+    gpath, fpath = _mixed_files(tmp_path)
+    run = {"pipeline_id": "pipe_named", "created_at": RUN_AT}
+    named = _pipeline_dir(tmp_path, "pipe_named", run=run, state=_state(pipeline_id="pipe_named"))
+    rc, report, text = _score(tmp_path, gpath, fpath, name="named", pipeline_dir=named, require_headline=True)
+    h = report["headline"]
+    assert rc == 0 and h["status"] == "ok" and (h["pipeline_id"], h["pipeline_dir"]) == ("pipe_named", named)
+    assert f"- pipeline: `pipe_named` (`{named}`)" in text.splitlines()
+    # a state without a pipeline_id falls back to run.json's
+    unlabelled = _pipeline_dir(tmp_path, "pipe_unlabelled", run=run, state=_state(pipeline_id=None))
+    assert _score(tmp_path, gpath, fpath, name="unlabelled",
+                  pipeline_dir=unlabelled)[1]["headline"]["pipeline_id"] == "pipe_named"
+
+    # another report's forecast (say an older run's, regenerated after resolution) scored with this
+    # pipeline dir: the dates vouch for nothing, so the run stamp is withheld
+    with open(fpath, encoding="utf-8") as fh:
+        other = _report_forecast(tmp_path, json.load(fh), report_id="report_older")
+    rc5, other_report, _ = _score(tmp_path, gpath, other, name="other", pipeline_dir=named, require_headline=True)
+    oh = other_report["headline"]
+    assert rc5 == 5 and oh["status"] == "withheld_no_provenance" and oh["tier_counts"]["unknown"] == 4
+    assert oh["run_created_at"] is None and oh["pipeline_id"] == "pipe_named"
+    assert oh["provenance_notes"] == ["pipeline_state.json report_id 'report_eval8' is not the scored forecast's "
+                                      "report directory 'report_older': run stamp withheld"]
+    # a state that names no report cannot vouch for any forecast
+    for i, report_id in enumerate((None, "", 7)):
+        unnamed = _pipeline_dir(tmp_path, f"pipe_unnamed_{i}", run=run, state=_state(report_id=report_id))
+        uh = _score(tmp_path, gpath, fpath, name=f"unnamed_{i}", pipeline_dir=unnamed)[1]["headline"]
+        assert uh["status"] == "withheld_no_provenance" and uh["provenance_notes"] == [
+            "pipeline_state.json names no report_id, so the scored forecast cannot be tied to this run: "
+            "run stamp withheld"], report_id
+    # the provenance helper without a forecast path cannot tie the run either
+    bare = ge.resolve_run_provenance(pipeline_dir=named)
+    assert bare["run_created_at"] is None and bare["notes"] == [
+        "no forecast path to tie to this run's report: run stamp withheld"]
+    tied = ge.resolve_run_provenance(pipeline_dir=named, forecast_path=fpath)
+    assert (tied["run_created_at"], tied["source"], tied["pipeline_id"], tied["notes"]) == (
+        RUN_AT, "run.json", "pipe_named", [])
 
 
 # --------------------------------------------------------------- no provenance
@@ -364,12 +575,12 @@ def test_no_provenance_withheld(tmp_path):
     assert [n.split(":")[0] for n in bn["provenance_notes"]] == ["run.json", "pipeline_state.json"]
     # a naive run.json falls back to an aware pipeline_state.json stamp
     fallback = _pipeline_dir(tmp_path, "pipe_fallback", run={"created_at": "2026-09-28T10:00:00"},
-                             state={"created_at": "2026-09-28T02:00:00-05:00", "options": {}})
+                             state=_state(created_at="2026-09-28T02:00:00-05:00"))
     fb = _score(tmp_path, gpath, fpath, name="fallback", pipeline_dir=fallback)[1]["headline"]
     assert (fb["status"], fb["run_created_at"], fb["run_created_at_source"]) == (
         "ok", "2026-09-28T07:00:00+00:00", "pipeline_state.json")
     # a missing run.json falls back too, and says so
-    no_manifest = _pipeline_dir(tmp_path, "pipe_no_manifest", state={"created_at": RUN_AT, "options": {}})
+    no_manifest = _pipeline_dir(tmp_path, "pipe_no_manifest", state=_state())
     nm = _score(tmp_path, gpath, fpath, name="no_manifest", pipeline_dir=no_manifest)[1]["headline"]
     assert nm["run_created_at_source"] == "pipeline_state.json" and nm["provenance_notes"] == ["run.json: missing"]
     # an empty pipeline dir has no provenance
@@ -489,7 +700,7 @@ def test_golden_tier_forwarded_and_score_ledger_split(tmp_path):
     assert lrep["golden"]["n"] == 7                                  # the golden section keeps every row
     text = md.read_text(encoding="utf-8")
     lines = text.splitlines()
-    assert lines[0] == ge.CHARACTERIZATION_BANNER
+    assert lines[0] == ge.CHARACTERIZATION_BANNER and lines[2] == ge.HEADLINE_SCOPE_NOTE
     golden_at = lines.index("## Golden section (binary Brier)")
     assert lines[golden_at + 2] == (f"HEADLINE: mean Brier {h['metrics']['mean_brier']:.4f} over 3/7 prospective "
                                     f"rows (BSS vs climatology {h['metrics']['rigor']['reference']['bss']:.4f})")
@@ -506,4 +717,5 @@ def test_golden_tier_forwarded_and_score_ledger_split(tmp_path):
     empty = json.loads(out.read_text(encoding="utf-8"))
     assert empty["headline"]["status"] == "withheld_no_eligible_rows" and empty["golden"] == {
         "n": 0, "brier_scale": "binary"}
-    assert "HEADLINE WITHHELD: no scored rows" in md.read_text(encoding="utf-8").splitlines()
+    empty_lines = md.read_text(encoding="utf-8").splitlines()
+    assert "HEADLINE WITHHELD: no scored rows" in empty_lines and ge.HEADLINE_SCOPE_NOTE not in empty_lines
