@@ -31,6 +31,7 @@ from ..utils.logger import get_logger
 from ..utils.security import UnsafeIdError, contained_child, is_safe_id, safe_id
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMMeter, set_run_context, get_run_context
+from .hindcast_policy import as_hindcast_pin, hindcast_forecast_block
 from .zep_tools import (
     ZepToolsService, 
     SearchResult, 
@@ -40,6 +41,9 @@ from .zep_tools import (
 )
 
 logger = get_logger('mirofish.report_agent')
+
+# TIME-6: ReportAgent._hindcast_pin 的「尚未查找」哨兵（区分未查找与查到 None = 非回测运行）。
+_HINDCAST_PIN_UNRESOLVED = object()
 
 # EXECPLAN2 F-7-1: 并发报告生成时，每份报告的 console_log.txt 此前都挂在进程级共享 logger
 # （'mirofish.report_agent' / 'mirofish.zep_tools'）上，导致两份报告的日志互相串扰，且 handler
@@ -1567,6 +1571,7 @@ class ReportAgent:
         graph_priors: Optional[Dict[str, Any]] = None,
         graph_priors_structural: Optional[Dict[str, Any]] = None,
         scenario_spine: Optional[List[Dict[str, Any]]] = None,
+        hindcast: Optional[Dict[str, Any]] = None,
     ):
         """
         初始化Report Agent
@@ -1594,6 +1599,11 @@ class ReportAgent:
                 因果骨架的 chokepoint 支点优先取自此处（研究显著度回退）。
             scenario_spine: 主跑情景脊柱 [{name, resolution_criteria}]（W9-5 多种子集成对齐）——
                 钉进骨架推导，让种子对同一组命名情景打分（概率自由，新情景可追加）。
+
+        TIME-6 hindcast: 回测运行的 hindcast_policy_v1 钉（编排器主报告/种子报告传入）。缺省 None 时
+            由 _hindcast_pin 按模拟 id 查回所属管线的钉（覆盖 API 重生成/对话）；两者皆无 = 实时运行，
+            行为逐字节不变。有钉时报告阶段不读/不重报价/不现抓预测市场，forecast.json 盖 hindcast 章。
+            只有真正的回测钉（本版本且 hindcast 为真）才算数：as_of 等于今天的实时钉、{} 或其他值一律视为未传入。
         """
         self.graph_id = graph_id
         self.simulation_id = simulation_id
@@ -1689,6 +1699,11 @@ class ReportAgent:
         # _resolve_evaluation_context 按模拟 id 查回所属管线的持久化标记（覆盖 API 重生成）；
         # 两者皆无 = 生产运行，行为不变。测试经 __new__ 构造时缺失，读取一律走 getattr。
         self.evaluation_context: Optional[Dict[str, Any]] = None
+        # TIME-6: 回测钉（见 docstring）；只存真正的回测钉，其余一律视为未传入。按模拟 id 的查找结果
+        # 懒缓存一次；查找抛错时记下，市场据此失败即扣下。测试经 __new__ 构造时三者缺失，读取一律走 getattr。
+        self.hindcast: Optional[Dict[str, Any]] = as_hindcast_pin(hindcast)
+        self._hindcast_pin_cache: Any = _HINDCAST_PIN_UNRESOLVED
+        self._hindcast_lookup_failed = False
 
         self.llm = llm_client or LLMClient()
         self.zep_tools = zep_tools or ZepToolsService()
@@ -2618,6 +2633,52 @@ class ReportAgent:
     # ──────────────────────────────────────────────────────────────
     # 预测市场信号包（Polymarket 公开 Gamma API；市场隐含概率 = 校准锚点）
     # ──────────────────────────────────────────────────────────────
+    def _hindcast_pin(self) -> Optional[Dict[str, Any]]:
+        """TIME-6: this report's hindcast policy pin, or None for a live report.
+
+        The ``hindcast`` constructor kwarg (orchestrator main and seed reports) wins
+        when it is a real hindcast pin (``hindcast_policy.as_hindcast_pin``; a live
+        pin or ``{}`` counts as not given). Otherwise the pipeline that ran
+        ``simulation_id`` is looked up once and cached
+        (``pipeline_orchestrator.hindcast_pin_for_simulation``), so entry points that
+        build a ReportAgent without orchestrator context (``/api/report`` regenerate
+        and chat) still withhold live market data from a hindcast. A lookup that
+        raises is logged and counts as no pin (no hindcast block, no as-of year), but
+        it is remembered so that markets stay withheld (``_markets_withheld_status``).
+        """
+        given = as_hindcast_pin(getattr(self, "hindcast", None))
+        if given is not None:
+            return given
+        cached = getattr(self, "_hindcast_pin_cache", _HINDCAST_PIN_UNRESOLVED)
+        if cached is not _HINDCAST_PIN_UNRESOLVED:
+            return cached
+        found: Optional[Dict[str, Any]] = None
+        simulation_id = getattr(self, "simulation_id", None)
+        if simulation_id:
+            try:
+                from .pipeline_orchestrator import hindcast_pin_for_simulation
+                found = hindcast_pin_for_simulation(simulation_id)
+            except Exception as exc:  # noqa: BLE001 — 查找失败不阻断报告：不盖章，但市场失败即扣下
+                logger.warning(f"回测钉查找失败（不盖 hindcast 章，预测市场扣下）: {exc}")
+                self._hindcast_lookup_failed = True
+        self._hindcast_pin_cache = found if isinstance(found, dict) else None
+        return self._hindcast_pin_cache
+
+    def _markets_withheld_status(self) -> Optional["_absence.SlotStatus"]:
+        """TIME-6: why this report keeps market data out, or None when markets load as usual.
+
+        A hindcast pin withholds them: ``not_run('hindcast_markets_withheld')``. A pin
+        lookup that raised withholds them too, ``unavailable('hindcast_lookup_failed')``
+        (fail closed, like EVAL-13's evaluation lookup): markets are an optional
+        enhancement, so a live report only loses its market table, whereas live odds
+        in an unrecognised hindcast would not be honest.
+        """
+        if self._hindcast_pin() is not None:
+            return _absence.not_run("hindcast_markets_withheld")
+        if getattr(self, "_hindcast_lookup_failed", False):
+            return _absence.unavailable("hindcast_lookup_failed")
+        return None
+
     def _load_prediction_markets(self) -> List[Dict[str, Any]]:
         """加载本次运行的预测市场快照（规整化 schema，见 utils.prediction_markets）。
 
@@ -2630,7 +2691,16 @@ class ReportAgent:
         现抓成功 ⇒ present；handoff 无行 ⇒ 按研究 payload 分类；现抓异常 ⇒ unavailable；
         无 handoff 且现抓未成功 ⇒ unavailable('no_market_snapshot')），供缺失标记与
         forecast.quality.prompt_slot_states 使用。现抓兜底行为本身不变。
+
+        TIME-6：回测运行（_hindcast_pin）一律扣下市场——不读 handoff 快照、不重报价、不现抓，
+        槽状态记为 not_run('hindcast_markets_withheld')（提示词据此写明「本次运行未启用」而非「无市场」）；
+        回测钉查找抛错时同样扣下，记为 unavailable('hindcast_lookup_failed')（见 _markets_withheld_status）。
         """
+        _withheld = self._markets_withheld_status()
+        if _withheld is not None:
+            self._market_status = _withheld
+            self._markets_stale = False
+            return []
         self._market_status = _absence.unavailable("no_market_snapshot")
         try:
             max_n = int(getattr(Config, "PREDICTION_MARKETS_MAX", 20) or 20)
@@ -2786,7 +2856,10 @@ class ReportAgent:
 
         就地更新 self._prediction_markets（供 extract_binary_forecasts 的 markets 回填/校验）
         与 self._market_pack（渲染的市场表，Δ 列随之刷新）。无缓存快照/未开旗标/失败 → 原样
-        （degrade-safe，_requote_snapshot 内部已把整体成败写进 _markets_stale）。"""
+        （degrade-safe，_requote_snapshot 内部已把整体成败写进 _markets_stale）。
+        TIME-6：市场被扣下（回测钉或钉查找失败，见 _markets_withheld_status）时直接返回，不发任何市场请求。"""
+        if self._markets_withheld_status() is not None:
+            return
         rows = getattr(self, "_prediction_markets", None)
         if not rows or not getattr(Config, "PREDICTION_MARKETS_ENABLED", True):
             return
@@ -3033,6 +3106,11 @@ class ReportAgent:
                     _early = dict(spine, evaluation=self._evaluation_stamp(
                         _early_evaluation,
                         self._evaluation_target_propositions(_early_evaluation), None))
+                # TIME-6：回测运行的骨架版同样盖 hindcast 章（成稿失败时留下的这份也如实标注）。
+                _early_hindcast = self._hindcast_pin()
+                if _early_hindcast is not None:
+                    _early = dict(_early, hindcast=hindcast_forecast_block(
+                        _early_hindcast, research_audit=_early_hindcast.get("research_audit")))
                 write_text_atomic(fpath, json.dumps(_early, ensure_ascii=False, indent=2))
             except Exception as _pe:  # noqa: BLE001 — 早落失败不影响主流程
                 logger.warning(f"预测骨架早落 forecast.json 失败（忽略）: {_pe}")
@@ -3208,6 +3286,9 @@ class ReportAgent:
         _eval_targets = self._evaluation_target_propositions(_evaluation)
         _target_binding: Optional[Dict[str, Any]] = None
         _binary_extraction_failed = False
+        # TIME-6：回测钉——时间范围一致性校验以 as_of 年为「今年」，落盘前盖 forecast['hindcast'] 章；
+        # 实时运行为 None，行为逐字节不变。
+        _hindcast = self._hindcast_pin()
         if self._forecast_spine and self._forecast_spine.get("scenarios"):
             forecast = dict(self._forecast_spine)        # 骨架已由信号驱动且 MECE
         else:
@@ -3396,10 +3477,14 @@ class ReportAgent:
                     # quality["horizon_mismatch"] 合并进 forecast（供发布门降信心）。日历
                     # horizon 缺失（hours 模式）时 horizon_date=None，退回仅按需求书校验，
                     # 行为不变（degrade-safe，绝不覆盖既有 quality 键）。
+                    # TIME-6：回测运行以 as_of 年为 now_year（目标年份窗口随之回到 as_of 当年）。
                     try:
+                        _hz_kwargs: Dict[str, Any] = {"horizon_date": _hz_date}
+                        if _hindcast is not None:
+                            _hz_kwargs["now_year"] = int(str(_hindcast["as_of"])[:4])
                         _apply_horizon_consistency(
                             forecast, getattr(self, "simulation_requirement", None),
-                            horizon_date=_hz_date)
+                            **_hz_kwargs)
                     except Exception:  # noqa: BLE001 — 观测性校验，绝不影响产物
                         pass
                     # PM-2：确定性市场对照负载（预测 vs 市场隐含概率、|Δ|、>10pp 判定）——嵌入
@@ -3489,6 +3574,9 @@ class ReportAgent:
             forecast["evaluation"] = self._evaluation_stamp(
                 _evaluation, _eval_targets, _target_binding,
                 extraction_failed=_binary_extraction_failed)
+        if _hindcast is not None:
+            forecast["hindcast"] = hindcast_forecast_block(
+                _hindcast, research_audit=_hindcast.get("research_audit"))
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
