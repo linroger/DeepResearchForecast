@@ -423,3 +423,427 @@ def test_subprocess_writer_to_orchestrator_roundtrip(
     assert "minimax:MiniMax-M3" in snap["by_model"]
     assert (state.options["sim_llm_telemetry_recorded"]["meter_run_token"]
             == rps._SIM_LLM_METER_RUN_TOKEN)
+
+
+# ------------------------------------------- EVAL-17：种子模拟计量 + 按模拟键的标记
+SEED_SIM_ID = "sim_seed_fixture"
+
+
+def _write_sim_snapshot(root, sim_id, **overrides):
+    sim_dir = os.path.join(root, sim_id)
+    os.makedirs(sim_dir, exist_ok=True)
+    overrides.setdefault("simulation_id", sim_id)
+    return _write_snapshot(sim_dir, **overrides)
+
+
+def test_main_and_seed_each_recorded_once(orch_env, meter_run):
+    """Main sim under 'run', seed sim under 'ensemble_sim'; a seed recording neither evicts
+    the main marker (re-entry stays a no-op) nor overwrites the main-run stash."""
+    run_id = meter_run("pipe_eval17_both")
+    root = os.path.dirname(orch_env)
+    _write_snapshot(orch_env)                               # main: 120000/45000
+    _write_sim_snapshot(root, SEED_SIM_ID, meter_run_token="tok_seed_1", calls=90,
+                        prompt_tokens=30000, completion_tokens=7000, total_tokens=37000)
+    state = po.PipelineState(pipeline_id=run_id, prompt="q")
+    orch = po.PipelineOrchestrator()
+
+    orch._record_sim_run_telemetry(state, SIM_ID)
+    orch._record_sim_run_telemetry(state, SEED_SIM_ID, stage=po.SIM_METER_STAGE_ENSEMBLE)
+    # Re-entry for both (success boundary, resume reuse path, redundant finally).
+    orch._record_sim_run_telemetry(state, SIM_ID)
+    orch._record_sim_run_telemetry(state, SEED_SIM_ID, stage=po.SIM_METER_STAGE_ENSEMBLE)
+
+    snap = LLMMeter.snapshot(run_id)
+    assert snap["by_stage"]["run"]["calls"] == 1
+    assert snap["by_stage"]["run"]["prompt_tokens"] == 120000
+    assert snap["by_stage"]["ensemble_sim"]["calls"] == 1
+    assert snap["by_stage"]["ensemble_sim"]["prompt_tokens"] == 30000
+    assert snap["by_stage"]["ensemble_sim"]["completion_tokens"] == 7000
+    assert snap["total"]["calls"] == 2
+
+    markers = state.options[po.SIM_METER_MARKERS_OPTION]
+    assert markers[SIM_ID]["meter_run_token"] == "tok_attempt_1"
+    assert markers[SIM_ID]["stage"] == "run"
+    assert markers[SEED_SIM_ID] == {"meter_run_token": "tok_seed_1", "stage": "ensemble_sim",
+                                    "recorded_at": markers[SEED_SIM_ID]["recorded_at"]}
+    assert markers[SEED_SIM_ID]["recorded_at"]
+    # The stash and the legacy mirror stay the main run's (a seed never writes them).
+    assert state.options["sim_llm_telemetry"]["calls"] == 648
+    assert state.options["sim_llm_telemetry_recorded"]["simulation_id"] == SIM_ID
+
+
+def test_seed_then_main_order_does_not_double_count_main(orch_env, meter_run):
+    """Pre-EVAL-17 a single slot would let a seed recording evict the main marker; the
+    main sim's later boundary call then double counted it. The per-sim map prevents it."""
+    run_id = meter_run("pipe_eval17_order")
+    root = os.path.dirname(orch_env)
+    _write_snapshot(orch_env)
+    _write_sim_snapshot(root, SEED_SIM_ID, meter_run_token="tok_seed_1")
+    state = po.PipelineState(pipeline_id=run_id, prompt="q")
+    orch = po.PipelineOrchestrator()
+    orch._record_sim_run_telemetry(state, SIM_ID)
+    orch._record_sim_run_telemetry(state, SEED_SIM_ID, stage=po.SIM_METER_STAGE_ENSEMBLE)
+    orch._record_sim_run_telemetry(state, SIM_ID)
+    assert LLMMeter.snapshot(run_id)["by_stage"]["run"]["calls"] == 1
+
+
+def test_legacy_marker_honoured_and_migrated(orch_env, meter_run):
+    """A run persisted before EVAL-17 carries only the single slot: it is honoured (no
+    re-record of the main sim), migrated into the map, and a new seed still records."""
+    run_id = meter_run("pipe_eval17_legacy")
+    root = os.path.dirname(orch_env)
+    _write_snapshot(orch_env)
+    _write_sim_snapshot(root, SEED_SIM_ID, meter_run_token="tok_seed_1")
+    state = po.PipelineState(pipeline_id=run_id, prompt="q")
+    legacy = {"simulation_id": SIM_ID, "meter_run_token": "tok_attempt_1",
+              "recorded_at": "2026-07-15T00:00:00Z"}
+    state.options["sim_llm_telemetry_recorded"] = dict(legacy)
+    orch = po.PipelineOrchestrator()
+
+    orch._record_sim_run_telemetry(state, SIM_ID)
+    assert LLMMeter.snapshot(run_id)["total"]["calls"] == 0
+    assert state.options[po.SIM_METER_MARKERS_OPTION] == {
+        SIM_ID: {"meter_run_token": "tok_attempt_1", "stage": "run",
+                 "recorded_at": "2026-07-15T00:00:00Z"}}
+    # The migration is persisted with the state (a resumed attempt reloads it).
+    persisted = po.PipelineManager.load(run_id)
+    assert SIM_ID in persisted["options"][po.SIM_METER_MARKERS_OPTION]
+
+    orch._record_sim_run_telemetry(state, SEED_SIM_ID, stage=po.SIM_METER_STAGE_ENSEMBLE)
+    orch._record_sim_run_telemetry(state, SIM_ID)
+    snap = LLMMeter.snapshot(run_id)
+    assert snap["total"]["calls"] == 1
+    assert "run" not in snap["by_stage"]
+    assert snap["by_stage"]["ensemble_sim"]["calls"] == 1
+    assert state.options["sim_llm_telemetry_recorded"] == legacy  # seed left it alone
+
+
+def test_legacy_marker_honoured_when_map_is_stale(orch_env, meter_run):
+    """Rollback safety: older code re-ran the main sim and advanced only the legacy slot;
+    the stale map entry must not make the new code record that run a second time."""
+    run_id = meter_run("pipe_eval17_stale")
+    _write_snapshot(orch_env, meter_run_token="tok_attempt_2")
+    state = po.PipelineState(pipeline_id=run_id, prompt="q")
+    state.options[po.SIM_METER_MARKERS_OPTION] = {
+        SIM_ID: {"meter_run_token": "tok_attempt_1", "stage": "run", "recorded_at": "t1"}}
+    state.options["sim_llm_telemetry_recorded"] = {
+        "simulation_id": SIM_ID, "meter_run_token": "tok_attempt_2", "recorded_at": "t2"}
+    po.PipelineOrchestrator()._record_sim_run_telemetry(state, SIM_ID)
+    assert LLMMeter.snapshot(run_id)["total"]["calls"] == 0
+
+
+def test_concurrent_seed_recordings_lock(orch_env, meter_run, monkeypatch):
+    """Seed threads record concurrently (ENSEMBLE_SEED_CONCURRENCY <= 3): the check-and-mark
+    runs under _sim_meter_lock, so each simulation lands exactly once and no marker is lost."""
+    import threading
+    import time as _time
+
+    run_id = meter_run("pipe_eval17_conc")
+    root = os.path.dirname(orch_env)
+    seeds = [f"sim_seed_c{i}" for i in range(3)]
+    for i, sid in enumerate(seeds):
+        _write_sim_snapshot(root, sid, meter_run_token=f"tok_c{i}",
+                            prompt_tokens=1000 * (i + 1), completion_tokens=100)
+    inside = {"now": 0, "max": 0}
+    guard = threading.Lock()
+    real_read = po._read_json
+
+    def slow_read(path):
+        # Widen the read-check-write window so a missing lock would interleave.
+        with guard:
+            inside["now"] += 1
+            inside["max"] = max(inside["max"], inside["now"])
+        try:
+            _time.sleep(0.02)
+            return real_read(path)
+        finally:
+            with guard:
+                inside["now"] -= 1
+
+    monkeypatch.setattr(po, "_read_json", slow_read)
+    state = po.PipelineState(pipeline_id=run_id, prompt="q")
+    orch = po.PipelineOrchestrator()
+    start = threading.Barrier(len(seeds) * 3)
+
+    def worker(sid):
+        start.wait()
+        orch._record_sim_run_telemetry(state, sid, stage=po.SIM_METER_STAGE_ENSEMBLE)
+
+    threads = [threading.Thread(target=worker, args=(sid,)) for sid in seeds for _ in range(3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+
+    assert inside["max"] == 1                         # serialised
+    row = LLMMeter.snapshot(run_id)["by_stage"]["ensemble_sim"]
+    assert row["calls"] == 3                          # each seed exactly once
+    assert row["prompt_tokens"] == 1000 + 2000 + 3000
+    assert set(state.options[po.SIM_METER_MARKERS_OPTION]) == set(seeds)
+    assert "sim_llm_telemetry" not in state.options
+    assert "sim_llm_telemetry_recorded" not in state.options
+
+
+# ------------------------------- EVAL-17：_maybe_run_seed_ensemble 端到端（真实 _run_one_seed）
+_PRIMARY_FORECAST = {"scenarios": [
+    {"name": "A", "probability": 0.6, "resolution_criteria": "a"},
+    {"name": "B", "probability": 0.4, "resolution_criteria": "b"}]}
+
+
+def _seed_ensemble_harness(monkeypatch, tmp_path, run_id, *, sim_outcome="completed"):
+    """N_FORECAST_SEEDS=2 with the real _maybe_run_seed_ensemble/_run_one_seed; only the
+    simulation manager/runner and the report agent are stubbed. The stub runner writes the
+    seed's sim_llm_telemetry.json the way the simulation subprocess does."""
+    root = tmp_path / "simulations"
+    root.mkdir(exist_ok=True)
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"), raising=False)
+    monkeypatch.setattr(Config, "LLM_TELEMETRY_ENABLED", True, raising=False)
+    monkeypatch.setattr(Config, "N_FORECAST_SEEDS", 2, raising=False)
+    monkeypatch.setattr(Config, "ENSEMBLE_SEED_CONCURRENCY", 1, raising=False)
+    monkeypatch.setattr(Config, "REPORT_STRUCTURED_FORECAST", True, raising=False)
+    monkeypatch.setattr(Config, "SIM_GRAPH_FEEDBACK", False, raising=False)
+    monkeypatch.setattr(Config, "SIM_SEED", 0, raising=False)
+
+    class _Sim:
+        simulation_id = SEED_SIM_ID
+
+    class _SimManager:
+        def create_simulation(self, *a, **k):
+            return _Sim()
+
+        def prepare_simulation(self, **k):
+            return None
+
+    class _RunState:
+        current_round = 1
+        runner_status = (po.RunnerStatus.COMPLETED if sim_outcome == "completed"
+                         else po.RunnerStatus.FAILED)
+
+    class _Runner:
+        RUN_STATE_DIR = str(root)
+
+        @staticmethod
+        def start_simulation(simulation_id, **k):
+            _write_sim_snapshot(str(root), simulation_id, meter_run_token="tok_seed_run",
+                                calls=77, prompt_tokens=21000, completion_tokens=6000,
+                                total_tokens=27000)
+
+        get_run_state = staticmethod(lambda sim_id: _RunState())
+        write_run_summary = staticmethod(lambda sim_id: None)
+        stop_simulation = staticmethod(lambda sim_id: None)
+
+    class _FakeAgent:
+        def __init__(self, **kwargs):
+            self.ledger_context = None
+
+        def generate_report(self, report_id=None, **kw):
+            if sim_outcome == "report_fails":
+                raise RuntimeError("seed report failed")
+
+    monkeypatch.setattr(po, "SimulationManager", _SimManager)
+    monkeypatch.setattr(po, "SimulationRunner", _Runner)
+    monkeypatch.setattr(po, "ReportAgent", _FakeAgent)
+    monkeypatch.setattr(po.PipelineOrchestrator, "_read_report_forecast",
+                        staticmethod(lambda rid: _PRIMARY_FORECAST if rid == "report_main"
+                                     else None))
+    handoff = tmp_path / "handoff"
+    handoff.mkdir(exist_ok=True)
+    state = po.PipelineState(pipeline_id=run_id, prompt="q", mode="full",
+                             report_id="report_main", handoff_dir=str(handoff))
+    return state
+
+
+def _run_ensemble(orch, state):
+    import contextvars
+    # A copied context keeps the run/stage context the ensemble sets out of later tests.
+    contextvars.copy_context().run(
+        orch._maybe_run_seed_ensemble, state, type("P", (), {"project_id": "proj"})(),
+        "graph_1", None, {"sources": []}, "# report")
+
+
+def test_seed_ensemble_meters_seed_sim_under_ensemble_sim(monkeypatch, tmp_path, meter_run):
+    """Acceptance: with N_FORECAST_SEEDS=2, run_telemetry.json by_stage.ensemble_sim equals the
+    seed's sim_llm_telemetry.json, and the main sim is recorded exactly once across a resume."""
+    run_id = meter_run("pipe_eval17_ens")
+    state = _seed_ensemble_harness(monkeypatch, tmp_path, run_id)
+    _write_sim_snapshot(str(tmp_path / "simulations"), SIM_ID)   # main: 120000/45000
+
+    orch = po.PipelineOrchestrator()
+    orch._init_telemetry_flush(state)
+    orch._record_sim_run_telemetry(state, SIM_ID)                # main RUN boundary
+    _run_ensemble(orch, state)
+
+    tel = json.loads((tmp_path / "pipelines" / run_id / "run_telemetry.json")
+                     .read_text(encoding="utf-8"))
+    with open(tmp_path / "simulations" / SEED_SIM_ID / "sim_llm_telemetry.json",
+              encoding="utf-8") as f:
+        seed_snapshot = json.load(f)
+    ens = tel["by_stage"]["ensemble_sim"]
+    assert ens["calls"] == 1
+    assert ens["prompt_tokens"] == seed_snapshot["prompt_tokens"] == 21000
+    assert ens["completion_tokens"] == seed_snapshot["completion_tokens"] == 6000
+    assert ens["total_tokens"] == seed_snapshot["total_tokens"]
+    assert tel["by_stage"]["run"]["prompt_tokens"] == 120000
+    assert state.options[po.SIM_METER_MARKERS_OPTION][SEED_SIM_ID]["stage"] == "ensemble_sim"
+    assert state.options["ensemble_member_simulations"] == {SEED_SIM_ID: 7919 * 2}
+
+    # Resume in a fresh process: meter cleared, state reloaded, the RUN reuse boundary
+    # re-enters for the same main simulation (same meter_run_token on disk).
+    LLMMeter.reset(run_id)
+    resumed = po.PipelineState.from_dict(po.PipelineManager.load(run_id))
+    orch2 = po.PipelineOrchestrator()
+    orch2._init_telemetry_flush(resumed)
+    orch2._record_sim_run_telemetry(resumed, SIM_ID)
+    orch2._flush_run_telemetry(resumed, final=True)
+    tel2 = json.loads((tmp_path / "pipelines" / run_id / "run_telemetry.json")
+                      .read_text(encoding="utf-8"))
+    assert tel2["total"]["calls"] == 0                            # nothing re-recorded
+    assert tel2["cumulative_by_stage"]["run"]["calls"] == 1
+    assert tel2["cumulative_by_stage"]["run"]["prompt_tokens"] == 120000
+    assert tel2["cumulative_by_stage"]["ensemble_sim"]["prompt_tokens"] == 21000
+
+
+@pytest.mark.parametrize("outcome", ["sim_fails", "report_fails"])
+def test_seed_failure_path_records(monkeypatch, tmp_path, meter_run, outcome):
+    """A seed whose simulation or report fails has still burnt its simulation tokens: the
+    finally around _run_one_seed meters them once; the ensemble skips the seed as before."""
+    run_id = meter_run(f"pipe_eval17_fail_{outcome}")
+    state = _seed_ensemble_harness(monkeypatch, tmp_path, run_id, sim_outcome=outcome)
+    orch = po.PipelineOrchestrator()
+    orch._init_telemetry_flush(state)
+    _run_ensemble(orch, state)
+
+    snap = LLMMeter.snapshot(run_id)
+    assert snap["by_stage"]["ensemble_sim"]["calls"] == 1
+    assert snap["by_stage"]["ensemble_sim"]["prompt_tokens"] == 21000
+    assert state.options[po.SIM_METER_MARKERS_OPTION][SEED_SIM_ID]["meter_run_token"] \
+        == "tok_seed_run"
+    assert state.options["ensemble_done"] is True                 # seed skipped, as before
+
+
+def test_seed_cancel_path_records(monkeypatch, tmp_path, meter_run):
+    """Cancellation inside the seed's poll loop propagates, and the seed spend is metered."""
+    run_id = meter_run("pipe_eval17_cancel")
+    state = _seed_ensemble_harness(monkeypatch, tmp_path, run_id)
+    import threading
+
+    ev = threading.Event()
+
+    class _CancellingRunner(po.SimulationRunner):
+        @staticmethod
+        def get_run_state(sim_id):
+            ev.set()  # the cancel lands while the seed is polling
+            return SimpleNamespace(current_round=0, runner_status=po.RunnerStatus.RUNNING)
+
+    monkeypatch.setattr(po, "SimulationRunner", _CancellingRunner)
+    monkeypatch.setattr(po.time, "sleep", lambda _s: None)
+    monkeypatch.setitem(po.PipelineOrchestrator._cancel_events, run_id, ev)
+    orch = po.PipelineOrchestrator()
+    with pytest.raises(po.PipelineCancelled):
+        _run_ensemble(orch, state)
+    snap = LLMMeter.snapshot(run_id)
+    assert snap["by_stage"]["ensemble_sim"]["calls"] == 1
+    assert snap["by_stage"]["ensemble_sim"]["completion_tokens"] == 6000
+
+
+def test_seed_without_simulation_records_nothing(monkeypatch, tmp_path, meter_run):
+    """create_simulation itself failing leaves no simulation to meter: nothing is recorded."""
+    run_id = meter_run("pipe_eval17_nosim")
+    state = _seed_ensemble_harness(monkeypatch, tmp_path, run_id)
+
+    class _BrokenManager:
+        def create_simulation(self, *a, **k):
+            raise RuntimeError("no simulation")
+
+    monkeypatch.setattr(po, "SimulationManager", _BrokenManager)
+    _run_ensemble(po.PipelineOrchestrator(), state)
+    assert LLMMeter.snapshot(run_id)["total"]["calls"] == 0
+    assert po.SIM_METER_MARKERS_OPTION not in state.options
+
+
+def test_default_single_seed_runs_no_seed_and_meters_nothing(monkeypatch, tmp_path, meter_run):
+    """The pinned default N_FORECAST_SEEDS=1 never reaches the seed path: no seed
+    simulation, no ensemble_sim record, no marker map (behaviour as before)."""
+    run_id = meter_run("pipe_eval17_n1")
+    state = _seed_ensemble_harness(monkeypatch, tmp_path, run_id)
+    monkeypatch.setattr(Config, "N_FORECAST_SEEDS", 1, raising=False)
+    _run_ensemble(po.PipelineOrchestrator(), state)
+    assert LLMMeter.snapshot(run_id)["by_stage"] == {}
+    assert po.SIM_METER_MARKERS_OPTION not in state.options
+    assert not (tmp_path / "simulations" / SEED_SIM_ID).exists()
+
+
+# ------------------------------------------- EVAL-17：cumulative_by_stage 跨 attempt
+def test_cumulative_by_stage_across_two_attempts(tmp_path, monkeypatch, meter_run):
+    """Acceptance: a two-attempt pipeline reports cumulative_by_stage = attempt 1 + attempt 2
+    per stage (base fixed at the attempt start, repeated flushes never re-add)."""
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path), raising=False)
+    run_id = meter_run("pipe_eval17_cum")
+    (tmp_path / run_id).mkdir()
+    state = po.PipelineState(pipeline_id=run_id, prompt="q")
+
+    orch1 = po.PipelineOrchestrator()
+    orch1._init_telemetry_flush(state)
+    LLMMeter.record("minimax", "m", 1000, 200, 10.0, run_id=run_id, stage="research",
+                    prompt_cache_read_tokens=600)
+    LLMMeter.record("minimax", "m", 300, 50, 5.0, run_id=run_id, stage="report")
+    orch1._flush_run_telemetry(state, final=True)
+    first = json.loads((tmp_path / run_id / "run_telemetry.json").read_text("utf-8"))
+    assert "cumulative_by_stage" not in first            # first attempt: shape unchanged
+    assert "cumulative_total" not in first
+
+    LLMMeter.reset(run_id)                               # process restart
+    orch2 = po.PipelineOrchestrator()
+    orch2._init_telemetry_flush(state)
+    LLMMeter.record("minimax", "m", 400, 100, 4.0, run_id=run_id, stage="report")
+    orch2._flush_run_telemetry(state)                    # in-flight flush
+    LLMMeter.record("minimax", "m", 700, 70, 7.0, run_id=run_id, stage="run")
+    orch2._flush_run_telemetry(state, final=True)
+    data = json.loads((tmp_path / run_id / "run_telemetry.json").read_text("utf-8"))
+
+    cum = data["cumulative_by_stage"]
+    assert set(cum) == {"research", "report", "run"}
+    for stage in cum:
+        for key in ("calls", "cached", "prompt_tokens", "completion_tokens", "total_tokens",
+                    "latency_ms", "cost_usd", "prompt_cache_read_tokens"):
+            expected = ((first["by_stage"].get(stage) or {}).get(key, 0)
+                        + (data["by_stage"].get(stage) or {}).get(key, 0))
+            assert cum[stage][key] == pytest.approx(expected), (stage, key)
+    assert cum["report"]["calls"] == 2 and cum["report"]["prompt_tokens"] == 700
+    assert cum["research"]["prompt_cache_read_tokens"] == 600
+    assert data["cumulative_total"]["calls"] == 4
+    assert data["cumulative_total"]["prompt_cache_read_tokens"] == 600
+    assert sum(row["calls"] for row in cum.values()) == data["cumulative_total"]["calls"]
+
+    # Attempt 3 builds on attempt 2's cumulative_by_stage, not just its by_stage.
+    LLMMeter.reset(run_id)
+    orch3 = po.PipelineOrchestrator()
+    orch3._init_telemetry_flush(state)
+    LLMMeter.record("minimax", "m", 10, 1, 1.0, run_id=run_id, stage="report")
+    orch3._flush_run_telemetry(state, final=True)
+    third = json.loads((tmp_path / run_id / "run_telemetry.json").read_text("utf-8"))
+    assert third["cumulative_by_stage"]["report"]["calls"] == 3
+    assert third["cumulative_by_stage"]["research"]["calls"] == 1
+    assert third["cumulative_total"]["calls"] == 5
+
+
+def test_cumulative_by_stage_falls_back_to_legacy_by_stage(tmp_path, monkeypatch, meter_run):
+    """A run_telemetry.json written before EVAL-17 has no cumulative_by_stage: its by_stage
+    is the per-stage base."""
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path), raising=False)
+    run_id = meter_run("pipe_eval17_cumlegacy")
+    (tmp_path / run_id).mkdir()
+    prev = {"total": {"calls": 2, "prompt_tokens": 50, "completion_tokens": 5,
+                      "total_tokens": 55},
+            "by_stage": {"graph": {"calls": 2, "prompt_tokens": 50, "completion_tokens": 5,
+                                   "total_tokens": 55}}}
+    (tmp_path / run_id / "run_telemetry.json").write_text(json.dumps(prev), encoding="utf-8")
+    state = po.PipelineState(pipeline_id=run_id, prompt="q")
+    orch = po.PipelineOrchestrator()
+    orch._init_telemetry_flush(state)
+    LLMMeter.record("minimax", "m", 10, 1, 1.0, run_id=run_id, stage="graph")
+    orch._flush_run_telemetry(state, final=True)
+    data = json.loads((tmp_path / run_id / "run_telemetry.json").read_text("utf-8"))
+    assert data["cumulative_by_stage"]["graph"]["calls"] == 3
+    assert data["cumulative_by_stage"]["graph"]["prompt_tokens"] == 60
+    assert data["cumulative_by_stage"]["graph"]["prompt_cache_read_tokens"] == 0

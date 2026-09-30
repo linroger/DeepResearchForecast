@@ -99,6 +99,13 @@ class Config:
     # （每百万 token 的 [输入, 输出] 美元价）。叠加在 telemetry._COST_PER_1K 的保守内建默认之上（同名覆盖、
     # 新名新增）。留空=纯用内建默认；解析失败=退回无覆盖（degrade-safe，见 telemetry._cost_overrides）。
     LLM_COST_PER_MTOK = os.environ.get('LLM_COST_PER_MTOK', '').strip()
+    # EVAL-17: comma-separated providers billed as a flat-rate plan (e.g. a coding-plan or
+    # token-plan endpoint), matched case-insensitively against the provider part of the meter's
+    # "provider:model" keys. Their volume is labelled cost_basis='subscription' in
+    # run_telemetry.json, like claude-cli/codex-cli, while cost_usd keeps the API-rate
+    # equivalent. Safe default: empty = only the built-in CLI providers count as subscription,
+    # so the classification is unchanged.
+    LLM_SUBSCRIPTION_PROVIDERS = os.environ.get('LLM_SUBSCRIPTION_PROVIDERS', '').strip()
 
     # —— 调优后的 LLM HTTP 客户端（R2-EXEC-6）——
     # 默认 httpx 把 keepalive 连接上限压在 20 且无多路复用，并发抬高后每次调用都要重做 TLS 握手，

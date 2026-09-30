@@ -363,3 +363,69 @@ def test_failed_v3_attempt_flushes_once_and_keeps_cached_tally(
     assert research["calls"] == 1
     assert research["prompt_tokens"] == 36000
     assert research["completion_tokens"] == 3700
+
+
+# ------------------------------- EVAL-17：研究缓存读 → prompt_cache_read_tokens
+def test_success_and_failure_paths_pass_cached_once(monkeypatch, tmp_path, meter_run):
+    """Both research metering entry points carry the runner's parsed cached= total as
+    prompt_cache_read_tokens, exactly once, with prompt/completion tokens unchanged."""
+    # Success: the runner does not meter; the caller's _record_research_telemetry does.
+    ok_run = meter_run("pipe_eval17_cached_ok")
+    handoff = _wire_fake_subprocess(
+        monkeypatch, tmp_path,
+        V3_USAGE_LINES + ["2026-09-27T00:00:05+00:00 [done] research complete (v3)\n"],
+        returncode=0,
+    )
+    (handoff / "research_report.md").write_text("research evidence " * 60, encoding="utf-8")
+    tel = po.DeerFlowResearchRunner.run(
+        "Q", str(handoff), on_progress=lambda _p, _m: None,
+        timeout=10, model="glm", budget_run_id=ok_run,
+    )["research_telemetry"]
+    assert tel["tokens_cached"] == 14500
+    assert LLMMeter.snapshot(ok_run)["total"]["calls"] == 0
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"), raising=False)
+    state = po.PipelineState(pipeline_id=ok_run, prompt="q")
+    po.PipelineOrchestrator()._record_research_telemetry(state, tel)
+    snap = LLMMeter.snapshot(ok_run)
+    research = snap["by_stage"]["research"]
+    assert research["calls"] == 1
+    assert research["prompt_cache_read_tokens"] == tel["tokens_cached"] == 14500
+    assert (research["prompt_tokens"], research["completion_tokens"]) == (36000, 3700)
+    assert snap["by_model"]["glm:glm"]["prompt_cache_read_tokens"] == 14500
+    assert snap["total"]["prompt_cache_read_tokens"] == 14500
+
+    # Failure: the wrapper's exception exit flushes once, cached reads included.
+    fail_run = meter_run("pipe_eval17_cached_fail")
+    fail_dir = tmp_path / "fail"
+    fail_dir.mkdir()
+    handoff = _wire_fake_subprocess(
+        monkeypatch, fail_dir,
+        V3_USAGE_LINES + ["[error] provider_unavailable\n"], returncode=2,
+    )
+    with pytest.raises(RuntimeError, match="研究子进程失败"):
+        po.DeerFlowResearchRunner.run(
+            "Q", str(handoff), on_progress=lambda _p, _m: None,
+            timeout=10, model="glm", budget_run_id=fail_run,
+        )
+    research = LLMMeter.snapshot(fail_run)["by_stage"]["research"]
+    assert research["calls"] == 1
+    assert research["prompt_cache_read_tokens"] == 14500
+    assert research["prompt_tokens"] == 36000
+
+
+def test_cached_tokens_malformed_or_absent_degrade_to_zero(monkeypatch, tmp_path, meter_run):
+    """A missing or malformed tokens_cached never drops the research record itself."""
+    run_id = meter_run("pipe_eval17_cached_bad")
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path), raising=False)
+    state = po.PipelineState(pipeline_id=run_id, prompt="q")
+    orch = po.PipelineOrchestrator()
+    orch._record_research_telemetry(
+        state, {"model": "glm", "tokens_in": 100, "tokens_out": 10, "tokens_cached": "n/a"})
+    orch._record_research_telemetry(state, {"model": "glm", "tokens_in": 50, "tokens_out": 5})
+    assert po._flush_failed_research_attempt_spend(
+        {"tokens_in": 20, "tokens_out": 2, "tokens_cached": "n/a", "model": "glm",
+         "flushed": False}, "failed", run_id=run_id) is True
+    research = LLMMeter.snapshot(run_id)["by_stage"]["research"]
+    assert research["calls"] == 3
+    assert research["prompt_tokens"] == 170
+    assert research["prompt_cache_read_tokens"] == 0
