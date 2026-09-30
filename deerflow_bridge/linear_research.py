@@ -195,6 +195,10 @@ VERIFIED_FACTS_SCHEMA = "drf.verified_facts/v1"
 # writes this file, whose verdict the parent stamps into the hindcast pin.
 POINT_IN_TIME_FILENAME = "point_in_time.json"
 POINT_IN_TIME_SCHEMA = "drf-point-in-time/v1"
+# In the work dir: the gates' counts of the attempts of this run so far (saved on
+# every exit), so a resumed attempt's audit counts the searches and fetches of the
+# attempts before it.
+PIT_COUNTS_FILENAME = "pit_counts.json"
 # Verbatim evidence spans (RESEARCH-7, RESEARCH_EVIDENCE_QUOTES = off | audit |
 # enforce; default off).  Not off: the KIQ task asks each finding for an
 # EVIDENCE clause quoting its source verbatim, the ledger keeps every distinct
@@ -4951,28 +4955,45 @@ def pit_cited_audit(sources: Sequence[Any], pit: rg.PitPolicy) -> dict[str, int]
 
 def pit_audit_status(cited: Mapping[str, Any], undated: str) -> str:
     """The research audit verdict: ``violated`` when a cited source is late,
-    else ``date_verified_with_unverifiable`` when one is undated or the undated
-    policy is ``flag`` (undated pages may back the report), else
-    ``date_verified``.  Honest naming: the dates of the sources are verified,
-    not the model's own knowledge."""
+    else ``date_verified_with_unverifiable`` when one is undated, the undated
+    policy is ``flag`` (undated pages may back the report) or the report cites
+    no source at all (no date was verified: every claim rests on the model's
+    own knowledge), else ``date_verified``.  Honest naming: the dates of the
+    sources are verified, not the model's own knowledge."""
     if cited.get("late"):
         return PIT_STATUS_VIOLATED
-    if cited.get("unverifiable") or undated == "flag":
+    if cited.get("unverifiable") or undated == "flag" or not cited.get("checked"):
         return PIT_STATUS_VERIFIED_UNVERIFIABLE
     return PIT_STATUS_VERIFIED
 
 
-def pit_gate_streams(counts: Mapping[str, Any] | None) -> dict[str, dict[str, Any]]:
+def _pit_count(value: Any) -> int:
+    """``value`` when it is a positive int counter (never a bool), else 0."""
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def pit_sum_counts(*counts: Mapping[str, Any] | None) -> dict[str, int]:
+    """The per-name sum of gate counter mappings (``ResearchTools.stats()["pit"]``
+    of several attempts); a value that is not a positive int counts 0."""
+    total: dict[str, int] = {}
+    for mapping in counts:
+        for name, value in (mapping or {}).items():
+            if isinstance(name, str):
+                total[name] = total.get(name, 0) + _pit_count(value)
+    return total
+
+
+def pit_gate_streams(counts: Mapping[str, Any] | None, *, attempts: int = 1) -> dict[str, dict[str, Any]]:
     """point_in_time.json's ``search`` and ``fetch`` streams: the gates' own
-    decisions (``ResearchTools.stats()["pit"]``, counted by the attempt that
-    ran them: ``scope`` ``attempt``).  Search counts the result rows a render
-    slot reached (admitted, same-day and undated rows shown; late rows
-    dropped); fetch counts the pages judged after a fetch (undated ones
-    withheld under ``drop``, stored under ``flag``) and, apart, the fetches
-    refused before any budget and the re-asks of a withheld page."""
+    decisions (``ResearchTools.stats()["pit"]`` summed over the ``attempts``
+    of the run that saved theirs: ``scope`` ``run``, ``attempts_counted``).
+    Search counts the result rows a render slot reached (admitted, same-day
+    and undated rows shown; late rows dropped); fetch counts the pages judged
+    after a fetch (undated ones withheld under ``drop``, stored under
+    ``flag``) and, apart, the fetches refused before any budget and the
+    re-asks of a withheld page."""
     def n(name: str) -> int:
-        value = (counts or {}).get(name)
-        return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+        return _pit_count((counts or {}).get(name))
 
     search = {"admitted": n("search_admitted_shown"), "same_day": n("search_same_day_shown"),
               "unverifiable": n("search_undated_shown"), "late": n("search_late_dropped")}
@@ -4983,11 +5004,11 @@ def pit_gate_streams(counts: Mapping[str, Any] | None) -> dict[str, dict[str, An
         "search": {"checked": sum(search.values()), **search,
                    "no_in_window_results": n("no_in_window_results"),
                    "bounded_queries": n("searches_bounded"), "unbounded_queries": n("searches_unbounded"),
-                   "scope": "attempt"},
+                   "scope": "run", "attempts_counted": attempts},
         "fetch": {"checked": sum(fetch.values()), **fetch,
                   "undated_withheld": undated_withheld, "undated_admitted": undated_admitted,
                   "refused_before_fetch": n("fetch_prefetch_refused"), "withheld_repeats": n("fetch_withheld_repeat"),
-                  "scope": "attempt"},
+                  "scope": "run", "attempts_counted": attempts},
     }
 
 
@@ -5014,15 +5035,17 @@ def parametric_suspects(timeline: Sequence[Mapping[str, Any]], quant: Sequence[M
 
 
 def point_in_time_payload(pit: rg.PitPolicy, *, gate_counts: Mapping[str, Any] | None, sources: Sequence[Any],
-                          suspects: Mapping[str, int] | None, wall: Mapping[str, int]) -> dict[str, Any]:
+                          suspects: Mapping[str, int] | None, wall: Mapping[str, int],
+                          attempts: int = 1) -> dict[str, Any]:
     """point_in_time.json (``drf-point-in-time/v1``): the as-of and policies,
-    the gate streams (:func:`pit_gate_streams`) and the independent ``cited``
-    re-check (:func:`pit_cited_audit`), what the citation wall kept out of
-    the report (``wall``), the parametric suspects, what the audit does not
-    guard (the model's own knowledge; live page text is labelled, not an
-    archived copy) and the verdict (:func:`pit_audit_status`)."""
+    the gate streams (:func:`pit_gate_streams` of ``gate_counts``, the run's
+    counts over ``attempts`` attempts) and the independent ``cited`` re-check
+    (:func:`pit_cited_audit`), what the citation wall kept out of the report
+    (``wall``), the parametric suspects, what the audit does not guard (the
+    model's own knowledge; live page text is labelled, not an archived copy)
+    and the verdict (:func:`pit_audit_status`)."""
     cited = pit_cited_audit(sources, pit)
-    streams = pit_gate_streams(gate_counts)
+    streams = pit_gate_streams(gate_counts, attempts=attempts)
     streams["cited"] = cited
     return {
         "schema": POINT_IN_TIME_SCHEMA,
@@ -5808,6 +5831,9 @@ class _Engine:
         # The parametric suspects _write_structured counts under the gates (None
         # when it has not, or the count failed).
         self.parametric_suspects: dict[str, int] | None = None
+        # (attempts, gate counts) the earlier attempts of this run saved: the audit's
+        # search and fetch streams add this attempt's counts to them.
+        self._pit_prior: tuple[int, dict[str, int]] = self._load_pit_counts() if pit is not None else (0, {})
         self.source_dates = _env_flag(self.env, "RESEARCH_SOURCE_DATES", False) or pit is not None
         if pit is not None:
             self.log("stage", f"point-in-time gates on (as of {pit.as_of.isoformat()}; same-day "
@@ -6906,9 +6932,10 @@ class _Engine:
                 if provider_error is not None:
                     raise provider_error
                 # Built after the fan-out, in outline order, so that no two
-                # deterministic sections share a finding (deterministic output).
+                # deterministic sections share a finding (deterministic output);
+                # a gated hindcast's findings are walled (_report_records).
                 fallback = fallback_section_bodies([s for s in plan.sections if s.index not in bodies],
-                                                   self.records, self.language)
+                                                   self._report_records(), self.language)
                 sections = [{"index": s.index, "title": s.title, "is_scenario": s.is_scenario,
                              "body": bodies.get(s.index) or fallback.get(s.index, ""),
                              "origin": "writer" if s.index in bodies else "fallback"}
@@ -7157,26 +7184,41 @@ class _Engine:
             body = self._trim_cut(body, f"§{section.index} {section.title}")
         return (body, result.truncated) if len(body) >= WRITER_BODY_MIN_CHARS else None
 
+    def _report_records(self) -> dict[str, dict]:
+        """The KIQ records the report's deterministic sections draw on.  In a
+        gated hindcast (TIME-9) each is walled like the evidence digest
+        (:func:`pit_wall_record`: markers of inadmissible sources stripped, a
+        finding whose every source is inadmissible left out), so a fallback
+        bullet never states a claim only an inadmissible source backs (which
+        renumbering would otherwise leave uncited); else :attr:`records`."""
+        if self.pit is None:
+            return self.records
+        admissible = _memoized_sid_check(self._pit_admissible)
+        return {kid: pit_wall_record(record, admissible)[0] for kid, record in self.records.items()}
+
     def _fallback_section(self, section: OutlineSection) -> str:
         """Bullets of the best findings routed to the section (citations kept);
-        see :func:`fallback_section_bodies`."""
-        return fallback_section_bodies([section], self.records, self.language)[section.index]
+        see :func:`fallback_section_bodies` and :meth:`_report_records`."""
+        return fallback_section_bodies([section], self._report_records(), self.language)[section.index]
 
     def _refill_emptied(self, sections: list[dict]) -> list[str]:
         """Never publish a bare heading: a section left without content (its
         paragraphs all removed as cross-section duplicates) is rebuilt from
         findings no section publishes yet, or, with none left, emptied so the
-        report omits it (origin "dropped").  Returns the omitted titles."""
+        report omits it (origin "dropped").  Findings are read from
+        :meth:`_report_records`, so "published yet" compares the texts the
+        fallback bullets carry.  Returns the omitted titles."""
         dropped: list[str] = []
+        records = self._report_records()
         published = "\n".join(str(section["body"]) for section in sections)
-        taken = {_fact_key(fact) for record in self.records.values() for fact in record.get("facts") or []
+        taken = {_fact_key(fact) for record in records.values() for fact in record.get("facts") or []
                  if isinstance(fact, dict) and str(fact.get("text") or "") in published}
         for section in sections:
             if (section.get("is_scenario") or section.get("origin") == "dropped"
                     or has_section_content(section["body"])):
                 continue
             outline = self._outline(int(section["index"]))
-            body = fallback_section_bodies([outline], self.records, self.language, taken,
+            body = fallback_section_bodies([outline], records, self.language, taken,
                                            empty_when_none=True)[outline.index]
             section["body"], section["origin"] = body, ("fallback" if body else "dropped")
             section.pop("trimmed", None)
@@ -7680,6 +7722,43 @@ class _Engine:
                          f"{self.meta['report_chars']} chars)")
         return 0
 
+    def _load_pit_counts(self) -> tuple[int, dict[str, int]]:
+        """``(attempts, gate counts)`` the earlier attempts of this run (this
+        work dir) saved (:meth:`_save_pit_counts`); ``(0, {})`` for a first
+        attempt.  An unreadable file counts as none, logged: the audit's search
+        and fetch streams then miss the earlier attempts (its ``cited`` stream,
+        a re-check of the published sources, never depends on them)."""
+        path = self.work / PIT_COUNTS_FILENAME
+        if not path.exists():
+            return 0, {}
+        data = _read_json(path)
+        attempts = data.get("attempts") if isinstance(data, dict) else None
+        counts = data.get("counts") if isinstance(data, dict) else None
+        if not _pit_count(attempts) or not isinstance(counts, dict):
+            self.log("warn", f"v3: {PIT_COUNTS_FILENAME} unreadable; the point-in-time audit counts the "
+                             "searches and fetches of this attempt only")
+            return 0, {}
+        return attempts, pit_sum_counts(counts)
+
+    def _pit_run_counts(self) -> tuple[int, dict[str, int]]:
+        """``(attempts, gate counts)`` of the run so far: the earlier attempts'
+        saved counts plus this attempt's (``ResearchTools.stats()["pit"]``)."""
+        attempts, prior = self._pit_prior
+        return attempts + 1, pit_sum_counts(prior, self.tools.stats().get("pit"))
+
+    def _save_pit_counts(self) -> None:
+        """Save :meth:`_pit_run_counts` in the work dir (TIME-9, a gated
+        hindcast) for the audit of a resumed attempt; called on every exit
+        (:meth:`attach_telemetry`).  An attempt killed outright saves nothing,
+        so ``attempts_counted`` counts only the attempts that did.  Best
+        effort: a failure is logged and a resumed audit then misses this
+        attempt's searches and fetches."""
+        attempts, counts = self._pit_run_counts()
+        try:
+            self.write_json(self.work / PIT_COUNTS_FILENAME, {"attempts": attempts, "counts": counts})
+        except OSError as exc:
+            self.log("warn", f"v3: {PIT_COUNTS_FILENAME} not written ({exc})")
+
     def _pit_wall_counts(self) -> dict[str, int]:
         """What the citation wall kept out of the report (TIME-9): the
         evidence's sources that are not admissible (``sids_withheld``), and the
@@ -7698,8 +7777,8 @@ class _Engine:
         """point_in_time.json (TIME-9, a gated hindcast): the research audit of
         :func:`point_in_time_payload` over the published sources.json as it
         is on disk (after every rewrite of this finalize), the gates' counts of
-        this attempt and the parametric suspects; mirrored (without its
-        schema and as-of) into ``meta.point_in_time.audit``.  Fails closed
+        the run (:meth:`_pit_run_counts`) and the parametric suspects; mirrored
+        (without its schema and as-of) into ``meta.point_in_time.audit``.  Fails closed
         without breaking the run: a failure is recorded in
         ``analytics_errors`` (``point_in_time``), no point_in_time.json is left
         (so no verdict vouches for the report) and the mirror says
@@ -7710,8 +7789,10 @@ class _Engine:
             sources = _read_json(self.out_dir / sources_name)
             if not isinstance(sources, list):
                 raise ValueError(f"{sources_name} is not a JSON list")
-            payload = point_in_time_payload(self.pit, gate_counts=self.tools.stats().get("pit"), sources=sources,
-                                            suspects=self.parametric_suspects, wall=self._pit_wall_counts())
+            attempts, gate_counts = self._pit_run_counts()
+            payload = point_in_time_payload(self.pit, gate_counts=gate_counts, sources=sources,
+                                            suspects=self.parametric_suspects, wall=self._pit_wall_counts(),
+                                            attempts=attempts)
             self.write_json(path, payload, internal=False)
         except Exception as exc:  # noqa: BLE001 — the audit never fails a finished report; it fails closed
             error = f"{type(exc).__name__}: {exc}"
@@ -8597,6 +8678,8 @@ class _Engine:
         self.meta["usage"] = {"total": ledger["total"], "phases": ledger["phases"],
                               "calls_recorded": len(ledger["calls"]), "calls_dropped": ledger["calls_dropped"]}
         self.meta["tools"] = self.tools.stats()
+        if self.pit is not None:
+            self._save_pit_counts()
         if self.shell_detection:
             shell_stats = getattr(self.tools, "shell_stats", None)
             self.meta["fetch_shells"] = {"rejected": shell_stats() if callable(shell_stats) else {},

@@ -29,8 +29,8 @@ labelled; the pin's ``search`` / ``fetch`` labels above stay as admitted.
 TIME-9 adds the research audit: the gated v3 child writes ``point_in_time.json``
 (an independent date re-check of the sources its report cites), and the parent
 records its verdict once per research generation as the pin's ``research_audit``
-(:func:`research_audit_record`: ``status`` plus the file's ``sha256``) before the
-report stage reads the pin.  :func:`hindcast_forecast_block` maps that verdict to
+(:func:`research_audit_record`: ``status`` plus the file's ``sha256``, for an audit
+of this pin's as-of and policies only) before the report stage reads the pin.  :func:`hindcast_forecast_block` maps that verdict to
 ``forecast['hindcast']['integrity']`` and :func:`as_of_enforcement_record` to
 run.json's ``retrieval_clamped`` / ``audit_status``; without a (valid) audit both
 keep their TIME-6 values.  A violated audit fails nothing: a hindcast is
@@ -178,14 +178,24 @@ def hindcast_policy(options: Any) -> Optional[dict[str, Any]]:
     return as_hindcast_pin(options.get(HINDCAST_POLICY_OPTION))
 
 
-def research_audit_record(payload: Any, sha256: Any) -> Optional[dict[str, Any]]:
-    """The pin's ``research_audit`` for a parsed ``point_in_time.json`` (TIME-9), or None.
+def research_audit_record(payload: Any, sha256: Any, *, pin: Mapping[str, Any]) -> Optional[dict[str, Any]]:
+    """The ``research_audit`` of ``pin`` for a parsed ``point_in_time.json`` (TIME-9), or None.
 
-    ``{'status', 'sha256'}`` when ``payload`` is an object of POINT_IN_TIME_SCHEMA
-    whose ``status`` is one of the audit verdicts and ``sha256`` is the file's hex
-    digest; anything else vouches for nothing (None: the report stays labelled).
+    ``{'status', 'sha256'}`` when ``pin``'s gates ran (``pit.gates``), ``payload`` is
+    an object of POINT_IN_TIME_SCHEMA audited for this pin (its ``as_of`` is the pin's
+    and its ``same_day_policy`` / ``undated_policy`` are the ones
+    :func:`pit_research_env` launched the research with), its ``status`` is one of the
+    audit verdicts and ``sha256`` is the file's hex digest.  Anything else, such as an
+    audit of another run's research left in the handoff, vouches for nothing (None: the
+    report stays labelled).
     """
-    if not isinstance(payload, Mapping) or payload.get("schema") != POINT_IN_TIME_SCHEMA:
+    env = pit_research_env(pin.get("pit")) if isinstance(pin, Mapping) else {}
+    if not env or not isinstance(payload, Mapping) or payload.get("schema") != POINT_IN_TIME_SCHEMA:
+        return None
+    as_of = pin.get("as_of")
+    if (not isinstance(as_of, str) or payload.get("as_of") != as_of
+            or payload.get("same_day_policy") != env["RESEARCH_PIT_SAME_DAY"]
+            or payload.get("undated_policy") != env["RESEARCH_PIT_UNDATED"]):
         return None
     status = payload.get("status")
     if status not in _AUDIT_INTEGRITY or not isinstance(sha256, str) or not sha256:

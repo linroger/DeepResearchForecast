@@ -10157,13 +10157,13 @@ class PipelineOrchestrator:
         Under a hindcast pin whose ``pit.gates`` ran, the handoff's ``point_in_time.json`` (the
         audit of the research this run consumes) becomes the pin's ``research_audit`` (``{'status',
         'sha256'}``, :func:`hindcast_policy.research_audit_record`, hashed and parsed from the
-        same bytes).  It is recorded once per research generation: a resume that reuses the
-        research finds the same bytes and changes nothing, and a re-run research replaces the
-        audit of the research it replaced.  No other pin field is touched.  A missing,
-        unreadable or unrecognised audit records none and drops a stale one, so the report
-        stays ``labelled`` rather than vouched for (fail closed).  When the audit changes,
-        run.json's ``resolved.as_of_enforcement`` is refreshed from the pin.  Never raises;
-        the stage completion that follows saves the state.
+        same bytes; only an audit of this pin's as-of and policies counts).  It is recorded once
+        per research generation: a resume that reuses the research finds the same bytes and
+        changes nothing, and a re-run research replaces the audit of the research it replaced.
+        No other pin field is touched.  A missing, unreadable or unrecognised audit records none
+        and drops a stale one, so the report stays ``labelled`` rather than vouched for (fail
+        closed).  When the audit changes, run.json's ``resolved.as_of_enforcement`` is refreshed
+        from the pin.  Never raises; the stage completion that follows saves the state.
         """
         pin = hindcast_policy(state.options)
         stored = state.options.get(HINDCAST_POLICY_OPTION) if pin is not None else None
@@ -10176,10 +10176,11 @@ class PipelineOrchestrator:
             try:
                 with open(path, "rb") as fh:
                     raw = fh.read()
-                audit = research_audit_record(json.loads(raw.decode("utf-8")), hashlib.sha256(raw).hexdigest())
+                audit = research_audit_record(json.loads(raw.decode("utf-8")), hashlib.sha256(raw).hexdigest(),
+                                              pin=pin)
                 if audit is None:
-                    logger.warning("[%s] %s is not a recognised research audit; the hindcast stays labelled",
-                                   state.pipeline_id, POINT_IN_TIME_FILENAME)
+                    logger.warning("[%s] %s is not a recognised research audit of this hindcast pin; "
+                                   "the hindcast stays labelled", state.pipeline_id, POINT_IN_TIME_FILENAME)
             except FileNotFoundError:
                 logger.warning("[%s] gated hindcast research wrote no %s; the hindcast stays labelled",
                                state.pipeline_id, POINT_IN_TIME_FILENAME)

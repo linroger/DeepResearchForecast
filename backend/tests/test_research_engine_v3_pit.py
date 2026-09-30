@@ -2,11 +2,12 @@
 
 Under TIME-8's gates (``tools.pit``) the report cites only sources admissible as
 of the as-of date: ``_citable_sids`` (hence renumbering, References and
-sources.json) and the evidence digest (markers stripped, a line built only on
-inadmissible sources left out, SOURCE INDEX filtered) apply the same wall.
-Finalize writes ``point_in_time.json`` (the gates' search/fetch streams, an
-independent re-check of the published sources.json dates, the wall's counts,
-the parametric suspects and the verdict) and mirrors it into
+sources.json), the evidence digest (markers stripped, a line built only on
+inadmissible sources left out, SOURCE INDEX filtered) and the deterministic
+fallback sections apply the same wall.  Finalize writes ``point_in_time.json``
+(the gates' search/fetch streams summed over the run's attempts, an independent
+re-check of the published sources.json dates, the wall's counts, the
+parametric suspects and the verdict) and mirrors it into
 ``meta.point_in_time.audit``.  A live run writes no audit and builds its digest
 exactly as before.  Offline: scripted model, injected search/fetch, zero network.
 """
@@ -19,6 +20,7 @@ import json
 import os
 import re
 import threading
+import types
 
 import pytest
 
@@ -151,14 +153,23 @@ class PitWorld(v3.World):
         }))
 
 
-def run_pit_engine(root, bridge, monkeypatch, *, gated: bool = True, undated: str = "drop"):
+class SilentWriterWorld(PitWorld):
+    """Every section writer returns nothing, so each section of the report is
+    the deterministic fallback built from the KIQ records."""
+
+    def writer(self, call):
+        return v3.ai("")
+
+
+def run_pit_engine(root, bridge, monkeypatch, *, gated: bool = True, undated: str = "drop",
+                   world_cls: type[PitWorld] = PitWorld):
     monkeypatch.setenv("RESEARCH_LINEAR_WORKERS", "1")
     monkeypatch.setattr(lr, "_utc_date", lambda: "2026-10-01")
     if gated:
         monkeypatch.setenv("RESEARCH_AS_OF", AS_OF)
         monkeypatch.setenv("RESEARCH_PIT_GATES", "true")
         monkeypatch.setenv("RESEARCH_PIT_UNDATED", undated)
-    world = PitWorld()
+    world = world_cls()
     out = root / "out"
     out.mkdir(parents=True, exist_ok=True)
     model = v3.ScriptedModel(world)
@@ -259,6 +270,35 @@ def test_gated_hindcast_report_cites_only_admissible_sources(tmp_path, bridge, m
     assert unwalled != digest and any(f"[S{sid}]" in unwalled for sid in world.briefs)
 
 
+def test_deterministic_sections_publish_only_admissible_findings(tmp_path, bridge, monkeypatch):
+    """With every writer failing, the fallback bullets are built from walled
+    records: a finding only a withheld brief backs is never published (uncited
+    after renumbering), and a mixed finding keeps only its survey marker."""
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch, world_cls=SilentWriterWorld)
+    assert rc == 0, meta.get("error")
+    synth = _load(out / "v3" / "synth.json")
+    origins = {section["origin"] for section in synth["sections"]}
+    assert "fallback" in origins and "writer" not in origins
+    report = (out / "research_report.md").read_text(encoding="utf-8")
+    sources = _load(out / "sources.json")
+    assert world.briefs
+    assert "250 GW of capacity by 2030" not in report
+    assert not any(domain in report + json.dumps(sources) for domain in ("undated-", "//late-", "sameday-"))
+    # Each mixed finding is published with exactly one marker: its survey's.
+    tails = re.findall(r"Analysts expect 12% annual demand growth through 2027(.*)$", report, re.M)
+    assert tails
+    for tail in tails:
+        position = re.fullmatch(r" \[S(\d+)\]", tail)
+        assert position, tail
+        assert "//dated-" in sources[int(position.group(1)) - 1]["url"]
+    # Every sentence of a fallback bullet carries a citation (no claim left unsourced).
+    bullets = [line for line in report.splitlines() if line.startswith("- ") and "GW" in line]
+    assert bullets and all(re.search(r"\[S\d+\]", line) for line in bullets)
+    audit = _load(out / lr.POINT_IN_TIME_FILENAME)
+    assert audit["status"] == "date_verified"
+    assert audit["streams"]["cited"] == _independent_cited(sources)
+
+
 def test_point_in_time_json_records_the_exact_counters_of_the_run(tmp_path, bridge, monkeypatch):
     rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
     assert rc == 0, meta.get("error")
@@ -283,12 +323,12 @@ def test_point_in_time_json_records_the_exact_counters_of_the_run(tmp_path, brid
     assert audit["streams"]["search"] == {
         "checked": 4 * searches, "admitted": searches, "same_day": 0, "unverifiable": searches,
         "late": 2 * searches, "no_in_window_results": 0, "bounded_queries": 0, "unbounded_queries": searches,
-        "scope": "attempt"}
+        "scope": "run", "attempts_counted": 1}
     # Fetch: per KIQ, the brief withheld undated and the survey admitted.
     assert audit["streams"]["fetch"] == {
         "checked": 2 * kiqs, "admitted": kiqs, "same_day": 0, "unverifiable": kiqs, "late": 0,
         "undated_withheld": kiqs, "undated_admitted": 0, "refused_before_fetch": 0, "withheld_repeats": 0,
-        "scope": "attempt"}
+        "scope": "run", "attempts_counted": 1}
     assert (gates["search_admitted_shown"], gates["fetch_undated_withheld"]) == (searches, kiqs)
     # Cited: an independent re-check of sources.json; every cited survey predates the as-of.
     assert audit["streams"]["cited"] == _independent_cited(sources) == {
@@ -349,6 +389,71 @@ def test_a_late_row_in_sources_json_is_re_audited_as_violated(tmp_path, bridge, 
     assert reaudit["streams"]["search"] == audit["streams"]["search"]
 
 
+_LATE_ROW = {"url": "https://wire.example/2024/07/02/x", "date": "2024-07-02"}
+
+
+@pytest.mark.parametrize("where", ["rows", "disk"])
+def test_the_engine_audit_re_checks_the_published_sources_json(tmp_path, bridge, monkeypatch, where):
+    """finalize's own audit re-reads sources.json as published: a late-dated row that
+    reached it (built into the rows, or written over the file later in finalize) is
+    counted late whatever the gates decided, and the verdict is violated."""
+    if where == "rows":
+        real_rows = lr._Engine._source_rows
+        monkeypatch.setattr(lr._Engine, "_source_rows", lambda self, order: [*real_rows(self, order), dict(_LATE_ROW)])
+    else:
+        real_analytics = lr._Engine._analytics
+
+        def analytics_then_rewrite(self, sources, actors_obj):
+            real_analytics(self, sources, actors_obj)
+            path = self.out_dir / "sources.json"
+            path.write_text(json.dumps([*_load(path), dict(_LATE_ROW)]), encoding="utf-8")
+
+        monkeypatch.setattr(lr._Engine, "_analytics", analytics_then_rewrite)
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    sources = _load(out / "sources.json")
+    assert sources[-1] == _LATE_ROW
+    audit = _load(out / lr.POINT_IN_TIME_FILENAME)
+    assert audit["streams"]["cited"] == _independent_cited(sources)
+    assert audit["streams"]["cited"]["late"] == 1 and audit["streams"]["cited"]["checked"] == len(sources)
+    assert audit["status"] == meta["point_in_time"]["audit"]["status"] == "violated"
+    assert any("wrote point_in_time.json (violated" in message for kind, message in plog.lines if kind == "warn")
+
+
+def test_a_resumed_attempt_audits_the_gate_counts_of_the_whole_run(tmp_path, bridge, monkeypatch):
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    first = _load(out / lr.POINT_IN_TIME_FILENAME)
+    saved = _load(out / "v3" / lr.PIT_COUNTS_FILENAME)
+    assert saved == {"attempts": 1, "counts": lr.pit_sum_counts(meta["tools"]["pit"])}
+    assert first["streams"]["search"]["checked"] > 0 and first["streams"]["fetch"]["checked"] > 0
+    # A second attempt resumes the work dir: it reuses every research phase (no search,
+    # no fetch, so its own gate counts are all zero) and finalizes again.
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    assert meta["tools"]["searches"] == meta["tools"]["fetches"] == 0
+    assert not any(meta["tools"]["pit"].values())
+    second = _load(out / lr.POINT_IN_TIME_FILENAME)
+    for stream in ("search", "fetch"):
+        assert second["streams"][stream] == dict(first["streams"][stream], attempts_counted=2)
+    assert second["streams"]["cited"] == first["streams"]["cited"]
+    assert second["status"] == first["status"] == "date_verified"
+    assert _load(out / "v3" / lr.PIT_COUNTS_FILENAME) == {"attempts": 2, "counts": saved["counts"]}
+    # An unreadable file of earlier counts is logged; the audit then counts this attempt only.
+    (out / "v3" / lr.PIT_COUNTS_FILENAME).write_text("{truncated", encoding="utf-8")
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    third = _load(out / lr.POINT_IN_TIME_FILENAME)
+    assert third["streams"]["search"]["checked"] == 0 and third["streams"]["search"]["attempts_counted"] == 1
+    assert any(lr.PIT_COUNTS_FILENAME + " unreadable" in message for kind, message in plog.lines if kind == "warn")
+
+
+def test_pit_sum_counts():
+    assert lr.pit_sum_counts({"a": 1, "b": 2}, None, {"a": 3, "c": True, "d": -1, "e": "4", 5: 1}) == {
+        "a": 4, "b": 2, "c": 0, "d": 0, "e": 0}
+    assert lr.pit_sum_counts() == {}
+
+
 def test_a_failed_audit_leaves_no_point_in_time_json(tmp_path, bridge, monkeypatch):
     (tmp_path / "out").mkdir(parents=True)
     # An earlier attempt's audit never survives this attempt's finalize.
@@ -372,6 +477,7 @@ def test_live_run_writes_no_audit_and_an_unwalled_digest(tmp_path, bridge, monke
     rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch, gated=False)
     assert rc == 0, meta.get("error")
     assert not (out / lr.POINT_IN_TIME_FILENAME).exists()
+    assert not (out / "v3" / lr.PIT_COUNTS_FILENAME).exists()
     assert "point_in_time" not in meta and "pit" not in meta["tools"]
     sources = _load(out / "sources.json")
     assert sources and all("pit_status" not in row for row in sources)
@@ -422,6 +528,11 @@ def test_pit_audit_status():
     assert lr.pit_audit_status(dict(clean, unverifiable=1), "drop") == "date_verified_with_unverifiable"
     assert lr.pit_audit_status(dict(clean, late=1, unverifiable=1), "flag") == "violated"
     assert lr.pit_cited_audit(["not a row"], POLICY)["unverifiable"] == 1
+    # A report the wall left without any source verified no date: never date_verified.
+    nothing = lr.pit_cited_audit([], POLICY)
+    assert nothing == {"checked": 0, "admitted": 0, "same_day": 0, "unverifiable": 0, "late": 0}
+    assert lr.pit_audit_status(nothing, "drop") == "date_verified_with_unverifiable"
+    assert lr.pit_audit_status({}, "drop") == "date_verified_with_unverifiable"
 
 
 def test_build_digest_wall_strips_and_drops_markers():
@@ -445,6 +556,42 @@ def test_build_digest_wall_strips_and_drops_markers():
         lr.build_digest([record], ledger.get, 20000, "English")
     walled, lines, markers = lr.pit_wall_record(record, lambda sid: sid == 1)
     assert (lines, markers) == (2, 2) and walled["open_questions"] == ["Grid timelines?"]
+
+
+def _walled_fallback_engine(records, admissible):
+    """The attributes the deterministic-section helpers read, under the gates."""
+    engine = types.SimpleNamespace(
+        records=records, language="English", pit=POLICY, _pit_admissible=admissible,
+        _outline=lambda index: lr.OutlineSection(index=index, title=f"Capacity {index}", kiq_ids=["K1"],
+                                                 focus="capacity"),
+        log=lambda kind, message: None)
+    for name in ("_report_records", "_fallback_section", "_refill_emptied"):
+        setattr(engine, name, types.MethodType(getattr(lr._Engine, name), engine))
+    return engine
+
+
+def test_deterministic_sections_draw_on_walled_records():
+    record = {"id": "K1", "facts": [
+        {"text": "Capacity reached 176 GW [S1][S2]", "tag": "VERIFIED", "sids": [1, 2]},
+        {"text": "A brief claims 250 GW [S2]", "tag": "REPORTED", "sids": [2]}]}
+    engine = _walled_fallback_engine({"K1": record}, lambda sid: sid == 1)
+    assert engine._fallback_section(engine._outline(1)) == "- Capacity reached 176 GW [S1]"
+    emptied = [{"index": 1, "title": "Capacity 1", "is_scenario": False, "body": "", "origin": "writer"}]
+    assert engine._refill_emptied(emptied) == []
+    assert (emptied[0]["body"], emptied[0]["origin"]) == ("- Capacity reached 176 GW [S1]", "fallback")
+    # The walled finding is already published, so an emptied section is dropped rather
+    # than refilled with a copy of it (the dedup keys are those of the walled texts).
+    sections = [{"index": 1, "title": "Capacity 1", "is_scenario": False, "origin": "fallback",
+                 "body": "- Capacity reached 176 GW [S1]"},
+                {"index": 2, "title": "Capacity 2", "is_scenario": False, "body": "", "origin": "writer"}]
+    assert engine._refill_emptied(sections) == ["Capacity 2"]
+    assert (sections[1]["body"], sections[1]["origin"]) == ("", "dropped")
+    assert record["facts"][0]["text"] == "Capacity reached 176 GW [S1][S2]"   # the record is unchanged
+    # Nothing admissible: the no-evidence line, never an uncited claim.
+    blind = _walled_fallback_engine({"K1": record}, lambda sid: False)
+    assert blind._fallback_section(blind._outline(1)) == f"- {lr._text('English', 'no_evidence')}"
+    # Without the gates the records are used as they are.
+    assert lr._Engine._report_records(types.SimpleNamespace(records={"K1": record}, pit=None)) == {"K1": record}
 
 
 @pytest.mark.parametrize("typing", [False, True])

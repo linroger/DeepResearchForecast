@@ -118,6 +118,11 @@ def test_research_audit_is_recorded_in_the_pin_once_per_research_generation(mani
     json.dumps(["not", "an", "audit"]),
     "{truncated",
     b"\xff\xfe not utf-8",
+    # An audit of another pin's research (as-of or policies) vouches for nothing either.
+    json.dumps(_audit_payload(as_of="2024-05-31")),
+    json.dumps(_audit_payload(same_day_policy="include")),
+    json.dumps(_audit_payload(undated_policy="flag")),
+    json.dumps({key: value for key, value in _audit_payload().items() if key != "as_of"}),
 ])
 def test_an_unrecognised_audit_vouches_for_nothing(env, tmp_path, content):
     state = _state("pipe_bad", PIN, tmp_path)
@@ -182,11 +187,21 @@ def test_enforcement_record_mapping():
 
 
 def test_research_audit_record():
-    assert hp.research_audit_record(_audit_payload(), "ab") == {"status": "date_verified", "sha256": "ab"}
-    assert hp.research_audit_record(_audit_payload("violated"), "cd")["status"] == "violated"
+    assert hp.research_audit_record(_audit_payload(), "ab", pin=PIN) == {"status": "date_verified", "sha256": "ab"}
+    assert hp.research_audit_record(_audit_payload("violated"), "cd", pin=PIN)["status"] == "violated"
     for payload, digest in ((_audit_payload(), ""), (_audit_payload(), None), (_audit_payload(status=None), "ab"),
                             ({"status": "date_verified"}, "ab"), (None, "ab")):
-        assert hp.research_audit_record(payload, digest) is None
+        assert hp.research_audit_record(payload, digest, pin=PIN) is None
+    # The audit must be of this pin: its as-of and the policies the research was launched with.
+    flagged = dict(PIN, pit=dict(GATED, undated="flag", same_day="include"))
+    assert hp.research_audit_record(_audit_payload(), "ab", pin=flagged) is None
+    assert hp.research_audit_record(_audit_payload(undated_policy="flag", same_day_policy="include"), "ab",
+                                    pin=flagged) == {"status": "date_verified", "sha256": "ab"}
+    # A hand-edited policy value reads strict, as it did for the research launch.
+    odd = dict(PIN, pit=dict(GATED, undated="sometimes", same_day=None))
+    assert hp.research_audit_record(_audit_payload(), "ab", pin=odd) == {"status": "date_verified", "sha256": "ab"}
+    for pin in (UNGATED_PIN, dict(PIN, pit=None), dict(PIN, as_of=None), {}, None):
+        assert hp.research_audit_record(_audit_payload(), "ab", pin=pin) is None
 
 
 # ───────────────────────────── artifacts ─────────────────────────────────────
