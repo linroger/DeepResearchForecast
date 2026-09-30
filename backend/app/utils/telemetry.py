@@ -377,7 +377,7 @@ class LLMMeter:
                latency_ms: float, *, cached: bool = False, stage: Optional[str] = None,
                run_id: Optional[str] = None, finish_reason: Optional[str] = None,
                prompt_cache_read_tokens: int = 0, served_model: Optional[str] = None,
-               requested_model: Optional[str] = None) -> None:
+               requested_model: Optional[str] = None, aggregate: bool = False) -> None:
         """Accumulate one LLM call. ``finish_reason`` (INFRA-1, normalized by
         llm_text.normalize_finish_reason) is tallied per stage when given.
         ``prompt_cache_read_tokens`` (EVAL-17) is the provider-reported cache-read share of
@@ -387,7 +387,10 @@ class LLMMeter:
         ``provider:requested label`` with the provider-reported ``served_model`` (None = not
         reported, counted in calls only). ``requested_model`` is the label the transport
         actually requested; None derives it from ``provider`` and ``model``
-        (model_provenance.effective_model_label). by_model keys are unchanged."""
+        (model_provenance.effective_model_label). by_model keys are unchanged.
+        ``aggregate=True`` marks a synthetic record of a child process's whole spend (the
+        research child, the simulation child): its provider/model label is no call's
+        requested model, so it is never counted in ``model_resolution``."""
         rid, stg, fallback = cls._attribute(run_id, stage)
         cost = 0.0 if cached else estimate_cost(provider, prompt_tokens, completion_tokens)
         try:
@@ -395,7 +398,7 @@ class LLMMeter:
         except (TypeError, ValueError, OverflowError):
             pcr = 0
         resolution_key = None
-        if _model_provenance_enabled():
+        if not aggregate and _model_provenance_enabled():
             resolution_key = f"{provider}:{requested_model or effective_model_label(provider, model)}"
         warn_calls = 0
         first_fallback = False
@@ -483,7 +486,7 @@ class LLMMeter:
         - ``model_resolution`` (INFRA-8): ``{stage: {'provider:requested label': {calls,
           served: {served id: calls}}}}``, at most model_provenance.MAX_SERVED_IDS served ids
           per entry (later ids under '_other'); present only when at least one call was
-          recorded with RECORD_MODEL_PROVENANCE on.
+          recorded with RECORD_MODEL_PROVENANCE on (``aggregate`` records never count).
         """
         rid = run_id or _current_run.get() or _DEFAULT_BUCKET
         declared_sub = _declared_subscription_providers()

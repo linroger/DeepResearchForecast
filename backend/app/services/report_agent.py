@@ -28,7 +28,12 @@ from ..utils import absence as _absence
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient, llm_call_timeout
 from ..utils.logger import get_logger
-from ..utils.model_provenance import REPORT_STAGE, forecast_model_provenance, stage_record
+from ..utils.model_provenance import (
+    REPORT_STAGE,
+    forecast_model_provenance,
+    resolution_entries,
+    stage_record,
+)
 from ..utils.security import UnsafeIdError, contained_child, is_safe_id, safe_id
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
@@ -3671,10 +3676,12 @@ class ReportAgent:
         The orchestrator's ``run_provenance`` (research..run stages, pin drift) plus the
         report stage, filled here: at construction the run.json report stamp still describes
         a previous attempt's report. The report stage records this agent's LLM provider /
-        model, its effective requested label and the ids LLMMeter saw served for stage
-        'report' in the current run context (none without a run context). None when
-        ``run_provenance`` is unset (API paths, seed reports) or RECORD_MODEL_PROVENANCE is
-        off; any failure also degrades to None (logged).
+        model and, from LLMMeter's stage 'report' in the current run context, the labels its
+        calls requested (tier routing and failover included) and the ids served
+        (model_provenance.stage_record; without a recorded call, the effective label of the
+        agent's provider / model and no served ids). None when ``run_provenance`` is unset
+        (API paths, seed reports) or RECORD_MODEL_PROVENANCE is off; any failure also
+        degrades to None (logged).
         """
         run_prov = getattr(self, "run_provenance", None)
         if not isinstance(run_prov, dict) or not getattr(Config, "RECORD_MODEL_PROVENANCE", True):
@@ -3685,7 +3692,8 @@ class ReportAgent:
             llm = getattr(self, "llm", None)
             provider, model = getattr(llm, "provider", None), getattr(llm, "model", None)
             report_stage = {"provider": provider, "model_name": model,
-                            **stage_record(provider, model, resolution, REPORT_STAGE)}
+                            **stage_record(resolution_entries(resolution, REPORT_STAGE),
+                                           provider, model)}
             return forecast_model_provenance(run_prov, report_stage)
         except Exception as exc:  # noqa: BLE001 — provenance is observability; never block the forecast
             logger.debug(f"model_provenance 构建失败（忽略）: {exc}")

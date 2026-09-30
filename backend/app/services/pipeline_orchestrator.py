@@ -2294,6 +2294,7 @@ RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_SOURCE_TAXONOMY", "bool"),
 )
 RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
+    ("RECORD_MODEL_PROVENANCE", "bool"),
     ("RESEARCH_ABSENCE_DISCIPLINE", "bool"),
     ("RESEARCH_AS_OF_PIN", "bool"),
     ("RESEARCH_EVIDENCE_QUOTES", "str"),
@@ -2431,6 +2432,7 @@ def _flush_failed_research_attempt_spend(spend: Optional[dict[str, Any]],
             stage=STAGE_RESEARCH,
             run_id=str(run_id) if run_id else None,  # None → contextvar/单活跃 run 回退
             prompt_cache_read_tokens=t_cached,
+            aggregate=True,  # INFRA-8: the child's whole spend, no call's requested model
         )
         logger.warning(
             "研究 attempt 以 %s 终止，已消耗 tokens in=%d out=%d cached=%d（model=%s）——"
@@ -9858,31 +9860,82 @@ class PipelineOrchestrator:
         """INFRA-8: the model provenance of ``stage`` as recomputed by this attempt.
 
         RESEARCH: the resolved model id and served ids of this attempt's research child
-        (``_record_research_telemetry``; None / [] when it reported none). RUN: the provider
-        and model the simulation child reported (``options.sim_llm_telemetry``), else the
-        current provider pair. Every other stage: the current provider pair (the pair INFRA-7
-        stamps). ``served_models`` of those come from this attempt's LLMMeter.
+        (``_record_research_telemetry``; None / [] when it reported none). RUN: the
+        simulation child's own record (:meth:`_sim_model_record`). Every other stage: the
+        requested labels and served ids this attempt's LLMMeter recorded for the stage
+        (model_provenance.stage_record: tier routing and failover included), falling back to
+        the current provider pair (the pair INFRA-7 stamps) when the stage made no call.
         """
         if stage == STAGE_RESEARCH:
             record = getattr(self, "_research_model_provenance", None)
             return dict(record) if isinstance(record, dict) else model_provenance.research_stage_record(None)
+        if stage == STAGE_RUN:
+            return self._sim_model_record(state)
         pair = _current_provider_pair()
-        provider, model = pair.get("provider"), pair.get("model_name")
-        sim_tel = state.options.get("sim_llm_telemetry")
-        if stage == STAGE_RUN and isinstance(sim_tel, dict) and sim_tel.get("model"):
-            provider, model = sim_tel.get("provider"), sim_tel.get("model")
         from ..utils.telemetry import LLMMeter
         resolution = LLMMeter.snapshot(state.pipeline_id).get("model_resolution")
-        return model_provenance.stage_record(provider, model, resolution, stage)
+        return model_provenance.stage_record(
+            model_provenance.resolution_entries(resolution, stage),
+            pair.get("provider"), pair.get("model_name"))
 
-    def _stamp_stage_model_provenance(self, state: "PipelineState", stage: str) -> None:
-        """INFRA-8: merge a recomputed stage's requested and served models into its run.json
+    @staticmethod
+    def _sim_model_record(state: "PipelineState") -> dict[str, Any]:
+        """INFRA-8: RUN's requested labels and served ids from the simulation child.
+
+        The child records them per call (sim_llm_telemetry.json ``model_resolution``, stashed
+        in ``options.sim_llm_telemetry``): the direct camel calls with the id the provider
+        reported, and every LLMClient call (CLI bridge, failover, decision channel) with its
+        own requested label and served id. Without that record (a child that predates it)
+        the requested label is the effective label of the simulation provider and the model
+        oasis_llm sends (LLM_MODEL_NAME), with no served ids. The telemetry's ``model`` is
+        never used: it is the dominant by_model key, i.e. a served id or, for the CLI bridge,
+        the provider name.
+        """
+        from ..utils.llm_client import CLI_PROVIDERS, OPENAI_COMPATIBLE_PROVIDERS
+        pair = _current_provider_pair()
+        sim_tel = state.options.get("sim_llm_telemetry")
+        sim_tel = sim_tel if isinstance(sim_tel, dict) else {}
+        provider = sim_tel.get("provider")
+        if provider not in (*CLI_PROVIDERS, *OPENAI_COMPATIBLE_PROVIDERS):
+            # Missing, or the pricing key _record_sim_run_telemetry guessed from the model.
+            provider = pair.get("provider")
+        return model_provenance.stage_record(
+            sim_tel.get("model_resolution"), provider, pair.get("model_name"))
+
+    def _reused_stage_model_record(self, state: "PipelineState", stage: str,
+                                   block: dict[str, Any]) -> Optional[dict[str, Any]]:
+        """INFRA-8: the model keys to merge into a reused stage's block that lacks them.
+
+        A block the attempt that produced the stage stamped keeps its keys (None). A reused
+        ONTOLOGY / GRAPH / REPORT restamped by INFRA-7 without a recomputing completion (the
+        early ONTOLOGY stamp after save_project, a pending report mint) gets the effective
+        label of its stamped pair with unknown served ids; only with RUN_SHAPE_PIN on, since
+        the legacy stage-entry stamp names the current provider, not the producer. A reused
+        RUN gets the simulation child's own record when the stash holds one. Other stages
+        stay as carried forward.
+        """
+        if "requested_model" in block:
+            return None
+        if stage in run_shape.PROVIDER_STAMPED_STAGES:
+            if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+                return None
+            return model_provenance.reused_stage_record(block)
+        if stage == STAGE_RUN:
+            sim_tel = state.options.get("sim_llm_telemetry")
+            if isinstance(sim_tel, dict) and sim_tel.get("model_resolution"):
+                return self._sim_model_record(state)
+        return None
+
+    def _stamp_stage_model_provenance(self, state: "PipelineState", stage: str, *,
+                                      reused: bool = False) -> None:
+        """INFRA-8: merge a stage's requested and served models into its run.json
         ``resolved`` block (RUN's block is ``simulation``; PREPARE gets a ``prepare`` block).
 
-        Runs after INFRA-7's restamp and merges into the block, so its provider/model_name
-        keys stay; a reused stage keeps the carried-forward stamp of the attempt that
-        produced it. A missing run.json is left missing; failures propagate to
-        ``_complete_stage``, which logs and continues.
+        A recomputed stage merges this attempt's record after INFRA-7's restamp, so its
+        provider/model_name keys stay. A reused stage keeps the carried-forward stamp of the
+        attempt that produced it, and only a block lacking the keys is filled in
+        (:meth:`_reused_stage_model_record`). A missing run.json is left missing; failures
+        propagate to ``_complete_stage``, which logs and continues.
         """
         if not (bool(getattr(Config, "RECORD_MODEL_PROVENANCE", True))
                 and bool(getattr(Config, "RECORD_RUN_MANIFEST", True))):
@@ -9900,7 +9953,11 @@ class PipelineOrchestrator:
         resolved = resolved if isinstance(resolved, dict) else {}
         block = resolved.get(block_name)
         block = dict(block) if isinstance(block, dict) else {}
-        block.update(self._stage_model_record(state, stage))
+        record = (self._reused_stage_model_record(state, stage, block) if reused
+                  else self._stage_model_record(state, stage))
+        if record is None:
+            return
+        block.update(record)
         resolved[block_name] = block
         manifest["resolved"] = resolved
         manifest["updated_at"] = _utcnow()
@@ -9910,10 +9967,11 @@ class PipelineOrchestrator:
         """INFRA-8: hand the report stage's ReportAgent the upstream model provenance.
 
         ``agent.run_provenance`` (model-provenance/v1) holds the model keys of run.json's
-        research / ontology / graph / prepare / run blocks and this attempt's run-shape
-        drift; ReportAgent adds the report stage itself and writes the block into
-        forecast.json. Unset (key omitted) with RECORD_MODEL_PROVENANCE off; stages is empty
-        when run.json is not recorded. Degrades to unset on any failure.
+        research / ontology / graph / prepare / run blocks and the latest recorded run-shape
+        drift (``options.run_shape_drift``, kept across attempts by INFRA-7, so it may come
+        from an earlier attempt); ReportAgent adds the report stage itself and writes the
+        block into forecast.json. Unset (key omitted) with RECORD_MODEL_PROVENANCE off;
+        stages is empty when run.json is not recorded. Degrades to unset on any failure.
         """
         if not bool(getattr(Config, "RECORD_MODEL_PROVENANCE", True)):
             return
@@ -10655,11 +10713,10 @@ class PipelineOrchestrator:
             self._record_stage_decision(state, stage, reused)  # INFRA-7
         except Exception as _sd_err:  # noqa: BLE001 — 复用记账是观测增益，绝不阻断阶段完成
             logger.debug("[%s] stage_reuse_v1 记账跳过: %s", state.pipeline_id, _sd_err)
-        if not reused:
-            try:
-                self._stamp_stage_model_provenance(state, stage)  # INFRA-8
-            except Exception as _mp_err:  # noqa: BLE001 — 出处记录是观测增益，绝不阻断阶段完成
-                logger.debug("[%s] run.json 模型出处跳过: %s", state.pipeline_id, _mp_err)
+        try:
+            self._stamp_stage_model_provenance(state, stage, reused=reused)  # INFRA-8
+        except Exception as _mp_err:  # noqa: BLE001 — 出处记录是观测增益，绝不阻断阶段完成
+            logger.debug("[%s] run.json 模型出处跳过: %s", state.pipeline_id, _mp_err)
         PipelineManager.save(state)
         # W9-3：阶段转换必落一版遥测账（重启只丢「上一次阶段边界之后」的增量）。
         self._flush_run_telemetry(state)
@@ -12238,6 +12295,7 @@ class PipelineOrchestrator:
                 stage=STAGE_RESEARCH,
                 run_id=state.pipeline_id,
                 prompt_cache_read_tokens=t_cached,
+                aggregate=True,  # INFRA-8: the child's whole spend, no call's requested model
             )
         except Exception as e:  # noqa: BLE001
             logger.debug("[%s] 研究阶段合成计量跳过: %s", state.pipeline_id, e)
@@ -12275,7 +12333,7 @@ class PipelineOrchestrator:
         RUN 的 LLM 调用发生在 detached 子进程——contextvars 与 LLMMeter 都不跨进程，
         这是 run_telemetry.json 拿到模拟花费的唯一入口。镜像 _record_research_telemetry：
         (1) 主模拟（stage='run'）始终 stash 摘要到 state.options['sim_llm_telemetry']
-            （计量关闭也是免费观测）；
+            （计量关闭也是免费观测；INFRA-8 开启时连同子进程逐调用的 model_resolution）；
         (2) 计量开启且确有 token 时，向 LLMMeter 写一条 ``stage`` 的合成记录
             （provider/model 取快照自报值；缺失时按研究路径同款映射兜底——CLI 订阅类
             claude/codex → 'claude-cli' 边际成本 0，其余复用同名 provider 定价表）。
@@ -12358,6 +12416,14 @@ class PipelineOrchestrator:
                                       if isinstance(tel.get("by_source"), dict) else {}),
                         "wall_s": tel.get("wall_s"),
                     }
+                    if bool(getattr(Config, "RECORD_MODEL_PROVENANCE", True)):
+                        # INFRA-8: the child's own per-call requested label -> served ids
+                        # (absent from a child that predates it or recorded no call).
+                        _sim_resolution: dict[str, Any] = {}
+                        model_provenance.merge_resolution_entries(
+                            _sim_resolution, tel.get("model_resolution"))
+                        if _sim_resolution:
+                            state.options["sim_llm_telemetry"]["model_resolution"] = _sim_resolution
                     state.options[SIM_METER_LEGACY_MARKER_OPTION] = {
                         "simulation_id": sid,
                         "meter_run_token": token,
@@ -12406,6 +12472,9 @@ class PipelineOrchestrator:
                     latency_ms=wall_ms,
                     stage=stage,
                     run_id=state.pipeline_id,
+                    # INFRA-8: the child's whole spend under its dominant by_model key (a
+                    # served id or the CLI bridge's provider name), no call's requested model.
+                    aggregate=True,
                 )
                 logger.info(
                     "[%s] 模拟子进程花费已入账 stage='%s'（simulation=%s provider=%s model=%s "

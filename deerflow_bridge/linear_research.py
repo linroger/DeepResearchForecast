@@ -5627,6 +5627,11 @@ class _Engine:
         self.stored_shells: dict[int, str] = (
             self._unmark_stored_shells() if self.shell_detection and self.resumed else {})
         self.gateway = gateway_factory(args, reporter, bridge, self.preset)
+        ledger = getattr(self.gateway, "ledger", None)
+        if isinstance(ledger, rg.UsageLedger):
+            # INFRA-8: the ledger follows this engine's RECORD_MODEL_PROVENANCE (the env the
+            # parent forwards from its Config), whatever the factory built it with.
+            ledger.record_models = self.record_models
         # Every model call (the gateway's json/text calls go through its
         # invoke) and every search/fetch passes through these wrappers: the
         # tally tells a provider that never answered from a phase that ran out
@@ -8996,7 +9001,15 @@ def _resolved_model_id(args: Any) -> str | None:
     """INFRA-8: the concrete model id (``model:`` field) of the ``--model`` stanza in the
     DeerFlow config named by ``--config`` (DeerFlow's own resolution without one), or
     None when it cannot be resolved (no deerflow package, unknown stanza, unreadable
-    config).  Read only: the process-wide config is installed by the gateway factory."""
+    config).
+
+    Not side-effect free: ``AppConfig.from_file`` applies the file's singleton configs
+    (title, summarization, memory, subagents, tool search, guardrails, checkpointer,
+    stream bridge, ACP; a changed checkpointer config resets the checkpointer and store),
+    and ``get_app_config`` caches the process-wide config.  Both are what the gateway
+    factory does right after with the same file (``_deerflow_app_config`` /
+    ``create_chat_model``), so the child ends in the same state; the cost is one extra
+    parse of the config file per run."""
     try:
         path = str(getattr(args, "config", None) or "").strip()
         if path:
@@ -9031,8 +9044,7 @@ def _default_gateway_factory(args: Any, plog: Any, bridge: Any, preset: Preset) 
                                    f"({type(exc).__name__}: {exc}); continuing without it")
     return rg.ModelGateway(model, reporter, fallback_model=fallback, lease=_bridge_lease(bridge, reporter),
                            max_concurrency=preset.workers, budget_units=preset.budget_units,
-                           reserve_share=RESERVE_SHARE,
-                           record_models=_env_flag(os.environ, "RECORD_MODEL_PROVENANCE", True))
+                           reserve_share=RESERVE_SHARE)
 
 
 def _pit_policy(env: Mapping[str, Any] | None) -> rg.PitPolicy | None:

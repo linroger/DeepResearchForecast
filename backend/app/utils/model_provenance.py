@@ -1,8 +1,9 @@
 """INFRA-8: model provenance, i.e. which model each stage asked for and which model served it.
 
 Pure helpers (stdlib only, no Config import) shared by LLMClient and LLMMeter (the per-call
-requested label and served id), the pipeline orchestrator (run.json ``resolved`` stamps and
-the report's ``run_provenance``) and ReportAgent (forecast.json ``model_provenance``).
+requested label and served id), the simulation child (sim_llm_telemetry.json
+``model_resolution``), the pipeline orchestrator (run.json ``resolved`` stamps and the
+report's ``run_provenance``) and ReportAgent (forecast.json ``model_provenance``).
 
 Vocabulary:
 
@@ -45,7 +46,8 @@ RESOLVED_BLOCK_FOR_STAGE: Dict[str, str] = {
 # them, so the attempt-start fold carries them with carry_forward_extra_blocks().
 EXTRA_RESOLVED_BLOCKS = ("prepare",)
 # Keys of a resolved block that describe models (the forecast.json ``stages`` subset).
-PROVENANCE_KEYS = ("provider", "model_name", "model", "model_id", "requested_model", "served_models")
+PROVENANCE_KEYS = ("provider", "model_name", "model", "model_id", "requested_model",
+                   "requested_models", "served_models")
 
 _CLAUDE_ALIASES = ("opus", "sonnet", "haiku")
 
@@ -135,29 +137,78 @@ def served_model_list(served: Any) -> List[str]:
     return ids
 
 
-def stage_served_models(model_resolution: Any, stage: str) -> List[str]:
-    """Served ids of ``stage`` in an LLMMeter snapshot's ``model_resolution`` (every requested
-    label of the stage merged). [] when the stage recorded none."""
-    if not isinstance(model_resolution, Mapping):
-        return []
-    entries = model_resolution.get(stage)
+def requested_label_of(key: str) -> str:
+    """The requested label of a ``model_resolution`` key ``provider:label`` (the provider part
+    never contains ':'; a key without one is taken as the label)."""
+    return key.split(":", 1)[1] if ":" in key else key
+
+
+def merge_resolution_entries(into: Dict[str, Dict[str, Any]], entries: Any) -> None:
+    """Add ``{'provider:label': {calls, served}}`` entries into ``into`` in place: calls are
+    summed and served ids merged under the MAX_SERVED_IDS cap. Junk keys/entries and entries
+    without a call are skipped."""
     if not isinstance(entries, Mapping):
-        return []
+        return
+    for key, entry in entries.items():
+        if not isinstance(key, str) or not key.strip() or not isinstance(entry, Mapping):
+            continue
+        calls = _count(entry.get("calls"))
+        if calls <= 0:
+            continue
+        dst = into.setdefault(key, {"calls": 0, "served": {}})
+        dst["calls"] += calls
+        merge_served(dst["served"], entry.get("served"))
+
+
+def resolution_entries(model_resolution: Any, stage: str) -> Dict[str, Dict[str, Any]]:
+    """``stage``'s entries of an LLMMeter snapshot's ``model_resolution``, sanitized
+    (merge_resolution_entries). {} when the stage recorded none."""
+    out: Dict[str, Dict[str, Any]] = {}
+    if isinstance(model_resolution, Mapping):
+        merge_resolution_entries(out, model_resolution.get(stage))
+    return out
+
+
+def stage_record(entries: Any, provider: Optional[str], model: Optional[str]) -> Dict[str, Any]:
+    """``{requested_model, requested_models, served_models}`` of one stage from the
+    ``model_resolution`` entries its calls recorded (``{'provider:label': {calls, served}}``).
+
+    ``requested_models`` lists every ``provider:label`` the stage's calls requested, most calls
+    first (ties by key), so tier routing (EVAL-10: the strong / fast model, possibly served by
+    LLM_FAST_PROVIDER) and failover show as the models actually sent. ``requested_model`` is
+    the label of the most-called one. ``served_models`` merges every served id. A stage that
+    recorded no call falls back to the effective label of ``provider`` / ``model`` (the
+    configured pair) with empty ``requested_models`` and ``served_models``.
+    """
+    clean: Dict[str, Dict[str, Any]] = {}
+    merge_resolution_entries(clean, entries)
+    keys = sorted(clean, key=lambda key: (-clean[key]["calls"], key))
     served: Dict[str, int] = {}
-    for entry in entries.values():
-        if isinstance(entry, Mapping):
-            merge_served(served, entry.get("served"))
-    return served_model_list(served)
-
-
-def stage_record(provider: Optional[str], model: Optional[str], model_resolution: Any,
-                 stage: str) -> Dict[str, Any]:
-    """``{requested_model, served_models}`` of one stage: the effective label of the stage's
-    provider/model and the ids the meter saw served for that stage."""
+    for key in keys:
+        merge_served(served, clean[key]["served"])
     return {
-        "requested_model": effective_model_label(provider, model),
-        "served_models": stage_served_models(model_resolution, stage),
+        "requested_model": (requested_label_of(keys[0]) if keys
+                            else effective_model_label(provider, model)),
+        "requested_models": keys,
+        "served_models": served_model_list(served),
     }
+
+
+def reused_stage_record(block: Any) -> Optional[Dict[str, Any]]:
+    """The model keys a reused stage's run.json block lacks, or None when it has them.
+
+    A reused ONTOLOGY / GRAPH / REPORT whose block INFRA-7 restamped with its producer pair
+    (the early ONTOLOGY stamp after save_project, a pending report mint) never passed through
+    a recomputing completion. Its requested label is the effective label of that pair and
+    its served ids are unknown (empty). None as well when the block names no pair.
+    """
+    if not isinstance(block, Mapping) or "requested_model" in block:
+        return None
+    provider, model = block.get("provider"), block.get("model_name")
+    if not (provider or model):
+        return None
+    return {"requested_model": effective_model_label(provider, model),
+            "requested_models": [], "served_models": []}
 
 
 def merge_research_model_resolutions(parts: Iterable[Any]) -> Optional[Dict[str, Any]]:
@@ -220,7 +271,9 @@ def run_provenance(resolved: Any, pin_drift: Any) -> Dict[str, Any]:
     ``stages`` holds the PROVENANCE_KEYS of every upstream stage's run.json resolved block
     (research, ontology, graph, prepare, run), keyed by pipeline stage. REPORT is left out:
     at construction its stamp still describes a previous attempt's report, so ReportAgent
-    fills it itself. ``pin_drift`` is the run-shape drift of this attempt (None without one).
+    fills it itself. ``pin_drift`` is the latest recorded run-shape drift (INFRA-7
+    ``options.run_shape_drift``, kept across attempts, so it may come from an earlier attempt
+    than the one producing this report); None without one.
     """
     stages: Dict[str, Any] = {}
     blocks = resolved if isinstance(resolved, Mapping) else {}

@@ -811,7 +811,8 @@ def test_saved_ontology_reused_next_attempt_keeps_its_producer_stamp(roots, monk
     assert decisions[-1] == (po.STAGE_ONTOLOGY, True)
     manifest = _manifest(pid)
     assert len(manifest["attempts"]) == 2
-    assert manifest["resolved"]["ontology"] == producer
+    # INFRA-8 adds the producer pair's requested label to the reused block (served unknown).
+    assert manifest["resolved"]["ontology"] == {**producer, **_REUSED_MODEL_KEYS_A}
 
 
 def test_guards_off_recompute_drops_a_stale_rebuilt_exemption(monkeypatch):
@@ -1158,16 +1159,22 @@ def test_failed_report_rebuild_after_run_recompute_is_not_reused_next_attempt(
     final = _manifest(result.pid)
     assert len(final["attempts"]) == 3
     resolved = final["resolved"]
-    # Reused stages keep the stamp of the attempt that produced them.
-    assert resolved["ontology"] == {"provider": "provider-0", "model_name": "model-0"}
-    assert resolved["graph"] == {"provider": "provider-0", "model_name": "model-0"}
+    # Reused stages keep the stamp of the attempt that produced them; INFRA-8 adds the
+    # requested label of a stamped pair that lacks it (served ids unknown).
+    no_calls = {"requested_models": [], "served_models": []}
+    assert resolved["ontology"] == {"provider": "provider-0", "model_name": "model-0",
+                                    "requested_model": "model-0", **no_calls}
+    assert resolved["graph"] == {"provider": "provider-0", "model_name": "model-0",
+                                 "requested_model": "model-0", **no_calls}
     # INFRA-8 merges the recomputing attempt's requested / served models next to the pair.
     assert resolved["report"] == {"provider": "provider-b", "model_name": "model-b",
-                                  "requested_model": "model-b", "served_models": []}
+                                  "requested_model": "model-b", **no_calls}
     assert resolved["simulation"] == first["resolved"]["simulation"]
 
 
 _PRODUCER_A = {"provider": "provider-a", "model_name": "model-a"}
+# INFRA-8: what a reused stage restamped with producer A gains (its served ids are unknown).
+_REUSED_MODEL_KEYS_A = {"requested_model": "model-a", "requested_models": [], "served_models": []}
 
 
 def _switch_provider_and_resume(monkeypatch, pid):
@@ -1196,7 +1203,7 @@ def test_reused_rebuilt_report_keeps_its_producer_stamp(monkeypatch, tmp_path):
     assert resumed["status"] == "completed", resumed.get("error")
     assert resumed["report_id"] == minted
     assert result.report_generations == [result.old_id], "X was reused"
-    assert _manifest(result.pid)["resolved"]["report"] == _PRODUCER_A
+    assert _manifest(result.pid)["resolved"]["report"] == {**_PRODUCER_A, **_REUSED_MODEL_KEYS_A}
     assert run_shape.REPORT_PRODUCER_OPTION not in resumed["options"]
 
 
@@ -1218,7 +1225,7 @@ def test_reused_force_regenerated_report_keeps_its_producer_stamp(monkeypatch, t
     assert resumed["status"] == "completed", resumed.get("error")
     assert resumed["report_id"] == minted
     assert result.report_generations == [result.old_id]
-    assert _manifest(result.pid)["resolved"]["report"] == _PRODUCER_A
+    assert _manifest(result.pid)["resolved"]["report"] == {**_PRODUCER_A, **_REUSED_MODEL_KEYS_A}
 
 
 def test_reused_report_never_borrows_a_lost_mints_stamp(monkeypatch, tmp_path):
@@ -1301,9 +1308,11 @@ def test_run_manifest_keeps_attempts_and_reused_stage_stamps(roots, monkeypatch)
     resolved = manifest["resolved"]
     # INFRA-8 merges each recomputing attempt's requested / served models next to the pair.
     assert resolved["ontology"] == {"provider": "provider-a", "model_name": "model-a",
-                                    "requested_model": "model-a", "served_models": []}
+                                    "requested_model": "model-a", "requested_models": [],
+                                    "served_models": []}
     assert resolved["graph"] == {"provider": "provider-b", "model_name": "model-b",
-                                 "requested_model": "model-b", "served_models": []}
+                                 "requested_model": "model-b", "requested_models": [],
+                                 "served_models": []}
     assert "run_shape" in manifest
     records = state.options["stage_reuse_v1"]
     assert [(r["stage"], r["reused"]) for r in records] == [

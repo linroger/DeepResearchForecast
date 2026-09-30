@@ -950,6 +950,10 @@ class SimulationRunner:
             # 原子落盘 checkpoint.json，使后续崩溃/重启可以续跑而非从第 0 轮重烧额度。
             if sim_resume_flag or resume_active:
                 env['SIM_RESUME'] = 'true'
+            # INFRA-8: the child records per-call model provenance into sim_llm_telemetry.json
+            # exactly when this process's Config does (never an ambient env value alone).
+            env['RECORD_MODEL_PROVENANCE'] = (
+                'true' if bool(getattr(Config, 'RECORD_MODEL_PROVENANCE', True)) else 'false')
 
             # 设置工作目录为模拟目录（数据库等文件会生成在此）
             # 使用 start_new_session=True 创建新的进程组，确保可以通过 os.killpg 终止所有子进程

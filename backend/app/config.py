@@ -585,11 +585,13 @@ class Config:
     RESUME_LINEAGE_GUARDS = os.environ.get('RESUME_LINEAGE_GUARDS', 'true').strip().lower() == 'true'
     # INFRA-8: model provenance. On, LLMMeter records per stage which model each call requested
     # (the effective label: a claude-cli call without --model is 'cli-default') and which model
-    # the provider reported serving it (snapshot 'model_resolution'); research v3 ledger rows and
-    # usage summaries carry model/served_model and the v3 work-dir identity gains the resolved
-    # model id (a side without one stays compatible, so existing work dirs still resume);
-    # run.json resolved blocks gain requested_model/served_models; forecast.json gains a
-    # 'model_provenance' block. Default on: it only adds recorded keys and changes no call,
+    # the provider reported serving it (snapshot 'model_resolution'; the simulation child writes
+    # its own into sim_llm_telemetry.json); research v3 ledger rows and usage summaries carry
+    # model/served_model and the v3 work-dir identity gains the resolved model id (a side
+    # without one stays compatible, so existing work dirs still resume); run.json resolved
+    # blocks gain requested_model/requested_models/served_models; forecast.json gains a
+    # 'model_provenance' block. Both children get this value from Config (research-child
+    # registry, simulation env). Default on: it only adds recorded keys and changes no call,
     # routing or gate; the one behavioural effect is that a research resume no longer reuses a
     # v3 work dir produced by a different resolved model id. Off = byte-identical to before.
     RECORD_MODEL_PROVENANCE = os.environ.get('RECORD_MODEL_PROVENANCE', 'true').strip().lower() == 'true'
@@ -2249,9 +2251,11 @@ class Config:
 
         - LLM_FALLBACK_MODEL set while LLM_FALLBACK_PROVIDER is empty: failover is off, so the
           fallback model is never used.
-        - LLM_FAST_MODEL / LLM_STRONG_MODEL set for a CLI primary (claude-cli / codex-cli) with
-          a value that resolves to 'cli-default' (claude-cli is given --model only for a claude
-          id/alias, codex-cli never): such a call runs on the CLI account's default model.
+        - LLM_FAST_MODEL / LLM_STRONG_MODEL set for a CLI primary (claude-cli / codex-cli) to a
+          model other than LLM_MODEL_NAME: the CLI transport never receives a tier model
+          (claude-cli is given --model from LLM_MODEL_NAME, and only for a claude id/alias;
+          codex-cli never), so every call runs LLM_MODEL_NAME's effective model or the CLI
+          account's default ('cli-default'), whatever the tier model names.
 
         run.py prints them at startup; scripts/preflight.py lists them as WARN rows.
         """
@@ -2266,13 +2270,15 @@ class Config:
             )
         provider = (cls.LLM_PROVIDER or '').strip().lower()
         if provider in ('claude-cli', 'codex-cli'):
+            runs = effective_model_label(provider, cls.LLM_MODEL_NAME)
+            runs_text = ("the CLI account's default model" if runs == CLI_DEFAULT_LABEL
+                         else f"{runs} (from LLM_MODEL_NAME)")
             for name in ('LLM_FAST_MODEL', 'LLM_STRONG_MODEL'):
                 value = getattr(cls, name, None)
-                if value and effective_model_label(provider, value) == CLI_DEFAULT_LABEL:
+                if value and value.strip() != (cls.LLM_MODEL_NAME or '').strip():
                     warnings.append(
-                        f"{name}={value} is set for LLM_PROVIDER={provider} but resolves to "
-                        f"{CLI_DEFAULT_LABEL}: the CLI is not given this model and runs on its "
-                        "account default"
+                        f"{name}={value} is set for LLM_PROVIDER={provider} but is ignored: the "
+                        f"CLI is never given a tier model, so every call runs {runs_text}"
                     )
         return warnings
 
