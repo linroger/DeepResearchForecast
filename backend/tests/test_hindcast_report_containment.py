@@ -229,7 +229,7 @@ def test_hindcast_policy_returns_a_copy():
 
 def test_forecast_block_and_enforcement_record():
     assert hp.hindcast_forecast_block(PIN) == BLOCK
-    # TIME-9 maps the research audit to ``integrity``; until then every hindcast is labelled.
+    # TIME-9 maps a recognised research audit to ``integrity``; one without a verdict stays labelled.
     assert hp.hindcast_forecast_block(PIN, research_audit={"verdict": "clean"}) == BLOCK
     assert hp.as_of_enforcement_record(PIN) == ENFORCEMENT
 
