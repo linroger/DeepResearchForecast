@@ -1090,6 +1090,33 @@ def _sum_shield(text: str, start: int, end: int) -> Optional[Set[_Span]]:
     return shielded
 
 
+# ------------------------------------------------------------ shared guards
+# REPORT-3's alias-aware slot audit (logic_number.py) skips the numbers the sync skips.
+# These are the sync's own guards under public names, with no change in behaviour; a
+# token span covers a percent with its sign ("40%") or a two-decimal fraction ("0.40").
+
+def range_guarded(text: str, start: int, end: int) -> bool:
+    """``text[start:end]`` is a range endpoint or one end of a stated move (range guard)."""
+    return _is_range(text, start, end)
+
+
+def quantity_guarded(text: str, start: int, end: int, names: Sequence[str] = ()) -> bool:
+    """``text[start:end]`` is a quantity or a signed change (quantity guard); a quantity
+    word inside a label of the scenarios called ``names`` is part of a scenario name."""
+    return _is_quantity(text, start, end, _raw_names(names))
+
+
+def sum_guarded(text: str, start: int, end: int) -> bool:
+    """``text[start:end]`` takes part in a sum statement of its sentence (sum guard):
+    the total or an addend of "合计50%", any number of a sentence with an arithmetic
+    '+', or of one whose sum word has no identifiable total and addends."""
+    for lo, hi in _sentence_bounds(text):
+        if lo <= start < hi:
+            shield = _sum_shield(text, lo, hi)
+            return shield is None or (start, end) in shield
+    return False
+
+
 def _format_replacement(text: str, token: _Token, new_pct: int) -> str:
     start, end, _, kind = token
     if kind == "decimal":
