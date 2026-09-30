@@ -1676,5 +1676,139 @@ def test_world_clock_round_isolates_optional_parts(monkeypatch):
     assert len(logs) == 1 and "回应阶段本期上下文生成失败" in logs[0]
     assert cu.missed(0, 3) == []
 
+
+# ===========================================================================
+# 11) SIM-8：决策 elicitor 看到本时段日程事件（SIM_DECISION_EVENTS，默认开）
+# ===========================================================================
+class _PromptRecordingLLM:
+    """LLMClient 替身（SIM-8）：记录真实 elicit_round 发出的提示词，恒答 agent 0 → 情景 A。"""
+
+    prompts = []
+
+    def __init__(self, *a, **k):
+        pass
+
+    def chat_json(self, messages, temperature=0.3, max_tokens=4096, **kw):
+        type(self).prompts.append(messages[0]["content"])
+        return {"decisions": [{"agent_id": 0, "scenario": "A", "magnitude": 1, "confidence": 1}]}
+
+
+@pytest.mark.parametrize("flag", [None, "false"])
+def test_inband_elicitation_receives_period_events(tmp_path, monkeypatch, flag):
+    """第 2 轮（loop 轮 1）到期事件进入该轮 elicit ctx；其余轮无 events 键；开关关 → 全无。"""
+    sim_dir = str(tmp_path)
+    envs, calls = [], []
+    _patch_runtime(monkeypatch, sim_dir, envs)
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit(calls))
+    _set_knob(monkeypatch, "SIM_DECISION_EVENTS", flag)
+    _run(_calendar_config(), sim_dir)
+
+    assert [c["ctx"]["round_num"] for c in calls] == [1, 2, 3]
+    if flag == "false":
+        assert all("events" not in c["ctx"] for c in calls)
+        return
+    events = calls[1]["ctx"]["events"]
+    assert [ev["content"] for ev in events] == ["[2026-11-05] 事件A发生"]
+    assert dc._render_events_block(events) == (
+        dc.EVENTS_BLOCK_HEADER + "\n- [2026-11-05] 事件A发生")
+    assert "events" not in calls[0]["ctx"] and "events" not in calls[2]["ctx"]
+
+
+def test_inband_prompt_carries_events_block_before_roster(tmp_path, monkeypatch):
+    """真实 elicit_round：事件轮提示词在名册前带标注事件块，其余轮提示词无事件块；零额外调用。"""
+    sim_dir = str(tmp_path)
+    envs = []
+    _patch_runtime(monkeypatch, sim_dir, envs)
+    monkeypatch.setattr("app.utils.llm_client.LLMClient", _PromptRecordingLLM)
+    monkeypatch.setattr(_PromptRecordingLLM, "prompts", [])
+    monkeypatch.setattr(rps, "_SIM_LLM_USAGE", {   # 进程级 token 计量隔离
+        "calls": 0, "errors": 0, "prompt_tokens": 0, "completion_tokens": 0,
+        "by_source": {}, "by_model": {}})
+    _run(_calendar_config(), sim_dir)
+
+    prompts = _PromptRecordingLLM.prompts
+    assert len(prompts) == 3                                  # 每轮恰一次批量调用
+    assert (dc.EVENTS_BLOCK_HEADER + "\n- [2026-11-05] 事件A发生\n角色名册：") in prompts[1]
+    assert "时段：第 2/3 轮" in prompts[1]
+    assert dc.EVENTS_BLOCK_HEADER not in prompts[0] and dc.EVENTS_BLOCK_HEADER not in prompts[2]
+
+
+@pytest.mark.parametrize("period_v2", [None, "false"])
+def test_inband_elicitation_receives_carried_dead_round_events(tmp_path, monkeypatch,
+                                                                period_v2):
+    """事件轮（第 2 轮）全员缺席：V2 开 → 暂存事件并入第 3 轮 elicit ctx，渲染标"更早时段"；
+    V2 关 → 死轮事件不暂存（SIM-6 旧行为），第 3 轮 ctx 无 events 键。"""
+    sim_dir = str(tmp_path)
+    envs, calls = [], []
+    _patch_runtime(monkeypatch, sim_dir, envs)
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit(calls))
+    _set_knob(monkeypatch, "SIM_PERIOD_CONTEXT_V2", period_v2)
+    monkeypatch.delenv("SIM_DECISION_EVENTS", raising=False)
+    _script_active(monkeypatch, {0: [0, 1], 1: [], 2: [0, 1]})
+    _run(_calendar_config(), sim_dir)
+
+    assert [c["ctx"]["round_num"] for c in calls] == [1, 3]
+    assert "events" not in calls[0]["ctx"]
+    if period_v2 == "false":
+        assert "events" not in calls[1]["ctx"]
+        return
+    events = calls[1]["ctx"]["events"]
+    assert [(ev["content"], ev.get("carried_from_round")) for ev in events] == [
+        ("[2026-11-05] 事件A发生", 2)]
+    assert dc._render_events_block(events) == (
+        dc.EVENTS_BLOCK_HEADER + "\n- 【更早时段】[2026-11-05] 事件A发生")
+
+
+def test_posthoc_decision_events_kwargs(monkeypatch):
+    """post-hoc 日历回退：按 1 基 runtime 轮号分组日程事件；hours 模式 / 开关关 / 无可用
+    事件 → {}（什么都不传）；round 非法或为负的条目跳过。main() 把它传给 run_decision_channel。"""
+    import inspect
+
+    monkeypatch.delenv("SIM_DECISION_EVENTS", raising=False)
+    cfg = _calendar_config()
+    scheduled = cfg["event_config"]["scheduled_events"]
+    scheduled += [{"round": "x", "content": "bad"}, {"round": -1, "content": "neg"},
+                  {"content": "no round"}, "junk",
+                  {"round": 1, "date": "2026-11-20", "content": "事件B"},
+                  {"round": 2, "date": "2027-02-01", "content": "事件C"}]
+    round_dates = cfg["temporal_config"]["round_dates"]
+    assert rps._posthoc_decision_events(cfg, round_dates) == {
+        "events_by_round": {2: [scheduled[0], scheduled[5]], 3: [scheduled[6]]}}
+    assert rps._posthoc_decision_events(cfg, None) == {}          # hours 模式：不传
+    assert rps._posthoc_decision_events(cfg, []) == {}
+    assert rps._posthoc_decision_events({"event_config": {}}, round_dates) == {}
+    assert rps._posthoc_decision_events({"event_config": {"scheduled_events": "x"}},
+                                        round_dates) == {}
+    assert rps._posthoc_decision_events(None, round_dates) == {}
+    monkeypatch.setenv("SIM_DECISION_EVENTS", "false")
+    assert rps._posthoc_decision_events(cfg, round_dates) == {}
+    assert ("**_posthoc_decision_events(config, _round_dates_posthoc)"
+            in inspect.getsource(rps.main))
+
+
+def test_posthoc_fallback_prompt_gets_events_block(monkeypatch):
+    """post-hoc 回退端到端（纯函数部分）：助手产出的关键字喂 run_decision_channel →
+    事件轮提示词带事件块、其余轮与无事件运行逐字节相同，调用数不变。"""
+    from tests.conftest import FakeLLMClient
+
+    monkeypatch.delenv("SIM_DECISION_EVENTS", raising=False)
+    cfg = _calendar_config()
+    actions = [{"round": r, "agent_id": 0, "agent_name": "Actor0"} for r in (1, 2, 3)]
+    reply = {"decisions": [{"agent_id": 0, "scenario": "A", "magnitude": 1, "confidence": 1}]}
+
+    def _prompts(**kw):
+        fake = FakeLLMClient(json_responses=[json.loads(json.dumps(reply)) for _ in range(3)])
+        dc.run_decision_channel(actions, cfg["agent_configs"], cfg["world_state_seed"], fake,
+                                round_dates=_ROUND_DATES, concurrency=1, **kw)
+        return [c["messages"][0]["content"] for c in fake.calls]
+
+    base = _prompts()
+    with_events = _prompts(**rps._posthoc_decision_events(cfg, _ROUND_DATES))
+    assert len(with_events) == len(base) == 3
+    assert with_events[0] == base[0] and with_events[2] == base[2]
+    assert with_events[1] == base[1].replace(
+        "角色名册：", dc.EVENTS_BLOCK_HEADER + "\n- [2026-11-05] 事件A发生\n角色名册：")
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-x", "-q"]))

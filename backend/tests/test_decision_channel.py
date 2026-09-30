@@ -431,3 +431,220 @@ def test_bare_all_abstain_rounds_stay_valid():
     assert res["validity"] == "valid" and res["validity_reasons"] == []
     assert res["decision_validation"]["fallback_share"] == 0.0
     assert res["decision_validation"]["abstained"] == 6
+
+
+# ------------------------------------------------------------------------ SIM-8 (P23)
+_SIM8_ACTIVE = [{"agent_id": 1, "name": "A", "stance": "pro", "influence": 1.0,
+                 "gains_if": "稳价", "post": "我支持"},
+                {"agent_id": PUBLIC_BLOCK_ID, "name": "公众", "stance": "", "influence": 2.0}]
+_SIM8_PERIOD = {"period_start": "2026-10-01", "period_end": "2026-12-31", "label": "2026-Q4"}
+# sha256 of the pre-SIM-8 prompts built by _sim8_prompts() (recorded before the change).
+_PRE_SIM8_PROMPT_SHA256 = {
+    "hours": "3de80902c63e4c960b3a3bb1b47ecd9a271417cbab500673ccbee0294f28aef0",
+    "calendar": "9fe35e39dca67dc19a87661ab60d35d6b0d2c8a2bd9bc31acd2afdbbf99d4057",
+}
+_SIM8_EVENTS = [{"date": "2027-01-05", "content": "X happens"},
+                {"date": "2027-01-09", "content": "Y", "is_scenario_injection": True}]
+
+
+def _sim8_prompts(**kw):
+    shares = {"S1": 0.6, "S2": 0.4}
+    return {
+        "hours": _build_round_decision_prompt(["S1", "S2"], _SIM8_ACTIVE, 3, "2027-01-01",
+                                              base_shares=shares, **kw),
+        "calendar": _build_round_decision_prompt(
+            ["S1", "S2"], _SIM8_ACTIVE, 2, "2026-12-31", base_shares=shares,
+            period=_SIM8_PERIOD, n_rounds=3, horizon_date="2027-03-31", unit="quarter", **kw),
+    }
+
+
+def _sha256(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def test_sim_decision_events_default_on_and_documented():
+    import os
+    assert Config.SIM_DECISION_EVENTS is True
+    env_example = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))), ".env.example")
+    with open(env_example, encoding="utf-8") as f:
+        assert "# SIM_DECISION_EVENTS=true" in f.read()
+
+
+def test_prompt_events_block_before_roster():
+    """SIM-8: the labelled events block sits immediately before the roster; None/[] leave
+    the prompt byte-identical to the pre-SIM-8 output in both framings."""
+    for kw in ({}, {"events": None}, {"events": []}):
+        assert {k: _sha256(v) for k, v in _sim8_prompts(**kw).items()} == _PRE_SIM8_PROMPT_SHA256
+    legacy = _sim8_prompts()
+    assert dc.EVENTS_BLOCK_HEADER == (
+        "本时段日程事件（来自研究时间线的预期外生事件，并非任何角色的发言；结果尚未确定）：")
+    block = dc._render_events_block(_SIM8_EVENTS)
+    assert block == (dc.EVENTS_BLOCK_HEADER + "\n- [2027-01-05] X happens"
+                     "\n- 【情景假设】[2027-01-09] Y")
+    for mode, prompt in _sim8_prompts(events=_SIM8_EVENTS).items():
+        assert "本时段日程事件" in prompt and "[2027-01-05] X happens" in prompt
+        assert "【情景假设】" in prompt
+        assert prompt.index("本时段日程事件") < prompt.index("角色名册：")
+        # inserted verbatim right before the roster; every other byte is unchanged
+        assert prompt == legacy[mode].replace("角色名册：", block + "\n角色名册：")
+        assert "投票/下单/站队/分配" in prompt          # characterization pin unchanged
+    # herding guard: no WorldState number or percentage, and no direction is asked for
+    assert "%" not in block and "60" not in block
+    assert not any(ch.isdigit() for ch in dc.EVENTS_BLOCK_HEADER)
+
+
+def test_events_block_labels_dedupe_and_skips():
+    events = [
+        {"date": "2026-11-05", "content": "[2026-11-05] 事件A发生"},     # already dated
+        {"date": "2026-11-05", "content": "[2026-11-05] 事件A发生",       # same (date, content)
+         "is_scenario_injection": True},
+        {"date": "2026-08-01", "content": "早先事件", "carried_from_round": 1},  # SIM-6 carry
+        {"date": "", "content": "无日期事件"},
+        {"date": "2026-12-01", "content": "   "},                        # no content
+        "not a dict",
+        {"date": "2026-12-02", "content": "多行\n内容"},
+    ]
+    assert dc._render_events_block(events).split("\n") == [
+        dc.EVENTS_BLOCK_HEADER,
+        "- [2026-11-05] 事件A发生",                 # first occurrence wins, no double date
+        "- 【更早时段】[2026-08-01] 早先事件",
+        "- 无日期事件",
+        "- [2026-12-02] 多行 内容",                 # one event is one line
+    ]
+    for empty in (None, [], [{"content": ""}], ["junk"], 5):
+        assert dc._render_events_block(empty) == ""
+
+
+def test_events_block_failure_degrades_safe(monkeypatch):
+    """The block is advisory: a renderer failure leaves the legacy prompt, never a failed round."""
+    legacy = _sim8_prompts()
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("renderer down")
+
+    monkeypatch.setattr(dc, "_render_events_block", _boom)
+    assert _sim8_prompts(events=_SIM8_EVENTS) == legacy
+
+
+def test_events_block_cap():
+    """30 long events (plus duplicates): whole lines within 800 characters, input order,
+    duplicates removed, and an explicit omission marker counting unique events."""
+    unique = [{"date": f"2027-01-{i + 1:02d}", "content": f"事件{i:02d} " + "长" * 60}
+              for i in range(30)]
+    block = dc._render_events_block(unique + [dict(ev) for ev in unique[:10]])
+    assert len(block) <= dc.EVENTS_BLOCK_MAX_CHARS == 800
+    lines = block.split("\n")
+    expected = [f"- [{ev['date']}] {ev['content']}" for ev in unique]
+    kept = lines[1:-1]
+    assert lines[0] == dc.EVENTS_BLOCK_HEADER
+    assert 0 < len(kept) < 30 and kept == expected[:len(kept)]   # whole lines, no duplicates
+    assert lines[-1] == f"（另有 {30 - len(kept)} 条事件省略）"
+    # the next whole line would not have fitted beside its marker
+    one_more = lines[:-1] + [expected[len(kept)], f"（另有 {30 - len(kept) - 1} 条事件省略）"]
+    assert len("\n".join(one_more)) > 800
+    small = dc._render_events_block(unique[:2])
+    assert "省略" not in small and small.split("\n")[1:] == expected[:2]
+    tight = dc._render_events_block(unique, max_chars=300)
+    assert len(tight) <= 300 and tight.endswith("条事件省略）")
+    # a single line longer than the budget is cut explicitly, never dropped silently
+    huge = dc._render_events_block([{"date": "2027-01-01", "content": "巨" * 2000}])
+    assert len(huge) <= 800 and huge.endswith("…(truncated)")
+
+
+def test_events_digest():
+    digest = dc._events_digest(_SIM8_EVENTS)
+    pairs = sorted([("2027-01-05", "X happens"), ("2027-01-09", "Y")])
+    assert digest == hashlib.sha1(json.dumps(pairs, ensure_ascii=False).encode("utf-8"),
+                                  usedforsecurity=False).hexdigest()[:16]
+    assert dc._events_digest(list(reversed(_SIM8_EVENTS))) == digest       # order-free
+    assert dc._events_digest(_SIM8_EVENTS + _SIM8_EVENTS[:1]) == digest     # duplicates
+    assert dc._events_digest(_SIM8_EVENTS[:1]) != digest
+
+
+def test_elicit_round_forwards_events(monkeypatch):
+    roster = [{"agent_id": 1, "name": "A", "stance": "pro", "outcome_power": 1.0}]
+    reply = {"decisions": [{"agent_id": 1, "scenario": "S1", "magnitude": 1, "confidence": 1}]}
+
+    def _prompt(**ctx_extra):
+        fake = FakeLLMClient(json_responses=[copy.deepcopy(reply)])
+        ctx = {"llm": fake, "scenarios": ["S1", "S2"], "round_num": 1, **ctx_extra}
+        out = dc.elicit_round(roster, ctx)
+        assert len(out) == 1 and ctx["round_status"] == "committed"
+        assert len(fake.calls) == 1                     # no extra LLM call
+        return fake.calls[0]["messages"][0]["content"]
+
+    plain = _prompt()
+    with_events = _prompt(events=_SIM8_EVENTS)
+    assert "本时段日程事件" in with_events and "[2027-01-05] X happens" in with_events
+    assert with_events == plain.replace(
+        "角色名册：", dc._render_events_block(_SIM8_EVENTS) + "\n角色名册：")
+    monkeypatch.setattr(Config, "SIM_DECISION_EVENTS", False)
+    off = _prompt(events=_SIM8_EVENTS)
+    assert off == plain and "本时段日程事件" not in off
+
+
+_SIM8_REPLY = {"decisions": [{"agent_id": 1, "scenario": "S1", "magnitude": 1, "confidence": 1}]}
+
+
+def _sim8_posthoc(n_rounds, **kw):
+    actions = [{"round": r, "agent_id": 1} for r in range(1, n_rounds + 1)]
+    fake = FakeLLMClient(json_responses=[copy.deepcopy(_SIM8_REPLY) for _ in range(n_rounds)])
+    res = run_decision_channel(actions, [{"agent_id": 1, "influence_weight": 1.0}],
+                               {"scenarios": ["S1", "S2"]}, fake, concurrency=1, **kw)
+    return res, [c["messages"][0]["content"] for c in fake.calls]
+
+
+def test_posthoc_events_cache_key(monkeypatch):
+    """Hours-mode rounds share one as_of date: different events → separate calls; rounds
+    without events keep the legacy key and still dedupe (R2-EXEC-10)."""
+    def same_day(_rnd):
+        return "2027-01-01"
+
+    ev_a = [{"date": "2027-01-05", "content": "A 发生"}]
+    ev_b = [{"date": "2027-01-06", "content": "B 发生"}]
+    base, base_prompts = _sim8_posthoc(4, round_to_date=same_day)
+    assert len(base_prompts) == 1                      # stable roster + one date → one call
+
+    res, prompts = _sim8_posthoc(4, round_to_date=same_day,
+                                 events_by_round={1: ev_a, 2: ev_b, 4: ev_a + ev_a})
+    # rounds 1 and 2 differ only in events → 2 calls; round 4 carries round 1's events
+    # (duplicate removed) → reuses round 1's call; round 3 has none → one legacy-keyed call
+    assert len(prompts) == 3
+    assert "A 发生" in prompts[0] and "B 发生" not in prompts[0]
+    assert "B 发生" in prompts[1] and "A 发生" not in prompts[1]
+    assert "本时段日程事件" not in prompts[2]
+    assert prompts[2] == base_prompts[0].replace("第 1 轮", "第 3 轮")
+    assert res["n_rounds"] == 4 and len(res["trajectory"]) == 5
+
+    # events on round 1 only: rounds 2-4 still dedupe to one call
+    _, prompts = _sim8_posthoc(4, round_to_date=same_day, events_by_round={1: ev_a})
+    assert len(prompts) == 2 and "本时段日程事件" not in prompts[1]
+
+    # None / {} / rows without content: byte-identical to no events
+    for empty in (None, {}, {1: []}, {1: [{"date": "2027-01-05", "content": ""}]}):
+        assert _sim8_posthoc(4, round_to_date=same_day, events_by_round=empty) == (
+            base, base_prompts)
+
+    # SIM_DECISION_EVENTS=false: prompts, cache keys (call count) and result unchanged
+    monkeypatch.setattr(Config, "SIM_DECISION_EVENTS", False)
+    assert _sim8_posthoc(4, round_to_date=same_day,
+                         events_by_round={1: ev_a, 2: ev_b}) == (base, base_prompts)
+
+
+def test_posthoc_calendar_rounds_get_the_events_block():
+    round_dates = [
+        {"round": 0, "period_start": "2026-07-12", "period_end": "2026-09-30", "label": "2026-Q3"},
+        {"round": 1, "period_start": "2026-10-01", "period_end": "2026-12-31", "label": "2026-Q4"},
+        {"round": 2, "period_start": "2027-01-01", "period_end": "2027-03-31", "label": "2027-Q1"},
+    ]
+    event = {"date": "2026-11-05", "content": "[2026-11-05] 事件A发生"}
+    base, base_prompts = _sim8_posthoc(3, round_dates=round_dates)
+    res, prompts = _sim8_posthoc(3, round_dates=round_dates, events_by_round={2: [event]})
+    assert len(prompts) == len(base_prompts) == 3      # no extra calls
+    assert prompts[0] == base_prompts[0] and prompts[2] == base_prompts[2]
+    assert prompts[1] == base_prompts[1].replace(
+        "角色名册：", dc._render_events_block([event]) + "\n角色名册：")
+    assert "时段：第 2/3 轮" in prompts[1] and "- [2026-11-05] 事件A发生\n角色名册：" in prompts[1]
+    assert res["schema_version"] == 3
+    assert res["trajectory"] == base["trajectory"] and res["decisions"] == base["decisions"]
