@@ -1969,6 +1969,22 @@ def _world_change_line(round_num, world_delta: str, delta_state: str) -> str:
     return _WORLD_CLOCK_SUMMARY_UNAVAILABLE
 
 
+def _stepped_delta_state(delta_text: str, digest_actions, fired_events, leader_move) -> str:
+    """REPORT-6: 步进成功的一轮，其摘要的来源状态（失败关闭）。有摘要 → stepped；摘要为空
+    且本轮确实无可报内容（无非空帖文、无非空到期事件、无领先者动量）→ quiet；摘要为空但
+    本轮有可报内容 → failed——build_world_delta 只在吞掉自身异常时才会如此，此时下一轮
+    绝不能向 agent 声称"上一时段无事发生"。判定口径与 build_world_delta 的取舍一致。"""
+    if str(delta_text or "").strip():
+        return "stepped"
+    has_posts = any(isinstance(a, dict) and str(a.get("content", "") or "").strip()
+                    for a in digest_actions or [])
+    has_events = any(isinstance(e, dict) and str(e.get("content", "") or "").strip()
+                     for e in fired_events or [])
+    if has_posts or has_events or leader_move is not None:
+        return "failed"
+    return "quiet"
+
+
 def _inject_period_context(env, active_ids, round_num, period, timeline,
                            fired_events, world_delta, response_step: bool = False,
                            language: str = "", *, delta_state: Optional[str] = None) -> None:
@@ -3573,7 +3589,8 @@ class _InbandWorldEvolution:
 
     def latest_delta_state(self) -> str:
         """REPORT-6: latest_delta() 的来源状态——not_stepped（尚无步进）/ stepped（有摘要）/
-        quiet（步进成功但摘要为空）/ failed（交付或步进失败）；喂世界时钟的空段标记。"""
+        quiet（步进成功且本轮确无可报内容）/ failed（交付或步进失败，或步进成功但摘要生成
+        失败，见 _stepped_delta_state）；喂世界时钟的空段标记。"""
         return self._delta_state
 
     def _record_delta(self, text: str, state: str) -> None:
@@ -3628,7 +3645,8 @@ class _InbandWorldEvolution:
                 if fv is not None:
                     result[fk] = fv
             # REPORT-6：摘要来源状态计数（附加键，与世界时钟空段标记同一开关；关 → 轨迹逐字节
-            # 不变）。stepped/quiet 之和 = 实际步进轮数，failed = 交付/步进失败次数。
+            # 不变）。stepped/quiet = 步进成功且摘要可信的轮数；failed = 摘要不可用的次数（交付/
+            # 步进失败，或步进成功但摘要生成失败——后者也计入实际步进轮）。
             if _flag_true("SIM_ABSENCE_MARKERS", "true"):
                 result["delta_state_counts"] = dict(self._delta_state_counts)
             # SIM-1：与 post-hoc 决策通道同一套有效性裁定规则（诚实对齐，无开关）。未入账轮
@@ -3818,8 +3836,13 @@ class _InbandWorldEvolution:
             self._max_round = max(self._max_round, rnd)
             if period_end:
                 self._prev_date = period_end
-            # REPORT-6：build_world_delta 对"无到期事件、无帖文、无领先者"的平静期返回 ""
-            self._record_delta(delta_text, "stepped" if delta_text.strip() else "quiet")
+            # REPORT-6：空摘要只在本轮确实无可报内容时记 quiet；否则是摘要生成失败 → failed
+            delta_state = _stepped_delta_state(delta_text, digest_actions,
+                                               buf.get("events") or [], leader_move)
+            if delta_state == "failed":
+                self._log(f"第 {rnd} 轮世界摘要为空但本轮有可报内容（摘要生成失败，"
+                          "下一轮标为摘要不可用）")
+            self._record_delta(delta_text, delta_state)
         except Exception as _e:  # noqa: BLE001 — spec §4: 失败 → 告警 + 下一轮空摘要
             self._record_delta("", "failed")
             self._log(f"第 {round_num + 1} 轮 in-band 世界演化失败（已隔离，下一轮空摘要）: {_e}")

@@ -10,7 +10,8 @@
      world_state_trajectory.json（schema v3）/ decisions.jsonl 落盘、摘要喂下一轮头部；
      演化故障注入 → 该轮照常完成、下一轮空摘要、绝不崩溃；
   6b) REPORT-6 空段标记（SIM_ABSENCE_MARKERS，默认开）：首轮 / 平静期 / 摘要不可用 /
-     本次运行不产出 / 本时段无日程事件各有具名标记，round >= 2 绝不自称首轮；开关关 →
+     本次运行不产出 / 本时段无日程事件各有具名标记，round >= 2 绝不自称首轮；空摘要只在
+     本轮确无可报内容时算平静期，否则失败关闭为摘要不可用；开关关 →
      头部与轨迹逐字节回到旧文本（"(none)" / "(first period)"）；轨迹附加 delta_state_counts；
   7) 死轮与检查点/断点续跑路径完好（只按轮次索引记账，与演化解耦）；
   8) hours 模式（无 temporal_config）回归钉：无注入、无演化产物、max_rounds 照旧截断。
@@ -926,8 +927,51 @@ def test_inband_delta_state_tracks_step_outcomes(tmp_path, monkeypatch):
     assert len(traj["trajectory"]) - 1 == 3
 
 
+def test_stepped_delta_state_fails_closed():
+    """步进成功后的摘要来源判定：空摘要只在本轮确无可报内容时算 quiet，否则失败关闭为 failed。"""
+    state = rps._stepped_delta_state
+    post = [{"content": "Actor0 strategic move"}]
+    event = [{"date": "2026-11-05", "content": "事件A发生"}]
+    lead = {"leader": "A", "direction": "flat"}
+    assert state("Momentum: A held this period.", post, event, lead) == "stepped"
+    assert state("Actor1: announced a deal", [], [], None) == "stepped"
+    assert state("", [], [], None) == "quiet"
+    assert state(None, None, None, None) == "quiet"
+    # 与 build_world_delta 同口径：空白正文 / 非 dict 事件不算可报内容
+    assert state("  \n", [{"content": "  "}], [{"content": ""}, "junk", None], None) == "quiet"
+    assert state("", post, [], None) == "failed"
+    assert state("", [], event, None) == "failed"
+    assert state("", [], [], lead) == "failed"
+    assert state("   ", post, event, lead) == "failed"
+
+
 def test_quiet_period_named_as_quiet(tmp_path, monkeypatch):
-    """步进成功但摘要为空（build_world_delta 的平静期语义）→ 下一轮标平静期而非首轮。"""
+    """步进成功且本轮确无可报内容（无帖文、无到期事件、无领先者动量）→ 真实 build_world_delta
+    返回空摘要、状态 quiet，下一轮头部标平静期而非首轮；轨迹计数记 quiet。"""
+    sim_dir = str(tmp_path)
+    logs = []
+    _patch_runtime(monkeypatch, sim_dir, [])
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit([]))
+    evo = rps._InbandWorldEvolution(_calendar_config(), sim_dir, 1, logs.append)
+    real_outcome = evo._ws.outcome
+    # 有情景的 WorldState 恒有领先者（动量线恒在）；去掉领先者才构造出真正无可报内容的一期
+    monkeypatch.setattr(evo._ws, "outcome", lambda: {**real_outcome(), "leader": None})
+
+    evo.deliver("twitter", 0, _ROUND_DATES[0], [], [])
+    assert evo.latest_delta() == "" and evo.latest_delta_state() == "quiet"
+    assert not any("摘要生成失败" in m for m in logs)
+    note = _clock_text(1, [], evo.latest_delta(), delta_state=evo.latest_delta_state())
+    assert _what_changed(note) == rps._WORLD_CLOCK_QUIET_PERIOD
+    assert "(first period" not in note
+    evo.platform_done("twitter")
+    traj = _read_traj(sim_dir)
+    assert traj["delta_state_counts"] == {"stepped": 0, "quiet": 1, "failed": 0}
+    assert len(traj["trajectory"]) - 1 == 1
+
+
+def test_empty_digest_with_content_fails_closed(tmp_path, monkeypatch, capsys):
+    """步进成功、本轮有帖文与领先者动量，摘要却为空（build_world_delta 吞掉自身异常的唯一
+    情形）→ 失败关闭：下一轮标"摘要不可用"，绝不声称平静期；轨迹计数记 failed 并告警。"""
     sim_dir = str(tmp_path)
     envs, calls = [], []
     _patch_runtime(monkeypatch, sim_dir, envs)
@@ -943,9 +987,13 @@ def test_quiet_period_named_as_quiet(tmp_path, monkeypatch):
         notes = _notes_for_round(env, r)
         assert notes
         for n in notes:
-            assert _what_changed(n) == rps._WORLD_CLOCK_QUIET_PERIOD
-            assert "(first period" not in n
-    assert _read_traj(sim_dir)["delta_state_counts"] == {"stepped": 0, "quiet": 3, "failed": 0}
+            assert _what_changed(n) == rps._WORLD_CLOCK_SUMMARY_UNAVAILABLE
+            assert "unavailable in this run" in n
+            assert rps._WORLD_CLOCK_QUIET_PERIOD not in n and "(first period" not in n
+    traj = _read_traj(sim_dir)
+    assert traj["delta_state_counts"] == {"stepped": 0, "quiet": 0, "failed": 3}
+    assert len(traj["trajectory"]) - 1 == 3  # WorldState 照常步进，只是摘要不可用
+    assert capsys.readouterr().out.count("摘要生成失败") == 3
 
 
 def test_no_inband_named_as_not_produced(tmp_path, monkeypatch):
@@ -969,7 +1017,8 @@ def test_no_inband_named_as_not_produced(tmp_path, monkeypatch):
 
 
 def test_delta_state_counts_mixed_run(tmp_path, monkeypatch):
-    """第 1 轮有摘要、第 2 轮 elicit 失败、第 3 轮平静 → 头部与轨迹计数逐一对应。"""
+    """第 1 轮有摘要、第 2 轮 elicit 失败、第 3 轮步进成功但摘要生成失败（有内容却空摘要）
+    → 头部与轨迹计数逐一对应（平静期计数见 test_quiet_period_named_as_quiet）。"""
     import app.services.world_delta as wd
 
     sim_dir = str(tmp_path)
@@ -985,7 +1034,7 @@ def test_delta_state_counts_mixed_run(tmp_path, monkeypatch):
     real_build = wd.build_world_delta
     built = []
 
-    def _build(*a, **k):  # 只在步进成功的轮被调用：第 1 轮真实摘要，第 3 轮平静
+    def _build(*a, **k):  # 只在步进成功的轮被调用：第 1 轮真实摘要，第 3 轮空摘要
         built.append(1)
         return real_build(*a, **k) if len(built) == 1 else ""
 
@@ -999,8 +1048,9 @@ def test_delta_state_counts_mixed_run(tmp_path, monkeypatch):
     assert r3 and all(_what_changed(n) == rps._WORLD_CLOCK_SUMMARY_UNAVAILABLE for n in r3)
     traj = _read_traj(sim_dir)
     counts = traj["delta_state_counts"]
-    assert counts == {"stepped": 1, "quiet": 1, "failed": 1}
-    assert counts["stepped"] + counts["quiet"] == len(traj["trajectory"]) - 1 == 2
+    assert counts == {"stepped": 1, "quiet": 0, "failed": 2}
+    # 第 2 轮步进失败（不入轨迹）；第 3 轮照常步进，只是摘要不可用 → 计 failed
+    assert [row["round"] for row in traj["trajectory"][1:]] == [1, 3]
     assert sum(counts.values()) == 3  # 每个运行轮恰计一次
 
 
