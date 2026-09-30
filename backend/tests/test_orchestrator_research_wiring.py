@@ -359,6 +359,7 @@ def test_report_health_hard_fails_when_final_audit_missing(monkeypatch, tmp_path
 import json  # noqa: E402
 import os  # noqa: E402
 import re  # noqa: E402
+import threading  # noqa: E402
 
 from app.services import pipeline_orchestrator as _po  # noqa: E402
 
@@ -718,8 +719,30 @@ def test_missing_legacy_run_summary_is_backfilled_once(monkeypatch, tmp_path):
 
 def _exercise_prepare_run_resume(
         monkeypatch, tmp_path, *, rebuild_prepare, corrupt_run=False,
-        corrupt_prepare_seal=False):
-    """Run the real orchestrator state machine with every external service faked."""
+        corrupt_prepare_seal=False, report_simulation_id=None, lineage_flags=True,
+        report_preflight_failures=0, real_run_manifest=False, extra_options=None,
+        prior_run_manifest=None, report_interrupt=None):
+    """Run the real orchestrator state machine with every external service faked.
+
+    The persisted report was generated for ``report_simulation_id`` (default:
+    the old simulation).  A regenerated report is recorded in
+    ``report_generations`` (the simulation id it was generated for) instead
+    of running the real ReportAgent.  ``lineage_flags`` sets both INFRA-7
+    knobs (RUN_SHAPE_PIN, RESUME_LINEAGE_GUARDS).  The first
+    ``report_preflight_failures`` REPORT preflight probes raise (a provider
+    outage).  ``real_run_manifest`` keeps the real run.json writers, and
+    ``run_manifest_at_start`` then holds run.json's simulation block as RUN
+    starts each simulation; ``prior_run_manifest`` is an earlier attempt's
+    run.json.  ``report_interrupt`` ends the first report generation early,
+    once: ``"cancel_before_meta"`` cancels the pipeline right after the new
+    report_id is minted (the report never reaches disk);
+    ``"cancel_after_publish"`` publishes the report and then cancels from its
+    final progress callback; ``"complete_stage_crash"`` publishes it and
+    crashes in ``_complete_stage(REPORT)``.  With it set, the report store is
+    keyed by id and the simulation lookup returns the newest report of the
+    simulation.  The returned ``pid`` can be resumed for a second attempt while
+    the fakes stay installed.
+    """
     pipeline_root = tmp_path / "pipelines"
     simulation_root = tmp_path / "simulations"
     report_root = tmp_path / "reports" / "report_existing"
@@ -743,8 +766,24 @@ def _exercise_prepare_run_resume(
         "SIM_TEMPORAL_MODE": "calendar",
         "SIM_DECISION_CHANNEL": True,
         "N_FORECAST_SEEDS": 1,
+        "RUN_SHAPE_PIN": lineage_flags,
+        "RESUME_LINEAGE_GUARDS": lineage_flags,
     }.items():
         monkeypatch.setattr(_po.Config, name, value, raising=False)
+    if report_preflight_failures:
+        import app.utils.llm_client as llm_client_module
+
+        preflight = {"calls": 0}
+
+        class FlakyPreflightClient:
+            def chat(self, messages, **kwargs):
+                preflight["calls"] += 1
+                if preflight["calls"] <= report_preflight_failures:
+                    raise RuntimeError("provider outage")
+                return "pong"
+
+        monkeypatch.setattr(_po.Config, "REPORT_LLM_PREFLIGHT", True, raising=False)
+        monkeypatch.setattr(llm_client_module, "LLMClient", FlakyPreflightClient)
 
     pid = "pipe_state_machine"
     _po.PipelineManager.ensure_dirs(pid)
@@ -984,9 +1023,13 @@ def _exercise_prepare_run_resume(
 
     start_calls = []
     summary_writes = []
+    run_manifest_at_start = []
 
     def start_simulation(cls, simulation_id, **kwargs):
         start_calls.append(simulation_id)
+        if real_run_manifest:
+            with open(_po.PipelineManager.manifest_path(pid), encoding="utf-8") as fh:
+                run_manifest_at_start.append(json.load(fh)["resolved"]["simulation"])
         states[simulation_id].status = _po.SimulationStatus.RUNNING
 
     def get_run_state(cls, simulation_id):
@@ -1023,27 +1066,71 @@ def _exercise_prepare_run_resume(
         _po.SimulationRunner, "write_run_summary", classmethod(write_summary))
 
     existing_report = SimpleNamespace(
-        report_id="report_existing", status=_po.ReportStatus.COMPLETED)
+        report_id="report_existing", status=_po.ReportStatus.COMPLETED,
+        simulation_id=report_simulation_id or old_id)
+    published_reports = {"report_existing": existing_report}
+    if report_interrupt is None:
+        def get_report(cls, report_id):
+            return existing_report
+
+        def get_report_by_simulation(cls, simulation_id):
+            return None
+    else:
+        def get_report(cls, report_id):
+            return published_reports.get(report_id)
+
+        def get_report_by_simulation(cls, simulation_id):
+            matches = [report for report in published_reports.values()
+                       if report.simulation_id == simulation_id]
+            return matches[-1] if matches else None
+    monkeypatch.setattr(_po.ReportManager, "get_report", classmethod(get_report))
     monkeypatch.setattr(
-        _po.ReportManager,
-        "get_report",
-        classmethod(lambda cls, report_id: existing_report),
-    )
-    monkeypatch.setattr(
-        _po.ReportManager,
-        "get_report_by_simulation",
-        classmethod(lambda cls, simulation_id: None),
-    )
+        _po.ReportManager, "get_report_by_simulation", classmethod(get_report_by_simulation))
     monkeypatch.setattr(
         _po.ReportManager,
         "_get_report_folder",
         classmethod(lambda cls, report_id: str(report_root)),
     )
 
+    report_generations = []
+    interrupts = {"pending": report_interrupt}
+
+    def take_interrupt(kind):
+        if interrupts["pending"] != kind:
+            return False
+        interrupts["pending"] = None
+        return True
+
+    def cancel_pipeline():
+        event = threading.Event()
+        event.set()
+        monkeypatch.setitem(_po.PipelineOrchestrator._cancel_events, pid, event)
+
+    def generate_stage_report(self, state, agent, simulation_id, *, report_id,
+                              progress_callback):
+        report_generations.append(simulation_id)
+        report = SimpleNamespace(report_id=report_id, status=_po.ReportStatus.COMPLETED,
+                                 simulation_id=simulation_id)
+        published_reports[report_id] = report
+        if take_interrupt("cancel_after_publish"):
+            # ReportAgent.generate_report saves the completed report, then calls
+            # progress_callback('completed', 100, ...): the stage updater raises
+            # PipelineCancelled there on a user cancel.
+            cancel_pipeline()
+            progress_callback("completed", 100, "report generated")
+        return report
+
+    real_clear_report_attempt = _po.PipelineOrchestrator._clear_report_attempt_artifacts
+
+    def clear_report_attempt(state):
+        real_clear_report_attempt(state)
+        if take_interrupt("cancel_before_meta"):
+            cancel_pipeline()  # the next stage update, right after the mint, raises
+
     # Keep this transition test focused on durable stage contracts, not provider,
     # telemetry, or final-report quality systems.
     monkeypatch.setattr(_po, "_finalize_research_contract", lambda *args, **kwargs: None)
-    for name, replacement in {
+    stubs = {
         "_start_heartbeat": lambda self, state: None,
         "_init_telemetry_flush": lambda self, state: None,
         "_write_run_manifest": lambda self, state: None,
@@ -1056,8 +1143,34 @@ def _exercise_prepare_run_resume(
         "_maybe_run_seed_ensemble": lambda self, *args, **kwargs: None,
         "_enforce_pipeline_health": lambda self, state: None,
         "_assess_report_health": lambda self, report_id: ("ok", [], {}),
-    }.items():
+        "_generate_stage_report": generate_stage_report,
+    }
+    if real_run_manifest:
+        monkeypatch.setattr(_po, "_repo_git_sha", lambda: "gitsha")
+        monkeypatch.setattr(_po, "_deerflow_ref", lambda: None)
+        del stubs["_write_run_manifest"], stubs["_update_manifest"]
+    for name, replacement in stubs.items():
         monkeypatch.setattr(_po.PipelineOrchestrator, name, replacement)
+    monkeypatch.setattr(_po.PipelineOrchestrator, "_clear_report_attempt_artifacts",
+                        staticmethod(clear_report_attempt))
+    real_complete_stage = _po.PipelineOrchestrator._complete_stage
+
+    def complete_stage(self, state, stage, message="完成", *, reused=False):
+        if stage == _po.STAGE_REPORT and not reused and take_interrupt("complete_stage_crash"):
+            raise RuntimeError("backend restarted before the REPORT stage completed")
+        return real_complete_stage(self, state, stage, message, reused=reused)
+
+    monkeypatch.setattr(_po.PipelineOrchestrator, "_complete_stage", complete_stage)
+
+    class FakeReportAgent(_po.ReportAgent):
+        # Keeps the class-level helpers (the reuse-path ledger repair calls
+        # them) while skipping the real agent's service construction.
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    monkeypatch.setattr(_po, "ReportAgent", FakeReportAgent)
+    monkeypatch.setattr(
+        _po.ReportManager, "save_report", classmethod(lambda cls, report: None))
 
     state = _po.PipelineState(
         pipeline_id=pid,
@@ -1071,6 +1184,10 @@ def _exercise_prepare_run_resume(
     state.simulation_id = old_id
     state.report_id = "report_existing"
     state.options["research_language"] = "English"
+    state.options.update(extra_options or {})
+    if prior_run_manifest is not None:
+        with open(_po.PipelineManager.manifest_path(pid), "w", encoding="utf-8") as fh:
+            json.dump(prior_run_manifest, fh)
     if corrupt_run:
         state.options["scenario_overlay"] = {
             "injected_events": [{"content": "Policy shock", "round": 0}],
@@ -1089,6 +1206,7 @@ def _exercise_prepare_run_resume(
 
     _po.PipelineOrchestrator._run(state)
     return SimpleNamespace(
+        pid=pid,
         state=state,
         old_id=old_id,
         new_id=new_id,
@@ -1097,6 +1215,8 @@ def _exercise_prepare_run_resume(
         start_calls=start_calls,
         summary_writes=summary_writes,
         manager_calls=manager_calls,
+        report_generations=report_generations,
+        run_manifest_at_start=run_manifest_at_start,
         manifest=_po.PipelineManager.load_artifact_manifest(pid),
         old_config_sha=old_config_sha,
         old_config_manifest_sha=old_config_manifest_sha,
@@ -1104,9 +1224,19 @@ def _exercise_prepare_run_resume(
     )
 
 
-def test_prepare_rebuild_invalidates_and_executes_run_end_to_end(monkeypatch, tmp_path):
+def _assert_legacy_report_reuse(result):
+    """INFRA-7 flags off: the persisted report is reused whatever changed upstream."""
+    assert result.report_generations == []
+    assert result.state.report_id == "report_existing"
+    for key in ("stage_notes", "lineage_invalidated", "stage_reuse_v1"):
+        assert key not in result.state.options
+
+
+@pytest.mark.parametrize("lineage_flags", [True, False])
+def test_prepare_rebuild_invalidates_and_executes_run_end_to_end(
+        monkeypatch, tmp_path, lineage_flags):
     result = _exercise_prepare_run_resume(
-        monkeypatch, tmp_path, rebuild_prepare=True)
+        monkeypatch, tmp_path, rebuild_prepare=True, lineage_flags=lineage_flags)
 
     assert result.state.status == "completed"
     assert result.state.simulation_id == result.new_id
@@ -1139,11 +1269,22 @@ def test_prepare_rebuild_invalidates_and_executes_run_end_to_end(monkeypatch, tm
     assert result.manifest["run_summary"]["path"].endswith(
         f"{result.new_id}/run_summary.json")
     assert result.state.stages[_po.STAGE_RUN].message == "模拟完成"
+    if not lineage_flags:
+        _assert_legacy_report_reuse(result)
+        return
+    # INFRA-7: the old report was written for the replaced simulation.
+    assert result.report_generations == [result.new_id]
+    assert result.state.report_id != "report_existing"
+    assert result.state.options["stage_notes"][_po.STAGE_REPORT] == [
+        "reuse_refused: simulation_id_mismatch"]
+    # Every stale stage was rebuilt, so nothing stays invalidated.
+    assert "lineage_invalidated" not in result.state.options
 
 
-def test_prepare_and_run_reuse_is_read_only_end_to_end(monkeypatch, tmp_path):
+@pytest.mark.parametrize("lineage_flags", [True, False])
+def test_prepare_and_run_reuse_is_read_only_end_to_end(monkeypatch, tmp_path, lineage_flags):
     result = _exercise_prepare_run_resume(
-        monkeypatch, tmp_path, rebuild_prepare=False)
+        monkeypatch, tmp_path, rebuild_prepare=False, lineage_flags=lineage_flags)
 
     assert result.state.status == "completed"
     assert result.state.simulation_id == result.old_id
@@ -1162,11 +1303,20 @@ def test_prepare_and_run_reuse_is_read_only_end_to_end(monkeypatch, tmp_path):
     assert config_manifest.read_bytes() == result.old_config_manifest_bytes
     assert _po._sha256_file(str(config_manifest)) == result.old_config_manifest_sha
     assert result.state.stages[_po.STAGE_RUN].message == "模拟已恢复"
+    if not lineage_flags:
+        _assert_legacy_report_reuse(result)
+        return
+    assert result.report_generations == []
+    assert result.state.report_id == "report_existing"
+    assert "stage_notes" not in result.state.options
+    assert "lineage_invalidated" not in result.state.options
 
 
-def test_invalid_run_manifest_applies_overlay_before_rerun(monkeypatch, tmp_path):
+@pytest.mark.parametrize("lineage_flags", [True, False])
+def test_invalid_run_manifest_applies_overlay_before_rerun(monkeypatch, tmp_path, lineage_flags):
     result = _exercise_prepare_run_resume(
-        monkeypatch, tmp_path, rebuild_prepare=False, corrupt_run=True)
+        monkeypatch, tmp_path, rebuild_prepare=False, corrupt_run=True,
+        lineage_flags=lineage_flags)
 
     assert result.state.status == "completed"
     assert result.state.simulation_id == result.old_id
@@ -1181,6 +1331,14 @@ def test_invalid_run_manifest_applies_overlay_before_rerun(monkeypatch, tmp_path
     assert len(scenario_events) == 1
     assert scenario_events[0]["content"] == "Policy shock"
     assert result.state.stages[_po.STAGE_RUN].message == "模拟完成"
+    if not lineage_flags:
+        _assert_legacy_report_reuse(result)
+        return
+    # INFRA-7: RUN re-executed this attempt, so the old report is stale.
+    assert result.report_generations == [result.old_id]
+    assert result.state.options["stage_notes"][_po.STAGE_REPORT] == [
+        "reuse_refused: run_recomputed"]
+    assert "lineage_invalidated" not in result.state.options
 
 
 def test_scenario_overlay_replay_preserves_requested_duplicate_multiplicity():
@@ -1207,14 +1365,16 @@ def test_scenario_overlay_replay_preserves_requested_duplicate_multiplicity():
     assert all(row["is_scenario_injection"] is True for row in scheduled)
 
 
+@pytest.mark.parametrize("lineage_flags", [True, False])
 def test_prepare_reuse_rebuilds_when_state_bound_config_seal_is_tampered(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, lineage_flags
 ):
     result = _exercise_prepare_run_resume(
         monkeypatch,
         tmp_path,
         rebuild_prepare=False,
         corrupt_prepare_seal=True,
+        lineage_flags=lineage_flags,
     )
 
     assert result.state.status == "completed"
@@ -1232,6 +1392,10 @@ def test_prepare_reuse_rebuilds_when_state_bound_config_seal_is_tampered(
         "artifact_validation_error"
     ]["error"]
     assert result.start_calls == [result.new_id]
+    if not lineage_flags:
+        _assert_legacy_report_reuse(result)
+        return
+    assert result.report_generations == [result.new_id]
 
 
 def test_research_html_artifact_is_raw_served_in_opaque_sandbox(monkeypatch, tmp_path):

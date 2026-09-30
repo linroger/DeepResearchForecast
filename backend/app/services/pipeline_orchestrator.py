@@ -62,6 +62,7 @@ from ..services.research_progress import (
     ResearchProgressEstimator,
     aggregate_parallel_progress,
 )
+from ..services import run_shape
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import RunnerStatus, SimulationRunner
 from ..services.text_processor import TextProcessor
@@ -799,6 +800,28 @@ def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
             getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
             or "diagnostic_only"),
     }
+
+
+def capture_run_shape_v1(options: Any, origin: str) -> Optional[dict[str, Any]]:
+    """INFRA-7: pin the run shape (result-affecting knobs + provenance).
+
+    The second admission snapshot next to ``safety_policy_v1``; see
+    ``run_shape``.  ``origin`` is ``admission`` (start), ``fork`` (scenario and
+    batch-question forks) or ``resume_unpinned`` (a run admitted before the
+    pin existed, captured at its first resume).  The pin is observational, so
+    a capture failure is logged and yields None instead of blocking admission.
+    """
+    try:
+        return run_shape.pin(
+            Config,
+            options,
+            origin=origin,
+            pinned_at=_utcnow(),
+            research_engine=research_engine_for_run(options),
+        )
+    except Exception as exc:  # noqa: BLE001 — the pin must never block a run
+        logger.warning("run-shape pin skipped (origin=%s): %s", origin, exc)
+        return None
 
 
 def capture_actor_intelligence_policy_v1(
@@ -7854,6 +7877,14 @@ def _build_run_manifest(state: "PipelineState") -> dict[str, Any]:
         max_rounds = opts.get("max_rounds") or None
     else:
         max_rounds = opts.get("max_rounds") or (getattr(Config, "OASIS_DEFAULT_MAX_ROUNDS", 0) or None)
+    sim_graph_feedback = bool(getattr(Config, "SIM_GRAPH_FEEDBACK", True))
+    if bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+        # INFRA-7：模拟实际遵循的是准入钉住的安全政策，而非当前环境默认值。
+        _safety = opts.get("safety_policy_v1")
+        _pinned_feedback = (
+            _safety.get("sim_graph_feedback") if isinstance(_safety, dict) else None)
+        if _pinned_feedback is not None:
+            sim_graph_feedback = bool(_pinned_feedback)
 
     manifest: dict[str, Any] = {
         "schema_version": PIPELINE_SCHEMA_VERSION,
@@ -7882,7 +7913,7 @@ def _build_run_manifest(state: "PipelineState") -> dict[str, Any]:
                 "max_rounds": int(max_rounds) if max_rounds else None,
                 "total_rounds": None,  # 真实总轮数运行时填
                 "recsys_wired": bool(getattr(Config, "SIM_WIRE_RECSYS", False)),
-                "sim_graph_feedback": bool(getattr(Config, "SIM_GRAPH_FEEDBACK", True)),
+                "sim_graph_feedback": sim_graph_feedback,
             },
         },
         "graph": {
@@ -8071,6 +8102,15 @@ class PipelineOrchestrator:
         self._tel_prev: Optional[dict] = None
         self._tel_prev_cum: Optional[dict] = None
         self._tel_last_flush_calls: int = 0
+        # INFRA-7: stages recomputed (not reused) in this attempt, read by the
+        # resume lineage guards; this attempt's stage_reuse_v1 records, passed
+        # to the stage telemetry; the attempt's fresh run.json ``resolved``
+        # blocks used to restamp recomputed research/simulation blocks; and the
+        # simulation runtime fields this attempt's RUN wrote to run.json.
+        self._recomputed_this_attempt: set[str] = set()
+        self._stage_reuse_this_attempt: list[dict[str, Any]] = []
+        self._fresh_resolved: Optional[dict[str, Any]] = None
+        self._sim_runtime_this_attempt: dict[str, Any] = {}
 
     # -- W9-3: run 遥测增量落盘 --------------------------------------------
     # 两条失败跑的教训：LLMMeter 是进程内存累加器，重启即清零；run_telemetry.json 只在
@@ -8508,6 +8548,8 @@ class PipelineOrchestrator:
             state.options[EVALUATION_RUN_OPTION] = evaluation_pin
             write_json_atomic(os.path.join(state.handoff_dir, EVALUATION_RUN_MARKER),
                               dict(evaluation_pin, pipeline_id=pipeline_id))
+        # INFRA-7：第二份准入快照——影响结果的旋钮 + provider 出处（resume 时据此检测漂移）。
+        cls._pin_run_shape(state, run_shape.ORIGIN_ADMISSION)
         PipelineManager.save(state)
 
         cls._cancel_events[pipeline_id] = threading.Event()
@@ -8747,6 +8789,10 @@ class PipelineOrchestrator:
                     state.options["safety_policy_v1"]["n_forecast_seeds"],
                     state.options["safety_policy_v1"]["simulation_forecast_effect"],
                 )
+            # INFRA-7：早于 run-shape 钉准入的管线在首次 resume 时补钉当前形状（origin 标明
+            # resume_unpinned——它不是准入时的形状，只是此后漂移检测的基线）。
+            if not isinstance(state.options.get("run_shape_v1"), dict):
+                cls._pin_run_shape(state, run_shape.ORIGIN_RESUME_UNPINNED)
             PipelineManager.save(state)
 
             cls._cancel_events[pipeline_id] = threading.Event()
@@ -8812,6 +8858,9 @@ class PipelineOrchestrator:
             state.error = None
             state.current_stage = STAGE_ONTOLOGY
             state.options["continued_to_full_at"] = _utcnow()
+            # INFRA-7：继续为完整管线与 resume 同理——未钉形状的旧管线补钉基线。
+            if not isinstance(state.options.get("run_shape_v1"), dict):
+                cls._pin_run_shape(state, run_shape.ORIGIN_RESUME_UNPINNED)
             PipelineManager.save(state)
 
             cls._cancel_events[pipeline_id] = threading.Event()
@@ -8885,6 +8934,9 @@ class PipelineOrchestrator:
                 new_state.options["max_rounds"] = int(overlay["max_rounds"])
             except (TypeError, ValueError):
                 pass
+        # INFRA-7：情景分叉是新准入——按分叉时刻的环境钉形状（origin=fork），并记下 base 的钉
+        # （复用的研究/本体/图谱是在 base 的形状下建的）。
+        cls._pin_run_shape(new_state, run_shape.ORIGIN_FORK, base_state=base_state)
 
         PipelineManager.ensure_dirs(new_id)
         task_manager = TaskManager()
@@ -9081,6 +9133,339 @@ class PipelineOrchestrator:
             return default if v is None else v
         except Exception:  # noqa: BLE001 — 安全政策读取绝不让管线崩溃；回退环境值
             return default
+
+    # -- INFRA-7: run-shape pin, drift detection and resume lineage guards ----
+
+    @staticmethod
+    def _pin_run_shape(state: "PipelineState", origin: str, *,
+                       base_state: Optional["PipelineState"] = None) -> None:
+        """Store ``options['run_shape_v1']`` when RUN_SHAPE_PIN is on.
+
+        A fork passes ``base_state``: its pin then records the base's pin
+        under ``fork_base`` (sha256 plus the identity knobs that differ), since
+        the fork reuses upstream artifacts built under the base's shape.
+        """
+        if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+            return
+        shape = capture_run_shape_v1(state.options, origin)
+        if shape is None:
+            return
+        if base_state is not None:
+            base_options = base_state.options if isinstance(base_state.options, dict) else {}
+            shape["fork_base"] = run_shape.fork_base_record(
+                base_options.get("run_shape_v1"), shape, base_state.pipeline_id)
+        state.options["run_shape_v1"] = shape
+
+    @staticmethod
+    def _run_shape_drift(state: "PipelineState") -> Optional[dict[str, Any]]:
+        """Diff the run's pinned shape against the ambient config (None if unpinned)."""
+        pinned = (state.options or {}).get("run_shape_v1")
+        if not isinstance(pinned, dict):
+            return None
+        current = run_shape.capture(
+            Config, state.options, research_engine=research_engine_for_run(state.options))
+        return run_shape.diff(pinned, current)
+
+    def _check_run_shape_drift(self, state: "PipelineState") -> None:
+        """INFRA-7: record admission-shape drift for this attempt; refuse on policy.
+
+        ``record`` (default) discloses the drift in ``options.run_shape_drift``
+        (+ a capped history) and continues; ``refuse`` fails the attempt naming
+        the changed identity knobs.  Provenance-only drift never refuses.
+        ``run_shape_drift`` keeps the latest non-empty drift: a later attempt
+        run under the restored admission shape does not erase it, because the
+        stages completed under the drifted shape are still part of the run.
+        """
+        if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+            return
+        raw_policy = getattr(Config, "RUN_SHAPE_DRIFT_POLICY", run_shape.DRIFT_POLICY_RECORD)
+        policy, valid = run_shape.resolve_drift_policy(raw_policy)
+        if not valid:
+            logger.warning(
+                "[%s] RUN_SHAPE_DRIFT_POLICY=%r 未知（可选 record | refuse）——按 record 处理",
+                state.pipeline_id, str(raw_policy)[:64],
+            )
+        try:
+            drift = self._run_shape_drift(state)
+        except Exception as exc:  # noqa: BLE001 — refuse 下无法证明未漂移即拒绝
+            if policy == run_shape.DRIFT_POLICY_REFUSE:
+                raise RuntimeError(
+                    "run-shape drift check failed under RUN_SHAPE_DRIFT_POLICY=refuse: "
+                    f"{exc}") from exc
+            logger.warning("[%s] run-shape 漂移检测跳过: %s", state.pipeline_id, exc)
+            return
+        if not run_shape.has_drift(drift):
+            return
+        state.options["run_shape_drift"] = drift
+        state.options["run_shape_drift_history"] = run_shape.append_capped(
+            state.options.get("run_shape_drift_history"),
+            {"at": _utcnow(), "policy": policy, **drift},
+            run_shape.DRIFT_HISTORY_CAP,
+        )
+        PipelineManager.save(state)
+        if run_shape.refuses(policy, drift):
+            raise RuntimeError(run_shape.refusal_message(drift))
+        logger.warning(
+            "[%s] 运行形状自准入以来已漂移（已记录，继续执行）: %s",
+            state.pipeline_id, ", ".join(run_shape.drifted_knobs(drift)),
+        )
+
+    def _attempt_recomputed(self) -> set[str]:
+        """Stages recomputed this attempt (lazily created for bare instances)."""
+        recomputed = getattr(self, "_recomputed_this_attempt", None)
+        if recomputed is None:
+            recomputed = set()
+            self._recomputed_this_attempt = recomputed
+        return recomputed
+
+    def _attempt_sim_runtime(self) -> dict[str, Any]:
+        """Simulation runtime fields this attempt's RUN wrote to run.json (lazy)."""
+        runtime = getattr(self, "_sim_runtime_this_attempt", None)
+        if runtime is None:
+            runtime = {}
+            self._sim_runtime_this_attempt = runtime
+        return runtime
+
+    def _lineage_refuses_reuse(
+        self,
+        state: "PipelineState",
+        stage: str,
+        *,
+        bound_ids: Optional[tuple[Any, Any]] = None,
+        exempt: tuple[str, ...] = (),
+        artifact_id: Any = None,
+    ) -> Optional[str]:
+        """INFRA-7 resume lineage guard: the refusal reason when ``stage`` must recompute.
+
+        Consults this attempt's recomputes and the durable
+        ``options.lineage_invalidated`` map, so a stage made stale by an earlier
+        attempt whose rebuild failed is still refused.  ``artifact_id`` names
+        the candidate artifact (REPORT: its report_id); when it is the one
+        ``options.lineage_rebuilt`` records for the stage, the durable entry
+        does not refuse it (a rebuild from current inputs cut off before the
+        stage completed).  A refusal is recorded in the invalidated map and
+        leaves a ``reuse_refused: <reason>`` note under
+        ``options.stage_notes[stage]`` (a per-stage list, so it never clobbers
+        the single-valued ``resumed_stage_validation`` breadcrumb that names
+        the upstream cause); the caller then falls through to its rebuild
+        branch.  None = reuse may proceed (always None with
+        RESUME_LINEAGE_GUARDS off).
+        """
+        if not bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
+            return None
+        invalidated = state.options.get(run_shape.LINEAGE_INVALIDATED_OPTION)
+        invalidated = dict(invalidated) if isinstance(invalidated, dict) else {}
+        reason = run_shape.lineage_refusal(
+            stage, self._attempt_recomputed(), bound_ids=bound_ids, exempt=exempt,
+            invalidated=invalidated, artifact_id=artifact_id,
+            rebuilt=state.options.get(run_shape.LINEAGE_REBUILT_OPTION))
+        if reason is None:
+            return None
+        invalidated.setdefault(stage, reason)
+        state.options[run_shape.LINEAGE_INVALIDATED_OPTION] = invalidated
+        notes = state.options.get("stage_notes")
+        notes = dict(notes) if isinstance(notes, dict) else {}
+        notes[stage] = run_shape.append_capped(
+            notes.get(stage), f"reuse_refused: {reason}", run_shape.STAGE_NOTES_CAP)
+        state.options["stage_notes"] = notes
+        logger.warning(
+            "[%s] %s 阶段拒绝复用（%s）：上游已变化（本 attempt 或此前未完成重建的 attempt），"
+            "重算以免复用陈旧产物",
+            state.pipeline_id, stage, reason,
+        )
+        return reason
+
+    def _forbid_shared_fork_rebuild(
+        self, state: "PipelineState", stage: str, project: Any, reason: str,
+    ) -> None:
+        """INFRA-7: fail closed instead of rebuilding a fork's shared artifacts in place.
+
+        A scenario fork (``fork``) runs on its base pipeline's project record.
+        When a lineage guard refuses its ontology/graph reuse, the rebuild would
+        overwrite ``project.ontology`` / ``project.graph_id`` that the base (and
+        sibling forks) still use.  Every fork (scenario and batch question)
+        also works in the base's handoff directory, where a graph rebuild writes
+        communities.json, entity_merges.json, graph_prune.json and the graph
+        priors that the base's artifact manifest seals.  In either case the
+        attempt fails naming the base instead.  A fork that owns its project
+        still regenerates its ontology (a batch question fork does so by
+        design).
+        """
+        base_pid = (state.options or {}).get("base_pipeline_id")
+        if not base_pid:
+            return
+        shared: list[str] = []
+        project_id = getattr(project, "project_id", None)
+        if project_id:
+            try:
+                base = PipelineManager.load(str(base_pid))
+            except Exception:  # noqa: BLE001 — an unreadable base cannot prove the project is ours
+                base = None
+            if isinstance(base, dict):
+                project_shared = base.get("project_id") == project_id
+            else:
+                # Base record gone or unreadable: scenario forks share the base
+                # project by construction, so treat them as shared.
+                project_shared = "scenario_overlay" in (state.options or {})
+            if project_shared:
+                shared.append(f"project {project_id}")
+        if stage == STAGE_GRAPH:
+            own_handoff = PipelineManager.handoff_dir(state.pipeline_id)
+            handoff = state.handoff_dir or own_handoff
+            if os.path.realpath(handoff) != os.path.realpath(own_handoff):
+                shared.append(f"handoff dir {handoff}")
+        if not shared:
+            return
+        raise RuntimeError(
+            f"resume lineage guard: the {stage} artifact of fork {state.pipeline_id} must be "
+            f"rebuilt ({reason}), but its {' and '.join(shared)} "
+            f"{'are' if len(shared) > 1 else 'is'} shared with base pipeline "
+            f"{base_pid}; refusing to overwrite the base's {stage} artifacts in place. Fork "
+            "again from a healthy base, or set RESUME_LINEAGE_GUARDS=false to reuse the "
+            "shared artifacts knowingly."
+        )
+
+    @staticmethod
+    def _store_lineage_map(state: "PipelineState", key: str, value: dict[str, str]) -> None:
+        """Write a durable lineage map into ``state.options``; drop the key when empty."""
+        if value:
+            state.options[key] = value
+        else:
+            state.options.pop(key, None)
+
+    def _record_stage_lineage(self, state: "PipelineState", stage: str, reused: bool) -> None:
+        """INFRA-7: remember a recompute (or a settled rebuild) for the lineage guards.
+
+        A recompute adds ``stage`` to this attempt's recomputed set and, with
+        the guards on, updates the durable maps: the stage's own
+        ``lineage_invalidated`` / ``lineage_rebuilt`` entries are cleared
+        (rebuilt from current inputs), every guarded downstream stage is marked
+        stale and loses its rebuilt artifact.  A reuse settles the stage's
+        interrupted rebuild when the reused artifact is the rebuilt one.  The
+        maps are saved with the stage's completion, so the invalidation
+        survives a failed downstream rebuild.  Pure in-memory bookkeeping; the
+        caller does not swallow its errors (the guard is an honesty check and
+        fails closed).
+        """
+        guards = bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True))
+        invalidated = state.options.get(run_shape.LINEAGE_INVALIDATED_OPTION)
+        rebuilt = state.options.get(run_shape.LINEAGE_REBUILT_OPTION)
+        if reused:
+            if guards:
+                invalidated, rebuilt = run_shape.settle_reused_rebuild(invalidated, rebuilt, stage)
+                self._store_lineage_map(state, run_shape.LINEAGE_INVALIDATED_OPTION, invalidated)
+                self._store_lineage_map(state, run_shape.LINEAGE_REBUILT_OPTION, rebuilt)
+            return
+        self._attempt_recomputed().add(stage)
+        if not guards:
+            return
+        exemptions = run_shape.lineage_exemptions(state.options)
+        self._store_lineage_map(
+            state, run_shape.LINEAGE_INVALIDATED_OPTION,
+            run_shape.invalidate_downstream(invalidated, stage, exemptions=exemptions))
+        self._store_lineage_map(
+            state, run_shape.LINEAGE_REBUILT_OPTION,
+            run_shape.settle_rebuilt(rebuilt, stage, exemptions=exemptions))
+
+    def _record_lineage_artifact_replaced(self, state: "PipelineState", stage: str) -> None:
+        """INFRA-7: ``stage``'s artifact was just overwritten from current inputs.
+
+        ONTOLOGY reuse is keyed on ``project.ontology`` being present, not on
+        the stage bit, so its lineage bookkeeping cannot wait for
+        ``_complete_stage``: an attempt cut off in between would keep the
+        invalidation and refuse the fresh ontology on the next resume.  The
+        recompute is recorded (and persisted) as soon as the artifact is
+        saved; ``_complete_stage`` repeats it idempotently.  A crash before
+        this save only costs a redundant rebuild.
+        """
+        if not bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
+            return
+        self._record_stage_lineage(state, stage, reused=False)
+        PipelineManager.save(state)
+
+    @staticmethod
+    def _record_lineage_rebuild_started(state: "PipelineState", stage: str,
+                                        artifact_id: str) -> None:
+        """INFRA-7: an invalidated ``stage`` starts building ``artifact_id`` from current inputs.
+
+        REPORT reuse is keyed on a persisted report, not on the stage bit: a
+        report minted and published after the upstream recompute, whose
+        attempt ended before ``_complete_stage`` (a cancel or outage halt
+        raised from its final progress callback, a restart), must be reused on
+        the next resume rather than regenerated under a new id.  The minted id
+        goes into ``options.lineage_rebuilt``; any other report of the stage
+        (such as the stale one the simulation-id fallback lookup would find
+        when the minted report never reached disk) is still refused.  The
+        caller persists the state together with the minted id.
+        """
+        if not bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
+            return
+        PipelineOrchestrator._store_lineage_map(
+            state, run_shape.LINEAGE_REBUILT_OPTION,
+            run_shape.mark_rebuilt(
+                state.options.get(run_shape.LINEAGE_INVALIDATED_OPTION),
+                state.options.get(run_shape.LINEAGE_REBUILT_OPTION),
+                stage, artifact_id))
+
+    def _record_stage_decision(self, state: "PipelineState", stage: str, reused: bool) -> None:
+        """INFRA-7: typed reuse fact per stage + run.json provider stamp on recompute."""
+        if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+            return
+        record = {"stage": stage, "reused": bool(reused), "at": _utcnow()}
+        state.options["stage_reuse_v1"] = run_shape.append_capped(
+            state.options.get("stage_reuse_v1"), record, run_shape.STAGE_REUSE_LOG_CAP)
+        attempt_records = getattr(self, "_stage_reuse_this_attempt", None)
+        if attempt_records is None:
+            attempt_records = []
+            self._stage_reuse_this_attempt = attempt_records
+        attempt_records.append(dict(record))
+        if not reused:
+            self._stamp_run_manifest_stage(state, stage)
+
+    def _reset_run_manifest_simulation(self, state: "PipelineState") -> None:
+        """INFRA-7: RUN re-executes, so run.json's simulation block restarts fresh.
+
+        The carried-forward block describes the simulation being replaced; while
+        the new run is in flight (or after it fails) run.json must not present
+        those values as this run's.  ``_update_manifest`` then adds the runtime
+        fields this attempt's RUN writes.
+        """
+        if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+            return
+        self._stamp_run_manifest_stage(state, STAGE_RUN)
+
+    def _stamp_run_manifest_stage(self, state: "PipelineState", stage: str) -> None:
+        """Restamp the run.json ``resolved`` block of a stage recomputed this attempt.
+
+        Reused stages keep the stamp carried forward from the attempt that
+        produced them.  A missing run.json is left missing (the attempt-start
+        writer owns creating it); any failure is swallowed like every other
+        run.json writer.
+        """
+        if not bool(getattr(Config, "RECORD_RUN_MANIFEST", True)):
+            return
+        if stage not in run_shape.RESOLVED_BLOCK_FOR_STAGE:
+            return
+        try:
+            from ..utils.security import redact_secrets
+            from ..utils.atomic import write_json_atomic
+            path = PipelineManager.manifest_path(state.pipeline_id)
+            manifest = _read_json(path)
+            if not isinstance(manifest, dict):
+                return
+            fresh = getattr(self, "_fresh_resolved", None)
+            if fresh is None:
+                fresh = _build_run_manifest(state).get("resolved") or {}
+            resolved = manifest.get("resolved")
+            resolved = resolved if isinstance(resolved, dict) else {}
+            run_shape.stamp_resolved_stage(
+                resolved, stage, fresh=fresh, provider=_current_provider_pair(),
+                sim_runtime=self._attempt_sim_runtime())
+            manifest["resolved"] = resolved
+            manifest["updated_at"] = _utcnow()
+            write_json_atomic(path, redact_secrets(manifest))
+        except Exception as e:  # noqa: BLE001 — 清单是观测产物，写失败必须静默降级
+            logger.debug("[%s] run.json 阶段戳跳过: %s", state.pipeline_id, e)
 
     def _maybe_run_seed_ensemble(self, state: "PipelineState", project: Any, graph_id: Optional[str],
                                  actors: Any, research: dict, report_md: str) -> None:
@@ -9767,6 +10152,12 @@ class PipelineOrchestrator:
             self._record_stage_artifacts(state, stage)  # T6.3
         except Exception:
             pass
+        # INFRA-7：血统记账是诚实性检查（fail closed，不吞异常），随本次 save 与阶段完成一起落盘。
+        self._record_stage_lineage(state, stage, reused)
+        try:
+            self._record_stage_decision(state, stage, reused)  # INFRA-7
+        except Exception as _sd_err:  # noqa: BLE001 — 复用记账是观测增益，绝不阻断阶段完成
+            logger.debug("[%s] stage_reuse_v1 记账跳过: %s", state.pipeline_id, _sd_err)
         PipelineManager.save(state)
         # W9-3：阶段转换必落一版遥测账（重启只丢「上一次阶段边界之后」的增量）。
         self._flush_run_telemetry(state)
@@ -11197,13 +11588,48 @@ class PipelineOrchestrator:
         try:
             from ..utils.security import redact_secrets
             from ..utils.atomic import write_json_atomic
-            manifest = redact_secrets(_build_run_manifest(state))
+            manifest = _build_run_manifest(state)
+            if bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+                manifest = self._fold_prior_run_manifest(state, manifest)
+            manifest = redact_secrets(manifest)
             write_json_atomic(PipelineManager.manifest_path(state.pipeline_id), manifest)
             # 登记可深链指针，供 StageTimeline / GET /manifest 复用。
             if isinstance(state.artifacts, dict):
                 state.artifacts["run_manifest"] = PipelineManager.manifest_path(state.pipeline_id)
         except Exception as e:  # noqa: BLE001 — 清单是观测产物，写失败必须静默降级
             logger.debug("[%s] run.json 写出跳过: %s", state.pipeline_id, e)
+
+    def _fold_prior_run_manifest(self, state: PipelineState,
+                                 manifest: dict[str, Any]) -> dict[str, Any]:
+        """INFRA-7: keep run.json history across attempts instead of rewriting it.
+
+        The previous run.json's ``resolved`` blocks are carried forward (a
+        reused stage keeps the stamp of the attempt that produced it; stages
+        recomputed this attempt are restamped in ``_complete_stage``), one
+        ``attempts`` entry is appended (capped), and the pinned run shape plus
+        this attempt's drift are published under ``run_shape``.
+        """
+        # carry_forward_resolved deep-copies, so this attempt's fresh blocks stay
+        # untouched for restamping recomputed research/simulation blocks.
+        self._fresh_resolved = manifest.get("resolved") or {}
+        prior = _read_json(PipelineManager.manifest_path(state.pipeline_id))
+        prior = prior if isinstance(prior, dict) else {}
+        manifest["resolved"] = run_shape.carry_forward_resolved(
+            prior.get("resolved"), manifest.get("resolved"))
+        pinned = (state.options or {}).get("run_shape_v1")
+        pinned = pinned if isinstance(pinned, dict) else None
+        try:
+            drift = self._run_shape_drift(state)
+        except Exception as exc:  # noqa: BLE001 — 漂移判定由 _check_run_shape_drift 负责
+            logger.debug("[%s] run.json 漂移摘要跳过: %s", state.pipeline_id, exc)
+            drift = None
+        manifest["attempts"] = run_shape.append_capped(
+            prior.get("attempts"),
+            run_shape.attempt_record(_utcnow(), pinned, drift),
+            run_shape.ATTEMPTS_CAP,
+        )
+        manifest["run_shape"] = {"pin": pinned, "drift": drift}
+        return manifest
 
     def _update_manifest(self, state: PipelineState, stage: str,
                          total_rounds: Optional[int] = None,
@@ -11217,6 +11643,15 @@ class PipelineOrchestrator:
         if not bool(getattr(Config, "RECORD_RUN_MANIFEST", True)):
             return
         try:
+            if stage == STAGE_RUN:
+                # INFRA-7：记下本 attempt 的 RUN 实际写入的运行期字段——RUN 重算的阶段戳只保留这些，
+                # 不沿用被替换模拟的旧值。
+                _runtime = self._attempt_sim_runtime()
+                if total_rounds is not None:
+                    _runtime["total_rounds"] = int(total_rounds)
+                for _k in ("calendar_unit", "n_rounds", "horizon_date"):
+                    if temporal and temporal.get(_k) is not None:
+                        _runtime[_k] = temporal[_k]
             from ..utils.security import redact_secrets
             from ..utils.atomic import write_json_atomic
             path = PipelineManager.manifest_path(state.pipeline_id)
@@ -11225,7 +11660,10 @@ class PipelineOrchestrator:
                 # 清单缺失（如老管线 resume）：重建首版骨架。
                 manifest = redact_secrets(_build_run_manifest(state))
             resolved = manifest.setdefault("resolved", {})
-            if stage in (STAGE_ONTOLOGY, STAGE_GRAPH, STAGE_REPORT):
+            # INFRA-7：RUN_SHAPE_PIN 开启时 provider 戳改在 _complete_stage 按「是否重算」落下——
+            # 阶段进入时尚不知是否复用，此处重戳会把复用阶段的出处改写成当前 provider。
+            if (stage in (STAGE_ONTOLOGY, STAGE_GRAPH, STAGE_REPORT)
+                    and not bool(getattr(Config, "RUN_SHAPE_PIN", True))):
                 resolved[stage] = _current_provider_pair()
             if total_rounds is not None:
                 sim = resolved.setdefault("simulation", {})
@@ -12737,6 +13175,8 @@ class PipelineOrchestrator:
         # 心跳让 reconcile_orphans 把「死管线」与「慢但活（深研究/persona 静默数分钟）」区分开。
         hb_stop = self._start_heartbeat(state)
         try:
+            # INFRA-7：对比准入钉住的运行形状与当前环境；漂移默认记录后继续，refuse 策略下失败。
+            self._check_run_shape_drift(state)
             # ---- Stage 0: RESEARCH ----
             upd = self._make_stage_updater(state, STAGE_RESEARCH)
             handoff_dir = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
@@ -13147,7 +13587,15 @@ class PipelineOrchestrator:
             self._update_manifest(state, STAGE_ONTOLOGY)  # I-8-1: 钉入本阶段实际 provider
             project_name = state.options.get("project_name") or f"研究预测 {state.pipeline_id}"
             project = ProjectManager.get_project(state.project_id) if state.project_id else None
-            if project is not None and project.ontology:
+            _reuse_ontology = bool(project is not None and project.ontology)
+            # INFRA-7：研究已重算（本 attempt，或此前重建未完成的 attempt）→ 旧本体派生自旧研究，
+            # 拒绝复用并在本管线自有项目上重生成；与 base 共用项目的情景分叉 fail closed。
+            _onto_refusal = (
+                self._lineage_refuses_reuse(state, STAGE_ONTOLOGY) if _reuse_ontology else None)
+            if _onto_refusal:
+                self._forbid_shared_fork_rebuild(state, STAGE_ONTOLOGY, project, _onto_refusal)
+                _reuse_ontology = False
+            if _reuse_ontology:
                 upd(100, "复用已有本体…")
                 self._complete_stage(state, STAGE_ONTOLOGY, "本体已恢复", reused=True)
             else:
@@ -13213,6 +13661,9 @@ class PipelineOrchestrator:
                 project.analysis_summary = ontology.get("analysis_summary", "")
                 project.status = ProjectStatus.ONTOLOGY_GENERATED
                 ProjectManager.save_project(project)
+                # INFRA-7：本体复用以 project.ontology 存在为准（非阶段位）——新本体一落盘即结清其血统
+                # 失效项，否则在 _complete_stage 前被打断的 attempt 会让下次 resume 拒绝这份新本体。
+                self._record_lineage_artifact_replaced(state, STAGE_ONTOLOGY)
                 # T6.3: 把本体落到 handoff/ontology.json，供 artifact 深链。
                 # ONT-10: 原子写（对齐 actors.json 的 write_json_atomic 约定）——半写的
                 # ontology.json 会让 resume 校验静默强制重建；失败留 warning 而非无声吞掉。
@@ -13230,6 +13681,15 @@ class PipelineOrchestrator:
             graph_stage_done = state.stages.get(STAGE_GRAPH) and state.stages[STAGE_GRAPH].status == "completed"
             graph_id = state.graph_id or getattr(project, "graph_id", None)
             _reuse_graph = bool(graph_stage_done and graph_id)
+            # INFRA-7：研究/本体已重算（本 attempt 或此前未完成重建的 attempt）→ 旧图谱派生自旧种子，
+            # 拒绝复用、重建；与 base 共用项目的情景分叉 fail closed。批次问题分叉声明了「共用锚点
+            # 图谱、按问题重生成本体」，其本体重算不视为陈旧上游。
+            _graph_refusal = self._lineage_refuses_reuse(
+                state, STAGE_GRAPH,
+                exempt=run_shape.graph_lineage_exempt(state.options)) if _reuse_graph else None
+            if _graph_refusal:
+                self._forbid_shared_fork_rebuild(state, STAGE_GRAPH, project, _graph_refusal)
+                _reuse_graph = False
             _reuse_builder: Optional[GraphBuilderService] = None
             # I-4-3: 复用前先按产物清单校验 GRAPH 阶段的文件产物（communities.json 等）未被半写/篡改；
             # 不符则回落重建并留痕（与下方既有的实体数健康检查并列，两道防线各管一半）。
@@ -13581,6 +14041,11 @@ class PipelineOrchestrator:
             # I-4-3: 复用前校验 PREPARE 产物（simulation_config.json / personas）未被半写/篡改；
             # 不符则当作未完成、走重建分支并留痕（半写的 sim_config 会让模拟/报告静默降级）。
             _prepare_reuse = bool(prepare_stage_done and sim_state is not None)
+            # INFRA-7：模拟必须绑定当前图谱，且图谱本 attempt 未重建；否则重建模拟环境。
+            if _prepare_reuse and self._lineage_refuses_reuse(
+                    state, STAGE_PREPARE,
+                    bound_ids=(getattr(sim_state, "graph_id", None), state.graph_id)):
+                _prepare_reuse = False
             if _prepare_reuse and not self._reuse_ok(state, STAGE_PREPARE):
                 _prepare_reuse = False
                 state.options["resumed_stage_validation"] = "prepare_rebuilt_manifest_mismatch"
@@ -13815,6 +14280,8 @@ class PipelineOrchestrator:
                 _run_completion_message = "模拟已恢复"
             else:
                 upd(2, "启动 OASIS 模拟…")
+                # INFRA-7：重跑期间/失败后 run.json 不得把被替换模拟的轮数/日历字段当作本次的。
+                self._reset_run_manifest_simulation(state)
                 run_kwargs: dict[str, Any] = {"platform": "parallel"}
                 # T3.7: 每次运行的 max_rounds 优先，否则用 Config.OASIS_DEFAULT_MAX_ROUNDS（0→None=跑满）。
                 # CAL：日历模式运行期不注入默认上限——轮数由 temporal_config.n_rounds 定，
@@ -14047,6 +14514,16 @@ class PipelineOrchestrator:
                     existing_report = ReportManager.get_report_by_simulation(sim_state.simulation_id)
                 except Exception:
                     existing_report = None
+            # INFRA-7：报告必须绑定当前模拟，且 RUN 未在其后重跑（本 attempt，或尚未结清的此前
+            # attempt——该 attempt 为重建铸出的报告除外）；否则铸新报告。
+            if (existing_report is not None
+                    and getattr(existing_report, "status", None) != ReportStatus.FAILED
+                    and self._lineage_refuses_reuse(
+                        state, STAGE_REPORT,
+                        bound_ids=(getattr(existing_report, "simulation_id", None),
+                                   state.simulation_id),
+                        artifact_id=getattr(existing_report, "report_id", None))):
+                existing_report = None
             # ORCH-1: 复用前评估交付物本身。meta 说 COMPLETED 但全章占位/无 forecast.json 的
             # 报告若被复用，S1 健康门必再抛错 → resume 陷入「复用坏报告→健康门失败」死循环
             # （report_id=None 手工修复也不够：get_report_by_simulation 兜底会把它找回来）。
@@ -14107,12 +14584,19 @@ class PipelineOrchestrator:
                             "报告前置探测失败：主/回退 LLM 提供方均不可用 —— 中止报告阶段以免"
                             f"烧掉全部章节成本（稍后 resume 可从 REPORT 续跑）: {str(_pf_err)[:200]}"
                         ) from _pf_err
+                if bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
+                    # INFRA-7：一次性 force 标记所要求的重生成此刻开始——血统守卫（或其它复用否决）
+                    # 先于上方的 pop 拒绝了复用时标记会残留，下次普通 resume 会丢弃这份新报告再重生成。
+                    state.options.pop("force_report_regen", None)
                 # XRUN-15/LOOP-005: 铸新报告 = 新 attempt。清掉上一 attempt 的临时及正式
                 # REPORT-owned 指针/完整性行，随后在生成开始前持久化新 report_id。这样每次
                 # progress callback 都扫描当前 attempt 的 sections/charts，而非旧目录或空目录。
                 self._clear_report_attempt_artifacts(state)
                 report_id = f"report_{uuid.uuid4().hex[:12]}"
                 state.report_id = report_id
+                # INFRA-7：报告复用以已落盘报告为准（非阶段位）——记下本次铸出的报告是从当前上游重建的，
+                # 使发布后、阶段完成前被取消/熔断/重启打断的 attempt 下次复用它，而非再生成一份。
+                self._record_lineage_rebuild_started(state, STAGE_REPORT, report_id)
                 PipelineManager.save(state)
                 upd(5, "生成预测报告…")
                 # T4.6/T4.7: 情景报告 → 传情景标签 + base 模拟 id（反事实对比 scenario_diff）
@@ -14292,7 +14776,12 @@ class PipelineOrchestrator:
                 try:
                     from ..utils.atomic import write_json_atomic, write_text_atomic
                     from ..utils.telemetry import build_stage_telemetry, render_telemetry_appendix
-                    _stage_tel = build_stage_telemetry(state.pipeline_id, _stage_walls(state))
+                    # INFRA-7：RUN_SHAPE_PIN 开启时附上本 attempt 的 stage_reuse_v1 记录（每阶段 reused 标志）。
+                    _stage_tel = build_stage_telemetry(
+                        state.pipeline_id, _stage_walls(state),
+                        stage_decisions=(
+                            self._stage_reuse_this_attempt
+                            if bool(getattr(Config, "RUN_SHAPE_PIN", True)) else None))
                     try:
                         _stpath = os.path.join(
                             PipelineManager._dir(state.pipeline_id), "telemetry.json")

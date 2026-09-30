@@ -517,6 +517,21 @@ class Config:
     # 的观测侧车先例）：只读投影、独立 try/except，绝不改 status/pipeline_health、绝不写报告目录。
     # 关闭 = 不写文件、不加 options 键。孤儿/旧跑用 scripts/stage_scorecard.py score 回填。
     STAGE_SCORECARD_ENABLED = os.environ.get('STAGE_SCORECARD_ENABLED', 'true').strip().lower() == 'true'
+    # INFRA-7：run-shape 准入钉（与 safety_policy_v1 并列的第二份准入快照）。开启时 start/fork/批次分叉
+    # 把影响结果的旋钮（ACTOR_CAST_MAX、GRAPH_MAX_ENTITIES、SIM_TEMPORAL_MODE…）与 provider/model
+    # 出处钉进 options.run_shape_v1，每个 attempt 起点对比当前环境并记录漂移；run.json 保留历次
+    # attempt 与复用阶段的原 provider 戳（不再在阶段进入时按当前 provider 重戳），遥测标注每阶段是否复用。
+    # 默认开：只增加记录、不改变任何阶段的执行语义（漂移默认只记录）。关闭 = 与引入前逐字节一致。
+    RUN_SHAPE_PIN = os.environ.get('RUN_SHAPE_PIN', 'true').strip().lower() == 'true'
+    # INFRA-7：resume 时 identity 旋钮漂移的处置。record（默认）= 告警 + 记录后继续；refuse = 以点名
+    # 漂移旋钮的错误使本次 attempt 失败。provider/model 仅漂移永不拒绝。未知值按 record 处理并告警。
+    RUN_SHAPE_DRIFT_POLICY = os.environ.get('RUN_SHAPE_DRIFT_POLICY', 'record').strip().lower()
+    # INFRA-7：resume 血统守卫。上游阶段被重算后，拒绝复用由其旧产物派生的下游产物
+    # （研究重算→本体/图谱重建；图谱重算或模拟绑定的 graph_id 不符→重建 PREPARE；RUN 重算或报告绑定的
+    # simulation_id 不符→重生成报告），在 options.stage_notes 留 'reuse_refused: <原因>' 面包屑。失效记录
+    # 持久化在 options.lineage_invalidated，直到该阶段真正重算才清除——下游重建失败后的下一次 resume
+    # 仍拒绝复用陈旧产物。默认开：以重算成本换取不复用陈旧产物（fail closed）；关闭 = 旧的逐阶段存在性复用。
+    RESUME_LINEAGE_GUARDS = os.environ.get('RESUME_LINEAGE_GUARDS', 'true').strip().lower() == 'true'
 
     # —— EXECPLAN2 第三波改进旋钮（剩余 L-effort 新能力；全部默认关，留空即保持当前行为）——
     # 预测质量回归评测开关（EXECPLAN2 I-7-7）：opt-in，绝不进默认 CI。开启后 eval_forecast_quality.py
