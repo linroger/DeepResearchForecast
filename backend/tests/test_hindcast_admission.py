@@ -232,6 +232,9 @@ def test_start_pins_the_hindcast_and_an_evaluation_run(env):
         "hindcast": True, "research_engine": "v3", "markets": "withheld", "fetch": "label",
         "search": "unbounded"}
     assert hp.hindcast_policy(persisted["options"]) == pin
+    # TIME-8: the point-in-time gates are pinned at admission (Config defaults here).
+    assert pin["pit"] == {"gates": True, "same_day": "exclude", "undated": "drop", "provider_bounds": True,
+                          "overfetch": 1}
     # The actor policy the engine check used is the one pinned (v3: not required).
     actor_policy = persisted["options"]["actor_intelligence_policy_v1"]
     assert actor_policy["research_engine"] == "v3" and actor_policy["required"] is False

@@ -27,6 +27,14 @@ Three layers:
 
 The extractors are DRF-original and unproven on real pages, which is why the
 knob that feeds them into the research artifacts defaults off.
+
+A fourth layer is the point-in-time rule of a gated hindcast (TIME-8):
+:func:`resolve_upper` reads a value as the latest day it is consistent with (a
+day is that day, a month / quarter / half / year the end of that period),
+:func:`availability` is the later of a source's published and modified days (a
+live page reflects its latest edit; :func:`page_availability` reads them from a
+fetched page's candidates) and :func:`gate` is the one cut rule:
+``admit`` / ``same_day`` / ``late`` / ``unverifiable``.
 """
 
 from __future__ import annotations
@@ -174,10 +182,12 @@ _TEXT_DATE = (
 )
 _PUBLISHED_LABELS = r"first\s+published|published(?:\s+(?:time|date|on|at))?|posted(?:\s+(?:on|at))?|date"
 _MODIFIED_LABELS = r"last\s+updated|updated(?:\s+(?:on|at))?|last\s+modified|modified(?:\s+(?:on|at))?"
-_HEAD_LINE_RE = re.compile(
+# A head dateline's label, up to where its date starts.
+_HEAD_LABEL = (
     r"[\s*_>#|-]{0,6}(?P<label>" + _MODIFIED_LABELS + "|" + _PUBLISHED_LABELS
     + r"|发布时间|发布日期|发表于|更新时间)[\s*_]{0,3}(?P<sep>[:：]?)[\s*_]{0,3}(?:(?:on|at)\s{1,3})?"
-    r"(?:" + _WEEKDAY + r")?(?P<date>" + _TEXT_DATE + r")", re.I)
+    r"(?:" + _WEEKDAY + r")?")
+_HEAD_LINE_RE = re.compile(_HEAD_LABEL + r"(?P<date>" + _TEXT_DATE + r")", re.I)
 _MODIFIED_LABEL_RE = re.compile(r"updated|modified|更新", re.I)
 
 _SCRIPT_TAG_RE = re.compile(r"<script\b[^<>]{0,500}>", re.I)
@@ -458,18 +468,25 @@ def from_html(raw: Any) -> list[Candidate]:
     return out
 
 
-def from_text_head(text: Any, max_lines: int = TEXT_HEAD_LINES) -> list[Candidate]:
+def from_text_head(text: Any, max_lines: int = TEXT_HEAD_LINES, *, relative: bool = False) -> list[Candidate]:
     """Rank-3 candidates of the datelines among a page's first ``max_lines``
     lines: Published / Posted / First published / Date (published) and
     Updated / Last updated / Last modified (modified), 发布时间 / 发布日期 /
     发表于 (published) and 更新时间 (modified), each followed directly by a
     date.  A bare "Date" line needs a colon ("Date of birth 1950" is no
-    dateline)."""
+    dateline).  With ``relative`` (the point-in-time page verdict only), a
+    dateline dated relative to now ("Updated 3 hours ago", "Posted
+    yesterday") is a candidate too, in its line's place: only
+    :func:`resolve_upper` reads its value, so no displayed date comes from
+    it."""
     out: list[Candidate] = []
     if not isinstance(text, str):
         return out
     for line in text.split("\n", max(0, int(max_lines)))[:max(0, int(max_lines))]:
-        match = _HEAD_LINE_RE.match(line[:_TEXT_LINE_CHARS])
+        head = line[:_TEXT_LINE_CHARS]
+        match = _HEAD_LINE_RE.match(head)
+        if match is None and relative:
+            match = _HEAD_RELATIVE_RE.match(head)
         if match is None:
             continue
         label = match["label"]
@@ -550,3 +567,184 @@ def resolve(candidates: Iterable[Any], *, now: Any) -> dict[str, Any]:
             best[role], ranks[role] = parsed, rank
     return {"published": best[ROLE_PUBLISHED], "modified": best[ROLE_MODIFIED],
             "rank": ranks[ROLE_PUBLISHED], "rejected": rejected}
+
+
+# ------------------------------------------------------------------ point in time (TIME-8)
+GATE_ADMIT = "admit"
+GATE_SAME_DAY = "same_day"
+GATE_LATE = "late"
+GATE_UNVERIFIABLE = "unverifiable"
+SAME_DAY_EXCLUDE = "exclude"
+SAME_DAY_INCLUDE = "include"
+
+# parse_published rejects values after its ``now``; the upper-bound reader keeps
+# them, because a date after today is certainly after any as-of date.
+_NO_FUTURE_LIMIT = _dt.date(9999, 12, 31)
+_QUARTER_RE = re.compile(r"q(?P<q1>[1-4])[\s-]{0,3}(?P<y1>\d{4})|(?P<y2>\d{4})[\s-]{0,3}q(?P<q2>[1-4])", re.I)
+_HALF_RE = re.compile(r"h(?P<h1>[12])[\s-]{0,3}(?P<y1>\d{4})|(?P<y2>\d{4})[\s-]{0,3}h(?P<h2>[12])", re.I)
+# Search providers (Serper, Google news rows) report recent rows relative to now.
+_RELATIVE_AGO = r"(?P<n>\d{1,4}|an?|one)\s{1,3}(?P<unit>sec(?:ond)?|min(?:ute)?|hour|hr|day|week|month|year)s?\s{1,3}ago"
+_RELATIVE_RE = re.compile(_RELATIVE_AGO, re.I)
+# A head dateline dated relative to now ("Updated 3 hours ago"), which only the
+# point-in-time page verdict reads (from_text_head(relative=True)); the date ends
+# at a word boundary ("today's" is no date).
+_HEAD_RELATIVE_RE = re.compile(
+    _HEAD_LABEL + r"(?P<date>" + _RELATIVE_AGO + r"|just\s{1,3}now|today|yesterday)(?![\w'’])", re.I)
+# Days per unit, rounded down so the day read is never earlier than the real one:
+# the upper bound errs late, which the gate reads as not yet available.
+_RELATIVE_UNIT_DAYS = {"sec": 0, "second": 0, "min": 0, "minute": 0, "hour": 0, "hr": 0,
+                       "day": 1, "week": 7, "month": 28, "year": 365}
+_RELATIVE_WORDS = {"just now": 0, "today": 0, "yesterday": 1}
+_CANONICAL_DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _period_end(year: int, last_month: int) -> _dt.date | None:
+    """The last day of ``last_month`` in ``year`` (None before MIN_YEAR)."""
+    if year < MIN_YEAR:
+        return None
+    return interval_bounds(f"{year:04d}-{last_month:02d}")[1]
+
+
+def _relative_upper(text: str, now: Any) -> _dt.date | None:
+    lowered = text.lower()
+    if lowered in _RELATIVE_WORDS:
+        return _utc_today(now) - _dt.timedelta(days=_RELATIVE_WORDS[lowered])
+    match = _RELATIVE_RE.fullmatch(text)
+    if match is None:
+        return None
+    count = 1 if match["n"].lower() in ("a", "an", "one") else int(match["n"])
+    unit = match["unit"].lower()
+    return _utc_today(now) - _dt.timedelta(days=count * _RELATIVE_UNIT_DAYS[unit])
+
+
+def resolve_upper(value: Any, *, now: Any = None) -> _dt.date | None:
+    """The latest UTC calendar day consistent with ``value``, or None.
+
+    A day (or an instant, converted to UTC first) is that day; ``YYYY-MM`` /
+    "May 2024" the month's last day; ``YYYY`` December 31; "Q3 2024" /
+    "2024Q3" the quarter's last day; "H1 2025" / "2025H2" the half's last day;
+    a relative "3 days ago" / "yesterday" the day that far before ``now``'s UTC
+    date (the wall clock by default).  Every form :func:`parse_published`
+    accepts is read, including a date after today (it is not rejected here:
+    it is after any as-of date).  None for anything else and before 1900.
+    Never raises."""
+    try:
+        if value is None or isinstance(value, bool):
+            return None
+        if isinstance(value, PubDate):
+            value = value.value
+        if isinstance(value, _dt.datetime):
+            return to_utc(value).date()
+        if isinstance(value, _dt.date):
+            return value
+        text = value if isinstance(value, (int, float)) else _raw_text(value)
+        if isinstance(text, str):
+            if not text:
+                return None
+            match = _QUARTER_RE.fullmatch(text)
+            if match:
+                quarter = int(match["q1"] or match["q2"])
+                return _period_end(int(match["y1"] or match["y2"]), quarter * 3)
+            match = _HALF_RE.fullmatch(text)
+            if match:
+                half = int(match["h1"] or match["h2"])
+                return _period_end(int(match["y1"] or match["y2"]), half * 6)
+            relative = _relative_upper(text, now)
+            if relative is not None:
+                return relative
+        parsed, _reason = parse_published(text, now=_NO_FUTURE_LIMIT)
+        return interval_bounds(parsed.value)[1] if parsed is not None else None
+    except Exception:  # noqa: BLE001 — an unreadable date is no date
+        return None
+
+
+def availability(published: Any, modified: Any, *, now: Any = None) -> _dt.date | None:
+    """The day a source became available as it is served now: the later of
+    :func:`resolve_upper` of its published and modified values (a live page
+    reflects its latest edit), or None when neither resolves."""
+    days = [day for day in (resolve_upper(published, now=now), resolve_upper(modified, now=now))
+            if day is not None]
+    return max(days) if days else None
+
+
+def page_availability(candidates: Iterable[Any], *, now: Any = None) -> _dt.date | None:
+    """:func:`availability` of a fetched page's date candidates: the later of
+    its published pick and its latest modified candidate, each read with
+    :func:`resolve_upper`, or None when none reads.
+
+    The published pick is the highest-ranked published candidate that reads,
+    as :func:`resolve` picks it, except that a date after today is kept (it is
+    after any as-of) and a tie among metadata candidates (provider keys,
+    JSON-LD, ``<meta>`` tags: their order says nothing about which one dates
+    the page) takes the latest day, so the verdict never depends on that
+    order and fails closed.  A tie among in-document candidates (``<time>``
+    tags, head datelines) keeps the first, the page's own byline, as
+    :func:`resolve` does: a later one dates an event or a related item.  A
+    lower-ranked published candidate is not the page's date either (a bare
+    "Date:" line of a scheduled event, or a ``<time>`` tag of a related item
+    beside the page's own metadata, is an event date, not the page's
+    availability).  Every modified candidate counts, whatever its rank: a
+    page is served in its latest edit.  Never raises."""
+    pick: _dt.date | None = None
+    pick_rank = 0
+    days: list[_dt.date] = []
+    for candidate in candidates or ():
+        if not isinstance(candidate, Sequence) or isinstance(candidate, str) or len(candidate) != 4:
+            continue
+        rank, _source, role, raw = candidate
+        if role not in _ROLES or not isinstance(rank, int) or isinstance(rank, bool):
+            continue
+        day = resolve_upper(raw, now=now)
+        if day is None:
+            continue
+        if role == ROLE_MODIFIED:
+            days.append(day)
+        elif pick is None or rank > pick_rank:
+            pick, pick_rank = day, rank
+        elif rank == pick_rank and rank >= RANK_META_TAG:
+            pick = max(pick, day)
+    if pick is not None:
+        days.append(pick)
+    return max(days) if days else None
+
+
+def _cutoff(as_of: Any) -> _dt.date | None:
+    if isinstance(as_of, _dt.datetime):
+        return to_utc(as_of).date()
+    if isinstance(as_of, _dt.date):
+        return as_of
+    # Only the canonical spelling: an as-of is validated upstream, never guessed here.
+    if not isinstance(as_of, str) or not _CANONICAL_DAY_RE.fullmatch(as_of.strip()):
+        return None
+    try:
+        return _dt.date.fromisoformat(as_of.strip())
+    except ValueError:
+        return None
+
+
+def gate(avail: Any, as_of: Any, *, same_day: str = SAME_DAY_EXCLUDE) -> str:
+    """The point-in-time verdict of a source available on ``avail`` for a
+    research ``as_of`` date: ``late`` after as_of, or on it unless ``same_day``
+    is ``include`` (then ``same_day``); ``admit`` before it; ``unverifiable``
+    when ``avail`` is None or does not resolve (:func:`resolve_upper` reads a
+    non-date value).  Strict by default: any ``same_day`` other than
+    ``include`` excludes the as-of day, and an as_of that is no date gates
+    everything ``late`` (fail closed).  Never raises."""
+    cutoff = _cutoff(as_of)
+    if cutoff is None:
+        return GATE_LATE
+    day = avail if isinstance(avail, _dt.date) and not isinstance(avail, _dt.datetime) else resolve_upper(avail)
+    if day is None:
+        return GATE_UNVERIFIABLE
+    if day < cutoff:
+        return GATE_ADMIT
+    if day == cutoff and same_day == SAME_DAY_INCLUDE:
+        return GATE_SAME_DAY
+    return GATE_LATE
+
+
+def url_date(url: Any) -> _dt.date | None:
+    """The latest day consistent with the date in ``url``'s path
+    (:func:`from_url`: a day, or a month read as its last day), or None."""
+    candidates = from_url(url)
+    return resolve_upper(candidates[0][3]) if candidates else None

@@ -164,11 +164,14 @@ def _read_forecast(report_id):
 # ───────────────────────────── policy module ─────────────────────────────────
 def test_capture_pins_a_past_as_of_as_a_hindcast():
     assert list(PIN) == ["version", "origin", "pinned_at", "as_of", "hindcast", "research_engine",
-                         "markets", "fetch", "search"]
+                         "markets", "fetch", "search", "pit"]
     assert {k: v for k, v in PIN.items() if k != "pinned_at"} == {
         "version": "hindcast-policy/v1", "origin": "admission", "as_of": "2024-06-01",
         "hindcast": True, "research_engine": "v3", "markets": "withheld", "fetch": "label",
-        "search": "unbounded"}
+        "search": "unbounded",
+        # TIME-8: Config's point-in-time gate knobs at admission (defaults here).
+        "pit": {"gates": True, "same_day": "exclude", "undated": "drop", "provider_bounds": True,
+                "overfetch": 1}}
     assert datetime.fromisoformat(PIN["pinned_at"]).utcoffset() == timedelta(0)
     assert hp.hindcast_policy({hp.HINDCAST_POLICY_OPTION: PIN}) == PIN
 

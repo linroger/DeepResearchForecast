@@ -667,6 +667,38 @@ class Config:
     # Default false, which is safe: a request carrying as_of is then rejected (400 /
     # ValueError) instead of silently running live; requests without as_of are unchanged.
     HINDCAST_ENABLED = os.environ.get('HINDCAST_ENABLED', 'false').strip().lower() == 'true'
+    # TIME-8 point-in-time evidence gates of a hindcast's v3 research.  Read only at
+    # admission (hindcast_policy.capture_hindcast_policy_v1 pins them as the pin's 'pit'
+    # block; a resume or a later config change never alters an admitted run) and
+    # effective only inside a pinned hindcast, which itself needs HINDCAST_ENABLED, so
+    # live runs are unaffected whatever these say.  On, a source whose latest known
+    # publication/update date is after the as-of never gets an [S<n>] id or a stored
+    # page: late search rows are dropped before registration, URL-dated-late fetches
+    # are refused without budget and late pages are withheld before storage.  An
+    # honesty check, so default on and parsed fail-closed: only 0/false/no/off disable it.
+    PIT_GATES = os.environ.get('PIT_GATES', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    # TIME-8: whether a source available on the as-of day itself is admitted.  exclude
+    # (default, strict: evidence must predate the as-of) | include.  Anything else is exclude.
+    PIT_SAME_DAY_POLICY = ('include' if os.environ.get('PIT_SAME_DAY_POLICY', 'exclude').strip().lower()
+                           == 'include' else 'exclude')
+    # TIME-8: a fetched page with no readable date.  drop (default, fail closed: withheld
+    # like a late page) | flag (stored, pit_status 'unverifiable', labelled undated).
+    # drop can starve undated data pages; flag trades that for unverified evidence.
+    # Anything else is drop.
+    PIT_UNDATED_POLICY = ('flag' if os.environ.get('PIT_UNDATED_POLICY', 'drop').strip().lower()
+                          == 'flag' else 'drop')
+    # TIME-8: ask the search provider for a date bound (Firecrawl tbs cd_max at the
+    # as-of; other providers cannot and are counted unbounded; a bounded request the
+    # provider rejects is retried once unbounded).  The primary control; the row gate
+    # still runs on every result, and gated search cache entries are keyed apart from
+    # live ones either way.  Default on; only 0/false/no/off disable it.
+    PIT_PROVIDER_DATE_BOUNDS = os.environ.get(
+        'PIT_PROVIDER_DATE_BOUNDS', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    # TIME-8: rows requested per gated search = 5 x this, so dropped late rows do not
+    # starve the render slots; clamped to 1..4 where it is pinned at admission
+    # (hindcast_policy.PIT_OVERFETCH_MAX).  Default 1 (no over-fetch: the provider bound
+    # is the primary control and each extra row can be billed).
+    PIT_SEARCH_OVERFETCH = int(os.environ.get('PIT_SEARCH_OVERFETCH', '1') or '1')
     # W9-10：建图输入源默认 both→dossier_only——用户明确要求 KG 收敛到关键 actor：actor 中心的
     # 卷宗切块入图，广覆盖研究报告只喂本体/报告上下文（graph 阶段 8h38m/60% 跳块的主要输入面）。
     # dossier 缺失/为空时代码自动回退 both 语义（全量报告切块），设 'both' 可显式恢复旧行为。
