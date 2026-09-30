@@ -149,9 +149,11 @@ def test_off_byte_identical(tmp_path, bridge, monkeypatch):
     assert rc == 0, on_meta.get("error")
     spec = _load(on_out / lr.QUESTION_SPEC_FILENAME)
     block = lr.render_question_spec_block(spec)
-    # plan.json: the spec key and its horizon label are the only differences.
+    # plan.json: the spec key, its horizon label and the scope horizon it
+    # replaced are the only differences.
     on_plan = _load(on_out / "v3" / "plan.json")
     assert on_plan.pop("question_spec") == spec and on_plan["horizon"] == SPEC_LABEL
+    assert on_plan.pop("scope_horizon") == SCOPE_HORIZON
     assert (out / "v3" / "plan.json").read_bytes() == _dump({**on_plan, "horizon": SCOPE_HORIZON})
     # brief.md: the horizon line and the appended spec block.
     on_brief = (on_out / "v3" / "brief.md").read_text(encoding="utf-8")
@@ -263,6 +265,7 @@ def test_persist_and_brief(tmp_path, bridge, monkeypatch):
 
     plan = _load(out / "v3" / "plan.json")
     assert plan["question_spec"] == spec and plan["horizon"] == SPEC_LABEL
+    assert plan["scope_horizon"] == SCOPE_HORIZON
     assert lr.Plan.from_dict(plan).to_dict() == plan
     block = lr.render_question_spec_block(spec)
     assert block.splitlines() == [
@@ -312,7 +315,8 @@ def test_a_past_horizon_keeps_the_scope_horizon(tmp_path, bridge, monkeypatch):
     spec = _load(out / lr.QUESTION_SPEC_FILENAME)
     assert spec["status"] == "ok" and spec["horizon"] == {"label": "", "date": "", "basis": "implied"}
     assert spec["degradation"] == ["horizon_date_invalid", "horizon_label_dropped"]
-    assert _load(out / "v3" / "plan.json")["horizon"] == SCOPE_HORIZON
+    plan = _load(out / "v3" / "plan.json")
+    assert plan["horizon"] == SCOPE_HORIZON and "scope_horizon" not in plan
     brief = (out / "v3" / "brief.md").read_text(encoding="utf-8")
     assert f"Forecast horizon: {SCOPE_HORIZON}\n" in brief and "Question spec" in brief
     assert "- Resolves:" not in brief and "December 2025" not in brief
@@ -339,6 +343,63 @@ def test_a_partial_spec_gets_only_the_rules_it_supports(tmp_path, bridge, monkey
     messages = _plan_call(model)["messages"]
     assert messages[3] == ("human", lr.render_question_spec_block(spec))
     assert messages[4] == ("human", _plain_plan_task()) and len(messages) == 5
+
+
+class OperationalQuestionOnlyWorld(v3.World):
+    def question_spec(self, call):
+        return v3.ai(json.dumps({"operational_question": "Will installed capacity exceed 250 GW on 31 December 2027?",
+                                 "outcome_definition": ""}))
+
+
+def test_a_spec_with_only_an_operational_question_adds_no_block(tmp_path, bridge, monkeypatch):
+    """A usable spec that pins nothing the block shows adds no bare header
+    to the plan call or the brief; it is still persisted and mirrored."""
+    assert lr.render_question_spec_block(_normalize({"operational_question": "Will X exceed 5?"})) == ""
+    rc, meta, _plog, model, out = _run(tmp_path, bridge, monkeypatch, spec="true",
+                                       world=OperationalQuestionOnlyWorld())
+    assert rc == 0, meta.get("error")
+    spec = _load(out / lr.QUESTION_SPEC_FILENAME)
+    assert spec["status"] == "partial" and lr.question_spec_usable(spec)
+    assert lr.render_question_spec_block(spec) == "" and lr.question_spec_plan_rule(spec) == ""
+    messages = _plan_call(model)["messages"]
+    assert messages[3] == ("human", _plain_plan_task()) and len(messages) == 4
+    brief = (out / "v3" / "brief.md").read_text(encoding="utf-8")
+    assert "Question spec" not in brief and f"Forecast horizon: {SCOPE_HORIZON}\n" in brief
+    assert _load(out / "actors.json")["question_spec"] == spec
+    assert meta["question_spec"]["status"] == "partial"
+
+
+def test_the_spec_call_gets_a_bounded_share_of_the_plan_phase(tmp_path, bridge, monkeypatch):
+    """The optional spec call runs under QUESTION_SPEC_TIME_SHARE of the plan
+    phase's remaining time, so its retries can never starve the plan call."""
+    seen: dict[str, tuple[str, float]] = {}
+    plan_json = lr._Engine._plan_json
+
+    def recording_plan_json(engine, shared, task, **kwargs):
+        seen[kwargs["label"]] = (kwargs["deadline"].label, kwargs["deadline"].remaining())
+        return plan_json(engine, shared, task, **kwargs)
+
+    monkeypatch.setattr(lr._Engine, "_plan_json", recording_plan_json)
+    rc, meta, _plog, _model, _out = _run(tmp_path, bridge, monkeypatch, spec="true")
+    assert rc == 0, meta.get("error")
+    spec_label, spec_left = seen["plan:question_spec"]
+    plan_label, plan_left = seen["plan:plan"]
+    assert (spec_label, plan_label) == ("plan:question_spec", "plan")
+    assert spec_left == pytest.approx(lr.QUESTION_SPEC_TIME_SHARE * plan_left, rel=0.01)
+
+
+def test_an_exhausted_spec_share_leaves_the_plan_call_its_time(tmp_path, bridge, monkeypatch):
+    """A spec call out of time is ``unavailable`` (never raised) and the plan
+    call still runs on the phase deadline."""
+    monkeypatch.setattr(lr, "QUESTION_SPEC_TIME_SHARE", 0)       # a sub-deadline already expired
+    rc, meta, plog, model, out = _run(tmp_path, bridge, monkeypatch, spec="true")
+    assert rc == 0, meta.get("error")
+    assert not v3.calls_of(model, SPEC_TASK)
+    spec = _load(out / lr.QUESTION_SPEC_FILENAME)
+    assert spec["status"] == "unavailable" and spec["degradation"] == ["call_failed"]
+    assert any("question spec call failed (deadline" in line for line in plog.of("warn"))
+    assert meta["plan_fallback"] == [] and len(v3.calls_of(model, "PLANNING TASK")) == 1
+    assert meta["research_quality"]["degradation"] == [UNAVAILABLE_EVENT]
 
 
 def test_question_spec_plan_rule_names_only_present_fields():
@@ -400,6 +461,27 @@ def test_a_damaged_plan_spec_is_reported_invalid(tmp_path, bridge, monkeypatch):
     assert any("question spec fails its integrity check" in line for line in plog.of("warn"))
     rc, meta, _, _, _ = _run(tmp_path, bridge, monkeypatch, spec="false", out_dir=out, model=_silent_model())
     assert rc == 0 and "degradation" not in meta["research_quality"]
+
+
+@pytest.mark.parametrize("field, value", [("assumptions", 5), ("horizon", "2027-12-31"), ("status", ["ok"])])
+def test_a_mistyped_reused_spec_field_degrades_safe(tmp_path, bridge, monkeypatch, field, value):
+    """A reused plan.json whose spec has a field of the wrong type: the resume
+    still succeeds (rc 0), the telemetry and the log say ``invalid`` and the
+    handoff file mirrors plan.json."""
+    out = tmp_path / "out"
+    rc, _, _, _, _ = _run(tmp_path, bridge, monkeypatch, spec="true", out_dir=out)
+    assert rc == 0
+    plan_path = out / "v3" / "plan.json"
+    plan = _load(plan_path)
+    plan["question_spec"][field] = value
+    plan_path.write_bytes(_dump(plan))
+    rc, meta, plog, model, _ = _run(tmp_path, bridge, monkeypatch, spec="true", out_dir=out,
+                                    model=_silent_model())
+    assert rc == 0, meta.get("error")
+    assert model.calls == [] and meta["question_spec"]["status"] == "invalid"
+    assert meta["research_quality"]["degradation"] == [INVALID_EVENT]
+    assert _load(out / lr.QUESTION_SPEC_FILENAME)[field] == value
+    assert any(line.startswith("wrote question_spec.json (status invalid, ") for line in plog.of("ok"))
 
 
 class JunkSpecWorld(v3.World):
@@ -573,6 +655,51 @@ def test_replan_keeps_the_prior_spec_when_its_call_fails(tmp_path, bridge, monke
     assert "degradation" not in meta["research_quality"]
 
 
+class ReplanDateOnlyWorld(v3.World):
+    """Only the plan call is down in the plan phase (the scope succeeded); the
+    re-plan's spec has a date but no label."""
+
+    def __init__(self, replan_date: str) -> None:
+        self.replan_date = replan_date
+        self.spec_calls = 0
+        self.plan_failures = 0
+        super().__init__(fail=self._plan_down)
+
+    def _plan_down(self, call, role):
+        if role == "PLANNING TASK" and self.plan_failures < 5:
+            self.plan_failures += 1
+            return APIConnectionError("Connection error.")
+        return None
+
+    def question_spec(self, call):
+        self.spec_calls += 1
+        reply = json.loads(super().question_spec(call).content)
+        if self.spec_calls > 1:
+            reply["horizon"] = {"label": "", "date": self.replan_date, "basis": "implied"}
+        return v3.ai(json.dumps(reply))
+
+
+@pytest.mark.parametrize("replan_date, horizon", [
+    ("2027-06-30", SCOPE_HORIZON),       # the reused scope's own horizon, never the first spec's label
+    ("2028-06-30", "2028-06-30"),        # the scope names another year: the pinned date
+])
+def test_replan_reuses_the_scope_horizon_not_the_earlier_spec_label(tmp_path, bridge, monkeypatch,
+                                                                   replan_date, horizon):
+    rc, meta, plog, model, out = _run(tmp_path, bridge, monkeypatch, spec="true",
+                                      world=ReplanDateOnlyWorld(replan_date))
+    assert rc == 0, meta.get("error")
+    assert "re-planned after the model outage" in plog.text()
+    assert len(v3.calls_of(model, "SCOPE TASK")) == 1 and len(v3.calls_of(model, SPEC_TASK)) == 2
+    plan = _load(out / "v3" / "plan.json")
+    assert plan["question_spec"]["horizon"] == {"label": "", "date": replan_date, "basis": "implied"}
+    assert plan["horizon"] == horizon and plan.get("scope_horizon") == (
+        None if horizon == SCOPE_HORIZON else SCOPE_HORIZON)
+    brief = (out / "v3" / "brief.md").read_text(encoding="utf-8")
+    assert f"Forecast horizon: {horizon}\n" in brief and f"- Resolves: {replan_date}\n" in brief
+    assert SPEC_LABEL not in brief
+    assert _load(out / "actors.json")["horizon_date"] == replan_date
+
+
 # =============================================================== normalizer
 
 def test_normalizer_happy_path_and_enums():
@@ -668,33 +795,43 @@ def test_normalizer_drops_question_assumptions():
                                    {"text": "Capacity means installed IT load.", "slot": "units"}]
     assert spec["degradation"] == ["assumption_question_dropped"] and "?" not in json.dumps(spec)
     assert spec["status"] == "partial"
+    # The question mark is checked before the 300-character cap ends the text in "…".
+    long_question = "Does installed capacity include " + "colocated and self-built facilities, " * 12 + "or not?"
+    long_default = "Installed capacity includes " + "colocated and self-built facilities, " * 12 + "and more."
+    assert len(long_question) > 300 and len(long_default) > 300
+    spec = _normalize({"outcome_definition": "X above 5", "assumptions": [
+        {"text": long_question, "slot": "units"}, {"text": long_default, "slot": "units"}]})
+    (kept,) = spec["assumptions"]
+    assert kept["text"].startswith("Installed capacity includes") and kept["text"].endswith("…")
+    assert len(kept["text"]) <= 300 and spec["degradation"] == ["assumption_question_dropped"]
 
 
-@pytest.mark.parametrize("as_of, date, kept", [
-    (AS_OF, "2027-12-31", True),
-    (AS_OF, "2026-10-02", True),
-    (AS_OF, "2056-10-01", True),                  # exactly as_of + 30 years
-    (AS_OF, AS_OF, False),                        # not after the as-of
-    (AS_OF, "2025-12-31", False),
-    (AS_OF, "2056-10-02", False),
-    (AS_OF, "2027", False),                       # not an ISO day
-    (AS_OF, "2027-02-30", False),
-    (AS_OF, "31/12/2027", False),
-    (AS_OF, 20271231, False),
-    ("2028-02-29", "2058-02-28", True),           # leap-day as-of: the window ends 28 February
-    ("2028-02-29", "2058-03-01", False),
-    ("not a date", "2027-12-31", False),
+@pytest.mark.parametrize("as_of, date, date_kept, label_kept", [
+    (AS_OF, "2027-12-31", True, True),
+    (AS_OF, "2026-10-02", True, True),
+    (AS_OF, "2056-10-01", True, True),            # exactly as_of + 30 years
+    (AS_OF, AS_OF, False, False),                 # not after the as-of
+    (AS_OF, "2025-12-31", False, False),
+    (AS_OF, "2056-10-02", False, False),
+    (AS_OF, "2027", False, True),                 # not an ISO day: malformed, says nothing about the label
+    (AS_OF, "2027-02-30", False, True),
+    (AS_OF, "31/12/2027", False, True),
+    (AS_OF, 20271231, False, True),
+    ("2028-02-29", "2058-02-28", True, True),     # leap-day as-of: the window ends 28 February
+    ("2028-02-29", "2058-03-01", False, False),
+    ("not a date", "2027-12-31", False, True),    # no as-of to anchor the date
 ])
-def test_normalizer_horizon_window(as_of, date, kept):
+def test_normalizer_horizon_window(as_of, date, date_kept, label_kept):
     """A date outside the window is dropped, and the label stating the same
-    deadline with it: it never becomes the plan horizon."""
+    deadline with it: it never becomes the plan horizon.  A malformed date
+    is dropped alone (the label, naming no year, is judged on its own)."""
     spec = _normalize({"outcome_definition": "X above 5", "horizon": {"label": "L", "date": date}}, as_of=as_of)
-    if kept:
-        assert spec["horizon"]["date"] == date and spec["horizon"]["label"] == "L"
+    assert spec["horizon"]["date"] == (date if date_kept else "")
+    assert spec["horizon"]["label"] == ("L" if label_kept else "")
+    if date_kept:
         assert spec["degradation"] == [] and spec["status"] == "ok"
     else:
-        assert spec["horizon"]["date"] == "" and spec["horizon"]["label"] == ""
-        assert spec["degradation"] == ["horizon_date_invalid", "horizon_label_dropped"]
+        assert spec["degradation"] == ["horizon_date_invalid"] + ([] if label_kept else ["horizon_label_dropped"])
         assert spec["status"] == "partial"
 
 
@@ -707,6 +844,12 @@ def test_normalizer_horizon_window(as_of, date, kept):
     (AS_OF, "by 2025-12-31 or the 2027 survey", "", True),   # a later year is named
     (AS_OF, "within two years", "", True),                   # no year: nothing to check
     (AS_OF, "by 20251231", "", True),                        # not a year token
+    (AS_OF, "within 2000 days", "", True),                   # quantities, not years
+    (AS_OF, "once 1950 MW is connected", "", True),
+    (AS_OF, "a 2025 MW target met by 2027", "", True),
+    (AS_OF, "2000天内", "", True),
+    (AS_OF, "by 2025.5", "", True),
+    (AS_OF, "once 1990 homes are connected", "", True),      # too far back to be a training-cutoff year
     ("2026-01-15", "FY2025/26 national accounts", "2026-05-31", True),   # the fiscal year ends in 2026
     ("2026-01-15", "FY2024-25 national accounts", "", False),
     ("not a date", "by 31 December 2025", "", True),         # no as-of to compare with
@@ -734,6 +877,58 @@ def test_a_rejected_horizon_never_replaces_the_scope_horizon():
     brief = lr.render_brief(plan)
     assert f"Forecast horizon: {SCOPE_HORIZON}\n" in brief and "Question spec" in brief
     assert "Resolves" not in brief and "2025" not in brief
+
+
+@pytest.mark.parametrize("label, date, kept_label, kept_date, degradation", [
+    ("by 31 December 2030", "2027-12-31", "", "", ["horizon_mismatch"]),
+    ("by 31 December 2027", "2028-01-15", "", "", ["horizon_mismatch"]),
+    ("by 31 December 2027", "2027-12-31", "by 31 December 2027", "2027-12-31", []),
+    ("between 2027 and 2029", "2028-06-30", "between 2027 and 2029", "2028-06-30", []),
+    ("FY2026/27 national accounts", "2027-03-31", "FY2026/27 national accounts", "2027-03-31", []),
+    ("within two years", "2028-10-01", "within two years", "2028-10-01", []),     # no year to compare
+    ("within 2000 days", "2032-03-23", "within 2000 days", "2032-03-23", []),     # a quantity, not a year
+    ("by end of 2027", "2027", "by end of 2027", "", ["horizon_date_invalid"]),   # malformed date only
+    ("by end of 2027", "31/12/2027", "by end of 2027", "", ["horizon_date_invalid"]),
+])
+def test_normalizer_label_and_date_name_one_deadline(label, date, kept_label, kept_date, degradation):
+    """A kept label and a kept date never name different years: which one is
+    wrong cannot be told, so neither is pinned (the scope horizon stays the
+    plan horizon and actors.json gets no horizon_date)."""
+    spec = _normalize({"outcome_definition": "X above 5", "resolution_source": {"name": "Agency"},
+                       "horizon": {"label": label, "date": date}})
+    assert spec["status"] == "ok" and spec["degradation"] == degradation
+    assert (spec["horizon"]["label"], spec["horizon"]["date"]) == (kept_label, kept_date)
+    plan = lr.build_plan(QUESTION, "English", AS_OF, lr.resolve_preset("standard", {}), 20,
+                         {"horizon": SCOPE_HORIZON, "scout_queries": ["q"]}, None, question_spec=spec)
+    assert plan.horizon == (kept_label or SCOPE_HORIZON)
+    if "horizon_mismatch" in degradation:
+        assert "Resolves" not in lr.render_brief(plan)
+
+
+@pytest.mark.parametrize("scope_horizon, spec_horizon, horizon", [
+    (SCOPE_HORIZON, {"label": SPEC_LABEL, "date": "2027-12-31"}, SPEC_LABEL),
+    (SCOPE_HORIZON, {"date": "2027-12-31"}, SCOPE_HORIZON),       # agrees: the scope's wording stays
+    (SCOPE_HORIZON, {"date": "2028-06-30"}, "2028-06-30"),        # names another year: the pinned date
+    ("", {"date": "2028-06-30"}, "2028-06-30"),
+    ("within two years", {"date": "2028-06-30"}, "within two years"),
+    (SCOPE_HORIZON, {}, SCOPE_HORIZON),
+])
+def test_the_spec_pins_the_plan_horizon(scope_horizon, spec_horizon, horizon):
+    """One horizon source: the brief's Forecast horizon never contradicts the
+    spec's Resolves line; the scope's own horizon is kept for a re-plan."""
+    spec = _normalize({"outcome_definition": "X above 5", "horizon": spec_horizon})
+    plan = lr.build_plan(QUESTION, "English", AS_OF, lr.resolve_preset("standard", {}), 20,
+                         {"horizon": scope_horizon, "scout_queries": ["q"]}, None, question_spec=spec)
+    assert lr.question_spec_plan_horizon(spec, scope_horizon, AS_OF) == plan.horizon == horizon
+    assert plan.scope_horizon == (None if horizon == scope_horizon else scope_horizon)
+    data = plan.to_dict()
+    assert ("scope_horizon" in data) == (horizon != scope_horizon)
+    reloaded = lr.Plan.from_dict(data)
+    assert reloaded.to_dict() == data and reloaded.scope_horizon == plan.scope_horizon
+    assert f"Forecast horizon: {horizon}\n" in lr.render_brief(plan)
+    # A spec that fails its integrity check never touches the scope's horizon.
+    tampered = {**spec, "outcome_definition": "X above 6"}
+    assert lr.question_spec_plan_horizon(tampered, scope_horizon, AS_OF) == scope_horizon
 
 
 def test_normalizer_neutralizes_injection_and_drops_bad_urls():

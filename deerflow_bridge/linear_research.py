@@ -1246,6 +1246,10 @@ class Plan:
     # The normalized question spec (RESEARCH_QUESTION_SPEC), any status; None
     # when the run made no spec call (plan.json then has no such key).
     question_spec: dict | None = None
+    # The scope call's horizon when the question spec replaced it as
+    # ``horizon`` (a re-plan reuses the scope, never an earlier spec's
+    # horizon); None otherwise (plan.json then has no such key).
+    scope_horizon: str | None = None
 
     def to_dict(self) -> dict:
         data = {
@@ -1259,6 +1263,8 @@ class Plan:
         }
         if self.question_spec is not None:
             data["question_spec"] = dict(self.question_spec)
+        if self.scope_horizon is not None:
+            data["scope_horizon"] = self.scope_horizon
         return data
 
     @classmethod
@@ -1291,7 +1297,8 @@ class Plan:
             key_entities=_as_str_list(data.get("key_entities")),
             scout_queries=_as_str_list(data.get("scout_queries")),
             fallback=dict(data.get("fallback") or {}),
-            question_spec=data["question_spec"] if isinstance(data.get("question_spec"), dict) else None)
+            question_spec=data["question_spec"] if isinstance(data.get("question_spec"), dict) else None,
+            scope_horizon=data["scope_horizon"] if isinstance(data.get("scope_horizon"), str) else None)
 
 
 def _short_query_base(question: str, language: str) -> str:
@@ -1615,10 +1622,9 @@ def build_plan(question: str, language: str, as_of: str, preset: Preset, actor_c
     deterministic defaults so planning can never fail the run.
 
     ``question_spec`` (a :func:`normalize_question_spec` result) is kept on the
-    plan whatever its status; a usable spec's horizon label is the plan's
-    horizon, so the brief has one horizon source (the normalizer drops a
-    label whose date was rejected or that names only past years, and the
-    scope's horizon then stays)."""
+    plan whatever its status; a usable spec pins the plan's horizon
+    (:func:`question_spec_plan_horizon`), so the brief has one horizon source,
+    and the scope's own horizon is then kept as ``scope_horizon``."""
     scope = scope or {}
     raw_plan = raw_plan or {}
     fallback: dict[str, bool] = {"scope": not scope, "plan": not raw_plan}
@@ -1655,9 +1661,8 @@ def build_plan(question: str, language: str, as_of: str, preset: Preset, actor_c
     if routed != valid_ids:
         fallback.setdefault("unrouted_kiqs", True)
     scout = [q[:rg.MAX_QUERY_CHARS] for q in _as_str_list(scope.get("scout_queries"), limit=SCOUT_QUERIES_MAX)]
-    horizon = _collapse(scope.get("horizon"), 120)
-    if question_spec_usable(question_spec) and question_spec["horizon"]["label"]:
-        horizon = question_spec["horizon"]["label"]
+    scope_horizon = _collapse(scope.get("horizon"), 120)
+    horizon = question_spec_plan_horizon(question_spec, scope_horizon, as_of)
     return Plan(
         question=question, language=language, as_of=as_of,
         restated_question=_collapse(scope.get("restated_question"), 400),
@@ -1665,7 +1670,8 @@ def build_plan(question: str, language: str, as_of: str, preset: Preset, actor_c
         scenarios=scenarios, actors=_normalize_plan_actors(raw_plan.get("actors"), actor_cap),
         key_entities=_as_str_list(scope.get("key_entities"), limit=12, item_chars=120),
         scout_queries=scout, fallback={k: v for k, v in fallback.items() if v},
-        question_spec=dict(question_spec) if question_spec is not None else None)
+        question_spec=dict(question_spec) if question_spec is not None else None,
+        scope_horizon=scope_horizon if horizon != scope_horizon else None)
 
 
 def render_pre_brief(question: str, language: str, as_of: str) -> str:
@@ -1719,6 +1725,10 @@ QUESTION_SPEC_USABLE = ("ok", "partial")
 QUESTION_SPEC_MAX_ASSUMPTIONS = 3
 # A horizon date is kept only in (as_of, as_of + this many years].
 QUESTION_SPEC_MAX_YEARS = 30
+# The spec call's share of the plan-phase time left when it starts: this
+# optional call (transient retries and backoff included) can never starve the
+# plan call, which keeps the rest.
+QUESTION_SPEC_TIME_SHARE = 0.35
 _QSPEC_SOURCE_KINDS = ("official_statistic", "index", "market", "consensus_reporting", "expert_panel", "other")
 _QSPEC_BASES = ("explicit", "implied", "default")
 # Assumption slots in disclosure priority order (the most important first).
@@ -1726,8 +1736,18 @@ _QSPEC_SLOTS = ("horizon", "resolution_source", "units", "entity", "outcome")
 _QSPEC_URL_CHARS = 300
 _ISO_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # A year named in a horizon label, with an optional two-digit end year
-# ("FY2025/26", "2029-30"); ASCII digits only.
-_QSPEC_LABEL_YEAR_RE = re.compile(r"(?<![0-9])((?:19|20|21)[0-9]{2})(?:[/-]([0-9]{2})(?![0-9]))?(?![0-9])")
+# ("FY2025/26", "2029-30"); ASCII digits only, never part of a longer or
+# decimal number.
+_QSPEC_LABEL_YEAR_RE = re.compile(
+    r"(?<![0-9])((?:19|20|21)[0-9]{2})(?:[/-]([0-9]{2})(?![0-9]))?(?![0-9])(?![.,][0-9])")
+# A number followed by a unit is a quantity, not a year ("within 2000 days",
+# "a 2030 MW target").
+_QSPEC_YEAR_UNIT_RE = re.compile(
+    r"\s*(?:(?:days?|weeks?|months?|hours?|units?|percent|per\s+cent|[kMGT]Wh?)(?![A-Za-z])"
+    r"|%|天|周|个月|小时|万|亿)", re.IGNORECASE)
+# A label year this far before the as-of year or earlier is read as a number
+# (a model anchored to its training cutoff names a year or two back).
+_QSPEC_LABEL_YEARS_BACK = 10
 # An assumption ending in one of these asks instead of recording a default.
 _QSPEC_QUESTION_MARKS = ("?", "？")
 # Values a model writes for "no value" (or echoes from the template): never content.
@@ -1749,7 +1769,8 @@ def question_spec_sha256(spec: Mapping[str, Any]) -> str:
 def _qspec_text(value: Any, limit: int) -> str:
     """Strictly typed spec text: a string (a finite number is formatted, a bool
     or any container is no text), instruction-neutralized, collapsed and
-    capped; placeholder values ("...", "n/a", "false") are empty."""
+    capped at ``limit`` (0: uncapped); placeholder values ("...", "n/a",
+    "false") are empty."""
     if isinstance(value, bool):
         return ""
     if isinstance(value, int):
@@ -1783,39 +1804,66 @@ def _qspec_window_end(as_of: _dt.date) -> _dt.date:
     return as_of.replace(year=year, day=min(as_of.day, calendar.monthrange(year, as_of.month)[1]))
 
 
-def _qspec_horizon_date(value: Any, as_of: str) -> tuple[str, bool]:
-    """``(date, rejected)``: an ISO day in (as_of, as_of + 30 years] is kept;
-    any other non-empty value is dropped (``rejected``)."""
+def _qspec_anchor(as_of: Any) -> _dt.date | None:
+    """The as-of day the horizon checks are anchored to (``None``: not an ISO day)."""
+    return _parse_iso_date(as_of) if _ISO_DAY_RE.match(str(as_of or "")) else None
+
+
+def _qspec_horizon_date(value: Any, anchor: _dt.date | None) -> tuple[_dt.date | None, str]:
+    """``(day, problem)`` for ``horizon.date``: an ISO day in (as_of, as_of +
+    30 years] is kept; an absent or blank value is no date; any other value is
+    dropped as ``"malformed"`` (not an ISO day, or no as-of to anchor it) or
+    ``"outside_window"`` (a real day not after the as-of or too far after it)."""
     if value is None or (isinstance(value, str) and not value.strip()):
-        return "", False
+        return None, ""
     text = value.strip() if isinstance(value, str) else ""
-    anchor = _parse_iso_date(as_of) if _ISO_DAY_RE.match(str(as_of or "")) else None
     day = _parse_iso_date(text) if _ISO_DAY_RE.match(text) else None
-    if anchor is None or day is None or not anchor < day <= _qspec_window_end(anchor):
-        return "", True
-    return day.isoformat(), False
+    if anchor is None or day is None:
+        return None, "malformed"
+    if not anchor < day <= _qspec_window_end(anchor):
+        return None, "outside_window"
+    return day, ""
 
 
-def _qspec_label_stale(label: str, as_of: str) -> bool:
-    """True when the horizon ``label`` names years and every one precedes the
-    as-of year: a deadline in words already past (the model anchored to an
-    earlier year), which the window check on ``horizon.date`` cannot see when
-    the date is missing or disagrees with the label."""
-    anchor = _parse_iso_date(as_of) if _ISO_DAY_RE.match(str(as_of or "")) else None
+def _qspec_label_years(text: str, anchor: _dt.date) -> list[int]:
+    """The years a horizon text names ("FY2025/26" names 2025 and 2026): a
+    4-digit token from ``_QSPEC_LABEL_YEARS_BACK`` years before the as-of year
+    on, unless a unit follows it ("within 2000 days", "2030 MW")."""
     years: list[int] = []
-    for match in _QSPEC_LABEL_YEAR_RE.finditer(label):
+    for match in _QSPEC_LABEL_YEAR_RE.finditer(text):
+        if _QSPEC_YEAR_UNIT_RE.match(text, match.end()):
+            continue
         start = int(match.group(1))
-        years.append(start)
+        named = [start]
         if match.group(2) and int(match.group(2)) > start % 100:     # "2025/26" ends in 2026
-            years.append(start - start % 100 + int(match.group(2)))
-    return anchor is not None and bool(years) and max(years) < anchor.year
+            named.append(start - start % 100 + int(match.group(2)))
+        years += [year for year in named if year >= anchor.year - _QSPEC_LABEL_YEARS_BACK]
+    return years
+
+
+def _qspec_label_stale(label: str, anchor: _dt.date | None) -> bool:
+    """True when the horizon ``label`` names years (:func:`_qspec_label_years`)
+    and every one precedes the as-of year: a deadline in words already past
+    (the model anchored to an earlier year), which the window check on
+    ``horizon.date`` cannot catch (the date may be missing, malformed or a
+    later day)."""
+    years = _qspec_label_years(label, anchor) if anchor is not None else []
+    return bool(years) and max(years) < anchor.year
+
+
+def _qspec_years_agree(text: str, day: _dt.date, anchor: _dt.date) -> bool:
+    """False when ``text`` names years (:func:`_qspec_label_years`) and ``day``
+    falls outside them ("between 2027 and 2029" covers the years between)."""
+    years = _qspec_label_years(text, anchor)
+    return not years or min(years) <= day.year <= max(years)
 
 
 def _qspec_assumptions(value: Any, degradation: list[str]) -> list[dict]:
     """A list of ``{"text", "slot"}`` dicts only (a string is never split into
     characters), deduplicated, ordered by slot priority (stable) and capped.
 
-    The spec never asks: a text ending in a question mark is dropped
+    The spec never asks: a text ending in a question mark (checked before the
+    300-character cap, which would end it in "…") is dropped
     (``assumption_question_dropped``).  A missing or unknown slot becomes
     ``outcome`` (the last slot, so it sorts last and its default is still
     disclosed) and ``assumption_slot_coerced`` records that a kept row's slot
@@ -1832,12 +1880,13 @@ def _qspec_assumptions(value: Any, degradation: list[str]) -> list[dict]:
         if not isinstance(item, dict):
             invalid = True
             continue
-        text = _qspec_text(item.get("text"), 300)
+        full = _qspec_text(item.get("text"), 0)
+        if full.endswith(_QSPEC_QUESTION_MARKS):
+            question = True
+            continue
+        text = _collapse(full, 300)
         key = _norm_key(text)
         if not text or not key or key in seen:
-            continue
-        if text.endswith(_QSPEC_QUESTION_MARKS):
-            question = True
             continue
         seen.add(key)
         slot = _qspec_enum(item.get("slot"), _QSPEC_SLOTS, "")
@@ -1870,9 +1919,14 @@ def normalize_question_spec(raw: Any, *, question: str, as_of: str,
     * ``horizon.date`` is kept only when ISO and in (as_of, as_of + 30y],
       else dropped with ``horizon_date_invalid``;
     * ``horizon.label`` (the plan horizon and the brief's Resolves line) is
-      dropped with ``horizon_label_dropped`` when the date was rejected (the
-      label states the same deadline) or when every year it names precedes
-      the as-of year (:func:`_qspec_label_stale`);
+      dropped with ``horizon_label_dropped`` when the date was a real day
+      outside that window (the label states the same deadline) or when every
+      year it names precedes the as-of year (:func:`_qspec_label_stale`); a
+      malformed date ("2027", "31/12/2027") takes no label with it;
+    * a kept label and a kept date that name different years
+      (:func:`_qspec_years_agree`) are both dropped with ``horizon_mismatch``:
+      which one is wrong cannot be told, and a pinned deadline must never
+      contradict the plan horizon;
     * at most 3 assumptions, slot priority first, never a question
       (:func:`_qspec_assumptions`).
 
@@ -1892,13 +1946,18 @@ def normalize_question_spec(raw: Any, *, question: str, as_of: str,
     source = source if isinstance(source, dict) else {}
     horizon = data.get("horizon")
     horizon = horizon if isinstance(horizon, dict) else {}
-    date, rejected = _qspec_horizon_date(horizon.get("date"), as_of)
-    if rejected:
+    anchor = _qspec_anchor(as_of)
+    day, date_problem = _qspec_horizon_date(horizon.get("date"), anchor)
+    if date_problem:
         degradation.append("horizon_date_invalid")
     label = _qspec_text(horizon.get("label"), 120)
-    if label and (rejected or _qspec_label_stale(label, as_of)):
+    if label and (date_problem == "outside_window" or _qspec_label_stale(label, anchor)):
         label = ""
         degradation.append("horizon_label_dropped")
+    elif label and day is not None and not _qspec_years_agree(label, day, anchor):
+        label, day = "", None
+        degradation.append("horizon_mismatch")
+    date = day.isoformat() if day is not None else ""
     fields: dict[str, Any] = {
         "operational_question": _qspec_text(data.get("operational_question"), 400),
         "outcome_definition": _qspec_text(data.get("outcome_definition"), 600),
@@ -1938,9 +1997,29 @@ def question_spec_usable(spec: Any) -> bool:
         return False
 
 
+def question_spec_plan_horizon(spec: Any, scope_horizon: str, as_of: str) -> str:
+    """The plan horizon under ``spec``: a usable spec's horizon label; else its
+    date when the scope's horizon is empty or names other years than the date
+    (:func:`_qspec_years_agree`); else ``scope_horizon``.  The brief's
+    Forecast horizon line then never contradicts the spec's Resolves line or
+    actors.json ``horizon_date``."""
+    if not question_spec_usable(spec):
+        return scope_horizon
+    label, date = spec["horizon"].get("label"), spec["horizon"].get("date")
+    if isinstance(label, str) and label:
+        return label
+    anchor = _qspec_anchor(as_of)
+    day = _parse_iso_date(date) if isinstance(date, str) and _ISO_DAY_RE.match(date) else None
+    if day is None or anchor is None or (scope_horizon and _qspec_years_agree(scope_horizon, day, anchor)):
+        return scope_horizon
+    return day.isoformat()
+
+
 def render_question_spec_block(spec: Any) -> str:
     """The spec as brief text (the plan call's shared block and the tail of
-    the RUN BRIEF); ``""`` unless :func:`question_spec_usable`."""
+    the RUN BRIEF); ``""`` unless :func:`question_spec_usable` and the spec
+    has a field the block shows (a spec with only an operational question
+    pins nothing the brief states, so it gets no bare header)."""
     if not question_spec_usable(spec):
         return ""
     horizon, source = spec["horizon"], spec["resolution_source"]
@@ -1962,7 +2041,7 @@ def render_question_spec_block(spec: Any) -> str:
     if assumptions:
         lines.append("Assumptions this run made:")
         lines += [f"- {row['text']}" for row in assumptions]
-    return "\n".join(lines)
+    return "\n".join(lines) if len(lines) > 1 else ""
 
 
 def question_spec_plan_rule(spec: Any) -> str:
@@ -4987,8 +5066,9 @@ class _Engine:
 
         One provider attempt per call, only while at least
         ``REPLAN_MIN_REMAINING_SHARE`` of the run's time budget remains; the
-        scope is reused when it had succeeded and the scout searches are served
-        from the run's search cache.  A usable plan replaces the template plan
+        scope is reused when it had succeeded (with its own horizon, never the
+        earlier question spec's) and the scout searches are served from the
+        run's search cache.  A usable plan replaces the template plan
         (persisted; nothing else has run for it yet); otherwise the template
         plan stays exactly as it is, still flagged for a resumed attempt.
         """
@@ -5001,7 +5081,8 @@ class _Engine:
         self.log("stage", "v3: the plan fell back to templates during a model outage; "
                           "trying the planning calls once more before gathering")
         scope = None if plan.fallback.get("scope") else {
-            "restated_question": plan.restated_question, "horizon": plan.horizon,
+            "restated_question": plan.restated_question,
+            "horizon": plan.horizon if plan.scope_horizon is None else plan.scope_horizon,
             "scout_queries": list(plan.scout_queries), "key_entities": list(plan.key_entities)}
         deadline = self.deadline.child(PHASE_TIME_SHARE["plan"], label="replan")
         with self.gateway.phase("plan"):
@@ -5051,7 +5132,8 @@ class _Engine:
         The spec call reuses the plan call's ``[pre_brief, scout]`` prefix and
         never fails planning: its normalized result (``unavailable`` when the
         call failed, then ``prior_spec`` when one is given) is left in
-        ``self._pending_question_spec``, and a usable spec is appended to the
+        ``self._pending_question_spec``, and a usable spec's block (when it
+        shows a field, :func:`render_question_spec_block`) is appended to the
         plan call's shared context with :func:`question_spec_plan_rule` on its
         task.
         """
@@ -5081,9 +5163,10 @@ class _Engine:
                 self.log("warn", "v3: question spec call failed again; keeping the spec of the earlier plan")
                 spec = dict(prior_spec)
             self._pending_question_spec = spec
-            if question_spec_usable(spec):
+            block = render_question_spec_block(spec)
+            if block:
                 # A new list: the spec call's request was built from ``shared``.
-                shared = [*shared, render_question_spec_block(spec)]
+                shared = [*shared, block]
                 rule = question_spec_plan_rule(spec)
                 if rule:
                     task += "\n- " + rule
@@ -5103,10 +5186,12 @@ class _Engine:
     def _question_spec_call(self, shared: Sequence[str], as_of: str, deadline: rg.Deadline, *, label: str,
                             single_attempt: bool) -> dict:
         """The question spec call, normalized; a gateway failure (outage,
-        deadline, unparseable reply) is status ``unavailable``, never raised."""
+        deadline, unparseable reply) is status ``unavailable``, never raised.
+        It runs under ``QUESTION_SPEC_TIME_SHARE`` of ``deadline``."""
         try:
             raw = self._plan_json(shared, _render(_T_QSPEC, language=self.language), label=label,
-                                  required=("outcome_definition",), deadline=deadline,
+                                  required=("outcome_definition",),
+                                  deadline=deadline.child(QUESTION_SPEC_TIME_SHARE, label=label),
                                   single_attempt=single_attempt)
         except rg.GatewayError as exc:
             self.log("warn", f"v3: question spec call failed ({exc.category}: {exc}); the forecasts get no "
@@ -5128,6 +5213,8 @@ class _Engine:
         run goes on (the stage manifest treats the file as optional)."""
         path = self.out_dir / QUESTION_SPEC_FILENAME
         spec = plan.question_spec
+        # Total over a damaged reused plan.json (any status, any field type).
+        telemetry = question_spec_telemetry(spec) if spec is not None else None
         try:
             if spec is None:
                 if path.exists():
@@ -5138,15 +5225,15 @@ class _Engine:
             payload = json.dumps(spec, ensure_ascii=False, indent=2)
             if _read_text(path) != payload:
                 self.write_text(path, payload)
-                self.log("ok", f"wrote {QUESTION_SPEC_FILENAME} (status {spec.get('status')}, "
-                               f"{len(spec.get('assumptions') or [])} assumption(s))")
+                self.log("ok", f"wrote {QUESTION_SPEC_FILENAME} (status {telemetry['status']}, "
+                               f"{telemetry['assumptions_n']} assumption(s))")
         except OSError as exc:
             error = f"{type(exc).__name__}: {exc}"
             self.analytics_errors.append({"helper": "question_spec:publish", "error": error[:300]})
             self.log("warn", f"v3: writing {QUESTION_SPEC_FILENAME} failed ({error})")
-        if spec is not None:
-            self.meta["question_spec"] = question_spec_telemetry(spec)
-            if self.meta["question_spec"]["status"] == "invalid":
+        if telemetry is not None:
+            self.meta["question_spec"] = telemetry
+            if telemetry["status"] == "invalid":
                 self.log("warn", "v3: the plan's question spec fails its integrity check; it is not used")
 
     def _scout(self, queries: Sequence[str]) -> str:
