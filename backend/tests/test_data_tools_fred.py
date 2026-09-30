@@ -748,6 +748,36 @@ def test_no_part_of_the_key_survives_a_metadata_clip(tmp_path):
     assert all(key_fragments(path.read_text(encoding="utf-8")) == [] for path in cache_dir.iterdir())
 
 
+@pytest.mark.parametrize("stage, payload", [
+    ("series", {"error_message": "partial answer"}),
+    ("series", {"seriess": None}),
+    ("series", {"seriess": {"id": "CPIAUCSL"}}),
+    ("series", {"seriess": [None]}),
+    ("series", {"seriess": ["CPIAUCSL"]}),
+    ("series/observations", {"error_message": "partial answer"}),
+    ("series/observations", {"observations": None}),
+    ("series/observations", {"observations": {"date": "2020-03-01", "value": "1.0"}}),
+])
+@pytest.mark.parametrize("pin", [PAST, TODAY])
+def test_a_200_without_the_list_is_unavailable_never_an_absence(stage, payload, pin, cache):
+    transport = FakeTransport()
+    transport.answers[stage] = (200, payload, "")
+    result = call(transport, as_of=pin, pit=pin, cache=cache)
+    assert result.status == dtools.STATUS_UNAVAILABLE and result.detail.startswith("FRED answered ")
+    assert not any(claim in result.detail for claim in ("no vintage", "no series", "no observation"))
+    assert len(transport.calls) == (1 if stage == "series" else 2)
+    assert_pinned(transport.calls, pin, pin)
+    assert not os.path.isdir(cache.root) or not os.listdir(cache.root)
+
+
+@pytest.mark.parametrize("pin", [PAST, TODAY])
+def test_an_empty_observation_list_is_not_found(pin):
+    transport = FakeTransport(obs=observations([]))
+    result = call(transport, as_of=pin, pit=pin)
+    assert result.status == dtools.STATUS_NOT_FOUND and "holds no observation" in result.detail
+    assert "Monthly" in result.detail and len(transport.calls) == 2
+
+
 def test_the_default_transport_redacts_an_echoed_key_before_its_own_cut(monkeypatch):
     import httpx
 
@@ -768,10 +798,24 @@ def test_the_default_transport_redacts_an_echoed_key_before_its_own_cut(monkeypa
     assert key_fragments(repr(dataclasses.asdict(result))) == []
 
 
-def test_an_invalid_series_echo_never_holds_part_of_the_key():
-    result = call(FakeTransport(), series="x" * 60 + KEY)
-    assert result.status == dtools.STATUS_INVALID_INPUT
+@pytest.mark.parametrize("series", [
+    "x" * 60 + KEY,
+    # Not strings: their text form would hold the key where the 80-character clip falls.
+    ["x" * 55 + KEY],
+    b"x" * 60 + KEY.encode(),
+    {"q": "x" * 55 + KEY},
+    ("x" * 55 + KEY,),
+    type("x" * 60 + KEY, (), {})(),
+])
+def test_an_invalid_series_echo_never_holds_part_of_the_key(series):
+    transport = FakeTransport()
+    result = call(transport, series=series)
+    assert result.status == dtools.STATUS_INVALID_INPUT and transport.calls == []
     assert key_fragments(repr(dataclasses.asdict(result))) == []
+    if isinstance(series, str):
+        assert result.detail.startswith("'" + "x" * 60 + "[redacted]'")
+    else:
+        assert result.detail.startswith("a ") and " value is not a FRED series" in result.detail
 
 
 def test_a_past_vintage_repeat_call_makes_zero_transport_calls(cache):
@@ -782,6 +826,20 @@ def test_a_past_vintage_repeat_call_makes_zero_transport_calls(cache):
     assert one == two
     entry = json.loads(Path(cache.path(f"fred|CPIAUCSL|{PAST}|{PAST}|10")).read_text(encoding="utf-8"))
     assert entry["ttl_s"] == 30 * 86400
+
+
+def test_values_below_one_millionth_round_trip_through_the_cache(cache):
+    # str(Decimal("0.0000002")) is "2E-7": cached that way, the entry failed its own parse on every read.
+    values = ["0.0000001"] + ["0.0000000"] * 11 + ["0.0000002"]
+    first = FakeTransport(obs=observations(monthly(dt.date(2019, 3, 1), values)))
+    one = call(first, as_of=PAST, pit=PAST, cache=cache)
+    assert one.status == dtools.STATUS_OK and "Latest: 0.0000002 (2020-03-01)" in one.page_text
+    assert one.facts[0]["value"] == "0.0000002" and one.facts[0]["text"] == "0.0000002"
+    entry = json.loads(Path(cache.path(f"fred|CPIAUCSL|{PAST}|{PAST}|10")).read_text(encoding="utf-8"))
+    assert [value for _, value in entry["payload"]["observations"]] == values
+    second = FakeTransport()
+    assert call(second, as_of=PAST, pit=PAST, cache=cache) == one
+    assert second.calls == []
 
 
 def test_a_same_day_vintage_expires_after_the_ttl(tmp_path, monkeypatch):

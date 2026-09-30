@@ -26,7 +26,9 @@ The contract of :func:`fred_series`:
 * Honesty.  ALFRED's error semantics are unverified against the live API, so
   the mapping is conservative: an HTTP 400 saying the series "does not exist"
   is ``not_found`` at FRED's today and ``no_vintage`` at an earlier pin; any
-  other 400, a 429, a 5xx or a transport failure is ``unavailable``.
+  other 400, a 429, a 5xx or a transport failure is ``unavailable``.  So is an
+  HTTP 200 without the series or observation list: only a list FRED sends
+  empty is an absence.
 * Rendering.  Deterministic lines whose numbers DRF's page-number parser reads
   in their units ("4.3%", "159,000 thousand persons", "29,000.5 billion USD").
   The header names the source, the series id and the vintage, and so does every
@@ -675,7 +677,8 @@ class _Snapshot:
             "units": self.units, "frequency": self.frequency, "seasonal_adjustment": self.seasonal_adjustment,
             "vintage": self.vintage.isoformat(), "observation_start": self.observation_start.isoformat(),
             "observation_end": self.observation_end.isoformat(),
-            "observations": [[day.isoformat(), str(value)] for day, value in self.points],
+            # Fixed-point, as parsed: str() writes 0.0000002 as 2E-7, which from_payload rejects.
+            "observations": [[day.isoformat(), format(value, "f")] for day, value in self.points],
             "fetched_at": self.fetched_at,
         }
 
@@ -732,7 +735,7 @@ def _render(snapshot: _Snapshot, *, language: str) -> DataResult:
                          else f"{_fmt(latest, style)} {period}.")]
     common = {"series_id": sid, "source": "FRED/ALFRED", "vintage": pit, "url": url}
     facts: list[dict] = [{
-        **common, "metric": snapshot.title, "value": str(latest), "unit": snapshot.units,
+        **common, "metric": snapshot.title, "value": format(latest, "f"), "unit": snapshot.units,
         "text": _fmt(latest, style), "observation_date": latest_day.isoformat(),
         "value_type": "actual", "provenance_kind": "structured",
     }]
@@ -861,11 +864,12 @@ def _http_failure(code: int, payload: Any, text: str, *, series_id: str, pit: _d
     return STATUS_UNAVAILABLE, f"FRED answered HTTP {code}"
 
 
-def _parse_observations(rows: Any, *, start: _dt.date, end: _dt.date) -> tuple[tuple[_dt.date, Decimal], ...]:
+def _parse_observations(rows: Sequence[Any], *, start: _dt.date,
+                        end: _dt.date) -> tuple[tuple[_dt.date, Decimal], ...]:
     """The numeric observations dated within ``[start, end]``, oldest first, one per date (the last
     listed wins).  FRED's missing-value marker ".", blanks and malformed rows are skipped."""
     found: dict[_dt.date, Decimal] = {}
-    for row in rows if isinstance(rows, list) else ():
+    for row in rows:
         if not isinstance(row, Mapping):
             continue
         day, value = _as_date(row.get("date")), row.get("value")
@@ -926,8 +930,11 @@ def _fred_series(series: Any, *, as_of: Any, pit: Any, key: str, window_years: A
                  now: Optional[_dt.datetime]) -> DataResult:
     series_id = resolve_series(series)
     if series_id is None:
-        shown = _clip(_redact_text(series, key) if isinstance(series, str) else series, 80)
-        return _failure(STATUS_INVALID_INPUT, f"{shown!r} is not a FRED series; {_ALIAS_HINT}")
+        if isinstance(series, str):
+            shown = repr(_clip(_redact_text(series, key), 80))
+        else:  # named by its type, never stringified: a container's text could carry the key past the clip
+            shown = f"a {_clip(_redact_text(type(series).__name__, key), 40)} value"
+        return _failure(STATUS_INVALID_INPUT, f"{shown} is not a FRED series; {_ALIAS_HINT}")
     as_of_day, pit_day = _as_date(as_of), _as_date(pit)
     if as_of_day is None or pit_day is None:
         return _failure(STATUS_INVALID_INPUT, "as_of and the vintage pin must be dates (YYYY-MM-DD)")
@@ -983,7 +990,9 @@ def _fetch(series_id: str, *, key: str, pit: _dt.date, as_of: _dt.date, start: _
            transport: Transport, fetched_at: str) -> _Snapshot | tuple[str, str]:
     """The series metadata and observations as published on ``pit``: a :class:`_Snapshot`, or the
     ``(status, detail)`` of the first failure.  Nothing is retried, and an answer whose real-time
-    stamps exclude the pin fails (:func:`_at_vintage`)."""
+    stamps exclude the pin fails (:func:`_at_vintage`).  Only a list FRED sends empty is an absence
+    (``no_vintage`` or ``not_found``); an answer without the list, or with a series entry that is
+    not an object, establishes nothing about FRED's holdings and is ``unavailable``."""
     realtime = {"realtime_start": pit.isoformat(), "realtime_end": pit.isoformat()}
     timeout = _timeout_s()
     code, payload, text = _fred_get(transport, "series", {"series_id": series_id, **realtime}, key=key, pit=pit,
@@ -992,12 +1001,16 @@ def _fetch(series_id: str, *, key: str, pit: _dt.date, as_of: _dt.date, start: _
     if failure:
         return failure
     rows = payload.get("seriess")
-    info = rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], Mapping) else None
-    if info is None:
+    if not isinstance(rows, list):
+        return STATUS_UNAVAILABLE, "FRED answered without a series list"
+    if not rows:
         if historical:
             return STATUS_NO_VINTAGE, (f"FRED/ALFRED lists no vintage of {series_id} as published on "
                                        f"{pit.isoformat()}; later revisions are never substituted")
         return STATUS_NOT_FOUND, f"FRED has no series {series_id}; {_ALIAS_HINT}"
+    info = rows[0]
+    if not isinstance(info, Mapping):
+        return STATUS_UNAVAILABLE, "FRED answered with a series entry that is not an object"
     if str(info.get("id") or series_id).upper() != series_id:
         return STATUS_UNAVAILABLE, "FRED answered with metadata of another series"
     if not (_at_vintage(payload, pit) and _at_vintage(info, pit)):
@@ -1011,8 +1024,9 @@ def _fetch(series_id: str, *, key: str, pit: _dt.date, as_of: _dt.date, start: _
     if failure:
         return failure
     observation_rows = payload.get("observations")
-    if not _at_vintage(payload, pit) or (isinstance(observation_rows, list)
-                                         and not all(_at_vintage(row, pit) for row in observation_rows)):
+    if not isinstance(observation_rows, list):
+        return STATUS_UNAVAILABLE, "FRED answered without an observation list"
+    if not (_at_vintage(payload, pit) and all(_at_vintage(row, pit) for row in observation_rows)):
         return _off_vintage(series_id, pit, historical)
     frequency = _clip(info.get("frequency"), 60)
     points = _parse_observations(observation_rows, start=start, end=as_of)
