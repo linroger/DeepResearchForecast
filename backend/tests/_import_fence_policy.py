@@ -192,6 +192,15 @@ ALLOW = (
         "ledger": "no model or vendor spend: one POST per drift alert, failures only warn",
     },
     {
+        "file": "backend/scripts/export_demo_site_data.py",
+        "capability": "http_client",
+        "reason": "Demo-site exporter: with --graph-api it reads a graph from a running local "
+                  "backend's /api/graph/data endpoint instead of opening the embedded graph "
+                  "store that process owns.",
+        "ledger": "no model or vendor spend: one read-only request per exported graph",
+        "scopes": ("export_graph",),
+    },
+    {
         "file": "drf2/driver/harness_client.py",
         "capability": "http_client",
         "reason": "The drf2 driver's Runs API client for the local DeerFlow harness gateway "
