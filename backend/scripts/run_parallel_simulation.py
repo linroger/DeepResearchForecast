@@ -2849,6 +2849,39 @@ def _scheduled_events_due(event_config, loop_round) -> List[Dict[str, Any]]:
     return out
 
 
+def _posthoc_decision_events(config: Any, round_dates: Any) -> Dict[str, Any]:
+    """SIM-8：post-hoc 决策通道日历回退的附加关键字——各时段日程事件
+    ``{"events_by_round": {1 基 runtime 轮号: [事件…]}}``，elicitor 与 in-band 看到同一事件块。
+    仅当 SIM_DECISION_EVENTS 开且确有日历 round_dates 映射时构建；hours 模式 / 开关关 /
+    无可用事件 → {}（什么都不传，逐字节不变）。round 字段非法或为负的条目跳过（与
+    _scheduled_events_due 同一 round 匹配语义）。SIM_PERIOD_CONTEXT_V2 开（与 in-band 死轮
+    暂存同一开关）→ 另传 carry_unreplayed_events=True：动作日志里没有的轮次（全员缺席）的
+    事件并入下一回放轮并标"更早时段"，与 in-band 同口径。"""
+    if not round_dates or not _flag_true("SIM_DECISION_EVENTS", "true"):
+        return {}
+    event_config = config.get("event_config") if isinstance(config, dict) else None
+    scheduled = event_config.get("scheduled_events") if isinstance(event_config, dict) else None
+    if not isinstance(scheduled, list):
+        return {}
+    by_round: Dict[int, List[Dict[str, Any]]] = {}
+    for ev in scheduled:
+        if not isinstance(ev, dict):
+            continue
+        try:
+            loop_round = int(ev.get("round"))
+        except (TypeError, ValueError):
+            continue
+        if loop_round < 0:
+            continue
+        by_round.setdefault(loop_round + 1, []).append(ev)
+    if not by_round:
+        return {}
+    kwargs: Dict[str, Any] = {"events_by_round": by_round}
+    if _flag_true("SIM_PERIOD_CONTEXT_V2", "true"):
+        kwargs["carry_unreplayed_events"] = True
+    return kwargs
+
+
 def _resolve_total_rounds(config: Dict[str, Any], temporal_config: Dict[str, Any],
                           calendar: bool, max_rounds: Optional[int], log_info) -> int:
     """总轮数的唯一权威计算（在 log_simulation_start 之前调用一次，使其记录真实轮数）。
@@ -3745,6 +3778,9 @@ class _InbandWorldEvolution:
         self._v2 = _flag_true("SIM_PERIOD_CONTEXT_V2", "true")
         self._delta_round = 0
         self._carry_events: Dict[int, List[Dict[str, Any]]] = {}
+        # SIM-8（V2 开）：已步进但名册为空（交付了轮次却无可归属动作）的轮没有 elicit——其决策
+        # 上下文事件（带 carried_from_round）留给下一次 elicit；只进决策上下文，摘要不重复。
+        self._decision_carry: List[Dict[str, Any]] = []
         self._prev_date = self._as_of_date
         self._stepped = 0
         self._max_round = 0
@@ -4001,6 +4037,12 @@ class _InbandWorldEvolution:
             if period:
                 ctx.update({"period": period, "n_rounds": self._n_rounds,
                             "horizon_date": self._horizon_date, "unit": self._unit})
+            # SIM-8（SIM_DECISION_EVENTS，默认开）：本时段日程事件（含上面并入的死轮暂存事件，
+            # 及此前空名册轮留下的决策暂存）作为带标注的外生事件块喂 elicitor；无事件 / 开关关
+            # → ctx 无 events 键，提示词逐字节不变。
+            decision_events = list(buf.get("events") or []) + self._decision_carry
+            if decision_events and _flag_true("SIM_DECISION_EVENTS", "true"):
+                ctx["events"] = decision_events
             commitments = self._dc.elicit_round(roster, ctx) if roster else []
             # SIM-2：本轮名册校验记录（DECISION_CHANNEL_VALIDATION 开时由 elicit_round 写入）
             validation = ctx.get("decision_validation")
@@ -4099,6 +4141,12 @@ class _InbandWorldEvolution:
                           "下一轮标为摘要不可用）")
             for k in carried_rounds:
                 self._carry_events.pop(k, None)
+            # SIM-8：有名册 → 本轮 elicit 已看到这些事件；空名册 + V2 → 事件留给下一次 elicit
+            # （与 post-hoc 回放把无动作轮的事件并入下一回放轮同口径）
+            if roster:
+                self._decision_carry = []
+            elif self._v2 and ctx.get("events"):
+                self._decision_carry = [self._dc._mark_carried(ev, rnd) for ev in ctx["events"]]
             self._record_delta(delta_text, delta_state)
             self._delta_round = rnd
         except Exception as _e:  # noqa: BLE001 — spec §4: 失败 → 告警 + 下一轮空摘要
@@ -6604,17 +6652,20 @@ async def main():
                 _eps = 0.02
             _tc_posthoc = config.get("temporal_config") if isinstance(config, dict) else None
             _tc_posthoc = _tc_posthoc if isinstance(_tc_posthoc, dict) else {}
+            # 日历模式回退：精确 round→时段映射（hours 模式无 temporal_config → None，
+            # 旧路径逐字节不变）
+            _round_dates_posthoc = (_tc_posthoc.get("round_dates")
+                                    if str(_tc_posthoc.get("mode") or "").lower() == "calendar"
+                                    else None)
             _res = run_decision_channel(
                 # DEFECT-3: 决策通道批调用同样进 sim token 计量（不经 camel 边界）。
                 _acts, config.get("agent_configs"), _ws_seed,
                 _wrap_llm_client_usage(LLMClient()),
                 inertia=_inertia, conv_eps=_eps,
                 round_to_date=_build_round_to_date(_ws_seed, config),
-                # 日历模式回退：精确 round→时段映射（hours 模式无 temporal_config → None，
-                # 旧路径逐字节不变）
-                round_dates=(_tc_posthoc.get("round_dates")
-                             if str(_tc_posthoc.get("mode") or "").lower() == "calendar"
-                             else None),
+                round_dates=_round_dates_posthoc,
+                # SIM-8：日历回退时各时段日程事件喂 elicitor（hours 模式 / 开关关 → 不传）
+                **_posthoc_decision_events(config, _round_dates_posthoc),
             )
             if _res:
                 write_json_atomic(
