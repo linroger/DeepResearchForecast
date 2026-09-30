@@ -257,6 +257,55 @@ def add_stage_counter_dicts(base_by_stage: Any, current_by_stage: Any) -> Dict[s
     return {str(s): add_counter_dicts(b.get(s), c.get(s)) for s in stages}
 
 
+def previous_attempt_carry(prev: Any) -> Optional[Dict[str, Any]]:
+    """EVAL-17: the history a new run_telemetry.json attempt carries forward from the file
+    it replaces (``prev``, its parsed content), or None when ``prev`` holds none. This is
+    the one merge rule behind the pipeline's incremental flush and
+    :meth:`LLMMeter.write_run_telemetry`, so the two cannot drift apart.
+
+    - A file qualifies on its own calls or on its cumulative fields: an attempt that made
+      no LLM call (cancelled right after a resume, a provider outage or quota cap before
+      the first call) still carries the pipeline's history.
+    - The per-stage base is the file's cumulative_by_stage, or its by_stage for a file
+      written before EVAL-17.
+    - ``partial`` marks a pre-EVAL-17 file that already spans attempts (it has
+      cumulative_total but kept only its last attempt's by_stage), so the per-stage rows
+      under-report against cumulative_total. Once set it is carried forward.
+    """
+    if not isinstance(prev, dict):
+        return None
+    total = prev.get("total")
+    calls = total.get("calls") if isinstance(total, dict) else None
+    if not (calls or prev.get("cumulative_total") or prev.get("cumulative_by_stage")):
+        return None
+    return {
+        "previous_attempt": {
+            "total": total,
+            "report_id": prev.get("report_id"),
+            "status": prev.get("status"),
+        },
+        "cumulative_total": prev.get("cumulative_total") or total or {},
+        "cumulative_by_stage": prev.get("cumulative_by_stage") or prev.get("by_stage") or {},
+        "partial": bool(prev.get("cumulative_by_stage_partial")
+                        or (prev.get("cumulative_total") and not prev.get("cumulative_by_stage"))),
+    }
+
+
+def apply_previous_attempt_carry(data: Dict[str, Any], carry: Optional[Dict[str, Any]]) -> None:
+    """EVAL-17: fold a :func:`previous_attempt_carry` result into the snapshot ``data`` in
+    place: previous_attempt, cumulative_total and cumulative_by_stage (base + this attempt),
+    plus cumulative_by_stage_partial when the base is partial. No-op for None."""
+    if not carry:
+        return
+    data["previous_attempt"] = carry["previous_attempt"]
+    data["cumulative_total"] = add_counter_dicts(carry["cumulative_total"], data.get("total"))
+    data["cumulative_by_stage"] = add_stage_counter_dicts(
+        carry["cumulative_by_stage"], data.get("by_stage"))
+    if carry["partial"]:
+        # cumulative_total stays authoritative; the split misses early attempts.
+        data["cumulative_by_stage_partial"] = True
+
+
 @dataclass
 class _RunMeter:
     total: _Counter = field(default_factory=_Counter)
@@ -507,6 +556,12 @@ class LLMMeter:
         （以及它指向的 report_id）凭空消失，跨 run 的 token 审计对不上账。改为合并：保留上一
         attempt 的 total/report_id 摘要（previous_attempt），并滚动累计 cumulative_total，
         使文件既反映「本 attempt」又反映「整条管线」的真实开销。首写行为不变。
+
+        EVAL-17: the merge is :func:`previous_attempt_carry` + :func:`apply_previous_attempt_carry`,
+        the same rule as the pipeline's run_telemetry flush (cumulative_by_stage included).
+        Every call treats the file on disk as the previous attempt, so call it once per
+        attempt; the pipeline itself flushes through PipelineOrchestrator._flush_run_telemetry,
+        which fixes the base at the attempt start.
         """
         import os as _os
         from .atomic import write_json_atomic
@@ -517,22 +572,7 @@ class LLMMeter:
             if _os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     prev = json.load(f)
-                if isinstance(prev, dict) and (prev.get("total") or {}).get("calls"):
-                    data["previous_attempt"] = {
-                        "total": prev.get("total"),
-                        "report_id": prev.get("report_id"),
-                        "status": prev.get("status"),
-                    }
-                    base = prev.get("cumulative_total") or prev.get("total") or {}
-                    cur = data.get("total") or {}
-                    cum: Dict[str, Any] = {}
-                    for k in ("calls", "cached", "prompt_tokens", "completion_tokens",
-                              "total_tokens", "latency_ms", "cost_usd"):
-                        try:
-                            cum[k] = round((base.get(k) or 0) + (cur.get(k) or 0), 6)
-                        except TypeError:
-                            continue
-                    data["cumulative_total"] = cum
+                apply_previous_attempt_carry(data, previous_attempt_carry(prev))
         except Exception:  # noqa: BLE001 — 合并是观测增益，失败退回单 attempt 覆盖写
             pass
         write_json_atomic(path, data)

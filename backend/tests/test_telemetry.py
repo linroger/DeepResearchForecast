@@ -466,3 +466,68 @@ def test_add_counter_dicts_sums_cumulative_keys_and_tolerates_bad_rows():
     assert stages["graph"]["calls"] == 4 and stages["report"]["calls"] == 1
     assert stages["bad"]["calls"] == 0
     assert T.add_stage_counter_dicts(None, ["x"]) == {}
+
+
+def test_previous_attempt_carry_qualifies_history_and_tolerates_junk():
+    assert T.previous_attempt_carry(None) is None
+    assert T.previous_attempt_carry(["junk"]) is None
+    assert T.previous_attempt_carry({}) is None
+    assert T.previous_attempt_carry({"total": {"calls": 0}}) is None   # no history at all
+    # A zero-call attempt still carries the pipeline's history in its cumulative fields.
+    carry = T.previous_attempt_carry({"total": {"calls": 0}, "cumulative_total": {"calls": 3},
+                                      "cumulative_by_stage": {"graph": {"calls": 3}},
+                                      "report_id": "r1", "status": "cancelled"})
+    assert carry == {"previous_attempt": {"total": {"calls": 0}, "report_id": "r1",
+                                          "status": "cancelled"},
+                     "cumulative_total": {"calls": 3},
+                     "cumulative_by_stage": {"graph": {"calls": 3}},
+                     "partial": False}
+    # A malformed total does not hide the cumulative history.
+    assert T.previous_attempt_carry({"total": ["junk"], "cumulative_total": {"calls": 2}}
+                                    )["cumulative_total"] == {"calls": 2}
+    # Pre-EVAL-17 file spanning attempts: by_stage is the base and the split is partial.
+    legacy = T.previous_attempt_carry({"total": {"calls": 1}, "cumulative_total": {"calls": 4},
+                                       "by_stage": {"graph": {"calls": 1}}})
+    assert legacy["cumulative_by_stage"] == {"graph": {"calls": 1}}
+    assert legacy["partial"] is True
+    data = {"total": {"calls": 1}, "by_stage": {"graph": {"calls": 1}}}
+    T.apply_previous_attempt_carry(data, None)
+    assert data == {"total": {"calls": 1}, "by_stage": {"graph": {"calls": 1}}}   # no-op
+    T.apply_previous_attempt_carry(data, legacy)
+    assert data["cumulative_total"]["calls"] == 5
+    assert data["cumulative_by_stage"]["graph"]["calls"] == 2
+    assert data["cumulative_by_stage_partial"] is True
+
+
+def test_write_run_telemetry_uses_the_shared_merge_rule(tmp_path):
+    """LLMMeter.write_run_telemetry merges like the pipeline flush: cumulative_total carries
+    prompt_cache_read_tokens, cumulative_by_stage keeps the per-stage split, and a zero-call
+    attempt no longer wipes the history (the old calls gate dropped it)."""
+    import json
+
+    rid = "eval17_write_rt"
+    path = str(tmp_path / "run_telemetry.json")
+    T.LLMMeter.reset(rid)
+    T.LLMMeter.record("minimax", "m", 100, 10, 1.0, run_id=rid, stage="research",
+                      prompt_cache_read_tokens=60)
+    T.LLMMeter.write_run_telemetry(path, run_id=rid, extra={"report_id": "a"})
+    with open(path, encoding="utf-8") as f:
+        first = json.load(f)
+    assert "cumulative_total" not in first and "cumulative_by_stage" not in first  # first write
+
+    T.LLMMeter.reset(rid)                                     # attempt 2: zero calls
+    T.LLMMeter.write_run_telemetry(path, run_id=rid, extra={"report_id": "b"})
+    T.LLMMeter.reset(rid)                                     # attempt 3
+    T.LLMMeter.record("minimax", "m", 50, 5, 1.0, run_id=rid, stage="report",
+                      prompt_cache_read_tokens=20)
+    T.LLMMeter.write_run_telemetry(path, run_id=rid, extra={"report_id": "c"})
+    T.LLMMeter.reset(rid)
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["previous_attempt"]["report_id"] == "b"
+    assert data["cumulative_total"]["calls"] == 2
+    assert data["cumulative_total"]["prompt_tokens"] == 150
+    assert data["cumulative_total"]["prompt_cache_read_tokens"] == 80
+    assert data["cumulative_by_stage"]["research"]["prompt_cache_read_tokens"] == 60
+    assert data["cumulative_by_stage"]["report"]["calls"] == 1
+    assert "cumulative_by_stage_partial" not in data

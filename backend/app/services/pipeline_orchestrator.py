@@ -8125,12 +8125,9 @@ class PipelineOrchestrator:
         # W9-3: run_telemetry.json 增量落盘状态（attempt 起点由 _init_telemetry_flush 填充）。
         self._tel_lock = threading.Lock()
         self._tel_path: Optional[str] = None
-        self._tel_prev: Optional[dict] = None
-        self._tel_prev_cum: Optional[dict] = None
-        # EVAL-17: the previous attempt's cumulative_by_stage (fallback: its by_stage), and
-        # whether that base is known to miss earlier attempts (see _init_telemetry_flush).
-        self._tel_prev_cum_by_stage: Optional[dict] = None
-        self._tel_cum_by_stage_partial: bool = False
+        # EVAL-17: what this attempt carries forward from the previous run_telemetry.json
+        # (telemetry.previous_attempt_carry), fixed at the attempt start.
+        self._tel_carry: Optional[dict] = None
         self._tel_last_flush_calls: int = 0
         # INFRA-7: stages recomputed (not reused) in this attempt, read by the
         # resume lineage guards; this attempt's stage_reuse_v1 records, passed
@@ -8154,35 +8151,13 @@ class PipelineOrchestrator:
     def _init_telemetry_flush(self, state: "PipelineState") -> None:
         """attempt 起点：定位 run_telemetry.json 并捕获上一 attempt 的账作为合并基底。"""
         self._tel_path = os.path.join(PipelineManager._dir(state.pipeline_id), "run_telemetry.json")
-        self._tel_prev = None
-        self._tel_prev_cum = None
-        self._tel_prev_cum_by_stage = None
-        self._tel_cum_by_stage_partial = False
+        self._tel_carry = None
         self._tel_last_flush_calls = 0
         try:
-            prev = _read_json(self._tel_path)
-            # EVAL-17: an attempt that made no LLM call (cancelled right after the resume, a
-            # provider outage or quota cap before the first call) still carries the pipeline's
-            # history in its cumulative fields; gating on its own calls alone dropped it.
-            if isinstance(prev, dict) and ((prev.get("total") or {}).get("calls")
-                                           or prev.get("cumulative_total")
-                                           or prev.get("cumulative_by_stage")):
-                self._tel_prev = {
-                    "total": prev.get("total"),
-                    "report_id": prev.get("report_id"),
-                    "status": prev.get("status"),
-                }
-                self._tel_prev_cum = prev.get("cumulative_total") or prev.get("total") or {}
-                # EVAL-17: per-stage base. A file written before EVAL-17 has no
-                # cumulative_by_stage, so its own by_stage is the best base available.
-                self._tel_prev_cum_by_stage = (
-                    prev.get("cumulative_by_stage") or prev.get("by_stage") or {})
-                # EVAL-17 honesty marker: a pre-EVAL-17 file that already spans attempts (it
-                # has cumulative_total) kept only its last attempt's by_stage, so the per-stage
-                # rows under-report against cumulative_total. Carried forward once set.
-                self._tel_cum_by_stage_partial = bool(
-                    prev.get("cumulative_by_stage_partial")
-                    or (prev.get("cumulative_total") and not prev.get("cumulative_by_stage")))
+            # EVAL-17: the shared carry-forward rule (a zero-call attempt keeps the history;
+            # per-stage base with the pre-EVAL-17 by_stage fallback and partial marker).
+            from ..utils.telemetry import previous_attempt_carry
+            self._tel_carry = previous_attempt_carry(_read_json(self._tel_path))
         except Exception:  # noqa: BLE001 — 基底捕获失败按首写处理
             pass
 
@@ -8196,7 +8171,7 @@ class PipelineOrchestrator:
         tpath = self._tel_path
         if not tpath:
             return
-        from ..utils.telemetry import LLMMeter, add_counter_dicts, add_stage_counter_dicts
+        from ..utils.telemetry import LLMMeter, apply_previous_attempt_carry
         from ..utils.atomic import write_json_atomic
         with self._tel_lock:
             try:
@@ -8210,17 +8185,9 @@ class PipelineOrchestrator:
                     data.update(extra)
                 if not final:
                     data["in_flight"] = True  # 运行中快照标记（终版落盘时消失）
-                if self._tel_prev:
-                    data["previous_attempt"] = self._tel_prev
-                    data["cumulative_total"] = add_counter_dicts(
-                        self._tel_prev_cum, data.get("total"))
-                    # EVAL-17: the per-stage split survives resumes too (base fixed at the
-                    # attempt start, like cumulative_total).
-                    data["cumulative_by_stage"] = add_stage_counter_dicts(
-                        self._tel_prev_cum_by_stage, data.get("by_stage"))
-                    if self._tel_cum_by_stage_partial:
-                        # cumulative_total stays authoritative; the split misses early attempts.
-                        data["cumulative_by_stage_partial"] = True
+                # EVAL-17: cumulative_total and the per-stage cumulative_by_stage both survive
+                # resumes (base fixed at the attempt start).
+                apply_previous_attempt_carry(data, self._tel_carry)
                 write_json_atomic(tpath, data, fsync=final)
                 self._tel_last_flush_calls = int((data.get("total") or {}).get("calls") or 0)
             except Exception as _fe:  # noqa: BLE001 — 遥测落盘失败不得影响管线
@@ -9534,6 +9501,15 @@ class PipelineOrchestrator:
                 or not getattr(Config, "REPORT_STRUCTURED_FORECAST", True)
                 or state.options.get("ensemble_done")):
             return
+        # EVAL-17: a seed whose process died hard (SIGKILL, OOM, host reboot) before the
+        # metering finally in _do_seed ran left a simulation that is neither checkpointed nor
+        # recorded, and the resumed ensemble re-runs that seed under a new simulation. Meter
+        # every persisted member once here; the per-simulation marker makes recorded ones
+        # no-ops.
+        _members = state.options.get("ensemble_member_simulations")
+        if isinstance(_members, dict):
+            for _member_sim in list(_members):
+                self._record_sim_run_telemetry(state, _member_sim, stage=SIM_METER_STAGE_ENSEMBLE)
         if not (project and graph_id and state.report_id):
             return
         from ..utils.atomic import write_json_atomic
@@ -11853,7 +11829,9 @@ class PipelineOrchestrator:
         seed can no longer evict the main run's marker. The pre-EVAL-17 single slot
         'sim_llm_telemetry_recorded' is honoured on read and migrated into the map (a resumed
         legacy run never double counts), and is still written for stage='run' so a rollback
-        to older code cannot double count the main simulation either. The whole
+        to older code cannot double count the main simulation either. When the marker save
+        fails, the marker is rolled back and nothing is metered, so a later boundary or
+        resume retries instead of trusting a marker that exists only in memory. The whole
         check-and-mark runs under self._sim_meter_lock because seed threads record
         concurrently. 成功、复用与失败边界各调用一次；全程 degrade-safe，绝不抛出。
         """
@@ -11899,6 +11877,11 @@ class PipelineOrchestrator:
                 except (TypeError, ValueError):
                     wall_ms = 0.0
                 recorded_at = _utcnow()
+                # The marker slots as they were, for the rollback when the save below fails.
+                prior_slots = {key: state.options[key]
+                               for key in (SIM_METER_MARKERS_OPTION,
+                                           SIM_METER_LEGACY_MARKER_OPTION)
+                               if key in state.options}
                 if stage == STAGE_RUN:
                     state.options["sim_llm_telemetry"] = {
                         "provider": provider,
@@ -11930,8 +11913,23 @@ class PipelineOrchestrator:
                     state.heartbeat_at = _utcnow()
                 try:
                     PipelineManager.save(state)
-                except Exception:  # noqa: BLE001 — stash/标记落盘失败不影响主流程
-                    pass
+                except Exception as save_err:  # noqa: BLE001 — 落盘失败不影响主流程
+                    # EVAL-17: exactly-once needs the marker on disk before the spend is
+                    # metered. A marker living only in memory would be lost by a crash before
+                    # the next successful save, and the resume would record this run again.
+                    # Roll the marker back and meter nothing: a later boundary or resume
+                    # retries, and until then the spend is under-counted, never doubled.
+                    for key in (SIM_METER_MARKERS_OPTION, SIM_METER_LEGACY_MARKER_OPTION):
+                        if key in prior_slots:
+                            state.options[key] = prior_slots[key]
+                        else:
+                            state.options.pop(key, None)
+                    logger.warning(
+                        "[%s] 模拟计量标记落盘失败：本边界不入账，留待后续边界或 resume 重试"
+                        "（stage='%s' simulation=%s）: %s",
+                        state.pipeline_id, stage, sid, save_err,
+                    )
+                    return
                 if not bool(getattr(Config, "LLM_TELEMETRY_ENABLED", True)):
                     return
                 if t_in <= 0 and t_out <= 0:
