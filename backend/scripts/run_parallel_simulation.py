@@ -1938,9 +1938,56 @@ def _observe_agent_dynamics(tracker, actual_actions, name_to_id):
         pass
 
 
+# REPORT-6（SIM_ABSENCE_MARKERS，默认开）：世界时钟空段的具名占位。旧头部把"首轮"、
+# "上一时段平静"、"演化失败/未步进"、"本次运行不产出摘要"一律写成 "(first period)"——
+# 演化失败或 in-band 关闭时每轮都自称首轮，与 "round N/M" 矛盾；CONFIRMED EVENTS 空段
+# 的 "(none)" 又被读成"世界无事发生"。herding guard：这些标记不含任何数字与 "%"。
+_WORLD_CLOCK_NO_EVENTS = ("(no dated research event is scheduled for this period — "
+                          "this does not mean nothing happened in the world)")
+_WORLD_CLOCK_FIRST_PERIOD = "(first period — nothing has happened in this simulation yet)"
+_WORLD_CLOCK_QUIET_PERIOD = ("(no scheduled event and no notable public move was recorded "
+                             "last period)")
+_WORLD_CLOCK_SUMMARY_UNAVAILABLE = ("(last period's summary is unavailable in this run — "
+                                    "this is not evidence that nothing happened)")
+_WORLD_CLOCK_SUMMARY_NOT_PRODUCED = ("(period summaries are not produced in this run — "
+                                     "this is not evidence that nothing happened)")
+
+
+def _world_change_line(round_num, world_delta: str, delta_state: str) -> str:
+    """REPORT-6: WHAT CHANGED LAST PERIOD 段正文（仅 SIM_ABSENCE_MARKERS 开且调用方给出
+    delta_state 时使用）。首轮 → 首轮标记；有摘要 → 摘要原样；quiet → 平静期标记；
+    no_inband → 本次运行不产出摘要；failed / not_stepped / 其他（含双平台错峰下摘要尚未
+    送达本平台的 stepped）→ 失败关闭为"摘要不可用，不能据此推断无事发生"。"""
+    if round_num == 0:
+        return _WORLD_CLOCK_FIRST_PERIOD
+    if world_delta:
+        return world_delta
+    if delta_state == "quiet":
+        return _WORLD_CLOCK_QUIET_PERIOD
+    if delta_state == "no_inband":
+        return _WORLD_CLOCK_SUMMARY_NOT_PRODUCED
+    return _WORLD_CLOCK_SUMMARY_UNAVAILABLE
+
+
+def _stepped_delta_state(delta_text: str, digest_actions, fired_events, leader_move) -> str:
+    """REPORT-6: 步进成功的一轮，其摘要的来源状态（失败关闭）。有摘要 → stepped；摘要为空
+    且本轮确实无可报内容（无非空帖文、无非空到期事件、无领先者动量）→ quiet；摘要为空但
+    本轮有可报内容 → failed——build_world_delta 只在吞掉自身异常时才会如此，此时下一轮
+    绝不能向 agent 声称"上一时段无事发生"。判定口径与 build_world_delta 的取舍一致。"""
+    if str(delta_text or "").strip():
+        return "stepped"
+    has_posts = any(isinstance(a, dict) and str(a.get("content", "") or "").strip()
+                    for a in digest_actions or [])
+    has_events = any(isinstance(e, dict) and str(e.get("content", "") or "").strip()
+                     for e in fired_events or [])
+    if has_posts or has_events or leader_move is not None:
+        return "failed"
+    return "quiet"
+
+
 def _inject_period_context(env, active_ids, round_num, period, timeline,
                            fired_events, world_delta, response_step: bool = False,
-                           language: str = "") -> None:
+                           language: str = "", *, delta_state: Optional[str] = None) -> None:
     """CAL-TEMPORAL: env.step 前给每个活跃 agent 追加一条本轮「世界时钟」记忆。
 
     以 USER 角色写入（关键）：camel-ai 0.2.78 的 ScoreBasedContextCreator 只保留
@@ -1949,9 +1996,11 @@ def _inject_period_context(env, active_ids, round_num, period, timeline,
     环境消息一同送达（与 OASIS 把「你的环境：[帖子…]」作 USER 消息投喂同源），且
     update_memory 不清空跨轮记忆。头部含日历时段/轮次进度/预测判定日（spec §5 verbatim）；
     CONFIRMED EVENTS 列出本轮已到期的日程事件；WHAT CHANGED LAST PERIOD 段由
-    SIM_WORLD_DELTA 开关控制（默认开），摘要为空（首轮 / in-band 演化未产出）时显示
-    "(first period)"。仅日历模式调用；全程 best-effort——无法构造/单个 agent 失败均静默
-    跳过，绝不中断轮循环。
+    SIM_WORLD_DELTA 开关控制（默认开）。空段占位：delta_state 为 None 或
+    SIM_ABSENCE_MARKERS 关 → 旧文本逐字节不变（事件空 "(none)"、摘要空 "(first period)"）；
+    否则按 delta_state（in-band 演化器的 not_stepped/stepped/quiet/failed，或调用方的
+    no_inband）给出具名标记（REPORT-6，见 _world_change_line）。仅日历模式调用；全程
+    best-effort——无法构造/单个 agent 失败均静默跳过，绝不中断轮循环。
     """
     if not isinstance(period, dict) or not period:
         return
@@ -1984,7 +2033,11 @@ def _inject_period_context(env, active_ids, round_num, period, timeline,
         if date and not content.startswith("["):
             content = f"[{date}] {content}"
         event_lines.append(content)
-    events_block = "\n".join(event_lines) if event_lines else "(none)"
+    absence_markers = delta_state is not None and _flag_true("SIM_ABSENCE_MARKERS", "true")
+    if event_lines:
+        events_block = "\n".join(event_lines)
+    else:
+        events_block = _WORLD_CLOCK_NO_EVENTS if absence_markers else "(none)"
 
     lines = [
         f"# WORLD CLOCK — {label} ({period_start} → {period_end}) | "
@@ -2007,7 +2060,11 @@ def _inject_period_context(env, active_ids, round_num, period, timeline,
     ]
     if _flag_true("SIM_WORLD_DELTA", "true"):
         lines.append("## WHAT CHANGED LAST PERIOD")
-        lines.append(str(world_delta or "").strip() or "(first period)")
+        delta = str(world_delta or "").strip()
+        if absence_markers:
+            lines.append(_world_change_line(round_num, delta, delta_state))
+        else:
+            lines.append(delta or "(first period)")
     text = "\n".join(lines)
 
     for aid in active_ids or []:
@@ -3460,6 +3517,11 @@ class _InbandWorldEvolution:
         self._done: set = set()                # 已结束回路的平台
         self._pending: Dict[int, Dict[str, Any]] = {}  # 轮次 → 合并缓冲（等齐平台水位）
         self._delta_text = ""                  # 最近一次步进产出的定性摘要（喂下一轮头部）
+        # REPORT-6：最近一次摘要的来源状态（not_stepped / stepped / quiet / failed），与
+        # _delta_text 同步更新，让世界时钟区分"平静期"与"摘要不可用"；逐次计数收尾写入轨迹
+        # 附加键 delta_state_counts（SIM_ABSENCE_MARKERS 开时）。
+        self._delta_state = "not_stepped"
+        self._delta_state_counts: Dict[str, int] = {"stepped": 0, "quiet": 0, "failed": 0}
         self._prev_date = self._as_of_date
         self._stepped = 0
         self._max_round = 0
@@ -3507,7 +3569,7 @@ class _InbandWorldEvolution:
             self._watermark[p] = max(self._watermark.get(p, -1), round_num)
             self._advance()
         except Exception as _e:  # noqa: BLE001
-            self._delta_text = ""
+            self._record_delta("", "failed")
             self._log(f"第 {round_num + 1} 轮 in-band 世界演化交付失败（已隔离，下一轮空摘要）: {_e}")
 
     def heartbeat(self, platform: str, round_num: int) -> None:
@@ -3524,6 +3586,18 @@ class _InbandWorldEvolution:
     def latest_delta(self) -> str:
         """最近一次步进产出的定性摘要（喂下一轮 WORLD CLOCK 头；未步进/失败 → ""）。"""
         return self._delta_text
+
+    def latest_delta_state(self) -> str:
+        """REPORT-6: latest_delta() 的来源状态——not_stepped（尚无步进）/ stepped（有摘要）/
+        quiet（步进成功且本轮确无可报内容）/ failed（交付或步进失败，或步进成功但摘要生成
+        失败，见 _stepped_delta_state）；喂世界时钟的空段标记。"""
+        return self._delta_state
+
+    def _record_delta(self, text: str, state: str) -> None:
+        """REPORT-6: 同步更新摘要、来源状态与状态计数（每次设置都计一次）。"""
+        self._delta_text = text
+        self._delta_state = state
+        self._delta_state_counts[state] = self._delta_state_counts.get(state, 0) + 1
 
     def platform_done(self, platform: str) -> None:
         """本平台回路结束；全部平台完成时冲刷剩余轮并落轨迹（幂等）。"""
@@ -3570,6 +3644,11 @@ class _InbandWorldEvolution:
                            ("horizon_defaulted", self._horizon_defaulted)):
                 if fv is not None:
                     result[fk] = fv
+            # REPORT-6：摘要来源状态计数（附加键，与世界时钟空段标记同一开关；关 → 轨迹逐字节
+            # 不变）。stepped/quiet = 步进成功且摘要可信的轮数；failed = 摘要不可用的次数（交付/
+            # 步进失败，或步进成功但摘要生成失败——后者也计入实际步进轮）。
+            if _flag_true("SIM_ABSENCE_MARKERS", "true"):
+                result["delta_state_counts"] = dict(self._delta_state_counts)
             # SIM-1：与 post-hoc 决策通道同一套有效性裁定规则（诚实对齐，无开关）。未入账轮
             # （本进程见过但 WorldState 未步进）按 missing 计入分母——有损续跑只覆盖部分
             # 轮次时不再被判 valid（post-hoc 只入账动作日志中出现的轮次，见
@@ -3634,7 +3713,8 @@ class _InbandWorldEvolution:
 
     def _step_round(self, round_num: int, buf: Dict[str, Any]) -> None:
         """步进一轮：名册 → elicit → WorldState.step → 摘要 + world_digest.jsonl 行。
-        任何异常 → 告警 + 空摘要（下一轮头部回落 "(first period)" 语义），模拟继续。"""
+        任何异常 → 告警 + 空摘要（状态 failed：下一轮头部标"摘要不可用"；SIM_ABSENCE_MARKERS
+        关时回落旧 "(first period)"），模拟继续。"""
         try:
             period = buf.get("period") if isinstance(buf.get("period"), dict) else None
             rnd = round_num + 1  # 轨迹/digest/decisions 与 actions.jsonl 同为 1 基轮号
@@ -3756,9 +3836,15 @@ class _InbandWorldEvolution:
             self._max_round = max(self._max_round, rnd)
             if period_end:
                 self._prev_date = period_end
-            self._delta_text = delta_text
+            # REPORT-6：空摘要只在本轮确实无可报内容时记 quiet；否则是摘要生成失败 → failed
+            delta_state = _stepped_delta_state(delta_text, digest_actions,
+                                               buf.get("events") or [], leader_move)
+            if delta_state == "failed":
+                self._log(f"第 {rnd} 轮世界摘要为空但本轮有可报内容（摘要生成失败，"
+                          "下一轮标为摘要不可用）")
+            self._record_delta(delta_text, delta_state)
         except Exception as _e:  # noqa: BLE001 — spec §4: 失败 → 告警 + 下一轮空摘要
-            self._delta_text = ""
+            self._record_delta("", "failed")
             self._log(f"第 {round_num + 1} 轮 in-band 世界演化失败（已隔离，下一轮空摘要）: {_e}")
 
 
@@ -5162,6 +5248,8 @@ async def run_twitter_simulation(
                     world_delta_text,
                     response_step=_reaction_on,
                     language=_sim_language,
+                    delta_state=(_inband_evo.latest_delta_state()
+                                 if _inband_evo is not None else "no_inband"),
                 )
             except Exception as _pc_err:  # noqa: BLE001
                 log_info(f"世界时钟注入失败，跳过（不中断模拟）: {_pc_err}")
@@ -5713,6 +5801,8 @@ async def run_reddit_simulation(
                     world_delta_text,
                     response_step=_reaction_on,
                     language=_sim_language,
+                    delta_state=(_inband_evo.latest_delta_state()
+                                 if _inband_evo is not None else "no_inband"),
                 )
             except Exception as _pc_err:  # noqa: BLE001
                 log_info(f"世界时钟注入失败，跳过（不中断模拟）: {_pc_err}")
