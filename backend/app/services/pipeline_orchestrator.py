@@ -4231,20 +4231,21 @@ def _run_extract_only_salvage(
                 pass
 
 
-def _stage_walls(state: "PipelineState") -> dict[str, float]:
-    """ITEM-18：从各阶段的 started_at→finished_at 时间戳算出每阶段墙钟秒数（stage → seconds）。
+def _stage_windows(state: "PipelineState") -> dict[str, tuple[str, str, float]]:
+    """ITEM-18：每阶段计入墙钟的时间窗 stage → (started_at, finished_at, seconds)。
 
-    供 build_stage_telemetry 把编排器的阶段级墙钟与 LLMMeter 的 token/成本合并。仅在两端时间戳
-    都存在且差值非负时计入（未开始/未结束/时钟回拨 → 跳过，degrade-safe，绝不抛）。"""
-    walls: dict[str, float] = {}
+    仅在两端时间戳都存在且差值非负时计入（未开始/未结束/时钟回拨 → 跳过，degrade-safe，绝不抛）。
+    EVAL-18 的成本卡据此判断各阶段墙钟窗是否覆盖其调用（见 cost_accounting 模块文档）。"""
+    windows: dict[str, tuple[str, str, float]] = {}
     for name, st in (getattr(state, "stages", None) or {}).items():
-        started = _parse_iso(getattr(st, "started_at", None))
-        finished = _parse_iso(getattr(st, "finished_at", None))
+        started_raw = getattr(st, "started_at", None)
+        finished_raw = getattr(st, "finished_at", None)
+        started, finished = _parse_iso(started_raw), _parse_iso(finished_raw)
         if started is None or finished is None:
             continue
         dt = (finished - started).total_seconds()
         if dt >= 0:
-            walls[str(name)] = dt
+            windows[str(name)] = (started_raw, finished_raw, dt)
     # W9-2：多种子集成不占 stages（避免污染阶段带/前端渲染），墙钟从 options.ensemble_wall
     # 补入——此前 report 完成后的 +1h31m 集成窗口不归属任何阶段带（遥测里凭空消失）。
     try:
@@ -4253,10 +4254,61 @@ def _stage_walls(state: "PipelineState") -> dict[str, float]:
         if e0 is not None and e1 is not None:
             edt = (e1 - e0).total_seconds()
             if edt >= 0:
-                walls["ensemble"] = edt
+                windows["ensemble"] = (ew.get("started_at"), ew.get("finished_at"), edt)
     except Exception:  # noqa: BLE001 — 纯观测，绝不抛
         pass
-    return walls
+    return windows
+
+
+def _stage_walls(state: "PipelineState") -> dict[str, float]:
+    """ITEM-18：从各阶段的 started_at→finished_at 时间戳算出每阶段墙钟秒数（stage → seconds）。
+
+    供 build_stage_telemetry 把编排器的阶段级墙钟与 LLMMeter 的 token/成本合并。"""
+    return {name: window[2] for name, window in _stage_windows(state).items()}
+
+
+def _read_bytes(path: str) -> Optional[bytes]:
+    """The file's bytes, or None when it is missing or unreadable."""
+    try:
+        with open(path, "rb") as fh:
+            return fh.read()
+    except OSError:
+        return None
+
+
+def pipeline_cost_card(state: "PipelineState") -> dict[str, Any]:
+    """EVAL-18: the drf-cost-card/v1 card of ``state`` from its durable inputs.
+
+    One gatherer for the ``_run`` finally hook and ``scripts/cost_card.py`` (offline
+    rebuild), so both project the same inputs: run_telemetry.json (parsed, plus the sha256
+    of the same bytes) and run.json from the pipeline dir, and from the state the stage
+    timing windows and statuses and the options, with the report stage's ``config_hash_v1``
+    pin, the attempt start's ``cost_card_attempt_v1`` record (the unattributed-spend
+    baseline) and the ``cost_card_windows_v1`` window records. Pure apart from those reads.
+    """
+    from ..utils.cost_accounting import build_cost_card
+    raw = _read_bytes(os.path.join(PipelineManager._dir(state.pipeline_id), "run_telemetry.json"))
+    run_telemetry: Any = None
+    if raw is not None:
+        try:
+            run_telemetry = json.loads(raw)
+        except ValueError:
+            run_telemetry = None
+    windows = _stage_windows(state)
+    return build_cost_card(
+        pipeline_id=state.pipeline_id,
+        mode=state.mode,
+        status=state.status,
+        run_telemetry=run_telemetry,
+        run_telemetry_sha256=hashlib.sha256(raw).hexdigest() if raw is not None else None,
+        stage_walls={name: window[2] for name, window in windows.items()},
+        stage_windows={name: {"started_at": window[0], "finished_at": window[1]}
+                       for name, window in windows.items()},
+        run_manifest=_read_json(PipelineManager.manifest_path(state.pipeline_id)),
+        options=state.options,
+        stage_status={name: getattr(st, "status", None)
+                      for name, st in (state.stages or {}).items()},
+    )
 
 
 def _reset_stage_attempt(stage: "StageState") -> None:
@@ -8468,6 +8520,123 @@ class PipelineOrchestrator:
         if calls - self._tel_last_flush_calls >= n:
             self._flush_run_telemetry(state)
 
+    # -- EVAL-18: 精简成本卡 cost_card.json ---------------------------------
+
+    @staticmethod
+    def _drop_cost_card(state: "PipelineState") -> None:
+        """EVAL-18: remove <pipeline_dir>/cost_card.json and ``artifacts['cost_card']``.
+
+        A card describes the attempt that wrote it; it must never pass for a later one.
+        The caller saves the state. Never raises (logs instead).
+        """
+        if isinstance(getattr(state, "artifacts", None), dict):
+            state.artifacts.pop("cost_card", None)
+        try:
+            from ..utils.cost_accounting import COST_CARD_FILENAME
+            path = os.path.join(PipelineManager._dir(state.pipeline_id), COST_CARD_FILENAME)
+            if os.path.exists(path):
+                os.remove(path)
+        except Exception as exc:  # noqa: BLE001 — 成本卡为观测增益
+            logger.warning("[%s] 移除上一 attempt 的成本卡失败（忽略）: %s",
+                           getattr(state, "pipeline_id", None), exc)
+
+    def _start_cost_card_attempt(self, state: "PipelineState") -> None:
+        """EVAL-18: attempt start of the cost card (before the attempt's first telemetry flush).
+
+        Removes the previous attempt's card and ``artifacts['cost_card']`` (an attempt that
+        dies and is reconciled as an orphan never reaches the finally block, so the old card
+        must not pass for it; same rule as EVAL-15's _reset_stage_scorecard_sidecar), then
+        pins ``options['cost_card_attempt_v1']``: the attempt marker, the process-wide
+        unattributed LLM calls now and the sha256 of the run_telemetry.json this attempt
+        starts from. The hook and ``scripts/cost_card.py`` read the baseline from that
+        record, never from another attempt's card. Before ``_run``'s try, so it never
+        raises; a failure leaves no record (an unknown baseline). Knob off → nothing at all.
+        """
+        if not bool(getattr(Config, "COST_CARD_ENABLED", True)):
+            return
+        try:
+            from ..utils.cost_accounting import COST_CARD_ATTEMPT_OPTION, cost_card_attempt_record
+            from ..utils.telemetry import LLMMeter
+            self._drop_cost_card(state)
+            state.options.pop(COST_CARD_ATTEMPT_OPTION, None)
+            unattributed = LLMMeter.snapshot(state.pipeline_id).get("unattributed_process")
+            raw = _read_bytes(self._tel_path or os.path.join(
+                PipelineManager._dir(state.pipeline_id), "run_telemetry.json"))
+            state.options[COST_CARD_ATTEMPT_OPTION] = cost_card_attempt_record(
+                resume_count=state.options.get("resume_count"),
+                started_at=_utcnow(),
+                unattributed_calls_at_start=(unattributed.get("calls")
+                                             if isinstance(unattributed, dict) else None),
+                run_telemetry_sha256=hashlib.sha256(raw).hexdigest() if raw is not None else None)
+        except Exception as exc:  # noqa: BLE001 — 成本卡为观测增益，失败不影响管线
+            logger.warning("[%s] 成本卡 attempt 起点记录失败（忽略）: %s",
+                           getattr(state, "pipeline_id", None), exc)
+        try:
+            PipelineManager.save(state)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[%s] 保存成本卡 attempt 记录失败（忽略）: %s",
+                           getattr(state, "pipeline_id", None), exc)
+
+    def _note_cost_card_window(self, state: "PipelineState", window: str,
+                               started_at: Optional[str]) -> None:
+        """EVAL-18: pin ``options['cost_card_windows_v1'][window]`` as a wall window opens.
+
+        Records the calls earlier attempts had already made in the window's stages (from
+        this attempt's telemetry carry, the same base its run_telemetry.json cumulative
+        numbers are built on), so the cost card can tell a window that covers all of its
+        stage's calls (a stage reused since its only execution) from one that covers only
+        the latest execution. The caller saves the state. Never raises; a failure, or an
+        instance whose attempt telemetry was never initialised (no carry to read), leaves
+        no record for this window (the card then flags it whenever earlier attempts spent
+        in it). Knob off → nothing at all.
+        """
+        if not bool(getattr(Config, "COST_CARD_ENABLED", True)) or not self._tel_path:
+            return
+        try:
+            from ..utils.cost_accounting import COST_CARD_WINDOWS_OPTION, cost_card_window_record
+            records = state.options.get(COST_CARD_WINDOWS_OPTION)
+            records = dict(records) if isinstance(records, dict) else {}
+            records[window] = cost_card_window_record(
+                window, started_at=started_at, carry=getattr(self, "_tel_carry", None))
+            state.options[COST_CARD_WINDOWS_OPTION] = records
+        except Exception as exc:  # noqa: BLE001 — 成本卡为观测增益，失败不影响管线
+            logger.debug("[%s] 成本卡墙钟窗记录失败（忽略）: %s",
+                         getattr(state, "pipeline_id", None), exc)
+
+    def _write_cost_card(self, state: "PipelineState") -> None:
+        """EVAL-18: write the terminal attempt's <pipeline_dir>/cost_card.json.
+
+        Called by the ``_run`` finally block after the final run_telemetry.json /
+        telemetry.json writes and before ``LLMMeter.reset``, outside their try so a
+        telemetry failure never skips it. Never the report folder (W9-6). Observation
+        only: it never changes status or health and never raises (every step, the
+        cleanup included, is guarded). On failure no card is left for this attempt and
+        ``artifacts['cost_card']`` is dropped. Knob off → nothing at all.
+        """
+        if not bool(getattr(Config, "COST_CARD_ENABLED", True)):
+            return
+        try:
+            from ..utils.atomic import write_json_atomic
+            from ..utils.cost_accounting import COST_CARD_FILENAME
+            path = os.path.join(PipelineManager._dir(state.pipeline_id), COST_CARD_FILENAME)
+            card = pipeline_cost_card(state)
+            write_json_atomic(path, card, allow_nan=False)
+            state.artifacts = getattr(state, "artifacts", None) or {}
+            if isinstance(state.artifacts, dict):
+                state.artifacts["cost_card"] = path
+            if not card["completeness"]["complete"]:
+                logger.info("[%s] 成本卡不完整: %s", state.pipeline_id,
+                            "; ".join(card["completeness"]["reasons"]))
+        except Exception as exc:  # noqa: BLE001 — 成本卡为观测增益，失败不影响管线终态
+            logger.warning("[%s] 成本卡写入失败（忽略）: %s",
+                           getattr(state, "pipeline_id", None), exc)
+            self._drop_cost_card(state)
+        try:
+            PipelineManager.save(state)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[%s] 保存成本卡指针失败（忽略）: %s",
+                           getattr(state, "pipeline_id", None), exc)
+
     # -- 生命周期：启动回收 + 关闭清理 ------------------------------------
 
     @classmethod
@@ -9938,6 +10107,8 @@ class PipelineOrchestrator:
                                state.pipeline_id, _ce)
 
         state.options.setdefault("ensemble_wall", {})["started_at"] = _utcnow()
+        self._note_cost_card_window(  # EVAL-18
+            state, "ensemble", state.options["ensemble_wall"]["started_at"])
         try:
             _set_stage("ensemble")
         except Exception:  # noqa: BLE001
@@ -10115,7 +10286,8 @@ class PipelineOrchestrator:
         (``scenario_label`` / ``scenario_key``). Without an explicit ``record_class`` the
         ledger derives production / conditional_scenario. An evaluation run's pin
         (EVAL-13) re-classes the context as ``evaluation`` with its run provenance, so
-        a reused report's repair commit lands in the evaluation ledger too.
+        a reused report's repair commit lands in the evaluation ledger too. With
+        COST_CARD_ENABLED the pinned ``config_hash`` (EVAL-18) rides along.
         """
         context: dict[str, Any] = {
             "pipeline_id": state.pipeline_id,
@@ -10124,6 +10296,13 @@ class PipelineOrchestrator:
             "run_kind": run_kind,
             "as_of_date": validated_as_of_from_options(state.options),
         }
+        if bool(getattr(Config, "COST_CARD_ENABLED", True)):
+            # EVAL-18: the config_hash the report stage pinned (_pin_config_hash), so commit
+            # rows join this pipeline's cost card on the same hash. Provenance only.
+            from ..utils.cost_accounting import pinned_config_hash
+            config_hash = pinned_config_hash(state.options)
+            if config_hash:
+                context["config_hash"] = config_hash
         context.update(_scenario_ledger_identity(state.options))
         if record_class:
             context["record_class"] = record_class
@@ -10259,6 +10438,37 @@ class PipelineOrchestrator:
         except ValueError:
             pass
 
+    @staticmethod
+    def _pin_config_hash(state: "PipelineState", *, report_id: Any,
+                         report_producer: Optional[dict[str, Any]],
+                         keep_existing: bool = False) -> None:
+        """EVAL-18: pin ``options['config_hash_v1']`` = ``{config_hash, fingerprint, report_id}``.
+
+        Computed once per report, at report-stage construction, from pinned state (run
+        shape, safety policy, run.json research/ontology/graph stamps, run options, the
+        unpinned forecast knobs) plus ``report_producer``; ``_report_ledger_context``
+        stamps it on the ledger rows and the cost card reuses it, so both carry the same
+        hash even though INFRA-7 restamps run.json's report block only at stage completion.
+        ``keep_existing`` keeps a valid earlier pin computed for this ``report_id`` (a
+        reused report); a pin computed for another report (the minted one never reached
+        disk and an older report was found) is recomputed. The caller saves the state. A
+        failure drops the pin (no hash rather than a stale one). Knob off → no-op.
+        """
+        if not bool(getattr(Config, "COST_CARD_ENABLED", True)):
+            return
+        from ..utils.cost_accounting import CONFIG_HASH_OPTION
+        try:
+            from ..utils.cost_accounting import config_hash_record, pinned_for_report
+            if keep_existing and pinned_for_report(state.options, report_id):
+                return
+            state.options[CONFIG_HASH_OPTION] = config_hash_record(
+                state.options, _read_json(PipelineManager.manifest_path(state.pipeline_id)),
+                report_producer=report_producer, report_id=report_id)
+        except Exception as exc:  # noqa: BLE001 — 配置指纹为观测增益，绝不阻断报告
+            state.options.pop(CONFIG_HASH_OPTION, None)
+            logger.warning("[%s] config_hash 钉入失败（忽略，本报告不带 config_hash）: %s",
+                           state.pipeline_id, exc)
+
     def _generate_stage_report(self, state: "PipelineState", agent: Any,
                                simulation_id: Optional[str], *, report_id: str,
                                progress_callback: Callable[[str, int, str], None]) -> Any:
@@ -10269,8 +10479,13 @@ class PipelineOrchestrator:
         receipt is copied into ``state.options['forecast_ledger']`` whatever the
         outcome: completed, FAILED, or a cancellation raised after the completed
         report was committed. An evaluation run's agent also gets its admission pin
-        as ``evaluation_context`` (EVAL-13, :meth:`_assign_evaluation_context`).
+        as ``evaluation_context`` (EVAL-13, :meth:`_assign_evaluation_context`). The
+        report's config_hash is pinned first (EVAL-18, :meth:`_pin_config_hash`).
         """
+        # EVAL-18: pin the config fingerprint once, before the ledger context is built; the
+        # report's producer is the provider pair generating it now (the pair the mint recorded).
+        self._pin_config_hash(state, report_id=report_id,
+                              report_producer=_current_provider_pair())
         agent.ledger_context = self._report_ledger_context(
             state, simulation_id, run_kind="pipeline", seed=int(Config.SIM_SEED or 0))
         self._assign_evaluation_context(agent, state)
@@ -10300,6 +10515,13 @@ class PipelineOrchestrator:
                 and (prior.get("status") in ("committed", "revision", "duplicate")
                      or prior.get("unpublished_row") in ("recorded", "duplicate"))):
             return
+        # EVAL-18: the pin of the attempt that produced this report stays; any other report
+        # (produced before the pin existed, or not the report the pin was computed for) gets
+        # one now, with the producer its mint recorded (unknown for a non-matching report).
+        self._pin_config_hash(
+            state, report_id=report_id, keep_existing=True,
+            report_producer=run_shape.reused_report_stamp(
+                state.options.get(run_shape.REPORT_PRODUCER_OPTION), report_id))
         try:
             from . import ledger_commit
             status = getattr(report, "status", None)
@@ -10576,6 +10798,7 @@ class PipelineOrchestrator:
             st.message = message
             if st.started_at is None:
                 st.started_at = _utcnow()
+                self._note_cost_card_window(state, stage, st.started_at)  # EVAL-18
             state.current_stage = stage
             # I-5-6: 记录最近一次进度信号的壁钟时间戳，供状态 API 计算 elapsed/stale，
             # 让 UI 把「长时间无进度」诚实地呈现为「仍在思考」而非「卡死的进度条」。
@@ -11370,6 +11593,11 @@ class PipelineOrchestrator:
         # EVAL-1: the previous attempt's ledger receipt must not pass for the verdict of
         # the new report (a cancelled/halted attempt never replaces it).
         state.options.pop("forecast_ledger", None)
+        if bool(getattr(Config, "COST_CARD_ENABLED", True)):
+            # EVAL-18: nor may the previous report's config_hash pin describe the new report
+            # when the attempt ends before _generate_stage_report pins it (the card recomputes).
+            from ..utils.cost_accounting import CONFIG_HASH_OPTION
+            state.options.pop(CONFIG_HASH_OPTION, None)
         stale_names = {
             name for name in list(state.artifacts)
             if name.endswith("_partial") or name == "report_viz_manifest"
@@ -13824,6 +14052,9 @@ class PipelineOrchestrator:
             _install_llm_outage_probe()
         # W9-3: attempt 起点初始化遥测增量落盘（捕获上一 attempt 的账作合并基底）。
         self._init_telemetry_flush(state)
+        # EVAL-18: 成本卡 attempt 起点——移除上一 attempt 的卡与指针，钉入本 attempt 的无归属
+        # 调用基线与起始 run_telemetry.json 摘要（须在本 attempt 首次遥测落盘之前）。
+        self._start_cost_card_attempt(state)
         # I-8-1: 管线起飞即写首版 run.json（解析后的研究深度/模型/图谱/环境指纹），
         # 后续每阶段进入时把热切换出的报告/模拟 provider 钉入。
         self._write_run_manifest(state)
@@ -15534,6 +15765,9 @@ class PipelineOrchestrator:
                     logger.debug(f"[{state.pipeline_id}] 阶段级遥测处理失败（忽略）: {_ste}")
             except Exception as _te:
                 logger.debug(f"[{state.pipeline_id}] 写入 run_telemetry 失败（忽略）: {_te}")
+            # EVAL-18: 精简成本卡 <pipeline_dir>/cost_card.json（读上方刚落盘的 run_telemetry.json）。
+            # 与遥测块平级（遥测任一步抛错都不得跳过它）、在 reset 之前；方法自身兜住一切异常。
+            self._write_cost_card(state)
             # INFRA-9：reset 是本 run 在 LLMMeter 与活跃 run 注册表里的权威终局，放在遥测 try 之外
             # （仍在其后：上面的落盘/阶段遥测要先读计量）。此前它在 try 内，终版落盘任一步抛错就被
             # 跳过——该 run 的计量与活跃登记滞留到进程结束，此后每条单独运行的管线都面对 2 个「活跃」

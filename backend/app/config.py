@@ -566,6 +566,22 @@ class Config:
     # 的观测侧车先例）：只读投影、独立 try/except，绝不改 status/pipeline_health、绝不写报告目录。
     # 关闭 = 不写文件、不加 options 键。孤儿/旧跑用 scripts/stage_scorecard.py score 回填。
     STAGE_SCORECARD_ENABLED = os.environ.get('STAGE_SCORECARD_ENABLED', 'true').strip().lower() == 'true'
+    # EVAL-18: slim per-pipeline cost card. On: the _run finally block writes
+    # <pipeline_dir>/cost_card.json (drf-cost-card/v1: per-stage calls/tokens/wall first, USD
+    # secondary, completeness reasons), and the report stage pins the run's config fingerprint
+    # in options.config_hash_v1 and stamps that config_hash on its ledger commit rows, so cost
+    # and forecast quality can later be joined per configuration. Each attempt start removes
+    # the previous attempt's card and pins its unattributed-spend baseline in
+    # options.cost_card_attempt_v1 (so an orphan rebuild never borrows another attempt's
+    # baseline), and each stage wall window's opening is pinned in
+    # options.cost_card_windows_v1 (its start and the calls earlier attempts had made in the
+    # stage, so the card can name the walls that do not time all of a row's calls).
+    # Default on, like the other observation sidecars (RECORD_RUN_MANIFEST,
+    # STAGE_SCORECARD_ENABLED): it only projects durable artifacts in its own try/except,
+    # never writes the report folder and never changes status or health. Off = no file, no
+    # options keys, no ledger stamp (byte-identical).
+    # Backfill: scripts/cost_card.py build <pipeline_id>.
+    COST_CARD_ENABLED = os.environ.get('COST_CARD_ENABLED', 'true').strip().lower() == 'true'
     # INFRA-7：run-shape 准入钉（与 safety_policy_v1 并列的第二份准入快照）。开启时 start/fork/批次分叉
     # 把影响结果的旋钮（ACTOR_CAST_MAX、GRAPH_MAX_ENTITIES、SIM_TEMPORAL_MODE…）与 provider/model
     # 出处钉进 options.run_shape_v1，每个 attempt 起点对比当前环境并记录漂移；run.json 保留历次
