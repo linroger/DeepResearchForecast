@@ -47,6 +47,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import copy
+import datetime as _dt
 import hashlib
 import importlib
 import inspect
@@ -2384,6 +2385,10 @@ class SourceLedger:
     in ``snippets`` (at most SNIPPETS_PER_ROW, each at most 500 chars), so an
     evidence quote copied from any search result shown can be located; the
     first-seen ``snippet`` field is unchanged.  Off, no sighting is added.
+
+    :meth:`set_dates` (RESEARCH_SOURCE_DATES, TIME-2) adds ``published``,
+    ``date_precision``, ``date_source``, ``date_rank``, ``modified_at`` and
+    ``date_rejected``; a row without them is exactly the row before TIME-2.
     """
 
     FLUSH_INTERVAL_S = 1.0
@@ -2546,6 +2551,41 @@ class SourceLedger:
             if clean_title:
                 row["title"] = clean_title
             self._touch()
+            return dict(row)
+
+    def set_dates(self, sid: int, *, published: str | None, precision: str | None,
+                  date_source: str | None, rank: int, modified: str | None = None,
+                  rejected: Sequence[str] = ()) -> dict | None:
+        """Record a source's publication dates (TIME-2); returns a copy of the
+        row, or ``None`` for an unknown sid.
+
+        ``published`` (with ``date_precision``, ``date_source``, ``date_rank``)
+        is replaced only by a strictly higher-ranked date, so a provider date
+        is never overwritten by a URL or search date, and a tie keeps the first;
+        ``modified_at`` keeps its first value; ``date_rejected`` is the sorted,
+        de-duplicated rejection reasons (at most 3).  The row is written only
+        when something changed."""
+        with self._lock:
+            row = self._rows.get(_as_int(sid) or 0)
+            if row is None:
+                return None
+            changed = False
+            if published and int(rank) > (_as_int(row.get("date_rank")) or 0):
+                row.update(published=str(published), date_precision=str(precision or ""),
+                           date_source=str(date_source or ""), date_rank=int(rank))
+                changed = True
+            if modified and not row.get("modified_at"):
+                row["modified_at"] = str(modified)
+                changed = True
+            reasons = {str(reason) for reason in rejected if reason}
+            if reasons:
+                known = row.get("date_rejected") if isinstance(row.get("date_rejected"), list) else []
+                merged = sorted(reasons | {str(reason) for reason in known})[:3]
+                if merged != row.get("date_rejected"):
+                    row["date_rejected"] = merged
+                    changed = True
+            if changed:
+                self._touch()
             return dict(row)
 
     def unmark_fetched(self, sid: int) -> dict | None:
@@ -3584,6 +3624,14 @@ def _default_search_fn(query: str, max_results: int) -> str:
     return search_tools.web_search_impl(query, max_results, revisit_reason=_ENGINE_REVISIT_REASON)
 
 
+def _run_fetch_coroutine(factory: Callable[[], Any]) -> Any:
+    """Run a fetch coroutine synchronously, bounded by RESEARCH_FETCH_CALL_TIMEOUT_S."""
+    timeout_s = _fetch_call_timeout_s()
+    if timeout_s > 0:
+        return _run_coroutine_bounded(factory, timeout_s)
+    return _run_coroutine_blocking(factory)
+
+
 def _default_fetch_fn(url: str) -> str:
     """``cached_fetch.cached_fetch(url, cached_fetch._resilient_fetch)`` run
     synchronously (``web_fetch_tool`` is an async-only StructuredTool and must
@@ -3593,10 +3641,46 @@ def _default_fetch_fn(url: str) -> str:
     def factory() -> Any:
         return cached_fetch.cached_fetch(url, cached_fetch._resilient_fetch, _ENGINE_REVISIT_REASON)
 
-    timeout_s = _fetch_call_timeout_s()
-    if timeout_s > 0:
-        return _run_coroutine_bounded(factory, timeout_s)
-    return _run_coroutine_blocking(factory)
+    return _run_fetch_coroutine(factory)
+
+
+def _default_fetch_fn_with_meta(url: str) -> Any:
+    """:func:`_default_fetch_fn` through ``cached_fetch.cached_fetch_with_meta``
+    (TIME-2): ``(text, date metadata)``, or a plain text (the deadline
+    sentinel, or a deployed cached_fetch without the function)."""
+    cached_fetch = importlib.import_module("cached_fetch")
+    fetch_with_meta = getattr(cached_fetch, "cached_fetch_with_meta", None)
+    if not callable(fetch_with_meta):
+        return _default_fetch_fn(url)
+
+    def factory() -> Any:
+        return fetch_with_meta(url, cached_fetch._resilient_fetch, _ENGINE_REVISIT_REASON)
+
+    return _run_fetch_coroutine(factory)
+
+
+_source_dates_module: Any = None
+
+
+def _source_dates() -> Any:
+    """The ``source_dates`` bridge module (imported lazily: it sits beside this
+    one), or None when it cannot be imported (dates are then skipped)."""
+    global _source_dates_module
+    if _source_dates_module is None:
+        try:
+            _source_dates_module = importlib.import_module("source_dates")
+        except ImportError:
+            return None
+    return _source_dates_module
+
+
+def _utc_now() -> _dt.datetime:
+    return _dt.datetime.now(_dt.timezone.utc)
+
+
+# A ledger date value as TIME-2 writes it (YYYY, YYYY-MM or YYYY-MM-DD); nothing
+# else is ever rendered into a trusted row header.
+_DATE_VALUE_RE = re.compile(r"\d{4}(?:-\d{2}(?:-\d{2})?)?")
 
 
 def _slug(text: Any, limit: int = 48) -> str:
@@ -3705,14 +3789,24 @@ class ResearchTools:
       (:meth:`outcome_counts`); with ``source_taxonomy`` (set by the engine
       from RESEARCH_SOURCE_TAXONOMY) a credential/quota refusal latches search
       for the run, an unconfirmed empty search is never run-cached, and a
-      failed fetch says whether the service or the page failed.
+      failed fetch says whether the service or the page failed;
+    * with ``source_dates`` (RESEARCH_SOURCE_DATES, TIME-2) every search row
+      and fetched page gets a publication date in the ledger
+      (:meth:`SourceLedger.set_dates`) from the fetch's provider metadata,
+      and with ``date_text_fallback`` also the page's head datelines and URL
+      path (search rows: the provider's row date and the URL path), shown in
+      its row header outside the untrusted block.  ``fetch_fn`` may return
+      ``(text, metadata)``; the default one then does (``clock`` returns the
+      UTC now that future dates are rejected against).
     """
 
     def __init__(self, ledger: SourceLedger, pages_dir: str | os.PathLike[str], *,
                  search_fn: Callable[[str, int], str] | None = None,
-                 fetch_fn: Callable[[str], str] | None = None,
+                 fetch_fn: Callable[[str], Any] | None = None,
                  bridge: Any = None, plog: Any = None,
-                 limits: ToolLimits | None = None) -> None:
+                 limits: ToolLimits | None = None, source_dates: bool = False,
+                 date_text_fallback: bool = True,
+                 clock: Callable[[], _dt.datetime] | None = None) -> None:
         self.ledger = ledger
         self.pages_dir = Path(pages_dir)
         self.pages_dir.mkdir(parents=True, exist_ok=True)
@@ -3720,7 +3814,15 @@ class ResearchTools:
         self.plog = plog
         self.limits = limits or ToolLimits()
         self._search_fn = search_fn or _default_search_fn
-        self._fetch_fn = fetch_fn or _default_fetch_fn
+        # The default fetch is chosen per call: the engine may turn
+        # source_dates on after construction (as it does shell_detection).
+        self._fetch_fn = fetch_fn or self._default_fetch
+        # TIME-2: off unless the factory or the engine turns it on.
+        self.source_dates = bool(source_dates)
+        self.date_text_fallback = bool(date_text_fallback)
+        self._clock = clock or _utc_now
+        # Dating attempts skipped because source_dates could not be imported or failed.
+        self._dates_skipped = 0
         self._lock = threading.Lock()
         self._search_cache: dict[str, str] = {}
         self._inflight_search: dict[str, threading.Event] = {}
@@ -3783,6 +3885,79 @@ class ResearchTools:
     def _outcome(self, name: str) -> None:
         with self._lock:
             self._outcomes[name] += 1
+
+    def _default_fetch(self, url: str) -> Any:
+        return (_default_fetch_fn_with_meta if self.source_dates else _default_fetch_fn)(url)
+
+    # ------------------------------------------------------------------ dates
+    def _stamp_dates(self, row: dict, candidates: Callable[[Any], list]) -> dict:
+        """``row`` after :meth:`SourceLedger.set_dates` with the resolved
+        ``candidates(source_dates_module)``.  Degrades safe: without the
+        module, or on any error, the row is returned unchanged and the skip is
+        counted (:meth:`date_stats`)."""
+        module = _source_dates()
+        if module is None:
+            with self._lock:
+                self._dates_skipped += 1
+            return row
+        try:
+            resolved = module.resolve(candidates(module), now=self._clock())
+            published, modified = resolved["published"], resolved["modified"]
+            updated = self.ledger.set_dates(
+                row["sid"], published=published.value if published else None,
+                precision=published.precision if published else None,
+                date_source=published.source if published else None, rank=resolved["rank"],
+                modified=modified.value if modified else None, rejected=resolved["rejected"])
+        except Exception as exc:  # noqa: BLE001 — dating never breaks a search or fetch
+            with self._lock:
+                self._dates_skipped += 1
+            self._log("warn", f"source dates skipped for [S{row.get('sid')}] ({type(exc).__name__})")
+            return row
+        return updated or row
+
+    def _search_row_dates(self, row: dict, item: Mapping[str, Any]) -> dict:
+        """A search row's dates: the provider's row date (rank 1) and the URL path (rank 2)."""
+        def candidates(module: Any) -> list:
+            found = []
+            for key in ("published", "publishedDate", "published_date", "date"):
+                value = item.get(key)
+                if value is not None and not isinstance(value, (bool, Mapping, list)) and str(value).strip():
+                    found.append((module.RANK_SEARCH, module.SOURCE_SEARCH, module.ROLE_PUBLISHED,
+                                  str(value)[:module.RAW_CHARS]))
+                    break
+            return found + module.from_url(row["url"])
+
+        return self._stamp_dates(row, candidates)
+
+    def _page_dates(self, row: dict, url: str, text: str, fetch_meta: Mapping[str, Any]) -> dict:
+        """A fetched page's dates: its fetch metadata (provider keys, HTML
+        candidates) and, with ``date_text_fallback``, its head datelines and
+        URL path.  A date the row already holds is replaced only by a
+        higher-ranked one (:meth:`SourceLedger.set_dates`)."""
+        def candidates(module: Any) -> list:
+            found = module.from_fetch_meta(fetch_meta)
+            if self.date_text_fallback:
+                found += module.from_text_head(text) + module.from_url(url)
+            return found
+
+        return self._stamp_dates(row, candidates)
+
+    def _date_label(self, row: Mapping[str, Any], *, with_modified: bool) -> str:
+        """`` — published X`` (plus ``; updated Y`` when ``with_modified`` and
+        the row's ``modified_at`` lies wholly after X) for a dated row with
+        source_dates on, else ``""``."""
+        published = str(row.get("published") or "")
+        if not self.source_dates or not _DATE_VALUE_RE.fullmatch(published):
+            return ""
+        label = f" — published {published}"
+        modified = str(row.get("modified_at") or "")
+        module = _source_dates() if with_modified and _DATE_VALUE_RE.fullmatch(modified) else None
+        if module is not None:
+            published_end = module.interval_bounds(published)[1]
+            modified_start = module.interval_bounds(modified)[0]
+            if published_end and modified_start and modified_start > published_end:
+                label += f"; updated {modified}"
+        return label
 
     @contextmanager
     def _singleflight(self, table: dict[str, threading.Event], key: str) -> Iterator[bool]:
@@ -3910,7 +4085,10 @@ class ResearchTools:
             row = self.ledger.register(item.get("url"), item.get("title"), snippet, "search", agent_id)
             if row is None:
                 continue
-            entry = f"[S{row['sid']}] {row['title']} — {row['domain']} ({tier_label(row['tier'])})"
+            if self.source_dates:
+                row = self._search_row_dates(row, item)
+            entry = (f"[S{row['sid']}] {row['title']} — {row['domain']} ({tier_label(row['tier'])})"
+                     f"{self._date_label(row, with_modified=False)}")
             # web_fetch takes a URL, so a hit the agent cannot see the URL of
             # cannot be read; long URLs are omitted rather than cut (a cut URL
             # would fetch the wrong page).
@@ -4019,6 +4197,9 @@ class ResearchTools:
         except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
             self._remember_failure(key, type(exc).__name__, transient=True, infra=True)
             return self._fetch_failed(agent_id, type(exc).__name__, infra=True)
+        # TIME-2: a fetch may return (text, date metadata); every check below
+        # sees only the text.
+        raw, fetch_meta = raw if isinstance(raw, tuple) and len(raw) == 2 else (raw, {})
         text = raw if isinstance(raw, str) else str(raw or "")
         envelope = _json_object(text)
         if envelope is not None and envelope.get("error") == "research_budget_exhausted":
@@ -4063,6 +4244,8 @@ class ResearchTools:
         row = self.ledger.mark_fetched(
             row["sid"], content_sha256=digest, chars=len(stripped), page_path=page_path,
             title=_page_title(stripped) or None) or row
+        if self.source_dates:
+            row = self._page_dates(row, url, stripped, fetch_meta if isinstance(fetch_meta, Mapping) else {})
         return self._render_page(row, stripped, terms, context_terms, cached=False)
 
     def _shell_reason(self, text: str, reason: str | None) -> str | None:
@@ -4119,7 +4302,10 @@ class ResearchTools:
         excerpt = select_passages(text, terms, max_chars=self.limits.passage_chars,
                                   context_terms=context_terms)
         kept, total = len(excerpt), len(text)
-        head = f"[S{row['sid']}] {row['title']} — {row['domain']} ({tier_label(row['tier'])})"
+        # A date is trusted engine metadata, so it sits in the header, never
+        # inside the untrusted block (page numbers read the stored page only).
+        head = (f"[S{row['sid']}] {row['title']} — {row['domain']} ({tier_label(row['tier'])})"
+                f"{self._date_label(row, with_modified=True)}")
         if kept >= total:
             header = f"{head} — full page ({total} chars)."
         else:
@@ -4140,6 +4326,11 @@ class ResearchTools:
         if row is None or not row.get("fetched") or not row.get("page_path"):
             return None
         return self._read_page(row)
+
+    def date_stats(self) -> dict[str, int]:
+        """Dating attempts skipped (source_dates unavailable or failing)."""
+        with self._lock:
+            return {"skipped": self._dates_skipped}
 
     def shell_stats(self) -> dict[str, int]:
         """Extraction shells rejected at the tool layer, per reason."""

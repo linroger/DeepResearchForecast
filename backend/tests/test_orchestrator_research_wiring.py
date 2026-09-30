@@ -105,6 +105,24 @@ def test_as_of_garbage_inputs_never_raise():
         assert dt is None or hasattr(dt, "date")
 
 
+def test_as_of_ignores_a_source_dated_after_the_run():
+    """TIME-2 (defensive): a misdated source after the run date is not the
+    newest evidence, so it cannot push a valid as_of_date off."""
+    run_date = datetime.now(timezone.utc).date()
+    future = (run_date + timedelta(days=3)).isoformat()
+    actors = {"as_of_date": "2026-05-01"}
+    dt, note = PipelineOrchestrator._validate_as_of_date(actors, [_src("2026-04-15"), _src(future)])
+    assert note is None and dt.date().isoformat() == "2026-05-01"
+    # The newest past source still bounds the as-of from below.
+    dt, note = PipelineOrchestrator._validate_as_of_date({"as_of_date": "2026-01-01"},
+                                                         [_src("2026-04-15"), _src(future)])
+    assert "早于最新来源日 2026-04-15" in note and dt.date().isoformat() == "2026-04-15"
+    # Only future sources: no source bound; an absent as-of stays "no anchor".
+    assert PipelineOrchestrator._validate_as_of_date({}, [_src(future)]) == (None, None)
+    dt, note = PipelineOrchestrator._validate_as_of_date({"as_of_date": "garbage"}, [_src(future)])
+    assert dt.date() == run_date and "无法解析" in note
+
+
 # ── R2-RES-3: advisory forecast-confidence penalty ──────────────────────────
 
 def test_penalty_zero_when_no_signals():
@@ -2124,6 +2142,71 @@ def test_runner_forwards_the_as_of_pin_from_config_to_v3_only(monkeypatch, tmp_p
     monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "legacy", raising=False)
     child = _launch_capturing_child(monkeypatch, tmp_path / "legacy", timeout=900)
     assert "RESEARCH_AS_OF_PIN" not in child["env"]
+
+
+def test_runner_forwards_the_source_date_knobs_from_config_to_v3_only(monkeypatch, tmp_path):
+    """TIME-2: Config decides RESEARCH_SOURCE_DATES and
+    RESEARCH_SOURCE_DATE_TEXT_FALLBACK for the v3 child, never ambient env."""
+    names = ("RESEARCH_SOURCE_DATES", "RESEARCH_SOURCE_DATE_TEXT_FALLBACK")
+    for name in ("default", "flipped", "legacy"):
+        (tmp_path / name).mkdir()
+    assert ("RESEARCH_SOURCE_DATES", "bool") in _po.RESEARCH_CHILD_V3_KNOBS
+    assert ("RESEARCH_SOURCE_DATE_TEXT_FALLBACK", "bool") in _po.RESEARCH_CHILD_V3_KNOBS
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    for name in names:
+        monkeypatch.delenv(name, raising=False)
+    # The hermetic Config defaults: dates off, text fallback on.
+    assert (_po.Config.RESEARCH_SOURCE_DATES, _po.Config.RESEARCH_SOURCE_DATE_TEXT_FALLBACK) == (False, True)
+    child = _launch_capturing_child(monkeypatch, tmp_path / "default", timeout=900)
+    assert [child["env"][name] for name in names] == ["false", "true"]
+
+    monkeypatch.setattr(_po.Config, "RESEARCH_SOURCE_DATES", True)
+    monkeypatch.setattr(_po.Config, "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", False)
+    monkeypatch.setenv("RESEARCH_SOURCE_DATES", "false")
+    monkeypatch.setenv("RESEARCH_SOURCE_DATE_TEXT_FALLBACK", "true")
+    child = _launch_capturing_child(monkeypatch, tmp_path / "flipped", timeout=900)
+    assert [child["env"][name] for name in names] == ["true", "false"]
+
+    for name in names:
+        monkeypatch.delenv(name)
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "legacy", raising=False)
+    child = _launch_capturing_child(monkeypatch, tmp_path / "legacy", timeout=900)
+    assert not any(name in child["env"] for name in names)
+
+
+_SOURCE_DATE_CONFIG_CHILD = r"""
+import importlib, json, os, sys
+import dotenv
+dotenv.load_dotenv = lambda *a, **k: False  # the repo .env must not decide
+import app.config as config_module
+out = []
+for raw in json.loads(sys.argv[1]):
+    for name in ("RESEARCH_SOURCE_DATES", "RESEARCH_SOURCE_DATE_TEXT_FALLBACK"):
+        if raw is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = raw
+    config = importlib.reload(config_module).Config
+    out.append([config.RESEARCH_SOURCE_DATES, config.RESEARCH_SOURCE_DATE_TEXT_FALLBACK])
+print("<<<JSON>>>" + json.dumps(out))
+"""
+
+
+def test_source_date_config_parsing():
+    """RESEARCH_SOURCE_DATES follows the default-off 'true' pattern; the default-on
+    text fallback is disabled only by an explicit falsy word (as the child reads
+    it).  A clean child process: app.config loads the repo .env at import."""
+    import subprocess
+    import sys
+
+    cases = [(None, False, True), ("true", True, True), ("TRUE ", True, True), ("1", False, True),
+             ("false", False, False), ("0", False, False), ("off", False, False), ("maybe", False, True)]
+    backend = Path(__file__).resolve().parents[1]
+    proc = subprocess.run([sys.executable, "-c", _SOURCE_DATE_CONFIG_CHILD, json.dumps([c[0] for c in cases])],
+                          cwd=str(backend), capture_output=True, text=True, timeout=120)
+    assert proc.returncode == 0, proc.stderr
+    line = [ln for ln in proc.stdout.splitlines() if ln.startswith("<<<JSON>>>")][-1]
+    assert json.loads(line[len("<<<JSON>>>"):]) == [[dates, fallback] for _raw, dates, fallback in cases]
 
 
 def test_runner_forwards_the_end_date_gate_knobs_from_config_to_every_engine(

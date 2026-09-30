@@ -1530,11 +1530,13 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 # tools (`use: market_tools:...` / `search_tools:...` / `cached_fetch:...`), the
 # LOOP-007 budget control plane they share, and the deep-research engine v3
 # (linear_research.py phases + research_gateway.py LLM gateway/research tools +
-# evidence_spans.py verbatim evidence-span matching).
+# evidence_spans.py verbatim evidence-span matching), plus source_dates.py (the
+# source publication-date parser cached_fetch and research_gateway import).
 # setup.sh deploys the same set; test_deerflow_bridge_sync_guard pins the parity.
 _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
     "research_budget.py", "linear_research.py", "research_gateway.py", "evidence_spans.py",
+    "source_dates.py",
 )
 
 
@@ -1706,7 +1708,8 @@ def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
         # Engine v3 is imported by bare name the same way: linear_research.py (the
         # phases), research_gateway.py (LLM gateway + research tools) and
         # evidence_spans.py (evidence-quote matching) must all sit next to the
-        # deployed script or the v3 dispatch raises ImportError.
+        # deployed script or the v3 dispatch raises ImportError; source_dates.py
+        # (source publication dates) sits there for cached_fetch/research_gateway.
         for _tool_mod in _DEPLOYED_BRIDGE_MODULES:
             _tool_src = os.path.join(bridge_dir, _tool_mod)
             if os.path.isfile(_tool_src):
@@ -2179,6 +2182,8 @@ RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_EVIDENCE_SUPPORTS", "bool"),
     ("RESEARCH_QUANT_TYPING", "bool"),
     ("RESEARCH_QUESTION_SPEC", "bool"),
+    ("RESEARCH_SOURCE_DATES", "bool"),
+    ("RESEARCH_SOURCE_DATE_TEXT_FALLBACK", "bool"),
     ("RESEARCH_V3_FORECAST_INPUTS", "bool"),
     ("RESEARCH_VERIFIED_FACTS", "bool"),
 )
@@ -12150,7 +12155,10 @@ class PipelineOrchestrator:
                 if not isinstance(s, dict):
                     continue
                 d = parse_as_of(s.get("date"))
-                if d is not None and (max_src is None or d > max_src):
+                # TIME-2 (defensive): a source dated after the run is a misdated
+                # page, never evidence newer than today, so it cannot push a
+                # valid as_of_date off (the research tools already reject it).
+                if d is not None and d <= run_dt and (max_src is None or d > max_src):
                     max_src = d
         raw = actors.get("as_of_date") if isinstance(actors, dict) else None
         parsed = parse_as_of(raw)

@@ -114,6 +114,35 @@ def _source_taxonomy_on() -> bool:
     return os.environ.get("RESEARCH_SOURCE_TAXONOMY", "").strip().lower() in _TAXONOMY_TRUTHY
 
 
+def _source_dates_on() -> bool:
+    """RESEARCH_SOURCE_DATES (TIME-2, default off; the orchestrator forwards
+    Config's value to the v3 child): Firecrawl search rows keep their date."""
+    return os.environ.get("RESEARCH_SOURCE_DATES", "").strip().lower() in _TAXONOMY_TRUTHY
+
+
+# Firecrawl search row fields that may carry the result's date (TIME-2), in order.
+_FIRECRAWL_ROW_DATE_KEYS = ("publishedDate", "published_date", "date")
+
+
+def _search_cache_provider(provider: str) -> str:
+    """The provider part of the search disk-cache key: Firecrawl rows cached
+    with RESEARCH_SOURCE_DATES on carry ``published`` (TIME-2), so they get their
+    own entries and a flag-off run never reads them (flag-off keys unchanged)."""
+    return f"{provider}+dates" if provider == "firecrawl" and _source_dates_on() else provider
+
+
+def _firecrawl_row_date(row: dict) -> str:
+    """The first non-empty date field of a Firecrawl search row, as text ("" when none)."""
+    for key in _FIRECRAWL_ROW_DATE_KEYS:
+        value = row.get(key)
+        if value is None or isinstance(value, (bool, dict, list)):
+            continue
+        text = str(value).strip()
+        if text:
+            return text[:80]
+    return ""
+
+
 def _record_provider_event(name: str) -> None:
     with _PROVIDER_EVENTS_LOCK:
         _PROVIDER_EVENTS[name] = _PROVIDER_EVENTS.get(name, 0) + 1
@@ -506,7 +535,8 @@ def _firecrawl_throttle() -> None:
 def _firecrawl_search(query: str, max_results: int) -> str:
     """Firecrawl v2 /search 直连实现，输出与 community 工具同形的 JSON 字符串。
 
-    成功 → {"query", "total_results", "results":[{title,url,content}]}；真实空结果 →
+    成功 → {"query", "total_results", "results":[{title,url,content}]}（RESEARCH_SOURCE_DATES 开时，
+    带日期字段的行另有 published）；真实空结果 →
     total_results=0 + results=[]（可被负缓存抑制重复空查询）；传输/HTTP 错误 →
     {"error", "query"}（不负缓存，交由上层按瞬态处理）。绝不抛异常、绝不回显凭据。
     花费护栏：limit 被 RESEARCH_FIRECRAWL_SEARCH_LIMIT 钳制（按条计费）；进程内计费调用
@@ -578,18 +608,24 @@ def _firecrawl_search(query: str, max_results: int) -> str:
         # v2 按 source 分组（{"web":[...]}）；容忍 v1 风格的裸列表。
         rows = data.get("web") if isinstance(data, dict) else data
         results = []
+        keep_dates = _source_dates_on()
         for row in rows if isinstance(rows, list) else []:
             if not isinstance(row, dict):
                 continue
             url = str(row.get("url") or "").strip()
             if not url:
                 continue
-            results.append({
+            result = {
                 "title": str(row.get("title") or "").strip() or url,
                 "url": url,
                 "content": str(row.get("description") or row.get("snippet")
                                or "").strip(),
-            })
+            }
+            published = _firecrawl_row_date(row) if keep_dates else ""
+            if published:
+                # TIME-2: the provider's date becomes the ledger row's rank-1 date.
+                result["published"] = published
+            results.append(result)
         return json.dumps(
             {"query": q, "total_results": len(results), "results": results},
             ensure_ascii=False)
@@ -679,7 +715,8 @@ def web_search_impl(
     if _ttl > 0 and _normalize_query(query):
         try:
             _root = _search_cache_root()
-            _cache_path_str = _search_cache_path(_root, _search_cache_key(provider, query, max_results))
+            _cache_path_str = _search_cache_path(
+                _root, _search_cache_key(_search_cache_provider(provider), query, max_results))
             hit = _read_search_cache(_cache_path_str, _ttl)
             if hit is not None:
                 hit = _filter_denied_search_results(hit)
