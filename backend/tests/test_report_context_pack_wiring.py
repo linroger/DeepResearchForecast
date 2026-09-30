@@ -600,3 +600,54 @@ def test_replay_defaults_to_each_handoffs_as_of_day(tmp_path, capsys):
     assert row["now_mode"] == "fixed" and row["binary"]["packed"]["scheduled_guard"] == "withheld"
     assert row["binary"]["packed"]["post_as_of_rows_withheld"] == 1
     assert "Scheduled row." not in row["texts"]["binary"]
+
+
+def test_replay_reports_an_analyst_section_written_as_an_h3(tmp_path, capsys):
+    """pipe_0f2b's binary calls are an H3 ("### Part 1 — Forecasts (12 binary calls …)") under
+    a body H2: the metric reads the analyst-class sub-headings when no H2 is analyst-class."""
+    import scripts.context_pack_replay as replay
+
+    handoff = _write_handoff(tmp_path)
+    (handoff / "research_report.md").write_text(DOSSIER.replace(
+        "## Resolution-ready forecasts\n\n", "## Market outlook\n\n### Resolution-ready forecasts\n\n"),
+        encoding="utf-8")
+    assert replay.main(["--handoff", str(handoff), "--json", "--now", TODAY.isoformat()]) == 0
+    row, = json.loads(capsys.readouterr().out)["handoffs"]
+    assert row["analyst_level"] == "sub_heading" and row["analyst_sections"] == 1
+    binary = row["binary"]
+    assert binary["packed"]["analyst_section_present"] is True
+    assert binary["packed"]["analyst_headings"] == [
+        {"heading": "### Resolution-ready forecasts", "present": True}]
+    assert binary["legacy"]["analyst_section_present"] is False
+
+
+def test_replay_newest_row_metric_catches_a_lane_ordering_bug(tmp_path, monkeypatch, capsys):
+    """The newest past row is found without the lane code, so a lane that sorts oldest first
+    (and so drops the newest row past its item cap) fails the metric."""
+    import scripts.context_pack_replay as replay
+
+    handoff = _write_handoff(tmp_path)
+    (handoff / "timeline.json").write_text(json.dumps(
+        [{"date": _day(-i), "event": f"Development number {i:02d} of the review."}
+         for i in range(1, 21)]), encoding="utf-8")
+    monkeypatch.setattr(cp, "_past_sorted", lambda rows: sorted(
+        rows, key=lambda r: (r[2].end, r[2].start, r[1])))
+    assert replay.main(["--handoff", str(handoff), "--json", "--now", TODAY.isoformat()]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    row, = payload["handoffs"]
+    assert row["newest_past_row"]["date"] == _day(-1)
+    assert row["newest_past_row"]["probe"] == "Development number 01 of the review."
+    assert row["binary"]["packed"]["newest_past_row_in_lane"] is False
+    assert row["spine"]["packed"]["newest_past_row_in_lane"] is False
+    assert payload["summary"]["binary"]["newest_past_row_in_every_lane"] is False
+
+
+@pytest.mark.parametrize("bad", ["2026-13-01", "yesterday", ""])
+def test_replay_rejects_an_invalid_now_with_a_usage_error(tmp_path, capsys, bad):
+    import scripts.context_pack_replay as replay
+
+    handoff = _write_handoff(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        replay.main(["--handoff", str(handoff), "--now", bad])
+    assert exc.value.code == 2
+    assert "expected 'as_of' or a YYYY-MM-DD date" in capsys.readouterr().err

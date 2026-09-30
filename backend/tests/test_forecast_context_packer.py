@@ -66,6 +66,19 @@ def test_parse_dated_period_forms(raw, start, end, precision):
     ("2026-09-15-20", date(2026, 9, 15), date(2026, 9, 20)),
     ("2026-09-15 to 10-01", date(2026, 9, 15), date(2026, 10, 1)),
     ("2026-09-15 (updated 2026-09-20)", date(2026, 9, 15), date(2026, 9, 20)),
+    ("2026年9月起至10月", date(2026, 9, 1), date(2026, 10, 31)),
+    ("2026-09-15 to mid 2026-10", date(2026, 9, 15), date(2026, 10, 31)),
+    # a list of days / months written without their shared parts covers every listed date
+    ("2026-09-15/16", date(2026, 9, 15), date(2026, 9, 16)),
+    ("2026-09-15, 16", date(2026, 9, 15), date(2026, 9, 16)),
+    ("2026-09-15 & 16", date(2026, 9, 15), date(2026, 9, 16)),
+    ("2026-09-15 and 16", date(2026, 9, 15), date(2026, 9, 16)),
+    ("2026-09-15, 17 and 19", date(2026, 9, 15), date(2026, 9, 19)),
+    ("2026年9月15日、16日", date(2026, 9, 15), date(2026, 9, 16)),
+    ("2026年9月15号和16号", date(2026, 9, 15), date(2026, 9, 16)),
+    ("2026年9月、10月", date(2026, 9, 1), date(2026, 10, 31)),
+    ("2026-09/10", date(2026, 9, 1), date(2026, 10, 31)),  # September/October, not 10 Sept
+    ("2026-09-15/30 and 2026-09-20", date(2026, 9, 15), date(2026, 9, 30)),
 ])
 def test_parse_dated_period_ranges_cover_both_endpoints(raw, start, end):
     assert cp.parse_dated_period(raw) == cp.DatedPeriod(start, end, "range")
@@ -78,6 +91,14 @@ def test_parse_dated_period_ranges_cover_both_endpoints(raw, start, end):
     ("2026-09-15T08:00:00+0800", cp.DatedPeriod(date(2026, 9, 15), date(2026, 9, 15), "day")),
     ("  2026-09-15\n", cp.DatedPeriod(date(2026, 9, 15), date(2026, 9, 15), "day")),
     ("2026  年  9  月", cp.DatedPeriod(date(2026, 9, 1), date(2026, 9, 30), "month")),
+    ("2026 Q3/Q4", cp.DatedPeriod(date(2026, 7, 1), date(2026, 12, 31), "quarter")),
+    ("Q3 and Q4 2026", cp.DatedPeriod(date(2026, 7, 1), date(2026, 12, 31), "quarter")),
+    ("2026 H1/H2", cp.DatedPeriod(date(2026, 1, 1), date(2026, 12, 31), "half")),
+    ("H1-H2 2026", cp.DatedPeriod(date(2026, 1, 1), date(2026, 12, 31), "half")),
+    # a time of day, however it is attached, is not a listed day
+    ("2026-09-15, 10:00", cp.DatedPeriod(date(2026, 9, 15), date(2026, 9, 15), "day")),
+    ("2026-09-15 at 10:00", cp.DatedPeriod(date(2026, 9, 15), date(2026, 9, 15), "day")),
+    ("2026-09-15, Monday", cp.DatedPeriod(date(2026, 9, 15), date(2026, 9, 15), "day")),
 ])
 def test_parse_dated_period_edge_forms(raw, expected):
     assert cp.parse_dated_period(raw) == expected
@@ -88,6 +109,13 @@ def test_parse_dated_period_edge_forms(raw, expected):
     # an open or unreadable range end leaves no endpoint: undated, never its first date
     "2025年3月至今", "2026-09-15 to date", "2026-09-15 – present", "2026-09-15 to mid-October",
     "2026年12月28日-1月3日", "2026-09-15 (2026-13 revised)",
+    # an open end or start: the row runs on past its date, whatever the separator
+    "2026-09-15 - present", "2026-09-15-present", "2026-09-15 - ongoing", "2026-09-15 ~ now",
+    "2026-09-15 till date", "2026-09-15 onwards", "2026-09-15 or later", "2026 and beyond",
+    "since 2026-09-15", "after 2026-09-15", "Starting in Q3 2026", "自从2026年9月",
+    "2026年9月起", "2026年9月以来", "2026年9月起至今", "2026年9月15日以后",
+    # a listed or range end that cannot be read after the last date
+    "2026-09-15/10", "2026-09/15", "2025/26", "2026-09-15, 3 more",
 ])
 def test_parse_dated_period_garbage_is_undated(raw):
     assert cp.parse_dated_period(raw) is None
@@ -105,7 +133,9 @@ def test_date_and_heading_parsing_is_linear_on_pathological_text():
         assert len(sections) == 1 and sections[0].level in (1, 2)
     dates = ["2026" + " " * 50000 + "Q3", "2026" + " " * 20000 + "年 " * 20000,
              "1" * 100000, "2026-09-15 " + "to " * 30000, "Q1-" * 30000 + "2026",
-             "2026-09-15T" + "1" * 50000]
+             "2026-09-15T" + "1" * 50000, "2026-09-01" + ", 1" * 30000,
+             "since " * 30000 + "2026", "2026" + " onwards" * 30000, "Q1/" * 30000 + "2026",
+             "2026-09-15 - " * 5000]
     for raw in dates:
         started = time.perf_counter()
         cp.parse_dated_period(raw)
@@ -160,13 +190,39 @@ def test_temporal_class_gates_on_the_period_end():
     ("Scenarios and Forecast Implications", "scenario"),
     ("附录A：概率情景汇总表", "scenario"),
     ("六、情景分析：Base / Upside / Downside（2026–2030）", "scenario"),
+    ("Notes and References", "excluded"),
+    ("References Cited", "excluded"),
+    ("Key References", "excluded"),
+    ("Selected References", "excluded"),
+    ("Sources & References", "excluded"),
+    ("Citations", "excluded"),
+    ("Endnotes", "excluded"),
+    ("Footnotes", "excluded"),
+    ("Works Cited", "excluded"),
+    ("Further Reading", "excluded"),
+    ("Appendix C: Bibliography", "excluded"),
+    ("资料来源与参考文献", "excluded"),
+    ("主要参考书目", "excluded"),
     ("Reference-Class Base Rates & Historical Anchoring", "body"),
+    ("Flow Batteries: Vanadium, Iron, Zinc — Commercial Reference Projects & Financing", "body"),
+    ("Modern Mercantilism Reference Class: Historical Industrial-Policy Success Rates", "body"),
+    ("Reference Scenario and Alternatives", "scenario"),
     ("Sources of Growth in the Memory Cycle", "body"),
     ("Track 1: 基率·参照类·历史类比 (Base Rates & Reference Classes)", "body"),
     ("Key Actors and Incentives", "body"),
 ])
 def test_classify_heading_bilingual(heading, cls):
     assert cp.classify_heading(heading) == cls
+
+
+def test_sub_headings_lists_h3_to_h6_outside_fences():
+    md = ("## Executive Synthesis & Forecast Package\n\n### Part 1 — Forecasts (12 binary calls)"
+          "\n\nx\n\n```\n### not a heading\n```\n\n#### Deep dive ##\n\n####### seven\n")
+    section, = cp.split_h2(md)
+    assert cp.sub_headings(section) == [
+        ("### Part 1 — Forecasts (12 binary calls)", "Part 1 — Forecasts (12 binary calls)"),
+        ("#### Deep dive ##", "Deep dive")]
+    assert cp.classify_heading(cp.sub_headings(section)[0][1]) == "analyst_forecasts"
 
 
 def test_split_h2_is_fence_aware_and_keeps_h3_with_its_h2():
@@ -268,6 +324,20 @@ def test_range_ending_after_as_of_is_straddle_and_excluded():
     assert packed.ok and "Hearing window still open" not in packed.text
     assert packed.telemetry["lanes"]["developments"]["straddle"] == 1
     assert packed.telemetry["lanes"]["audit"]["violations"] == []
+
+
+def test_open_ended_and_listed_dates_never_reach_the_developments_lane():
+    rows = [{"date": "2026-09-15/16", "event": "Two-day summit ending after as_of"},
+            {"date": "2026-09-15 - present", "event": "Ongoing blockade"},
+            {"date": "since 2026-09-01", "event": "Strike still running"},
+            {"date": "2026-09-14 & 15", "event": "Two-day vote before the cutoff"}]
+    lane = cp.developments_lane(rows, AS_OF)
+    assert [i.event for i in lane.items] == ["Two-day vote before the cutoff"]
+    assert lane.stats["straddle"] == 1 and lane.stats["undated"] == 2
+    kept, violations = cp.audit_temporal_contract([lane], AS_OF)
+    assert kept == [lane] and violations == []
+    assert cp.split_chronology(rows, AS_OF, NOW)["past"] == [
+        {"date": "2026-09-14 & 15", "event": "Two-day vote before the cutoff"}]
 
 
 def test_a_long_date_is_audited_unclipped_and_never_withholds_the_lane():
@@ -472,7 +542,43 @@ def test_pipe_6c41_shape_keeps_resolution_section_and_no_references():
     excerpt = result.text[result.text.index("[DOSSIER EXCERPT"):]
     assert len(excerpt) <= 48000
     lanes = result.text[: result.text.index("[DOSSIER EXCERPT")]
-    assert len(lanes) <= 5000 + 2000  # the budget-exempt lanes stay bounded
+    assert len(lanes) <= cp.BINARY_LANE_BUDGET  # exempt from the dossier budget, not unbounded
+
+
+def _worst_case_timeline(as_of: date):
+    """More and longer rows than the binary lanes hold, both sides of as_of."""
+    past = [{"date": date.fromordinal(as_of.toordinal() - i).isoformat(),
+             "event": f"Past development {i:02d} " + "detail " * 80} for i in range(1, 31)]
+    future = [{"date": date.fromordinal(as_of.toordinal() + i).isoformat(),
+               "event": f"Scheduled catalyst {i:02d} " + "detail " * 60} for i in range(1, 21)]
+    return past + future
+
+
+@pytest.mark.parametrize("dossier", ["short", "long"])
+def test_binary_prompt_growth_stays_within_5k_with_a_worst_case_timeline(dossier):
+    """Acceptance "binary prompt growth <= about 5k": the pack replaces the legacy
+    [Situation brief] + head+tail slice; bounded here with no brief at all (worst case)."""
+    live_as_of = date.fromordinal(NOW.date().toordinal() - 1)
+    report = ("## Body\n\n" + _para("body", 2000) if dossier == "short"
+              else _pipe_6c41_dossier())
+    rows = _worst_case_timeline(live_as_of)
+    result = cp.build_binary_pack(report, rows, live_as_of.isoformat(), NOW, 48000)
+    assert result.ok
+    legacy = slice_head_tail(report, 48000)
+    assert len(result.text) - len(legacy) <= 5000
+    lanes = result.telemetry["lanes"]
+    assert lanes["developments"]["kept"] == cp.BINARY_DEV_MAX_ITEMS
+    assert lanes["scheduled"]["kept"] == cp.BINARY_SCHED_MAX_ITEMS
+    fill = lanes["budget"]["streams"]
+    assert sum(s["allocated_chars"] for s in fill.values()) <= cp.BINARY_LANE_BUDGET
+    assert fill["developments"]["truncated"] is True
+    text = result.text
+    # a cut lane loses its oldest development lines, never its header or newest row
+    assert text.startswith("[DEVELOPMENTS — events dated on or before")
+    assert "Past development 01 " in text and "Past development 12 " not in text
+    assert "[SCHEDULED — dated after" in text and "Scheduled catalyst 01 " in text
+    assert text.index("[SCHEDULED") < text.index("[DOSSIER EXCERPT")
+    assert lanes["audit"]["violations"] == []
 
 
 def test_duplicate_dossiers_are_deduplicated():
@@ -499,6 +605,25 @@ def test_duplicate_dossiers_are_deduplicated():
     assert kept.text.count("## Executive Summary") == 2
     assert kept.text.count("## Binary forecasts") == 2
     assert kept.telemetry["sections"]["duplicates_dropped"] == 1  # only the H1 title repeats
+
+
+def test_dedupe_is_linear_on_one_heading_repeated_thousands_of_times():
+    """A model-written dossier repeating one heading: the Jaccard comparison is capped per
+    heading (DEDUP_MAX_PRIORS), exact repeats are still dropped however many there are."""
+    rng = random.Random(11)
+    distinct = "\n\n".join(
+        "## Update\n\n" + " ".join(f"w{rng.randrange(10**7)}" for _ in range(60))
+        for _ in range(3000))
+    started = time.perf_counter()
+    kept, dropped = cp.dedupe_sections(cp.split_h2(distinct))
+    assert time.perf_counter() - started < 2.0
+    assert len(kept) == 3000 and dropped == []
+    copies = "\n\n".join(["## Update\n\n" + _para("same", 800)] * 20)
+    kept, dropped = cp.dedupe_sections(cp.split_h2(copies))
+    assert len(kept) == 1 and len(dropped) == 19
+    result = cp.build_binary_pack(copies, TIMELINE, "2026-09-15", NOW)
+    assert result.telemetry["sections"]["dedupe_max_priors"] == cp.DEDUP_MAX_PRIORS
+    assert result.telemetry["sections"]["duplicates_dropped"] == 19
 
 
 def test_spine_pack_fills_shares_within_budget():

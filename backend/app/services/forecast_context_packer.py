@@ -10,14 +10,16 @@ inputs always give the same text and the same SHAs.
 * ``split_h2`` / ``classify_heading`` / ``dedupe_sections``: a fence-aware H1/H2 splitter
   (H3+ stays with its section) with bilingual heading classes. References, Visual Annex and
   How-to-Read are never packed; near-duplicate sections of concatenated multi-dossier
-  reports are dropped.
+  reports are dropped. ``sub_headings`` lists the H3-H6 headings inside a section.
 * ``priority_fill``: per-stream caps as budget fractions, leftover redistributed in priority
   order, whole sections in document order and the last one cut at a paragraph/line boundary.
 * ``developments_lane`` / ``scheduled_lane`` / ``split_chronology``: as_of-labelled timeline
-  lanes. Dates are periods (``parse_dated_period``; a date range covers both endpoints): a row
-  counts as past only when its whole period ended on or before as_of. The lane certifies event
-  dates, not when a source became available, and its header says so. Rows dated after as_of
-  are shown only for a live run (``scheduled_guard_open``), never in a hindcast.
+  lanes. Dates are periods (``parse_dated_period``; a date range or list covers all its dates,
+  an open-ended one is undated): a row counts as past only when its whole period ended on or
+  before as_of. The lane certifies event dates, not when a source became available, and its
+  header says so. Rows dated after as_of are shown only for a live run
+  (``scheduled_guard_open``), never in a hindcast. The binary lanes share a fixed
+  ``BINARY_LANE_BUDGET``, which bounds the binary prompt's growth.
 * ``audit_temporal_contract``: re-parses every lane item's full date; a segment with any item
   that breaks its header's contract is withheld, so a false "on or before" header is never
   emitted.
@@ -77,13 +79,18 @@ SPINE_CAPS: Dict[str, float] = {
     "developments": 0.20, "scheduled": 0.05, "key_metrics": 0.20,
 }
 
-# Binary lanes are budget-exempt, so their size is bounded here: at most about 12 x 462 +
-# 5 x 361 chars plus two headers (~7.6k), about 5.6k net of the 2,000-char situation brief the
-# pack replaces in the binary prompt (the full 7.6k when the run had no brief).
+# Binary lanes are exempt from the dossier budget but share a fixed budget of their own (cut
+# like a spine lane: oldest developments / latest scheduled lines first, never a header), so
+# the binary prompt grows by at most about 5k chars over the legacy view even when the run has
+# no situation brief: 4,600 lane chars + two separators + the ~250-char dossier header (net of
+# the 2,000-char brief the pack replaces, about 2.9k). Uncut, 12 x 462 + 5 x 361 chars plus
+# the headers would reach ~7.6k.
 BINARY_DEV_MAX_ITEMS = 12
 BINARY_DEV_ITEM_CHARS = 400
 BINARY_SCHED_MAX_ITEMS = 5
 BINARY_SCHED_ITEM_CHARS = 300
+BINARY_LANE_BUDGET = 4600
+BINARY_LANE_CAPS: Dict[str, float] = {"developments": 0.75, "scheduled": 0.25}
 # Spine lanes are one stream each and are cut to their share, so they can start longer.
 SPINE_DEV_MAX_ITEMS = 15
 SPINE_DEV_ITEM_CHARS = 400
@@ -95,6 +102,7 @@ PIECE_SEP = "\n\n"
 MIN_PARTIAL_CHARS = 80
 DEDUP_PREFIX_CHARS = 2000
 DEDUP_JACCARD = 0.9
+DEDUP_MAX_PRIORS = 8
 _LANE_DATE_CHARS = 32
 
 _HEADERS = {
@@ -139,46 +147,66 @@ class DatedPeriod(NamedTuple):
 
 # The per-form regexes run on one token (``_DATE_TOKEN_RE``) of whitespace-collapsed text, so
 # their ``\s*`` runs are at most one char long and every search is linear.
-_Q_RANGE_RE = re.compile(r"(\d{4})\s*[-/ ]?\s*Q([1-4])\s*(?:-|–|—|~|to|至|到)\s*Q([1-4])", re.I)
+# Two quarters or halves joined by a range or list separator cover both ("Q3/Q4 2026").
+_SPAN_SEP = r"(?:-|–|—|~|to|至|到|/|&|,|、|and|or|和|及|与|或)"
+_Q_RANGE_RE = re.compile(rf"(\d{{4}})\s*[-/ ]?\s*Q([1-4])\s*{_SPAN_SEP}\s*Q([1-4])", re.I)
 _Q_REV_RANGE_RE = re.compile(
-    r"(?<![A-Za-z])Q([1-4])\s*(?:-|–|—|~|to|至|到)\s*Q([1-4])\s*[-/ ]?\s*(\d{4})", re.I)
+    rf"(?<![A-Za-z])Q([1-4])\s*{_SPAN_SEP}\s*Q([1-4])\s*[-/ ]?\s*(\d{{4}})", re.I)
 _Q_RE = re.compile(r"(\d{4})\s*[-/ ]?\s*Q([1-4])(?![0-9])", re.I)
 _Q_REV_RE = re.compile(r"(?<![A-Za-z])Q([1-4])\s*[-/ ]?\s*(\d{4})", re.I)
 _Q_CJK_RE = re.compile(r"(\d{4})\s*年\s*第?\s*([一二三四1-4])\s*季度")
+_H_RANGE_RE = re.compile(rf"(\d{{4}})\s*[-/ ]?\s*H([12])\s*{_SPAN_SEP}\s*H([12])", re.I)
+_H_REV_RANGE_RE = re.compile(
+    rf"(?<![A-Za-z])H([12])\s*{_SPAN_SEP}\s*H([12])\s*[-/ ]?\s*(\d{{4}})", re.I)
 _H_RE = re.compile(r"(\d{4})\s*[-/ ]?\s*H([12])(?![0-9])", re.I)
 _H_REV_RE = re.compile(r"(?<![A-Za-z])H([12])\s*[-/ ]?\s*(\d{4})", re.I)
 _H_CJK_RE = re.compile(r"(\d{4})\s*年\s*(上|下)半年")
 _CJK_DIGITS = {"一": 1, "二": 2, "三": 3, "四": 4}
 # Every date form parse_dated_period reads, as one alternation: at a given position the
-# earlier alternative wins, so a full date is never read as its month or year.
+# earlier alternative wins, so a full date is never read as its month or year. A full numeric
+# date uses one separator throughout: "2026-09/10" is September/October, not 10 September.
 _DATE_TOKEN_RE = re.compile("|".join((
     r"\d{4} ?年 ?第? ?[一二三四1-4] ?季度",                        # 2026年第三季度
     r"\d{4} ?年 ?[上下]半年",                                     # 2026年上半年
-    r"\d{4} ?年 ?\d{1,2} ?月 ?\d{1,2} ?日?",                      # 2026年9月15日
+    r"\d{4} ?年 ?\d{1,2} ?月 ?\d{1,2} ?[日号]?",                  # 2026年9月15日
     r"\d{4} ?年 ?\d{1,2} ?月",                                    # 2026年9月
-    r"\d{4}[-/.]\d{1,2}[-/.]\d{1,2}",                             # 2026-09-15, 2026/09/15
-    r"\d{4} ?[-/ ]? ?Q[1-4] ?(?:-|–|—|~|to|至|到) ?Q[1-4]",        # 2026-Q3-Q4
+    r"\d{4}(?P<ymd_sep>[-/.])\d{1,2}(?P=ymd_sep)\d{1,2}",         # 2026-09-15, 2026/09/15
+    rf"\d{{4}} ?[-/ ]? ?Q[1-4] ?{_SPAN_SEP} ?Q[1-4]",             # 2026-Q3-Q4, 2026 Q3/Q4
     r"\d{4} ?[-/ ]? ?Q[1-4](?![0-9])",                            # 2026-Q3
+    rf"\d{{4}} ?[-/ ]? ?H[12] ?{_SPAN_SEP} ?H[12]",               # 2026 H1/H2
     r"\d{4} ?[-/ ]? ?H[12](?![0-9])",                             # 2026-H2
     r"\d{4}[-/.]\d{1,2}(?!\d)",                                   # 2026-09
-    r"(?<![A-Za-z])Q[1-4] ?(?:-|–|—|~|to|至|到) ?Q[1-4] ?[-/ ]? ?\d{4}",  # Q3-Q4 2026
+    rf"(?<![A-Za-z])Q[1-4] ?{_SPAN_SEP} ?Q[1-4] ?[-/ ]? ?\d{{4}}",  # Q3-Q4 2026
     r"(?<![A-Za-z])Q[1-4] ?[-/ ]? ?\d{4}",                        # Q3 2026
+    rf"(?<![A-Za-z])H[12] ?{_SPAN_SEP} ?H[12] ?[-/ ]? ?\d{{4}}",  # H1-H2 2026
     r"(?<![A-Za-z])H[12] ?[-/ ]? ?\d{4}",                         # H2 2026
     r"\b\d{4}\b",                                                 # 2026
 )), re.I)
-# A time of day never changes the date's period ("2026-09-15T08:00:00+0800").
-_TIME_OF_DAY_RE = re.compile(r"(?<=\d)[T ]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?",
-                             re.I)
-# A range separator right after the last date: the row runs to the endpoint that follows.
-# '-', '至' and '到' count only before a digit ("2026年9月到期" is a month, not a range); an open
-# end ("至今", "to date", "– present") leaves no endpoint, so the row is undated.
+# A time of day never changes the date's period ("2026-09-15T08:00:00+0800", "…, 10:00").
+_TIME_OF_DAY_RE = re.compile(
+    r"(?<=\d)(?:T|,? (?:at )?|,)\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?", re.I)
+# After a date, the separators that make it one endpoint of a period (read by _tail_end).
+# A range: '-', '至' and '到' count only before a digit ("2026年9月到期" is a month, not a range).
 _RANGE_SEP_RE = re.compile(
-    r" ?(?:–|—|~|〜) ?| (?:to|until|through|till)\b ?| ?(?:-|至|到) ?(?=\d)"
-    r"| ?起? ?(?:至|到|迄) ?(?:今|现在|目前)", re.I)
-# The end of a range written without the parts it shares with its start.
-_TAIL_MONTH_DAY_RE = re.compile(r"(\d{1,2}) ?(?:月|[-/.]) ?(\d{1,2})(?!\d)")   # 10月20日, 10-01
-_TAIL_MONTH_RE = re.compile(r"(\d{1,2}) ?月")                                  # 10月
-_TAIL_NUMBER_RE = re.compile(r"(\d{1,2})(?![\d月])")                           # 20日, 20
+    r" ?(?:–|—|~|〜) ?| (?:to|until|through|till|thru)\b ?| ?起? ?(?:-|至|到) ?(?=\d)", re.I)
+# A list of days or months written without the parts they share ("2026-09-15/16", "9月15日、
+# 16日", "2026-09-15 and 17"): the row covers every listed date.
+_LIST_SEP_RE = re.compile(r" ?(?:[/,;&、]|和|及|与|或|and\b|or\b) ?(?=\d)", re.I)
+# An open end: the row runs on past its date ("– present", "至今", "起", "onwards"), so it has
+# no end to gate on. "起" followed by a range ("2026年9月起至10月") is not open.
+_OPEN_END_RE = re.compile(
+    r" ?(?:[-–—~〜]|to\b|until\b|through\b|till\b|thru\b|起? ?(?:至|到|迄))? ?"
+    r"(?:(?:present|now|today|ongoing|date|current)\b|今|现在|目前|当前)"
+    r"| ?(?:onwards?|afterwards?|thereafter|or later|and (?:after|beyond|later|onwards?))\b"
+    r"| ?(?:起(?! ?(?:-|至|到|迄))|以来|以后|之后|往后|开始)", re.I)
+# An open start right before the first date ("since 2026-09-15", "自从2026年9月"): with no
+# other endpoint the row has no end either.
+_OPEN_START_RE = re.compile(
+    r"(?:(?<![A-Za-z])(?:since|after|starting|beginning)|自从) ?(?:(?:on|in|from) )?$", re.I)
+# The endpoint after a separator, written without the parts it shares with the date before.
+_TAIL_MONTH_DAY_RE = re.compile(r"(\d{1,2}) ?(?:月|[-/.]) ?(\d{1,2})(?!\d)(?: ?[日号])?")  # 10月20日
+_TAIL_MONTH_RE = re.compile(r"(\d{1,2}) ?月")                                            # 10月
+_TAIL_NUMBER_RE = re.compile(r"(\d{1,2})(?![\d月])(?: ?[日号])?")                        # 20日, 20
 
 
 def _month_span(year: int, first_month: int, last_month: int) -> Optional[Tuple[date, date]]:
@@ -197,8 +225,10 @@ def _quarters(year: int, first: int, last: int) -> Optional[DatedPeriod]:
     return DatedPeriod(span[0], span[1], "quarter") if span else None
 
 
-def _half(year: int, half: int) -> Optional[DatedPeriod]:
-    span = _month_span(year, 1 if half == 1 else 7, 6 if half == 1 else 12)
+def _halves(year: int, first: int, last: int) -> Optional[DatedPeriod]:
+    if last < first:
+        return None
+    span = _month_span(year, 6 * first - 5, 6 * last)
     return DatedPeriod(span[0], span[1], "half") if span else None
 
 
@@ -222,15 +252,22 @@ def _token_period(value: Any) -> Optional[DatedPeriod]:
         if m:
             q = _CJK_DIGITS.get(m.group(2)) or int(m.group(2))
             return _quarters(int(m.group(1)), q, q)
+        m = _H_RANGE_RE.search(value)
+        if m:
+            return _halves(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        m = _H_REV_RANGE_RE.search(value)
+        if m:
+            return _halves(int(m.group(3)), int(m.group(1)), int(m.group(2)))
         m = _H_RE.search(value)
         if m:
-            return _half(int(m.group(1)), int(m.group(2)))
+            return _halves(int(m.group(1)), int(m.group(2)), int(m.group(2)))
         m = _H_REV_RE.search(value)
         if m:
-            return _half(int(m.group(2)), int(m.group(1)))
+            return _halves(int(m.group(2)), int(m.group(1)), int(m.group(1)))
         m = _H_CJK_RE.search(value)
         if m:
-            return _half(int(m.group(1)), 1 if m.group(2) == "上" else 2)
+            half = 1 if m.group(2) == "上" else 2
+            return _halves(int(m.group(1)), half, half)
     try:
         span = date_period(value)
     except Exception:  # noqa: BLE001 — a malformed date is undated, never an error
@@ -247,38 +284,60 @@ def _token_period(value: Any) -> Optional[DatedPeriod]:
     return DatedPeriod(start, end, precision)
 
 
-def _range_end(rest: str, first: DatedPeriod) -> Optional[DatedPeriod]:
-    """The endpoint after a range separator when it omits what it shares with ``first``
-    ("2026年9月15日-20日", "2026-09-15 to 10-01", "2026年9月-10月"); None when ``rest`` holds
-    no such endpoint or it would end before ``first`` starts (never guessed across a year)."""
-    if first.precision not in ("day", "month"):
+def _tail_end(text: str, pos: int, stop: int,
+              prev: DatedPeriod) -> Optional[Tuple[DatedPeriod, int]]:
+    """The endpoint at ``text[pos:stop]`` written without what it shares with the date before
+    it, ``prev`` ("2026年9月15日-20日", "2026-09-15 to 10-01", "2026年9月、10月"), and where it
+    ends; None when there is no such endpoint or it would end before ``prev`` starts (never
+    guessed across a year)."""
+    if prev.precision not in ("day", "month"):
         return None
     day: Optional[int]
-    m = _TAIL_MONTH_DAY_RE.match(rest)
+    m = _TAIL_MONTH_DAY_RE.match(text, pos, stop)
     if m:
         month, day = int(m.group(1)), int(m.group(2))
     else:
-        m = _TAIL_MONTH_RE.match(rest)
+        m = _TAIL_MONTH_RE.match(text, pos, stop)
         if m:
             month, day = int(m.group(1)), None
         else:
-            m = _TAIL_NUMBER_RE.match(rest)
+            m = _TAIL_NUMBER_RE.match(text, pos, stop)
             if not m:
                 return None
             number = int(m.group(1))
-            month, day = (first.start.month, number) if first.precision == "day" else (number, None)
+            month, day = (prev.start.month, number) if prev.precision == "day" else (number, None)
     if day is None:
-        span = _month_span(first.start.year, month, month)
+        span = _month_span(prev.start.year, month, month)
         if span is None:
             return None
         period = DatedPeriod(span[0], span[1], "month")
     else:
         try:
-            period = DatedPeriod(date(first.start.year, month, day),
-                                 date(first.start.year, month, day), "day")
+            period = DatedPeriod(date(prev.start.year, month, day),
+                                 date(prev.start.year, month, day), "day")
         except ValueError:
             return None
-    return period if period.end >= first.start else None
+    return (period, m.end()) if period.end >= prev.start else None
+
+
+def _tail_periods(text: str, pos: int, stop: int, prev: DatedPeriod,
+                  last: bool) -> Optional[List[DatedPeriod]]:
+    """The endpoints written after one date token, up to ``stop`` (the next token or the end):
+    range ends and listed days/months, read left to right. None when the date runs open, or
+    when a separator after the last token is followed by an end that cannot be read (a later
+    token bounds an intermediate one, so its unreadable tail is only skipped)."""
+    out: List[DatedPeriod] = []
+    while True:
+        if _OPEN_END_RE.match(text, pos, stop):
+            return None
+        sep = _RANGE_SEP_RE.match(text, pos, stop) or _LIST_SEP_RE.match(text, pos, stop)
+        if sep is None or (not last and sep.end() == stop):
+            return out  # nothing more, or the next token is this range's end
+        tail = _tail_end(text, sep.end(), stop, prev)
+        if tail is None:
+            return None if last else out
+        prev, pos = tail
+        out.append(prev)
 
 
 def parse_dated_period(value: Any) -> Optional[DatedPeriod]:
@@ -287,11 +346,13 @@ def parse_dated_period(value: Any) -> Optional[DatedPeriod]:
     Forms: ``YYYY-MM-DD``, ``YYYY/MM/DD``, CJK 年月日 / 年月, ``YYYY-MM``, quarters
     (``YYYY-Qn``, ``YYYY-Qn-Qm``, ``Qn YYYY``, ``Qn-Qm YYYY``, ``YYYY年第n季度``), halves
     (``YYYY-Hn``, ``Hn YYYY``, ``YYYY年上/下半年``) and ``YYYY``; a coarse date is never read
-    as a single day. A value holding several dates, or one date and a range end written
-    after it ("2026-09-15 to 2026-10-01", "2025–2026", "2026年9月15日-20日"), covers all of
-    them (precision ``range``), so gating on its end never calls an unfinished range past.
-    A range whose end cannot be read ("2026-09-15 至今", "… to date") or any unreadable
-    date token makes the value undated. Linear in the input length; never raises.
+    as a single day. A value holding several dates, or a date followed by a range end or a
+    list of days/months written without their shared parts ("2026-09-15 to 2026-10-01",
+    "2025–2026", "2026年9月15日-20日", "2026-09-15/16", "Q3/Q4 2026"), covers all of them
+    (precision ``range``), so gating on its end never calls an unfinished period past. An
+    open end or start ("2026-09-15 - present", "至今", "2026年9月起", "since 2026-09-15",
+    "onwards"), a range or list end that cannot be read after the last date, or any
+    unreadable date token makes the value undated. Linear in the input length; never raises.
     """
     if value is None or isinstance(value, bool):
         return None
@@ -303,19 +364,18 @@ def parse_dated_period(value: Any) -> Optional[DatedPeriod]:
     if not tokens:
         return None
     periods: List[DatedPeriod] = []
-    for token in tokens:
+    for i, token in enumerate(tokens):
         period = _token_period(token.group(0))
         if period is None:
             return None
-        periods.append(period)
-    sep = _RANGE_SEP_RE.match(text, tokens[-1].end())
-    if sep:
-        end = _range_end(text[sep.end():], periods[-1])
-        if end is None:
+        last = i == len(tokens) - 1
+        tail = _tail_periods(text, token.end(), len(text) if last else tokens[i + 1].start(),
+                             period, last)
+        if tail is None:
             return None
-        periods.append(end)
+        periods.extend([period, *tail])
     if len(periods) == 1:
-        return periods[0]
+        return None if _OPEN_START_RE.search(text, 0, tokens[0].start()) else periods[0]
     return DatedPeriod(min(p.start for p in periods), max(p.end for p in periods), "range")
 
 
@@ -362,6 +422,7 @@ class Section:
 # Only the opening run is matched here; the closing run is trimmed in _heading_text, which
 # keeps the match linear on a heading line of any length.
 _SPLIT_HEADING_RE = re.compile(r"^(#{1,2})[ \t]+(.*)$")
+_SUB_HEADING_RE = re.compile(r"^#{3,6}[ \t]+(.*)$")
 _HEADING_NUMBERING_RE = re.compile(
     r"^(?:\d+(?:\.\d+)*[.)、:：]?|[ivxlc]+[.)]|[一二三四五六七八九十]+[、.．]"
     r"|第[一二三四五六七八九十\d]+[章节部分])\s*", re.I)
@@ -369,11 +430,16 @@ _APPENDIX_PREFIX_RE = re.compile(r"^(?:appendix|annex|附录)\s*[a-z0-9一二三
 # A trailing parenthetical is often a gloss of the heading ("参考资料 (References)").
 _TRAILING_GLOSS_RE = re.compile(r"^(.*?)\s*\(([^()]*)\)$")
 
+# Bibliography words match anywhere ("Notes and References", "Key References", "资料来源与参考
+# 文献"). The singular "reference" only as the whole heading: "Reference Class …" and
+# "Commercial Reference Projects" (a stored pipe_0e1b section) are analysis, not bibliography.
 _EXCLUDED_RE = re.compile(
-    r"^(?:references?|reference\s+list|bibliography|sources\s+cited|works\s+cited)"
-    r"(?:\s*(?:and|&)\s*(?:notes|sources|links))?\s*(?:\(.*\))?$"
+    r"\breferences\b|\bbibliograph|\bcitations\b|\b(?:end|foot)notes?\b"
+    r"|\b(?:works|sources|references?)\s+cited\b|^further\s+reading\b"
+    r"|^reference(?:\s+list)?(?:\s*(?:and|&)\s*(?:notes|sources|links))?\s*(?:\(.*\))?$"
     r"|^visual\s+(?:annex|appendix)\b|^how\s+to\s+read\b"
-    r"|^(?:参考文献|参考来源|参考资料)|图表附录|阅读说明|阅读指南|^如何阅读", re.I)
+    r"|参考文献|参考来源|参考资料|参考书目|引用文献|脚注|尾注|延伸阅读"
+    r"|图表附录|阅读说明|阅读指南|^如何阅读", re.I)
 _APPENDIX_RE = re.compile(
     r"^(?:data\s+)?sources?\b(?!\s+of\b)|\bmethodology\b|^methods?\b(?!\s+(?:of|for|to)\b)"
     r"|^(?:appendix|annex)\b"
@@ -484,6 +550,21 @@ def split_h2(md: Any) -> List[Section]:
     return sections
 
 
+def sub_headings(section: Section) -> List[Tuple[str, str]]:
+    """``(line, heading text)`` of every H3-H6 heading inside ``section``, outside fenced code
+    blocks (a section always starts outside one: split_h2 splits only there)."""
+    found: List[Tuple[str, str]] = []
+    fence: MarkdownFenceState = None
+    for line in section.text.split("\n"):
+        was_in_fence = fence is not None
+        fence, is_fence_line = markdown_fence_transition(line, fence)
+        if not (is_fence_line or was_in_fence):
+            m = _SUB_HEADING_RE.match(line)
+            if m:
+                found.append((line, _heading_text(m.group(1))))
+    return found
+
+
 def _token_set(text: str) -> set:
     return set(re.findall(r"[0-9a-z]+|[㐀-鿿]",
                           unicodedata.normalize("NFKC", text[:DEDUP_PREFIX_CHARS]).casefold()))
@@ -498,17 +579,27 @@ def _jaccard(a: set, b: set) -> float:
 def dedupe_sections(sections: Sequence[Section]) -> Tuple[List[Section], List[Section]]:
     """Drop later sections duplicating an earlier kept one: same class, same normalized
     heading and >= 0.9 token-Jaccard over the first 2,000 chars (concatenated multi-dossier
-    reports repeat their executive summary / forecast sections). Returns (kept, dropped)."""
+    reports repeat their executive summary / forecast sections). Returns (kept, dropped).
+
+    An exact token-set repeat is always caught; the Jaccard comparison runs against the
+    first ``DEDUP_MAX_PRIORS`` kept sections of a heading only, so a model-written dossier
+    repeating one heading thousands of times stays linear (a concatenated report has a few
+    copies)."""
     kept: List[Section] = []
     dropped: List[Section] = []
-    seen: Dict[Tuple[str, str], List[set]] = {}
+    exact: Dict[Tuple[str, str], set] = {}
+    priors: Dict[Tuple[str, str], List[frozenset]] = {}
     for sec in sections:
         key = (sec.cls, normalize_heading(sec.heading))
-        tokens = _token_set(sec.text)
-        if sec.level and any(_jaccard(tokens, prior) >= DEDUP_JACCARD for prior in seen.get(key, [])):
+        tokens = frozenset(_token_set(sec.text))
+        if sec.level and (tokens in exact.get(key, ()) or any(
+                _jaccard(tokens, prior) >= DEDUP_JACCARD for prior in priors.get(key, []))):
             dropped.append(sec)
             continue
-        seen.setdefault(key, []).append(tokens)
+        exact.setdefault(key, set()).add(tokens)
+        near = priors.setdefault(key, [])
+        if len(near) < DEDUP_MAX_PRIORS:
+            near.append(tokens)
         kept.append(sec)
     return kept, dropped
 
@@ -819,6 +910,7 @@ def _result(text: str, status: str, telemetry: Dict[str, Any], input_sha: str) -
 
 
 def _sections_telemetry(sections: Sequence[Section], dropped: Sequence[Section]) -> Dict[str, Any]:
+    """Section counts by heading class and the dedup outcome."""
     classes: Dict[str, int] = {}
     for sec in sections:
         classes[sec.cls] = classes.get(sec.cls, 0) + 1
@@ -828,6 +920,7 @@ def _sections_telemetry(sections: Sequence[Section], dropped: Sequence[Section])
         "excluded_headings": [s.heading for s in sections if s.cls == CLASS_EXCLUDED],
         "excluded_chars": sum(len(s.text) for s in sections if s.cls == CLASS_EXCLUDED),
         "duplicates_dropped": len(dropped),
+        "dedupe_max_priors": DEDUP_MAX_PRIORS,
     }
 
 
@@ -869,9 +962,10 @@ def _budget(value: Any) -> Optional[int]:
 def build_binary_pack(research_report: Any, timeline: Any, as_of_raw: Any, now: Any,
                       budget: int = 48000, lang: str = "en", *,
                       window_days: int = 30, retrospective: bool = False) -> PackResult:
-    """The binary draw's dossier context: dated lanes (budget-exempt) + a section-aware
-    dossier excerpt within ``budget`` chars. ``retrospective`` (a hindcast) keeps the
-    scheduled lane withheld (``scheduled_guard_open``).
+    """The binary draw's dossier context: dated lanes (exempt from ``budget``, within
+    ``BINARY_LANE_BUDGET``) + a section-aware dossier excerpt within ``budget`` chars.
+    ``retrospective`` (a hindcast) keeps the scheduled lane withheld
+    (``scheduled_guard_open``).
 
     Fallbacks (the caller keeps its legacy prompt): an invalid as_of, a non-positive budget,
     a dossier without H2 headings (the text is then the legacy head+tail slice, for replay
@@ -909,6 +1003,11 @@ def build_binary_pack(research_report: Any, timeline: Any, as_of_raw: Any, now: 
         timeline, as_of, now, window_days, lang, dev_items=BINARY_DEV_MAX_ITEMS,
         dev_chars=BINARY_DEV_ITEM_CHARS, sched_items=BINARY_SCHED_MAX_ITEMS,
         sched_chars=BINARY_SCHED_ITEM_CHARS, retrospective=retrospective)
+    lane_text = {name: (lanes[name].render() if name in lanes else "")
+                 for name in ("developments", "scheduled")}
+    lane_fill = priority_fill([(name, [text] if text else []) for name, text in lane_text.items()],
+                              BINARY_LANE_BUDGET, BINARY_LANE_CAPS)
+    lane_telemetry["budget"] = {"chars": BINARY_LANE_BUDGET, "streams": lane_fill.telemetry}
     dossier_block = (header + "\n" + PIECE_SEP.join(excerpt)) if excerpt else ""
     telemetry.update({
         "dossier_chars": len(report), "sections": _sections_telemetry(kept_sections, dropped),
@@ -917,8 +1016,9 @@ def build_binary_pack(research_report: Any, timeline: Any, as_of_raw: Any, now: 
     if not dossier_block:
         # Lanes alone would drop the dossier from the prompt: keep the legacy view instead.
         return _result("", STATUS_EMPTY, telemetry, input_sha)
-    blocks = [seg.render() for seg in (lanes.get("developments"), lanes.get("scheduled")) if seg]
-    text = PIECE_SEP.join([b for b in blocks if b] + [dossier_block])
+    blocks = [text for name in ("developments", "scheduled")
+              for _idx, text in lane_fill.kept.get(name, [])]
+    text = PIECE_SEP.join(blocks + [dossier_block])
     return _result(text, STATUS_OK, telemetry, input_sha)
 
 

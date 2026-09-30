@@ -9,16 +9,18 @@ For each research handoff this compares the context the two probability prompts 
 * spine: legacy = the ``[态势简报]`` slice (REPORT_SPINE_INPUT_CAP_BRIEF chars of the same
   brief); packed = ``build_spine_pack``.
 
-Metrics per handoff and kind: ``analyst_section_present`` (binary only: an analyst
-binary/resolution-ready section heading is in the context; None when the dossier has none),
-``references_chars`` (chars of References / Visual Annex / How-to-Read lines in the context,
-counting only lines that occur nowhere else in the dossier), ``newest_past_row_in_lane`` (the
-newest timeline row dated on or before as_of is in the context; None without one), the pack's
-per-stream sizes, its temporal-audit violations and the scheduled-lane guard state. The packs
-are built by ``ReportAgent._context_pack_result``, the method a report uses, with the handoff's
-actors, timeline.json and quantitative.json; a hindcast pin in ``<pipeline>/pipeline_state.json``
-is honoured as in a report. No live market pack exists offline, so the REPORT-10 market-table
-strip is not applied.
+Metrics per handoff and kind: ``analyst_section_present`` (binary only: a heading of the
+analyst binary/resolution-ready section is in the context, each one reported under
+``analyst_headings``; the analyst-class H1/H2 headings, else the analyst-class H3-H6 ones inside
+packable sections; None when the dossier has neither), ``references_chars`` (chars of
+References / Visual Annex / How-to-Read lines in the context, counting only lines that occur
+nowhere else in the dossier), ``newest_past_row_in_lane`` (the newest timeline row dated on or
+before as_of, found by parse_dated_period alone rather than the lane code, is in the context;
+None without one), the pack's per-stream sizes, its temporal-audit violations and the
+scheduled-lane guard state. The packs are built by ``ReportAgent._context_pack_result``, the
+method a report uses, with the handoff's actors, timeline.json and quantitative.json; a
+hindcast pin in ``<pipeline>/pipeline_state.json`` is honoured as in a report. No live market
+pack exists offline, so the REPORT-10 market-table strip is not applied.
 
 The replay date defaults to each handoff's own as_of day (``--now as_of``): a live report runs
 close to its research as_of, so its scheduled lane is open, and replaying an older run with
@@ -48,7 +50,8 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, time, timezone
+import unicodedata
+from datetime import date, datetime, time, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # scripts/ -> backend/ on sys.path (mirror of scripts/model_comparison.py)
@@ -139,25 +142,64 @@ def _references_chars(context: str, excluded_lines: Sequence[str]) -> int:
     return sum(len(line) for line in excluded_lines if line in context)
 
 
-def _analyst_present(context: str, analyst: Sequence[cp.Section]) -> Dict[str, Any]:
-    present = sum(1 for sec in analyst if sec.text.split("\n", 1)[0] in context)
-    return {"analyst_sections_present": present,
-            "analyst_section_present": (present > 0) if analyst else None}
+def _analyst_headings(sections: Sequence[cp.Section]) -> Tuple[str, List[str]]:
+    """The heading lines of the run's analyst binary/resolution-ready section: its
+    analyst-class H1/H2 sections ("section"), else the analyst-class H3-H6 headings inside
+    packable sections ("sub_heading": pipe_0f2b's "### Part 1 — Forecasts (12 binary calls
+    …)" sits under a body H2); ("", []) when the dossier has none."""
+    top = [sec.text.split("\n", 1)[0] for sec in sections if sec.cls == cp.CLASS_ANALYST_FORECASTS]
+    if top:
+        return "section", top
+    sub = [line for sec in sections if sec.cls != cp.CLASS_EXCLUDED
+           for line, text in cp.sub_headings(sec)
+           if cp.classify_heading(text) == cp.CLASS_ANALYST_FORECASTS]
+    return ("sub_heading", sub) if sub else ("", [])
 
 
-def _newest_past_row(timeline: Any, as_of: Any) -> Optional[Dict[str, Any]]:
+def _analyst_present(context: str, headings: Sequence[str]) -> Dict[str, Any]:
+    present = [line in context for line in headings]
+    return {"analyst_sections_present": sum(present),
+            "analyst_section_present": any(present) if headings else None,
+            "analyst_headings": [{"heading": line, "present": hit}
+                                 for line, hit in zip(headings, present, strict=True)]}
+
+
+def _newest_past_row(timeline: Any, as_of: Optional[date]) -> Optional[Dict[str, Any]]:
+    """The newest timeline row dated on or before as_of, found without the lane code (so the
+    metric can catch a lane ordering or classification bug): each row's period from
+    parse_dated_period, kept when it ended on or before as_of, the greatest end then the
+    latest start. Every row tied on both is a candidate (the lane breaks that tie on the
+    event text); None when no row qualifies."""
     if as_of is None:
         return None
-    lane = cp.developments_lane(timeline, as_of, max_items=1)
-    if not lane.items:
+    best: Optional[Tuple[date, date]] = None
+    tied: List[Tuple[str, str]] = []
+    for row in timeline if isinstance(timeline, list) else []:
+        if not isinstance(row, dict):
+            continue
+        event = _squash(unicodedata.normalize("NFKC", str(row.get("event") or ""))).strip()
+        raw_date = _squash(unicodedata.normalize("NFKC", str(row.get("date") or ""))).strip()
+        period = cp.parse_dated_period(raw_date) if event and raw_date else None
+        if period is None or period.end > as_of:
+            continue
+        key = (period.end, period.start)
+        if best is None or key > best:
+            best, tied = key, []
+        if key == best:
+            tied.append((event, raw_date))
+    if best is None:
         return None
-    item = lane.items[0]
-    return {"date": item.date, "days_before_as_of": item.days,
-            "probe": _squash(item.event)[:_EVENT_PROBE_CHARS]}
+    tied.sort(key=lambda pair: (pair[0].casefold(), pair[0], pair[1]))
+    probes = sorted({event[:_EVENT_PROBE_CHARS] for event, _raw in tied})
+    return {"date": tied[0][1], "days_before_as_of": (as_of - best[0]).days,
+            "probe": tied[0][0][:_EVENT_PROBE_CHARS], "tied_rows": len(tied), "probes": probes}
 
 
 def _row_in(context: str, newest: Optional[Dict[str, Any]]) -> Optional[bool]:
-    return None if newest is None else newest["probe"] in _squash(context)
+    if newest is None:
+        return None
+    squashed = _squash(context)
+    return any(probe in squashed for probe in newest["probes"])
 
 
 def _pack_metrics(result: Any, excluded_lines: Sequence[str],
@@ -201,7 +243,7 @@ def replay_handoff(handoff: Dict[str, Any], now: Optional[datetime] = None) -> D
     agent = _agent(handoff)
     report = handoff["research_report"]
     sections = cp.split_h2(report)
-    analyst = [sec for sec in sections if sec.cls == cp.CLASS_ANALYST_FORECASTS]
+    analyst_level, analyst = _analyst_headings(sections)
     excluded = _excluded_lines(sections)
     as_of_raw, as_of_source = agent._context_pack_as_of()
     now, now_mode = _replay_now(as_of_raw, now)
@@ -232,6 +274,7 @@ def replay_handoff(handoff: Dict[str, Any], now: Optional[datetime] = None) -> D
         "now": now.date().isoformat(),
         "now_mode": now_mode,
         "analyst_sections": len(analyst),
+        "analyst_level": analyst_level or None,
         "newest_past_row": newest,
         "binary": {"legacy": binary_legacy, "packed": binary_packed},
         "spine": {
@@ -274,7 +317,7 @@ def _print_text(rows: Sequence[Dict[str, Any]], summary: Dict[str, Any], show_te
     for row in rows:
         print(f"== {row['handoff']}  dossier={row['dossier_chars']}  as_of={_fmt(row['as_of'])}"
               f" ({row['as_of_source']})  now={row['now']} ({row['now_mode']})"
-              f"  analyst_sections={row['analyst_sections']}")
+              f"  analyst_sections={row['analyst_sections']} ({_fmt(row['analyst_level'])})")
         for kind in ("binary", "spine"):
             legacy, packed = row[kind]["legacy"], row[kind]["packed"]
             print(f"  {kind:6s} legacy: chars={legacy['chars']} refs={legacy['references_chars']}"
@@ -297,11 +340,18 @@ def _print_text(rows: Sequence[Dict[str, Any]], summary: Dict[str, Any], show_te
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
-def _parse_now(value: Optional[str]) -> Optional[datetime]:
-    """None for the per-handoff as_of mode, else the fixed replay date."""
-    if not value or value.strip().lower() == "as_of":
+def _now_arg(value: str) -> Optional[datetime]:
+    """``--now``: None for the per-handoff as_of mode, else the fixed replay day (noon UTC);
+    anything else is a usage error."""
+    text = value.strip()
+    if text.lower() == "as_of":
         return None
-    return datetime.fromisoformat(value).replace(tzinfo=timezone.utc)
+    try:
+        day = date.fromisoformat(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected 'as_of' or a YYYY-MM-DD date, got {value!r}") from None
+    return datetime.combine(day, time(12, 0), tzinfo=timezone.utc)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -309,13 +359,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--handoff", nargs="+", required=True, metavar="DIR",
                         help="handoff directories (or pipeline directories holding handoff/)")
     parser.add_argument("--json", action="store_true", help="print machine-readable JSON")
-    parser.add_argument("--now", default="as_of",
+    parser.add_argument("--now", type=_now_arg, default="as_of",
                         help="replay date: 'as_of' (default: each handoff's own as_of day, as a "
                              "live report ran) or a fixed YYYY-MM-DD")
     parser.add_argument("--show-text", action="store_true",
                         help="include each pack's text (for the manual prompt review)")
     args = parser.parse_args(argv)
-    now = _parse_now(args.now)
+    now = args.now
     rows: List[Dict[str, Any]] = []
     errors: List[Dict[str, str]] = []
     for path in args.handoff:
