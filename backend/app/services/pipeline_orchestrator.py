@@ -2317,6 +2317,7 @@ RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
     ("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", "float"),
     ("RESEARCH_EVIDENCE_GRADING", "bool"),
     ("RESEARCH_FORECAST_INPUTS", "bool"),
+    ("RESEARCH_QUANT_RECONCILE", "bool"),
     ("RESEARCH_SOURCE_TAXONOMY", "bool"),
 )
 RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (

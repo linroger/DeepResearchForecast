@@ -2260,6 +2260,28 @@ def test_runner_forwards_the_end_date_gate_knobs_from_config_to_every_engine(
     assert child["env"]["PREDICTION_MARKETS_END_DATE_GRACE_HOURS"] == "6.5"
 
 
+def test_runner_forwards_quant_reconcile_from_config_to_every_engine(monkeypatch, tmp_path):
+    """TIME-4: Config decides RESEARCH_QUANT_RECONCILE for the research child of
+    every engine (both engines and the extract-only salvage read it); an
+    ambient value never decides."""
+    assert ("RESEARCH_QUANT_RECONCILE", "bool") in _po.RESEARCH_CHILD_KNOBS
+    for name in ("default", "v3", "legacy"):
+        (tmp_path / name).mkdir()
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    assert _po.Config.RESEARCH_QUANT_RECONCILE is True   # the hermetic default
+    child = _launch_capturing_child(monkeypatch, tmp_path / "default", timeout=900)
+    assert child["env"]["RESEARCH_QUANT_RECONCILE"] == "true"
+
+    monkeypatch.setattr(_po.Config, "RESEARCH_QUANT_RECONCILE", False)
+    monkeypatch.setenv("RESEARCH_QUANT_RECONCILE", "true")
+    child = _launch_capturing_child(monkeypatch, tmp_path / "v3", timeout=900)
+    assert child["env"]["RESEARCH_QUANT_RECONCILE"] == "false"
+
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "legacy", raising=False)
+    child = _launch_capturing_child(monkeypatch, tmp_path / "legacy", timeout=900)
+    assert child["env"]["RESEARCH_QUANT_RECONCILE"] == "false"
+
+
 def _registry_entries():
     return [*_po.RESEARCH_CHILD_KNOBS, *_po.RESEARCH_CHILD_V3_KNOBS]
 
