@@ -19,6 +19,8 @@ source, and where:
   gateway's instruction-removal marker;
 * :func:`locate_span` finds a quote exactly, normalized, or as ordered elided
   segments no more than ``max_gap`` normalized characters apart;
+  :func:`quote_in_bounds` tells a quote it never looks for (too short to be
+  specific, or too long) from one it did not find;
 * :func:`near_miss` tells a quote that starts or ends verbatim (a paraphrase)
   from an invention — telemetry only;
 * :func:`evidence_window` is the page text around a located span (widened to
@@ -57,12 +59,17 @@ __all__ = [
     "locate_span",
     "near_miss",
     "normalize_for_match",
+    "quote_in_bounds",
     "split_quote",
 ]
 
 BASIS_EXACT = "exact"
 BASIS_NORMALIZED = "normalized"
 BASIS_SEGMENTED = "segmented"
+# Normalized length bounds of a quote :func:`locate_span` looks for: a shorter
+# one ("176 GW in 2023") would match by coincidence, a longer one is no span.
+MIN_QUOTE_CHARS = 20
+MAX_QUOTE_CHARS = 500
 # Head and tail probes of :func:`near_miss` (normalized characters).
 NEAR_MISS_PROBE_CHARS = 24
 # Placements of a segmented quote's first segment that are tried before the
@@ -241,12 +248,24 @@ def split_quote(quote: Any) -> list[str]:
     return [piece for piece in pieces if piece]
 
 
-def locate_span(page: Any, quote: Any, min_chars: int = 20, max_chars: int = 500, max_gap: int = 400,
-                min_segment: int = 12) -> SpanMatch | None:
+def _quote_segments(quote: Any) -> list[str]:
+    """The normalized, non-empty segments of a quote (:func:`split_quote`)."""
+    return [norm for norm in (_normalize(piece, need_map=False)[0] for piece in split_quote(quote)) if norm]
+
+
+def quote_in_bounds(quote: Any, min_chars: int = MIN_QUOTE_CHARS, max_chars: int = MAX_QUOTE_CHARS) -> bool:
+    """Whether the normalized length of ``quote`` (its segments together) lies
+    within ``[min_chars, max_chars]``: :func:`locate_span` never locates a
+    quote outside these bounds, wherever it is."""
+    return min_chars <= sum(len(segment) for segment in _quote_segments(quote)) <= max_chars
+
+
+def locate_span(page: Any, quote: Any, min_chars: int = MIN_QUOTE_CHARS, max_chars: int = MAX_QUOTE_CHARS,
+                max_gap: int = 400, min_segment: int = 12) -> SpanMatch | None:
     """Where ``quote`` is in ``page`` (a str or a :class:`MatchText`), or None.
 
     The quote's normalized length (its segments together) must lie within
-    ``[min_chars, max_chars]``.  Tried in order:
+    ``[min_chars, max_chars]`` (:func:`quote_in_bounds`).  Tried in order:
 
     * ``exact`` — the stripped quote is a substring of the raw page;
     * ``normalized`` — a quote without elisions is a substring of the page
@@ -262,8 +281,7 @@ def locate_span(page: Any, quote: Any, min_chars: int = 20, max_chars: int = 500
     raw_quote = str(quote or "").strip()
     if not text.raw or not raw_quote:
         return None
-    segments = [norm for norm in (_normalize(piece, need_map=False)[0] for piece in split_quote(raw_quote))
-                if norm]
+    segments = _quote_segments(raw_quote)
     if not min_chars <= sum(len(segment) for segment in segments) <= max_chars:
         return None
     position = text.raw.find(raw_quote)
@@ -300,7 +318,7 @@ def near_miss(page: Any, quote: Any) -> bool:
     first NEAR_MISS_PROBE_CHARS normalized characters of its first segment or
     the last ones of its last segment are in the normalized page (a
     paraphrase of a real passage rather than an invention).  Telemetry only."""
-    segments = [norm for norm in (_normalize(piece, need_map=False)[0] for piece in split_quote(quote)) if norm]
+    segments = _quote_segments(quote)
     if not segments:
         return False
     norm = _as_match_text(page).normalized()[0]

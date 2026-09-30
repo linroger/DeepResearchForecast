@@ -211,6 +211,13 @@ EVIDENCE_SUPPORT_CHARS = 280
 # Enforce: a run where fewer than this share of the claimed-VERIFIED findings
 # had a located quote is a degradation event.
 EVIDENCE_MIN_LOCATED_SHARE = 0.5
+# Why a quote was never checked (fact evidence_unchecked; meta.evidence
+# unchecked counts quotes): no reading of it lies within evidence_spans' length
+# bounds, or it is not in a source seen only in search results whose kept
+# snippet sightings are at the ledger's cap (the sighting the agent copied may
+# never have been stored).  An unchecked quote is never a demotion.
+EVIDENCE_UNCHECKED_LENGTH = "length"
+EVIDENCE_UNCHECKED_SNIPPETS_CAPPED = "snippets_capped"
 # Upper bounds of each phase's wall clock, as a fraction of the run time left
 # when the phase starts.  Gathering can never consume the time synthesis needs.
 PHASE_TIME_SHARE: Mapping[str, float] = {
@@ -2810,11 +2817,16 @@ def _split_tag(text: str) -> tuple[str, str]:
     return _collapse(text), tag
 
 
-# Evidence clauses (RESEARCH-7): the LAST "EVIDENCE:" / "证据：" label of a
-# finding (bold or not) opens its clause; up to EVIDENCE_QUOTES_PER_FACT quoted
-# strings ("…", “…”, 「…」) follow, each optionally bound to a source by an
-# [S<n>] marker written right before it.
+# Evidence clauses (RESEARCH-7): an "EVIDENCE:" / "Evidence:" / "证据：" label
+# (bold or not) opens a finding's clause only where it starts a word (no letter
+# or CJK character right before it: "关键证据：" is prose) and a quoted string
+# ("…", “…”, 「…」) opens the clause, after optional [S<n>] markers, emphasis and
+# separators (_CLAUSE_LEAD_RE): "Supporting Evidence: capacity reached …" and a
+# label inside the quoted passage are prose too.  The LAST such label splits.
+# Up to EVIDENCE_QUOTES_PER_FACT quoted strings follow, each optionally bound
+# to a source by an [S<n>] marker written right before it.
 _EVIDENCE_LABEL_RE = re.compile(r"(?:\*\*|__)?(?:EVIDENCE|Evidence|证据)(?:\*\*|__)?[ \t]{0,3}[:：](?:\*\*|__)?")
+_CLAUSE_LEAD_RE = re.compile(r"(?:[ \t*_:：,，;；\-–—]|\[S\d{1,9}\])*")
 _QUOTE_OPEN_RE = re.compile("[\"“「]")
 _QUOTE_CLOSERS = {"\"": "\"", "“": "”", "「": "」"}
 _BOUND_MARKER_RE = re.compile(r"\[S(\d{1,9})\]$")
@@ -2837,12 +2849,17 @@ _UNCHECKABLE_NUMBER_RES = (
 
 
 def _split_evidence_clause(text: str) -> tuple[str, str | None]:
-    """``(finding, clause)``: the text before the LAST evidence label and
-    the clause after it, or ``(text, None)`` when there is no label."""
-    matches = list(_EVIDENCE_LABEL_RE.finditer(text))
-    if not matches:
-        return text, None
-    return text[:matches[-1].start()], text[matches[-1].end():]
+    """``(finding, clause)``: the text before the last evidence label that
+    opens a clause (see _EVIDENCE_LABEL_RE) and the clause after it, or
+    ``(text, None)`` when no label does.  Linear: a label's lead scan stops
+    at the next label's first letter."""
+    for match in reversed(list(_EVIDENCE_LABEL_RE.finditer(text))):
+        if match.start() and text[match.start() - 1].isalpha():
+            continue
+        lead = _CLAUSE_LEAD_RE.match(text, match.end())
+        if _QUOTE_OPEN_RE.match(text, lead.end()):
+            return text[:match.start()], text[match.end():]
+    return text, None
 
 
 def _bound_sid(lead: str) -> int | None:
@@ -2852,31 +2869,67 @@ def _bound_sid(lead: str) -> int | None:
     return int(bound.group(1)) if bound else None
 
 
-def _quote_text(raw: str) -> str:
-    """A quoted string as it is located: a verification tag written inside
-    the quote marks is the agent's, never the page's."""
-    return _collapse(_TAG_RE.sub(" ", raw))
+def _quote_pairs(clause: str) -> Iterator[tuple[int, int]]:
+    """``(opener, closer)`` offsets of the quoted strings of an evidence
+    clause, in order: one linear scan over matched pairs; an unclosed quote
+    ends the scan."""
+    position = 0
+    while True:
+        opener = _QUOTE_OPEN_RE.search(clause, position)
+        if opener is None:
+            return
+        close = clause.find(_QUOTE_CLOSERS[opener.group(0)], opener.end())
+        if close < 0:
+            return
+        yield opener.start(), close
+        position = close + 1
 
 
 def _clause_quotes(clause: str) -> list[tuple[str, int | None]]:
     """The first EVIDENCE_QUOTES_PER_FACT non-empty quoted strings of an
-    evidence clause (one linear scan over matched pairs; an unclosed quote
-    ends the scan), each with the sid of an [S<n>] marker written right before
-    it (:func:`_bound_sid`), else None."""
+    evidence clause as written (:func:`_quote_pairs`), each with the sid of an
+    [S<n>] marker written right before it (:func:`_bound_sid`), else None."""
     quotes: list[tuple[str, int | None]] = []
     position = 0
-    while len(quotes) < EVIDENCE_QUOTES_PER_FACT:
-        opener = _QUOTE_OPEN_RE.search(clause, position)
-        if opener is None:
-            break
-        close = clause.find(_QUOTE_CLOSERS[opener.group(0)], opener.end())
-        if close < 0:
-            break
-        text = _quote_text(clause[opener.end():close])
+    for opener, close in _quote_pairs(clause):
+        text = _collapse(clause[opener + 1:close])
         if text:
-            quotes.append((text, _bound_sid(clause[position:opener.start()])))
+            quotes.append((text, _bound_sid(clause[position:opener])))
+            if len(quotes) == EVIDENCE_QUOTES_PER_FACT:
+                break
         position = close + 1
     return quotes
+
+
+def _unquoted(clause: str) -> str:
+    """An evidence clause without its quoted strings (:func:`_quote_pairs`)."""
+    parts: list[str] = []
+    position = 0
+    for opener, close in _quote_pairs(clause):
+        parts.append(clause[position:opener])
+        position = close + 1
+    parts.append(clause[position:])
+    return " ".join(parts)
+
+
+def _claimed_tag(bullet: str, body: str, clause: str | None) -> str:
+    """The tag the agent wrote on a finding (``bullet`` = ``body`` + evidence
+    label + ``clause``): the last one outside the quoted strings of its
+    clause (a quoted page passage may itself say "(reported)"), else one
+    written inside the quote marks, else REPORTED."""
+    if clause is not None:
+        outside = f"{body} {_unquoted(clause)}"
+        if _TAG_RE.search(outside):
+            return _split_tag(outside)[1]
+    return _split_tag(bullet)[1]
+
+
+def _quote_variants(quote: str) -> list[str]:
+    """The readings a quote is looked for in: as written, then (when that
+    differs) without a verification tag written inside its quote marks, the
+    agent's own ("… in 2023 (VERIFIED)") unless the page says it too."""
+    stripped = _collapse(_TAG_RE.sub(" ", quote))
+    return [quote] if not stripped or stripped == quote else [quote, stripped]
 
 
 def _outer_quote(clause: str) -> tuple[str, int | None] | None:
@@ -2887,7 +2940,7 @@ def _outer_quote(clause: str) -> tuple[str, int | None] | None:
     if clause.count('"') < 3:
         return None
     first, last = clause.find('"'), clause.rfind('"')
-    text = _quote_text(clause[first + 1:last])
+    text = _collapse(clause[first + 1:last])
     return (text, _bound_sid(clause[:first])) if text else None
 
 
@@ -2909,6 +2962,17 @@ def _missing_numbers(text: str, tokens: Sequence[str], available: frozenset[str]
     return [token for token in tokens
             if not _number_on_pages(token, available, values.get(token, frozenset()),
                                     percent=token in percents, units=units.get(token, frozenset()))]
+
+
+@dataclass
+class _QuoteCheck:
+    """What :meth:`_EvidenceChecker.locate` made of a fact's quotes."""
+
+    entries: list[dict] = field(default_factory=list)   # evidence entries of the located quotes
+    windows: list[str] = field(default_factory=list)    # evidence windows of the located page quotes
+    near: bool = False                                   # a missed quote starts or ends verbatim
+    missed: int = 0                                      # checked quotes not located
+    unchecked: list[str] = field(default_factory=list)  # EVIDENCE_UNCHECKED_* of each quote never checked
 
 
 class _EvidenceChecker:
@@ -2951,34 +3015,63 @@ class _EvidenceChecker:
             self._numbers[sid] = frozenset(numbers)
         return self._numbers[sid]
 
-    def locate(self, quotes: Sequence[tuple[str, int | None]],
-               sids: Sequence[int]) -> tuple[list[dict], list[str], bool]:
-        """``(evidence entries of the located quotes, evidence windows of the
-        page ones, near miss of an unlocated one)``.  A bound quote is looked
-        for in its source only, any other in every cited source in order."""
-        entries: list[dict] = []
-        windows: list[str] = []
-        near = False
+    def capped(self, sid: int) -> bool:
+        """Whether a cited source was seen only in search results and its kept
+        snippet sightings are at the ledger's cap (SNIPPETS_PER_ROW): a
+        quote copied from a later sighting was never stored, so not finding
+        it there proves nothing."""
+        row = self.ledger_get(sid) or {}
+        snippets = row.get("snippets")
+        return (not row.get("fetched") and isinstance(snippets, list)
+                and len(snippets) >= rg.SourceLedger.SNIPPETS_PER_ROW)
+
+    def locate(self, quotes: Sequence[tuple[str, int | None]], sids: Sequence[int]) -> _QuoteCheck:
+        """Look for a fact's quotes in its cited sources.
+
+        A quote bound to a cited source is looked for there first, then in the
+        other cited sources (a marker written after each quote, '"q1" [S1];
+        "q2" [S2]', binds the next quote to the previous source); any other
+        quote in every cited source in order; each in its readings
+        (:func:`_quote_variants`).  A quote with no reading inside
+        evidence_spans' length bounds is never looked for, and one not found
+        whose claimed sources (the bound one, else every cited one) are all
+        :meth:`capped` is unchecked rather than missed."""
+        check = _QuoteCheck()
         for quote, bound in quotes:
-            order = [bound] if bound in sids else list(sids)
-            located = None
-            for sid in order:
-                for target, text in self.targets(sid):
-                    match = es.locate_span(text, quote)
-                    if match is not None:
-                        located = (sid, target, text, match)
-                        break
-                if located is not None:
-                    break
-            if located is None:
-                near = near or any(es.near_miss(text, quote) for sid in order for _, text in self.targets(sid))
+            variants = [variant for variant in _quote_variants(quote) if es.quote_in_bounds(variant)]
+            if not variants:
+                check.unchecked.append(EVIDENCE_UNCHECKED_LENGTH)
                 continue
-            sid, target, text, match = located
-            entries.append({"sid": sid, "quote": _collapse(quote, EVIDENCE_QUOTE_CHARS), "basis": match.basis,
-                            "start": match.start, "end": match.end, "target": target})
+            order = [bound, *(sid for sid in sids if sid != bound)] if bound in sids else list(sids)
+            located = self._find(variants, order)
+            if located is None:
+                claimed = order[:1] if bound in sids else order
+                if claimed and all(self.capped(sid) for sid in claimed):
+                    check.unchecked.append(EVIDENCE_UNCHECKED_SNIPPETS_CAPPED)
+                else:
+                    check.missed += 1
+                    check.near = check.near or any(es.near_miss(text, variant) for variant in variants
+                                                   for sid in order for _, text in self.targets(sid))
+                continue
+            sid, target, text, variant, match = located
+            check.entries.append({"sid": sid, "quote": _collapse(variant, EVIDENCE_QUOTE_CHARS),
+                                  "basis": match.basis, "start": match.start, "end": match.end, "target": target})
             if target == "page":
-                windows.append(es.evidence_window(text, match))
-        return entries, windows, near
+                check.windows.append(es.evidence_window(text, match))
+        return check
+
+    def _find(self, variants: Sequence[str],
+              order: Sequence[int]) -> tuple[int, str, es.MatchText, str, es.SpanMatch] | None:
+        """``(sid, target, text, reading, match)`` of the first reading found,
+        sources in ``order``, each source's stored page before its search
+        text; None when no reading is anywhere."""
+        for sid in order:
+            for target, text in self.targets(sid):
+                for variant in variants:
+                    match = es.locate_span(text, variant)
+                    if match is not None:
+                        return sid, target, text, variant, match
+        return None
 
     def check_reported_numbers(self, fact: dict) -> None:
         """The REPORTED-number audit (telemetry only, never changes a tag):
@@ -3007,12 +3100,14 @@ def _apply_evidence(fact: dict, claimed: str, clause: str | None, mode: str, che
     quotes (when none of the quoted strings is found, a passage with nested
     straight quotes is tried whole: :func:`_outer_quote`);
     ``evidence_status`` verified (a quote located) | failed (quotes
-    given, none located) | absent (no clause or no quoted string: a formatting
-    lapse, never a demotion); ``evidence_near_miss`` whether an unlocated
-    quote starts or ends verbatim.  ``evidence_verdict`` says what enforce
-    does (audit records it and changes no tag):
+    checked, none located) | absent (no clause, no quoted string or no quote
+    that could be checked: never a demotion); ``evidence_unchecked`` (only
+    when there is one) why each quote never checked was not
+    (EVIDENCE_UNCHECKED_*); ``evidence_near_miss`` whether a missed quote
+    starts or ends verbatim.  ``evidence_verdict`` says what enforce does
+    (audit records it and changes no tag):
 
-    * ``evidence_not_on_page`` — quotes given, none located, on a fact not
+    * ``evidence_not_on_page`` — quotes checked, none located, on a fact not
       already UNVERIFIED → UNVERIFIED;
     * ``numbers_outside_evidence`` — a VERIFIED fact with located quotes whose
       numbers (all on its pages, or the fact would already be UNVERIFIED) are
@@ -3022,23 +3117,30 @@ def _apply_evidence(fact: dict, claimed: str, clause: str | None, mode: str, che
 
     A fact left REPORTED gets the REPORTED-number audit (``number_check``)."""
     quotes = _clause_quotes(clause) if clause else []
-    entries, windows, near = checker.locate(quotes, fact["sids"]) if quotes else ([], [], False)
-    outer = _outer_quote(clause) if quotes and not entries else None
+    check = checker.locate(quotes, fact["sids"])
+    outer = _outer_quote(clause) if quotes and not check.entries else None
     if outer is not None and outer not in quotes:
-        entries, windows, outer_near = checker.locate([outer], fact["sids"])
-        near = near or outer_near
+        whole = checker.locate([outer], fact["sids"])
+        if whole.entries:
+            check = whole
+        else:
+            check.missed += whole.missed
+            check.near = check.near or whole.near
+    entries = check.entries
     fact["claimed_tag"] = claimed
     fact["evidence"] = entries
-    fact["evidence_status"] = "verified" if entries else ("failed" if quotes else "absent")
-    fact["evidence_near_miss"] = bool(near and not entries)
+    fact["evidence_status"] = "verified" if entries else ("failed" if check.missed else "absent")
+    fact["evidence_near_miss"] = bool(check.near and not entries)
+    if check.unchecked:
+        fact["evidence_unchecked"] = check.unchecked
     verdict = None
     outside: list[str] = []
-    if quotes and not entries and fact["tag"] != "UNVERIFIED":
+    if check.missed and not entries and fact["tag"] != "UNVERIFIED":
         verdict = "evidence_not_on_page"
     elif entries and fact["tag"] == "VERIFIED":
         tokens = fact_number_tokens(fact["text"])
         if tokens:
-            window_numbers = page_number_set("\n\n".join(windows)) if windows else frozenset()
+            window_numbers = page_number_set("\n\n".join(check.windows)) if check.windows else frozenset()
             outside = _missing_numbers(fact["text"], tokens, window_numbers)
             if outside:
                 verdict = "numbers_outside_evidence"
@@ -3061,7 +3163,8 @@ def evidence_summary(records: Iterable[Mapping[str, Any]], mode: str) -> dict:
 
     ``with_spans``: facts with a located quote; ``located``: located quotes by
     basis; ``demoted``: facts by ``evidence_verdict`` (in audit mode what
-    enforce would demote); ``claim_grounding``: with_spans / facts;
+    enforce would demote); ``unchecked``: quotes never checked, by
+    EVIDENCE_UNCHECKED_* reason; ``claim_grounding``: with_spans / facts;
     ``claimed_verified``: the facts the agent tagged VERIFIED and how many of
     them have a located quote; ``reported_numbers``: the REPORTED-number audit
     (``checked`` = ok + missing)."""
@@ -3069,6 +3172,7 @@ def evidence_summary(records: Iterable[Mapping[str, Any]], mode: str) -> dict:
     counts = Counter()
     located = {es.BASIS_EXACT: 0, es.BASIS_NORMALIZED: 0, es.BASIS_SEGMENTED: 0}
     demoted = {"numbers_outside_evidence": 0, "evidence_not_on_page": 0}
+    unchecked = {EVIDENCE_UNCHECKED_LENGTH: 0, EVIDENCE_UNCHECKED_SNIPPETS_CAPPED: 0}
     reported = {"checked": 0, "missing": 0, "not_checkable": 0}
     for record in records:
         facts = [fact for fact in record.get("facts") or [] if isinstance(fact, dict)]
@@ -3086,6 +3190,9 @@ def evidence_summary(records: Iterable[Mapping[str, Any]], mode: str) -> dict:
             counts["near_miss"] += bool(fact.get("evidence_near_miss"))
             if fact.get("evidence_verdict") in demoted:
                 demoted[fact["evidence_verdict"]] += 1
+            for reason in fact.get("evidence_unchecked") or []:
+                if reason in unchecked:
+                    unchecked[reason] += 1
             check = fact.get("number_check")
             if check in ("ok", "missing"):
                 reported["checked"] += 1
@@ -3099,7 +3206,7 @@ def evidence_summary(records: Iterable[Mapping[str, Any]], mode: str) -> dict:
     return {
         "mode": mode, "contract": contract, "facts": facts_total, "with_spans": counts["with_spans"],
         "located": located, "failed": counts["failed"], "near_miss": counts["near_miss"], "demoted": demoted,
-        "absent": counts["absent"], "not_requested": counts["not_requested"],
+        "absent": counts["absent"], "unchecked": unchecked, "not_requested": counts["not_requested"],
         "claim_grounding": round(counts["with_spans"] / facts_total, 3) if facts_total else None,
         "claimed_verified": {"facts": counts["claimed_verified"], "located": counts["claimed_verified_located"]},
         "reported_numbers": reported,
@@ -3130,9 +3237,12 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
       otherwise the fact is kept but tagged UNVERIFIED.
 
     ``evidence_mode`` audit or enforce (RESEARCH-7; off changes nothing):
-    each finding's markers and tag are read from the WHOLE bullet, then its
-    last EVIDENCE clause is split off (the fact text excludes it and gets the
-    markers only the clause carried), and :func:`_apply_evidence` locates the
+    each finding's markers are read from the WHOLE bullet and its tag from
+    the whole bullet outside the clause's quoted strings
+    (:func:`_claimed_tag`); its last EVIDENCE clause is split off
+    (:func:`_split_evidence_clause`; the fact text excludes it and gets the
+    markers only the clause carried; a label that leaves no finding before it
+    splits nothing), and :func:`_apply_evidence` locates the
     clause's quotes in ``page_text(sid)`` of the cited fetched sources and in
     the search text of the cited sources (``row_text(sid)``, by default
     :func:`_row_search_texts` of the ledger row).
@@ -3153,11 +3263,12 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
     for bullet in sections["findings"]:
         clause = None
         if evidence:
-            claimed = _split_tag(bullet)[1]
-            all_sids = strip_unknown_citations(bullet, known)[1]
             body, clause = _split_evidence_clause(bullet)
+            if clause is not None and len(_collapse(strip_unknown_citations(_split_tag(body)[0], known)[0])) < 3:
+                body, clause = bullet, None
+            tag = _claimed_tag(bullet, body, clause)
+            all_sids = strip_unknown_citations(bullet, known)[1]
             text = _split_tag(body)[0]
-            tag = claimed
         else:
             text, tag = _split_tag(bullet)
         text, sids = strip_unknown_citations(text, known)
@@ -5324,7 +5435,9 @@ class _Engine:
 
         With evidence quotes on, the record carries its ``evidence_contract``;
         an evidence check that fails unexpectedly degrades to the legacy
-        postprocessing (logged, no contract: the KIQ counts as not_requested).
+        postprocessing (logged; no contract, so the KIQ counts as
+        not_requested; ``evidence_error`` on the record, a degradation event
+        in enforce mode: :meth:`_research_events`).
         """
         shown = set(outcome.seen) | set(outcome.fetched)
 
@@ -5332,6 +5445,7 @@ class _Engine:
             return self.ledger.get(sid) if sid in shown else None
 
         contract = self._evidence_contract() if self.evidence_mode != EVIDENCE_OFF else None
+        evidence_error = None
         try:
             notes_md, parts = postprocess_notes(kiq.id, outcome.notes, ledger_get, self.page_numbers,
                                                 evidence_mode=self.evidence_mode, page_text=self.tools.page_text)
@@ -5342,7 +5456,7 @@ class _Engine:
             self.analytics_errors.append({"helper": "evidence_quotes", "kiq": kiq.id, "error": error[:300]})
             self.log("warn", f"v3: {kiq.id} evidence check failed ({error}); notes kept without it")
             notes_md, parts = postprocess_notes(kiq.id, outcome.notes, ledger_get, self.page_numbers)
-            contract = None
+            contract, evidence_error = None, error[:300]
         facts = parts["facts"]
         verified = sum(1 for fact in facts if fact["tag"] == "VERIFIED")
         sources = sorted({sid for fact in facts for sid in fact["sids"]})
@@ -5356,6 +5470,8 @@ class _Engine:
         }
         if contract is not None:
             record["evidence_contract"] = contract
+        if evidence_error is not None:
+            record["evidence_error"] = evidence_error
         self.ledger.flush()  # every source the record cites is on disk before the record
         self._write_internal(self.work / "kiq" / f"{kiq.id}.md", notes_md + "\n")
         self.write_json(self.work / "kiq" / f"{kiq.id}.json", record)
@@ -5374,6 +5490,7 @@ class _Engine:
             self.log("evidence", f"v3: {kiq.id} {self.evidence_mode} facts={counts['facts']} "
                                  f"with_spans={counts['with_spans']} failed={counts['failed']} "
                                  f"absent={counts['absent']} near_miss={counts['near_miss']} "
+                                 f"unchecked={sum(counts['unchecked'].values())} "
                                  f"{demoted}={sum(counts['demoted'].values())}")
 
     def _evidence_contract(self) -> str:
@@ -7050,8 +7167,9 @@ class _Engine:
         model outage, content-filter refusals of every model call, KIQs never
         researched or ended in deterministic notes, a gap review a failure
         ended early, failed searches, a page fetch failure rate of 50% or
-        more and, with evidence quotes enforced, a located-quote share of the
-        findings tagged VERIFIED below EVIDENCE_MIN_LOCATED_SHARE."""
+        more and, with evidence quotes enforced, KIQs whose evidence check
+        failed (their findings kept their tags unchecked) and a located-quote
+        share of the findings tagged VERIFIED below EVIDENCE_MIN_LOCATED_SHARE."""
         events: list[str] = []
         if self.plan is not None and self.plan.fallback.get(PLAN_OUTAGE_KEY):
             events.append("research plan built from the deterministic templates: the model was unavailable "
@@ -7095,7 +7213,12 @@ class _Engine:
             events.extend(_source_health_events(tools, _bridge_provider_events("search_tools"),
                                                 _bridge_provider_events("cached_fetch")))
         if self.evidence_mode == EVIDENCE_ENFORCE:
-            claimed = evidence_summary(list(self.records.values()), self.evidence_mode)["claimed_verified"]
+            records = list(self.records.values())
+            check_failed = sum(1 for record in records if record.get("evidence_error"))
+            if check_failed:
+                events.append(f"the evidence check failed for {check_failed} KIQ(s): their findings kept their "
+                              "tags without being checked against their evidence quotes")
+            claimed = evidence_summary(records, self.evidence_mode)["claimed_verified"]
             if claimed["facts"] and claimed["located"] < EVIDENCE_MIN_LOCATED_SHARE * claimed["facts"]:
                 events.append(f"evidence quotes located for only {claimed['located']} of {claimed['facts']} "
                               "findings the research agents tagged VERIFIED")

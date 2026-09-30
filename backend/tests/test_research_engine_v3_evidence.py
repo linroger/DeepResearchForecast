@@ -21,10 +21,13 @@ scripted model, injected search/fetch and real bridge of
 
 from __future__ import annotations
 
+import functools
+import hashlib
 import json
 import re
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -73,7 +76,26 @@ ROWS = {
 }
 NESTED_PAGE = ("In its release the agency said “installed capacity reached 176 GW” in 2023, a record for "
                "the operators it surveys.")
-PAGES = {1: PAGE, 3: TABLE_PAGE, 4: NESTED_PAGE}
+CJK_PAGE = "国家能源局发布年度统计公报。装机容量达到176吉瓦。东部地区占比超过一半，西部地区增长最快。"
+RESULTS_PAGE = ("Quarterly results. Net income (reported) rose 5% to $4.2 billion in the second quarter, while "
+                "adjusted net income rose 7%.")
+OUTLOOK_PAGE = "Analysts expect installed capacity to reach 300 GW by 2027 as new campuses open."
+QUOTE_OUTLOOK = "Analysts expect installed capacity to reach 300 GW by 2027"
+SEEN_QUOTE = "Operators plan 30 new campuses in the coastal provinces next year"
+ROWS.update({
+    5: {"sid": 5, "fetched": True, "title": "统计公报", "snippet": ""},
+    6: {"sid": 6, "fetched": True, "title": "Quarterly results", "snippet": ""},
+    7: {"sid": 7, "fetched": True, "title": "Analyst outlook", "snippet": ""},
+    # Seen only in search results, its kept sightings at the ledger's cap.
+    8: {"sid": 8, "fetched": False, "title": "Campus pipeline", "snippet": "Campus pipeline sighting 1.",
+        "snippets": [f"Campus pipeline sighting {n}." for n in range(1, rg.SourceLedger.SNIPPETS_PER_ROW + 1)]},
+})
+PAGES = {1: PAGE, 3: TABLE_PAGE, 4: NESTED_PAGE, 5: CJK_PAGE, 6: RESULTS_PAGE, 7: OUTLOOK_PAGE}
+# The pre-RESEARCH-7 prompts (base feat/finharness-transplants): off mode
+# must leave both byte-identical.  A package that changes ENGINE_CORE or
+# _T_KIQ_TASK on purpose updates these.
+ENGINE_CORE_SHA256 = "33f21a1466d2eb703ea3a96015ddb03ca6e474ec64d5af89f1a93c6bedbc6d8b"
+KIQ_TASK_SHA256 = "59241c32c6abd6be6bfbffdd65d9e88fa7bfefebb64922f728a0e07d3771d5ef"
 
 
 def page_numbers(sid):
@@ -137,7 +159,8 @@ def test_audit_parses_spans_without_changing_tags_or_keeping_the_clause():
     assert summary == {
         "mode": "audit", "contract": "audit:v1", "facts": 5, "with_spans": 3,
         "located": {"exact": 3, "normalized": 0, "segmented": 0}, "failed": 1, "near_miss": 0,
-        "demoted": {"numbers_outside_evidence": 1, "evidence_not_on_page": 1}, "absent": 1, "not_requested": 0,
+        "demoted": {"numbers_outside_evidence": 1, "evidence_not_on_page": 1}, "absent": 1,
+        "unchecked": {"length": 0, "snippets_capped": 0}, "not_requested": 0,
         "claim_grounding": 0.6, "claimed_verified": {"facts": 4, "located": 2},
         "reported_numbers": {"checked": 1, "missing": 0, "not_checkable": 0}}
 
@@ -190,9 +213,106 @@ def test_a_paraphrase_is_a_near_miss():
 def test_verified_without_a_clause_stays_verified_with_status_absent():
     notes = findings("- The 2022 baseline was 150 GW of installed capacity [S1] (VERIFIED)",
                      "- Capacity reached 176 GW in 2023 [S1] (VERIFIED) EVIDENCE: see the agency release")
-    for fact in post(notes, "enforce"):
+    facts = post(notes, "enforce")
+    for fact in facts:
         assert fact["tag"] == "VERIFIED" and fact["evidence_status"] == "absent" and fact["evidence"] == []
         assert "verification" not in fact and "evidence_verdict" not in fact
+    # A label no quoted string follows opens no clause: the finding reads as off.
+    assert [fact["text"] for fact in facts] == [fact["text"] for fact in post(notes, "off")]
+
+
+@pytest.mark.parametrize("bullet", [
+    "- 关键证据：数据中心装机容量在2023年达到176吉瓦 [S1] (已核实)",
+    "- 证据：2023年装机176吉瓦 [S1] (已核实)",
+    "- Supporting Evidence: capacity reached 176 GW in 2023 per the survey [S1] (VERIFIED)",
+    "- Key evidence: capacity reached 176 GW in 2023 [S1] (VERIFIED)",
+    "- 证据：「数据中心装机容量为176吉瓦」 [S1] (已核实)",
+    "- **Evidence:** “installed capacity reached 176 GW” [S4] (VERIFIED)",
+])
+def test_an_evidence_label_in_ordinary_text_opens_no_clause(bullet):
+    """A label inside a word ("关键证据："), one no quoted string follows, and
+    one that leaves no finding before it split nothing: audit and enforce
+    keep the finding with the text and tag off gives it."""
+    (off,) = post(findings(bullet), "off")
+    for mode in ("audit", "enforce"):
+        (fact,) = post(findings(bullet), mode)
+        assert (fact["text"], fact["tag"], fact["sids"]) == (off["text"], off["tag"], off["sids"])
+        assert fact["evidence_status"] == "absent" and fact["claimed_tag"] == off["tag"]
+
+
+def test_a_label_inside_the_quoted_passage_does_not_split_the_quote():
+    quote = "Evidence: installed data-centre capacity reached 176 GW in 2023"
+    page = f"Key findings. {quote}, the agency said."
+    notes = findings(f'- Capacity reached 176 GW in 2023 [S1] (VERIFIED) EVIDENCE: "{quote}"')
+    (fact,) = lr.postprocess_notes("K1", notes, ROWS.get, lambda sid: lr.page_number_set(page),
+                                   evidence_mode="enforce", page_text=lambda sid: page)[1]["facts"]
+    assert fact["text"] == "Capacity reached 176 GW in 2023 [S1]"
+    assert fact["tag"] == "VERIFIED" and fact["evidence"][0]["quote"] == quote
+
+
+def test_quotes_outside_the_length_bounds_are_unchecked_never_demoted():
+    """A short verbatim CJK quote (12 characters) and an over-long one are not
+    looked for: absent, tag kept, counted as unchecked; a short quote beside
+    a located one leaves the fact verified."""
+    long_quote = " ".join([QUOTE_176] * 8)
+    notes = findings("- 装机容量达到176吉瓦 [S5] (已核实) 证据：「装机容量达到176吉瓦」",
+                     f'- Capacity reached 176 GW in 2023 [S1] (VERIFIED) EVIDENCE: "{long_quote}"',
+                     f'- Capacity reached 176 GW in 2023 [S1] (VERIFIED) EVIDENCE: "176 GW in 2023" "{QUOTE_HEAD}"')
+    for mode in ("audit", "enforce"):
+        short, long, mixed = post(notes, mode)
+        for fact in (short, long):
+            assert fact["tag"] == fact["claimed_tag"] == "VERIFIED" and fact["evidence_status"] == "absent"
+            assert fact["evidence_unchecked"] == ["length"] and "evidence_verdict" not in fact
+        assert short["text"] == "装机容量达到176吉瓦 [S5]"
+        assert mixed["tag"] == "VERIFIED" and mixed["evidence_status"] == "verified"
+        assert mixed["evidence_unchecked"] == ["length"]
+        summary = lr.evidence_summary([{"evidence_contract": f"{mode}:v1", "facts": [short, long, mixed]}], mode)
+        assert summary["unchecked"] == {"length": 3, "snippets_capped": 0}
+        assert summary["failed"] == 0 and summary["absent"] == 2 and summary["demoted"]["evidence_not_on_page"] == 0
+    # In bounds, the same kind of CJK quote is located.
+    (located,) = post(findings("- 装机容量达到176吉瓦 [S5] (已核实) 证据：「国家能源局发布年度统计公报。装机容量达到176吉瓦。」"),
+                      "enforce")
+    assert located["tag"] == "VERIFIED" and located["evidence"][0]["basis"] == "exact"
+
+
+def test_a_marker_written_after_each_quote_still_finds_both_quotes():
+    """'"q1" [S1]; "q2" [S7]' binds q2 to S1 (the marker right before it);
+    a bound quote not in its source is looked for in the other cited ones."""
+    notes = findings(f'- Capacity reached 176 GW in 2023 and should reach 300 GW by 2027 [S1][S7] (VERIFIED) '
+                     f'EVIDENCE: "{QUOTE_HEAD}" [S1]; "{QUOTE_OUTLOOK}" [S7]')
+    (fact,) = post(notes, "enforce")
+    assert fact["tag"] == "VERIFIED" and "verification" not in fact
+    assert [(entry["sid"], entry["quote"]) for entry in fact["evidence"]] == [(1, QUOTE_HEAD), (7, QUOTE_OUTLOOK)]
+
+
+def test_a_tag_like_parenthetical_of_the_page_stays_in_the_quote():
+    """"(reported)" in a quoted page passage is page text: the quote is located
+    as written, and the agent's tag is the one outside the quote marks."""
+    quote = "Net income (reported) rose 5% to $4.2 billion in the second quarter"
+    notes = findings(f'- Net income rose 5% to $4.2 billion [S6] (VERIFIED) EVIDENCE: "{quote}"')
+    for mode in ("audit", "enforce"):
+        (fact,) = post(notes, mode)
+        assert fact["tag"] == fact["claimed_tag"] == "VERIFIED"
+        assert fact["text"] == "Net income rose 5% to $4.2 billion [S6]"
+        assert fact["evidence"][0]["quote"] == quote and fact["evidence"][0]["basis"] == "exact"
+
+
+def test_a_quote_from_a_capped_search_only_source_is_unchecked():
+    """A seen-only row whose kept sightings are at the ledger's cap may have
+    shown the agent a sighting that was never stored: a quote not found there
+    is unchecked, not demoted.  A cited source that holds all it showed still
+    decides."""
+    notes = findings(f'- Operators plan 30 new campuses [S8] (REPORTED) EVIDENCE: "{SEEN_QUOTE}"',
+                     f'- Operators plan 30 new campuses [S8][S1] (REPORTED) EVIDENCE: [S8] "{SEEN_QUOTE}"',
+                     f'- Operators plan 30 new campuses [S8][S1] (REPORTED) EVIDENCE: "{SEEN_QUOTE}"',
+                     f'- Operators plan 30 new campuses [S2] (REPORTED) EVIDENCE: "{SEEN_QUOTE}"')
+    capped, bound, mixed, uncapped = post(notes, "enforce")
+    for fact in (capped, bound):
+        assert fact["tag"] == "REPORTED" and fact["evidence_status"] == "absent"
+        assert fact["evidence_unchecked"] == ["snippets_capped"] and "evidence_verdict" not in fact
+    for fact in (mixed, uncapped):
+        assert fact["tag"] == "UNVERIFIED" and fact["verification"] == "evidence_not_on_page"
+        assert fact["evidence_status"] == "failed" and "evidence_unchecked" not in fact
 
 
 def test_a_tag_or_marker_written_after_the_clause_is_still_parsed():
@@ -204,7 +324,8 @@ def test_a_tag_or_marker_written_after_the_clause_is_still_parsed():
     assert first["sids"] == [1] and first["tag"] == first["claimed_tag"] == "VERIFIED"
     assert first["text"] == "Installed capacity was 176 GW in 2023 [S1]"
     assert first["evidence"][0]["sid"] == 1 and first["evidence"][0]["target"] == "page"
-    # Each quote is looked for in the source its marker binds it to only.
+    # A bound quote is looked for in its marker's source first (the invented
+    # one in S2, then S1, found in neither), the other one in S1 first.
     assert second["sids"] == [2, 1] and second["claimed_tag"] == "REPORTED"
     assert second["text"] == "Statistics put installed capacity at 176 GW [S2][S1]"
     assert [(e["sid"], e["target"]) for e in second["evidence"]] == [(1, "snippet")]
@@ -427,6 +548,25 @@ def test_off_mode_is_byte_identical(tmp_path, bridge, monkeypatch):
             [record["facts"] for record in _records(first).values()]
 
 
+def test_off_mode_prompts_match_their_pre_research_7_hashes():
+    """ENGINE_CORE and the KIQ task of a fixed KIQ, seed row and preset hash
+    to what they were before this package; audit only appends the rule."""
+    def kiq_task(mode: str) -> str:
+        engine = types.SimpleNamespace(preset=lr.resolve_preset("standard", env={}), language="English",
+                                       evidence_mode=mode)
+        engine._kiq_task_addenda = functools.partial(lr._Engine._kiq_task_addenda, engine)
+        kiq = lr.Kiq(id="K1", question="How much data-centre capacity was installed in 2023?",
+                     queries=["capacity 2023"], kind="general", why="Sizing the base year.")
+        rows = [{"sid": 1, "title": "Official statistics release", "domain": "agency.gov", "tier": "S1",
+                 "url": "https://agency.gov/r", "snippet": "Capacity reached 176 GW in 2023."}]
+        return lr._Engine._kiq_task(engine, kiq, rows)
+
+    assert hashlib.sha256(lr.ENGINE_CORE.encode("utf-8")).hexdigest() == ENGINE_CORE_SHA256
+    off = kiq_task("off")
+    assert hashlib.sha256(off.encode("utf-8")).hexdigest() == KIQ_TASK_SHA256
+    assert kiq_task("audit") == kiq_task("enforce") == off + "\n" + lr._KIQ_EVIDENCE_RULE
+
+
 def test_audit_mode_records_evidence_and_changes_no_tag(tmp_path, bridge, monkeypatch):
     monkeypatch.setenv("RESEARCH_LINEAR_WORKERS", "1")   # deterministic runs: the two runs' prompts compare
     rc, _, _, off_model, off_out = v3.run_engine(tmp_path, bridge, EvidenceWorld(), out_dir=tmp_path / "off",
@@ -575,6 +715,11 @@ def test_an_evidence_check_failure_degrades_to_the_legacy_notes(tmp_path, bridge
     assert meta["evidence"]["not_requested"] == sum(len(r["facts"]) for r in records.values())
     assert any("evidence check failed (RuntimeError: matcher exploded)" in m for m in plog.of("warn"))
     assert any(e.get("helper") == "evidence_quotes" for e in meta["analytics_errors"])
+    # Enforced, the unchecked findings are a degradation event, also after a resume.
+    assert all(record["evidence_error"] == "RuntimeError: matcher exploded" for record in records.values())
+    event = (f"the evidence check failed for {len(records)} KIQ(s): their findings kept their tags without "
+             "being checked against their evidence quotes")
+    assert event in meta["research_quality"]["degradation"]
 
 
 # ================================================================== wiring

@@ -160,6 +160,11 @@ def test_length_bounds_are_enforced():
     assert es.locate_span(long_page, long_quote) is None          # 599 normalized chars > 500
     assert es.locate_span(long_page, long_quote, max_chars=1000).basis == es.BASIS_EXACT
     assert es.locate_span(PAGE, "") is None and es.locate_span("", "Installed data-centre capacity") is None
+    # quote_in_bounds tells a quote locate_span never looks for from one it did not find.
+    assert not es.quote_in_bounds(short) and not es.quote_in_bounds(long_quote) and not es.quote_in_bounds("")
+    assert es.quote_in_bounds(short, min_chars=5) and es.quote_in_bounds(long_quote, max_chars=1000)
+    assert es.quote_in_bounds("The minister told parliament that the grid regulator had approved it")
+    assert not es.quote_in_bounds("装机容量达到176吉瓦") and es.quote_in_bounds("国家能源局发布年度统计公报。装机容量达到176吉瓦。")
 
 
 # ------------------------------------------------------------------ windows
