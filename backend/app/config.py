@@ -794,6 +794,19 @@ class Config:
     # 跨模型概率样本 stdev 超此阈值 → 该预测记入 low-agreement（binary_quality.ensemble），
     # 二元预测表渲染以 ±spread 显示分歧。默认 0.15。
     FORECAST_ENSEMBLE_SPREAD_THRESHOLD = float(os.environ.get('FORECAST_ENSEMBLE_SPREAD_THRESHOLD', '0.15') or '0.15')
+    # EVAL-11（P15）骨架跨底座敏感性影子检查：主报告骨架定稿后，以骨架原提示词 + 已定情景名的 follow
+    # 提示各抽一次——同底座对照（复制主客户端，钉住骨架所用模型、绕过缓存）与副底座（下列清单中第一个
+    # 可构造且 (provider, model) 不同于主底座者）——比较跨底座（对照 vs 副）与同底座（批判前骨架 vs 对照）
+    # 的情景分布差异，记入 forecast.quality.backbone_sensitivity。纯影子诊断：不改概率、区间、渲染与
+    # 发布门。准入时钉进 safety_policy_v1.backbone_check（resume 不重新捕获；缺失即关闭）；种子报告 /
+    # model_comparison / API 重生成从不运行。默认关是安全的：不发任何额外 LLM 调用，forecast.json 与
+    # 全部提示词逐字节不变；开启时每次运行多 2 次骨架调用。
+    BACKBONE_CHECK_ENABLED = os.environ.get('BACKBONE_CHECK_ENABLED', 'false').strip().lower() == 'true'
+    # 副底座候选：逗号分隔的提供方名（构造方式同 FORECAST_ENSEMBLE_MODELS）。空 = 无副底座
+    # （开启时记 unchecked:no_distinct_secondary，不发调用）。
+    BACKBONE_CHECK_PROVIDERS = os.environ.get('BACKBONE_CHECK_PROVIDERS', '').strip()
+    # 越界阈值：任一情景 |Δp| ≥ 此值或领先情景不一致即算越界（取值须在 (0, 1]，否则记 unchecked）。
+    BACKBONE_CHECK_MAX_ABS_DELTA = float(os.environ.get('BACKBONE_CHECK_MAX_ABS_DELTA', '0.15') or '0.15')
     REPORT_QUOTE_AUDIT_V2 = os.environ.get('REPORT_QUOTE_AUDIT_V2', 'true').strip().lower() == 'true'
     REPORT_COMPACT_RETRIEVAL_QUERY = os.environ.get('REPORT_COMPACT_RETRIEVAL_QUERY', 'true').strip().lower() == 'true'
     # RQ-2 报告修复门：质量门失败时按维度单次定向修复（引用回填 / 引文接地 / 占位符解析），
