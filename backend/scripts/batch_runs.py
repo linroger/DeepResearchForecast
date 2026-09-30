@@ -76,7 +76,9 @@ from app.services.pipeline_orchestrator import (  # noqa: E402
     PipelineState,
     StageState,
     evaluation_pin_for_question_fork,
+    fork_safety_policy_v1,
     preflight_pipeline,
+    warn_if_fork_feeds_shared_graph,
 )
 from app.services.report_agent import ReportManager  # noqa: E402
 from app.services.run_shape import ORIGIN_FORK, SHARED_GRAPH_OPTION  # noqa: E402
@@ -323,6 +325,14 @@ def fork_question(
         # the base's hindcast pin (carried, never re-captured, as in fork()); its reports then
         # withhold live market odds and carry the hindcast label.
         options[HINDCAST_POLICY_OPTION] = dict(hindcast_pin)
+    # INFRA-9：与 PipelineOrchestrator.fork() 同一规则——问题分叉沿用锚点的安全政策钉（锚点无钉则
+    # 按分叉准入捕获）；FORK_INHERIT_SAFETY_POLICY 关闭 = 不写（旧行为）。
+    safety_policy = fork_safety_policy_v1(base_state.options)
+    if safety_policy is not None:
+        options["safety_policy_v1"] = safety_policy
+        warn_if_fork_feeds_shared_graph(safety_policy, fork_id=new_id,
+                                        base_pipeline_id=base_pipeline_id,
+                                        graph_id=base_state.graph_id)
     if max_rounds:
         try:
             options["max_rounds"] = int(max_rounds)

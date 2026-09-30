@@ -534,6 +534,15 @@ class Config:
     # options.lineage_rebuilt）在打断后的下次 resume 被复用而非再生成。默认开：以重算成本换取不复用陈旧产物
     # （fail closed）；关闭 = 旧的逐阶段存在性复用。
     RESUME_LINEAGE_GUARDS = os.environ.get('RESUME_LINEAGE_GUARDS', 'true').strip().lower() == 'true'
+    # INFRA-9：分叉继承安全政策钉。开启时情景分叉（PipelineOrchestrator.fork）与批次问题分叉
+    # （scripts/batch_runs.fork_question）深拷贝 base 的 options.safety_policy_v1（origin=fork_inherited）；
+    # base 无钉（Foglamp WP1 之前准入）时在分叉准入时捕获当前环境政策（默认 Config 下即安全政策，
+    # origin=fork_admission）。默认开：分叉沿用 base 的研究/图谱继续预测，其图谱反馈/种子/extremize/
+    # 模拟影响语义不得随服务重载后的环境默认值漂移；只影响分叉。注意：分叉与 base 共用 graph_id——
+    # base 以 SIM_GRAPH_FEEDBACK=true 准入时分叉继承 sim_graph_feedback=true，其模拟（含情景注入的
+    # 反事实事件）会写入 base 与兄弟分叉共享的观察图；分叉准入时对此记 warning（点名共享图谱）。
+    # 关闭 = 旧行为（分叉不带钉，每个读点回退当前环境值）。
+    FORK_INHERIT_SAFETY_POLICY = os.environ.get('FORK_INHERIT_SAFETY_POLICY', 'true').strip().lower() == 'true'
 
     # —— EXECPLAN2 第三波改进旋钮（剩余 L-effort 新能力；全部默认关，留空即保持当前行为）——
     # 预测质量回归评测开关（EXECPLAN2 I-7-7）：opt-in，绝不进默认 CI。开启后 eval_forecast_quality.py

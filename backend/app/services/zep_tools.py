@@ -22,6 +22,7 @@ from .graphiti_client import Zep
 from .graphiti_client import ApiError, InternalServerError
 
 from ..config import Config
+from ..utils.ctxpool import submit_with_context
 from ..utils.logger import get_logger
 from ..utils.llm_client import LLMClient
 from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
@@ -1565,9 +1566,10 @@ class ZepToolsService:
             workers = min(self._retrieval_parallel_workers(), len(search_specs))
             with ThreadPoolExecutor(max_workers=workers) as ex:
                 # EXECPLAN2 I-1-1/I-1-6: 透传 recipe（MMR）与 as-of 时态过滤到每次检索。
+                # INFRA-9：每个检索任务带一份提交线程的 contextvars 副本（run/stage/report 归属）。
                 future_to_idx = {
-                    ex.submit(
-                        self.search_graph, graph_id, spec_q, spec_limit, "edges",
+                    submit_with_context(
+                        ex, self.search_graph, graph_id, spec_q, spec_limit, "edges",
                         recipe, as_of_filter,
                     ): idx
                     for idx, (spec_q, spec_limit) in enumerate(search_specs)
