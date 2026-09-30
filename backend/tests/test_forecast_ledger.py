@@ -293,8 +293,12 @@ def test_shape_summary_empty_and_malformed_rows(tmp_path):
     weird = [None, "row", {"report_id": "x", "objective_signals": "bad"},
              {"report_id": "y", "objective_signals": {"probability_shape": {
                  "policy": {"binary_symmetric_guard": "yes"},
-                 "scenarios": {"normalized_entropy": float("nan"), "max_probability": True}}}}]
+                 "scenarios": {"normalized_entropy": float("nan"), "max_probability": True}}}},
+             # a hand-edited row: an int too large for a float is skipped, not fatal
+             {"report_id": "z", "objective_signals": {"probability_shape": {
+                 "scenarios": {"normalized_entropy": 10 ** 400, "max_probability": -10 ** 400},
+                 "binaries": {"midband_share": 10 ** 400}}}}]
     summary = forecast_ledger.shape_summary(entries=weird)
     (group,) = summary["groups"]
-    assert group["binary_symmetric_guard"] is None and (group["n"], group["n_with_shape"]) == (2, 1)
+    assert group["binary_symmetric_guard"] is None and (group["n"], group["n_with_shape"]) == (3, 2)
     assert all(m == {"n": 0, "mean": None, "median": None} for m in group["metrics"].values())

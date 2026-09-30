@@ -426,9 +426,15 @@ def _dig(obj: Any, path: Tuple[str, ...]) -> Any:
 
 
 def _finite_number(value: Any) -> Optional[float]:
+    """``value`` as a finite float, else None (bool, non-numbers, NaN/inf and ints too
+    large for a float: a hand-edited or corrupt row must not abort the summary)."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return float(value) if math.isfinite(value) else None
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
 
 
 def _distribution(values: List[float]) -> Dict[str, Any]:

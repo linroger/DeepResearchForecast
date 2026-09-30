@@ -1,10 +1,11 @@
 """REPORT-11: the symmetric binary guard (FORECAST_BINARY_SYMMETRIC_GUARD, default off).
 
-With the knob on, every binary draw prompt carries the SYMMETRY GUARD sentence right after
-the round's contrarian-framing or low-probability rule (both rules stay verbatim); with it
-off, every prompt is byte-identical. The policy is visible in forecast.quality.forecast_policy
-whatever FORECAST_PROBABILITY_SHAPE says, and in the admission snapshot
-(capture_safety_policy_v1), which forks inherit.
+With the knob on, every binary draw prompt carries the SYMMETRY GUARD sentence: right after
+the round's contrarian-framing or low-probability rule (both rules stay verbatim), or right
+after the base RULES when FORECAST_BINARY_CONTRARIAN is off, so the policy recorded is the
+policy applied. With it off, every prompt is byte-identical. The policy is visible in
+forecast.quality.forecast_policy whatever FORECAST_PROBABILITY_SHAPE says, and in the
+admission snapshot (capture_safety_policy_v1), which forks inherit.
 
 Offline: scripted chat_json stubs; no network, no real LLM.
 """
@@ -76,18 +77,25 @@ def test_knob_on_every_draw_prompt_carries_the_guard(monkeypatch):
     assert fe._BINARY_LOW_P_RULE + fe._BINARY_SYMMETRIC_GUARD in low_p[0]
 
 
-def test_knob_off_prompts_are_byte_identical(monkeypatch):
-    off = _draw_prompts(monkeypatch, guard=False)
-    on = _draw_prompts(monkeypatch, guard=True)
+@pytest.mark.parametrize("contrarian", [True, False])
+def test_knob_off_prompts_are_byte_identical(monkeypatch, contrarian):
+    off = _draw_prompts(monkeypatch, guard=False, contrarian=contrarian)
+    on = _draw_prompts(monkeypatch, guard=True, contrarian=contrarian)
+    assert len(off) == len(on)
     assert all("SYMMETRY GUARD" not in p for p in off)
     # the guard sentence is the only difference, so knob-off prompts are the pre-REPORT-11 bytes
     assert off == [p.replace(fe._BINARY_SYMMETRIC_GUARD, "") for p in on]
 
 
-def test_guard_follows_the_rules_only(monkeypatch):
-    """With contrarian framing off there is no rule to qualify: no guard either."""
+def test_guard_is_applied_when_contrarian_framing_is_off(monkeypatch):
+    """The base RULES still push away from 0.5 ("do not cluster in 0.40-0.60"), so with
+    contrarian framing off the guard follows them: knob on means every prompt carries it,
+    which is exactly what quality.forecast_policy and the admission pin record."""
     prompts = _draw_prompts(monkeypatch, guard=True, contrarian=False)
-    assert all("SYMMETRY GUARD" not in p and "CONTRARIAN FRAMING" not in p for p in prompts)
+    assert all("CONTRARIAN FRAMING" not in p and "0.05-0.35 range" not in p for p in prompts)
+    assert "do not cluster in 0.40-0.60" in fe._BINARY_FORECAST_INSTRUCTIONS
+    # the guard sits right after the base RULES, whose last sentence names the language
+    assert all("Write all text in English." + fe._BINARY_SYMMETRIC_GUARD in p for p in prompts)
 
 
 def test_default_is_off_and_documented():

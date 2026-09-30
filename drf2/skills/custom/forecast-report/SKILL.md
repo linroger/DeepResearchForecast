@@ -62,7 +62,7 @@ A table built this way usually looks healthy on its own: few calls clustered in 
 
 ### 2.2 Contrarian framing (how to achieve spread honestly)
 
-Frame roughly **40–50% of the statements so the evidence-supported probability is BELOW 0.5** — assert the counter-consensus outcome directly (e.g. "X exceeds Y by Z date" priced at 0.25). **Never** achieve this by negating another statement in the set (that manufactures fake spread and fake independence). One-directional framing is the classic failure: all probabilities land above 0.5 and the spread gate can never pass.
+Frame roughly **40–50% of the statements so the evidence-supported probability is BELOW 0.5** — assert the counter-consensus outcome directly (e.g. "X exceeds Y by Z date" priced at 0.25). **Never** achieve this by negating another statement in the set (that manufactures fake spread and fake independence). One-directional framing is the classic failure: all probabilities land above 0.5, a sign that the framing, not the evidence, set the numbers.
 
 ## 3. Prediction-market anchoring
 
@@ -98,13 +98,13 @@ The report draws on two epistemically different inputs. **Never launder one as t
 - Report language follows the run's requested language; Part 1 field text follows the report language.
 - Bridgewater register: direct, numerate, falsifiable; short paragraphs; no hedging filler ("only time will tell") — uncertainty is expressed in the numbers and the named drivers, not in mush.
 - Idempotent structure: exactly one Part 1/2/3 skeleton; the binary table appears once, immediately after the title (plus an optional one-blockquote executive summary).
-- **Stage artifacts**: when run as a pipeline stage, write BOTH `full_report.md` (the three-part brief) AND `forecast.json` — the structured mirror of Part 1 and §4.1 (`{"binary_forecasts": [...], "scenarios": [...]}` with the exact fields from §2). The driver's conviction/deliverable gates read `forecast.json` deterministically; a report without it fails the stage.
+- **Stage artifacts**: when run as a pipeline stage, write BOTH `full_report.md` (the three-part brief) AND `forecast.json` — the structured mirror of Part 1 and §4.1 (`{"binary_forecasts": [...], "scenarios": [...]}` with the exact fields from §2). The driver's deliverable checks read `forecast.json` deterministically; a report without it fails the stage.
 
-## 8. Quality gate (the deterministic checks your output must survive)
+## 8. Quality gate (check each item before delivery)
 
 - [ ] ≥10 distinct binaries; every statement one sentence, yes/no-resolvable, number and date inside it?
 - [ ] Every resolution_criteria carries metric + numeric threshold + date/window + resolving source?
-- [ ] Every probability sized by how decisively its evidence wins — near 0.5 only when the evidence stays balanced or thin, no extremity manufactured to look decisive, no number shaded toward a range? Does the resulting table show healthy spread (stdev ≥ 0.12, ≥3 calls at ≥0.70 or ≤0.30, little 0.40–0.60 clustering) with 40–50% of statements framed below 0.5 without negation tricks?
+- [ ] Every probability sized by how decisively its evidence wins — near 0.5 only when the evidence stays balanced or thin, no extremity manufactured to look decisive, no number shaded toward a range? 40–50% of statements framed below 0.5 without negation tricks? Then, as a diagnostic only: a table sized this way usually shows spread (stdev ≥ 0.12, ≥3 calls at ≥0.70 or ≤0.30, little 0.40–0.60 clustering); if yours does not, revisit the framing and the evidence — never move numbers to fit it.
 - [ ] Every probability's `source` names a simulation signal or research-prior?
 - [ ] Market overlaps cited; divergences > 10pp explained; `market_anchor` present only where a listed market applies?
 - [ ] Scenarios (2–5) mutually exclusive, probabilities sum ~1.0, each with falsifiable criteria?
@@ -114,7 +114,7 @@ The report draws on two epistemically different inputs. **Never launder one as t
 ## 9. Failure modes
 
 - ❌ Scenario probabilities that sum to 1 presented as the binary table (or binaries forced to sum to 1).
-- ❌ All probabilities above 0.5 — one-directional framing that can never pass the spread gate.
+- ❌ All probabilities above 0.5 — one-directional framing: the framing, not the evidence, set the numbers.
 - ❌ Manufacturing spread by negating existing statements.
 - ❌ Shading a probability toward a target band, or manufacturing extremity to look decisive, when the evidence does not carry it.
 - ❌ "Resolves by 2027" with no metric or threshold — an unsharp criterion an auditor cannot settle.

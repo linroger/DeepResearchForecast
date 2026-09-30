@@ -144,6 +144,39 @@ def test_policy_is_copied_and_shape_is_strict_json():
     policy = {"binary_symmetric_guard": True}
     shape = ps.probability_shape(_named(_SPINE_P), _binary_rows([0.2, 0.8]), policy=policy)
     assert shape["policy"] == policy and shape["policy"] is not policy
+    assert "error" not in shape
+    json.dumps(shape, allow_nan=False)
+
+
+def test_an_int_too_large_for_a_float_is_ignored_not_fatal():
+    huge = 10 ** 400  # float(huge) raises OverflowError
+    scenarios = _named(_SPINE_P) + [{"name": "Huge", "probability": huge}]
+    binaries = _binary_rows([0.2, huge, 0.8]) + [
+        {"probability": 0.6, "pre_reconciliation_probability": huge}]
+    shape = ps.probability_shape(scenarios, binaries, pre_critique_scenarios=[huge, 0.5, 0.5],
+                                 policy={"binary_symmetric_guard": True})
+    assert "error" not in shape and shape["policy"] == {"binary_symmetric_guard": True}
+    assert shape["scenarios"]["n"] == 3 and shape["scenarios"]["max_probability"] == 0.5
+    assert shape["scenarios"]["pre_critique"]["n"] == 2
+    assert shape["binaries"]["n"] == 3
+    assert shape["binaries"]["moves"] == {"toward_half": 0, "away_from_half": 0}
+    json.dumps(shape, allow_nan=False)
+
+
+def test_a_failed_computation_keeps_the_policy_and_says_so(monkeypatch):
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("unforeseen input")
+
+    monkeypatch.setattr(ps, "_scenario_block", _boom)
+    policy = {"binary_symmetric_guard": True}
+    shape = ps.probability_shape(_named(_SPINE_P), _binary_rows([0.2, 0.8]), policy=policy)
+    # a failure is told apart from an empty forecast, and the row keeps its policy group
+    assert shape["error"] is True and shape["policy"] == policy
+    assert shape["scenarios"]["n"] == 0 and shape["binaries"]["n"] == 0
+    summary = fl.shape_summary(entries=[{
+        "report_id": "r", "objective_signals": {"probability_shape": shape}}])
+    (group,) = summary["groups"]
+    assert group["binary_symmetric_guard"] is True and group["n_with_shape"] == 1
     json.dumps(shape, allow_nan=False)
 
 
@@ -483,3 +516,7 @@ def test_skill_no_longer_cues_the_gate():
     assert "not targets to aim the probabilities at" in text
     # the checklist no longer demands "no 0.40–0.60 clustering" as a target in itself
     assert "no 0.40–0.60 clustering" not in text
+    # nowhere is the spread something to pass: §2.2, the checklist and §9 name the failure
+    # itself, and the spread line is explicitly a diagnostic
+    assert "spread gate" not in text and "must survive" not in text
+    assert "as a diagnostic only" in text and "never move numbers to fit it" in text

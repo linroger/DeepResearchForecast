@@ -49,7 +49,10 @@ def _unit_probability(value: Any) -> Optional[float]:
     """A finite probability in [0, 1], else None (bool, None, NaN, str and out-of-range)."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    p = float(value)
+    try:
+        p = float(value)
+    except (OverflowError, ValueError):  # an int too large for a float is no probability
+        return None
     if not math.isfinite(p) or p < 0.0 or p > 1.0:
         return None
     return p
@@ -163,18 +166,22 @@ def probability_shape(scenarios: Any = None, binaries: Any = None, *,
     ``scenarios.pre_critique`` and ``scenarios.critique_delta`` (post - pre of
     ``max_probability`` and ``normalized_entropy``). ``policy`` is the prompt policy
     the forecast was produced under (``quality.forecast_policy``), copied as given.
-    A block with n=0 carries None stats.
+    A block with n=0 carries None stats. Should the stats fail on some unforeseen
+    input, the record keeps the policy, carries empty blocks and adds
+    ``'error': True``, so a failure never reads as an empty forecast.
     """
+    recorded_policy = dict(policy) if isinstance(policy, dict) else {}
     try:
         return {
             "version": SHAPE_VERSION,
-            "policy": dict(policy) if isinstance(policy, dict) else {},
+            "policy": recorded_policy,
             "scenarios": _scenario_block(scenarios, pre_critique_scenarios),
             "binaries": _binary_block(binaries),
         }
     except Exception:  # noqa: BLE001 — telemetry must never break report finalization
-        return {"version": SHAPE_VERSION, "policy": {},
-                "scenarios": _scenario_stats([]), "binaries": _binary_block(None)}
+        return {"version": SHAPE_VERSION, "policy": recorded_policy,
+                "scenarios": _scenario_stats([]), "binaries": _binary_block(None),
+                "error": True}
 
 
 def _json_safe(value: Any) -> Any:
