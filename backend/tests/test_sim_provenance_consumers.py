@@ -9,6 +9,7 @@ stance trajectory), each with SIM_EVENT_PROVENANCE on (default) and off (legacy 
 
 import json
 import os
+import sqlite3
 import sys
 
 import pytest
@@ -20,6 +21,8 @@ for _p in (_BACKEND, _SCRIPTS):
         sys.path.insert(0, _p)
 
 import run_parallel_simulation as rps  # noqa: E402
+from oasis.social_platform.database import create_db  # noqa: E402
+
 from app.config import Config  # noqa: E402
 from app.services.report_agent import _parse_outcome_actors, salience_tiers_from_outcomes  # noqa: E402
 from app.services.simulation_runner import SimulationRunner  # noqa: E402
@@ -296,3 +299,78 @@ def test_stance_trajectory_flag_off_is_legacy(tmp_path, monkeypatch):
     assert by_round[1] == {"supportive": 2, "opposing": 0, "neutral": 1, "observer": 0}
     assert by_round[3] == {"supportive": 1, "opposing": 0, "neutral": 0, "observer": 0}
     assert 0 in net
+
+
+def _interaction_db(sim_dir):
+    """OASIS schema: agent 0 hosts the replayed event; agents 1-3 interact with it and each other."""
+    db = os.path.join(str(sim_dir), "twitter_simulation.db")
+    conn, _cursor = create_db(db)
+    for aid in STANCES:
+        conn.execute(
+            "INSERT INTO user (user_id, agent_id, user_name, name, bio, created_at, "
+            "num_followings, num_followers) VALUES (?, ?, ?, ?, '', 't', 0, 0)",
+            (aid, aid, f"user{aid}", f"Agent {aid}"))
+
+    def _post(author, content, original=None, quote=None):
+        return conn.execute(
+            "INSERT INTO post (user_id, original_post_id, content, quote_content, created_at, "
+            "num_likes, num_dislikes, num_shares) VALUES (?, ?, ?, ?, 't', 0, 0, 0)",
+            (author, original, content, quote)).lastrowid
+
+    def _comment(author, post_id):
+        conn.execute(
+            "INSERT INTO comment (post_id, user_id, content, created_at, num_likes, num_dislikes) "
+            "VALUES (?, ?, 'reply', 't', 0, 0)", (post_id, author))
+
+    event = _post(0, EVENT)
+    organic = _post(1, "Alpha sees strong growth and support.")
+    # OASIS copies the root text into a quote's post.content
+    quote = _post(2, EVENT, original=event, quote="Beta: this listing backfires.")
+    _post(3, EVENT, original=event)               # pure repost of the event
+    _comment(3, event)                            # neutral -> event host: cross
+    _comment(1, event)                            # supportive -> event host: within
+    _comment(2, organic)                          # opposing -> Alpha: cross
+    _comment(1, quote)                            # supportive -> Beta's quote: cross
+    _comment(0, organic)                          # supportive -> Alpha: within
+    conn.commit()
+    conn.close()
+    return db
+
+
+def _interaction_config():
+    return {
+        "agent_configs": [{"agent_id": aid, "stance": stance} for aid, stance in STANCES.items()],
+        "event_config": {"scheduled_events": [{
+            "round": 1, "poster_agent_id": 0,
+            "content": "Commerce adds three quantum firms to the Entity List."}]},
+    }
+
+
+def test_interaction_ratio_ignores_edges_onto_event_posts(tmp_path):
+    db = _interaction_db(tmp_path)
+    conn = sqlite3.connect(db)
+    try:
+        legacy = rps._compute_interaction_ratio(conn, STANCES)
+        filtered = rps._compute_interaction_ratio(conn, STANCES, {EVENT})
+    finally:
+        conn.close()
+    # legacy: quote 2->0, repost 3->0 and comments 3->0 / 2->1 / 1->2 are cross-stance;
+    # comments 1->0 / 0->1 are within-stance
+    assert (legacy["cross_stance"], legacy["within_stance"]) == (5, 2)
+    # event edges dropped; the reply to Beta's quote of the event is a real actor interaction
+    assert (filtered["cross_stance"], filtered["within_stance"]) == (2, 1)
+    assert filtered["cross_stance_interaction_ratio"] == round(2 / 3, 4)
+
+
+@pytest.mark.parametrize("provenance_on", [True, False])
+def test_emergent_metrics_interaction_counts_follow_the_flag(tmp_path, monkeypatch, provenance_on):
+    if provenance_on:
+        monkeypatch.delenv("SIM_EVENT_PROVENANCE", raising=False)
+    else:
+        monkeypatch.setenv("SIM_EVENT_PROVENANCE", "false")
+    _interaction_db(tmp_path)
+    metrics = rps.compute_emergent_metrics(str(tmp_path), _interaction_config(), "twitter",
+                                           lambda _m: None)
+    expected = {"cross_stance": 2, "within_stance": 1} if provenance_on else {
+        "cross_stance": 5, "within_stance": 2}
+    assert metrics["interaction_counts"] == expected

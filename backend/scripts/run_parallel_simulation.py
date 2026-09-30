@@ -2985,12 +2985,22 @@ def _score_stance_trajectory(
 def _compute_interaction_ratio(
     conn: "sqlite3.Connection",
     stance_by_agent: Dict[int, str],
+    event_contents: Any = frozenset(),
 ) -> Dict[str, Any]:
     """跨立场 vs 同立场互动比。
 
     通过 follow（关注边）、post.original_post_id（转发/引用）、comment（回复）三类
     “agent→agent”边，按双方 stance 是否相同计数。比值 = 跨立场 / (同立场 + 跨立场)。
+
+    SIM-5：event_contents（_event_post_contents_for_run，开关关/无事件 → 空集）非空时，
+    目标帖是定时事件帖本身（原帖且正文 ∈ event_contents，与回应阶段同一判定）的转发/引用/
+    评论边不计——对新闻的反应不是与发帖账号的互动。对他人引用事件的帖子的评论照计（目标是
+    引用者）。空集 → 计数逐字节不变。
     """
+    def _is_event_post(original_post_id, content) -> bool:
+        return (bool(event_contents) and original_post_id is None
+                and str(content or "").strip() in event_contents)
+
     cursor = conn.cursor()
 
     # user_id -> agent_id -> stance
@@ -3031,11 +3041,13 @@ def _compute_interaction_ratio(
     # 转发/引用边：reposter -> 原帖作者
     try:
         cursor.execute(
-            "SELECT p.user_id, orig.user_id "
+            "SELECT p.user_id, orig.user_id, orig.original_post_id, orig.content "
             "FROM post p JOIN post orig ON p.original_post_id = orig.post_id "
             "WHERE p.original_post_id IS NOT NULL"
         )
-        for reposter, author in cursor.fetchall():
+        for reposter, author, orig_parent, orig_content in cursor.fetchall():
+            if _is_event_post(orig_parent, orig_content):
+                continue
             _tally(reposter, author)
     except sqlite3.Error:
         pass
@@ -3043,10 +3055,12 @@ def _compute_interaction_ratio(
     # 评论边：评论者 -> 被评论帖作者
     try:
         cursor.execute(
-            "SELECT c.user_id, p.user_id "
+            "SELECT c.user_id, p.user_id, p.original_post_id, p.content "
             "FROM comment c JOIN post p ON c.post_id = p.post_id"
         )
-        for commenter, author in cursor.fetchall():
+        for commenter, author, post_parent, post_content in cursor.fetchall():
+            if _is_event_post(post_parent, post_content):
+                continue
             _tally(commenter, author)
     except sqlite3.Error:
         pass
@@ -3233,7 +3247,9 @@ def compute_emergent_metrics(
     conn = None
     try:
         conn = sqlite3.connect(db_path)
-        interaction = _compute_interaction_ratio(conn, stance_by_agent)
+        interaction = _compute_interaction_ratio(
+            conn, stance_by_agent, _event_post_contents_for_run(config.get("event_config"))
+        )
         communities = _detect_follow_communities(conn, stance_by_agent, log_info)
         cascades = _compute_cascades(conn)
     except Exception as e:  # noqa: BLE001
@@ -4733,15 +4749,63 @@ def _scheduled_event_post_ids(db_path: str, post_ids: Any, event_contents: Any) 
     return {int(pid) for pid, content in rows if str(content or "").strip() in event_contents}
 
 
+def _comment_post_ids(db_path: str, comment_ids: Any) -> Dict[int, int]:
+    """SIM-5：comment_id → 该评论所回应帖子的 post_id。
+
+    OASIS create_comment 的 trace 只记 {content, comment_id}，不含 post_id（platform.py
+    create_comment），fetch_new_actions_from_db 读出的评论行因此没有目标帖——须经 comment
+    表回查。OASIS 已把对纯转发的评论改挂到根帖，comment.post_id 即回应对象。
+    无目标/缺表/任何 sqlite 异常 → 空映射（ResponseLog 退回旧措辞，degrade-safe）。"""
+    ids = set()
+    for cid in comment_ids or ():
+        try:
+            ids.add(int(cid))
+        except (TypeError, ValueError):
+            continue
+    if not ids or not os.path.exists(db_path):
+        return {}
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            ordered = sorted(ids)
+            placeholders = ",".join("?" for _ in ordered)
+            rows = conn.execute(
+                f"SELECT comment_id, post_id FROM comment WHERE comment_id IN ({placeholders})",
+                ordered,
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001
+        return {}
+    return {int(cid): int(pid) for cid, pid in rows if pid is not None}
+
+
+def _reaction_target_post_id(action: Dict[str, Any], comment_post_ids: Dict[int, int]) -> Optional[int]:
+    """SIM-5：回应动作所针对的帖子 id——优先取动作参数里的 post_id（点赞帖子的 trace 带它），
+    评论行没有时按 comment_post_ids（_comment_post_ids 回查结果）补齐；都没有 → None。"""
+    args = action.get("action_args") or {}
+    pid = args.get("post_id")
+    if pid is None and action.get("action_type") == "CREATE_COMMENT":
+        try:
+            pid = comment_post_ids.get(int(args.get("comment_id")))
+        except (TypeError, ValueError):
+            pid = None
+    try:
+        return int(pid)
+    except (TypeError, ValueError):
+        return None
+
+
 def _reaction_memory_note(
     agent_id: int, actions: List[Dict[str, Any]], agent_names: Dict[int, str],
-    event_post_ids: Any = frozenset(),
+    event_post_ids: Any = frozenset(), comment_post_ids: Optional[Dict[int, int]] = None,
 ) -> str:
     """把某 agent 本阶段的回应动作压成一条简短记忆（供后续轮次保持连续性）。
 
-    SIM-5：回应对象是定时事件帖本身（post_id ∈ event_post_ids，见 _scheduled_event_post_ids）
+    SIM-5：回应对象是定时事件帖本身（目标帖 ∈ event_post_ids，见 _scheduled_event_post_ids）
     时不写「You replied to X's post」——事件不是发帖行为者说的话；对他人引用事件的帖子的回应
-    照旧记为回应引用者。event_post_ids 为空 → 逐字节不变。"""
+    照旧记为回应引用者。评论的目标帖经 comment_post_ids 回查（OASIS 评论 trace 不带 post_id）。
+    event_post_ids 为空 → 逐字节不变。"""
     parts: List[str] = []
     for action in actions:
         if action.get("agent_id") != agent_id:
@@ -4751,10 +4815,7 @@ def _reaction_memory_note(
         target = args.get("post_author_name") or args.get("comment_author_name") or "another actor"
         on_event = False
         if event_post_ids and kind in ("CREATE_COMMENT", "LIKE_POST"):
-            try:
-                on_event = int(args.get("post_id")) in event_post_ids
-            except (TypeError, ValueError):
-                on_event = False
+            on_event = _reaction_target_post_id(action, comment_post_ids or {}) in event_post_ids
         if kind == "CREATE_COMMENT":
             text = _truncate_text(args.get("content"), _REACTION_NOTE_CHARS)
             if on_event:
@@ -4884,12 +4945,23 @@ async def run_reaction_phase(
         # 连续性：把各自的回应压成一条 USER 记忆（SYSTEM 记录会被 camel 上下文构造器丢弃）。
         try:
             from camel.types import OpenAIBackendRole
+            # SIM-5：评论行没有 post_id（OASIS trace 只记 comment_id）——仅在有事件帖时回查目标帖，
+            # 无事件 → 不读库、event_post_ids 为空，记忆逐字节不变。
+            comment_post_ids: Dict[int, int] = {}
+            if event_contents:
+                comment_post_ids = _comment_post_ids(
+                    db_path,
+                    [(a.get("action_args") or {}).get("comment_id") for a in actions
+                     if a.get("action_type") == "CREATE_COMMENT"],
+                )
             event_post_ids = _scheduled_event_post_ids(
-                db_path, [(a.get("action_args") or {}).get("post_id") for a in actions],
+                db_path, [_reaction_target_post_id(a, comment_post_ids) for a in actions],
                 event_contents,
             )
             for aid, agent, _prompt in plans:
-                note = _reaction_memory_note(aid, actions, agent_names, event_post_ids)
+                note = _reaction_memory_note(
+                    aid, actions, agent_names, event_post_ids, comment_post_ids
+                )
                 if note and hasattr(agent, "update_memory"):
                     agent.update_memory(
                         BaseMessage.make_user_message(role_name="ResponseLog", content=note),

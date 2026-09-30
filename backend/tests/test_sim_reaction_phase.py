@@ -102,10 +102,11 @@ def _add_comment(db, author, post_id, content, trace=True):
     )
     cid = cur.lastrowid
     if trace:
+        # OASIS Platform.create_comment 的真实 trace 形状：只有 content + comment_id，没有 post_id
+        # （test_reaction_phase_notes_follow_real_oasis_trace_shapes 用真实 Platform 钉住它）
         conn.execute(
             "INSERT INTO trace (user_id, created_at, action, info) VALUES (?, '2026-01-01', ?, ?)",
-            (author, "create_comment",
-             json.dumps({"post_id": post_id, "content": content, "comment_id": cid})),
+            (author, "create_comment", json.dumps({"content": content, "comment_id": cid})),
         )
     conn.commit()
     conn.close()
@@ -312,7 +313,9 @@ def test_reaction_phase_uses_only_interaction_tools_and_logs(tmp_path, monkeypat
 
     assert new_rowid > last_rowid
     assert [a["action_type"] for a in actions] == ["CREATE_COMMENT"] * 3
-    assert all(a["action_args"].get("post_author_name") for a in actions)
+    # OASIS 评论 trace 只记 content + comment_id（无 post_id，故无帖子作者上下文）
+    assert all(a["action_args"].get("content") and a["action_args"].get("comment_id")
+               for a in actions)
     with open(os.path.join(str(tmp_path), "twitter", "actions.jsonl"), encoding="utf-8") as f:
         logged = [json.loads(line) for line in f if line.strip()]
     assert [(row["round"], row["action_type"]) for row in logged] == [(1, "CREATE_COMMENT")] * 3
@@ -820,24 +823,35 @@ def test_prompt_without_event_candidates_is_unchanged():
 
 
 def test_memory_note_names_the_world_event_not_the_poster():
+    # OASIS 真实行形状：评论只有 content + comment_id（目标帖经 comment 表回查）；点赞带 post_id
     actions = [
         {"agent_id": 1, "action_type": "CREATE_COMMENT",
-         "action_args": {"content": "Origin: we will appeal.", "post_id": 5,
-                         "post_content": EVENT_TEXT, "post_author_name": "IBM"}},
+         "action_args": {"content": "Origin: we will appeal.", "comment_id": 11}},
         {"agent_id": 1, "action_type": "LIKE_POST",
-         "action_args": {"post_id": 5, "post_content": EVENT_TEXT, "post_author_name": "IBM"}},
+         "action_args": {"post_id": 5, "like_id": 3, "post_content": EVENT_TEXT,
+                         "post_author_name": "IBM"}},
         {"agent_id": 1, "action_type": "CREATE_COMMENT",
-         "action_args": {"content": "Origin: noted.", "post_id": 6,
-                         "post_content": "IBM: Starling on schedule.", "post_author_name": "IBM"}},
+         "action_args": {"content": "Origin: noted.", "comment_id": 12}},
+        {"agent_id": 1, "action_type": "CREATE_COMMENT",      # 行里自带 post_id 时以它为准
+         "action_args": {"content": "Origin: see our filing.", "post_id": 5, "comment_id": 13}},
     ]
-    note = rps._reaction_memory_note(1, actions, AGENT_NAMES, {5})
+    comment_posts = {11: 5, 12: 6, 13: 6}
+    note = rps._reaction_memory_note(1, actions, AGENT_NAMES, {5}, comment_posts)
     assert note == ("# YOUR RESPONSES THIS PERIOD\n"
                     "You responded to the scheduled world event: \"Origin: we will appeal.\"\n"
                     "You endorsed the scheduled world event.\n"
-                    "You replied to IBM's post: \"Origin: noted.\"")
+                    "You replied to another actor's post: \"Origin: noted.\"\n"
+                    "You responded to the scheduled world event: \"Origin: see our filing.\"")
+    # 评论目标回查不到 → 退回旧措辞（degrade-safe）；点赞照常按 post_id 判定
+    assert rps._reaction_memory_note(1, actions[:2], AGENT_NAMES, {5}) == (
+        "# YOUR RESPONSES THIS PERIOD\n"
+        "You replied to another actor's post: \"Origin: we will appeal.\"\n"
+        "You endorsed the scheduled world event.")
     legacy = rps._reaction_memory_note(1, actions, AGENT_NAMES)
-    assert legacy.startswith("# YOUR RESPONSES THIS PERIOD\nYou replied to IBM's post: ")
+    assert legacy.startswith("# YOUR RESPONSES THIS PERIOD\nYou replied to another actor's post: ")
     assert "scheduled world event" not in legacy
+    # 无事件帖 → 回查结果不影响措辞（旧路径逐字节不变）
+    assert rps._reaction_memory_note(1, actions, AGENT_NAMES, frozenset(), comment_posts) == legacy
 
 
 def _add_like(db, author, post_id):
@@ -869,7 +883,17 @@ def test_scheduled_event_post_ids_match_the_event_post_not_its_quotes(tmp_path):
     assert rps._scheduled_event_post_ids(str(tmp_path / "missing.db"), [ev], {EVENT_TEXT}) == set()
 
 
-def test_reaction_phase_reply_to_a_quote_of_the_event_names_the_quoter(tmp_path, monkeypatch):
+def test_comment_post_ids_resolve_the_replied_post(tmp_path):
+    db, ev, quote = _quoted_event_db(tmp_path)
+    on_event = _add_comment(db, 0, ev, "BIS: the listing is final.", trace=False)
+    on_quote = _add_comment(db, 0, quote, "BIS: the appeal has no legal basis.", trace=False)
+    assert rps._comment_post_ids(db, [on_event, on_quote, None, "x", 999]) == {
+        on_event: ev, on_quote: quote}
+    assert rps._comment_post_ids(db, []) == {}
+    assert rps._comment_post_ids(str(tmp_path / "missing.db"), [on_event]) == {}
+
+
+def test_reaction_phase_reply_to_a_quote_of_the_event_is_not_the_world_event(tmp_path, monkeypatch):
     db, ev, quote = _quoted_event_db(tmp_path)
     prompts = {}
 
@@ -898,9 +922,10 @@ def test_reaction_phase_reply_to_a_quote_of_the_event_names_the_quoter(tmp_path,
     assert set(prompts) == {0, 1, 2}
     assert f"post_id={quote} — Origin Quantum wrote:" in prompts[0]
     assert f"  (quoting {EVENT_AUTHOR}: " in prompts[0]
+    # 评论 trace 不带 post_id（OASIS 真实形状）→ 回复行不点名，但绝不记为回应世界事件
     assert agents[0].memory[0][0] == (
         "# YOUR RESPONSES THIS PERIOD\n"
-        "You replied to Origin Quantum's post: \"BIS: the appeal has no legal basis.\"\n"
+        "You replied to another actor's post: \"BIS: the appeal has no legal basis.\"\n"
         "You endorsed (liked) Origin Quantum's post.")
     assert agents[1].memory[0][0] == (
         "# YOUR RESPONSES THIS PERIOD\n"
@@ -938,7 +963,81 @@ def test_reaction_phase_marks_event_threads(tmp_path, monkeypatch, provenance_on
     else:
         assert set(prompts) == {0, 1}                       # 旧行为：IBM 视其为自己的帖子
         assert all(f"post_id={pid} — IBM wrote:" in p for p in prompts.values())
-        assert agents[0].memory[0][0].startswith("# YOUR RESPONSES THIS PERIOD\nYou replied to IBM's post")
+        assert agents[0].memory[0][0].startswith(
+            "# YOUR RESPONSES THIS PERIOD\nYou replied to another actor's post")
+
+
+@pytest.mark.parametrize("provenance_on", [True, False])
+def test_reaction_phase_notes_follow_real_oasis_trace_shapes(tmp_path, monkeypatch, provenance_on):
+    """回归：库与 trace 全由真实 OASIS Platform 写出（create_post / quote_post / repost /
+    create_comment / like_post），不用手写夹具——评论 trace 只有 {content, comment_id}，
+    ResponseLog 须经 comment 表回查目标帖；OASIS 的 trace 形状一旦漂移本测试即失败。"""
+    from oasis.social_platform.platform import Platform
+
+    db = str(tmp_path / "twitter_simulation.db")
+    agents = {aid: _Agent(aid, ALL_TWITTER_TOOLS) for aid in AGENTS}
+
+    async def _scenario():
+        pf = Platform(db, recsys_type="twitter")
+        try:
+            for aid, a in AGENTS.items():
+                await pf.sign_up(aid, (f"user{aid}", a["name"], ""))
+            ev = (await pf.create_post(2, EVENT_TEXT))["post_id"]             # 挂在 IBM 账号下
+            quote = (await pf.quote_post(1, (ev, "Origin: we will appeal the listing.")))["post_id"]
+            repost = (await pf.repost(0, ev))["post_id"]
+
+            class _Helper:
+                def __init__(self, agent, tools):
+                    self.agent = agent
+
+                async def astep(self, message):
+                    aid = self.agent.agent_id
+                    if aid == 0:     # BIS 回复并点赞 Origin 的引用帖——回应的是 Origin
+                        await pf.create_comment(0, (quote, "BIS: the appeal has no legal basis."))
+                        await pf.like_post(0, quote)
+                    elif aid == 1:   # Origin 评论事件的纯转发（OASIS 改挂到根帖）并点赞事件帖
+                        await pf.create_comment(1, (repost, "Origin: the listing ignores civil work."))
+                        await pf.like_post(1, ev)
+                    else:            # IBM 评论事件帖本身
+                        await pf.create_comment(2, (ev, "IBM: we will comply."))
+
+            monkeypatch.setattr(rps, "_make_reaction_agent", lambda agent, tools: _Helper(agent, tools))
+            state = {"window_start": 0, "round_start": 0}
+            if provenance_on:
+                state["event_contents"] = {EVENT_TEXT}
+            actions, _rowid = await rps.run_reaction_phase(
+                _Env(), db, sorted(agents.items()), _config(), 0, "2026-H2", "twitter",
+                AGENT_NAMES, state, _trace_rowid(db), None, random.Random(7), lambda _m: None)
+            return ev, actions
+        finally:
+            pf.db.close()
+
+    ev, actions = asyncio.run(_scenario())
+
+    comments = [a for a in actions if a["action_type"] == "CREATE_COMMENT"]
+    assert len(comments) == 3
+    assert all(set(a["action_args"]) == {"content", "comment_id"} for a in comments)
+    conn = sqlite3.connect(db)
+    origin_target = conn.execute("SELECT post_id FROM comment WHERE user_id = 1").fetchone()[0]
+    conn.close()
+    assert origin_target == ev                     # 对纯转发的评论落在根事件帖上
+    notes = {aid: agent.memory[0][0] for aid, agent in agents.items() if agent.memory}
+    assert notes[0] == ("# YOUR RESPONSES THIS PERIOD\n"
+                        "You replied to another actor's post: \"BIS: the appeal has no legal basis.\"\n"
+                        "You endorsed (liked) Origin Quantum's post.")
+    if provenance_on:
+        assert notes[1] == ("# YOUR RESPONSES THIS PERIOD\n"
+                            "You responded to the scheduled world event: "
+                            "\"Origin: the listing ignores civil work.\"\n"
+                            "You endorsed the scheduled world event.")
+        assert notes[2] == ("# YOUR RESPONSES THIS PERIOD\n"
+                            "You responded to the scheduled world event: \"IBM: we will comply.\"")
+    else:
+        assert notes[1] == ("# YOUR RESPONSES THIS PERIOD\n"
+                            "You replied to another actor's post: "
+                            "\"Origin: the listing ignores civil work.\"\n"
+                            "You endorsed (liked) IBM's post.")
+        assert not any("scheduled world event" in note for note in notes.values())
 
 
 @pytest.mark.parametrize("platform", ["twitter", "reddit"])
