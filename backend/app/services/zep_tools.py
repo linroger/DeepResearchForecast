@@ -464,6 +464,18 @@ class InterviewResult:
         return "\n".join(text_parts)
 
 
+def _roster_actor_for(name: Any, roster: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """INFRA-11: the one research-roster actor a name exactly denotes, else None.
+
+    Its canonical name first, then an alias no other actor claims: an alias two actors list
+    (or one equal to another actor's canonical name, where the canonical wins) denotes no
+    single actor, so neither of them receives it.
+    """
+    from ..utils.actors import actor_match_candidates
+    rows = actor_match_candidates(name, roster, exact_only=True)
+    return rows[0] if len(rows) == 1 else None
+
+
 class ZepToolsService:
     """
     Zep检索工具服务
@@ -2775,21 +2787,27 @@ class ZepToolsService:
         """INFRA-11: fail-closed node-name resolution for trace_cascade.
 
         1. Exact normalized node name: the name itself, then (when it is exactly the name or
-           an alias of one roster actor) that actor's canonical name and aliases, so an exact
-           alias such as 'EU' reaches the 'European Union' node.
+           an alias of one roster actor) that actor's canonical name and the aliases that
+           denote only it, so an exact alias such as 'EU' reaches the 'European Union' node
+           while a contested alias ('China' listed by the Chinese Communist Party beside a
+           China actor) never steers the pick to another actor's node.
         2. Containment only when both sides have at least 4 normalized characters (a CJK name
            counts per character) and exactly one distinct node name qualifies.
         Anything else returns None and the caller keeps the raw name.
         """
-        from ..utils.actors import actor_match_candidates, normalize_name
+        from ..utils.actors import normalize_name
+        roster = getattr(self, "actor_roster", None)
         surfaces = [target]
-        rows = actor_match_candidates(raw, getattr(self, "actor_roster", None), exact_only=True)
-        if len(rows) == 1:
-            row = rows[0]
+        row = _roster_actor_for(raw, roster)
+        if row is not None:
+            canonical = normalize_name(row.get("name"))
             aliases = row.get("aliases") if isinstance(row.get("aliases"), list) else []
             for surface in (row.get("name"), *aliases):
                 norm = normalize_name(surface) if isinstance(surface, str) else ""
-                if norm and norm not in surfaces:
+                if not norm or norm in surfaces:
+                    continue
+                owner = _roster_actor_for(surface, roster)
+                if owner is not None and normalize_name(owner.get("name")) == canonical:
                     surfaces.append(norm)
         by_norm: Dict[str, str] = {}
         for node in nodes:
@@ -2890,15 +2908,19 @@ class ZepToolsService:
         # RPT-13：空 target 时 str.find('') 恒为 0，会把全体动作日志误标成单一 actor 的轨迹。
         if not target:
             return "（opinion_shift 需要 actor_name 参数：请提供要追踪的 Agent/角色名）"
+        shown = f"「{actor_name}」"
         if getattr(Config, "ACTOR_NAME_MATCH_STRICT", True):
-            agents, ambiguity = self._opinion_shift_agents(actor_name, actions)
+            agents, resolved, ambiguity = self._opinion_shift_agents(actor_name, actions)
             if ambiguity:
                 return ambiguity
+            if resolved and normalize_name(resolved) != target:
+                # INFRA-11：经别名/包含解析到的行为者要在输出里点名，绝不把替换后的轨迹挂在原始名下。
+                shown += f"（解析为「{resolved}」）"
             mine = [a for a in actions if a.agent_name and str(a.agent_name) in agents]
         else:
             mine = [a for a in actions if normalize_name(a.agent_name) == target or normalize_name(a.agent_name).find(target) >= 0]
         if not mine:
-            return f"（未找到名为「{actor_name}」的 agent 的动作记录）"
+            return f"（未找到名为{shown}的 agent 的动作记录）"
         # SIM-5（SIM_EVENT_PROVENANCE，默认开）：挂在该行为者名下的种子/时间线事件回放/采样
         # 点赞不是它的行为轨迹——剔除并注明条数。开关关 → 旧输出逐字节不变。
         injected = 0
@@ -2908,14 +2930,14 @@ class ZepToolsService:
                        if not is_injected_row(getattr(a, "action_args", None), a.round_num)]
             injected = len(mine) - len(organic)
             if not organic:
-                return (f"（「{actor_name}」名下没有自发动作：{injected} 次均为注入动作——"
+                return (f"（{shown}名下没有自发动作：{injected} 次均为注入动作——"
                         "种子/时间线事件回放/采样点赞）")
             mine = organic
         by_round: Dict[int, Dict[str, int]] = {}
         for a in mine:
             r = by_round.setdefault(a.round_num, {})
             r[a.action_type] = r.get(a.action_type, 0) + 1
-        lines = [f"## 「{actor_name}」逐轮行为轨迹（参与度/立场演变线索）"]
+        lines = [f"## {shown}逐轮行为轨迹（参与度/立场演变线索）"]
         for rn in sorted(by_round):
             at = by_round[rn]
             lines.append(f"- round {rn}: " + "、".join(f"{k}×{v}" for k, v in sorted(at.items(), key=lambda x: -x[1])))
@@ -2924,51 +2946,69 @@ class ZepToolsService:
             lines.append(f"（已剔除注入动作 {injected} 次：种子/时间线事件回放/采样点赞——非行为者自发）")
         return "\n".join(lines)
 
-    def _opinion_shift_agents(self, actor_name: str, actions: List[Any]) -> tuple[set, str]:
-        """INFRA-11: the agent names opinion_shift tracks, or an ambiguity message.
+    def _opinion_shift_agents(self, actor_name: str, actions: List[Any]) -> tuple[set, str, str]:
+        """INFRA-11: (agent names opinion_shift tracks, the actor they resolve to, ambiguity message).
 
         The legacy filter kept every agent whose normalized name merely contained the
-        target, so 'US' also swept in Russia, Australia and Business Roundtable.  Here the
-        target resolves in four passes, the first that yields anything deciding: an exact
-        name/alias of the research roster, an exact agent name from the action log, a
-        roster containment of at least 4 characters, an agent-name containment of at least
-        4 characters.  One roster actor tracks the agents that name it (or whose own name
-        ``match_actor`` resolves to it); several candidates return an explanatory message
-        naming them instead of merging their trajectories.
+        target, so 'US' also swept in Russia, Australia and Business Roundtable.  Here an
+        exact name decides first: the research roster's canonical name or an alias (the
+        canonical wins over another actor's alias), then an agent name from the action log.
+        Otherwise containment of at least 4 characters is weighed across both pools at once:
+        every roster actor sharing such a containment with the target, plus every agent name
+        that does and that none of those roster actors already tracks ('Japan' against the
+        roster actor Bank of Japan and the unrostered agent Government of Japan is two
+        candidates).  A roster actor tracks the agents whose name denotes it exactly or that
+        ``match_actor`` resolves to it.  One candidate resolves (its name is returned so the
+        output can say what the target resolved to); several return an explanatory message
+        naming them instead of merging their trajectories; none returns empty values.
         """
         from ..utils.actors import actor_match_candidates, match_actor, normalize_name
         agent_names = sorted({str(a.agent_name) for a in actions if a.agent_name})
         roster = getattr(self, "actor_roster", None)
-        agent_roster = {"actors": [{"name": name} for name in agent_names]}
+        agent_pool = {"actors": [{"name": name} for name in agent_names]}
+        owners: Optional[Dict[str, str]] = None  # agent name -> normalized roster canonical
 
-        def _agents_naming(row: Dict[str, Any], pool: Optional[Dict[str, Any]]) -> set:
+        def _roster_agents(row: Dict[str, Any]) -> set:
+            nonlocal owners
+            if owners is None:
+                owners = {}
+                for name in agent_names:
+                    exact = actor_match_candidates(name, roster, exact_only=True)
+                    if exact:  # an alias two actors share names neither of them
+                        owner = exact[0] if len(exact) == 1 else None
+                    else:
+                        owner = match_actor(name, roster)
+                    owners[name] = normalize_name(owner.get("name")) if owner else ""
             canonical = normalize_name(row.get("name"))
-            aliases = row.get("aliases") if isinstance(row.get("aliases"), list) else []
-            surfaces = {canonical, *(normalize_name(a) for a in aliases if isinstance(a, str))}
-            surfaces.discard("")
-            out = set()
-            for name in agent_names:
-                if normalize_name(name) in surfaces:
-                    out.add(name)
-                elif pool is not None:
-                    hit = match_actor(name, pool)
-                    if hit is not None and normalize_name(hit.get("name")) == canonical:
-                        out.add(name)
-            return out
+            return {name for name in agent_names if owners[name] == canonical}
 
-        for pool, exact_only in ((roster, True), (agent_roster, True),
-                                 (roster, False), (agent_roster, False)):
-            rows = actor_match_candidates(actor_name, pool, exact_only=exact_only)
-            if len(rows) == 1:
-                return _agents_naming(rows[0], roster if pool is roster else None), ""
-            if len(rows) > 1:
-                names = "、".join(str(row.get("name")) for row in rows[:12])
-                more = f" 等 {len(rows)} 个" if len(rows) > 12 else ""
-                return set(), (
-                    f"（「{actor_name}」可对应多个行为者：{names}{more}——为避免把不同行为者的轨迹"
-                    "混在一起，请用其中一个的完整名称重新调用 opinion_shift）"
-                )
-        return set(), ""
+        def _named_agents(row: Dict[str, Any]) -> set:
+            norm = normalize_name(row.get("name"))
+            return {name for name in agent_names if normalize_name(name) == norm}
+
+        candidates = [(str(row.get("name")), _roster_agents(row))
+                      for row in actor_match_candidates(actor_name, roster, exact_only=True)]
+        if not candidates:
+            candidates = [(str(row.get("name")), _named_agents(row))
+                          for row in actor_match_candidates(actor_name, agent_pool, exact_only=True)]
+        if not candidates:
+            candidates = [(str(row.get("name")), _roster_agents(row))
+                          for row in actor_match_candidates(actor_name, roster)]
+            tracked = set().union(*(agents for _, agents in candidates))
+            for row in actor_match_candidates(actor_name, agent_pool):
+                untracked = _named_agents(row) - tracked
+                if untracked:
+                    candidates.append((str(row.get("name")), untracked))
+        if len(candidates) == 1:
+            return candidates[0][1], candidates[0][0], ""
+        if not candidates:
+            return set(), "", ""
+        names = "、".join(label for label, _ in candidates[:12])
+        more = f" 等 {len(candidates)} 个" if len(candidates) > 12 else ""
+        return set(), "", (
+            f"（「{actor_name}」可对应多个行为者：{names}{more}——为避免把不同行为者的轨迹"
+            "混在一起，请用其中一个的完整名称重新调用 opinion_shift）"
+        )
 
     def scenario_diff(self, base_sim_id: str, scenario_sim_id: str) -> str:
         """T4.7: 反事实对比 base vs 情景两次模拟的结构化差异（确定性，无 LLM）。

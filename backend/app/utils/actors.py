@@ -184,6 +184,8 @@ def actor_key_is_lossy(name: Any) -> bool:
     hangul, Cyrillic, Arabic and CJK ideographs outside U+3400–U+9FFF make the key lossy.
     """
     normalized = unicodedata.normalize("NFKC", str(name or "")).casefold()
+    if normalized.isascii():
+        return False  # ASCII letters casefold to a-z, which the legacy key keeps
     for ch in normalized:
         if _LEGACY_ACTOR_KEY_DROP.fullmatch(ch) is None:
             continue  # kept by the legacy key
@@ -566,12 +568,15 @@ def actor_match_candidates(
 ) -> List[Dict[str, Any]]:
     """INFRA-11: every roster row a name could denote, for callers that must name an ambiguity.
 
-    Exact normalized name/alias hits are decisive: when any exist only they are returned.
-    Otherwise (unless ``exact_only``) every row whose name or alias shares a containment of
-    at least 4 normalized characters with the name is a candidate (no longest-name
-    tie-break, unlike ``match_actor``: "Bank" against "Bank of Japan" and "Bank of England"
-    is two candidates).  One entry per distinct canonical name, in roster order; the caller
-    resolves only a single candidate and reports several as ambiguous.
+    Exact normalized hits are decisive: when any exist only they are returned, and a row
+    whose canonical name is the name outranks rows that merely list it as an alias (the
+    canonical wins, as in ``actor_alias_map``: "China" is the China actor even when the
+    Chinese Communist Party lists "China" as an alias; an alias two rows share stays two
+    candidates).  Otherwise (unless ``exact_only``) every row whose name or alias shares a
+    containment of at least 4 normalized characters with the name is a candidate (no
+    longest-name tie-break, unlike ``match_actor``: "Bank" against "Bank of Japan" and
+    "Bank of England" is two candidates).  One entry per distinct canonical name, in roster
+    order; the caller resolves only a single candidate and reports several as ambiguous.
     """
     rows = extract_actor_rows(actors)
     target = normalize_name(entity_name)
@@ -584,10 +589,8 @@ def actor_match_candidates(
             out.setdefault(normalize_name(str(row.get("name", ""))), row)
         return [row for canonical, row in out.items() if canonical]
 
-    exact = [
-        row for row in rows
-        if normalize_name(str(row.get("name", ""))) == target
-        or target in _actor_norm_aliases(row)
+    exact = [row for row in rows if normalize_name(str(row.get("name", ""))) == target] or [
+        row for row in rows if target in _actor_norm_aliases(row)
     ]
     if exact or exact_only:
         return _distinct(exact)

@@ -17,6 +17,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.config import Config  # noqa: E402
 from app.services import zep_entity_resolver as er  # noqa: E402
 from app.services.actor_context import (  # noqa: E402
+    _actor_terms,
+    _relevance,
+    _term_key,
     actor_id_for,
     build_actor_context_artifacts,
     build_actor_context_pack,
@@ -52,6 +55,14 @@ LEGACY_IDS = {
 }
 # sha256('')[:16]: the id every hangul/Cyrillic name shared in the old role contract.
 EMPTY_KEY_ID = "actor_e3b0c44298fc1c14"
+# Contested aliases: 'Fed' is listed by two actors; 'China' is one actor's canonical name
+# and another actor's alias.
+SHARED_ALIAS_ACTORS = {"actors": [
+    {"name": "Federal Reserve Board", "aliases": ["Fed", "FRB"]},
+    {"name": "Federal Open Market Committee", "aliases": ["Fed", "FOMC"]},
+    {"name": "China", "aliases": ["PRC"]},
+    {"name": "Chinese Communist Party", "aliases": ["CCP", "China"]},
+]}
 
 
 @pytest.fixture
@@ -159,6 +170,26 @@ def test_context_pack_relationships_stay_with_their_non_latin_actor():
     # Latin endpoints keep their legacy-key matching.
     apple = build_actor_context_pack(dossier, dossier["actors"][2], "report")
     assert len(apple["relationships"]) == 3
+
+
+def test_relevance_terms_keep_non_latin_letters():
+    """Kana terms are no longer dropped as empty/short legacy keys, nor de-duplicated or
+    equated with a name that merely shares their kanji remainder."""
+    assert _term_key("Federal Reserve") == legacy_actor_key("Federal Reserve")
+    assert _term_key("Nestlé") == "nestl"  # lossless Latin keeps the legacy key
+    assert _term_key("ホンダ自動車") != _term_key("トヨタ自動車")
+    rival = {"name": "Toyota", "goals": ["トヨタ自動車株式会社", "ホンダ自動車株式会社"]}
+    assert {"トヨタ自動車株式会社", "ホンダ自動車株式会社"} <= set(_actor_terms(rival))
+    actor = {"name": "トヨタ", "role": "ハイブリッド車メーカー", "goals": ["全固体電池の量産"]}
+    assert "ハイブリッド車メーカー" in _actor_terms(actor)  # legacy key '車' was below the floor
+    score, matched = _relevance("ハイブリッド車メーカーは全固体電池の量産を急ぐ。", actor)
+    assert score > 0 and set(matched) == {"ハイブリッド車メーカー", "全固体電池の量産"}
+    # A term is not the actor's own name merely because both legacy keys are 自動車株式会社.
+    toyota = {"name": "トヨタ自動車株式会社", "role": "ホンダ自動車株式会社"}
+    assert _actor_terms(toyota) == ["トヨタ自動車株式会社", "ホンダ自動車株式会社"]
+    # Latin terms are untouched: the legacy floor, generic filter and de-duplication apply.
+    latin = {"name": "Fed", "role": "Government", "goals": ["Rate path", "rate-path", "QT"]}
+    assert _actor_terms(latin) == ["Rate path"]
 
 
 def test_actor_identity_key_is_the_hashed_key():
@@ -302,6 +333,46 @@ def test_opinion_shift_actor_outside_the_roster_matches_agent_names(monkeypatch,
     assert _svc().opinion_shift("sim", "") == "（opinion_shift 需要 actor_name 参数：请提供要追踪的 Agent/角色名）"
 
 
+def test_opinion_shift_containment_weighs_roster_and_unrostered_agents(monkeypatch, strict):
+    """Review r1: a unique roster containment no longer hides a second containment candidate
+    among the agents, and a resolved target is named in the output."""
+    _actions(monkeypatch, ["Bank of Japan", "Government of Japan"])
+    out = _svc(_roster("Bank of Japan")).opinion_shift("sim", "Japan")
+    assert "多个行为者" in out and "Bank of Japan" in out and "Government of Japan" in out
+    assert "round 1" not in out
+    _actions(monkeypatch, ["Bank of Japan", "Bank of Japan (BoJ)"])  # both track the roster actor
+    out = _svc(_roster("Bank of Japan")).opinion_shift("sim", "Japan")
+    assert out.splitlines()[0] == "## 「Japan」（解析为「Bank of Japan」）逐轮行为轨迹（参与度/立场演变线索）"
+    assert "合计 2 次动作" in out
+    _actions(monkeypatch, ["Federal Reserve Board", "Bank of Japan"])  # no roster: agent containment
+    out = _svc().opinion_shift("sim", "Federal Reserve")
+    assert out.startswith("## 「Federal Reserve」（解析为「Federal Reserve Board」）逐轮行为轨迹")
+
+
+def test_opinion_shift_names_alias_resolutions_but_not_exact_names(monkeypatch, strict):
+    _actions(monkeypatch, ["Bank of Japan", "Bank of England"])
+    roster = _roster({"name": "Bank of Japan", "aliases": ["BoJ"]}, "Bank of England")
+    assert _svc(roster).opinion_shift("sim", "BoJ").startswith("## 「BoJ」（解析为「Bank of Japan」）逐轮")
+    assert _svc(roster).opinion_shift("sim", "bank of england").startswith("## 「bank of england」逐轮")
+    _actions(monkeypatch, ["Bank of England"])
+    assert _svc(roster).opinion_shift("sim", "BoJ") == (
+        "（未找到名为「BoJ」（解析为「Bank of Japan」）的 agent 的动作记录）")
+
+
+def test_opinion_shift_canonical_name_beats_another_actors_alias(monkeypatch, strict):
+    """Review r1: 'China' is the China actor although the CCP lists 'China' as an alias, and
+    the contested alias never pulls the China agent into the CCP's trajectory."""
+    _actions(monkeypatch, ["China", "Chinese Communist Party", "China"])
+    china = _svc(SHARED_ALIAS_ACTORS).opinion_shift("sim", "China")
+    assert china.startswith("## 「China」逐轮") and "合计 2 次动作" in china
+    ccp = _svc(SHARED_ALIAS_ACTORS).opinion_shift("sim", "CCP")
+    assert ccp.startswith("## 「CCP」（解析为「Chinese Communist Party」）逐轮") and "合计 1 次动作" in ccp
+    # An agent literally named after an alias two actors share belongs to neither of them.
+    _actions(monkeypatch, ["Fed", "Federal Reserve Board"])
+    frb = _svc(SHARED_ALIAS_ACTORS).opinion_shift("sim", "FRB")
+    assert "合计 1 次动作" in frb
+
+
 # ============================================================== _resolve_entity_name
 
 def _graph_svc(node_names, roster=None):
@@ -338,6 +409,24 @@ def test_resolve_entity_name_requires_a_unique_containment(strict):
     assert _graph_svc(["中国人民银行"])._resolve_entity_name("g", "人民银行") == "中国人民银行"
 
 
+def test_resolve_entity_name_never_follows_a_contested_alias(strict):
+    # CCP lists 'China' as an alias, but 'China' is another roster actor's canonical name.
+    assert _graph_svc(["China"], SHARED_ALIAS_ACTORS)._resolve_entity_name("g", "CCP") == "CCP"
+    nodes = ["China", "Chinese Communist Party"]
+    assert _graph_svc(nodes, SHARED_ALIAS_ACTORS)._resolve_entity_name("g", "CCP") == "Chinese Communist Party"
+    assert _graph_svc(nodes, SHARED_ALIAS_ACTORS)._resolve_entity_name("g", "PRC") == "China"
+    assert _graph_svc(nodes, SHARED_ALIAS_ACTORS)._resolve_entity_name("g", "China") == "China"
+
+
+def test_resolve_entity_name_short_containment_needs_an_exact_roster_name(strict, monkeypatch):
+    """The documented default-on change: a unique 3-character containment no longer resolves."""
+    assert _graph_svc(["Federal Reserve"])._resolve_entity_name("g", "Fed") == "Fed"
+    roster = _roster({"name": "Federal Reserve", "aliases": ["Fed"]})
+    assert _graph_svc(["Federal Reserve"], roster)._resolve_entity_name("g", "Fed") == "Federal Reserve"
+    monkeypatch.setattr(Config, "ACTOR_NAME_MATCH_STRICT", False)
+    assert _graph_svc(["Federal Reserve"])._resolve_entity_name("g", "Fed") == "Federal Reserve"
+
+
 def test_resolve_entity_name_flag_off_is_legacy(legacy):
     assert _graph_svc(["EUROPEAN X"])._resolve_entity_name("g", "EU") == "EUROPEAN X"
     nodes = ["Bank of Japan", "Bank of England"]
@@ -345,14 +434,6 @@ def test_resolve_entity_name_flag_off_is_legacy(legacy):
 
 
 # ============================================================== actor_alias_map
-
-SHARED_ALIAS_ACTORS = {"actors": [
-    {"name": "Federal Reserve Board", "aliases": ["Fed", "FRB"]},
-    {"name": "Federal Open Market Committee", "aliases": ["Fed", "FOMC"]},
-    {"name": "China", "aliases": ["PRC"]},
-    {"name": "Chinese Communist Party", "aliases": ["CCP", "China"]},
-]}
-
 
 def test_actor_alias_map_drops_an_alias_shared_by_two_actors(strict):
     amap = er.actor_alias_map(SHARED_ALIAS_ACTORS)
@@ -394,6 +475,10 @@ def test_actor_match_candidates_semantics():
     assert actor_match_candidates("Bank", roster, exact_only=True) == []
     assert [r["name"] for r in actor_match_candidates("BOJ", roster, exact_only=True)] == ["Bank of Japan"]
     assert actor_match_candidates("", roster) == [] and actor_match_candidates("Bank", None) == []
+    # A canonical name outranks another actor's alias; an alias two actors share stays two.
+    assert [r["name"] for r in actor_match_candidates("China", SHARED_ALIAS_ACTORS)] == ["China"]
+    assert [r["name"] for r in actor_match_candidates("fed", SHARED_ALIAS_ACTORS, exact_only=True)] == [
+        "Federal Reserve Board", "Federal Open Market Committee"]
 
 
 # ============================================================== plumbing + knob
