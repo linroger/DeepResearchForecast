@@ -1047,6 +1047,25 @@ def salience_tiers_from_outcomes(outcomes_text: str) -> str:
     return "\n".join(lines)
 
 
+# REPORT-5（REPORT_SIGNAL_PACK_HEALTH_GATE）：run_summary.json 的 simulation_health → 信号包须跳过
+# 的块（按渲染顺序）。hollow（零有机动作）时议程设置力分层数的是种子动作、派系图聚类的是种子关注、
+# 情景差异比较的是两份种子回声；errored 连世界态也不可信。图谱派生块（投影纽带、因果骨架）不依赖
+# 模拟行为，始终保留。
+_SIGNAL_PACK_HEALTH_SKIPS: Dict[str, Tuple[str, ...]] = {
+    "hollow": ("simulation_outcomes", "coalition_map", "scenario_diff"),
+    "errored": ("world_state", "simulation_outcomes", "coalition_map", "scenario_diff"),
+}
+_SIGNAL_PACK_NO_BEHAVIOUR_NOTE = (
+    "⚠️ 本次模拟未产出可用的行为数据（simulation_health={health}）——这不是「行为者无反应」的发现；"
+    "正文不得引用任何基于模拟行为量或派系聚类的推演结论。"
+)
+# 部分 / 降级完成的运行：块全部保留，包头后附审慎提示。
+_SIGNAL_PACK_PARTIAL_HEALTHS = ("truncated", "llm_degraded")
+_SIGNAL_PACK_PARTIAL_NOTE = (
+    "⚠️ 模拟运行状态：{health}（未完整或降级完成）——以下诊断材料只覆盖部分运行，引用须更加审慎。"
+)
+
+
 REACT_CONTAMINATED_RETRY_MSG = (
     "【格式错误】你上一条输出不是合格的章节正文（疑似系统提示泄漏、工具调用残留或采访超时提示）。"
     '请立即以 "Final Answer:" 开头，只输出本章节的中文正文：用研究材料中的可验证事实与 [S#]，'
@@ -1673,6 +1692,8 @@ class ReportAgent:
         # EXECPLAN2 I-3-2: 模拟量化信号包（确定性接地下限），懒构建一次后缓存；
         # 关闭 REPORT_SIGNAL_PACK 时始终为空串，_prepend_research_background 自动跳过（行为不变）。
         self._signal_pack = ""
+        # REPORT-5：最近一次构建信号包时的健康门裁定 {'health', 'suppressed'}；门关闭或尚未构建时为 None。
+        self._signal_pack_health: Optional[Dict[str, Any]] = None
         # 预测市场信号包（Polymarket 公开 Gamma API，keyless）：市场隐含概率作为**校准锚点**
         # 注入章节/骨架/二元预测提示词。优先读研究 handoff 的 prediction_markets.json，
         # 缺失时经 PolymarketClient 现抓。懒构建一次后缓存；无数据/关闭
@@ -2444,15 +2465,32 @@ class ReportAgent:
                       or "diagnostic_only").strip().lower()
         if _effect == "no_update":
             return ""
+        # REPORT-5（REPORT_SIGNAL_PACK_HEALTH_GATE，默认开，fail-closed）：按 run_summary.json 的
+        # simulation_health 跳过种子回声块（_SIGNAL_PACK_HEALTH_SKIPS），裁定记入
+        # self._signal_pack_health（_finalize_structured_forecast 落 quality.signal_pack_health）。
+        # 无 summary / 读取失败 → health=None，与 ok 一样按旧行为组包（逐字节不变）。
+        _health: Optional[str] = None
+        _skip: Tuple[str, ...] = ()
+        if getattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", True):
+            _health = self._run_summary_health()
+            _skip = _SIGNAL_PACK_HEALTH_SKIPS.get(_health or "", ())
+            # 情景差异块只在有基线模拟时才会构建，没有基线就谈不上被跳过。
+            self._signal_pack_health = {
+                "health": _health,
+                "suppressed": [b for b in _skip
+                               if b != "scenario_diff" or self.base_simulation_id],
+            }
         parts: List[str] = []
         # 0) NEXTSTEPS P1-1: 决策通道演化出的「结果世界态」——建模出的 P(outcome)（按情景份额），
         # 比声量份额更接近真实结果。仅开启 SIM_DECISION_CHANNEL 时存在；置于最前（最权威）。
-        try:
-            ws_blk = self._world_state_block()
-            if ws_blk:
-                parts.append(ws_blk)
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"信号包 world_state 读取失败（忽略）: {e}")
+        # hollow 时保留（块内自带有效性裁定行）；errored 时跳过。
+        if "world_state" not in _skip:
+            try:
+                ws_blk = self._world_state_block()
+                if ws_blk:
+                    parts.append(ws_blk)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"信号包 world_state 读取失败（忽略）: {e}")
         # 0b) NEXTSTEPS P3-8: 关系演化投影到预测时点（保守模型先验，显式标注=非证据）。
         # 默认关（REPORT_PROJECTED_EDGES）；标注 contingent 的纽带是情景分叉支点。
         if getattr(Config, "REPORT_PROJECTED_EDGES", False):
@@ -2465,29 +2503,31 @@ class ReportAgent:
                 logger.warning(f"信号包 projected_edges 失败（忽略）: {e}")
         # 1) 量化结果——WAVE9：默认把原始动作计数确定性转写为定性「议程设置力分层」再注入
         # （REPORT_SIGNAL_PACK_QUALITATIVE，默认开）；转写失败或旗标关闭回退原始文本（截断 ~3600 字）。
-        try:
-            outcomes = self.zep_tools.simulation_outcomes(self.simulation_id, top_n=8)
-            if outcomes and not outcomes.strip().startswith("（"):
-                if getattr(Config, "REPORT_SIGNAL_PACK_QUALITATIVE", True):
-                    tiers = salience_tiers_from_outcomes(outcomes)
-                    if tiers:
-                        parts.append(tiers)
-                    elif not _actor_counts_flat(_parse_outcome_actors(outcomes)):
-                        # 转写失败（解析不出行为者）才回退原始文本（历史行为）；LOOP-015：
-                        # 计数持平判空 = 无信号，整块自抑制——绝不回退原始动作计数，
-                        # 那正是 WAVE9 定性转写要挡住的机制数字泄漏。
+        if "simulation_outcomes" not in _skip:
+            try:
+                outcomes = self.zep_tools.simulation_outcomes(self.simulation_id, top_n=8)
+                if outcomes and not outcomes.strip().startswith("（"):
+                    if getattr(Config, "REPORT_SIGNAL_PACK_QUALITATIVE", True):
+                        tiers = salience_tiers_from_outcomes(outcomes)
+                        if tiers:
+                            parts.append(tiers)
+                        elif not _actor_counts_flat(_parse_outcome_actors(outcomes)):
+                            # 转写失败（解析不出行为者）才回退原始文本（历史行为）；LOOP-015：
+                            # 计数持平判空 = 无信号，整块自抑制——绝不回退原始动作计数，
+                            # 那正是 WAVE9 定性转写要挡住的机制数字泄漏。
+                            parts.append(outcomes[:3600])
+                    else:
                         parts.append(outcomes[:3600])
-                else:
-                    parts.append(outcomes[:3600])
-        except Exception as e:  # noqa: BLE001 — 信号包为可选增强，失败仅告警不影响主流程
-            logger.warning(f"信号包 simulation_outcomes 计算失败（忽略）: {e}")
+            except Exception as e:  # noqa: BLE001 — 信号包为可选增强，失败仅告警不影响主流程
+                logger.warning(f"信号包 simulation_outcomes 计算失败（忽略）: {e}")
         # 2) 派系/联盟结构——RQ-4：截断到 ~1600 字
-        try:
-            coalitions = self.zep_tools.coalition_map(self.graph_id, self.simulation_id)
-            if coalitions and not coalitions.strip().startswith("（"):
-                parts.append(coalitions[:1600])
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"信号包 coalition_map 计算失败（忽略）: {e}")
+        if "coalition_map" not in _skip:
+            try:
+                coalitions = self.zep_tools.coalition_map(self.graph_id, self.simulation_id)
+                if coalitions and not coalitions.strip().startswith("（"):
+                    parts.append(coalitions[:1600])
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"信号包 coalition_map 计算失败（忽略）: {e}")
         # 2b) R2-KG-7: 因果骨架——chokepoint 多跳因果邻域 + 最强 source→outcome 路径（含
         # 方向/符号/强度/时滞）。RQ-4：默认开（Config.REPORT_CAUSAL_SPINE=True），且 graph 层
         # 多跳遍历有界、任意失败降级为空串，不影响信号包其余部分。
@@ -2499,7 +2539,7 @@ class ReportAgent:
             except Exception as e:  # noqa: BLE001
                 logger.warning(f"信号包 causal_spine 计算失败（忽略）: {e}")
         # 3) 反事实差异（仅情景报告有基线时）——RQ-4：截断到 ~2400 字
-        if self.base_simulation_id:
+        if self.base_simulation_id and "scenario_diff" not in _skip:
             try:
                 diff = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
                 if diff and not diff.strip().startswith("（"):
@@ -2524,7 +2564,36 @@ class ReportAgent:
             "本材料不进入概率生成路径（forecast_effect=diagnostic_only）；\n"
             "❌ 严禁在正文引用动作次数、轮次、动作类型、发帖/点赞/评论等机制细节。"
         )
+        # REPORT-5：非健康运行在包头后紧跟一行状态说明（ok / 未知 → 不加，逐字节不变）。
+        if _health in _SIGNAL_PACK_HEALTH_SKIPS:
+            header += "\n\n" + _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
+        elif _health in _SIGNAL_PACK_PARTIAL_HEALTHS:
+            header += "\n\n" + _SIGNAL_PACK_PARTIAL_NOTE.format(health=_health)
         return header + "\n\n" + "\n\n".join(parts)
+
+    def _run_summary_health(self) -> Optional[str]:
+        """REPORT-5：读本模拟 run_summary.json 的 simulation_health（小写）。
+
+        路径与编排器模拟健康门相同（SimulationRunner.RUN_STATE_DIR/<simulation_id>/run_summary.json，
+        经 contained_child 校验 id）。缺文件 / 解析失败 / 非法 id / 字段缺失或非字符串 → None，
+        调用方按旧行为组包（离线 / API 路径不因缺 summary 而改变）。"""
+        try:
+            from .simulation_runner import SimulationRunner
+            path = os.path.join(
+                contained_child(SimulationRunner.RUN_STATE_DIR,
+                                getattr(self, "simulation_id", None), "simulation"),
+                "run_summary.json")
+            if not os.path.exists(path):
+                return None
+            with open(path, "r", encoding="utf-8") as f:
+                summary = json.load(f)
+        except Exception as e:  # noqa: BLE001 — 读不到健康度即按旧行为（绝不阻断信号包）
+            logger.debug(f"信号包健康门读取 run_summary.json 失败（按无 summary 处理）: {e}")
+            return None
+        health = summary.get("simulation_health") if isinstance(summary, dict) else None
+        if not isinstance(health, str) or not health.strip():
+            return None
+        return health.strip().lower()
 
     def _world_state_block(self) -> str:
         """NEXTSTEPS P1-1: 读取模拟的 world_state_trajectory.json（决策通道产物），渲染**建模出的
@@ -3558,6 +3627,17 @@ class ReportAgent:
                 }
             except Exception as _pse:  # noqa: BLE001 — 观测性记录，绝不影响产物
                 logger.debug(f"记录 prompt_slot_states 失败（忽略）: {_pse}")
+        # REPORT-5：信号包健康门裁定（health + 被跳过的块）随 forecast.json 落盘（additive）。
+        # 门关闭或本次从未构建信号包时属性为 None → 不写，forecast.json 逐字节不变。
+        _sp_health = getattr(self, "_signal_pack_health", None)
+        if _sp_health:
+            try:
+                forecast.setdefault("quality", {})["signal_pack_health"] = {
+                    "health": _sp_health.get("health"),
+                    "suppressed": list(_sp_health.get("suppressed") or []),
+                }
+            except Exception as _sphe:  # noqa: BLE001 — 观测性记录，绝不影响产物
+                logger.debug(f"记录 signal_pack_health 失败（忽略）: {_sphe}")
         # P2-2: 把观察指标随 forecast.json 落盘（供解析调度器对照判别情景）。
         try:
             from ..utils import actors as _actors

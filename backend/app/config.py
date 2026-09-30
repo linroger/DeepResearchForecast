@@ -490,6 +490,14 @@ class Config:
     # REPORT-3：默认开——把确定性 sim 聚合（top actors/volumes/coalition sizes/P(outcome)/scenario diff）
     # 钉进每章作可引用的数字底座，提升引用覆盖、减少探索式工具调用。
     REPORT_SIGNAL_PACK = os.environ.get('REPORT_SIGNAL_PACK', 'True').strip().lower() == 'true'  # I-3-2 每章注入定量信号包
+    # REPORT-5：信号包按 run_summary.json 的 simulation_health 门控（诚实检查，fail-closed，默认开）。
+    # hollow（零有机动作）时去掉动作量/关注聚类派生块（议程设置力分层、派系图、情景差异——它们只是
+    # 种子动作的回声）；errored 再去掉世界态块；图谱派生块（投影纽带、因果骨架）保留；二者都在包头后
+    # 注明「模拟未产出可用行为数据」，无块可留时整包为空。truncated / llm_degraded 保留全部块并附审慎
+    # 提示。结果记入 forecast.json quality.signal_pack_health。ok / 无 summary / 读取失败 → 信号包逐字节
+    # 不变；false → 旧行为（不读 summary、不记 quality）。
+    REPORT_SIGNAL_PACK_HEALTH_GATE = os.environ.get(
+        'REPORT_SIGNAL_PACK_HEALTH_GATE', 'true').strip().lower() == 'true'
     # RQ-4：默认 False→True。基线-情景对比表是 what-if 报告的核心可引用工件；仅在有 base
     # 模拟 + 命中「对比/反事实」章节时注入，缺基线时自动 no-op（degrade-safe）。
     REPORT_COMPARISON_TABLE = os.environ.get('REPORT_COMPARISON_TABLE', 'True').strip().lower() == 'true'  # I-3-4 基线-情景对比表
