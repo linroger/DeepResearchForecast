@@ -9265,11 +9265,16 @@ def _magnitude(value: Any) -> float | None:
     their midpoint, else the first number, a leading minus kept) at the scale
     its words give ("1.2 million" = 1,200,000, "$1.2T" = 1.2e12; in "1.2-1.5
     trillion" the second number's scale also covers a smaller unscaled first
-    one); None without a number."""
+    one); None without a number or for one beyond the float range (a JSON
+    integer like 10**400 overflows ``float``)."""
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return float(value) if math.isfinite(value) else None
+        try:
+            number = float(value)
+        except OverflowError:  # an int beyond the float range
+            return None
+        return number if math.isfinite(number) else None
     text = _join_digit_groups(_number_text(str(value or ""), strip_dates=False))
     found = _number_values_at(text)
     if not found:
@@ -9282,9 +9287,11 @@ def _magnitude(value: Any) -> float | None:
         if first == Decimal(first_token) and second != Decimal(second_token) \
                 and Decimal(first_token) <= Decimal(second_token):
             first *= second / Decimal(second_token)
-        return float((first + second) / 2)
-    number = float(found[0][2][1:])
-    return -number if _NEGATIVE_LEAD_RE.match(text) else number
+        number = float((first + second) / 2)
+    else:
+        number = float(found[0][2][1:])
+        number = -number if _NEGATIVE_LEAD_RE.match(text) else number
+    return number if math.isfinite(number) else None
 
 
 def _stated_in_report(text: str, report_numbers: frozenset[str]) -> bool:
@@ -9311,8 +9318,8 @@ def _checked_bound(value: Any, report_numbers: frozenset[str]) -> tuple[Any, flo
 
 
 def _forecaster_count(value: Any) -> int | None:
-    """A stated forecaster count as an integer >= 2 (a whole number, or text of
-    digits); None for anything else."""
+    """A stated forecaster count as an integer from 2 to 9,999,999 (a whole
+    number, or text of at most 7 digits); None for anything else."""
     if isinstance(value, bool):
         return None
     if isinstance(value, float):
@@ -9320,7 +9327,7 @@ def _forecaster_count(value: Any) -> int | None:
     elif isinstance(value, str):
         text = unicodedata.normalize("NFKC", value).strip().replace(",", "")
         value = int(text) if re.fullmatch(r"\d{1,7}", text) else None
-    return value if isinstance(value, int) and value >= 2 else None
+    return value if isinstance(value, int) and 2 <= value <= 9_999_999 else None
 
 
 def _report_states_count(count: int, report_body: str) -> bool:

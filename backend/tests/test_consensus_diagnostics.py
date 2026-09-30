@@ -240,6 +240,21 @@ def test_n_forecasters_is_kept_only_next_to_a_count_noun():
     assert not lr._report_states_count(40, "n = 40.5")
 
 
+def test_numbers_beyond_the_float_range_are_dropped_not_raised():
+    """A JSON integer like 10**400 overflows float(): only that field is
+    dropped (the row keeps its forecaster), so one bad number no longer
+    raises and costs every row of the run its attribution."""
+    assert lr._magnitude(10 ** 400) is None and lr._magnitude(-(10 ** 400)) is None
+    assert lr._magnitude("1" + "0" * 400) is None and lr._magnitude(10 ** 300) == 1e300
+    numbers = lr.page_number_set(REPORT)
+    row = _row()
+    assert lr.attribute_forecast_row(row, {"forecaster": "Poll", "low": 10 ** 400, "high": "1.2 million",
+                                           "n_forecasters": 10 ** 400}, REPORT, numbers) == [
+        "low", "high", "n_forecasters"]
+    assert row["forecaster"] == "Poll" and not {"low", "high", "n_forecasters"} & set(row)
+    assert lr._forecaster_count(9_999_999) == 9_999_999 and lr._forecaster_count(10_000_000) is None
+
+
 def test_actual_rows_lose_the_added_keys():
     row = _row(value="13,317", value_type="actual", low="stale", range_kind="x")
     dropped = lr.attribute_forecast_row(row, {"forecaster": "Omdia", "low": "38,000", "high": "1.2 million",
@@ -388,10 +403,14 @@ def test_attribution_failure_degrades_safe(tmp_path, bridge, monkeypatch, fixed_
     assert any("forecaster attribution failed" in m for m in plog.of("warn"))
 
 
-def test_forecaster_keys_never_drop_previously_matched_actor_rows():
-    """actor_context matches a quant row to an actor on its JSON text: the
-    added keys can add matches (the forecaster's own actor now sees its
-    forecast), never remove one."""
+def test_forecaster_keys_never_unmatch_a_previously_matched_actor_row():
+    """actor_context matches a quant row to an actor on its JSON text
+    (``_matches_structured_row``).  Attribution only adds keys, and the one
+    value it replaces (analyst, which the bridge otherwise copies from the
+    source) leaves that source in the row, so every row that matched an actor
+    still matches it; the forecaster's own actor now also sees its forecast.
+    Below the 32-row pack cap every previously packed row stays packed (the
+    cap case is the next test)."""
     facts = [
         {"metric": "Humanoid shipments", "value": "250000", "unit": "units", "as_of_date": "2025-06-01",
          "period_end": "2030", "value_type": "forecast", "source": "Reuters",
@@ -411,12 +430,38 @@ def test_forecaster_keys_never_drop_previously_matched_actor_rows():
             {"name": "Reuters"}, {"name": "Morgan Stanley"}, {"name": "CNBC"}]
     gained = []
     for actor in cast:
+        for old_row, new_row in zip(before, after, strict=True):
+            if actor_context._matches_structured_row(old_row, actor):
+                assert actor_context._matches_structured_row(new_row, actor), (actor["name"], old_row["metric"])
         old = [row["metric"] + row["value"] for row in actor_context._relevant_rows(before, actor, 32)]
         new = [row["metric"] + row["value"] for row in actor_context._relevant_rows(after, actor, 32)]
         assert set(old) <= set(new), actor["name"]
         gained += [(actor["name"], key) for key in new if key not in old]
     assert ("Morgan Stanley", "Humanoid shipments446000") in gained      # intended: its own forecast
     assert all(name != "Unitree" for name, _ in gained)                  # actual rows gain nothing
+
+
+def test_at_the_pack_cap_new_forecaster_matches_displace_at_most_as_many_later_rows():
+    """The PREPARE pack keeps an actor's first 32 matched rows in row order
+    (``_relevant_rows``).  When that cap binds, an earlier row that newly
+    matches through its forecaster pushes a later, previously matched row out
+    of the pack: never more rows than it adds, always from the pack's end, and
+    each displaced row still matches the actor."""
+    goldman = {"name": "Goldman Sachs"}
+    gaining = [{"metric": f"Projection {i}", "value": str(100 + i), "unit": "units", "period_end": "2030",
+                "value_type": "forecast", "source": "Reuters", "forecaster": "Goldman Sachs"} for i in range(5)]
+    matching = [{"metric": f"Metric {i}", "value": str(i + 1), "unit": "units", "as_of_date": "2025-12-31",
+                 "value_type": "actual", "source": "Goldman Sachs Research"} for i in range(32)]
+    before = dr.enrich_quantitative_rows(lr.normalize_quant(copy.deepcopy(gaining + matching), []))
+    after = dr.enrich_quantitative_rows(_attributed(gaining + matching, REPORT)[0])
+    old = [row["metric"] for row in actor_context._relevant_rows(before, goldman, 32)]
+    new = [row["metric"] for row in actor_context._relevant_rows(after, goldman, 32)]
+    assert old == [f"Metric {i}" for i in range(32)]
+    assert new == [f"Projection {i}" for i in range(5)] + [f"Metric {i}" for i in range(27)]
+    gained = [metric for metric in new if metric not in old]
+    displaced = [metric for metric in old if metric not in new]
+    assert len(displaced) <= len(gained) and displaced == old[len(old) - len(displaced):]
+    assert all(actor_context._matches_structured_row(row, goldman) for row in after if row["metric"] in displaced)
 
 
 # =============================================================== diagnostics: pure
@@ -506,6 +551,92 @@ def test_a_projection_dated_after_the_as_of_is_excluded():
     assert coarse["excluded"] == [] and coarse["groups"][0]["n_forecasters"] == 2
 
 
+def test_free_text_dates_are_read_and_an_unreadable_as_of_date_fails_closed():
+    """The leakage guard reads as_of_date as the research engine does: a
+    free-text month after the as-of is excluded like an ISO one, a stated
+    date no reading can date is excluded (unparsed_as_of), a blank or
+    placeholder one is an undated vintage; timeline event dates are read
+    the same way."""
+    rows = [_forecast("humanoid shipments", "38000", "Omdia", "2024-07-01"),
+            _forecast("humanoid shipments", "250000", "Goldman Sachs", "2026-05-01"),
+            _forecast("humanoid shipments", "900000", "Leak A", "August 2026"),
+            _forecast("humanoid shipments", "900000", "Leak B", "2026年8月"),
+            _forecast("humanoid shipments", "900000", "Leak C", "2026年底"),
+            _forecast("humanoid shipments", "900000", "Leak D", "FY29"),
+            _forecast("humanoid shipments", "70000", "Undated A", "n/a"),
+            _forecast("humanoid shipments", "80000", "Undated B", ""),
+            _forecast("humanoid shipments", "90000", "Coarse", "July 2026")]
+    timeline = [{"date": "June 2026", "event": "free-text month after the newest vintage"},
+                {"date": "2026年6月", "event": "the same in Chinese"},
+                {"date": "2026年底", "event": "after the as-of"}]
+    diag = ce.build_dispersion_diagnostics(rows, timeline, "2026-07-15")
+    assert diag["excluded"] == [
+        {"metric": "humanoid shipments", "as_of_date": as_of_date, "reason": reason}
+        for as_of_date, reason in (("2026年8月", "after_as_of"), ("2026年底", "after_as_of"),
+                                   ("August 2026", "after_as_of"), ("FY29", "unparsed_as_of"))]
+    (group,) = diag["groups"]
+    assert group["forecasters"] == ["Coarse", "Goldman Sachs", "Omdia", "Undated A", "Undated B"]
+    assert group["max"] == 250000 and group["newest_as_of"] == "July 2026"
+    assert ce.quality_summary(diag)["excluded_n"] == 4
+
+    dated = ce.build_dispersion_diagnostics(rows[:2], timeline, "2026-07-15")
+    assert (dated["groups"][0]["stale"], dated["groups"][0]["events_since"]) == (True, 2)
+    # Without a full as-of day the guard is off: nothing is excluded.
+    assert ce.build_dispersion_diagnostics(rows, timeline, None)["excluded"] == []
+
+
+def test_a_publication_year_is_no_target_year():
+    """The bridge fills ``year`` from as_of_date when a row states no period:
+    such a row never joins a genuine forecast for its publication year."""
+    genuine, published, other = dr.enrich_quantitative_rows([
+        _forecast("humanoid shipments", "20000", "Omdia", "2024-06-01", year="2025"),
+        {"metric": "humanoid shipments", "value": "50000", "unit": "units", "as_of_date": "2025-03-10",
+         "value_type": "forecast", "geography": "Global", "forecaster": "Goldman Sachs", "analyst": "Goldman Sachs"},
+        _forecast("humanoid shipments", "38000", "Omdia", "2024-07-01")])
+    assert published["year"] == 2025 and "period_end" not in published
+    diag = ce.build_dispersion_diagnostics([genuine, published], [], "2026-07-15")
+    assert diag["groups"] == [] and diag["counts"]["no_target_year"] == 1
+    # A year the row states apart from its as_of_date is its target.
+    (group,) = ce.build_dispersion_diagnostics([{**published, "year": 2030}, other], [], "2026-07-15")["groups"]
+    assert group["key"]["target_year"] == 2030 and group["n_forecasters"] == 2
+
+
+def test_the_scale_word_belongs_to_the_number_value_num_reads():
+    """``value_num`` is the value's first range, else its first number; only
+    the scale word right after that number scales it."""
+    assert ce._value_scale("250,000 (1 million by 2035)") == 1.0
+    assert ce._value_scale("1.2-1.5 trillion") == 1e12 and ce._value_scale("$5 to $7bn") == 1e9
+    assert ce._value_scale("$1.2T") == 1e12 and ce._value_scale("1.2T") == 1.0 and ce._value_scale("3000亿元") == 1e8
+    rows = [_forecast("humanoid shipments", "250,000 (1 million by 2035)", "Goldman Sachs", "2025-06-01"),
+            _forecast("humanoid shipments", "38,000", "Omdia", "2024-07-01"),
+            _forecast("humanoid shipments", "1.1-1.3 million", "Bank of America", "2025-04-30")]
+    (group,) = ce.build_dispersion_diagnostics(rows, [], "2026-07-15")["groups"]
+    assert (group["min"], group["median"], group["max"]) == (38000, 250000, 1200000)
+    assert group["spread_ratio"] == pytest.approx(31.5789, abs=1e-4)
+
+
+def test_values_beyond_the_float_range_never_sink_the_payload():
+    """A value that overflows at full scale (or as an int) is counted as
+    no_value; statistics of huge finite values stay finite; every other row
+    still groups."""
+    rows = [_forecast("capex", "1", "A", "2025-01", unit="USD trillion"),
+            _forecast("capex", "2", "B", "2025-02", unit="USD trillion"),
+            _forecast("capex", "3", "C", "2025-03", unit="USD trillion", low="1e300", high="1e301"),
+            _forecast("capex", "4", "D", "2025-04", unit="USD trillion")]
+    rows[0]["value_num"], rows[3]["value_num"] = 1e300, 10 ** 400
+    diag = ce.build_dispersion_diagnostics(rows, [], "2026-07-15")
+    assert "error" not in diag and diag["counts"]["no_value"] == 2 and diag["ranges"] == []
+    (group,) = diag["groups"]
+    assert group["forecasters"] == ["B", "C"] and group["max"] == 3_000_000_000_000
+    huge = [_forecast("capex", "1", "A", "2025-01"), _forecast("capex", "1", "B", "2025-01")]
+    huge[0]["value_num"], huge[1]["value_num"] = 1.5e308, 1.7e308
+    (group,) = ce.build_dispersion_diagnostics(huge, [], "2026-07-15")["groups"]
+    assert group["median"] == pytest.approx(1.6e308) and group["spread_ratio"] == pytest.approx(1.1333, abs=1e-4)
+    huge[0]["value_num"] = 1e-300
+    (group,) = ce.build_dispersion_diagnostics(huge, [], "2026-07-15")["groups"]
+    assert group["spread_ratio"] is None                                  # max/min overflows: no ratio
+
+
 def test_delloro_vintages_give_an_up_revision():
     rows = [_forecast("data center capex", "1.2", "Dell'Oro", "2024-02", unit="USD trillion", year="2029"),
             _forecast("data center capex", ">3", "Dell'Oro", "2026-01", unit="USD trillion", year="2029"),
@@ -585,6 +716,14 @@ def test_malformed_rows_never_raise_and_the_sha_ignores_key_order():
     body = {key: value for key, value in diag.items() if key != "sha256"}
     canonical = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
     assert diag["sha256"] == hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    # Range entries that tie on every other field still order the same way.
+    tied = [_forecast("output", "250000", "Poll", "2025-01", low="38,000", high="1.2 million", **extra)
+            for extra in ({"n_forecasters": 3}, {"n_forecasters": 7}, {"n_forecasters": -1}, {},
+                          {"range_kind": "stated_range"}, {"n_forecasters": 3, "range_kind": "across_forecasters"})]
+    forward = ce.build_dispersion_diagnostics(tied, [], "2026-07-15")
+    backward = ce.build_dispersion_diagnostics(tied[::-1], [], "2026-07-15")
+    assert len(forward["ranges"]) == 6 and forward == backward
 
 
 def test_an_unexpected_failure_returns_an_error_payload(monkeypatch):

@@ -14,17 +14,29 @@ The rules are DRF constructions (the dispersion threshold is uncalibrated):
 
 * eligible rows are projections (:func:`app.utils.quant_typing.quant_class`:
   the research typing stamp, else the value_type rule) with a parseable
-  ``value_num``;
-* leakage guard: a projection whose ``as_of_date`` begins after the as-of
-  date is excluded (``after_as_of``), fail closed even when that date is a
-  target date misplaced there (the publication date is then unknown);
+  ``value_num`` that stays finite at full scale;
+* dates (``as_of_date``, timeline ``date``) are read as the research engine
+  reads them (quant_typing's copy of its period parser): the strict forms,
+  then a whole free-text month, quarter or half ("August 2026", "2026年8月",
+  "2026年底"), then the years free text names;
+* leakage guard (with a full as-of day), fail closed: a projection whose
+  ``as_of_date`` begins after the as-of date is excluded (``after_as_of``),
+  even when that date is a target date misplaced there (the publication date
+  is then unknown), and so is one whose ``as_of_date`` states something no
+  reading can date (``unparsed_as_of``: "FY29"); a blank or placeholder
+  ("n/a", "unknown") ``as_of_date`` is an undated vintage;
 * group key: the metric family, else the metric without years, forecast
   words and the row's own forecaster/analyst tokens; the region, else the
-  geography; the target year (target_date, else period_end, else year); the
-  unit (case, punctuation and plural insensitive, its scale word dropped);
-* values are ``value_num`` at full scale: the first scale word of ``value``
-  ("1.2 million", "$1.2T"), else of ``unit`` ("USD billion"), multiplies it,
-  so "1.2 million" units and "250,000" units compare;
+  geography; the target year (target_date, else period_end, else the
+  bridge's ``year`` unless as_of_date names that year: the bridge fills
+  ``year`` from as_of_date when a row states no period, and a publication
+  year is no target); the unit (case, punctuation and plural insensitive,
+  its scale word dropped);
+* values are ``value_num`` at full scale: the scale word right after the
+  number ``value_num`` is read from (the bridge's reading: the first range,
+  else the first number; "1.2 million", "$1.2T", "1.2-1.5 trillion"), else
+  the one of ``unit`` ("USD billion"), multiplies it, so "1.2 million" units
+  and "250,000" units compare and "250,000 (1 million by 2035)" stays 250,000;
 * a group is reported when it has >= 2 distinct forecasters (forecaster,
   else analyst, else source).  Each forecaster adds one point, the median of
   its newest vintage, so a revised forecast never counts twice;
@@ -45,24 +57,25 @@ compact separators, NaN rejected).  Pure; nothing here raises.
 
 from __future__ import annotations
 
-import calendar
 import datetime as _dt
 import itertools
 import math
 import re
-import statistics
 import unicodedata
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from ..utils.canonical_json import canonical_json_sha256
-from ..utils.quant_typing import PROJECTED, quant_class
+from ..utils.quant_typing import _NO_PERIOD, _loose_period_bounds, PROJECTED, quant_class
 
 SCHEMA = "drf.consensus_diagnostics/v1"
 FILENAME = "consensus_evidence.json"
 DEFAULT_STALE_DAYS = 120
 # A group whose max/min spread is at least this counts as wide (uncalibrated DRF constant).
 WIDE_SPREAD_RATIO = 2.0
+# Leakage-guard exclusion reasons: published after the as-of date, or a
+# stated publication date no reading can date.
 AFTER_AS_OF = "after_as_of"
+UNPARSED_AS_OF = "unparsed_as_of"
 
 # Metric words that name the forecast rather than the quantity.
 _FORECAST_WORDS = frozenset({
@@ -85,22 +98,23 @@ _RATE_METRIC_TOKENS = frozenset({
     "share", "rate", "growth", "cagr", "probability", "penetration", "margin", "yield", "efficiency",
     "utilization", "utilisation", "ratio",
 })
-_DAY_RE = re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?",
-                     re.I)
-_MONTH_RE = re.compile(r"(\d{4})-(\d{1,2})")
-_PART_RE = re.compile(r"(\d{4})[-\s]?([QH])([1-4])", re.I)
-_YEAR_ONLY_RE = re.compile(r"(?:FY\s?)?(\d{4})", re.I)
 _LOOSE_NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
-# Scale words: after a number of ``value`` (a single letter only after a
-# currency sign, as the research number checks read it) or as a unit token.
+# Scale words: after the number value_num is read from (a single letter only
+# after a currency sign, as the research number checks read it) or as a unit token.
 _SCALE_FACTORS = {
     "thousand": 1e3, "million": 1e6, "mn": 1e6, "mln": 1e6, "billion": 1e9, "bn": 1e9, "bln": 1e9,
     "trillion": 1e12, "tn": 1e12, "trn": 1e12, "万": 1e4, "亿": 1e8, "万亿": 1e12,
     "k": 1e3, "m": 1e6, "b": 1e9, "t": 1e12,
 }
-_VALUE_SCALE_RE = re.compile(
-    r"\d\s*(?:(?P<word>thousand|million|billion|trillion|mn|mln|bn|bln|tn|trn)s?\b|(?P<cjk>万亿|亿|万))"
-    r"|[$€£¥]\s*\d[\d,]*(?:\.\d+)?\s*(?P<letter>[kmbt])\b", re.I)
+# The number the bridge's value_num is read from (_quant_value_num: the first
+# range "a-b" / "a to b", else the first number), with the scale word right
+# after it; a range's trailing word covers both numbers ("1.2-1.5 trillion").
+_VALUE_NUM = r"\d[\d,]*(?:\.\d+)?"
+_VALUE_SCALE_AFTER = (r"(?:\s*(?:(?P<word>thousand|million|billion|trillion|mn|mln|bn|bln|tn|trn)s?\b"
+                      r"|(?P<cjk>万亿|亿|万)|(?P<letter>[kmbt])\b))?")
+_VALUE_RANGE_RE = re.compile(rf"(?P<currency>[$€£¥])?\s*{_VALUE_NUM}\s*(?:[-–—~]|to)\s*[$€£¥]?\s*{_VALUE_NUM}"
+                             rf"{_VALUE_SCALE_AFTER}", re.I)
+_VALUE_FIRST_RE = re.compile(rf"(?P<currency>[$€£¥])?\s*{_VALUE_NUM}{_VALUE_SCALE_AFTER}", re.I)
 _UNIT_SCALE_TOKENS = frozenset({"thousand", "million", "mn", "mln", "billion", "bn", "bln", "trillion", "tn", "trn",
                                 "万", "亿", "万亿"})
 
@@ -110,41 +124,16 @@ _Key = Tuple[str, str, Optional[int], str]
 
 # ── Parsing ──────────────────────────────────────────────────────────────────
 
-def _date_bounds(value: Any) -> Tuple[_Date, _Date]:
-    """``(first day, last day)`` of a stated date or period (YYYY-MM-DD with an
-    optional time, YYYY-MM, YYYY-Qn, YYYY-Hn, YYYY or FYyyyy); ``(None, None)``
-    for anything else."""
-    if isinstance(value, _dt.datetime):
-        return value.date(), value.date()
-    if isinstance(value, _dt.date):
-        return value, value
-    text = value.strip() if isinstance(value, str) else ""
-    try:
-        day = _DAY_RE.fullmatch(text)
-        if day:
-            found = _dt.date(int(day.group(1)), int(day.group(2)), int(day.group(3)))
-            return found, found
-        month = _MONTH_RE.fullmatch(text)
-        if month:
-            year, number = int(month.group(1)), int(month.group(2))
-            return (_dt.date(year, number, 1),
-                    _dt.date(year, number, calendar.monthrange(year, number)[1]))
-        part = _PART_RE.fullmatch(text)
-        if part:
-            year, kind, index = int(part.group(1)), part.group(2).upper(), int(part.group(3))
-            months = 3 if kind == "Q" else 6
-            if index * months > 12:
-                return None, None
-            last = index * months
-            return (_dt.date(year, last - months + 1, 1),
-                    _dt.date(year, last, calendar.monthrange(year, last)[1]))
-        year_only = _YEAR_ONLY_RE.fullmatch(text)
-        if year_only:
-            year = int(year_only.group(1))
-            return _dt.date(year, 1, 1), _dt.date(year, 12, 31)
-    except ValueError:  # month 13, Feb 30, year 0
-        return None, None
-    return None, None
+def _date_text(value: Any) -> str:
+    """A date field as one line of text (a non-string as its text); "" when missing."""
+    return " ".join(("" if value is None else str(value)).split())
+
+
+def _states_date(text: str) -> bool:
+    """True when a date field states something: not blank, not punctuation
+    only and not a placeholder ("n/a", "unknown": quant_typing's no-period
+    words)."""
+    return any(ch.isalnum() for ch in text) and text.casefold() not in _NO_PERIOD
 
 
 def _as_of_day(value: Any) -> _Date:
@@ -154,23 +143,18 @@ def _as_of_day(value: Any) -> _Date:
         return value.date()
     if isinstance(value, _dt.date):
         return value
-    first, last = _date_bounds(value)
+    first, last = _loose_period_bounds(_date_text(value))
     return first if first is not None and first == last else None
 
 
 def _number(value: Any) -> Optional[float]:
     """A finite number from a number or numeric text (thousands commas
     allowed); None otherwise."""
-    if isinstance(value, bool):
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
         return None
-    if isinstance(value, (int, float)):
-        number = float(value)
-    elif isinstance(value, str):
-        try:
-            number = float(value.strip().replace(",", ""))
-        except ValueError:
-            return None
-    else:
+    try:
+        number = float(value.strip().replace(",", "") if isinstance(value, str) else value)
+    except (OverflowError, ValueError):  # not a number, or an int beyond the float range
         return None
     return number if math.isfinite(number) else None
 
@@ -191,7 +175,8 @@ def _bound(value: Any, unit_scale: float) -> Optional[float]:
     if number is None:
         return None
     own = _value_scale(value)
-    return number * (own if own != 1.0 else unit_scale)
+    number *= own if own != 1.0 else unit_scale
+    return number if math.isfinite(number) else None
 
 
 def _clean(value: Any, limit: int = 200) -> str:
@@ -222,14 +207,18 @@ def _unit_and_scale(value: Any) -> Tuple[str, float]:
 
 
 def _value_scale(value: Any) -> float:
-    """The factor of the first scale word after a number of a text ``value``; 1 without one."""
+    """The factor of the scale word right after the number a text ``value``
+    is read from (its first range, else its first number: the bridge's
+    value_num), a single letter only after a currency sign; 1 without one."""
     if not isinstance(value, str):
         return 1.0
-    found = _VALUE_SCALE_RE.search(unicodedata.normalize("NFKC", value))
+    text = unicodedata.normalize("NFKC", value)
+    found = _VALUE_RANGE_RE.search(text) or _VALUE_FIRST_RE.search(text)
     if found is None:
         return 1.0
-    word = found.group("word") or found.group("cjk") or found.group("letter")
-    return _SCALE_FACTORS[word.casefold()]
+    letter = found.group("letter") if found.group("currency") else None
+    word = found.group("word") or found.group("cjk") or letter
+    return _SCALE_FACTORS[word.casefold()] if word else 1.0
 
 
 def _norm_metric(row: Mapping[str, Any]) -> str:
@@ -246,17 +235,20 @@ def _norm_metric(row: Mapping[str, Any]) -> str:
 
 def _target_year(row: Mapping[str, Any]) -> Optional[int]:
     """The year a projection is for: the latest year target_date names, else
-    period_end, else the row's ``year``; None without one."""
+    period_end, else the row's ``year`` unless as_of_date names that year (the
+    bridge fills ``year`` from as_of_date when a row states no period: a
+    publication year is no target); None without one."""
     for key in ("target_date", "period_end"):
         years = [int(year) for year in _YEAR_RE.findall(str(row.get(key) or ""))]
         if years:
             return max(years)
     year = row.get("year")
     if isinstance(year, str) and re.fullmatch(r"(?:19|20|21)\d{2}", year.strip()):
-        return int(year)
-    if isinstance(year, int) and not isinstance(year, bool) and 1900 <= year <= 2199:
-        return year
-    return None
+        year = int(year)
+    if not (isinstance(year, int) and not isinstance(year, bool) and 1900 <= year <= 2199):
+        return None
+    published = {int(named) for named in _YEAR_RE.findall(_date_text(row.get("as_of_date")))}
+    return None if year in published else year
 
 
 def _forecaster(row: Mapping[str, Any]) -> str:
@@ -272,6 +264,14 @@ def _is_level(metric: str, unit: str) -> bool:
     """True unless the unit or the metric marks a rate, share or percentage."""
     return not (set(unit.split()) & _RATE_UNIT_TOKENS or "%" in unit
                 or set(metric.split()) & _RATE_METRIC_TOKENS)
+
+
+def _median(values: Iterable[float]) -> float:
+    """:func:`statistics.median` that halves before adding, so the middle
+    pair of two huge finite values never overflows (the same result otherwise)."""
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    return ordered[middle] if len(ordered) % 2 else ordered[middle - 1] / 2 + ordered[middle] / 2
 
 
 def _plain(number: float) -> Any:
@@ -294,7 +294,7 @@ def _vintages(entries: List[Dict[str, Any]]) -> List[Tuple[Dict[str, Any], float
     out: List[Tuple[Dict[str, Any], float]] = []
     for _, same in itertools.groupby(dated, key=lambda e: (e["as_of_first"], e["as_of_last"])):
         vintage = list(same)
-        out.append((vintage[0], statistics.median(e["value"] for e in vintage)))
+        out.append((vintage[0], _median(e["value"] for e in vintage)))
     return out
 
 
@@ -313,7 +313,7 @@ def _point(entries: List[Dict[str, Any]]) -> float:
     """A forecaster's point: the median of its newest vintage (all its rows when undated)."""
     vintages = _vintages(entries)
     if not vintages:
-        return statistics.median(e["value"] for e in entries)
+        return _median(e["value"] for e in entries)
     return vintages[-1][1]
 
 
@@ -344,19 +344,24 @@ def _build(quantitative: Any, timeline: Any, as_of: Any, stale_days: int) -> Dic
         if quant_class(row, as_of_day) != PROJECTED:
             continue
         counts["projected"] += 1
-        as_of_text = _clean(row.get("as_of_date"), 40)
-        first, last = _date_bounds(as_of_text)
-        if as_of_day is not None and first is not None and first > as_of_day:
-            excluded.append({"metric": _clean(row.get("metric")), "as_of_date": as_of_text, "reason": AFTER_AS_OF})
-            continue
+        date_text = _date_text(row.get("as_of_date"))
+        as_of_text = date_text[:40]
+        first, last = _loose_period_bounds(date_text)
+        if as_of_day is not None:
+            reason = (AFTER_AS_OF if first is not None and first > as_of_day
+                      else UNPARSED_AS_OF if first is None and _states_date(date_text) else None)
+            if reason:
+                excluded.append({"metric": _clean(row.get("metric")), "as_of_date": as_of_text, "reason": reason})
+                continue
         value = _number(row.get("value_num"))
-        if value is None:
+        unit, unit_scale = _unit_and_scale(row.get("unit"))
+        if value is not None:
+            value_scale = _value_scale(row.get("value"))
+            value *= value_scale if value_scale != 1.0 else unit_scale
+        if value is None or not math.isfinite(value):   # unparsed, or beyond the float range at full scale
             counts["no_value"] += 1
             continue
         counts["eligible"] += 1
-        unit, unit_scale = _unit_and_scale(row.get("unit"))
-        value_scale = _value_scale(row.get("value"))
-        value *= value_scale if value_scale != 1.0 else unit_scale
         family = _norm_text(row.get("metric_family"))
         key_metric = family or _norm_metric(row)
         year = _target_year(row)
@@ -380,7 +385,7 @@ def _build(quantitative: Any, timeline: Any, as_of: Any, stale_days: int) -> Dic
             "value": value, "name": name, "forecaster_key": _norm_text(name), "as_of_text": as_of_text,
             "as_of_first": first, "as_of_last": last})
 
-    event_days = sorted(day for day in (_date_bounds(_clean(event.get("date"), 40))[0]
+    event_days = sorted(day for day in (_loose_period_bounds(_date_text(event.get("date")))[0]
                                         for event in (timeline if isinstance(timeline, list) else [])
                                         if isinstance(event, Mapping)) if day is not None)
     groups: List[Dict[str, Any]] = []
@@ -397,6 +402,7 @@ def _build(quantitative: Any, timeline: Any, as_of: Any, stale_days: int) -> Dic
             continue
         points = [_point(entries) for entries in by_forecaster.values()]
         low, high = min(points), max(points)
+        ratio = high / low if low > 0 and _is_level(key[0], key[3]) else None
         dated = sorted((e for e in buckets[key] if e["as_of_first"] is not None), key=_vintage_order)
         stale, events_since = _staleness(max((e["as_of_last"] for e in dated), default=None), as_of_day,
                                          event_days, stale_days)
@@ -405,8 +411,8 @@ def _build(quantitative: Any, timeline: Any, as_of: Any, stale_days: int) -> Dic
             "n_rows": len(buckets[key]),
             "n_forecasters": len(by_forecaster),
             "forecasters": sorted(names.values(), key=lambda name: (name.casefold(), name)),
-            "min": _plain(low), "max": _plain(high), "median": _plain(statistics.median(points)),
-            "spread_ratio": round(high / low, 4) if low > 0 and _is_level(key[0], key[3]) else None,
+            "min": _plain(low), "max": _plain(high), "median": _plain(_median(points)),
+            "spread_ratio": round(ratio, 4) if ratio is not None and math.isfinite(ratio) else None,
             "oldest_as_of": dated[0]["as_of_text"] if dated else None,
             "newest_as_of": dated[-1]["as_of_text"] if dated else None,
             "stale": stale,
@@ -414,8 +420,11 @@ def _build(quantitative: Any, timeline: Any, as_of: Any, stale_days: int) -> Dic
             "revisions": key_revisions,
         })
     excluded.sort(key=lambda item: (item["metric"], item["as_of_date"], item["reason"]))
+    # Every field of a range entry, so the order (and the sha256) never depends on the row order.
     ranges.sort(key=lambda item: (item["metric"], item["region"], item["target_year"] or 0, item["unit"],
-                                  item["forecaster"], item["low"], item["high"], item["row_metric"]))
+                                  item["forecaster"], item["low"], item["high"], item["row_metric"],
+                                  (item["n_forecasters"] is not None, item["n_forecasters"] or 0),
+                                  item["range_kind"] or ""))
     return {
         "schema": SCHEMA,
         "as_of": as_of_day.isoformat() if as_of_day else None,
