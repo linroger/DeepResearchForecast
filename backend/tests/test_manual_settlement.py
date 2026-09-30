@@ -18,12 +18,15 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 import scripts.forecast_tools as tools
+import scripts.resolution_monitor as mon
 from app.config import Config
 from app.services import forecast_ledger as fl
 from app.services import forecast_resolution as fr
 from app.services.backtest import calibration_report
 from app.services.report_agent import ReportManager
+from app.utils.prediction_markets import _parse_resolution
 from tests.test_forecast_resolution import _forecast, _write_sealed_report
+from tests.test_resolution_monitor import _exact_anchored
 from tests.test_sdk_publication_barrier import _save_report
 
 SCENARIOS = [{"name": "Status quo", "probability": 0.6, "resolution_criteria": "No change."},
@@ -185,6 +188,16 @@ def test_cli_rejects_unmatched_missing_or_future(capsys, ledger, reports):
         assert (code, out) == (2, None), label
         assert err.startswith("error:"), label
         assert _resolutions_bytes(ledger) is None, label
+    # --binary never names the scenario set (nor its reserved forecast id).
+    for name in ("scenario", "__scenarios__"):
+        code, out, err = _resolve(capsys, ledger, "--binary", name, "--outcome", "YES",
+                                  "--known-at", KNOWN_AT, "--evidence", URL)
+        assert (code, out) == (2, None) and "--scenario" in err, name
+    # Invalid input is exit 2 even for a report without a settleable target.
+    code, out, err = _resolve(capsys, ledger, "--scenario", "Status quo", "--known-at", future,
+                              "--evidence", URL, report_id="unknown-report")
+    assert (code, out) == (2, None) and "future" in err
+    assert _resolutions_bytes(ledger) is None
     # No settleable target: exit 4 and nothing written either.
     for report_id in ("unknown-report", "r-ensemble"):
         if report_id == "r-ensemble":
@@ -319,6 +332,114 @@ def test_standing_events_leaves_other_rows_untouched():
     assert item["resolution_status"] == "conflict"
 
 
+def _market_resolution(market_id, outcome, *, closed_time="2025-07-01T15:30:00Z"):
+    """A settled Gamma market (the real parser), resolved YES or NO."""
+    prices = '["1","0"]' if outcome == "YES" else '["0","1"]'
+    return _parse_resolution({"id": market_id, "outcomes": '["Yes","No"]',
+                              "outcomePrices": prices, "closed": True,
+                              "umaResolutionStatus": "resolved", "closedTime": closed_time,
+                              "endDate": "2025-06-30T12:00:00Z"})
+
+
+def _due(d, processed_at):
+    targets, _ = mon.settle_targets(fl.read_ledger(d), 10, fl.read_market_resolutions(d),
+                                    processed_at=processed_at, grace_days=180)
+    return {row["report_id"]: [binary["id"] for binary in due] for row, due in targets}
+
+
+def test_settle_sweep_checks_attested_anchored_binary_against_its_market(capsys, ledger):
+    """An attestation never makes an anchored item final for the settle sweep: the market
+    is still fetched, and an eligible settlement that disagrees folds into a conflict."""
+    anchored = _exact_anchored("F1", "X happens by 2025-06-30.", "Resolves YES if X by 2025-06-30.",
+                               market_id="m-1", end_date="2025-06-30T12:00:00Z", horizon_year=2025)
+    forecast = {"horizon": "2025", "scenarios": copy.deepcopy(SCENARIOS),
+                "binary_forecasts": [anchored]}
+    for report_id in ("r1", "r2"):
+        _commit(ledger, report_id, as_of="2025-01-01", committed_at="2025-01-02T08:00:00+00:00",
+                forecast=forecast)
+        assert _resolve(capsys, ledger, "--binary", "F1", "--outcome", "YES", "--known-at",
+                        "2025-07-01T00:00:00Z", "--evidence", URL, report_id=report_id)[0] == 0
+    now = datetime.now(timezone.utc).isoformat()
+    assert _due(ledger, now) == {"r1": ["F1"], "r2": ["F1"]}
+    assert fr.recorded_items(fl.read_market_resolutions(ledger)) == set()
+    assert fr.attested_items(fl.read_market_resolutions(ledger)) == {("r1", "F1"), ("r2", "F1")}
+
+    # r1: the market settled NO. Its eligible event is appended beside the attestation.
+    existing = fl.read_market_resolutions(ledger)
+    targets = {row["report_id"]: (row, due) for row, due in mon.settle_targets(
+        fl.read_ledger(ledger), 10, existing, processed_at=now, grace_days=180)[0]}
+    row, due = targets["r1"]
+    out = fr.settle_binaries("r1", due, {"m-1": _market_resolution("m-1", "NO")},
+                             target_meta=mon._commit_target_meta(row), processed_at=now,
+                             grace_days=180, existing_events=existing, answered_market_ids={"m-1"})
+    (event,) = out["events"]
+    assert (event["outcome"], event["scoring_eligible"], out["terminal"]) == ("NO", True, [])
+    assert fl.append_settlement_event(event, d=ledger) is not None
+    item = fr.fold_binary_items(fl.read_market_resolutions(ledger))[("r1", "F1")]
+    assert (item["resolution_status"], item["conflicting_outcomes"]) == ("conflict", ["NO", "YES"])
+    assert fr.admissible(item) == (False, "conflict")
+
+    # r2: the source answered but the market never settled; past its grace the terminal
+    # closes the market channel, while the attestation still decides the item.
+    row, due = targets["r2"]
+    out = fr.settle_binaries("r2", due, {}, target_meta=mon._commit_target_meta(row),
+                             processed_at=now, grace_days=180, existing_events=existing,
+                             answered_market_ids={"m-1"})
+    (terminal,) = out["terminal"]
+    assert fl.append_settlement_event(terminal, d=ledger) is not None
+    item = fr.fold_binary_items(fl.read_market_resolutions(ledger))[("r2", "F1")]
+    assert (item["source_kind"], item["outcome"], item["n_events"]) == ("manual", "YES", 2)
+    assert fr.admissible(item) == (True, None)
+    # Both market channels are closed now: nothing is due any more.
+    assert _due(ledger, now) == {}
+
+
+def test_standing_attestation_spares_only_an_unanchored_item_its_terminal(capsys, ledger):
+    """An attested unanchored binary has nothing left for the sweep; once the attestation is
+    retracted it is unsettled again and gets its grace terminal."""
+    row = _commit(ledger)
+    now = datetime.now(timezone.utc).isoformat()
+    assert _due(ledger, now) == {"r1": ["F1", "F3"]}  # both past their 2025 grace
+    assert _resolve(capsys, ledger, "--binary", "F1", "--outcome", "YES", "--known-at",
+                    KNOWN_AT, "--evidence", URL)[0] == 0
+    assert _due(ledger, now) == {"r1": ["F3"]}
+    # A per-report run (all binaries, not only the due ones) writes no terminal for F1 either.
+    out = fr.settle_binaries("r1", row["binary_forecasts"], {},
+                             target_meta=mon._commit_target_meta(row), processed_at=now,
+                             existing_events=fl.read_market_resolutions(ledger))
+    assert [event["forecast_id"] for event in out["terminal"]] == ["F3"]
+
+    assert _resolve(capsys, ledger, "--binary", "F1", "--retract", "--supersedes", "manual",
+                    "--evidence", NOTE)[0] == 0
+    assert fr.attested_items(fl.read_market_resolutions(ledger)) == set()
+    assert _due(ledger, now) == {"r1": ["F1", "F3"]}
+    out = fr.settle_binaries("r1", row["binary_forecasts"], {},
+                             target_meta=mon._commit_target_meta(row), processed_at=now,
+                             existing_events=fl.read_market_resolutions(ledger))
+    assert [event["forecast_id"] for event in out["terminal"]] == ["F1", "F3"]
+    for event in out["terminal"]:
+        assert fl.append_settlement_event(event, d=ledger) is not None
+    item = fr.fold_binary_items(fl.read_market_resolutions(ledger))[("r1", "F1")]
+    assert (item["resolution_status"], item["scoring_eligible"]) == ("terminal", False)
+    assert _due(ledger, now) == {}
+
+
+def test_monitor_shares_the_settlement_helpers(monkeypatch):
+    """One implementation each: the monitor's event append, report-row reader and meta.json
+    stamp reader are the ones the manual path uses, so their field lists never drift."""
+    assert mon._report_ledger_rows is fr.report_ledger_rows
+    assert mon._local_stamp_to_utc is fr.local_stamp_to_utc
+    calls = []
+
+    def append(event, *, d=None):
+        calls.append((event, d))
+        return dict(event)
+
+    monkeypatch.setattr(fl, "append_settlement_event", append)
+    assert mon._append_event({"report_id": "r1"}, "/ledger") == {"report_id": "r1"}
+    assert calls == [({"report_id": "r1"}, "/ledger")]
+
+
 def test_manual_builders_fail_closed():
     target = {"report_id": "r1", "commit_id": "c-1", "as_of": "2025-06-01",
               "created_at": "2025-06-02T08:00:00+00:00", "scenarios": copy.deepcopy(SCENARIOS),
@@ -365,6 +486,27 @@ def test_manual_builders_fail_closed():
     assert (unknown["prospective"], unknown["ineligible_reason"]) == ("unknown", "prospective_unknown")
     assert fr.manual_revision("manual") == 0 and fr.manual_revision("manual:r12") == 12
     assert fr.manual_revision("manual:r0") is None and fr.manual_revision("m-1") is None
+    # A binary probability outside [0, 1] (or none) gets no fabricated Brier and never scores.
+    for probability in (70, -0.1, None, True):
+        odd = dict(target, binary_forecasts=[dict(BINARIES[0], probability=probability)])
+        event = fr.build_manual_event(target=odd, item="F1", outcome="NO",
+                                      outcome_known_at=KNOWN_AT, evidence=URL,
+                                      processed_at=now.isoformat())
+        assert (event["brier_contribution"], event["scoring_eligible"],
+                event["ineligible_reason"], event["prospective"], event["outcome"]) == \
+            (None, False, "invalid_model_probability", True, "NO"), probability
+    # The scenario set's forecast id is reserved, never a binary id.
+    reserved = dict(target, binary_forecasts=[dict(BINARIES[0], id="__scenarios__")])
+    for retract in (False, True):
+        ok, errors = fr.validate_manual_settlement(
+            reserved, "__scenarios__", None if retract else "YES", None if retract else KNOWN_AT,
+            URL, retract=retract, now=now)
+        assert not ok and "reserved" in errors[0], retract
+    # The target-independent checks run on their own (callers use them before any lookup).
+    assert fr.validate_manual_attestation(KNOWN_AT, URL, now=now) == (True, [])
+    assert fr.validate_manual_attestation(None, NOTE, retract=True, now=now) == (True, [])
+    ok, errors = fr.validate_manual_attestation("2025-10-01T00:00:00Z", "short", now=now)
+    assert not ok and "future" in errors[0] and "evidence" in errors[1]
 
 
 # ─────────────────────────────── target helper ───────────────────────────────
@@ -389,12 +531,19 @@ def test_load_manual_target_ledger_then_report(capsys, ledger, reports, monkeypa
     assert reason is None
     assert (target["source"], target["commit_id"], target["as_of"], target["created_at"]) == \
         ("report", None, None, "2026-05-02T08:00:00+00:00")
-    # The CLI attests against it; the origin is the report's creation stamp.
-    code, event, _ = _resolve(capsys, ledger, "--scenario", "adopted", "--known-at",
-                              "2026-07-01T00:00:00Z", "--evidence", URL, report_id="r-old")
+    # The CLI attests against it; the origin is the report's creation stamp. No production
+    # primary row exists for resolved_view to label, so the scenario event is recorded with a
+    # warning that it enters no calibration.
+    code, event, err = _resolve(capsys, ledger, "--scenario", "adopted", "--known-at",
+                                "2026-07-01T00:00:00Z", "--evidence", URL, report_id="r-old")
     assert code == 0
     assert (event["outcome"], event["target_commit_id"], event["prospective"]) == \
         ("Adopted", None, True)
+    assert f"warning: {fr.MANUAL_NOT_BINDABLE}" in err
+    view = fr.resolved_view(fl.read_ledger(ledger), fl.read_market_resolutions(ledger))
+    assert view and all(row["report_id"] != "r-old" for row in view)
+    assert fr.manual_not_bindable_reason(target, "F1") is None  # binaries fold without a row
+    assert fr.manual_not_bindable_reason(dict(target, source="ledger"), "scenario") is None
 
     def target_reason(**kwargs):
         return fr.load_manual_target("r-x", ledger_dir=ledger, **kwargs)
@@ -411,6 +560,16 @@ def test_load_manual_target_ledger_then_report(capsys, ledger, reports, monkeypa
     target, reason = target_reason(publishable_fn=lambda rid: True,
                                    load_forecast_fn=lambda rid: sealed)
     assert (reason, target["source"], target["created_at"]) == (None, "report", None)
+    # Only an explicit proof of publication passes: True, or the publishable_at_issue dict
+    # with publishable True. The documented default itself, passed explicitly, fails closed
+    # for a report that does not exist.
+    for result in ({"publishable": False}, {"publishable": "yes"}, {}, "false", 1, None):
+        assert target_reason(publishable_fn=lambda rid, result=result: result,
+                             load_forecast_fn=lambda rid: sealed)[1] == "not_publishable", result
+    assert target_reason(publishable_fn=lambda rid: {"publishable": True},
+                         load_forecast_fn=lambda rid: sealed)[1] is None
+    assert target_reason(publishable_fn=ReportManager.publishable_at_issue,
+                         load_forecast_fn=lambda rid: sealed)[1] == "not_publishable"
     # Rows that are not a production primary (a revision, an evaluation run) never fall back.
     forecast = {"horizon": "2025", "scenarios": copy.deepcopy(SCENARIOS),
                 "binary_forecasts": []}
@@ -532,7 +691,10 @@ def test_v1_resolve_with_known_at_records_attested_event(client):
     _save_report("r-legacy-api", publish=True)
     status, payload = _post(client, "r-legacy-api", outcome="Other",
                             outcome_known_at="2025-09-01", evidence=NOTE)
-    assert status == 200 and payload["data"]["settlement"]["recorded"] is True
+    # Recorded, but no production primary row exists for it to label: the response says so.
+    assert status == 200
+    assert payload["data"]["settlement"] == {"recorded": True, "event_key": "manual",
+                                             "reason": fr.MANUAL_NOT_BINDABLE}
     legacy_event = fl.read_market_resolutions()[-1]
     assert (legacy_event["report_id"], legacy_event["target_commit_id"],
             legacy_event["scoring_eligible"], legacy_event["ineligible_reason"]) == \
@@ -544,7 +706,50 @@ def test_v1_resolve_with_known_at_records_attested_event(client):
     status, payload = _post(client, "r-ens", outcome="Other", outcome_known_at=KNOWN_AT,
                             evidence=URL)
     assert status == 409 and "not_production_primary" in payload["error"]
+    # Invalid input is 400 before any target lookup, so it is 400 for r-ens too.
+    for body in ({"outcome_known_at": future, "evidence": URL},
+                 {"outcome_known_at": KNOWN_AT, "evidence": "short"}):
+        status, payload = _post(client, "r-ens", outcome="Other", **body)
+        assert status == 400, body
     assert not os.path.exists(_resolved_path("r-ens"))
+
+
+def test_v1_resolve_appends_before_writing_resolved_json(client, monkeypatch):
+    """resolved.json is written only once the ledger holds the attestation (appended, or an
+    identical one already recorded), so it never disagrees with the ledger."""
+    _commit_report("r-api")
+    real_append = fl.append_settlement_event
+    body = {"outcome": "Base case", "outcome_known_at": KNOWN_AT, "evidence": URL}
+
+    # The ledger does not take the event (not writable): 500, nothing written anywhere.
+    monkeypatch.setattr(fl, "append_settlement_event", lambda event, *, d=None: None)
+    status, payload = _post(client, "r-api", **body)
+    assert status == 500 and payload["success"] is False
+    assert not os.path.exists(_resolved_path("r-api"))
+    assert fl.read_market_resolutions() == []
+
+    # A concurrent request wins the key with a different attestation: 409, no resolved.json.
+    def lose_to(outcome):
+        def append(event, *, d=None):
+            real_append(dict(event, outcome=outcome, resolved_outcome=outcome), d=d)
+            return None
+        return append
+
+    monkeypatch.setattr(fl, "append_settlement_event", lose_to("Other"))
+    status, payload = _post(client, "r-api", **body)
+    assert status == 409 and "--supersedes" in payload["error"]
+    assert not os.path.exists(_resolved_path("r-api"))
+    assert [e["outcome"] for e in fl.read_market_resolutions()] == ["Other"]
+
+    # A concurrent request wins with the same attestation: a no-op, resolved.json written.
+    _commit_report("r-api-2")
+    monkeypatch.setattr(fl, "append_settlement_event", lose_to("Base case"))
+    status, payload = _post(client, "r-api-2", **body)
+    assert status == 200
+    assert payload["data"]["settlement"] == {"recorded": False, "event_key": "manual",
+                                             "reason": "already_recorded"}
+    with open(_resolved_path("r-api-2"), encoding="utf-8") as fh:
+        assert json.load(fh)["outcome"] == "Base case"
 
 
 def test_v1_resolve_without_known_at_legacy_file_only(client):

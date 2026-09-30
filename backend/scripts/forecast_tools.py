@@ -86,12 +86,15 @@ def _print_json(payload) -> None:
 def cmd_resolve(args) -> int:
     """EVAL-4: attest one outcome of a report as a manual settlement event.
 
-    The target is forecast_resolution.load_manual_target (the report's production
-    primary ledger row, else the report itself when publishable at issue and sealed);
+    The known-at and evidence are validated first (exit 2 even without a target). The
+    target is forecast_resolution.load_manual_target (the report's production primary
+    ledger row, else the report itself when publishable at issue and sealed);
     forecast_resolution.plan_manual_settlement validates the attestation and its
     revision chain before anything is written, and the event is appended through the
     ledger's first-write-wins lock. The appended event (or, for an identical repeat,
-    the recorded one; for --dry-run, the one that would be appended) goes to stdout.
+    the recorded one; for --dry-run, the one that would be appended) goes to stdout; a
+    scenario attestation that no production primary ledger row can carry into
+    calibration is still written, with a warning on stderr.
     """
     if args.scenario is not None:
         if args.outcome is not None:
@@ -101,6 +104,18 @@ def cmd_resolve(args) -> int:
         item, outcome = forecast_resolution.SCENARIO_ITEM, args.scenario
     else:
         item, outcome = args.binary, args.outcome
+        if item.strip() in (forecast_resolution.SCENARIO_ITEM,
+                            forecast_resolution.SCENARIO_SET_FORECAST_ID):
+            print(f"error: {item.strip()!r} names the scenario set, not a binary; "
+                  f"use --scenario", file=sys.stderr)
+            return EXIT_INVALID
+    # Invalid input is exit 2 whether or not the report has a target.
+    ok, errors = forecast_resolution.validate_manual_attestation(args.known_at, args.evidence,
+                                                                 retract=args.retract)
+    if not ok:
+        for error in errors:
+            print(f"error: {error}", file=sys.stderr)
+        return EXIT_INVALID
     target, reason = forecast_resolution.load_manual_target(args.report_id,
                                                             ledger_dir=args.ledger_dir)
     if target is None:
@@ -116,6 +131,10 @@ def cmd_resolve(args) -> int:
         for error in plan["errors"]:
             print(f"error: {error}", file=sys.stderr)
         return EXIT_INVALID
+    unbound = forecast_resolution.manual_not_bindable_reason(target, item)
+    if unbound and not args.retract:
+        print(f"warning: {unbound}: the report has no production primary ledger row, so "
+              f"this scenario attestation enters no calibration", file=sys.stderr)
     if plan["status"] == "noop":
         print(f"no-op: the same attestation is already recorded as "
               f"{plan['latest'].get('market_id')!r}", file=sys.stderr)

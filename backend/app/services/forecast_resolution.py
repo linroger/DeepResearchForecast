@@ -70,8 +70,13 @@ an identical repeat is a no-op. The fold counts only the manual events no later
 revision supersedes and never a retraction, so a wrong attestation can be
 corrected or withdrawn although every key is first-write-wins; an eligible manual
 outcome that disagrees with an eligible market settlement stays a ``conflict``.
-``load_manual_target`` (the one reader of disk here) resolves the forecast target
-that ``forecast_tools resolve`` and ``POST /api/v1/resolve`` both attest against.
+A manual row never makes an item final for the market sweep (``recorded_items``):
+an anchored item is still fetched until a market event or its grace terminal
+closes its market channel, so that conflict can actually be written, and a
+standing attestation spares only an unanchored item its grace terminal (the fold
+ranks any attestation above a terminal). ``load_manual_target`` (the one reader
+of disk here) resolves the forecast target that ``forecast_tools resolve`` and
+``POST /api/v1/resolve`` both attest against.
 """
 
 from __future__ import annotations
@@ -99,6 +104,7 @@ from .forecast_ledger import (
     _RANGE_JOIN,
     MARKET_RESOLUTION_EVENT_SCHEMA_VERSION,
     _route_dir,
+    _unit_probability,
     binary_resolution_date,
     is_production_calibration_row,
     is_production_primary_commit,
@@ -551,27 +557,43 @@ def _is_terminal_row(event: Dict[str, Any]) -> bool:
 
 
 def _held_forecast_ids(report_id: str, events: Optional[Iterable[Any]]
-                       ) -> Tuple[Set[str], Set[str]]:
-    """``(settled, terminal)``: forecast ids of ``report_id`` that already hold a
-    non-terminal event, and those that already hold a terminal row, in the ledger."""
+                       ) -> Tuple[Set[str], Set[str], Set[str]]:
+    """``(settled, terminal, attested)``: forecast ids of ``report_id`` that already hold
+    a non-terminal market-side row (settled, ambiguous or legacy), a terminal row, and
+    (EVAL-4) a standing manual attestation, in the ledger. A superseded or retracted
+    attestation no longer stands (``standing_events``), so it never keeps an item from
+    its grace terminal."""
     settled: Set[str] = set()
     terminal: Set[str] = set()
-    for event in events or []:
-        if isinstance(event, dict) and str(event.get("report_id") or "") == report_id:
+    attested: Set[str] = set()
+    for event in standing_events(events):
+        if str(event.get("report_id") or "") == report_id:
             forecast_id = str(event.get("forecast_id") or "")
-            (terminal if _is_terminal_row(event) else settled).add(forecast_id)
-    return settled, terminal
+            if is_manual_event(event):
+                attested.add(forecast_id)
+            else:
+                (terminal if _is_terminal_row(event) else settled).add(forecast_id)
+    return settled, terminal, attested
 
 
 def recorded_items(events: Optional[Iterable[Any]]) -> Set[Tuple[str, str]]:
-    """``(report_id, forecast_id)`` pairs that already hold any resolutions row: a
-    settled, ambiguous or terminal event, or a legacy settled row. Such an item is
-    final; nothing a later sweep decides can be appended for it as a new fact."""
+    """``(report_id, forecast_id)`` pairs that already hold a market-side resolutions
+    row: a settled, ambiguous or terminal event, or a legacy settled row. Such an item
+    is final; nothing a later sweep decides can be appended for it as a new fact.
+    EVAL-4: manual rows never count. An attestation is a human label, not the market's
+    answer: the sweep keeps fetching an anchored item so that a disagreeing market
+    settlement folds into a ``conflict`` (see ``attested_items`` and ``due_binaries``)."""
     out: Set[Tuple[str, str]] = set()
     for event in events or []:
-        if isinstance(event, dict):
+        if isinstance(event, dict) and not is_manual_event(event):
             out.add((str(event.get("report_id") or ""), str(event.get("forecast_id") or "")))
     return out
+
+
+def attested_items(events: Optional[Iterable[Any]]) -> Set[Tuple[str, str]]:
+    """EVAL-4: ``(report_id, forecast_id)`` pairs that hold a standing manual attestation
+    (``standing_events``: neither superseded nor a retraction)."""
+    return {_item_key(event) for event in standing_events(events) if is_manual_event(event)}
 
 
 def anchor_market_id(binary: Any) -> str:
@@ -597,7 +619,8 @@ def overdue_since(binaries: Any, processed_at: str) -> Optional[str]:
 
 
 def due_binaries(report_id: Any, binaries: Any, recorded: Set[Tuple[str, str]], *,
-                 processed_at: str, grace_days: int = 180) -> List[Dict[str, Any]]:
+                 processed_at: str, grace_days: int = 180,
+                 attested: Optional[Set[Tuple[str, str]]] = None) -> List[Dict[str, Any]]:
     """The binaries of one target that a settle sweep can act on at ``processed_at``, in order.
 
     A binary qualifies when it has an id, no row in ``recorded`` (see
@@ -606,14 +629,19 @@ def due_binaries(report_id: Any, binaries: Any, recorded: Set[Tuple[str, str]], 
     terminal needs no network). An unanchored binary still inside its grace
     period has nothing to do yet: a target holding only such items must not
     take a sweep's cap slot for years while older targets wait for their
-    terminals. Raises ``ValueError`` when ``processed_at`` is not an
-    offset-aware ISO date-time.
+    terminals. EVAL-4: an attestation leaves an anchored item's market channel
+    open (it stays due until a market event or its grace terminal closes it, so
+    a disagreeing settlement becomes a ``conflict``), while an unanchored item in
+    ``attested`` (``attested_items``: a standing manual attestation) has nothing
+    left to do: it needs no terminal. Raises ``ValueError`` when
+    ``processed_at`` is not an offset-aware ISO date-time.
     """
     processed = parse_stamp_strict(processed_at, allow_date=False)
     if processed is None:
         raise ValueError("processed_at must be an offset-aware ISO date-time")
     rid = str(report_id or "").strip()
     grace = max(0, int(grace_days))
+    labelled = attested or set()
     due: List[Dict[str, Any]] = []
     for binary in binaries if isinstance(binaries, list) else []:
         if not isinstance(binary, dict):
@@ -621,7 +649,8 @@ def due_binaries(report_id: Any, binaries: Any, recorded: Set[Tuple[str, str]], 
         forecast_id = str(binary.get("id") or "").strip()
         if not forecast_id or (rid, forecast_id) in recorded:
             continue
-        if anchor_market_id(binary) or _grace_expired(binary, processed, grace):
+        if anchor_market_id(binary) or (_grace_expired(binary, processed, grace)
+                                        and (rid, forecast_id) not in labelled):
             due.append(binary)
     return due
 
@@ -641,8 +670,12 @@ def settle_binaries(report_id: Any, binaries: Any, resolutions: Any, *,
     legacy report with no ledger row) changes nothing; ``processed_at``
     (offset-aware, ``ValueError`` otherwise) is the only clock, so every
     decision is replayable. ``existing_events`` are the ledger's resolutions
-    rows: an item that already holds a non-terminal event never gets a
-    terminal one, and an item that already holds a terminal row is final and
+    rows: an item that already holds a non-terminal market-side event never
+    gets a terminal one; nor does an unanchored item holding a standing manual
+    attestation (EVAL-4; a superseded or retracted one no longer counts). An
+    anchored item's terminal only closes its market channel, which an
+    attestation leaves open: the fold still ranks the attestation above the
+    terminal. An item that already holds a terminal row is final and
     gets nothing (counted in ``already_terminal``): the terminal is an
     append-only fact, so a market that settles after it must not add a second,
     contradicting one (the sweep's ``due_binaries`` skips such items the same
@@ -671,7 +704,7 @@ def settle_binaries(report_id: Any, binaries: Any, resolutions: Any, *,
     answered = {str(mid or "").strip() for mid in (
         answered_market_ids if answered_market_ids is not None else by_market)}
     grace = max(0, int(grace_days))
-    already_settled, already_ended = _held_forecast_ids(rid, existing_events)
+    already_settled, already_ended, attested = _held_forecast_ids(rid, existing_events)
     events: List[Dict[str, Any]] = []
     terminal: List[Dict[str, Any]] = []
     pending: Counter = Counter()
@@ -703,6 +736,7 @@ def settle_binaries(report_id: Any, binaries: Any, resolutions: Any, *,
             reason = "no_market_anchor"
         resolution_date = _grace_expired(binary, processed, grace)
         if (resolution_date and forecast_id not in already_settled
+                and (market_id or forecast_id not in attested)
                 and (reason != "no_resolution_data" or market_id in answered)):
             terminal.append(_terminal_event(rid, forecast_id, binary, anchor, meta=meta,
                                             processed_at=processed_iso,
@@ -1140,8 +1174,13 @@ TARGET_MISSING_REPORT_ID = "missing_report_id"
 TARGET_NOT_PUBLISHABLE = "not_publishable"
 TARGET_NOT_SEALED = "not_sealed"
 TARGET_EVALUATION_RUN = "evaluation_run"
+# A scenario-set attestation of a report-fallback target (manual_not_bindable_reason).
+MANUAL_NOT_BINDABLE = "recorded_not_bindable: no production primary commit row"
 # The fields that make two attestations of one item the same one (a repeat is a no-op).
 _ATTESTATION_FIELDS = ("item_kind", "outcome", "outcome_known_at", "evidence")
+# A manual binary whose target probability is missing or outside [0, 1]: recorded, never scored
+# (binary_calibration_summary's exclusion reason for the same defect).
+INVALID_MODEL_PROBABILITY = "invalid_model_probability"
 
 
 def match_scenario_name(scenarios: Any, outcome: Any) -> Tuple[Optional[str], Optional[str]]:
@@ -1213,6 +1252,37 @@ def _evidence_record(evidence: Any) -> Tuple[Optional[Dict[str, Any]], Optional[
     return {"url": None, "note": text}, None
 
 
+def validate_manual_attestation(outcome_known_at: Any, evidence: Any, *, retract: bool = False,
+                                now: Optional[datetime] = None) -> Tuple[bool, List[str]]:
+    """``(ok, errors)`` for the target-independent part of a manual attestation, so a
+    caller can refuse invalid input (400 / exit 2) before it looks for a target.
+
+    ``outcome_known_at`` must pass ``parse_stamp_strict`` (a canonical date, or an ISO
+    date-time with a Z or an explicit offset) and not lie after ``now`` (offset-aware,
+    default the current UTC time); a retraction (``retract=True``) carries none.
+    ``evidence`` must be an http(s) URL or a note of at least MANUAL_EVIDENCE_MIN_CHARS
+    characters. Raises ``ValueError`` for a naive ``now``.
+    """
+    errors: List[str] = []
+    if retract:
+        if outcome_known_at not in (None, ""):
+            errors.append("a retraction carries no outcome_known_at")
+    else:
+        known = parse_stamp_strict(outcome_known_at)
+        current = now if now is not None else datetime.now(timezone.utc)
+        if current.tzinfo is None:
+            raise ValueError("now must be an offset-aware datetime")
+        if known is None:
+            errors.append("outcome_known_at must be a canonical YYYY-MM-DD date or an ISO "
+                          "date-time with a Z or an explicit UTC offset")
+        elif known > current:
+            errors.append("outcome_known_at lies in the future")
+    _, error = _evidence_record(evidence)
+    if error:
+        errors.append(error)
+    return not errors, errors
+
+
 def validate_manual_settlement(target: Any, item: Any, outcome: Any, outcome_known_at: Any,
                                evidence: Any, *, retract: bool = False,
                                now: Optional[datetime] = None) -> Tuple[bool, List[str]]:
@@ -1222,13 +1292,12 @@ def validate_manual_settlement(target: Any, item: Any, outcome: Any, outcome_kno
     ``item`` SCENARIO_ITEM ('scenario') attests the scenario set: ``outcome`` must name
     exactly one of the target's scenarios under ``ensemble._norm_name``. Any other
     ``item`` is a binary id that must appear exactly once in the target, with
-    ``outcome`` YES or NO (any case). ``outcome_known_at`` must pass
-    ``parse_stamp_strict`` (a canonical date, or an ISO date-time with a Z or an
-    explicit offset) and not lie after ``now`` (offset-aware, default the current UTC
-    time). ``evidence`` must be an http(s) URL or a note of at least
-    MANUAL_EVIDENCE_MIN_CHARS characters. A retraction (``retract=True``) names the item
-    and its evidence but neither an outcome nor a known-at. Every failure is listed and
-    nothing is coerced into validity. Raises ``ValueError`` for a naive ``now``.
+    ``outcome`` YES or NO (any case); SCENARIO_SET_FORECAST_ID is reserved for the
+    scenario set's events and never a binary id. ``outcome_known_at`` and ``evidence``
+    are checked by ``validate_manual_attestation``. A retraction (``retract=True``)
+    names the item and its evidence but neither an outcome nor a known-at. Every
+    failure is listed and nothing is coerced into validity. Raises ``ValueError`` for a
+    naive ``now``.
     """
     if not isinstance(target, dict) or not str(target.get("report_id") or "").strip():
         return False, ["no forecast target to attest against"]
@@ -1237,6 +1306,9 @@ def validate_manual_settlement(target: Any, item: Any, outcome: Any, outcome_kno
     has_outcome = outcome not in (None, "")
     if not item_id:
         errors.append(f"item is required: {SCENARIO_ITEM!r} or a binary id")
+    elif item_id == SCENARIO_SET_FORECAST_ID:
+        errors.append(f"{SCENARIO_SET_FORECAST_ID!r} is reserved for the scenario set; "
+                      f"attest it as {SCENARIO_ITEM!r}")
     elif retract:
         if item_id != SCENARIO_ITEM:
             _, error = _target_binary(target, item_id)
@@ -1258,22 +1330,7 @@ def validate_manual_settlement(target: Any, item: Any, outcome: Any, outcome_kno
             errors.append(error)
         if _binary_outcome(outcome) is None:
             errors.append("a binary outcome must be YES or NO")
-    if retract:
-        if outcome_known_at not in (None, ""):
-            errors.append("a retraction carries no outcome_known_at")
-    else:
-        known = parse_stamp_strict(outcome_known_at)
-        current = now if now is not None else datetime.now(timezone.utc)
-        if current.tzinfo is None:
-            raise ValueError("now must be an offset-aware datetime")
-        if known is None:
-            errors.append("outcome_known_at must be a canonical YYYY-MM-DD date or an ISO "
-                          "date-time with a Z or an explicit UTC offset")
-        elif known > current:
-            errors.append("outcome_known_at lies in the future")
-    _, error = _evidence_record(evidence)
-    if error:
-        errors.append(error)
+    errors += validate_manual_attestation(outcome_known_at, evidence, retract=retract, now=now)[1]
     return not errors, errors
 
 
@@ -1356,14 +1413,17 @@ def build_manual_event(*, target: Dict[str, Any], item: str, outcome: Any,
     - forecast_id SCENARIO_SET_FORECAST_ID, item_kind 'scenario_set', the target's
       canonical scenario name as outcome and model_p None; or the binary id, item_kind
       'binary', outcome YES/NO with y 1/0, model_p the target binary's probability and
-      its brier_contribution;
+      its brier_contribution. A probability that is missing or outside [0, 1] gets no
+      Brier and makes the row ineligible (``invalid_model_probability``): the outcome is
+      still recorded, but a fabricated score never is;
     - market_id 'manual' without ``supersedes``, else 'manual:r<n>' with n the number
       of manual events ``existing_events`` already hold for the item, and
       ``supersedes`` that superseded market id;
     - source_kind 'manual', known_at_basis 'attested' (``outcome_known_at`` kept as
       given, so a bare date keeps both of its conservative readings), prospective from
       ``prospective_status`` against the target's as-of date and creation stamp,
-      scoring_eligible exactly when prospective is True, resolution_status 'settled';
+      scoring_eligible exactly when prospective is True (and, for a binary, its
+      probability is valid), resolution_status 'settled';
     - a retraction has outcome, y and outcome_known_at None, resolution_status
       'retracted', retracted True and is never scoring-eligible.
 
@@ -1402,7 +1462,8 @@ def build_manual_event(*, target: Dict[str, Any], item: str, outcome: Any,
         if not retract:
             label = _binary_outcome(outcome)
             y = 1 if label == "YES" else 0
-            brier = round((model_p - y) ** 2, 4) if model_p is not None else None
+            if _unit_probability(model_p) is not None:
+                brier = round((model_p - y) ** 2, 4)
     evidence_record, _ = _evidence_record(evidence)
     known_iso = None if retract else outcome_known_at
     prospective: Optional[Prospective] = None
@@ -1411,7 +1472,9 @@ def build_manual_event(*, target: Dict[str, Any], item: str, outcome: Any,
     else:
         prospective = prospective_status(known_iso, BASIS_ATTESTED, target.get("as_of"),
                                          target.get("created_at"), None)
-        if prospective is True:
+        if not scenario_set and brier is None:
+            ineligible_reason = INVALID_MODEL_PROBABILITY
+        elif prospective is True:
             ineligible_reason = None
         else:
             ineligible_reason = "not_prospective" if prospective is False else "prospective_unknown"
@@ -1501,9 +1564,19 @@ def plan_manual_settlement(target: Any, item: Any, outcome: Any, outcome_known_a
     return result
 
 
-def _publishable_at_issue(report_id: str) -> bool:
+def _publishable_at_issue(report_id: str) -> Any:
     from .report_agent import ReportManager  # lazy: report_agent imports this package's modules
-    return bool(ReportManager.publishable_at_issue(report_id).get("publishable"))
+    return ReportManager.publishable_at_issue(report_id)
+
+
+def proves_publishable(result: Any) -> bool:
+    """True only for an explicit proof of publication: ``True`` itself, or a
+    ``ReportManager.publishable_at_issue`` / ``publication_status`` dict whose
+    ``publishable`` is ``True``. Anything else (False, None, a truthy string, a dict
+    without the key) proves nothing, so the gate fails closed."""
+    if isinstance(result, dict):
+        return result.get("publishable") is True
+    return result is True
 
 
 def _sealed_forecast(report_id: str) -> Any:
@@ -1511,18 +1584,11 @@ def _sealed_forecast(report_id: str) -> Any:
     return ReportManager.load_structured_forecast(report_id, allow_stale_policy=True)
 
 
-def _report_created_at(report_id: str) -> Optional[str]:
-    """meta.json's ``created_at`` in UTC. It is written by ``datetime.now().isoformat()``
-    (host local time, no zone), so a naive stamp reads as local time, exactly as the
-    resolution monitor reads it; anything unreadable is None."""
-    try:
-        from .report_agent import ReportManager
-        with open(os.path.join(ReportManager._get_report_folder(report_id), "meta.json"),
-                  encoding="utf-8") as handle:
-            meta = json.load(handle)
-    except (OSError, ValueError, TypeError):
-        return None
-    value = meta.get("created_at") if isinstance(meta, dict) else None
+def local_stamp_to_utc(value: Any) -> Optional[str]:
+    """A report meta.json ``created_at`` in UTC (ISO). It is written by
+    ``datetime.now().isoformat()`` (host local time, no zone), so a naive stamp reads as
+    local time and an aware one converts; anything else is None. The resolution monitor
+    and ``load_manual_target`` share it."""
     if not isinstance(value, str) or not value.strip():
         return None
     try:
@@ -1531,9 +1597,25 @@ def _report_created_at(report_id: str) -> Optional[str]:
         return None
 
 
-def _report_ledger_rows(report_id: str, ledger_dir: Optional[str]) -> List[Dict[str, Any]]:
-    """The report's rows in the production ledger and in the evaluation ledger that
-    record-class routing sends evaluation rows to (the resolution monitor reads both)."""
+def _report_created_at(report_id: str) -> Optional[str]:
+    """meta.json's ``created_at`` in UTC (``local_stamp_to_utc``); unreadable is None."""
+    try:
+        from .report_agent import ReportManager
+        with open(os.path.join(ReportManager._get_report_folder(report_id), "meta.json"),
+                  encoding="utf-8") as handle:
+            meta = json.load(handle)
+    except (OSError, ValueError, TypeError):
+        return None
+    return local_stamp_to_utc(meta.get("created_at") if isinstance(meta, dict) else None)
+
+
+def report_ledger_rows(report_id: str, ledger_dir: Optional[str] = None) -> List[Dict[str, Any]]:
+    """The report's rows in the production ledger (``ledger_dir``, default the production
+    ledger) and in the evaluation ledger that record-class routing (Foglamp WP1,
+    ``forecast_ledger._route_dir``) sends evaluation rows to; an injected non-default
+    ``ledger_dir`` is not redirected, so its evaluation rows are in it. Reading both is
+    what recognises an evaluation or golden report. The resolution monitor and
+    ``load_manual_target`` share it."""
     dirs: List[str] = []
     for directory in (_route_dir(ledger_dir, "production"), _route_dir(ledger_dir, "evaluation")):
         if os.path.abspath(directory) not in {os.path.abspath(seen) for seen in dirs}:
@@ -1560,9 +1642,11 @@ def load_manual_target(report_id: Any, *, ledger_dir: Optional[str] = None,
       revision, an unpublished terminal) are ``not_production_primary``: such a
       settlement must never label production calibration (I-21).
     - No row, or legacy schema_version 1 production rows only (they prove nothing): the
-      report itself, ``source`` 'report', when ``publishable_fn`` (default
-      ``ReportManager.publishable_at_issue``) proves it was publishable at issue
-      (``not_publishable`` otherwise, also when the check raises) and
+      report itself, ``source`` 'report', when ``publishable_fn(report_id)`` (default
+      ``ReportManager.publishable_at_issue``; it returns a bool or that method's dict,
+      read by ``proves_publishable``: only an explicit True or ``{'publishable': True}``
+      passes) proves it was publishable at issue (``not_publishable`` otherwise, also
+      when the check raises) and
       ``load_forecast_fn`` (default ``ReportManager.load_structured_forecast`` with
       ``allow_stale_policy=True``) returns its sealed forecast (``not_sealed``
       otherwise). An evaluation run's forecast is ``evaluation_run``. The as-of date is
@@ -1571,7 +1655,7 @@ def load_manual_target(report_id: Any, *, ledger_dir: Optional[str] = None,
     rid = str(report_id or "").strip()
     if not rid:
         return None, TARGET_MISSING_REPORT_ID
-    rows = _report_ledger_rows(rid, ledger_dir)
+    rows = report_ledger_rows(rid, ledger_dir)
     primaries = [row for row in rows if is_production_primary_commit(row)]
     if len(primaries) > 1:
         return None, AMBIGUOUS_TARGET
@@ -1585,7 +1669,7 @@ def load_manual_target(report_id: Any, *, ledger_dir: Optional[str] = None,
     if any("row_type" in row or not is_production_calibration_row(row) for row in rows):
         return None, NOT_PRODUCTION_PRIMARY
     try:
-        publishable = bool((publishable_fn or _publishable_at_issue)(rid))
+        publishable = proves_publishable((publishable_fn or _publishable_at_issue)(rid))
     except Exception:  # noqa: BLE001 — a gate that cannot prove publication refuses (fail closed)
         publishable = False
     if not publishable:
@@ -1604,3 +1688,16 @@ def load_manual_target(report_id: Any, *, ledger_dir: Optional[str] = None,
             "scenarios": copy.deepcopy(forecast.get("scenarios") or []),
             "binary_forecasts": copy.deepcopy(forecast.get("binary_forecasts") or []),
             "source": "report"}, None
+
+
+def manual_not_bindable_reason(target: Any, item: Any) -> Optional[str]:
+    """MANUAL_NOT_BINDABLE when ``item`` attests the scenario set of a report-fallback
+    target (``load_manual_target`` source 'report'), else None. ``resolved_view`` labels
+    production primary commit rows only, so such an event is recorded but enters no
+    calibration while the report has no such row; callers must say so instead of
+    reporting a plain success. Binary events fold without a commit row
+    (``fold_binary_items``), so they are never affected."""
+    item_id = item.strip() if isinstance(item, str) else ""
+    if isinstance(target, dict) and target.get("source") == "report" and item_id == SCENARIO_ITEM:
+        return MANUAL_NOT_BINDABLE
+    return None
