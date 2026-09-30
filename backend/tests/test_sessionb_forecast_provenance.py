@@ -9,6 +9,7 @@ from app.services.forecast_extractor import (
     _enforce_source_provenance,
     allowed_signal_labels,
     extract_binary_forecasts,
+    reconcile_forecast_contract,
     world_state_outcome_from_signal_pack,
 )
 from app.utils.actors import (
@@ -179,16 +180,10 @@ def test_world_state_marker_matches_calendar_renderer(tmp_path, monkeypatch):
     assert out["converged"] is False
 
 
-@pytest.mark.parametrize("effect, kept", [("legacy_prompt", True), ("diagnostic_only", False)])
-def test_rendered_world_state_block_reaches_provenance_and_sim_adjustment(
-        tmp_path, monkeypatch, effect, kept):
-    """legacy_prompt：渲染块真实注入 → 引用世界态份额的 source 保留、world_state_outcome 落
-    binary_quality（SIM-ADD-3 前置）。默认 diagnostic_only：允许集只在 sim_sensitive 时计算，
-    行为不变（照旧降级、不落 world_state_outcome）。"""
-    block = _rendered_world_state_block(tmp_path, monkeypatch, _HOURS_TRAJECTORY)
-    _provenance_config(monkeypatch)
-    from app.config import Config
-    monkeypatch.setattr(Config, "SIMULATION_FORECAST_EFFECT", effect, raising=False)
+def _extract_and_reconcile(block):
+    """extract_binary_forecasts on ``block`` (F1 cites the world-state shares), then the
+    report_agent call order: binary_quality is attached to the forecast before
+    reconcile_forecast_contract, which records SIM-ADD-3 sim_adjustment from it."""
     fake = FakeLLMClient(json_responses=[
         {"binary_forecasts": [
             {"id": "F1", "statement": "Alpha exceeds 10% by 2027", "probability": 0.72,
@@ -199,18 +194,82 @@ def test_rendered_world_state_block_reaches_provenance_and_sim_adjustment(
         ]}])
     out = extract_binary_forecasts("dossier", fake, min_count=2, language="English",
                                    signal_pack=block)
-    by_id = {b["id"]: b for b in out["binary_forecasts"]}
-    bq = out["binary_quality"]
+    forecast = {
+        "scenarios": [{"name": "突破", "probability": 0.5},
+                      {"name": "维持现状", "probability": 0.5}],
+        "binary_forecasts": out["binary_forecasts"],
+        "binary_quality": out["binary_quality"],
+    }
+    reconcile_forecast_contract(forecast)
+    return {b["id"]: b for b in out["binary_forecasts"]}, out["binary_quality"], forecast
+
+
+def _assert_world_state_downgraded(by_id, bq, forecast):
+    assert by_id["F1"]["source"] == "research-prior"
+    assert by_id["F1"]["source_claimed"] == "world-state outcome shares"
+    assert bq["provenance_downgrades"] == 1
+    assert "world_state_outcome" not in bq
+    assert "sim_adjustment" not in forecast
+
+
+@pytest.mark.parametrize("effect, kept", [("legacy_prompt", True), ("diagnostic_only", False)])
+def test_rendered_world_state_block_reaches_provenance_and_sim_adjustment(
+        tmp_path, monkeypatch, effect, kept):
+    """legacy_prompt：渲染块真实注入 → 引用世界态份额的 source 保留、world_state_outcome 落
+    binary_quality，reconcile_forecast_contract 据此记下 SIM-ADD-3 sim_adjustment。
+    默认 diagnostic_only：允许集只在 sim_sensitive 时计算，行为不变（照旧降级、不落
+    world_state_outcome、无 sim_adjustment）。"""
+    block = _rendered_world_state_block(tmp_path, monkeypatch, _HOURS_TRAJECTORY)
+    _provenance_config(monkeypatch)
+    from app.config import Config
+    monkeypatch.setattr(Config, "SIMULATION_FORECAST_EFFECT", effect, raising=False)
+    by_id, bq, forecast = _extract_and_reconcile(block)
     if kept:
         assert by_id["F1"]["source"] == "world-state outcome shares"
         assert "source_claimed" not in by_id["F1"]
         assert bq["provenance_downgrades"] == 0
         assert bq["world_state_outcome"]["scenario_shares"] == {"突破": 0.62, "维持现状": 0.38}
+        adj = forecast["sim_adjustment"]
+        assert adj["scenario_shares"] == {"突破": 0.62, "维持现状": 0.38}
+        assert adj["delta_vs_research_prior"] == {"突破": 0.12, "维持现状": -0.12}
+        assert adj["converged"] is True
     else:
-        assert by_id["F1"]["source"] == "research-prior"
-        assert by_id["F1"]["source_claimed"] == "world-state outcome shares"
-        assert bq["provenance_downgrades"] == 1
-        assert "world_state_outcome" not in bq
+        _assert_world_state_downgraded(by_id, bq, forecast)
+
+
+@pytest.mark.parametrize("hide", [True, False])
+def test_non_valid_world_state_block_is_not_a_citable_signal(tmp_path, monkeypatch, hide):
+    """显式非 valid 裁定（「本分布不可用作任何依据」）的渲染块：legacy_prompt 下既不进允许集
+    （引用它的二元预测照旧降级），也不被解析成 world_state_outcome / sim_adjustment——
+    REPORT_WORLDSTATE_HIDE_INVALID 关闭时块内仍列份额，同样 fail-closed。"""
+    from app.config import Config
+    monkeypatch.setattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", hide, raising=False)
+    trajectory = dict(_HOURS_TRAJECTORY, validity="inconclusive",
+                      validity_reasons=["failed_rounds"])
+    block = _rendered_world_state_block(tmp_path, monkeypatch, trajectory)
+    assert "⚠️ 有效性裁定：inconclusive" in block
+    assert ("· 突破: 62%" in block) is not hide     # knob off: the shares are still listed
+    assert "world-state outcome shares" not in allowed_signal_labels(block)
+    assert world_state_outcome_from_signal_pack(block) is None
+    _provenance_config(monkeypatch)
+    _assert_world_state_downgraded(*_extract_and_reconcile(block))
+
+
+@pytest.mark.parametrize("pack, usable", [
+    # a verdict line that says valid does not block the block
+    ("【推演结果分布 P(outcome)】\n⚠️ 有效性裁定：valid\n· A: 60%\n· B: 40%", True),
+    # an unreadable verdict fails closed
+    ("【推演结果分布 P(outcome)】\n⚠️ 有效性裁定：\n· A: 60%\n· B: 40%", False),
+    # the verdict check stays inside the world-state block: text in a later block is ignored
+    ("【推演结果分布 P(outcome)】\n· A: 60%\n· B: 40%\n\n## 派系/联盟图\n有效性裁定：invalid", True),
+    ("【推演结果分布 P(outcome)】\n· A: 60%\n· B: 40%\n\n【因果骨架】\n有效性裁定：invalid", True),
+])
+def test_world_state_verdict_check_is_scoped_to_its_block(pack, usable):
+    assert ("world-state outcome shares" in allowed_signal_labels(pack)) is usable
+    out = world_state_outcome_from_signal_pack(pack)
+    assert (out is not None) is usable
+    if usable:
+        assert out["scenario_shares"] == {"A": 0.6, "B": 0.4}
 
 
 # ------------------------------------------ 研究报告情景节 → forecast_inputs 种子解析

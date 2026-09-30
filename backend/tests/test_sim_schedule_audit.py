@@ -2,19 +2,25 @@
 
 * ``audit_scheduled_events`` gives every event the first matching reason
   (invalid_round → beyond_total_rounds → missing_poster → missing_content), counts
-  them per reason and keeps at most 10 deterministic samples;
+  them per reason and keeps at most 10 deterministic samples; a row that makes
+  ``fire_scheduled_events`` raise (non-mapping, or a round int() rejects) blocks
+  every other row too (blocked_by_invalid_round), pinned against the real
+  ``fire_scheduled_events``;
 * ``unreachable_issue`` turns a stored ``schedule_audit`` block into the pipeline
   run-health issue only when the count is a positive int;
 * a fresh start rotates world_digest.jsonl to ``.prev`` (the in-band evolver appends
   to it), while a resume keeps appending;
 * both SIM-3 knobs are declared in Config and documented in .env.example.
 
-Offline: pure functions plus SimulationRunner.start_simulation with Popen and the
-monitor thread stubbed (the test_temporal_mode_contract harness). No LLM, no network.
+Offline: pure functions, fire_scheduled_events on a stub env, and
+SimulationRunner.start_simulation with Popen and the monitor thread stubbed (the
+test_temporal_mode_contract harness). No LLM, no network.
 """
 
+import asyncio
 import json
 import os
+import sys
 
 import pytest
 
@@ -64,12 +70,21 @@ def test_missing_poster_and_missing_content():
     assert audit_scheduled_events([_ev(1, poster=0)], 36)["unreachable"] == 0
 
 
-@pytest.mark.parametrize("bad_round", ["x", -1, None, [], "1.5", float("nan")])
+@pytest.mark.parametrize("bad_round", ["x", -1, None, [], "1.5", float("nan"), float("inf")])
 def test_invalid_round(bad_round):
     audit = audit_scheduled_events([_ev(bad_round)], 36)
     assert audit["by_reason"] == {"invalid_round": 1}
     assert audit["samples"][0]["reason"] == "invalid_round"
-    json.dumps(audit)  # a sample never breaks the run_summary.json dump
+    # a sample never breaks the run_summary.json dump or a strict JSON reader
+    json.loads(json.dumps(audit, allow_nan=False))
+
+
+@pytest.mark.parametrize("bad_round, stored", [(float("nan"), "nan"), (float("inf"), "inf"),
+                                               (float("-inf"), "-inf")])
+def test_non_finite_round_is_stored_as_a_string(bad_round, stored):
+    assert audit_scheduled_events([_ev(bad_round)], 36)["samples"][0]["round"] == stored
+    sample = audit_scheduled_events([_ev(1, poster=None, date=bad_round)], 36)["samples"][0]
+    assert sample["date"] == stored
 
 
 def test_missing_round_key_and_non_mapping_event_are_invalid():
@@ -77,6 +92,32 @@ def test_missing_round_key_and_non_mapping_event_are_invalid():
     assert audit["by_reason"] == {"invalid_round": 2}
     assert audit["samples"][1] == {"round": None, "date": None, "reason": "invalid_round",
                                    "is_scenario_injection": False}
+
+
+@pytest.mark.parametrize("blocker", [None, "x", [], "1.5", float("nan"), "junk-row"])
+def test_row_that_breaks_the_due_list_blocks_every_event(blocker):
+    # fire_scheduled_events runs int(e.get('round', -1)) over every row in every round,
+    # so one such row makes each call raise and nothing on the schedule ever fires.
+    bad = "junk-row" if blocker == "junk-row" else _ev(blocker)
+    audit = audit_scheduled_events([_ev(0), bad, _ev(3)], 36)
+    assert audit["scheduled"] == audit["unreachable"] == 3
+    assert audit["by_reason"] == {"invalid_round": 1, "blocked_by_invalid_round": 2}
+    assert [s["reason"] for s in audit["samples"]] == [
+        "blocked_by_invalid_round", "invalid_round", "blocked_by_invalid_round"]
+    json.loads(json.dumps(audit, allow_nan=False))
+    # rows unreachable for their own reason keep it; only fireable rows become blocked
+    audit = audit_scheduled_events([_ev(50), _ev(1, poster=None), bad, _ev(2)], 36)
+    assert audit["by_reason"] == {"invalid_round": 1, "beyond_total_rounds": 1,
+                                  "missing_poster": 1, "blocked_by_invalid_round": 1}
+    assert list(audit["by_reason"])[-1] == "blocked_by_invalid_round"
+
+
+def test_negative_or_missing_round_only_drops_its_own_row():
+    # int() accepts -1 and the -1 default for a missing key, so the due list still builds
+    for bad in (_ev(-1), {"poster_agent_id": 1, "content": "c"}):
+        audit = audit_scheduled_events([_ev(0), bad, _ev(3)], 36)
+        assert audit["unreachable"] == 1
+        assert audit["by_reason"] == {"invalid_round": 1}
 
 
 def test_int_coercible_round_follows_fire_scheduled_events():
@@ -115,6 +156,64 @@ def test_empty_schedule():
     assert audit_scheduled_events([], 36) == {
         "scheduled": 0, "unreachable": 0, "by_reason": {}, "samples": []}
     assert audit_scheduled_events(None, 36)["scheduled"] == 0
+
+
+# ------------------------------------------------- parity with the real fire_scheduled_events
+class _Graph:
+    def get_agent(self, aid):
+        return f"agent-{aid}"
+
+
+class _Env:
+    def __init__(self):
+        self.agent_graph = _Graph()
+
+    async def step(self, actions):
+        return None
+
+
+def _fired_over_run(rps, events, total_rounds):
+    """Events fire_scheduled_events posts over range(0, total_rounds), with the platform
+    loop's own guard (an exception skips that round's schedule, the run goes on)."""
+    fired = 0
+    for loop_round in range(total_rounds):
+        try:
+            fired += asyncio.run(rps.fire_scheduled_events(
+                _Env(), {"scheduled_events": events}, loop_round, {}, None, lambda _m: None))
+        except Exception:  # noqa: BLE001 — mirrors the caller's '定时事件触发异常，跳过'
+            continue
+    return fired
+
+
+@pytest.fixture(scope="module")
+def rps():
+    scripts = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import run_parallel_simulation
+    return run_parallel_simulation
+
+
+@pytest.mark.parametrize("events", [
+    [_ev(0), _ev(5), _ev(99)],
+    [_ev(0), _ev(None)],
+    [_ev(0), "junk"],
+    [_ev(1), _ev(float("nan"))],
+    [_ev(1), _ev("1.5"), _ev(2, poster=None)],
+    [_ev(0), _ev(-1), {"poster_agent_id": 1, "content": "c"}],
+    [_ev(2, poster=None), _ev(3, content=""), _ev("7"), _ev(4), _ev(4, poster=5)],
+], ids=["horizon", "none-round", "non-mapping", "nan-round", "string-float", "negative",
+        "poster-content"])
+def test_audit_matches_fire_scheduled_events(rps, monkeypatch, events):
+    """Drift guard: scheduled - unreachable equals what fire_scheduled_events really posts
+    over the run. If fire_scheduled_events starts skipping bad rows one by one, this fails
+    and blocked_by_invalid_round must go (whitespace-only content is the one deliberate
+    difference and is left out here)."""
+    monkeypatch.setenv("SIM_EVENT_PROVENANCE", "true")
+    total_rounds = 10
+    audit = audit_scheduled_events(events, total_rounds)
+    assert _fired_over_run(rps, events, total_rounds) == audit["scheduled"] - audit["unreachable"]
 
 
 # ------------------------------------------------------------------ unreachable_issue

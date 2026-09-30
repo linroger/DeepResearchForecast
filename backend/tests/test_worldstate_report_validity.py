@@ -92,7 +92,8 @@ def _signal_pack_outcome(block):
     """Run the signal-pack parser on ``block`` exactly as rendered.
 
     Since SIM-3 forecast_extractor._WS_OUTCOME_HEADER_RE recognises the renderer's
-    「【推演结果分布」 header, the result depends on the share lines only.
+    「【推演结果分布」 header, and the parser fails closed on an explicit non-valid
+    「⚠️ 有效性裁定」 line, the result depends on the share lines and that verdict line.
     """
     return world_state_outcome_from_signal_pack(block)
 
@@ -159,8 +160,10 @@ def test_inconclusive_block_hides_shares_and_waypoints(sim_root):
     assert lines[-2:] == [_HIDDEN, _NOTE]
     assert len(lines) == 5
     # fail-closed downstream: the parser recognises the header yet the block yields no
-    # sim outcome, because no share line is left (the knob-off test below is the pair)
+    # sim outcome: no share line is left and the verdict line alone already blocks the
+    # parse (the knob-off test below is the pair)
     assert _signal_pack_outcome(block) is None
+    assert _signal_pack_outcome("\n".join(lines[:1] + lines[2:])) is None
 
 
 def test_invalid_block_without_reasons_omits_reason_line(sim_root):
@@ -197,9 +200,11 @@ def test_knob_off_inconclusive_still_renders_shares(sim_root, monkeypatch):
     assert "\n".join(lines[:1] + lines[2:]) == _LEGACY_V3_GOLDEN
     assert "· A: 62%" in lines and "裁定原因" not in block
     assert "演化航点（按日历时段）：" in lines
-    # regression pair for the fail-closed parser check: the parser recovers the sim
-    # outcome from a block that still renders its shares
-    parsed = _signal_pack_outcome(block)
+    # regression pair for the fail-closed parser check: the block still renders its
+    # shares, yet the explicit non-valid verdict keeps them out of the parse; the same
+    # block without the verdict line parses, so the None comes from the verdict check
+    assert _signal_pack_outcome(block) is None
+    parsed = _signal_pack_outcome("\n".join(lines[:1] + lines[2:]))
     assert parsed is not None
     assert parsed["scenario_shares"] == {"A": 0.62, "B": 0.38}
 

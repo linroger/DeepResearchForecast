@@ -11,6 +11,17 @@ overlay ``injected_events`` keep their raw round, and an overlay ``max_rounds``
 shrinks the run after the schedule was built (calendar mode clamps both at config
 time).
 
+One malformed row blocks the whole schedule: ``fire_scheduled_events`` builds its
+due list with ``int(e.get('round', -1))`` over every row in every round, so a
+non-mapping row or a round that ``int()`` rejects (None, 'x', [], NaN) raises
+there, the caller logs the error and skips the round, and no scheduled event
+fires at all.  While such a row exists, every row that would otherwise fire is
+counted as ``blocked_by_invalid_round`` (a missing or negative round only drops
+its own row).  ``test_audit_matches_fire_scheduled_events`` pins this against the
+real ``fire_scheduled_events``.  One deliberate difference: whitespace-only
+content counts as ``missing_content`` although ``fire_scheduled_events`` posts it,
+because an empty post carries no event for the actors to see.
+
 ``audit_scheduled_events`` counts those rows for ``run_summary.json``;
 ``unreachable_issue`` turns the stored block into the pipeline run-health issue.
 Rows inside the horizon but after a truncation point are not counted: the run
@@ -22,6 +33,7 @@ reads configuration.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 # Reasons in the order they are checked; the first match wins.
@@ -29,11 +41,14 @@ REASON_INVALID_ROUND = "invalid_round"
 REASON_BEYOND_TOTAL_ROUNDS = "beyond_total_rounds"
 REASON_MISSING_POSTER = "missing_poster"
 REASON_MISSING_CONTENT = "missing_content"
+# Otherwise fireable, but another row makes every fire_scheduled_events call raise.
+REASON_BLOCKED_BY_INVALID_ROUND = "blocked_by_invalid_round"
 REASONS = (
     REASON_INVALID_ROUND,
     REASON_BEYOND_TOTAL_ROUNDS,
     REASON_MISSING_POSTER,
     REASON_MISSING_CONTENT,
+    REASON_BLOCKED_BY_INVALID_ROUND,
 )
 
 MAX_SAMPLES = 10
@@ -43,7 +58,7 @@ _JSON_SCALARS = (str, int, float, bool)
 
 def _event_round(value: Any) -> Optional[int]:
     """The 0-based round ``fire_scheduled_events`` would compare against, or None
-    when the value is missing, not int-coercible or negative (never fires)."""
+    when the value is missing, not int-coercible or negative (the row never fires)."""
     if value is None:
         return None
     try:
@@ -61,9 +76,25 @@ def _horizon(total_rounds: Any) -> Optional[int]:
     return None
 
 
+def _blocks_schedule(event: Any) -> bool:
+    """True for a row that makes ``fire_scheduled_events`` raise while it builds the
+    due list: not a mapping, or a round ``int()`` rejects.  A missing round defaults
+    to -1 there and a negative round is accepted, so neither blocks the schedule."""
+    if not isinstance(event, Mapping):
+        return True
+    try:
+        int(event.get("round", -1))
+    except (TypeError, ValueError, OverflowError):
+        return True
+    return False
+
+
 def _json_safe(value: Any) -> Any:
-    """Keep JSON scalars as they are; stringify anything else so the sample can
-    never break the run_summary.json dump."""
+    """Keep finite JSON scalars as they are; stringify anything else (including NaN
+    and ±inf, which strict JSON parsers reject) so the sample can never break the
+    run_summary.json dump or its readers."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
     if value is None or isinstance(value, _JSON_SCALARS):
         return value
     return str(value)
@@ -94,14 +125,18 @@ def audit_scheduled_events(
     ``by_reason`` lists only reasons that occurred, in check order; ``samples``
     holds at most ``MAX_SAMPLES`` unreachable rows in schedule order, so the
     output is deterministic for a given input.  ``total_rounds`` that is not a
-    positive int skips the horizon check.
+    positive int skips the horizon check.  When any row blocks the schedule (see
+    ``_blocks_schedule``) nothing can fire, so ``unreachable == scheduled``.
     """
     events = list(scheduled_events or [])
     horizon = _horizon(total_rounds)
+    blocked = any(_blocks_schedule(event) for event in events)
     counts = dict.fromkeys(REASONS, 0)
     samples: List[Dict[str, Any]] = []
     for event in events:
         reason = _unreachable_reason(event, horizon)
+        if reason is None and blocked:
+            reason = REASON_BLOCKED_BY_INVALID_ROUND
         if reason is None:
             continue
         counts[reason] += 1
