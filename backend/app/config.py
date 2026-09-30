@@ -661,10 +661,11 @@ class Config:
     # live ones either way.  Default on; only 0/false/no/off disable it.
     PIT_PROVIDER_DATE_BOUNDS = os.environ.get(
         'PIT_PROVIDER_DATE_BOUNDS', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
-    # TIME-8: rows requested per gated search = 5 x this (clamped 1..4), so dropped late
-    # rows do not starve the render slots.  Default 1 (no over-fetch: the provider bound
+    # TIME-8: rows requested per gated search = 5 x this, so dropped late rows do not
+    # starve the render slots; clamped to 1..4 where it is pinned at admission
+    # (hindcast_policy.PIT_OVERFETCH_MAX).  Default 1 (no over-fetch: the provider bound
     # is the primary control and each extra row can be billed).
-    PIT_SEARCH_OVERFETCH = max(1, min(4, int(os.environ.get('PIT_SEARCH_OVERFETCH', '1') or '1')))
+    PIT_SEARCH_OVERFETCH = int(os.environ.get('PIT_SEARCH_OVERFETCH', '1') or '1')
     # W9-10：建图输入源默认 both→dossier_only——用户明确要求 KG 收敛到关键 actor：actor 中心的
     # 卷宗切块入图，广覆盖研究报告只喂本体/报告上下文（graph 阶段 8h38m/60% 跳块的主要输入面）。
     # dossier 缺失/为空时代码自动回退 both 语义（全量报告切块），设 'both' 可显式恢复旧行为。

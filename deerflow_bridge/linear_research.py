@@ -8985,7 +8985,7 @@ def _pit_policy(env: Mapping[str, Any] | None) -> rg.PitPolicy | None:
     RESEARCH_PIT_GATES gets gates; the parent writes the RESEARCH_PIT_* values
     from the run's admission pin, never from its current config.  Unknown text
     reads as the strict choice: same-day excluded, undated pages dropped, and
-    an overfetch outside 1..4 clamped (unparseable: 1)."""
+    an overfetch outside 1..rg.PIT_OVERFETCH_MAX clamped (unparseable: 1)."""
     as_of = _hindcast_as_of(env)
     if as_of is None or not _env_flag(env, "RESEARCH_PIT_GATES", False):
         return None
@@ -8997,7 +8997,7 @@ def _pit_policy(env: Mapping[str, Any] | None) -> rg.PitPolicy | None:
                         same_day="include" if same_day == "include" else "exclude",
                         undated="flag" if undated == "flag" else "drop",
                         provider_bounds=_env_flag(env, "RESEARCH_PIT_PROVIDER_BOUNDS", True),
-                        overfetch=max(1, min(4, overfetch)) if overfetch is not None else 1)
+                        overfetch=max(1, min(rg.PIT_OVERFETCH_MAX, overfetch)) if overfetch is not None else 1)
 
 
 def _pit_starvation_detail(pit: Any) -> str:

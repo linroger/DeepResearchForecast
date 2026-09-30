@@ -32,7 +32,8 @@ A fourth layer is the point-in-time rule of a gated hindcast (TIME-8):
 :func:`resolve_upper` reads a value as the latest day it is consistent with (a
 day is that day, a month / quarter / half / year the end of that period),
 :func:`availability` is the later of a source's published and modified days (a
-live page reflects its latest edit) and :func:`gate` is the one cut rule:
+live page reflects its latest edit; :func:`page_availability` reads them from a
+fetched page's candidates) and :func:`gate` is the one cut rule:
 ``admit`` / ``same_day`` / ``late`` / ``unverifiable``.
 """
 
@@ -650,6 +651,39 @@ def availability(published: Any, modified: Any, *, now: Any = None) -> _dt.date 
     reflects its latest edit), or None when neither resolves."""
     days = [day for day in (resolve_upper(published, now=now), resolve_upper(modified, now=now))
             if day is not None]
+    return max(days) if days else None
+
+
+def page_availability(candidates: Iterable[Any], *, now: Any = None) -> _dt.date | None:
+    """:func:`availability` of a fetched page's date candidates: the later of
+    its published pick and its latest modified candidate, each read with
+    :func:`resolve_upper`, or None when none reads.
+
+    The published pick is the highest-ranked published candidate that reads
+    (the first one on a tie), as :func:`resolve` picks it, except that a date
+    after today is kept: it is after any as-of.  A lower-ranked published
+    candidate is not the page's date (a bare "Date:" line of a scheduled event,
+    or a ``<time>`` tag of a related item beside the page's own metadata, is an
+    event date, not the page's availability).  Every modified candidate counts,
+    whatever its rank: a page is served in its latest edit.  Never raises."""
+    pick: _dt.date | None = None
+    pick_rank = 0
+    days: list[_dt.date] = []
+    for candidate in candidates or ():
+        if not isinstance(candidate, Sequence) or isinstance(candidate, str) or len(candidate) != 4:
+            continue
+        rank, _source, role, raw = candidate
+        if role not in _ROLES or not isinstance(rank, int) or isinstance(rank, bool):
+            continue
+        day = resolve_upper(raw, now=now)
+        if day is None:
+            continue
+        if role == ROLE_MODIFIED:
+            days.append(day)
+        elif pick is None or rank > pick_rank:
+            pick, pick_rank = day, rank
+    if pick is not None:
+        days.append(pick)
     return max(days) if days else None
 
 

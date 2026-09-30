@@ -1,7 +1,8 @@
 """TIME-8: the point-in-time availability rule of deerflow_bridge/source_dates.py.
 
 ``resolve_upper`` reads a date as the latest day it is consistent with,
-``availability`` is the later of a source's published and modified days, and
+``availability`` is the later of a source's published and modified days
+(``page_availability`` reads them from a fetched page's date candidates), and
 ``gate`` is the one cut rule of a gated hindcast (strict by default: the as-of
 day itself is late).  Pure and offline.
 """
@@ -127,6 +128,47 @@ def test_gate_default_is_strict_and_reads_resolve_upper_values():
 def test_a_page_published_before_but_updated_after_as_of_is_late():
     assert sd.gate(sd.availability("2024-03-01", None), AS_OF) == "admit"
     assert sd.gate(sd.availability("2024-03-01", "2024-07-15"), AS_OF) == "late"
+
+
+def _meta(**dates):
+    return sd.from_provider_meta(dates)
+
+
+def _head(*lines):
+    return sd.from_text_head("# Title\n\n" + "\n".join(lines) + "\n\nBody text.")
+
+
+def test_page_availability_is_the_published_pick_and_every_modified_date():
+    # The published pick is the highest-ranked published candidate, as TIME-2 picks it.
+    assert sd.page_availability(_meta(published_time="2024-01-01")
+                                + _head("Published: 2024-07-15")) == dt.date(2024, 1, 1)
+    assert sd.page_availability(_head("Published: 2024-07-15")) == dt.date(2024, 7, 15)
+    # ... the first one on a tie (a scheduled-event "Date:" line after the dateline is no pick).
+    assert sd.page_availability(_head("Published: 2024-05-01", "Date: November 5, 2024")) == dt.date(2024, 5, 1)
+    # A <time> tag of a related item beside the page's own JSON-LD date is no pick either.
+    html_dates = sd.from_fetch_meta({"html_dates": [[6, "json_ld", "published", "2024-01-01"],
+                                                    [4, "time_tag", "published", "2026-09-29"]]})
+    assert sd.page_availability(html_dates) == dt.date(2024, 1, 1)
+    # Every modified candidate counts, whatever its rank.
+    assert sd.page_availability(_meta(published_time="2024-01-01", modified_time="2024-02-01")
+                                + _head("Updated: 2024-07-15")) == dt.date(2024, 7, 15)
+    assert sd.page_availability(_head("Last updated: May 2024")) == dt.date(2024, 5, 31)
+    # A date after today is kept: TIME-2's resolve would reject it as future and pick a lower one.
+    future = _meta(published_time="2026-12-01") + _head("Published: 2024-01-01")
+    assert sd.resolve(future, now=NOW)["published"].value == "2024-01-01"
+    assert sd.page_availability(future, now=NOW) == dt.date(2026, 12, 1)
+    assert sd.page_availability(_meta(modified_time="2026-12-01"), now=NOW) == dt.date(2026, 12, 1)
+
+
+def test_page_availability_skips_what_does_not_read():
+    # An unreadable top-ranked value falls to the next published candidate, as in resolve.
+    assert sd.page_availability(_meta(published_time="soon") + _head("Published: 2024-05-01")) == (
+        dt.date(2024, 5, 1))
+    assert sd.page_availability(_meta(published_time="1850-01-01")) is None
+    assert sd.page_availability([]) is None
+    assert sd.page_availability(None) is None
+    assert sd.page_availability(["2024-01-01", (7, "x", "unknown_role", "2024-01-01"), (True, "x", "published",
+                                 "2024-01-01"), (7, "x", "published")]) is None
 
 
 @pytest.mark.parametrize("as_of", [None, "", "2024-6-1", "not a date", 20240601])

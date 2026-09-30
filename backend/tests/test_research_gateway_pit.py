@@ -97,8 +97,10 @@ def pages_on_disk(tools) -> list:
 def test_pit_policy_validates_its_fields(tmp_path):
     assert policy() == rg.PitPolicy(as_of=AS_OF, same_day="exclude", undated="drop", provider_bounds=True,
                                     overfetch=1)
-    for bad in ({"same_day": "maybe"}, {"undated": "keep"}, {"overfetch": 0}, {"overfetch": 5},
-                {"overfetch": 2.0}, {"overfetch": True}, {"provider_bounds": "yes"}):
+    assert policy(overfetch=rg.PIT_OVERFETCH_MAX).overfetch == 4
+    for bad in ({"same_day": "maybe"}, {"undated": "keep"}, {"overfetch": 0},
+                {"overfetch": rg.PIT_OVERFETCH_MAX + 1}, {"overfetch": 2.0}, {"overfetch": True},
+                {"provider_bounds": "yes"}):
         with pytest.raises(ValueError):
             policy(**bad)
     for as_of in ("2024-06-01", dt.datetime(2024, 6, 1), None):
@@ -543,25 +545,125 @@ def test_a_search_text_showing_a_source_marked_late_meanwhile_is_not_cached(tmp_
     assert ledger.get(1)["pit_status"] == "late"
 
 
+_STORY_URL = "https://site0.example/2024/05/story"
+
+
+def _sighted_late_while_fetched(tmp_path, monkeypatch, when):
+    """A source registered in window (its URL says May 2024) that another
+    agent's search sights late ("3 days ago") while its fetch is in flight:
+    ``during_fetch`` while the provider call runs, ``after_verdict`` after the
+    page's own dates admitted it but before the verdict is recorded."""
+    rows = {"grid first": [hit(0, "2024/05/story")], "grid second": [hit(0, "2024/05/story", date="3 days ago")]}
+    holder = {}
+
+    def fetch(url):
+        if when == "during_fetch":
+            holder["tools"].search("grid second", agent_id="k2")
+        return dated_page("Published: 2024-05-10")
+
+    tools, ledger = make_tools(tmp_path, pit=policy(), search_fn=lambda query, n: json.dumps({"results": rows[query]}),
+                               fetch_fn=fetch)
+    holder["tools"] = tools
+    if when == "after_verdict":
+        verdict = tools._pit_page_verdict
+
+        def verdict_then_sighting(*args):
+            decided = verdict(*args)
+            tools.search("grid second", agent_id="k2")
+            return decided
+
+        monkeypatch.setattr(tools, "_pit_page_verdict", verdict_then_sighting)
+    return tools, ledger
+
+
+@pytest.mark.parametrize("when", ["during_fetch", "after_verdict"])
+def test_a_source_sighted_late_while_its_page_is_fetched_is_withheld(tmp_path, monkeypatch, when):
+    tools, ledger = _sighted_late_while_fetched(tmp_path, monkeypatch, when)
+    assert tools.search("grid first", agent_id="k1").split("\n", 1)[0] == (
+        "[S1] Hit 0 — site0.example (tier 3) — published 2024-05")
+
+    assert tools.fetch(_STORY_URL, agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
+
+    row = ledger.get(1)
+    # The search's late verdict wins over the page's own in-window dates: nothing is stored.
+    assert (row["pit_status"], row["fetched"], row["page_path"]) == ("late", False, None)
+    stats, outcomes = tools.stats(), tools.outcome_counts()
+    assert {key: stats["pit"][key] for key in ("fetch_late_withheld", "fetch_units_spent_withheld",
+                                               "fetch_admitted", "search_late_dropped")} == {
+        "fetch_late_withheld": 1, "fetch_units_spent_withheld": 1, "fetch_admitted": 0, "search_late_dropped": 1}
+    assert (stats["fetches"], stats["failures"], outcomes["fetch_ok"]) == (1, 0, 0)
+    if when == "during_fetch":
+        # Withheld before storage.
+        assert pages_on_disk(tools) == []
+    # Remembered for the run and refused free after a resume.
+    assert tools.fetch(_STORY_URL, agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
+    ledger.flush()
+    resumed = rg.ResearchTools(rg.SourceLedger(ledger.path), tools.pages_dir, clock=lambda: NOW, pit=policy())
+    assert resumed.fetch(_STORY_URL, agent_id="k1") == rg.MSG_OUT_OF_WINDOW_SOURCE
+    assert all(not stored.get("fetched") and not stored.get("page_path") for stored in resumed.ledger.rows())
+
+
+def test_a_source_withheld_undated_stays_withheld_after_a_dated_sighting(tmp_path):
+    rows = {"grid first": [hit(0)], "grid second": [hit(0, published="2024-05-01")]}
+    fetch = CountingFetch(UNDATED_PAGE)
+    tools, ledger = make_tools(tmp_path, pit=policy(), search_fn=lambda query, n: json.dumps({"results": rows[query]}),
+                               fetch_fn=fetch)
+    tools.search("grid first", agent_id="k1")
+    url = "https://site0.example/page-0"
+    assert tools.fetch(url, agent_id="k1") == rg.MSG_FETCH_WITHHELD_UNDATED
+
+    # A later row dates the source in window: it is shown with that date ...
+    assert tools.search("grid second", agent_id="k1").split("\n", 1)[0] == (
+        "[S1] Hit 0 — site0.example (tier 3) — published 2024-05-01")
+    # ... but a withhold is never retried, and the answer speaks of the fetched page only.
+    assert tools.fetch(url, agent_id="k2") == rg.MSG_FETCH_WITHHELD_UNDATED
+    assert rg.MSG_FETCH_WITHHELD_UNDATED.startswith("FETCH_WITHHELD(pit_undated): the fetched page carried no "
+                                                    "readable date")
+    assert fetch.urls == [url]
+    row = ledger.get(1)
+    assert (row["pit_status"], row["published"], row["fetched"]) == ("undated_withheld", "2024-05-01", False)
+
+
 @pytest.mark.parametrize("result", [
-    # A lower-ranked page-head dateline after the as-of beats a metadata date before it.
+    # A lower-ranked page-head "Updated" dateline after the as-of beats metadata dates before it.
     (dated_page("Updated: 2024-07-15"), {"article:published_time": "2024-01-01",
                                           "article:modified_time": "2024-02-01"}),
-    (dated_page("Published: 2024-07-15"), {"article:published_time": "2024-01-01"}),
-    # An HTML <time> candidate (rank 4) after the as-of counts too.
+    # So does an HTML <time itemprop=dateModified> (rank 4) after it.
     (UNDATED_PAGE, {"article:published_time": "2024-01-01",
-                    "html_dates": [[4, "time_tag", "published", "2024-09-01"]]}),
+                    "html_dates": [[4, "time_tag", "modified", "2024-09-01"]]}),
+    # A page-head published dateline is the published pick when no metadata dates the page.
+    (dated_page("Published: 2024-07-15"), {}),
+    (dated_page("Date: 2024-07-15", "Published: 2024-05-01"), {}),
     # A date after today is after any as-of (TIME-2's display pick rejects it as future).
+    (dated_page("Published: 2024-01-01"), {"article:published_time": "2026-12-01"}),
     (UNDATED_PAGE, {"article:published_time": "2024-01-01", "article:modified_time": "2026-12-01"}),
     (UNDATED_PAGE, {"article:modified_time": "2026-12-01"}),
 ])
 @pytest.mark.parametrize("undated", ["drop", "flag"])
-def test_any_known_date_after_as_of_withholds_the_page(tmp_path, result, undated):
+def test_a_published_pick_or_any_modified_date_after_as_of_withholds_the_page(tmp_path, result, undated):
     tools, ledger = make_tools(tmp_path, pit=policy(undated=undated), fetch_fn=CountingFetch(result))
     assert tools.fetch("https://a.example/story", agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
     assert pages_on_disk(tools) == [] and len(ledger) == 0
     pit = tools.stats()["pit"]
     assert (pit["fetch_late_withheld"], pit["fetch_undated_withheld"], pit["fetch_undated_admitted"]) == (1, 0, 0)
+
+
+@pytest.mark.parametrize("result, shown", [
+    # A scheduled event's "Date:" line after the page's own dateline is an event date.
+    (dated_page("Published: 2024-05-01", "Date: November 5, 2024"), "published 2024-05-01"),
+    # A related item's <time> tag beside the page's JSON-LD date is not the page's date.
+    ((UNDATED_PAGE, {"html_dates": [[6, "json_ld", "published", "2024-01-01"],
+                                    [4, "time_tag", "published", "2026-09-29"]]}), "published 2024-01-01"),
+    # Nor is a page-head published line below the page's metadata date.
+    ((dated_page("Published: 2024-07-15"), {"article:published_time": "2024-01-01"}), "published 2024-01-01"),
+])
+def test_a_lower_ranked_published_date_after_as_of_does_not_withhold_the_page(tmp_path, result, shown):
+    tools, ledger = make_tools(tmp_path, pit=policy(), fetch_fn=CountingFetch(result))
+    page = tools.fetch("https://a.example/story", agent_id="k1")
+    assert page.split("\n", 1)[0].startswith(f"[S1] Grid connection report — a.example (tier 3) — {shown} — full page")
+    row = ledger.get(1)
+    assert (row["fetched"], row["pit_status"]) == (True, "admitted")
+    assert tools.stats()["pit"]["fetch_admitted"] == 1 and len(pages_on_disk(tools)) == 1
 
 
 def test_page_head_datelines_gate_even_without_the_text_date_fallback(tmp_path):
@@ -716,6 +818,15 @@ def test_without_a_policy_search_and_fetch_texts_are_unchanged(tmp_path):
 ])
 def test_pit_policy_from_the_child_env(env, expected):
     assert lr._pit_policy(env) == expected
+
+
+def test_the_overfetch_bound_is_one_value_in_both_processes():
+    """The parent clamps its pin with hindcast_policy's bound, the child's PitPolicy
+    and its env reader with research_gateway's (the processes share no code)."""
+    from app.services import hindcast_policy
+
+    assert rg.PIT_OVERFETCH_MAX == hindcast_policy.PIT_OVERFETCH_MAX == 4
+    assert hindcast_policy.pit_research_env({"gates": True, "overfetch": 99})["RESEARCH_PIT_OVERFETCH"] == "4"
 
 
 def test_pit_policy_needs_a_past_as_of(monkeypatch):

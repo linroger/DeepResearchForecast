@@ -42,6 +42,8 @@ HINDCAST_POLICY_OPTION = "hindcast_policy_v1"
 AS_OF_ENFORCEMENT_SCHEMA = "as-of-enforcement/v1"
 # TIME-8: the research child env a gated hindcast gets (see pit_research_env).
 PIT_RESEARCH_ENV_PREFIX = "RESEARCH_PIT_"
+# The one backend clamp of PIT_SEARCH_OVERFETCH (the v3 child's PitPolicy bound is
+# research_gateway.PIT_OVERFETCH_MAX; the processes share no code).
 PIT_OVERFETCH_MAX = 4
 
 
@@ -90,9 +92,10 @@ def capture_pit_policy_v1() -> dict[str, Any]:
     """The pin's ``pit`` block: Config's point-in-time gate knobs (TIME-8) at admission.
 
     ``gates`` (PIT_GATES), ``same_day`` (``exclude``/``include``), ``undated``
-    (``drop``/``flag``), ``provider_bounds`` and ``overfetch`` (1..4).  Values outside
-    those sets read as the strict choice.  The only reader of Config.PIT_*: the research
-    launch reads the pin, so a resume after a config change keeps the admitted gates.
+    (``drop``/``flag``), ``provider_bounds`` and ``overfetch`` (clamped to
+    1..PIT_OVERFETCH_MAX).  Values outside those sets read as the strict choice.  The
+    only reader of Config.PIT_*: the research launch reads the pin, so a resume after a
+    config change keeps the admitted gates.
     """
     from ..config import Config
 
