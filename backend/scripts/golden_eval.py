@@ -34,7 +34,10 @@ INTENDED WORKFLOW (the whole point — read this before using):
      Retrieval is labelled, not clamped (search is unbounded, pages are served
      as they are now), and the models may already know the outcome, so every
      hindcast is characterization-only (ADR 0002 I-21), never a fair as-of
-     forecast.
+     forecast. A replay started without ``as_of`` (for example with only the
+     ``evaluation`` context of step 2) is a live run: it must set
+     PREDICTION_MARKETS_ENABLED=false, because live Polymarket odds leak the
+     outcome.
   2. Start the run as an evaluation run (EVAL-13):
      ``PipelineOrchestrator.start(brief, evaluation={"eval_run_id": ..., "target":
      evaluation_target_from_golden(q)})``. Its reports never read production

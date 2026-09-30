@@ -164,18 +164,39 @@ def test_route_without_as_of_is_unchanged(client, start_calls, route):
 
 
 @pytest.mark.parametrize("route", ROUTES)
-def test_route_maps_a_start_refusal_to_400_only_for_a_hindcast(client, monkeypatch, route):
-    def refuse(cls, *args, **kwargs):
-        raise ValueError("refused at admission")
+def test_route_maps_only_an_admission_refusal_from_start_to_400(client, monkeypatch, route):
+    raised = {}
 
-    monkeypatch.setattr(po.PipelineOrchestrator, "start", classmethod(refuse))
+    def start(cls, *args, **kwargs):
+        raise raised["error"]
 
+    monkeypatch.setattr(po.PipelineOrchestrator, "start", classmethod(start))
+
+    raised["error"] = po.RunAdmissionError("refused at admission")
     hindcast = _post(client, route, as_of=AS_OF)
     assert hindcast.status_code == 400
     assert hindcast.get_json() == {"success": False, "error": "refused at admission"}
-    # Without as_of a ValueError from start() keeps today's 500.
-    live = _post(client, route)
-    assert live.status_code == 500 and live.get_json()["error"] == "refused at admission"
+    # Any other ValueError from start() is an internal fault: today's 500, with or
+    # without as_of.
+    raised["error"] = ValueError("internal fault")
+    for fields in ({"as_of": AS_OF}, {}):
+        response = _post(client, route, **fields)
+        assert response.status_code == 500 and response.get_json()["error"] == "internal fault"
+
+
+@pytest.mark.parametrize("route", ROUTES)
+def test_route_reports_a_fault_after_admission_as_500(client, monkeypatch, route):
+    """A ValueError raised once start() is creating the pipeline (here: the safety-policy
+    snapshot) is not a client error, even for a request carrying as_of."""
+    def broken_snapshot(origin):
+        raise ValueError("safety snapshot unavailable")
+
+    monkeypatch.setattr(po, "capture_safety_policy_v1", broken_snapshot)
+
+    response = _post(client, route, as_of=AS_OF)
+
+    assert response.status_code == 500
+    assert response.get_json()["error"] == "safety snapshot unavailable"
 
 
 # ───────────────────────────── start(): the single constructor ──────────────
@@ -192,7 +213,7 @@ def test_start_refuses_before_any_dir_task_or_thread(env, monkeypatch, no_tasks,
         as_of = _future()
     threads_before = dict(po.PipelineOrchestrator._threads)
 
-    with pytest.raises(ValueError, match=error):
+    with pytest.raises(po.RunAdmissionError, match=error):
         po.PipelineOrchestrator.start(QUESTION, as_of=as_of)
 
     assert not os.path.exists(Config.PIPELINE_DATA_DIR)
@@ -232,9 +253,17 @@ def test_start_keeps_the_callers_evaluation_context(env):
 
 
 def test_start_refuses_an_invalid_evaluation_with_a_valid_as_of(env, no_tasks):
-    with pytest.raises(ValueError):
+    with pytest.raises(po.RunAdmissionError):
         po.PipelineOrchestrator.start(QUESTION, as_of=AS_OF, evaluation={"eval_run_id": "../x"})
     assert not os.path.exists(Config.PIPELINE_DATA_DIR)
+
+
+def test_admission_refusals_are_value_errors(monkeypatch):
+    """Callers that catch ValueError (scripts, EVAL-13 users) keep working."""
+    monkeypatch.setattr(Config, "HINDCAST_ENABLED", False, raising=False)
+    assert issubclass(po.RunAdmissionError, ValueError)
+    with pytest.raises(po.RunAdmissionError, match="HINDCAST_ENABLED"):
+        po.admit_hindcast_as_of(AS_OF)
 
 
 def test_as_of_today_is_admitted_but_pinned_live(env):

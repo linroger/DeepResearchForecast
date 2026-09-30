@@ -25,6 +25,7 @@ from ..services.pipeline_orchestrator import (
     PipelineManager,
     PipelineOrchestrator,
     PipelineState,
+    RunAdmissionError,
     admit_hindcast_as_of,
     preflight_pipeline,
     refresh_research_artifact_manifest,
@@ -107,7 +108,7 @@ def run_pipeline():
         if as_of is not None:
             try:
                 admit_hindcast_as_of(as_of)
-            except ValueError as e:
+            except RunAdmissionError as e:
                 return jsonify({"success": False, "error": str(e)}), 400
 
         # 起飞前体检：把"研究跑完 40 分钟后才发现 Zep Key 是占位符"这类失败提前到现在
@@ -130,10 +131,9 @@ def run_pipeline():
                 model=model,
                 as_of=as_of,
             )
-        except ValueError as e:
-            if as_of is None:
-                raise
-            # start() re-checks the hindcast admission before creating anything.
+        except RunAdmissionError as e:
+            # start() re-checks the admission before creating anything; any other
+            # ValueError is an internal fault (500 below).
             return jsonify({"success": False, "error": str(e)}), 400
         return jsonify({
             "success": True,

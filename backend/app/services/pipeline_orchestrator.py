@@ -945,25 +945,37 @@ def admission_actor_intelligence_policy_v1() -> dict[str, Any]:
     return policy
 
 
+class RunAdmissionError(ValueError):
+    """A run request refused at admission, before any pipeline dir, task or thread exists.
+
+    TIME-7: the run API routes map only this class to 400.  A ValueError raised after
+    admission (while the pipeline is being created) is an internal fault and keeps its 500.
+    It subclasses ValueError so callers that catch ValueError are unaffected.
+    """
+
+
 def admit_hindcast_as_of(as_of: Any) -> tuple[str, dict[str, Any], str]:
     """TIME-7: the fail-closed hindcast admission rule for a run request carrying ``as_of``.
 
     Returns ``(as_of, actor policy, research engine)``: the canonical date, the actor-plane
     policy the admission pins and the engine the run's research stage will select from it.
-    Raises ValueError, in this order, when ``Config.HINDCAST_ENABLED`` is off, when ``as_of``
-    is not a canonical YYYY-MM-DD date on or before today (UTC; ``validate_as_of``) and when
-    that engine is not v3: only v3 honours a pinned as-of, while the legacy engine's
+    Raises RunAdmissionError, in this order, when ``Config.HINDCAST_ENABLED`` is off, when
+    ``as_of`` is not a canonical YYYY-MM-DD date on or before today (UTC; ``validate_as_of``)
+    and when that engine is not v3: only v3 honours a pinned as-of, while the legacy engine's
     ``_clamp_asof_reference`` would roll a past as-of forward to the run date.  Pure (nothing
     is written); ``PipelineOrchestrator.start`` and the run API routes share it.
     """
     from ..utils.point_in_time import validate_as_of
     if not bool(getattr(Config, "HINDCAST_ENABLED", False)):
-        raise ValueError("as_of requires HINDCAST_ENABLED=true")
-    canonical = validate_as_of(as_of)
+        raise RunAdmissionError("as_of requires HINDCAST_ENABLED=true")
+    try:
+        canonical = validate_as_of(as_of)
+    except ValueError as exc:
+        raise RunAdmissionError(str(exc)) from exc
     actor_policy = admission_actor_intelligence_policy_v1()
     engine = research_engine_for_run({"actor_intelligence_policy_v1": actor_policy})
     if engine != RESEARCH_ENGINE_V3:
-        raise ValueError("hindcast runs require the v3 research engine")
+        raise RunAdmissionError("hindcast runs require the v3 research engine")
     return canonical, actor_policy, engine
 
 
@@ -2519,7 +2531,9 @@ class DeerFlowResearchRunner:
         dated to it), ``PREDICTION_MARKETS_ENABLED=false`` and
         ``RESEARCH_AS_OF_PIN=true``, written after every Config forward so they
         win.  Only v3 honours it: any other engine raises RuntimeError before a
-        file or process exists.  An ambient ``RESEARCH_AS_OF`` never reaches a
+        file or process exists, and a watchdog timeout that leaves no actors.json
+        raises ``hindcast_salvage_refused`` instead of launching the legacy
+        ``--extract-only`` salvage.  An ambient ``RESEARCH_AS_OF`` never reaches a
         child (live runs stay live).
 
         W9-9 ``kg_graph_id``：非空且 RESEARCH_MCP_KG 开启时，把 DEER_FLOW_EXTENSIONS_CONFIG_PATH
@@ -2941,6 +2955,16 @@ class DeerFlowResearchRunner:
             # 超时打捞：研究主报告先于 actors/sources 提取阶段落盘——若被看门狗
             # 杀掉时报告已经写出，没必要丢弃整轮研究，降级继续（仅缺结构化档案）。
             if _fresh_expected_artifact():
+                if as_of and not os.path.exists(os.path.join(handoff_dir, "actors.json")):
+                    # TIME-7: a pinned hindcast never degrades here.  The ITEM-14 salvage
+                    # child runs the legacy engine (--extract-only is a legacy-only mode),
+                    # which ignores RESEARCH_AS_OF, and going on without actors.json would
+                    # anchor the simulation calendar at the run date.  Fail closed: v3's
+                    # identity-bound work dir lets a resume finish only the finalize phase.
+                    raise RuntimeError(
+                        f"hindcast_salvage_refused: research timed out (>{budget}s) before v3 "
+                        f"wrote actors.json; the legacy --extract-only salvage cannot honour "
+                        f"RESEARCH_AS_OF {as_of}; resume so v3 finishes its finalize phase")
                 logger.warning(
                     f"DeerFlow 研究超时（>{budget}s），但 {artifact_label} 已写出——打捞继续"
                 )
@@ -3021,6 +3045,15 @@ class DeerFlowResearchRunner:
             logger.warning("actor_dossier.md 疑似降级产物（错误串/过短），按缺失处理")
             actor_dossier = ""
         actors = _read_json(os.path.join(handoff_dir, "actors.json"))
+        if as_of:
+            # TIME-7: actors.json as_of_date anchors the simulation calendar and the persona
+            # as-of lines.  A pinned hindcast is returned only when the child dated it to the
+            # pin; anything else (no actors.json, another date) fails closed and stays resumable.
+            _actors_as_of = actors.get("as_of_date") if isinstance(actors, dict) else None
+            if _actors_as_of != as_of:
+                raise RuntimeError(
+                    f"hindcast_as_of_mismatch: actors.json as_of_date {_actors_as_of!r} is not the "
+                    f"pinned as_of {as_of}; resume so v3 rewrites it")
         sources = _read_json(os.path.join(handoff_dir, "sources.json"))
         timeline = _read_json(os.path.join(handoff_dir, "timeline.json"))
         # I-5-7: 汇总研究阶段遥测。token 行可能整轮缺失（某些研究模型不报 usage）→ 全 0/None。
@@ -8694,6 +8727,9 @@ class PipelineOrchestrator:
         （TIME-6 capture_hindcast_policy_v1），并作为评估运行准入：调用方未给 evaluation 时以
         eval_run_id ``hindcast_<YYYYMMDD>`` 走 EVAL-13 同一条钉/标记路径（评估账本、跳过生产
         校准、解析监测排除）；调用方给了 evaluation（golden 回放）则沿用其值。缺省 None → 今日路径。
+
+        两类准入拒绝（as_of 与 evaluation）都抛 RunAdmissionError（ValueError 子类）：运行 API
+        只把它映射为 400；创建目录/任务之后抛出的 ValueError 是内部故障，仍是 500。
         """
         admission_actor_policy: Optional[dict[str, Any]] = None
         hindcast_pin: Optional[dict[str, Any]] = None
@@ -8702,7 +8738,12 @@ class PipelineOrchestrator:
             hindcast_pin = capture_hindcast_policy_v1(as_of, research_engine=engine)
             if evaluation is None:
                 evaluation = {"eval_run_id": "hindcast_" + as_of.replace("-", "")}
-        evaluation_pin = build_evaluation_pin(evaluation) if evaluation is not None else None
+        evaluation_pin: Optional[dict[str, Any]] = None
+        if evaluation is not None:
+            try:
+                evaluation_pin = build_evaluation_pin(evaluation)
+            except ValueError as exc:
+                raise RunAdmissionError(str(exc)) from exc
         pipeline_id = f"pipe_{uuid.uuid4().hex[:12]}"
         PipelineManager.ensure_dirs(pipeline_id)
 
@@ -12520,32 +12561,48 @@ class PipelineOrchestrator:
         source date, and in a hindcast a source dated after the as-of is a leak, never newer
         evidence.  Such sources are recorded, never adopted: up to
         ``HINDCAST_VIOLATIONS_MAX`` of their URLs go to ``state.options['hindcast_violations']``
-        (only when there is one; every graph build re-decides).  The pinned date is also the
-        ledger pre-registration anchor (EVAL-1 ``as_of_date_validated``).  A pin whose as-of is
-        not a canonical, non-future date raises ValueError: the graph stage fails closed
-        rather than anchor a hindcast anywhere else.
+        (only when there is one; every graph build re-decides).  The check can only see
+        dated sources (v3 dates them only with RESEARCH_SOURCE_DATES), so its coverage is
+        always recorded in ``state.options['hindcast_source_dates']`` = ``{'dated',
+        'undated', 'after_as_of'}`` (source rows; ``after_as_of`` is not capped): no
+        violations with every source undated means "not checked", never "no leak".  The
+        pinned date is also the ledger pre-registration anchor (EVAL-1
+        ``as_of_date_validated``).  A pin whose as-of is not a canonical, non-future date
+        raises ValueError: the graph stage fails closed rather than anchor a hindcast
+        anywhere else.
         """
         from ..utils.point_in_time import validate_as_of
         anchor = datetime.strptime(validate_as_of(pin.get("as_of")), "%Y-%m-%d").replace(
             tzinfo=timezone.utc)
         violations: list[str] = []
+        coverage = {"dated": 0, "undated": 0, "after_as_of": 0}
         for source in sources if isinstance(sources, list) else []:
-            if len(violations) >= HINDCAST_VIOLATIONS_MAX:
-                break
             if not isinstance(source, dict):
                 continue
-            url = source.get("url")
-            if not isinstance(url, str) or not url or url in violations:
-                continue
             dated = parse_as_of(source.get("date"))
-            if dated is not None and dated > anchor:
+            if dated is None:
+                coverage["undated"] += 1
+                continue
+            coverage["dated"] += 1
+            if dated <= anchor:
+                continue
+            coverage["after_as_of"] += 1
+            url = source.get("url")
+            if (isinstance(url, str) and url and url not in violations
+                    and len(violations) < HINDCAST_VIOLATIONS_MAX):
                 violations.append(url)
         state.options.pop("hindcast_violations", None)
+        state.options["hindcast_source_dates"] = coverage
         if violations:
             state.options["hindcast_violations"] = violations
             logger.warning("[%s] hindcast: %d source(s) dated after the pinned as-of %s recorded "
                            "in hindcast_violations, never adopted as the graph anchor",
                            state.pipeline_id, len(violations), anchor.date())
+        if coverage["undated"]:
+            logger.info("[%s] hindcast: %d of %d source(s) carry no publication date; the "
+                        "later-dated check covers only dated sources (RESEARCH_SOURCE_DATES)",
+                        state.pipeline_id, coverage["undated"],
+                        coverage["undated"] + coverage["dated"])
         cls._record_validated_as_of(state, anchor, True)
         return anchor
 

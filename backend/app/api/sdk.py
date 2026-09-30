@@ -44,6 +44,7 @@ from ..config import Config
 from ..services.pipeline_orchestrator import (
     PipelineManager,
     PipelineOrchestrator,
+    RunAdmissionError,
     admit_hindcast_as_of,
     preflight_pipeline,
 )
@@ -133,7 +134,7 @@ def v1_run():
         if as_of is not None:
             try:
                 admit_hindcast_as_of(as_of)
-            except ValueError as e:
+            except RunAdmissionError as e:
                 return _err(str(e))
 
         # 起飞前体检（与 SPA 路由同一套，杜绝漂移）
@@ -156,10 +157,9 @@ def v1_run():
                 model=model,
                 as_of=as_of,
             )
-        except ValueError as e:
-            if as_of is None:
-                raise
-            # start() re-checks the hindcast admission before creating anything.
+        except RunAdmissionError as e:
+            # start() re-checks the admission before creating anything; any other
+            # ValueError is an internal fault (500 below).
             return _err(str(e))
         return _ok({
             "pipeline_id": state.pipeline_id,
