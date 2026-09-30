@@ -220,6 +220,10 @@ def stable_actor_id(name: Any) -> str:
     (backward compatible artifacts).  Otherwise the id hashes ``normalize_name`` in its own
     ``idk1`` namespace, so non-Latin names get distinct, NFKC-stable ids instead of an empty
     or colliding key.  Raises ValueError only when ``normalize_name(name)`` is empty.
+
+    This is the backend fallback behind ``actor_context.actor_id_for``, not the research
+    producer's ``deerflow_research.stable_actor_id`` (a different key, so different ids for
+    the same name); explicit producer ``actor_id`` values always take precedence over it.
     """
     key = actor_identity_key(name)
     if not key:

@@ -1002,7 +1002,10 @@ def build_actor_role_contract(
     if not actor_id:
         # INFRA-11: exactly actor_context.actor_id_for (the raw dossier name, not the
         # display-sanitised one), so the role and its context pack share one id and every
-        # non-Latin name no longer shares the empty-key id actor_e3b0c44298fc1c14.
+        # non-Latin name no longer shares the empty-key id actor_e3b0c44298fc1c14.  For
+        # two Latin cases the role id changed once, onto the unchanged pack id: names over
+        # 180 characters (hashed after truncation before) and names the unsafe-text filter
+        # replaces (all of them shared the placeholder's id before).
         try:
             actor_id = stable_actor_id(actor.get("name"))
         except ValueError:

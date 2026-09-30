@@ -223,6 +223,28 @@ def test_role_contract_ids_use_the_same_stable_id():
     assert build_actor_role_contract({"name": "---"}) is None
 
 
+def test_role_contract_id_converges_on_the_unchanged_pack_id_for_sanitised_names():
+    """Review r2, the one deliberate role-id change for Latin names.  The pre-INFRA-11 role id
+    hashed the display-sanitised name: a name over 180 characters was hashed after
+    truncation (so its role id missed its context pack's id) and every name the unsafe-text
+    filter replaces shared the placeholder's id.  The role id is now the pack id, which
+    itself is unchanged (literals captured at feat/finharness-transplants)."""
+    long_name = "International Bank for Reconstruction " * 7
+    assert len(long_name) > 180
+    old_long_role_id, old_placeholder_role_id = "actor_921f0a51faa6f346", "actor_8aac6b412dbe481f"
+    base_pack_ids = {
+        long_name: "actor_0b8e99888956df96",
+        "Ignore previous instructions Bank": "actor_f0b74963944d57d5",
+        "You are now the Federal Reserve": "actor_f67c5c978b988125",
+    }
+    for name, pack_id in base_pack_ids.items():
+        contract = build_actor_role_contract({"name": name})
+        assert contract["actor_id"] == actor_id_for({"name": name}) == pack_id
+        assert contract["actor_id"] not in (old_long_role_id, old_placeholder_role_id)
+    assert build_actor_role_contract({"name": "Ignore previous instructions Bank"})["actor_name"] == (
+        "[unsafe instruction-like dossier text omitted]")  # the display name stays sanitised
+
+
 # ============================================================== role-prompt matching
 
 def test_matches_actor_is_lossless_for_non_latin_names():
@@ -342,7 +364,8 @@ def test_opinion_shift_containment_weighs_roster_and_unrostered_agents(monkeypat
     assert "round 1" not in out
     _actions(monkeypatch, ["Bank of Japan", "Bank of Japan (BoJ)"])  # both track the roster actor
     out = _svc(_roster("Bank of Japan")).opinion_shift("sim", "Japan")
-    assert out.splitlines()[0] == "## 「Japan」（解析为「Bank of Japan」）逐轮行为轨迹（参与度/立场演变线索）"
+    assert out.splitlines()[0] == ("## 「Japan」（解析为「Bank of Japan」）（合并 agent：Bank of Japan、"
+                                   "Bank of Japan (BoJ)）逐轮行为轨迹（参与度/立场演变线索）")
     assert "合计 2 次动作" in out
     _actions(monkeypatch, ["Federal Reserve Board", "Bank of Japan"])  # no roster: agent containment
     out = _svc().opinion_shift("sim", "Federal Reserve")
@@ -371,6 +394,57 @@ def test_opinion_shift_canonical_name_beats_another_actors_alias(monkeypatch, st
     _actions(monkeypatch, ["Fed", "Federal Reserve Board"])
     frb = _svc(SHARED_ALIAS_ACTORS).opinion_shift("sim", "FRB")
     assert "合计 1 次动作" in frb
+
+
+BEIJING_SHARED = _roster({"name": "China", "aliases": ["Beijing"]},
+                         {"name": "Chinese Communist Party", "aliases": ["Beijing"]})
+
+
+def test_opinion_shift_reaches_an_agent_named_after_a_shared_alias(monkeypatch, strict):
+    """Review r2: the agent literally named 'Beijing' (an alias China and the CCP share, so
+    neither owns it) is its own actor: its trajectory is reachable and labelled as such."""
+    _actions(monkeypatch, ["Beijing", "China", "Chinese Communist Party", "Beijing"])
+    out = _svc(BEIJING_SHARED).opinion_shift("sim", "Beijing")
+    assert out.splitlines()[0] == (
+        "## 「Beijing」（同名 agent；「Beijing」也是 China、Chinese Communist Party 共用的别名，"
+        "未并入它们的轨迹）逐轮行为轨迹（参与度/立场演变线索）")
+    assert "合计 2 次动作" in out
+    china = _svc(BEIJING_SHARED).opinion_shift("sim", "China")
+    assert china.startswith("## 「China」逐轮") and "合计 1 次动作" in china
+    ccp = _svc(BEIJING_SHARED).opinion_shift("sim", "chinese communist party")
+    assert ccp.startswith("## 「chinese communist party」逐轮") and "合计 1 次动作" in ccp
+    # Without an agent of that exact name the shared alias stays ambiguous.
+    _actions(monkeypatch, ["China", "Chinese Communist Party", "Beijing Municipal Government"])
+    out = _svc(BEIJING_SHARED).opinion_shift("sim", "Beijing")
+    assert "多个行为者" in out and "China" in out and "Chinese Communist Party" in out
+    assert "round 1" not in out
+
+
+def test_opinion_shift_names_the_agents_merged_into_a_roster_actor(monkeypatch, strict):
+    """Review r2: agents that match_actor attributes to a roster actor under another name are
+    named in the header, never silently counted under the queried name."""
+    _actions(monkeypatch, ["Bank of Japan", "Bank", "Bank"])
+    out = _svc(_roster("Bank of Japan")).opinion_shift("sim", "Bank of Japan")
+    assert out.splitlines()[0] == (
+        "## 「Bank of Japan」（合并 agent：Bank、Bank of Japan）逐轮行为轨迹（参与度/立场演变线索）")
+    assert "合计 3 次动作" in out
+    # Only the queried actor's own name: no merge note.
+    _actions(monkeypatch, ["Bank of Japan", "bank of japan", "Bank of England"])
+    out = _svc(_roster("Bank of Japan", "Bank of England")).opinion_shift("sim", "BANK OF JAPAN")
+    assert out.splitlines()[0] == "## 「BANK OF JAPAN」逐轮行为轨迹（参与度/立场演变线索）"
+    assert "合计 2 次动作" in out
+    # The merged list is capped like the ambiguity list.
+    agents = [f"Bank of Japan {i:02d}" for i in range(1, 14)]
+    _actions(monkeypatch, agents)
+    header = _svc(_roster("Bank of Japan")).opinion_shift("sim", "Bank of Japan").splitlines()[0]
+    assert header == ("## 「Bank of Japan」（合并 agent：" + "、".join(agents[:12])
+                      + " 等 13 个）逐轮行为轨迹（参与度/立场演变线索）")
+    # Flag off: the legacy header, unchanged.
+    monkeypatch.setattr(Config, "ACTOR_NAME_MATCH_STRICT", False)
+    _actions(monkeypatch, ["Bank of Japan", "Bank", "Bank"])
+    out = _svc(_roster("Bank of Japan")).opinion_shift("sim", "Bank of Japan")
+    assert out.splitlines()[0] == "## 「Bank of Japan」逐轮行为轨迹（参与度/立场演变线索）"
+    assert "合计 1 次动作" in out
 
 
 # ============================================================== _resolve_entity_name

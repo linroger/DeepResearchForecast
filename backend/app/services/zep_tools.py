@@ -2910,12 +2910,11 @@ class ZepToolsService:
             return "（opinion_shift 需要 actor_name 参数：请提供要追踪的 Agent/角色名）"
         shown = f"「{actor_name}」"
         if getattr(Config, "ACTOR_NAME_MATCH_STRICT", True):
-            agents, resolved, ambiguity = self._opinion_shift_agents(actor_name, actions)
+            agents, note, ambiguity = self._opinion_shift_agents(actor_name, actions)
             if ambiguity:
                 return ambiguity
-            if resolved and normalize_name(resolved) != target:
-                # INFRA-11：经别名/包含解析到的行为者要在输出里点名，绝不把替换后的轨迹挂在原始名下。
-                shown += f"（解析为「{resolved}」）"
+            # INFRA-11：解析到的行为者与并入的 agent 都在输出里点名，绝不把替换/合并后的轨迹挂在原始名下。
+            shown += note
             mine = [a for a in actions if a.agent_name and str(a.agent_name) in agents]
         else:
             mine = [a for a in actions if normalize_name(a.agent_name) == target or normalize_name(a.agent_name).find(target) >= 0]
@@ -2947,22 +2946,27 @@ class ZepToolsService:
         return "\n".join(lines)
 
     def _opinion_shift_agents(self, actor_name: str, actions: List[Any]) -> tuple[set, str, str]:
-        """INFRA-11: (agent names opinion_shift tracks, the actor they resolve to, ambiguity message).
+        """INFRA-11: (agent names opinion_shift tracks, header note, ambiguity message).
 
         The legacy filter kept every agent whose normalized name merely contained the
         target, so 'US' also swept in Russia, Australia and Business Roundtable.  Here an
         exact name decides first: the research roster's canonical name or an alias (the
         canonical wins over another actor's alias), then an agent name from the action log.
-        Otherwise containment of at least 4 characters is weighed across both pools at once:
-        every roster actor sharing such a containment with the target, plus every agent name
-        that does and that none of those roster actors already tracks ('Japan' against the
-        roster actor Bank of Japan and the unrostered agent Government of Japan is two
-        candidates).  A roster actor tracks the agents whose name denotes it exactly or that
-        ``match_actor`` resolves to it.  One candidate resolves (its name is returned so the
-        output can say what the target resolved to); several return an explanatory message
-        naming them instead of merging their trajectories; none returns empty values.
+        An alias two roster actors share belongs to neither of them, so an agent carrying
+        exactly that name is tracked on its own (the note says whose alias the name also is)
+        instead of leaving its trajectory unreachable; without such an agent the shared alias
+        stays ambiguous.  Otherwise containment of at least 4 characters is weighed across
+        both pools at once: every roster actor sharing such a containment with the target,
+        plus every agent name that does and that none of those roster actors already tracks
+        ('Japan' against the roster actor Bank of Japan and the unrostered agent Government
+        of Japan is two candidates).  A roster actor tracks the agents whose name denotes it
+        exactly or that ``match_actor`` resolves to it.  One candidate resolves, and the note
+        names the actor the target resolved to and every tracked agent under another name;
+        several return an explanatory message naming them instead of merging their
+        trajectories; none returns empty values.
         """
         from ..utils.actors import actor_match_candidates, match_actor, normalize_name
+        target = normalize_name(actor_name)
         agent_names = sorted({str(a.agent_name) for a in actions if a.agent_name})
         roster = getattr(self, "actor_roster", None)
         agent_pool = {"actors": [{"name": name} for name in agent_names]}
@@ -2986,11 +2990,23 @@ class ZepToolsService:
             norm = normalize_name(row.get("name"))
             return {name for name in agent_names if normalize_name(name) == norm}
 
+        def _listing(labels: List[str]) -> str:
+            more = f" 等 {len(labels)} 个" if len(labels) > 12 else ""
+            return "、".join(labels[:12]) + more
+
+        note = ""
         candidates = [(str(row.get("name")), _roster_agents(row))
                       for row in actor_match_candidates(actor_name, roster, exact_only=True)]
+        same_name = [(str(row.get("name")), _named_agents(row))
+                     for row in actor_match_candidates(actor_name, agent_pool, exact_only=True)]
+        if len(candidates) > 1 and same_name:
+            # The agent named exactly after the shared alias is owned by none of the actors
+            # sharing it (see owners), so its own trajectory is the one to show.
+            note = (f"（同名 agent；「{actor_name}」也是 {_listing([label for label, _ in candidates])}"
+                    " 共用的别名，未并入它们的轨迹）")
+            candidates = same_name
         if not candidates:
-            candidates = [(str(row.get("name")), _named_agents(row))
-                          for row in actor_match_candidates(actor_name, agent_pool, exact_only=True)]
+            candidates = same_name
         if not candidates:
             candidates = [(str(row.get("name")), _roster_agents(row))
                           for row in actor_match_candidates(actor_name, roster)]
@@ -3000,14 +3016,18 @@ class ZepToolsService:
                 if untracked:
                     candidates.append((str(row.get("name")), untracked))
         if len(candidates) == 1:
-            return candidates[0][1], candidates[0][0], ""
+            label, agents = candidates[0]
+            resolved = normalize_name(label)
+            if resolved != target:
+                note += f"（解析为「{label}」）"
+            if any(normalize_name(name) not in (resolved, target) for name in agents):
+                note += f"（合并 agent：{_listing(sorted(agents))}）"
+            return agents, note, ""
         if not candidates:
             return set(), "", ""
-        names = "、".join(label for label, _ in candidates[:12])
-        more = f" 等 {len(candidates)} 个" if len(candidates) > 12 else ""
         return set(), "", (
-            f"（「{actor_name}」可对应多个行为者：{names}{more}——为避免把不同行为者的轨迹"
-            "混在一起，请用其中一个的完整名称重新调用 opinion_shift）"
+            f"（「{actor_name}」可对应多个行为者：{_listing([label for label, _ in candidates])}"
+            "——为避免把不同行为者的轨迹混在一起，请用其中一个的完整名称重新调用 opinion_shift）"
         )
 
     def scenario_diff(self, base_sim_id: str, scenario_sim_id: str) -> str:
