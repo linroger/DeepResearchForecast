@@ -1298,6 +1298,20 @@ _BINARY_LOW_P_RULE = (
     "(not negations of earlier statements)."
 )
 
+# REPORT-11（FORECAST_BINARY_SYMMETRIC_GUARD，默认关）：上面两条规则与基础 RULES（「不要挤在
+# 0.40-0.60」）只把模型推离 0.5，没有一句约束反方向的失败——为凑目标区间挪数字、为显得果断制造极端。
+# 开启时每轮都追加：紧跟当轮的逆向 / 低概率规则（两条规则逐字保留）；FORECAST_BINARY_CONTRARIAN 关时
+# 紧跟基础 RULES——旗标开即每条抽取提示词都带护栏，forecast_policy 记的就是实际生效的政策。
+# 刻意不含 '0.05-0.35 range' 与 'CONTRARIAN FRAMING' 字面量：test_audit_fixes_report 的假 LLM
+# 按它们路由回复。思路来源：TradingAgents（Apache-2.0）研究经理 / 组合经理提示词中的对称 Hold 规则
+# （tradingagents/agents/managers/research_manager.py、portfolio_manager.py：不为显得果断而强行
+# 给方向）；措辞为 DRF 自拟，未复制代码。
+_BINARY_SYMMETRIC_GUARD = (
+    "\nSYMMETRY GUARD: include a statement only if the evidence genuinely supports the "
+    "probability you give it; never shade a number toward a target range — drop the "
+    "candidate instead. Do not manufacture extremity to look decisive."
+)
+
 # 预测市场校准锚点（Polymarket 公开 Gamma API）：与所列市场重叠的预测须引用市场
 # 隐含概率，偏离 >10 个百分点须显式解释分歧；市场是校准锚点，不是真值。命中时模型给出
 # market_anchor 字段，_normalize_binaries 用我们自己的市场数据回填/校验隐含概率并计算
@@ -3217,6 +3231,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         content = slice_head_tail(content, _bbudget, _bhr if _bhr is not None else 0.6)
     themes = [str(t).strip().lower() for t in (themes or []) if str(t).strip()] or None
     contrarian = bool(_cfg("FORECAST_BINARY_CONTRARIAN", True))
+    symmetric_guard = bool(_cfg("FORECAST_BINARY_SYMMETRIC_GUARD", False))
     # Foglamp WP1 (1D, I-16)：模拟信号只有在 SIMULATION_FORECAST_EFFECT=legacy_prompt
     # （特征化 fixture 专用）时才允许进入二元概率生成；默认 diagnostic_only 下模拟产出
     # 不得移动任何已发布概率（simulation adjustments 是未晋升的预测政策）。
@@ -3292,6 +3307,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         )
         if contrarian:
             user += _BINARY_LOW_P_RULE if low_p else _BINARY_CONTRARIAN_RULE
+        if symmetric_guard:
+            user += _BINARY_SYMMETRIC_GUARD
         if sim_sensitive:
             user += (
                 "\nSIMULATION SENSITIVITY: each adjustment_rationale MUST state how far and in "

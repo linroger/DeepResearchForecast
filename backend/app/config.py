@@ -915,6 +915,21 @@ class Config:
     # false 恢复旧的「失败后成稿再评一次」且不写标记。
     REPORT_CRITIQUE_SINGLE_PASS = os.environ.get('REPORT_CRITIQUE_SINGLE_PASS', 'true').strip().lower() == 'true'
     FORECAST_BINARY_CONTRARIAN = os.environ.get('FORECAST_BINARY_CONTRARIAN', 'true').strip().lower() == 'true'
+    # REPORT-11 二元预测对称护栏（默认关）：逆向框架 / 低概率重述规则与基础 RULES 只把模型推离 0.5，
+    # 没有一句约束反方向的失败。开启后每条二元抽取提示词都追加 SYMMETRY GUARD（紧跟当轮逆向 / 低概率
+    # 规则；FORECAST_BINARY_CONTRARIAN 关时紧跟基础 RULES）：证据不支持所给概率就丢掉候选，绝不为凑
+    # 目标区间挪数字，不为显得果断制造极端。这是会移动概率的提示词政策，须经 WP14 前瞻、结果盲的
+    # 晋升门才可默认开启（ADR-0002 I-21：不得凭 golden / 形状指标晋升）。开启时记入
+    # forecast.quality.forecast_policy（与形状遥测旗标无关）与准入钉 safety_policy_v1。默认关是安全的：
+    # 二元抽取提示词逐字节不变。
+    FORECAST_BINARY_SYMMETRIC_GUARD = os.environ.get('FORECAST_BINARY_SYMMETRIC_GUARD', 'false').strip().lower() == 'true'
+    # REPORT-11 概率形状遥测（默认开）：确定性计算情景形状（峰值 max_probability、归一化熵、距均匀分布的
+    # TV 距离，叙事前 / 成稿后批判成功时另算批判前后差值）与二元预测形状（0.40-0.60 中间带 / 0.45-0.55
+    # 近半 / ≤0.05 或 ≥0.95 极端占比、十分位直方图、市场重述与分区对账向 / 远离 0.5 的移动计数），记入
+    # forecast.quality.probability_shape（批判成功时另记 quality.pre_critique_scenarios），发布提交时
+    # 作为账本行 objective_signals。纯观测：任何门都不读它，零 LLM 调用，不改概率与提示词，故默认开是
+    # 安全的。false 时 forecast.json 与账本提交行逐字节回到旧形态。
+    FORECAST_PROBABILITY_SHAPE = os.environ.get('FORECAST_PROBABILITY_SHAPE', 'true').strip().lower() == 'true'
     FORECAST_SIM_SENSITIVITY = os.environ.get('FORECAST_SIM_SENSITIVITY', 'true').strip().lower() == 'true'
     FORECAST_BINARY_THEMES = os.environ.get('FORECAST_BINARY_THEMES', '').strip()  # 空=由 brief/主题自适应
     FORECAST_HORIZON_CHECK = os.environ.get('FORECAST_HORIZON_CHECK', 'true').strip().lower() == 'true'  # RQ-6 需求↔二元预测结算年份一致性标记
