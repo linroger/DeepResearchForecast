@@ -21,6 +21,7 @@ from openai.types.chat.chat_completion import ChatCompletion
 from ..config import Config
 from .llm_client import LLMClient, CLI_PROVIDERS
 from .logger import get_logger
+from .provider_overrides import openai_compat_request_overrides
 
 logger = get_logger('mirofish.oasis_llm')
 
@@ -532,26 +533,29 @@ def _create_openai_model(config: Dict[str, Any], use_boost: bool = False):
     return _wrap_openai_empty_guard(_m)  # S2-llm: prevent empty-assistant 400 cascade
 
 
-def _inject_coding_agent_ua(model) -> None:
-    """为 CAMEL OpenAIModel 注入 coding-agent User-Agent，以通过 Kimi-for-coding 网关。
+def _inject_coding_agent_ua(model, provider: str = 'kimi') -> None:
+    """为 CAMEL OpenAIModel 注入 ``provider`` 的默认请求头（Kimi-for-coding 的 coding-agent UA）。
 
     CAMEL 的 ``ModelFactory.create`` / ``OpenAIModel`` 不会把 ``default_headers``
-    透传到底层 ``openai`` 客户端，因此在模型创建后直接用带 UA 头的客户端替换
-    ``_client`` / ``_async_client``（同步与异步路径都要替换）。
+    透传到底层 ``openai`` 客户端，因此在模型创建后直接用带头的客户端替换
+    ``_client`` / ``_async_client``（同步与异步路径都要替换）。INFRA-6: 头部取自
+    provider_overrides（与 LLMClient 同源）；该提供方没有默认头时不替换客户端。
     """
+    headers = openai_compat_request_overrides(provider)["default_headers"]
+    if not headers:
+        return
     from openai import OpenAI, AsyncOpenAI
 
-    ua = Config.LLM_USER_AGENT
-    common: Dict[str, Any] = dict(
-        timeout=model._timeout,
-        max_retries=model._max_retries,
-        base_url=model._url,
-        api_key=model._api_key,
-        default_headers={"User-Agent": ua},
-    )
+    common: Dict[str, Any] = {
+        "timeout": model._timeout,
+        "max_retries": model._max_retries,
+        "base_url": model._url,
+        "api_key": model._api_key,
+        "default_headers": headers,
+    }
     model._client = OpenAI(**common)
     model._async_client = AsyncOpenAI(**common)
-    logger.info(f"OASIS kimi: 已为 OpenAI 客户端注入 coding-agent UA='{ua}'")
+    logger.info(f"OASIS {provider}: 已为 OpenAI 客户端注入 coding-agent UA='{headers.get('User-Agent')}'")
 
 
 def create_oasis_model(config: Dict[str, Any], use_boost: bool = False):
@@ -582,14 +586,15 @@ def create_oasis_model(config: Dict[str, Any], use_boost: bool = False):
         )
 
     model = _create_openai_model(config, use_boost=use_boost)
-    if provider == 'kimi':
-        # 仅 Kimi-for-coding 网关按 UA 校验 coding-agent 身份；MiniMax 不需要。
-        _inject_coding_agent_ua(model)
+    # 仅 Kimi-for-coding 网关按 UA 校验 coding-agent 身份；其它提供方没有默认头，不替换客户端。
+    _inject_coding_agent_ua(model, provider)
     # 推理模型(kimi/minimax/deepseek/qwen/glm)默认关闭推理，避免 reasoning 吃光 token 预算
-    # 导致 content 为空。reasoning_extra_body() 对非推理提供方返回 None，故可统一调用。
+    # 导致 content 为空。非推理提供方的 extra_body 为空，不注入。
     # CAMEL 会把 model_config_dict 透传为 create() 关键字参数，故注入 extra_body。
-    extra_body = Config.reasoning_extra_body()
-    if extra_body is not None:
+    # INFRA-6: 按 _resolve_provider 解析出的提供方取 extra_body（此前无参调用读的是全局
+    # Config.LLM_PROVIDER，模拟提供方与全局主提供方不同时发错推理开关体）。
+    extra_body = openai_compat_request_overrides(provider)["extra_body"]
+    if extra_body:
         try:
             model.model_config_dict["extra_body"] = extra_body
             logger.info(f"OASIS {provider}: 已关闭推理 via model_config_dict.extra_body={extra_body}")

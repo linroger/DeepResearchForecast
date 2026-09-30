@@ -19,6 +19,7 @@ from flask import jsonify, request
 from . import settings_bp
 from ..config import Config
 from ..utils.logger import get_logger
+from ..utils.provider_overrides import openai_compat_request_overrides
 
 logger = get_logger('mirofish.api.settings')
 
@@ -95,6 +96,11 @@ def _test_openai_compat_provider(provider, api_key, base_url, model):
 
     from openai import OpenAI
 
+    # INFRA-6: 请求头 / 推理开关体 / 温度规则与生产调用同源（provider_overrides）。
+    # 推理提供方：测试时一律关闭推理（force_disable_thinking），避免 reasoning 吃光 max_tokens
+    # 导致空 content；温度用 0，Kimi K2.7 Code 网关只接受关推理时的 0.6（0 会 400，前端
+    # 「测试连接」会把 kimi 误报为失败），由同一规则修正。
+    overrides = openai_compat_request_overrides(provider, 0, force_disable_thinking=True)
     client_kwargs = {
         "api_key": api_key,
         "base_url": base_url,
@@ -102,24 +108,17 @@ def _test_openai_compat_provider(provider, api_key, base_url, model):
         "max_retries": 0,
     }
     # Kimi-for-coding 网关按 User-Agent 校验 coding-agent 身份（详见 llm_client.py）。
-    if provider == 'kimi':
-        client_kwargs["default_headers"] = {"User-Agent": Config.LLM_USER_AGENT}
+    if overrides["default_headers"]:
+        client_kwargs["default_headers"] = overrides["default_headers"]
 
     kwargs = {
         "model": model,
         "messages": [{"role": "user", "content": "Reply with exactly: pong"}],
-        "temperature": 0,
+        "temperature": overrides["temperature"],
         "max_tokens": 16,
     }
-    # 推理提供方：测试时一律关闭推理，避免 reasoning 吃光 max_tokens 导致空 content。
-    extra_body = Config._DISABLE_THINKING_EXTRA_BODY.get(provider)
-    if extra_body:
-        kwargs["extra_body"] = extra_body
-    # Kimi K2.7 Code 网关硬校验温度（开推理只接受 1、关推理只接受 0.6），temperature=0 会 400。
-    # 与 LLMClient._coerce_temperature 同源，否则前端「测试连接」会把 kimi 误报为失败。
-    if provider == 'kimi':
-        thinking_disabled = bool(extra_body and (extra_body.get("thinking") or {}).get("type") == "disabled")
-        kwargs["temperature"] = 0.6 if thinking_disabled else 1.0
+    if overrides["extra_body"]:
+        kwargs["extra_body"] = overrides["extra_body"]
 
     started = time.monotonic()
     try:

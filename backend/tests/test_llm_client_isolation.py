@@ -340,7 +340,8 @@ def test_chat_caches_meters_and_retries_under_the_model_the_request_carried(tran
         assert len(reads) == 1  # one read served the cache key, the meter and both attempts
         assert [c["model"] for c in transports["deepseek"].calls] == [FAST_ALIAS, FAST_ALIAS]
         assert PRIMARY not in transports or transports[PRIMARY].calls == []
-        assert set(tel.LLMMeter.snapshot(run_id)["by_model"]) == {f"{PRIMARY}:{FAST_ALIAS}"}
+        # INFRA-6: the meter names the serving provider (the fast-tier second client's).
+        assert set(tel.LLMMeter.snapshot(run_id)["by_model"]) == {f"deepseek:{FAST_ALIAS}"}
         key = tel.LLMCache.key(PRIMARY, FAST_ALIAS, _msgs("one-route"), 0.7, 4096, None)
         assert tel.LLMCache.get(key) == "fast-ok"
         reads.clear()
