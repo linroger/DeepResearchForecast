@@ -1489,15 +1489,18 @@ def test_report_stage_helper_wires_context_and_receipt(report_env):
         state, agent, "sim_stage", report_id="r_stage",
         progress_callback=lambda stage, pct, msg: progress.append(stage))
     assert report.status == ReportStatus.COMPLETED and "completed" in progress
+    # EVAL-18 (COST_CARD_ENABLED, default on): the report stage pins the run's config_hash.
+    config_hash = state.options["config_hash_v1"]["config_hash"]
     assert agent.ledger_context == {"pipeline_id": "pipe_stage", "simulation_id": "sim_stage",
                                     "seed": int(Config.SIM_SEED or 0), "run_kind": "pipeline",
-                                    "as_of_date": "2026-08-20"}
+                                    "as_of_date": "2026-08-20", "config_hash": config_hash}
     receipt = state.options["forecast_ledger"]
     assert receipt["status"] == "committed" and receipt["report_id"] == "r_stage"
     assert receipt is not agent.ledger_receipt and receipt == agent.ledger_receipt
     (row,) = _rows("commit")
-    assert (row["pipeline_id"], row["run_kind"], row["as_of_date"], row["as_of_source"]) == (
-        "pipe_stage", "pipeline", "2026-08-20", "validated")
+    assert (row["pipeline_id"], row["run_kind"], row["as_of_date"], row["as_of_source"],
+            row["config_hash"]) == ("pipe_stage", "pipeline", "2026-08-20", "validated",
+                                    config_hash)
 
 
 def test_report_stage_helper_copies_failed_and_cancelled_receipts(report_env):
