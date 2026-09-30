@@ -595,9 +595,12 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
   #     bare name, so they must be colocated too or the v3 dispatch hits ImportError.
   #   - source_dates.py is the source publication-date parser cached_fetch and
   #     research_gateway import by bare name (RESEARCH_SOURCE_DATES).
+  #   - data_tools.py is the official-data vendor module (FRED/ALFRED
+  #     vintage-pinned macro series), imported by bare name once the research
+  #     engine binds it.
   #     Keep this list in sync with _sync_deerflow_bridge_if_stale in
   #     backend/app/services/pipeline_orchestrator.py (the launch-time drift guard).
-  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py evidence_spans.py source_dates.py; do
+  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py evidence_spans.py source_dates.py data_tools.py; do
     if [ -f "$BRIDGE_DIR/$_tool_mod" ]; then
       cp "$BRIDGE_DIR/$_tool_mod" "$DEERFLOW_DIR/$_tool_mod"
       case "$_tool_mod" in
@@ -607,6 +610,8 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
           ok "Installed $_tool_mod (deep-research engine v3)" ;;
         source_dates.py)
           ok "Installed source_dates.py (source publication-date parser)" ;;
+        data_tools.py)
+          ok "Installed data_tools.py (official-data vendor tools)" ;;
         *)
           ok "Installed $_tool_mod (config-reflected bridge tool)" ;;
       esac

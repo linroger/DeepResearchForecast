@@ -1667,12 +1667,14 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 # LOOP-007 budget control plane they share, and the deep-research engine v3
 # (linear_research.py phases + research_gateway.py LLM gateway/research tools +
 # evidence_spans.py verbatim evidence-span matching), plus source_dates.py (the
-# source publication-date parser cached_fetch and research_gateway import).
+# source publication-date parser cached_fetch and research_gateway import) and
+# data_tools.py (TIME-10 official-data vendor tools: FRED/ALFRED vintage-pinned
+# macro series).
 # setup.sh deploys the same set; test_deerflow_bridge_sync_guard pins the parity.
 _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
     "research_budget.py", "linear_research.py", "research_gateway.py", "evidence_spans.py",
-    "source_dates.py",
+    "source_dates.py", "data_tools.py",
 )
 
 
