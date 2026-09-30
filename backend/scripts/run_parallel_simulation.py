@@ -2854,7 +2854,9 @@ def _posthoc_decision_events(config: Any, round_dates: Any) -> Dict[str, Any]:
     ``{"events_by_round": {1 基 runtime 轮号: [事件…]}}``，elicitor 与 in-band 看到同一事件块。
     仅当 SIM_DECISION_EVENTS 开且确有日历 round_dates 映射时构建；hours 模式 / 开关关 /
     无可用事件 → {}（什么都不传，逐字节不变）。round 字段非法或为负的条目跳过（与
-    _scheduled_events_due 同一 round 匹配语义）。"""
+    _scheduled_events_due 同一 round 匹配语义）。SIM_PERIOD_CONTEXT_V2 开（与 in-band 死轮
+    暂存同一开关）→ 另传 carry_unreplayed_events=True：动作日志里没有的轮次（全员缺席）的
+    事件并入下一回放轮并标"更早时段"，与 in-band 同口径。"""
     if not round_dates or not _flag_true("SIM_DECISION_EVENTS", "true"):
         return {}
     event_config = config.get("event_config") if isinstance(config, dict) else None
@@ -2872,7 +2874,12 @@ def _posthoc_decision_events(config: Any, round_dates: Any) -> Dict[str, Any]:
         if loop_round < 0:
             continue
         by_round.setdefault(loop_round + 1, []).append(ev)
-    return {"events_by_round": by_round} if by_round else {}
+    if not by_round:
+        return {}
+    kwargs: Dict[str, Any] = {"events_by_round": by_round}
+    if _flag_true("SIM_PERIOD_CONTEXT_V2", "true"):
+        kwargs["carry_unreplayed_events"] = True
+    return kwargs
 
 
 def _resolve_total_rounds(config: Dict[str, Any], temporal_config: Dict[str, Any],
@@ -3771,6 +3778,9 @@ class _InbandWorldEvolution:
         self._v2 = _flag_true("SIM_PERIOD_CONTEXT_V2", "true")
         self._delta_round = 0
         self._carry_events: Dict[int, List[Dict[str, Any]]] = {}
+        # SIM-8（V2 开）：已步进但名册为空（交付了轮次却无可归属动作）的轮没有 elicit——其决策
+        # 上下文事件（带 carried_from_round）留给下一次 elicit；只进决策上下文，摘要不重复。
+        self._decision_carry: List[Dict[str, Any]] = []
         self._prev_date = self._as_of_date
         self._stepped = 0
         self._max_round = 0
@@ -4027,10 +4037,12 @@ class _InbandWorldEvolution:
             if period:
                 ctx.update({"period": period, "n_rounds": self._n_rounds,
                             "horizon_date": self._horizon_date, "unit": self._unit})
-            # SIM-8（SIM_DECISION_EVENTS，默认开）：本时段日程事件（含上面并入的死轮暂存事件）
-            # 作为带标注的外生事件块喂 elicitor；无事件 / 开关关 → ctx 无 events 键，提示词逐字节不变。
-            if buf.get("events") and _flag_true("SIM_DECISION_EVENTS", "true"):
-                ctx["events"] = list(buf["events"])
+            # SIM-8（SIM_DECISION_EVENTS，默认开）：本时段日程事件（含上面并入的死轮暂存事件，
+            # 及此前空名册轮留下的决策暂存）作为带标注的外生事件块喂 elicitor；无事件 / 开关关
+            # → ctx 无 events 键，提示词逐字节不变。
+            decision_events = list(buf.get("events") or []) + self._decision_carry
+            if decision_events and _flag_true("SIM_DECISION_EVENTS", "true"):
+                ctx["events"] = decision_events
             commitments = self._dc.elicit_round(roster, ctx) if roster else []
             # SIM-2：本轮名册校验记录（DECISION_CHANNEL_VALIDATION 开时由 elicit_round 写入）
             validation = ctx.get("decision_validation")
@@ -4129,6 +4141,12 @@ class _InbandWorldEvolution:
                           "下一轮标为摘要不可用）")
             for k in carried_rounds:
                 self._carry_events.pop(k, None)
+            # SIM-8：有名册 → 本轮 elicit 已看到这些事件；空名册 + V2 → 事件留给下一次 elicit
+            # （与 post-hoc 回放把无动作轮的事件并入下一回放轮同口径）
+            if roster:
+                self._decision_carry = []
+            elif self._v2 and ctx.get("events"):
+                self._decision_carry = [self._dc._mark_carried(ev, rnd) for ev in ctx["events"]]
             self._record_delta(delta_text, delta_state)
             self._delta_round = rnd
         except Exception as _e:  # noqa: BLE001 — spec §4: 失败 → 告警 + 下一轮空摘要

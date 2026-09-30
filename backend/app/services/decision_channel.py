@@ -38,6 +38,7 @@ decisions/轨迹行带 period_end，输出 schema v3。``round_dates=None`` → 
 
 from __future__ import annotations
 
+import bisect
 import hashlib
 import json
 import logging
@@ -85,7 +86,8 @@ EVENTS_BLOCK_HEADER = ("本时段日程事件（来自研究时间线的预期�
                        "结果尚未确定）：")
 EVENTS_BLOCK_MAX_CHARS = 800
 _SCENARIO_EVENT_PREFIX = "【情景假设】"
-# An event the in-band evolver carried out of a round that was never stepped (SIM-6): it
+# An event carried out of a round no elicitation saw (SIM-6's in-band dead-round carry, an
+# in-band round with an empty roster, or a post-hoc round without replayed actions): it
 # fired in an earlier period, so it is not presented as this period's own event.
 _CARRIED_EVENT_PREFIX = "【更早时段】"
 
@@ -191,25 +193,69 @@ def _render_period_block(round_num: int, n_rounds: Optional[int],
 
 def _event_pair(ev: Any) -> Optional[Tuple[str, str]]:
     """SIM-8: the ``(date, content)`` identity of a scheduled event; ``None`` when the
-    row is not a dict or has no content (such a row renders nothing)."""
+    row is not a dict or has no content (such a row renders nothing). Whitespace runs
+    (line breaks included) in the content collapse to one space, so dedupe, the cache
+    digest and the rendered one-line item share a single identity."""
     if not isinstance(ev, dict):
         return None
-    content = str(ev.get("content", "") or "").strip()
+    content = " ".join(str(ev.get("content", "") or "").split())
     if not content:
         return None
     return str(ev.get("date", "") or "").strip(), content
 
 
+def _event_rows(events: Any) -> List[Dict[str, Any]]:
+    """SIM-8: the dict rows of an events value; a non-iterable value counts as none."""
+    try:
+        return [ev for ev in (events or []) if isinstance(ev, dict)]
+    except TypeError:
+        return []
+
+
+def _mark_carried(ev: Dict[str, Any], source_round: int) -> Dict[str, Any]:
+    """SIM-8: a copy of ``ev`` labelled as carried out of ``source_round`` (1-based), or
+    ``ev`` itself when it already names the earlier round it was carried from."""
+    if ev.get(CARRIED_FROM_ROUND_KEY) is not None:
+        return ev
+    return {**ev, CARRIED_FROM_ROUND_KEY: source_round}
+
+
+def _carry_unreplayed_events(events_by_round: Dict[int, Any],
+                             replayed_rounds: List[int]) -> Dict[int, List[Dict[str, Any]]]:
+    """SIM-8: post-hoc parity with SIM-6's in-band dead-round carry.
+
+    A round (1-based, ``>= 1``) with scheduled events but no replayed actions is never
+    elicited, so its events join the next replayed round after that round's own events,
+    each copy labelled with its source round (``_mark_carried``; ascending source order,
+    like the in-band merge). Events after the last replayed round reach no elicitation,
+    as in-band, where no later step exists. Returns ``{replayed round: [event, ...]}`` for
+    the replayed rounds that have any; the input is not mutated.
+    """
+    replayed = sorted(set(replayed_rounds))
+    replayed_set = set(replayed)
+    out: Dict[int, List[Dict[str, Any]]] = {}
+    for rnd in replayed:
+        own = _event_rows(events_by_round.get(rnd))
+        if own:
+            out[rnd] = own
+    sources = sorted(k for k in events_by_round
+                     if isinstance(k, int) and k >= 1 and k not in replayed_set)
+    for src in sources:
+        i = bisect.bisect_right(replayed, src)
+        if i == len(replayed):
+            break  # sorted sources: every later one is past the last replayed round too
+        carried = [_mark_carried(ev, src) for ev in _event_rows(events_by_round[src])]
+        if carried:
+            out.setdefault(replayed[i], []).extend(carried)
+    return out
+
+
 def _unique_events(events: Any) -> List[Tuple[Tuple[str, str], Dict[str, Any]]]:
     """SIM-8: renderable events deduplicated on ``(date, content)`` in input order (the
     first occurrence wins); a non-iterable value counts as no events."""
-    try:
-        rows = list(events or [])
-    except TypeError:
-        return []
     seen: set = set()
     out: List[Tuple[Tuple[str, str], Dict[str, Any]]] = []
-    for ev in rows:
+    for ev in _event_rows(events):
         pair = _event_pair(ev)
         if pair is None or pair in seen:
             continue
@@ -221,14 +267,13 @@ def _unique_events(events: Any) -> List[Tuple[Tuple[str, str], Dict[str, Any]]]:
 def _render_event_item(pair: Tuple[str, str], ev: Dict[str, Any]) -> str:
     """One ``- `` line. Date rule of the WORLD CLOCK header: add ``[date] `` unless the
     content already starts with ``[``; scenario injections and carried events are
-    labelled; line breaks inside the content are flattened so one event is one line."""
+    labelled. ``pair`` comes from ``_event_pair``, whose content is already one line."""
     date_s, content = pair
-    content = " ".join(content.split())
     if date_s and not content.startswith("["):
         content = f"[{date_s}] {content}"
     if classify_event(ev) == EVENT_PROVENANCE_SCENARIO:
         content = _SCENARIO_EVENT_PREFIX + content
-    if ev.get(CARRIED_FROM_ROUND_KEY):
+    if ev.get(CARRIED_FROM_ROUND_KEY) is not None:  # same test as world_delta's section
         content = _CARRIED_EVENT_PREFIX + content
     return "- " + content
 
@@ -262,7 +307,14 @@ def _render_events_block(events: Optional[List[Dict[str, Any]]],
 
 def _events_digest(events: Optional[List[Dict[str, Any]]]) -> str:
     """SIM-8: cache-key component for a round's events — sha1 over the sorted unique
-    ``(date, content)`` pairs, first 16 hex characters."""
+    ``(date, content)`` pairs, first 16 hex characters.
+
+    Deliberately blind to event order and to the scenario/carried labels (the spec's
+    definition): two keys could then share one elicitation although their blocks differ
+    in those, but only for rounds with the same roster AND the same period label or
+    as_of. Calendar labels are unique per period, and the post-hoc runner passes events
+    only in calendar mode, so runs do not hit that case in practice.
+    """
     pairs = sorted({pair for pair, _ev in _unique_events(events)})
     blob = json.dumps(pairs, ensure_ascii=False).encode("utf-8")
     return hashlib.sha1(blob, usedforsecurity=False).hexdigest()[:16]
@@ -302,7 +354,8 @@ def _build_round_decision_prompt(scenarios: List[str], active: List[Dict[str, An
     # the elicitor, not a roster row). None/[] → "" and the prompt is byte-identical.
     try:
         events_block = _render_events_block(events) if events else ""
-    except Exception:  # noqa: BLE001 — advisory text: a malformed event never fails the round
+    except Exception as _ev_err:  # noqa: BLE001 — advisory text never fails the round
+        logger.warning("决策通道事件块渲染失败（已降级为无事件提示词）: %s", _ev_err)
         events_block = ""
     events_line = f"{events_block}\n" if events_block else ""
     return (
@@ -812,6 +865,7 @@ def run_decision_channel(
     posts_by_round: Optional[Dict[int, Dict[Any, str]]] = None,
     affect_by_agent: Optional[Dict[Any, str]] = None,
     events_by_round: Optional[Dict[int, List[Dict[str, Any]]]] = None,
+    carry_unreplayed_events: bool = False,
 ) -> Dict[str, Any]:
     """Replay the simulation rounds → evolve a single WorldState → modeled outcome.
 
@@ -831,7 +885,10 @@ def run_decision_channel(
     ``events_by_round[round]`` (1-based runtime round → that period's scheduled events,
     SIM-8) adds a labelled exogenous-events block to that round's prompt while
     ``SIM_DECISION_EVENTS`` is on; only such rounds extend the cache key with an events
-    digest, so rounds without events keep today's key and dedupe (R2-EXEC-10). Returns
+    digest, so rounds without events keep today's key and dedupe (R2-EXEC-10).
+    ``carry_unreplayed_events`` (the runner passes it with SIM-6's SIM_PERIOD_CONTEXT_V2)
+    moves the events of rounds absent from the action log into the next replayed round,
+    labelled as carried (``_carry_unreplayed_events``), matching the in-band evolver. Returns
     ``{outcome, trajectory, decisions, converged_at, n_rounds, ...}``; empty seed → ``{}``.
     """
     scenarios = [str(s) for s in (seed or {}).get("scenarios", []) if str(s).strip()]
@@ -909,9 +966,15 @@ def run_decision_channel(
     # key. 日历模式缓存键 = (roster 签名, 时段 label)——机制同旧的 (签名, as_of)。
     # SIM-8: a round with scheduled events appends an events digest to its key (hours-mode
     # rounds sharing an as_of date but not their events must not share one elicitation);
-    # rounds without events, and SIM_DECISION_EVENTS=false, keep the key above.
+    # rounds without events, and SIM_DECISION_EVENTS=false, keep the key above. With
+    # carry_unreplayed_events, a round absent from the action log hands its events to the
+    # next replayed round (labelled carried) instead of reaching no elicitation.
     events_on = (isinstance(events_by_round, dict) and bool(events_by_round)
                  and bool(_cfg("SIM_DECISION_EVENTS", True)))
+    events_src: Dict[int, Any] = {}
+    if events_on:
+        events_src = (_carry_unreplayed_events(events_by_round, ordered_rounds)
+                      if carry_unreplayed_events else events_by_round)
     tasks: Dict[Any, Tuple[List[Dict[str, Any]], Dict[str, Any]]] = {}
     round_key: Dict[int, Any] = {}
     for rnd in ordered_rounds:
@@ -919,8 +982,7 @@ def run_decision_channel(
         p = period_by_round.get(rnd)
         key = (_roster_signature(active),
                str(p.get("label")) if p and p.get("label") else as_of_by_round[rnd])
-        round_events = ([ev for _pair, ev in _unique_events(events_by_round.get(rnd))]
-                        if events_on else [])
+        round_events = [ev for _pair, ev in _unique_events(events_src.get(rnd))]
         if round_events:
             key = key + (_events_digest(round_events),)
         round_key[rnd] = key

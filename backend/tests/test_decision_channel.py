@@ -504,27 +504,34 @@ def test_events_block_labels_dedupe_and_skips():
         {"date": "2026-12-01", "content": "   "},                        # no content
         "not a dict",
         {"date": "2026-12-02", "content": "多行\n内容"},
+        {"date": "2026-12-02", "content": " 多行   内容 "},               # same after flattening
+        {"date": "2026-12-03", "content": "零轮携带", "carried_from_round": 0},
     ]
     assert dc._render_events_block(events).split("\n") == [
         dc.EVENTS_BLOCK_HEADER,
         "- [2026-11-05] 事件A发生",                 # first occurrence wins, no double date
         "- 【更早时段】[2026-08-01] 早先事件",
         "- 无日期事件",
-        "- [2026-12-02] 多行 内容",                 # one event is one line
+        "- [2026-12-02] 多行 内容",                 # one event is one line, whitespace-deduped
+        "- 【更早时段】[2026-12-03] 零轮携带",       # label tests `is not None`, like world_delta
     ]
     for empty in (None, [], [{"content": ""}], ["junk"], 5):
         assert dc._render_events_block(empty) == ""
 
 
-def test_events_block_failure_degrades_safe(monkeypatch):
-    """The block is advisory: a renderer failure leaves the legacy prompt, never a failed round."""
+def test_events_block_failure_degrades_safe(monkeypatch, caplog):
+    """The block is advisory: a renderer failure leaves the legacy prompt, never a failed
+    round, and is logged (degrade safe, never silent)."""
     legacy = _sim8_prompts()
 
     def _boom(*_a, **_k):
         raise RuntimeError("renderer down")
 
     monkeypatch.setattr(dc, "_render_events_block", _boom)
-    assert _sim8_prompts(events=_SIM8_EVENTS) == legacy
+    with caplog.at_level(logging.WARNING, logger=dc.logger.name):
+        assert _sim8_prompts(events=_SIM8_EVENTS) == legacy
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings == ["决策通道事件块渲染失败（已降级为无事件提示词）: renderer down"] * 2
 
 
 def test_events_block_cap():
@@ -560,6 +567,9 @@ def test_events_digest():
     assert dc._events_digest(list(reversed(_SIM8_EVENTS))) == digest       # order-free
     assert dc._events_digest(_SIM8_EVENTS + _SIM8_EVENTS[:1]) == digest     # duplicates
     assert dc._events_digest(_SIM8_EVENTS[:1]) != digest
+    # one identity with the renderer's dedupe: whitespace-only variants share the digest
+    spaced = [{"date": "2027-01-05", "content": " X \n happens"}, _SIM8_EVENTS[1]]
+    assert dc._events_digest(spaced) == digest
 
 
 def test_elicit_round_forwards_events(monkeypatch):
@@ -648,3 +658,65 @@ def test_posthoc_calendar_rounds_get_the_events_block():
     assert "时段：第 2/3 轮" in prompts[1] and "- [2026-11-05] 事件A发生\n角色名册：" in prompts[1]
     assert res["schema_version"] == 3
     assert res["trajectory"] == base["trajectory"] and res["decisions"] == base["decisions"]
+
+
+def test_carry_unreplayed_events():
+    """Events of rounds without replayed actions join the next replayed round after its own
+    events, labelled with their source round; past the last replayed round they reach none."""
+    ev = {n: {"date": f"2026-0{n}-01", "content": f"E{n}"} for n in range(1, 8)}
+    pre_carried = {**ev[7], "carried_from_round": 1}
+    events_by_round = {1: [ev[1]], 2: [ev[2], "junk"], 4: [ev[4], pre_carried], 6: [ev[6]],
+                       0: [ev[5]], "3": [ev[3]], 5: None}
+    snapshot = copy.deepcopy(events_by_round)
+    out = dc._carry_unreplayed_events(events_by_round, [5, 2, 3, 2])
+    assert out == {
+        2: [ev[2], {**ev[1], "carried_from_round": 1}],   # own first, then the carry
+        5: [{**ev[4], "carried_from_round": 4}, pre_carried],  # an earlier carry keeps its round
+    }
+    assert events_by_round == snapshot                     # pure: the input is untouched
+    assert dc._carry_unreplayed_events(events_by_round, []) == {}
+    assert dc._carry_unreplayed_events({2: [ev[2]]}, [2]) == {2: [ev[2]]}
+
+
+def _sim8_calendar_posthoc(rounds, **kw):
+    round_dates = [
+        {"round": 0, "period_start": "2026-07-12", "period_end": "2026-09-30", "label": "2026-Q3"},
+        {"round": 1, "period_start": "2026-10-01", "period_end": "2026-12-31", "label": "2026-Q4"},
+        {"round": 2, "period_start": "2027-01-01", "period_end": "2027-03-31", "label": "2027-Q1"},
+    ]
+    actions = [{"round": r, "agent_id": 1} for r in rounds]
+    fake = FakeLLMClient(json_responses=[copy.deepcopy(_SIM8_REPLY) for _ in rounds])
+    res = run_decision_channel(actions, [{"agent_id": 1, "influence_weight": 1.0}],
+                               {"scenarios": ["S1", "S2"]}, fake, concurrency=1,
+                               round_dates=round_dates, **kw)
+    return res, [c["messages"][0]["content"] for c in fake.calls]
+
+
+def test_posthoc_dead_round_events_carry(monkeypatch):
+    """Round 2 has the event but nobody acted: with carry_unreplayed_events it reaches
+    round 3's prompt labelled 【更早时段】 (the in-band label); without it (the legacy call
+    shape) it reaches no prompt. No extra calls either way."""
+    event = {"date": "2026-11-05", "content": "[2026-11-05] 事件A发生"}
+    base, base_prompts = _sim8_calendar_posthoc([1, 3])
+    assert len(base_prompts) == 2
+
+    _, prompts = _sim8_calendar_posthoc([1, 3], events_by_round={2: [event]})
+    assert prompts == base_prompts
+
+    res, prompts = _sim8_calendar_posthoc([1, 3], events_by_round={2: [event]},
+                                          carry_unreplayed_events=True)
+    assert len(prompts) == 2 and prompts[0] == base_prompts[0]
+    assert prompts[1] == base_prompts[1].replace(
+        "角色名册：",
+        dc.EVENTS_BLOCK_HEADER + "\n- 【更早时段】[2026-11-05] 事件A发生\n角色名册：")
+    assert res["trajectory"] == base["trajectory"]
+
+    # own events first; the same (date, content) carried in is deduplicated away
+    _, prompts = _sim8_calendar_posthoc([1, 3], events_by_round={2: [event], 3: [event]},
+                                        carry_unreplayed_events=True)
+    assert "- [2026-11-05] 事件A发生\n角色名册：" in prompts[1] and "【更早时段】" not in prompts[1]
+
+    # SIM_DECISION_EVENTS=false: no events, no carry, byte-identical
+    monkeypatch.setattr(Config, "SIM_DECISION_EVENTS", False)
+    assert _sim8_calendar_posthoc([1, 3], events_by_round={2: [event]},
+                                  carry_unreplayed_events=True) == (base, base_prompts)

@@ -2058,13 +2058,15 @@ class Config:
     # OASIS_DEFAULT_MAX_ROUNDS 封顶 + SIM_CONVERGENCE_STOP 早停 + 并行 elicitation 约束。
     SIM_DECISION_CHANNEL = os.environ.get('SIM_DECISION_CHANNEL', 'true').strip().lower() == 'true'
     # SIM-8 (P23 follow-on): the decision-channel elicitor, the call that steps WorldState,
-    # sees the period's scheduled research-timeline events (including events SIM-6 carried
-    # out of dead rounds) as a labelled exogenous block before the roster, capped at 800
-    # characters on whole lines: in-band every calendar round with events, and in the
-    # post-hoc calendar fallback. Default on: zero extra LLM calls, the block carries no
-    # WorldState number and asks for no direction, and the channel stays diagnostic_only;
-    # the post-hoc cache key gains an events digest only for rounds that have events. false
-    # = prompts and cache keys byte-identical to before.
+    # sees the period's scheduled research-timeline events (with SIM_PERIOD_CONTEXT_V2 also
+    # events carried out of rounds no elicitation saw: SIM-6 dead rounds, in-band rounds
+    # with an empty roster, post-hoc rounds without actions, labelled as earlier periods)
+    # as a labelled exogenous block before the roster, capped at 800 characters on whole
+    # lines: in-band every calendar round with events, and in the post-hoc calendar
+    # fallback. Default on: zero extra LLM calls, the block carries no WorldState number
+    # and asks for no direction, and the channel stays diagnostic_only; the post-hoc cache
+    # key gains an events digest only for rounds that have events. false = prompts and
+    # cache keys byte-identical to before.
     SIM_DECISION_EVENTS = os.environ.get('SIM_DECISION_EVENTS', 'true').strip().lower() == 'true'
     # SIM-2 (C26): bind every decision-channel reply to the round roster before it can move
     # WorldState — canonical roster ids, unknown ids and duplicate rows dropped, magnitude and

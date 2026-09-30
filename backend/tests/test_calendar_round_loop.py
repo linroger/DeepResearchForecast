@@ -1761,10 +1761,12 @@ def test_inband_elicitation_receives_carried_dead_round_events(tmp_path, monkeyp
 
 def test_posthoc_decision_events_kwargs(monkeypatch):
     """post-hoc 日历回退：按 1 基 runtime 轮号分组日程事件；hours 模式 / 开关关 / 无可用
-    事件 → {}（什么都不传）；round 非法或为负的条目跳过。main() 把它传给 run_decision_channel。"""
+    事件 → {}（什么都不传）；round 非法或为负的条目跳过；V2 开才要求无动作轮事件顺延。
+    main() 把它传给 run_decision_channel。"""
     import inspect
 
     monkeypatch.delenv("SIM_DECISION_EVENTS", raising=False)
+    monkeypatch.delenv("SIM_PERIOD_CONTEXT_V2", raising=False)
     cfg = _calendar_config()
     scheduled = cfg["event_config"]["scheduled_events"]
     scheduled += [{"round": "x", "content": "bad"}, {"round": -1, "content": "neg"},
@@ -1772,8 +1774,13 @@ def test_posthoc_decision_events_kwargs(monkeypatch):
                   {"round": 1, "date": "2026-11-20", "content": "事件B"},
                   {"round": 2, "date": "2027-02-01", "content": "事件C"}]
     round_dates = cfg["temporal_config"]["round_dates"]
+    by_round = {2: [scheduled[0], scheduled[5]], 3: [scheduled[6]]}
+    # SIM_PERIOD_CONTEXT_V2 on (default): all-absent rounds carry, as in-band
     assert rps._posthoc_decision_events(cfg, round_dates) == {
-        "events_by_round": {2: [scheduled[0], scheduled[5]], 3: [scheduled[6]]}}
+        "events_by_round": by_round, "carry_unreplayed_events": True}
+    monkeypatch.setenv("SIM_PERIOD_CONTEXT_V2", "false")
+    assert rps._posthoc_decision_events(cfg, round_dates) == {"events_by_round": by_round}
+    monkeypatch.delenv("SIM_PERIOD_CONTEXT_V2")
     assert rps._posthoc_decision_events(cfg, None) == {}          # hours 模式：不传
     assert rps._posthoc_decision_events(cfg, []) == {}
     assert rps._posthoc_decision_events({"event_config": {}}, round_dates) == {}
@@ -1808,6 +1815,65 @@ def test_posthoc_fallback_prompt_gets_events_block(monkeypatch):
     assert with_events[0] == base[0] and with_events[2] == base[2]
     assert with_events[1] == base[1].replace(
         "角色名册：", dc.EVENTS_BLOCK_HEADER + "\n- [2026-11-05] 事件A发生\n角色名册：")
+
+
+@pytest.mark.parametrize("period_v2", [None, "false"])
+def test_posthoc_fallback_dead_round_parity(monkeypatch, period_v2):
+    """与 in-band 死轮暂存同口径：事件轮（第 2 轮）无人行动、动作只在第 1/3 轮 → V2 开时
+    事件以"更早时段"块进第 3 轮提示词（与 in-band 第 3 轮 ctx 渲染一致）；V2 关 → 两轮都不含。
+    调用数不变（2 次）。"""
+    from tests.conftest import FakeLLMClient
+
+    monkeypatch.delenv("SIM_DECISION_EVENTS", raising=False)
+    _set_knob(monkeypatch, "SIM_PERIOD_CONTEXT_V2", period_v2)
+    cfg = _calendar_config()
+    actions = [{"round": r, "agent_id": 0, "agent_name": "Actor0"} for r in (1, 3)]
+    reply = {"decisions": [{"agent_id": 0, "scenario": "A", "magnitude": 1, "confidence": 1}]}
+    fake = FakeLLMClient(json_responses=[json.loads(json.dumps(reply)) for _ in range(2)])
+    dc.run_decision_channel(actions, cfg["agent_configs"], cfg["world_state_seed"], fake,
+                            round_dates=_ROUND_DATES, concurrency=1,
+                            **rps._posthoc_decision_events(cfg, _ROUND_DATES))
+    prompts = [c["messages"][0]["content"] for c in fake.calls]
+    assert len(prompts) == 2
+    assert dc.EVENTS_BLOCK_HEADER not in prompts[0]
+    if period_v2 == "false":
+        assert all("事件A发生" not in p for p in prompts)
+        return
+    assert (dc.EVENTS_BLOCK_HEADER + "\n- 【更早时段】[2026-11-05] 事件A发生\n角色名册："
+            in prompts[1])
+    assert "时段：第 3/3 轮" in prompts[1]
+
+
+@pytest.mark.parametrize("period_v2,decision_events", [
+    (None, None), ("false", None), (None, "false")])
+def test_inband_empty_roster_round_events_reach_next_elicitation(
+        tmp_path, monkeypatch, period_v2, decision_events):
+    """已交付但无可归属动作的轮（名册为空，不 elicit）：其事件照常进摘要，并以"更早时段"
+    进下一次 elicit 的 ctx（只进决策上下文，下一轮摘要不重复）；再下一轮不再携带。
+    V2 关 / SIM_DECISION_EVENTS 关 → 不暂存。"""
+    sim_dir = str(tmp_path)
+    _set_knob(monkeypatch, "SIM_PERIOD_CONTEXT_V2", period_v2)
+    _set_knob(monkeypatch, "SIM_DECISION_EVENTS", decision_events)
+    evo = _evo(sim_dir, monkeypatch)
+    calls = []
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit(calls))
+    ev = {"round": 0, "date": "2026-08-01", "content": "[2026-08-01] 事件0"}
+    evo.deliver("twitter", 0, _ROUND_DATES[0], [], [ev])        # 名册为空：步进但不 elicit
+    evo.deliver("twitter", 1, _ROUND_DATES[1], _ACTOR0_POST, [])
+    evo.deliver("twitter", 2, _ROUND_DATES[2], _ACTOR0_POST, [])
+    assert [c["ctx"]["round_num"] for c in calls] == [2, 3]
+    assert "events" not in calls[1]["ctx"]                       # 已被第 2 轮 elicit 消费
+    rows = _read_jsonl(os.path.join(sim_dir, "world_digest.jsonl"))
+    assert [r["round"] for r in rows] == [1, 2, 3]
+    assert "[2026-08-01] 事件0" in rows[0]["digest"]
+    assert all("事件0" not in r["digest"] for r in rows[1:])     # 摘要不重复
+    if period_v2 == "false" or decision_events == "false":
+        assert "events" not in calls[0]["ctx"]
+        return
+    events = calls[0]["ctx"]["events"]
+    assert events == [{**ev, "carried_from_round": 1}]
+    assert dc._render_events_block(events) == (
+        dc.EVENTS_BLOCK_HEADER + "\n- 【更早时段】[2026-08-01] 事件0")
 
 
 if __name__ == "__main__":
