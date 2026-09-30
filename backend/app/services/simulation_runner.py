@@ -1998,6 +1998,13 @@ class SimulationRunner:
         # EXECPLAN2 F-6-3：per-agent 统计须基于完整历史，否则超过 1w 动作后早期轮次/Agent 会被截断、
         # engagement 总量被低估。
         actions = cls.get_all_actions(simulation_id)
+        # SIM-5（SIM_EVENT_PROVENANCE，默认开）：附加 organic_actions / injected_actions /
+        # organic_action_types——种子、定时事件回放、种子动作、采样点赞不是该 agent 的自发行为
+        # （回放帖挂在名字匹配或最高影响力回退的行为者名下）。排序仍按 total_actions（API 兼容）；
+        # 开关关 → 不写新字段，run_summary.json 逐字节不变。
+        provenance_on = bool(getattr(Config, "SIM_EVENT_PROVENANCE", True))
+        if provenance_on:
+            from .sim_event_provenance import is_injected_row
 
         agent_stats: Dict[int, Dict[str, Any]] = {}
         
@@ -2015,6 +2022,9 @@ class SimulationRunner:
                     "first_action_time": action.timestamp,
                     "last_action_time": action.timestamp,
                 }
+                if provenance_on:
+                    agent_stats[agent_id].update(
+                        {"organic_actions": 0, "injected_actions": 0, "organic_action_types": {}})
             
             stats = agent_stats[agent_id]
             stats["total_actions"] += 1
@@ -2025,6 +2035,13 @@ class SimulationRunner:
                 stats["reddit_actions"] += 1
             
             stats["action_types"][action.action_type] = stats["action_types"].get(action.action_type, 0) + 1
+            if provenance_on:
+                if is_injected_row(action.action_args, action.round_num):
+                    stats["injected_actions"] += 1
+                else:
+                    stats["organic_actions"] += 1
+                    organic_types = stats["organic_action_types"]
+                    organic_types[action.action_type] = organic_types.get(action.action_type, 0) + 1
             # XRUN-9: 同 get_timeline——比较时间戳而非按遍历顺序覆盖，修复 first>last 反转。
             if action.timestamp:
                 if not stats["first_action_time"] or action.timestamp < stats["first_action_time"]:
