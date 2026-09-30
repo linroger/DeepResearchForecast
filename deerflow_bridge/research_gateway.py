@@ -3436,6 +3436,11 @@ _CACHED_SEARCH_NOTE = "(cached result; this query was already run)"
 
 MSG_SEARCH_BUDGET = "SEARCH_BUDGET_EXHAUSTED: stop searching; write your notes from what you have."
 MSG_NO_RESULTS = "NO_RESULTS: change the entity/angle, not just wording."
+# RESEARCH-3 absence discipline (``ResearchTools.absence_discipline``, set by the
+# engine from RESEARCH_ABSENCE_DISCIPLINE): an empty web search says nothing
+# about the world, because results are relevance-ranked and undated.
+MSG_NO_RESULTS_COVERAGE = (MSG_NO_RESULTS + " Results are relevance-ranked and undated: an empty search is "
+                           "not evidence that something did not happen.")
 MSG_SEARCH_UNAVAILABLE = "SEARCH_TEMPORARILY_UNAVAILABLE: use known URLs or finish."
 MSG_FETCH_BUDGET = "FETCH_BUDGET_EXHAUSTED: stop fetching; write your notes from what you have."
 _CONTENT_FAILURE_MARKERS = (
@@ -3794,6 +3799,10 @@ class ResearchTools:
       from RESEARCH_SOURCE_TAXONOMY) a credential/quota refusal latches search
       for the run, an unconfirmed empty search is never run-cached, and a
       failed fetch says whether the service or the page failed;
+    * with ``absence_discipline`` (set by the engine from
+      RESEARCH_ABSENCE_DISCIPLINE) an empty search answers
+      :data:`MSG_NO_RESULTS_COVERAGE`, which says an empty search is not
+      evidence of absence (as cacheable as :data:`MSG_NO_RESULTS`);
     * with ``source_dates`` (RESEARCH_SOURCE_DATES, TIME-2) every search row
       and fetched page gets a publication date in the ledger
       (:meth:`SourceLedger.set_dates`), a fetched page from the fetch's
@@ -3854,6 +3863,8 @@ class ResearchTools:
         self._search_refused: tuple[str, str] | None = None
         # canonical URL -> "infra" | "content" (taxonomy on; for _known_failure).
         self._failure_class: dict[str, str] = {}
+        # RESEARCH-3: off unless the engine turns it on (the empty-search text).
+        self.absence_discipline = False
 
     # ---------------------------------------------------------------- helpers
     def _log(self, kind: str, message: str) -> None:
@@ -4073,6 +4084,9 @@ class ResearchTools:
 
     def _render_search(self, raw: Any, agent_id: str) -> tuple[str, bool, int]:
         """(model text, cacheable, row count) for one backend payload."""
+        # Every empty answer (a "no results" error, an empty or unusable result
+        # list) gets the same text: the coverage variant with absence discipline.
+        no_results = MSG_NO_RESULTS_COVERAGE if self.absence_discipline else MSG_NO_RESULTS
         try:
             payload = json.loads(raw) if isinstance(raw, str) else raw
         except ValueError:
@@ -4087,12 +4101,12 @@ class ResearchTools:
         if error == "research_budget_exhausted":
             return MSG_SEARCH_BUDGET, False, 0
         if error == "research_negative_cache_suppressed" or error.lower().startswith("no results"):
-            return MSG_NO_RESULTS, True, 0
+            return no_results, True, 0
         if error or payload.get("status") == "already_available":
             return MSG_SEARCH_UNAVAILABLE, False, 0
         results = payload.get("results")
         if not isinstance(results, list) or not results:
-            return MSG_NO_RESULTS, True, 0
+            return no_results, True, 0
         rendered: list[str] = []
         total = 0
         for item in results:
@@ -4122,7 +4136,7 @@ class ResearchTools:
             rendered.append(entry)
             total += cost
         if not rendered:
-            return MSG_NO_RESULTS, True, 0
+            return no_results, True, 0
         return "\n".join(rendered), True, len(rendered)
 
     # ------------------------------------------------------------------ fetch

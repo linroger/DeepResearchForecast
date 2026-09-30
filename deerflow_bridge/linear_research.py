@@ -577,6 +577,14 @@ _FACTS_FORECAST_INPUTS_RULE = (
 _KIQ_EVIDENCE_RULE = ('Evidence: end each finding with EVIDENCE: "<a passage copied character for character '
                       'from the page or search result you were shown, 8 to 60 words>" (keep the word EVIDENCE in '
                       'English; the passage for a VERIFIED finding must contain its numbers).')
+# The lines RESEARCH_ABSENCE_DISCIPLINE appends to the KIQ task (``_Engine._kiq_task_addenda``)
+# and to the section rules (``_Engine._section_rule_addenda``): web search is
+# relevance-ranked and undated, so an empty search never shows that something did not happen.
+_KIQ_ABSENCE_RULE = ("Absence: an empty or failed search is not evidence that something did not happen. "
+                     "Write that something did not happen or was not reported only when a source you read "
+                     "says so, and cite it; otherwise record it under Open questions.")
+_SECTION_ABSENCE_RULE = ("- Never state that something did not happen, was not reported or does not exist unless "
+                         "a cited source says so; otherwise say the sources reviewed do not establish it.")
 
 _PROMPT_TEMPLATES: Mapping[str, string.Template] = {
     "pre_brief": _T_PRE_BRIEF,
@@ -3881,6 +3889,80 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
     }
 
 
+# RESEARCH_ABSENCE_DISCIPLINE incidence telemetry (observe only: no tag, fact or
+# prompt depends on it).  An absence claim says that something did not happen,
+# was not reported or does not exist; web search is relevance-ranked and
+# undated, so such a claim holds only when a source says so.  The cues are
+# narrow and bilingual.  Exclusions:
+# - "no longer", "no more than", "no less than", "not only", "no doubt" and the
+#   future forms "will not" / "won't" / "is unlikely to" are never a cue: every
+#   English branch needs a perfect tense ("has not been announced"), "there is
+#   no" plus a record noun, or "no" plus a listed qualifier or noun.  A
+#   comparison, "not only" or "no doubt" next to a real cue does not undo it
+#   ("Growth of no more than 5% has not been confirmed" is a claim), so these
+#   are not looked for around a cue.
+# - A scope-taking exclusion ("no longer", a future form) in a cue's clause
+#   lead-in ("It is no longer true that no deal has been announced", "Officials
+#   will not say whether there is no evidence") disqualifies the cue.  The
+#   lead-in is at most _ABSENCE_LEAD_CHARS long and ends at punctuation or a
+#   clause-joining conjunction ("The firm won't comment and has not disclosed
+#   the fee" is a claim).  It may also drop a real claim ("It will not matter
+#   that there is no public evidence"), so the count is a lower bound.
+# Whitespace is collapsed first and every branch has a bounded length, so a scan
+# is linear in the text.  Idea credit: TradingAgents (Apache-2.0) labels a
+# failed or empty vendor lookup "not an absence"; reimplemented, no code copied.
+_ABSENCE_ACTS = r"(?:announced|reported|disclosed|confirmed)"
+_ABSENCE_QUALIFIERS = r"(?:reported|public|official|known|announced|confirmed)"
+_ABSENCE_CUE_RE = re.compile(
+    rf"\bno {_ABSENCE_QUALIFIERS} "
+    r"(?:talks|negotiations|deal|agreement|plans?|announcement|evidence|market|reports?)\b"
+    rf"|\bno (?:{_ABSENCE_QUALIFIERS} )?"
+    r"(?:talks|negotiations|deals?|agreements?|plans?|announcements?|evidence|markets?|reports?) "
+    rf"(?:has|have|had) (?:yet )?been {_ABSENCE_ACTS}\b"
+    rf"|\b(?:has|have|had)(?: not|n['’]t) (?:yet )?(?:been )?{_ABSENCE_ACTS}\b"
+    r"|\bthere (?:is|are|was|were|has been) no (?:public |official )?"
+    r"(?:evidence|reports?|announcements?|records?)\b"
+    r"|尚未(?:公开|正式)?(?:宣布|公布|披露|报道|确认)"
+    r"|暂无(?:公开)?(?:报道|消息|证据|数据)"
+    r"|未见(?:公开)?(?:报道|证据|消息)",
+    re.IGNORECASE)
+_ABSENCE_SCOPE_EXCLUSION_RE = re.compile(r"\b(?:no longer|will not|won['’]t|is unlikely to)\b",
+                                         re.IGNORECASE)
+# How far back (at most, and never past a clause break) a scope exclusion is looked for.
+_ABSENCE_LEAD_CHARS = 40
+_CLAUSE_BREAK_RE = re.compile(r"[.;:!?,。；：！？，]|\b(?:and|but|while|whereas|although|though)\b",
+                              re.IGNORECASE)
+_FACT_TAGS = ("VERIFIED", "REPORTED", "UNVERIFIED")
+
+
+def absence_cue(text: Any) -> str | None:
+    """The first absence-claim cue of ``text`` ("has not been announced",
+    "there is no evidence", "暂无公开报道") whose clause lead-in holds no scope
+    exclusion, or None (also for a non-string).  Pure and linear-time; see
+    :data:`_ABSENCE_CUE_RE`."""
+    if not isinstance(text, str) or not text:
+        return None
+    flat = " ".join(text.split())
+    for match in _ABSENCE_CUE_RE.finditer(flat):
+        lead = _CLAUSE_BREAK_RE.split(flat[max(0, match.start() - _ABSENCE_LEAD_CHARS):match.start()])[-1]
+        if not _ABSENCE_SCOPE_EXCLUSION_RE.search(lead):
+            return match.group(0)
+    return None
+
+
+def absence_cue_counts(facts: Iterable[Any]) -> dict[str, int]:
+    """``{tag: n}``: the sourced facts whose text carries an absence cue, by
+    evidence tag: exactly the :data:`_FACT_TAGS` keys, zero when none (a fact
+    with any other or no tag is not counted; postprocess_notes always assigns
+    one of them)."""
+    counts = dict.fromkeys(_FACT_TAGS, 0)
+    for fact in facts or ():
+        tag = fact.get("tag") if isinstance(fact, Mapping) else None
+        if isinstance(tag, str) and tag in counts and absence_cue(fact.get("text")) is not None:
+            counts[tag] += 1
+    return counts
+
+
 # Page chrome that carries digits but is never evidence (deterministic notes):
 # consent and legal lines, sign-in and reading-time chrome, datelines.  A menu
 # or byline row ("Home | Markets | Energy", "By Staff | May 3 | 4 min read")
@@ -5471,6 +5553,13 @@ class _Engine:
         self.source_taxonomy = _env_flag(self.env, "RESEARCH_SOURCE_TAXONOMY", False)
         if hasattr(self.tools, "source_taxonomy"):
             self.tools.source_taxonomy = self.source_taxonomy
+        # RESEARCH_ABSENCE_DISCIPLINE (default off): an empty search says it is not
+        # evidence of absence, the KIQ task and the section rules say when an
+        # absence may be stated, and absence-claim findings are counted
+        # (record absence_cues, meta.absence_findings; no tag changes).
+        self.absence_discipline = _env_flag(self.env, "RESEARCH_ABSENCE_DISCIPLINE", False)
+        if hasattr(self.tools, "absence_discipline"):
+            self.tools.absence_discipline = self.absence_discipline
         # RESEARCH_SOURCE_DATES (default off until a precision check on real
         # pages; TIME-2): sources get publication dates from provider metadata
         # (and, with RESEARCH_SOURCE_DATE_TEXT_FALLBACK, default on, page-head
@@ -6222,6 +6311,9 @@ class _Engine:
         postprocessing (logged; no contract, so the KIQ counts as
         not_requested; ``evidence_error`` on the record, a degradation event
         in enforce mode: :meth:`_research_events`).
+
+        With absence discipline on, the record carries ``absence_cues``: its
+        facts that state an absence, by tag (observe only: no tag changes).
         """
         shown = set(outcome.seen) | set(outcome.fetched)
 
@@ -6256,6 +6348,10 @@ class _Engine:
             record["evidence_contract"] = contract
         if evidence_error is not None:
             record["evidence_error"] = evidence_error
+        if self.absence_discipline:
+            cues = self._absence_cues(kiq.id, facts)
+            if cues is not None:
+                record["absence_cues"] = cues
         self.ledger.flush()  # every source the record cites is on disk before the record
         self._write_internal(self.work / "kiq" / f"{kiq.id}.md", notes_md + "\n")
         self.write_json(self.work / "kiq" / f"{kiq.id}.json", record)
@@ -6280,6 +6376,18 @@ class _Engine:
     def _evidence_contract(self) -> str:
         """The evidence contract KIQ records are postprocessed under ("audit:v1")."""
         return f"{self.evidence_mode}:{EVIDENCE_CONTRACT_VERSION}"
+
+    def _absence_cues(self, kiq_id: str, facts: Sequence[Mapping[str, Any]]) -> dict[str, int] | None:
+        """:func:`absence_cue_counts` of a KIQ's facts; None (logged, recorded in
+        analytics_errors) when the count fails: observe-only telemetry never
+        breaks a run."""
+        try:
+            return absence_cue_counts(facts)
+        except Exception as exc:  # noqa: BLE001 — telemetry degrades safe
+            error = f"{type(exc).__name__}: {exc}"[:300]
+            self.analytics_errors.append({"helper": "absence_cues", "kiq": kiq_id, "error": error})
+            self.log("warn", f"v3: {kiq_id} absence cues not counted ({error})")
+            return None
 
     def _run_seeds(self, kiqs: Sequence[Kiq]) -> dict[str, list[dict]]:
         """Up to 2 queries per KIQ, deduped run-wide and run concurrently, so the
@@ -6337,6 +6445,8 @@ class _Engine:
         derivations (RESEARCH-8).  Volatile last-message text: ENGINE_CORE and
         the RUN BRIEF never change; none: exactly the template."""
         addenda: list[str] = []
+        if getattr(self, "absence_discipline", False):  # engines built without __init__ lack the knob
+            addenda.append(_KIQ_ABSENCE_RULE)
         if self.evidence_mode != EVIDENCE_OFF:
             addenda.append(_KIQ_EVIDENCE_RULE)
         return addenda
@@ -6646,13 +6756,23 @@ class _Engine:
             lines += [f"## {section.title}", detail]
             if section.is_scenario:
                 lines.append("   " + _SCENARIO_SECTION_NOTE)
-        lines += ["", _SECTION_RULES]
+        lines += ["", _SECTION_RULES, *self._section_rule_addenda()]
         if current:
             lines += ["", "Current version of this section (rewrite it to fix the problem below and "
                           "keep every correct citation):", current]
         if note:
             lines += ["", note]
         return "\n".join(lines)
+
+    def _section_rule_addenda(self) -> list[str]:
+        """Rule lines the enabled knobs append right after ``_SECTION_RULES``,
+        in canonical order: absence discipline (RESEARCH-3), DERIVED
+        (RESEARCH-8), thin evidence (RESEARCH-10).  Volatile last-message text:
+        ENGINE_CORE and the RUN BRIEF never change; none: exactly the rules."""
+        addenda: list[str] = []
+        if getattr(self, "absence_discipline", False):  # engines built without __init__ lack the knob
+            addenda.append(_SECTION_ABSENCE_RULE)
+        return addenda
 
     def clean_body(self, body: str, section: OutlineSection) -> str:
         text = str(body or "").strip()
@@ -8166,6 +8286,11 @@ class _Engine:
         }
         if self.evidence_mode != EVIDENCE_OFF:
             self.meta["evidence"] = evidence_summary(records, self.evidence_mode)
+        if self.absence_discipline:
+            # Recounted from the facts, so KIQ records a resumed run kept count too.
+            counts = self._absence_cues("run", [fact for r in records for fact in r.get("facts") or []])
+            if counts is not None:
+                self.meta["absence_findings"] = {"total": sum(counts.values()), **counts}
         if self.analytics_errors:
             self.meta["analytics_errors"] = list(self.analytics_errors)
 

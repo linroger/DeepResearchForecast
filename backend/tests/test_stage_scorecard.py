@@ -509,7 +509,8 @@ def _track(state, *, queries=2, successful=0, failures=0, timeouts=0, empty_reas
 
 
 # The orchestrator's real multi-track merge keeps the specific infra state in
-# status.state beside the generic empty_reason 'no_equivalent_market'.
+# status.state beside the generic empty_reason 'no_equivalent_market' (a partial
+# transport failure has carried its own empty_reason since RESEARCH-3).
 _MERGED_TIMEOUT = po.merge_market_snapshots(
     [_track("inflight_timeout", timeouts=2), _track("inflight_timeout", timeouts=2)])
 _MERGED_PARTIAL = po.merge_market_snapshots(
@@ -523,8 +524,9 @@ def test_merged_market_fixtures_have_the_ambiguous_shape():
     assert _MERGED_TIMEOUT["status"]["state"] == "inflight_timeout"
     assert _MERGED_PARTIAL["status"]["state"] == "partial_transport_failure"
     assert _MERGED_EMPTY["status"]["state"] == "verified_empty"
-    for merged in (_MERGED_TIMEOUT, _MERGED_PARTIAL, _MERGED_EMPTY):
+    for merged in (_MERGED_TIMEOUT, _MERGED_EMPTY):
         assert merged["status"]["empty_reason"] == "no_equivalent_market"
+    assert _MERGED_PARTIAL["status"]["empty_reason"] == "partial_transport_failure"
 
 
 @pytest.mark.parametrize("payload,state,verdict", [
