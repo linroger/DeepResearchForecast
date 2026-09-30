@@ -10,6 +10,7 @@ legacy 48k head+tail slice drops it.
 from __future__ import annotations
 
 import random
+import time
 from datetime import date, datetime, timezone
 
 import pytest
@@ -51,9 +52,70 @@ def test_parse_dated_period_forms(raw, start, end, precision):
     assert cp.parse_dated_period(raw) == cp.DatedPeriod(start, end, precision)
 
 
-@pytest.mark.parametrize("raw", [None, "", "   ", "TBD", "soon", "late in the decade", True])
+@pytest.mark.parametrize("raw, start, end", [
+    # a range covers both endpoints, so gating on its end never calls it past too early
+    ("2026-09-15 to 2026-10-01", date(2026, 9, 15), date(2026, 10, 1)),
+    ("2026-09-10 – 2026-10-20", date(2026, 9, 10), date(2026, 10, 20)),
+    ("2026-03 to 2026-06", date(2026, 3, 1), date(2026, 6, 30)),
+    ("2025–2026", date(2025, 1, 1), date(2026, 12, 31)),
+    ("2025-2026", date(2025, 1, 1), date(2026, 12, 31)),
+    ("2026-Q3 to 2026-Q4", date(2026, 7, 1), date(2026, 12, 31)),
+    ("2026年9月15日-20日", date(2026, 9, 15), date(2026, 9, 20)),
+    ("2026年9月15日至10月2日", date(2026, 9, 15), date(2026, 10, 2)),
+    ("2026年9月-10月", date(2026, 9, 1), date(2026, 10, 31)),
+    ("2026-09-15-20", date(2026, 9, 15), date(2026, 9, 20)),
+    ("2026-09-15 to 10-01", date(2026, 9, 15), date(2026, 10, 1)),
+    ("2026-09-15 (updated 2026-09-20)", date(2026, 9, 15), date(2026, 9, 20)),
+])
+def test_parse_dated_period_ranges_cover_both_endpoints(raw, start, end):
+    assert cp.parse_dated_period(raw) == cp.DatedPeriod(start, end, "range")
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("Q3-Q4 2026", cp.DatedPeriod(date(2026, 7, 1), date(2026, 12, 31), "quarter")),
+    ("2024-中", cp.DatedPeriod(date(2024, 1, 1), date(2024, 12, 31), "year")),  # not a range
+    ("2026年9月到期", cp.DatedPeriod(date(2026, 9, 1), date(2026, 9, 30), "month")),
+    ("2026-09-15T08:00:00+0800", cp.DatedPeriod(date(2026, 9, 15), date(2026, 9, 15), "day")),
+    ("  2026-09-15\n", cp.DatedPeriod(date(2026, 9, 15), date(2026, 9, 15), "day")),
+    ("2026  年  9  月", cp.DatedPeriod(date(2026, 9, 1), date(2026, 9, 30), "month")),
+])
+def test_parse_dated_period_edge_forms(raw, expected):
+    assert cp.parse_dated_period(raw) == expected
+
+
+@pytest.mark.parametrize("raw", [
+    None, "", "   ", "TBD", "soon", "late in the decade", True,
+    # an open or unreadable range end leaves no endpoint: undated, never its first date
+    "2025年3月至今", "2026-09-15 to date", "2026-09-15 – present", "2026-09-15 to mid-October",
+    "2026年12月28日-1月3日", "2026-09-15 (2026-13 revised)",
+])
 def test_parse_dated_period_garbage_is_undated(raw):
     assert cp.parse_dated_period(raw) is None
+
+
+def test_date_and_heading_parsing_is_linear_on_pathological_text():
+    """Timeline dates, as_of values and dossier headings are model / web text: every regex on
+    them must stay linear (the old heading pattern took ~58s on 4,000 spaces)."""
+    headings = ["## a" + " " * 50000 + "b", "## a" + "#" * 50000 + "b",
+                "# a" + " \t" * 20000 + "#" * 20000, "## " + "x" * 50000 + " " * 50000 + "#"]
+    for line in headings:
+        started = time.perf_counter()
+        sections = cp.split_h2(line + "\n\nbody")
+        assert time.perf_counter() - started < 0.5
+        assert len(sections) == 1 and sections[0].level in (1, 2)
+    dates = ["2026" + " " * 50000 + "Q3", "2026" + " " * 20000 + "年 " * 20000,
+             "1" * 100000, "2026-09-15 " + "to " * 30000, "Q1-" * 30000 + "2026",
+             "2026-09-15T" + "1" * 50000]
+    for raw in dates:
+        started = time.perf_counter()
+        cp.parse_dated_period(raw)
+        cp.validate_pack_as_of(raw, NOW)
+        assert time.perf_counter() - started < 0.5
+
+
+def test_split_h2_strips_only_a_closing_hash_run_after_a_space():
+    md = "## Why C#\n\nx\n\n## Title ##\n\ny\n\n# Intro #  \n\nz\n\n## C# #\n\nw"
+    assert [s.heading for s in cp.split_h2(md)] == ["Why C#", "Title", "Intro", "C#"]
 
 
 def test_temporal_class_gates_on_the_period_end():
@@ -193,6 +255,35 @@ def test_straddling_row_is_excluded_from_the_lane():
     assert "September row" not in lane.render()
 
 
+def test_range_ending_after_as_of_is_straddle_and_excluded():
+    rows = [{"date": "2026-09-10 to 2026-10-20", "event": "Hearing window still open"},
+            {"date": "2026年9月1日-10日", "event": "Consultation closed"}]
+    lane = cp.developments_lane(rows, AS_OF)
+    assert [i.event for i in lane.items] == ["Consultation closed"]
+    assert lane.lines == ("- 2026年9月1日-10日 (5 days before as-of): Consultation closed",)
+    assert lane.stats["straddle"] == 1
+    sched = cp.scheduled_lane(rows, AS_OF, NOW, 30)
+    assert sched.items == ()  # it started before as_of: not "not yet occurred" either
+    packed = cp.build_binary_pack("## Body\n\n" + _para("b", 500), rows, "2026-09-15", NOW)
+    assert packed.ok and "Hearing window still open" not in packed.text
+    assert packed.telemetry["lanes"]["developments"]["straddle"] == 1
+    assert packed.telemetry["lanes"]["audit"]["violations"] == []
+
+
+def test_a_long_date_is_audited_unclipped_and_never_withholds_the_lane():
+    rows = [{"date": "2026-07-01", "event": "Well-formed row"},
+            {"date": "Reported between March and April, 2025", "event": "Loosely dated row"}]
+    lane = cp.developments_lane(rows, AS_OF)
+    long_item = lane.items[1]
+    assert long_item.date == "Reported between March and Apri…"
+    assert long_item.raw_date == "Reported between March and April, 2025"
+    kept, violations = cp.audit_temporal_contract([lane], AS_OF)
+    assert kept == [lane] and violations == []
+    packed = cp.build_binary_pack("## Body\n\n" + _para("b", 500), rows, "2026-09-15", NOW)
+    assert packed.ok and "[DEVELOPMENTS" in packed.text and "Well-formed row" in packed.text
+    assert packed.telemetry["lanes"]["audit"]["withheld_segments"] == []
+
+
 def test_lane_is_newest_first_deduplicated_and_rendered_with_ages():
     lane = cp.developments_lane(TIMELINE, AS_OF)
     assert [i.date for i in lane.items] == ["2026-07-23", "2026-05", "2026-03-09", "2025"]
@@ -246,6 +337,30 @@ def test_scheduled_rows_shown_live_and_withheld_retrospectively():
                                   NOW, 48000)
     assert "[SCHEDULED" not in packed.text and "After the old as_of" not in packed.text
     assert packed.telemetry["lanes"]["scheduled"]["post_as_of_rows_withheld"] == 2
+
+
+def test_a_hindcast_withholds_scheduled_rows_however_recent_its_cutoff():
+    recent = date.fromordinal(NOW.date().toordinal() - 5)
+    rows = [{"date": NOW.date().isoformat(), "event": "Outcome reported after the cutoff."}]
+    assert cp.scheduled_guard_open(recent, NOW, 30)
+    assert not cp.scheduled_guard_open(recent, NOW, 30, retrospective=True)
+    live = cp.scheduled_lane(rows, recent, NOW, 30)
+    assert [i.event for i in live.items] == ["Outcome reported after the cutoff."]
+    hindcast = cp.scheduled_lane(rows, recent, NOW, 30, retrospective=True)
+    assert hindcast.items == () and hindcast.render() == ""
+    assert hindcast.stats["guard"] == "withheld" and hindcast.stats["retrospective"] is True
+    assert hindcast.stats["post_as_of_rows_withheld"] == 1
+    report = "## Executive Summary\n\n" + _para("e", 500)
+    for result in (cp.build_binary_pack(report, rows, recent.isoformat(), NOW, retrospective=True),
+                   cp.build_spine_pack(report, "brief", "", rows, recent.isoformat(), NOW,
+                                       retrospective=True)):
+        assert result.ok and "Outcome reported" not in result.text
+        assert result.telemetry["lanes"]["scheduled"]["post_as_of_rows_withheld"] == 1
+    assert (cp.build_binary_pack(report, rows, recent.isoformat(), NOW).input_sha256
+            != cp.build_binary_pack(report, rows, recent.isoformat(), NOW,
+                                    retrospective=True).input_sha256)
+    split = cp.split_chronology(rows, recent, NOW, retrospective=True)
+    assert split["scheduled"] == [] and split["post_as_of_rows_withheld"] == 1
 
 
 def test_forged_item_withholds_its_segment():

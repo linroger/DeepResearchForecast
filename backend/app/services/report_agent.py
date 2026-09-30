@@ -1674,6 +1674,12 @@ class ReportAgent:
             if isinstance(graph_priors_structural, dict) and graph_priors_structural else None)
         self.scenario_spine = (scenario_spine
                                if isinstance(scenario_spine, list) and scenario_spine else None)
+        # TIME-6: 回测钉（见 docstring）；只存真正的回测钉，其余一律视为未传入。按模拟 id 的查找结果
+        # 懒缓存一次；查找抛错时记下，市场据此失败即扣下。测试经 __new__ 构造时三者缺失，读取一律走 getattr。
+        # 须在下方各块构建之前赋值：REPORT_CHRONOLOGY_ASOF_SPLIT 的时间线块按回测钉的 as_of 切分（RESEARCH-13）。
+        self.hindcast: Optional[Dict[str, Any]] = as_hindcast_pin(hindcast)
+        self._hindcast_pin_cache: Any = _HINDCAST_PIN_UNRESOLVED
+        self._hindcast_lookup_failed = False
         # VIZ-2: 研究期图表清单渲染成「可引用图表」块，钉进各章节提示词（章节据此用标准 markdown
         # 图片语法引用图形）；charts_manifest 缺省/空/解析失败时为空串 → 注入自动跳过（degrade-safe）。
         try:
@@ -1744,11 +1750,6 @@ class ReportAgent:
         # RESEARCH-13: 概率提示词证据包的摘要（无正文，kind → digest），_finalize 在最终落盘前写入
         # forecast.context_pack。旗标全关时始终为空。测试经 __new__ 构造时缺失，读取一律走 getattr。
         self._context_pack_digests: Dict[str, Dict[str, Any]] = {}
-        # TIME-6: 回测钉（见 docstring）；只存真正的回测钉，其余一律视为未传入。按模拟 id 的查找结果
-        # 懒缓存一次；查找抛错时记下，市场据此失败即扣下。测试经 __new__ 构造时三者缺失，读取一律走 getattr。
-        self.hindcast: Optional[Dict[str, Any]] = as_hindcast_pin(hindcast)
-        self._hindcast_pin_cache: Any = _HINDCAST_PIN_UNRESOLVED
-        self._hindcast_lookup_failed = False
 
         self.llm = llm_client or LLMClient()
         self.zep_tools = zep_tools or ZepToolsService()
@@ -2218,18 +2219,20 @@ class ReportAgent:
         """RESEARCH-13（REPORT_CHRONOLOGY_ASOF_SPLIT）：时间线块按 as_of 切分。
 
         已发生（整个日期区间在 as_of 当日或之前，最近 15 条，按时序）与单列的「已排期」子列表
-        （日期晚于 as_of；与证据包同一实时运行门，回溯运行扣下并注明条数）；无日期/跨越 as_of 的
-        条目只计数。as_of 无效或切分失败 → None，调用方渲染旧块（degrade-safe）。"""
+        （日期晚于 as_of；与证据包同一实时运行门，回溯/回测运行扣下并注明条数）；无日期/跨越 as_of 的
+        条目只计数。as_of 取回测钉优先（_context_pack_as_of）；as_of 无效、回测钉查找失败或切分失败
+        → None，调用方渲染旧块（degrade-safe）。"""
         try:
             from . import forecast_context_packer as _cp
-            as_of_raw, _source = self._context_pack_as_of()
+            as_of_raw, as_of_source = self._context_pack_as_of()
             now = datetime.now(timezone.utc)
             as_of = _cp.validate_pack_as_of(as_of_raw, now)
             if as_of is None:
                 return None
             split = _cp.split_chronology(
                 rows, as_of, now,
-                window_days=int(getattr(Config, "FORECAST_SCHEDULED_LIVE_WINDOW_DAYS", 30)))
+                window_days=int(getattr(Config, "FORECAST_SCHEDULED_LIVE_WINDOW_DAYS", 30)),
+                retrospective=as_of_source == "hindcast_pin")
         except Exception as exc:  # noqa: BLE001 — 切分为增强，失败回退旧时间线块
             logger.warning(f"时间线 as_of 切分失败（回退旧时间线块）: {exc}")
             return None
@@ -3177,12 +3180,35 @@ class ReportAgent:
 
         A hindcast's pinned as-of (TIME-6) wins over the research actors' ``as_of_date`` (the
         research run date): a row dated after the cutoff must never be shown as a past
-        development. The packer validates the value (a day, not after today)."""
+        development. Fail closed: a pin without a usable as-of, or a pin lookup that raised
+        (hindcast unknown, as when TIME-6 withholds markets), yields no cutoff, so the packs
+        and the chronology split fall back to their legacy views instead of cutting at the
+        research date. The packer validates the value (a day, not after today)."""
         pin = self._hindcast_pin()
-        if pin is not None and pin.get("as_of"):
-            return pin["as_of"], "hindcast_pin"
+        if pin is not None:
+            return pin.get("as_of"), "hindcast_pin"
+        if getattr(self, "_hindcast_lookup_failed", False):
+            return None, "hindcast_lookup_failed"
         actors = self.actors if isinstance(getattr(self, "actors", None), dict) else {}
         return actors.get("as_of_date"), "actors"
+
+    def _context_pack_situation(self) -> Tuple[str, str]:
+        """RESEARCH-13: the spine pack's situation stream and where it came from.
+
+        The actors' situation-brief block; when actors.json has none, the legacy background
+        brief (actors.situation_brief: roster, relationships, hot topics) that the [态势简报]
+        slice carried, rendered without its key-events timeline and research as-of line (the
+        dated rows reach the pack only through the as_of-labelled lanes)."""
+        from ..utils import actors as _actors
+        actors = self.actors if isinstance(getattr(self, "actors", None), dict) else None
+        block = _actors.situation_brief_block(actors)
+        if block:
+            return block, "situation_brief_block"
+        if actors is None:
+            return "", "none"
+        brief = _actors.situation_brief(
+            {k: v for k, v in actors.items() if k not in ("key_events", "as_of_date")})
+        return (brief, "legacy_brief") if brief else ("", "none")
 
     def _context_pack_timeline(self) -> List[Dict[str, Any]]:
         """RESEARCH-13: the research timeline (timeline.json), else the actors' key_events."""
@@ -3202,9 +3228,11 @@ class ReportAgent:
         Shared with backend/scripts/context_pack_replay.py so the replay packs exactly what
         a report would."""
         from . import forecast_context_packer as _cp
-        from ..utils import actors as _actors
         now = now or datetime.now(timezone.utc)
         as_of_raw, as_of_source = self._context_pack_as_of()
+        # A hindcast's timeline was researched after its cutoff: rows dated after it are
+        # withheld however recent the cutoff (scheduled_guard_open).
+        retrospective = as_of_source == "hindcast_pin"
         timeline = self._context_pack_timeline()
         window = int(getattr(Config, "FORECAST_SCHEDULED_LIVE_WINDOW_DAYS", 30))
         report = str(getattr(self, "research_report", "") or "")
@@ -3216,13 +3244,13 @@ class ReportAgent:
             result = _cp.build_binary_pack(
                 report, timeline, as_of_raw, now,
                 budget=int(getattr(Config, "FORECAST_CONTEXT_PACK_BINARY_BUDGET", 48000)),
-                lang="en", window_days=window)
+                lang="en", window_days=window, retrospective=retrospective)
         elif kind == "spine":
+            situation, provenance["situation_source"] = self._context_pack_situation()
             result = _cp.build_spine_pack(
-                report, _actors.situation_brief_block(getattr(self, "actors", None)),
-                self._build_key_metrics_block(), timeline, as_of_raw, now,
+                report, situation, self._build_key_metrics_block(), timeline, as_of_raw, now,
                 budget=int(getattr(Config, "FORECAST_CONTEXT_PACK_SPINE_BUDGET", 14000)),
-                lang="zh", window_days=window)
+                lang="zh", window_days=window, retrospective=retrospective)
         else:
             raise ValueError(f"unknown context pack kind: {kind!r}")
         return result, provenance
@@ -3234,8 +3262,9 @@ class ReportAgent:
         Writes ``<report_folder>/context_pack_<kind>.json`` atomically (schema
         drf.context_pack/1, with the text) and keeps the digest without the text in
         ``self._context_pack_digests[kind]``; ``applied`` says whether the prompt got the
-        pack. Degrade-safe: a fallback status or any error is logged and returns None, so
-        the caller runs its legacy prompt (the digest records why)."""
+        pack (for the spine, ``published`` is added after the draw: see
+        ``_mark_spine_pack_published``). Degrade-safe: a fallback status or any error is
+        logged and returns None, so the caller runs its legacy prompt (the digest records why)."""
         digests = getattr(self, "_context_pack_digests", None)
         if not isinstance(digests, dict):
             digests = {}
@@ -3259,6 +3288,16 @@ class ReportAgent:
             return None
         logger.info(f"证据包 {kind}: {len(result.text)} 字（as_of 来源 {provenance['as_of_source']}）")
         return result.text
+
+    def _mark_spine_pack_published(self, published: bool) -> None:
+        """RESEARCH-13: record on the spine pack's digest whether the spine drawn with it was
+        pinned. A spine without scenarios (or a failed draw) falls back to post-hoc
+        extract_structured_forecast, which never sees the pack, so its scenarios are not the
+        pack's. No-op unless the pack reached the spine prompt (flag off: no digest)."""
+        digests = getattr(self, "_context_pack_digests", None)
+        digest = digests.get("spine") if isinstance(digests, dict) else None
+        if isinstance(digest, dict) and digest.get("applied"):
+            digest["published"] = bool(published)
 
     def _derive_and_pin_forecast_spine(self, report_id: str) -> None:
         """NEXTSTEPS P0-1: derive the structured forecast spine BEFORE section prose,
@@ -3343,6 +3382,7 @@ class ReportAgent:
                 # forecast.quality.probability_parse（回退成稿后抽取的原因可审计）。
                 if isinstance(spine, dict) and spine.get("probability_review"):
                     self._spine_probability_review = spine["probability_review"]
+                self._mark_spine_pack_published(False)
                 logger.info("预测骨架推导未产出情景，跳过（回退为成稿后抽取）")
                 return
             pre_critique_spine = spine
@@ -3366,6 +3406,7 @@ class ReportAgent:
                     logger.warning(f"骨架前置自校准失败（忽略）: {_ce}")
             self._forecast_spine = spine
             self._forecast_spine_block = _fe.render_forecast_spine_block(spine)
+            self._mark_spine_pack_published(True)
             # 早落 forecast.json（骨架版）；成稿后由 _finalize_structured_forecast 补
             # citation_audit / 自校准 / 发布门后覆盖。EVAL-13：评估运行的骨架版同样盖
             # forecast['evaluation'] 章（目标尚未抽取 → missing），成稿失败时留下的这份文件
@@ -3394,6 +3435,7 @@ class ReportAgent:
             logger.warning(f"预测骨架推导失败（忽略，回退成稿后抽取）: {_se}")
             self._forecast_spine = None
             self._forecast_spine_block = ""
+            self._mark_spine_pack_published(False)
         # EVAL-11：影子跨底座检查置于上方 try/except 之外——其失败（含向上抛出的 BudgetExceeded）
         # 绝不能经由那个 except 丢弃已发布的骨架。仅在骨架已钉住时运行；未开启时不发任何调用。
         if pre_critique_spine is not None and self._forecast_spine is not None:

@@ -24,6 +24,7 @@ from app.config import Config
 from app.services import forecast_context_packer as cp
 from app.services import forecast_extractor as fe
 from app.services import forecast_ledger
+from app.services import pipeline_orchestrator as po
 from app.services import report_agent as ra
 from app.services.hindcast_policy import HINDCAST_POLICY_VERSION
 from app.services.report_agent import ReportAgent, ReportManager
@@ -221,7 +222,12 @@ def test_flag_on_writes_sidecar_atomically_and_digest_matches(report_env, monkey
         assert digest["text_sha256"] == hashlib.sha256(sidecar["text"].encode("utf-8")).hexdigest()
         assert "text" not in digest and digest["applied"] is True
         assert digest["as_of_source"] == "actors"
-        assert {k: v for k, v in sidecar.items() if k != "text"} == digest
+        # "published" is recorded after the spine draw, so only the spine digest carries it
+        assert {k: v for k, v in sidecar.items() if k != "text"} == {
+            k: v for k, v in digest.items() if k != "published"}
+    assert final["context_pack"]["spine"]["published"] is True
+    assert "published" not in final["context_pack"]["binary"]
+    assert final["context_pack"]["spine"]["situation_source"] == "situation_brief_block"
 
     binary_text = _read(report_env, "report_on", "context_pack_binary.json")["text"]
     binary_prompt, = _prompts(llm, "[Research dossier]")
@@ -273,6 +279,60 @@ def test_packer_that_raises_keeps_the_legacy_extraction(report_env, monkeypatch)
         "spine": {"kind": "spine", "status": "error:RuntimeError", "applied": False},
         "binary": {"kind": "binary", "status": "error:RuntimeError", "applied": False}}
     assert _sidecars(report_env, "report_raise") == []
+
+
+class _NoScenarioSpineLLM(_RouterLLM):
+    """The spine draw yields no scenarios (the post-hoc extraction, whose prompt opens with
+    the same first sentence, is still answered)."""
+
+    def chat_json(self, messages, temperature=0.3, max_tokens=4096, tier=None, **kwargs):
+        reply = super().chat_json(messages, temperature=temperature, max_tokens=max_tokens,
+                                  tier=tier, **kwargs)
+        if messages[-1]["content"].startswith(fe._SPINE_LEAD_PREFIX):
+            return {"headline": "h", "scenarios": []}
+        return reply
+
+
+def test_spine_without_scenarios_marks_the_pack_unpublished(report_env, monkeypatch):
+    _flags(monkeypatch)
+    llm = _NoScenarioSpineLLM()
+    agent = _agent(llm)
+    os.makedirs(_folder(report_env, "report_noscen"), exist_ok=True)
+    agent._derive_and_pin_forecast_spine("report_noscen")
+    assert agent._forecast_spine is None  # no spine pinned: no early forecast.json either
+    assert not os.path.exists(os.path.join(_folder(report_env, "report_noscen"), "forecast.json"))
+    agent._finalize_structured_forecast("report_noscen", "# T\n\nBody text.")
+    final = _read(report_env, "report_noscen", "forecast.json")
+
+    spine_draws = [c["messages"][-1]["content"] for c in llm.calls if c["kind"] == "chat_json"
+                   and c["messages"][-1]["content"].startswith(fe._SPINE_LEAD_PREFIX)]
+    assert spine_draws
+    assert all("[研究证据包（按时点标注）]" in prompt for prompt in spine_draws)
+    spine = final["context_pack"]["spine"]
+    assert spine["applied"] is True and spine["published"] is False
+    assert final["scenarios"]  # the post-hoc extraction, which never saw the pack
+
+
+def test_spine_situation_falls_back_to_the_legacy_brief_without_its_timeline(report_env):
+    agent = _agent(_RouterLLM())
+    agent.actors = {
+        "as_of_date": AS_OF.isoformat(), "central_question": "Will the ruling be upheld?",
+        "actors": [{"name": "Regulator Alpha", "type": "agency", "role": "decides the appeal"}],
+        "key_events": [{"date": _day(3), "event": "KEY EVENT ONLY IN ACTORS JSON"}],
+        "hot_topics": ["appeal timing"],
+    }
+    result, provenance = agent._context_pack_result("spine")
+    assert result.ok and provenance["situation_source"] == "legacy_brief"
+    assert "- Regulator Alpha（agency） 角色: decides the appeal" in result.text
+    assert "appeal timing" in result.text
+    # the dated rows reach the pack only through the as_of lanes, never unlabelled
+    assert "KEY EVENT ONLY IN ACTORS JSON" not in result.text
+    assert "研究截止日" not in result.text and "关键时间线" not in result.text
+    assert "Newest development" in result.text
+
+    agent.actors = None
+    empty, provenance = agent._context_pack_result("spine")
+    assert provenance["situation_source"] == "none"
 
 
 def test_invalid_as_of_falls_back_with_a_recorded_digest(report_env, monkeypatch):
@@ -354,6 +414,93 @@ def test_hindcast_pin_as_of_is_the_lane_cutoff(report_env):
     assert result.telemetry["lanes"]["scheduled"]["post_as_of_rows_withheld"] == 2
 
 
+def test_a_recent_hindcast_pin_withholds_rows_dated_after_its_cutoff(report_env, monkeypatch):
+    agent = _agent(_RouterLLM())
+    cutoff = TODAY - timedelta(days=5)
+    agent.timeline_events = [
+        {"date": (cutoff - timedelta(days=2)).isoformat(), "event": "Before the cutoff."},
+        {"date": TODAY.isoformat(), "event": "AFTER CUTOFF - outcome reported."}]
+    agent.actors = dict(agent.actors, as_of_date=cutoff.isoformat())
+    live, _prov = agent._context_pack_result("binary")  # a live run at the same as_of shows it
+    assert "[SCHEDULED" in live.text and "AFTER CUTOFF" in live.text
+
+    agent.hindcast = {"version": HINDCAST_POLICY_VERSION, "hindcast": True,
+                      "as_of": cutoff.isoformat()}
+    for kind in ("binary", "spine"):
+        result, provenance = agent._context_pack_result(kind)
+        assert result.ok and provenance["as_of_source"] == "hindcast_pin"
+        assert "AFTER CUTOFF" not in result.text and "Before the cutoff." in result.text
+        scheduled = result.telemetry["lanes"]["scheduled"]
+        assert scheduled["retrospective"] is True and scheduled["post_as_of_rows_withheld"] == 1
+    monkeypatch.setattr(Config, "REPORT_CHRONOLOGY_ASOF_SPLIT", True, raising=False)
+    block = agent._build_chronology_block()
+    assert "AFTER CUTOFF" not in block and "### 已排期" not in block
+    assert f"1 条日期在 {cutoff.isoformat()} 之后的条目" in block
+
+
+def test_hindcast_pin_without_as_of_never_falls_back_to_the_research_date(report_env):
+    agent = _agent(_RouterLLM())
+    agent.hindcast = {"version": HINDCAST_POLICY_VERSION, "hindcast": True}
+    assert agent._context_pack_as_of() == (None, "hindcast_pin")
+    result, _prov = agent._context_pack_result("binary")
+    assert result.status == cp.STATUS_AS_OF_INVALID and result.text == ""
+
+
+def _constructed(**kwargs):
+    """A ReportAgent built through __init__ (no network: fake LLM, dummy graph tools)."""
+    return ReportAgent(graph_id="g1", simulation_id="sim_ctor",
+                       simulation_requirement="Will the ruling be upheld?",
+                       llm_client=FakeLLMClient(), zep_tools=object(), **kwargs)
+
+
+def test_init_chronology_split_uses_the_constructor_hindcast_pin(report_env, monkeypatch):
+    """The split block is built in __init__: it must already see the hindcast kwarg."""
+    lookups = []
+
+    def lookup(simulation_id):
+        lookups.append(simulation_id)
+        raise OSError("pipeline dir unreadable")
+
+    monkeypatch.setattr(po, "hindcast_pin_for_simulation", lookup)
+    monkeypatch.setattr(Config, "REPORT_CHRONOLOGY_ASOF_SPLIT", True, raising=False)
+    cutoff = TODAY - timedelta(days=60)
+    agent = _constructed(
+        hindcast={"version": HINDCAST_POLICY_VERSION, "hindcast": True,
+                  "as_of": cutoff.isoformat()},
+        actors={"as_of_date": TODAY.isoformat()},
+        timeline_events=[
+            {"date": (cutoff - timedelta(days=10)).isoformat(), "event": "Before the cutoff."},
+            {"date": (TODAY - timedelta(days=30)).isoformat(),
+             "event": "AFTER CUTOFF - resolution leaked"}])
+    block = agent._chronology_block
+    assert f"日期在 {cutoff.isoformat()} 当日或之前" in block
+    assert "Before the cutoff." in block and "AFTER CUTOFF" not in block
+    assert lookups == [] and agent._hindcast_lookup_failed is False
+
+
+def test_init_with_a_failed_pin_lookup_falls_back_fail_closed(report_env, monkeypatch):
+    """No kwarg and a lookup that raises: hindcast status unknown, so neither the chronology
+    split nor the packs cut at the research date, and TIME-6 still withholds markets."""
+    def lookup(simulation_id):
+        raise OSError("pipeline dir unreadable")
+
+    monkeypatch.setattr(po, "hindcast_pin_for_simulation", lookup)
+    monkeypatch.setattr(Config, "REPORT_CHRONOLOGY_ASOF_SPLIT", True, raising=False)
+    rows = [{"date": _day(-5), "event": "Newest development."},
+            {"date": _day(20), "event": "Scheduled hearing."}]
+    agent = _constructed(actors={"as_of_date": AS_OF.isoformat()}, timeline_events=rows,
+                         research_report=DOSSIER)
+    monkeypatch.setattr(Config, "REPORT_CHRONOLOGY_ASOF_SPLIT", False, raising=False)
+    assert agent._chronology_block == agent._build_chronology_block()  # the legacy block
+    assert agent._hindcast_lookup_failed is True
+    assert agent._markets_withheld_status() is not None
+    assert agent._context_pack_as_of() == (None, "hindcast_lookup_failed")
+    for kind in ("binary", "spine"):
+        result, provenance = agent._context_pack_result(kind)
+        assert result.status == cp.STATUS_AS_OF_INVALID and not result.ok
+        assert provenance["as_of_source"] == "hindcast_lookup_failed"
+
+
 def test_chronology_split_separates_past_and_scheduled_rows(report_env, monkeypatch):
     agent = _agent(_RouterLLM())
     legacy = agent._build_chronology_block()
@@ -423,3 +570,33 @@ def test_replay_script_emits_metrics_with_zero_llm_calls(tmp_path, monkeypatch, 
 
     assert replay.main(["--handoff", str(tmp_path / "missing"), "--json"]) == 1
     assert json.loads(capsys.readouterr().out)["errors"][0]["handoff"].endswith("missing")
+
+
+def test_replay_defaults_to_each_handoffs_as_of_day(tmp_path, capsys):
+    """A stored run replayed at today's date would close the scheduled guard; by default the
+    replay runs each handoff at its own as_of day, as its live report did."""
+    import scripts.context_pack_replay as replay
+
+    old_as_of = TODAY - timedelta(days=400)
+    handoff = _write_handoff(tmp_path)
+    (handoff / "actors.json").write_text(json.dumps({"as_of_date": old_as_of.isoformat()}),
+                                         encoding="utf-8")
+    (handoff / "timeline.json").write_text(json.dumps([
+        {"date": (old_as_of - timedelta(days=3)).isoformat(), "event": "Past row."},
+        {"date": (old_as_of + timedelta(days=20)).isoformat(), "event": "Scheduled row."}]),
+        encoding="utf-8")
+
+    assert replay.main(["--handoff", str(handoff), "--json", "--show-text"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    row, = payload["handoffs"]
+    assert payload["now"] == "as_of"
+    assert row["now"] == old_as_of.isoformat() and row["now_mode"] == "as_of"
+    assert row["binary"]["packed"]["scheduled_guard"] == "open"
+    assert "Scheduled row." in row["texts"]["binary"]
+
+    assert replay.main(["--handoff", str(handoff), "--json", "--show-text",
+                        "--now", TODAY.isoformat()]) == 0
+    row, = json.loads(capsys.readouterr().out)["handoffs"]
+    assert row["now_mode"] == "fixed" and row["binary"]["packed"]["scheduled_guard"] == "withheld"
+    assert row["binary"]["packed"]["post_as_of_rows_withheld"] == 1
+    assert "Scheduled row." not in row["texts"]["binary"]

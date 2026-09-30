@@ -14,11 +14,13 @@ inputs always give the same text and the same SHAs.
 * ``priority_fill``: per-stream caps as budget fractions, leftover redistributed in priority
   order, whole sections in document order and the last one cut at a paragraph/line boundary.
 * ``developments_lane`` / ``scheduled_lane`` / ``split_chronology``: as_of-labelled timeline
-  lanes. Dates are periods (``parse_dated_period``): a row counts as past only when its whole
-  period ended on or before as_of. The lane certifies event dates, not when a source became
-  available, and its header says so.
-* ``audit_temporal_contract``: re-parses every lane item; a segment with any item that breaks
-  its header's contract is withheld, so a false "on or before" header is never emitted.
+  lanes. Dates are periods (``parse_dated_period``; a date range covers both endpoints): a row
+  counts as past only when its whole period ended on or before as_of. The lane certifies event
+  dates, not when a source became available, and its header says so. Rows dated after as_of
+  are shown only for a live run (``scheduled_guard_open``), never in a hindcast.
+* ``audit_temporal_contract``: re-parses every lane item's full date; a segment with any item
+  that breaks its header's contract is withheld, so a false "on or before" header is never
+  emitted.
 * ``build_binary_pack`` / ``build_spine_pack`` -> ``PackResult``. An invalid as_of (not a day,
   or after today), a non-positive budget, a binary dossier without H2 headings or with
   nothing packable returns a ``fallback:*`` status and the caller keeps its legacy prompt.
@@ -75,8 +77,9 @@ SPINE_CAPS: Dict[str, float] = {
     "developments": 0.20, "scheduled": 0.05, "key_metrics": 0.20,
 }
 
-# Binary lanes are budget-exempt, so their size is bounded here: about 12 x 450 + 5 x 350
-# chars, minus the 2,000-char situation brief the pack replaces in the binary prompt.
+# Binary lanes are budget-exempt, so their size is bounded here: at most about 12 x 462 +
+# 5 x 361 chars plus two headers (~7.6k), about 5.6k net of the 2,000-char situation brief the
+# pack replaces in the binary prompt (the full 7.6k when the run had no brief).
 BINARY_DEV_MAX_ITEMS = 12
 BINARY_DEV_ITEM_CHARS = 400
 BINARY_SCHED_MAX_ITEMS = 5
@@ -131,10 +134,14 @@ class DatedPeriod(NamedTuple):
     """A date read as the calendar period it covers; gating uses ``end``."""
     start: date
     end: date
-    precision: str  # day | month | quarter | half | year
+    precision: str  # day | month | quarter | half | year | range
 
 
+# The per-form regexes run on one token (``_DATE_TOKEN_RE``) of whitespace-collapsed text, so
+# their ``\s*`` runs are at most one char long and every search is linear.
 _Q_RANGE_RE = re.compile(r"(\d{4})\s*[-/ ]?\s*Q([1-4])\s*(?:-|–|—|~|to|至|到)\s*Q([1-4])", re.I)
+_Q_REV_RANGE_RE = re.compile(
+    r"(?<![A-Za-z])Q([1-4])\s*(?:-|–|—|~|to|至|到)\s*Q([1-4])\s*[-/ ]?\s*(\d{4})", re.I)
 _Q_RE = re.compile(r"(\d{4})\s*[-/ ]?\s*Q([1-4])(?![0-9])", re.I)
 _Q_REV_RE = re.compile(r"(?<![A-Za-z])Q([1-4])\s*[-/ ]?\s*(\d{4})", re.I)
 _Q_CJK_RE = re.compile(r"(\d{4})\s*年\s*第?\s*([一二三四1-4])\s*季度")
@@ -142,6 +149,36 @@ _H_RE = re.compile(r"(\d{4})\s*[-/ ]?\s*H([12])(?![0-9])", re.I)
 _H_REV_RE = re.compile(r"(?<![A-Za-z])H([12])\s*[-/ ]?\s*(\d{4})", re.I)
 _H_CJK_RE = re.compile(r"(\d{4})\s*年\s*(上|下)半年")
 _CJK_DIGITS = {"一": 1, "二": 2, "三": 3, "四": 4}
+# Every date form parse_dated_period reads, as one alternation: at a given position the
+# earlier alternative wins, so a full date is never read as its month or year.
+_DATE_TOKEN_RE = re.compile("|".join((
+    r"\d{4} ?年 ?第? ?[一二三四1-4] ?季度",                        # 2026年第三季度
+    r"\d{4} ?年 ?[上下]半年",                                     # 2026年上半年
+    r"\d{4} ?年 ?\d{1,2} ?月 ?\d{1,2} ?日?",                      # 2026年9月15日
+    r"\d{4} ?年 ?\d{1,2} ?月",                                    # 2026年9月
+    r"\d{4}[-/.]\d{1,2}[-/.]\d{1,2}",                             # 2026-09-15, 2026/09/15
+    r"\d{4} ?[-/ ]? ?Q[1-4] ?(?:-|–|—|~|to|至|到) ?Q[1-4]",        # 2026-Q3-Q4
+    r"\d{4} ?[-/ ]? ?Q[1-4](?![0-9])",                            # 2026-Q3
+    r"\d{4} ?[-/ ]? ?H[12](?![0-9])",                             # 2026-H2
+    r"\d{4}[-/.]\d{1,2}(?!\d)",                                   # 2026-09
+    r"(?<![A-Za-z])Q[1-4] ?(?:-|–|—|~|to|至|到) ?Q[1-4] ?[-/ ]? ?\d{4}",  # Q3-Q4 2026
+    r"(?<![A-Za-z])Q[1-4] ?[-/ ]? ?\d{4}",                        # Q3 2026
+    r"(?<![A-Za-z])H[12] ?[-/ ]? ?\d{4}",                         # H2 2026
+    r"\b\d{4}\b",                                                 # 2026
+)), re.I)
+# A time of day never changes the date's period ("2026-09-15T08:00:00+0800").
+_TIME_OF_DAY_RE = re.compile(r"(?<=\d)[T ]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?",
+                             re.I)
+# A range separator right after the last date: the row runs to the endpoint that follows.
+# '-', '至' and '到' count only before a digit ("2026年9月到期" is a month, not a range); an open
+# end ("至今", "to date", "– present") leaves no endpoint, so the row is undated.
+_RANGE_SEP_RE = re.compile(
+    r" ?(?:–|—|~|〜) ?| (?:to|until|through|till)\b ?| ?(?:-|至|到) ?(?=\d)"
+    r"| ?起? ?(?:至|到|迄) ?(?:今|现在|目前)", re.I)
+# The end of a range written without the parts it shares with its start.
+_TAIL_MONTH_DAY_RE = re.compile(r"(\d{1,2}) ?(?:月|[-/.]) ?(\d{1,2})(?!\d)")   # 10月20日, 10-01
+_TAIL_MONTH_RE = re.compile(r"(\d{1,2}) ?月")                                  # 10月
+_TAIL_NUMBER_RE = re.compile(r"(\d{1,2})(?![\d月])")                           # 20日, 20
 
 
 def _month_span(year: int, first_month: int, last_month: int) -> Optional[Tuple[date, date]]:
@@ -165,43 +202,35 @@ def _half(year: int, half: int) -> Optional[DatedPeriod]:
     return DatedPeriod(span[0], span[1], "half") if span else None
 
 
-def parse_dated_period(value: Any) -> Optional[DatedPeriod]:
-    """``value`` as ``(start, end, precision)``, or None when it carries no date.
-
-    Quarter (``YYYY-Qn``, ``YYYY-Qn-Qm``, ``Qn YYYY``, ``YYYY年第n季度``) and half-year
-    (``YYYY-Hn``, ``YYYY年上/下半年``) forms are read first; every other form goes through
-    ``dates.date_period`` (``YYYY-MM-DD``, ``YYYY/MM/DD``, CJK 年月日 / 年月, ``YYYY-MM``,
-    ``YYYY``), so a coarse date is never read as a single day. Never raises.
-    """
-    if value is None or isinstance(value, bool):
-        return None
-    if not isinstance(value, (date, datetime)):
-        text = unicodedata.normalize("NFKC", str(value)).strip()
-        if not text:
-            return None
-        m = _Q_RANGE_RE.search(text)
+def _token_period(value: Any) -> Optional[DatedPeriod]:
+    """One date token (or a ``date``) as its period: the quarter and half-year forms, else
+    ``dates.date_period`` (day / month / year by the token's own precision)."""
+    if isinstance(value, str):
+        m = _Q_RANGE_RE.search(value)
         if m:
             return _quarters(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-        m = _Q_RE.search(text)
+        m = _Q_REV_RANGE_RE.search(value)
+        if m:
+            return _quarters(int(m.group(3)), int(m.group(1)), int(m.group(2)))
+        m = _Q_RE.search(value)
         if m:
             return _quarters(int(m.group(1)), int(m.group(2)), int(m.group(2)))
-        m = _Q_REV_RE.search(text)
+        m = _Q_REV_RE.search(value)
         if m:
             return _quarters(int(m.group(2)), int(m.group(1)), int(m.group(1)))
-        m = _Q_CJK_RE.search(text)
+        m = _Q_CJK_RE.search(value)
         if m:
             q = _CJK_DIGITS.get(m.group(2)) or int(m.group(2))
             return _quarters(int(m.group(1)), q, q)
-        m = _H_RE.search(text)
+        m = _H_RE.search(value)
         if m:
             return _half(int(m.group(1)), int(m.group(2)))
-        m = _H_REV_RE.search(text)
+        m = _H_REV_RE.search(value)
         if m:
             return _half(int(m.group(2)), int(m.group(1)))
-        m = _H_CJK_RE.search(text)
+        m = _H_CJK_RE.search(value)
         if m:
             return _half(int(m.group(1)), 1 if m.group(2) == "上" else 2)
-        value = text
     try:
         span = date_period(value)
     except Exception:  # noqa: BLE001 — a malformed date is undated, never an error
@@ -216,6 +245,78 @@ def parse_dated_period(value: Any) -> Optional[DatedPeriod]:
     else:
         precision = "year"
     return DatedPeriod(start, end, precision)
+
+
+def _range_end(rest: str, first: DatedPeriod) -> Optional[DatedPeriod]:
+    """The endpoint after a range separator when it omits what it shares with ``first``
+    ("2026年9月15日-20日", "2026-09-15 to 10-01", "2026年9月-10月"); None when ``rest`` holds
+    no such endpoint or it would end before ``first`` starts (never guessed across a year)."""
+    if first.precision not in ("day", "month"):
+        return None
+    day: Optional[int]
+    m = _TAIL_MONTH_DAY_RE.match(rest)
+    if m:
+        month, day = int(m.group(1)), int(m.group(2))
+    else:
+        m = _TAIL_MONTH_RE.match(rest)
+        if m:
+            month, day = int(m.group(1)), None
+        else:
+            m = _TAIL_NUMBER_RE.match(rest)
+            if not m:
+                return None
+            number = int(m.group(1))
+            month, day = (first.start.month, number) if first.precision == "day" else (number, None)
+    if day is None:
+        span = _month_span(first.start.year, month, month)
+        if span is None:
+            return None
+        period = DatedPeriod(span[0], span[1], "month")
+    else:
+        try:
+            period = DatedPeriod(date(first.start.year, month, day),
+                                 date(first.start.year, month, day), "day")
+        except ValueError:
+            return None
+    return period if period.end >= first.start else None
+
+
+def parse_dated_period(value: Any) -> Optional[DatedPeriod]:
+    """``value`` as ``(start, end, precision)``, or None when it carries no date.
+
+    Forms: ``YYYY-MM-DD``, ``YYYY/MM/DD``, CJK 年月日 / 年月, ``YYYY-MM``, quarters
+    (``YYYY-Qn``, ``YYYY-Qn-Qm``, ``Qn YYYY``, ``Qn-Qm YYYY``, ``YYYY年第n季度``), halves
+    (``YYYY-Hn``, ``Hn YYYY``, ``YYYY年上/下半年``) and ``YYYY``; a coarse date is never read
+    as a single day. A value holding several dates, or one date and a range end written
+    after it ("2026-09-15 to 2026-10-01", "2025–2026", "2026年9月15日-20日"), covers all of
+    them (precision ``range``), so gating on its end never calls an unfinished range past.
+    A range whose end cannot be read ("2026-09-15 至今", "… to date") or any unreadable
+    date token makes the value undated. Linear in the input length; never raises.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (date, datetime)):
+        return _token_period(value)
+    text = re.sub(r"\s+", " ", unicodedata.normalize("NFKC", str(value))).strip()
+    text = _TIME_OF_DAY_RE.sub("", text)
+    tokens = list(_DATE_TOKEN_RE.finditer(text))
+    if not tokens:
+        return None
+    periods: List[DatedPeriod] = []
+    for token in tokens:
+        period = _token_period(token.group(0))
+        if period is None:
+            return None
+        periods.append(period)
+    sep = _RANGE_SEP_RE.match(text, tokens[-1].end())
+    if sep:
+        end = _range_end(text[sep.end():], periods[-1])
+        if end is None:
+            return None
+        periods.append(end)
+    if len(periods) == 1:
+        return periods[0]
+    return DatedPeriod(min(p.start for p in periods), max(p.end for p in periods), "range")
 
 
 def temporal_class(period: Optional[DatedPeriod], as_of: date) -> str:
@@ -258,7 +359,9 @@ class Section:
     text: str
 
 
-_SPLIT_HEADING_RE = re.compile(r"^(#{1,2})[ \t]+(.+?)[ \t]*#*[ \t]*$")
+# Only the opening run is matched here; the closing run is trimmed in _heading_text, which
+# keeps the match linear on a heading line of any length.
+_SPLIT_HEADING_RE = re.compile(r"^(#{1,2})[ \t]+(.*)$")
 _HEADING_NUMBERING_RE = re.compile(
     r"^(?:\d+(?:\.\d+)*[.)、:：]?|[ivxlc]+[.)]|[一二三四五六七八九十]+[、.．]"
     r"|第[一二三四五六七八九十\d]+[章节部分])\s*", re.I)
@@ -337,6 +440,16 @@ def classify_heading(heading: Any) -> str:
     return _classify_core(h)
 
 
+def _heading_text(raw: str) -> str:
+    """ATX heading text without its optional closing ``#`` run, which (as in CommonMark)
+    counts only after a space or tab: "Why C#" keeps its ``#``, "Title ##" loses them."""
+    text = raw.rstrip(" \t")
+    core = text.rstrip("#")
+    if core != text and (not core or core[-1] in " \t"):
+        text = core
+    return text.strip()
+
+
 def split_h2(md: Any) -> List[Section]:
     """Split markdown at H1/H2 headings outside fenced code blocks; H3+ stays in place.
 
@@ -365,7 +478,7 @@ def split_h2(md: Any) -> List[Section]:
             m = _SPLIT_HEADING_RE.match(line)
             if m:
                 flush(offset)
-                cur_start, cur_level, cur_heading = offset, len(m.group(1)), m.group(2).strip()
+                cur_start, cur_level, cur_heading = offset, len(m.group(1)), _heading_text(m.group(2))
         offset += len(line) + 1
     flush(len(text))
     return sections
@@ -481,9 +594,13 @@ def priority_fill(streams: Sequence[Tuple[str, Sequence[str]]], budget: int,
 # ----------------------------------------------------------------------- timeline lanes
 @dataclass(frozen=True)
 class LaneItem:
+    """One lane line: ``date`` is the display date (clipped to 32 chars), ``raw_date`` the
+    full normalized date the row was classified by (the audit re-parses it; an item built
+    without one is audited on its display date)."""
     date: str
     event: str
     days: int
+    raw_date: str = ""
 
 
 @dataclass(frozen=True)
@@ -566,8 +683,8 @@ def developments_lane(timeline: Any, as_of: date, max_items: int = 12, item_char
     buckets = _classified(timeline, as_of)
     ordered, duplicates = _dedupe_sorted(_past_sorted(buckets["past"]))
     chosen = ordered[:max(0, int(max_items))]
-    items = tuple(LaneItem(_clip(d, _LANE_DATE_CHARS), _clip(e, item_chars), (as_of - p.end).days)
-                  for d, e, p in chosen)
+    items = tuple(LaneItem(_clip(d, _LANE_DATE_CHARS), _clip(e, item_chars), (as_of - p.end).days,
+                           raw_date=d) for d, e, p in chosen)
     lines = tuple(tpl["dev_line"].format(date=i.date, days=i.days, event=i.event) for i in items)
     absence = "" if items else tpl["absence"].format(
         as_of=as_of.isoformat(), undated=len(buckets["undated"]), straddle=len(buckets["straddle"]))
@@ -579,29 +696,34 @@ def developments_lane(timeline: Any, as_of: date, max_items: int = 12, item_char
                    tpl["developments"].format(as_of=as_of.isoformat()), items, lines, absence, stats)
 
 
-def scheduled_guard_open(as_of: date, now: Any, window_days: int) -> bool:
+def scheduled_guard_open(as_of: date, now: Any, window_days: int,
+                         retrospective: bool = False) -> bool:
     """Future rows are shown only for a live run: as_of within ``window_days`` of today. In a
-    retrospective run they may have been written with hindsight, so they are withheld."""
+    retrospective run they may have been written with hindsight, so they are withheld; a
+    known hindcast (``retrospective``, the cutoff is a pinned past as-of while the research
+    ran later) withholds them however recent its cutoff is."""
     today = _as_date(now)
-    if today is None:
+    if today is None or retrospective:
         return False
     return (today - as_of).days <= max(0, int(window_days))
 
 
 def scheduled_lane(timeline: Any, as_of: date, now: Any, window_days: int, max_items: int = 12,
-                   item_chars: int = 400, lang: str = "en") -> Segment:
+                   item_chars: int = 400, lang: str = "en", *,
+                   retrospective: bool = False) -> Segment:
     """Rows dated after as_of (soonest first), shown only while the scheduled guard is open;
     otherwise every such row is withheld and counted as ``post_as_of_rows_withheld``."""
     tpl = _HEADERS[_lang_key(lang)]
     buckets = _classified(timeline, as_of)
-    guard_open = scheduled_guard_open(as_of, now, window_days)
+    guard_open = scheduled_guard_open(as_of, now, window_days, retrospective)
     ordered, duplicates = _dedupe_sorted(_future_sorted(buckets["future"]))
     chosen = ordered[:max(0, int(max_items))] if guard_open else []
-    items = tuple(LaneItem(_clip(d, _LANE_DATE_CHARS), _clip(e, item_chars), (p.start - as_of).days)
-                  for d, e, p in chosen)
+    items = tuple(LaneItem(_clip(d, _LANE_DATE_CHARS), _clip(e, item_chars), (p.start - as_of).days,
+                           raw_date=d) for d, e, p in chosen)
     lines = tuple(tpl["sched_line"].format(date=i.date, days=i.days, event=i.event) for i in items)
     stats = {"future": len(buckets["future"]), "kept": len(items), "duplicates": duplicates,
              "guard": "open" if guard_open else "withheld", "window_days": int(window_days),
+             "retrospective": bool(retrospective),
              "post_as_of_rows_withheld": 0 if guard_open else len(buckets["future"]),
              "over_cap": max(0, len(ordered) - len(items)) if guard_open else 0}
     return Segment("scheduled", CONTRACT_AFTER, tpl["scheduled"].format(as_of=as_of.isoformat()),
@@ -621,9 +743,10 @@ def audit_temporal_contract(segments: Sequence[Segment], as_of: date
         want = {CONTRACT_ON_OR_BEFORE: "past", CONTRACT_AFTER: "future"}.get(seg.contract)
         bad = []
         for item in seg.items:
-            got = temporal_class(parse_dated_period(item.date), as_of)
+            got = temporal_class(parse_dated_period(item.raw_date or item.date), as_of)
             if want is None or got != want:
-                bad.append({"segment": seg.name, "contract": seg.contract, "date": item.date,
+                bad.append({"segment": seg.name, "contract": seg.contract,
+                            "date": _clip(item.raw_date or item.date, 80),
                             "class": got, "event_head": item.event[:60]})
         if bad:
             violations.extend(bad)
@@ -633,13 +756,14 @@ def audit_temporal_contract(segments: Sequence[Segment], as_of: date
 
 
 def split_chronology(timeline: Any, as_of: date, now: Any, max_past: int = 15,
-                     window_days: int = 30, max_scheduled: int = 10) -> Dict[str, Any]:
+                     window_days: int = 30, max_scheduled: int = 10, *,
+                     retrospective: bool = False) -> Dict[str, Any]:
     """Section-prompt chronology split at as_of: the newest ``max_past`` past rows (returned in
     chronological order) and, under the same live-run guard as the scheduled lane, the soonest
     future rows. Undated and straddling rows appear in neither list and are counted."""
     buckets = _classified(timeline, as_of)
     past, _dup = _dedupe_sorted(_past_sorted(buckets["past"]))
-    guard_open = scheduled_guard_open(as_of, now, window_days)
+    guard_open = scheduled_guard_open(as_of, now, window_days, retrospective)
     future, _fdup = _dedupe_sorted(_future_sorted(buckets["future"]))
     return {
         "past": [{"date": d, "event": e} for d, e, _p in reversed(past[:max(0, int(max_past))])],
@@ -708,11 +832,11 @@ def _sections_telemetry(sections: Sequence[Section], dropped: Sequence[Section])
 
 
 def _lanes(timeline: Any, as_of: date, now: Any, window_days: int, lang: str, *,
-           dev_items: int, dev_chars: int, sched_items: int, sched_chars: int
-           ) -> Tuple[Dict[str, Segment], Dict[str, Any]]:
+           dev_items: int, dev_chars: int, sched_items: int, sched_chars: int,
+           retrospective: bool) -> Tuple[Dict[str, Segment], Dict[str, Any]]:
     dev = developments_lane(timeline, as_of, max_items=dev_items, item_chars=dev_chars, lang=lang)
     sched = scheduled_lane(timeline, as_of, now, window_days, max_items=sched_items,
-                           item_chars=sched_chars, lang=lang)
+                           item_chars=sched_chars, lang=lang, retrospective=retrospective)
     kept, violations = audit_temporal_contract([dev, sched], as_of)
     kept_names = {s.name for s in kept}
     telemetry = {
@@ -744,9 +868,10 @@ def _budget(value: Any) -> Optional[int]:
 
 def build_binary_pack(research_report: Any, timeline: Any, as_of_raw: Any, now: Any,
                       budget: int = 48000, lang: str = "en", *,
-                      window_days: int = 30) -> PackResult:
+                      window_days: int = 30, retrospective: bool = False) -> PackResult:
     """The binary draw's dossier context: dated lanes (budget-exempt) + a section-aware
-    dossier excerpt within ``budget`` chars.
+    dossier excerpt within ``budget`` chars. ``retrospective`` (a hindcast) keeps the
+    scheduled lane withheld (``scheduled_guard_open``).
 
     Fallbacks (the caller keeps its legacy prompt): an invalid as_of, a non-positive budget,
     a dossier without H2 headings (the text is then the legacy head+tail slice, for replay
@@ -756,7 +881,8 @@ def build_binary_pack(research_report: Any, timeline: Any, as_of_raw: Any, now: 
     budget_n = _budget(budget)
     input_sha = _input_sha("binary", research_report=report, timeline=timeline,
                            as_of=as_of_raw, now=today.isoformat() if today else None,
-                           budget=budget_n, lang=_lang_key(lang), window_days=int(window_days))
+                           budget=budget_n, lang=_lang_key(lang), window_days=int(window_days),
+                           retrospective=bool(retrospective))
     telemetry: Dict[str, Any] = {"kind": "binary", "budget": budget_n,
                                  "as_of": str(as_of_raw or ""), "lang": _lang_key(lang)}
     as_of = validate_pack_as_of(as_of_raw, now)
@@ -782,7 +908,7 @@ def build_binary_pack(research_report: Any, timeline: Any, as_of_raw: Any, now: 
     lanes, lane_telemetry = _lanes(
         timeline, as_of, now, window_days, lang, dev_items=BINARY_DEV_MAX_ITEMS,
         dev_chars=BINARY_DEV_ITEM_CHARS, sched_items=BINARY_SCHED_MAX_ITEMS,
-        sched_chars=BINARY_SCHED_ITEM_CHARS)
+        sched_chars=BINARY_SCHED_ITEM_CHARS, retrospective=retrospective)
     dossier_block = (header + "\n" + PIECE_SEP.join(excerpt)) if excerpt else ""
     telemetry.update({
         "dossier_chars": len(report), "sections": _sections_telemetry(kept_sections, dropped),
@@ -798,11 +924,13 @@ def build_binary_pack(research_report: Any, timeline: Any, as_of_raw: Any, now: 
 
 def build_spine_pack(research_report: Any, situation_text: Any, key_metrics_text: Any,
                      timeline: Any, as_of_raw: Any, now: Any, budget: int = 14000,
-                     lang: str = "zh", *, window_days: int = 30) -> PackResult:
+                     lang: str = "zh", *, window_days: int = 30,
+                     retrospective: bool = False) -> PackResult:
     """The spine's evidence pack within ``budget`` chars: dossier executive summary and
     scenario sections, the situation brief, the as_of-split timeline lanes and key metrics,
     filled by share (SPINE_CAPS) with leftover in SPINE_PRIORITY order. A lane cut to its
-    share loses its oldest (developments) or latest (scheduled) lines, never its header."""
+    share loses its oldest (developments) or latest (scheduled) lines, never its header.
+    ``retrospective`` as in ``build_binary_pack``."""
     report = str(research_report or "")
     situation = str(situation_text or "").strip()
     metrics = str(key_metrics_text or "").strip()
@@ -811,7 +939,8 @@ def build_spine_pack(research_report: Any, situation_text: Any, key_metrics_text
     input_sha = _input_sha("spine", research_report=report, situation_text=situation,
                            key_metrics_text=metrics, timeline=timeline, as_of=as_of_raw,
                            now=today.isoformat() if today else None, budget=budget_n,
-                           lang=_lang_key(lang), window_days=int(window_days))
+                           lang=_lang_key(lang), window_days=int(window_days),
+                           retrospective=bool(retrospective))
     telemetry: Dict[str, Any] = {"kind": "spine", "budget": budget_n,
                                  "as_of": str(as_of_raw or ""), "lang": _lang_key(lang)}
     as_of = validate_pack_as_of(as_of_raw, now)
@@ -827,7 +956,7 @@ def build_spine_pack(research_report: Any, situation_text: Any, key_metrics_text
     lanes, lane_telemetry = _lanes(timeline, as_of, now, window_days, lang,
                                    dev_items=SPINE_DEV_MAX_ITEMS, dev_chars=SPINE_DEV_ITEM_CHARS,
                                    sched_items=SPINE_SCHED_MAX_ITEMS,
-                                   sched_chars=SPINE_SCHED_ITEM_CHARS)
+                                   sched_chars=SPINE_SCHED_ITEM_CHARS, retrospective=retrospective)
     lane_text = {name: (lanes[name].render() if name in lanes else "")
                  for name in ("developments", "scheduled")}
     header = tpl["dossier"]

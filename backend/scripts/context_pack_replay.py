@@ -14,11 +14,17 @@ binary/resolution-ready section heading is in the context; None when the dossier
 ``references_chars`` (chars of References / Visual Annex / How-to-Read lines in the context,
 counting only lines that occur nowhere else in the dossier), ``newest_past_row_in_lane`` (the
 newest timeline row dated on or before as_of is in the context; None without one), the pack's
-per-stream sizes and its temporal-audit violations. The packs are built by
-``ReportAgent._context_pack_result``, the method a report uses, with the handoff's actors,
-timeline.json and quantitative.json; a hindcast pin in ``<pipeline>/pipeline_state.json`` is
-honoured as in a report. No live market pack exists offline, so the REPORT-10 market-table
+per-stream sizes, its temporal-audit violations and the scheduled-lane guard state. The packs
+are built by ``ReportAgent._context_pack_result``, the method a report uses, with the handoff's
+actors, timeline.json and quantitative.json; a hindcast pin in ``<pipeline>/pipeline_state.json``
+is honoured as in a report. No live market pack exists offline, so the REPORT-10 market-table
 strip is not applied.
+
+The replay date defaults to each handoff's own as_of day (``--now as_of``): a live report runs
+close to its research as_of, so its scheduled lane is open, and replaying an older run with
+today's date would close the guard and hide the lane the report carried. ``--now YYYY-MM-DD``
+replays every handoff at one fixed date instead; a handoff whose as_of is not a day is replayed
+at today's date (its packs fall back anyway).
 
 Promotion of FORECAST_CONTEXT_PACK_BINARY / _SPINE rests on these metrics plus a manual review
 of five packed prompts (``--json`` carries each pack's text sha; the text itself is printed with
@@ -29,7 +35,7 @@ read.
 
 Usage:
     python backend/scripts/context_pack_replay.py --handoff DIR [DIR ...] [--json]
-        [--now YYYY-MM-DD] [--show-text]
+        [--now as_of|YYYY-MM-DD] [--show-text]
 
 DIR is a handoff directory (holding research_report.md) or a pipeline directory holding one
 under handoff/. Exit status 1 when any handoff could not be replayed.
@@ -42,8 +48,8 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence
+from datetime import datetime, time, timezone
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # scripts/ -> backend/ on sys.path (mirror of scripts/model_comparison.py)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -172,19 +178,33 @@ def _pack_metrics(result: Any, excluded_lines: Sequence[str],
         "audit_violations": len(audit.get("violations") or []),
         "withheld_segments": list(audit.get("withheld_segments") or []),
         "post_as_of_rows_withheld": (lanes.get("scheduled") or {}).get("post_as_of_rows_withheld"),
+        "scheduled_guard": (lanes.get("scheduled") or {}).get("guard"),
         "input_sha256": result.input_sha256,
         "text_sha256": result.text_sha256,
     }
 
 
-def replay_handoff(handoff: Dict[str, Any], now: datetime) -> Dict[str, Any]:
-    """Legacy vs packed metrics for one loaded handoff (see the module docstring)."""
+def _replay_now(as_of_raw: Any, now: Optional[datetime]) -> Tuple[datetime, str]:
+    """The replay date of one handoff and how it was chosen: ``now`` when fixed, else the
+    handoff's as_of day (noon UTC), else today when that as_of is not a single day."""
+    if now is not None:
+        return now, "fixed"
+    period = cp.parse_dated_period(as_of_raw)
+    if period is not None and period.precision == "day":
+        return datetime.combine(period.start, time(12, 0), tzinfo=timezone.utc), "as_of"
+    return datetime.now(timezone.utc), "today"
+
+
+def replay_handoff(handoff: Dict[str, Any], now: Optional[datetime] = None) -> Dict[str, Any]:
+    """Legacy vs packed metrics for one loaded handoff (see the module docstring); ``now``
+    None replays it at its own as_of day."""
     agent = _agent(handoff)
     report = handoff["research_report"]
     sections = cp.split_h2(report)
     analyst = [sec for sec in sections if sec.cls == cp.CLASS_ANALYST_FORECASTS]
     excluded = _excluded_lines(sections)
     as_of_raw, as_of_source = agent._context_pack_as_of()
+    now, now_mode = _replay_now(as_of_raw, now)
     as_of = cp.validate_pack_as_of(as_of_raw, now)
     newest = _newest_past_row(agent._context_pack_timeline(), as_of)
 
@@ -209,6 +229,8 @@ def replay_handoff(handoff: Dict[str, Any], now: datetime) -> Dict[str, Any]:
         "as_of": as_of.isoformat() if as_of else None,
         "as_of_raw": None if as_of_raw is None else str(as_of_raw),
         "as_of_source": as_of_source,
+        "now": now.date().isoformat(),
+        "now_mode": now_mode,
         "analyst_sections": len(analyst),
         "newest_past_row": newest,
         "binary": {"legacy": binary_legacy, "packed": binary_packed},
@@ -251,7 +273,8 @@ def _fmt(value: Any) -> str:
 def _print_text(rows: Sequence[Dict[str, Any]], summary: Dict[str, Any], show_text: bool) -> None:
     for row in rows:
         print(f"== {row['handoff']}  dossier={row['dossier_chars']}  as_of={_fmt(row['as_of'])}"
-              f" ({row['as_of_source']})  analyst_sections={row['analyst_sections']}")
+              f" ({row['as_of_source']})  now={row['now']} ({row['now_mode']})"
+              f"  analyst_sections={row['analyst_sections']}")
         for kind in ("binary", "spine"):
             legacy, packed = row[kind]["legacy"], row[kind]["packed"]
             print(f"  {kind:6s} legacy: chars={legacy['chars']} refs={legacy['references_chars']}"
@@ -261,7 +284,9 @@ def _print_text(rows: Sequence[Dict[str, Any]], summary: Dict[str, Any], show_te
                   f" growth={packed['growth_chars']} refs={packed['references_chars']}"
                   f" analyst={_fmt(packed.get('analyst_section_present'))}"
                   f" newest_row={_fmt(packed['newest_past_row_in_lane'])}"
-                  f" audit_violations={packed['audit_violations']}")
+                  f" audit_violations={packed['audit_violations']}"
+                  f" scheduled={_fmt(packed['scheduled_guard'])}"
+                  f" withheld={_fmt(packed['post_as_of_rows_withheld'])}")
             sizes = ", ".join(f"{name} {s['kept_chars']}/{s['raw_chars']}"
                               for name, s in packed["streams"].items())
             if sizes:
@@ -272,9 +297,10 @@ def _print_text(rows: Sequence[Dict[str, Any]], summary: Dict[str, Any], show_te
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
-def _parse_now(value: Optional[str]) -> datetime:
-    if not value:
-        return datetime.now(timezone.utc)
+def _parse_now(value: Optional[str]) -> Optional[datetime]:
+    """None for the per-handoff as_of mode, else the fixed replay date."""
+    if not value or value.strip().lower() == "as_of":
+        return None
     return datetime.fromisoformat(value).replace(tzinfo=timezone.utc)
 
 
@@ -283,8 +309,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--handoff", nargs="+", required=True, metavar="DIR",
                         help="handoff directories (or pipeline directories holding handoff/)")
     parser.add_argument("--json", action="store_true", help="print machine-readable JSON")
-    parser.add_argument("--now", default=None,
-                        help="replay date YYYY-MM-DD (default: today, UTC)")
+    parser.add_argument("--now", default="as_of",
+                        help="replay date: 'as_of' (default: each handoff's own as_of day, as a "
+                             "live report ran) or a fixed YYYY-MM-DD")
     parser.add_argument("--show-text", action="store_true",
                         help="include each pack's text (for the manual prompt review)")
     args = parser.parse_args(argv)
@@ -302,8 +329,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.show_text:
             for payload, row in zip(payload_rows, rows, strict=True):
                 payload["texts"] = row["_texts"]
-        print(json.dumps({"now": now.date().isoformat(), "handoffs": payload_rows,
-                          "errors": errors, "summary": summary}, ensure_ascii=False, indent=2))
+        print(json.dumps({"now": now.date().isoformat() if now else "as_of",
+                          "handoffs": payload_rows, "errors": errors, "summary": summary},
+                         ensure_ascii=False, indent=2))
     else:
         _print_text(rows, summary, args.show_text)
         for err in errors:

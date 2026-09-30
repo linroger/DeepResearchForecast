@@ -948,13 +948,14 @@ class Config:
     # 骨架：以「研究证据包（按时点标注）」（执行摘要/情景节、局势简报、as_of 切分的时间线、关键指标，
     # 按份额填充）取代 [态势简报] 的 2000 字切片；EVAL-11 影子检查重建的提示词同样带包。默认关，理由同上。
     FORECAST_CONTEXT_PACK_SPINE = os.environ.get('FORECAST_CONTEXT_PACK_SPINE', 'false').strip().lower() == 'true'
-    # 二元包 dossier 摘录的字符预算（与旧切片同为 48000；时间线通道不计入，约 5k 字封顶）。
+    # 二元包 dossier 摘录的字符预算（与旧切片同为 48000）。时间线通道不计入：封顶约 7.6k 字（12 条近期进展
+    # + 5 条已排期 + 两行标题）；包同时去掉 2k 的 [Situation brief]，净增约 5.6k（运行无简报时即 7.6k）。
     FORECAST_CONTEXT_PACK_BINARY_BUDGET = int(os.environ.get('FORECAST_CONTEXT_PACK_BINARY_BUDGET', '48000') or '48000')
     # 骨架证据包的总字符预算。
     FORECAST_CONTEXT_PACK_SPINE_BUDGET = int(os.environ.get('FORECAST_CONTEXT_PACK_SPINE_BUDGET', '14000') or '14000')
     # 「已排期」（日期晚于 as_of 的时间线条目）只在 as_of 距今不超过此天数的实时运行中展示；回溯运行
-    # 的此类条目可能是事后写成的，一律扣下并计数（post_as_of_rows_withheld）。只影响上面两个包与下面的
-    # 章节时间线切分，三者默认都关。
+    # 的此类条目可能是事后写成的，一律扣下并计数（post_as_of_rows_withheld）；回测运行（TIME-6 回测钉）不论
+    # 截止日多近一律扣下。只影响上面两个包与下面的章节时间线切分，三者默认都关。
     FORECAST_SCHEDULED_LIVE_WINDOW_DAYS = int(os.environ.get('FORECAST_SCHEDULED_LIVE_WINDOW_DAYS', '30') or '30')
     # 章节提示词的「关键事件时间线」块按 as_of 切分：已发生（日期在 as_of 当日或之前，最近 15 条）与
     # 单列的「已排期」子列表（同一实时运行门）；无日期/跨越 as_of 的条目只计数。默认关：关 → 块逐字节不变。
