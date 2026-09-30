@@ -137,7 +137,8 @@ ENV_BASELINE: Optional[dict] = None
 
 @functools.lru_cache(maxsize=1)
 def _env_drift():
-    """Load backend/scripts/check_env_drift.py (stdlib only) for its env-name parsers."""
+    """Load backend/scripts/check_env_drift.py (stdlib only) for its env-name parsers
+    (config.py's knobs come from config_audit.extract_knobs through it)."""
     path = os.path.join(_BACKEND_DIR, "scripts", "check_env_drift.py")
     spec = importlib.util.spec_from_file_location("_drf_hermetic_check_env_drift", path)
     module = importlib.util.module_from_spec(spec)
@@ -179,14 +180,15 @@ def _source_files(repo_root: str):
 def _steering_names(repo_root: str) -> set:
     """Env names DRF reads, references or documents.
 
-    Config reads (check_env_drift's regex over config.py), .env.example, the
-    local .env files, every env-shaped name in the application / script /
-    bridge / drf2 Python sources, the ${NAME:-default} knobs of the shell
-    scripts and the $NAME references in DeerFlow's configs.
+    Config reads (config_audit.extract_knobs over config.py, through
+    check_env_drift.config_knobs), .env.example, the local .env files, every
+    env-shaped name in the application / script / bridge / drf2 Python sources,
+    the ${NAME:-default} knobs of the shell scripts and the $NAME references in
+    DeerFlow's configs.
     """
     drift = _env_drift()
     config_text = _read_text(os.path.join(repo_root, "backend", "app", "config.py"))
-    names = {m.group(1) or m.group(2) for m in drift._ENV_READ_RE.finditer(config_text)}
+    names = set(drift.config_knobs(config_text))
     names |= set(drift._ENV_DOC_RE.findall(_read_text(os.path.join(repo_root, ".env.example"))))
     for env_file in (os.path.join(repo_root, ".env"), os.path.join(repo_root, "backend", ".env")):
         names |= set(drift.parse_env_file(env_file))
@@ -214,7 +216,7 @@ def scrub_ambient_env(environ: MutableMapping[str, str], *, repo_root: str = REP
     """Pop every ambient name that could steer DRF code; return the popped names (sorted).
 
     Popped: names read by Config or documented in .env.example (parsed with
-    check_env_drift's regexes), names in the repo-root and backend .env files,
+    check_env_drift's parsers), names in the repo-root and backend .env files,
     env-shaped names in the DRF sources, shell scripts and DeerFlow configs
     (_steering_names), per-provider LLM_<P>_DISABLE_THINKING knobs,
     credential-shaped names (check_env_drift.is_secret) and egress endpoints.

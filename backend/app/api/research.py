@@ -21,6 +21,7 @@ from flask import jsonify, request
 
 from . import research_bp
 from ..config import Config
+from ..config_audit import parse_int_option
 from ..services.pipeline_orchestrator import (
     PipelineManager,
     PipelineOrchestrator,
@@ -79,9 +80,10 @@ def run_pipeline():
 
         max_rounds = data.get('max_rounds')
         if max_rounds is not None:
+            # INFRA-14: strict — a JSON true (int(True) == 1) or 3.5 (int() truncates) is refused.
             try:
-                max_rounds = int(max_rounds)
-            except (TypeError, ValueError):
+                max_rounds = parse_int_option(max_rounds, 'max_rounds')
+            except ValueError:
                 return jsonify({"success": False, "error": "max_rounds 必须是整数"}), 400
 
         # T5.5: 每次运行可覆盖研究语言/模型（缺省回退 Config）。在任何子进程启动前校验，杜绝
@@ -171,7 +173,12 @@ def resume_pipeline(pipeline_id: str):
         existing = PipelineManager.load(pipeline_id)
         if existing is None:
             return jsonify({"success": False, "error": "管线不存在"}), 404
-        preflight_errors = preflight_pipeline(mode=existing.get("mode") or "full")
+        # INFRA-14: check the research model the run pinned at admission, not the Config default.
+        options = existing.get("options")
+        preflight_errors = preflight_pipeline(
+            mode=existing.get("mode") or "full",
+            model=options.get("research_model") if isinstance(options, dict) else None,
+        )
         if preflight_errors:
             return jsonify({
                 "success": False,

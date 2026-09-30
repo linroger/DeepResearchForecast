@@ -25,14 +25,18 @@ from app.config import Config
 def main():
     """主函数"""
     # 验证配置
-    errors = Config.validate()
+    errors = Config.validate(include_audit=False)
     if errors:
         print("配置错误:")
         for err in errors:
             print(f"  - {err}")
         print("\n请检查 .env 文件中的配置")
         sys.exit(1)
-    
+    # INFRA-14: the config audit never stops the server; its errors refuse pipeline runs
+    # while CONFIG_STRICT_VALIDATION is on (preflight / PipelineOrchestrator.start).
+    for issue in Config.config_issues():
+        print(f"WARN config {issue.level}: {issue.message}")
+
     # 创建应用
     app = create_app()
 
