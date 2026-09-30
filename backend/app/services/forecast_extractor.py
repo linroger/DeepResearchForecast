@@ -661,9 +661,10 @@ def _llm_forecast_view(forecast: Dict[str, Any]) -> Dict[str, Any]:
     提示词 token。confidence_rationale_detail 只在不是兜底情景路径写下时才去掉（该路径
     同时置 residual_scenario_added，且在旗标关闭时也存在）。旗标关闭时这些同步键都不存在，
     副本与原对象键序、取值完全相同，提示词逐字节不变。INFRA-2 的 critique_attempted 簿记标记
-    同样去掉（旗标关闭时不存在），评审 / 验尸提示词不因单次评审旗标而改变。
+    同样去掉（旗标关闭时不存在），评审 / 验尸提示词不因单次评审旗标而改变。RESEARCH-13 的
+    context_pack 摘要（证据包簿记，仅在最终落盘前写入）同样去掉：它绝不进入评审输入。
     """
-    dropped = {"headline_detail", "critique_attempted"}
+    dropped = {"headline_detail", "critique_attempted", "context_pack"}
     if not forecast.get("residual_scenario_added"):
         dropped.add("confidence_rationale_detail")
     view = {key: value for key, value in forecast.items() if key not in dropped}
@@ -3067,6 +3068,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              horizon_date: Optional[str] = None,
                              now: Optional[datetime] = None,
                              target_propositions: Optional[List[Dict[str, Any]]] = None,
+                             context_pack: Optional[str] = None,
                              ) -> Dict[str, Any]:
     """Extract/derive >=min_count INDEPENDENT binary forecasts from the dossier.
 
@@ -3100,6 +3102,10 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     binary_quality.market_table_stripped（删表后市场包超出 _draw 切片上限另记
     market_pack_truncated；标题行只剩在围栏代码块内、一节未删记 market_table_strip_skipped）；
     旗标关或未注入市场包 → 提示词逐字节不变。
+    RESEARCH-13（FORECAST_CONTEXT_PACK_BINARY，默认关）：``context_pack``（调用方用
+    forecast_context_packer 建好的证据包：as_of 时间线通道 + 按节分类的 dossier 摘录）给出时，
+    [Research dossier] 之后放包文而非 head+tail 切片，且不再注入 [Situation brief]（包内的
+    时间线通道取代它）；指令文本与各块位置不变。None → 提示词逐字节不变。
     """
     target_rows = _clean_target_propositions(target_propositions)
     market_aware = (bool(_cfg("PREDICTION_MARKETS_ENABLED", True))
@@ -3128,9 +3134,14 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
             market_table_strip_skipped = 1
             logger.warning("二元预测抽取：dossier 仍含「## Prediction Market Signals」标题行但位于"
                            "围栏代码块内，未删除（其中的市场价仍会进入 _draw）")
-    _bbudget = int(_cfg("FORECAST_BINARY_EXTRACT_BUDGET", 48000))
-    _bhr = _coerce_float(_cfg("FORECAST_EXTRACT_HEAD_RATIO", 0.6))
-    content = slice_head_tail(content, _bbudget, _bhr if _bhr is not None else 0.6)
+    if context_pack:
+        # RESEARCH-13：证据包已在预算内按节取舍（REPORT-10 删表开启时，调用方打包前已删机器
+        # 市场表），原样作为 dossier 视图——不再 head+tail 切片。
+        content = context_pack
+    else:
+        _bbudget = int(_cfg("FORECAST_BINARY_EXTRACT_BUDGET", 48000))
+        _bhr = _coerce_float(_cfg("FORECAST_EXTRACT_HEAD_RATIO", 0.6))
+        content = slice_head_tail(content, _bbudget, _bhr if _bhr is not None else 0.6)
     themes = [str(t).strip().lower() for t in (themes or []) if str(t).strip()] or None
     contrarian = bool(_cfg("FORECAST_BINARY_CONTRARIAN", True))
     # Foglamp WP1 (1D, I-16)：模拟信号只有在 SIMULATION_FORECAST_EFFECT=legacy_prompt
@@ -3220,7 +3231,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         if exclude:
             user += "\n\nDo NOT repeat these already-captured forecasts (produce NEW, distinct ones):\n" + \
                 "\n".join(f"- {s}" for s in exclude[:30])
-        if situation_brief:
+        if situation_brief and not context_pack:
             user += f"\n\n[Situation brief]\n{situation_brief[:2000]}"
         if sim_sensitive:
             user += f"\n\n[Simulation quantitative signals]\n{str(signal_pack)[:4000]}"
@@ -3838,7 +3849,8 @@ def build_spine_user_prompt(*, central_question: str = "", horizon: str = "",
                             forecast_inputs: str = "", signal_pack: str = "",
                             base_distribution: Optional[Dict[str, float]] = None,
                             quantitative_facts: str = "",
-                            market_block: str = "") -> Tuple[str, bool]:
+                            market_block: str = "",
+                            context_pack: Optional[str] = None) -> Tuple[str, bool]:
     """EVAL-11: the spine draw's user prompt, plus whether the WorldState anchor is active.
 
     Extracted verbatim from ``derive_forecast_spine`` (same defaults, same input caps, same
@@ -3846,6 +3858,9 @@ def build_spine_user_prompt(*, central_question: str = "", horizon: str = "",
     the published spine was drawn from. Later spine-prompt additions belong here.
     Returns ``(user, anchor_ws)``; ``anchor_ws`` is true when REPORT_SPINE_ANCHOR_WORLDSTATE
     is on and ``base_distribution`` is a dict (the caller echoes the anchor into its output).
+    RESEARCH-13 (FORECAST_CONTEXT_PACK_SPINE): a ``context_pack`` replaces the [态势简报]
+    slice with a [研究证据包（按时点标注）] block (not capped: the packer holds it within its
+    budget), and the REPORT-4 lead names 研究证据包. None keeps the prompt byte-identical.
     """
     # R2-DETAIL-3：每块输入上限可配置。RQ-4：signal/inputs 两块 4000→6000（骨架情景/概率
     # 由这两块驱动，4000 会把驱动因素与量化信号截断，让骨架欠地气）；brief/facts 维持旧值。
@@ -3865,7 +3880,10 @@ def build_spine_user_prompt(*, central_question: str = "", horizon: str = "",
     if horizon:
         labels.append("预测时间范围")
         user += f"\n\n[预测时间范围]\n{horizon[:120]}"
-    if situation_brief:
+    if context_pack:
+        labels.append("研究证据包")
+        user += f"\n\n[研究证据包（按时点标注）]\n{context_pack}"
+    elif situation_brief:
         labels.append("态势简报")
         user += f"\n\n[态势简报]\n{situation_brief[:cap_brief]}"
     if forecast_inputs:
@@ -3926,7 +3944,8 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
                           forecast_inputs: str = "", signal_pack: str = "",
                           base_distribution: Optional[Dict[str, float]] = None,
                           quantitative_facts: str = "",
-                          market_block: str = "") -> Dict[str, Any]:
+                          market_block: str = "",
+                          context_pack: Optional[str] = None) -> Dict[str, Any]:
     """NEXTSTEPS P0-1: derive the structured forecast *spine* from research +
     simulation SIGNALS — *before* any prose is written.
 
@@ -3945,12 +3964,14 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
         cite a metric + as-of date.
       * ``REPORT_SPINE_SELFCONSISTENCY_K`` — K self-consistency draws pooled to
         mean + spread (R2-CAL-1 / R2-CAL-17).
+      * ``context_pack`` — RESEARCH-13 evidence pack replacing the situation-brief slice
+        (see ``build_spine_user_prompt``).
     """
     user, anchor_ws = build_spine_user_prompt(
         central_question=central_question, horizon=horizon, situation_brief=situation_brief,
         forecast_inputs=forecast_inputs, signal_pack=signal_pack,
         base_distribution=base_distribution, quantitative_facts=quantitative_facts,
-        market_block=market_block)
+        market_block=market_block, context_pack=context_pack)
 
     max_tokens = int(_cfg("REPORT_SPINE_MAX_TOKENS", 6144))  # R2-CAL-11: 2048→6144
     floor = _coerce_float(_cfg("FORECAST_PROB_FLOOR", 0.0)) or 0.0
