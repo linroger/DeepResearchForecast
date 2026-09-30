@@ -16,7 +16,7 @@ jina `web_fetch` 工具包成一层**磁盘缓存**：命中且未过期即秒�
 * **缓存语义**：
     - 目录  env RESEARCH_SOURCE_CACHE_DIR（默认 <module_dir>/.cache/source_cache）
     - 键    sha256(url) 的 hexdigest（→ ``<hash>.json``）
-    - 值    {url, content, fetched_at(epoch), content_len}
+    - 值    {url, content, fetched_at(epoch), content_len}（+ meta：来源日期元数据，非空时才写）
     - TTL   env RESEARCH_SOURCE_CACHE_TTL_H（默认 72h；0=关闭缓存，透明直连）
     - 上限  env RESEARCH_SOURCE_CACHE_MAX_MB（默认 500；<=0=不限；超限按 mtime LRU 淘汰）
 * **绝不放入正缓存的失败/哨兵/死抓取**：jina 失败返回以 "Error:" 起头的串；正文 <200 字符
@@ -32,6 +32,10 @@ jina `web_fetch` 工具包成一层**磁盘缓存**：命中且未过期即秒�
   provider_events()；Firecrawl 401/402（凭据/额度拒绝）后本进程不再请求 Firecrawl，并经
   research_budget 打开共享熔断（各 lane 同跳过）；传输故障与凭据/额度拒绝不进负缓存。
   关 = 行为逐字节不变。
+* **TIME-2 —— 来源发布日期旁路**：Firecrawl scrape 的日期类 metadata、Exa published_date、
+  直连抓取（opt-in）的 HTML 日期候选（source_dates.from_html）写入 _FETCH_META；
+  ``cached_fetch_with_meta`` 返回 ``(text, meta)`` 供 v3 工具层定日期（RESEARCH_SOURCE_DATES），
+  ``cached_fetch`` / ``web_fetch`` 的 str 契约与返回内容不变。
 * **degrade-safe**：任何缓存读写/目录/淘汰异常都被吞掉并回退到「直接抓取并返回」，缓存层的
   故障绝不阻断研究主流程，也绝不改变抓取结果本身。
 """
@@ -61,6 +65,11 @@ try:  # copied beside this module by the bridge sync guard; absence is fail-open
     import research_budget as _research_budget
 except ImportError:  # pragma: no cover - exercised only by incomplete deployments
     _research_budget = None  # type: ignore[assignment]
+
+try:  # TIME-2: deployed beside this module; absence only skips direct-fetch HTML dates
+    import source_dates as _source_dates
+except ImportError:  # pragma: no cover - exercised only by incomplete deployments
+    _source_dates = None  # type: ignore[assignment]
 
 # 死抓取阈值：正文短于此长度（或以 "Error:" 起头）视作失败/空壳，不落盘。
 DEAD_FETCH_MIN_CHARS = 200
@@ -168,6 +177,25 @@ _PDF_LOCK = threading.Lock()
 _FETCH_PROVIDER: contextvars.ContextVar[str] = contextvars.ContextVar(
     "research_fetch_provider", default=""
 )
+# —— TIME-2：来源发布日期旁路（RESEARCH_SOURCE_DATES 的数据面；抓取结果 str 契约不变）——
+# The provider that answered a fetch stores the page's date metadata here (Firecrawl
+# scrape metadata keys, Exa's published_date, the direct fetch's from_html()
+# candidates under source_dates.HTML_DATES_KEY); _resilient_fetch resets it per call
+# and per failed provider, and cached_fetch_with_meta reads it right after awaiting
+# the fetch in the same task (a ContextVar set there is visible to the awaiting
+# caller).  A copy is kept in the cache entry, so a cache hit returns it too.  The
+# stored dict is never mutated in place (always replaced with .set()).
+_FETCH_META: contextvars.ContextVar[dict] = contextvars.ContextVar(
+    "research_fetch_meta", default={}
+)
+# Firecrawl metadata keys kept (lower-cased name containing one of these), at most
+# _FETCH_META_MAX_KEYS keys, each value (or list element) cut to _FETCH_META_VALUE_CHARS.
+# Every source_dates PUBLISHED/MODIFIED_META_KEYS name contains one ("created":
+# dcterms.created / dcTermsCreated); a test pins that.
+_FETCH_META_KEY_MARKERS = ("date", "time", "publish", "modif", "updated", "created")
+_FETCH_META_MAX_KEYS = 12
+_FETCH_META_VALUE_CHARS = 80
+_FETCH_META_LIST_ITEMS = 4
 # —— RESEARCH-2：类型化来源结果（RESEARCH_SOURCE_TAXONOMY，缺省关）——
 # research_gateway._INFRA_FETCH_REASON_PREFIXES / _CONTENT_FETCH_REASON_PREFIXES /
 # _TRANSIENT_FETCH_REASON_RE / _FIRECRAWL_FAILED_PREFIX (kept as copies so
@@ -498,6 +526,49 @@ class _TextExtractor(HTMLParser):
             self.parts.append(data.strip())
 
 
+def _date_meta_value(value: Any) -> Any:
+    """A metadata value kept for dating: a non-empty str (numbers as text) or a
+    list of them, each cut to _FETCH_META_VALUE_CHARS; None otherwise."""
+    if isinstance(value, (list, tuple)):
+        items = [kept for kept in (_date_meta_value(item) for item in value[:_FETCH_META_LIST_ITEMS])
+                 if isinstance(kept, str)]
+        return items or None
+    if value is None or isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        return None
+    text = str(value).strip()[:_FETCH_META_VALUE_CHARS]
+    return text or None
+
+
+def _date_metadata(metadata: dict) -> dict:
+    """The date-bearing part of a Firecrawl scrape's metadata (TIME-2): at most
+    _FETCH_META_MAX_KEYS keys whose lower-cased name contains a date marker."""
+    kept: dict[str, Any] = {}
+    for key, value in metadata.items():
+        if len(kept) >= _FETCH_META_MAX_KEYS:
+            break
+        name = str(key)
+        if not any(marker in name.lower() for marker in _FETCH_META_KEY_MARKERS):
+            continue
+        clean = _date_meta_value(value)
+        if clean is not None:
+            kept[name[:_FETCH_META_VALUE_CHARS]] = clean
+    return kept
+
+
+def _capture_html_dates(raw: str) -> None:
+    """Direct fetch (TIME-2): store the page's HTML date candidates in
+    _FETCH_META before readability drops the markup.  Degrade-safe: a missing
+    source_dates module or any extractor error stores nothing."""
+    if _source_dates is None:
+        return
+    try:
+        candidates = _source_dates.from_html(raw)
+    except Exception:  # noqa: BLE001 — dating never breaks a fetch
+        return
+    if candidates:
+        _FETCH_META.set({_source_dates.HTML_DATES_KEY: [list(item) for item in candidates[:_FETCH_META_MAX_KEYS]]})
+
+
 async def _host_is_public(host: str) -> bool:
     """Reject local/private direct-fallback targets before opening a socket."""
     normalized = str(host or "").strip().rstrip(".")
@@ -577,6 +648,7 @@ async def _direct_http_fetch(url: str) -> str:
             raw = response.text
             if "html" not in content_type and "<html" not in raw[:1000].lower():
                 return raw[:12000]
+            _capture_html_dates(raw)
             try:
                 from deerflow.utils.readability import ReadabilityExtractor
 
@@ -629,6 +701,9 @@ async def _exa_fetch(url: str) -> str:
         body = str(getattr(row, "text", None) or "").strip()
         if not body:
             return "Error: Exa fallback returned no page text"
+        published = str(getattr(row, "published_date", None) or "").strip()
+        if published:
+            _FETCH_META.set({"publishedDate": published[:_FETCH_META_VALUE_CHARS]})
         return f"# {title}\n\n{body[:max_chars]}"
     except Exception as exc:  # noqa: BLE001
         # Do not include provider exception text: some clients echo request
@@ -743,6 +818,7 @@ async def _firecrawl_fetch(url: str) -> str:
         metadata = data.get("metadata")
         if not isinstance(metadata, dict):
             metadata = {}
+        _FETCH_META.set(_date_metadata(metadata))
         title = str(metadata.get("title") or "").strip()
         return (f"# {title}\n\n{body[:max_chars]}" if title else body[:max_chars])
     except Exception as exc:  # noqa: BLE001
@@ -804,6 +880,9 @@ async def _resilient_fetch(url: str) -> str:
     Jina (53% ConnectTimeout in the 2026-07-14 humanoid run) becomes fallback.
     """
     _FETCH_PROVIDER.set("")
+    # TIME-2: date metadata belongs to the provider whose text is returned; a
+    # failed provider's metadata is dropped below before the next one is asked.
+    _FETCH_META.set({})
     # RESEARCH-2 (taxonomy on): every physical attempt's outcome is recorded,
     # and a provider that refused the credential/quota is not asked again.
     taxonomy = _source_taxonomy_on()
@@ -827,6 +906,7 @@ async def _resilient_fetch(url: str) -> str:
                     _record_fetch_event("firecrawl", "ok")
                 return firecrawl_result
             _record_provider_failure("firecrawl", firecrawl_result)
+            _FETCH_META.set({})
             if taxonomy:
                 _note_fetch_failure("firecrawl", firecrawl_result)
 
@@ -869,6 +949,7 @@ async def _resilient_fetch(url: str) -> str:
                 _record_fetch_event("exa", "ok")
             return exa_result
         _record_provider_failure("exa", exa_result)
+        _FETCH_META.set({})
         if taxonomy:
             _note_fetch_failure("exa", exa_result)
 
@@ -886,6 +967,7 @@ async def _resilient_fetch(url: str) -> str:
             if taxonomy:
                 _record_fetch_event("direct", "ok")
             return direct_result
+        _FETCH_META.set({})
         if taxonomy:
             _note_fetch_failure("direct", direct_result)
 
@@ -1013,11 +1095,12 @@ def _is_cacheable(content: Any) -> bool:
     return len(content) >= DEAD_FETCH_MIN_CHARS
 
 
-def _read_cache(path: str, ttl_seconds: float) -> Optional[str]:
-    """命中且未过期 → 返回 content（并 touch mtime 供 LRU 记「近用」）；否则 None。任何异常 → None。
+def _read_cache_entry(path: str, ttl_seconds: float) -> Optional[tuple[str, dict]]:
+    """命中且未过期 → ``(content, meta)``（并 touch mtime 供 LRU 记「近用」）；否则 None。任何异常 → None。
 
-    过期判定基于落盘时记录的 ``fetched_at``（真实抓取时刻），**不**用 mtime——因为命中会 touch
-    mtime 用作 LRU 近用标记，二者若混用会让被反复命中的条目永不过期。二者故意分离。
+    ``meta`` 是落盘时一并保存的来源日期元数据（TIME-2，缺省 {}）。过期判定基于落盘时记录的
+    ``fetched_at``（真实抓取时刻），**不**用 mtime——因为命中会 touch mtime 用作 LRU 近用标记，
+    二者若混用会让被反复命中的条目永不过期。二者故意分离。
     """
     try:
         if not os.path.exists(path):
@@ -1041,13 +1124,23 @@ def _read_cache(path: str, ttl_seconds: float) -> Optional[str]:
             os.utime(path, None)  # LRU：命中即刷新 mtime 为「最近使用」（best-effort）
         except OSError:
             pass
-        return content
+        meta = obj.get("meta")
+        return content, (dict(meta) if isinstance(meta, dict) else {})
     except Exception:  # noqa: BLE001 — 缓存读损坏/并发写中 → 当作未命中，degrade-safe
         return None
 
 
-def _write_cache(path: str, url: str, content: str) -> None:
-    """原子写缓存条目（temp+replace）。best-effort：任何失败静默跳过（不影响返回给 agent 的结果）。"""
+def _read_cache(path: str, ttl_seconds: float) -> Optional[str]:
+    """:func:`_read_cache_entry` 的正文部分（命中 → content；否则 None）。"""
+    entry = _read_cache_entry(path, ttl_seconds)
+    return entry[0] if entry is not None else None
+
+
+def _write_cache(path: str, url: str, content: str, meta: Optional[dict] = None) -> None:
+    """原子写缓存条目（temp+replace）。best-effort：任何失败静默跳过（不影响返回给 agent 的结果）。
+
+    ``meta``（TIME-2 来源日期元数据）非空时才写入 ``meta`` 键，空时条目与此前逐字节同形。
+    """
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         payload = {
@@ -1056,6 +1149,8 @@ def _write_cache(path: str, url: str, content: str) -> None:
             "fetched_at": time.time(),
             "content_len": len(content),
         }
+        if meta:
+            payload["meta"] = meta
         tmp = f"{path}.{os.getpid()}.tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False)
@@ -1101,34 +1196,37 @@ def _enforce_size_cap(root: str, max_bytes: int) -> None:
         logger.warning("cached_fetch: 淘汰缓存失败（跳过）: %s", e)
 
 
-async def cached_fetch(
+async def _cached_fetch_core(
     url: str,
     fetch_fn: Callable[[str], Awaitable[str]],
     revisit_reason: str = "",
-) -> str:
-    """缓存核心流程（可注入 ``fetch_fn`` 供单测，无网络无 deerflow）。返回类型与被包裹工具一致（str）。
+) -> tuple[str, dict]:
+    """缓存核心流程（可注入 ``fetch_fn`` 供单测，无网络无 deerflow）→ ``(text, meta)``。
 
     TTL<=0 → 关闭正缓存（LOOP-007 预算仍独立生效）。否则：命中未过期即返回；否则真抓，成功且可缓存
     （非失败/非哨兵/≥200 字符）才落盘 + 触发 LRU 淘汰。缓存层任何异常都不改变返回结果。
+    ``meta``（TIME-2）：命中 → 缓存条目里保存的来源日期元数据；真抓 → 紧接 ``await fetch_fn`` 之后
+    读取的 _FETCH_META 副本（同一 task，内层 ContextVar 写入可见）；任何哨兵/拒绝路径 → {}。
     """
     exact_key = str(url or "").strip()
     policy_rejection = _source_policy_rejection(exact_key)
     if policy_rejection:
-        return _source_policy_result(exact_key, policy_rejection)
+        return _source_policy_result(exact_key, policy_rejection), {}
     if _research_budget is not None:
         attempt = _research_budget.admit_attempt("fetch")
         if not attempt.allowed:
-            return _research_budget.denial_result("web_fetch", attempt.reason, exact_key)
+            return _research_budget.denial_result("web_fetch", attempt.reason, exact_key), {}
 
     ttl = _ttl_seconds()
     root = _cache_root()
     path = _cache_path(root, url)
     if ttl > 0:
         try:
-            hit = _read_cache(path, ttl)
+            entry = _read_cache_entry(path, ttl)
         except Exception:  # noqa: BLE001 — 极端情况下路径计算/读取异常也不阻断抓取
-            hit = None
-        if hit is not None:
+            entry = None
+        if entry is not None:
+            hit, hit_meta = entry
             if _research_budget is not None:
                 if hasattr(_research_budget, "record_fetched_source"):
                     _research_budget.record_fetched_source(
@@ -1139,13 +1237,13 @@ async def cached_fetch(
                         "fetch", exact_key)
                     if artifact_id:
                         return _research_budget.compact_positive_result(
-                            "web_fetch", artifact_id)
+                            "web_fetch", artifact_id), {}
                 _research_budget.record_positive("fetch", exact_key)
-            return hit
+            return hit, hit_meta
 
     if (_research_budget is not None
             and _research_budget.negative_suppressed("fetch", exact_key)):
-        return _research_budget.negative_result("web_fetch", exact_key)
+        return _research_budget.negative_result("web_fetch", exact_key), {}
 
     claim_token = ""
     waited_for_claim = False
@@ -1163,8 +1261,9 @@ async def cached_fetch(
             while time.monotonic() < deadline:
                 await asyncio.sleep(delay)
                 delay = min(1.0, delay * 1.7)
-                hit = _read_cache(path, ttl)
-                if hit is not None:
+                entry = _read_cache_entry(path, ttl)
+                if entry is not None:
+                    hit, hit_meta = entry
                     # A singleflight follower may be an isolated subagent that
                     # cannot see the owner's model history. Share the fresh
                     # cache body in full; network dedupe must not become
@@ -1174,7 +1273,7 @@ async def cached_fetch(
                         _research_budget.record_fetched_source(
                             exact_key, hit, provider="cache", cache_hit=True
                         )
-                    return hit
+                    return hit, hit_meta
                 claim_token = _research_budget.claim_request("fetch", exact_key)
                 if claim_token:
                     break
@@ -1183,11 +1282,11 @@ async def cached_fetch(
                     "error": "research_inflight_timeout",
                     "tool": "web_fetch",
                     "message": "Timed out waiting for the identical in-flight fetch.",
-                }, ensure_ascii=False, sort_keys=True)
+                }, ensure_ascii=False, sort_keys=True), {}
     if (waited_for_claim and _research_budget is not None
             and _research_budget.negative_suppressed("fetch", exact_key)):
         _research_budget.release_request(claim_token)
-        return _research_budget.negative_result("web_fetch", exact_key)
+        return _research_budget.negative_result("web_fetch", exact_key), {}
 
     # This reservation is deliberately after the positive-cache/singleflight
     # lookup: hits never spend real fetch allowance.
@@ -1195,8 +1294,9 @@ async def cached_fetch(
         network = _research_budget.admit_network("fetch")
         if not network.allowed:
             _research_budget.release_request(claim_token)
-            return _research_budget.denial_result("web_fetch", network.reason, exact_key)
+            return _research_budget.denial_result("web_fetch", network.reason, exact_key), {}
 
+    _FETCH_META.set({})
     try:
         content = await fetch_fn(url)
     except Exception:
@@ -1206,6 +1306,8 @@ async def cached_fetch(
     finally:
         if "content" not in locals() and _research_budget is not None:
             _research_budget.release_request(claim_token)
+    # Read in the task that awaited fetch_fn: _resilient_fetch's provider set it.
+    fetch_meta = dict(_FETCH_META.get())
     try:
         if _research_budget is not None:
             if _is_cacheable(content):
@@ -1223,12 +1325,30 @@ async def cached_fetch(
                 # refusal is not the URL's failure, so it is never negative-cached.
                 _research_budget.record_negative("fetch", exact_key)
         if ttl > 0 and _is_cacheable(content):
-            _write_cache(path, url, content)
+            _write_cache(path, url, content, fetch_meta)
             _enforce_size_cap(root, _max_bytes())
-        return content
+        return content, fetch_meta
     finally:
         if _research_budget is not None:
             _research_budget.release_request(claim_token)
+
+
+async def cached_fetch(
+    url: str,
+    fetch_fn: Callable[[str], Awaitable[str]],
+    revisit_reason: str = "",
+) -> str:
+    """:func:`_cached_fetch_core` 的正文：返回类型与被包裹工具一致（str）。"""
+    return (await _cached_fetch_core(url, fetch_fn, revisit_reason))[0]
+
+
+async def cached_fetch_with_meta(
+    url: str,
+    fetch_fn: Callable[[str], Awaitable[str]],
+    revisit_reason: str = "",
+) -> tuple[str, dict]:
+    """TIME-2：:func:`cached_fetch` 的同一流程，另返回来源日期元数据 ``(text, meta)``。"""
+    return await _cached_fetch_core(url, fetch_fn, revisit_reason)
 
 
 async def _jina_delegate_fetch(url: str) -> str:

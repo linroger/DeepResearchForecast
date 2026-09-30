@@ -1468,6 +1468,35 @@ class Config:
     # is measured in an audit run first; off = supports exactly as before.  Forwarded to
     # the v3 child.
     RESEARCH_EVIDENCE_SUPPORTS = os.environ.get('RESEARCH_EVIDENCE_SUPPORTS', 'false').strip().lower() == 'true'
+    # TIME-2 source publication dates (v3): each searched/fetched source is dated from
+    # its provider metadata (Firecrawl scrape metadata and search row dates, Exa
+    # published_date, the opt-in direct fetch's JSON-LD/<meta>/<time>), converted to the
+    # UTC calendar (offsets applied, offset-less values and epochs read as UTC) with its
+    # precision and provenance; a date after the run's UTC date or before 1900 is
+    # rejected, never clamped.  Shown in tool row headers (outside the untrusted
+    # block), the SOURCE INDEX and References; written to sources.json (date,
+    # date_precision, date_source, modified_at, modified_source, date_rejected),
+    # quantitative rows (source_date, as_of_after_source: an actual value dated after
+    # its source, where only a metadata modified date widens the source's window and a
+    # page-head "Updated:" line never does; never dropped) and meta.source_dates (dated /
+    # undated / rejected counts by source and precision).  Zero model calls.  Default
+    # false: the extractors are unproven on real pages and need a precision check
+    # first; off = tool text, source ledger, sources.json and report byte-identical.
+    # The fetch layer records date metadata whatever this flag says (source-cache
+    # entries gain a "meta" key when a provider reported dates; the opt-in direct
+    # fetch scans the page head for them), so a later flag-on run dates cache hits
+    # too; nothing reads that metadata while the flag is off.  Forwarded to the v3
+    # child.
+    RESEARCH_SOURCE_DATES = os.environ.get('RESEARCH_SOURCE_DATES', 'false').strip().lower() == 'true'
+    # TIME-2: with RESEARCH_SOURCE_DATES on, sources are also dated from two heuristics
+    # ranked below metadata: a fetched page's head datelines (Published/Updated/发布时间
+    # lines) and the URL path (/YYYY/MM/DD/) of a fetched page or a search row.  Off,
+    # only provider/HTML metadata and search-provider row dates date a source.  Only
+    # read when RESEARCH_SOURCE_DATES is on, so the default true changes nothing by
+    # itself; only 0/false/no/off disable it (the child reads unknown values as on).
+    # Forwarded to the v3 child.
+    RESEARCH_SOURCE_DATE_TEXT_FALLBACK = os.environ.get(
+        'RESEARCH_SOURCE_DATE_TEXT_FALLBACK', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
     # PAR-2：编排器级「多角度并行研究轨」。>1 时研究阶段并行跑 K 个 DeerFlowResearchRunner
     # 子进程，每个带角度特化前缀（轨1=基线证据扫描，即原始 brief 逐字；轨2=基率/参照类/历史
     # 类比；轨3=行为者激励+反面证伪+市场定价），各写入 handoff/track_<k>/，随后确定性合并回

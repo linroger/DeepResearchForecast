@@ -4188,12 +4188,14 @@ def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str) -> tup
 
 
 def build_digest(records: Sequence[Mapping[str, Any]], ledger_get: Callable[[int], Mapping[str, Any] | None],
-                 digest_cap: int, language: str) -> tuple[str, int]:
+                 digest_cap: int, language: str, *, dates: bool = False) -> tuple[str, int]:
     """Digest + SOURCE INDEX of every source the digest cites (ledger order).
 
     KIQs in natural order (K1 < K2 < K10, then follow-ups); each block gets
     ``min(12000, max(3000, digest_cap / n))`` chars and loses its
-    lowest-priority lines first.  Returns ``(text, dropped_line_count)``.
+    lowest-priority lines first.  With ``dates`` (RESEARCH_SOURCE_DATES) a
+    dated source's index entry ends ``, published X`` inside its parentheses.
+    Returns ``(text, dropped_line_count)``.
     """
     ordered = sorted(records, key=lambda r: _natural_key(str(r.get("id"))))
     per_kiq = int(min(12000, max(3000, digest_cap / max(1, len(ordered)))))
@@ -4210,6 +4212,8 @@ def build_digest(records: Sequence[Mapping[str, Any]], ledger_get: Callable[[int
         row = ledger_get(sid)
         if row:
             kind = "fetched" if row.get("fetched") else "snippet"
+            published = source_published(row) if dates else ""
+            kind += f", published {published}" if published else ""
             index_lines.append(f"[S{sid}] {row.get('title')} — {row.get('domain')} "
                                f"({rg.tier_label(row.get('tier'))}, {kind})")
     index = "\n".join(index_lines) or "(no sources were cited)"
@@ -4583,11 +4587,110 @@ def renumber_citations(text: str, known: Callable[[int], bool]) -> tuple[str, li
     return _tidy_spaces(renumbered), order
 
 
-def render_references(order: Sequence[int], ledger_get: Callable[[int], Mapping[str, Any] | None]) -> str:
+# A TIME-2 ledger date (rg.SourceLedger.set_dates writes source_dates.PubDate values).
+_SOURCE_DATE_RE = re.compile(r"\d{4}(?:-\d{2}(?:-\d{2})?)?")
+# Quant value types whose as_of_date may follow their source's date by design
+# (quant_source_dates never flags them as_of_after_source).
+_SOURCE_DATE_PROJECTED_TYPES = frozenset({"forecast", "target", "estimate"})
+# source_dates labels of the structured-metadata extractors (provider metadata,
+# JSON-LD, <meta>, <time>: ranks 4-7).  Only a modified date read from one of
+# them widens a source's window in quant_source_dates; a page-head "Updated:"
+# line may be site chrome, so it never suppresses as_of_after_source.
+_SOURCE_DATE_METADATA_SOURCES = frozenset({"provider_meta", "json_ld", "meta_tag", "time_tag"})
+
+
+def _date_value(value: Any) -> str:
+    """``value`` when it is a TIME-2 date (``YYYY``, ``YYYY-MM`` or ``YYYY-MM-DD``), else ``""``."""
+    text = str(value or "")
+    return text if _SOURCE_DATE_RE.fullmatch(text) else ""
+
+
+def source_published(row: Mapping[str, Any]) -> str:
+    """A ledger row's TIME-2 publication date, ``""`` when it has none."""
+    return _date_value(row.get("published"))
+
+
+def _source_date_fields(row: Mapping[str, Any]) -> dict[str, Any]:
+    """sources.json date keys of a dated ledger row (TIME-2); ``{}`` when undated."""
+    published = source_published(row)
+    if not published:
+        return {}
+    fields: dict[str, Any] = {"date": published, "date_precision": row.get("date_precision"),
+                              "date_source": row.get("date_source")}
+    for key in ("modified_at", "modified_source", "date_rejected"):
+        if row.get(key):
+            fields[key] = row[key]
+    return fields
+
+
+def source_date_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """meta.source_dates (TIME-2) over the ledger rows of the published
+    sources: dated / undated counts, rows with a rejected ``future`` date and
+    rows with any other rejection (``unparseable`` / ``pre_1900``), and the
+    dated rows by date source and by precision, so that low date coverage is
+    visible rather than read as fresh."""
+    dated = [row for row in rows if source_published(row)]
+    rejected = [set(row.get("date_rejected") or ()) if isinstance(row.get("date_rejected"), list) else set()
+                for row in rows]
+    return {
+        "dated": len(dated),
+        "undated": len(rows) - len(dated),
+        "rejected_future": sum(1 for reasons in rejected if "future" in reasons),
+        "rejected_other": sum(1 for reasons in rejected if reasons - {"future"}),
+        "by_source": dict(sorted(Counter(str(row.get("date_source") or "unknown") for row in dated).items())),
+        "by_precision": dict(sorted(Counter(str(row.get("date_precision") or "unknown") for row in dated).items())),
+    }
+
+
+def quant_source_dates(quant: list[dict], sources: Sequence[Mapping[str, Any]]) -> int:
+    """Stamp each quantitative row whose ``source_url`` is a dated sources.json
+    row with its ``source_date`` (TIME-2), and flag ``as_of_after_source``
+    when the row's ``as_of_date`` starts after the source's latest date ends:
+    a value dated after its source last changed.  The latest date is
+    ``date``, or ``modified_at`` when later and read from structured metadata
+    (``modified_source`` in _SOURCE_DATE_METADATA_SOURCES): a page-head
+    "Updated:" line, which may be site chrome, never widens the window, so
+    the flag fails closed.  Only a row that reports a value (``actual`` or no
+    type) is flagged: a ``forecast`` / ``target`` names a later period by
+    design, and an ``estimate`` dated after its source is a projection too
+    (:func:`classify_quant_row` reads it as projected), so those rows get
+    ``source_date`` only.  Never drops or rewrites a row.  Returns the rows
+    flagged."""
+    dated: dict[str, Mapping[str, Any]] = {}
+    for source in sources:
+        if isinstance(source, Mapping) and source.get("url") and _date_value(source.get("date")):
+            dated.setdefault(str(source["url"]), source)
+    flagged = 0
+    for row in quant:
+        source = dated.get(str(row.get("source_url") or ""))
+        if source is None:
+            continue
+        row["source_date"] = source["date"]
+        if str(row.get("value_type") or "").strip().lower() in _SOURCE_DATE_PROJECTED_TYPES:
+            continue
+        latest_dates = [source.get("date")]
+        if str(source.get("modified_source") or "") in _SOURCE_DATE_METADATA_SOURCES:
+            latest_dates.append(source.get("modified_at"))
+        ends = [_period_bounds(value)[1] for value in latest_dates if _date_value(value)]
+        latest = max((end for end in ends if end is not None), default=None)
+        stated_start = _loose_period_bounds(row.get("as_of_date"))[0]
+        if latest is not None and stated_start is not None and stated_start > latest:
+            row["as_of_after_source"] = True
+            flagged += 1
+    return flagged
+
+
+def render_references(order: Sequence[int], ledger_get: Callable[[int], Mapping[str, Any] | None], *,
+                      dates: bool = False) -> str:
+    """The report's References: one line per cited source in positional
+    order; with ``dates`` (RESEARCH_SOURCE_DATES) a dated source's line ends
+    ``; published X`` inside its parentheses."""
     lines = ["## References", ""]
     for position, sid in enumerate(order, start=1):
         row = ledger_get(sid) or {}
         kind = "fetched" if row.get("fetched") else "search snippet"
+        published = source_published(row) if dates else ""
+        kind += f"; published {published}" if published else ""
         lines.append(f"- [S{position}] {_collapse(row.get('title'), 200)} — {row.get('url')} "
                      f"({rg.tier_label(row.get('tier'))}; {kind})")
     return "\n".join(lines)
@@ -4633,7 +4736,8 @@ _PROVIDER_ERRORS = (rg.ProviderUnavailable, rg.QuotaExhausted)
 _MARKER_URL_RE = re.compile(r"^\s*+\[?\s*+S(\d++)\s*+\]?\s*+$", re.I)
 # The row header ResearchTools renders for a source: "[S13] Title — domain
 # (tier 3)" (a search row) or the same header followed by " — full page …" /
-# " — excerpt …" (the first line of a fetch).
+# " — excerpt …" (the first line of a fetch); with RESEARCH_SOURCE_DATES a
+# dated row adds " — published 2025-05-09" (and "; updated …") after the tier.
 _ROW_HEADER_RE = re.compile(r"^\[S(\d+)\] .* \((?:tier \d+|tier unknown)\)(?: — .*)?$")
 
 
@@ -5307,6 +5411,16 @@ class _Engine:
         self.source_taxonomy = _env_flag(self.env, "RESEARCH_SOURCE_TAXONOMY", False)
         if hasattr(self.tools, "source_taxonomy"):
             self.tools.source_taxonomy = self.source_taxonomy
+        # RESEARCH_SOURCE_DATES (default off until a precision check on real
+        # pages; TIME-2): sources get publication dates from provider metadata
+        # (and, with RESEARCH_SOURCE_DATE_TEXT_FALLBACK, default on, page-head
+        # datelines and URL paths), shown in tool row headers, the SOURCE INDEX
+        # and References and written to sources.json, the quant rows
+        # (source_date / as_of_after_source) and meta.source_dates.
+        self.source_dates = _env_flag(self.env, "RESEARCH_SOURCE_DATES", False)
+        if hasattr(self.tools, "source_dates"):
+            self.tools.source_dates = self.source_dates
+            self.tools.date_text_fallback = _env_flag(self.env, "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", True)
         # RESEARCH_QUESTION_SPEC (default off): one post-scout call pins the
         # outcome definition, resolution source, horizon, reference class and
         # the defaults it chose (handoff question_spec.json, brief, actors.json).
@@ -6328,7 +6442,8 @@ class _Engine:
         raw = _read_text(path)
         if not raw:
             records = [self.records[k.id] for k in self.kiqs if k.id in self.records]
-            raw, dropped = build_digest(records, self.ledger.get, self.preset.digest_cap, self.language)
+            raw, dropped = build_digest(records, self.ledger.get, self.preset.digest_cap, self.language,
+                                        dates=self.source_dates)
             self.meta["digest_dropped_lines"] = dropped
             if dropped:
                 self.log("warn", f"v3: evidence digest dropped {dropped} lower-priority lines to fit its caps")
@@ -6791,7 +6906,7 @@ class _Engine:
                                                                      "citation groups", "groups": stale[:20]})
         body, order = renumber_citations(
             normalized, lambda sid: sid in citable and self.ledger.get(sid) is not None)
-        final = body.rstrip() + "\n\n" + render_references(order, self.ledger.get) + "\n"
+        final = body.rstrip() + "\n\n" + render_references(order, self.ledger.get, dates=self.source_dates) + "\n"
         trimmed = self._trimmed_titles(bool(self.synth.get("exec_trimmed")), sections)
         dropped = [str(s["title"]) for s in sections
                    if not s.get("is_scenario") and not has_section_content(s["body"])]
@@ -7081,6 +7196,8 @@ class _Engine:
             if not self._publish_evidence(counts.pop("_evidence", None)):
                 counts.pop("verified_facts", None)
             self._analytics(sources, counts.pop("_actors_obj"))
+            if self.source_dates:
+                self._source_date_meta(order)
             self.bridge_call("_collect_prediction_markets", self.out_dir, self.question, report,
                              self.meta, self.reporter, model_name=self.model_name)
             self.bridge_call("_render_research_charts", self.out_dir, self.meta, self.reporter,
@@ -7126,7 +7243,13 @@ class _Engine:
         With RESEARCH_EVIDENCE_SUPPORTS (and evidence quotes not off) a
         source's located quotes (:meth:`_evidence_support_quotes`) are its
         ``supports``, through :func:`_merge_supports`; REPORT-7's evidence
-        windows join after them.  Otherwise ``supports`` is ``[]``."""
+        windows join after them.  Otherwise ``supports`` is ``[]``.
+
+        With RESEARCH_SOURCE_DATES a dated ledger row (TIME-2) publishes its
+        ``date`` and, right after it, ``date_precision``, ``date_source`` and,
+        when present, ``modified_at`` / ``modified_source`` /
+        ``date_rejected``; an undated row keeps ``date`` None and no other
+        date key."""
         rows: list[dict] = []
         demoted = 0
         quotes = self._evidence_support_quotes() if self.evidence_supports else {}
@@ -7146,9 +7269,11 @@ class _Engine:
             entry: dict[str, Any] = {
                 "source_id": self._source_id(row["url"]), "url": row["url"], "title": row.get("title"),
                 "tier": row.get("tier"), "date": None,
-                "source_origin": "fetched" if fetched else "cited",
-                "reachable": True if fetched else None,
             }
+            if self.source_dates:
+                entry.update(_source_date_fields(row))
+            entry.update({"source_origin": "fetched" if fetched else "cited",
+                          "reachable": True if fetched else None})
             if shell is not None:
                 entry["fetch_status"] = f"shell:{shell}"
             if fetched:
@@ -7381,6 +7506,8 @@ class _Engine:
         enriched = self.bridge_call("enrich_quantitative_rows", quant)
         if isinstance(enriched, list):
             quant = enriched
+        if self.source_dates:
+            self._quant_source_dates(quant, sources)
         ref_date = _parse_iso_date(plan.as_of) or _dt.datetime.now(_dt.timezone.utc).date()
         stale_days = _positive_int(self.env.get("RESEARCH_STALE_DAYS"), DEFAULT_STALE_DAYS)
         typing = _env_flag(self.env, "RESEARCH_QUANT_TYPING", False)
@@ -7444,6 +7571,24 @@ class _Engine:
             counts["verified_facts"] = dict(evidence["payload"]["counts"])
             counts["_evidence"] = evidence
         return counts
+
+    def _quant_source_dates(self, quant: list[dict], sources: Sequence[Mapping[str, Any]]) -> None:
+        """:func:`quant_source_dates` (RESEARCH_SOURCE_DATES), degrade-safe: a
+        failure is recorded in ``analytics_errors`` (``source_dates:quant``)
+        and the rows keep what they had; the run goes on."""
+        try:
+            stamps = [dict(row) for row in quant]
+            flagged = quant_source_dates(stamps, sources)
+        except Exception as exc:  # noqa: BLE001 — source dates never fail a finished report
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "source_dates:quant", "error": error[:300]})
+            self.log("warn", f"v3: quantitative source dates failed ({error})")
+            return
+        for row, stamped in zip(quant, stamps, strict=True):
+            row.update(stamped)
+        if flagged:
+            self.log("warn", f"v3: {flagged} quantitative row(s) dated after their source's latest date "
+                             "(as_of_after_source)")
 
     def _quant_provenance(self, quant: list[dict], as_of: _dt.date, *, verify: bool, typing: bool) -> None:
         """Page verification (RESEARCH_VERIFIED_FACTS) and reported/projected
@@ -7790,6 +7935,25 @@ class _Engine:
                 self.log("warn", f"v3: research degraded ({len(events)} event(s)): {'; '.join(events)}")
             self.meta["research_quality"] = quality
             self.log("ok", f"research_quality={quality.get('score')} (grounding={grounding})")
+
+    def _source_date_meta(self, order: Sequence[int]) -> None:
+        """meta.source_dates (RESEARCH_SOURCE_DATES): :func:`source_date_summary`
+        over the ledger rows sources.json publishes, plus ``skipped`` (dating
+        attempts the tool layer skipped) when any was.  Degrade-safe."""
+        try:
+            summary = source_date_summary([row for row in (self.ledger.get(sid) for sid in order) if row])
+            date_stats = getattr(self.tools, "date_stats", None)
+            skipped = int((date_stats() if callable(date_stats) else {}).get("skipped") or 0)
+            if skipped:
+                summary["skipped"] = skipped
+        except Exception as exc:  # noqa: BLE001 — telemetry never fails a finished report
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "source_dates", "error": error[:300]})
+            self.log("warn", f"v3: source date summary failed ({error})")
+            return
+        self.meta["source_dates"] = summary
+        self.log("ok", f"source dates: {summary['dated']} dated, {summary['undated']} undated "
+                       f"({summary['rejected_future']} with a future date rejected)")
 
     def _research_events(self) -> list[str]:
         """Research the report rests on incompletely: a template plan from a
@@ -8614,7 +8778,9 @@ def _default_gateway_factory(args: Any, plog: Any, bridge: Any, preset: Preset) 
 def _default_tools_factory(ledger: rg.SourceLedger, pages_dir: Path, bridge: Any, plog: Any,
                            limits: rg.ToolLimits) -> rg.ResearchTools:
     """Production tools: real search (search_tools) and fetch (cached_fetch)."""
-    return rg.ResearchTools(ledger, pages_dir, bridge=bridge, plog=plog, limits=limits)
+    return rg.ResearchTools(ledger, pages_dir, bridge=bridge, plog=plog, limits=limits,
+                            source_dates=_env_flag(os.environ, "RESEARCH_SOURCE_DATES", False),
+                            date_text_fallback=_env_flag(os.environ, "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", True))
 
 
 # ===========================================================================
