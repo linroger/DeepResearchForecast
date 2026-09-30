@@ -178,10 +178,12 @@ def test_sectioned_oversized_events_cannot_starve_posts_and_vice_versa():
     assert len("\n".join(posts)) <= 400 and len(posts) - 1 >= 1
     # the momentum line survives both overflows and stays last
     assert lines[-1] == "Momentum: ScenarioA weakened this period."
-    # a single event longer than its cap is dropped whole, with the marker, posts intact
+    # a single event longer than its cap is cut with an explicit ending, posts intact
     one = build_world_delta(big_posts[:1], [{"date": "2027-03-10", "content": "E" * 900}],
-                            sectioned=True, event_char_cap=600)
-    assert one.split("\n")[:3] == [_EVENTS_H, "(+1 more omitted)", _POSTS_H]
+                            sectioned=True, event_char_cap=600).split("\n")
+    assert one[0] == _EVENTS_H and one[2] == _POSTS_H
+    assert one[1].startswith("[2027-03-10] EEE") and one[1].endswith("E…(truncated)")
+    assert len(one[1]) <= 600
 
 
 def test_sectioned_marks_clipped_posts():
@@ -208,6 +210,33 @@ def test_sectioned_herding_guard_no_share_tokens():
     assert out.split("\n")[-1] == momentum[0]
 
 
+def test_sectioned_carried_events_get_their_own_section():
+    """Events carried out of a round that produced no digest are never presented as
+    last period's: own heading first, own cap; the flat layout ignores the tag."""
+    carried = {"date": "2027-01-10", "content": "Earlier event", "carried_from_round": 2}
+    events = [carried] + _events()
+    out = build_world_delta(_actions(), events, sectioned=True).split("\n")
+    assert out[:5] == [
+        "### Scheduled events from earlier periods (no digest was produced)",
+        "[2027-01-10] Earlier event",
+        _EVENTS_H,
+        "[2027-03-15] Regulator opens formal inquiry",
+        "[2027-03-20] Flagship model ships",
+    ]
+    assert out[5] == _POSTS_H
+    only_carried = build_world_delta([], [carried], sectioned=True)
+    assert only_carried == ("### Scheduled events from earlier periods (no digest was "
+                            "produced)\n[2027-01-10] Earlier event")
+    assert build_world_delta([], [carried]) == "[2027-01-10] Earlier event"
+    many = [dict(carried, content=f"Earlier event {i} " + "x" * 80) for i in range(10)]
+    capped = build_world_delta([], many + _events(), sectioned=True,
+                               event_char_cap=300).split("\n")
+    last = capped.index(_EVENTS_H)
+    assert capped[last - 1].startswith("(+") and capped[last - 1].endswith(" more omitted)")
+    assert capped[last + 1:] == ["[2027-03-15] Regulator opens formal inquiry",
+                                 "[2027-03-20] Flagship model ships"]
+
+
 def test_fit_whole_lines():
     from app.services.world_delta import fit_whole_lines
 
@@ -221,3 +250,12 @@ def test_fit_whole_lines():
     assert len("\n".join(kept + [marker(omitted)])) <= 31
     assert fit_whole_lines(lines, 5, marker) == ([], 3)
     assert fit_whole_lines([], 0, marker) == ([], 0)
+    # a first line too long on its own is cut on a word boundary, never silently
+    long_lines = ["alpha beta gamma delta " * 10, "short"]
+    kept, omitted = fit_whole_lines(long_lines, 80, marker)
+    assert omitted == 1 and kept == ["alpha beta gamma delta alpha beta gamma delta…(truncated)"]
+    assert len("\n".join(kept + [marker(omitted)])) <= 80
+    kept, omitted = fit_whole_lines(["z" * 200], 60, marker)
+    assert (kept, omitted) == (["z" * 48 + "…(truncated)"], 0)
+    # too little room for a meaningful cut → dropped whole, the marker names it
+    assert fit_whole_lines(["z" * 200, "y"], 60, marker) == ([], 2)

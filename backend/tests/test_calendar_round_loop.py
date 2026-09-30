@@ -1295,22 +1295,26 @@ def test_catchup_budget_knob_and_failed_injection_not_marked(monkeypatch):
     state = {}
     rps._world_clock_round(
         env, [(0, good), (1, broken)], 2, _ROUND_DATES[2], _calendar_config()["temporal_config"],
-        _calendar_config()["event_config"], "", 0, {}, None, cu, state,
-        v2=True, response_step=False, language="")
+        _calendar_config()["event_config"], "", {}, None, cu, state,
+        v2=True, response_step=False, language="", log_info=lambda _m: None)
     assert "EARLIER SCHEDULED EVENTS" in good.memory_notes[0][0]
     assert cu.missed(0, 3) == [] and len(cu.missed(1, 3)) == 1
     assert "period_context" not in state  # 回应阶段关 → 不给本期上下文
 
 
-@pytest.mark.parametrize("period_v2", ["true", "false"])
-def test_dead_round_event_carried_into_next_digest(tmp_path, monkeypatch, period_v2):
-    """事件轮（第 2 轮）全员缺席：V2 开 → 事件随心跳暂存，进入下一次步进（第 3 轮）的摘要；
-    轨迹行数不变（死轮从不步进）。第 3 轮头部注明摘要覆盖的是更早时段，缺席者补报事件。"""
+@pytest.mark.parametrize("period_v2,absence_markers", [
+    ("true", None), ("true", "false"), ("false", None)])
+def test_dead_round_event_carried_into_next_digest(tmp_path, monkeypatch, period_v2,
+                                                   absence_markers):
+    """事件轮（第 2 轮）全员缺席：V2 开 → 事件随心跳暂存，进入下一次步进（第 3 轮）的摘要，
+    单列在"更早时段"标题下（不冒充上一时段的事件）；轨迹行数不变（死轮从不步进）。第 3 轮
+    头部注明摘要覆盖的是更早时段（落后标注只看 V2，与 SIM_ABSENCE_MARKERS 无关），缺席者补报事件。"""
     sim_dir = str(tmp_path)
     envs, calls = [], []
     _patch_runtime(monkeypatch, sim_dir, envs)
     monkeypatch.setattr(dc, "elicit_round", _fake_elicit(calls))
     monkeypatch.setenv("SIM_PERIOD_CONTEXT_V2", period_v2)
+    _set_knob(monkeypatch, "SIM_ABSENCE_MARKERS", absence_markers)
     _script_active(monkeypatch, {0: [0, 1], 1: [], 2: [0, 1]})
     _run(_calendar_config(), sim_dir)
     env = envs[0]
@@ -1323,7 +1327,9 @@ def test_dead_round_event_carried_into_next_digest(tmp_path, monkeypatch, period
     assert len(r3) == 2
     if period_v2 == "true":
         assert digest_rows[1]["digest"].startswith(
-            "### Scheduled events last period\n[2026-11-05] 事件A发生\n")
+            "### Scheduled events from earlier periods (no digest was produced)\n"
+            "[2026-11-05] 事件A发生\n### Most-influential")
+        assert "### Scheduled events last period" not in digest_rows[1]["digest"]
         for n in r3:
             # 摘要出自第 1 轮（2026-Q3），不是刚过去的死轮时段
             assert (spc.WHAT_CHANGED_HEADING + "\n(latest available digest covers 2026-Q3; "
@@ -1483,6 +1489,192 @@ def test_inband_v2_off_ignores_heartbeat_events(tmp_path, monkeypatch):
     rows = _read_jsonl(os.path.join(sim_dir, "world_digest.jsonl"))
     assert "事件A发生" not in rows[0]["digest"] and "###" not in rows[0]["digest"]
 
+
+
+def test_inband_carried_events_survive_a_failed_step(tmp_path, monkeypatch):
+    """暂存只在步进成功后删除：下一轮步进失败 → 事件留给再下一次步进，并单列在
+    "更早时段"标题下（带 1 基来源轮号，不改动暂存的原事件）。"""
+    monkeypatch.delenv("SIM_PERIOD_CONTEXT_V2", raising=False)
+    sim_dir = str(tmp_path)
+    evo = _evo(sim_dir, monkeypatch)
+    ev = {"round": 1, "date": "2026-11-05", "content": "[2026-11-05] 事件A发生"}
+    evo.heartbeat("twitter", 1, [ev])          # 全平台死轮 → 暂存
+
+    def _boom(roster, period_ctx):
+        raise RuntimeError("elicit 爆炸（故障注入）")
+
+    monkeypatch.setattr(dc, "elicit_round", _boom)
+    evo.deliver("twitter", 2, _ROUND_DATES[2], _ACTOR0_POST, [])
+    assert evo.latest_delta_state() == "failed"
+    assert evo._carry_events == {1: [ev]}      # 失败步进不吞掉暂存
+
+    monkeypatch.setattr(dc, "elicit_round", _fake_elicit([]))
+    q2 = {"round": 3, "period_start": "2027-04-01", "period_end": "2027-06-30",
+          "label": "2027-Q2"}
+    evo.deliver("twitter", 3, q2, _ACTOR0_POST, [])
+    assert evo._carry_events == {}
+    assert "carried_from_round" not in ev      # 标注打在副本上
+    rows = _read_jsonl(os.path.join(sim_dir, "world_digest.jsonl"))
+    assert [r["round"] for r in rows] == [4]
+    assert rows[0]["digest"].startswith(
+        "### Scheduled events from earlier periods (no digest was produced)\n"
+        "[2026-11-05] 事件A发生\n")
+    assert "### Scheduled events last period" not in rows[0]["digest"]
+    assert evo.latest_delta_state() == "stepped" and evo.latest_delta_round() == 4
+
+
+def test_inband_same_round_carry_is_not_labelled_earlier(tmp_path, monkeypatch):
+    """双平台：reddit 先对第 1 轮心跳（尚无缓冲 → 暂存），twitter 随后交付同一轮 →
+    暂存并入同一轮，仍算"上一时段"的事件（不标 earlier）。"""
+    monkeypatch.delenv("SIM_PERIOD_CONTEXT_V2", raising=False)
+    sim_dir = str(tmp_path)
+    evo = _evo(sim_dir, monkeypatch, platforms=2)
+    ev = {"round": 0, "date": "2026-08-01", "content": "[2026-08-01] 事件0"}
+    evo.heartbeat("reddit", 0, [ev])
+    assert evo._carry_events == {0: [ev]}
+    evo.deliver("twitter", 0, _ROUND_DATES[0], _ACTOR0_POST, [])
+    assert evo._carry_events == {}
+    (row,) = _read_jsonl(os.path.join(sim_dir, "world_digest.jsonl"))
+    assert row["digest"].startswith("### Scheduled events last period\n[2026-08-01] 事件0\n")
+
+
+class _EvoStub:
+    """in-band 演化器的读接口替身（_world_clock_round 只读这三个方法）。"""
+
+    def __init__(self, text, rnd, state="stepped"):
+        self.text, self.rnd, self.state = text, rnd, state
+
+    def latest_delta(self):
+        return self.text
+
+    def latest_delta_round(self):
+        return self.rnd
+
+    def latest_delta_state(self):
+        return self.state
+
+
+def _clock_round(agents, round_num, world_delta, evo, *, v2=True, catchup=None,
+                 response_step=True, logs=None):
+    env = types.SimpleNamespace(agent_graph=_FakeGraph(agents))
+    state = {"period_context": "stale from last round"}
+    cfg = _calendar_config()
+    rps._world_clock_round(
+        env, [(a.agent_id, a) for a in agents], round_num, _ROUND_DATES[round_num],
+        cfg["temporal_config"], cfg["event_config"], world_delta,
+        dict(enumerate(_ROUND_DATES)), evo, catchup, state, v2=v2,
+        response_step=response_step, language="",
+        log_info=(logs.append if logs is not None else (lambda _m: None)))
+    return state
+
+
+def test_world_clock_round_v2_rereads_the_digest_at_injection(monkeypatch):
+    """双平台错峰：回路上一轮末读到的是旧摘要，fire_scheduled_events 的 await 期间另一平台
+    步进了缺失的一轮 → v2 在注入时重读，正文/轮号/状态一致，不再误标落后；v2 关用回路读数。"""
+    monkeypatch.delenv("SIM_ABSENCE_MARKERS", raising=False)
+    monkeypatch.delenv("SIM_WORLD_DELTA", raising=False)
+    fresh = _EvoStub("Actor1: fresh move", 2)
+    agent = _FakeAgent(0, "Actor0")
+    state = _clock_round([agent], 2, "Actor1: loop read", fresh)
+    (note, _role), = agent.memory_notes
+    assert _what_changed(note) == "Actor1: fresh move"
+    assert "latest available digest covers" not in note
+    assert state["period_context"].endswith(spc.WHAT_CHANGED_HEADING + "\nActor1: fresh move")
+    # 重读到的摘要确实落后时照常标注
+    agent = _FakeAgent(0, "Actor0")
+    _clock_round([agent], 2, "", _EvoStub("Actor1: older move", 1))
+    (note, _role), = agent.memory_notes
+    assert _what_changed(note) == (
+        "(latest available digest covers 2026-Q3; no digest of the most recent period is "
+        "available)\nActor1: older move")
+    # v2 关：逐字节旧行为——用回路读数，无落后标注、无回应阶段上下文
+    agent = _FakeAgent(0, "Actor0")
+    state = _clock_round([agent], 2, "Actor1: loop read", fresh, v2=False)
+    (note, _role), = agent.memory_notes
+    assert note == _clock_text(2, [], "Actor1: loop read", delta_state="stepped",
+                               response_step=True)
+    assert "period_context" not in state
+
+
+def test_world_clock_round_v2_sees_a_round_stepped_by_the_other_platform(tmp_path, monkeypatch):
+    """真实演化器、双平台：twitter 第 1 轮末读到空摘要（reddit 尚未交付第 0 轮），await 期间
+    reddit 交付 → 步进。v2 注入时重读，送达刚产出的摘要；v2 关保持旧行为（回路读数为空 →
+    "摘要不可用"占位）。"""
+    for knob in ("SIM_PERIOD_CONTEXT_V2", "SIM_ABSENCE_MARKERS", "SIM_WORLD_DELTA"):
+        monkeypatch.delenv(knob, raising=False)
+    evo = _evo(str(tmp_path), monkeypatch, platforms=2)
+    evo.deliver("twitter", 0, _ROUND_DATES[0], _ACTOR0_POST, [])
+    loop_read = evo.latest_delta()
+    assert loop_read == "" and evo.latest_delta_state() == "not_stepped"
+    evo.deliver("reddit", 0, _ROUND_DATES[0], [], [])   # fire_scheduled_events 的 await 期间
+    assert evo.latest_delta_round() == 1 and evo.latest_delta()
+
+    agent = _FakeAgent(0, "Actor0")
+    _clock_round([agent], 1, loop_read, evo, response_step=False)
+    (note, _role), = agent.memory_notes
+    assert _what_changed(note) == evo.latest_delta()
+    assert _what_changed(note).startswith("### Most-influential actor posts last period")
+    assert "latest available digest covers" not in note
+
+    agent = _FakeAgent(0, "Actor0")
+    _clock_round([agent], 1, loop_read, evo, v2=False, response_step=False)
+    (note, _role), = agent.memory_notes
+    assert _what_changed(note) == spc.WORLD_CLOCK_SUMMARY_UNAVAILABLE
+
+
+def test_world_clock_round_isolates_optional_parts(monkeypatch):
+    """落后标注 / 补报块 / 回应阶段上下文各自出错：只丢该部分并记专门日志，世界时钟照常
+    注入；补报出错 → 本轮不记已告知（下次激活重补）；异常绝不上抛给回路。"""
+    for knob in ("SIM_ABSENCE_MARKERS", "SIM_WORLD_DELTA"):
+        monkeypatch.delenv(knob, raising=False)
+    evo = _EvoStub("Actor1: older move", 1)
+    events = _calendar_config()["event_config"]
+
+    def _catchup():
+        return rps._build_event_catchup(events, lambda _m: None)
+
+    def _raise(*_a, **_k):
+        raise RuntimeError("故障注入")
+
+    logs, agent = [], _FakeAgent(0, "Actor0")
+    _clock_round([agent], 2, "", evo, logs=logs, catchup=_catchup())
+    (expected, _role), = agent.memory_notes
+    assert "latest available digest covers" in expected and spc.CATCHUP_HEADING in expected
+    assert logs == []
+
+    # 1) 落后标注失败 → 无落后行，其余不变
+    with monkeypatch.context() as m:
+        m.setattr(rps, "_period_stale_label", _raise)
+        logs, agent = [], _FakeAgent(0, "Actor0")
+        _clock_round([agent], 2, "", evo, logs=logs, catchup=_catchup())
+    (note, _role), = agent.memory_notes
+    assert note == expected.replace(
+        "(latest available digest covers 2026-Q3; no digest of the most recent period is "
+        "available)\n", "")
+    assert len(logs) == 1 and "落后标注失败" in logs[0]
+
+    # 2) 补报渲染失败 → 无补报块、不记已告知
+    cu = _catchup()
+    with monkeypatch.context() as m:
+        m.setattr(cu, "render", _raise)
+        logs, agent = [], _FakeAgent(0, "Actor0")
+        _clock_round([agent], 2, "", evo, logs=logs, catchup=cu)
+    (note, _role), = agent.memory_notes
+    assert note == expected.split("\n\n" + spc.CATCHUP_HEADING)[0]
+    assert len(logs) == 1 and "补报渲染失败" in logs[0]
+    assert len(cu.missed(0, 3)) == 1            # 未记已告知
+
+    # 3) 回应阶段上下文失败 → 世界时钟已注入、已记已告知，period_context 被清掉
+    cu = _catchup()
+    with monkeypatch.context() as m:
+        m.setattr(rps, "_reaction_period_context", _raise)
+        logs, agent = [], _FakeAgent(0, "Actor0")
+        state = _clock_round([agent], 2, "", evo, logs=logs, catchup=cu)
+    (note, _role), = agent.memory_notes
+    assert note == expected
+    assert "period_context" not in state
+    assert len(logs) == 1 and "回应阶段本期上下文生成失败" in logs[0]
+    assert cu.missed(0, 3) == []
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-x", "-q"]))

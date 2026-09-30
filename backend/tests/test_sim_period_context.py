@@ -128,8 +128,16 @@ def test_render_delta_lines_markers_off_is_legacy():
         for state in ("not_stepped", "stepped", "quiet", "failed", "no_inband", None):
             assert render_delta_lines("", state, round_num=rnd, markers=False) == [
                 "(first period)"]
+            assert render_delta_lines(" a\nb ", state, round_num=rnd, markers=False) == [
+                "a", "b"]
+            # the stale line is not a placeholder: SIM_PERIOD_CONTEXT_V2 (the caller passes
+            # stale_label only then) governs it whatever SIM_ABSENCE_MARKERS says
             assert render_delta_lines(" a\nb ", state, round_num=rnd, stale_label="2026-Q3",
-                                      markers=False) == ["a", "b"]
+                                      markers=False) == [
+                "(latest available digest covers 2026-Q3; no digest of the most recent period "
+                "is available)", "a", "b"]
+            assert render_delta_lines("", state, round_num=rnd, stale_label="2026-Q3",
+                                      markers=False) == ["(first period)"]
 
 
 # ------------------------------------------------------------------ EventCatchUp
@@ -194,6 +202,20 @@ def test_catchup_cap_keeps_whole_lines_with_omission_marker():
     assert tiny == spc.CATCHUP_HEADING + "\n(+5 earlier scheduled events omitted)"
 
 
+def test_catchup_clips_a_newest_event_too_long_for_the_cap():
+    """A newest event longer than the whole cap is cut with an explicit ending, not
+    dropped: the actor always learns of the latest event it missed."""
+    events = [{"round": 0, "date": "2026-08-01", "content": "older event"},
+              {"round": 1, "date": "2026-11-05", "content": "word " * 400}]
+    block = EventCatchUp({"scheduled_events": events}, 1200).render(events)
+    lines = block.split("\n")
+    assert len(block) <= 1200
+    assert lines[0] == spc.CATCHUP_HEADING
+    assert lines[1].startswith("[2026-11-05] word word") and lines[1].endswith(
+        "word…(truncated)")
+    assert lines[2] == "(+1 earlier scheduled events omitted)"
+
+
 def test_catchup_is_resume_safe():
     """A resumed process rebuilds agent memory, so the first activation after a lossy
     resume re-delivers the earlier events; the index comes only from the config."""
@@ -242,6 +264,32 @@ def test_compact_period_context_short_section_lends_its_budget():
     assert "[2026-11-05] 事件A发生\n" in out                    # the short section is intact
     assert out.count("d" * 90) > 1200 // 2 // 100                 # delta took the slack
     assert out.endswith("more omitted)")
+
+
+def test_compact_period_context_gives_this_periods_events_priority():
+    """A long event line (more than half the budget) stays whole while the digest
+    overflows; the digest keeps a reserve of whole lines and its omission marker."""
+    event = "[2026-11-05] " + "long scheduled event text " * 26
+    assert 600 < len(event) < 800
+    delta = [f"Actor{i}: " + "d" * 90 for i in range(12)]
+    out = compact_period_context([event], delta, max_chars=1200)
+    assert len(out) <= 1200
+    head, tail = out.split("\n" + spc.WHAT_CHANGED_HEADING + "\n")
+    assert head == spc.THIS_PERIOD_HEADING + "\n" + event
+    de_lines = tail.split("\n")
+    assert len(de_lines) >= 3 and de_lines[:-1] == delta[:len(de_lines) - 1]
+    assert de_lines[-1] == f"(+{len(delta) - len(de_lines) + 1} more omitted)"
+
+
+def test_compact_period_context_clips_an_event_too_long_for_its_section():
+    event = "[2026-11-05] " + "word " * 500
+    delta = [f"Actor{i}: " + "d" * 90 for i in range(12)]
+    out = compact_period_context([event, "[2026-11-06] second event"], delta, max_chars=1200)
+    assert len(out) <= 1200
+    lines = out.split("\n")
+    assert lines[1].startswith("[2026-11-05] word") and lines[1].endswith("word…(truncated)")
+    assert lines[2] == "(+1 more omitted)" and lines[3] == spc.WHAT_CHANGED_HEADING
+    assert lines[4] == delta[0]
 
 
 def test_compact_period_context_tiny_cap_still_names_omissions():

@@ -19,7 +19,8 @@ Honesty rules encoded here:
   summaries each get their own marker (REPORT-6), and a summary that covers an
   older period says which period it covers;
 * every cap keeps whole lines and ends with an explicit omission marker instead
-  of cutting text silently.
+  of cutting text silently (a single line too long for its section is cut with an
+  explicit ``…(truncated)`` ending rather than dropped).
 
 The REPORT-6 absence markers live here (moved verbatim from the runner) so only
 one copy exists.  Herding guard: the markers carry no digits and no ``%``.
@@ -65,6 +66,9 @@ STALE_DIGEST_LINE = ("(latest available digest covers {label}; no digest of the 
                      "period is available)")
 
 REACTION_CONTEXT_MAX_CHARS = 1200
+# compact_period_context: this period's events come first, but the "what changed"
+# section keeps at least this much of an overflowing budget (a couple of digest lines).
+_DELTA_RESERVE_CHARS = 300
 
 
 def _catchup_marker(n: int) -> str:
@@ -121,22 +125,23 @@ def render_delta_lines(delta_text: Any, delta_state: Optional[str], *, round_num
     ``delta_state`` is REPORT-6's provenance of the summary (``not_stepped`` /
     ``stepped`` / ``quiet`` / ``failed``, or the caller's ``no_inband``).
 
-    markers on: round 0 → first-period marker; a non-empty summary → its lines,
-    preceded by the stale line when ``stale_label`` names the older period it covers;
+    markers on: round 0 → first-period marker; a non-empty summary → its lines;
     ``quiet`` → quiet marker; ``no_inband`` → not-produced marker; anything else →
     "unavailable in this run" (fail closed).  Never "first period" after round 0.
 
-    markers off: the summary or ``(first period)``, exactly as the legacy header."""
+    markers off: the summary or ``(first period)``, exactly as the legacy header.
+
+    Either way a non-empty summary is preceded by the stale line when ``stale_label``
+    names the older period it covers.  The stale line is not a placeholder: the caller
+    passes ``stale_label`` only under SIM_PERIOD_CONTEXT_V2, which governs it."""
     text = str(delta_text or "").strip()
-    if not markers:
-        return (text or LEGACY_FIRST_PERIOD).split("\n")
-    if round_num == 0:
+    if markers and round_num == 0:
         return [WORLD_CLOCK_FIRST_PERIOD]
     if text:
-        lines = text.split("\n")
-        if stale_label:
-            lines.insert(0, STALE_DIGEST_LINE.format(label=stale_label))
-        return lines
+        stale = [STALE_DIGEST_LINE.format(label=stale_label)] if stale_label else []
+        return stale + text.split("\n")
+    if not markers:
+        return [LEGACY_FIRST_PERIOD]
     if delta_state == "quiet":
         return [WORLD_CLOCK_QUIET_PERIOD]
     if delta_state == "no_inband":
@@ -153,9 +158,12 @@ def compact_period_context(event_lines: Optional[Iterable[Any]],
     then ``## WHAT CHANGED LAST PERIOD`` with the delta lines (the section is left out
     when ``delta_lines`` is empty, i.e. SIM_WORLD_DELTA is off).  When the whole text
     does not fit, each section keeps whole lines in order and ends with
-    ``(+N more omitted)``; a section that fits in half the budget gives the rest to
-    the other.  Headings and omission markers are never dropped, so a cap smaller
-    than them yields just those lines."""
+    ``(+N more omitted)`` (a first line too long on its own is cut with an explicit
+    ``…(truncated)`` ending, see ``world_delta.fit_whole_lines``).  The period's
+    events have priority: they get what they need up to all but
+    ``_DELTA_RESERVE_CHARS`` of the budget (never less than half), the delta the rest,
+    and a section that needs less lends its slack to the other.  Headings and omission
+    markers are never dropped, so a cap smaller than them yields just those lines."""
     events = [str(line) for line in event_lines or []]
     delta = [str(line) for line in delta_lines or []]
     sections = [(THIS_PERIOD_HEADING, events)]
@@ -170,13 +178,11 @@ def compact_period_context(event_lines: Optional[Iterable[Any]],
     if len(sections) == 1:
         budgets = [budget]
     else:
-        ev_len, de_len, half = len("\n".join(events)), len("\n".join(delta)), budget // 2
-        if ev_len <= half:
-            budgets = [ev_len, budget - ev_len]
-        elif de_len <= half:
-            budgets = [budget - de_len, de_len]
-        else:
-            budgets = [half, budget - half]
+        ev_len, de_len = len("\n".join(events)), len("\n".join(delta))
+        ev_cap = min(ev_len, max(budget // 2, budget - _DELTA_RESERVE_CHARS))
+        if de_len < budget - ev_cap:
+            ev_cap = budget - de_len
+        budgets = [ev_cap, budget - ev_cap]
     parts = []
     for (heading, lines), cap in zip(sections, budgets, strict=True):
         kept, omitted = fit_whole_lines(lines, cap, _more_marker)
@@ -224,9 +230,10 @@ class EventCatchUp:
 
     def render(self, events: Optional[Iterable[Any]]) -> str:
         """'' without events; otherwise the catch-up block, newest event first (``events``
-        in chronological order, as ``missed`` returns them).  Whole lines only, at most
+        in chronological order, as ``missed`` returns them).  Whole lines, at most
         ``max_chars`` in total, ending with ``(+N earlier scheduled events omitted)``
-        when older events are dropped; the heading and the marker are never dropped."""
+        when older events are dropped (a newest event too long on its own is cut with an
+        explicit ``…(truncated)`` ending); the heading and the marker are never dropped."""
         lines = _event_lines(events)
         if not lines:
             return ""

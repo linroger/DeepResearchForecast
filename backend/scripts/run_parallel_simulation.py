@@ -2139,34 +2139,59 @@ def _reaction_period_context(due_events, world_delta: str, delta_state: str, rou
 
 
 def _world_clock_round(env, active_agents, round_num: int, period, timeline, event_config,
-                       world_delta: str, delta_round: int,
-                       round_periods: Dict[int, Dict[str, Any]], inband_evo, catchup,
-                       reaction_state: Dict[str, Any], *, v2: bool, response_step: bool,
-                       language: str) -> None:
+                       world_delta: str, round_periods: Dict[int, Dict[str, Any]], inband_evo,
+                       catchup, reaction_state: Dict[str, Any], *, v2: bool,
+                       response_step: bool, language: str, log_info) -> None:
     """一轮的世界时钟投递（Twitter/Reddit 两个孪生回路共用，保证两者同步）。
 
     注入 WORLD CLOCK 记忆（_inject_period_context）；SIM-6（v2）另加：摘要落后标注、
     漏报事件补报（catchup：本轮活跃者缺席过的事件轮，注入成功后记为已告知）、回应阶段的
-    本期上下文（reaction_state["period_context"]，每轮重算）。v2=False → 与旧回路逐字节
-    相同的注入调用、无回应阶段上下文。异常上抛，由回路既有的 try/except 记录并跳过。"""
+    本期上下文（reaction_state["period_context"]，每轮重算）。
+
+    v2 下摘要正文、所出轮号与来源状态在注入时一并重读：回路在上一轮末读到的摘要之后还
+    await 过 fire_scheduled_events（有到期事件时 env.step），双平台运行中另一平台可能已在
+    此间步进了缺失的一轮——重读拿到更新的摘要，落后标注与占位状态也彼此一致（最多到上一
+    时段：本平台本轮尚未交付，演化器不会步进本轮）。v2=False → world_delta 用回路上一轮末
+    的读数，与旧回路逐字节相同的注入调用、无回应阶段上下文。
+
+    失败隔离：落后标注、补报块、回应阶段上下文各自出错只丢掉该附加部分（记日志），世界
+    时钟照常注入；补报块出错时本轮不记"已告知"（下次激活重补）。注入本身的异常上抛，由
+    回路既有的 try/except 记录并跳过。"""
     reaction_state.pop("period_context", None)
     due = _scheduled_events_due(event_config, round_num)
+    delta_round = 0
+    if v2 and inband_evo is not None:
+        world_delta = inband_evo.latest_delta()
+        delta_round = inband_evo.latest_delta_round()
     delta_state = inband_evo.latest_delta_state() if inband_evo is not None else "no_inband"
-    stale = _period_stale_label(world_delta, delta_round, round_num, round_periods) if v2 else ""
+    stale = ""
+    if v2:
+        try:
+            stale = _period_stale_label(world_delta, delta_round, round_num, round_periods)
+        except Exception as _st_err:  # noqa: BLE001 — 附加标注，失败只省略落后说明
+            log_info(f"世界时钟摘要落后标注失败（省略该行，不中断模拟）: {_st_err}")
     suffix = None
     if catchup is not None:
-        suffix = {aid: catchup.render(catchup.missed(aid, round_num)) for aid, _ in active_agents}
+        try:
+            suffix = {aid: catchup.render(catchup.missed(aid, round_num))
+                      for aid, _ in active_agents}
+        except Exception as _cu_err:  # noqa: BLE001 — 附加块，失败只省略本轮补报
+            log_info(f"漏报事件补报渲染失败（本轮不补报，不中断模拟）: {_cu_err}")
     briefed = _inject_period_context(
         env, [aid for aid, _ in active_agents], round_num, period, timeline, due, world_delta,
         response_step=response_step, language=language, delta_state=delta_state,
         v2=v2, delta_stale_label=stale, per_agent_suffix=suffix,
     )
-    if catchup is not None:
+    if suffix is not None:
         for aid in briefed:
             catchup.mark_briefed(aid, round_num)
     if v2 and response_step:
-        reaction_state["period_context"] = _reaction_period_context(
-            due, world_delta, delta_state, round_num, stale)
+        try:
+            reaction_state["period_context"] = _reaction_period_context(
+                due, world_delta, delta_state, round_num, stale)
+        except Exception as _rc_err:  # noqa: BLE001 — 辅助 agent 退回无本期上下文的旧提示
+            log_info(f"回应阶段本期上下文生成失败（辅助 agent 不带本期上下文，不中断模拟）: "
+                     f"{_rc_err}")
 
 
 # ============================================================================
@@ -3668,7 +3693,7 @@ class _InbandWorldEvolution:
         self._delta_state_counts: Dict[str, int] = {"stepped": 0, "quiet": 0, "failed": 0}
         # SIM-6（SIM_PERIOD_CONTEXT_V2，默认开）：摘要分段封顶（不再静默截断）；最近一次成功
         # 步进的轮号（1 基，0 = 尚未步进），世界时钟据此标注落后于时钟的摘要（死轮 / 双平台
-        # 水位错峰）；全平台死轮的到期事件暂存（轮次 → 事件），并入其后第一次步进的缓冲。
+        # 水位错峰）；全平台死轮的到期事件暂存（轮次 → 事件），并入其后第一次成功步进的缓冲。
         self._v2 = _flag_true("SIM_PERIOD_CONTEXT_V2", "true")
         self._delta_round = 0
         self._carry_events: Dict[int, List[Dict[str, Any]]] = {}
@@ -3720,7 +3745,8 @@ class _InbandWorldEvolution:
         防止双平台按轮配对停摆。绝不抛异常。
 
         SIM-6（V2 开）：本轮到期事件照常上了 feed，不能随死轮消失——已有本轮缓冲（另一平台
-        已交付）→ 去重并入；否则暂存，由其后第一次步进并入摘要与决策上下文（不新增轨迹行）。"""
+        已交付）→ 去重并入；否则暂存，由其后第一次成功步进并入摘要（单列"更早时段"段）与
+        决策上下文（不新增轨迹行）。"""
         try:
             self._max_seen_round = max(self._max_seen_round, int(round_num) + 1)
             if self._v2 and fired_events:
@@ -3887,9 +3913,15 @@ class _InbandWorldEvolution:
         任何异常 → 告警 + 空摘要（状态 failed：下一轮头部标"摘要不可用"；SIM_ABSENCE_MARKERS
         关时回落旧 "(first period)"），模拟继续。"""
         try:
-            # SIM-6：全平台死轮暂存的到期事件并入本轮（只并入不早于它的轮次；去重）
-            for carried in sorted(k for k in self._carry_events if k <= round_num):
-                self._add_events(buf, self._carry_events.pop(carried))
+            from app.services.world_delta import CARRIED_FROM_ROUND_KEY, build_world_delta
+            # SIM-6：暂存的到期事件并入本轮（只并入不晚于本轮的暂存；去重）。更早轮次的事件
+            # 带 carried_from_round（1 基）→ 摘要单列"更早时段"段，不冒充上一时段的事件；
+            # 暂存到步进成功才删除——本轮步进失败则原样留给下一次步进。
+            carried_rounds = sorted(k for k in self._carry_events if k <= round_num)
+            for k in carried_rounds:
+                self._add_events(buf, [
+                    ev if k == round_num else {**ev, CARRIED_FROM_ROUND_KEY: k + 1}
+                    for ev in self._carry_events[k]])
             period = buf.get("period") if isinstance(buf.get("period"), dict) else None
             rnd = round_num + 1  # 轨迹/digest/decisions 与 actions.jsonl 同为 1 基轮号
             period_end = (str(period.get("period_end")) if period and period.get("period_end")
@@ -3951,7 +3983,6 @@ class _InbandWorldEvolution:
                 direction = "up" if diff > 1e-9 else ("down" if diff < -1e-9 else "flat")
                 leader_move = {"leader": leader, "direction": direction}
             # 定性摘要（喂下一轮 WORLD CLOCK 头）——纯函数，出错自身返回 ""
-            from app.services.world_delta import build_world_delta
             digest_actions = []
             for a in buf.get("actions") or []:
                 content = (a.get("action_args") or {}).get("content")
@@ -4018,6 +4049,8 @@ class _InbandWorldEvolution:
             if delta_state == "failed":
                 self._log(f"第 {rnd} 轮世界摘要为空但本轮有可报内容（摘要生成失败，"
                           "下一轮标为摘要不可用）")
+            for k in carried_rounds:
+                self._carry_events.pop(k, None)
             self._record_delta(delta_text, delta_state)
             self._delta_round = rnd
         except Exception as _e:  # noqa: BLE001 — spec §4: 失败 → 告警 + 下一轮空摘要
@@ -5450,7 +5483,6 @@ async def run_twitter_simulation(
             except (TypeError, ValueError):
                 _round_periods[_rp_i] = _rp
     world_delta_text = ""
-    _delta_round = 0  # SIM-6: world_delta_text 出自的步进轮号（同时读取，判断摘要是否落后）
 
     start_time = datetime.now()
 
@@ -5576,7 +5608,6 @@ async def run_twitter_simulation(
                 _inband_evo.heartbeat(_ckpt_platform, round_num,
                                       _scheduled_events_due(event_config, round_num))
                 world_delta_text = _inband_evo.latest_delta()
-                _delta_round = _inband_evo.latest_delta_round()
             _write_ckpt(round_num + 1)  # RUN-7: 死轮也推进检查点
             continue
 
@@ -5586,14 +5617,16 @@ async def run_twitter_simulation(
 
         # CAL-TEMPORAL: 日历模式注入本轮世界时钟头（时段/进度/本轮到期事件/上一时段演化摘要）。
         # world_delta_text 由 in-band 演化在上一轮末填充；空摘要按来源状态给具名占位（REPORT-6）。
-        # SIM-6（_pc_v2）：预期事件标题、摘要落后标注、漏报补报、回应阶段本期上下文。
+        # SIM-6（_pc_v2）：注入时重读摘要（见 _world_clock_round）、预期事件标题、摘要落后
+        # 标注、漏报补报、回应阶段本期上下文。
         if calendar:
             try:
                 _world_clock_round(
                     result.env, active_agents, round_num, _period, temporal_config,
-                    event_config, world_delta_text, _delta_round, _round_periods,
+                    event_config, world_delta_text, _round_periods,
                     _inband_evo, _catchup, _reaction_state,
                     v2=_pc_v2, response_step=_reaction_on, language=_sim_language,
+                    log_info=log_info,
                 )
             except Exception as _pc_err:  # noqa: BLE001
                 log_info(f"世界时钟注入失败，跳过（不中断模拟）: {_pc_err}")
@@ -5625,7 +5658,6 @@ async def run_twitter_simulation(
                 _inband_evo.heartbeat(_ckpt_platform, round_num,
                                       _scheduled_events_due(event_config, round_num))
                 world_delta_text = _inband_evo.latest_delta()
-                _delta_round = _inband_evo.latest_delta_round()
             _write_ckpt(round_num + 1)  # RUN-7: 失败轮同样推进检查点（该轮已按 0 动作记账）
             if step_failure_limit > 0 and consec_step_failures >= step_failure_limit:
                 raise RuntimeError(
@@ -5687,7 +5719,6 @@ async def run_twitter_simulation(
             _inband_evo.deliver(_ckpt_platform, round_num, _period, actual_actions,
                                 _scheduled_events_due(event_config, round_num))
             world_delta_text = _inband_evo.latest_delta()
-            _delta_round = _inband_evo.latest_delta_round()
 
         if action_logger:
             action_logger.log_round_end(
@@ -6018,7 +6049,6 @@ async def run_reddit_simulation(
             except (TypeError, ValueError):
                 _round_periods[_rp_i] = _rp
     world_delta_text = ""
-    _delta_round = 0  # SIM-6: world_delta_text 出自的步进轮号（同时读取，判断摘要是否落后）
 
     start_time = datetime.now()
 
@@ -6144,7 +6174,6 @@ async def run_reddit_simulation(
                 _inband_evo.heartbeat(_ckpt_platform, round_num,
                                       _scheduled_events_due(event_config, round_num))
                 world_delta_text = _inband_evo.latest_delta()
-                _delta_round = _inband_evo.latest_delta_round()
             _write_ckpt(round_num + 1)  # RUN-7: 死轮也推进检查点
             continue
 
@@ -6154,14 +6183,16 @@ async def run_reddit_simulation(
 
         # CAL-TEMPORAL: 日历模式注入本轮世界时钟头（时段/进度/本轮到期事件/上一时段演化摘要）。
         # world_delta_text 由 in-band 演化在上一轮末填充；空摘要按来源状态给具名占位（REPORT-6）。
-        # SIM-6（_pc_v2）：预期事件标题、摘要落后标注、漏报补报、回应阶段本期上下文。
+        # SIM-6（_pc_v2）：注入时重读摘要（见 _world_clock_round）、预期事件标题、摘要落后
+        # 标注、漏报补报、回应阶段本期上下文。
         if calendar:
             try:
                 _world_clock_round(
                     result.env, active_agents, round_num, _period, temporal_config,
-                    event_config, world_delta_text, _delta_round, _round_periods,
+                    event_config, world_delta_text, _round_periods,
                     _inband_evo, _catchup, _reaction_state,
                     v2=_pc_v2, response_step=_reaction_on, language=_sim_language,
+                    log_info=log_info,
                 )
             except Exception as _pc_err:  # noqa: BLE001
                 log_info(f"世界时钟注入失败，跳过（不中断模拟）: {_pc_err}")
@@ -6193,7 +6224,6 @@ async def run_reddit_simulation(
                 _inband_evo.heartbeat(_ckpt_platform, round_num,
                                       _scheduled_events_due(event_config, round_num))
                 world_delta_text = _inband_evo.latest_delta()
-                _delta_round = _inband_evo.latest_delta_round()
             _write_ckpt(round_num + 1)  # RUN-7: 失败轮同样推进检查点（该轮已按 0 动作记账）
             if step_failure_limit > 0 and consec_step_failures >= step_failure_limit:
                 raise RuntimeError(
@@ -6255,7 +6285,6 @@ async def run_reddit_simulation(
             _inband_evo.deliver(_ckpt_platform, round_num, _period, actual_actions,
                                 _scheduled_events_due(event_config, round_num))
             world_delta_text = _inband_evo.latest_delta()
-            _delta_round = _inband_evo.latest_delta_round()
 
         if action_logger:
             action_logger.log_round_end(
