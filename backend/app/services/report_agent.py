@@ -292,9 +292,11 @@ class ReportLogger:
         """INFRA-5: 记录一次派发前被拒绝的工具调用（参数非 JSON / 缺工具名 / 参数无效）。
 
         只记事件骨架（工具名、拒绝原因、调用原文摘录），不含任何章节草稿正文，故不在
-        api/report.py 的 _AGENT_LOG_DRAFT_FIELDS 草稿闸门之列。摘录经 report_tool_args.rejection_excerpt
-        收窄：至多 300 字符，并在首个 'Final Answer'、空行或首个完整 JSON 对象之后截断——未闭合的
-        <tool_call> 块会一直延伸到回复末尾，可能带上其后的章节正文。
+        api/report.py 的 _AGENT_LOG_DRAFT_FIELDS 草稿闸门之列。未闭合的 <tool_call> 块会一直延伸到
+        回复末尾、可能带上章节正文，故摘录经 report_tool_args.rejection_excerpt fail-closed 收窄：先在首个
+        'Final Answer' 或空行处截断，再从首个调用开头（{"name": / {"tool":，否则首个 {）起只保留调用语法
+        记号（括号、键、字符串、数字等），遇到中文正文、Markdown 标题等其他字符即止，至多 300 字符，
+        止于首个完整 JSON 对象；没有 { 时为空串。
         """
         self.log(
             action="tool_rejected",
@@ -10772,18 +10774,26 @@ class ReportAgent:
                                    track: bool = True) -> str:
         """INFRA-5: 同一回复里未被处理的无法解析块（_select_tool_call 选了别的调用）留痕并告知模型。
 
-        每个这样的块记一次不计费的被拒调用（track=False 的 chat 对话不动报告级计数）与一行
-        tool_rejected，不占本章免费额度（本轮已处理选中的调用）；返回拼在本轮 Observation 前的说明。
-        没有这样的块时（含宽容解析关闭：列表里没有错误条目）返回空串，Observation 逐字节不变。
+        前 SKIPPED_BLOCKS_ITEMIZED 个这样的块各记一次不计费的被拒调用（track=False 的 chat 对话不动
+        报告级计数）与一行 tool_rejected，其余块只合记一行汇总（退化回复里成百上千个块不会变成成百上千次
+        加锁追加写与虚高的 rejected_parse）；都不占本章免费额度（本轮已处理选中的调用）。返回拼在本轮
+        Observation 前的说明。没有这样的块时（含宽容解析关闭：列表里没有错误条目）返回空串，
+        Observation 逐字节不变。
         """
         skipped = [c for c in tool_calls if c is not selected and "_parse_error" in c]
-        for entry in skipped:
+        itemized = skipped[:_rta.SKIPPED_BLOCKS_ITEMIZED]
+        for entry in itemized:
             kind = entry.get("_kind") or _rta.KIND_ARGS_NOT_JSON
             if track:
                 self._count_tool_event(_rta.OUTCOME_FOR_KIND.get(kind, "rejected_parse"))
             self._safe_report_log("log_tool_rejection", section_title, None,
                                   f"{kind}: {entry['_parse_error']}（同一回复另有被处理的调用，本块未执行）",
                                   entry.get("raw"), section_index=section_index)
+        if len(skipped) > len(itemized):
+            self._safe_report_log("log_tool_rejection", section_title, None,
+                                  f"skipped_blocks: 同一回复另有 {len(skipped) - len(itemized)} 个无法解析的"
+                                  f"工具调用块未逐条记录（共 {len(skipped)} 个，均未执行）",
+                                  None, section_index=section_index)
         if skipped:
             logger.warning(f"同一回复中 {len(skipped)} 个无法解析的工具调用块未执行（不计工具预算）")
         return _rta.skipped_blocks_note([str(c["_parse_error"]) for c in skipped])
@@ -10884,7 +10894,8 @@ class ReportAgent:
         最后一个闭合块之后仍有未闭合的 <tool_call>（回复被 max_tokens 截断，或误用 </invoke> 等
         闭合标签）时，其后全文按同一流程作为一个块处理（修复标记 unterminated_block）。
         裸 JSON 兜底（无 <tool_call> 块）沿用历史的两种候选与「工具名须合法」约束，只把
-        json.loads 换成同一套修复；裸 JSON 解析失败不产出错误条目（可能只是正文里的花括号）。
+        json.loads 换成同一套修复；裸 JSON 解析失败一般不产出错误条目（可能只是正文里的花括号），
+        唯一例外是整个回复以 {"name": "<可用工具>" 开头却解码不了（report_tool_args.broken_bare_call）。
         切分与候选定位都不用回溯正则：模型文本上的 <tool_call>\\s*(.*?)\\s*</tool_call> 在未闭合开标签
         + 长空白串时是三次方回溯，且 _sre 匹配期间不释放 GIL（并发章节线程全被卡住）。
         """
@@ -10915,7 +10926,22 @@ class ReportAgent:
             if isinstance(name, str) and name in self._valid_tool_names():
                 call["_repairs"] = repairs + envelope_repairs
                 return [call]
-        return []
+
+        # 整个回复以 {"name": "<可用工具>" 开头、但那个对象解码不了（多为缺外层右括号，
+        # 上面的候选只看以 } 结尾的回复）：能补齐就派发，补不齐就产出错误条目回给模型，不再静默丢弃。
+        broken = _rta.broken_bare_call(response)
+        if broken is None or broken[1] not in self._valid_tool_names():
+            return []
+        candidate, _declared = broken
+        obj, repairs, error = _rta.parse_tool_call_block_repairs(candidate)
+        if obj is None:
+            return [{"_parse_error": error, "raw": candidate[:500], "_kind": _rta.KIND_ARGS_NOT_JSON}]
+        call, envelope_repairs = _rta.normalize_envelope(obj)
+        name = call.get("name")
+        if not isinstance(name, str) or name not in self._valid_tool_names():
+            return []
+        call["_repairs"] = repairs + envelope_repairs
+        return [call]
 
     def _parse_tool_calls_legacy(self, response: str) -> List[Dict[str, Any]]:
         """历史严格解析（REPORT_TOOL_ARG_REPAIR=false）：JSON 解析失败的块被静默丢弃。"""
@@ -11847,6 +11873,8 @@ class ReportAgent:
         max_iterations = 14  # RQ-1: 10→14，支撑更多工具轮次 + 更长章节的收尾
         max_tool_calls = self.MAX_TOOL_CALLS_PER_SECTION
         tool_calls_count = 0
+        # INFRA-5: 成功派发的调用数，工具下限 _eff_min 只认它（计费的被拒调用只占上限预算）。
+        dispatched_count = 0
         # INFRA-5: 派发前校验开关、本章被拒调用的免费额度、已派发工具结果（兜底收尾的证据摘要）。
         _repair_on = bool(getattr(Config, "REPORT_TOOL_ARG_REPAIR", True))
         _rejections = _rta.RejectionBudget(self._free_tool_rejections())
@@ -11857,9 +11885,9 @@ class ReportAgent:
             # 用较小的 REPORT_AGENT_TOOL_TURN_MAX_TOKENS 抑制长链推理；达到下限后本回合可能直接产出正文，
             # 回到完整 SECTION_MAX_TOKENS 预算以免截断。（原生路径此前用 chat_with_tools 的 4096 默认值。）
             _turn_max_tokens = (
-                Config.REPORT_AGENT_SECTION_MAX_TOKENS
-                if tool_calls_count >= _eff_min
-                else getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
+                getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
+                if _rta.evidence_floor_unmet(dispatched_count, tool_calls_count, _eff_min, max_tool_calls)
+                else Config.REPORT_AGENT_SECTION_MAX_TOKENS
             )
             resp = self.llm.chat_with_tools(
                 messages, schemas, temperature=Config.REPORT_AGENT_TEMPERATURE,
@@ -11923,6 +11951,7 @@ class ReportAgent:
                         result = f"（工具 {c['name']} 执行失败：{te}）"
                     # INFRA-5: 派发之后才计费（此前先计费后派发）；EXECPLAN2 I-5-4 per-section 计数同步递增。
                     tool_calls_count += 1
+                    dispatched_count += 1
                     self._count_tool_event("dispatched", charged=True)
                     _evidence.append(f"【{c['name']}】\n{str(result)[:8000]}")
                     if self.report_logger:
@@ -11948,13 +11977,14 @@ class ReportAgent:
 
             # 无更多工具调用（或已达上限）→ 收尾出正文
             if content.strip():
-                # EXECPLAN2 F-7-2 工具调用不足且仍可继续检索 → 拒绝过早出正文，强制补足实证（对齐 ReAct 路径）
-                if tool_calls_count < _eff_min and tool_calls_count < max_tool_calls:
+                # EXECPLAN2 F-7-2 工具调用不足且仍可继续检索 → 拒绝过早出正文，强制补足实证（对齐 ReAct 路径；
+                # INFRA-5: 下限只数成功派发的调用）
+                if dispatched_count < _eff_min and tool_calls_count < max_tool_calls:
                     messages.append({"role": "assistant", "content": content})
                     messages.append({
                         "role": "user",
                         "content": (
-                            f"你只调用了 {tool_calls_count} 次工具，少于本章要求的至少 "
+                            f"你只调用了 {dispatched_count} 次工具，少于本章要求的至少 "
                             f"{_eff_min} 次。请勿现在输出正文，"
                             "继续发起工具调用以补足实证后再撰写本章。"
                         ),
@@ -12088,6 +12118,9 @@ class ReportAgent:
         # ReACT循环（min_tool_calls 在提示词构建前经 _effective_min_tool_calls 计算，
         # T4.4 配置下限 + LOOP-015 padding/证据预注入下调）
         tool_calls_count = 0
+        # INFRA-5: 成功派发的调用数。工具下限只认它——超出免费额度后计费的被拒调用只占上限预算，
+        # 没有取回任何证据（宽容解析关闭时没有被拒调用，两者恒等）。
+        dispatched_count = 0
         max_iterations = 14  # RQ-1: 10→14，最大迭代轮数（更高以支撑更深入的检索与更长的章节）
         conflict_retries = 0  # 工具调用与Final Answer同时出现的连续冲突次数
         contamination_retries = 0  # 输出被污染（系统提示泄漏/工具调用残留）的连续重试次数
@@ -12121,9 +12154,10 @@ class ReportAgent:
             # 到下限，本回合可能直接产出最终正文，回到完整 SECTION_MAX_TOKENS 预算以免截断正文。
             # REPORT-10: 温度统一读 Config.REPORT_AGENT_TEMPERATURE（默认 0.5，行为不变、可运维调）。
             _turn_max_tokens = (
-                Config.REPORT_AGENT_SECTION_MAX_TOKENS
-                if tool_calls_count >= min_tool_calls
-                else getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
+                getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
+                if _rta.evidence_floor_unmet(dispatched_count, tool_calls_count, min_tool_calls,
+                                             self.MAX_TOOL_CALLS_PER_SECTION)
+                else Config.REPORT_AGENT_SECTION_MAX_TOKENS
             )
             response = self.llm.chat(
                 messages=messages,
@@ -12198,15 +12232,16 @@ class ReportAgent:
 
             # ── 情况1：LLM 输出了 Final Answer ──
             if has_final_answer:
-                # 工具调用次数不足，拒绝并要求继续调工具
-                if tool_calls_count < min_tool_calls:
+                # 工具调用次数不足，拒绝并要求继续调工具（INFRA-5: 只数成功派发的调用）
+                if _rta.evidence_floor_unmet(dispatched_count, tool_calls_count, min_tool_calls,
+                                             self.MAX_TOOL_CALLS_PER_SECTION):
                     messages.append({"role": "assistant", "content": response})
                     unused_tools = all_tools - used_tools
                     unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
                     messages.append({
                         "role": "user",
                         "content": REACT_INSUFFICIENT_TOOLS_MSG.format(
-                            tool_calls_count=tool_calls_count,
+                            tool_calls_count=dispatched_count,
                             min_tool_calls=min_tool_calls,
                             unused_hint=unused_hint,
                         ),
@@ -12348,6 +12383,7 @@ class ReportAgent:
                     )
 
                 tool_calls_count += 1
+                dispatched_count += 1
                 used_tools.add(call['name'])
                 # EXECPLAN2 I-5-4: per-section 工具调用计数（INFRA-5: 持锁递增，附报告级计数与派发结局）
                 self._count_tool_event("dispatched", charged=True, repaired=bool(call.get("_repairs")))
@@ -12375,15 +12411,16 @@ class ReportAgent:
             # ── 情况3：既没有工具调用，也没有 Final Answer ──
             messages.append({"role": "assistant", "content": response})
 
-            if tool_calls_count < min_tool_calls:
-                # 工具调用次数不足，推荐未用过的工具
+            if _rta.evidence_floor_unmet(dispatched_count, tool_calls_count, min_tool_calls,
+                                         self.MAX_TOOL_CALLS_PER_SECTION):
+                # 工具调用次数不足，推荐未用过的工具（INFRA-5: 只数成功派发的调用）
                 unused_tools = all_tools - used_tools
                 unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
 
                 messages.append({
                     "role": "user",
                     "content": REACT_INSUFFICIENT_TOOLS_MSG_ALT.format(
-                        tool_calls_count=tool_calls_count,
+                        tool_calls_count=dispatched_count,
                         min_tool_calls=min_tool_calls,
                         unused_hint=unused_hint,
                     ),

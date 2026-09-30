@@ -50,9 +50,9 @@ KIND_INVALID_PARAMS = "invalid_params"
 
 # Outcome counters kept per report (telemetry.json totals.tool_dispatch). Every
 # call the loops act on (the selected call of a ReAct turn, each native tool call,
-# and the unparseable blocks skipped beside a ReAct turn's selected call) lands in
-# exactly one of the first four; ``repaired`` counts dispatched calls that needed
-# at least one repair token.
+# and up to SKIPPED_BLOCKS_ITEMIZED unparseable blocks skipped beside a ReAct turn's
+# selected call) lands in exactly one of the first four; ``repaired`` counts
+# dispatched calls that needed at least one repair token.
 TOOL_OUTCOME_KEYS = ("dispatched", "rejected_parse", "rejected_params", "rejected_unknown", "repaired")
 OUTCOME_FOR_KIND = {
     KIND_ARGS_NOT_JSON: "rejected_parse",
@@ -103,16 +103,38 @@ _INVISIBLE_TEXT = "\u200b\u200c\u200d\u2060\ufeff"
 _INVISIBLE_CHARS = dict.fromkeys(map(ord, _INVISIBLE_TEXT))
 # json raises RecursionError (not ValueError) on pathologically deep nesting.
 _JSON_ERRORS = (ValueError, RecursionError)
+# Stateless, so one instance serves every thread.
+_DECODER = json.JSONDecoder()
 
 _OPEN_TAG = "<tool_call>"
 _CLOSE_TAG = "</tool_call>"
 # Start of a bare (untagged) tool-call object. Linear: each candidate's whitespace run is its own.
 _BARE_CALL_START_RE = re.compile(r'\{"(?:name|tool)"\s*:')
+# Start of a call object inside a block or at the head of a reply (whitespace after the brace
+# allowed). Linear for the same reason: a whitespace run belongs to the one brace before it.
+_CALL_OPENER_RE = re.compile(r'\{\s*"(?:name|tool)"\s*:')
+# The same opener with the tool name as a complete string literal (group 1).
+_CALL_NAME_RE = re.compile(r'\{\s*"(?:name|tool)"\s*:\s*"([^"\\\r\n]{1,80})"')
+# Call openers after a block's first ``{`` that raw_decode tries when the text from that brace
+# is not one object (leading prose with its own braces); bounds the work on degenerate blocks.
+_MAX_OPENER_ATTEMPTS = 8
+# The ReAct answer marker: a reply that carries one is an answer, not a bare call.
+_FINAL_ANSWER_MARKER = "Final Answer"
 
 # tool_rejected rows keep at most this much of the call text (agent_log, not draft-gated).
 REJECTION_EXCERPT_CHARS = 300
 # Where the call text ends and model prose may begin: the ReAct answer marker, or a blank line.
-_EXCERPT_PROSE_BOUNDARY_RE = re.compile(r"Final Answer|\n[ \t\r]*\n")
+_EXCERPT_PROSE_BOUNDARY_RE = re.compile(_FINAL_ANSWER_MARKER + r"|\n[ \t\r]*\n")
+# Tokens the excerpt keeps outside string literals (see _call_text_prefix).
+_IDENT_START = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
+_IDENT_CHARS = _IDENT_START | frozenset("0123456789")
+_NUMBER_START = frozenset("-0123456789")
+_NUMBER_CHARS = frozenset("0123456789+-.eE")
+_JSON_LITERALS = frozenset({"true", "false", "null"})
+_JSON_WHITESPACE = frozenset(" \t\r\n")
+# Unparseable blocks skipped beside a reply's selected call that get their own tool_rejected
+# row and outcome count; the rest of a degenerate reply's blocks share one summary row.
+SKIPPED_BLOCKS_ITEMIZED = 3
 
 # ---------------------------------------------------------------- observations
 
@@ -172,6 +194,28 @@ def bare_tool_call_candidates(text: str) -> List[str]:
     return candidates
 
 
+def broken_bare_call(text: str) -> Optional[Tuple[str, str]]:
+    """A reply that is one bare call object that does not decode: ``(stripped reply, declared
+    tool name)``, else None. The caller tries it after :func:`bare_tool_call_candidates` failed.
+
+    Those candidates only exist for replies that end with ``}``, so a bare call cut short of its
+    outer brace (``{"name": "quick_search", "query": "gold"``) was dropped without a word. Only a
+    reply that *starts* with a ``{"name": "<tool>"`` / ``{"tool": "<tool>"`` key qualifies, and
+    only when the object there does not decode (a complete call followed by prose keeps the
+    legacy behaviour) and the reply carries no ``Final Answer`` (then it is an answer). Prose
+    braces never qualify.
+    """
+    stripped = (text or "").strip()
+    match = _CALL_NAME_RE.match(stripped)
+    if not match or _FINAL_ANSWER_MARKER in stripped:
+        return None
+    try:
+        _DECODER.raw_decode(stripped)
+    except _JSON_ERRORS:
+        return stripped, match.group(1)
+    return None
+
+
 def parse_tool_call_block(text: str) -> Tuple[Optional[dict], Optional[str], Optional[str]]:
     """Parse the JSON inside one ``<tool_call>`` block, repairing what is safe to repair.
 
@@ -192,9 +236,13 @@ def parse_tool_call_block_repairs(text: str) -> Tuple[Optional[dict], List[str],
     2. ``JSONDecoder.raw_decode`` from the first ``{`` - ``first_object_of_many``
        when content follows the object (several calls in one block, trailing
        prose), ``leading_text_skipped`` when only text before it was dropped;
-    3. append the missing ``}``/``]`` closers (``brace_balanced``). A block that
-       ends inside a string is not repaired: closing it would silently truncate
-       an argument value.
+       when that brace does not start an object (leading prose such as
+       ``我用 {query} 检索``), the same from each later ``{"name":`` / ``{"tool":``
+       opener that sits outside every bracket opened before it (never a call-shaped
+       object nested inside the first one), at most ``_MAX_OPENER_ATTEMPTS``;
+    3. append the missing ``}``/``]`` closers (``brace_balanced``) to the text from
+       the first ``{``, else from the last such opener. A block that ends inside a
+       string is not repaired: closing it would silently truncate an argument value.
 
     Steps 2-3 run on the block with zero-width/BOM characters removed outside string
     literals, so argument values are never altered; whenever that removal changed the
@@ -227,15 +275,23 @@ def parse_tool_call_block_repairs(text: str) -> Tuple[Optional[dict], List[str],
     start = s.find("{")
     if start < 0:
         return None, [], first_error
-    try:
-        obj, end = json.JSONDecoder().raw_decode(s, start)
-    except _JSON_ERRORS:
-        obj = None
-    if isinstance(obj, dict):
+    decoded = _decode_object_at(s, start)
+    openers: List[int] = []
+    if decoded is None:
+        openers = _top_level_call_openers(s, start)
+        for origin in openers:
+            decoded = _decode_object_at(s, origin)
+            if decoded is not None:
+                break
+    if decoded is not None:
+        obj, end = decoded
         return obj, repairs + [REPAIR_FIRST_OBJECT if s[end:].strip() else REPAIR_LEADING_TEXT], None
 
-    balanced = _balance_brackets(s[start:])
-    if balanced is not None:
+    # Only the last top-level opener can still be open at the end of the block.
+    for origin in [start] + openers[-1:]:
+        balanced = _balance_brackets(s[origin:])
+        if balanced is None:
+            continue
         try:
             obj = json.loads(balanced)
         except _JSON_ERRORS:
@@ -243,6 +299,42 @@ def parse_tool_call_block_repairs(text: str) -> Tuple[Optional[dict], List[str],
         if isinstance(obj, dict):
             return obj, repairs + [REPAIR_BRACE_BALANCED], None
     return None, [], first_error
+
+
+def _decode_object_at(text: str, index: int) -> Optional[Tuple[dict, int]]:
+    """``(object, end offset)`` when a complete JSON object starts at ``text[index]``, else None."""
+    try:
+        obj, end = _DECODER.raw_decode(text, index)
+    except _JSON_ERRORS:
+        return None
+    return (obj, end) if isinstance(obj, dict) else None
+
+
+def _top_level_call_openers(text: str, start: int) -> List[int]:
+    """Offsets of the ``{"name":`` / ``{"tool":`` openers after ``text[start]`` (a ``{``) that sit
+    outside every bracket opened from ``start`` on, string literals ignored; at most
+    ``_MAX_OPENER_ATTEMPTS``.
+
+    Depth 0 is what keeps a call-shaped object nested inside the first one (a parameter that
+    happens to carry a ``name`` key) from being taken for the call. Stray closers in prose do
+    not push the depth below 0.
+    """
+    fragment = text[start:]
+    mask, _ = _string_literal_mask(fragment)
+    openers: List[int] = []
+    depth = 0
+    for index, ch in enumerate(fragment):
+        if mask[index]:
+            continue
+        if ch in _CLOSERS:
+            if depth == 0 and index and _CALL_OPENER_RE.match(fragment, index):
+                openers.append(start + index)
+                if len(openers) >= _MAX_OPENER_ATTEMPTS:
+                    break
+            depth += 1
+        elif ch in ("}", "]"):
+            depth = max(0, depth - 1)
+    return openers
 
 
 def _string_literal_mask(text: str) -> Tuple[bytearray, bool]:
@@ -316,29 +408,74 @@ def _balance_brackets(fragment: str) -> Optional[str]:
 def rejection_excerpt(raw: Any, limit: int = REJECTION_EXCERPT_CHARS) -> str:
     """The call text a ``tool_rejected`` agent_log row keeps: skeleton only, never draft prose.
 
-    At most ``limit`` characters, cut at the first ``Final Answer`` or blank line (an
-    unterminated block runs to the end of the reply, so it can carry the section body) and
-    right after the first complete JSON object.
+    Fails closed, because an unterminated block runs to the end of the reply and can carry the
+    section body: the text is first cut at the first ``Final Answer`` or blank line; the excerpt
+    then starts at the first call opener (``{"name":`` / ``{"tool":``), else at the first ``{``,
+    and is ``""`` when there is none; from there it keeps at most ``limit`` characters of
+    call-syntax tokens (:func:`_call_text_prefix`), ending right after the first complete object.
     """
-    text = ("" if raw is None else str(raw))[:max(0, limit)]
+    text = "" if raw is None else str(raw)
     boundary = _EXCERPT_PROSE_BOUNDARY_RE.search(text)
     if boundary:
         text = text[:boundary.start()]
-    start = text.find("{")
-    if start >= 0:
-        mask, _ = _string_literal_mask(text[start:])
-        depth = 0
-        for offset, ch in enumerate(text[start:]):
-            if mask[offset]:
-                continue
-            if ch in _CLOSERS:
-                depth += 1
-            elif ch in ("}", "]"):
-                depth -= 1
-                if depth <= 0:
-                    text = text[:start + offset + 1]
-                    break
-    return text.rstrip()
+    opener = _CALL_OPENER_RE.search(text)
+    start = opener.start() if opener else text.find("{")
+    if start < 0:
+        return ""
+    return _call_text_prefix(text[start:start + max(0, limit)]).rstrip()
+
+
+def _call_text_prefix(fragment: str) -> str:
+    """The longest prefix of ``fragment`` (which starts with ``{``) made of call-syntax tokens,
+    up to and including the closer of its first value.
+
+    Kept: brackets, ``:`` and ``,``, whitespace, numbers, ``true``/``false``/``null``, quoted
+    strings (double or single quotes, as models write both) and unquoted keys (an ASCII
+    identifier followed by ``:``). A raw line break inside a string ends the prefix (a JSON
+    string cannot hold one, so the string never closed and what follows is prose), and so does
+    any other character outside a string: CJK text, a Markdown heading, an English word.
+    """
+    depth = 0
+    index = 0
+    length = len(fragment)
+    while index < length:
+        ch = fragment[index]
+        if ch in _CLOSERS:
+            depth += 1
+        elif ch in ("}", "]"):
+            depth -= 1
+            if depth <= 0:
+                return fragment[:index + 1]
+        elif ch in ('"', "'"):
+            end = index + 1
+            while end < length and fragment[end] != ch:
+                step = 2 if fragment[end] == "\\" else 1  # an escape covers the next character
+                if "\r" in fragment[end:end + step] or "\n" in fragment[end:end + step]:
+                    return fragment[:end]
+                end += step
+            index = end + 1
+            continue
+        elif ch in _NUMBER_START:
+            end = index + 1
+            while end < length and fragment[end] in _NUMBER_CHARS:
+                end += 1
+            index = end
+            continue
+        elif ch in _IDENT_START:
+            end = index + 1
+            while end < length and fragment[end] in _IDENT_CHARS:
+                end += 1
+            probe = end
+            while probe < length and fragment[probe] in _JSON_WHITESPACE:
+                probe += 1
+            if fragment[index:end] not in _JSON_LITERALS and fragment[probe:probe + 1] != ":":
+                return fragment[:index]
+            index = end
+            continue
+        elif ch not in _JSON_WHITESPACE and ch not in (":", ","):
+            return fragment[:index]
+        index += 1
+    return fragment
 
 
 def normalize_envelope(obj: Any) -> Tuple[Dict[str, Any], List[str]]:
@@ -496,10 +633,14 @@ def rejection_observation(kind: str, detail: str = "", tool_name: str = "", char
 def skipped_blocks_note(errors: List[str]) -> str:
     """Observation prefix for the unparseable blocks of a reply that were not acted on because
     another block of the same reply was (``""`` when there are none): the model is told they
-    were not run instead of the blocks vanishing."""
+    were not run instead of the blocks vanishing. At most SKIPPED_BLOCKS_ITEMIZED distinct
+    reasons are listed, so a degenerate reply cannot blow up the next prompt."""
     if not errors:
         return ""
-    reasons = "；".join(dict.fromkeys(str(error) for error in errors))
+    distinct = list(dict.fromkeys(str(error) for error in errors))
+    reasons = "；".join(distinct[:SKIPPED_BLOCKS_ITEMIZED])
+    if len(distinct) > SKIPPED_BLOCKS_ITEMIZED:
+        reasons += "；…"
     return (f"（本次回复中另有 {len(errors)} 个工具调用块无法解析（{reasons}），未执行；"
             f"每次回复只输出一个 {_TOOL_CALL_EXAMPLE}。）\n")
 
@@ -523,3 +664,19 @@ class RejectionBudget:
         """Record one rejection; True when it is charged."""
         self.count += 1
         return self.count > self.free
+
+
+def evidence_floor_unmet(dispatched: int, charged: int, floor: int, cap: int) -> bool:
+    """Whether a section still owes tool calls before its body can be accepted.
+
+    ``dispatched`` counts the calls that ran; ``charged`` is the tool budget spent, which also
+    holds the rejections charged past the free cap. Only dispatched calls meet the floor: a
+    charged rejection spends budget but gathers no evidence. When charged rejections have used
+    up the budget (``charged >= cap``) no further call can run, so the floor is waived instead
+    of sending the model back and forth between "call more tools" and "no tool budget left".
+    Without charged rejections (``dispatched == charged``, always the case with
+    REPORT_TOOL_ARG_REPAIR off) this is exactly the legacy ``charged < floor``.
+    """
+    if dispatched >= floor:
+        return False
+    return dispatched == charged or charged < cap

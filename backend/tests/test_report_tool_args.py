@@ -15,7 +15,11 @@ Offline (scripted LLM doubles, no network):
     zero-width characters kept inside values, malformed blocks beside a valid one
     recorded, skeleton-only rejection excerpts, blank-primary fallbacks, the tool
     contracts pinned to _define_tools / _execute_tool, and the native name check
-    failing closed.
+    failing closed;
+  * review round 2: fail-closed excerpts (no draft prose even without a JSON object),
+    charged rejections never meeting the per-section tool minimum, capped rows for
+    the malformed blocks of a degenerate reply, a call after leading prose braces,
+    and a bare call missing its outer brace.
 """
 
 import inspect
@@ -82,9 +86,11 @@ class _ScriptLLM:
     def __init__(self, replies):
         self.replies = list(replies)
         self.calls = []
+        self.max_tokens = []
 
     def chat(self, messages=None, temperature=0.3, max_tokens=4096, **kw):
         self.calls.append([dict(m) for m in messages])
+        self.max_tokens.append(max_tokens)
         return self.replies.pop(0) if self.replies else "Final Answer: " + BODY
 
 
@@ -96,6 +102,7 @@ class _NativeLLM:
         self.final = final
         self.idle_content = BODY if idle_content is None else idle_content
         self.tool_messages = []
+        self.tool_max_tokens = []
         self.chat_calls = []
 
     def supports_native_tools(self):
@@ -103,6 +110,7 @@ class _NativeLLM:
 
     def chat_with_tools(self, messages, schemas, temperature=0.5, max_tokens=4096, **kw):
         self.tool_messages.append([dict(m) for m in messages])
+        self.tool_max_tokens.append(max_tokens)
         if self.turns:
             return self.turns.pop(0)
         return {"content": self.idle_content, "tool_calls": []}
@@ -198,6 +206,31 @@ def test_parse_block_leading_text_is_skipped():
     assert obj == {"name": "x", "parameters": {}} and repair == rta.REPAIR_LEADING_TEXT
 
 
+def test_parse_block_call_after_leading_prose_braces():
+    call = {"name": "quick_search", "parameters": {"query": "q"}}
+    # review round 2: a '{' in the leading prose used to hide the real call (args_not_json)
+    obj, repair, _ = rta.parse_tool_call_block('我用 {query} 检索\n{"name":"quick_search","parameters":{"query":"q"}}')
+    assert obj == call and repair == rta.REPAIR_LEADING_TEXT
+    obj, repair, _ = rta.parse_tool_call_block(
+        '说明 {a} [b] {c}\n{"tool":"quick_search","args":{"query":"q"}} 然后')
+    assert obj == {"tool": "quick_search", "args": {"query": "q"}} and repair == rta.REPAIR_FIRST_OBJECT
+    # ... and when that call also lost its outer brace
+    obj, repair, _ = rta.parse_tool_call_block('我用 {query} 检索\n{"name":"quick_search","parameters":{"query":"q"}')
+    assert obj == call and repair == rta.REPAIR_BRACE_BALANCED
+    # a call-shaped object nested inside the call is never taken for the call
+    obj, repair, _ = rta.parse_tool_call_block(
+        '{"name":"insight_forge","parameters":{"query":"x","ctx":{"name":"quick_search","parameters":{}}}')
+    assert obj["name"] == "insight_forge" and repair == rta.REPAIR_BRACE_BALANCED
+    # the openers tried are capped: a call behind more than _MAX_OPENER_ATTEMPTS undecodable
+    # ones is surfaced as an error, not searched for without bound
+    noisy = "{x} " + '{"name": oops} ' * (rta._MAX_OPENER_ATTEMPTS + 2) + '{"name":"quick_search","parameters":{}}'
+    obj, _, error = rta.parse_tool_call_block(noisy)
+    assert obj is None and error
+    # an unclosed prose brace hides it (it looks like the call's own nesting): surfaced, not guessed
+    obj, _, error = rta.parse_tool_call_block('我用 {query 检索\n{"name":"quick_search","parameters":{"query":"q"}}')
+    assert obj is None and error
+
+
 def test_parse_block_zero_width_characters_are_removed():
     obj, repair, _ = rta.parse_tool_call_block('{"name":"x","parameters":{}}\u200d')
     assert obj == {"name": "x", "parameters": {}} and repair == rta.REPAIR_INVISIBLE_CHARS
@@ -271,6 +304,8 @@ def test_bare_candidates_match_the_legacy_regex(text):
     ("<tool_call>" + " " * 20000 + "x", rta.KIND_ARGS_NOT_JSON),
     ("<tool_call>{}</tool_call>" * 2000 + "<tool_call>" + "\n" * 20000, rta.KIND_ARGS_NOT_JSON),
     ("前文 " + '{"name": "quick_search", ' * 4000 + "}", None),
+    ('{"name": "quick_search", ' * 4000, rta.KIND_ARGS_NOT_JSON),
+    ("<tool_call>{x} " + '{"name": oops} ' * 4000 + "</tool_call>", rta.KIND_ARGS_NOT_JSON),
 ])
 def test_parse_tool_calls_is_linear_on_degenerate_replies(monkeypatch, reply, kind):
     # the lazy block regex took ~12 s on an unclosed opener + 4,000 spaces, holding the GIL
@@ -416,8 +451,36 @@ def test_rejection_excerpt_is_skeleton_only():
     assert rta.rejection_excerpt('{"name": "x"} 之后的正文') == '{"name": "x"}'
     assert rta.rejection_excerpt('{"a": 1\n\n本章正文') == '{"a": 1'
     assert rta.rejection_excerpt('{"q": "a}b"} tail') == '{"q": "a}b"}'
-    assert len(rta.rejection_excerpt("x" * 1000)) == rta.REJECTION_EXCERPT_CHARS
+    assert rta.rejection_excerpt('{"q": "a\\"b", "n": -1.5e3, "f": true, "z": null}') == \
+        '{"q": "a\\"b", "n": -1.5e3, "f": true, "z": null}'
+    assert rta.rejection_excerpt("{'name': 'quick_search', query: 'x'} 正文") == \
+        "{'name': 'quick_search', query: 'x'}"
+    # a long argument value is call text: kept, capped
+    long_value = '{"name": "quick_search", "parameters": {"query": "' + "q" * 1000
+    assert rta.rejection_excerpt(long_value) == long_value[:rta.REJECTION_EXCERPT_CHARS]
     assert rta.rejection_excerpt(None) == ""
+
+
+@pytest.mark.parametrize("raw, expected", [
+    # review round 2 probe: an unterminated block straight into section prose, no JSON at all
+    ("<tool_call>\n## 美联储政策展望\n本章认为" + "利率将维持高位。" * 60, ""),
+    ("\n## 美联储政策展望\n本章认为" + "利率将维持高位。" * 60, ""),
+    ("x" * 1000, ""),
+    # prose right after the call, with no blank line and no Final Answer
+    ('{"name": "quick_search", "parameters": {"query": "q"\n## 美联储政策展望\n本章认为' + "很长" * 200,
+     '{"name": "quick_search", "parameters": {"query": "q"'),
+    ('{"name": "quick_search", "parameters": {"query": "q"本章认为' + "很长" * 200,
+     '{"name": "quick_search", "parameters": {"query": "q"'),
+    ("{ The section argues that rates stay high for longer.", "{"),
+    # prose before the call, including a prose brace: the excerpt starts at the call opener
+    ('我用 {query} 检索\n{"name": "quick_search", "parameters": {"query": "q"}} 然后写正文',
+     '{"name": "quick_search", "parameters": {"query": "q"}}'),
+    ('先检索：{\n  "tool": "quick_search"}', '{\n  "tool": "quick_search"}'),
+])
+def test_rejection_excerpt_fails_closed_on_prose(raw, expected):
+    excerpt = rta.rejection_excerpt(raw)
+    assert excerpt == expected
+    assert not re.search(r"[\u4e00-\u9fff#]", excerpt)
 
 
 def test_skipped_blocks_note_text():
@@ -425,6 +488,9 @@ def test_skipped_blocks_note_text():
     note = rta.skipped_blocks_note(["Expecting value", "Expecting value", "missing tool name"])
     assert note.startswith("（本次回复中另有 3 个工具调用块无法解析（Expecting value；missing tool name），未执行；")
     assert note.endswith("）\n")
+    # a degenerate reply lists at most SKIPPED_BLOCKS_ITEMIZED distinct reasons
+    note = rta.skipped_blocks_note([f"error {i}" for i in range(500)])
+    assert note.startswith("（本次回复中另有 500 个工具调用块无法解析（error 0；error 1；error 2；…），未执行；")
 
 
 # ──────────────────────────────── _parse_tool_calls ────────────────────────────────
@@ -465,6 +531,26 @@ def test_parse_tool_calls_unterminated_block(monkeypatch):
     assert calls[1]["_repairs"] == [rta.REPAIR_UNTERMINATED_BLOCK, rta.REPAIR_BRACE_BALANCED]
 
 
+def test_parse_tool_calls_bare_call_missing_its_outer_brace(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_TOOL_ARG_REPAIR", True, raising=False)
+    a = _agent()
+    # review round 2: dropped silently before (the bare candidates need a reply ending in "}")
+    assert a._parse_tool_calls('{"name": "quick_search", "query": "gold price"') == [
+        {"name": "quick_search", "parameters": {"query": "gold price"},
+         "_repairs": [rta.REPAIR_BRACE_BALANCED, rta.REPAIR_FLATTENED]}]
+    calls = a._parse_tool_calls('  {"tool" : "insight_forge", "args": {"query": "q"}\n')
+    assert calls[0]["name"] == "insight_forge" and calls[0]["parameters"] == {"query": "q"}
+    # a live tool whose call cannot be repaired is surfaced, not dropped
+    calls = a._parse_tool_calls('{"name": "quick_search", "parameters": {"query": "gold')
+    assert len(calls) == 1 and calls[0]["_kind"] == rta.KIND_ARGS_NOT_JSON
+    assert calls[0]["raw"] == '{"name": "quick_search", "parameters": {"query": "gold'
+    # unchanged: unknown tools, prose braces, answers, and a complete call followed by prose
+    for text in ('{"name": "not_a_tool", "query": "q"', "正文里有花括号 {x", '正文 {"name": "quick_search", "q": 1',
+                 '{"name": "quick_search", "query": "q"\nFinal Answer: 正文',
+                 '{"name": "quick_search", "query": "q"} 然后我会写正文'):
+        assert a._parse_tool_calls(text) == []
+
+
 def test_parse_tool_calls_flag_off_is_the_legacy_parser(monkeypatch):
     monkeypatch.setattr(Config, "REPORT_TOOL_ARG_REPAIR", False, raising=False)
     a = _agent()
@@ -474,6 +560,8 @@ def test_parse_tool_calls_flag_off_is_the_legacy_parser(monkeypatch):
         '<tool_call>\n{"name": "quick_search", "query": "q"}\n</tool_call>',
         '<tool_call>\n{"tool": "quick_search", "params": {"query": "q"}}\n</tool_call>',
         '{"name": "insight_forge", "parameters": {"query": "q"}}',
+        '{"name": "quick_search", "query": "gold price"',
+        '<tool_call>我用 {query} 检索\n{"name":"quick_search","parameters":{"query":"q"}}</tool_call>',
         "plain prose",
     ]
     for text in samples:
@@ -481,6 +569,7 @@ def test_parse_tool_calls_flag_off_is_the_legacy_parser(monkeypatch):
     # legacy semantics pinned: malformed blocks vanish, flat arguments are not lifted
     assert a._parse_tool_calls(samples[0]) == []
     assert a._parse_tool_calls(samples[2]) == [{"name": "quick_search", "query": "q"}]
+    assert a._parse_tool_calls(samples[5]) == [] and a._parse_tool_calls(samples[6]) == []
 
 
 # ─────────────────────────────────────── ReAct ───────────────────────────────────────
@@ -516,7 +605,7 @@ def test_react_malformed_block_beside_a_valid_one_is_recorded(monkeypatch, repor
     a = _agent()
     a.report_logger = ReportLogger("r_bad_then_good")
     a.llm = _ScriptLLM([
-        '<tool_call>{broken</tool_call>\n'
+        '<tool_call>{"name": "quick_search", "parameters": {query: }}</tool_call>\n'
         '<tool_call>{"name": "quick_search", "parameters": {"query": "gold"}}</tool_call>',
         "Final Answer: " + BODY,
     ])
@@ -528,9 +617,35 @@ def test_react_malformed_block_beside_a_valid_one_is_recorded(monkeypatch, repor
     assert observation.startswith("（本次回复中另有 1 个工具调用块无法解析（")
     rejected = [r for r in _read_agent_log(report_dir, "r_bad_then_good") if r["action"] == "tool_rejected"]
     assert len(rejected) == 1 and rejected[0]["details"]["reason"].startswith("args_not_json")
-    assert rejected[0]["details"]["raw_excerpt"] == "{broken"
+    assert rejected[0]["details"]["raw_excerpt"] == '{"name": "quick_search", "parameters": {query: }}'
     _, outcomes = a._tool_counters_snapshot()
     assert outcomes["rejected_parse"] == 1 and outcomes["dispatched"] == 1
+
+
+def test_react_degenerate_reply_rows_are_capped(monkeypatch, report_dir):
+    monkeypatch.setattr(Config, "REPORT_TOOL_ARG_REPAIR", True, raising=False)
+    a = _agent()
+    a.report_logger = ReportLogger("r_degenerate")
+    a.llm = _ScriptLLM([
+        "<tool_call>{broken</tool_call>" * 500
+        + '<tool_call>{"name": "quick_search", "parameters": {"query": "gold"}}</tool_call>',
+        "Final Answer: " + BODY,
+    ])
+    executed = _recording_executor(a)
+    assert BODY in _run_react(a)
+    assert executed == [("quick_search", {"query": "gold"})]
+    rejected = [r for r in _read_agent_log(report_dir, "r_degenerate") if r["action"] == "tool_rejected"]
+    itemized = rta.SKIPPED_BLOCKS_ITEMIZED
+    assert len(rejected) == itemized + 1  # the first blocks one row each, then one summary row
+    assert all(r["details"]["reason"].startswith("args_not_json") for r in rejected[:itemized])
+    summary = rejected[-1]["details"]
+    assert summary["reason"].startswith(f"skipped_blocks: 同一回复另有 {500 - itemized} 个")
+    assert "共 500 个" in summary["reason"] and summary["raw_excerpt"] == ""
+    _, outcomes = a._tool_counters_snapshot()
+    assert outcomes["rejected_parse"] == itemized and outcomes["dispatched"] == 1
+    observation = next(t for t in _user_texts(a.llm.calls[-1:]) if "RESULT[quick_search]" in t)
+    note = observation.split("\n", 1)[0]
+    assert note.startswith("（本次回复中另有 500 个工具调用块无法解析（") and len(note) < 300
 
 
 def test_react_rejection_row_excerpt_never_carries_draft_prose(monkeypatch, report_dir):
@@ -553,25 +668,65 @@ def test_react_rejection_row_excerpt_never_carries_draft_prose(monkeypatch, repo
     assert "本章正文" not in json.dumps(rejected[0], ensure_ascii=False)
 
 
+def _distinct_turn_budgets(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 111, raising=False)
+    monkeypatch.setattr(Config, "REPORT_AGENT_SECTION_MAX_TOKENS", 999, raising=False)
+
+
 def test_react_seventh_rejection_is_charged(monkeypatch):
     monkeypatch.setattr(Config, "REPORT_TOOL_ARG_REPAIR", True, raising=False)
     monkeypatch.setattr(Config, "REPORT_TOOL_MAX_REJECTED_PER_SECTION", 6, raising=False)
+    _distinct_turn_budgets(monkeypatch)
     a = _agent()
-    a.llm = _ScriptLLM(["<tool_call>{broken</tool_call>"] * 7 + ["Final Answer: " + BODY])
+    a.llm = _ScriptLLM(["<tool_call>{broken</tool_call>"] * 7 + [
+        "Final Answer: " + BODY,
+        '<tool_call>{"name": "quick_search", "parameters": {"query": "gold"}}</tool_call>',
+        "Final Answer: " + BODY,
+    ])
     executed = _recording_executor(a)
     result = _run_react(a)
-    # the 7th rejection consumed budget, so MIN_TOOL_CALLS_PER_SECTION=1 is met and the
-    # Final Answer is accepted on the 8th turn (an uncharged 7th would have been refused)
-    assert BODY in result and len(a.llm.calls) == 8
-    assert executed == []
-    assert a._section_tool_calls == 1
+    # the 7th rejection is charged against the budget but gathers no evidence, so it does not
+    # meet MIN_TOOL_CALLS_PER_SECTION=1: the 8th turn's Final Answer is refused, and the one
+    # after the dispatched call is accepted
+    assert BODY in result and len(a.llm.calls) == 10
+    assert executed == [("quick_search", {"query": "gold"})]
+    assert a._section_tool_calls == 2  # one charged rejection + one dispatched call
     # the last turn's conversation holds every observation once, in order
-    observations = [t for t in _user_texts(a.llm.calls[-1:]) if t.startswith("工具调用参数不是有效的 JSON")]
+    texts = _user_texts(a.llm.calls[-1:])
+    observations = [t for t in texts if t.startswith("工具调用参数不是有效的 JSON")]
     assert len(observations) == 7
     assert all(rta.CHARGED_NOTE not in t for t in observations[:6])
     assert rta.CHARGED_NOTE in observations[6]
+    assert any(t.startswith("【注意】你只调用了0次工具，至少需要1次。") for t in texts)
+    # turns owing evidence get the tool-decision budget, the turn after the dispatch the full one
+    assert a.llm.max_tokens == [111] * 9 + [999]
     _, outcomes = a._tool_counters_snapshot()
-    assert outcomes["rejected_parse"] == 7
+    assert outcomes["rejected_parse"] == 7 and outcomes["dispatched"] == 1
+
+
+def test_react_budget_spent_on_charged_rejections_waives_the_minimum(monkeypatch):
+    # no free rejections and a budget of 2: once both are charged no call can run any more, so
+    # the Final Answer is accepted instead of bouncing between "call more tools" and "no budget"
+    monkeypatch.setattr(Config, "REPORT_TOOL_ARG_REPAIR", True, raising=False)
+    monkeypatch.setattr(Config, "REPORT_TOOL_MAX_REJECTED_PER_SECTION", 0, raising=False)
+    _distinct_turn_budgets(monkeypatch)
+    a = _agent(MAX_TOOL_CALLS_PER_SECTION=2)
+    a.llm = _ScriptLLM(["<tool_call>{broken</tool_call>"] * 2 + ["Final Answer: " + BODY])
+    executed = _recording_executor(a)
+    assert BODY in _run_react(a) and len(a.llm.calls) == 3
+    assert executed == [] and a._section_tool_calls == 2
+    assert a.llm.max_tokens == [111, 111, 999]
+    assert not any("至少需要" in t for t in _user_texts(a.llm.calls))
+
+
+def test_evidence_floor_counts_dispatched_calls_only():
+    # without charged rejections (dispatched == charged, the flag-off case) it is the legacy check
+    for count in range(6):
+        for cap in (2, 4, 12):
+            assert rta.evidence_floor_unmet(count, count, 4, cap) is (count < 4)
+    assert rta.evidence_floor_unmet(0, 3, 1, 12) is True  # charged rejections do not meet it
+    assert rta.evidence_floor_unmet(1, 3, 1, 12) is False
+    assert rta.evidence_floor_unmet(0, 12, 1, 12) is False  # budget spent on rejections: waived
 
 
 def test_react_invalid_params_rejected_before_dispatch(monkeypatch):
@@ -727,6 +882,25 @@ def test_native_charges_only_after_dispatch(monkeypatch):
     a.llm = _NativeLLM([_tool_turn({"id": "c1", "name": "quick_search", "arguments": {"query": "q"}})])
     _run_native(a)
     assert seen == [0] and a._section_tool_calls == 1
+
+
+def test_native_charged_rejection_does_not_meet_the_minimum(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_TOOL_ARG_REPAIR", True, raising=False)
+    monkeypatch.setattr(Config, "REPORT_TOOL_MAX_REJECTED_PER_SECTION", 0, raising=False)
+    _distinct_turn_budgets(monkeypatch)
+    a = _agent()
+    bad = {"id": "c_bad", "name": "quick_search", "arguments": {},
+           "raw_arguments": '{"query": "gold"', "arguments_error": "JSONDecodeError"}
+    good = {"id": "c_ok", "name": "quick_search", "arguments": {"query": "silver"}}
+    # turn 2 offers a body after only a (charged) rejection: refused, the minimum is 1 dispatched call
+    a.llm = _NativeLLM([_tool_turn(bad), {"content": BODY, "tool_calls": []}, _tool_turn(good)])
+    executed = _recording_executor(a)
+    assert _run_native(a) == BODY
+    assert executed == [("quick_search", {"query": "silver"})]
+    assert a._section_tool_calls == 2  # the charged rejection + the dispatched call
+    assert any(t.startswith("你只调用了 0 次工具，少于本章要求的至少 1 次")
+               for t in _user_texts(a.llm.tool_messages[-1:]))
+    assert a.llm.tool_max_tokens == [111, 111, 111, 999]
 
 
 def test_native_argument_screening_degrades_safe_but_name_check_does_not(monkeypatch):

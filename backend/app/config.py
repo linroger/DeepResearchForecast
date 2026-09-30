@@ -2105,7 +2105,8 @@ class Config:
     # 拒绝与 agent_log 的 tool_unknown 行不受此开关控制）。
     REPORT_TOOL_ARG_REPAIR = os.environ.get('REPORT_TOOL_ARG_REPAIR', 'true').strip().lower() == 'true'
     # INFRA-5：每章可免费（不计工具预算）被拒的工具调用次数；超出后被拒调用照常计入预算，防止模型在无效
-    # 调用上无限空转。仅在 REPORT_TOOL_ARG_REPAIR 开启（或原生路径拒绝调用）时生效。
+    # 调用上无限空转。仅在 REPORT_TOOL_ARG_REPAIR 开启时生效（关闭时没有参数类拒绝）；未知工具名的拒绝
+    # （ReAct 与原生路径）从不计费，也不占此额度。计费的被拒调用只占上限预算，不算入每章工具调用下限。
     REPORT_TOOL_MAX_REJECTED_PER_SECTION = int(os.environ.get('REPORT_TOOL_MAX_REJECTED_PER_SECTION', '6') or '6')
     # INFRA-5：原生工具循环迭代用尽、被迫无工具收尾时，把已检索到的工具结果（首尾截取到
     # REPORT_NATIVE_FINAL_EVIDENCE_CHARS 字符）附进收尾提示，而非丢弃全部证据凭空成文。默认开是安全的：
