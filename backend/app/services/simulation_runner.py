@@ -1321,6 +1321,9 @@ class SimulationRunner:
         # DEFECT-3: 上一轮子进程的 token 计量快照必须随重跑轮转——否则新一轮启动即失败时,
         # 编排器会把上一轮（可能已入账过的）花费当作本轮的账消费。
         "sim_llm_telemetry.json",
+        # SIM-3: in-band 世界演化以 append 模式写 world_digest.jsonl——不轮转则全新重跑会续写在
+        # 上一轮的摘要之后。续跑（resume）不走轮转，照旧续写，这是预期行为。
+        "world_digest.jsonl",
     )
 
     @classmethod
@@ -2135,6 +2138,16 @@ class SimulationRunner:
             and (a.round_num or 0) > 0
             and not (a.action_args or {}).get("is_scheduled_event")
         ]
+        # SIM-3（SIM_ORGANIC_EXCLUDES_ENGAGEMENT_SAMPLES，默认开）：采样赞（is_engagement_sample）
+        # 是引擎随机代点而非 agent 决策——同样剔出有机量，否则只有采样赞与定时事件帖的零自主
+        # 运行逃过 hollow（summary 与管线健康门两处）。剔出条数记 engagement_sample_count（>0 才写），
+        # 与定时事件一样落入 seed_action_count 的非有机口径；关闭 → 旧计数逐字节不变。
+        engagement_sample_count = 0
+        if getattr(Config, "SIM_ORGANIC_EXCLUDES_ENGAGEMENT_SAMPLES", True):
+            _agent_chosen = [a for a in organic
+                             if not (a.action_args or {}).get("is_engagement_sample")]
+            engagement_sample_count = len(organic) - len(_agent_chosen)
+            organic = _agent_chosen
         organic_count = len(organic)
         seed_count = max(0, len(actions) - organic_count)
         rounds_with_organic = len({a.round_num for a in organic})
@@ -2203,11 +2216,15 @@ class SimulationRunner:
         # CAL-TEMPORAL：顺带读取 temporal_config（仅 mode=="calendar" 时保留）；
         # hours 模式恒为空 dict → run_summary 不写任何日历键（逐字节不变）。
         _temporal_cfg: Dict[str, Any] = {}
+        # SIM-3：保留解析后的配置，供下方定时事件可达性审计读取 event_config.scheduled_events。
+        _sim_cfg: Dict[str, Any] = {}
         try:
             _cfgp = os.path.join(cls._sim_dir(simulation_id), "simulation_config.json")
             if os.path.exists(_cfgp):
                 with open(_cfgp, encoding="utf-8") as _cf:
                     _sc = json.load(_cf)
+                if isinstance(_sc, dict):
+                    _sim_cfg = _sc
                 _mpr = (_sc.get("time_config") or {}).get("minutes_per_round", 60)
                 _minutes_per_round = float(_mpr) if _mpr else 60.0
                 _tc_block = _sc.get("temporal_config")
@@ -2227,7 +2244,6 @@ class SimulationRunner:
         # 掩盖 agent 自身零点赞的塌缩。连续 ≥K 轮 posts>0 而 comments+likes==0 → 结构化告警。
         organic_ratio_warnings: List[Dict[str, Any]] = []
         try:
-            from app.config import Config
             if getattr(Config, "SIM_ORGANIC_RATIO_DETECTOR", True):
                 from app.services.agent_dynamics import (
                     classify_organic_action, detect_organic_ratio_collapse,
@@ -2247,6 +2263,21 @@ class SimulationRunner:
                 organic_ratio_warnings = detect_organic_ratio_collapse(_prc, _minc)
         except Exception:  # noqa: BLE001 — 侦测器失败不阻断 run_summary（degrade-safe）
             organic_ratio_warnings = []
+
+        # SIM-3（SIM_SCHEDULE_AUDIT，默认开）：定时事件可达性审计。round 非法 / ≥ total_rounds、
+        # 缺发帖者或内容的 scheduled_events 永远不会被 fire_scheduled_events 触发，模拟角色从未
+        # 看到它们。仅当存在不可达事件时写 schedule_audit（全部可达 → summary 键不变）。
+        schedule_audit: Optional[Dict[str, Any]] = None
+        try:
+            _ec = _sim_cfg.get("event_config")
+            _events = _ec.get("scheduled_events") if isinstance(_ec, dict) else None
+            if getattr(Config, "SIM_SCHEDULE_AUDIT", True) and isinstance(_events, list) and _events:
+                from app.services.sim_schedule_audit import audit_scheduled_events
+                _audit = audit_scheduled_events(_events, total_rounds)
+                if _audit["unreachable"] > 0:
+                    schedule_audit = _audit
+        except Exception:  # noqa: BLE001 — 审计失败不阻断 run_summary（degrade-safe）
+            schedule_audit = None
 
         summary = {
             "simulation_id": simulation_id,
@@ -2308,6 +2339,12 @@ class SimulationRunner:
         if organic_ratio_warnings:
             # ITEM 20: 有机互动塌缩告警——报告端据此对相关平台样本施加「不得叙述为活跃讨论」caveat。
             summary["organic_ratio_warnings"] = organic_ratio_warnings
+        if engagement_sample_count:
+            # SIM-3：被剔出有机量的采样赞条数（审计可对账 seed_action_count 的构成）。
+            summary["engagement_sample_count"] = engagement_sample_count
+        if schedule_audit:
+            # SIM-3：永不触发的定时事件（scheduled/unreachable/by_reason/samples）——管线运行健康据此降级。
+            summary["schedule_audit"] = schedule_audit
 
         try:
             sim_dir = cls._sim_dir(simulation_id)

@@ -2853,9 +2853,10 @@ class ReportAgent:
             if getattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", True):
                 # SIM-1（fail-closed）：显式非 valid 裁定 → 只留警示与裁定原因，隐藏结果份额与
                 # 演化航点，正文无数字可引。注意：信号包解析器
-                # （forecast_extractor._WS_OUTCOME_HEADER_RE / _SIM_SIGNAL_TAXONOMY）至今仍锚定旧头
-                # 「【预测结果分布」，本来就不识别本块的「【推演结果分布」头；隐藏份额行保证即便该头部
-                # 漂移日后被修复，非 valid 块里也没有可被解析成 sim 结果分布的数字。
+                # （forecast_extractor._WS_OUTCOME_HEADER_RE / _SIM_SIGNAL_TAXONOMY）自 SIM-3 起识别
+                # 本块的「【推演结果分布」头（以本渲染器标题为准），并对上面的「⚠️ 有效性裁定」行
+                # fail-closed（不计入可引用信号、不解析份额，本开关关闭时同样如此）；隐藏份额行
+                # 再保证正文无数字可引。
                 if _reasons:
                     lines.append("裁定原因：" + "、".join(_reasons))
                 lines.append("（有效性未达标：已隐藏结果份额与演化航点——正文不得引用本块任何数字或趋势）")

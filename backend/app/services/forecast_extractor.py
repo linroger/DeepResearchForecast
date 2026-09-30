@@ -1361,11 +1361,17 @@ def _binary_draw_max_tokens(rows: int, latest_actual: bool) -> int:
 # 逐字节同源）确定性推导「允许的信号标签集」，抽取后把不能对账到该集合的 source 降级为
 # 'research-prior'（原话保留在 source_claimed 供审计），降级条数落 binary_quality.provenance_downgrades。
 # 每行 = (规范信号名, 信号包块标记——对注入切片匹配, source 标签识别——对模型自由文本匹配)；
-# 块标记逐字节取自各渲染器的标题行（report_agent._world_state_block / zep_tools.coalition_map 等），
-# 渲染器改头时此表须同步。
+# 块标记以各渲染器的标题行为唯一权威（report_agent._world_state_block / zep_tools.coalition_map 等），
+# 渲染器改头时此表须同步。SIM-3：世界态块标题自 Foglamp 1D 起为「【推演结果分布 P(outcome)」，
+# 旧标记只认「【预测结果分布」而漂移失配（legacy_prompt 下引用世界态份额的二元预测被误降级、
+# SIM-ADD-3 sim_adjustment 从不触发）；_WS_OUTCOME_HEADER_PATTERN 同时接受现行标题与旧 fixture 标题，
+# 由 test_world_state_marker_matches_renderer 对真实渲染输出钉住。带显式非 valid 有效性裁定的
+# 世界态块不算可引用信号（allowed_signal_labels 经 _usable_world_state_header 剔除）。
+_WS_OUTCOME_HEADER_PATTERN = r"【(?:推演|预测)结果分布\s*P\(outcome\)"
+_WS_SIGNAL_LABEL = "world-state outcome shares"
 _SIM_SIGNAL_TAXONOMY: List[Tuple[str, re.Pattern, re.Pattern]] = [
-    ("world-state outcome shares",
-     re.compile(r"【预测结果分布\s*P\(outcome\)"),
+    (_WS_SIGNAL_LABEL,
+     re.compile(_WS_OUTCOME_HEADER_PATTERN),
      re.compile(r"world[\s_-]*state|outcome\s*shares?|P\(outcome\)|世界态|结果分布|结果份额", re.I)),
     ("salience tiers",
      re.compile(r"议程设置力分层"),
@@ -1418,11 +1424,15 @@ def allowed_signal_labels(signal_pack: Optional[str]) -> set:
     """从**实际注入提示词**的 signal_pack 切片推导允许的规范信号名集合（确定性、离线）。
 
     只有块标记真实出现在切片里的信号才可被 source 引用；空/None → 空集（即所有模拟信号
-    标签都不被允许）。调用方必须传入与提示词完全相同的截断切片，保证「允许集」与模型
-    实际看到的内容逐字节对齐。
+    标签都不被允许）。世界态块带显式非 valid 有效性裁定（「本分布不可用作任何依据」）时
+    不计入（fail-closed：引用它的 source 照旧降级）。调用方必须传入与提示词完全相同的截断
+    切片，保证「允许集」与模型实际看到的内容逐字节对齐。
     """
     text = str(signal_pack or "")
-    return {canon for canon, marker, _label in _SIM_SIGNAL_TAXONOMY if marker.search(text)}
+    labels = {canon for canon, marker, _label in _SIM_SIGNAL_TAXONOMY if marker.search(text)}
+    if _WS_SIGNAL_LABEL in labels and _usable_world_state_header(text) is None:
+        labels.discard(_WS_SIGNAL_LABEL)
+    return labels
 
 
 def _enforce_source_provenance(binaries: List[Dict[str, Any]], allowed: set) -> int:
@@ -1457,14 +1467,36 @@ def _enforce_source_provenance(binaries: List[Dict[str, Any]], allowed: set) -> 
 # 取证（sim_05ab2bdebbd2 等）：即便决策通道真的产出了 world_state_trajectory.json，其收敛的
 # P(outcome) 份额此前只作为提示词里的一段文本影响 LLM，从不作为**可对账的显式先验**落进
 # forecast.json——sim 的贡献既不可审计、也无法量化「相对研究先验移动了多少」。下列解析器从
-# **实际注入提示词**的世界态块（report_agent._world_state_block 渲染，块标记逐字节同源）里
-# 抽出收敛结果份额与趋稳判定，供 reconcile_forecast_contract 记成 forecast.sim_adjustment。
+# **实际注入提示词**的世界态块（report_agent._world_state_block 渲染；块标题以渲染器为唯一权威，
+# 与 _SIM_SIGNAL_TAXONOMY 共用 _WS_OUTCOME_HEADER_PATTERN）里抽出收敛结果份额与趋稳判定，
+# 供 reconcile_forecast_contract 记成 forecast.sim_adjustment。
 # 份额来自渲染文本（整数百分比），故做一次归一并标注为先验（非精确观测），degrade-safe。
-_WS_OUTCOME_HEADER_RE = re.compile(r"【预测结果分布\s*P\(outcome\)")
+_WS_OUTCOME_HEADER_RE = re.compile(_WS_OUTCOME_HEADER_PATTERN)
 _WS_OUTCOME_SHARE_RE = re.compile(
     r"^·\s*(?P<name>.+?)\s*[:：]\s*(?P<pct>\d{1,3}(?:\.\d+)?)\s*%\s*$")
 # 世界态块内**份额行之后**的其它小节起始（碰到即停止份额收集，避免把日历航点/诊断行混入）。
 _WS_OUTCOME_SECTION_BREAK = ("【", "演化航点", "稳定性诊断", "截至", "于 ", "注", "预测期限")
+# SIM-3：显式非 valid 裁定时 report_agent._world_state_block 在标题下渲染
+# 「⚠️ 有效性裁定：<verdict>（…本分布不可用作任何依据；forecast_effect=no_update）」。这样的块
+# 既不是可引用的 source，也不能被解析成 sim 先验——REPORT_WORLDSTATE_HIDE_INVALID 关闭时块内
+# 仍列份额，同样不解析（fail-closed，与标记失配的 SIM-3 之前结果一致）。
+_WS_VERDICT_RE = re.compile(r"有效性裁定\s*[:：]\s*(?P<verdict>[^\s（(，,；;）)]*)")
+
+
+def _usable_world_state_header(text: str) -> Optional[re.Match]:
+    """世界态块标题的首个匹配；该块（到下一个以「【」或「##」起头的信号块为止）带显式
+    非 valid 有效性裁定 → None（无法读出裁定值也按非 valid 处理）。"""
+    m = _WS_OUTCOME_HEADER_RE.search(text)
+    if not m:
+        return None
+    for ln in text[m.end():].splitlines():
+        s = ln.strip()
+        if s.startswith(("【", "##")):
+            break  # 下一个信号块
+        verdict = _WS_VERDICT_RE.search(s)
+        if verdict and verdict.group("verdict").lower() != "valid":
+            return None
+    return m
 
 
 def world_state_outcome_from_signal_pack(
@@ -1472,13 +1504,15 @@ def world_state_outcome_from_signal_pack(
 ) -> Optional[Dict[str, Any]]:
     """从 signal_pack 的世界态结果分布块解析决策通道的收敛 P(outcome) 份额（纯离线、确定性）。
 
-    识别 ``【预测结果分布 P(outcome)…】`` 块及其下的 ``· <情景名>: <NN>%`` 份额行，归一后
-    返回 ``{"scenario_shares": {name: frac}, "converged": bool|None,
-    "source": "world-state outcome shares"}``；块缺失/无份额行 → ``None``（调用方视同 sim
-    无收敛结果，degrade-safe）。``converged`` 由块内「已趋稳/尚未趋稳」文案判定（无 → None）。
+    识别世界态块标题——以 report_agent._world_state_block 渲染的 ``【推演结果分布 P(outcome)…】``
+    为准，旧 fixture 的 ``【预测结果分布 P(outcome)…】`` 同样接受（SIM-3 标记重新同步）——及其下的
+    ``· <情景名>: <NN>%`` 份额行，归一后返回 ``{"scenario_shares": {name: frac},
+    "converged": bool|None, "source": "world-state outcome shares"}``；块缺失/无份额行/带显式
+    非 valid 有效性裁定 → ``None``（调用方视同 sim 无收敛结果，degrade-safe）。
+    ``converged`` 由块内「已趋稳/尚未趋稳」文案判定（无 → None）。
     """
     text = str(signal_pack or "")
-    m = _WS_OUTCOME_HEADER_RE.search(text)
+    m = _usable_world_state_header(text)
     if not m:
         return None
     tail = text[m.end():]

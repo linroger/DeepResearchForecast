@@ -911,6 +911,18 @@ class Config:
     #     时把结构化告警写入 run_summary（检测+诚实优先，绝不伪造互动）。
     SIM_ORGANIC_RATIO_DETECTOR = os.environ.get('SIM_ORGANIC_RATIO_DETECTOR', 'true').strip().lower() == 'true'
     SIM_ORGANIC_RATIO_MIN_CONSECUTIVE = int(os.environ.get('SIM_ORGANIC_RATIO_MIN_CONSECUTIVE', '3') or '3')
+    # SIM-3 (C26): 采样赞（action_args.is_engagement_sample，引擎随机代点）不是 agent 的决策，
+    #     不计入 run_summary 的 organic_action_count / rounds_with_organic_actions——否则只有采样赞
+    #     与定时事件帖的零自主运行逃过 'hollow'（summary 与管线健康门两处）。排除数写
+    #     engagement_sample_count（>0 才写）。默认开是诚实修正：只会把此类运行如实标为 hollow；
+    #     false 恢复旧计数（采样赞算有机）。
+    SIM_ORGANIC_EXCLUDES_ENGAGEMENT_SAMPLES = os.environ.get(
+        'SIM_ORGANIC_EXCLUDES_ENGAGEMENT_SAMPLES', 'true').strip().lower() == 'true'
+    # SIM-3 (C16): 定时事件可达性审计——round 非法/≥ total_rounds、缺发帖者或内容的
+    #     scheduled_events 永远不会触发（fire_scheduled_events 静默跳过），模拟角色从未看到它们。
+    #     仅当存在不可达事件时 run_summary 写 schedule_audit，管线运行健康记 'degraded' issue
+    #     （绝不判失败）；全部可达 → summary 键逐字节不变，故默认开安全。false 关闭审计。
+    SIM_SCHEDULE_AUDIT = os.environ.get('SIM_SCHEDULE_AUDIT', 'true').strip().lower() == 'true'
 
     # —— 报告组（RPT-*/XRUN-1/XRUN-5/RPT-6/RPT-8；report_agent / forecast_extractor 经 getattr 读取）——
     REPORT_ABORT_ON_LLM_OUTAGE = os.environ.get('REPORT_ABORT_ON_LLM_OUTAGE', 'true').strip().lower() == 'true'
