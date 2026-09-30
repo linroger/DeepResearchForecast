@@ -13,8 +13,8 @@ committed baseline — never on exact scores — because LLM-judge scores are no
 
 ## 1. groundedness
 Are the report's claims traceable to concrete evidence — graph facts, named
-actors, simulation agent quotes, or cited sources — rather than free-floating
-assertion?
+actors, or cited sources — rather than free-floating assertion? Attribution
+phrasing without a resolvable [S#] marker or market snapshot is not grounding.
 - **0** Pure assertion; no anchoring to entities, data, or sources.
 - **2** Some named actors/numbers, but most claims are unsupported.
 - **4** Most material claims anchored to a specific actor, datum, or source.
@@ -48,7 +48,7 @@ contradicting another, probabilities not double-counting?
 
 ## 5. citation_density
 How densely are quantitative/quoted claims tied to citation markers
-(`[S1]`, `【S3】`, agent quotes)? Anchor to the objective citation-coverage
+(`[S1]`, `【S3】`)? Anchor to the objective citation-coverage
 signal supplied with the report, then adjust for quote attribution quality.
 - **0** No citation markers anywhere; numbers appear unsourced.
 - **2** Sparse markers; <30% of quantitative claims carry one.

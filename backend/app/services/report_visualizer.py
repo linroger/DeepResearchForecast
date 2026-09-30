@@ -848,7 +848,21 @@ def _metric_row_is_publishable(
         f"{source} {definition}"))
 
 
+def _typed_epistemic_class(row: Dict[str, Any]) -> Optional[str]:
+    """QUANT_TYPED_RENDERING (RESEARCH-5): the research typing's ``reported`` /
+    ``projected`` stamp (epistemic_class), read before any label or text
+    heuristic; None when the knob is off or the row carries no such stamp, so
+    the legacy reading below applies unchanged."""
+    label = str(row.get("epistemic_class") or "").strip().lower()
+    if label not in ("reported", "projected") or not bool(_cfg("QUANT_TYPED_RENDERING", False)):
+        return None
+    return label
+
+
 def _quant_is_projection(row: Dict[str, Any]) -> bool:
+    typed = _typed_epistemic_class(row)
+    if typed is not None:
+        return typed == "projected"
     explicit = row.get("is_projection")
     if isinstance(explicit, bool):
         return explicit
@@ -1284,7 +1298,11 @@ def _metric_row_value(row: Dict[str, Any]) -> Optional[float]:
 
 def _metric_row_kind(row: Dict[str, Any]) -> str:
     """观测/预测判定（actual|forecast）：value_kind 优先，回退 value_type，再回退
-    _quant_is_projection 语义推断。用于轨迹/区域图上区分实测点与预测点的记号样式。"""
+    _quant_is_projection 语义推断。用于轨迹/区域图上区分实测点与预测点的记号样式。
+    QUANT_TYPED_RENDERING 开启时研究分型 epistemic_class（projected/reported）最先生效。"""
+    typed = _typed_epistemic_class(row)
+    if typed is not None:
+        return "forecast" if typed == "projected" else "actual"
     for key in ("value_kind", "value_type"):
         raw = row.get(key)
         if isinstance(raw, str):

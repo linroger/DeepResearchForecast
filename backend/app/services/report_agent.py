@@ -6110,6 +6110,7 @@ class ReportAgent:
                 write_text_atomic(os.path.join(folder, "full_report.md"), cleaned)
             except Exception as _we:  # noqa: BLE001
                 logger.warning(f"回写编辑 lint 成稿 full_report.md 失败（忽略）: {_we}")
+        projection = self._projection_attribution_audit(report.markdown_content or "")
         # lint 报告并入 forecast.json 的 quality（读-改-写；文件缺失/损坏时仅记内存副本）。
         try:
             fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
@@ -6118,9 +6119,13 @@ class ReportAgent:
                     fc = json.load(f)
                 if isinstance(fc, dict):
                     fc.setdefault("quality", {})["lint"] = lint_rep
+                    if projection is not None:
+                        fc["quality"]["projection_attribution"] = projection
                     write_text_atomic(fpath, json.dumps(fc, ensure_ascii=False, indent=2))
                     if isinstance(getattr(self, "_forecast_spine", None), dict):
                         self._forecast_spine.setdefault("quality", {})["lint"] = lint_rep
+                        if projection is not None:
+                            self._forecast_spine["quality"]["projection_attribution"] = projection
         except Exception as _fe:  # noqa: BLE001 — quality 记录失败不影响成稿
             logger.warning(f"编辑 lint 报告写入 forecast.json 失败（忽略）: {_fe}")
         logger.info(
@@ -6130,6 +6135,28 @@ class ReportAgent:
             f"{lint_rep.get('dangling_attributions')}｜重复句 "
             f"{lint_rep.get('duplicate_sentences_removed')}｜泄漏残留 {lint_rep.get('leakage_flags')}"
         )
+
+    def _projection_attribution_audit(self, md: str) -> Optional[Dict[str, Any]]:
+        """RESEARCH-5：已报告 vs 预期的归因观测（report_lint.check_projection_attribution）——
+        研究 quantitative 行里的预期值被正文写成已发生事实等计数。只读、只记数，绝不改成稿、
+        不进 hard_issues。REPORT_PROJECTION_LINT 关闭或无研究量化行时返回 None（调用方不写
+        字段）；失败仅告警并返回 None（degrade-safe）。as-of 取 self.actors['as_of_date']。"""
+        rows = getattr(self, "quantitative", None)
+        if not getattr(Config, "REPORT_PROJECTION_LINT", True) or not isinstance(rows, list) or not rows:
+            return None
+        try:
+            from . import report_lint as _rl
+            from ..utils.dates import parse_as_of
+            actors = getattr(self, "actors", None)
+            as_of = parse_as_of(actors.get("as_of_date")) if isinstance(actors, dict) else None
+            return _rl.check_projection_attribution(
+                md, rows,
+                as_of=as_of.date() if as_of is not None else None,
+                lang=getattr(self, "output_language", None) or "English",
+            )
+        except Exception as exc:  # noqa: BLE001 — 观测失败不影响成稿与审计
+            logger.warning(f"已报告/预期归因观测失败（忽略）: {exc}")
+            return None
 
     # ──────────────────────────────────────────────────────────────
     # BILINGUAL：自动生成成稿的另一语种版本（英⇄中），逐 H2 章节并发翻译
@@ -8451,6 +8478,10 @@ class ReportAgent:
             # published bytes; the candidate rewrite is intentionally discarded.
             "lint": lint_audit,
         }
+        # RESEARCH-5: observe-only; _final_audit_integrity_issues never reads it.
+        projection_audit = self._projection_attribution_audit(md)
+        if projection_audit is not None:
+            audit["projection_attribution"] = projection_audit
         audit["hard_issues"] = self._final_audit_integrity_issues(audit)
         audit["hard_passed"] = not audit["hard_issues"]
 

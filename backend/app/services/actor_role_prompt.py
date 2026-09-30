@@ -20,6 +20,7 @@ from ..utils.actors import (
     actor_intelligence_payload,
     has_unsupported_actor_intelligence_schema,
 )
+from ..utils.quant_typing import expectation_qualifier
 from .actor_context import (
     is_hard_public_relationship,
     normalize_evidence_gap,
@@ -797,6 +798,18 @@ def _shared_situation_context(dossier: Optional[Dict[str, Any]]) -> List[Dict[st
     return rows[:8]
 
 
+def _typed_expectation(raw: Dict[str, Any]) -> bool:
+    """QUANT_TYPED_RENDERING (RESEARCH-5): a quantitative fact the research typing
+    stamped ``projected`` or ``unknown`` is someone's expectation, not a measured
+    value, so the persona sees who expects it and for when.  Keyed on the stamp:
+    untyped rows, and every row while the knob is off, keep their exact bytes."""
+    if str(raw.get("epistemic_class") or "").strip().lower() not in ("projected", "unknown"):
+        return False
+    from ..config import Config
+
+    return bool(getattr(Config, "QUANT_TYPED_RENDERING", False))
+
+
 def _pack_report_rows(
     pack: Dict[str, Any],
     *,
@@ -845,6 +858,9 @@ def _pack_report_rows(
                             _text(raw.get("unit"), 80),
                         ) if bit
                     )
+                    if detail and _typed_expectation(raw):
+                        # The source name is untrusted research text: same filter as the fields.
+                        detail += f" ({_text(expectation_qualifier(raw, 'en'), 200)})"
                 else:
                     detail = " ".join(
                         bit for bit in (
