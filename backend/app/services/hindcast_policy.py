@@ -204,8 +204,8 @@ def research_audit_record(payload: Any, sha256: Any, *,
             or payload.get("undated_policy") != env["RESEARCH_PIT_UNDATED"]):
         return None
     status = payload.get("status")
-    if (status not in _AUDIT_INTEGRITY or status != _cited_verdict(payload)
-            or not isinstance(sha256, str) or not sha256):
+    if (not isinstance(status, str) or status not in _AUDIT_INTEGRITY
+            or status != _cited_verdict(payload) or not isinstance(sha256, str) or not sha256):
         return None
     return {"status": status, "sha256": sha256}
 
@@ -247,7 +247,7 @@ def _audit_status(pin: Mapping[str, Any], research_audit: Any) -> Optional[str]:
             or not isinstance(research_audit, Mapping)):
         return None
     status = research_audit.get("status")
-    return status if status in _AUDIT_INTEGRITY else None
+    return status if isinstance(status, str) and status in _AUDIT_INTEGRITY else None
 
 
 def hindcast_forecast_block(pin: Mapping[str, Any], *,

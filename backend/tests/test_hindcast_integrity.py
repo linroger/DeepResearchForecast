@@ -83,6 +83,19 @@ def _run_json(pid):
         return json.load(fh)
 
 
+class _WarningRecorder:
+    """Stands in for the orchestrator's logger (which does not propagate): keeps its warnings."""
+
+    def __init__(self):
+        self.warnings = []
+
+    def warning(self, msg, *args):
+        self.warnings.append(msg % args)
+
+    def __getattr__(self, name):
+        return lambda *args, **kwargs: None
+
+
 @pytest.fixture
 def manifest_env(env, monkeypatch):
     monkeypatch.setattr(po, "_repo_git_sha", lambda: "gitsha")
@@ -124,6 +137,9 @@ def test_research_audit_is_recorded_in_the_pin_once_per_research_generation(mani
 @pytest.mark.parametrize("content", [
     json.dumps(_audit_payload(schema="drf-point-in-time/v0")),
     json.dumps(_audit_payload(status="clean")),
+    # An unhashable verdict (hand-edited or migrated) is no verdict, not a crash.
+    json.dumps(dict(_audit_payload(), status=["x"])),
+    json.dumps(dict(_audit_payload(), status={})),
     json.dumps(["not", "an", "audit"]),
     "{truncated",
     b"\xff\xfe not utf-8",
@@ -139,14 +155,21 @@ def test_research_audit_is_recorded_in_the_pin_once_per_research_generation(mani
     json.dumps(_audit_payload(cited=dict(_CITED["date_verified"], checked=3))),
     json.dumps(_audit_payload(streams={})),
 ])
-def test_an_unrecognised_audit_vouches_for_nothing(env, tmp_path, content):
+def test_an_unrecognised_audit_vouches_for_nothing(env, tmp_path, monkeypatch, content):
     state = _state("pipe_bad", PIN, tmp_path)
     os.makedirs(state.handoff_dir)
     mode = "wb" if isinstance(content, bytes) else "w"
     with open(os.path.join(state.handoff_dir, hp.POINT_IN_TIME_FILENAME), mode) as fh:
         fh.write(content)
+    recorder = _WarningRecorder()
+    monkeypatch.setattr(po, "logger", recorder)
     po.PipelineOrchestrator()._record_research_audit(state, state.handoff_dir)
     assert state.options[hp.HINDCAST_POLICY_OPTION] == PIN
+    # A parseable audit is judged and rejected, never mistaken for an unreadable file.
+    unreadable = content in ("{truncated", b"\xff\xfe not utf-8")
+    [warning] = [message for message in recorder.warnings if hp.POINT_IN_TIME_FILENAME in message]
+    assert ("unreadable" in warning) is unreadable
+    assert ("not a recognised research audit" in warning) is not unreadable
 
 
 @pytest.mark.parametrize("pin", [None, UNGATED_PIN, containment.LIVE_PIN, containment.PIN | {"pit": None}])
@@ -182,6 +205,14 @@ def test_run_json_attests_the_audit(manifest_env, status, clamped):
     assert po._build_run_manifest(state)["resolved"]["as_of_enforcement"] == expected
 
 
+@pytest.mark.parametrize("status", [["x"], {"a": 1}])
+def test_run_json_survives_an_unhashable_audit_verdict(manifest_env, status):
+    """A hand-edited or migrated state.json whose pin carries an unhashable verdict: run.json
+    is still built, with the unaudited record."""
+    state = _state("pipe_odd_verdict", dict(PIN, research_audit={"status": status, "sha256": "ab"}), manifest_env)
+    assert po._build_run_manifest(state)["resolved"]["as_of_enforcement"] == ENFORCEMENT
+
+
 def test_run_json_is_left_missing_when_absent(manifest_env):
     state = _state("pipe_no_run_json", PIN, manifest_env)
     _write_audit(state.handoff_dir, _audit_payload())
@@ -199,7 +230,8 @@ def test_enforcement_record_mapping():
     # verdict is no audit.
     for pit in (dict(GATED, gates=False), dict(GATED, gates="true"), None):
         assert hp.as_of_enforcement_record(dict(audited, pit=pit)) == ENFORCEMENT
-    assert hp.as_of_enforcement_record(dict(PIN, research_audit={"status": "clean"})) == ENFORCEMENT
+    for status in ("clean", ["x"], {"a": 1}):
+        assert hp.as_of_enforcement_record(dict(PIN, research_audit={"status": status})) == ENFORCEMENT
 
 
 def test_research_audit_record():
@@ -208,6 +240,8 @@ def test_research_audit_record():
     assert hp.research_audit_record(_audit_payload("date_verified_with_unverifiable"), "ef", pin=PIN) == {
         "status": "date_verified_with_unverifiable", "sha256": "ef"}
     for payload, digest in ((_audit_payload(), ""), (_audit_payload(), None), (_audit_payload(status=None), "ab"),
+                            (dict(_audit_payload(), status=["x"]), "ab"),
+                            (dict(_audit_payload(), status={"a": 1}), "ab"),
                             ({"status": "date_verified"}, "ab"), (None, "ab")):
         assert hp.research_audit_record(payload, digest, pin=PIN) is None
     # The verdict is re-derived from the audit's own cited counts; a disagreeing or
@@ -259,7 +293,8 @@ def test_forecast_block_maps_the_audit_to_integrity(status, integrity):
     assert block == dict(BLOCK, retrieval="date_gated", integrity=integrity)
 
 
-@pytest.mark.parametrize("audit", [None, {}, {"status": "clean"}, {"verdict": "clean"}, "violated"])
+@pytest.mark.parametrize("audit", [None, {}, {"status": "clean"}, {"verdict": "clean"}, "violated",
+                                   {"status": ["x"], "sha256": "ab"}, {"status": {}, "sha256": "ab"}])
 def test_forecast_block_without_an_audit_stays_labelled(audit):
     assert hp.hindcast_forecast_block(PIN, research_audit=audit) == BLOCK
 
