@@ -74,12 +74,13 @@ _TEXT: Dict[str, Dict[str, Any]] = {
         "rule": ("核验仅表示该数字出现在所引来源页面，不代表指标口径已人工确认。若其他来源给出不同数字，"
                  "请并列呈现两者及其来源，不要自行调和出新数字；预测/目标值是具名来源的预期，不是已发生的"
                  "结果；未列出或未核验的数字不得作为确切事实陈述（本表未收录：未核验 {unverified} 条、"
-                 "仅转述 {relayed} 条）。"),
+                 "仅转述 {relayed} 条{other}）。"),
+        "other": "、时点晚于研究时点或无法区分实际与预期 {count} 条",
         "columns": ("指标", "数值", "单位", "时点", "层级", "来源"),
         "projections": "### 预测/目标值（具名来源的预期，不是已发生的结果）",
         "projection_columns": ("指标", "数值", "单位", "目标期", "层级", "来源", "性质"),
         "not_outcome": "——不是已发生的结果",
-        "stale": "⚠ = 陈旧数据（距研究时点逾 180 天）",
+        "stale": "⚠ = 陈旧数据（研究标记为陈旧，或距研究时点逾 180 天）",
         "empty": "（本次研究没有在所引页面核验通过的数字。）",
         "overflow": "…（另有 {count} 条已核验数字因篇幅上限未列出）",
     },
@@ -91,12 +92,13 @@ _TEXT: Dict[str, Dict[str, Any]] = {
                  "present both with their sources and never reconcile them into a new number; a "
                  "projection or target is a named source's expectation, not an outcome; a number that "
                  "is not listed here or not verified must not be stated as an exact fact (left out of "
-                 "this table: {unverified} unverified, {relayed} reported only)."),
+                 "this table: {unverified} unverified, {relayed} reported only{other})."),
+        "other": ", {count} dated after the research or not typed as outcome or projection",
         "columns": ("metric", "value", "unit", "as of", "tier", "source"),
         "projections": "### Projections (a named source's expectation, not an outcome)",
         "projection_columns": ("metric", "value", "unit", "target", "tier", "source", "status"),
         "not_outcome": " — not an outcome",
-        "stale": "⚠ = stale figure (dated more than 180 days before the research)",
+        "stale": "⚠ = stale figure (flagged stale by the research, or dated more than 180 days before it)",
         "empty": "(No figure passed the on-page check in this research.)",
         "overflow": "…({count} more verified figures not listed: the block's size cap)",
     },
@@ -154,17 +156,23 @@ def _bucket(row: Mapping[str, Any], as_of: Optional[_dt.date]) -> str:
     return klass if klass in (REPORTED, PROJECTED) else "unclassified"
 
 
+def _source_url(source: Any) -> str:
+    return str(source.get("url") or "").strip() if isinstance(source, Mapping) else ""
+
+
 def citation_tag_resolver(tag_map: Optional[Mapping[str, Any]]) -> TagFor:
     """``tag_for`` over the report's citation index (``{tag: source row}``).
 
     A row resolves to its ``source_ref`` when that is a key of the index (the
     unified grammar's S<n> is the sources.json position, the numbering research
-    used), else to the first tag, in index order, whose source ``url`` equals the
-    row's ``source_url``, else to None.  Only index keys are ever returned."""
+    used) and the indexed source's ``url`` does not contradict the row's
+    ``source_url`` (a renumbered ledger would otherwise pin a real but wrong
+    tag); else to the first tag, in index order, whose source ``url`` equals the
+    row's ``source_url``; else to None.  Only index keys are ever returned."""
     index = dict(tag_map) if isinstance(tag_map, Mapping) else {}
     by_url: Dict[str, str] = {}
     for tag, source in index.items():
-        url = str(source.get("url") or "").strip() if isinstance(source, Mapping) else ""
+        url = _source_url(source)
         if url:
             by_url.setdefault(url, str(tag))
 
@@ -172,9 +180,11 @@ def citation_tag_resolver(tag_map: Optional[Mapping[str, Any]]) -> TagFor:
         ref = str(row.get("source_ref") or "").strip().strip("[]【】").strip()
         if ref[:1] in ("s", "S"):
             ref = "S" + ref[1:]
-        if ref and ref in index:
-            return ref
         url = str(row.get("source_url") or "").strip()
+        if ref and ref in index:
+            indexed_url = _source_url(index[ref])
+            if not (url and indexed_url and url != indexed_url):
+                return ref
         return by_url.get(url) if url else None
 
     return tag_for
@@ -221,6 +231,15 @@ def _cells(shown: Mapping[str, Any]) -> Tuple[str, ...]:
     return cells + (shown["label"],) if "label" in shown else cells
 
 
+def _preference(shown: Mapping[str, Any]) -> Tuple[str, int, bool]:
+    """Which of two admitted rows with the same cells the block keeps (the
+    larger): the newest as-of date (a projection quoted on two pages, or a
+    reported row whose date is only in period_end), then the better tier, then
+    the current one.  With the cells, this covers every field a kept row
+    carries, so the choice never depends on input order."""
+    return shown["as_of_key"], -shown["tier_rank"], not shown["stale"]
+
+
 def _render_order(rows: Sequence[Mapping[str, Any]]) -> List[Mapping[str, Any]]:
     """Tier (S1 first), then as-of date (newest first), then the cells."""
     ordered = sorted(rows, key=_cells)
@@ -253,10 +272,12 @@ def _table(columns: Sequence[str], rows: Sequence[Mapping[str, Any]]) -> List[st
 
 
 def _render(texts: Mapping[str, Any], kept: Sequence[Mapping[str, Any]], omitted: int,
-            unverified: int, relayed: int) -> str:
+            unverified: int, relayed: int, other: int) -> str:
     verified = _render_order([shown for shown in kept if shown["group"] == REPORTED])
     projections = _render_order([shown for shown in kept if shown["group"] == PROJECTED])
-    lines = [texts["header"], texts["rule"].format(unverified=unverified, relayed=relayed)]
+    rule = texts["rule"].format(unverified=unverified, relayed=relayed,
+                                other=texts["other"].format(count=other) if other else "")
+    lines = [texts["header"], rule]
     if verified:
         lines += [""] + _table(texts["columns"], verified)
         if any(shown["stale"] for shown in verified):
@@ -287,12 +308,14 @@ def build_verified_figures_block(quantitative: Any, *, tag_for: TagFor, lang: An
     returns the row's report tag or None (see :func:`citation_tag_resolver`);
     anything not shaped like a tag is treated as None.
 
-    Deterministic: the same rows in any order render the same text.  The block
-    keeps at most ``max_rows`` rows and ``max_chars`` characters (the header and
-    rule are never cut), dropping projections first, then stale rows, then the
-    oldest, and says how many it left out.  The rule paragraph counts as
-    "unverified" the unverified, none and unchecked rows, and as "reported
-    only" the snippet_only rows.
+    Deterministic: the same rows in any order render the same text; admitted
+    rows whose cells coincide render once (:func:`_preference` picks which).
+    The block keeps at most ``max_rows`` rows and ``max_chars`` characters (the
+    header and rule are never cut), dropping projections first, then stale
+    rows, then the oldest, and says how many it left out.  The rule paragraph
+    counts as "unverified" the unverified, none and unchecked rows, as
+    "reported only" the snippet_only rows and, when there are any, the
+    future_dated and unclassified rows as a third count.
 
     Returns ``{"rendered", "sha256", "rows", "projections", "excluded",
     "omitted"}``: ``rows`` / ``projections`` are the rendered rows' cells,
@@ -312,18 +335,21 @@ def build_verified_figures_block(quantitative: Any, *, tag_for: TagFor, lang: An
         bucket = _bucket(row, as_of)
         if bucket in (REPORTED, PROJECTED):
             shown = _display(row, bucket, tag_for, zh, texts)
-            admitted.setdefault((bucket,) + _cells(shown), shown)
+            key = (bucket,) + _cells(shown)
+            previous = admitted.get(key)
+            if previous is None or _preference(shown) > _preference(previous):
+                admitted[key] = shown
         else:
             result["excluded"][bucket] += 1
     excluded = result["excluded"]
-    unverified = excluded["unverified"] + excluded["none"] + excluded["unchecked"]
-    relayed = excluded["snippet_only"]
+    counts = (excluded["unverified"] + excluded["none"] + excluded["unchecked"],
+              excluded["snippet_only"], excluded["future_dated"] + excluded["unclassified"])
     candidates = _keep_order(list(admitted.values()))
     kept = candidates[:max(0, int(max_rows))]
-    rendered = _render(texts, kept, len(candidates) - len(kept), unverified, relayed)
+    rendered = _render(texts, kept, len(candidates) - len(kept), *counts)
     while kept and len(rendered) > max_chars:
         kept = kept[:-1]
-        rendered = _render(texts, kept, len(candidates) - len(kept), unverified, relayed)
+        rendered = _render(texts, kept, len(candidates) - len(kept), *counts)
     result.update(
         rendered=rendered,
         sha256=hashlib.sha256(rendered.encode("utf-8")).hexdigest(),

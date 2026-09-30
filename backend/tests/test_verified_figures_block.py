@@ -13,6 +13,7 @@ byte. Offline: fake LLM, faked PipelineManager / Gamma, pinned market clock.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import os
 import random
@@ -95,8 +96,11 @@ def test_admission():
     rendered = result["rendered"]
     assert rendered.startswith("## 已核验指标（研究期在所引网页上核验到数字——引用时保持数值、时点与 [S#]）\n"
                                "核验仅表示该数字出现在所引来源页面，不代表指标口径已人工确认。")
-    # unverified 2 + none 1 + unchecked 1 are "未核验"; snippet_only is "仅转述".
-    assert "（本表未收录：未核验 4 条、仅转述 1 条）。" in rendered
+    # unverified 2 + none 1 + unchecked 1 are "未核验"; snippet_only is "仅转述"; the verified
+    # rows in neither table (future_dated 2 + unclassified 1) are the third count.
+    assert "（本表未收录：未核验 4 条、仅转述 1 条、时点晚于研究时点或无法区分实际与预期 3 条）。" in rendered
+    assert ("(left out of this table: 4 unverified, 1 reported only, 3 dated after the research or "
+            "not typed as outcome or projection).") in _build(_mixed_rows(), lang="en")["rendered"]
     assert "### 预测/目标值（具名来源的预期，不是已发生的结果）" in rendered
     for excluded in ("Unverified figure", "Weird label", "Relayed figure", "Orphan figure",
                      "Unchecked figure", "Future actual", "Future reported", "Untyped figure"):
@@ -128,7 +132,7 @@ def test_rows_without_any_label_render_nothing():
 def test_labelled_but_nothing_admitted_still_replaces_the_table():
     rows = [_row("A", verification="unverified"), _row("B", verification="snippet_only")]
     rendered = _build(rows)["rendered"]
-    assert "（本表未收录：未核验 1 条、仅转述 1 条）" in rendered
+    assert "（本表未收录：未核验 1 条、仅转述 1 条）。" in rendered     # no third count when it is 0
     assert rendered.endswith("（本次研究没有在所引页面核验通过的数字。）")
     assert "| 指标 |" not in rendered
 
@@ -159,11 +163,18 @@ def test_tags_never_invented():
 def test_tag_resolver_contract():
     resolve = vf.citation_tag_resolver({"S1-a": {"url": "https://a.example"},
                                         "S2": {"url": "https://b.example"},
-                                        "S3": {"url": "https://b.example"}})
+                                        "S3": {"url": "https://b.example"},
+                                        "S4": {"title": "No url"}})
     assert resolve({"source_ref": "S1", "source_url": "https://a.example"}) == "S1-a"
     assert resolve({"source_ref": "[s2]"}) == "S2"
+    assert resolve({"source_ref": "S2", "source_url": "https://b.example"}) == "S2"
     assert resolve({"source_url": "https://b.example"}) == "S2"      # first in index order
     assert resolve({"source_ref": "S9"}) is None
+    # A ref whose indexed url contradicts the row's own url (a renumbered ledger) is not
+    # trusted: the row's url decides, and a url outside the index resolves to nothing.
+    assert resolve({"source_ref": "S2", "source_url": "https://a.example"}) == "S1-a"
+    assert resolve({"source_ref": "S2", "source_url": "https://moved.example"}) is None
+    assert resolve({"source_ref": "S4", "source_url": "https://any.example"}) == "S4"   # nothing to contradict
     assert resolve({}) is None
     assert vf.citation_tag_resolver(None)({"source_ref": "S1"}) is None
 
@@ -199,7 +210,7 @@ def test_deterministic_and_caps():
     tiers = [row["tier"] for row in full["rows"] if not row["stale"]]
     order = {"S1": 0, "S2": 1, "S3": 2, "": 3, "S4": 4}
     assert tiers == sorted(tiers, key=order.__getitem__)
-    assert "⚠ = 陈旧数据（距研究时点逾 180 天）" in full["rendered"]
+    assert "⚠ = 陈旧数据（研究标记为陈旧，或距研究时点逾 180 天）" in full["rendered"]
 
     # Row cap: projections go first, then stale rows, then the oldest.
     capped = _build(rows, max_rows=11)
@@ -222,6 +233,33 @@ def test_deterministic_and_caps():
     tiny = _build(rows, max_chars=10)
     assert tiny["rows"] == [] and tiny["projections"] == [] and tiny["omitted"] == 16
     assert tiny["rendered"].startswith("## 已核验指标") and "…（另有 16 条" in tiny["rendered"]
+
+
+def test_near_duplicates_are_order_independent():
+    """Rows with the same cells but different as-of dates render once, and which one is kept
+    (it decides the sort position and what the caps keep) never depends on input order."""
+    rows = [
+        _row("Outlook", value_type="forecast", target_date="2030", source="IEA", as_of_date="2026-01-01"),
+        _row("Outlook", value_type="forecast", target_date="2030", source="IEA", as_of_date="2026-06-01"),
+        _row("Other outlook", value_type="forecast", target_date="2031", source="IEA", as_of_date="2026-03-01"),
+        # The same reported figure, dated only through period_end in one copy.
+        _row("Capacity", as_of_date="", period_end="2026-05-01"),
+        _row("Capacity", as_of_date="2026-05-01"),
+        _row("Older figure", as_of_date="2026-03-01"),
+    ]
+    full = {_build(list(perm))["sha256"] for perm in itertools.permutations(rows)}
+    assert len(full) == 1
+    result = _build(rows)
+    assert [row["metric"] for row in result["rows"]] == ["Capacity", "Older figure"]
+    assert [row["metric"] for row in result["projections"]] == ["Outlook", "Other outlook"]
+    # Under a cap the newest copy's date decides: "Outlook" (2026-06-01) outranks "Other outlook".
+    for cap in (1, 3):
+        kept = {json.dumps([_build(list(perm), max_rows=cap)[key] for key in ("rows", "projections")])
+                for perm in itertools.permutations(rows)}
+        assert len(kept) == 1
+    one_projection = _build([rows[1], rows[0], rows[2]], max_rows=1)
+    assert [row["metric"] for row in one_projection["projections"]] == ["Outlook"]
+    assert _build([rows[0], rows[2]], max_rows=1)["projections"][0]["metric"] == "Other outlook"
 
 
 def test_cells_are_table_safe_and_capped():
