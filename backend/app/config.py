@@ -529,8 +529,10 @@ class Config:
     # INFRA-7：resume 血统守卫。上游阶段被重算后，拒绝复用由其旧产物派生的下游产物
     # （研究重算→本体/图谱重建；图谱重算或模拟绑定的 graph_id 不符→重建 PREPARE；RUN 重算或报告绑定的
     # simulation_id 不符→重生成报告），在 options.stage_notes 留 'reuse_refused: <原因>' 面包屑。失效记录
-    # 持久化在 options.lineage_invalidated，直到该阶段真正重算才清除——下游重建失败后的下一次 resume
-    # 仍拒绝复用陈旧产物。默认开：以重算成本换取不复用陈旧产物（fail closed）；关闭 = 旧的逐阶段存在性复用。
+    # 持久化在 options.lineage_invalidated，直到该阶段从当前上游重建才清除——下游重建失败后的下一次 resume
+    # 仍拒绝复用陈旧产物；重建已保存的新本体（落盘即结清）与已完成（COMPLETED）的铸出报告（id 记在
+    # options.lineage_rebuilt）在打断后的下次 resume 被复用而非再生成。默认开：以重算成本换取不复用陈旧产物
+    # （fail closed）；关闭 = 旧的逐阶段存在性复用。
     RESUME_LINEAGE_GUARDS = os.environ.get('RESUME_LINEAGE_GUARDS', 'true').strip().lower() == 'true'
 
     # —— EXECPLAN2 第三波改进旋钮（剩余 L-effort 新能力；全部默认关，留空即保持当前行为）——

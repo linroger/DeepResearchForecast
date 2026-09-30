@@ -262,6 +262,30 @@ def test_fork_base_record():
     }
     assert run_shape.fork_base_record(None, fork_pin, "pipe_legacy") == {
         "pipeline_id": "pipe_legacy", "sha256": None, "identity_diff": None}
+    # A per-run option the fork does not carry (a scenario fork never copies the
+    # base's depth/research_language) is not drift; a Config knob unset on the
+    # fork side, or an option the fork sets differently, still is.
+    config.GRAPH_MAX_ENTITIES = None
+    uncarried = run_shape.pin(config, {"max_rounds": 9}, origin="fork", pinned_at="t2")
+    assert run_shape.fork_base_record(base_pin, uncarried, "pipe_base")["identity_diff"] == {
+        "GRAPH_MAX_ENTITIES": [400, None], "max_rounds": [None, 9]}
+    changed = run_shape.pin(config, {"depth": "quick"}, origin="fork", pinned_at="t3")
+    assert run_shape.fork_base_record(base_pin, changed, "pipe_base")["identity_diff"] == {
+        "GRAPH_MAX_ENTITIES": [400, None], "depth": ["deep", "quick"]}
+
+
+def test_report_producer_record_and_reuse_stamp():
+    pair = {"provider": "provider-a", "model_name": "model-a"}
+    record = run_shape.producer_record("report_x", pair)
+    assert record == {"report_id": "report_x", **pair}
+    # No pending mint: the carried-forward stamp already describes the report.
+    assert run_shape.reused_report_stamp(None, "report_x") is None
+    # Reusing the minted report stamps its recorded producer.
+    assert run_shape.reused_report_stamp(record, "report_x") == pair
+    # Any other report (the minted one never reached disk) has no known producer.
+    unknown = {"provider": None, "model_name": None}
+    assert run_shape.reused_report_stamp(record, "report_old") == unknown
+    assert run_shape.reused_report_stamp(record, None) == unknown
 
 
 def test_resolved_carry_forward_and_restamp():
@@ -383,28 +407,49 @@ def test_continue_to_full_of_legacy_run_pins_resume_unpinned(roots, monkeypatch)
     assert pin["origin"] == run_shape.ORIGIN_RESUME_UNPINNED
 
 
+def _admit_completed_base(**start_kwargs):
+    """A base admitted through start() (depth/language pinned), then marked graph-complete."""
+    base = po.PipelineOrchestrator.start("Will X happen by 2030?", mode="full", **start_kwargs)
+    _join(base.pipeline_id)
+    data = po.PipelineManager.load(base.pipeline_id)
+    data.update(status="completed", graph_id="graph", project_id="proj")
+    with open(po.PipelineManager.state_path(base.pipeline_id), "w", encoding="utf-8") as fh:
+        json.dump(data, fh)
+    return data
+
+
 def test_scenario_fork_pins_origin_fork(roots, monkeypatch):
     _noop_run(monkeypatch)
-    base = po.PipelineState(pipeline_id="pipe_rs_base", prompt="q", mode="full",
-                            status="completed", graph_id="graph", project_id="proj")
-    po.PipelineOrchestrator._pin_run_shape(base, run_shape.ORIGIN_ADMISSION)
-    po.PipelineManager.ensure_dirs(base.pipeline_id)
-    po.PipelineManager.save(base)
+    base = _admit_completed_base(depth="deep", language="English")
+    assert base["options"]["run_shape_v1"]["identity"]["depth"] == "deep"
     # The environment changed since the base was admitted: the fork's own pin
     # captures the new value, and discloses that its reused upstream stages
-    # were built under the base's.
+    # were built under the base's.  depth/research_language are not carried by
+    # a scenario fork (it reuses the research they shaped): not drift.
     monkeypatch.setattr(Config, "GRAPH_MAX_ENTITIES", 123, raising=False)
-    fork = po.PipelineOrchestrator.fork(base.pipeline_id, {"label": "what-if", "max_rounds": 9})
+    fork = po.PipelineOrchestrator.fork(base["pipeline_id"],
+                                        {"label": "what-if", "max_rounds": 9})
     _join(fork.pipeline_id)
     pin = po.PipelineManager.load(fork.pipeline_id)["options"]["run_shape_v1"]
     assert pin["origin"] == run_shape.ORIGIN_FORK
     assert pin["identity"]["max_rounds"] == 9
     assert pin["identity"]["GRAPH_MAX_ENTITIES"] == 123
     assert pin["fork_base"] == {
-        "pipeline_id": base.pipeline_id,
-        "sha256": base.options["run_shape_v1"]["sha256"],
+        "pipeline_id": base["pipeline_id"],
+        "sha256": base["options"]["run_shape_v1"]["sha256"],
         "identity_diff": {"GRAPH_MAX_ENTITIES": [400, 123], "max_rounds": [None, 9]},
     }
+
+
+def test_scenario_fork_without_any_change_reports_no_identity_diff(roots, monkeypatch):
+    """Round-3 review: a real (start()-admitted) base used to diff depth/language."""
+    _noop_run(monkeypatch)
+    base = _admit_completed_base(depth="deep", language="English")
+    fork = po.PipelineOrchestrator.fork(base["pipeline_id"], {"label": "what-if"})
+    _join(fork.pipeline_id)
+    pin = po.PipelineManager.load(fork.pipeline_id)["options"]["run_shape_v1"]
+    assert pin["fork_base"]["identity_diff"] == {}
+    assert pin["fork_base"]["sha256"] == base["options"]["run_shape_v1"]["sha256"]
 
 
 @pytest.mark.parametrize("flags_on", [True, False])
@@ -556,7 +601,7 @@ class _Sentinel(RuntimeError):
 
 def _drive_full(monkeypatch, pid, *, research_reused, sim_graph_id="graph",
                 ontology_failures=0, ontology_completion_crashes=0, options=None,
-                handoff_dir=None):
+                handoff_dir=None, real_run_manifest=False):
     """Run the real ``_run`` over a resumed full pipeline whose every stage completed.
 
     Fakes stop the attempt with a named sentinel at the first expensive call:
@@ -565,16 +610,18 @@ def _drive_full(monkeypatch, pid, *, research_reused, sim_graph_id="graph",
     ``ontology_failures`` ontology generations raise (a provider outage); the
     first ``ontology_completion_crashes`` completions of a regenerated
     ontology crash after it was saved (a restart before ``_complete_stage``).
-    ``handoff_dir`` overrides the pipeline's own handoff directory.  The fakes
-    stay installed, so ``resume(pid)`` runs a second attempt on them.
+    ``handoff_dir`` overrides the pipeline's own handoff directory;
+    ``real_run_manifest`` keeps the real run.json writers.  The fakes stay
+    installed, so ``resume(pid)`` runs a second attempt on them.
     """
     calls: list[str] = []
     _real_run_research_only(monkeypatch, calls)
-    for name, replacement in {
-        "_write_run_manifest": lambda self, state: None,
-        "_update_manifest": lambda self, state, stage, **kwargs: None,
-    }.items():
-        monkeypatch.setattr(po.PipelineOrchestrator, name, replacement)
+    if not real_run_manifest:
+        for name, replacement in {
+            "_write_run_manifest": lambda self, state: None,
+            "_update_manifest": lambda self, state, stage, **kwargs: None,
+        }.items():
+            monkeypatch.setattr(po.PipelineOrchestrator, name, replacement)
     project = SimpleNamespace(
         project_id="proj", name="EV", graph_id="graph", files=[], analysis_summary="",
         status=None, ontology={"entity_types": [{"name": "Company"}], "edge_types": []})
@@ -734,6 +781,78 @@ def test_saved_ontology_is_reused_when_its_attempt_ends_before_completion(roots,
                  for row in resumed["options"]["stage_reuse_v1"]]
     assert decisions[-2:] == [(po.STAGE_RESEARCH, True), (po.STAGE_ONTOLOGY, True)]
     assert resumed["options"]["lineage_invalidated"] == _STALE_AFTER_RESEARCH
+
+
+def test_saved_ontology_reused_next_attempt_keeps_its_producer_stamp(roots, monkeypatch):
+    """Round-3 review: the reused ontology used to keep the replaced ontology's stamp.
+
+    Attempt 1 (provider-a) regenerates and saves the ontology, then crashes before
+    ``_complete_stage``; attempt 2 (provider-b) reuses it.  run.json must name
+    provider-a, the ontology's producer, both at rest and after the reuse.
+    """
+    pid = "pipe_rs_onto_stamp"
+    po.PipelineManager.ensure_dirs(pid)
+    with open(po.PipelineManager.manifest_path(pid), "w", encoding="utf-8") as fh:
+        json.dump({"resolved": {"ontology": {"provider": "provider-0",
+                                             "model_name": "model-0"}}}, fh)
+    run = _drive_full(monkeypatch, pid, research_reused=False,
+                      ontology_completion_crashes=1, real_run_manifest=True)
+    assert run.state.error == "ONTOLOGY_COMPLETION_CRASHED"
+    producer = {"provider": "provider-a", "model_name": "model-a"}
+    assert _manifest(pid)["resolved"]["ontology"] == producer
+
+    monkeypatch.setattr(Config, "LLM_PROVIDER", "provider-b", raising=False)
+    monkeypatch.setattr(Config, "LLM_MODEL_NAME", "model-b", raising=False)
+    resumed = _resume_attempt(pid)
+    assert resumed["error"] == "GRAPH_REBUILT"
+    assert len(run.ontology_calls) == 1, "the saved ontology is reused"
+    decisions = [(row["stage"], row["reused"])
+                 for row in resumed["options"]["stage_reuse_v1"]]
+    assert decisions[-1] == (po.STAGE_ONTOLOGY, True)
+    manifest = _manifest(pid)
+    assert len(manifest["attempts"]) == 2
+    assert manifest["resolved"]["ontology"] == producer
+
+
+def test_guards_off_recompute_drops_a_stale_rebuilt_exemption(monkeypatch):
+    """Round-3 review: guards on (report_x minted) -> guards off (RUN re-run) -> guards on.
+
+    report_x predates the guards-off attempt's RUN, so it must lose its exemption.
+    """
+    state = po.PipelineState(pipeline_id="pipe_rs_toggle", prompt="q", options={
+        run_shape.LINEAGE_INVALIDATED_OPTION: {po.STAGE_REPORT: "run_recomputed"},
+        run_shape.LINEAGE_REBUILT_OPTION: {po.STAGE_REPORT: "report_x"},
+    })
+    monkeypatch.setattr(Config, "RESUME_LINEAGE_GUARDS", False, raising=False)
+    po.PipelineOrchestrator()._record_stage_lineage(state, po.STAGE_RUN, reused=False)
+    # Only the exemption goes; the guards-off attempt records nothing else.
+    assert state.options == {
+        run_shape.LINEAGE_INVALIDATED_OPTION: {po.STAGE_REPORT: "run_recomputed"}}
+    monkeypatch.setattr(Config, "RESUME_LINEAGE_GUARDS", True, raising=False)
+    assert po.PipelineOrchestrator()._lineage_refuses_reuse(
+        state, po.STAGE_REPORT, bound_ids=("sim", "sim"),
+        artifact_id="report_x") == "run_recomputed"
+
+
+def test_guards_off_lineage_bookkeeping_leaves_legacy_state_untouched(monkeypatch):
+    """No map was ever written: a guards-off recompute or ontology save changes nothing."""
+    saves: list[str] = []
+    monkeypatch.setattr(po.PipelineManager, "save",
+                        classmethod(lambda cls, state: saves.append(state.pipeline_id)))
+    monkeypatch.setattr(Config, "RESUME_LINEAGE_GUARDS", False, raising=False)
+    orch = po.PipelineOrchestrator()
+    state = po.PipelineState(pipeline_id="pipe_rs_legacy_maps", prompt="q",
+                             options={"depth": "deep"})
+    orch._record_stage_lineage(state, po.STAGE_RUN, reused=False)
+    orch._record_lineage_artifact_replaced(state, po.STAGE_ONTOLOGY)
+    assert state.options == {"depth": "deep"}
+    assert saves == [], "no extra state save with the guards off"
+    # A rebuilt map left by an earlier guards-on attempt is settled (and saved)
+    # as soon as a guards-off attempt saves a regenerated ontology upstream of it.
+    state.options[run_shape.LINEAGE_REBUILT_OPTION] = {po.STAGE_REPORT: "report_x"}
+    orch._record_lineage_artifact_replaced(state, po.STAGE_ONTOLOGY)
+    assert state.options == {"depth": "deep"}
+    assert saves == ["pipe_rs_legacy_maps"]
 
 
 def test_flags_off_research_recompute_keeps_legacy_reuse(roots, monkeypatch):
@@ -921,6 +1040,33 @@ def test_report_published_before_stage_completion_is_reused_on_resume(
     assert decisions[-1] == (po.STAGE_REPORT, True)
 
 
+def test_unfinished_minted_report_is_not_exempt_from_the_refusal(monkeypatch, tmp_path):
+    """Round-3 review: the minted report reached disk only as GENERATING.
+
+    With the health gate off the lineage refusal is the only barrier: the
+    unfinished report must be regenerated, not reused through the exemption.
+    """
+    from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
+
+    monkeypatch.setattr(Config, "PIPELINE_HEALTH_GATE", False, raising=False)
+    result = _exercise_prepare_run_resume(
+        monkeypatch, tmp_path, rebuild_prepare=False, corrupt_run=True,
+        report_interrupt="cancel_after_publish")
+    minted = result.state.report_id
+    assert po.PipelineManager.load(result.pid)["options"]["lineage_rebuilt"] == {
+        po.STAGE_REPORT: minted}
+    po.ReportManager.get_report(minted).status = po.ReportStatus.GENERATING
+
+    resumed = _resume_attempt(result.pid)
+    assert resumed["status"] == "completed", resumed.get("error")
+    assert result.report_generations == [result.old_id, result.old_id]
+    assert resumed["report_id"] not in (minted, "report_existing")
+    assert resumed["options"]["stage_notes"][po.STAGE_REPORT] == [
+        "reuse_refused: run_recomputed"] * 2
+    for key in ("lineage_invalidated", "lineage_rebuilt"):
+        assert key not in resumed["options"]
+
+
 def test_minted_report_that_never_reached_disk_keeps_the_stale_report_refused(
         monkeypatch, tmp_path):
     """Cancelled right after the mint: the simulation lookup's stale report stays refused."""
@@ -1017,6 +1163,85 @@ def test_failed_report_rebuild_after_run_recompute_is_not_reused_next_attempt(
     assert resolved["graph"] == {"provider": "provider-0", "model_name": "model-0"}
     assert resolved["report"] == {"provider": "provider-b", "model_name": "model-b"}
     assert resolved["simulation"] == first["resolved"]["simulation"]
+
+
+_PRODUCER_A = {"provider": "provider-a", "model_name": "model-a"}
+
+
+def _switch_provider_and_resume(monkeypatch, pid):
+    monkeypatch.setattr(Config, "LLM_PROVIDER", "provider-b", raising=False)
+    monkeypatch.setattr(Config, "LLM_MODEL_NAME", "model-b", raising=False)
+    return _resume_attempt(pid)
+
+
+def test_reused_rebuilt_report_keeps_its_producer_stamp(monkeypatch, tmp_path):
+    """Round-3 review: RUN re-run -> report X minted+published (provider-a) -> cancel
+    -> provider-b resume reuses X.  run.json must name X's producer, not the
+    replaced report's (provider-0), both at rest and after the reuse."""
+    from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
+
+    result = _exercise_prepare_run_resume(
+        monkeypatch, tmp_path, rebuild_prepare=False, corrupt_run=True,
+        report_interrupt="cancel_after_publish", real_run_manifest=True,
+        prior_run_manifest=_stamped_run_manifest(monkeypatch))
+    minted = result.state.report_id
+    assert result.state.status == "cancelled"
+    assert _manifest(result.pid)["resolved"]["report"] == _PRODUCER_A
+    assert po.PipelineManager.load(result.pid)["options"][
+        run_shape.REPORT_PRODUCER_OPTION] == {"report_id": minted, **_PRODUCER_A}
+
+    resumed = _switch_provider_and_resume(monkeypatch, result.pid)
+    assert resumed["status"] == "completed", resumed.get("error")
+    assert resumed["report_id"] == minted
+    assert result.report_generations == [result.old_id], "X was reused"
+    assert _manifest(result.pid)["resolved"]["report"] == _PRODUCER_A
+    assert run_shape.REPORT_PRODUCER_OPTION not in resumed["options"]
+
+
+def test_reused_force_regenerated_report_keeps_its_producer_stamp(monkeypatch, tmp_path):
+    """The same holds without any lineage invalidation (a force re-report)."""
+    from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
+
+    result = _exercise_prepare_run_resume(
+        monkeypatch, tmp_path, rebuild_prepare=False,
+        report_interrupt="cancel_after_publish", real_run_manifest=True,
+        prior_run_manifest=_stamped_run_manifest(monkeypatch),
+        extra_options={"force_report_regen": "2026-09-30T00:00:00Z"})
+    minted = result.state.report_id
+    assert result.state.status == "cancelled"
+    assert "lineage_rebuilt" not in result.state.options
+    assert _manifest(result.pid)["resolved"]["report"] == _PRODUCER_A
+
+    resumed = _switch_provider_and_resume(monkeypatch, result.pid)
+    assert resumed["status"] == "completed", resumed.get("error")
+    assert resumed["report_id"] == minted
+    assert result.report_generations == [result.old_id]
+    assert _manifest(result.pid)["resolved"]["report"] == _PRODUCER_A
+
+
+def test_reused_report_never_borrows_a_lost_mints_stamp(monkeypatch, tmp_path):
+    """Minted report never reached disk; the simulation lookup's older report is reused.
+
+    The mint restamped run.json for the report it minted; the older report's
+    producer is not recorded, so it is stamped unknown rather than provider-a.
+    """
+    from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
+
+    result = _exercise_prepare_run_resume(
+        monkeypatch, tmp_path, rebuild_prepare=False,
+        report_interrupt="cancel_before_meta", real_run_manifest=True,
+        prior_run_manifest=_stamped_run_manifest(monkeypatch),
+        extra_options={"force_report_regen": "2026-09-30T00:00:00Z"})
+    assert result.state.status == "cancelled"
+    assert result.report_generations == []
+    assert _manifest(result.pid)["resolved"]["report"] == _PRODUCER_A
+
+    resumed = _switch_provider_and_resume(monkeypatch, result.pid)
+    assert resumed["status"] == "completed", resumed.get("error")
+    assert resumed["report_id"] == "report_existing"
+    assert _manifest(result.pid)["resolved"]["report"] == {
+        "provider": None, "model_name": None}
+    assert run_shape.REPORT_PRODUCER_OPTION not in resumed["options"]
 
 
 def test_guard_refused_report_consumes_the_force_regen_flag(monkeypatch, tmp_path):
