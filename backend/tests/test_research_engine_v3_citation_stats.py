@@ -19,10 +19,12 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -134,6 +136,63 @@ def test_writer_bibliographies_counts_only_list_shaped_reference_blocks():
     assert lr.writer_bibliographies("### References\n- a\n```\n- b\n```\n") == 0
 
 
+def _bibliographies_by_definition(text: str) -> int:
+    """The detector's definition read literally (quadratic): every opener's
+    block to the next heading, re-read from the next line when it fails."""
+    lines = text.splitlines()
+    fenced = lr._fenced_lines(lines)
+    found = i = 0
+    while i < len(lines):
+        label = None if fenced[i] else lr._bibliography_label(lines[i])
+        if label is None or lr._norm_key(label) not in lr._REFERENCE_HEADING_KEYS:
+            i += 1
+            continue
+        end = i + 1
+        while end < len(lines) and (fenced[end] or not lr._ANY_HEADING_RE.match(lines[end])):
+            end += 1
+        items = [j for j in range(i + 1, end) if lines[j].strip()]
+        if items and all(not fenced[j] and lr._BIBLIOGRAPHY_ITEM_RE.match(lines[j]) for j in items):
+            found, i = found + 1, end
+        else:
+            i += 1
+    return found
+
+
+def test_writer_bibliographies_match_their_definition():
+    vocab = ["### References", "#### Sources ####", "## Next", "**Bibliography**", "References:", "Sources:",
+             "- Sources:", "1. References:", "参考文献：", "- [S1] item", "* item", "2) second", "[S3] third",
+             "https://x.org/a", "", "The agency said so.", "```", "~~~", "### Referenced works"]
+    rng = random.Random(9)
+    texts = ["\n".join(rng.choice(vocab) for _ in range(rng.randint(0, 12))) for _ in range(3000)]
+    assert sum(1 for text in texts if _bibliographies_by_definition(text)) > 300
+    for text in texts:
+        assert lr.writer_bibliographies(text) == _bibliographies_by_definition(text), text
+
+
+class _CountingPattern:
+    """A compiled pattern that counts its ``match`` calls."""
+
+    def __init__(self, pattern):
+        self.pattern, self.calls = pattern, 0
+
+    def match(self, *args, **kwargs):
+        self.calls += 1
+        return self.pattern.match(*args, **kwargs)
+
+
+@pytest.mark.parametrize("tail, expected", [("", 0), ("\n- [S1] a", 1), ("\nThe agency said so.", 0)])
+def test_writer_bibliographies_is_linear_in_repeated_openers(monkeypatch, tail, expected):
+    """A writer repetition loop of opener lines: every failing block resumes at
+    its first non-list line, so each line is read a bounded number of times."""
+    heading = _CountingPattern(lr._ANY_HEADING_RE)
+    item = _CountingPattern(lr._BIBLIOGRAPHY_ITEM_RE)
+    monkeypatch.setattr(lr, "_ANY_HEADING_RE", heading)
+    monkeypatch.setattr(lr, "_BIBLIOGRAPHY_ITEM_RE", item)
+    lines = 5000
+    assert lr.writer_bibliographies("\n".join(["Sources:"] * lines) + tail) == expected
+    assert heading.calls + item.calls <= 4 * (lines + 1)
+
+
 def test_scaffold_echo_lines_are_exact_full_lines():
     text = "\n".join([
         "SOURCE INDEX", "  EVIDENCE DIGEST  ", "SECTION WRITING TASK", "RUN BRIEF",
@@ -168,6 +227,46 @@ def test_untraced_numbers_read_prose_as_verified_findings_are_read():
     # 12 on a page but not as a percentage does not trace "12%".
     assert lr.untraced_numbers(["Growth of 12% a year."], lr.page_number_set("12 sites")) == \
         [("Growth of 12% a year.", ["12"])]
+
+
+def _stats_engine(rows: list[dict], pages: dict[int, str], *, shell_detection: bool = True,
+                  stored_shells: dict[int, str] | None = None, weights: tuple[int, ...] = ()):
+    """The engine state _unused_fetched_sids / _traced_numbers read, nothing more."""
+    engine = SimpleNamespace(
+        ledger=SimpleNamespace(rows=lambda: list(rows), get={row["sid"]: row for row in rows}.get),
+        tools=SimpleNamespace(page_text=pages.get), shell_detection=shell_detection,
+        stored_shells=dict(stored_shells or {}), records={},
+        plan=SimpleNamespace(scenarios=[SimpleNamespace(weight=weight) for weight in weights]))
+    engine._published_page = lambda sid, row: lr._Engine._published_page(engine, sid, row)
+    engine.page_numbers = lambda sid: lr.page_number_set(pages.get(sid) or "")
+    return engine
+
+
+SHELL_PAGE = "Title: Loading\n\nMarkdown Content:\n"
+
+
+def test_unused_fetched_sids_read_fetched_as_sources_json_publishes_it(monkeypatch):
+    monkeypatch.setattr(rg, "_extraction_failure_reason",
+                        lambda text: "empty_extraction" if text == SHELL_PAGE else None)
+    rows = [{"sid": 1, "fetched": True}, {"sid": 2, "fetched": True}, {"sid": 3, "fetched": True},
+            {"sid": 4, "fetched": False}, {"sid": 5, "fetched": False}, {"sid": 6, "fetched": True}]
+    pages = {1: "Cited page with 176 GW.", 2: "Uncited page with 40 months.", 3: SHELL_PAGE, 6: SHELL_PAGE}
+    engine = _stats_engine(rows, pages, stored_shells={5: "empty_extraction"})
+    # 1 is cited; 3 is an uncited shell (sources.json would publish it as a
+    # snippet) and 6 a cited one; 4 and 5 were never fetched.
+    assert lr._Engine._unused_fetched_sids(engine, {1, 6}) == [2]
+    assert lr._Engine._published_page(engine, 6, rows[5])[0] is False
+    # Without shell detection sources.json publishes a shell as fetched: so do the stats.
+    engine = _stats_engine(rows, pages, shell_detection=False)
+    assert lr._Engine._unused_fetched_sids(engine, {1, 6}) == [2, 3]
+
+
+def test_scenario_weights_trace_only_as_percentages():
+    engine = _stats_engine([], {}, weights=(50, 35, 15))
+    traced = lr._Engine._traced_numbers(engine, [], set())
+    assert {"%50", "%35", "%15"} <= traced and not {"35", "=35", "50", "=50"} & traced
+    sentences = ["The base case holds at 35%.", "It stays near 50 percent.", "The agency counted 35 new plants."]
+    assert lr.untraced_numbers(sentences, traced) == [("The agency counted 35 new plants.", ["35"])]
 
 
 # ================================================================ engine run

@@ -13,11 +13,13 @@ This module keeps one report's log of those repairs and turns it into the
 
 Pure and offline: plain dicts in and out, no config, no disk, no Markdown edits,
 and never a gate input (the publish gate and the integrity issues do not read it).
-Malformed counts read as 0, so a log update cannot raise on odd repair output.
+Malformed counts read as 0 and unreadable or non-finite coverage as None, so a
+log update cannot raise on odd repair output and the record always serializes.
 """
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, Mapping, Optional
 
 SCHEMA = "report-citation-finalization/1"
@@ -47,16 +49,20 @@ def _count(value: Any) -> int:
     """A non-negative integer count; anything unreadable is 0."""
     try:
         return max(0, int(value or 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
 def _ratio(value: Any) -> Optional[float]:
-    """A coverage value as a float; None when absent or unreadable."""
-    try:
-        return None if value is None else float(value)
-    except (TypeError, ValueError):
+    """A coverage value as a finite float; None when absent, unreadable or not
+    finite (the record is serialized with ``allow_nan=False``)."""
+    if value is None:
         return None
+    try:
+        ratio = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return ratio if math.isfinite(ratio) else None
 
 
 def _coverage(audit: Any) -> Optional[float]:

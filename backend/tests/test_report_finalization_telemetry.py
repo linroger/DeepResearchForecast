@@ -295,6 +295,40 @@ def test_audit_without_a_stabilizer_log_writes_no_record(monkeypatch, tmp_path):
     assert "pre_audit_repairs" not in audit
 
 
+def test_reaudit_without_a_record_drops_an_earlier_record(monkeypatch, tmp_path):
+    """The audit replaces forecast.json's draft values with this run's
+    measurements: a re-audit that produces no record (flag off, or the log of
+    another report) must not re-seal the record an earlier publish wrote."""
+    _, _, published, forecast = _publish(monkeypatch, tmp_path, telemetry=True)
+    assert "citation_finalization" in forecast["quality"]
+    folder = tmp_path / "reports" / "report_r9"
+    forecast_path = folder / "forecast.json"
+
+    def replay(*, telemetry: bool, foreign_log: bool = False) -> tuple[dict, dict, dict]:
+        """The backfill replay order: a fresh agent stabilizes, then re-audits."""
+        monkeypatch.setattr(Config, "REPORT_FINALIZATION_TELEMETRY", telemetry, raising=False)
+        report = SimpleNamespace(markdown_content=published)
+        agent = _agent(SOURCES)
+        agent._stabilize_publish_markdown("report_r9", report)
+        if foreign_log:
+            agent._finalization_log = cft.new_log("report_other", 1)
+        audit = agent._audit_final_published_markdown("report_r9", report)
+        final_audit = json.loads((folder / "final_audit.json").read_text(encoding="utf-8"))
+        return audit, final_audit, json.loads(forecast_path.read_text(encoding="utf-8"))
+
+    audit, final_audit, forecast = replay(telemetry=False)
+    assert "pre_audit_repairs" not in final_audit
+    assert "citation_finalization" not in forecast["quality"]
+    assert "pre_audit_repairs" not in forecast["quality"]["final_audit"]
+    assert audit["forecast_sha256"] == hashlib.sha256(forecast_path.read_bytes()).hexdigest()
+
+    _, final_audit, forecast = replay(telemetry=True)
+    assert forecast["quality"]["citation_finalization"] == final_audit["pre_audit_repairs"]
+    _, final_audit, forecast = replay(telemetry=True, foreign_log=True)
+    assert "pre_audit_repairs" not in final_audit
+    assert "citation_finalization" not in forecast["quality"]
+
+
 def test_telemetry_failure_never_blocks_publication(monkeypatch, tmp_path):
     def boom(*args, **kwargs):
         raise RuntimeError("telemetry exploded")
@@ -346,6 +380,19 @@ def test_record_reads_malformed_counts_as_zero_and_rejects_unknown_events():
     assert record["quantitative"]["coverage_before"] is None and record["marker_strip_ratio"] == 0.0
     with pytest.raises(ValueError):
         cft.record(log, "lint", {})
+    # Non-finite values never reach the record, which is serialized with allow_nan=False.
+    log = cft.new_log("r", float("inf"))
+    cft.record(log, "quantitative", {"citations_added": float("inf"), "sentences_removed": float("nan"),
+                                     "before": {"resolved_coverage": float("nan")},
+                                     "after": {"resolved_coverage": float("inf")}}, first_pass=True)
+    cft.record(log, "totals", {"overuse_stripped": float("-inf"), "passes": 2})
+    record = cft.pre_audit_repairs(log, float("nan"))
+    assert record["quantitative"] == {"citations_added": 0, "sentences_removed": 0, "table_rows_removed": 0,
+                                      "table_cells_cleared": 0, "coverage_before": None, "coverage_after": None}
+    assert (record["markers_before"], record["markers_final"], record["overuse_stripped"]) == (0, 0, 0)
+    json.dumps(record, allow_nan=False)
+    assert cft.pre_audit_repairs(dict(log, quantitative={"coverage_after": 10 ** 400}), 0)[
+        "quantitative"]["coverage_after"] is None
 
 
 # ================================================================ knob

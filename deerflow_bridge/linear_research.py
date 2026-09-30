@@ -5327,6 +5327,10 @@ def writer_bibliographies(text: str) -> int:
     inside a code fence opens a block, and a fence inside one is not
     list-shaped.  The engine's own final References section is not part of the
     text this reads (see :func:`strip_references`).
+
+    Linear in the text: a block's scan stops at its first line that is not
+    list-shaped and resumes there, since every opener before that line runs
+    to the same heading and fails on the same line.
     """
     lines = str(text or "").splitlines()
     fenced = _fenced_lines(lines)
@@ -5337,15 +5341,20 @@ def writer_bibliographies(text: str) -> int:
         if label is None or _norm_key(label) not in _REFERENCE_HEADING_KEYS:
             i += 1
             continue
-        end = i + 1
+        end, items, offending = i + 1, 0, None
         while end < len(lines) and (fenced[end] or not _ANY_HEADING_RE.match(lines[end])):
+            if lines[end].strip():
+                if fenced[end] or not _BIBLIOGRAPHY_ITEM_RE.match(lines[end]):
+                    offending = end
+                    break
+                items += 1
             end += 1
-        items = [(line, fenced[j]) for j, line in enumerate(lines[i + 1:end], start=i + 1) if line.strip()]
-        if items and all(not inside and _BIBLIOGRAPHY_ITEM_RE.match(line) for line, inside in items):
+        if offending is not None:
+            i = offending
+            continue
+        if items:
             found += 1
-            i = end
-        else:
-            i += 1
+        i = end     # an empty block holds blank lines only: no opener to skip
     return found
 
 
@@ -7729,7 +7738,8 @@ class _Engine:
         a snippet exactly as sources.json publishes it (:meth:`_published_page`),
         so ``cited_fetched + cited_snippet == cited_sources == len(sources.json)``;
         ``snippet_marker_share`` is the share of the body's markers that point
-        at a snippet source.  A sentence of the body counts in
+        at a snippet source, and ``unused_fetched_sids`` reads fetched the same
+        way (:meth:`_unused_fetched_sids`).  A sentence of the body counts in
         ``untraced_prose_numbers`` when one of its numbers is in no VERIFIED
         or REPORTED finding, on no cited fetched page and in no cited snippet
         row's search text (:meth:`_traced_numbers`).
@@ -7738,9 +7748,7 @@ class _Engine:
         markers = [int(position) for position in _CITE_RE.findall(body)]
         snippet_markers = sum(1 for position in markers
                               if 0 < position <= len(order) and order[position - 1] not in fetched)
-        cited = set(order)
-        unused = [int(row["sid"]) for row in self.ledger.rows()
-                  if row.get("fetched") and int(row["sid"]) not in cited]
+        unused = self._unused_fetched_sids(set(order))
         untraced = untraced_numbers(prose_sentences(body), self._traced_numbers(order, fetched))
         return {
             "schema": CITATION_STATS_SCHEMA,
@@ -7766,12 +7774,21 @@ class _Engine:
             },
         }
 
+    def _unused_fetched_sids(self, cited: set[int]) -> list[int]:
+        """Ledger sids, in ledger order, of the fetched pages the report does
+        not cite, fetched as sources.json would publish them
+        (:meth:`_published_page`): an uncited extraction shell is no unused page."""
+        return [int(row["sid"]) for row in self.ledger.rows()
+                if row.get("fetched") and int(row["sid"]) not in cited
+                and self._published_page(int(row["sid"]), row)[0]]
+
     def _traced_numbers(self, order: Sequence[int], fetched: set[int]) -> frozenset[str]:
         """The numbers a published sentence may trace to (a union of
         :func:`page_number_set`): the VERIFIED and REPORTED findings' texts,
         the pages of the cited fetched sources, the search text of the cited
         snippet sources (:func:`_row_search_texts`) and the scenario frame's
-        weights (the plan's forecast, which the report restates by design)."""
+        weights as percentages only (the plan's forecast, which the report
+        restates by design; a bare number equal to a weight stays untraced)."""
         traced: set[str] = set()
         for record in self.records.values():
             for fact in record.get("facts") or []:
@@ -7783,7 +7800,7 @@ class _Engine:
             else:
                 for text in _row_search_texts(self.ledger.get(sid)):
                     traced |= page_number_set(text)
-        traced |= page_number_set(" ".join(f"{scenario.weight}%" for scenario in self.plan.scenarios))
+        traced |= {"%" + _canonical_number(str(scenario.weight)) for scenario in self.plan.scenarios}
         return frozenset(traced)
 
     def _evidence_sids(self) -> set[int]:

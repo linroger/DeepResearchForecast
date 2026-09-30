@@ -9732,6 +9732,10 @@ class ReportAgent:
             if pre_audit_repairs is not None:
                 # Before serialization, so forecast_sha256 seals it.
                 quality["citation_finalization"] = pre_audit_repairs
+            else:
+                # No record of this run (flag off, no log, or the log of another
+                # report): an earlier audit's record must not survive re-sealed.
+                quality.pop("citation_finalization", None)
             quality["final_audit"] = audit
             forecast["quality"] = quality
             if getattr(Config, "REPORT_PUBLISH_GATE", False):
