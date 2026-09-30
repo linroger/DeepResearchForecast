@@ -52,6 +52,7 @@ from ..models.task import TaskManager
 from ..services.hindcast_policy import (
     HINDCAST_POLICY_OPTION,
     as_of_enforcement_record,
+    capture_hindcast_policy_v1,
     hindcast_policy,
 )
 from ..services.graph_builder import (
@@ -942,6 +943,28 @@ def admission_actor_intelligence_policy_v1() -> dict[str, Any]:
     if dual_track and engine != RESEARCH_ENGINE_LEGACY:
         policy["not_required_reason"] = ACTOR_PLANE_UNSUPPORTED_BY_V3
     return policy
+
+
+def admit_hindcast_as_of(as_of: Any) -> tuple[str, dict[str, Any], str]:
+    """TIME-7: the fail-closed hindcast admission rule for a run request carrying ``as_of``.
+
+    Returns ``(as_of, actor policy, research engine)``: the canonical date, the actor-plane
+    policy the admission pins and the engine the run's research stage will select from it.
+    Raises ValueError, in this order, when ``Config.HINDCAST_ENABLED`` is off, when ``as_of``
+    is not a canonical YYYY-MM-DD date on or before today (UTC; ``validate_as_of``) and when
+    that engine is not v3: only v3 honours a pinned as-of, while the legacy engine's
+    ``_clamp_asof_reference`` would roll a past as-of forward to the run date.  Pure (nothing
+    is written); ``PipelineOrchestrator.start`` and the run API routes share it.
+    """
+    from ..utils.point_in_time import validate_as_of
+    if not bool(getattr(Config, "HINDCAST_ENABLED", False)):
+        raise ValueError("as_of requires HINDCAST_ENABLED=true")
+    canonical = validate_as_of(as_of)
+    actor_policy = admission_actor_intelligence_policy_v1()
+    engine = research_engine_for_run({"actor_intelligence_policy_v1": actor_policy})
+    if engine != RESEARCH_ENGINE_V3:
+        raise ValueError("hindcast runs require the v3 research engine")
+    return canonical, actor_policy, engine
 
 
 # ---------------------------------------------------------------------------
@@ -2465,6 +2488,7 @@ class DeerFlowResearchRunner:
         evidence_only: bool = False,
         synthesis_manifest_path: Optional[str] = None,
         research_engine: Optional[str] = None,
+        as_of: Optional[str] = None,
         _spend: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """运行研究子进程，阻塞直到结束。返回 handoff 摘要。
@@ -2490,6 +2514,14 @@ class DeerFlowResearchRunner:
         ``Config.RESEARCH_ENGINE``.  Lane-contract invocations (evidence-only,
         synthesis manifest) always run the legacy engine regardless.
 
+        TIME-7 ``as_of``: a pinned hindcast's as-of date (``hindcast_policy_v1``).
+        The child then gets ``RESEARCH_AS_OF`` (the v3 plan, brief and actors are
+        dated to it), ``PREDICTION_MARKETS_ENABLED=false`` and
+        ``RESEARCH_AS_OF_PIN=true``, written after every Config forward so they
+        win.  Only v3 honours it: any other engine raises RuntimeError before a
+        file or process exists.  An ambient ``RESEARCH_AS_OF`` never reaches a
+        child (live runs stay live).
+
         W9-9 ``kg_graph_id``：非空且 RESEARCH_MCP_KG 开启时，把 DEER_FLOW_EXTENSIONS_CONFIG_PATH
         指向部署目录的 extensions_config.json 并注入 DRF_MCP_KG_GRAPH_ID——研究子进程可经 MCP
         （kg_search/kg_trace_cascade 等）直查既有基线图谱。调用方仅在图谱已存在的路径
@@ -2499,6 +2531,23 @@ class DeerFlowResearchRunner:
             PipelineCancelled: cancel_event 被置位（用户取消），子进程组已被终止。
             RuntimeError: 子进程失败、超时或未产出报告。
         """
+        # Engine v3: the parent — never ambient env inheritance — decides which
+        # research engine the child runs, using the same resolver as the
+        # outer-lane topology so the two cannot disagree.  Evidence lanes and
+        # global synthesis are lane contracts only the legacy engine implements,
+        # so those invocations always declare it explicitly.
+        research_engine = (
+            RESEARCH_ENGINE_LEGACY
+            if (evidence_only or synthesis_manifest_path)
+            else (resolve_research_engine(research_engine) if research_engine
+                  else resolve_research_engine())
+        )
+        if as_of and research_engine != RESEARCH_ENGINE_V3:
+            # TIME-7: a pinned as-of is honoured only by v3 (legacy would roll it forward
+            # to the run date).  Fail before any file, process or spend exists.
+            raise RuntimeError(
+                f"hindcast_engine_mismatch: as_of {as_of} requires the v3 research engine, "
+                f"not {research_engine}")
         deerflow_dir = Config.DEERFLOW_DIR
         script = os.path.join(deerflow_dir, "deerflow_research.py")
         if not os.path.isdir(deerflow_dir):
@@ -2584,17 +2633,8 @@ class DeerFlowResearchRunner:
         # Checkpoint identity is parent-owned per launch; never inherit an
         # ambient value from the backend process into a different handoff.
         env.pop("RESEARCH_CHECKPOINT_ID", None)
-        # Engine v3: the parent — never ambient env inheritance — decides which
-        # research engine the child runs, using the same resolver as the
-        # outer-lane topology so the two cannot disagree.  Evidence lanes and
-        # global synthesis are lane contracts only the legacy engine implements,
-        # so those invocations always declare it explicitly.
-        research_engine = (
-            RESEARCH_ENGINE_LEGACY
-            if (evidence_only or synthesis_manifest_path)
-            else (resolve_research_engine(research_engine) if research_engine
-                  else resolve_research_engine())
-        )
+        # TIME-7: so is the research as-of — only a pinned hindcast sets it (below).
+        env.pop("RESEARCH_AS_OF", None)
         env["RESEARCH_ENGINE"] = research_engine
         if research_engine == RESEARCH_ENGINE_V3:
             # v3 caps its own wall-clock plan at 0.85 × this value so it writes
@@ -2665,6 +2705,14 @@ class DeerFlowResearchRunner:
         _forward_research_knobs(env, RESEARCH_CHILD_KNOBS)
         if research_engine == RESEARCH_ENGINE_V3:
             _forward_research_knobs(env, RESEARCH_CHILD_V3_KNOBS)
+        if as_of:
+            # TIME-7 pinned hindcast (v3 only, checked above).  Written after the inline
+            # PREDICTION_MARKETS_* lines and the registry forward so these values win: the
+            # child dates its plan/brief/actors to as_of, never snapshots live Polymarket odds
+            # (they would leak the outcome), and never adopts a model-supplied as-of.
+            env["RESEARCH_AS_OF"] = as_of
+            env["PREDICTION_MARKETS_ENABLED"] = "false"
+            env["RESEARCH_AS_OF_PIN"] = "true"
         # RESEARCH-1: fetch-layer shell detection and the per-call fetch bound
         # come from Config too (cached_fetch / research_gateway / linear_research
         # read them from os.environ with the same defaults).
@@ -7407,6 +7455,10 @@ def evaluation_context_for_simulation(simulation_id: Optional[str]) -> Optional[
         return _fail_closed_evaluation_pin(lookup_failed=True)
 
 
+# TIME-7: at most this many later-dated source URLs are recorded per graph build of a hindcast.
+HINDCAST_VIOLATIONS_MAX = 50
+
+
 def hindcast_pin_for_simulation(simulation_id: Optional[str]) -> Optional[dict[str, Any]]:
     """TIME-6: the hindcast pin of the pipeline that ran ``simulation_id``, else None.
 
@@ -8628,13 +8680,28 @@ class PipelineOrchestrator:
         language: Optional[str] = None,
         model: Optional[str] = None,
         evaluation: Optional[dict[str, Any]] = None,
+        as_of: Optional[str] = None,
     ) -> PipelineState:
         """创建管线记录并在后台线程启动。立即返回（含 pipeline_id / task_id）。
 
         EVAL-13 ``evaluation``：评估运行上下文（见 validate_evaluation_context）。在创建任何
         目录/任务之前校验，非法即 ValueError；合法时钉入 options['evaluation_run_v1'] 并落
         handoff/evaluation_run.json。缺省 None → options 与 handoff 逐字节不变。
+
+        TIME-7 ``as_of``：回测准入（规范 YYYY-MM-DD，不晚于今天 UTC）。同样在创建任何目录/任务
+        之前 fail-closed 校验：Config.HINDCAST_ENABLED 未开、日期非规范/在未来、或本次运行将用
+        的研究引擎不是 v3 → ValueError（绝不悄悄按实时运行）。合法时钉入 options['hindcast_policy_v1']
+        （TIME-6 capture_hindcast_policy_v1），并作为评估运行准入：调用方未给 evaluation 时以
+        eval_run_id ``hindcast_<YYYYMMDD>`` 走 EVAL-13 同一条钉/标记路径（评估账本、跳过生产
+        校准、解析监测排除）；调用方给了 evaluation（golden 回放）则沿用其值。缺省 None → 今日路径。
         """
+        admission_actor_policy: Optional[dict[str, Any]] = None
+        hindcast_pin: Optional[dict[str, Any]] = None
+        if as_of is not None:
+            as_of, admission_actor_policy, engine = admit_hindcast_as_of(as_of)
+            hindcast_pin = capture_hindcast_policy_v1(as_of, research_engine=engine)
+            if evaluation is None:
+                evaluation = {"eval_run_id": "hindcast_" + as_of.replace("-", "")}
         evaluation_pin = build_evaluation_pin(evaluation) if evaluation is not None else None
         pipeline_id = f"pipe_{uuid.uuid4().hex[:12]}"
         PipelineManager.ensure_dirs(pipeline_id)
@@ -8667,11 +8734,16 @@ class PipelineOrchestrator:
             "research_model": model or None,
         })
         state.options["actor_intelligence_policy_v1"] = (
-            admission_actor_intelligence_policy_v1()
+            admission_actor_policy if admission_actor_policy is not None
+            else admission_actor_intelligence_policy_v1()
         )
         # Foglamp WP1 (1B)：新管线在准入时钉住安全政策快照——服务重载/环境变量漂移
         # 不得让一条已准入的运行悄悄改变图谱反馈/种子/extremize/模拟影响语义。
         state.options["safety_policy_v1"] = capture_safety_policy_v1("admission")
+        if hindcast_pin is not None:
+            # TIME-7：回测钉（研究子进程据此拿到 RESEARCH_AS_OF、扣下预测市场；图谱锚定钉日；
+            # 报告阶段按 TIME-6 扣下市场并盖 hindcast 章）。resume 原样保留，fork 携带。
+            state.options[HINDCAST_POLICY_OPTION] = hindcast_pin
         if evaluation_pin is not None:
             # EVAL-13：评估运行准入钉——报告跳过生产校准读、只入评估账本、不进解析监测。
             # handoff 标记供无编排器上下文的报告入口（API 重生成）按模拟 id 查回。标记另记
@@ -12439,6 +12511,44 @@ class PipelineOrchestrator:
         # as_of_date 存在但无效且无来源日可回退 → 运行日兜底（优于带脏日期入图）。
         return run_dt, note
 
+    @classmethod
+    def _pin_hindcast_graph_anchor(cls, state: "PipelineState", pin: dict[str, Any],
+                                   sources: Any) -> datetime:
+        """TIME-7: the bi-temporal graph anchor of a pinned hindcast (midnight UTC of its as-of).
+
+        ``_validate_as_of_date`` is not consulted: it moves an anchor forward to the newest
+        source date, and in a hindcast a source dated after the as-of is a leak, never newer
+        evidence.  Such sources are recorded, never adopted: up to
+        ``HINDCAST_VIOLATIONS_MAX`` of their URLs go to ``state.options['hindcast_violations']``
+        (only when there is one; every graph build re-decides).  The pinned date is also the
+        ledger pre-registration anchor (EVAL-1 ``as_of_date_validated``).  A pin whose as-of is
+        not a canonical, non-future date raises ValueError: the graph stage fails closed
+        rather than anchor a hindcast anywhere else.
+        """
+        from ..utils.point_in_time import validate_as_of
+        anchor = datetime.strptime(validate_as_of(pin.get("as_of")), "%Y-%m-%d").replace(
+            tzinfo=timezone.utc)
+        violations: list[str] = []
+        for source in sources if isinstance(sources, list) else []:
+            if len(violations) >= HINDCAST_VIOLATIONS_MAX:
+                break
+            if not isinstance(source, dict):
+                continue
+            url = source.get("url")
+            if not isinstance(url, str) or not url or url in violations:
+                continue
+            dated = parse_as_of(source.get("date"))
+            if dated is not None and dated > anchor:
+                violations.append(url)
+        state.options.pop("hindcast_violations", None)
+        if violations:
+            state.options["hindcast_violations"] = violations
+            logger.warning("[%s] hindcast: %d source(s) dated after the pinned as-of %s recorded "
+                           "in hindcast_violations, never adopted as the graph anchor",
+                           state.pipeline_id, len(violations), anchor.date())
+        cls._record_validated_as_of(state, anchor, True)
+        return anchor
+
     # -- 内部：仅综合恢复（复用 immutable evidence lanes）-----------------
 
     def _run_research_synthesis_recovery(
@@ -13591,6 +13701,16 @@ class PipelineOrchestrator:
                     # legacy engine keeps today's RESEARCH_PARALLEL_TRACKS rule.
                     # The run's pinned actor policy may require the legacy engine.
                     _research_engine = research_engine_for_run(state.options)
+                    # TIME-7: a pinned hindcast is re-checked at launch (config drift or a
+                    # resume could select legacy, which would roll the as-of forward): fail
+                    # closed before any spend; the stage stays resumable once v3 is back.
+                    _hindcast_pin = hindcast_policy(state.options)
+                    if _hindcast_pin is not None and _research_engine != RESEARCH_ENGINE_V3:
+                        raise RuntimeError(
+                            "hindcast_engine_mismatch: pinned hindcast (as_of "
+                            f"{_hindcast_pin.get('as_of')}) requires the v3 research engine, "
+                            f"but this run resolves {_research_engine}; set RESEARCH_ENGINE=v3 "
+                            "and resume")
                     _n_tracks = research_outer_track_count(
                         getattr(Config, "RESEARCH_PARALLEL_TRACKS", 3),
                         _research_engine,
@@ -13682,6 +13802,7 @@ class PipelineOrchestrator:
                             max_concurrent_subagents=max(1, _single_subagent_cap),
                             model_concurrency_global=_single_model_concurrency,
                             research_engine=_research_engine,
+                            as_of=_hindcast_pin["as_of"] if _hindcast_pin else None,
                         )
                 state.research_pid = None  # 子进程已结束，清掉以免 reconcile 误杀复用 PID
                 # PAR-2：并行轨 PID 清单也一并清空（研究阶段已结束，避免 reconcile 误杀复用 PID）。
@@ -14142,7 +14263,13 @@ class PipelineOrchestrator:
                 # future, pre-evidence, or unparseable value. Gated default-on; any
                 # error or a disabled flag reverts to the plain parse (today's behavior).
                 _as_of_validated = False
-                if getattr(Config, "VALIDATE_AS_OF_DATE", True):
+                # TIME-7: a pinned hindcast anchors at its as-of date; the validator below would
+                # roll the anchor forward to a later-dated source (a leak, never newer evidence).
+                _hindcast_anchor_pin = hindcast_policy(state.options)
+                if _hindcast_anchor_pin is not None:
+                    as_of = self._pin_hindcast_graph_anchor(
+                        state, _hindcast_anchor_pin, research.get("sources"))
+                elif getattr(Config, "VALIDATE_AS_OF_DATE", True):
                     try:
                         as_of, _as_of_note = self._validate_as_of_date(actors, research.get("sources"))
                         if _as_of_note:
@@ -14156,8 +14283,10 @@ class PipelineOrchestrator:
                 else:
                     as_of = parse_as_of((actors or {}).get("as_of_date")) if isinstance(actors, dict) else None
                 # EVAL-1: 只有校验器实际给出的锚点才成为账本预注册键的 as_of（本次建图重新判定，
-                # 旧值先清掉）；回退到原始解析的日期未经校验，不写入。
-                self._record_validated_as_of(state, as_of, _as_of_validated)
+                # 旧值先清掉）；回退到原始解析的日期未经校验，不写入。回测钉的锚点已由
+                # _pin_hindcast_graph_anchor 记为钉日。
+                if _hindcast_anchor_pin is None:
+                    self._record_validated_as_of(state, as_of, _as_of_validated)
                 seeded = _seed_research_actors(
                     builder, graph_id, actors, valid_at=as_of
                 )

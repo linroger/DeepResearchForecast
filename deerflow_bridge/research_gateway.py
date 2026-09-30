@@ -3802,7 +3802,10 @@ class ResearchTools:
       either one's URL path, shown in its row header outside the untrusted
       block.  ``fetch_fn`` may return
       ``(text, metadata)``; the default one then does (``clock`` returns the
-      UTC now that future dates are rejected against).
+      UTC now that future dates are rejected against);
+    * with ``vintage_as_of`` (a hindcast's RESEARCH_AS_OF, TIME-7) every
+      fetched page carries a trusted LIVE PAGE line between its row header and
+      the untrusted block: the page is served as it is now, not as of that date.
     """
 
     def __init__(self, ledger: SourceLedger, pages_dir: str | os.PathLike[str], *,
@@ -3811,7 +3814,8 @@ class ResearchTools:
                  bridge: Any = None, plog: Any = None,
                  limits: ToolLimits | None = None, source_dates: bool = False,
                  date_text_fallback: bool = True,
-                 clock: Callable[[], _dt.datetime] | None = None) -> None:
+                 clock: Callable[[], _dt.datetime] | None = None,
+                 vintage_as_of: str | None = None) -> None:
         self.ledger = ledger
         self.pages_dir = Path(pages_dir)
         self.pages_dir.mkdir(parents=True, exist_ok=True)
@@ -3826,6 +3830,8 @@ class ResearchTools:
         self.source_dates = bool(source_dates)
         self.date_text_fallback = bool(date_text_fallback)
         self._clock = clock or _utc_now
+        # TIME-7: the hindcast as-of date fetched pages are labelled against (None = live run).
+        self.vintage_as_of = str(vintage_as_of) if vintage_as_of else None
         # Dating attempts skipped because source_dates could not be imported or failed.
         self._dates_skipped = 0
         self._lock = threading.Lock()
@@ -4329,6 +4335,11 @@ class ResearchTools:
         # sanitizer, which blanks ordinary policy prose ("override the veto").
         body = (delimit_untrusted(_WEB_EXCERPT_LABEL, neutralize_citation_markers(excerpt))
                 or "(no readable text on this page)")
+        if self.vintage_as_of:
+            # Trusted engine text on the second line: the row header stays line 0
+            # (tool_output_sids) and the page itself stays inside the untrusted block.
+            body = (f"LIVE PAGE: served as it is now, not as of {self.vintage_as_of}; "
+                    f"ignore anything dated after {self.vintage_as_of}.\n{body}")
         suffix = " (stored copy)" if cached else ""
         self._log("result", f"web_fetch → {kept}/{total} chars [S{row['sid']}]{suffix}")
         return f"{header}\n{body}"

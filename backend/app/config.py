@@ -618,6 +618,13 @@ class Config:
     # adopted again (previous bytes).  The parent forwards it to the v3 child.
     RESEARCH_AS_OF_PIN = os.environ.get(
         'RESEARCH_AS_OF_PIN', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    # TIME-7 hindcast admission: accept as_of (a canonical past-or-today YYYY-MM-DD) on run
+    # requests (/api/research/run, /api/v1/run, PipelineOrchestrator.start).  An admitted
+    # as_of pins hindcast_policy_v1 plus an evaluation-run pin, runs v3 research with
+    # RESEARCH_AS_OF and prediction markets withheld, and anchors the graph at the pin.
+    # Default false, which is safe: a request carrying as_of is then rejected (400 /
+    # ValueError) instead of silently running live; requests without as_of are unchanged.
+    HINDCAST_ENABLED = os.environ.get('HINDCAST_ENABLED', 'false').strip().lower() == 'true'
     # W9-10：建图输入源默认 both→dossier_only——用户明确要求 KG 收敛到关键 actor：actor 中心的
     # 卷宗切块入图，广覆盖研究报告只喂本体/报告上下文（graph 阶段 8h38m/60% 跳块的主要输入面）。
     # dossier 缺失/为空时代码自动回退 both 语义（全量报告切块），设 'both' 可显式恢复旧行为。

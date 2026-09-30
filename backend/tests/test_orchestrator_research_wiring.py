@@ -1799,10 +1799,12 @@ def test_v3_engine_forces_single_outer_track_and_logs_once(monkeypatch):
     assert len(log.of("info")) == 2
 
 
-def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options=None):
+def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options=None,
+                               runner_kwargs=None, expect_status="completed"):
     """Run the real ``_run`` state machine for a fresh research-only pipeline
     with the research subprocess layer faked; return which topology ran (and,
-    for a single lane, the engine the stage asked the runner for)."""
+    for a single lane, the engine the stage asked the runner for).
+    ``runner_kwargs`` (a list) collects each single-lane runner call's kwargs."""
     monkeypatch.setattr(_po.Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"),
                         raising=False)
     monkeypatch.setattr(_po.Config, "UPLOAD_FOLDER", str(tmp_path / "uploads"),
@@ -1837,6 +1839,8 @@ def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options
     def fake_single(prompt, handoff_dir, **kwargs):
         calls.append(("single", kwargs.get("budget_lane_id")))
         engines.append(kwargs.get("research_engine"))
+        if runner_kwargs is not None:
+            runner_kwargs.append(kwargs)
         with open(os.path.join(handoff_dir, "research_report.md"), "w",
                   encoding="utf-8") as fh:
             fh.write(report)
@@ -1865,7 +1869,7 @@ def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options
     state.handoff_dir = _po.PipelineManager.handoff_dir(pid)
     os.makedirs(state.handoff_dir, exist_ok=True)
     _po.PipelineOrchestrator._run(state)
-    assert state.status == "completed", state.error
+    assert state.status == expect_status, state.error
     if options is not None:
         return calls, engines
     return calls
@@ -2303,3 +2307,195 @@ def test_judge_bound_probe_is_false_without_a_contract_manifest(tmp_path):
     """Single-lane runs publish no research contract manifest; the probe must
     answer False instead of raising (the AttributeError skipped research lint)."""
     assert _po._research_report_is_judge_bound(str(tmp_path)) is False
+
+
+# ── TIME-7: a pinned hindcast's as-of reaches only a v3 child; graph anchor = pin ──
+
+import inspect  # noqa: E402
+from datetime import date  # noqa: E402
+
+from app.services import hindcast_policy as _hp  # noqa: E402
+
+HINDCAST_AS_OF = "2024-06-01"
+
+
+def _hindcast_pin(as_of=HINDCAST_AS_OF):
+    return _hp.capture_hindcast_policy_v1(as_of, research_engine="v3", today_utc=date(2026, 9, 30))
+
+
+def test_runner_hands_a_pinned_as_of_to_the_v3_child(monkeypatch, tmp_path):
+    """The hindcast values are written after every Config forward, so they win
+    (markets on and the as-of pin off in Config), and an ambient value never decides."""
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    monkeypatch.setattr(_po.Config, "PREDICTION_MARKETS_ENABLED", True, raising=False)
+    monkeypatch.setattr(_po.Config, "RESEARCH_AS_OF_PIN", False, raising=False)
+    monkeypatch.setenv("RESEARCH_AS_OF", "2020-01-01")
+
+    child = _launch_capturing_child(monkeypatch, tmp_path, timeout=900, as_of=HINDCAST_AS_OF)
+
+    env = child["env"]
+    assert env["RESEARCH_ENGINE"] == "v3"
+    assert env["RESEARCH_AS_OF"] == HINDCAST_AS_OF
+    assert env["PREDICTION_MARKETS_ENABLED"] == "false"
+    assert env["RESEARCH_AS_OF_PIN"] == "true"
+    assert HINDCAST_AS_OF not in " ".join(child["cmd"])  # env contract only, no new CLI flag
+
+
+@pytest.mark.parametrize("engine", ["v3", "legacy"])
+def test_ambient_research_as_of_never_reaches_a_live_child(monkeypatch, tmp_path, engine):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", engine, raising=False)
+    monkeypatch.setattr(_po.Config, "PREDICTION_MARKETS_ENABLED", True, raising=False)
+    monkeypatch.setenv("RESEARCH_AS_OF", HINDCAST_AS_OF)
+
+    child = _launch_capturing_child(monkeypatch, tmp_path, timeout=900)
+
+    assert "RESEARCH_AS_OF" not in child["env"]
+    assert child["env"]["PREDICTION_MARKETS_ENABLED"] == "true"
+
+
+def test_live_child_env_is_identical_with_or_without_the_as_of_argument(monkeypatch, tmp_path):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    envs = []
+    for name, extra in (("omitted", {}), ("explicit", {"as_of": None}), ("empty", {"as_of": ""})):
+        root = tmp_path / name
+        root.mkdir()
+        env = _launch_capturing_child(monkeypatch, root, timeout=900, **extra)["env"]
+        envs.append({key: value.replace(os.path.realpath(root), "<root>").replace(str(root), "<root>")
+                     for key, value in env.items()})
+    assert envs[0] == envs[1] == envs[2]
+    assert "RESEARCH_AS_OF" not in envs[0]
+
+
+@pytest.mark.parametrize("config_engine, kwargs", [
+    ("v3", {"research_engine": "legacy"}),
+    ("legacy", {}),
+    ("v3", {"evidence_only": True}),
+    ("v3", {"synthesis_manifest_path": "/tmp/evidence_synthesis_manifest.json"}),
+])
+def test_pinned_as_of_on_a_non_v3_child_fails_before_launch(monkeypatch, tmp_path, config_engine, kwargs):
+    """Only v3 honours a pinned as-of: any other child is refused before Popen (a
+    launched child would make the fake runner return normally) and before the
+    prompt file exists."""
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", config_engine, raising=False)
+
+    with pytest.raises(RuntimeError, match="hindcast_engine_mismatch"):
+        _launch_capturing_child(monkeypatch, tmp_path, timeout=900, as_of=HINDCAST_AS_OF, **kwargs)
+
+    assert not list((tmp_path / "handoff").glob(".prompt-*"))
+
+
+def test_research_stage_passes_the_pinned_as_of_to_the_runner(monkeypatch, tmp_path):
+    seen = []
+    calls, engines = _drive_research_only_stage(
+        monkeypatch, tmp_path, engine="v3", tracks=3,
+        options={_hp.HINDCAST_POLICY_OPTION: _hindcast_pin()}, runner_kwargs=seen)
+    assert calls == [("single", "outer-track-1")] and engines == ["v3"]
+    assert [kwargs["as_of"] for kwargs in seen] == [HINDCAST_AS_OF]
+
+
+@pytest.mark.parametrize("options", [
+    {},
+    # An as-of equal to today is pinned but live (TIME-6): no as-of reaches research.
+    {_hp.HINDCAST_POLICY_OPTION: _hp.capture_hindcast_policy_v1(
+        "2026-09-30", research_engine="v3", today_utc=date(2026, 9, 30))},
+])
+def test_research_stage_without_a_hindcast_pin_passes_no_as_of(monkeypatch, tmp_path, options):
+    seen = []
+    _drive_research_only_stage(monkeypatch, tmp_path, engine="v3", tracks=1,
+                               options=options, runner_kwargs=seen)
+    assert [kwargs["as_of"] for kwargs in seen] == [None]
+
+
+def test_research_stage_refuses_a_pinned_hindcast_on_the_legacy_engine(monkeypatch, tmp_path):
+    """Config drift after admission (or on resume) selects legacy: the stage fails
+    closed before any lane runs, with a resumable, named error."""
+    seen = []
+    calls, engines = _drive_research_only_stage(
+        monkeypatch, tmp_path, engine="legacy", tracks=3,
+        options={_hp.HINDCAST_POLICY_OPTION: _hindcast_pin()}, runner_kwargs=seen,
+        expect_status="failed")
+    assert calls == [] and engines == [] and seen == []
+    persisted = _po.PipelineManager.load("pipe_topology_legacy_3")
+    assert "hindcast_engine_mismatch" in persisted["error"]
+    assert persisted["stages"][_po.STAGE_RESEARCH]["status"] == "failed"
+
+
+def _anchor_state(**options):
+    return _po.PipelineState(pipeline_id="pipe_hindcast_anchor", prompt="Will X happen?",
+                             options=dict(options))
+
+
+def _dated(url, date_str):
+    return {"title": "t", "url": url, "tier": "S1", "date": date_str}
+
+
+def test_hindcast_graph_anchor_is_the_pin_and_records_later_sources():
+    pin = _hindcast_pin()
+    state = _anchor_state(**{_hp.HINDCAST_POLICY_OPTION: pin})
+    sources = [
+        _dated("https://early.example/a", "2024-05-20"),
+        _dated("https://late.example/a", "2025-03-01"),
+        _dated("https://same-day.example/a", HINDCAST_AS_OF),     # not after the as-of
+        _dated("https://late.example/a", "2025-03-01"),            # recorded once
+        {"title": "undated", "url": "https://undated.example/a"},
+        _dated("", "2026-01-01"),                                  # nothing to record
+        "not a source",
+        _dated("https://month.example/a", "2024-07"),              # a later month counts
+    ]
+
+    anchor = _po.PipelineOrchestrator._pin_hindcast_graph_anchor(state, pin, sources)
+
+    assert anchor == datetime(2024, 6, 1, tzinfo=timezone.utc)
+    assert state.options["hindcast_violations"] == ["https://late.example/a",
+                                                    "https://month.example/a"]
+    # EVAL-1: the pinned date is the ledger pre-registration anchor.
+    assert state.options["as_of_date_validated"] == HINDCAST_AS_OF
+    # Without the pin, the R2-RES-7 validator would have rolled the anchor forward.
+    rolled, note = _po.PipelineOrchestrator._validate_as_of_date(
+        {"as_of_date": HINDCAST_AS_OF}, sources)
+    assert rolled.date().isoformat() == "2026-01-01" and "早于最新来源日" in note
+
+
+def test_hindcast_graph_anchor_rebuild_drops_stale_violations_and_caps_them():
+    pin = _hindcast_pin()
+    state = _anchor_state(hindcast_violations=["https://stale.example"],
+                          as_of_date_validated="2026-01-01")
+    _po.PipelineOrchestrator._pin_hindcast_graph_anchor(
+        state, pin, [_dated("https://early.example/a", "2024-01-01")])
+    assert "hindcast_violations" not in state.options
+    assert state.options["as_of_date_validated"] == HINDCAST_AS_OF
+
+    many = [_dated(f"https://late.example/{i}", "2025-01-01") for i in range(80)]
+    _po.PipelineOrchestrator._pin_hindcast_graph_anchor(state, pin, many)
+    assert state.options["hindcast_violations"] == [
+        f"https://late.example/{i}" for i in range(_po.HINDCAST_VIOLATIONS_MAX)]
+    assert _po.HINDCAST_VIOLATIONS_MAX == 50
+
+
+@pytest.mark.parametrize("bad_as_of", ["2024-6-1", None, "2999-01-01"])
+def test_hindcast_graph_anchor_fails_closed_on_a_bad_pin(bad_as_of):
+    pin = dict(_hindcast_pin(), as_of=bad_as_of)
+    state = _anchor_state(as_of_date_validated="2024-06-01")
+    with pytest.raises(ValueError):
+        _po.PipelineOrchestrator._pin_hindcast_graph_anchor(state, pin, [])
+
+
+def test_graph_stage_anchors_a_hindcast_before_and_instead_of_the_validator():
+    src = inspect.getsource(_po.PipelineOrchestrator._run)
+    markers = [
+        "_as_of_validated = False",
+        "_hindcast_anchor_pin = hindcast_policy(state.options)",
+        "if _hindcast_anchor_pin is not None:",
+        "as_of = self._pin_hindcast_graph_anchor(",
+        'elif getattr(Config, "VALIDATE_AS_OF_DATE", True):',
+        "as_of, _as_of_note = self._validate_as_of_date(",
+        "if _hindcast_anchor_pin is None:",
+        "self._record_validated_as_of(state, as_of, _as_of_validated)",
+        "seeded = _seed_research_actors(",
+    ]
+    pos = -1
+    for marker in markers:
+        nxt = src.find(marker, pos + 1)
+        assert nxt > pos, marker
+        pos = nxt
+    assert src.count("self._pin_hindcast_graph_anchor(") == 1

@@ -634,6 +634,34 @@ def _utc_date() -> str:
     return _dt.datetime.now(_dt.timezone.utc).date().isoformat()
 
 
+def _canonical_date(value: Any) -> bool:
+    """True for the exact canonical ``YYYY-MM-DD`` spelling of a real calendar date.
+
+    The rule of the backend's ``utils.point_in_time.validate_as_of`` (this child cannot
+    import the backend): a string that survives a strptime/strftime round trip, so
+    '2024-6-1', '2024-06-01 00:00' and '2024-02-30' are refused.
+    """
+    if not isinstance(value, str):
+        return False
+    try:
+        return _dt.datetime.strptime(value, "%Y-%m-%d").strftime("%Y-%m-%d") == value
+    except ValueError:
+        return False
+
+
+def _hindcast_as_of(env: Mapping[str, Any] | None) -> str | None:
+    """RESEARCH_AS_OF of the run env when it pins a canonical date before today (UTC), else None.
+
+    Such a run is a hindcast: its prompts carry the point-in-time rule and fetched pages
+    are labelled as live.  A pin equal to today is live; the engine refuses an invalid
+    or future value before this matters (:class:`_Engine`).
+    """
+    raw = str((env or {}).get("RESEARCH_AS_OF", "") or "").strip()
+    if not _canonical_date(raw):
+        return None
+    return raw if _dt.date.fromisoformat(raw) < _dt.date.fromisoformat(_utc_date()) else None
+
+
 def _compact_utc() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
@@ -1718,17 +1746,35 @@ def build_plan(question: str, language: str, as_of: str, preset: Preset, actor_c
         scope_horizon=scope_horizon if horizon != scope_horizon else None)
 
 
-def render_pre_brief(question: str, language: str, as_of: str) -> str:
-    return _render(_T_PRE_BRIEF, question=_collapse(question), language=language, as_of=as_of)
+def point_in_time_rule(as_of: str) -> str:
+    """The brief line of a hindcast (RESEARCH_AS_OF before today): research as of ``as_of``."""
+    return (f"Point-in-time rule: treat {as_of} as today. Use only information published on or "
+            f"before {as_of}. Web pages are served as they are now and may show later content: "
+            f"ignore any event, figure or status dated after {as_of}.")
 
 
-def render_brief(plan: Plan) -> str:
-    """The RUN BRIEF: built once after planning, persisted, reused byte-identically."""
+def render_pre_brief(question: str, language: str, as_of: str, *, point_in_time: bool = False) -> str:
+    """The planning-stage brief; ``point_in_time`` (a hindcast) adds :func:`point_in_time_rule`
+    after the As-of line, which is the last line."""
+    brief = _render(_T_PRE_BRIEF, question=_collapse(question), language=language, as_of=as_of)
+    return f"{brief}\n{point_in_time_rule(as_of)}" if point_in_time else brief
+
+
+def render_brief(plan: Plan, *, point_in_time: bool = False) -> str:
+    """The RUN BRIEF: built once after planning, persisted, reused byte-identically.
+
+    ``point_in_time`` (a hindcast) inserts :func:`point_in_time_rule` after the As-of line;
+    ENGINE_CORE and the tools schema never change, so the prompt-cache prefix does not either.
+    """
     lines = [
         "RUN BRIEF",
         f"Research question: {_collapse(plan.question)}",
         f"Output language: {plan.language}",
         f"As-of date (UTC): {plan.as_of}",
+    ]
+    if point_in_time:
+        lines.append(point_in_time_rule(plan.as_of))
+    lines += [
         f"Forecast horizon: {plan.horizon or 'not stated in the question'}",
     ]
     if plan.restated_question and _norm_key(plan.restated_question) != _norm_key(plan.question):
@@ -5365,9 +5411,23 @@ class _Engine:
         self.phase_seconds: dict[str, float] = {}
         self._lock = threading.Lock()
         self._page_numbers: dict[int, frozenset[str]] = {}
+        # TIME-7 RESEARCH_AS_OF (set by the parent only for a pinned hindcast): the plan,
+        # brief and actors are dated to it.  An invalid or future value is refused (exit 2)
+        # rather than silently researching as of today.
+        raw_as_of = str((env or {}).get("RESEARCH_AS_OF", "") or "").strip()
+        if raw_as_of and (not _canonical_date(raw_as_of)
+                          or _dt.date.fromisoformat(raw_as_of) > _dt.date.fromisoformat(_utc_date())):
+            raise _EngineFailure(f"invalid RESEARCH_AS_OF {raw_as_of[:40]!r}: expected a canonical "
+                                 "YYYY-MM-DD date that is not in the future")
+        self.pinned_as_of: str | None = raw_as_of or None
+        # A pin before today is a hindcast: point-in-time rule in the briefs, labelled pages.
+        self.hindcast = _hindcast_as_of(env) is not None
         identity = {"question_sha256": _sha256(" ".join(self.question.split())),
                     "depth": self.preset.depth, "model": self.model_name,
                     "language": self.language, "engine_version": ENGINE_VERSION}
+        if self.pinned_as_of:
+            # Only pinned runs carry it, so a live run's work dir is never archived.
+            identity["as_of"] = self.pinned_as_of
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.work, self.state, self.resumed = _open_work_dir(
             self.out_dir, identity, self._write_internal, reporter)
@@ -5701,8 +5761,8 @@ class _Engine:
             return
         self.log("stage", "research:v3:plan start")
         with self.phase("plan") as deadline:
-            as_of = _utc_date()
-            pre_brief = render_pre_brief(self.question, self.language, as_of)
+            as_of = self.pinned_as_of or _utc_date()
+            pre_brief = render_pre_brief(self.question, self.language, as_of, point_in_time=self.hindcast)
             scope, raw_plan, outage = self._plan_calls(pre_brief, deadline, as_of=as_of)
             plan = build_plan(self.question, self.language, as_of, self.preset, self.actor_cap,
                               scope, raw_plan, question_spec=self._pending_question_spec)
@@ -5712,7 +5772,7 @@ class _Engine:
             if plan.fallback:
                 self.log("warn", "v3: plan uses deterministic defaults for: "
                                  + ", ".join(sorted(plan.fallback)))
-            brief = render_brief(plan)
+            brief = render_brief(plan, point_in_time=self.hindcast)
             self.write_json(self.work / "plan.json", plan.to_dict())
             self._write_internal(self.work / "brief.md", brief)
             self._publish_question_spec(plan)
@@ -5771,7 +5831,8 @@ class _Engine:
             "scout_queries": list(plan.scout_queries), "key_entities": list(plan.key_entities)}
         deadline = self.deadline.child(PHASE_TIME_SHARE["plan"], label="replan")
         with self.gateway.phase("plan"):
-            scope, raw_plan, _ = self._plan_calls(render_pre_brief(self.question, self.language, plan.as_of),
+            scope, raw_plan, _ = self._plan_calls(render_pre_brief(self.question, self.language, plan.as_of,
+                                                                   point_in_time=self.hindcast),
                                                   deadline, as_of=plan.as_of, scope=scope, single_attempt=True,
                                                   prior_spec=plan.question_spec)
         if raw_plan is None:
@@ -5779,7 +5840,7 @@ class _Engine:
             return
         new = build_plan(self.question, self.language, plan.as_of, self.preset, self.actor_cap, scope, raw_plan,
                          question_spec=self._pending_question_spec)
-        brief = render_brief(new)
+        brief = render_brief(new, point_in_time=self.hindcast)
         self.write_json(self.work / "plan.json", new.to_dict())
         self._write_internal(self.work / "brief.md", brief)
         self._publish_question_spec(new)
@@ -7198,8 +7259,16 @@ class _Engine:
             self._analytics(sources, counts.pop("_actors_obj"))
             if self.source_dates:
                 self._source_date_meta(order)
-            self.bridge_call("_collect_prediction_markets", self.out_dir, self.question, report,
-                             self.meta, self.reporter, model_name=self.model_name)
+            if self.pinned_as_of:
+                # TIME-7: today's odds are not as of the pinned date (the parent also turns
+                # PREDICTION_MARKETS_ENABLED off for such a run); nothing is fetched.
+                self.log("stage", f"prediction markets withheld (RESEARCH_AS_OF={self.pinned_as_of})")
+                self.meta["point_in_time"] = {
+                    "as_of": self.pinned_as_of, "hindcast": self.hindcast, "markets": "withheld",
+                    "fetch": "label" if self.hindcast else "live", "search": "unbounded"}
+            else:
+                self.bridge_call("_collect_prediction_markets", self.out_dir, self.question, report,
+                                 self.meta, self.reporter, model_name=self.model_name)
             self.bridge_call("_render_research_charts", self.out_dir, self.meta, self.reporter,
                              question=self.question)
             final_text = _read_text(self.out_dir / report_name) or report
@@ -8777,10 +8846,14 @@ def _default_gateway_factory(args: Any, plog: Any, bridge: Any, preset: Preset) 
 
 def _default_tools_factory(ledger: rg.SourceLedger, pages_dir: Path, bridge: Any, plog: Any,
                            limits: rg.ToolLimits) -> rg.ResearchTools:
-    """Production tools: real search (search_tools) and fetch (cached_fetch)."""
+    """Production tools: real search (search_tools) and fetch (cached_fetch).
+
+    A hindcast (RESEARCH_AS_OF before today) labels every fetched page as live
+    (``vintage_as_of``)."""
     return rg.ResearchTools(ledger, pages_dir, bridge=bridge, plog=plog, limits=limits,
                             source_dates=_env_flag(os.environ, "RESEARCH_SOURCE_DATES", False),
-                            date_text_fallback=_env_flag(os.environ, "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", True))
+                            date_text_fallback=_env_flag(os.environ, "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", True),
+                            vintage_as_of=_hindcast_as_of(os.environ))
 
 
 # ===========================================================================
