@@ -1390,6 +1390,31 @@ class Config:
     # run first; off = byte-identical tool text, caches and meta.  The parent forwards
     # it to every research child (search_tools / cached_fetch / linear_research).
     RESEARCH_SOURCE_TAXONOMY = os.environ.get('RESEARCH_SOURCE_TAXONOMY', 'false').strip().lower() == 'true'
+    # RESEARCH-11 v3 question spec: one post-scout JSON call (reusing the plan call's
+    # cached prefix) pins the operational question, outcome definition, resolution
+    # source, horizon and reference class, and discloses at most 3 defaults it chose
+    # instead of asking.  Written to handoff question_spec.json (drf.question_spec/v1,
+    # SHA-manifested), appended to the run brief, fed to the plan call and mirrored
+    # into actors.json (question_spec, horizon_date, forecast_inputs.base_rates).  A
+    # failed call never fails the run (status unavailable + a degradation event).
+    # Default false: it adds a model call and changes the plan prompt; off = brief,
+    # plan, actors.json and every prompt byte-identical.  Forwarded to the v3 child.
+    RESEARCH_QUESTION_SPEC = os.environ.get('RESEARCH_QUESTION_SPEC', 'false').strip().lower() == 'true'
+    # Forecast-input extraction master switch (EXECPLAN2 I-0-5), read by the legacy
+    # bridge's extraction prompt and the report agent's forecast-inputs block (both
+    # already read this name); parsed exactly like the bridge (unset or empty = true,
+    # else 1/true/yes/on), so the default keeps today's behaviour.  Forwarded to every
+    # research child.
+    RESEARCH_FORECAST_INPUTS = (os.environ.get('RESEARCH_FORECAST_INPUTS', '').strip().lower() or 'true') in (
+        '1', 'true', 'yes', 'on')
+    # RESEARCH-11 v3 forecast inputs: the facts extraction also asks for the drivers
+    # and dated leading indicators (precision-preserving dates, never padded) that
+    # fill actors.json forecast_inputs.drivers / .indicators, which v3 wrote empty.
+    # Needs RESEARCH_FORECAST_INPUTS too.  Default false until one live A/B: it
+    # extends the facts prompt; off = prompt and actors.json byte-identical.
+    # Forwarded to the v3 child.
+    RESEARCH_V3_FORECAST_INPUTS = os.environ.get(
+        'RESEARCH_V3_FORECAST_INPUTS', 'false').strip().lower() == 'true'
     # PAR-2：编排器级「多角度并行研究轨」。>1 时研究阶段并行跑 K 个 DeerFlowResearchRunner
     # 子进程，每个带角度特化前缀（轨1=基线证据扫描，即原始 brief 逐字；轨2=基率/参照类/历史
     # 类比；轨3=行为者激励+反面证伪+市场定价），各写入 handoff/track_<k>/，随后确定性合并回
