@@ -333,6 +333,8 @@ class _RunMeter:
     structured: Dict[str, Dict[str, Dict[str, int]]] = field(default_factory=dict)
     # INFRA-8: {stage: {'provider:requested label': {'calls': n, 'served': {served id: n}}}}.
     model_resolution: Dict[str, Dict[str, Dict[str, Any]]] = field(default_factory=dict)
+    # INFRA-3: {kind: {stage: {outcome: episodes}}}（record_recovery）。
+    recovery: Dict[str, Dict[str, Dict[str, int]]] = field(default_factory=dict)
 
 
 # INFRA-2: chat_json 结构化输出的结局。ok = 首轮即得合法 JSON 对象；repaired = 修复轮才得到；
@@ -342,6 +344,16 @@ STRUCTURED_OUTCOMES = ("ok", "repaired", "failed")
 
 def _structured_counts() -> Dict[str, int]:
     return {"ok": 0, "repaired": 0, "failed": 0, "truncation_repaired": 0}
+
+
+# INFRA-3: outcomes of one transport recovery episode (kind 'length_escalation': an empty reply
+# cut by max_tokens re-sent with a larger cap). recovered = an escalated attempt returned a
+# complete reply; partial = it returned text that the raised cap cut again (finish_reason
+# length); exhausted = escalation gave up (attempts or headroom used up, or the provider refused
+# the raised cap) and the call went on to failover; failed = an escalated attempt ended in
+# another failure (an empty non-length reply, a content filter, transport retries used up, the
+# run budget) and the call went on to failover or aborted. An escalating call counts once.
+RECOVERY_OUTCOMES = ("recovered", "partial", "exhausted", "failed")
 
 
 # TEL-1: '_global' 桶只该接住零星的无归属调用（reset 从不清它，跨 run 累积）。它一旦变大，
@@ -462,6 +474,27 @@ class LLMMeter:
             logging.getLogger("mirofish.telemetry").debug(f"结构化输出计数失败（忽略）: {exc}")
 
     @classmethod
+    def record_recovery(cls, kind: str, outcome: str, *, stage: Optional[str] = None,
+                        run_id: Optional[str] = None) -> None:
+        """INFRA-3: tally one transport recovery episode of ``kind`` (e.g. 'length_escalation').
+
+        ``outcome`` is one of RECOVERY_OUTCOMES. Run and stage attribution are identical to
+        record(). Observability only: an unknown outcome or any internal failure is logged at
+        debug level and swallowed.
+        """
+        try:
+            if outcome not in RECOVERY_OUTCOMES:
+                raise ValueError(f"unknown recovery outcome {outcome!r}")
+            rid, stg, _fallback = cls._attribute(run_id, stage)
+            with cls._lock:
+                rm = cls._runs.setdefault(rid, _RunMeter())
+                counts = rm.recovery.setdefault(str(kind), {}).setdefault(stg, {})
+                counts[outcome] = counts.get(outcome, 0) + 1
+        except Exception as exc:  # noqa: BLE001 — telemetry must never fail the call path
+            import logging
+            logging.getLogger("mirofish.telemetry").debug(f"恢复事件计数失败（忽略）: {exc}")
+
+    @classmethod
     def snapshot(cls, run_id: Optional[str] = None) -> Dict[str, Any]:
         """Per-run usage snapshot. Additive keys (existing keys keep their meaning):
 
@@ -487,6 +520,9 @@ class LLMMeter:
           served: {served id: calls}}}}``, at most model_provenance.MAX_SERVED_IDS served ids
           per entry (later ids under '_other'); present only when at least one call was
           recorded with RECORD_MODEL_PROVENANCE on (``aggregate`` records never count).
+        - ``recovery`` (INFRA-3): ``{kind: {outcome: episodes}}`` from record_recovery()
+          (only the outcomes that occurred), and ``recovery_by_stage``: ``{kind: {stage:
+          {outcome: episodes}}}``; both present only when at least one was recorded.
         """
         rid = run_id or _current_run.get() or _DEFAULT_BUCKET
         declared_sub = _declared_subscription_providers()
@@ -559,6 +595,19 @@ class LLMMeter:
                     stg: {key: {"calls": entry["calls"], "served": dict(entry["served"])}
                           for key, entry in entries.items()}
                     for stg, entries in rm.model_resolution.items()
+                }
+            if rm.recovery:
+                recovery: Dict[str, Dict[str, int]] = {}
+                for kind, by_stage in rm.recovery.items():
+                    totals: Dict[str, int] = {}
+                    for counts in by_stage.values():
+                        for outcome, n in counts.items():
+                            totals[outcome] = totals.get(outcome, 0) + n
+                    recovery[kind] = totals
+                out["recovery"] = recovery
+                out["recovery_by_stage"] = {
+                    kind: {stg: dict(counts) for stg, counts in by_stage.items()}
+                    for kind, by_stage in rm.recovery.items()
                 }
             if rid != _DEFAULT_BUCKET:
                 out["unattributed_process"] = unattributed

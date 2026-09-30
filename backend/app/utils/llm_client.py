@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from typing import Optional, Dict, Any, List, Tuple
 
 from ..config import Config
+from .llm_recovery import next_max_tokens
 from .llm_text import flatten_content, has_dangling_think, normalize_finish_reason, strip_think
 from .logger import get_logger
 # INFRA-8: claude_cli_model_arg lives with the other model-provenance helpers; it stays
@@ -328,6 +329,40 @@ class LLMContentFiltered(_CompletionDiagnostics, Exception):
 
 class LLMAbortedCompletion(_CompletionDiagnostics, RuntimeError):
     """The provider aborted the generation (finish_reason 'error') before any text."""
+
+
+class _LengthEscalation:
+    """INFRA-3: one chat() call's max_tokens escalation state (see _chat_openai_escalating).
+
+    chat() creates it once per call and hands it to every transport attempt, so an attempt that
+    a transient error interrupts mid-escalation resumes at the escalated cap, and one call never
+    escalates more than LLM_MAX_ESCALATIONS times in total. The call's escalation episode is
+    counted in LLMMeter exactly once, through settle().
+    """
+
+    __slots__ = ("max_tokens", "escalations", "recovered", "rejected_ms", "last_empty", "outcome")
+
+    def __init__(self, max_tokens: Optional[int]) -> None:
+        self.max_tokens = max_tokens
+        self.escalations = 0
+        # True when the reply chat() returns came from an escalated attempt.
+        self.recovered = False
+        # Wall-clock of the rejected attempts; each was metered with its own latency.
+        self.rejected_ms = 0.0
+        # The last rejected empty length reply: re-raised when an escalated cap is refused.
+        self.last_empty: Optional[EmptyCompletion] = None
+        # The recovery outcome counted for this call (None: not counted yet).
+        self.outcome: Optional[str] = None
+
+    def settle(self, outcome: str) -> None:
+        """Count this call's escalation episode in LLMMeter as ``outcome`` (telemetry
+        RECOVERY_OUTCOMES), once: a later outcome of the same call is ignored."""
+        if self.outcome is not None:
+            return
+        self.outcome = outcome
+        if Config.LLM_TELEMETRY_ENABLED:
+            from .telemetry import LLMMeter
+            LLMMeter.record_recovery("length_escalation", outcome)
 
 
 # The DISABLE_THINKING knob that governs each reasoning provider (Config.reasoning_extra_body).
@@ -791,7 +826,8 @@ class LLMClient:
         the API, 'cli' = Claude CLI envelope, 'none' = not reported, all zeros), think_stripped,
         served_by ('primary' | 'fallback' | 'cache') and cacheable. chat_json adds
         json_truncation_repaired=True (INFRA-2) when it accepted a reply only after closing
-        its unterminated brackets locally.
+        its unterminated brackets locally, together with json_truncation_partial_item (INFRA-3):
+        whether that repair closed a list element the cut left incomplete.
 
         Returns a copy, or None when the thread's last call belongs to another client or this
         client's last call on the thread did not complete.
@@ -937,6 +973,12 @@ class LLMClient:
         LLMAbortedCompletion（均为 RuntimeError，照常退避重试；鉴权失败/余额不足/参数非法等
         确定性错误信封除外——不重试，直接回退）；审查拦截抛 LLMContentFiltered
         （非 RuntimeError：不重试，直接尝试一次回退）。本次调用的 finish_reason/usage 等见 last_call_meta()。
+
+        INFRA-3（LLM_LENGTH_ESCALATION，默认开）：OpenAI 兼容提供方的空回复若因 max_tokens 截断
+        （finish_reason=length），立即以更大的 max_tokens 重发（见 _chat_openai_escalating）；升档耗尽
+        （或升档后的 max_tokens 被提供方以 400 拒绝）则不再退避重试、直接转回退。被拒尝试（含回退
+        提供方的调用）触发的超预算 BudgetExceeded 原样抛出。升档后得到的回复仅在 finish_reason=stop
+        时以原始缓存键入缓存。
         """
         # EXECPLAN2 I-6-2: 解析本次调用实际使用的模型（fast/strong）。关闭路由时 = self.model。
         # EVAL-10: one routing read per call; the cache key, the meter and every transport retry
@@ -945,7 +987,9 @@ class LLMClient:
         model = route[0]
         # EXECPLAN2 I-6-0/I-5-0/I-5-3: 内容寻址缓存命中直接返回；否则正常调用后记录
         # token/延迟/成本计量并做预算检查。计量默认开（开销极小），缓存/预算默认关。
-        from .telemetry import LLMMeter, LLMCache, get_run_context, check_budget, estimate_tokens
+        from .telemetry import (
+            BudgetExceeded, LLMCache, LLMMeter, check_budget, estimate_tokens, get_run_context,
+        )
         run_id, stage = get_run_context()
         cache_key = None
         # EVAL-10: use_cache=False opts this client out of LLMCache entirely (get and put).
@@ -972,6 +1016,8 @@ class LLMClient:
         # by_model 归属错乱。置位后跳过外层计量。
         served_by_fallback = False
         started = time.monotonic()
+        # INFRA-3: one escalation budget for the whole call, shared by every retry below.
+        escalation = _LengthEscalation(max_tokens)
         self._clear_own_call_meta()
         # Circuit breaker: if the primary is in a content-filter/quota cooldown, skip the doomed
         # primary attempt entirely and go straight to the fallback (prevents the futile-call flood).
@@ -1002,8 +1048,9 @@ class LLMClient:
                 break
             try:
                 if self.provider in OPENAI_COMPATIBLE_PROVIDERS:
-                    result = self._chat_openai(messages, temperature, max_tokens, response_format,
-                                               tier=tier, route=route)
+                    result = self._chat_openai_escalating(messages, temperature, max_tokens,
+                                                          response_format, tier=tier, route=route,
+                                                          escalation=escalation)
                 elif self.provider == "codex-cli":
                     # CLI 订阅提供方只有单一订阅模型，tier 在此为 no-op。
                     result = self._chat_codex_cli(messages, temperature, max_tokens, response_format)
@@ -1011,6 +1058,13 @@ class LLMClient:
                     result = self._chat_claude_cli(messages, temperature, max_tokens, response_format)
                 _cb_reset(self.provider)  # primary succeeded → clear its 422/429 streaks
                 break
+            except BudgetExceeded:
+                # INFRA-3: a metered rejected attempt put the run over budget. BudgetExceeded is
+                # a RuntimeError; it must abort the call, not enter the retry loop below. An
+                # escalation it ends is counted as failed.
+                if escalation.escalations:
+                    escalation.settle("failed")
+                raise
             except (RuntimeError, *_RETRYABLE_API_ERRORS) as exc:
                 last_error = exc
                 if _is_deterministic_auth_error(exc):
@@ -1028,6 +1082,10 @@ class LLMClient:
                         _err_brief(exc),
                     )
                     break
+                if getattr(exc, "escalation_exhausted", False):
+                    # INFRA-3: max_tokens escalation gave up; a same-cap retry would be cut the
+                    # same way, so fail over now.
+                    break
                 if attempt < MAX_RETRIES - 1:
                     delay = _retry_delay(exc, attempt)
                     logger.warning(
@@ -1041,6 +1099,12 @@ class LLMClient:
                 logger.warning(f"LLM 调用遇不可重试错误，转回退提供方: {_err_brief(exc)}")
                 break
         if result is None:
+            if escalation.escalations:
+                # INFRA-3: the primary escalated, then another failure (an empty non-length
+                # reply, a content filter, retries used up on transport errors) ended the call
+                # without a reply; the raised caps were spent, so the episode counts as failed.
+                # An exhausted ladder has already been counted.
+                escalation.settle("failed")
             # QUALITY-OPT S9: provider failover. On exhausted quota (429) or a content-filter
             # rejection (422 new_sensitive) the same provider will keep failing; retry the SAME
             # request once on a configured fallback provider so the run recovers instead of
@@ -1058,7 +1122,8 @@ class LLMClient:
         # token 记到错误的调用上。回退接管时 _try_fallback 已把回退方元数据转写为本客户端的。
         meta = self._own_call_meta()
         if Config.LLM_TELEMETRY_ENABLED and not served_by_fallback:
-            latency_ms = (time.monotonic() - started) * 1000.0
+            # INFRA-3: rejected length attempts were metered with their own latency.
+            latency_ms = (time.monotonic() - started) * 1000.0 - escalation.rejected_ms
             # 仅 API 上报的精确 usage 顶替粗估；Claude CLI 信封的 usage 含 CLI 自身的系统提示/缓存，
             # 计入会抬高 run 预算口径，故 CLI 仍按文本长度粗估（与历史一致）。
             usage = meta["usage"] if meta and meta.get("usage_source") == "provider" else None
@@ -1079,7 +1144,12 @@ class LLMClient:
         if cache_on and cache_key is not None:
             # INFRA-1 (LLM_TRANSPORT_STRICT): 截断(length)/审查/中止/悬空 <think> 的回复不入缓存
             # ——否则同一 prompt 会从 LLMCache 永久重放这份残缺回复。无元数据时同样不缓存（失败安全）。
-            if _transport_strict() and not (meta and meta.get("cacheable")):
+            if escalation.recovered and not (meta and meta.get("finish_reason") == "stop"):
+                # INFRA-3: an escalated reply is replayed under the original key only when complete.
+                logger.debug(
+                    "升档回复不入缓存（finish_reason=%s）", meta.get("finish_reason") if meta else None,
+                )
+            elif _transport_strict() and not (meta and meta.get("cacheable")):
                 logger.debug(
                     "LLM 回复不入缓存（finish_reason=%s，无元数据=%s）",
                     meta.get("finish_reason") if meta else None, meta is None,
@@ -1158,6 +1228,12 @@ class LLMClient:
             logger.info(f"回退提供方 {fb_provider} 成功接管本次调用")
             return out
         except Exception as e:  # noqa: BLE001 — fallback failed too; caller raises the primary error
+            from .telemetry import BudgetExceeded
+            if isinstance(e, BudgetExceeded) and getattr(Config, "LLM_LENGTH_ESCALATION", True):
+                # INFRA-3: the fallback's own metering (a rejected escalation attempt, or its
+                # post-call check) put the run over budget; that aborts the call rather than
+                # surfacing the primary's error. Off: legacy (swallowed, primary error raised).
+                raise
             # 确定性失败（401 凭据坏 / 400 invalid-model 类）进入进程级冷却：重试修不好，
             # 并行 worker 不该反复对同一注定失败的回退发起昂贵调用。服务重启或修好配置自然清零。
             if _is_deterministic_auth_error(e) or _is_deterministic_invalid_request_error(e):
@@ -1199,9 +1275,10 @@ class LLMClient:
                                                allow_non_dict=allow_non_dict)
         last_response = ""
         for attempt in range(2):
+            attempt_temperature = max(0.0, temperature - attempt * 0.2)
             response = self.chat(
                 messages=messages,
-                temperature=max(0.0, temperature - attempt * 0.2),
+                temperature=attempt_temperature,
                 max_tokens=max_tokens,
                 response_format={"type": "json_object"},
                 tier=tier
@@ -1209,6 +1286,8 @@ class LLMClient:
             last_response = response
             parsed = self._parse_json_response(response)
             if parsed is not None:
+                self._remember_json_request(messages, attempt_temperature, max_tokens,
+                                            {"type": "json_object"}, tier)
                 return parsed
             if attempt == 0:
                 logger.warning("chat_json 解析失败，降温重发一次")
@@ -1246,16 +1325,19 @@ class LLMClient:
                     # structured_outputs, which is what decides whether Phase B is needed.
                     self._record_structured(label, "failed", False)
                 raise
-            value, truncation_repaired = self._parse_json_response_ex(response, unparsed=_JSON_UNPARSED)
+            value, truncation_repaired, partial_item = self._parse_json_response_detail(
+                response, unparsed=_JSON_UNPARSED)
             if value is _JSON_UNPARSED:
                 reason = _JSON_MISS_INVALID
             elif value is None or (not allow_non_dict and not isinstance(value, dict)):
                 reason = _JSON_MISS_NOT_OBJECT
             else:
                 if truncation_repaired:
-                    self._mark_json_truncation_repaired()
+                    self._mark_json_truncation_repaired(partial_item)
                 self._record_structured(label, "ok" if attempt == 0 else "repaired",
                                         truncation_repaired)
+                self._remember_json_request(attempt_messages, temperature, max_tokens,
+                                            response_format, tier)
                 return value
             reasons.append(reason)
             # A rejected reply must never stay in LLMCache: the next identical call (graphiti's
@@ -1274,11 +1356,40 @@ class LLMClient:
             f"LLM返回的JSON格式无效（首轮: {reasons[0]}; 修复轮: {reasons[1]}）: {response[:500]}"
         )
 
-    def _mark_json_truncation_repaired(self) -> None:
-        """Flag this client's last call on the calling thread as a locally repaired truncation."""
+    def _mark_json_truncation_repaired(self, partial_item: bool) -> None:
+        """Flag this client's last call on the calling thread as a locally repaired truncation;
+        ``partial_item`` (INFRA-3) says whether the repair closed a list element the cut left
+        open (see _parse_json_response_detail)."""
         meta = self._own_call_meta()
         if meta is not None:
             meta["json_truncation_repaired"] = True
+            meta["json_truncation_partial_item"] = bool(partial_item)
+
+    def _remember_json_request(self, messages: List[Dict[str, str]], temperature: float,
+                               max_tokens: int, response_format: Optional[Dict], tier: str) -> None:
+        """INFRA-3: note the request chat_json accepted its reply for, so discard_last_reply()
+        can drop that reply from LLMCache. Tied to this call's metadata object: the next call on
+        the thread replaces the metadata, which retires the note. Nothing is noted while this
+        client does not use the cache (there is nothing to drop)."""
+        meta = self._own_call_meta() if self._cache_on() else None
+        _CALL_META.json_request = (
+            None if meta is None else (meta, (messages, temperature, max_tokens, response_format, tier))
+        )
+
+    def discard_last_reply(self) -> bool:
+        """INFRA-3: drop from LLMCache the reply of this client's last chat_json call on the
+        calling thread, for a caller that rejected it after chat_json accepted it (forecast
+        extraction failing closed on a truncated reply, LLM_JSON_TRUNCATION_FAIL_CLOSED).
+        Without this an identical retry, or the same call in a resumed run, replays the rejected
+        reply from the cache. Returns False when the thread's last call is not a chat_json reply
+        of this client. Never raises.
+        """
+        note = getattr(_CALL_META, "json_request", None)
+        meta = self._own_call_meta()
+        if not note or meta is None or note[0] is not meta:
+            return False
+        self._discard_cached_reply(*note[1])
+        return True
 
     @staticmethod
     def _record_structured(label: str, outcome: str, truncation_repaired: bool) -> None:
@@ -1487,6 +1598,19 @@ class LLMClient:
         dangling trailing comma) for it to parse. (unparsed, False) when nothing parses:
         (None, False) by default, the same as a reply of JSON null; chat_json passes a
         sentinel to tell the two apart."""
+        value, repaired, _partial_item = LLMClient._parse_json_response_detail(
+            response, unparsed=unparsed)
+        return value, repaired
+
+    @staticmethod
+    def _parse_json_response_detail(response: str, *,
+                                    unparsed: Any = None) -> Tuple[Any, bool, bool]:
+        """_parse_json_response_ex plus ``partial_item`` (INFRA-3): True when the repair closed
+        a list element that the cut left open (the cut fell inside an element of a list), so
+        that element's content is incomplete. False when every list element in the repaired
+        value was closed by the reply itself: the cut then fell between elements or outside
+        the lists, or the search for the last '}' had already dropped the incomplete element.
+        Always False when nothing was repaired."""
         cleaned = response.strip()
         # 清理 markdown 代码块标记
         cleaned = re.sub(r'^```(?:json)?\s*\n?', '', cleaned, flags=re.IGNORECASE)
@@ -1494,7 +1618,7 @@ class LLMClient:
         cleaned = cleaned.strip()
 
         try:
-            return json.loads(cleaned), False
+            return json.loads(cleaned), False, False
         except json.JSONDecodeError:
             pass
 
@@ -1502,14 +1626,14 @@ class LLMClient:
         match = re.search(r'\{[\s\S]*\}', cleaned)
         if match:
             try:
-                return json.loads(match.group()), False
+                return json.loads(match.group()), False, False
             except json.JSONDecodeError:
                 cleaned = match.group()
         else:
             # 没有闭合的 '}'：截断式输出，从首个 '{' 起修复
             brace = cleaned.find('{')
             if brace < 0:
-                return unparsed, False
+                return unparsed, False, False
             cleaned = cleaned[brace:]
 
         # 补全被 max_tokens 截断的字符串/括号：扫描跟踪字符串态与括号栈，
@@ -1543,10 +1667,18 @@ class LLMClient:
         repaired = re.sub(r',\s*$', '', repaired)
         for opener in reversed(stack):
             repaired += '}' if opener == '{' else ']'
+        # INFRA-3: an element of a still-open list was cut when anything above that '[' is still
+        # open too (a nested opener, or a string the cut fell inside), or when the reply ends
+        # inside a bare number or literal directly in that list.
+        ends_in_scalar = (bool(stack) and stack[-1] == '[' and not in_string
+                          and cleaned[-1:] not in ('[', ',', ']', '}', '"'))
+        partial_item = ends_in_scalar or any(
+            opener == '[' and (depth < len(stack) - 1 or in_string)
+            for depth, opener in enumerate(stack))
         try:
-            return json.loads(repaired), repaired != cleaned
+            return json.loads(repaired), repaired != cleaned, partial_item
         except json.JSONDecodeError:
-            return unparsed, False
+            return unparsed, False, False
 
     # ------------------------------------------------------------------
     # 共享辅助
@@ -1653,6 +1785,139 @@ class LLMClient:
     # ------------------------------------------------------------------
     # openai 提供方
     # ------------------------------------------------------------------
+    def _chat_openai_escalating(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+        response_format: Optional[Dict] = None,
+        tier: str = "strong",
+        route: Optional[Tuple[str, bool]] = None,
+        escalation: Optional[_LengthEscalation] = None,
+    ) -> str:
+        """INFRA-3 (LLM_LENGTH_ESCALATION): _chat_openai, re-sent with a larger max_tokens while
+        the reply is empty because the output cap cut it (EmptyCompletion, finish_reason 'length').
+
+        Each rejected attempt is metered with the usage its exception carries (the provider
+        spent those tokens) and the run budget is checked (BudgetExceeded propagates). The next
+        cap comes from llm_recovery.next_max_tokens, clamped to the serving provider's ceiling
+        and context window, and the request is re-sent at once, without backoff. When
+        LLM_MAX_ESCALATIONS is used up or no headroom is left, the EmptyCompletion is re-raised
+        with ``escalation_exhausted = True`` so chat() fails over instead of retrying. An
+        escalated cap the provider refuses as an invalid request (a 400: past its real output
+        cap) ends the ladder the same way, with the last EmptyCompletion: the 400 is an artefact
+        of the escalation, and read as such it would put a fallback provider into the
+        deterministic-failure cooldown of _try_fallback. Any other failure propagates unchanged.
+        ``escalation`` is chat()'s per-call state (None: a fresh one starting at ``max_tokens``).
+        Off: exactly one _chat_openai call.
+        """
+        if not getattr(Config, "LLM_LENGTH_ESCALATION", True):
+            return self._chat_openai(messages, temperature, max_tokens, response_format,
+                                     tier=tier, route=route)
+        state = escalation if escalation is not None else _LengthEscalation(max_tokens)
+        # Every attempt of the ladder carries one route, so all are metered under one model.
+        route = route if route is not None else self._tier_route(tier)
+        try:
+            limit = max(0, int(getattr(Config, "LLM_MAX_ESCALATIONS", 2)))
+        except (TypeError, ValueError):
+            limit = 2
+        while True:
+            attempt_started = time.monotonic()
+            try:
+                result = self._chat_openai(messages, temperature, state.max_tokens, response_format,
+                                           tier=tier, route=route)
+            except EmptyCompletion as exc:
+                if exc.finish_reason != "length":
+                    raise
+                latency_ms = (time.monotonic() - attempt_started) * 1000.0
+                state.rejected_ms += latency_ms
+                self._meter_rejected_attempt(exc, messages, route[0], latency_ms)
+                state.last_empty = exc
+                sent = state.max_tokens
+                raised = self._escalated_max_tokens(exc, sent) if state.escalations < limit else None
+                if raised is None:
+                    exc.escalation_exhausted = True
+                    state.settle("exhausted")
+                    logger.warning(
+                        f"LLM 空回复（finish_reason=length，max_tokens={sent}）升档已耗尽"
+                        f"（{state.escalations}/{limit} 次），转回退提供方"
+                    )
+                    raise
+                state.escalations += 1
+                state.max_tokens = raised
+                logger.warning(
+                    f"LLM 空回复（finish_reason=length，推理耗尽输出上限），max_tokens {sent}→{raised} "
+                    f"立即重发（第 {state.escalations}/{limit} 次升档）"
+                )
+                continue
+            except Exception as err:  # noqa: BLE001 — only a refused escalated cap is rewritten
+                last_empty = state.last_empty
+                if not (state.escalations and last_empty is not None
+                        and _is_deterministic_invalid_request_error(err)):
+                    raise
+                last_empty.escalation_exhausted = True
+                state.settle("exhausted")
+                logger.warning(
+                    f"LLM 升档后的 max_tokens={state.max_tokens} 被提供方拒绝（{_err_brief(err)}），"
+                    f"升档结束，按空回复转回退提供方"
+                )
+                raise last_empty from err
+            if state.escalations:
+                state.recovered = True
+                meta = self._own_call_meta()
+                if meta and meta.get("finish_reason") == "length":
+                    # The escalated reply has text but the raised cap cut it again.
+                    state.settle("partial")
+                    logger.warning(f"LLM 升档后的回复仍被截断（max_tokens={state.max_tokens}）")
+                else:
+                    state.settle("recovered")
+                    logger.info(f"LLM 升档后得到回复（max_tokens={state.max_tokens}）")
+            return result
+
+    def _meter_rejected_attempt(self, exc: EmptyCompletion, messages: List[Dict[str, str]],
+                                model: str, latency_ms: float) -> None:
+        """INFRA-3: meter one rejected empty length reply, then check the run budget.
+
+        The attempt is recorded like any call, with the usage the exception carries; without
+        provider usage the prompt is estimated from the messages and the whole sent cap counts
+        as completion (a length finish means the cap was spent). BudgetExceeded propagates.
+        """
+        from .telemetry import LLMMeter, check_budget, estimate_tokens, get_run_context
+        run_id, stage = get_run_context()
+        if Config.LLM_TELEMETRY_ENABLED:
+            if exc.usage:
+                pt = _as_int(_field(exc.usage, "prompt_tokens"))
+                ct = _as_int(_field(exc.usage, "completion_tokens"))
+            else:
+                pt = sum(estimate_tokens(str(m.get("content", ""))) for m in messages)
+                ct = _as_int(exc.sent_max_tokens)
+            provider = exc.provider or self.provider
+            LLMMeter.record(provider, model, pt, ct, latency_ms, cached=False, stage=stage,
+                            run_id=run_id, finish_reason=exc.finish_reason,
+                            requested_model=self._requested_label(provider, model))
+        if Config.LLM_RUN_BUDGET_TOKENS or Config.LLM_RUN_BUDGET_USD:
+            check_budget(run_id)  # 超预算抛 BudgetExceeded，中止升档
+
+    @staticmethod
+    def _escalated_max_tokens(exc: EmptyCompletion, sent: Optional[int]) -> Optional[int]:
+        """INFRA-3: the next cap for a rejected attempt sent with ``sent``; None = no headroom.
+
+        The ceiling is the serving provider's PROVIDER_META max_output_tokens, else
+        LLM_MAX_TOKENS_CEILING; the context-window clamp uses the prompt tokens the provider
+        reported for the rejected attempt (none reported: no window clamp).
+        """
+        provider = exc.provider or ""
+        try:
+            ceiling = int(Config.PROVIDER_META.get(provider, {}).get("max_output_tokens") or 0)
+        except (TypeError, ValueError):
+            ceiling = 0
+        if ceiling <= 0:
+            ceiling = int(getattr(Config, "LLM_MAX_TOKENS_CEILING", 32768) or 32768)
+        return next_max_tokens(
+            sent, ceiling=ceiling, context_window=Config.context_window_for(provider),
+            prompt_tokens=_as_int(_field(exc.usage, "prompt_tokens")) or None,
+        )
+
     def _chat_openai(
         self,
         messages: List[Dict[str, str]],

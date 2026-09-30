@@ -116,6 +116,34 @@ class Config:
     # 是安全的：首轮即合法的 JSON 对象回复逐字节不变，只改变原本就会失败或返回非对象值的调用。
     # false 恢复旧的降温重发（且照旧可能返回非 dict）。
     LLM_JSON_REPAIR_TURN = os.environ.get('LLM_JSON_REPAIR_TURN', 'true').strip().lower() == 'true'
+    # INFRA-3：推理模型把 max_tokens 全耗在推理上、回复为空且 finish_reason=length 时，chat() 立即
+    # （不退避）以更大的 max_tokens 重发：max(当前×2, 1024)，封顶 PROVIDER_META 的 max_output_tokens
+    # （未配置时 LLM_MAX_TOKENS_CEILING）与「上下文窗口 − prompt − 1024」，至多 LLM_MAX_ESCALATIONS 次。
+    # 被拒的空回复照样计量（token 已花掉）并做预算检查（BudgetExceeded 中止，回退提供方里的超预算
+    # 同样中止、不再被吞掉换成主提供方的错误）；升档耗尽（或升档后的 max_tokens 被提供方以 400 拒绝，
+    # 此时按空回复处理，不让回退提供方进入确定性失败冷却）则直接转回退提供方，不再做同一请求的主
+    # 提供方退避重试。默认开是安全的：只作用于原本必然失败的空截断回复，正常回复逐字节不变，花费
+    # 受次数与上限约束。报告前置探测（max_tokens=64）收到这种空截断回复时视为提供方可达、放行。
+    # false 恢复旧行为（同一 max_tokens 退避重试 3 次；前置探测照旧判失败）。
+    LLM_LENGTH_ESCALATION = os.environ.get('LLM_LENGTH_ESCALATION', 'true').strip().lower() == 'true'
+    try:
+        LLM_MAX_ESCALATIONS = max(0, int(os.environ.get('LLM_MAX_ESCALATIONS', '2') or '2'))
+    except ValueError:
+        LLM_MAX_ESCALATIONS = 2
+    try:
+        LLM_MAX_TOKENS_CEILING = int(os.environ.get('LLM_MAX_TOKENS_CEILING', '32768') or '32768')
+    except ValueError:
+        LLM_MAX_TOKENS_CEILING = 32768
+    if LLM_MAX_TOKENS_CEILING <= 0:
+        LLM_MAX_TOKENS_CEILING = 32768
+    # INFRA-3：预测抽取对截断的 JSON 回复失败即关闭（默认开）。回复 finish_reason=length 或 chat_json
+    # 靠补括号才解析成功（json_truncation_repaired）时：骨架 draw 整个丢弃（全部丢弃 = 骨架失败，照旧
+    # 回退成稿后抽取），二元抽取与市场匹配/分歧重述丢掉被截在半途的列表项（本地补括号时只在补全
+    # 合上了被截断的列表项时丢，无从判断时丢最后一项），红队评审/事前验尸原样返回输入；兜底的成稿后
+    # 抽取保留结果但记 quality.llm_truncation。被判截断的回复同时移出 LLMCache，重试与 resume 不会
+    # 重放它。默认开是安全的：只影响被截断的回复，完整回复逐字节不变。false 恢复旧行为（截断内容
+    # 照常采纳、不标注）。
+    LLM_JSON_TRUNCATION_FAIL_CLOSED = os.environ.get('LLM_JSON_TRUNCATION_FAIL_CLOSED', 'true').strip().lower() == 'true'
     # 每个 run 的 token / 成本上限（0=不限）。超限后下一次 LLM 调用抛 BudgetExceeded，止血式中止。
     LLM_RUN_BUDGET_TOKENS = int(os.environ.get('LLM_RUN_BUDGET_TOKENS', '0') or '0')
     LLM_RUN_BUDGET_USD = float(os.environ.get('LLM_RUN_BUDGET_USD', '0') or '0')

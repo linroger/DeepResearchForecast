@@ -1793,6 +1793,8 @@ class ReportAgent:
         self._forecast_spine_block = ""
         # REPORT-1：骨架因概率不可读被弃用时的复核摘要（并入 forecast.quality.probability_parse）。
         self._spine_probability_review: Optional[Dict[str, Any]] = None
+        # INFRA-3：骨架因截断 draw 全部被丢弃而弃用时的计数（并入 forecast.quality.llm_truncation）。
+        self._spine_llm_truncation: Optional[Dict[str, Any]] = None
         # XRUN-5/RPT-8: 报告级紧凑检索查询（懒派生一次后缓存）；None=未派生。
         self._retrieval_query: Optional[str] = None
         # RQ-1(4): 报告形状（章节数区间 / 每章字数 / 每章工具预算），从需求书 page_budget 懒派生
@@ -3486,6 +3488,7 @@ class ReportAgent:
         from . import backbone_sensitivity as _bs
         from . import forecast_extractor as _fe
         self._spine_probability_review = None
+        self._spine_llm_truncation = None
         # EVAL-11：影子跨底座检查的输入——骨架实际所用的参数与批判前骨架（检查在下方 try 之外运行）。
         # 开启时骨架推导经观察器调用主客户端，逐次记下每次骨架调用的服务方（主 / 回退 / 缓存）；
         # 未开启时照旧直接传 self.llm（调用与提示词逐字节不变）。
@@ -3574,6 +3577,10 @@ class ReportAgent:
                 # forecast.quality.probability_parse（回退成稿后抽取的原因可审计）。
                 if isinstance(spine, dict) and spine.get("probability_review"):
                     self._spine_probability_review = spine["probability_review"]
+                # INFRA-3：截断 draw 全被丢弃导致骨架为空时同样留下计数（仅截断失败即关闭时存在）。
+                _spine_quality = spine.get("quality") if isinstance(spine, dict) else None
+                if isinstance(_spine_quality, dict) and _spine_quality.get("llm_truncation"):
+                    self._spine_llm_truncation = dict(_spine_quality["llm_truncation"])
                 self._mark_spine_pack_published(False)
                 logger.info("预测骨架推导未产出情景，跳过（回退为成稿后抽取）")
                 return
@@ -4289,6 +4296,16 @@ class ReportAgent:
             _pparse["spine"] = _spine_review
             _pq["probability_parse"] = _pparse
             forecast["quality"] = _pq
+        # INFRA-3：骨架因截断 draw 全被丢弃而回退成稿后抽取时，把丢弃计数并入 quality.llm_truncation
+        # （与成稿后抽取自己的截断标注并存）；骨架可用时计数已随骨架带入，此处为 None。
+        _spine_truncation = getattr(self, "_spine_llm_truncation", None)
+        if _spine_truncation:
+            _tq0 = forecast.get("quality")
+            _tq = dict(_tq0) if isinstance(_tq0, dict) else {}
+            _truncation = dict(_tq.get("llm_truncation") or {})
+            _truncation.update(_spine_truncation)
+            _tq["llm_truncation"] = _truncation
+            forecast["quality"] = _tq
         if _evaluation is not None:
             forecast["evaluation"] = self._evaluation_stamp(
                 _evaluation, _eval_targets, _target_binding,

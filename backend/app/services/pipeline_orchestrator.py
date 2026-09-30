@@ -15750,10 +15750,20 @@ class PipelineOrchestrator:
                             temperature=0.0, max_tokens=64,
                         )
                     except Exception as _pf_err:  # noqa: BLE001
-                        raise RuntimeError(
-                            "报告前置探测失败：主/回退 LLM 提供方均不可用 —— 中止报告阶段以免"
-                            f"烧掉全部章节成本（稍后 resume 可从 REPORT 续跑）: {str(_pf_err)[:200]}"
-                        ) from _pf_err
+                        from ..utils.llm_client import EmptyCompletion as _PreflightEmpty
+                        if not (bool(getattr(Config, "LLM_LENGTH_ESCALATION", True))
+                                and isinstance(_pf_err, _PreflightEmpty)
+                                and _pf_err.finish_reason == "length"):
+                            raise RuntimeError(
+                                "报告前置探测失败：主/回退 LLM 提供方均不可用 —— 中止报告阶段以免"
+                                f"烧掉全部章节成本（稍后 resume 可从 REPORT 续跑）: {str(_pf_err)[:200]}"
+                            ) from _pf_err
+                        # INFRA-3 (LLM_LENGTH_ESCALATION): an empty reply cut by the probe's output
+                        # cap (a reasoning model thinking past it, even after escalation) proves the
+                        # provider answered, so the probe passes. A model that never produces text
+                        # still fails the report stage loudly. Off: legacy (the probe fails).
+                        logger.info("[%s] 报告前置探测：提供方可达（空回复被 max_tokens 截断，"
+                                    "finish_reason=length），继续报告阶段", state.pipeline_id)
                 if bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
                     # INFRA-7：一次性 force 标记所要求的重生成此刻开始——血统守卫（或其它复用否决）
                     # 先于上方的 pop 拒绝了复用时标记会残留，下次普通 resume 会丢弃这份新报告再重生成。
