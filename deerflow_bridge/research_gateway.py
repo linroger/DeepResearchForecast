@@ -35,7 +35,9 @@ traced back to the same missing choke point:
   ``cached_fetch.cached_fetch`` on a bounded event loop in worker threads
   (``asyncio.run`` when RESEARCH_FETCH_CALL_TIMEOUT_S is 0), maps
   every envelope to short actionable text, dedups queries run-wide, stores full
-  pages on disk and returns deterministic query-focused passages.
+  pages on disk and returns deterministic query-focused passages.  Official-data
+  tools (TIME-12, off unless the engine passes their functions) answer through
+  :meth:`ResearchTools.data` into the same ledger, as fetched S1 rows.
 
 Import contract: this module is stdlib-only at import time.  langchain is
 imported lazily (``_msg_classes``) so the backend test venv, which has no
@@ -66,7 +68,7 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, ContextManager, Iterator, Mapping, Sequence, TypeVar
+from typing import Any, Callable, ContextManager, Iterable, Iterator, Mapping, Sequence, TypeVar
 from urllib.parse import quote, urlsplit, urlunsplit
 
 T = TypeVar("T")
@@ -97,11 +99,13 @@ __all__ = [
     "build_messages",
     "canonical_url",
     "classify_exception",
+    "data_tool_schema_list",
     "delimit_untrusted",
     "detect_profile",
     "estimate_tokens",
     "neutralize_citation_markers",
     "neutralize_instructions",
+    "normalize_data_args",
     "normalize_usage",
     "parse_json_object",
     "query_terms",
@@ -2419,6 +2423,25 @@ def _atomic_write_text(path: Path, text: str) -> None:
         raise
 
 
+_PLAIN_JSON_DEPTH = 8
+
+
+def _plain_json(value: Any, depth: int = 0) -> Any:
+    """``value`` as plain JSON data: mappings become dicts with string keys,
+    tuples and lists become lists, a non-finite float and anything else that
+    is not JSON (or nested deeper than _PLAIN_JSON_DEPTH) becomes its text."""
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+    if depth < _PLAIN_JSON_DEPTH:
+        if isinstance(value, Mapping):
+            return {str(key): _plain_json(item, depth + 1) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [_plain_json(item, depth + 1) for item in value]
+    return str(value)
+
+
 def _fallback_valid_url(url: str) -> bool:
     try:
         parts = urlsplit(url)
@@ -2452,6 +2475,14 @@ class SourceLedger:
     ``modified_source`` and ``date_rejected``; a row without them is exactly
     the row before TIME-2.  :meth:`set_pit` (a gated hindcast, TIME-8) adds
     ``pit_status``; no other run writes it.
+
+    Official-data rows (TIME-12, :meth:`ResearchTools.data`) are registered
+    with ``via="data"`` and an explicit tier, and carry the vendor's
+    provenance in ``data`` (:meth:`set_data`).  A data row never shares an
+    identity with a web row: a data registration colliding with a search or
+    fetch row is refused, and a later search/fetch registration of a data
+    row's URL changes nothing on it, so its title, snippet, tier and
+    ``via`` stay the vendor's.  Without data tools no row carries either.
     """
 
     FLUSH_INTERVAL_S = 1.0
@@ -2501,6 +2532,8 @@ class SourceLedger:
                 clean["title"] = _clean_title(clean["title"]) or _display_domain(url)
             if clean.get("tier") not in _VALID_TIERS:
                 clean["tier"] = self._tier(url)
+            if "data" in clean and not isinstance(clean["data"], dict):
+                del clean["data"]  # only set_data writes it, always an object
             self._rows[sid] = clean
             self._by_canonical.setdefault(canonical, sid)
         if self._rows:
@@ -2536,10 +2569,20 @@ class SourceLedger:
         return _fallback_valid_url(url)
 
     def register(self, url: Any, title: Any = "", snippet: Any = "", via: str = "search",
-                 by: str = "") -> dict | None:
+                 by: str = "", *, tier: str | None = None) -> dict | None:
         """Register (or find) the row for ``url``; returns a copy, or ``None``
         for an invalid URL.  Empty title/snippet fields are filled by later
-        sightings; every other field keeps its first-seen value."""
+        sightings; every other field keeps its first-seen value.
+
+        ``via`` is ``"search"``, ``"fetch"`` or ``"data"`` (anything else is
+        stored as ``"search"``).  ``tier`` (one of S1-S3) replaces the
+        domain tier of a row this call creates; an existing row keeps its
+        tier.  A ``"data"`` registration of a URL that already has a search
+        or fetch row returns ``None`` (a web row is never adopted or
+        overwritten), and a search/fetch sighting of a data row returns the
+        row unchanged."""
+        if tier is not None and tier not in _VALID_TIERS:
+            raise ValueError(f"unknown source tier {tier!r}")
         url = str(url or "").strip()
         if not url or not self.valid_url(url):
             return None
@@ -2553,6 +2596,8 @@ class SourceLedger:
             sid = self._by_canonical.get(canonical)
             if sid is not None:
                 row = self._rows[sid]
+                if (via == "data") != (row.get("via") == "data"):
+                    return None if via == "data" else dict(row)
                 changed = False
                 if clean_title and (not row.get("title") or row.get("title") == row.get("domain")):
                     row["title"] = clean_title
@@ -2574,8 +2619,8 @@ class SourceLedger:
                 "canonical": canonical,
                 "title": clean_title or domain,
                 "domain": domain,
-                "tier": self._tier(url),
-                "via": "fetch" if via == "fetch" else "search",
+                "tier": tier or self._tier(url),
+                "via": via if via in ("fetch", "data") else "search",
                 "fetched": False,
                 "content_sha256": None,
                 "chars": 0,
@@ -2613,6 +2658,23 @@ class SourceLedger:
             clean_title = _clean_title(title) if title else ""
             if clean_title:
                 row["title"] = clean_title
+            self._touch()
+            return dict(row)
+
+    def set_data(self, sid: int, data: Mapping[str, Any]) -> dict | None:
+        """Record an official-data row's provenance, date, support sentences
+        and structured facts as ``data`` (TIME-12), replacing any earlier
+        value; returns a copy of the row, or ``None`` for an unknown sid.  The
+        value is stored as plain JSON (tuples become lists, anything that is
+        not JSON becomes its text), so the ledger stays serializable, and it
+        persists across reloads."""
+        if not isinstance(data, Mapping):
+            raise TypeError("data must be a mapping")
+        with self._lock:
+            row = self._rows.get(_as_int(sid) or 0)
+            if row is None:
+                return None
+            row["data"] = _plain_json(data)
             self._touch()
             return dict(row)
 
@@ -3450,6 +3512,10 @@ class ToolLimits:
     ``per_agent_overrides`` maps an agent id to ``(max_searches, max_fetches)``
     for agents whose role differs from a KIQ investigator (e.g. the planner's
     scout searches).
+
+    ``max_data_total`` / ``max_data_per_agent`` cap official-data tool calls
+    (TIME-12, :meth:`ResearchTools.data`), booked apart from searches and
+    fetches; 0, the default, allows none.
     """
 
     max_searches_total: int = 60
@@ -3458,10 +3524,13 @@ class ToolLimits:
     max_fetches_per_agent: int = 4
     passage_chars: int = 2600
     per_agent_overrides: Mapping[str, tuple[int, int]] = field(default_factory=dict, hash=False)
+    max_data_total: int = 0
+    max_data_per_agent: int = 0
 
     def __post_init__(self) -> None:
         for name in ("max_searches_total", "max_fetches_total",
-                     "max_searches_per_agent", "max_fetches_per_agent"):
+                     "max_searches_per_agent", "max_fetches_per_agent",
+                     "max_data_total", "max_data_per_agent"):
             if int(getattr(self, name)) < 0:
                 raise ValueError(f"ToolLimits.{name} must be >= 0")
         if int(self.passage_chars) < 400:
@@ -3508,6 +3577,131 @@ AGENT_TOOLS_SCHEMA: list[dict] = [
         },
     },
 ]
+
+# TIME-12 official-data tools.  AGENT_TOOLS_SCHEMA never changes: an engine that
+# enables data tools (TIME-13) binds the one list data_tool_schema_list returns
+# for its run.  DATA_TOOL_VENDORS names the vendor behind each tool, so either
+# name may enable it.
+DATA_TOOL_NAMES: tuple[str, ...] = ("macro_series", "company_filings")
+DATA_TOOL_VENDORS: Mapping[str, str] = {"fred": "macro_series", "sec_edgar": "company_filings"}
+DATA_FREQS: tuple[str, ...] = ("annual", "quarterly")
+MAX_DATA_ARG_CHARS = 100
+_MACRO_SERIES_LEAD = "Official US/major macro series from FRED as published on the run's vintage date."
+_MACRO_SERIES_HELP = ("INVALID_TOOL_CALL: macro_series needs a 'series' string: a macro alias (such as cpi) "
+                      "or a FRED series id.")
+_COMPANY_HELP = ("INVALID_TOOL_CALL: company_filings needs a 'company' string (a CIK or a US ticker) and "
+                 "optionally 'freq': annual or quarterly.")
+_ARG_TOO_LONG_TEXT = "INVALID_TOOL_CALL: '{arg}' is longer than {limit} characters."
+_DATA_ARG_SPACE_RE = re.compile(r"\s+")
+
+
+@lru_cache(maxsize=1)
+def _data_tool_schemas() -> Mapping[str, dict]:
+    """The data-tool schemas by name, built once.  The macro_series
+    description lists data_tools.MACRO_ALIASES, imported here rather than at
+    module import so that a run without data tools never depends on
+    data_tools; when it cannot be imported the description names the raw-id
+    form only."""
+    try:
+        aliases = sorted(importlib.import_module("data_tools").MACRO_ALIASES)
+    except Exception:  # noqa: BLE001 — the alias list is a prompt aid, never a requirement
+        aliases = []
+    hint = f"Use an alias: {', '.join(aliases)} or a FRED series id." if aliases else "Use a FRED series id."
+    return {
+        "macro_series": {
+            "type": "function",
+            "function": {
+                "name": "macro_series",
+                "description": f"{_MACRO_SERIES_LEAD} {hint}",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "series": {"type": "string", "description": "A macro alias or a FRED series id."},
+                    },
+                    "required": ["series"],
+                },
+            },
+        },
+        "company_filings": {
+            "type": "function",
+            "function": {
+                "name": "company_filings",
+                "description": "Statements of a US SEC filer as filed on or before the as-of date.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "company": {"type": "string", "description": "The filer's CIK or US ticker."},
+                        "freq": {"type": "string", "enum": list(DATA_FREQS),
+                                 "description": "annual (the default) or quarterly statements."},
+                    },
+                    "required": ["company"],
+                },
+            },
+        },
+    }
+
+
+def data_tool_schema_list(enabled: Iterable[str]) -> list[dict]:
+    """A new tools list for an engine with official-data tools (TIME-12):
+    AGENT_TOOLS_SCHEMA followed by the schemas of ``enabled`` (tool names, or
+    their vendors in DATA_TOOL_VENDORS) in DATA_TOOL_NAMES order.  Every call
+    returns fresh copies, so AGENT_TOOLS_SCHEMA is never modified; the engine
+    keeps the one list it builds for the run, which the gateway binds once
+    (tools are bound by identity).  An unknown name raises ValueError."""
+    names = (enabled,) if isinstance(enabled, str) else tuple(enabled)
+    chosen = set()
+    for name in names:
+        tool = DATA_TOOL_VENDORS.get(name, name)
+        if tool not in DATA_TOOL_NAMES:
+            raise ValueError(f"unknown data tool {name!r}")
+        chosen.add(tool)
+    schemas = _data_tool_schemas()
+    return copy.deepcopy([*AGENT_TOOLS_SCHEMA, *(schemas[tool] for tool in DATA_TOOL_NAMES if tool in chosen)])
+
+
+def _data_arg_text(value: Any) -> str | None:
+    """A string argument with its whitespace collapsed (``None`` when it is not a string)."""
+    return _DATA_ARG_SPACE_RE.sub(" ", value).strip() if isinstance(value, str) else None
+
+
+def normalize_data_args(name: Any, args: Any) -> tuple[dict[str, str] | None, str]:
+    """``(keyword arguments, "")`` for a well-formed call of data tool
+    ``name``, else ``(None, its INVALID_TOOL_CALL text)``.  macro_series
+    takes ``series`` (whitespace collapsed); company_filings takes
+    ``company`` (upper-cased; a whole-number CIK may come as a number) and
+    ``freq``, annual (the default) or quarterly.  Other keys are ignored,
+    like the web tools' extra arguments.  These are the arguments the tool's
+    function receives and the identity of the call."""
+    if name not in DATA_TOOL_NAMES:
+        return None, f"INVALID_TOOL_CALL: {_collapse(name, 40)!r} is not an official data tool."
+    fields_in = args if isinstance(args, Mapping) else {}
+    if name == "macro_series":
+        series = _data_arg_text(fields_in.get("series"))
+        if not series:
+            return None, _MACRO_SERIES_HELP
+        if len(series) > MAX_DATA_ARG_CHARS:
+            return None, _ARG_TOO_LONG_TEXT.format(arg="series", limit=MAX_DATA_ARG_CHARS)
+        return {"series": series}, ""
+    company = fields_in.get("company")
+    if isinstance(company, int) and not isinstance(company, bool) and company >= 0:
+        company = str(company)
+    company = _data_arg_text(company)
+    if not company:
+        return None, _COMPANY_HELP
+    if len(company) > MAX_DATA_ARG_CHARS:
+        return None, _ARG_TOO_LONG_TEXT.format(arg="company", limit=MAX_DATA_ARG_CHARS)
+    raw_freq = fields_in.get("freq")
+    freq = "" if raw_freq is None else _data_arg_text(raw_freq)
+    if freq is None or (freq and freq.lower() not in DATA_FREQS):
+        return None, "INVALID_TOOL_CALL: 'freq' must be annual or quarterly."
+    return {"company": company.upper(), "freq": freq.lower() or "annual"}, ""
+
+
+def _data_key(name: str, args: Mapping[str, str]) -> str:
+    """The run-level identity of a normalized data call (case-insensitive:
+    FRED aliases and series ids, CIKs and tickers all are)."""
+    return "|".join([name, *(f"{field_name}={str(value).casefold()}" for field_name, value in sorted(args.items()))])
+
 
 SEARCH_RESULTS_PER_QUERY = 5
 SEARCH_SNIPPET_CHARS = 300
@@ -3598,6 +3792,31 @@ _FETCH_UNAVAILABLE_TEXT = ("FETCH_UNAVAILABLE({reason}): {already}the page-readi
 _FETCH_CONTENT_TEXT = ("FETCH_FAILED({reason}): {already}page unread; claims from its snippet stay REPORTED; "
                        "try another source.")
 _ALREADY_FAILED = "this URL already failed in this run; "
+# TIME-12 official-data tool texts (ResearchTools.data).  Only an answer that
+# registered a source starts with "[S"; every other text names none.  A data
+# call that failed is remembered for the run like a failed fetch: a service
+# that did not answer (an exception, or the vendor's "unavailable") first gets
+# DATA_TRANSIENT_RETRIES more attempts; an answer that could not be recorded
+# as a source is final.
+DATA_TRANSIENT_RETRIES = 1
+MSG_DATA_BUDGET = "DATA_BUDGET_EXHAUSTED: stop requesting official data; use what you have."
+_DATA_NO_ANSWER_TEXT = ("DATA_UNAVAILABLE: {already}the official data service did not answer; "
+                        "do not estimate or fabricate the value.")
+MSG_DATA_UNAVAILABLE = _DATA_NO_ANSWER_TEXT.format(already="")
+_DATA_UNRECORDED_TEXT = ("DATA_UNAVAILABLE({reason}): {already}the answer could not be recorded as a citable "
+                         "source; do not estimate or fabricate the value.")
+_DATA_ALREADY_FAILED = "this request already failed in this run; "
+_CACHED_DATA_NOTE = "(cached result; this data request was already made)"
+_NO_VINTAGE_TEXT = ("NO_VINTAGE: {key} had no published value by the vintage date; report it as unavailable, "
+                    "do not estimate.")
+_DATA_ABSENT_TEXT = "{status}: {detail}; do not estimate or fabricate."
+_INVALID_DATA_LABELS = {"macro_series": "INVALID_SERIES", "company_filings": "INVALID_COMPANY"}
+# data_tools.DataResult statuses (the module is imported only by the engine's
+# data functions; a test holds these equal to data_tools.STATUSES).
+_DATA_OK, _DATA_INVALID, _DATA_NO_VINTAGE, _DATA_UNAVAILABLE = "ok", "invalid_input", "no_vintage", "unavailable"
+_DATA_ABSENT_STATUSES = ("not_found", "not_a_filer", "no_xbrl_facts")
+_DATA_LABEL = "official data"
+_DATA_DETAIL_CHARS = 800
 # TIME-8 point-in-time gates (``ResearchTools.pit``, a gated hindcast only).  None
 # of these texts starts with "[S", so none can name a source.
 _NO_IN_WINDOW_TEXT = ("NO_IN_WINDOW_RESULTS: {count} {results} dated after the as-of date; this is not "
@@ -3976,6 +4195,30 @@ class _AgentCounters:
         return {name: getattr(self, name) for name in self.__slots__}
 
 
+class _DataCounters:
+    """Official-data counters (TIME-12), apart from _AgentCounters so that
+    ``stats()["per_agent"]`` is the same with or without data tools.
+    ``data_calls`` counts the data units spent (an invalid request's unit is
+    refunded); ``cached_data`` the answers given from run memory (a repeated
+    request, or one that already failed); ``data_invalid`` the requests
+    rejected as malformed or invalid; ``data_failures`` the calls whose
+    answer could not be used."""
+
+    __slots__ = ("data_calls", "cached_data", "data_invalid", "data_failures")
+
+    def __init__(self) -> None:
+        self.data_calls = self.cached_data = self.data_invalid = self.data_failures = 0
+
+    def to_dict(self) -> dict[str, int]:
+        return {name: getattr(self, name) for name in self.__slots__}
+
+
+def _data_detail(result: Any) -> str:
+    """A data result's ``detail``, neutralized and collapsed for model-facing text (it may echo vendor text)."""
+    detail = _collapse(_clean_web_text(getattr(result, "detail", "") or ""), _DATA_DETAIL_CHARS).rstrip(" .;")
+    return detail or "no detail given"
+
+
 class ResearchTools:
     """Model-visible ``web_search``/``web_fetch`` for the v3 agents.
 
@@ -4029,7 +4272,16 @@ class ResearchTools:
       ledger row's ``pit_status`` (:meth:`SourceLedger.set_pit`), or, for a
       URL without a row, in :data:`PIT_WITHHELD_FILE` beside the ledger, so a
       resumed attempt refuses them too; ``stats()["pit"]`` counts every gate
-      decision.
+      decision;
+    * with ``data_fns`` (official-data tools, TIME-12; the engine passes them
+      only when it enables them) :meth:`data` answers ``macro_series`` /
+      ``company_filings`` calls: run-level dedup with singleflight, units
+      reserved against ``max_data_total`` / ``max_data_per_agent`` apart
+      from searches and fetches, and every result registered as a fetched
+      S1 ledger row with its provenance (:meth:`SourceLedger.set_data`), its
+      page stored like a fetched page.  Data outcomes never touch the
+      search/fetch counters, failures or outcome classes; ``stats()["data"]``
+      counts them.  Without ``data_fns`` nothing changes.
     """
 
     def __init__(self, ledger: SourceLedger, pages_dir: str | os.PathLike[str], *,
@@ -4040,7 +4292,8 @@ class ResearchTools:
                  date_text_fallback: bool = True,
                  clock: Callable[[], _dt.datetime] | None = None,
                  vintage_as_of: str | None = None,
-                 pit: PitPolicy | None = None) -> None:
+                 pit: PitPolicy | None = None,
+                 data_fns: Mapping[str, Callable[..., Any]] | None = None) -> None:
         self.ledger = ledger
         self.pages_dir = Path(pages_dir)
         self.pages_dir.mkdir(parents=True, exist_ok=True)
@@ -4108,6 +4361,23 @@ class ResearchTools:
         # taking provider_bound is told when the policy wants no bound.
         self._search_takes_as_of = pit is not None and _accepts_keyword(self._search_fn, "as_of")
         self._search_takes_unbounded = pit is not None and _accepts_keyword(self._search_fn, "provider_bound")
+        # TIME-12: tool name -> the function answering it with a data_tools.DataResult
+        # (a None value is a tool left out).  Empty: no data tool, stats() unchanged.
+        self._data_fns: dict[str, Callable[..., Any]] = {}
+        for tool_name, fn in (data_fns or {}).items():
+            if tool_name not in DATA_TOOL_NAMES:
+                raise ValueError(f"unknown data tool {tool_name!r}")
+            if fn is not None and not callable(fn):
+                raise TypeError(f"data function for {tool_name} must be callable")
+            if fn is not None:
+                self._data_fns[tool_name] = fn
+        self._data_totals = _DataCounters()
+        self._data_agents: dict[str, _DataCounters] = {}
+        # data key -> (row header or "", body) of an answer repeated from run memory.
+        self._data_cache: dict[str, tuple[str, str]] = {}
+        self._inflight_data: dict[str, threading.Event] = {}
+        # data key -> (reason, failures, transient); see DATA_TRANSIENT_RETRIES.
+        self._failed_data: dict[str, tuple[str, int, bool]] = {}
 
     # ---------------------------------------------------------------- helpers
     def _log(self, kind: str, message: str) -> None:
@@ -4125,7 +4395,17 @@ class ResearchTools:
         setattr(agent, name, getattr(agent, name) + 1)
 
     def _reserve(self, agent_id: str, kind: str) -> bool:
-        """Atomically reserve one search/fetch unit for ``agent_id``."""
+        """Atomically reserve one search/fetch unit for ``agent_id``, or a
+        ``"data"`` unit (TIME-12), booked against the data limits and
+        counters only."""
+        if kind == "data":
+            with self._lock:
+                agent = self._data_agents.get(agent_id)
+                if (self._data_totals.data_calls >= self.limits.max_data_total
+                        or (agent.data_calls if agent is not None else 0) >= self.limits.max_data_per_agent):
+                    return False
+                self._data_count(agent_id, "data_calls")
+                return True
         per_search, per_fetch = self.limits.agent_limits(agent_id)
         with self._lock:
             agent = self._agents.setdefault(agent_id, _AgentCounters())
@@ -4142,6 +4422,12 @@ class ResearchTools:
                 self._fetches_used += 1
                 self._count(agent_id, "fetches")
             return True
+
+    def _data_count(self, agent_id: str, name: str, amount: int = 1) -> None:
+        """Add ``amount`` to a data counter for the run and the agent (caller holds the lock)."""
+        setattr(self._data_totals, name, getattr(self._data_totals, name) + amount)
+        agent = self._data_agents.setdefault(agent_id, _DataCounters())
+        setattr(agent, name, getattr(agent, name) + amount)
 
     def _failure(self, agent_id: str) -> None:
         with self._lock:
@@ -5027,6 +5313,169 @@ class ResearchTools:
         self._log("result", f"web_fetch → {kept}/{total} chars [S{row['sid']}]{suffix}")
         return f"{header}\n{body}"
 
+    # ------------------------------------------------------------------- data
+    def data(self, name: Any, args: Any, *, agent_id: str) -> str:
+        """Model-visible answer of one official-data tool call (TIME-12); never raises.
+
+        ``name`` is a tool of ``data_fns`` (else UNKNOWN_TOOL) and ``args`` its
+        arguments (:func:`normalize_data_args`; malformed: INVALID_TOOL_CALL).
+        A request already answered in this run (by any agent) is repeated
+        free; otherwise one data unit is reserved and the tool's function
+        called with the normalized arguments.  Only an ``ok`` result
+        registers a source: a fetched S1 row whose stored page is the
+        result's page text and whose ``data`` holds its provenance, date,
+        support sentences and facts; the answer is that row's header (line 0,
+        like a fetch) and the result's text as untrusted evidence data.  An
+        invalid request refunds its unit; the vendor's absences (no vintage,
+        not found, not a filer, no XBRL facts) are answered as such, and a
+        service that did not answer, or a result that could not be recorded,
+        as DATA_UNAVAILABLE; none of them registers a source."""
+        agent_id = str(agent_id or "agent")
+        tool = str(name or "")
+        fn = self._data_fns.get(tool)
+        if fn is None:
+            available = [tool_name for tool_name in DATA_TOOL_NAMES if tool_name in self._data_fns]
+            shown = re.sub(r"[^0-9A-Za-z_.-]+", "", tool)[:40] or "that tool"
+            return (f"UNKNOWN_TOOL: {shown} is not available; the official data tools are {', '.join(available)}."
+                    if available else f"UNKNOWN_TOOL: {shown} is not available; this run has no official data tools.")
+        try:
+            return self._data(tool, fn, args, agent_id)
+        except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
+            with self._lock:
+                self._data_count(agent_id, "data_failures")
+            self._log("result", f"{tool} → DATA_UNAVAILABLE (internal {type(exc).__name__})")
+            return MSG_DATA_UNAVAILABLE
+
+    def _data(self, tool: str, fn: Callable[..., Any], args: Any, agent_id: str) -> str:
+        normalized, error = normalize_data_args(tool, args)
+        if normalized is None:
+            with self._lock:
+                self._data_count(agent_id, "data_invalid")
+            self._log("result", f"{tool} → INVALID_TOOL_CALL")
+            return error
+        key = _data_key(tool, normalized)
+        self._log("tool", f"{tool} " + " ".join(f"{field_name}={value}" for field_name, value in normalized.items()))
+        for _ in range(2):
+            with self._lock:
+                cached = self._data_cache.get(key)
+                if cached is not None:
+                    self._data_count(agent_id, "cached_data")
+            if cached is not None:
+                self._log("result", f"{tool} → cached")
+                head, body = cached
+                return f"{head}\n{_CACHED_DATA_NOTE}\n{body}" if head else f"{_CACHED_DATA_NOTE}\n{body}"
+            known = self._known_data_failure(tool, key, agent_id)
+            if known is not None:
+                return known
+            with self._singleflight(self._inflight_data, key) as owner:
+                if owner:
+                    return self._data_uncached(tool, fn, normalized, key, agent_id)
+        known = self._known_data_failure(tool, key, agent_id)
+        if known is not None:
+            return known
+        return self._data_uncached(tool, fn, normalized, key, agent_id)
+
+    def _known_data_failure(self, tool: str, key: str, agent_id: str) -> str | None:
+        """The answer to a data request that already failed in this run
+        (``None`` when it should be tried): free, counted as cached data."""
+        with self._lock:
+            entry = self._failed_data.get(key)
+            if entry is None:
+                return None
+            reason, failures, transient = entry
+            if transient and failures <= DATA_TRANSIENT_RETRIES:
+                return None
+            self._data_count(agent_id, "cached_data")
+        self._log("result", f"{tool} → DATA_UNAVAILABLE({reason}) (already failed in this run)")
+        return (_DATA_NO_ANSWER_TEXT.format(already=_DATA_ALREADY_FAILED) if transient
+                else _DATA_UNRECORDED_TEXT.format(reason=reason, already=_DATA_ALREADY_FAILED))
+
+    def _data_failed(self, tool: str, key: str, agent_id: str, reason: str, *, transient: bool) -> str:
+        """Remember and count one failed data call (``transient``: the service
+        did not answer, so it may be retried) and return its text."""
+        with self._lock:
+            previous = self._failed_data.get(key)
+            self._failed_data[key] = (reason, (previous[1] if previous is not None else 0) + 1, transient)
+            self._data_count(agent_id, "data_failures")
+        self._log("result", f"{tool} → DATA_UNAVAILABLE({reason})")
+        return (MSG_DATA_UNAVAILABLE if transient
+                else _DATA_UNRECORDED_TEXT.format(reason=reason, already=""))
+
+    def _data_answered(self, key: str, head: str, body: str) -> None:
+        """Keep an answer for repeats of ``key`` (and forget an earlier failure)."""
+        with self._lock:
+            self._data_cache[key] = (head, body)
+            self._failed_data.pop(key, None)
+
+    def _data_uncached(self, tool: str, fn: Callable[..., Any], args: dict[str, str], key: str,
+                       agent_id: str) -> str:
+        if not self._reserve(agent_id, "data"):
+            self._log("result", f"{tool} → DATA_BUDGET_EXHAUSTED")
+            return MSG_DATA_BUDGET
+        try:
+            result = fn(**args)
+        except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
+            return self._data_failed(tool, key, agent_id, type(exc).__name__, transient=True)
+        status = getattr(result, "status", None)
+        if status == _DATA_INVALID:
+            with self._lock:
+                self._data_count(agent_id, "data_calls", -1)  # refunded: the request, not the service, failed
+                self._data_count(agent_id, "data_invalid")
+            self._log("result", f"{tool} → {_INVALID_DATA_LABELS[tool]}")
+            return f"{_INVALID_DATA_LABELS[tool]}: {_data_detail(result)}"
+        if status == _DATA_NO_VINTAGE or status in _DATA_ABSENT_STATUSES:
+            item = _collapse(_clean_web_text(getattr(result, "key", "") or ""), 120) or " ".join(args.values())
+            text = (_NO_VINTAGE_TEXT.format(key=item) if status == _DATA_NO_VINTAGE
+                    else _DATA_ABSENT_TEXT.format(status=status.upper(), detail=_data_detail(result)))
+            self._data_answered(key, "", text)
+            self._log("result", f"{tool} → {status.upper()}")
+            return text
+        if status != _DATA_OK:
+            unavailable = status == _DATA_UNAVAILABLE
+            return self._data_failed(tool, key, agent_id, "unavailable" if unavailable else "malformed_result",
+                                     transient=unavailable)
+        return self._data_register(tool, result, key, agent_id)
+
+    def _data_register(self, tool: str, result: Any, key: str, agent_id: str) -> str:
+        """Store an ``ok`` result's page, register it as a fetched S1 data row
+        and return its answer (or the failure when it cannot be recorded)."""
+        url, page = getattr(result, "url", None), getattr(result, "page_text", None)
+        model_text = getattr(result, "model_text", None)
+        if not (isinstance(url, str) and url.strip() and isinstance(page, str) and page.strip()
+                and isinstance(model_text, str)):
+            return self._data_failed(tool, key, agent_id, "incomplete_result", transient=False)
+        stripped = page.strip()
+        digest = hashlib.sha256(stripped.encode("utf-8")).hexdigest()
+        page_path = f"{self.pages_dir.name}/{digest[:16]}.txt"
+        target = self._page_file(page_path)
+        try:
+            if not target.exists():
+                _atomic_write_text(target, stripped)
+        except OSError as exc:
+            return self._data_failed(tool, key, agent_id, f"storage_{type(exc).__name__}", transient=True)
+        row = self.ledger.register(url, getattr(result, "title", ""), "", "data", agent_id, tier="S1")
+        if row is None:
+            # The URL is invalid, or it already names a search/fetch row, which a data
+            # row must never adopt: either way the answer cannot be cited.
+            reason = "collision" if self.ledger.valid_url(url.strip()) else "invalid_url"
+            return self._data_failed(tool, key, agent_id, reason, transient=False)
+        row = self.ledger.mark_fetched(row["sid"], content_sha256=digest, chars=len(stripped),
+                                       page_path=page_path) or row
+        provenance = getattr(result, "provenance", None)
+        supports, facts = getattr(result, "supports", None), getattr(result, "facts", None)
+        row = self.ledger.set_data(row["sid"], {
+            **(provenance if isinstance(provenance, Mapping) else {}),
+            "date": getattr(result, "date", None),
+            "supports": list(supports) if isinstance(supports, (list, tuple)) else [],
+            "facts": list(facts) if isinstance(facts, (list, tuple)) else [],
+        }) or row
+        head = f"[S{row['sid']}] {row['title']} — {row['domain']} ({tier_label(row['tier'])}) — {_DATA_LABEL}"
+        body = (delimit_untrusted(_DATA_LABEL, neutralize_citation_markers(model_text))
+                or "(no readable text in this result)")
+        self._data_answered(key, head, body)
+        self._log("result", f"{tool} → {len(stripped)} chars [S{row['sid']}]")
+        return f"{head}\n{body}"
+
     # ------------------------------------------------------------ inspection
     def page_text(self, sid: int) -> str | None:
         """Full stored text of a fetched source (for number verification)."""
@@ -5074,4 +5523,9 @@ class ResearchTools:
             if self.pit is not None:
                 # TIME-8: every gate decision (PIT_COUNTERS); absent without the gates.
                 stats["pit"] = dict(self._pit_counts)
+            if self._data_fns:
+                # TIME-12: the official-data counters (_DataCounters); absent without data tools.
+                stats["data"] = {**self._data_totals.to_dict(),
+                                 "per_agent": {agent: counters.to_dict()
+                                               for agent, counters in sorted(self._data_agents.items())}}
             return stats
