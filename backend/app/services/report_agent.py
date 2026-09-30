@@ -1350,7 +1350,8 @@ def _mc_influences_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, Any
 
 def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                                    markets: Optional[List[Dict[str, Any]]] = None,
-                                   lang: str = "en") -> str:
+                                   lang: str = "en", *,
+                                   disclose_anchoring: bool = False) -> str:
     """PM-2：渲染确定性「Market Cross-Check」块——预测 vs 市场隐含概率对照 + 未匹配市场清单。
 
     纯函数（无 LLM/无网络）：
@@ -1363,7 +1364,11 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
 
     LOOP-017 P0（影响溯源不丢失）：追加「市场影响的概率修订」小节——每条市场实际移动过
     发布概率的预测（market_influence 印章 / market_comparison.influences），**含锚点其后
-    被对账移除的情形**（标注是否已恢复 prior）。仅有影响记录时也必须出块。"""
+    被对账移除的情形**（标注是否已恢复 prior）。仅有影响记录时也必须出块。
+
+    REPORT-10 ``disclose_anchoring``（生产调用方传 REPORT_MARKET_XCHECK_DISCLOSURE，默认开）：
+    说明句末尾追加一句披露——预测起草时已参考这些市场价格，Δ 是锚定之后的差值，而非对一个
+    独立于市场的估计的度量。缺省 False → 输出逐字节不变。"""
     if not isinstance(forecast, dict):
         return ""
     comps = _mc_comparisons_from_forecast(forecast)
@@ -1381,15 +1386,20 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
     # 其余（"zh"/"Chinese"/"中文" 等）走中文，兼容短码与语言全名两种传入。
     zh = not str(lang or "").lower().startswith("en")
     if zh:
-        lines = ["### 市场交叉核对", "",
-                 "_预测概率与真实预测市场隐含概率的确定性对照。市场是校准锚点，非真值；"
-                 "分歧超 10 个百分点且理由未引用市场者标注「需解释」。_", ""]
+        caption = ("预测概率与真实预测市场隐含概率的确定性对照。市场是校准锚点，非真值；"
+                   "分歧超 10 个百分点且理由未引用市场者标注「需解释」。")
+        if disclose_anchoring:
+            caption += "预测在起草时已参考上述市场价格，故 Δ 是锚定之后的差值，并非独立于市场的估计。"
+        lines = ["### 市场交叉核对", "", f"_{caption}_", ""]
     else:
-        lines = ["### Market Cross-Check", "",
-                 "_Deterministic cross-check of forecast probabilities against live "
-                 "prediction-market implied probabilities. Markets are calibration anchors, "
-                 "not ground truth; divergences over 10 percentage points whose rationale does "
-                 "not cite the market are flagged for explanation._", ""]
+        caption = ("Deterministic cross-check of forecast probabilities against live "
+                   "prediction-market implied probabilities. Markets are calibration anchors, "
+                   "not ground truth; divergences over 10 percentage points whose rationale does "
+                   "not cite the market are flagged for explanation.")
+        if disclose_anchoring:
+            caption += (" Forecasts were drafted with these market prices in view, so Δ is "
+                        "measured after anchoring, not against a market-independent estimate.")
+        lines = ["### Market Cross-Check", "", f"_{caption}_", ""]
     if comps:
         comps_sorted = sorted(
             comps, key=lambda c: -(abs(_mc_float(c.get("divergence")) or 0.0)))
@@ -8303,9 +8313,11 @@ class ReportAgent:
         if not block:
             return
         # PM-2：确定性市场交叉核对块，紧随二元表。degrade-safe：渲染失败/空 → 不追加。
+        # REPORT-10：说明句按 REPORT_MARKET_XCHECK_DISCLOSURE 披露预测起草时已见市场价（Δ 为锚定后差值）。
         try:
             xcheck = render_market_comparison_block(
-                fc, markets=getattr(self, "_prediction_markets", None), lang=_lang)
+                fc, markets=getattr(self, "_prediction_markets", None), lang=_lang,
+                disclose_anchoring=bool(getattr(Config, "REPORT_MARKET_XCHECK_DISCLOSURE", True)))
         except Exception as _xe:  # noqa: BLE001 — 对照块为增强，失败不影响二元表前置
             logger.warning(f"渲染 Market Cross-Check 块失败（忽略）: {_xe}")
             xcheck = ""

@@ -292,6 +292,55 @@ def test_prepend_crosscheck_is_idempotent(report_folder):
     assert once.count("### Market Cross-Check") == 1
 
 
+# ----------------------------------- REPORT-10: anchoring disclosure in the caption
+
+_DISCLOSURE_ZH = "预测在起草时已参考上述市场价格，故 Δ 是锚定之后的差值，并非独立于市场的估计。"
+_DISCLOSURE_EN = ("Forecasts were drafted with these market prices in view, so Δ is measured "
+                  "after anchoring, not against a market-independent estimate.")
+_LEGACY_CAPTION_ZH = ("_预测概率与真实预测市场隐含概率的确定性对照。市场是校准锚点，非真值；"
+                      "分歧超 10 个百分点且理由未引用市场者标注「需解释」。_")
+_LEGACY_CAPTION_EN = ("_Deterministic cross-check of forecast probabilities against live "
+                      "prediction-market implied probabilities. Markets are calibration anchors, "
+                      "not ground truth; divergences over 10 percentage points whose rationale "
+                      "does not cite the market are flagged for explanation._")
+
+
+@pytest.mark.parametrize("lang, legacy, disclosure", [
+    ("zh", _LEGACY_CAPTION_ZH, _DISCLOSURE_ZH),
+    ("en", _LEGACY_CAPTION_EN, _DISCLOSURE_EN),
+])
+def test_crosscheck_disclose_anchoring_appends_caption_sentence(lang, legacy, disclosure):
+    fc = {"market_comparison": _MC}
+    default = render_market_comparison_block(fc, markets=_SNAPSHOT, lang=lang)
+    disclosed = render_market_comparison_block(fc, markets=_SNAPSHOT, lang=lang,
+                                               disclose_anchoring=True)
+    # default call byte-identical to the pre-REPORT-10 caption; kwarg False == default
+    assert default.split("\n")[2] == legacy
+    assert render_market_comparison_block(fc, markets=_SNAPSHOT, lang=lang,
+                                          disclose_anchoring=False) == default
+    assert disclosure not in default
+    # the disclosure joins the italic intro caption; nothing else changes
+    sep = "" if lang == "zh" else " "
+    assert disclosed.split("\n")[2] == legacy[:-1] + sep + disclosure + "_"
+    assert disclosed.replace(sep + disclosure, "", 1) == default
+
+
+@pytest.mark.parametrize("knob", [True, False])
+def test_prepend_crosscheck_discloses_per_knob(report_folder, monkeypatch, knob):
+    monkeypatch.setattr(Config, "REPORT_MARKET_XCHECK_DISCLOSURE", knob, raising=False)
+    a = _agent(_forecast_spine={"binary_forecasts": _MC["comparisons"],
+                                "market_comparison": _MC},
+               _prediction_markets=_SNAPSHOT)
+    rep = _ReportStub(_H1_MD)
+    a._prepend_binary_forecasts_section("rid-1", rep)
+    assert (_DISCLOSURE_EN in rep.markdown_content) is knob
+    assert (_LEGACY_CAPTION_EN in rep.markdown_content) is (not knob)
+
+
+def test_market_xcheck_disclosure_defaults_on():
+    assert Config.REPORT_MARKET_XCHECK_DISCLOSURE is True
+
+
 # ------------------------------------------------- PM-3: requote snapshot
 
 def test_requote_snapshot_disabled_flag_marks_stale(monkeypatch):

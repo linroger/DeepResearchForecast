@@ -2952,6 +2952,9 @@ def forecast_inputs_block(actors: Optional[Any], max_per_section: int = 6) -> st
         for sc in scenarios:
             raw = str(sc.get("name", "") or "").strip().lower()
             label = _SCENARIO_LABEL.get(raw, raw or "情景")
+            # REPORT-10（信息墙）：只渲染旧式 probability_band；v3 情景的数值 ``probability``
+            # 是研究规划期的权重，刻意不渲染——它经本块会进入骨架/报告的概率权威，把研究
+            # 先验当成已定的概率（test_information_walls_static 钉住此选择）。
             band = str(sc.get("probability_band", "") or "").strip()
             narrative = str(sc.get("narrative", "") or "").strip()
             seg = f"- {label}"

@@ -888,6 +888,15 @@ class Config:
     # 对账弹出锚点、修订概率却永久保留）。默认 0.6——高于锚点完整性下限
     # （_market_anchor_complete 的 0.5）：影响概率的门槛必须严于仅作展示的门槛。
     FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE = float(os.environ.get('FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE', '0.6') or '0.6')
+    # REPORT-10（信息墙）：注入实时市场包时，二元抽取的 dossier 视图删掉研究桥追加的机器市场表
+    # （"## Prediction Market Signals" H2 节，研究期价格、可能过时），市场价只经实时市场包一个
+    # 入口进入 _draw，且不再占用 head+tail 的尾部预算。默认关：删除会改变二元提示词进而可能
+    # 改变概率，先对比再晋升；关 → 提示词逐字节不变。
+    FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE = os.environ.get('FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE', 'false').strip().lower() == 'true'
+    # REPORT-10（诚实标注）：Market Cross-Check 说明句追加披露——预测起草时已参考市场价格，Δ 是
+    # 锚定之后的差值，而非独立于市场的估计。默认开（纯披露文字、不动任何数字）；false → 说明句
+    # 逐字节恢复旧文案。
+    REPORT_MARKET_XCHECK_DISCLOSURE = os.environ.get('REPORT_MARKET_XCHECK_DISCLOSURE', 'true').strip().lower() == 'true'
 
     # —— RQ-2：成稿后抽取切片（head+tail，结论在文末）+ 抽取 max_tokens（forecast_extractor 经 getattr 读取）——
     # 情景/二元抽取此前只取正文开头 [:budget]，把文末的收敛判断切掉；改为「前 head_ratio +
