@@ -782,6 +782,13 @@ class Config:
     # forecast.quality.narrative_sync。默认开是安全的：零 token、纯确定性、只改叙事文本，从不改概率；
     # 设 false 逐字节复现旧 forecast.json。
     REPORT_NARRATIVE_SYNC = os.environ.get('REPORT_NARRATIVE_SYNC', 'true').strip().lower() == 'true'
+    # REPORT-4 报告阶段提示词的类型化缺失标记（utils/absence.py）：章节质检无骨架时去掉概率一致性
+    # 规则、缺失的信号包/市场表写成「本次未启用 / 检索为空 / 不可用」标记而非「（无）」、并行撰写的
+    # 大纲意图不再冒充前序章节摘要；骨架提示词首句只列实际注入的输入并要求无研究基率时写明基率出处；
+    # 二元预测 source 行在模拟信号未注入时不再邀请具名模拟信号；章节前缀追加一行市场缺失说明；
+    # forecast.quality.prompt_slot_states 记录市场槽状态。默认开是安全的：只改提示词措辞（诚实性修复，
+    # 概率锚点仍是数值），标记文本由 report_lint 的泄漏哨兵兜底删除；设 false 逐字节复现旧提示词。
+    REPORT_ABSENCE_MARKERS = os.environ.get('REPORT_ABSENCE_MARKERS', 'true').strip().lower() == 'true'
 
     # —— WAVE9-FOCUS：报告焦点与编辑纪律（模拟=内部方法，报告主语=现实世界）——
     # 确定性编辑 lint（report_lint.lint_report）：修复 passes 之后、双语翻译之前清理引用残留 /

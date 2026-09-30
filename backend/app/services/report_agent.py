@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from enum import Enum
 
 from ..config import Config
+from ..utils import absence as _absence
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
@@ -1658,6 +1659,8 @@ class ReportAgent:
         # PREDICTION_MARKETS_ENABLED 时为空串，注入自动跳过（degrade-safe，行为不变）。
         self._market_pack = ""
         self._prediction_markets: List[Dict[str, Any]] = []
+        # REPORT-4：章节提示词所见的市场槽状态（generate_report 构建市场包后冻结；None ⇒ 现算）。
+        self._prompt_market_status: Optional[_absence.SlotStatus] = None
         # PM-3：市场快照是否「陈旧」（实时重报价未生效——关闭旗标/client 不可用/整体失败）。
         # True 时 _build_market_pack 在包头附一句时效性说明，读者知道价是研究期而非当下（degrade-safe）。
         self._markets_stale = False
@@ -2312,10 +2315,20 @@ class ReportAgent:
         """
         # 市场包/图表块经 getattr 读取：部分离线测试用 __new__ 绕过 __init__ 构造 agent，
         # 缺属性时按空串处理（与注入跳过语义一致）。
+        # REPORT-4（REPORT_ABSENCE_MARKERS）：市场槽为空且状态非 present 时，在市场包位置写一行
+        # 类型化缺失标记 + 禁止引用/编造市场价的说明。状态在一次运行内稳定 ⇒ 各章前缀仍逐字节一致。
+        market_pack = getattr(self, "_market_pack", "")
+        market_absence = ""
+        if getattr(Config, "REPORT_ABSENCE_MARKERS", True) and not market_pack:
+            _mstatus = self._market_slot_status()
+            if _mstatus.state != _absence.SLOT_PRESENT:
+                market_absence = (
+                    _absence.absence_marker("预测市场信号", _mstatus, "zh")
+                    + "\n正文不得引用或编造预测市场价格/隐含概率（研究材料中带 [S#] 的数字除外）。")
         prefix_parts = [p for p in (
             self._background_block, self._sources_index,
             self._forecast_spine_block, self._signal_pack,
-            getattr(self, "_market_pack", ""),
+            market_pack, market_absence,
             getattr(self, "_charts_block", ""),
         ) if p]
         # W9-8: 章节定向证据块——标题命中关键词时追加争议表 / 时间线（块为空时自动跳过）。
@@ -2612,7 +2625,13 @@ class ReportAgent:
         simulation_id 定位，与 load_research_dossier_for_simulation 同模式）；② 文件缺失
         且 PolymarketClient 可用时现抓一次（检索词由需求书 + hot_topics + 头部 actor 名确定性
         派生）。任何失败返回 []（degrade-safe，绝不阻断报告生成）。
+
+        REPORT-4：同时把市场槽状态写进 self._market_status（absence.SlotStatus：研究快照有行 /
+        现抓成功 ⇒ present；handoff 无行 ⇒ 按研究 payload 分类；现抓异常 ⇒ unavailable；
+        无 handoff 且现抓未成功 ⇒ unavailable('no_market_snapshot')），供缺失标记与
+        forecast.quality.prompt_slot_states 使用。现抓兜底行为本身不变。
         """
+        self._market_status = _absence.unavailable("no_market_snapshot")
         try:
             max_n = int(getattr(Config, "PREDICTION_MARKETS_MAX", 20) or 20)
         except (TypeError, ValueError):
@@ -2635,9 +2654,11 @@ class ReportAgent:
                     markets = payload.get("markets") if isinstance(payload, dict) else payload
                     rows = [m for m in (markets or []) if isinstance(m, dict)]
                     if rows:
+                        self._market_status = _absence.present("research_snapshot")
                         # PM-3：handoff-PLUS-refresh——研究期快照拉进来后对其做一次实时重报价，
                         # 保留 price_at_research 并算 Δ；重报价未生效时用研究期价并置 _markets_stale。
                         return self._requote_snapshot(rows[:max_n])
+                    self._market_status = _absence.market_status(payload, enabled=True)
                 break  # 找到对应管线即停（无论有无市场文件），转现抓兜底
         except Exception as e:  # noqa: BLE001 — handoff 读取失败转现抓兜底
             logger.debug(f"读取 handoff prediction_markets.json 失败（转现抓兜底）: {e}")
@@ -2718,10 +2739,12 @@ class ReportAgent:
                         )
                     except Exception as persist_error:  # noqa: BLE001 — observability only
                         logger.debug(f"写入报告期预测市场恢复工件失败（忽略）: {persist_error}")
+                self._market_status = _absence.present("report_fallback")
             self._markets_stale = False  # PM-3：现抓即实时价，不陈旧
             return markets
         except Exception as e:  # noqa: BLE001 — 市场信号为可选增强
             logger.warning(f"预测市场信号抓取失败（忽略）: {e}")
+            self._market_status = _absence.unavailable("report_fallback_error")
             return []
 
     def _requote_snapshot(self, markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -2814,6 +2837,35 @@ class ReportAgent:
             return ""
         self._prediction_markets = markets
         return self._render_market_pack(markets)
+
+    def _market_slot_status(self) -> "_absence.SlotStatus":
+        """REPORT-4：提示词里市场槽的状态（absence.SlotStatus）。
+
+        generate_report 构建市场包后即冻结该状态（_freeze_market_slot_status）：之后骨架 / 二元
+        抽取在市场包为空时会重跑 _load_prediction_markets 并改写 self._market_status，但章节前缀、
+        章节质检与 forecast.quality.prompt_slot_states 必须一致地反映章节提示词实际看到的那个状态。
+        未冻结（单独调用 / 离线测试）时现算，见 _live_market_slot_status。"""
+        frozen = getattr(self, "_prompt_market_status", None)
+        if frozen is not None:
+            return frozen
+        return self._live_market_slot_status()
+
+    def _freeze_market_slot_status(self) -> None:
+        """REPORT-4：把此刻的市场槽状态冻结为本次运行章节提示词所用的状态（见 _market_slot_status）。"""
+        self._prompt_market_status = self._live_market_slot_status()
+
+    def _live_market_slot_status(self) -> "_absence.SlotStatus":
+        """REPORT-4：按当前记录现算市场槽状态。
+
+        PREDICTION_MARKETS_ENABLED 关 ⇒ not_run；否则取 _load_prediction_markets 记下的状态，
+        未加载过 ⇒ unavailable('no_market_snapshot')。状态为 present 但提示词实际没有市场表
+        （渲染为空 / 构建失败）⇒ unavailable('market_pack_empty')——缺失槽绝不被当作已注入。"""
+        if not getattr(Config, "PREDICTION_MARKETS_ENABLED", True):
+            return _absence.not_run("prediction_markets_disabled")
+        status = getattr(self, "_market_status", None) or _absence.unavailable("no_market_snapshot")
+        if status.state == _absence.SLOT_PRESENT and not getattr(self, "_market_pack", ""):
+            return _absence.unavailable("market_pack_empty")
+        return status
 
     def _build_causal_spine_block(self, max_chokepoints: int = 4, max_chars: int = 3200) -> str:
         """R2-KG-7: 确定性「因果骨架」块——以图谱中显著度最高的若干 chokepoint 为中心，渲染其
@@ -3397,6 +3449,20 @@ class ReportAgent:
         # resolution criteria, language repair, editorial lint, and References can
         # all change it below.  Applying the gate here made its citation/quality
         # fields stale by construction and could demote confidence twice.
+        # REPORT-4（REPORT_ABSENCE_MARKERS）：记录本次提示词槽状态——市场槽（与章节前缀的缺失
+        # 标记同源）与研究基率是否存在（骨架提示词据此要求写明基率出处）。纯观测，失败不影响产物。
+        if getattr(Config, "REPORT_ABSENCE_MARKERS", True):
+            try:
+                from ..utils import actors as _actors
+                _has_base_rates = bool(
+                    _actors.extract_forecast_inputs(self.actors).get("base_rates"))
+                forecast.setdefault("quality", {})["prompt_slot_states"] = {
+                    "market": self._market_slot_status().to_dict(),
+                    "base_rates": {"state": (_absence.SLOT_PRESENT if _has_base_rates
+                                             else _absence.SLOT_NOT_RUN)},
+                }
+            except Exception as _pse:  # noqa: BLE001 — 观测性记录，绝不影响产物
+                logger.debug(f"记录 prompt_slot_states 失败（忽略）: {_pse}")
         # P2-2: 把观察指标随 forecast.json 落盘（供解析调度器对照判别情景）。
         try:
             from ..utils import actors as _actors
@@ -9791,27 +9857,33 @@ class ReportAgent:
         prior = "\n\n".join((s or "")[:600] for s in (previous_sections or [])[:6])[:2400]
         floor = self._section_char_floor()  # WAVE9：800 → 章节目标的 40%（随形状伸缩）
         lang = getattr(self, "output_language", None) or "English"
-        sys_prompt = (
-            "你是一名严格的报告章节质检员。仅依据下方给定材料，判断本章草稿是否同时满足四条标准：\n"
-            "1) 概率一致性：正文若提及情景/事件概率，须与【预测骨架概率】一致，不得矛盾；\n"
-            "2) 硬数字接地：关于现实世界的关键定量声明必须带来源标注 [S#]；【信号包】中的数字"
-            "是内部模拟推演产物（elicited model projection），只有在正文显式标注其模拟来源时"
-            "才可引用，绝不能替代 [S#] 作为现实世界声明的接地；【预测市场表】中的隐含概率/"
-            "价格是机器抓取的真实市场数据（Polymarket 公开 API），正文引用且与表内数值一致时"
-            "视为已接地，不要求 [S#]，绝不能当作捏造数字要求删除或改写；\n"
-            f"3) 篇幅下限：正文须有不少于 {floor} 字符的实质内容；\n"
-            "4) 不复述前序章节：不得大段重复【前序章节摘要】中的内容。\n"
-            f"全部满足 ⇒ 只输出 PASS（不要任何多余文字）；否则 ⇒ 只输出一条最关键、可执行、"
-            f"具体的修订指令（用{lang}书写，单句，不要解释）。"
-        )
-        usr_prompt = (
-            f"【预测骨架概率】\n{spine_txt or '（无）'}\n\n"
-            f"【信号包（硬数字）】\n{signal_txt or '（无）'}\n\n"
-            f"【预测市场表】\n{market_txt or '（无）'}\n\n"
-            f"【前序章节摘要】\n{prior or '（无）'}\n\n"
-            f"【本章标题】{section.title}\n\n"
-            f"【本章草稿】\n{content[:6000]}"
-        )
+        if getattr(Config, "REPORT_ABSENCE_MARKERS", True):
+            sys_prompt, usr_prompt = self._typed_critique_prompts(
+                section, content, previous_sections, spine_txt=spine_txt,
+                signal_txt=signal_txt, market_txt=market_txt, prior=prior,
+                floor=floor, lang=lang)
+        else:
+            sys_prompt = (
+                "你是一名严格的报告章节质检员。仅依据下方给定材料，判断本章草稿是否同时满足四条标准：\n"
+                "1) 概率一致性：正文若提及情景/事件概率，须与【预测骨架概率】一致，不得矛盾；\n"
+                "2) 硬数字接地：关于现实世界的关键定量声明必须带来源标注 [S#]；【信号包】中的数字"
+                "是内部模拟推演产物（elicited model projection），只有在正文显式标注其模拟来源时"
+                "才可引用，绝不能替代 [S#] 作为现实世界声明的接地；【预测市场表】中的隐含概率/"
+                "价格是机器抓取的真实市场数据（Polymarket 公开 API），正文引用且与表内数值一致时"
+                "视为已接地，不要求 [S#]，绝不能当作捏造数字要求删除或改写；\n"
+                f"3) 篇幅下限：正文须有不少于 {floor} 字符的实质内容；\n"
+                "4) 不复述前序章节：不得大段重复【前序章节摘要】中的内容。\n"
+                f"全部满足 ⇒ 只输出 PASS（不要任何多余文字）；否则 ⇒ 只输出一条最关键、可执行、"
+                f"具体的修订指令（用{lang}书写，单句，不要解释）。"
+            )
+            usr_prompt = (
+                f"【预测骨架概率】\n{spine_txt or '（无）'}\n\n"
+                f"【信号包（硬数字）】\n{signal_txt or '（无）'}\n\n"
+                f"【预测市场表】\n{market_txt or '（无）'}\n\n"
+                f"【前序章节摘要】\n{prior or '（无）'}\n\n"
+                f"【本章标题】{section.title}\n\n"
+                f"【本章草稿】\n{content[:6000]}"
+            )
         resp = self.llm.chat(
             messages=[{"role": "system", "content": sys_prompt},
                       {"role": "user", "content": usr_prompt}],
@@ -9832,6 +9904,91 @@ class ReportAgent:
             logger.warning(f"章节 {section.title}: 质检只回了「{text[:20]}」（无具体指令），跳过修订")
             return None
         return text[:600]
+
+    @staticmethod
+    def _signal_slot_status() -> "_absence.SlotStatus":
+        """REPORT-4：章节质检里空信号包槽的状态。
+
+        信号包步骤不在本次运行里（SIMULATION_FORECAST_EFFECT=no_update 整包自抑制，或
+        REPORT_SIGNAL_PACK 关）⇒ not_run；步骤开着却没有信号包（_build_signal_pack 产出空串或
+        构建失败——空心 / 出错的模拟）⇒ unavailable('signal_pack_empty')，不能谎称「未启用」。"""
+        _effect = str(getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
+                      or "diagnostic_only").strip().lower()
+        if _effect == "no_update":
+            return _absence.not_run("simulation_forecast_effect_no_update")
+        if not getattr(Config, "REPORT_SIGNAL_PACK", False):
+            return _absence.not_run("signal_pack_not_injected")
+        return _absence.unavailable("signal_pack_empty")
+
+    # REPORT-4：并发/brief 上下文模式下 previous_sections[0] 是 _build_synthesis_brief 的大纲意图，
+    # 不是前序章节正文。
+    _SYNTHESIS_BRIEF_PREFIX = "【报告大纲与各章节意图"
+    _CRITIQUE_RULE_COUNT_ZH = {2: "两", 3: "三", 4: "四"}
+
+    def _typed_critique_prompts(
+        self, section: "ReportSection", content: str, previous_sections: List[str], *,
+        spine_txt: str, signal_txt: str, market_txt: str, prior: str, floor: int, lang: str,
+    ) -> Tuple[str, str]:
+        """REPORT-4（REPORT_ABSENCE_MARKERS）：章节质检提示词，缺失的材料不再写成「（无）」。
+
+        规则按实际材料动态编号：无骨架 ⇒ 去掉概率一致性规则与【预测骨架概率】槽；缺信号包 /
+        市场表 ⇒ 槽内写类型化缺失标记，规则 2 的对应子句改为「未注入 ⇒ 相关论断无依据 / 无 [S#]
+        的市场价按未接地处理」（带 [S#] 的研究数字不受影响，保留 LOOP-017 修复）；首章 ⇒ 说明尚无
+        前序章节并去掉不复述规则；并发大纲意图 ⇒ 如实标注，规则改为不与其他章节的既定意图重复。"""
+        rules: List[str] = []
+        if spine_txt:
+            rules.append("概率一致性：正文若提及情景/事件概率，须与【预测骨架概率】一致，不得矛盾")
+        if signal_txt:
+            signal_clause = (
+                "【信号包】中的数字是内部模拟推演产物（elicited model projection），只有在正文"
+                "显式标注其模拟来源时才可引用，绝不能替代 [S#] 作为现实世界声明的接地")
+            signal_slot = signal_txt
+        else:
+            signal_clause = ("本次质检未注入内部情景推演诊断材料：任何「内部情景推演显示…」"
+                             "类论断视为无依据")
+            signal_slot = _absence.absence_marker("信号包", self._signal_slot_status())
+        if market_txt:
+            market_clause = (
+                "【预测市场表】中的隐含概率/价格是机器抓取的真实市场数据（Polymarket 公开 API），"
+                "正文引用且与表内数值一致时视为已接地，不要求 [S#]，绝不能当作捏造数字要求删除或改写")
+            market_slot = market_txt
+        else:
+            market_clause = (
+                "本次运行无可用的预测市场表：正文中未带 [S#] 的预测市场价格/隐含概率没有机器证据，"
+                "按未接地处理（带 [S#] 的研究材料数字不受影响）")
+            market_slot = _absence.absence_marker("预测市场表", self._market_slot_status())
+        rules.append("硬数字接地：关于现实世界的关键定量声明必须带来源标注 [S#]；"
+                     + signal_clause + "；" + market_clause)
+        rules.append(f"篇幅下限：正文须有不少于 {floor} 字符的实质内容")
+        first_prior = str((previous_sections or [""])[0] or "")
+        if not prior:
+            prior_label, prior_body = "【前序章节摘要】", "（尚无前序章节：这是第一个章节）"
+        elif first_prior.startswith(self._SYNTHESIS_BRIEF_PREFIX):
+            prior_label = "【报告大纲意图（并行撰写，前序正文不可用）】"
+            prior_body = prior
+            rules.append("不重复其他章节：不与其他章节的既定意图大段重复")
+        else:
+            prior_label, prior_body = "【前序章节摘要】", prior
+            rules.append("不复述前序章节：不得大段重复【前序章节摘要】中的内容")
+        n = len(rules)
+        numbered = "".join(f"{i}) {rule}{'；' if i < n else '。'}\n"
+                           for i, rule in enumerate(rules, 1))
+        sys_prompt = (
+            "你是一名严格的报告章节质检员。仅依据下方给定材料，判断本章草稿是否同时满足"
+            f"{self._CRITIQUE_RULE_COUNT_ZH.get(n, str(n))}条标准：\n"
+            + numbered
+            + f"全部满足 ⇒ 只输出 PASS（不要任何多余文字）；否则 ⇒ 只输出一条最关键、可执行、"
+            f"具体的修订指令（用{lang}书写，单句，不要解释）。"
+        )
+        slots = [f"【预测骨架概率】\n{spine_txt}"] if spine_txt else []
+        slots += [
+            f"【信号包（硬数字）】\n{signal_slot}",
+            f"【预测市场表】\n{market_slot}",
+            f"{prior_label}\n{prior_body}",
+            f"【本章标题】{section.title}",
+            f"【本章草稿】\n{content[:6000]}",
+        ]
+        return sys_prompt, "\n\n".join(slots)
 
     def _revise_section_draft(
         self, section: "ReportSection", outline: "ReportOutline",
@@ -10785,6 +10942,10 @@ class ReportAgent:
                 except Exception as _mp_err:  # noqa: BLE001 — 市场信号为可选增强
                     logger.warning(f"构建预测市场信号包失败（忽略）: {_mp_err}")
                     self._market_pack = ""
+            # REPORT-4：冻结章节提示词所见的市场槽状态——骨架 / 二元抽取稍后可能重跑市场加载并
+            # 改写 self._market_status，缺失标记与 prompt_slot_states 仍须与章节提示词一致。
+            if getattr(Config, "REPORT_ABSENCE_MARKERS", True):
+                self._freeze_market_slot_status()
 
             if (getattr(Config, "REPORT_STRUCTURED_FORECAST", True)
                     and getattr(Config, "REPORT_FORECAST_SPINE_FIRST", True)):

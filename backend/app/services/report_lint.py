@@ -36,6 +36,8 @@ from collections import Counter
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..utils.absence import MARKER_SENTINELS
+
 # ──────────────────────────────────────────────────────────────
 # 基础：围栏感知的行遍历
 # ──────────────────────────────────────────────────────────────
@@ -231,6 +233,10 @@ LEAKAGE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     ("sim_inference_terms_zh", re.compile(
         r"(?:(?:模拟|推演|智能体)[^。！？\n]{0,60}(?:共识形成|揭示性偏好|行为信号)"
         r"|(?:共识形成|揭示性偏好|行为信号)[^。！？\n]{0,60}(?:模拟|推演|智能体))")),
+    # REPORT-4：提示词里的类型化缺失标记（utils/absence.py）被抄进正文 = 泄漏；哨兵短语只出现在
+    # 标记文本里，final 模式整句删除。
+    ("absence_marker_leak", re.compile(
+        "|".join(re.escape(phrase) for phrase in MARKER_SENTINELS), re.I)),
 ]
 
 # 平台行为引文（发帖/点赞/评论机制内容——应删除而非转写）

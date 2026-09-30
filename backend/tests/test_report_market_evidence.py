@@ -57,12 +57,30 @@ def test_critique_material_includes_market_pack_and_rule():
     assert "预测市场表" in sys_p, "规则须明示市场表数字是合法机器抓取证据"
 
 
-def test_critique_without_market_pack_says_none():
+def test_critique_without_market_pack_says_none(monkeypatch):
+    """REPORT_ABSENCE_MARKERS=False pins the legacy '（无）' slot."""
+    from app.config import Config
+
+    monkeypatch.setattr(Config, "REPORT_ABSENCE_MARKERS", False, raising=False)
     llm = _RecLLM(["PASS"])
     a = _agent(llm=llm, _market_pack="", _signal_pack="")
     sec = ReportSection(title="Body 1", description="")
     a._critique_section_draft(sec, "x" * 100, [])
     assert "（无）" in llm.calls[0]["messages"][1]["content"]
+
+
+def test_critique_without_market_pack_marks_absence():
+    """REPORT-4 default: a typed marker replaces '（无）' and the rule keeps the [S#] carve-out."""
+    llm = _RecLLM(["PASS"])
+    a = _agent(llm=llm, _market_pack="", _signal_pack="")
+    sec = ReportSection(title="Body 1", description="")
+    a._critique_section_draft(sec, "x" * 100, [])
+    sys_p = llm.calls[0]["messages"][0]["content"]
+    usr_p = llm.calls[0]["messages"][1]["content"]
+    assert "（无）" not in usr_p
+    assert "【预测市场表】\n（预测市场表：本次运行未启用该步骤——不是空结果" in usr_p
+    assert "未带 [S#] 的预测市场价格/隐含概率没有机器证据" in sys_p
+    assert "带 [S#] 的研究材料数字不受影响" in sys_p
 
 
 # --------------------------------------- 机制 2：最终定量接地修复的市场证据

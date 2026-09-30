@@ -1153,6 +1153,11 @@ def _assemble_forecast(raw: Dict[str, Any]) -> Dict[str, Any]:
 # to produce these (e.g. an F1..Fn table); the scenario-only finalizer discarded them. This
 # pathway extracts/derives >=min_count independent binaries and keeps them ALONGSIDE the
 # scenario spine, so both the calibratable scenario view and the brief's contract survive.
+# REPORT-4：source 行抽成 {source_rule} 槽。旧措辞（邀请具名模拟信号）只在模拟信号真的注入时
+# 使用（sim_sensitive）或 REPORT_ABSENCE_MARKERS 关闭时逐字节复现；见 _binary_source_rule。
+_BINARY_SOURCE_RULE_LEGACY = (
+    '"source": "provenance of the probability: name the simulation signal that moved it (e.g. \\"world-state outcome shares\\", \\"coalition map\\") or \\"research-prior\\" when only research evidence informs it"'
+)
 _BINARY_FORECAST_INSTRUCTIONS = (
     "You are a forecasting-calibration expert assembling the HEADLINE deliverable: a set of "
     "INDEPENDENT BINARY (yes/no) forecasts. From the research dossier below, FIRST extract "
@@ -1171,7 +1176,7 @@ _BINARY_FORECAST_INSTRUCTIONS = (
     '  "horizon_year": {horizon_year_hint},            // {horizon_year_rule}\n'
     '  "base_rate_anchor": "reference-class base rate / outside view",\n'
     '  "adjustment_rationale": "why this case differs from the base rate (anchor-and-adjust)",\n'
-    '  "source": "provenance of the probability: name the simulation signal that moved it (e.g. \\"world-state outcome shares\\", \\"coalition map\\") or \\"research-prior\\" when only research evidence informs it"\n'
+    '  {source_rule}\n'
     "}}\n\n"
     "Each object MUST also include proposition_id (a stable kebab-case identifier for the exact "
     "resolvable event) and a scenario_membership object with a derivable boolean and a "
@@ -1262,6 +1267,22 @@ _SOURCE_ALWAYS_ALLOWED_RE = re.compile(
 _SOURCE_MARKET_LABEL = "prediction markets"
 _SOURCE_MARKET_RE = re.compile(
     r"polymarket|prediction[\s_-]*market|market[\s_-]*implied|预测市场|市场隐含", re.I)
+
+
+def _binary_source_rule(*, sim_sensitive: bool, market_aware: bool) -> str:
+    """REPORT-4：二元预测提示词的 source 行（填 _BINARY_FORECAST_INSTRUCTIONS 的 {source_rule}）。
+
+    模拟信号真的注入提示词（sim_sensitive）或 REPORT_ABSENCE_MARKERS 关闭 ⇒ 旧措辞逐字节不变；
+    否则不再邀请「具名模拟信号」（该信号不在本次概率输入里，具名即编造溯源，会被
+    _enforce_source_provenance 降级）——默认 research-prior，市场表注入时放行市场标签。
+    """
+    if sim_sensitive or not bool(_cfg("REPORT_ABSENCE_MARKERS", True)):
+        return _BINARY_SOURCE_RULE_LEGACY
+    rule = ('"source": "research-prior"   '
+            "// no simulation signal is among this run's probability inputs")
+    if market_aware:
+        rule += f' — or "{_SOURCE_MARKET_LABEL}" when a listed market informed the probability'
+    return rule
 
 
 def allowed_signal_labels(signal_pack: Optional[str]) -> set:
@@ -3070,6 +3091,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
             theme_enum=("|".join(themes) if themes else _BINARY_DEFAULT_THEME_ENUM),
             tie_rule=(f"tied to {', '.join(themes)}" if themes else _BINARY_DEFAULT_TIE_RULE),
             horizon_year_hint=_hz_hint, horizon_year_rule=_hz_rule,
+            source_rule=_binary_source_rule(sim_sensitive=sim_sensitive,
+                                            market_aware=market_aware),
         )
         if contrarian:
             user += _BINARY_LOW_P_RULE if low_p else _BINARY_CONTRARIAN_RULE
@@ -3495,6 +3518,52 @@ _SPINE_RETRY_NOTE = (
     "（如 0.35），不得为字符串、百分数、区间或上下限]"
 )
 
+# REPORT-4（REPORT_ABSENCE_MARKERS）：骨架提示词首句固定点名【研究输入】与【模拟量化信号】，而默认
+# diagnostic_only 下模拟信号从不注入——首句在邀请模型引用一个不存在的输入。拆出首句，按实际注入的
+# 块重建；_SPINE_LEAD_LEGACY + _SPINE_BODY 逐字节等于 _SPINE_INSTRUCTIONS（旗标关时照旧拼接）。
+_SPINE_LEAD_LEGACY, _SPINE_BODY_SEP, _SPINE_BODY_REST = _SPINE_INSTRUCTIONS.partition("\n只输出 JSON")
+_SPINE_BODY = _SPINE_BODY_SEP + _SPINE_BODY_REST
+_SPINE_LEAD_PREFIX = "你是预测校准专家。在撰写任何叙事之前，"
+_SPINE_LEAD_TAIL = "给出一个**机器可读**的结构化预测骨架。"
+_SPINE_RESEARCH_LABEL_LEGACY = "[研究输入：参考类基率 / 驱动因素 / 观察指标 / 候选情景]"
+# actors.forecast_inputs_block 的小节标题 → 研究输入标签里的名称（按渲染顺序）。
+_SPINE_RESEARCH_HEADINGS = (
+    ("### 外部视角基率", "参考类基率"),
+    ("### 关键驱动变量", "驱动因素"),
+    ("### 可观测指标", "观察指标"),
+    ("### 情景", "候选情景"),
+)
+# 研究未给参考类基率、且没有其他可引用的锚点块（S级量化事实 / 基准分布锚点）时：仍要求数值化的
+# 外部视角基率（anchor-and-adjust 不能丢），但须标明出处是模型判断而非研究——禁止给数字会伤校准，
+# 放任不标会把模型先验伪装成研究结论。有锚点块时不追加：那些块自带锚点出处要求，再叫模型把
+# 锚点标成「模型判断、非研究来源」会与之矛盾。
+_SPINE_NO_BASE_RATE_NOTE = (
+    "\n（研究输入未提供参考类基率：各情景 base_rate_anchor 仍须给出数值化的外部视角基率，"
+    "但须写明其为模型外部视角判断、非研究来源；不得虚构来源或出处。）"
+)
+
+
+def _spine_research_sections(forecast_inputs: str) -> List[str]:
+    """forecast_inputs 中实际出现的小节名（参考类基率 / 驱动因素 / 观察指标 / 候选情景）。"""
+    text = forecast_inputs or ""
+    return [name for heading, name in _SPINE_RESEARCH_HEADINGS
+            if re.search("^" + re.escape(heading), text, re.M)]
+
+
+def _spine_prompt_head(labels: List[str], *, base_rates_supplied: bool) -> str:
+    """REPORT-4：按实际注入的输入块名重建骨架首句 + 指令正文；无可引用锚点时追加出处要求。
+
+    base_rates_supplied：研究输入含参考类基率，或提示词另有 S级量化事实 / 基准分布锚点块。"""
+    if labels:
+        lead = (_SPINE_LEAD_PREFIX + "先基于下面提供的输入（" + "、".join(labels) + "），"
+                + _SPINE_LEAD_TAIL)
+    else:
+        lead = _SPINE_LEAD_PREFIX + _SPINE_LEAD_TAIL
+    head = lead + _SPINE_BODY
+    if not base_rates_supplied:
+        head += _SPINE_NO_BASE_RATE_NOTE
+    return head
+
 
 def _spine_draw(llm, user: str, temperature: float, max_tokens: int) -> Dict[str, Any]:
     """One spine LLM draw → assembled forecast dict (degrade-safe on bad replies)."""
@@ -3678,21 +3747,38 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
     cap_inputs = int(_cfg("REPORT_SPINE_INPUT_CAP_INPUTS", 6000))
     cap_signal = int(_cfg("REPORT_SPINE_INPUT_CAP_SIGNAL", 6000))
     cap_facts = int(_cfg("REPORT_SPINE_INPUT_CAP_FACTS", 3000))
-    user = _SPINE_INSTRUCTIONS
+    # REPORT-4：先拼输入块并记下实际注入的块名，最后再前置指令（旗标开时首句据块名重建）。
+    absence_markers = bool(_cfg("REPORT_ABSENCE_MARKERS", True))
+    research_inputs = (forecast_inputs or "")[:cap_inputs]
+    research_sections = _spine_research_sections(research_inputs) if absence_markers else []
+    labels: List[str] = []
+    user = ""
     if central_question:
+        labels.append("核心问题")
         user += f"\n\n[核心问题]\n{central_question[:600]}"
     if horizon:
+        labels.append("预测时间范围")
         user += f"\n\n[预测时间范围]\n{horizon[:120]}"
     if situation_brief:
+        labels.append("态势简报")
         user += f"\n\n[态势简报]\n{situation_brief[:cap_brief]}"
     if forecast_inputs:
-        user += f"\n\n[研究输入：参考类基率 / 驱动因素 / 观察指标 / 候选情景]\n{forecast_inputs[:cap_inputs]}"
+        labels.append("研究输入")
+        if not absence_markers:
+            research_label = _SPINE_RESEARCH_LABEL_LEGACY
+        elif research_sections:
+            research_label = f"[研究输入：{' / '.join(research_sections)}]"
+        else:
+            research_label = "[研究输入]"
+        user += f"\n\n{research_label}\n{research_inputs}"
     if signal_pack:
+        labels.append("模拟量化信号")
         user += f"\n\n[模拟量化信号]\n{signal_pack[:cap_signal]}"
     # 预测市场校准锚点（Polymarket 公开 Gamma API）：市场隐含概率是外部视角的
     # 聚合信念——与所列市场重叠的情景概率应对照之，偏离 >10 个百分点须在
     # adjustment_rationale 说明依据（市场是校准锚点，不是真值）。空串时提示词不变。
     if market_block:
+        labels.append("预测市场隐含概率")
         # PM-2：市场块切片 2500→6000，让相关性门控后的更多市场进入骨架校准视野。
         user += ("\n\n[预测市场隐含概率（Polymarket 实盘·校准锚点，非真值）]\n"
                  + str(market_block)[:6000]
@@ -3700,6 +3786,7 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
                    "在 adjustment_rationale 中显式解释分歧（市场遗漏/错价了什么）。")
     # R2-CAL-16：S 级量化事实数字底座，要求锚点引用 指标 + as_of 日期。
     if quantitative_facts:
+        labels.append("S级量化事实")
         user += ("\n\n[S级量化事实（数字底座，base_rate_anchor 须引用其中的 指标+as_of 日期）]\n"
                  + str(quantitative_facts)[:cap_facts])
     # R2-CAL-3：把模拟得到的 WorldState.shares 作为基准分布锚点，约束情景集合与概率带。
@@ -3708,9 +3795,16 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
         shares_txt = "；".join(f"{k}={float(v):.2f}" for k, v in base_distribution.items()
                               if _coerce_float(v) is not None)
         if shares_txt:
+            labels.append("基准分布锚点")
             user += ("\n\n[基准分布锚点（模拟 WorldState 份额，先验）]\n" + shares_txt
                      + "\n请以此为外部视角先验：沿用相同情景集合，最终概率应落在各自份额的合理带内"
                        "（偏离须在 adjustment_rationale 中给出具体证据）。")
+    if absence_markers:
+        anchors_supplied = ("参考类基率" in research_sections
+                            or "S级量化事实" in labels or "基准分布锚点" in labels)
+        user = _spine_prompt_head(labels, base_rates_supplied=anchors_supplied) + user
+    else:
+        user = _SPINE_INSTRUCTIONS + user
 
     max_tokens = int(_cfg("REPORT_SPINE_MAX_TOKENS", 6144))  # R2-CAL-11: 2048→6144
     floor = _coerce_float(_cfg("FORECAST_PROB_FLOOR", 0.0)) or 0.0
