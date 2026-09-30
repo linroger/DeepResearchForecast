@@ -421,6 +421,20 @@ def test_firecrawl_fetch_records_date_metadata_and_returns_the_unchanged_text(mo
     assert plain == out and meta == {}
 
 
+def test_firecrawl_date_metadata_keeps_every_key_source_dates_reads():
+    # Review round 1: the key filter dropped "dcterms.created" before source_dates saw it.
+    sd = cf._source_dates
+    assert sd is not None
+    for key in sd.PUBLISHED_META_KEYS + sd.MODIFIED_META_KEYS:
+        assert cf._date_metadata({"title": "t", key: "2025-05-09"}) == {key: "2025-05-09"}, key
+    # Firecrawl's camel-cased Dublin Core keys are publication dates.
+    kept = cf._date_metadata({"dcterms.created": "2025-05-09", "dcTermsCreated": "2025-05-08",
+                              "dcDateCreated": "2025-05-07", "dcDate": "2025-05-06", "ogUrl": "https://x"})
+    assert [candidate[2:] for candidate in sd.from_fetch_meta(kept)] == [
+        ("published", "2025-05-09"), ("published", "2025-05-08"), ("published", "2025-05-07"),
+        ("published", "2025-05-06")]
+
+
 def test_firecrawl_date_metadata_keeps_at_most_twelve_keys():
     many = {f"date_{i:02d}": f"2025-05-{i + 1:02d}" for i in range(20)}
     kept = cf._date_metadata({"title": "t", **many})

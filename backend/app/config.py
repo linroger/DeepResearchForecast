@@ -1455,7 +1455,11 @@ class Config:
     # undated / rejected counts by source and precision).  Zero model calls.  Default
     # false: the extractors are unproven on real pages and need a precision check
     # first; off = tool text, source ledger, sources.json and report byte-identical.
-    # Forwarded to the v3 child.
+    # The fetch layer records date metadata whatever this flag says (source-cache
+    # entries gain a "meta" key when a provider reported dates; the opt-in direct
+    # fetch scans the page head for them), so a later flag-on run dates cache hits
+    # too; nothing reads that metadata while the flag is off.  Forwarded to the v3
+    # child.
     RESEARCH_SOURCE_DATES = os.environ.get('RESEARCH_SOURCE_DATES', 'false').strip().lower() == 'true'
     # TIME-2: with RESEARCH_SOURCE_DATES on, a fetched page without provider metadata
     # is also dated from its head datelines (Published/Updated/发布时间 lines) and its

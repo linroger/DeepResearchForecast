@@ -78,10 +78,13 @@ REJECT_FUTURE = "future"
 REJECT_PRE_1900 = "pre_1900"
 MIN_YEAR = 1900
 
+# Firecrawl reports Dublin Core tags camel-cased (dcTermsCreated, dcDateCreated,
+# dcDate) and other tags under their raw names; both spellings are listed.
 PUBLISHED_META_KEYS = (
     "publishedTime", "published_time", "article:published_time", "og:published_time",
     "datePublished", "date_published", "publishedDate", "published_date", "dcterms.created",
-    "dc.date", "citation_publication_date", "citation_date", "parsely-pub-date", "sailthru.date",
+    "dcTermsCreated", "dc.date.created", "dcDateCreated", "dc.date", "dcDate",
+    "citation_publication_date", "citation_date", "parsely-pub-date", "sailthru.date",
 )
 MODIFIED_META_KEYS = (
     "modifiedTime", "modified_time", "article:modified_time", "og:updated_time",
@@ -209,11 +212,14 @@ def _month_number(name: str) -> int:
 
 def _checked(year: int, month: int | None, day: int | None, raw: str, source: str, today: _dt.date,
              instant: str | None = None) -> tuple[PubDate | None, str | None]:
-    """The PubDate of a calendar value at its precision, or its rejection."""
+    """The PubDate of a calendar value at its precision, or its rejection.
+
+    Only an absent component defaults to 1 for the calendar check: a month or
+    day of 0 ("2025-00", "2025-05-00") is ``unparseable``, never emitted."""
     if year < MIN_YEAR:
         return None, REJECT_PRE_1900
     try:
-        start = _dt.date(year, month or 1, day or 1)
+        start = _dt.date(year, month if month is not None else 1, day if day is not None else 1)
     except ValueError:
         return None, REJECT_UNPARSEABLE
     if start > today:

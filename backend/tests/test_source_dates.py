@@ -124,7 +124,10 @@ def test_future_and_pre_1900_are_rejected_never_clamped():
 
 @pytest.mark.parametrize("value", [None, {}, [], "", "   ", "garbage", "Mayor 9, 2025", "2025-13-01", "2025-02-30",
                                    True, float("nan"), float("inf"), 0, -1, "2025-05-09T25:00:00Z", object(),
-                                   "2025-05-09T10:00:00+99:00"])
+                                   "2025-05-09T10:00:00+99:00",
+                                   # A month or day of 0 is no calendar date (never emitted as "2025-05-00").
+                                   "2025-00", "2025-05-00", "2025-00-00", "2019/05/00", "20250500", "May 0, 2025",
+                                   "00 May 2025", "2025年0月", "2025年5月0日"])
 def test_garbage_is_unparseable_without_raising(value):
     assert sd.parse_published(value, now=NOW) == (None, "unparseable")
 
@@ -291,6 +294,16 @@ def test_resolve_honours_rank_order_and_keeps_the_first_on_a_tie():
     assert resolved["rank"] == 6
     assert resolved["modified"].value == "2025-06-01"
     assert resolved["rejected"] == ["future", "unparseable"]
+
+
+def test_resolve_skips_an_invalid_high_rank_date_for_a_valid_url_date():
+    # A provider "citation_publication_date" of 2019/05/00 is no date: it must
+    # not become "2019-05-00" nor block the valid rank-2 URL date.
+    candidates = (sd.from_provider_meta({"citation_publication_date": "2019/05/00"})
+                  + sd.from_url("https://x.org/2019/05/12/story"))
+    resolved = sd.resolve(candidates, now=NOW)
+    assert resolved["published"].value == "2019-05-12" and resolved["published"].source == "url_path"
+    assert resolved["rank"] == sd.RANK_URL and resolved["rejected"] == ["unparseable"]
 
 
 def test_resolve_without_a_parseable_candidate():

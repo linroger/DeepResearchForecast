@@ -157,6 +157,17 @@ def test_future_dates_are_rejected_against_the_clock(tmp_path):
     assert "published" not in _header(out)
 
 
+def test_a_zero_day_provider_date_is_rejected_and_the_url_date_wins(tmp_path):
+    # Review round 1: "2019/05/00" became published 2019-05-00 at rank 7 and
+    # blocked the URL's valid 2019-05-12.
+    tools, ledger = _tools(tmp_path, fetch_fn=lambda url: (PAGE, {"citation_publication_date": "2019/05/00"}))
+    out = tools.fetch("https://x.org/2019/05/12/story", agent_id="K1")
+    row = ledger.get(1)
+    assert (row["published"], row["date_source"], row["date_rank"], row["date_rejected"]) == (
+        "2019-05-12", "url_path", 2, ["unparseable"])
+    assert " — published 2019-05-12 — full page" in _header(out) and "-00" not in out
+
+
 def test_header_date_stays_outside_the_untrusted_block_and_page_numbers(tmp_path):
     tools, ledger = _tools(tmp_path, fetch_fn=lambda url: (PAGE, {"publishedTime": "2025-05-09"}))
     out = tools.fetch("https://x.org/a", agent_id="K1")
@@ -262,7 +273,8 @@ def test_flag_off_ignores_every_date_input(tmp_path):
         ledger.flush()
     assert outputs[0] == outputs[1]
     assert _header(outputs[0][0]) == "[S1] Provider dated — a.org (tier 3)"
-    assert _header(outputs[0][1]) == f"[S1] Grid connection report — a.org (tier 3) — full page ({len(PAGE)} chars)."
+    assert _header(outputs[0][1]) == (f"[S1] Grid connection report — a.org (tier 3) — "
+                                      f"full page ({len(PAGE)} chars).")
     assert ((tmp_path / "off" / "sources_ledger.json").read_bytes()
             == (tmp_path / "plain" / "sources_ledger.json").read_bytes())
     assert not any(key in off_ledger.get(1) for key in _LEDGER_DATE_KEYS)
@@ -379,14 +391,20 @@ def test_quant_source_dates_stamp_and_flag_never_drop():
              {"metric": "m3", "value": 3, "as_of_date": "2025-05-01", "source_url": "https://b.org/y"},
              {"metric": "m4", "value": 4, "as_of_date": "2026", "source_url": "https://b.org/y"},
              {"metric": "m5", "value": 5, "as_of_date": "2030", "source_url": "https://c.org/z"},
-             {"metric": "m6", "value": 6, "source_url": "https://a.org/x"}]
-    assert lr.quant_source_dates(quant, sources) == 2
+             {"metric": "m6", "value": 6, "source_url": "https://a.org/x"},
+             *({"metric": metric, "value": 7, "as_of_date": as_of, "value_type": kind, "source_url": "https://a.org/x"}
+               for metric, as_of, kind in (("m7", "2030", "forecast"), ("m8", "2030", "target"),
+                                           ("m9", "2026", "Estimate"), ("m10", "2026", "actual")))]
+    assert lr.quant_source_dates(quant, sources) == 3
     assert [row.get("source_date") for row in quant] == ["2025-05-09", "2025-05-09", "2019-03-01", "2019-03-01",
-                                                         None, "2025-05-09"]
+                                                         None] + ["2025-05-09"] * 5
     # m1 dated after its source; m2's month contains the source day; m3 is before
     # the source's modified date; m4 is after it; m5's source is undated; m6 has no as-of.
-    assert [row.get("as_of_after_source") for row in quant] == [True, None, None, True, None, None]
-    assert len(quant) == 6
+    # m7-m9 are projections (forecast / target / estimate): stamped, never flagged;
+    # m10, an actual value dated after its source, is.
+    assert [row.get("as_of_after_source") for row in quant] == [True, None, None, True, None, None,
+                                                                None, None, None, True]
+    assert len(quant) == 10
 
 
 # =============================================================== full engine runs

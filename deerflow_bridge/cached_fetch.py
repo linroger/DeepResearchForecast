@@ -190,7 +190,9 @@ _FETCH_META: contextvars.ContextVar[dict] = contextvars.ContextVar(
 )
 # Firecrawl metadata keys kept (lower-cased name containing one of these), at most
 # _FETCH_META_MAX_KEYS keys, each value (or list element) cut to _FETCH_META_VALUE_CHARS.
-_FETCH_META_KEY_MARKERS = ("date", "time", "publish", "modif", "updated")
+# Every source_dates PUBLISHED/MODIFIED_META_KEYS name contains one ("created":
+# dcterms.created / dcTermsCreated); a test pins that.
+_FETCH_META_KEY_MARKERS = ("date", "time", "publish", "modif", "updated", "created")
 _FETCH_META_MAX_KEYS = 12
 _FETCH_META_VALUE_CHARS = 80
 _FETCH_META_LIST_ITEMS = 4

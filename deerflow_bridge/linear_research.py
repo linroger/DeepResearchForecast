@@ -4589,6 +4589,9 @@ def renumber_citations(text: str, known: Callable[[int], bool]) -> tuple[str, li
 
 # A TIME-2 ledger date (rg.SourceLedger.set_dates writes source_dates.PubDate values).
 _SOURCE_DATE_RE = re.compile(r"\d{4}(?:-\d{2}(?:-\d{2})?)?")
+# Quant value types whose as_of_date may follow their source's date by design
+# (quant_source_dates never flags them as_of_after_source).
+_SOURCE_DATE_PROJECTED_TYPES = frozenset({"forecast", "target", "estimate"})
 
 
 def _date_value(value: Any) -> str:
@@ -4639,7 +4642,11 @@ def quant_source_dates(quant: list[dict], sources: Sequence[Mapping[str, Any]]) 
     row with its ``source_date`` (TIME-2), and flag ``as_of_after_source``
     when the row's ``as_of_date`` starts after the source's latest date (its
     ``modified_at`` when later than ``date``) ends: a value dated after its
-    source last changed.  Never drops or rewrites a row.  Returns the rows
+    source last changed.  Only a row that reports a value (``actual`` or no
+    type) is flagged: a ``forecast`` / ``target`` names a later period by
+    design, and an ``estimate`` dated after its source is a projection too
+    (:func:`classify_quant_row` reads it as projected), so those rows get
+    ``source_date`` only.  Never drops or rewrites a row.  Returns the rows
     flagged."""
     dated: dict[str, Mapping[str, Any]] = {}
     for source in sources:
@@ -4651,6 +4658,8 @@ def quant_source_dates(quant: list[dict], sources: Sequence[Mapping[str, Any]]) 
         if source is None:
             continue
         row["source_date"] = source["date"]
+        if str(row.get("value_type") or "").strip().lower() in _SOURCE_DATE_PROJECTED_TYPES:
+            continue
         ends = [_period_bounds(value)[1] for value in (source.get("date"), source.get("modified_at"))
                 if _date_value(value)]
         latest = max((end for end in ends if end is not None), default=None)

@@ -4043,6 +4043,10 @@ class ResearchTools:
             text, cacheable = MSG_SEARCH_BUDGET, False
         self._outcome(outcome)
         if cacheable:
+            # A repeated query gets this text as rendered now: its row titles and
+            # (RESEARCH_SOURCE_DATES) row dates are those known at this render.  A
+            # later fetch's higher-ranked date reaches the ledger, sources.json,
+            # the digest and the fetch header, not this cached search text.
             with self._lock:
                 self._search_cache[key] = text
         else:
