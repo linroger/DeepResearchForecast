@@ -18,7 +18,11 @@ from typing import Any, Dict, Iterable, List, Optional
 from ..utils.actors import (
     ACTOR_INTELLIGENCE_SCHEMA_VERSION,
     actor_intelligence_payload,
+    actor_key_is_lossy,
     has_unsupported_actor_intelligence_schema,
+    legacy_actor_key,
+    normalize_name,
+    stable_actor_id,
 )
 from ..utils.quant_typing import expectation_qualifier
 from .actor_context import (
@@ -335,19 +339,35 @@ def _items(value: Any, limit: int = _LIST_ITEM_LIMIT) -> List[str]:
     return [item for item in out if item][:limit]
 
 
-def _canonical_name(value: Any) -> str:
-    return re.sub(r"[^0-9a-z\u3400-\u9fff]+", "", str(value or "").casefold())
+# INFRA-11: one identity key with actor_context — NFKC + casefold, then [0-9a-z] + CJK.
+# (Before, this copy skipped NFKC, so a full-width pack name never matched its actor.)
+_canonical_name = legacy_actor_key
+
+
+def _same_actor_name(value: Any, name: Any) -> bool:
+    """INFRA-11: ``normalize_name`` equality first, so kana/hangul/Cyrillic names match
+    themselves and nothing else; the legacy key is a fallback only when neither side
+    loses non-Latin letters to it, where it cannot equate two different names."""
+    candidate = normalize_name(value)
+    if not candidate or not name:
+        return False
+    if candidate == normalize_name(name):
+        return True
+    legacy = _canonical_name(value)
+    return (
+        bool(legacy)
+        and legacy == _canonical_name(name)
+        and not actor_key_is_lossy(value)
+        and not actor_key_is_lossy(name)
+    )
 
 
 def _matches_actor(value: Any, actor: Dict[str, Any]) -> bool:
-    candidate = _canonical_name(value)
-    if not candidate:
-        return False
     names = [actor.get("name")]
     aliases = actor.get("aliases")
     if isinstance(aliases, list):
         names.extend(aliases)
-    return candidate in {_canonical_name(name) for name in names if name}
+    return any(_same_actor_name(value, name) for name in names)
 
 
 _SOURCE_KEYS = {
@@ -749,12 +769,16 @@ def _context_pack_for_actor(
         require_identity = False
         packs = dossier.get("actor_context_packs") if isinstance(dossier, dict) else None
         if isinstance(packs, dict):
-            actor_keys = {
-                _canonical_name(actor.get("actor_id") or actor.get("id")),
-                _canonical_name(actor.get("name")),
-            }
+            # INFRA-11: an empty legacy key (a kana/hangul/Cyrillic name or a missing id)
+            # never matches, so one non-Latin actor cannot pick up another one's pack.
+            actor_id_key = _canonical_name(actor.get("actor_id") or actor.get("id"))
             for key, value in packs.items():
-                if _canonical_name(key) in actor_keys and isinstance(value, dict):
+                if not isinstance(value, dict):
+                    continue
+                if (
+                    (actor_id_key and _canonical_name(key) == actor_id_key)
+                    or _same_actor_name(key, actor.get("name"))
+                ):
                     candidate = value
                     break
         elif isinstance(packs, list):
@@ -976,9 +1000,13 @@ def build_actor_role_contract(
         return None
     actor_id = _text(actor.get("actor_id") or actor.get("id"), 160)
     if not actor_id:
-        actor_id = "actor_" + hashlib.sha256(
-            _canonical_name(name).encode("utf-8")
-        ).hexdigest()[:16]
+        # INFRA-11: exactly actor_context.actor_id_for (the raw dossier name, not the
+        # display-sanitised one), so the role and its context pack share one id and every
+        # non-Latin name no longer shares the empty-key id actor_e3b0c44298fc1c14.
+        try:
+            actor_id = stable_actor_id(actor.get("name"))
+        except ValueError:
+            return None
 
     raw_intelligence = actor.get("intelligence")
     intelligence = actor_intelligence_payload(actor)

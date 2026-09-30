@@ -515,6 +515,9 @@ class ZepToolsService:
         self._fact_embed_cache: Dict[str, List[float]] = {}
         self._embedder = None  # 懒构建的本地句向量嵌入器（与图谱检索同源）
         self._embedder_unavailable = False  # 嵌入器不可用时置位，避免反复尝试
+        # INFRA-11: 研究 actors.json 顶层对象（ReportAgent 构造时注入）。ACTOR_NAME_MATCH_STRICT 下
+        # opinion_shift / _resolve_entity_name 先按名册（含别名）解析名字；None = 只按图谱/动作日志名匹配。
+        self.actor_roster: Optional[Dict[str, Any]] = None
         logger.info("ZepToolsService 初始化完成")
 
     # I-6-1: 集中读取性能开关，默认 False/串行，缺少 Config 字段时回退到当前行为。
@@ -2732,7 +2735,9 @@ class ZepToolsService:
         trace_cascade 的精确 `a.name = $src` Cypher 匹配使用（否则大小写/空格/公司后缀
         的细微差异会让多跳查询无谓地返回空）。解析顺序对齐 actors.match_actor 语义：
         标准化精确匹配 → 双向包含（取较长名，避免「AI」类短名误配）。无命中或读取失败 →
-        原样返回（degrade-safe，绝不因解析失败而阻断遍历）。"""
+        原样返回（degrade-safe，绝不因解析失败而阻断遍历）。
+        INFRA-11（ACTOR_NAME_MATCH_STRICT，默认开）：见 _resolve_entity_name_strict——先查名册
+        别名，包含匹配下限 4 字符且要求唯一命中；关闭 = 上面的旧解析（2 字符包含、取较长名）。"""
         raw = (name or "").strip()
         if not raw:
             return raw
@@ -2745,23 +2750,67 @@ class ZepToolsService:
         target = normalize_name(raw)
         if not target:
             return raw
-        exact: Optional[str] = None
-        best: Optional[str] = None
-        best_len = 0
-        for node in nodes:
-            cand = normalize_name(node.name)
-            if not cand:
-                continue
-            if cand == target:
-                exact = node.name
-                break
-            if len(cand) >= 2 and (cand in target or target in cand) and len(cand) > best_len:
-                best, best_len = node.name, len(cand)
-        resolved = exact or best
+        if getattr(Config, "ACTOR_NAME_MATCH_STRICT", True):
+            resolved = self._resolve_entity_name_strict(raw, target, nodes)
+        else:
+            exact: Optional[str] = None
+            best: Optional[str] = None
+            best_len = 0
+            for node in nodes:
+                cand = normalize_name(node.name)
+                if not cand:
+                    continue
+                if cand == target:
+                    exact = node.name
+                    break
+                if len(cand) >= 2 and (cand in target or target in cand) and len(cand) > best_len:
+                    best, best_len = node.name, len(cand)
+            resolved = exact or best
         if resolved and resolved != raw:
             logger.info(f"trace_cascade 名称解析: {raw!r} → 规范节点 {resolved!r}")
             return resolved
         return raw
+
+    def _resolve_entity_name_strict(self, raw: str, target: str, nodes: List[Any]) -> Optional[str]:
+        """INFRA-11: fail-closed node-name resolution for trace_cascade.
+
+        1. Exact normalized node name: the name itself, then (when it is exactly the name or
+           an alias of one roster actor) that actor's canonical name and aliases, so an exact
+           alias such as 'EU' reaches the 'European Union' node.
+        2. Containment only when both sides have at least 4 normalized characters (a CJK name
+           counts per character) and exactly one distinct node name qualifies.
+        Anything else returns None and the caller keeps the raw name.
+        """
+        from ..utils.actors import actor_match_candidates, normalize_name
+        surfaces = [target]
+        rows = actor_match_candidates(raw, getattr(self, "actor_roster", None), exact_only=True)
+        if len(rows) == 1:
+            row = rows[0]
+            aliases = row.get("aliases") if isinstance(row.get("aliases"), list) else []
+            for surface in (row.get("name"), *aliases):
+                norm = normalize_name(surface) if isinstance(surface, str) else ""
+                if norm and norm not in surfaces:
+                    surfaces.append(norm)
+        by_norm: Dict[str, str] = {}
+        for node in nodes:
+            cand = normalize_name(node.name)
+            if cand:
+                by_norm.setdefault(cand, node.name)
+        for surface in surfaces:
+            if surface in by_norm:
+                return by_norm[surface]
+        contained = [
+            cand for cand in by_norm
+            if min(len(cand), len(target)) >= 4 and (cand in target or target in cand)
+        ]
+        if len(contained) == 1:
+            return by_norm[contained[0]]
+        if contained:
+            logger.info(
+                f"trace_cascade 名称解析: {raw!r} 包含匹配到 {len(contained)} 个节点，歧义不解析"
+                f"（{', '.join(by_norm[c] for c in contained[:6])}）"
+            )
+        return None
 
     @staticmethod
     def _fmt_edge_label(edge: Any) -> str:
@@ -2841,7 +2890,13 @@ class ZepToolsService:
         # RPT-13：空 target 时 str.find('') 恒为 0，会把全体动作日志误标成单一 actor 的轨迹。
         if not target:
             return "（opinion_shift 需要 actor_name 参数：请提供要追踪的 Agent/角色名）"
-        mine = [a for a in actions if normalize_name(a.agent_name) == target or normalize_name(a.agent_name).find(target) >= 0]
+        if getattr(Config, "ACTOR_NAME_MATCH_STRICT", True):
+            agents, ambiguity = self._opinion_shift_agents(actor_name, actions)
+            if ambiguity:
+                return ambiguity
+            mine = [a for a in actions if a.agent_name and str(a.agent_name) in agents]
+        else:
+            mine = [a for a in actions if normalize_name(a.agent_name) == target or normalize_name(a.agent_name).find(target) >= 0]
         if not mine:
             return f"（未找到名为「{actor_name}」的 agent 的动作记录）"
         # SIM-5（SIM_EVENT_PROVENANCE，默认开）：挂在该行为者名下的种子/时间线事件回放/采样
@@ -2868,6 +2923,52 @@ class ZepToolsService:
         if injected:
             lines.append(f"（已剔除注入动作 {injected} 次：种子/时间线事件回放/采样点赞——非行为者自发）")
         return "\n".join(lines)
+
+    def _opinion_shift_agents(self, actor_name: str, actions: List[Any]) -> tuple[set, str]:
+        """INFRA-11: the agent names opinion_shift tracks, or an ambiguity message.
+
+        The legacy filter kept every agent whose normalized name merely contained the
+        target, so 'US' also swept in Russia, Australia and Business Roundtable.  Here the
+        target resolves in four passes, the first that yields anything deciding: an exact
+        name/alias of the research roster, an exact agent name from the action log, a
+        roster containment of at least 4 characters, an agent-name containment of at least
+        4 characters.  One roster actor tracks the agents that name it (or whose own name
+        ``match_actor`` resolves to it); several candidates return an explanatory message
+        naming them instead of merging their trajectories.
+        """
+        from ..utils.actors import actor_match_candidates, match_actor, normalize_name
+        agent_names = sorted({str(a.agent_name) for a in actions if a.agent_name})
+        roster = getattr(self, "actor_roster", None)
+        agent_roster = {"actors": [{"name": name} for name in agent_names]}
+
+        def _agents_naming(row: Dict[str, Any], pool: Optional[Dict[str, Any]]) -> set:
+            canonical = normalize_name(row.get("name"))
+            aliases = row.get("aliases") if isinstance(row.get("aliases"), list) else []
+            surfaces = {canonical, *(normalize_name(a) for a in aliases if isinstance(a, str))}
+            surfaces.discard("")
+            out = set()
+            for name in agent_names:
+                if normalize_name(name) in surfaces:
+                    out.add(name)
+                elif pool is not None:
+                    hit = match_actor(name, pool)
+                    if hit is not None and normalize_name(hit.get("name")) == canonical:
+                        out.add(name)
+            return out
+
+        for pool, exact_only in ((roster, True), (agent_roster, True),
+                                 (roster, False), (agent_roster, False)):
+            rows = actor_match_candidates(actor_name, pool, exact_only=exact_only)
+            if len(rows) == 1:
+                return _agents_naming(rows[0], roster if pool is roster else None), ""
+            if len(rows) > 1:
+                names = "、".join(str(row.get("name")) for row in rows[:12])
+                more = f" 等 {len(rows)} 个" if len(rows) > 12 else ""
+                return set(), (
+                    f"（「{actor_name}」可对应多个行为者：{names}{more}——为避免把不同行为者的轨迹"
+                    "混在一起，请用其中一个的完整名称重新调用 opinion_shift）"
+                )
+        return set(), ""
 
     def scenario_diff(self, base_sim_id: str, scenario_sim_id: str) -> str:
         """T4.7: 反事实对比 base vs 情景两次模拟的结构化差异（确定性，无 LLM）。
