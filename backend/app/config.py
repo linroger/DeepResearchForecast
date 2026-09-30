@@ -1192,6 +1192,12 @@ class Config:
     SIM_HORIZON_DEFAULT_MONTHS = int(os.environ.get('SIM_HORIZON_DEFAULT_MONTHS', '12') or '12')
     # 世界时钟头部附带上一时段变化摘要（world_delta 纯确定性拼装，仅日历模式生效）。
     SIM_WORLD_DELTA = os.environ.get('SIM_WORLD_DELTA', 'true').strip().lower() == 'true'
+    # REPORT-6：世界时钟头部区分「首轮 / 平静期 / 摘要不可用 / 本次运行不产出摘要」与
+    # 「本时段无日程事件」，取代一律回落的 "(first period)" / "(none)"（演化失败或 in-band
+    # 关闭时每轮都自称首轮，与 "round N/M" 矛盾；"(none)" 被读成"世界无事发生"）。
+    # 默认开是安全的：只改 agent 可见的占位措辞（不含数字/百分号，herding guard 不变）+
+    # 轨迹附加键 delta_state_counts；关闭 → 头部与轨迹逐字节回到旧行为。
+    SIM_ABSENCE_MARKERS = os.environ.get('SIM_ABSENCE_MARKERS', 'true').strip().lower() == 'true'
     # 决策通道改为逐轮在环内引出承诺并推进 WorldState（仅日历模式；关闭则回退事后一次性通道）。
     SIM_DECISION_CHANNEL_INBAND = os.environ.get('SIM_DECISION_CHANNEL_INBAND', 'true').strip().lower() == 'true'
     # WorldState.step 熵地板：按时段天数向种子基率先验混合，防止长时域份额锁死（仅日历模式生效）。
