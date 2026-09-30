@@ -11,14 +11,18 @@ orchestrator's health gate reads) and:
 - errored: additionally drops the world-state block; a pack with no block left
   is '' (no simulation material at all);
 - truncated / llm_degraded: keeps every block and adds a caution line;
+- an unrecognised non-ok value: keeps every block, adds its own caution line and
+  logs a warning (the gate leans closed instead of treating it as ok);
 - ok, a missing or unreadable summary, or the knob off: the legacy pack,
-  byte-identical.
+  byte-identical. A summary that exists but cannot be read is additionally
+  flagged (summary_unreadable) and logged at WARNING, since the gate did not run.
 
 The verdict is kept on the agent and written to forecast.json as
 quality.signal_pack_health. Offline: tmp run-state dir, stub tools, no LLM.
 """
 
 import json
+import logging
 import os
 import re
 
@@ -65,6 +69,8 @@ _NO_BEHAVIOUR = ("⚠️ 本次模拟未产出可用的行为数据（simulation
                  "的发现；正文不得引用任何基于模拟行为量或派系聚类的推演结论。")
 _PARTIAL = ("⚠️ 模拟运行状态：{health}（未完整或降级完成）——以下诊断材料只覆盖部分运行，"
             "引用须更加审慎。")
+_UNKNOWN = ("⚠️ 模拟运行状态：{health}（未识别的健康状态，运行是否完整未经确认）——以下诊断材料的"
+            "可靠性未经核验，引用须更加审慎。")
 
 _ACTIVITY_SUPPRESSED = ["simulation_outcomes", "coalition_map", "scenario_diff"]
 
@@ -122,6 +128,25 @@ def run_state(tmp_path, monkeypatch):
         (sim_dir / "run_summary.json").write_text(text, encoding="utf-8")
 
     return write
+
+
+@pytest.fixture
+def warnings_log():
+    """WARNING+ records of the report agent's logger (mirofish.* does not propagate, so
+    caplog misses them): a temporary handler on the real logger."""
+    records = []
+    handler = logging.Handler(level=logging.WARNING)
+    handler.emit = records.append
+    log = logging.getLogger("mirofish.report_agent")
+    log.addHandler(handler)
+    try:
+        yield records
+    finally:
+        log.removeHandler(handler)
+
+
+def _gate_warnings(records):
+    return [r.getMessage() for r in records if "信号包健康门" in r.getMessage()]
 
 
 def _agent(*, base=BASE_SIM_ID, world_state=_WORLD_STATE, spine=_SPINE):
@@ -249,13 +274,13 @@ def test_ok_missing_and_flag_off_identical(run_state, monkeypatch, tmp_path):
     assert ok._build_signal_pack() == _LEGACY_FULL
     assert ok._signal_pack_health == {"health": "ok", "suppressed": []}
 
-    # unreadable summary / summary without a health field / unknown health value
-    for raw in ("{not json", json.dumps({"simulation_id": SIM_ID}), json.dumps(["hollow"]),
-                json.dumps({"simulation_health": 7}),
-                json.dumps({"simulation_health": "some_future_state"})):
+    # summary without a health field (predates health accounting) / unreadable summaries
+    for raw in (json.dumps({"simulation_id": SIM_ID}), "{not json", json.dumps(["hollow"]),
+                json.dumps({"simulation_health": 7}), json.dumps({"simulation_health": " "})):
         run_state(raw=raw)
         agent = _agent()
         assert agent._build_signal_pack() == _LEGACY_FULL, raw
+        assert agent._signal_pack_health["health"] is None, raw
 
     # missing summary
     os.remove(os.path.join(SimulationRunner.RUN_STATE_DIR, SIM_ID, "run_summary.json"))
@@ -268,6 +293,73 @@ def test_ok_missing_and_flag_off_identical(run_state, monkeypatch, tmp_path):
     escape.simulation_id = "../" + SIM_ID
     assert escape._build_signal_pack() == _LEGACY_FULL
     assert escape._signal_pack_health == {"health": None, "suppressed": []}
+
+
+# ─────────────── gate skipped / unrecognised values are visible ───────────────
+@pytest.mark.parametrize("raw", ["{not json", json.dumps(["hollow"]),
+                                 json.dumps({"simulation_health": 7}),
+                                 json.dumps({"simulation_health": None}),
+                                 json.dumps({"simulation_health": " "})])
+def test_unreadable_summary_warns_and_is_flagged(run_state, warnings_log, raw):
+    run_state(raw=raw)
+    agent = _agent()
+
+    # the pack stays the legacy one (spec: parse error -> health None) ...
+    assert agent._build_signal_pack() == _LEGACY_FULL
+    # ... but the skipped gate is flagged apart from an absent summary and logged at WARNING
+    assert agent._signal_pack_health == {
+        "health": None, "suppressed": [], "summary_unreadable": True}
+    warned = _gate_warnings(warnings_log)
+    assert len(warned) == 1 and "run_summary.json 存在但不可读" in warned[0]
+    assert all(r.levelno == logging.WARNING for r in warnings_log)
+
+
+def test_absent_summary_stays_silent(run_state, warnings_log):
+    # no summary file, an unsafe id, and a summary that predates health accounting
+    missing = _agent()
+    assert missing._build_signal_pack() == _LEGACY_FULL
+    escape = _agent()
+    escape.simulation_id = "../" + SIM_ID
+    assert escape._build_signal_pack() == _LEGACY_FULL
+    run_state(raw=json.dumps({"simulation_id": SIM_ID, "organic_action_count": 12}))
+    legacy = _agent()
+    assert legacy._build_signal_pack() == _LEGACY_FULL
+
+    for agent in (missing, escape, legacy):
+        assert agent._signal_pack_health == {"health": None, "suppressed": []}
+    assert _gate_warnings(warnings_log) == []
+
+
+def test_unrecognised_health_leans_closed(run_state, warnings_log):
+    run_state("Stalled")
+    agent = _agent()
+
+    pack = agent._build_signal_pack()
+
+    caveat = _UNKNOWN.format(health="stalled")
+    assert pack == _pack(_WORLD_STATE, _TIERS, _COALITIONS, _SPINE, _DIFF, note=caveat)
+    assert pack != _LEGACY_FULL
+    assert agent._signal_pack_health == {"health": "stalled", "suppressed": []}
+    warned = _gate_warnings(warnings_log)
+    assert len(warned) == 1 and "未识别的 simulation_health='stalled'" in warned[0]
+
+
+def test_unrecognised_health_note_is_length_capped(run_state):
+    run_state("x" * 500)
+    agent = _agent()
+
+    pack = agent._build_signal_pack()
+
+    assert _UNKNOWN.format(health="x" * 40) in pack
+    assert "x" * 41 not in pack
+    assert agent._signal_pack_health["health"] == "x" * 500
+
+
+@pytest.mark.parametrize("health", ["ok", "hollow", "errored", "truncated", "llm_degraded"])
+def test_known_health_values_do_not_warn(run_state, warnings_log, health):
+    run_state(health)
+    _agent()._build_signal_pack()
+    assert _gate_warnings(warnings_log) == []
 
 
 def test_no_update_policy_still_suppresses_before_the_gate(run_state, monkeypatch):
@@ -321,6 +413,20 @@ def test_quality_record(run_state, monkeypatch, tmp_path):
     assert forecast["quality"]["signal_pack_health"] == {
         "health": "hollow", "suppressed": _ACTIVITY_SUPPRESSED}
     assert [s["name"] for s in forecast["scenarios"]] == ["Expand", "Stall"]
+
+
+def test_quality_record_separates_unreadable_from_absent(run_state, monkeypatch, tmp_path):
+    absent = _finalize_agent(tmp_path, monkeypatch)
+    absent._signal_pack = absent._build_signal_pack()
+    assert _finalize(absent, tmp_path, "report_r5_absent")["quality"]["signal_pack_health"] == {
+        "health": None, "suppressed": []}
+
+    run_state(raw="{not json")
+    unreadable = _finalize_agent(tmp_path, monkeypatch)
+    unreadable._signal_pack = unreadable._build_signal_pack()
+    forecast = _finalize(unreadable, tmp_path, "report_r5_unreadable")
+    assert forecast["quality"]["signal_pack_health"] == {
+        "health": None, "suppressed": [], "summary_unreadable": True}
 
 
 def test_quality_record_absent_when_gate_off_or_pack_never_built(run_state, monkeypatch, tmp_path):

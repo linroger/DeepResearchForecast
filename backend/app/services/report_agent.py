@@ -1064,6 +1064,12 @@ _SIGNAL_PACK_PARTIAL_HEALTHS = ("truncated", "llm_degraded")
 _SIGNAL_PACK_PARTIAL_NOTE = (
     "⚠️ 模拟运行状态：{health}（未完整或降级完成）——以下诊断材料只覆盖部分运行，引用须更加审慎。"
 )
+# 运行器当前只产出 ok/hollow/errored/truncated/llm_degraded；未识别的非 ok 值（未来新增状态）
+# 不当作 ok 静默放行（fail-closed 偏向）：块全部保留，包头后附此提示并告警。
+_SIGNAL_PACK_UNKNOWN_HEALTH_NOTE = (
+    "⚠️ 模拟运行状态：{health}（未识别的健康状态，运行是否完整未经确认）——以下诊断材料的可靠性"
+    "未经核验，引用须更加审慎。"
+)
 
 
 REACT_CONTAMINATED_RETRY_MSG = (
@@ -2468,18 +2474,30 @@ class ReportAgent:
         # REPORT-5（REPORT_SIGNAL_PACK_HEALTH_GATE，默认开，fail-closed）：按 run_summary.json 的
         # simulation_health 跳过种子回声块（_SIGNAL_PACK_HEALTH_SKIPS），裁定记入
         # self._signal_pack_health（_finalize_structured_forecast 落 quality.signal_pack_health）。
-        # 无 summary / 读取失败 → health=None，与 ok 一样按旧行为组包（逐字节不变）。
+        # 无 summary / 读取失败 → health=None，与 ok 一样按旧行为组包（逐字节不变）；summary 存在
+        # 却读不出健康度时另记 summary_unreadable=True（门对本次运行未生效，须与「无 summary」可区分）。
+        # 未识别的非 ok 值 → 保留全部块并附审慎提示（偏向关闭，不当作 ok）。
         _health: Optional[str] = None
+        _unrecognised = False
         _skip: Tuple[str, ...] = ()
         if getattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", True):
-            _health = self._run_summary_health()
+            _health, _summary_unreadable = self._run_summary_health()
             _skip = _SIGNAL_PACK_HEALTH_SKIPS.get(_health or "", ())
-            # 情景差异块只在有基线模拟时才会构建，没有基线就谈不上被跳过。
+            _unrecognised = (_health is not None and _health != "ok" and not _skip
+                             and _health not in _SIGNAL_PACK_PARTIAL_HEALTHS)
+            if _unrecognised:
+                logger.warning(f"信号包健康门：未识别的 simulation_health={_health[:80]!r}，"
+                               f"保留全部块并附审慎提示（按非健康运行处理）")
+            # suppressed = 门跳过的块。被跳过块的构建工具根本不调用，所以列入不代表该块本会非空
+            # （如 SIM_DECISION_CHANNEL 关闭时世界态块本就为空）。唯一按适用性筛掉的是情景差异块：
+            # 它只对有基线模拟的报告适用，无基线时从不构建，谈不上被跳过。
             self._signal_pack_health = {
                 "health": _health,
                 "suppressed": [b for b in _skip
                                if b != "scenario_diff" or self.base_simulation_id],
             }
+            if _summary_unreadable:
+                self._signal_pack_health["summary_unreadable"] = True
         parts: List[str] = []
         # 0) NEXTSTEPS P1-1: 决策通道演化出的「结果世界态」——建模出的 P(outcome)（按情景份额），
         # 比声量份额更接近真实结果。仅开启 SIM_DECISION_CHANNEL 时存在；置于最前（最权威）。
@@ -2564,36 +2582,54 @@ class ReportAgent:
             "本材料不进入概率生成路径（forecast_effect=diagnostic_only）；\n"
             "❌ 严禁在正文引用动作次数、轮次、动作类型、发帖/点赞/评论等机制细节。"
         )
-        # REPORT-5：非健康运行在包头后紧跟一行状态说明（ok / 未知 → 不加，逐字节不变）。
+        # REPORT-5：非健康运行在包头后紧跟一行状态说明（ok / 无 health → 不加，逐字节不变）。
         if _health in _SIGNAL_PACK_HEALTH_SKIPS:
             header += "\n\n" + _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
         elif _health in _SIGNAL_PACK_PARTIAL_HEALTHS:
             header += "\n\n" + _SIGNAL_PACK_PARTIAL_NOTE.format(health=_health)
+        elif _unrecognised:
+            # 未识别值原样进每章提示词：截短，防异常长串挤占上下文。
+            header += "\n\n" + _SIGNAL_PACK_UNKNOWN_HEALTH_NOTE.format(health=_health[:40])
         return header + "\n\n" + "\n\n".join(parts)
 
-    def _run_summary_health(self) -> Optional[str]:
-        """REPORT-5：读本模拟 run_summary.json 的 simulation_health（小写）。
+    def _run_summary_health(self) -> Tuple[Optional[str], bool]:
+        """REPORT-5：读本模拟 run_summary.json 的 simulation_health（小写），返回 (health, unreadable)。
 
         路径与编排器模拟健康门相同（SimulationRunner.RUN_STATE_DIR/<simulation_id>/run_summary.json，
-        经 contained_child 校验 id）。缺文件 / 解析失败 / 非法 id / 字段缺失或非字符串 → None，
-        调用方按旧行为组包（离线 / API 路径不因缺 summary 而改变）。"""
+        经 contained_child 校验 id）。
+        - 缺文件 / 非法 id / 早于健康度记账的老 summary（无该字段）→ (None, False)，静默。
+        - 文件存在但解析失败、顶层不是对象、或 simulation_health 不是非空字符串 → (None, True)，
+          WARNING 告警：fail-closed 的健康门对本次运行未生效，生产上必须可见。
+        两种 None 调用方都按旧行为组包（离线 / API 路径不因 summary 缺失或损坏而改变）。"""
         try:
             from .simulation_runner import SimulationRunner
             path = os.path.join(
                 contained_child(SimulationRunner.RUN_STATE_DIR,
                                 getattr(self, "simulation_id", None), "simulation"),
                 "run_summary.json")
-            if not os.path.exists(path):
-                return None
+        except Exception as e:  # noqa: BLE001 — 非法 / 缺失 id：没有可读的 summary
+            logger.debug(f"信号包健康门无法定位 run_summary.json（按无 summary 处理）: {e}")
+            return None, False
+        if not os.path.exists(path):
+            return None, False
+        try:
             with open(path, "r", encoding="utf-8") as f:
                 summary = json.load(f)
         except Exception as e:  # noqa: BLE001 — 读不到健康度即按旧行为（绝不阻断信号包）
-            logger.debug(f"信号包健康门读取 run_summary.json 失败（按无 summary 处理）: {e}")
-            return None
-        health = summary.get("simulation_health") if isinstance(summary, dict) else None
-        if not isinstance(health, str) or not health.strip():
-            return None
-        return health.strip().lower()
+            problem = f"读取或解析失败: {e}"
+        else:
+            if not isinstance(summary, dict):
+                problem = f"顶层不是对象（{type(summary).__name__}）"
+            elif "simulation_health" not in summary:
+                return None, False
+            else:
+                health = summary.get("simulation_health")
+                if isinstance(health, str) and health.strip():
+                    return health.strip().lower(), False
+                problem = f"simulation_health 非法: {health!r:.80}"
+        logger.warning(f"信号包健康门：run_summary.json 存在但不可读（{problem}），"
+                       f"按无 summary 处理（门未生效）: {path}")
+        return None, True
 
     def _world_state_block(self) -> str:
         """NEXTSTEPS P1-1: 读取模拟的 world_state_trajectory.json（决策通道产物），渲染**建模出的
@@ -3627,15 +3663,18 @@ class ReportAgent:
                 }
             except Exception as _pse:  # noqa: BLE001 — 观测性记录，绝不影响产物
                 logger.debug(f"记录 prompt_slot_states 失败（忽略）: {_pse}")
-        # REPORT-5：信号包健康门裁定（health + 被跳过的块）随 forecast.json 落盘（additive）。
-        # 门关闭或本次从未构建信号包时属性为 None → 不写，forecast.json 逐字节不变。
+        # REPORT-5：信号包健康门裁定（health + 被跳过的块 + summary 损坏标记）随 forecast.json
+        # 落盘（additive）。门关闭或本次从未构建信号包时属性为 None → 不写，forecast.json 逐字节不变。
         _sp_health = getattr(self, "_signal_pack_health", None)
         if _sp_health:
             try:
-                forecast.setdefault("quality", {})["signal_pack_health"] = {
+                _sp_record = {
                     "health": _sp_health.get("health"),
                     "suppressed": list(_sp_health.get("suppressed") or []),
                 }
+                if _sp_health.get("summary_unreadable"):
+                    _sp_record["summary_unreadable"] = True
+                forecast.setdefault("quality", {})["signal_pack_health"] = _sp_record
             except Exception as _sphe:  # noqa: BLE001 — 观测性记录，绝不影响产物
                 logger.debug(f"记录 signal_pack_health 失败（忽略）: {_sphe}")
         # P2-2: 把观察指标随 forecast.json 落盘（供解析调度器对照判别情景）。
