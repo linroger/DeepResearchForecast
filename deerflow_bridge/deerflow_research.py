@@ -15785,6 +15785,9 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
                 refresh_diagnostics[_key] = (
                     refresh_diagnostics.get(_key, 0) + _stage_diagnostics.get(_key, 0)
                 )
+            # RESEARCH-3: a retry stage that ran out of time also leaves coverage unknown.
+            if _stage_diagnostics.get("deadline_exhausted", 0):
+                refresh_diagnostics["deadline_exhausted"] = 1
             for _label, _n in (_stage_diagnostics.get("transport_error_classes") or {}).items():
                 _cls = refresh_diagnostics.setdefault("transport_error_classes", {})
                 _cls[_label] = _cls.get(_label, 0) + _n
@@ -15827,6 +15830,9 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
         payload["degraded_queries"] = degraded_queries
     all_queries_failed = initial_all_transport_failed
     transport_failures = refresh_diagnostics.get("transport_failure_count", 0)
+    # Queries still unanswered when the snapshot deadline hit (or the circuit
+    # opened) were never searched: coverage is as unknown as after a failure.
+    deadline_exhausted = bool(refresh_diagnostics.get("deadline_exhausted", 0))
     payload["status"] = {
         "attempted": True,
         "query_count": len(queries),
@@ -15836,17 +15842,20 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
         "refresh_candidate_count": len(refreshed_markets),
         "candidate_count": len(combined_candidates),
         "selected_count": len(markets),
-        # RESEARCH-3: some queries failed and none found a candidate, so market
-        # coverage is unknown: 'partial_transport_failure', never the generic
-        # 'no_equivalent_market' (which would read as "no such market exists").
+        # RESEARCH-3: some queries failed or went unanswered and none found a
+        # candidate, so market coverage is unknown: 'partial_transport_failure',
+        # never the generic 'no_equivalent_market' ("no such market exists").
         "empty_reason": None if markets else (
             "all_candidates_irrelevant" if combined_candidates else (
                 "transport_failure" if all_queries_failed else (
-                    "partial_transport_failure" if transport_failures > 0 else "no_equivalent_market"
+                    "partial_transport_failure" if transport_failures > 0 or deadline_exhausted
+                    else "no_equivalent_market"
                 )
             )
         ),
     }
+    if deadline_exhausted:
+        payload["status"]["deadline_exhausted"] = 1
     if end_date_passed_count is not None:
         payload["status"]["end_date_passed_count"] = end_date_passed_count
     # TRANSPORT-DIAG: additive——失败查询的具体错误类名[:HTTP 状态] 计数，使断网可诊断

@@ -6942,6 +6942,8 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
     }
     empty_reason_counts: dict[str, int] = {}
     end_date_gate_seen = False
+    # A track whose snapshot deadline ran out left queries unanswered (RESEARCH-3).
+    deadline_exhausted = False
     for track_index, pm in enumerate(snapshots, start=1):
         snap_as_of = str(pm.get("as_of") or "")
         source_value = pm.get("registry_sources") or pm.get("source")
@@ -6971,6 +6973,11 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
             empty_reason_counts[empty_reason] = empty_reason_counts.get(empty_reason, 0) + 1
         if "end_date_passed_count" in track_status:
             end_date_gate_seen = True
+        try:
+            if int(track_status.get("deadline_exhausted") or 0) > 0:
+                deadline_exhausted = True
+        except (TypeError, ValueError, OverflowError):
+            pass
         for query in pm.get("queries") or []:
             text = str(query or "").strip()
             key = text.casefold()
@@ -7045,7 +7052,7 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
     elif (status_totals["inflight_timeout_count"] > 0
           and status_totals["successful_query_count"] == 0):
         evidence_state = "inflight_timeout"
-    elif status_totals["transport_failure_count"] > 0:
+    elif status_totals["transport_failure_count"] > 0 or deadline_exhausted:
         evidence_state = "partial_transport_failure"
     else:
         evidence_state = "verified_empty"
@@ -7061,17 +7068,20 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
         "empty_reason_counts": empty_reason_counts,
         **status_totals,
         "attempted_query_count": status_totals["query_count"],
-        # A failed query with no candidate means coverage is unknown: never the
-        # generic 'no_equivalent_market' (the bridge collector's rule, RESEARCH-3).
+        # A failed or unanswered query with no candidate means coverage is unknown:
+        # never the generic 'no_equivalent_market' (the bridge collector's rule, RESEARCH-3).
         "empty_reason": None if selected else (
             "all_candidates_irrelevant" if candidate_count else (
                 "transport_failure" if all_network_attempts_failed else (
-                    "partial_transport_failure" if status_totals["transport_failure_count"] > 0
+                    "partial_transport_failure"
+                    if status_totals["transport_failure_count"] > 0 or deadline_exhausted
                     else "no_equivalent_market"
                 )
             )
         ),
     }
+    if deadline_exhausted:
+        status["deadline_exhausted"] = 1
     # TIME-3: keep the endDate-gate exclusion telemetry across tracks by recounting the
     # stamped rows that survived selection. Only tracks that ran with the gate on carry the
     # key, so an all-gate-off merge keeps its bytes.

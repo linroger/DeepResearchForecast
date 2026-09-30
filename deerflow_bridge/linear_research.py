@@ -3847,12 +3847,24 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
 # prompt depends on it).  An absence claim says that something did not happen,
 # was not reported or does not exist; web search is relevance-ranked and
 # undated, so such a claim holds only when a source says so.  The cues are
-# narrow and bilingual; a cue whose clause lead-in or own text holds an
-# exclusion (a comparison, "not only", "no doubt" or a future form) is not a
-# claim.  Whitespace is collapsed first and every branch has a bounded length,
-# so a scan is linear in the text.  Idea credit: TradingAgents (Apache-2.0)
-# labels a failed or empty vendor lookup "not an absence"; reimplemented, no
-# code copied.
+# narrow and bilingual.  Exclusions:
+# - "no longer", "no more than", "no less than", "not only", "no doubt" and the
+#   future forms "will not" / "won't" / "is unlikely to" are never a cue: every
+#   English branch needs a perfect tense ("has not been announced"), "there is
+#   no" plus a record noun, or "no" plus a listed qualifier or noun.  A
+#   comparison, "not only" or "no doubt" next to a real cue does not undo it
+#   ("Growth of no more than 5% has not been confirmed" is a claim), so these
+#   are not looked for around a cue.
+# - A scope-taking exclusion ("no longer", a future form) in a cue's clause
+#   lead-in ("It is no longer true that no deal has been announced", "Officials
+#   will not say whether there is no evidence") disqualifies the cue.  The
+#   lead-in is at most _ABSENCE_LEAD_CHARS long and ends at punctuation or a
+#   clause-joining conjunction ("The firm won't comment and has not disclosed
+#   the fee" is a claim).  It may also drop a real claim ("It will not matter
+#   that there is no public evidence"), so the count is a lower bound.
+# Whitespace is collapsed first and every branch has a bounded length, so a scan
+# is linear in the text.  Idea credit: TradingAgents (Apache-2.0) labels a
+# failed or empty vendor lookup "not an absence"; reimplemented, no code copied.
 _ABSENCE_ACTS = r"(?:announced|reported|disclosed|confirmed)"
 _ABSENCE_QUALIFIERS = r"(?:reported|public|official|known|announced|confirmed)"
 _ABSENCE_CUE_RE = re.compile(
@@ -3868,37 +3880,40 @@ _ABSENCE_CUE_RE = re.compile(
     r"|暂无(?:公开)?(?:报道|消息|证据|数据)"
     r"|未见(?:公开)?(?:报道|证据|消息)",
     re.IGNORECASE)
-_ABSENCE_EXCLUSION_RE = re.compile(
-    r"\b(?:no longer|no more than|no less than|not only|no doubt|will not|won['’]t|is unlikely to)\b",
-    re.IGNORECASE)
-# How far back (at most, and never past a clause break) an exclusion is looked for.
+_ABSENCE_SCOPE_EXCLUSION_RE = re.compile(r"\b(?:no longer|will not|won['’]t|is unlikely to)\b",
+                                         re.IGNORECASE)
+# How far back (at most, and never past a clause break) a scope exclusion is looked for.
 _ABSENCE_LEAD_CHARS = 40
-_CLAUSE_BREAK_RE = re.compile(r"[.;:!?,。；：！？，]")
+_CLAUSE_BREAK_RE = re.compile(r"[.;:!?,。；：！？，]|\b(?:and|but|while|whereas|although|though)\b",
+                              re.IGNORECASE)
 _FACT_TAGS = ("VERIFIED", "REPORTED", "UNVERIFIED")
 
 
 def absence_cue(text: Any) -> str | None:
     """The first absence-claim cue of ``text`` ("has not been announced",
-    "there is no evidence", "暂无公开报道"), or None (also for a non-string).
-    Pure and linear-time; see :data:`_ABSENCE_CUE_RE`."""
+    "there is no evidence", "暂无公开报道") whose clause lead-in holds no scope
+    exclusion, or None (also for a non-string).  Pure and linear-time; see
+    :data:`_ABSENCE_CUE_RE`."""
     if not isinstance(text, str) or not text:
         return None
     flat = " ".join(text.split())
     for match in _ABSENCE_CUE_RE.finditer(flat):
         lead = _CLAUSE_BREAK_RE.split(flat[max(0, match.start() - _ABSENCE_LEAD_CHARS):match.start()])[-1]
-        if not _ABSENCE_EXCLUSION_RE.search(lead + match.group(0)):
+        if not _ABSENCE_SCOPE_EXCLUSION_RE.search(lead):
             return match.group(0)
     return None
 
 
 def absence_cue_counts(facts: Iterable[Any]) -> dict[str, int]:
     """``{tag: n}``: the sourced facts whose text carries an absence cue, by
-    evidence tag (every tag key present, zero when none)."""
+    evidence tag: exactly the :data:`_FACT_TAGS` keys, zero when none (a fact
+    with any other or no tag is not counted; postprocess_notes always assigns
+    one of them)."""
     counts = dict.fromkeys(_FACT_TAGS, 0)
     for fact in facts or ():
-        if isinstance(fact, Mapping) and absence_cue(fact.get("text")) is not None:
-            tag = str(fact.get("tag") or "")
-            counts[tag] = counts.get(tag, 0) + 1
+        tag = fact.get("tag") if isinstance(fact, Mapping) else None
+        if isinstance(tag, str) and tag in counts and absence_cue(fact.get("text")) is not None:
+            counts[tag] += 1
     return counts
 
 

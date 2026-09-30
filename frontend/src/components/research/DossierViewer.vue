@@ -257,6 +257,7 @@ import {
   requestResearchTranslation, getResearchTranslation, researchPdfUrl,
 } from '../../api/research'
 import { detectTranslationTarget } from '../../utils/researchTranslation'
+import { marketLookupIncomplete } from '../../utils/marketStatus'
 
 const props = defineProps({
   dossier: {
@@ -422,9 +423,12 @@ const marketList = computed(() => {
 
 const marketAsOf = computed(() => String((marketContainer.value && marketContainer.value.as_of) || ''))
 
+// A failed, partial or timed-out lookup leaves coverage unknown: never "no market exists".
+const marketLookupFailed = computed(() =>
+  marketLookupIncomplete(marketContainer.value && marketContainer.value.status))
+
 const marketEmptyTitle = computed(() => {
-  const status = marketContainer.value && marketContainer.value.status
-  if (status && status.empty_reason === 'transport_failure') {
+  if (marketLookupFailed.value) {
     return L('市场数据暂不可用', 'Market data unavailable')
   }
   return L('未找到足够相关且流动的市场', 'No sufficiently relevant liquid market found')
@@ -432,6 +436,10 @@ const marketEmptyTitle = computed(() => {
 
 const marketEmptyDetail = computed(() => {
   if (!marketContainer.value) return L('该研究运行没有市场快照。', 'This research run has no market snapshot.')
+  if (marketLookupFailed.value) {
+    return L('本轮市场查询失败或不完整，覆盖情况未知；这不表示不存在相关市场。',
+      'The market lookup failed or was incomplete this run, so coverage is unknown; this does not mean no market exists.')
+  }
   return L('这表示没有可用的外部市场锚点，并非研究阶段失败。', 'This means no usable external market anchor was found; it is not a research failure.')
 })
 

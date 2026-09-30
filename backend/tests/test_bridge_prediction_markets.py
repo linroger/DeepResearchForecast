@@ -365,14 +365,21 @@ def test_collector_circuit_open_persists_prepass_error_classes(tmp_path, monkeyp
 
 # ---------------------------------------------------------------- RESEARCH-3 partial transport label
 
-def _collect_empty_refresh(tmp_path, monkeypatch, *, attempted, successful, failures):
+def _collect_empty_refresh(tmp_path, monkeypatch, *, attempted, successful, failures,
+                           deadline_on_calls=()):
     """Run the collector on a refresh that returns no market with the given
-    query outcomes (every snapshot call, horizon retries included); return the
-    written status."""
+    query outcomes (every snapshot call, horizon retries included); the
+    snapshot calls numbered in ``deadline_on_calls`` (0 = the refresh) also
+    report ``deadline_exhausted``.  Return the written status."""
+    calls = []
+
     def snapshot(queries, *, diagnostics=None, **_kwargs):
         if diagnostics is not None:
             diagnostics.update({"attempted_query_count": attempted, "successful_query_count": successful,
                                 "transport_failure_count": failures})
+            if len(calls) in deadline_on_calls:
+                diagnostics["deadline_exhausted"] = 1
+        calls.append(list(queries))
         return []
 
     monkeypatch.setattr(d, "_pm_snapshot", snapshot)
@@ -391,6 +398,7 @@ def _collect_empty_refresh(tmp_path, monkeypatch, *, attempted, successful, fail
     payload = json.loads((tmp_path / d.PREDICTION_MARKETS_FILENAME).read_text(encoding="utf-8"))
     assert payload["markets"] == [] and payload["no_relevant_markets"] is True
     assert meta["prediction_markets_count"] == 0
+    assert all(index < len(calls) for index in deadline_on_calls), calls
     return payload["status"]
 
 
@@ -407,6 +415,20 @@ def test_collector_all_failed_and_clean_empty_keep_their_labels(tmp_path, monkey
     assert failed["empty_reason"] == "transport_failure"
     clean = _collect_empty_refresh(tmp_path / "clean", monkeypatch, attempted=2, successful=2, failures=0)
     assert clean["empty_reason"] == "no_equivalent_market" and clean["transport_failure_count"] == 0
+    assert "deadline_exhausted" not in clean
+
+
+def test_collector_unanswered_queries_without_candidates_are_partial(tmp_path, monkeypatch):
+    """The snapshot deadline ran out (in the refresh, call 0, or in a horizon-retry
+    stage, call 1) with no failure and no candidate: the unanswered queries were
+    never searched, so coverage is unknown and the status must not read as 'no
+    market exists'."""
+    for call in (0, 1):
+        status = _collect_empty_refresh(tmp_path / f"call{call}", monkeypatch, attempted=5, successful=2,
+                                        failures=0, deadline_on_calls=(call,))
+        assert status["transport_failure_count"] == 0 and status["candidate_count"] == 0
+        assert status["empty_reason"] == "partial_transport_failure"
+        assert status["deadline_exhausted"] == 1
 
 
 def test_orchestrator_market_merge_applies_the_partial_transport_rule():
@@ -426,6 +448,11 @@ def test_orchestrator_market_merge_applies_the_partial_transport_rule():
     irrelevant = merge_market_snapshots([{"markets": [], "status": {
         "query_count": 3, "successful_query_count": 2, "transport_failure_count": 1, "candidate_count": 4}}])
     assert irrelevant["status"]["empty_reason"] == "all_candidates_irrelevant"
+    # A track whose snapshot deadline ran out left queries unanswered: coverage is unknown.
+    unanswered = merge_market_snapshots([track(5, 2, 0, deadline_exhausted=1), track(2, 2, 0)])["status"]
+    assert unanswered["empty_reason"] == "partial_transport_failure"
+    assert unanswered["state"] == "partial_transport_failure" and unanswered["deadline_exhausted"] == 1
+    assert "deadline_exhausted" not in partial
 
 
 # ---------------------------------------------------------------- PM-1 market normalization enrich

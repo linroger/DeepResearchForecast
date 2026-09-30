@@ -198,26 +198,43 @@ def test_section_task_off_is_byte_identical_and_on_adds_the_rule_after_the_rules
     ("目前暂无公开报道。", "暂无公开报道"),
     ("市场上未见报道。", "未见报道"),
     ("公司尚未正式确认该计划。", "尚未正式确认"),
+    # A comparison, "not only" or "no doubt" in the same clause does not undo a real claim.
+    ("Growth of no more than 5% has not been confirmed.", "has not been confirmed"),
+    ("Shares rose no more than 5% after the merger had not been confirmed.", "had not been confirmed"),
+    ("Output of no less than 3 GW has not been confirmed by the ministry.", "has not been confirmed"),
+    ("Not only has no official agreement been signed, talks have stalled.", "no official agreement"),
+    ("There is no doubt the plan has not been disclosed.", "has not been disclosed"),
+    # A clause break (punctuation or a joining conjunction) ends a scope exclusion's reach.
+    ("The date is unlikely to change; officials have not confirmed it.", "have not confirmed"),
+    ("The firm won't comment and has not disclosed the fee.", "has not disclosed"),
+    ("The regulator will not rule until June but has not confirmed a date.", "has not confirmed"),
 ])
 def test_absence_cue_hits(text, cue):
     assert lr.absence_cue(text) == cue
 
 
 @pytest.mark.parametrize("text", [
+    # No cue branch reads an exclusion phrase.
     "no longer",
     "no more than 5%",
+    "no less than",
     "not only",
+    "no doubt",
     "will not",
+    "won't",
+    "is unlikely to",
     "Operators no longer publish quarterly capacity figures.",
     "Growth of no more than 5% was reported in 2023.",
     "Not only has capacity grown, it has accelerated.",
     "The regulator will not approve the plan this year.",
     "The plan is unlikely to be announced before May.",
-    # An exclusion in the cue's own clause lead-in disqualifies it.
-    "Not only has no official agreement been signed",
-    "It will not matter that there is no public evidence",
     "The deal has been announced and reported widely.",
     "There is no doubt that capacity rose.",
+    # A scope exclusion in the cue's own clause lead-in disqualifies it.
+    "It is no longer true that no deal has been announced.",
+    "Officials will not say whether there is no evidence of a leak.",
+    "Officials won't confirm that there is no official record.",
+    "The ministry is unlikely to say there is no evidence.",
     "预计明年将公布数据。",
     "",
 ])
@@ -225,9 +242,15 @@ def test_absence_cue_misses(text):
     assert lr.absence_cue(text) is None
 
 
+def test_absence_cue_scope_exclusion_can_drop_a_real_claim():
+    """The documented trade-off: a scope exclusion disqualifies every later cue in
+    its clause, a factive one included, so absence_findings is a lower bound."""
+    assert lr.absence_cue("It will not matter that there is no public evidence") is None
+
+
 def test_absence_cue_rejects_non_strings_and_scans_past_an_excluded_cue():
     assert lr.absence_cue(None) is None and lr.absence_cue(42) is None
-    text = "Not only has no official deal emerged; the plan has not been disclosed."
+    text = "It is no longer true that no official deal exists; the plan has not been disclosed."
     assert lr.absence_cue(text) == "has not been disclosed"
     assert lr.absence_cue("has\n\n  not   been \t announced") == "has not been announced"
 
@@ -235,6 +258,7 @@ def test_absence_cue_rejects_non_strings_and_scans_past_an_excluded_cue():
 @pytest.mark.parametrize("unit", [
     "no ", "has ", "have not ", "there is no ", "no reported ", "尚未", "暂无公开", "a", " \n",
     "no doubt has not been announced ", "not only there is no evidence ",
+    "won't say there is no evidence and ", "is unlikely to, ",
 ])
 def test_absence_cue_is_linear_on_adversarial_input(unit):
     text = (unit * (200_000 // len(unit) + 1))[:200_000]
@@ -251,6 +275,15 @@ def test_absence_cue_counts_by_tag():
              "not a fact"]
     assert lr.absence_cue_counts(facts) == {"VERIFIED": 1, "REPORTED": 1, "UNVERIFIED": 1}
     assert lr.absence_cue_counts([]) == {"VERIFIED": 0, "REPORTED": 0, "UNVERIFIED": 0}
+
+
+def test_absence_cue_counts_keep_the_tag_shape():
+    """A fact with an unknown, missing or unhashable tag is not counted, so the
+    record and meta keys are always exactly the three evidence tags."""
+    cue = "The deal has not been confirmed [S1]"
+    facts = [{"text": cue, "tag": "WEIRD"}, {"text": cue}, {"text": cue, "tag": ""},
+             {"text": cue, "tag": ["VERIFIED"]}, {"text": cue, "tag": "REPORTED"}]
+    assert lr.absence_cue_counts(facts) == {"VERIFIED": 0, "REPORTED": 1, "UNVERIFIED": 0}
 
 
 def test_absence_cue_count_failure_degrades_safe(monkeypatch):
