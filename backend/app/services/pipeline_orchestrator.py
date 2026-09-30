@@ -69,7 +69,7 @@ from ..services.research_progress import (
     ResearchProgressEstimator,
     aggregate_parallel_progress,
 )
-from ..services import run_shape
+from ..services import backbone_sensitivity, run_shape
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import RunnerStatus, SimulationRunner
 from ..services.text_processor import TextProcessor
@@ -805,6 +805,11 @@ def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
     here: ``fork_safety_policy_v1`` stamps it on a deep copy of the base's pin.
     Every capture snapshots the ambient Config, which is the safe containment
     policy only while the operator keeps the WP1 defaults.
+
+    ``backbone_check`` (EVAL-11) is the opt-in of the shadow cross-backbone spine
+    check. Only an ``admission`` or ``fork_admission`` capture snapshots the
+    ambient BACKBONE_CHECK_* knobs; any other origin (a legacy resume) records it
+    disabled, so a resume never turns the check on from the current environment.
     """
     return {
         "version": SAFETY_POLICY_VERSION,
@@ -821,6 +826,10 @@ def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
         "simulation_forecast_effect": str(
             getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
             or "diagnostic_only"),
+        "backbone_check": (
+            backbone_sensitivity.capture_policy(Config)
+            if origin in ("admission", "fork_admission")
+            else dict(backbone_sensitivity.DISABLED_POLICY)),
     }
 
 
@@ -9408,6 +9417,17 @@ class PipelineOrchestrator:
         except Exception:  # noqa: BLE001 — 安全政策读取绝不让管线崩溃；回退环境值
             return default
 
+    @classmethod
+    def _backbone_check_policy(cls, state: "PipelineState") -> Optional[dict[str, Any]]:
+        """EVAL-11: the main report's shadow backbone-check policy from the run's pin, or None.
+
+        Read from ``safety_policy_v1['backbone_check']`` with no ambient fallback: a run
+        admitted before the key existed, a legacy resume and a fork without a pin all stay
+        disabled, whatever BACKBONE_CHECK_ENABLED says now.
+        """
+        return backbone_sensitivity.enabled_policy(
+            cls._pinned_safety(state, "backbone_check", None))
+
     # -- INFRA-7: run-shape pin, drift detection and resume lineage guards ----
 
     @staticmethod
@@ -15216,6 +15236,10 @@ class PipelineOrchestrator:
                     logger.info("[%s] ReportAgent 尚未支持研究工件直通参数，回退旧签名",
                                 state.pipeline_id)
                     agent = ReportAgent(**_ra_kwargs)
+
+                # EVAL-11：只有主报告按准入钉决定是否跑骨架跨底座影子检查（None = 不跑）；种子报告 /
+                # model_comparison / API 重生成从不设置。
+                agent.backbone_check_policy = self._backbone_check_policy(state)
 
                 def report_cb(stage: str, progress: int, message: str):
                     upd(max(5, min(99, int(progress))), f"{stage}: {message}")

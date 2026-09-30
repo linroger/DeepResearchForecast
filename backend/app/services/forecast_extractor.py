@@ -2977,9 +2977,14 @@ def _build_ensemble_client(provider: str) -> Any:
         直接 ``LLMClient(provider=p)``；
       - OpenAI 兼容提供方从 PROVIDER_META 取 default_base/default_model，Key 依次尝试
         ``<PROVIDER>_API_KEY`` → 该提供方的 key_env（如 DEEPSEEK_API_KEY）→ 当且仅当与主提供方
-        同名时的 Config.LLM_API_KEY；缺 Key 时 LLMClient 构造抛 ValueError。
-    未知提供方（不在 PROVIDER_META）→ LLMClient 构造抛 ValueError。两类异常都由
-    ``_run_ensemble_draws`` 捕获 → 跳过该模型并记 flag（绝不阻断主抽取）。"""
+        同名时的 Config.LLM_API_KEY；三者皆无时此处直接抛 ValueError——不能把 api_key=None 交给
+        LLMClient：其构造会回退到 Config.LLM_API_KEY，把主提供方的 Key 发往副提供方的 default_base。
+        与主提供方同名且所得 Key 就是主提供方的 Config.LLM_API_KEY（直接复用，或设置菜单镜像进
+        key_env 的同一把 Key）时，端点用主提供方的 Config.LLM_BASE_URL 而非 default_base：主 Key
+        只发往它本来的端点（例如主提供方走代理 LLM_BASE_URL 时，绝不把代理的 Key 发往官方端点）。
+    未知提供方（不在 PROVIDER_META）→ LLMClient 构造抛 ValueError。两类异常都由调用方捕获
+    （``_run_ensemble_draws`` 跳过该模型并记 flag；EVAL-11 骨架跨底座检查记
+    construct_failed 并试下一个候选），绝不阻断主流程。"""
     import os as _os
     from ..config import Config
     from ..utils.llm_client import LLMClient
@@ -2988,11 +2993,19 @@ def _build_ensemble_client(provider: str) -> Any:
     if not meta.get("openai_compat"):
         # CLI 订阅提供方 / 未知名：交给 LLMClient 构造决定（合法 CLI 通过，未知名抛 ValueError）。
         return LLMClient(provider=p)
+    is_primary = p == str(Config.LLM_PROVIDER or "").lower()
     key = (_os.environ.get(f"{p.upper()}_API_KEY")
            or (_os.environ.get(str(meta.get("key_env"))) if meta.get("key_env") else None)
-           or (Config.LLM_API_KEY if p == str(Config.LLM_PROVIDER or "").lower() else None))
+           or (Config.LLM_API_KEY if is_primary else None))
+    if not key:
+        key_envs = dict.fromkeys(e for e in (f"{p.upper()}_API_KEY", meta.get("key_env")) if e)
+        raise ValueError(f"提供方 {p} 未配置 API Key（{' / '.join(key_envs)}）；"
+                         "主提供方的 Key 不会发往其他提供方的端点")
+    base_url = meta.get("default_base")
+    if is_primary and key == Config.LLM_API_KEY:
+        base_url = Config.LLM_BASE_URL
     return LLMClient(provider=p, api_key=key,
-                     base_url=meta.get("default_base"),
+                     base_url=base_url,
                      model=meta.get("default_model"))
 
 
@@ -3806,30 +3819,19 @@ def apply_self_consistency_intervals(forecast: Any) -> Any:
     return forecast
 
 
-def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
-                          situation_brief: Optional[str] = None,
-                          forecast_inputs: str = "", signal_pack: str = "",
-                          base_distribution: Optional[Dict[str, float]] = None,
-                          quantitative_facts: str = "",
-                          market_block: str = "") -> Dict[str, Any]:
-    """NEXTSTEPS P0-1: derive the structured forecast *spine* from research +
-    simulation SIGNALS — *before* any prose is written.
+def build_spine_user_prompt(*, central_question: str = "", horizon: str = "",
+                            situation_brief: Optional[str] = None,
+                            forecast_inputs: str = "", signal_pack: str = "",
+                            base_distribution: Optional[Dict[str, float]] = None,
+                            quantitative_facts: str = "",
+                            market_block: str = "") -> Tuple[str, bool]:
+    """EVAL-11: the spine draw's user prompt, plus whether the WorldState anchor is active.
 
-    This forces MECE probabilistic discipline up front and yields a spine whose
-    scenarios+probabilities+resolution_criteria each later report section must
-    defend, rather than reverse-engineering numbers out of finished narrative.
-    Same output shape as ``extract_structured_forecast`` plus ``derived_from='spine'``.
-    Degrade-safe: a malformed reply yields a well-formed empty forecast; the caller
-    wraps in try/except and falls back to the post-hoc extractor.
-
-    Optional enhancements (all inert unless their flag + input are supplied):
-      * ``base_distribution`` — WorldState.shares anchor (R2-CAL-3) used to constrain
-        the scenario set + probability band and to compute per-scenario divergence
-        (R2-CAL-18); echoed into the output as ``base_distribution``.
-      * ``quantitative_facts`` — S-tier metric digest (R2-CAL-16) requiring anchors to
-        cite a metric + as-of date.
-      * ``REPORT_SPINE_SELFCONSISTENCY_K`` — K self-consistency draws pooled to
-        mean + spread (R2-CAL-1 / R2-CAL-17).
+    Extracted verbatim from ``derive_forecast_spine`` (same defaults, same input caps, same
+    REPORT-4 absence-marker head) so the shadow backbone check can rebuild the exact prompt
+    the published spine was drawn from. Later spine-prompt additions belong here.
+    Returns ``(user, anchor_ws)``; ``anchor_ws`` is true when REPORT_SPINE_ANCHOR_WORLDSTATE
+    is on and ``base_distribution`` is a dict (the caller echoes the anchor into its output).
     """
     # R2-DETAIL-3：每块输入上限可配置。RQ-4：signal/inputs 两块 4000→6000（骨架情景/概率
     # 由这两块驱动，4000 会把驱动因素与量化信号截断，让骨架欠地气）；brief/facts 维持旧值。
@@ -3895,6 +3897,46 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
         user = _spine_prompt_head(labels, base_rates_supplied=anchors_supplied) + user
     else:
         user = _SPINE_INSTRUCTIONS + user
+    return user, anchor_ws
+
+
+def spine_follow_prompt(user: str, names: List[str]) -> str:
+    """EVAL-11: the fixed-scenario follow prompt (K>1 self-consistency draws and the shadow
+    backbone check): the spine prompt plus the pinned scenario names, re-estimate only."""
+    return user + ("\n\n[已确定情景集合：请沿用完全相同的情景名，仅独立重新估计各自概率"
+                   "（其和≈1），不要新增或重命名情景]\n" + "；".join(names))
+
+
+def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
+                          situation_brief: Optional[str] = None,
+                          forecast_inputs: str = "", signal_pack: str = "",
+                          base_distribution: Optional[Dict[str, float]] = None,
+                          quantitative_facts: str = "",
+                          market_block: str = "") -> Dict[str, Any]:
+    """NEXTSTEPS P0-1: derive the structured forecast *spine* from research +
+    simulation SIGNALS — *before* any prose is written.
+
+    This forces MECE probabilistic discipline up front and yields a spine whose
+    scenarios+probabilities+resolution_criteria each later report section must
+    defend, rather than reverse-engineering numbers out of finished narrative.
+    Same output shape as ``extract_structured_forecast`` plus ``derived_from='spine'``.
+    Degrade-safe: a malformed reply yields a well-formed empty forecast; the caller
+    wraps in try/except and falls back to the post-hoc extractor.
+
+    Optional enhancements (all inert unless their flag + input are supplied):
+      * ``base_distribution`` — WorldState.shares anchor (R2-CAL-3) used to constrain
+        the scenario set + probability band and to compute per-scenario divergence
+        (R2-CAL-18); echoed into the output as ``base_distribution``.
+      * ``quantitative_facts`` — S-tier metric digest (R2-CAL-16) requiring anchors to
+        cite a metric + as-of date.
+      * ``REPORT_SPINE_SELFCONSISTENCY_K`` — K self-consistency draws pooled to
+        mean + spread (R2-CAL-1 / R2-CAL-17).
+    """
+    user, anchor_ws = build_spine_user_prompt(
+        central_question=central_question, horizon=horizon, situation_brief=situation_brief,
+        forecast_inputs=forecast_inputs, signal_pack=signal_pack,
+        base_distribution=base_distribution, quantitative_facts=quantitative_facts,
+        market_block=market_block)
 
     max_tokens = int(_cfg("REPORT_SPINE_MAX_TOKENS", 6144))  # R2-CAL-11: 2048→6144
     floor = _coerce_float(_cfg("FORECAST_PROB_FLOOR", 0.0)) or 0.0
@@ -3932,8 +3974,7 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
     draws = [first]
     if k > 1 and first.get("scenarios"):
         names = [str(s.get("name")) for s in first["scenarios"] if isinstance(s, dict)]
-        follow = user + ("\n\n[已确定情景集合：请沿用完全相同的情景名，仅独立重新估计各自概率"
-                         "（其和≈1），不要新增或重命名情景]\n" + "；".join(names))
+        follow = spine_follow_prompt(user, names)
         for i in range(1, k):
             temp = min(0.9, 0.2 + 0.15 * i)  # varied temperature for diversity
             d = _spine_draw(llm, follow, temp, max_tokens)

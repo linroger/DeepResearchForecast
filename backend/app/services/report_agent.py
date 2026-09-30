@@ -1709,6 +1709,11 @@ class ReportAgent:
         # _resolve_evaluation_context 按模拟 id 查回所属管线的持久化标记（覆盖 API 重生成）；
         # 两者皆无 = 生产运行，行为不变。测试经 __new__ 构造时缺失，读取一律走 getattr。
         self.evaluation_context: Optional[Dict[str, Any]] = None
+        # EVAL-11: 骨架跨底座影子检查的政策（仅编排器主报告按准入钉赋值；种子报告 / model_comparison /
+        # API 路径从不设置 → None = 不运行）与检查结果（_finalize 写入 forecast.quality）。
+        # 测试经 __new__ 构造时二者缺失，读取一律走 getattr。
+        self.backbone_check_policy: Optional[Dict[str, Any]] = None
+        self._backbone_sensitivity: Optional[Dict[str, Any]] = None
         # TIME-6: 回测钉（见 docstring）；只存真正的回测钉，其余一律视为未传入。按模拟 id 的查找结果
         # 懒缓存一次；查找抛错时记下，市场据此失败即扣下。测试经 __new__ 构造时三者缺失，读取一律走 getattr。
         self.hindcast: Optional[Dict[str, Any]] = as_hindcast_pin(hindcast)
@@ -3025,8 +3030,18 @@ class ReportAgent:
         Degrade-safe: any failure leaves ``self._forecast_spine=None`` and the block
         empty, so sections behave exactly as the pre-spine path.
         """
+        from . import backbone_sensitivity as _bs
         from . import forecast_extractor as _fe
         self._spine_probability_review = None
+        # EVAL-11：影子跨底座检查的输入——骨架实际所用的参数与批判前骨架（检查在下方 try 之外运行）。
+        # 开启时骨架推导经观察器调用主客户端，逐次记下每次骨架调用的服务方（主 / 回退 / 缓存）；
+        # 未开启时照旧直接传 self.llm（调用与提示词逐字节不变）。
+        self._backbone_sensitivity = None
+        pre_critique_spine: Optional[Dict[str, Any]] = None
+        spine_kwargs: Dict[str, Any] = {}
+        spine_calls: Optional[_bs.SpineCallObserver] = None
+        if _bs.enabled_policy(getattr(self, "backbone_check_policy", None)) is not None:
+            spine_calls = _bs.SpineCallObserver(self.llm)
         try:
             from ..utils import actors as _actors
             try:
@@ -3068,15 +3083,16 @@ class ReportAgent:
             _hz = self._temporal_horizon_date()
             if _hz:
                 horizon = _hz
+            spine_kwargs = {
+                "central_question": self.simulation_requirement or "",
+                "horizon": horizon,
+                "situation_brief": self.situation_brief or None,
+                "forecast_inputs": forecast_inputs,
+                "signal_pack": signal_pack,
+                "market_block": market_pack,
+            }
             spine = _fe.derive_forecast_spine(
-                self.llm,
-                central_question=self.simulation_requirement or "",
-                horizon=horizon,
-                situation_brief=self.situation_brief or None,
-                forecast_inputs=forecast_inputs,
-                signal_pack=signal_pack,
-                market_block=market_pack,
-            )
+                self.llm if spine_calls is None else spine_calls, **spine_kwargs)
             if not spine or not spine.get("scenarios"):
                 # REPORT-1：骨架因概率不可读被置空时保留复核摘要，_finalize 并入
                 # forecast.quality.probability_parse（回退成稿后抽取的原因可审计）。
@@ -3084,6 +3100,7 @@ class ReportAgent:
                     self._spine_probability_review = spine["probability_review"]
                 logger.info("预测骨架推导未产出情景，跳过（回退为成稿后抽取）")
                 return
+            pre_critique_spine = spine
             # RPT-3（REPORT_CRITIQUE_BEFORE_PROSE，默认开）：红队自校准 + 事前验尸挪到
             # 叙事之前——此前批判发生在全部正文写完之后，正文（连章节标题里的百分比）
             # 捍卫的是 4 情景 39/23/19/19，而 forecast.json 交付的是批判后的 5 情景
@@ -3132,6 +3149,65 @@ class ReportAgent:
             logger.warning(f"预测骨架推导失败（忽略，回退成稿后抽取）: {_se}")
             self._forecast_spine = None
             self._forecast_spine_block = ""
+        # EVAL-11：影子跨底座检查置于上方 try/except 之外——其失败（含向上抛出的 BudgetExceeded）
+        # 绝不能经由那个 except 丢弃已发布的骨架。仅在骨架已钉住时运行；未开启时不发任何调用。
+        if pre_critique_spine is not None and self._forecast_spine is not None:
+            self._run_backbone_check(
+                pre_critique_spine, spine_kwargs,
+                spine_served_by=None if spine_calls is None else spine_calls.served_by)
+
+    def _run_backbone_check(self, pre_critique_spine: Dict[str, Any],
+                            spine_kwargs: Dict[str, Any], *,
+                            spine_served_by: Optional[List[Optional[str]]] = None) -> None:
+        """EVAL-11 (P15): shadow cross-backbone sensitivity check of the published spine.
+
+        Runs only when the orchestrator handed this agent an enabled ``backbone_check_policy``
+        (the main report of a run whose admission pin opted in); seed reports,
+        model_comparison and the API path never set it. The spine prompt is rebuilt from the
+        exact kwargs the spine was drawn with, ``pre_critique_spine``'s scenario names are
+        pinned in the follow prompt, and the artifact lands in ``self._backbone_sensitivity``
+        for _finalize_structured_forecast (forecast.quality.backbone_sensitivity). ``within``
+        compares ``pre_critique_spine`` (the free spine prompt, pooled when
+        REPORT_SPINE_SELFCONSISTENCY_K > 1) with one control draw on the fixed-name follow
+        prompt, so it bundles sampling noise with the free-vs-follow prompt difference.
+        ``spine_served_by`` is who served each call of the spine derivation
+        (SpineCallObserver): a spine the fallback provider drew any part of is not a
+        within-backbone baseline and is recorded unchecked without a call. Never touches
+        ``self._forecast_spine`` / ``self._forecast_spine_block``: probabilities are
+        unchanged. BudgetExceeded propagates; any other error records
+        ``unchecked:error:<Type>``. The calls are metered under the telemetry stage
+        'backbone_check'; the previous stage is restored afterwards.
+        """
+        from . import backbone_sensitivity as _bs
+        policy = _bs.enabled_policy(getattr(self, "backbone_check_policy", None))
+        if policy is None:
+            return
+        from . import forecast_extractor as _fe
+        from ..utils.telemetry import BudgetExceeded, set_stage
+        prev_stage = get_run_context()[1]
+        set_stage("backbone_check")
+        try:
+            user, _anchor_ws = _fe.build_spine_user_prompt(**spine_kwargs)
+            names = [str(s.get("name")) for s in (pre_critique_spine.get("scenarios") or [])
+                     if isinstance(s, dict)]
+            self._backbone_sensitivity = _bs.run_spine_backbone_check(
+                follow_prompt=_fe.spine_follow_prompt(user, names),
+                primary_spine=pre_critique_spine,
+                primary_llm=self.llm,
+                providers=policy["providers"],
+                client_factory=_fe._build_ensemble_client,
+                max_tokens=int(getattr(Config, "REPORT_SPINE_MAX_TOKENS", 6144)),
+                max_abs_delta=policy["max_abs_delta"],
+                spine_served_by=spine_served_by,
+            )
+            logger.info(f"骨架跨底座影子检查: {self._backbone_sensitivity.get('status')}")
+        except BudgetExceeded:
+            raise
+        except Exception as _bce:  # noqa: BLE001 — 影子诊断，失败只记 unchecked，绝不影响报告
+            logger.warning(f"骨架跨底座影子检查失败（记 unchecked，不影响骨架）: {_bce}")
+            self._backbone_sensitivity = _bs.unchecked_artifact(f"error:{type(_bce).__name__}")
+        finally:
+            set_stage(prev_stage)
 
     def _resolve_evaluation_context(self) -> Optional[Dict[str, Any]]:
         """EVAL-13: this report's evaluation-run context, or None for a production report.
@@ -3587,6 +3663,20 @@ class ReportAgent:
         if _hindcast is not None:
             forecast["hindcast"] = hindcast_forecast_block(
                 _hindcast, research_audit=_hindcast.get("research_audit"))
+        # EVAL-11：骨架跨底座影子检查的记录（仅准入钉开启的主报告才有）。只记录：不改概率 / 区间 /
+        # 渲染，不进发布门；未开启时不加键（forecast.json 逐字节不变）。已开启但没有叙事前骨架可查
+        # （骨架推导失败 / 无情景 / 关闭 REPORT_FORECAST_SPINE_FIRST）时记 unchecked:no_spine，
+        # 使「已开启但无可查」与「未开启」可区分。
+        _backbone = getattr(self, "_backbone_sensitivity", None)
+        if _backbone is None and getattr(self, "backbone_check_policy", None) is not None:
+            from . import backbone_sensitivity as _bs
+            if _bs.enabled_policy(self.backbone_check_policy) is not None:
+                _backbone = _bs.unchecked_artifact("no_spine")
+        if isinstance(_backbone, dict):
+            _bq0 = forecast.get("quality")
+            _bq = dict(_bq0) if isinstance(_bq0, dict) else {}
+            _bq["backbone_sensitivity"] = _backbone
+            forecast["quality"] = _bq
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
