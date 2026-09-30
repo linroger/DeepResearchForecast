@@ -8,6 +8,9 @@ wrote the scored report; the TIME-7 hindcast pin; or --run-created-at): only
 the lead tolerance, never a pinned hindcast) reach the ``headline``; every other row is
 under ``characterization.by_tier``; ``metrics`` keeps every matched row. A
 headline without eligible rows is withheld and ``--require-headline`` exits 5.
+When only the run's last activity cannot be dated, created_at is a lower bound (a row
+resolved on or before it is exposed, any other row unknown). ``--to-ledger`` records
+each tier's ``golden_tier_source``; an unreadable lead tolerance fails loud.
 With GOLDEN_HEADLINE_GATE=false every output is byte-identical to the pre-EVAL-8
 code.
 
@@ -17,6 +20,7 @@ Offline and deterministic: tmp ledgers, synthetic golden sets and pipeline dirs.
 import hashlib
 import json
 import os
+import subprocess
 import sys
 from datetime import date
 from types import SimpleNamespace
@@ -217,8 +221,32 @@ def test_classify_tier_boundaries():
     assert active("2026-10-03T00:00:00+00:00", "2026-09-01T00:00:00+00:00")["tier"] == "prospective"
     stale = active("2026-10-03T00:00:00+00:00", "2026-10-04T00:00:00")
     assert stale == {"tier": "unknown", "reasons": [
-        "run last activity '2026-10-04T00:00:00' has no UTC offset (naive stamps are rejected)"]}
+        "run last activity '2026-10-04T00:00:00' has no UTC offset (naive stamps are rejected)",
+        "run created 2026-10-03 precedes resolution 2026-12-01, but a later resume or report regeneration "
+        "could have seen the outcome"]}
     assert active(None, "2026-10-04T00:00:00+00:00")["reasons"] == ["no run created_at"]
+
+    # an unknown last activity leaves created_at a lower bound (review round 2): a run created on or
+    # after resolution is still exposed, any other row is unknown, never prospective or late origin
+    def bounded(created, question=q):
+        return ge.classify_tier(question, run_created_at=created, lead_tolerance_days=7, last_activity_unknown=True)
+
+    assert bounded("2026-12-01T00:00:00+00:00") == {"tier": HINDCAST, "reasons": [
+        "run 2026-12-01 is on or after resolution 2026-12-01: live retrieval and model memory can see the outcome"]}
+    assert bounded("2026-10-03T00:00:00+00:00") == {"tier": "unknown", "reasons": [
+        "the run's last activity is unknown",
+        "run created 2026-10-03 precedes resolution 2026-12-01, but a later resume or report regeneration "
+        "could have seen the outcome"]}
+    assert bounded("2026-10-20T00:00:00+00:00")["tier"] == "unknown"                  # would be late_origin
+    assert active("2026-12-02T00:00:00+00:00", "2026-12-02T00:00:00")["tier"] == HINDCAST   # malformed, but late
+    assert bounded(None)["reasons"] == ["no run created_at"]
+    assert bounded("2026-10-03T00:00:00+00:00", question={"as_of_date": "2026-10-01"})["reasons"][-1] == (
+        "question has no canonical resolution_date")
+    assert ge.classify_tier(q, run_created_at=RUN_AT, lead_tolerance_days=7, last_activity_unknown=True,
+                            hindcast={"as_of": "2026-10-01", "source": "run.json"})["tier"] == "hindcast_pit"
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        ge.classify_tier(q, run_created_at=RUN_AT, lead_tolerance_days=7, last_activity_unknown=True,
+                         run_last_activity_at=RUN_AT)
 
 
 # ------------------------------------------------------- committed set, 2026 run
@@ -274,6 +302,27 @@ def test_committed_set_all_hindcast_withheld(tmp_path, monkeypatch):
                                       "--pipeline-dir", pdir, "--run-created-at", RUN_AT])
     with pytest.raises(SystemExit):                                  # mutually exclusive provenance
         ge.main()
+
+    # the spec's literal fixture, a pipeline dir holding only run.json: without pipeline_state.json a
+    # later resume cannot be ruled out, but created_at is a lower bound and every row resolved before it
+    literal = _pipeline_dir(tmp_path, "pipe_literal", run={"pipeline_id": "pipe_literal", "created_at": stamp})
+    rc_l, lit, lit_text = _score(tmp_path, ge.GOLDEN_PATH, fpath, name="literal", pipeline_dir=literal)
+    lh = lit["headline"]
+    assert rc_l == 0 and lh["status"] == "withheld_no_eligible_rows"
+    assert lh["tier_counts"] == {"prospective": 0, "late_origin": 0, HINDCAST: 30, "hindcast_pit": 0, "unknown": 0}
+    assert (lh["run_created_at"], lh["run_created_at_source"]) == (stamp, "run.json")
+    assert lh["run_last_activity_at"] is None and lh["run_last_activity_unknown"] is True
+    assert lh["provenance_notes"] == [
+        "pipeline_state.json: missing",
+        "pipeline_state.json cannot be read, so a resume or report regeneration after created_at cannot be "
+        "ruled out: created_at kept as a lower bound only"]
+    assert list(lit["characterization"]["by_tier"]) == [HINDCAST]
+    lit_lines = lit_text.splitlines()
+    assert lit_lines[0] == "HEADLINE WITHHELD: 30/30 hindcast (live retrieval + model memory exposed)"
+    assert ("- run last activity: unknown (created_at is a lower bound only: rows resolved on or before it are "
+            "hindcast, the rest unknown)") in lit_lines
+    assert _score(tmp_path, ge.GOLDEN_PATH, fpath, name="literal_req", pipeline_dir=literal,
+                  require_headline=True)[0] == 5
 
 
 # ------------------------------------------------------------ prospective rows
@@ -360,6 +409,7 @@ def test_hindcast_pin_never_headline_eligible(tmp_path):
     mh = _score(tmp_path, gpath, fpath, name="manifest", pipeline_dir=manifest_only)[1]["headline"]
     assert mh["hindcast"] == {"as_of": "2026-09-25", "source": "run.json", "integrity": "leak_suspected"}
     assert mh["tier_counts"]["hindcast_pit"] == 4 and "pipeline_state.json: missing" in mh["provenance_notes"]
+    assert mh["run_created_at"] == RUN_AT and mh["run_last_activity_unknown"] is True   # a lower bound only
     # ... and it is read even when the state is readable and carries no pin
     unpinned = _pipeline_dir(tmp_path, "pipe_unpinned", run=enforced_run, state=_state())
     uh = _score(tmp_path, gpath, fpath, name="unpinned", pipeline_dir=unpinned, require_headline=True)
@@ -396,7 +446,9 @@ def test_hindcast_pin_never_headline_eligible(tmp_path):
             ("list_options", run, _state(options=[["hindcast_policy_v1", {"hindcast": True}]]),
              "pipeline_state.json: options is not an object"),
             ("odd_enforcement", {"created_at": RUN_AT, "resolved": {"as_of_enforcement": "2026-09-25"}}, _state(),
-             "run.json: resolved.as_of_enforcement is not an object")):
+             "run.json: resolved.as_of_enforcement is not an object"),
+            ("list_resolved", {"created_at": RUN_AT, "resolved": [{"as_of_enforcement": enforcement}]}, _state(),
+             "run.json: resolved is not an object")):
         odd = _pipeline_dir(tmp_path, f"pipe_{name}", run=pipe_run, state=state)
         rc_odd, odd_report, _ = _score(tmp_path, gpath, fpath, name=name, pipeline_dir=odd, require_headline=True)
         oh = odd_report["headline"]
@@ -477,7 +529,12 @@ def test_resumed_run_dated_by_last_activity(tmp_path):
     assert lh["status"] == "withheld_no_eligible_rows" and lh["tier_counts"]["late_origin"] == 1
 
     # fail closed: a malformed activity record, or no readable pipeline_state.json (run.json alone
-    # cannot rule a resume out), withholds the run stamp
+    # cannot rule a resume out), leaves created_at a lower bound only (review round 2): r1, resolved
+    # after it, is unknown and r0, resolved before it, is exposed; neither is ever prospective
+    gpath = _write_json(tmp_path / "bound_golden.json", {"questions": [
+        _q("r1", "2026-09-25", "2026-10-10", True), _q("r0", "2026-08-01", "2026-09-01", False)]})
+    fpath = _report_forecast(tmp_path, {"binary_forecasts": [{"id": "r1", "probability": 0.8},
+                                                             {"id": "r0", "probability": 0.3}]})
     for i, (state, note) in enumerate((
             (_state(created_at="2026-09-28 09:00:00"),
              "pipeline_state.json: created_at '2026-09-28 09:00:00' has no UTC offset (naive stamps are "
@@ -501,9 +558,28 @@ def test_resumed_run_dated_by_last_activity(tmp_path):
         rc_m, rep_m, _ = _score(tmp_path, gpath, fpath, name=f"malformed_{i}", pipeline_dir=pdir,
                                 require_headline=True)
         hm = rep_m["headline"]
-        assert rc_m == 5 and hm["status"] == "withheld_no_provenance" and hm["tier_counts"]["unknown"] == 1, note
-        assert hm["run_created_at"] is None and hm["run_last_activity_at"] is None, note
-        assert hm["provenance_notes"][-1] == f"{note}: run stamp withheld"
+        assert rc_m == 5 and hm["status"] == "withheld_no_eligible_rows", note
+        assert hm["tier_counts"] == {"prospective": 0, "late_origin": 0, HINDCAST: 1, "hindcast_pit": 0,
+                                     "unknown": 1}, note
+        assert (hm["run_created_at"], hm["run_created_at_source"]) == (created, "run.json"), note
+        assert hm["run_last_activity_at"] is None and hm["run_last_activity_unknown"] is True, note
+        assert hm["provenance_notes"][-1] == f"{note}: created_at kept as a lower bound only"
+        assert {r["id"]: r["tier"] for r in rep_m["matched"]} == {"r1": "unknown", "r0": HINDCAST}, note
+        assert next(r for r in rep_m["matched"] if r["id"] == "r1")["tier_reasons"] == [
+            "the run's last activity is unknown",
+            "run created 2026-09-28 precedes resolution 2026-10-10, but a later resume or report regeneration "
+            "could have seen the outcome"], note
+    # ... but a state that also names another report withholds the stamp outright
+    mixed = _pipeline_dir(tmp_path, "pipe_malformed_other", run=run,
+                          state=_state(created_at=created, heartbeat_at=1790000000, report_id="report_other"))
+    hx = _score(tmp_path, gpath, fpath, name="malformed_other", pipeline_dir=mixed)[1]["headline"]
+    assert hx["status"] == "withheld_no_provenance" and hx["tier_counts"]["unknown"] == 2
+    assert hx["run_created_at"] is None and "run_last_activity_unknown" not in hx
+    assert hx["provenance_notes"] == [
+        "pipeline_state.json: heartbeat_at 1790000000 is not an ISO-8601 string, so the run's last activity "
+        "cannot be dated: run stamp withheld",
+        "pipeline_state.json report_id 'report_other' is not the scored forecast's report directory "
+        "'report_eval8': run stamp withheld"]
 
 
 def test_pipeline_must_name_the_scored_report(tmp_path):
@@ -661,6 +737,54 @@ def test_knob_defaults_and_documentation():
     assert "# GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS=7 " in documented
 
 
+def test_lead_tolerance_fails_loud_when_unreadable(tmp_path, monkeypatch):
+    """A tolerance the operator set but Config could not read fails loud; it never falls back to a more
+    lenient 7 days (review round 2). INFRA-14's import audit pops an unparseable value (Config then
+    holds the default) and records it; without app.config the variable is parsed here."""
+    import app.config as app_config
+    from app.config_audit import sanitize_numeric_env
+
+    knob = "GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS"
+    for bad in ("abc", "0d"):
+        environ = {knob: bad}
+        issues = sanitize_numeric_env(environ, app_config.CONFIG_KNOBS)
+        assert environ == {} and [issue.knob for issue in issues] == [knob]          # popped: Config reads 7
+        monkeypatch.setattr(app_config, "CONFIG_IMPORT_ISSUES", issues)
+        with pytest.raises(ValueError, match=f"^{knob} could not be read, and the golden headline never falls "
+                                             "back to the default: lead tolerance must be an integer"):
+            ge._lead_tolerance_days()
+    other = sanitize_numeric_env({"OASIS_MAX_AGENTS": "abc"}, app_config.CONFIG_KNOBS)
+    monkeypatch.setattr(app_config, "CONFIG_IMPORT_ISSUES", other)
+    assert ge._lead_tolerance_days() == 7                            # another knob's issue is not this one's
+
+    monkeypatch.setitem(sys.modules, "app.config", None)            # `import app.config` now raises
+    for bad in ("abc", "0d", " "):
+        monkeypatch.setenv(knob, bad)
+        with pytest.raises(ValueError, match=f"^{knob}='{bad}': lead tolerance must be an integer from 0 to 3650"):
+            ge._lead_tolerance_days()
+    for bad in ("-1", "3651"):
+        monkeypatch.setenv(knob, bad)
+        with pytest.raises(ValueError, match="lead tolerance must be an integer from 0 to 3650 days"):
+            ge._lead_tolerance_days()
+    monkeypatch.setenv(knob, "0")
+    assert ge._lead_tolerance_days() == 0                            # a strict tolerance stays strict
+    monkeypatch.setenv(knob, "")
+    assert ge._lead_tolerance_days() == 7                            # empty means the default, as in Config
+    monkeypatch.delenv(knob)
+    assert ge._lead_tolerance_days() == 7
+
+    # the review probe, end to end in a fresh process: the command fails before writing any report
+    gpath, fpath = _mixed_files(tmp_path)
+    out = tmp_path / "probe.json"
+    proc = subprocess.run(
+        [sys.executable, os.path.join(REPO_ROOT, "backend", "scripts", "golden_eval.py"), "score-forecast-file",
+         "--forecast", fpath, "--golden", gpath, "--run-created-at", RUN_AT, "-o", str(out)],
+        env={**os.environ, knob: "abc"}, capture_output=True, text=True, timeout=120)
+    assert proc.returncode != 0 and not out.exists()
+    assert f"ValueError: {knob} could not be read" in proc.stderr
+    assert f"(config audit: {knob}=abc is not an integer" in proc.stderr
+
+
 # ------------------------------------------------------- ledger forwarding
 def test_golden_tier_forwarded_and_score_ledger_split(tmp_path):
     ldir = str(tmp_path / "eval_ledger")
@@ -672,14 +796,26 @@ def test_golden_tier_forwarded_and_score_ledger_split(tmp_path):
     assert {k: v for k, v in tiered.items() if k not in ("golden_tier", "question_id", "report_id")} == \
         {k: v for k, v in plain.items() if k not in ("question_id", "report_id")}
     assert tiered["record_class"] == "evaluation" and tiered["characterization_only"] is True
+    # golden_tier_source is written only alongside golden_tier (review round 2)
+    src_dir = str(tmp_path / "source_ledger")
+    sourced = append_golden_result(question_id="s1", probability=0.4, resolved_outcome=False, d=src_dir,
+                                   golden_tier="prospective", golden_tier_source="pipeline_dir")
+    assert (sourced["golden_tier"], sourced["golden_tier_source"]) == ("prospective", "pipeline_dir")
+    untiered = append_golden_result(question_id="s2", probability=0.4, resolved_outcome=False, d=src_dir,
+                                    golden_tier_source="pipeline_dir")
+    assert not {"golden_tier", "golden_tier_source"} & set(untiered)
+    assert "golden_tier_source" not in tiered
 
-    # score-forecast-file --to-ledger stamps each row's tier (default dir: redirected, tier kept)
+    # score-forecast-file --to-ledger stamps each row's tier and what it rests on (default dir:
+    # redirected, tier kept)
     gpath, fpath = _mixed_files(tmp_path)
     rc, report, _ = _score(tmp_path, gpath, fpath, run_created_at=RUN_AT, to_ledger=True, ledger_dir=ldir)
     assert rc == 0 and report["ledger_appended"] == 4
+    assert not any("tier_source" in r for r in report["matched"])     # the report rows are unchanged
     rows = {r["question_id"]: r for r in read_ledger(ldir)}
     assert {qid: rows[qid]["golden_tier"] for qid in ("p1", "p2", "l1", "h1")} == {
         "p1": "prospective", "p2": "prospective", "l1": "late_origin", "h1": HINDCAST}
+    assert {rows[qid]["golden_tier_source"] for qid in ("p1", "p2", "l1", "h1")} == {"--run-created-at"}
     assert all(r["record_class"] == "evaluation" and r["characterization_only"] is True for r in rows.values())
     redirected = append_golden_result(question_id="r1", probability=0.5, resolved_outcome=True,
                                       golden_tier="late_origin")
@@ -698,8 +834,16 @@ def test_golden_tier_forwarded_and_score_ledger_split(tmp_path):
     assert h["metrics"]["n"] == 3 and h["metrics"]["mean_brier"] == round((0.16 + 0.04 + 0.09) / 3, 4)
     assert list(lrep["characterization"]["by_tier"]) == ["late_origin", HINDCAST, "unknown"]
     assert lrep["golden"]["n"] == 7                                  # the golden section keeps every row
+    # what the prospective rows rest on: p1/p2 on an operator-given stamp, x1 on nothing recorded
+    assert h["prospective_tier_sources"] == {"--run-created-at": 2, "unrecorded": 1}
+    run_created_at_note = ("2 prospective row(s) rest on an operator-given --run-created-at, taken as given "
+                           "(a later resume or report regeneration of the run was not checked)")
+    assert h["provenance_notes"] == [run_created_at_note, "1 prospective row(s) record no golden_tier_source, so "
+                                                          "what their tier rests on is unknown"]
     text = md.read_text(encoding="utf-8")
     lines = text.splitlines()
+    assert "- prospective rows by tier source: `--run-created-at` 2, `unrecorded` 1" in lines
+    assert f"- provenance note: {run_created_at_note}" in lines
     assert lines[0] == ge.CHARACTERIZATION_BANNER and lines[2] == ge.HEADLINE_SCOPE_NOTE
     golden_at = lines.index("## Golden section (binary Brier)")
     assert lines[golden_at + 2] == (f"HEADLINE: mean Brier {h['metrics']['mean_brier']:.4f} over 3/7 prospective "
@@ -712,6 +856,7 @@ def test_golden_tier_forwarded_and_score_ledger_split(tmp_path):
     assert ge.cmd_score_ledger(SimpleNamespace(ledger_dir=legacy_dir, bins=10, out=str(out), markdown=None)) == 0
     legacy = json.loads(out.read_text(encoding="utf-8"))["headline"]
     assert legacy["status"] == "withheld_no_provenance" and legacy["tier_counts"]["unknown"] == 1
+    assert legacy["prospective_tier_sources"] == {} and "provenance_notes" not in legacy
     empty_dir = str(tmp_path / "empty_ledger")
     assert ge.cmd_score_ledger(SimpleNamespace(ledger_dir=empty_dir, bins=10, out=str(out), markdown=str(md))) == 0
     empty = json.loads(out.read_text(encoding="utf-8"))
@@ -719,3 +864,32 @@ def test_golden_tier_forwarded_and_score_ledger_split(tmp_path):
         "n": 0, "brier_scale": "binary"}
     empty_lines = md.read_text(encoding="utf-8").splitlines()
     assert "HEADLINE WITHHELD: no scored rows" in empty_lines and ge.HEADLINE_SCOPE_NOTE not in empty_lines
+
+
+def test_golden_tier_source_per_provenance(tmp_path):
+    """--to-ledger records what each tier rests on, so the ledger headline can tell a pipeline-checked
+    prospective row from one resting on an operator-given --run-created-at (review round 2)."""
+    gpath, fpath = _mixed_files(tmp_path)
+    pdir = _pipeline_dir(tmp_path, run={"pipeline_id": "pipe_eval8", "created_at": RUN_AT}, state=_state())
+    with open(fpath, encoding="utf-8") as fh:
+        stamped = json.load(fh)
+    stamped["hindcast"] = hp.hindcast_forecast_block(_gated_pin("2026-09-25", "date_verified"),
+                                                     research_audit={"status": "date_verified"})
+    spath = _write_json(tmp_path / "stamped.json", stamped)
+    for name, forecast, kw, source, tiers in (
+            ("pipe", fpath, {"pipeline_dir": pdir}, "pipeline_dir",
+             {"p1": "prospective", "p2": "prospective", "l1": "late_origin", "h1": HINDCAST}),
+            ("stamped", spath, {}, "forecast_hindcast", dict.fromkeys(("p1", "p2", "l1", "h1"), "hindcast_pit")),
+            ("bare", fpath, {}, "none", dict.fromkeys(("p1", "p2", "l1", "h1"), "unknown"))):
+        ldir = str(tmp_path / f"ledger_{name}")
+        assert _score(tmp_path, gpath, forecast, name=name, to_ledger=True, ledger_dir=ldir, **kw)[0] == 0, name
+        rows = read_ledger(ldir)
+        assert {r["question_id"]: r["golden_tier"] for r in rows} == tiers, name
+        assert {r["golden_tier_source"] for r in rows} == {source}, name
+    # the pipeline-checked prospective rows carry no caveat in the ledger headline
+    out = tmp_path / "pipe_ledger.json"
+    assert ge.cmd_score_ledger(SimpleNamespace(ledger_dir=str(tmp_path / "ledger_pipe"), bins=10, out=str(out),
+                                               markdown=None)) == 0
+    h = json.loads(out.read_text(encoding="utf-8"))["headline"]
+    assert h["status"] == "ok" and h["prospective_tier_sources"] == {"pipeline_dir": 2}
+    assert "provenance_notes" not in h

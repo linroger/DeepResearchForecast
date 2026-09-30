@@ -652,7 +652,8 @@ class Config:
     # false = the pre-EVAL-8 reports (no headline / characterization keys, no golden_tier on rows).
     GOLDEN_HEADLINE_GATE = os.environ.get('GOLDEN_HEADLINE_GATE', 'true').strip().lower() == 'true'
     # EVAL-8: how many days after a golden question's as_of_date a run may still be active and count as
-    # prospective (keeps information sets comparable across code versions); must be 0-3650.
+    # prospective (keeps information sets comparable across code versions); must be 0-3650. golden_eval
+    # refuses a value it cannot read (the import audit's default 7) instead of scoring with it.
     GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS = int(
         os.environ.get('GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS', '7') or '7')
     # EVAL-13: under an evaluation run whose pin carries a target proposition, a target the binary
