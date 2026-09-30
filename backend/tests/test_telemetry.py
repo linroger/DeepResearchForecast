@@ -358,15 +358,17 @@ def test_cache_read_tokens_accumulate_and_snapshot_additive():
                       prompt_cache_read_tokens=-5)              # clamped to 0
     T.LLMMeter.record("glm", "glm-5", 10, 1, 1.0, stage="report", run_id="eval17_cache",
                       prompt_cache_read_tokens="junk")          # unparseable → 0
+    T.LLMMeter.record("glm", "glm-5", 10, 1, 1.0, stage="report", run_id="eval17_cache",
+                      prompt_cache_read_tokens=float("inf"))    # OverflowError → 0
     snap = T.LLMMeter.snapshot("eval17_cache")
     assert snap["total"]["prompt_cache_read_tokens"] == 14500
     assert snap["by_stage"]["research"]["prompt_cache_read_tokens"] == 14500
     assert snap["by_stage"]["report"]["prompt_cache_read_tokens"] == 0
     assert snap["by_model"]["glm:glm-5"]["prompt_cache_read_tokens"] == 14500
     # Informational split only: prompt/total tokens and cost are what they were without it.
-    assert snap["total"]["prompt_tokens"] == 16020
+    assert snap["total"]["prompt_tokens"] == 16030
     assert snap["total"]["cost_usd"] == round(
-        T.estimate_cost("glm", 16020, 1002), 6)
+        T.estimate_cost("glm", 16030, 1003), 6)
     assert T.LLMMeter.status_snapshot("eval17_cache")["total"]["prompt_cache_read_tokens"] == 14500
     T.LLMMeter.reset("eval17_plain")
     T.LLMMeter.reset("eval17_cache")

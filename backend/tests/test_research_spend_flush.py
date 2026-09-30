@@ -425,7 +425,13 @@ def test_cached_tokens_malformed_or_absent_degrade_to_zero(monkeypatch, tmp_path
     assert po._flush_failed_research_attempt_spend(
         {"tokens_in": 20, "tokens_out": 2, "tokens_cached": "n/a", "model": "glm",
          "flushed": False}, "failed", run_id=run_id) is True
+    # int(inf) raises OverflowError, not ValueError: it degrades to 0 as well.
+    orch._record_research_telemetry(
+        state, {"model": "glm", "tokens_in": 7, "tokens_out": 1, "tokens_cached": float("inf")})
+    assert po._flush_failed_research_attempt_spend(
+        {"tokens_in": 3, "tokens_out": 1, "tokens_cached": float("inf"), "model": "glm",
+         "flushed": False}, "failed", run_id=run_id) is True
     research = LLMMeter.snapshot(run_id)["by_stage"]["research"]
-    assert research["calls"] == 3
-    assert research["prompt_tokens"] == 170
+    assert research["calls"] == 5
+    assert research["prompt_tokens"] == 180
     assert research["prompt_cache_read_tokens"] == 0

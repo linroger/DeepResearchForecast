@@ -107,7 +107,8 @@ STAGE_BANDS: dict[str, tuple[int, int]] = {
 RESEARCH_ONLY_BANDS: dict[str, tuple[int, int]] = {STAGE_RESEARCH: (0, 100)}
 
 # EVAL-17: LLMMeter band (not a pipeline stage) for the simulation-subprocess spend of the
-# extra ensemble seeds; the seeds' report calls keep metering under "ensemble".
+# extra ensemble seeds. The seeds' prepare/persona calls meter under "ensemble"; their
+# ReportAgent calls meter under "report" (ReportAgent.generate_report sets its own stage).
 SIM_METER_STAGE_ENSEMBLE = "ensemble_sim"
 # EVAL-17: per-simulation exactly-once sim-meter markers in state.options:
 # {simulation_id: {meter_run_token, stage, recorded_at}}.
@@ -2296,7 +2297,7 @@ def _flush_failed_research_attempt_spend(spend: Optional[dict[str, Any]],
     try:
         # EVAL-17: 进审计日志，也作 prompt_cache_read_tokens 进计量；脏值退回 0，绝不影响入账本身。
         t_cached = max(0, int(spend.get("tokens_cached") or 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         t_cached = 0
     try:
         from ..utils.telemetry import LLMMeter
@@ -8113,6 +8114,9 @@ class PipelineOrchestrator:
     # EVAL-17: serialises _record_sim_run_telemetry. The main run and up to
     # ENSEMBLE_SEED_CONCURRENCY seed threads read-check-write one marker map in
     # state.options; class-level so instances built without __init__ have it too.
+    # _note_ensemble_member_simulation takes it as well: it is the only other seed-thread
+    # write to state.options, and the full save inside _record_sim_run_telemetry
+    # (asdict) must never iterate a dict another seed thread is growing.
     _sim_meter_lock: threading.Lock = threading.Lock()
 
     def __init__(self) -> None:
@@ -8123,8 +8127,10 @@ class PipelineOrchestrator:
         self._tel_path: Optional[str] = None
         self._tel_prev: Optional[dict] = None
         self._tel_prev_cum: Optional[dict] = None
-        # EVAL-17: the previous attempt's cumulative_by_stage (fallback: its by_stage).
+        # EVAL-17: the previous attempt's cumulative_by_stage (fallback: its by_stage), and
+        # whether that base is known to miss earlier attempts (see _init_telemetry_flush).
         self._tel_prev_cum_by_stage: Optional[dict] = None
+        self._tel_cum_by_stage_partial: bool = False
         self._tel_last_flush_calls: int = 0
         # INFRA-7: stages recomputed (not reused) in this attempt, read by the
         # resume lineage guards; this attempt's stage_reuse_v1 records, passed
@@ -8151,10 +8157,16 @@ class PipelineOrchestrator:
         self._tel_prev = None
         self._tel_prev_cum = None
         self._tel_prev_cum_by_stage = None
+        self._tel_cum_by_stage_partial = False
         self._tel_last_flush_calls = 0
         try:
             prev = _read_json(self._tel_path)
-            if isinstance(prev, dict) and (prev.get("total") or {}).get("calls"):
+            # EVAL-17: an attempt that made no LLM call (cancelled right after the resume, a
+            # provider outage or quota cap before the first call) still carries the pipeline's
+            # history in its cumulative fields; gating on its own calls alone dropped it.
+            if isinstance(prev, dict) and ((prev.get("total") or {}).get("calls")
+                                           or prev.get("cumulative_total")
+                                           or prev.get("cumulative_by_stage")):
                 self._tel_prev = {
                     "total": prev.get("total"),
                     "report_id": prev.get("report_id"),
@@ -8165,6 +8177,12 @@ class PipelineOrchestrator:
                 # cumulative_by_stage, so its own by_stage is the best base available.
                 self._tel_prev_cum_by_stage = (
                     prev.get("cumulative_by_stage") or prev.get("by_stage") or {})
+                # EVAL-17 honesty marker: a pre-EVAL-17 file that already spans attempts (it
+                # has cumulative_total) kept only its last attempt's by_stage, so the per-stage
+                # rows under-report against cumulative_total. Carried forward once set.
+                self._tel_cum_by_stage_partial = bool(
+                    prev.get("cumulative_by_stage_partial")
+                    or (prev.get("cumulative_total") and not prev.get("cumulative_by_stage")))
         except Exception:  # noqa: BLE001 — 基底捕获失败按首写处理
             pass
 
@@ -8200,6 +8218,9 @@ class PipelineOrchestrator:
                     # attempt start, like cumulative_total).
                     data["cumulative_by_stage"] = add_stage_counter_dicts(
                         self._tel_prev_cum_by_stage, data.get("by_stage"))
+                    if self._tel_cum_by_stage_partial:
+                        # cumulative_total stays authoritative; the split misses early attempts.
+                        data["cumulative_by_stage_partial"] = True
                 write_json_atomic(tpath, data, fsync=final)
                 self._tel_last_flush_calls = int((data.get("total") or {}).get("calls") or 0)
             except Exception as _fe:  # noqa: BLE001 — 遥测落盘失败不得影响管线
@@ -9607,6 +9628,13 @@ class PipelineOrchestrator:
             except Exception:  # noqa: BLE001
                 pass
             _prev = _done_seeds.get(seed)
+            if _prev and _prev.get("simulation_id"):
+                # EVAL-17: a checkpointed seed's simulation spend is real whether its report is
+                # reused below or the seed re-runs under a new simulation. A seed completed
+                # before seed metering existed was never recorded; the per-simulation marker
+                # makes this a no-op for one recorded when it ran.
+                self._record_sim_run_telemetry(
+                    state, _prev.get("simulation_id"), stage=SIM_METER_STAGE_ENSEMBLE)
             if _prev and _prev.get("report_id"):
                 _fc_prev = self._read_report_forecast(_prev.get("report_id"))
                 if _fc_prev and _fc_prev.get("scenarios"):
@@ -9889,10 +9917,14 @@ class PipelineOrchestrator:
         No pipeline owns a member's simulation as its ``simulation_id``, so without
         this map a later /api/report/generate on it would key a second PRODUCTION
         primary; ``ledger_identity_for_simulation`` reads it to keep it an
-        ensemble member. Persisted by the ensemble's own state saves.
+        ensemble member. Persisted by the ensemble's own state saves. Seed threads call it
+        concurrently with the full state save in _record_sim_run_telemetry, so the write
+        takes the same lock (EVAL-17).
         """
         if simulation_id:
-            state.options.setdefault("ensemble_member_simulations", {})[str(simulation_id)] = int(seed)
+            with PipelineOrchestrator._sim_meter_lock:
+                state.options.setdefault(
+                    "ensemble_member_simulations", {})[str(simulation_id)] = int(seed)
 
     def _run_one_seed(self, state: "PipelineState", project: Any, graph_id: str,
                       actors: Any, research: dict, report_md: str, *,
@@ -11749,7 +11781,7 @@ class PipelineOrchestrator:
             # EVAL-17: the runner's summed [usage] cached= reads (no new parsing here); a
             # malformed value degrades to 0 instead of dropping the whole record.
             t_cached = max(0, int(telemetry.get("tokens_cached") or 0))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             t_cached = 0
         try:
             from ..utils.telemetry import LLMMeter
@@ -11847,6 +11879,8 @@ class PipelineOrchestrator:
                             and str(legacy.get("meter_run_token") or "") == token)):
                     if migrated:
                         state.options[SIM_METER_MARKERS_OPTION] = markers
+                        if state.owner_boot_id is not None:  # W9-2: see the marker save below
+                            state.heartbeat_at = _utcnow()
                         try:
                             PipelineManager.save(state)
                         except Exception:  # noqa: BLE001 — 迁移落盘失败：旧槽仍被读取兜底
@@ -11889,6 +11923,11 @@ class PipelineOrchestrator:
                     "recorded_at": recorded_at,
                 }
                 state.options[SIM_METER_MARKERS_OPTION] = markers
+                # W9-2: a full save must not overwrite the fresh on-disk heartbeat with a stale
+                # in-memory one. Seed threads call this too, and nothing refreshes their in-memory
+                # heartbeat_at (the watchdog and the seed poll loop only touch the disk copy).
+                if state.owner_boot_id is not None:
+                    state.heartbeat_at = _utcnow()
                 try:
                     PipelineManager.save(state)
                 except Exception:  # noqa: BLE001 — stash/标记落盘失败不影响主流程

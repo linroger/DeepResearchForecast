@@ -321,7 +321,7 @@ class LLMMeter:
         cost = 0.0 if cached else estimate_cost(provider, prompt_tokens, completion_tokens)
         try:
             pcr = max(0, int(prompt_cache_read_tokens or 0))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             pcr = 0
         warn_calls = 0
         first_fallback = False
