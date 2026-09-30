@@ -28,15 +28,22 @@ research 模式引用不变量：lint 绝不删除或凭空生成 [S#]——任�
   * 表格单元疑似截断（超长且无句末标点）；
   * 情景概率与预测骨架不一致（传入 spine 时交叉核对）；
   * Tier-2 模拟机制泄漏句（模式清单导出给 report_agent 的泄漏修复通道复用）。
+
+独立观测（不在 lint_report 内，由 report_agent 单独调用；只记数/采样）：
+  * check_projection_attribution（RESEARCH-5）——研究量化行里的预期值被正文写成已发生事实
+    （projection_as_fact）等已报告/预期归因错位。
 """
 
 from __future__ import annotations
 
 from collections import Counter
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils.absence import MARKER_SENTINELS
+from ..utils.quant_typing import quant_class
 
 # ──────────────────────────────────────────────────────────────
 # 基础：围栏感知的行遍历
@@ -1527,6 +1534,295 @@ def drop_platform_behavior_quotes(md: str) -> Tuple[str, int]:
             continue
         out.append(ln)
     return "\n".join(out), removed
+
+
+# ──────────────────────────────────────────────────────────────
+# RESEARCH-5：已报告 vs 预期的归因观测（只记数/采样，不改写；不属于 lint_report）
+# ──────────────────────────────────────────────────────────────
+
+# Part-1 binary-forecast block markers: copies of forecast_extractor's
+# BINARY_FORECAST_START_MARKER / BINARY_FORECAST_END_MARKER (this module imports
+# nothing from the forecast plane); test_report_lint_projection pins the equality.
+_BINARY_FORECAST_START_MARKER = "<!-- binary-forecast-block:start -->"
+_BINARY_FORECAST_END_MARKER = "<!-- binary-forecast-block:end -->"
+
+PROJECTION_ATTRIBUTION_CODES = (
+    "projection_as_fact", "projection_unmarked", "actual_as_projection", "estimate_unattributed",
+)
+_PROJECTION_EXCERPT_CHARS = 160
+# Bytes that carry numbers but no claim: comments, inline code, link targets,
+# bare URLs and [S#] citation markers.
+_PROJECTION_NOISE_RE = re.compile(
+    r"<!--.*?-->|`[^`\n]*`|\]\([^)\s]*\)|https?://\S+|[\[【]\s*S[\d?#][^\]】]*[\]】]")
+_PROJECTION_LIST_MARKER_RE = re.compile(r"^(?:[-*+]|\d{1,3}[.)])\s+")
+# A number as written: thousands separators, decimals and a trailing percent sign
+# stay one token; the ASCII-only look-behind lets a number follow CJK text.
+_PROJECTION_NUMBER_RE = re.compile(
+    r"(?<![A-Za-z0-9_.])(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?![0-9])(?:\s*[%％])?")
+_PROJECTION_YEAR_RE = re.compile(r"(?<![0-9])((?:19|20|21)\d{2})(?![0-9])")
+_PROJECTION_LATIN_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9]*")
+# A year-like metric token ("fy2025", "2030e" has no leading letter and never tokenizes).
+_PROJECTION_YEARISH_RE = re.compile(r"(?:fy|cy|q[1-4]|h[12])?(?:19|20|21)\d{2}[a-z]?")
+_PROJECTION_CJK_RUN_RE = re.compile(r"[" + _CJK_CHAR + r"]+")
+# Generic metric words that anchor nothing on their own (compared after the
+# plural fold of _projection_stem).
+_PROJECTION_ANCHOR_STOPWORDS = frozenset({
+    "global", "total", "market", "forecast", "forecasted", "estimate", "estimated", "base", "case",
+})
+_PROJECTION_CJK_STOP_BIGRAMS = frozenset({
+    "全球", "总计", "合计", "总量", "市场", "预测", "预计", "预期", "估计", "估算", "基准", "情景",
+})
+# Rows whose metric is a scenario or probability figure, not a world quantity.
+_PROJECTION_PROBABILITY_METRIC_RE = re.compile(r"probabilit|scenario|概率|情景", re.I)
+_PROJECTION_NO_UNIT = frozenset({"n/a", "na", "none", "null", "-", "—", "unitless", "dimensionless"})
+_PROJECTION_UNIT_STOPWORDS = frozenset({"per", "of", "the", "and", "or", "in", "an", "to", "as", "us"})
+_PROJECTION_PERCENT_UNIT_RE = re.compile(r"%|％|\bpercent|\bper\s*cent\b|\bpct\b|百分", re.I)
+# Currency units written as a symbol or a word in prose.
+_PROJECTION_UNIT_ALIASES = {
+    "usd": r"usd|us\$|\$|dollars?", "$": r"usd|us\$|\$|dollars?",
+    "eur": r"eur|€|euros?", "€": r"eur|€|euros?",
+    "cny": r"cny|rmb|yuan|人民币|元", "rmb": r"cny|rmb|yuan|人民币|元",
+}
+# PROJ cues: a projection is being stated (future modal, forecast vocabulary, "by <year>").
+_PROJECTION_CUE_RE = re.compile(
+    r"\b(?:will|would|could|may(?!\s+\d)|expect\w*|forecast\w*|project\w*|estimat\w*|target\w*"
+    r"|aim\w*\s+to|plan\w*\s+to|outlook|guidance|anticipat\w*)\b"
+    r"|\bby\s+(?:the\s+end\s+of\s+)?(?:19|20|21)\d{2}\b"
+    r"|预计|预测|预期|有望|将|目标|计划|估计|展望|到[^，。；,;！？]{0,8}?(?:19|20|21)\d{2}\s*年",
+    re.I)
+# REAL cues: a realized value is being stated.
+_REALIZED_CUE_RE = re.compile(
+    r"\b(?:was|were|reached|hit|stood\s+at|totall?ed|rose\s+to|fell\s+to|recorded|has\s+reached)\b"
+    r"|已达|已经达到|录得|实现了|达到了|跨过|突破|升至",
+    re.I)
+# An estimate presented as one (approximation or attribution wording).
+_ESTIMATE_CUE_RE = re.compile(
+    r"\b(?:estimat\w*|approx\w*|about|around|roughly|nearly|according\s+to)\b|~|≈"
+    r"|估|约|左右|根据|据(?:称|统计|测算|报道|悉)",
+    re.I)
+
+
+def _projection_stem(token: str) -> str:
+    """Case- and plural-folded Latin token ("Robots" → "robot")."""
+    token = token.lower()
+    return token[:-1] if len(token) > 4 and token.endswith("s") and not token.endswith("ss") else token
+
+
+def _canonical_number(token: str) -> Optional[str]:
+    """A number token as a plain decimal string ("1,000.0 %" → "1000"); None if unreadable."""
+    try:
+        value = Decimal(re.sub(r"[\s,%％]", "", token))
+    except InvalidOperation:
+        return None
+    return format(value.normalize(), "f") if value.is_finite() else None
+
+
+def _projection_key_numbers(value: Any, percent_unit: bool) -> frozenset:
+    """Canonical key numbers of a row value: a decimal, a percentage, or >= 2 digits
+    that is not a bare year 1900-2100 (a lone digit or year matches too much prose)."""
+    if isinstance(value, bool):
+        return frozenset()
+    text = format(Decimal(repr(value)), "f") if isinstance(value, float) else str(value or "")
+    keys = set()
+    for match in _PROJECTION_NUMBER_RE.finditer(text):
+        canonical = _canonical_number(match.group(0))
+        if canonical is None:
+            continue
+        percent = percent_unit or match.group(0).rstrip().endswith(("%", "％"))
+        if percent or "." in canonical or (len(canonical) >= 2 and not 1900 <= int(canonical) <= 2100):
+            keys.add(canonical)
+    return frozenset(keys)
+
+
+def _projection_unit_patterns(unit: Any) -> Optional[List["re.Pattern[str]"]]:
+    """Patterns of which a matching sentence must contain one: [] = the row states no
+    unit (no requirement); None = a unit no sentence token can stand for (row skipped)."""
+    text = re.sub(r"\s+", " ", str(unit or "")).strip()
+    if not text or text.casefold() in _PROJECTION_NO_UNIT:
+        return []
+    if _PROJECTION_PERCENT_UNIT_RE.search(text):
+        return [_PROJECTION_PERCENT_UNIT_RE]
+    patterns: List["re.Pattern[str]"] = []
+    for word in re.findall(r"[A-Za-z]+|[$€]", text):
+        folded = _projection_stem(word)
+        if folded in _PROJECTION_UNIT_STOPWORDS or (len(folded) < 2 and folded not in _PROJECTION_UNIT_ALIASES):
+            continue
+        alias = _PROJECTION_UNIT_ALIASES.get(folded)
+        body = alias if alias else re.escape(folded) + r"(?:s|es)?"
+        patterns.append(re.compile(r"(?<![A-Za-z])(?:" + body + r")(?![A-Za-z])", re.I))
+    patterns.extend(re.compile(re.escape(run)) for run in _PROJECTION_CJK_RUN_RE.findall(text))
+    return patterns or None
+
+
+def _projection_anchors(names: str) -> Tuple[frozenset, frozenset]:
+    """(Latin anchors, CJK bigrams) of a row's metric/series: Latin tokens of >= 4
+    characters outside the stop-list and not year-like; CJK bigrams outside the
+    CJK stop-list."""
+    latin = frozenset(
+        _projection_stem(token) for token in _PROJECTION_LATIN_TOKEN_RE.findall(names)
+        if len(token) >= 4 and not _PROJECTION_YEARISH_RE.fullmatch(token.lower())
+        and _projection_stem(token) not in _PROJECTION_ANCHOR_STOPWORDS)
+    bigrams = frozenset(
+        run[i:i + 2] for run in _PROJECTION_CJK_RUN_RE.findall(names) for i in range(len(run) - 1)
+    ) - _PROJECTION_CJK_STOP_BIGRAMS
+    return latin, bigrams
+
+
+def _projection_rows(quant_rows: Any, as_of: Optional[date]) -> List[Dict[str, Any]]:
+    """The typed rows the check can anchor, in input order."""
+    prepared: List[Dict[str, Any]] = []
+    for row in quant_rows if isinstance(quant_rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        klass = quant_class(row, as_of)
+        if klass not in ("reported", "projected"):
+            continue
+        names = " ".join(str(row.get(key) or "") for key in ("metric", "series"))
+        if _PROJECTION_PROBABILITY_METRIC_RE.search(names):
+            continue
+        units = _projection_unit_patterns(row.get("unit"))
+        percent_unit = bool(_PROJECTION_PERCENT_UNIT_RE.search(str(row.get("unit") or "")))
+        keys = _projection_key_numbers(row.get("value"), percent_unit)
+        latin, bigrams = _projection_anchors(names)
+        if units is None or not keys or not (latin or len(bigrams) >= 2):
+            continue
+        prepared.append({"row": row, "class": klass, "keys": keys, "units": units,
+                         "latin": latin, "bigrams": bigrams,
+                         "estimate": str(row.get("value_type") or "").strip().lower() == "estimate"})
+    return prepared
+
+
+def _projection_scan_lines(md: str) -> List[Tuple[int, str]]:
+    """(1-based line number, text) of the prose and bullet lines: fenced code,
+    headings, tables, blockquotes, HTML comments, References / 参考来源 sections
+    and the Part-1 binary-forecast block are skipped; list markers are dropped."""
+    lines = (md or "").split("\n")
+    mask = _fence_mask(lines)
+    out: List[Tuple[int, str]] = []
+    in_part1 = False
+    references_level = 0          # > 0 inside a References section: its heading level
+    for number, (line, fenced) in enumerate(zip(lines, mask, strict=True), start=1):
+        stripped = line.strip()
+        if stripped == _BINARY_FORECAST_START_MARKER:
+            in_part1 = True
+            continue
+        if stripped == _BINARY_FORECAST_END_MARKER:
+            in_part1 = False
+            continue
+        if fenced or in_part1 or not stripped:
+            continue
+        if _MD_HEADING_RE.match(line) or _REFERENCES_HEADING_RE.match(line):
+            level = len(stripped) - len(stripped.lstrip("#"))
+            if references_level and level <= references_level:
+                references_level = 0
+            if _REFERENCES_HEADING_RE.match(line):
+                references_level = level
+            continue
+        if references_level or stripped.startswith(("|", ">", "<!--")):
+            continue
+        out.append((number, _PROJECTION_LIST_MARKER_RE.sub("", stripped, count=1)))
+    return out
+
+
+def _projection_matches(row: Dict[str, Any], text: str, numbers: frozenset, tokens: frozenset) -> bool:
+    """A sentence restates a row only with its key number, its unit (when it has
+    one) and a metric anchor (a Latin anchor word, or >= 2 CJK bigrams)."""
+    if not row["keys"] & numbers:
+        return False
+    if row["units"] and not any(pattern.search(text) for pattern in row["units"]):
+        return False
+    return bool(row["latin"] & tokens) or sum(1 for gram in row["bigrams"] if gram in text) >= 2
+
+
+def _projection_cue(text: str, as_of: Optional[date]) -> bool:
+    if _PROJECTION_CUE_RE.search(text):
+        return True
+    return as_of is not None and any(
+        int(year) > as_of.year for year in _PROJECTION_YEAR_RE.findall(text))
+
+
+def _projection_excerpt(sentence: str) -> str:
+    text = re.sub(r"\s+", " ", sentence).strip()
+    limit = _PROJECTION_EXCERPT_CHARS
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+
+
+def check_projection_attribution(md: str, quant_rows: Any, *, as_of: Optional[date] = None,
+                                 lang: str = "English", max_examples: int = 8) -> Dict[str, Any]:
+    """Reports-vs-projects attribution check (RESEARCH-5).  Pure, deterministic and
+    observe-only: it counts, never rewrites, and lint_report does not call it.
+
+    Rows are typed with quant_typing.quant_class against ``as_of`` (a date or
+    datetime); untyped rows are ignored (precision first), as are scenario/probability
+    rows and rows without a key number, a usable unit or a metric anchor.  A prose or
+    bullet sentence (see _projection_scan_lines) restates a row when it holds the row's
+    key number, its unit and a metric anchor; the row's [S#] is not consulted, since
+    the prose may cite a different source than the row.  Cues are read per sentence
+    in both languages (``lang`` is recorded only): PROJ = future modal, forecast
+    vocabulary, "by <year>", 预计/预测/…/到…年, or a year after the as-of year; REAL =
+    was/were/reached/…, 已达/录得/…
+
+    Codes (each at most once per sentence):
+      * projection_as_fact     -- projected row, REAL cue, no PROJ cue (sampled in
+        ``examples``, at most ``max_examples``);
+      * projection_unmarked    -- projected row, neither cue (count only);
+      * actual_as_projection   -- reported row, PROJ cue, no REAL cue (count only);
+      * estimate_unattributed  -- value_type estimate, no approximation/attribution
+        wording (count only).
+
+    Cross-language restatements (an English row in a Chinese sentence) never match.
+    """
+    if isinstance(as_of, datetime):
+        as_of = as_of.date()
+    elif not isinstance(as_of, date):
+        as_of = None
+    rows = _projection_rows(quant_rows, as_of)
+    report: Dict[str, Any] = {"lang": str(lang or ""), "checked_rows": len(rows), "matched_sentences": 0}
+    report.update(dict.fromkeys(PROJECTION_ATTRIBUTION_CODES, 0))
+    examples: List[Dict[str, Any]] = []
+    report["examples"] = examples
+    if not rows:
+        return report
+    cap = max(0, int(max_examples))
+    for number, line in _projection_scan_lines(md):
+        for sentence in _split_sentences(line):
+            text = _PROJECTION_NOISE_RE.sub(" ", sentence)
+            numbers = frozenset(filter(None, (
+                _canonical_number(match.group(0)) for match in _PROJECTION_NUMBER_RE.finditer(text))))
+            if not numbers:
+                continue
+            tokens = frozenset(_projection_stem(t) for t in _PROJECTION_LATIN_TOKEN_RE.findall(text))
+            matched = [row for row in rows if _projection_matches(row, text, numbers, tokens)]
+            if not matched:
+                continue
+            report["matched_sentences"] += 1
+            projection = _projection_cue(text, as_of)
+            realized = bool(_REALIZED_CUE_RE.search(text))
+            hits: Dict[str, Dict[str, Any]] = {}
+            for row in matched:
+                if row["class"] == "projected" and not projection:
+                    hits.setdefault("projection_as_fact" if realized else "projection_unmarked", row)
+                if row["class"] == "reported" and projection and not realized:
+                    hits.setdefault("actual_as_projection", row)
+                if row["estimate"] and not _ESTIMATE_CUE_RE.search(text):
+                    hits.setdefault("estimate_unattributed", row)
+            for code in hits:
+                report[code] += 1
+            as_fact = hits.get("projection_as_fact")
+            if as_fact is not None and len(examples) < cap:
+                source_row = as_fact["row"]
+                value = source_row.get("value")
+                value_type = source_row.get("value_type")
+                examples.append({
+                    "code": "projection_as_fact",
+                    "line": number,
+                    "excerpt": _projection_excerpt(sentence),
+                    "metric": _projection_excerpt(str(source_row.get("metric") or "")),
+                    "value": value if isinstance(value, (int, float, str)) and not isinstance(value, bool)
+                    else str(value),
+                    "value_type": str(value_type) if value_type is not None else None,
+                })
+    return report
 
 
 # ──────────────────────────────────────────────────────────────

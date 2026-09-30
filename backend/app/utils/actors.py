@@ -1808,19 +1808,38 @@ def extract_quantitative_rows(actors: Optional[Any]) -> List[Dict[str, Any]]:
     return out
 
 
-def quantitative_facts_block(actors: Optional[Any], max_facts: int = 20) -> str:
+# typed 表「类型」列的中文标签（quant_typing.quant_class 的三类）。
+_QUANT_CLASS_LABELS_ZH = {"reported": "已报告", "projected": "预期", "unknown": "未定"}
+
+
+def quantitative_facts_block(actors: Optional[Any], max_facts: int = 20, *,
+                             typed: bool = False) -> str:
     """把 quantitative_facts 渲染为紧凑的中文 markdown 表；缺省返回空串。
 
     每行携带单位 + as-of 日 + 定义 + 来源/层级，报告代理可直接引用精确、带日期、
     有定义的数字，无需再次联网检索，亦避免 SKILL §6 警示的「定义漂移」。
+
+    typed=True（RESEARCH-5，供选择接入的报告侧调用方）：增加「类型」列（已报告 / 预期 /
+    未定，quant_typing.quant_class 以 actors.as_of_date 为基准判定），日期列改为数据期
+    （目标日 → 期末 → as-of，quant_typing.reference_period），使预测的目标年不再被读成
+    实测值的时点。typed=False 与旧输出逐字节一致。
     """
     rows = extract_quantitative_rows(actors)
     if not rows:
         return ""
     rows = rows[:max_facts]
-    lines = ["## 定量事实（深度研究实证，引用时务必带单位与 as-of 日）",
-             "| 指标 | 数值 | 单位 | as-of | 定义 | 来源 |",
-             "| --- | --- | --- | --- | --- | --- |"]
+    if typed:
+        from .dates import parse_as_of  # 同包相对导入，匹配代码库约定
+        from .quant_typing import quant_class, reference_period
+        as_of = parse_as_of(actors.get("as_of_date"))
+        as_of_day = as_of.date() if as_of is not None else None
+        lines = ["## 定量事实（深度研究数据；类型=已报告/预期/未定，预期值须注明预期方与目标期）",
+                 "| 指标 | 数值 | 单位 | 数据期 | 类型 | 定义 | 来源 |",
+                 "| --- | --- | --- | --- | --- | --- | --- |"]
+    else:
+        lines = ["## 定量事实（深度研究实证，引用时务必带单位与 as-of 日）",
+                 "| 指标 | 数值 | 单位 | as-of | 定义 | 来源 |",
+                 "| --- | --- | --- | --- | --- | --- |"]
 
     def cell(v: Any) -> str:
         # markdown 表格安全：转义竖线、压平换行
@@ -1833,6 +1852,13 @@ def quantitative_facts_block(actors: Optional[Any], max_facts: int = 20) -> str:
             src = f"{src}（{tier}）"
         elif tier:
             src = tier
+        if typed:
+            lines.append("| " + " | ".join((
+                cell(r.get("metric")) or "?", cell(r.get("value")), cell(r.get("unit")),
+                cell(reference_period(r)), _QUANT_CLASS_LABELS_ZH[quant_class(r, as_of_day)],
+                cell(r.get("definition")), src,
+            )) + " |")
+            continue
         lines.append(
             "| {metric} | {value} | {unit} | {as_of} | {definition} | {source} |".format(
                 metric=cell(r.get("metric")) or "?",
