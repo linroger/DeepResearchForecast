@@ -39,6 +39,7 @@ from ..utils.security import UnsafeIdError, contained_child, is_safe_id, safe_id
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
 from .hindcast_policy import as_hindcast_pin, hindcast_forecast_block
+from . import citation_finalization_telemetry as _cftel
 from . import question_spec as _qspec
 from . import translation_dates as _tdates
 from . import translation_quantities as _tq
@@ -9027,6 +9028,7 @@ class ReportAgent:
             body, repair_info = self._repair_dangling_citations(
                 body, list(v["dangling"])
             )
+            self._log_citation_finalization("dangling", repair_info)
             imap = self._citation_index_or_fallback()
             v = validate_citation_markers(body, imap)
             logger.info(
@@ -9044,6 +9046,11 @@ class ReportAgent:
             imap = self._citation_index_or_fallback()
             if self._audit_semantic_citations(body, imap)["unsupported"] == 0:
                 break
+        # RESEARCH-9: every pass re-checks the surviving markers, so the log sums
+        # only remaps / strips and keeps kept / unverifiable of the last pass.
+        self._log_citation_finalization(
+            "semantic", semantic_totals, state=semantic_info
+        )
         v = validate_citation_markers(body, imap)
         if semantic_totals["remapped"] or semantic_totals["stripped"]:
             logger.info(
@@ -9136,6 +9143,79 @@ class ReportAgent:
                 ) from exc
             logger.warning(f"引用最终化失败（正文无引用记号，降级继续）: {exc}")
 
+    def _new_citation_finalization_log(
+        self, report_id: str, report: "Report"
+    ) -> Optional[Dict[str, Any]]:
+        """RESEARCH-9: a fresh citation-finalization log for one stabilizer run.
+
+        ``markers_before`` is the body-marker total (References excluded) before
+        the first citation finalization.  None when REPORT_FINALIZATION_TELEMETRY
+        is off or the measurement fails (telemetry never blocks publication).
+        """
+        if not getattr(Config, "REPORT_FINALIZATION_TELEMETRY", True):
+            return None
+        try:
+            from .forecast_extractor import validate_citation_markers
+
+            body = "\n".join(
+                chunk for chunk in self._split_markdown_h2_sections(
+                    report.markdown_content or ""
+                )
+                if chunk.split("\n", 1)[0].strip() not in _REFS_HEADINGS
+            )
+            markers = validate_citation_markers(
+                body, self._citation_index_or_fallback()
+            )["total_markers"]
+            return _cftel.new_log(report_id, markers)
+        except Exception as exc:  # noqa: BLE001 — telemetry never blocks publication
+            logger.warning(f"引用最终化遥测初始化失败（忽略）: {exc}")
+            return None
+
+    def _log_citation_finalization(
+        self, event: str, info: Any, *, first_pass: bool = False, state: Any = None
+    ) -> None:
+        """RESEARCH-9: add one repair event to the current citation-finalization
+        log (no-op without one: flag off, or a caller outside the stabilizer)."""
+        log = getattr(self, "_finalization_log", None)
+        if not isinstance(log, dict):
+            return
+        try:
+            _cftel.record(log, event, info, first_pass=first_pass, state=state)
+        except Exception as exc:  # noqa: BLE001 — telemetry never blocks publication
+            logger.warning(f"引用最终化遥测记录失败（忽略）: {event}: {exc}")
+
+    def _pre_audit_repairs(
+        self, report_id: str, body_marker_audit: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """RESEARCH-9: the report-citation-finalization/1 record of this report's
+        stabilizer run for the final audit; None when the flag is off or no log
+        of this report exists.  Warns when most markers were stripped."""
+        if not getattr(Config, "REPORT_FINALIZATION_TELEMETRY", True):
+            return None
+        log = getattr(self, "_finalization_log", None)
+        if not isinstance(log, dict) or log.get("report_id") != str(report_id):
+            return None
+        try:
+            record = _cftel.pre_audit_repairs(
+                log, (body_marker_audit or {}).get("total_markers", 0)
+            )
+        except Exception as exc:  # noqa: BLE001 — telemetry never blocks publication
+            logger.warning(f"引用最终化遥测汇总失败（忽略）: {exc}")
+            return None
+        if record["marker_strip_ratio"] >= _cftel.STRIP_RATIO_WARNING:
+            logger.warning(
+                "citation finalization stripped most markers before the audit: "
+                "%s ratio=%.3f before=%s final=%s machine_added=%s "
+                "lost_with_removed_text=%s",
+                report_id,
+                record["marker_strip_ratio"],
+                record["markers_before"],
+                record["markers_final"],
+                record["machine_added_citations"],
+                record["markers_lost_with_removed_text"],
+            )
+        return record
+
     def _stabilize_publish_markdown(
         self,
         report_id: str,
@@ -9181,6 +9261,12 @@ class ReportAgent:
             "stable": False,
             "lint": {},
         }
+        # RESEARCH-9: this run's citation-finalization log (None with
+        # REPORT_FINALIZATION_TELEMETRY off); _finalize_citations and the loop
+        # below add to it and the read-only audit persists it.
+        self._finalization_log = self._new_citation_finalization_log(
+            report_id, report
+        )
 
         for pass_no in range(1, limit + 1):
             totals["passes"] = pass_no
@@ -9202,6 +9288,11 @@ class ReportAgent:
                 )
             )
             totals["quantitative_grounding"] = quantitative_info
+            # The repairing call's diagnostics: the probe below re-runs on the
+            # repaired text and overwrites totals with zeros.
+            self._log_citation_finalization(
+                "quantitative", quantitative_info, first_pass=pass_no == 1
+            )
             if quantitatively_grounded != (report.markdown_content or ""):
                 totals["quantitative_rewrites"] += 1
                 report.markdown_content = quantitatively_grounded
@@ -9254,6 +9345,7 @@ class ReportAgent:
             totals["_quote_stable"] = (quote_probe == current)
             totals["_quant_stable"] = (quantitative_probe == current)
             totals["_semantic"] = semantic
+            self._log_citation_finalization("totals", totals)
             if (
                 quote_probe == current
                 and quantitative_probe == current
@@ -9732,6 +9824,11 @@ class ReportAgent:
         projection_audit = self._projection_attribution_audit(md)
         if projection_audit is not None:
             audit["projection_attribution"] = projection_audit
+        # RESEARCH-9: what the publish stabilizer stripped / added before this
+        # audit (telemetry: neither the integrity issues nor the gate read it).
+        pre_audit_repairs = self._pre_audit_repairs(report_id, body_marker_audit)
+        if pre_audit_repairs is not None:
+            audit["pre_audit_repairs"] = pre_audit_repairs
         audit["hard_issues"] = self._final_audit_integrity_issues(audit)
         audit["hard_passed"] = not audit["hard_issues"]
 
@@ -9745,6 +9842,13 @@ class ReportAgent:
             quality["quote_provenance"] = quote_audit
             quality["numeric_consistency"] = numeric_audit
             quality["implausible_stats"] = stat_audit
+            if pre_audit_repairs is not None:
+                # Before serialization, so forecast_sha256 seals it.
+                quality["citation_finalization"] = pre_audit_repairs
+            else:
+                # No record of this run (flag off, no log, or the log of another
+                # report): an earlier audit's record must not survive re-sealed.
+                quality.pop("citation_finalization", None)
             quality["final_audit"] = audit
             forecast["quality"] = quality
             if getattr(Config, "REPORT_PUBLISH_GATE", False):
