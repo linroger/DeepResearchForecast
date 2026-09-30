@@ -2077,6 +2077,35 @@ def _json_retry_note(error: str, required_keys: Sequence[str]) -> str:
 _FENCED_JSON_RE = re.compile(r"```(?:json|JSON)?[ \t]*\n?(.*?)```", re.DOTALL)
 _DECODER = json.JSONDecoder(strict=False)
 _MAX_TRUNCATION_REPAIRS = 16
+_NONFINITE_JSON_MSG = "non-finite constant"
+
+
+def _reject_nonfinite_constant(name: str) -> Any:
+    raise json.JSONDecodeError(_NONFINITE_JSON_MSG, "", 0)
+
+
+def _parse_finite_float(text: str) -> float:
+    value = float(text)
+    if not math.isfinite(value):  # an overflowing literal such as 1e999
+        raise json.JSONDecodeError(_NONFINITE_JSON_MSG, "", 0)
+    return value
+
+
+# INFRA-4: NaN, Infinity, -Infinity and overflowing floats are not JSON; a model reply
+# carrying one is unparseable (the JSON retry asks again) instead of decoding to a float
+# that poisons downstream arithmetic and artifacts.  Control characters stay tolerated.
+_FINITE_DECODER = json.JSONDecoder(strict=False, parse_constant=_reject_nonfinite_constant,
+                                   parse_float=_parse_finite_float)
+
+
+def _strict_json_numbers() -> bool:
+    """RESEARCH_JSON_STRICT_NUMBERS (default true; the parent forwards its Config value)."""
+    raw = os.environ.get("RESEARCH_JSON_STRICT_NUMBERS", "true")
+    return str(raw or "").strip().lower() == "true"
+
+
+def _json_decoder() -> json.JSONDecoder:
+    return _FINITE_DECODER if _strict_json_numbers() else _DECODER
 
 
 def _strip_trailing_commas(text: str) -> str:
@@ -2114,13 +2143,14 @@ def _strip_trailing_commas(text: str) -> str:
 
 
 def _decode_at(text: str, index: int) -> Any:
-    """``raw_decode`` at ``index`` (strict=False), then with comma repair."""
+    """``raw_decode`` at ``index`` (strict=False; finite numbers only unless
+    RESEARCH_JSON_STRICT_NUMBERS=false), then with comma repair."""
     try:
-        return _DECODER.raw_decode(text, index)[0]
+        return _json_decoder().raw_decode(text, index)[0]
     except ValueError:
         pass
     try:
-        return _DECODER.raw_decode(_strip_trailing_commas(text[index:]), 0)[0]
+        return _json_decoder().raw_decode(_strip_trailing_commas(text[index:]), 0)[0]
     except ValueError:
         return None
 
@@ -2161,7 +2191,7 @@ def _repair_truncated(text: str, start: int) -> Any:
     closers = "".join("}" if opener == "{" else "]" for opener in reversed(open_stack))
     candidate = _strip_trailing_commas(text[start:cut] + closers)
     try:
-        return _DECODER.raw_decode(candidate, 0)[0]
+        return _json_decoder().raw_decode(candidate, 0)[0]
     except ValueError:
         return None
 
@@ -2192,7 +2222,7 @@ def _drop_malformed_element(text: str, start: int) -> Any:
     repairs the object.
     """
     try:
-        _DECODER.raw_decode(text, start)
+        _json_decoder().raw_decode(text, start)
         return None
     except json.JSONDecodeError as exc:
         error_at = min(exc.pos, len(text) - 1)
@@ -2276,10 +2306,25 @@ def parse_json_object(text: str | None, required_keys: Sequence[str] = ()) -> di
     return None
 
 
+def _has_nonfinite_object(text: str) -> bool:
+    """True when some ``{`` position decodes to a dict once NaN / Infinity are accepted."""
+    index = text.find("{")
+    while index != -1:
+        try:
+            if isinstance(_DECODER.raw_decode(text, index)[0], dict):
+                return True
+        except ValueError:
+            pass
+        index = text.find("{", index + 1)
+    return False
+
+
 def _describe_json_failure(text: str, required_keys: Sequence[str], truncated: bool) -> str:
     if not text.strip():
         return "empty reply"
     candidates = [value for _, value in _iter_json_candidates(text) if isinstance(value, dict)]
+    if not candidates and _strict_json_numbers() and _has_nonfinite_object(text):
+        return "NaN or Infinity is not a JSON number"
     if candidates and required_keys:
         best = max(candidates, key=lambda c: sum(1 for k in required_keys if k in c))
         missing = [k for k in required_keys if k not in best]

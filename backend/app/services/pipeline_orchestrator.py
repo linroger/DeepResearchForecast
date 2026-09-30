@@ -430,6 +430,11 @@ def _classify_provider_outage(exc: Any) -> Optional[str]:
     （llm_client._is_deterministic_auth_error）、连接/传输失败、以及 llm_client 的
     双通道快失败（主提供方熔断冷却 + 回退不可用）。内容审查（422）、JSON 解析、
     预算护栏（BudgetExceeded）、取消信号等都不是「提供方中断」——既不计数也不清零。
+
+    INFRA-4（LLM_ERROR_CLASSIFY_STATUS_FIRST，默认开）：异常先按类型/HTTP 状态判定
+    （RateLimitError/429 → quota，AuthenticationError/401/403 → auth），其次是熔断快失败文本，
+    最后按文本「配额先于认证」判定（MiniMax 2056 / GLM 1113 用量上限消息可能带认证样措辞）；
+    纯文本输入只走文本判定。关闭时为旧顺序：认证文本 → 熔断 → 配额文本。
     """
     if isinstance(exc, (PipelineCancelled, ProviderOutageHalt)):
         return None
@@ -444,23 +449,38 @@ def _classify_provider_outage(exc: Any) -> Optional[str]:
         return None
     if text.startswith(_PROVIDER_OUTAGE_FAST_FAIL_PREFIX):
         return None  # 本熔断器自己的快失败信号，不得自我喂养
-    _is_quota = _is_auth = None
+    _is_quota = _is_auth = _status_first = _status_kind = _text_kind = None
     try:
         from ..utils.llm_client import (
+            _classify_status_first as _status_first,
             _is_deterministic_auth_error as _is_auth,
             _is_quota,
+            _llm_error_status_kind as _status_kind,
+            _llm_error_text_kind as _text_kind,
         )
     except Exception:  # noqa: BLE001 — 帮手不可导入时退化为本地指纹
         pass
-    if _is_auth is not None and _is_auth(exc):
-        return "auth"
     # llm_client 双通道中断快失败（消息含 '422/429 熔断冷却' → _is_quota 也会命中，
     # 但显式归类更可读）。
     low = text.casefold()
-    if "熔断冷却" in text or "circuit-breaker" in low or "回退提供方不可用" in text:
-        return "circuit_breaker"
-    if _is_quota is not None and _is_quota(exc):
-        return "quota"
+    circuit_breaker = ("熔断冷却" in text or "circuit-breaker" in low
+                       or "回退提供方不可用" in text)
+    if _status_first is not None and _status_first():
+        kind = _status_kind(exc) if isinstance(exc, BaseException) else None
+        if kind in ("quota", "auth"):
+            return kind
+        if circuit_breaker:
+            return "circuit_breaker"
+        kind = _text_kind(exc)
+        if kind in ("quota", "auth"):
+            return kind
+    else:
+        if _is_auth is not None and _is_auth(exc):
+            return "auth"
+        if circuit_breaker:
+            return "circuit_breaker"
+        if _is_quota is not None and _is_quota(exc):
+            return "quota"
     if isinstance(exc, BaseException):
         tname = type(exc).__name__.casefold()
         if "connection" in tname or "timeout" in tname:
@@ -2326,6 +2346,7 @@ RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_AS_OF_PIN", "bool"),
     ("RESEARCH_EVIDENCE_QUOTES", "str"),
     ("RESEARCH_EVIDENCE_SUPPORTS", "bool"),
+    ("RESEARCH_JSON_STRICT_NUMBERS", "bool"),
     ("RESEARCH_QUANT_TYPING", "bool"),
     ("RESEARCH_QUESTION_SPEC", "bool"),
     ("RESEARCH_SOURCE_DATES", "bool"),

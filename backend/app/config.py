@@ -116,6 +116,20 @@ class Config:
     # 是安全的：首轮即合法的 JSON 对象回复逐字节不变，只改变原本就会失败或返回非对象值的调用。
     # false 恢复旧的降温重发（且照旧可能返回非 dict）。
     LLM_JSON_REPAIR_TURN = os.environ.get('LLM_JSON_REPAIR_TURN', 'true').strip().lower() == 'true'
+    # INFRA-4：LLM JSON 严格数值（默认开）。_parse_json_response_ex 把 NaN / Infinity / -Infinity 与
+    # 溢出的浮点字面量（1e999）当作非法 JSON（它们不是 RFC 8259 JSON，Python json 却默认接受），
+    # chat_json 于是走修复轮重问一次（原因点名 NaN/Infinity），而不是把 NaN 概率带进骨架与产物。
+    # 默认开是安全的：只含有限数的回复解析结果逐字节不变。false 恢复旧的宽松解析。
+    LLM_JSON_STRICT_NUMBERS = os.environ.get('LLM_JSON_STRICT_NUMBERS', 'true').strip().lower() == 'true'
+    # INFRA-4：LLM 错误分类先看状态（默认开）。_classify_llm_error 先按异常类型 / HTTP 状态判定
+    # （RateLimitError/429 → 配额，AuthenticationError/401/403 → 认证，422 → 内容审查），其次按文本
+    # 「配额先于认证」（_is_quota 标记 + insufficient balance / usage limit / 2056 / 1113），最后才是
+    # 确定性非法请求。chat() 重试环、_is_deterministic_auth_error 与编排器 _classify_provider_outage
+    # 都读它：带认证样措辞的 MiniMax 2056 用量上限消息不再被判成确定性认证失败（跳过重试、回退
+    # 进 900s 冷却）。默认开是安全的：只改变同时命中配额与认证文本、或带状态码的异常的归类。
+    # false 恢复旧顺序（认证文本 → 配额文本）。
+    LLM_ERROR_CLASSIFY_STATUS_FIRST = os.environ.get(
+        'LLM_ERROR_CLASSIFY_STATUS_FIRST', 'true').strip().lower() == 'true'
     # 每个 run 的 token / 成本上限（0=不限）。超限后下一次 LLM 调用抛 BudgetExceeded，止血式中止。
     LLM_RUN_BUDGET_TOKENS = int(os.environ.get('LLM_RUN_BUDGET_TOKENS', '0') or '0')
     LLM_RUN_BUDGET_USD = float(os.environ.get('LLM_RUN_BUDGET_USD', '0') or '0')
@@ -356,6 +370,11 @@ class Config:
     # 双语（随成稿语言，另按 meta.translations[] 生成 exec_brief.<lang>.md）。PDF 复用 pandoc 引擎选择/
     # PyMuPDF 回退但去 --toc 收紧边距做单页。默认开；关闭=三端点 404（degrade-safe）。
     REPORT_EXEC_BRIEF = os.environ.get('REPORT_EXEC_BRIEF', 'True').strip().lower() == 'true'
+    # INFRA-4：预测工件严格 JSON（默认开）。forecast.json（骨架早落版 / 成稿版 / lint 回写）与
+    # market_comparison.json 按 allow_nan=False 序列化：含 NaN/±Infinity 的骨架不钉、不早落（回退成稿后
+    # 抽取）；成稿工件里的非有限叶子记 error 后置 null，路径记入 forecast.quality.nonfinite_nulled。
+    # 浏览器 JSON.parse 拒绝 NaN，默认开是安全的：有限数内容逐字节不变。false 恢复旧的照写 NaN。
+    ARTIFACT_STRICT_JSON = os.environ.get('ARTIFACT_STRICT_JSON', 'true').strip().lower() == 'true'
     # NEXTSTEPS P2-4：把每份 forecast.json 追加进校准账本（horizon/resolution date 为键），已解析
     # 预测的历史 Brier/ECE surfacing 进新预测 confidence_rationale——让信心由 track record 赚得而非
     # 自评。默认开（仅 jsonl 追加/读取，无 LLM）；初期无已解析样本时对信心无影响（degrade-safe）。
@@ -1776,6 +1795,14 @@ class Config:
     # either way; off = no key.  Forwarded to the v3 child.
     RESEARCH_V3_CITATION_STATS = os.environ.get(
         'RESEARCH_V3_CITATION_STATS', 'true').strip().lower() == 'true'
+    # INFRA-4: v3 research-gateway JSON parsing (parse_json_object) rejects NaN, Infinity,
+    # -Infinity and overflowing float literals (1e999): a model reply carrying one is unparseable,
+    # so the gateway's JSON retry asks again (naming the non-finite number) instead of handing a
+    # NaN to the plan, facts and handoff artifacts.  Control characters stay tolerated.  Default
+    # true is safe: replies with finite numbers parse byte-identically; false = the previous
+    # permissive decoder.  The bridge reads it from its env; the parent forwards it to the v3 child.
+    RESEARCH_JSON_STRICT_NUMBERS = os.environ.get(
+        'RESEARCH_JSON_STRICT_NUMBERS', 'true').strip().lower() == 'true'
     # RESEARCH-7: verbatim evidence-span contract for v3 findings (off | audit | enforce).
     # Not off: the KIQ task asks each finding for an EVIDENCE: "<verbatim passage>" clause,
     # the source ledger keeps every distinct search snippet of a row, and each quote is
