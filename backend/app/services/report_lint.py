@@ -43,6 +43,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils.absence import MARKER_SENTINELS
+from ..utils.dates import parse_as_of
 from ..utils.quant_typing import quant_class
 
 # ──────────────────────────────────────────────────────────────
@@ -1550,10 +1551,14 @@ PROJECTION_ATTRIBUTION_CODES = (
     "projection_as_fact", "projection_unmarked", "actual_as_projection", "estimate_unattributed",
 )
 _PROJECTION_EXCERPT_CHARS = 160
+_PROJECTION_DEFAULT_EXAMPLES = 8
 # Bytes that carry numbers but no claim: comments, inline code, link targets,
-# bare URLs and [S#] citation markers.
+# bare URLs and [S#] citation markers.  Every bracketed alternative stops at the
+# next opener of its kind (comments and citations never nest), so an unclosed
+# "<!--", "](" or "[S1" costs only the text up to the next one: linear time.
 _PROJECTION_NOISE_RE = re.compile(
-    r"<!--.*?-->|`[^`\n]*`|\]\([^)\s]*\)|https?://\S+|[\[【]\s*S[\d?#][^\]】]*[\]】]")
+    r"<!--(?:(?!<!--).)*?-->|`[^`\n]*`|\]\([^)\s\]]*\)|https?://\S+"
+    r"|[\[【]\s*S[\d?#][^\[\]【】]*[\]】]")
 _PROJECTION_LIST_MARKER_RE = re.compile(r"^(?:[-*+]|\d{1,3}[.)])\s+")
 # A number as written: thousands separators, decimals and a trailing percent sign
 # stay one token; the ASCII-only look-behind lets a number follow CJK text.
@@ -1564,10 +1569,19 @@ _PROJECTION_LATIN_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9]*")
 # A year-like metric token ("fy2025", "2030e" has no leading letter and never tokenizes).
 _PROJECTION_YEARISH_RE = re.compile(r"(?:fy|cy|q[1-4]|h[12])?(?:19|20|21)\d{2}[a-z]?")
 _PROJECTION_CJK_RUN_RE = re.compile(r"[" + _CJK_CHAR + r"]+")
-# Generic metric words that anchor nothing on their own (compared after the
-# plural fold of _projection_stem).
+# Words that anchor nothing on their own (compared after the plural fold of
+# _projection_stem): generic metric words, generic quantity/period words, and
+# English function words of >= 4 letters (shorter tokens never anchor).  Each entry
+# is its own stem (a test pins it).
 _PROJECTION_ANCHOR_STOPWORDS = frozenset({
     "global", "total", "market", "forecast", "forecasted", "estimate", "estimated", "base", "case",
+    "year", "yearly", "annual", "annually", "fiscal", "quarter", "quarterly", "month", "monthly",
+    "period", "share", "rate", "growth", "level", "number", "value", "amount", "average", "change",
+    "percent", "percentage",
+    "about", "after", "also", "among", "been", "before", "between", "both", "during",
+    "each", "from", "have", "into", "more", "most", "only", "other", "over", "such", "than", "that",
+    "their", "them", "then", "there", "these", "they", "this", "those", "through", "under", "until",
+    "were", "what", "when", "where", "which", "while", "will", "with", "within", "without", "would",
 })
 _PROJECTION_CJK_STOP_BIGRAMS = frozenset({
     "全球", "总计", "合计", "总量", "市场", "预测", "预计", "预期", "估计", "估算", "基准", "情景",
@@ -1747,13 +1761,34 @@ def _projection_excerpt(sentence: str) -> str:
     return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
 
 
-def check_projection_attribution(md: str, quant_rows: Any, *, as_of: Optional[date] = None,
-                                 lang: str = "English", max_examples: int = 8) -> Dict[str, Any]:
+def _projection_as_of(as_of: Any) -> Optional[date]:
+    """The as-of day of a date, a datetime or a date string (dates.parse_as_of); else None."""
+    if isinstance(as_of, str):
+        as_of = parse_as_of(as_of)
+    if isinstance(as_of, datetime):
+        return as_of.date()
+    return as_of if isinstance(as_of, date) else None
+
+
+def _projection_example_cap(max_examples: Any) -> int:
+    """``max_examples`` as a count >= 0; the default when it is not a readable number."""
+    if isinstance(max_examples, bool):
+        return _PROJECTION_DEFAULT_EXAMPLES
+    try:
+        return max(0, int(max_examples))
+    except (TypeError, ValueError, OverflowError):
+        return _PROJECTION_DEFAULT_EXAMPLES
+
+
+def check_projection_attribution(md: str, quant_rows: Any, *, as_of: Any = None,
+                                 lang: str = "English",
+                                 max_examples: int = _PROJECTION_DEFAULT_EXAMPLES) -> Dict[str, Any]:
     """Reports-vs-projects attribution check (RESEARCH-5).  Pure, deterministic and
     observe-only: it counts, never rewrites, and lint_report does not call it.
 
-    Rows are typed with quant_typing.quant_class against ``as_of`` (a date or
-    datetime); untyped rows are ignored (precision first), as are scenario/probability
+    Rows are typed with quant_typing.quant_class against ``as_of`` (a date, a
+    datetime or a date string read with dates.parse_as_of; anything else = no as-of
+    date); untyped rows are ignored (precision first), as are scenario/probability
     rows and rows without a key number, a usable unit or a metric anchor.  A prose or
     bullet sentence (see _projection_scan_lines) restates a row when it holds the row's
     key number, its unit and a metric anchor; the row's [S#] is not consulted, since
@@ -1771,11 +1806,10 @@ def check_projection_attribution(md: str, quant_rows: Any, *, as_of: Optional[da
         wording (count only).
 
     Cross-language restatements (an English row in a Chinese sentence) never match.
+    Malformed arguments degrade instead of raising: a non-str ``md`` is empty and an
+    unreadable ``max_examples`` is the default.
     """
-    if isinstance(as_of, datetime):
-        as_of = as_of.date()
-    elif not isinstance(as_of, date):
-        as_of = None
+    as_of = _projection_as_of(as_of)
     rows = _projection_rows(quant_rows, as_of)
     report: Dict[str, Any] = {"lang": str(lang or ""), "checked_rows": len(rows), "matched_sentences": 0}
     report.update(dict.fromkeys(PROJECTION_ATTRIBUTION_CODES, 0))
@@ -1783,8 +1817,8 @@ def check_projection_attribution(md: str, quant_rows: Any, *, as_of: Optional[da
     report["examples"] = examples
     if not rows:
         return report
-    cap = max(0, int(max_examples))
-    for number, line in _projection_scan_lines(md):
+    cap = _projection_example_cap(max_examples)
+    for number, line in _projection_scan_lines(md if isinstance(md, str) else ""):
         for sentence in _split_sentences(line):
             text = _PROJECTION_NOISE_RE.sub(" ", sentence)
             numbers = frozenset(filter(None, (

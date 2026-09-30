@@ -15,7 +15,9 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
+import subprocess
 import sys
 
 import pytest
@@ -154,6 +156,12 @@ def test_reference_period_prefers_target_then_period_then_as_of():
     assert qt.reference_period({"as_of_date": "  2025-04  "}) == "2025-04"
     assert qt.reference_period({}) == ""
     assert qt.reference_period(None) == ""
+    # Text without a letter or digit states no period (the bridge's period_unparsed rule).
+    assert qt.reference_period({"period_end": "-"}) == ""
+    assert qt.reference_period({"target_date": "—", "period_end": " ? ", "as_of_date": "2025-04-10"}) == (
+        "2025-04-10")
+    # A word the source wrote is kept as the period.
+    assert qt.reference_period({"period_end": "TBD"}) == "TBD"
 
 
 def test_expectation_qualifier_languages_and_fallbacks():
@@ -168,6 +176,26 @@ def test_expectation_qualifier_languages_and_fallbacks():
     assert qt.expectation_qualifier({}, "中文") == "未具名来源的预期"
     long_source = "Research house " * 20
     assert len(qt.expectation_qualifier({"source": long_source})) < 130
+
+
+# A real v3 row (pipe_1ee2fae33f8c handoff/quantitative.json): FY2026 guidance with
+# no target_date or period_end, so its only date is the source's publication date.
+_CAPEX_GUIDANCE = {"metric": "四大厂2026年capex指引合计", "series": "big4_capex_guidance", "value": "735–760",
+                   "unit": "USD billion", "as_of_date": "2026-07-30", "value_type": "target",
+                   "source": "CNBC [S49]及各厂财报", "tier": "S1", "value_kind": "forecast",
+                   "analyst": "CNBC [S49]及各厂财报"}
+
+
+def test_expectation_qualifier_never_labels_the_publication_date_a_target():
+    assert qt.expectation_qualifier(_CAPEX_GUIDANCE, "en") == "expectation by CNBC [S49]及各厂财报, as of 2026-07-30"
+    assert qt.expectation_qualifier(_CAPEX_GUIDANCE, "zh") == "CNBC [S49]及各厂财报的预期，截至 2026-07-30"
+    # A stated period wins over the publication date; a placeholder period does not.
+    assert qt.expectation_qualifier({**_CAPEX_GUIDANCE, "period_end": "2026"}) == (
+        "expectation by CNBC [S49]及各厂财报, target 2026")
+    assert qt.expectation_qualifier({"source": "IBM", "period_end": "-", "as_of_date": "2025-04-10"}) == (
+        "expectation by IBM, as of 2025-04-10")
+    assert qt.expectation_qualifier({"source": "IBM", "period_end": "-"}) == "expectation by IBM"
+    assert qt.expectation_qualifier({"source": "IBM", "target_date": "n/a", "period_end": "—"}, "zh") == "IBM的预期"
 
 
 @pytest.mark.parametrize("label, expected", [
@@ -199,6 +227,9 @@ def test_pack_report_rows_appends_qualifier_only_for_typed_expectations(typed_re
     ]
     unknown = {**_IBM_ROW, "epistemic_class": "unknown"}
     assert _findings([unknown]) == ["Logical qubits 200 qubits (expectation by IBM, target 2029-12-31)"]
+    guidance = {**_CAPEX_GUIDANCE, "epistemic_class": "projected"}
+    assert _findings([guidance]) == [
+        "四大厂2026年capex指引合计 735–760 USD billion (expectation by CNBC [S49]及各厂财报, as of 2026-07-30)"]
     # Keyed on the research stamp: an untyped forecast row keeps its exact bytes.
     assert _findings([_IBM_ROW]) == ["Logical qubits 200 qubits"]
 
@@ -287,9 +318,29 @@ def test_quantitative_facts_block_typed_adds_class_and_reference_period():
     assert "| 预期 |" in early and "| 已报告 |" in late
 
 
+# app.config calls load_dotenv(override=True) at import, so a developer's .env or
+# exported knob would mask the code default: read it in a child with .env loading
+# neutralized and both knobs unset (test_config_optimization_defaults' recipe).
+_DEFAULTS_CHILD = r"""
+import json, os
+import dotenv
+dotenv.load_dotenv = lambda *a, **k: False
+for key in ("QUANT_TYPED_RENDERING", "REPORT_PROJECTION_LINT"):
+    os.environ.pop(key, None)
+from app.config import Config
+print("<<<JSON>>>" + json.dumps({"typed": Config.QUANT_TYPED_RENDERING,
+                                 "projection": Config.REPORT_PROJECTION_LINT}))
+"""
+
+
 def test_knob_defaults_and_documentation():
-    assert Config.QUANT_TYPED_RENDERING is False
-    assert Config.REPORT_PROJECTION_LINT is True
+    env = {key: value for key, value in os.environ.items()
+           if key not in ("QUANT_TYPED_RENDERING", "REPORT_PROJECTION_LINT")}
+    proc = subprocess.run([sys.executable, "-c", _DEFAULTS_CHILD], cwd=_BACKEND, env=env,
+                          capture_output=True, text=True, timeout=120)
+    assert proc.returncode == 0, proc.stderr
+    [payload] = [line for line in proc.stdout.splitlines() if line.startswith("<<<JSON>>>")]
+    assert json.loads(payload[len("<<<JSON>>>"):]) == {"typed": False, "projection": True}
     env_example = os.path.join(os.path.dirname(_BACKEND), ".env.example")
     with open(env_example, encoding="utf-8") as handle:
         text = handle.read()

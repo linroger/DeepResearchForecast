@@ -861,9 +861,10 @@ class Config:
     REPORT_EDITORIAL_LINT = os.environ.get('REPORT_EDITORIAL_LINT', 'true').strip().lower() == 'true'
     # RESEARCH-5：已报告 vs 预期的归因观测（report_lint.check_projection_attribution，纯确定性、只记数/
     # 采样、绝不改写成稿）。研究 quantitative 行按 quant_typing.quant_class 分型（未分型行忽略），正文
-    # 句子同时含该行的关键数字、单位与指标锚词时，按「实现」/「预期」措辞记 projection_as_fact 等计数，
-    # 写入 forecast.quality.projection_attribution 与 final_audit.projection_attribution。默认开是安全的：
-    # 只读观测，不进 hard_issues、不改发布状态；设 false 两处字段都不写（逐字节复现旧产物）。
+    # 句子同时含该行的关键数字、单位与指标锚词时，按「实现」/「预期」措辞记 projection_as_fact 等计数。
+    # 终审副本（final_audit.json 与 forecast.quality.final_audit 的 projection_attribution）总是写入；
+    # forecast.quality.projection_attribution 由编辑 lint 通道写入，故另需 REPORT_EDITORIAL_LINT 开启。
+    # 默认开是安全的：只读观测，不进 hard_issues、不改发布状态；设 false 各处字段都不写（逐字节复现旧产物）。
     REPORT_PROJECTION_LINT = os.environ.get('REPORT_PROJECTION_LINT', 'true').strip().lower() == 'true'
     # 模拟机制泄漏修复（_repair_simulation_leakage，注册进 REPORT_REPAIR_PASSES 修复链）：
     # Tier-1 确定性改写（标签/边/工具记号/平台行为引文/泄漏标题）→ Tier-2 每个泄漏段落一次
@@ -1442,7 +1443,8 @@ class Config:
     # prompt and meta.  The parent forwards it to the v3 child.
     RESEARCH_QUANT_TYPING = os.environ.get('RESEARCH_QUANT_TYPING', 'false').strip().lower() == 'true'
     # RESEARCH-5: report-side rendering of that typing.  On, a persona's quantitative fact the
-    # research stamped projected/unknown carries "(expectation by {source}, target {period})"
+    # research stamped projected/unknown carries "(expectation by {source}, target {period})",
+    # or ", as of {date}" when the row states only the source's date
     # (actor_role_prompt._pack_report_rows), and the chart labels read epistemic_class before
     # value_kind/value_type (report_visualizer: projected -> forecast marker, reported -> actual).
     # Default false: it changes role-prompt bytes (PREPARE recomputes their SHAs) and chart

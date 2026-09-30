@@ -19,6 +19,7 @@ import inspect
 import json
 import os
 import sys
+import time
 from types import SimpleNamespace
 
 from app.config import Config
@@ -95,6 +96,28 @@ def test_same_number_without_unit_or_metric_anchor_does_not_match():
     assert report["projection_as_fact"] == 0
     # A unit alone is not enough either: the sentence must share the row's unit.
     assert _check("Data-centre electricity demand reached 945 GW.", [DC_FORECAST])["matched_sentences"] == 0
+
+
+def test_function_and_generic_quantity_words_are_not_metric_anchors():
+    """Two false positives a review probe found: the shared words ('with',
+    'share', 'year', 'growth', ...) anchored a projected % row to an unrelated
+    realized sentence with the same number."""
+    cooling = {"metric": "Share of AI servers with liquid cooling", "value": 53, "unit": "%",
+               "value_type": "forecast", "period_end": "2027"}
+    shipments = {"metric": "Year-over-year growth in shipments", "value": 12, "unit": "%",
+                 "value_type": "forecast", "period_end": "2027"}
+    margin = "Nvidia's gross margin rose to 53% in fiscal 2025, with data-centre revenue leading."
+    costs = "Operating costs rose to 12% of sales this year."
+    for md, row in ((margin, cooling), (costs, shipments)):
+        report = _check(md, [row])
+        assert report["checked_rows"] == 1
+        assert report["matched_sentences"] == 0
+        assert report["projection_as_fact"] == 0 and report["examples"] == []
+    # The rows still anchor on their own metric words.
+    assert _check("Liquid cooling reached 53% of AI servers.", [cooling])["projection_as_fact"] == 1
+    assert _check("Shipments rose to 12% growth.", [shipments])["projection_as_fact"] == 1
+    # The stop-list is compared after the plural fold, so each entry must be its own stem.
+    assert all(rl._projection_stem(word) == word for word in rl._PROJECTION_ANCHOR_STOPWORDS)
 
 
 def test_scenario_probability_rows_are_skipped():
@@ -206,6 +229,42 @@ def test_real_row_shapes_are_read():
     shipments = {"metric": "Humanoid robot shipments", "value": 50000, "unit": "units", "value_type": "target",
                  "epistemic_class": "projected"}
     assert _check("Humanoid robot shipments hit 50,000 units [S2].", [shipments])["projection_as_fact"] == 1
+
+
+def test_malformed_arguments_degrade_instead_of_raising():
+    md = "\n".join([AS_FACT_EN] * 10)
+    assert len(_check(md, [DC_FORECAST], max_examples=None)["examples"]) == 8
+    for cap in (True, "abc", float("nan"), float("inf"), [2]):
+        assert len(_check(md, [DC_FORECAST], max_examples=cap)["examples"]) == 8, cap
+    assert len(_check(md, [DC_FORECAST], max_examples=-3)["examples"]) == 0
+    assert len(_check(md, [DC_FORECAST], max_examples=2.9)["examples"]) == 2
+    for bad_md in (123, None, b"bytes", [AS_FACT_EN]):
+        report = _check(bad_md, [DC_FORECAST])
+        assert report["checked_rows"] == 1 and report["matched_sentences"] == 0, bad_md
+    # An as-of string is read like the date it names; an unreadable one is no as-of date.
+    in_2030 = "Data-centre electricity demand was 945 TWh in 2030."
+    assert _check(in_2030, [DC_FORECAST], as_of="2026-09-28") == _check(in_2030, [DC_FORECAST], as_of=AS_OF)
+    assert _check(in_2030, [DC_FORECAST], as_of="2026-09-28")["projection_as_fact"] == 0
+    assert _check(in_2030, [DC_FORECAST], as_of="not a date") == _check(in_2030, [DC_FORECAST], as_of=None)
+    assert _check(in_2030, [DC_FORECAST], as_of=20260928)["projection_as_fact"] == 1
+
+
+def test_noise_stripping_is_linear_on_unclosed_openers():
+    """Every bracketed noise alternative used to rescan to the end of the sentence
+    from each unclosed opener (quadratic: ~2 s for 40 KB of "[S1 ")."""
+    adversarial = ("[S1 " * 15_000, "【S2 " * 15_000, "<!-- x " * 9_000, "](" * 30_000, "`a" * 30_000)
+    started = time.perf_counter()
+    for text in adversarial:
+        assert rl._PROJECTION_NOISE_RE.sub(" ", text)
+    assert time.perf_counter() - started < 1.0
+    # The whole check on a single long sentence that matches a row.
+    line = "Data-centre electricity demand reached 945 TWh " + "[S1 <!-- ](" * 8_000 + "."
+    started = time.perf_counter()
+    assert _check(line, [DC_FORECAST])["projection_as_fact"] == 1
+    assert time.perf_counter() - started < 2.0
+    # Closed markers are still stripped whole.
+    assert rl._PROJECTION_NOISE_RE.sub(" ", "a <!-- 12 --> b [S3, p. 45] c 【S4】 [see](https://x.y/1) d") == (
+        "a   b   c   [see  d")
 
 
 def test_marker_literals_equal_forecast_extractor_constants():

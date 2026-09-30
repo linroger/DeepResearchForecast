@@ -19,7 +19,9 @@ typing off.  This module is their one reading of a row:
 * :func:`reference_period` -- the date a value is about: its target date, else
   its period end, else the source's as-of date.
 * :func:`expectation_qualifier` -- "expectation by IBM, target 2029-12-31" /
-  "IBM的预期，目标期 2029-12-31".
+  "IBM的预期，目标期 2029-12-31"; a row that states only the source's as-of
+  date reads "expectation by CNBC, as of 2026-07-30" / "CNBC的预期，截至
+  2026-07-30" (a publication date is not a target).
 * :func:`is_unverified` -- the RESEARCH-4 page check did not find the number
   on its cited page, or could not check it there.
 
@@ -239,17 +241,24 @@ def _clean(value: Any, limit: int) -> str:
     return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
 
 
-def reference_period(row: Any) -> str:
-    """The date or period a value is about: ``target_date``, else
-    ``period_end``, else ``as_of_date`` (placeholders such as "n/a" skipped);
-    "" when the row states none."""
-    if not isinstance(row, Mapping):
-        return ""
-    for key in ("target_date", "period_end", "as_of_date"):
+def _stated_period(row: Mapping[str, Any], keys: tuple[str, ...]) -> str:
+    """The first of ``keys`` that states a date or period.  Placeholders are
+    skipped: "n/a"-style words and text without a letter or digit ("-", "?"),
+    the bridge's rule for a period_end that states nothing."""
+    for key in keys:
         text = _clean(row.get(key), 60)
-        if text and text.casefold() not in _NO_PERIOD:
+        if any(ch.isalnum() for ch in text) and text.casefold() not in _NO_PERIOD:
             return text
     return ""
+
+
+def reference_period(row: Any) -> str:
+    """The date or period a value is about: ``target_date``, else
+    ``period_end``, else ``as_of_date`` (placeholders such as "n/a" or "-"
+    skipped); "" when the row states none."""
+    if not isinstance(row, Mapping):
+        return ""
+    return _stated_period(row, ("target_date", "period_end", "as_of_date"))
 
 
 def _is_zh(lang: Any) -> bool:
@@ -259,17 +268,25 @@ def _is_zh(lang: Any) -> bool:
 def expectation_qualifier(row: Any, lang: str = "en") -> str:
     """Who expects a projected value and for when, in ``lang`` (zh* / Chinese /
     中文 → Chinese, anything else → English): "expectation by {source},
-    target {reference period}" / "{source}的预期，目标期 {reference period}".
-    The expecting party is ``source``, else ``analyst``, else an unnamed source;
-    the target clause is dropped when the row states no period."""
+    target {period}" / "{source}的预期，目标期 {period}", the period being
+    ``target_date``, else ``period_end``.  A row that states neither reads
+    "…, as of {as_of_date}" / "…，截至 {as_of_date}" instead: the source's
+    publication date is not the target.  The expecting party is ``source``,
+    else ``analyst``, else an unnamed source; the date clause is dropped when
+    the row states no date at all."""
     fields = row if isinstance(row, Mapping) else {}
     who = _clean(fields.get("source") or fields.get("analyst"), 100)
-    ref = reference_period(fields)
+    target = _stated_period(fields, ("target_date", "period_end"))
+    stated = "" if target else _stated_period(fields, ("as_of_date",))
     if _is_zh(lang):
         who = who or "未具名来源"
-        return f"{who}的预期，目标期 {ref}" if ref else f"{who}的预期"
+        if target:
+            return f"{who}的预期，目标期 {target}"
+        return f"{who}的预期，截至 {stated}" if stated else f"{who}的预期"
     who = who or "an unnamed source"
-    return f"expectation by {who}, target {ref}" if ref else f"expectation by {who}"
+    if target:
+        return f"expectation by {who}, target {target}"
+    return f"expectation by {who}, as of {stated}" if stated else f"expectation by {who}"
 
 
 def is_unverified(row: Any) -> bool:
