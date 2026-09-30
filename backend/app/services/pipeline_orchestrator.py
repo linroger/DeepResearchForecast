@@ -8620,8 +8620,9 @@ class PipelineOrchestrator:
                 new_state.options["max_rounds"] = int(overlay["max_rounds"])
             except (TypeError, ValueError):
                 pass
-        # INFRA-7：情景分叉是新准入——按分叉时刻的环境钉形状（origin=fork）。
-        cls._pin_run_shape(new_state, run_shape.ORIGIN_FORK)
+        # INFRA-7：情景分叉是新准入——按分叉时刻的环境钉形状（origin=fork），并记下 base 的钉
+        # （复用的研究/本体/图谱是在 base 的形状下建的）。
+        cls._pin_run_shape(new_state, run_shape.ORIGIN_FORK, base_state=base_state)
 
         PipelineManager.ensure_dirs(new_id)
         task_manager = TaskManager()
@@ -8822,13 +8823,24 @@ class PipelineOrchestrator:
     # -- INFRA-7: run-shape pin, drift detection and resume lineage guards ----
 
     @staticmethod
-    def _pin_run_shape(state: "PipelineState", origin: str) -> None:
-        """Store ``options['run_shape_v1']`` when RUN_SHAPE_PIN is on."""
+    def _pin_run_shape(state: "PipelineState", origin: str, *,
+                       base_state: Optional["PipelineState"] = None) -> None:
+        """Store ``options['run_shape_v1']`` when RUN_SHAPE_PIN is on.
+
+        A fork passes ``base_state``: its pin then records the base's pin
+        under ``fork_base`` (sha256 plus the identity knobs that differ), since
+        the fork reuses upstream artifacts built under the base's shape.
+        """
         if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
             return
         shape = capture_run_shape_v1(state.options, origin)
-        if shape is not None:
-            state.options["run_shape_v1"] = shape
+        if shape is None:
+            return
+        if base_state is not None:
+            base_options = base_state.options if isinstance(base_state.options, dict) else {}
+            shape["fork_base"] = run_shape.fork_base_record(
+                base_options.get("run_shape_v1"), shape, base_state.pipeline_id)
+        state.options["run_shape_v1"] = shape
 
     @staticmethod
     def _run_shape_drift(state: "PipelineState") -> Optional[dict[str, Any]]:
@@ -8907,18 +8919,23 @@ class PipelineOrchestrator:
         *,
         bound_ids: Optional[tuple[Any, Any]] = None,
         exempt: tuple[str, ...] = (),
+        artifact_id: Any = None,
     ) -> Optional[str]:
         """INFRA-7 resume lineage guard: the refusal reason when ``stage`` must recompute.
 
         Consults this attempt's recomputes and the durable
         ``options.lineage_invalidated`` map, so a stage made stale by an earlier
-        attempt whose rebuild failed is still refused.  A refusal is recorded in
-        that map (cleared only when the stage recomputes) and leaves a
-        ``reuse_refused: <reason>`` note under ``options.stage_notes[stage]`` (a
-        per-stage list, so it never clobbers the single-valued
-        ``resumed_stage_validation`` breadcrumb that names the upstream cause);
-        the caller then falls through to its rebuild branch.  None = reuse may
-        proceed (always None with RESUME_LINEAGE_GUARDS off).
+        attempt whose rebuild failed is still refused.  ``artifact_id`` names
+        the candidate artifact (REPORT: its report_id); when it is the one
+        ``options.lineage_rebuilt`` records for the stage, the durable entry
+        does not refuse it (a rebuild from current inputs cut off before the
+        stage completed).  A refusal is recorded in the invalidated map and
+        leaves a ``reuse_refused: <reason>`` note under
+        ``options.stage_notes[stage]`` (a per-stage list, so it never clobbers
+        the single-valued ``resumed_stage_validation`` breadcrumb that names
+        the upstream cause); the caller then falls through to its rebuild
+        branch.  None = reuse may proceed (always None with
+        RESUME_LINEAGE_GUARDS off).
         """
         if not bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
             return None
@@ -8926,7 +8943,8 @@ class PipelineOrchestrator:
         invalidated = dict(invalidated) if isinstance(invalidated, dict) else {}
         reason = run_shape.lineage_refusal(
             stage, self._attempt_recomputed(), bound_ids=bound_ids, exempt=exempt,
-            invalidated=invalidated)
+            invalidated=invalidated, artifact_id=artifact_id,
+            rebuilt=state.options.get(run_shape.LINEAGE_REBUILT_OPTION))
         if reason is None:
             return None
         invalidated.setdefault(stage, reason)
@@ -8943,67 +8961,137 @@ class PipelineOrchestrator:
         )
         return reason
 
-    def _forbid_shared_project_rebuild(
+    def _forbid_shared_fork_rebuild(
         self, state: "PipelineState", stage: str, project: Any, reason: str,
     ) -> None:
-        """INFRA-7: fail closed instead of regenerating a fork's shared project in place.
+        """INFRA-7: fail closed instead of rebuilding a fork's shared artifacts in place.
 
         A scenario fork (``fork``) runs on its base pipeline's project record.
         When a lineage guard refuses its ontology/graph reuse, the rebuild would
         overwrite ``project.ontology`` / ``project.graph_id`` that the base (and
-        sibling forks) still use, so the attempt fails naming the base instead.
-        A fork that owns its project (a batch question fork creates one) is not
-        affected.
+        sibling forks) still use.  Every fork (scenario and batch question)
+        also works in the base's handoff directory, where a graph rebuild writes
+        communities.json, entity_merges.json, graph_prune.json and the graph
+        priors that the base's artifact manifest seals.  In either case the
+        attempt fails naming the base instead.  A fork that owns its project
+        still regenerates its ontology (a batch question fork does so by
+        design).
         """
         base_pid = (state.options or {}).get("base_pipeline_id")
-        project_id = getattr(project, "project_id", None)
-        if not base_pid or not project_id:
+        if not base_pid:
             return
-        try:
-            base = PipelineManager.load(str(base_pid))
-        except Exception:  # noqa: BLE001 — an unreadable base cannot prove the project is ours
-            base = None
-        if isinstance(base, dict):
-            shared = base.get("project_id") == project_id
-        else:
-            # Base record gone or unreadable: scenario forks share the base
-            # project by construction, so treat them as shared.
-            shared = "scenario_overlay" in (state.options or {})
+        shared: list[str] = []
+        project_id = getattr(project, "project_id", None)
+        if project_id:
+            try:
+                base = PipelineManager.load(str(base_pid))
+            except Exception:  # noqa: BLE001 — an unreadable base cannot prove the project is ours
+                base = None
+            if isinstance(base, dict):
+                project_shared = base.get("project_id") == project_id
+            else:
+                # Base record gone or unreadable: scenario forks share the base
+                # project by construction, so treat them as shared.
+                project_shared = "scenario_overlay" in (state.options or {})
+            if project_shared:
+                shared.append(f"project {project_id}")
+        if stage == STAGE_GRAPH:
+            own_handoff = PipelineManager.handoff_dir(state.pipeline_id)
+            handoff = state.handoff_dir or own_handoff
+            if os.path.realpath(handoff) != os.path.realpath(own_handoff):
+                shared.append(f"handoff dir {handoff}")
         if not shared:
             return
         raise RuntimeError(
             f"resume lineage guard: the {stage} artifact of fork {state.pipeline_id} must be "
-            f"rebuilt ({reason}), but project {project_id} is shared with base pipeline "
-            f"{base_pid}; refusing to regenerate the base's ontology/graph in place. Fork the "
-            "scenario again from a healthy base, or set RESUME_LINEAGE_GUARDS=false to reuse "
-            "the shared artifacts knowingly."
+            f"rebuilt ({reason}), but its {' and '.join(shared)} "
+            f"{'are' if len(shared) > 1 else 'is'} shared with base pipeline "
+            f"{base_pid}; refusing to overwrite the base's {stage} artifacts in place. Fork "
+            "again from a healthy base, or set RESUME_LINEAGE_GUARDS=false to reuse the "
+            "shared artifacts knowingly."
         )
+
+    @staticmethod
+    def _store_lineage_map(state: "PipelineState", key: str, value: dict[str, str]) -> None:
+        """Write a durable lineage map into ``state.options``; drop the key when empty."""
+        if value:
+            state.options[key] = value
+        else:
+            state.options.pop(key, None)
 
     def _record_stage_lineage(self, state: "PipelineState", stage: str, reused: bool) -> None:
-        """INFRA-7: remember a recompute for the resume lineage guards.
+        """INFRA-7: remember a recompute (or a settled rebuild) for the lineage guards.
 
-        Adds ``stage`` to this attempt's recomputed set and, with the guards on,
-        updates the durable ``options.lineage_invalidated`` map: the stage's own
-        entry is cleared (rebuilt from current inputs) and every guarded
-        downstream stage is marked stale.  The map is saved with the stage's
-        completion, so the invalidation survives a failed downstream rebuild.
-        Pure in-memory bookkeeping; the caller does not swallow its errors
-        (the guard is an honesty check and fails closed).
+        A recompute adds ``stage`` to this attempt's recomputed set and, with
+        the guards on, updates the durable maps: the stage's own
+        ``lineage_invalidated`` / ``lineage_rebuilt`` entries are cleared
+        (rebuilt from current inputs), every guarded downstream stage is marked
+        stale and loses its rebuilt artifact.  A reuse settles the stage's
+        interrupted rebuild when the reused artifact is the rebuilt one.  The
+        maps are saved with the stage's completion, so the invalidation
+        survives a failed downstream rebuild.  Pure in-memory bookkeeping; the
+        caller does not swallow its errors (the guard is an honesty check and
+        fails closed).
         """
+        guards = bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True))
+        invalidated = state.options.get(run_shape.LINEAGE_INVALIDATED_OPTION)
+        rebuilt = state.options.get(run_shape.LINEAGE_REBUILT_OPTION)
         if reused:
+            if guards:
+                invalidated, rebuilt = run_shape.settle_reused_rebuild(invalidated, rebuilt, stage)
+                self._store_lineage_map(state, run_shape.LINEAGE_INVALIDATED_OPTION, invalidated)
+                self._store_lineage_map(state, run_shape.LINEAGE_REBUILT_OPTION, rebuilt)
             return
         self._attempt_recomputed().add(stage)
+        if not guards:
+            return
+        exemptions = run_shape.lineage_exemptions(state.options)
+        self._store_lineage_map(
+            state, run_shape.LINEAGE_INVALIDATED_OPTION,
+            run_shape.invalidate_downstream(invalidated, stage, exemptions=exemptions))
+        self._store_lineage_map(
+            state, run_shape.LINEAGE_REBUILT_OPTION,
+            run_shape.settle_rebuilt(rebuilt, stage, exemptions=exemptions))
+
+    def _record_lineage_artifact_replaced(self, state: "PipelineState", stage: str) -> None:
+        """INFRA-7: ``stage``'s artifact was just overwritten from current inputs.
+
+        ONTOLOGY reuse is keyed on ``project.ontology`` being present, not on
+        the stage bit, so its lineage bookkeeping cannot wait for
+        ``_complete_stage``: an attempt cut off in between would keep the
+        invalidation and refuse the fresh ontology on the next resume.  The
+        recompute is recorded (and persisted) as soon as the artifact is
+        saved; ``_complete_stage`` repeats it idempotently.  A crash before
+        this save only costs a redundant rebuild.
+        """
         if not bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
             return
-        invalidated = run_shape.invalidate_downstream(
-            state.options.get(run_shape.LINEAGE_INVALIDATED_OPTION),
-            stage,
-            exemptions=run_shape.lineage_exemptions(state.options),
-        )
-        if invalidated:
-            state.options[run_shape.LINEAGE_INVALIDATED_OPTION] = invalidated
-        else:
-            state.options.pop(run_shape.LINEAGE_INVALIDATED_OPTION, None)
+        self._record_stage_lineage(state, stage, reused=False)
+        PipelineManager.save(state)
+
+    @staticmethod
+    def _record_lineage_rebuild_started(state: "PipelineState", stage: str,
+                                        artifact_id: str) -> None:
+        """INFRA-7: an invalidated ``stage`` starts building ``artifact_id`` from current inputs.
+
+        REPORT reuse is keyed on a persisted report, not on the stage bit: a
+        report minted and published after the upstream recompute, whose
+        attempt ended before ``_complete_stage`` (a cancel or outage halt
+        raised from its final progress callback, a restart), must be reused on
+        the next resume rather than regenerated under a new id.  The minted id
+        goes into ``options.lineage_rebuilt``; any other report of the stage
+        (such as the stale one the simulation-id fallback lookup would find
+        when the minted report never reached disk) is still refused.  The
+        caller persists the state together with the minted id.
+        """
+        if not bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
+            return
+        PipelineOrchestrator._store_lineage_map(
+            state, run_shape.LINEAGE_REBUILT_OPTION,
+            run_shape.mark_rebuilt(
+                state.options.get(run_shape.LINEAGE_INVALIDATED_OPTION),
+                state.options.get(run_shape.LINEAGE_REBUILT_OPTION),
+                stage, artifact_id))
 
     def _record_stage_decision(self, state: "PipelineState", stage: str, reused: bool) -> None:
         """INFRA-7: typed reuse fact per stage + run.json provider stamp on recompute."""
@@ -13153,7 +13241,7 @@ class PipelineOrchestrator:
             _onto_refusal = (
                 self._lineage_refuses_reuse(state, STAGE_ONTOLOGY) if _reuse_ontology else None)
             if _onto_refusal:
-                self._forbid_shared_project_rebuild(state, STAGE_ONTOLOGY, project, _onto_refusal)
+                self._forbid_shared_fork_rebuild(state, STAGE_ONTOLOGY, project, _onto_refusal)
                 _reuse_ontology = False
             if _reuse_ontology:
                 upd(100, "复用已有本体…")
@@ -13221,6 +13309,9 @@ class PipelineOrchestrator:
                 project.analysis_summary = ontology.get("analysis_summary", "")
                 project.status = ProjectStatus.ONTOLOGY_GENERATED
                 ProjectManager.save_project(project)
+                # INFRA-7：本体复用以 project.ontology 存在为准（非阶段位）——新本体一落盘即结清其血统
+                # 失效项，否则在 _complete_stage 前被打断的 attempt 会让下次 resume 拒绝这份新本体。
+                self._record_lineage_artifact_replaced(state, STAGE_ONTOLOGY)
                 # T6.3: 把本体落到 handoff/ontology.json，供 artifact 深链。
                 # ONT-10: 原子写（对齐 actors.json 的 write_json_atomic 约定）——半写的
                 # ontology.json 会让 resume 校验静默强制重建；失败留 warning 而非无声吞掉。
@@ -13245,7 +13336,7 @@ class PipelineOrchestrator:
                 state, STAGE_GRAPH,
                 exempt=run_shape.graph_lineage_exempt(state.options)) if _reuse_graph else None
             if _graph_refusal:
-                self._forbid_shared_project_rebuild(state, STAGE_GRAPH, project, _graph_refusal)
+                self._forbid_shared_fork_rebuild(state, STAGE_GRAPH, project, _graph_refusal)
                 _reuse_graph = False
             _reuse_builder: Optional[GraphBuilderService] = None
             # I-4-3: 复用前先按产物清单校验 GRAPH 阶段的文件产物（communities.json 等）未被半写/篡改；
@@ -14071,13 +14162,15 @@ class PipelineOrchestrator:
                     existing_report = ReportManager.get_report_by_simulation(sim_state.simulation_id)
                 except Exception:
                     existing_report = None
-            # INFRA-7：报告必须绑定当前模拟，且 RUN 本 attempt 未重跑；否则铸新报告。
+            # INFRA-7：报告必须绑定当前模拟，且 RUN 未在其后重跑（本 attempt，或尚未结清的此前
+            # attempt——该 attempt 为重建铸出的报告除外）；否则铸新报告。
             if (existing_report is not None
                     and getattr(existing_report, "status", None) != ReportStatus.FAILED
                     and self._lineage_refuses_reuse(
                         state, STAGE_REPORT,
                         bound_ids=(getattr(existing_report, "simulation_id", None),
-                                   state.simulation_id))):
+                                   state.simulation_id),
+                        artifact_id=getattr(existing_report, "report_id", None))):
                 existing_report = None
             # ORCH-1: 复用前评估交付物本身。meta 说 COMPLETED 但全章占位/无 forecast.json 的
             # 报告若被复用，S1 健康门必再抛错 → resume 陷入「复用坏报告→健康门失败」死循环
@@ -14149,6 +14242,9 @@ class PipelineOrchestrator:
                 self._clear_report_attempt_artifacts(state)
                 report_id = f"report_{uuid.uuid4().hex[:12]}"
                 state.report_id = report_id
+                # INFRA-7：报告复用以已落盘报告为准（非阶段位）——记下本次铸出的报告是从当前上游重建的，
+                # 使发布后、阶段完成前被取消/熔断/重启打断的 attempt 下次复用它，而非再生成一份。
+                self._record_lineage_rebuild_started(state, STAGE_REPORT, report_id)
                 PipelineManager.save(state)
                 upd(5, "生成预测报告…")
                 # T4.6/T4.7: 情景报告 → 传情景标签 + base 模拟 id（反事实对比 scenario_diff）

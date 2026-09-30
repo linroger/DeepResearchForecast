@@ -334,8 +334,9 @@ def fork_question(
         # 否则本 attempt 的本体重算会被当作陈旧上游而重建共享图谱。
         options[SHARED_GRAPH_OPTION] = base_pipeline_id
     new_state.options = options
-    # INFRA-7：批次问题分叉是新准入——按分叉时刻的环境钉运行形状（origin=fork）。
-    PipelineOrchestrator._pin_run_shape(new_state, ORIGIN_FORK)
+    # INFRA-7：批次问题分叉是新准入——按分叉时刻的环境钉运行形状（origin=fork），并记下锚点的钉
+    # （复用的研究/图谱是在锚点的形状下建的）。
+    PipelineOrchestrator._pin_run_shape(new_state, ORIGIN_FORK, base_state=base_state)
 
     PipelineManager.ensure_dirs(new_id)
 

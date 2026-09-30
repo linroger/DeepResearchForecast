@@ -176,6 +176,25 @@ def test_lineage_refusal_rules():
     assert run_shape.lineage_refusal("graph", set(), invalidated=stale) is None
     assert run_shape.lineage_refusal("report", set(), bound_ids=("s", "s"),
                                      invalidated={"report": ""}) == "lineage_invalidated"
+    # The artifact the stage's rebuild produced from current inputs is exempt
+    # from the durable entry; any other (or an unnamed) artifact is not.
+    rebuilt = {"report": "report_new"}
+    assert run_shape.lineage_refusal(
+        "report", set(), bound_ids=("s", "s"), invalidated=stale,
+        artifact_id="report_new", rebuilt=rebuilt) is None
+    assert run_shape.lineage_refusal(
+        "report", set(), bound_ids=("s", "s"), invalidated=stale,
+        artifact_id="report_old", rebuilt=rebuilt) == "run_recomputed"
+    assert run_shape.lineage_refusal(
+        "report", set(), bound_ids=("s", "s"), invalidated=stale,
+        artifact_id=None, rebuilt=rebuilt) == "run_recomputed"
+    # Evidence from this attempt and the bound id still refuse the rebuilt id.
+    assert run_shape.lineage_refusal(
+        "report", {"run"}, bound_ids=("s", "s"), invalidated=stale,
+        artifact_id="report_new", rebuilt=rebuilt) == "run_recomputed"
+    assert run_shape.lineage_refusal(
+        "report", set(), bound_ids=("s1", "s2"), invalidated=stale,
+        artifact_id="report_new", rebuilt=rebuilt) == "simulation_id_mismatch"
 
 
 def test_durable_invalidation_walk():
@@ -204,6 +223,45 @@ def test_durable_invalidation_walk():
     assert run_shape.invalidate_downstream(None, "run") == {"report": "run_recomputed"}
     assert run_shape.invalidate_downstream({"report": "run_recomputed"}, "report") == {}
     assert run_shape.invalidate_downstream("junk", "ontology", exemptions=batch) == {}
+
+
+def test_rebuilt_artifact_bookkeeping():
+    stale = {"report": "run_recomputed"}
+    # A rebuild is recorded only for an invalidated stage and a real id; the
+    # newest rebuild replaces an earlier one.
+    assert run_shape.mark_rebuilt(stale, None, "report", "report_a") == {"report": "report_a"}
+    assert run_shape.mark_rebuilt(stale, {"report": "report_a"}, "report", "report_b") == {
+        "report": "report_b"}
+    assert run_shape.mark_rebuilt({}, None, "report", "report_a") == {}
+    assert run_shape.mark_rebuilt(stale, None, "report", "") == {}
+    # An upstream recompute drops the rebuilt artifacts built from its old output.
+    rebuilt = {"report": "report_a"}
+    assert run_shape.settle_rebuilt(rebuilt, "run") == {}
+    assert run_shape.settle_rebuilt(rebuilt, "research") == {}
+    assert run_shape.settle_rebuilt(rebuilt, "report") == {}
+    assert run_shape.settle_rebuilt(rebuilt, "ontology", exemptions={"graph": ("ontology",)}) == (
+        rebuilt)
+    assert rebuilt == {"report": "report_a"}  # input left untouched
+    # Reusing the rebuilt artifact finishes the rebuild; other reuses change nothing.
+    assert run_shape.settle_reused_rebuild(stale, rebuilt, "report") == ({}, {})
+    both = {"report": "run_recomputed", "graph": "research_recomputed"}
+    assert run_shape.settle_reused_rebuild(both, rebuilt, "run") == (both, rebuilt)
+    assert run_shape.settle_reused_rebuild(both, None, "report") == (both, {})
+
+
+def test_fork_base_record():
+    config = _config(GRAPH_MAX_ENTITIES=400, ACTOR_CAST_MAX=40)
+    base_pin = run_shape.pin(config, {"depth": "deep"}, origin="admission", pinned_at="t0")
+    config.GRAPH_MAX_ENTITIES = 123
+    fork_pin = run_shape.pin(config, {"depth": "deep", "max_rounds": 9}, origin="fork",
+                             pinned_at="t1")
+    assert run_shape.fork_base_record(base_pin, fork_pin, "pipe_base") == {
+        "pipeline_id": "pipe_base",
+        "sha256": base_pin["sha256"],
+        "identity_diff": {"GRAPH_MAX_ENTITIES": [400, 123], "max_rounds": [None, 9]},
+    }
+    assert run_shape.fork_base_record(None, fork_pin, "pipe_legacy") == {
+        "pipeline_id": "pipe_legacy", "sha256": None, "identity_diff": None}
 
 
 def test_resolved_carry_forward_and_restamp():
@@ -329,13 +387,24 @@ def test_scenario_fork_pins_origin_fork(roots, monkeypatch):
     _noop_run(monkeypatch)
     base = po.PipelineState(pipeline_id="pipe_rs_base", prompt="q", mode="full",
                             status="completed", graph_id="graph", project_id="proj")
+    po.PipelineOrchestrator._pin_run_shape(base, run_shape.ORIGIN_ADMISSION)
     po.PipelineManager.ensure_dirs(base.pipeline_id)
     po.PipelineManager.save(base)
+    # The environment changed since the base was admitted: the fork's own pin
+    # captures the new value, and discloses that its reused upstream stages
+    # were built under the base's.
+    monkeypatch.setattr(Config, "GRAPH_MAX_ENTITIES", 123, raising=False)
     fork = po.PipelineOrchestrator.fork(base.pipeline_id, {"label": "what-if", "max_rounds": 9})
     _join(fork.pipeline_id)
     pin = po.PipelineManager.load(fork.pipeline_id)["options"]["run_shape_v1"]
     assert pin["origin"] == run_shape.ORIGIN_FORK
     assert pin["identity"]["max_rounds"] == 9
+    assert pin["identity"]["GRAPH_MAX_ENTITIES"] == 123
+    assert pin["fork_base"] == {
+        "pipeline_id": base.pipeline_id,
+        "sha256": base.options["run_shape_v1"]["sha256"],
+        "identity_diff": {"GRAPH_MAX_ENTITIES": [400, 123], "max_rounds": [None, 9]},
+    }
 
 
 @pytest.mark.parametrize("flags_on", [True, False])
@@ -355,6 +424,9 @@ def test_batch_question_fork_pins_fork_and_declares_shared_graph(roots, monkeypa
     if flags_on:
         assert options["run_shape_v1"]["origin"] == run_shape.ORIGIN_FORK
         assert options[run_shape.SHARED_GRAPH_OPTION] == base.pipeline_id
+        # The anchor predates the pin: nothing to compare the fork's shape with.
+        assert options["run_shape_v1"]["fork_base"] == {
+            "pipeline_id": base.pipeline_id, "sha256": None, "identity_diff": None}
     else:
         assert "run_shape_v1" not in options
         assert run_shape.SHARED_GRAPH_OPTION not in options
@@ -483,14 +555,18 @@ class _Sentinel(RuntimeError):
 
 
 def _drive_full(monkeypatch, pid, *, research_reused, sim_graph_id="graph",
-                ontology_failures=0, options=None):
+                ontology_failures=0, ontology_completion_crashes=0, options=None,
+                handoff_dir=None):
     """Run the real ``_run`` over a resumed full pipeline whose every stage completed.
 
     Fakes stop the attempt with a named sentinel at the first expensive call:
     GRAPH_REBUILT (graph rebuild), PREPARE_REBUILT (new simulation) or
     PREPARE_REUSED (PREPARE reuse handed over to the RUN checks).  The first
-    ``ontology_failures`` ontology generations raise (a provider outage).  The
-    fakes stay installed, so ``resume(pid)`` runs a second attempt on them.
+    ``ontology_failures`` ontology generations raise (a provider outage); the
+    first ``ontology_completion_crashes`` completions of a regenerated
+    ontology crash after it was saved (a restart before ``_complete_stage``).
+    ``handoff_dir`` overrides the pipeline's own handoff directory.  The fakes
+    stay installed, so ``resume(pid)`` runs a second attempt on them.
     """
     calls: list[str] = []
     _real_run_research_only(monkeypatch, calls)
@@ -515,6 +591,16 @@ def _drive_full(monkeypatch, pid, *, research_reused, sim_graph_id="graph",
                     "analysis_summary": "regenerated"}
 
     monkeypatch.setattr(po, "OntologyGenerator", FakeOntologyGenerator)
+    real_complete_stage = po.PipelineOrchestrator._complete_stage
+    completion_crashes = {"left": ontology_completion_crashes}
+
+    def complete_stage(self, state, stage, message="完成", *, reused=False):
+        if stage == po.STAGE_ONTOLOGY and not reused and completion_crashes["left"] > 0:
+            completion_crashes["left"] -= 1
+            raise _Sentinel("ONTOLOGY_COMPLETION_CRASHED")
+        return real_complete_stage(self, state, stage, message, reused=reused)
+
+    monkeypatch.setattr(po.PipelineOrchestrator, "_complete_stage", complete_stage)
 
     class FakeGraphBuilder:
         def __init__(self, **kwargs):
@@ -556,7 +642,7 @@ def _drive_full(monkeypatch, pid, *, research_reused, sim_graph_id="graph",
                              status="running", project_id="proj", graph_id="graph",
                              simulation_id="sim_old", report_id="report_old",
                              options=dict(options or {}))
-    state.handoff_dir = po.PipelineManager.handoff_dir(pid)
+    state.handoff_dir = handoff_dir or po.PipelineManager.handoff_dir(pid)
     state.stages = {name: po.StageState(name=name, status="completed", progress=100)
                     for name in po.STAGE_BANDS}
     if research_reused:
@@ -624,6 +710,29 @@ def test_failed_ontology_rebuild_is_not_reused_on_the_next_attempt(roots, monkey
     decisions = [(row["stage"], row["reused"])
                  for row in resumed["options"]["stage_reuse_v1"]]
     assert decisions[-2:] == [(po.STAGE_RESEARCH, True), (po.STAGE_ONTOLOGY, False)]
+    assert resumed["options"]["lineage_invalidated"] == _STALE_AFTER_RESEARCH
+
+
+def test_saved_ontology_is_reused_when_its_attempt_ends_before_completion(roots, monkeypatch):
+    """Research recompute -> ontology regenerated and saved -> crash -> resume reuses it."""
+    pid = "pipe_rs_lineage_onto_saved"
+    run = _drive_full(monkeypatch, pid, research_reused=False, ontology_completion_crashes=1)
+    assert run.state.status == "failed" and run.state.error == "ONTOLOGY_COMPLETION_CRASHED"
+    assert run.project.ontology["entity_types"] == [{"name": "Agency"}], "new ontology saved"
+    # The saved ontology left the invalidation map at once; its downstream stays stale.
+    assert po.PipelineManager.load(pid)["options"]["lineage_invalidated"] == (
+        _STALE_AFTER_RESEARCH)
+
+    resumed = _resume_attempt(pid)
+    assert len(run.calls) == 1, "research is reused on the next attempt"
+    assert resumed["status"] == "failed" and resumed["error"] == "GRAPH_REBUILT"
+    assert len(run.ontology_calls) == 1, "the fresh ontology is reused, not regenerated"
+    notes = resumed["options"]["stage_notes"]
+    assert notes[po.STAGE_ONTOLOGY] == ["reuse_refused: research_recomputed"]
+    assert notes[po.STAGE_GRAPH] == ["reuse_refused: research_recomputed"]
+    decisions = [(row["stage"], row["reused"])
+                 for row in resumed["options"]["stage_reuse_v1"]]
+    assert decisions[-2:] == [(po.STAGE_RESEARCH, True), (po.STAGE_ONTOLOGY, True)]
     assert resumed["options"]["lineage_invalidated"] == _STALE_AFTER_RESEARCH
 
 
@@ -708,6 +817,29 @@ def test_fork_owning_its_project_rebuilds_normally(roots, monkeypatch):
     assert len(run.ontology_calls) == 1
 
 
+def test_fork_graph_rebuild_never_writes_into_the_base_handoff(roots, monkeypatch):
+    """A batch question fork (own project, base handoff) fails closed at GRAPH."""
+    _save_base("pipe_rs_batch_anchor", "proj_anchor")
+    base_handoff = po.PipelineManager.handoff_dir("pipe_rs_batch_anchor")
+    os.makedirs(base_handoff, exist_ok=True)
+    communities = os.path.join(base_handoff, "communities.json")
+    with open(communities, "w", encoding="utf-8") as fh:
+        fh.write('{"communities": ["anchor"]}')
+    run = _drive_full(monkeypatch, "pipe_rs_batch_fork", research_reused=False,
+                      handoff_dir=base_handoff,
+                      options={"base_pipeline_id": "pipe_rs_batch_anchor",
+                               run_shape.SHARED_GRAPH_OPTION: "pipe_rs_batch_anchor"})
+    assert run.state.status == "failed"
+    error = run.state.error
+    assert "graph artifact" in error and "research_recomputed" in error
+    # Only the handoff is shared: the fork owns its project.
+    assert (f"but its handoff dir {base_handoff} is shared with base pipeline "
+            "pipe_rs_batch_anchor") in error
+    assert len(run.ontology_calls) == 1, "the fork still regenerates its own ontology"
+    with open(communities, encoding="utf-8") as fh:
+        assert fh.read() == '{"communities": ["anchor"]}', "base graph artifacts untouched"
+
+
 def test_graph_guard_honours_the_batch_shared_graph_declaration(monkeypatch):
     orch = po.PipelineOrchestrator()
     orch._attempt_recomputed().add(po.STAGE_ONTOLOGY)
@@ -751,6 +883,69 @@ def test_report_reuse_kept_after_run_recompute_only_with_guards_off(monkeypatch,
     assert result.start_calls == [result.old_id]
     assert result.report_generations == []
     assert result.state.report_id == "report_existing"
+
+
+@pytest.mark.parametrize("interrupt", ["cancel_after_publish", "complete_stage_crash"])
+def test_report_published_before_stage_completion_is_reused_on_resume(
+        monkeypatch, tmp_path, interrupt):
+    """RUN re-executed -> report minted and published -> attempt cut off -> reused.
+
+    The cancel is raised from the report's final progress callback (as
+    ReportAgent.generate_report does after saving the completed report); the
+    crash models a restart before ``_complete_stage(REPORT)``.
+    """
+    from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
+
+    result = _exercise_prepare_run_resume(
+        monkeypatch, tmp_path, rebuild_prepare=False, corrupt_run=True,
+        report_interrupt=interrupt)
+    minted = result.state.report_id
+    assert result.state.status == (
+        "cancelled" if interrupt == "cancel_after_publish" else "failed")
+    assert result.report_generations == [result.old_id]
+    assert minted not in (None, "report_existing")
+    persisted = po.PipelineManager.load(result.pid)
+    assert persisted["report_id"] == minted
+    assert persisted["options"]["lineage_invalidated"] == {po.STAGE_REPORT: "run_recomputed"}
+    assert persisted["options"]["lineage_rebuilt"] == {po.STAGE_REPORT: minted}
+
+    resumed = _resume_attempt(result.pid)
+    assert resumed["status"] == "completed", resumed.get("error")
+    assert result.report_generations == [result.old_id], "no second report generation"
+    assert resumed["report_id"] == minted, "the published report_id is kept"
+    assert resumed["options"]["stage_notes"][po.STAGE_REPORT] == [
+        "reuse_refused: run_recomputed"]
+    for key in ("lineage_invalidated", "lineage_rebuilt"):
+        assert key not in resumed["options"]
+    decisions = [(row["stage"], row["reused"]) for row in resumed["options"]["stage_reuse_v1"]]
+    assert decisions[-1] == (po.STAGE_REPORT, True)
+
+
+def test_minted_report_that_never_reached_disk_keeps_the_stale_report_refused(
+        monkeypatch, tmp_path):
+    """Cancelled right after the mint: the simulation lookup's stale report stays refused."""
+    from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
+
+    result = _exercise_prepare_run_resume(
+        monkeypatch, tmp_path, rebuild_prepare=False, corrupt_run=True,
+        report_interrupt="cancel_before_meta")
+    minted = result.state.report_id
+    assert result.state.status == "cancelled"
+    assert result.report_generations == []
+    assert minted not in (None, "report_existing")
+    assert po.PipelineManager.load(result.pid)["options"]["lineage_rebuilt"] == {
+        po.STAGE_REPORT: minted}
+
+    resumed = _resume_attempt(result.pid)
+    assert resumed["status"] == "completed", resumed.get("error")
+    # The minted id never resolved, so the lookup fell back to the simulation's
+    # newest report: the stale one, still refused.
+    assert result.report_generations == [result.old_id]
+    assert resumed["report_id"] not in (minted, "report_existing")
+    assert resumed["options"]["stage_notes"][po.STAGE_REPORT] == [
+        "reuse_refused: run_recomputed"] * 2
+    for key in ("lineage_invalidated", "lineage_rebuilt"):
+        assert key not in resumed["options"]
 
 
 def _stamped_run_manifest(monkeypatch):

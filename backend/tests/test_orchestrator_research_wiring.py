@@ -359,6 +359,7 @@ def test_report_health_hard_fails_when_final_audit_missing(monkeypatch, tmp_path
 import json  # noqa: E402
 import os  # noqa: E402
 import re  # noqa: E402
+import threading  # noqa: E402
 
 from app.services import pipeline_orchestrator as _po  # noqa: E402
 
@@ -720,7 +721,7 @@ def _exercise_prepare_run_resume(
         monkeypatch, tmp_path, *, rebuild_prepare, corrupt_run=False,
         corrupt_prepare_seal=False, report_simulation_id=None, lineage_flags=True,
         report_preflight_failures=0, real_run_manifest=False, extra_options=None,
-        prior_run_manifest=None):
+        prior_run_manifest=None, report_interrupt=None):
     """Run the real orchestrator state machine with every external service faked.
 
     The persisted report was generated for ``report_simulation_id`` (default:
@@ -732,7 +733,14 @@ def _exercise_prepare_run_resume(
     outage).  ``real_run_manifest`` keeps the real run.json writers, and
     ``run_manifest_at_start`` then holds run.json's simulation block as RUN
     starts each simulation; ``prior_run_manifest`` is an earlier attempt's
-    run.json.  The returned ``pid`` can be resumed for a second attempt while
+    run.json.  ``report_interrupt`` ends the first report generation early,
+    once: ``"cancel_before_meta"`` cancels the pipeline right after the new
+    report_id is minted (the report never reaches disk);
+    ``"cancel_after_publish"`` publishes the report and then cancels from its
+    final progress callback; ``"complete_stage_crash"`` publishes it and
+    crashes in ``_complete_stage(REPORT)``.  With it set, the report store is
+    keyed by id and the simulation lookup returns the newest report of the
+    simulation.  The returned ``pid`` can be resumed for a second attempt while
     the fakes stay installed.
     """
     pipeline_root = tmp_path / "pipelines"
@@ -1060,16 +1068,24 @@ def _exercise_prepare_run_resume(
     existing_report = SimpleNamespace(
         report_id="report_existing", status=_po.ReportStatus.COMPLETED,
         simulation_id=report_simulation_id or old_id)
+    published_reports = {"report_existing": existing_report}
+    if report_interrupt is None:
+        def get_report(cls, report_id):
+            return existing_report
+
+        def get_report_by_simulation(cls, simulation_id):
+            return None
+    else:
+        def get_report(cls, report_id):
+            return published_reports.get(report_id)
+
+        def get_report_by_simulation(cls, simulation_id):
+            matches = [report for report in published_reports.values()
+                       if report.simulation_id == simulation_id]
+            return matches[-1] if matches else None
+    monkeypatch.setattr(_po.ReportManager, "get_report", classmethod(get_report))
     monkeypatch.setattr(
-        _po.ReportManager,
-        "get_report",
-        classmethod(lambda cls, report_id: existing_report),
-    )
-    monkeypatch.setattr(
-        _po.ReportManager,
-        "get_report_by_simulation",
-        classmethod(lambda cls, simulation_id: None),
-    )
+        _po.ReportManager, "get_report_by_simulation", classmethod(get_report_by_simulation))
     monkeypatch.setattr(
         _po.ReportManager,
         "_get_report_folder",
@@ -1077,12 +1093,39 @@ def _exercise_prepare_run_resume(
     )
 
     report_generations = []
+    interrupts = {"pending": report_interrupt}
+
+    def take_interrupt(kind):
+        if interrupts["pending"] != kind:
+            return False
+        interrupts["pending"] = None
+        return True
+
+    def cancel_pipeline():
+        event = threading.Event()
+        event.set()
+        monkeypatch.setitem(_po.PipelineOrchestrator._cancel_events, pid, event)
 
     def generate_stage_report(self, state, agent, simulation_id, *, report_id,
                               progress_callback):
         report_generations.append(simulation_id)
-        return SimpleNamespace(report_id=report_id, status=_po.ReportStatus.COMPLETED,
-                               simulation_id=simulation_id)
+        report = SimpleNamespace(report_id=report_id, status=_po.ReportStatus.COMPLETED,
+                                 simulation_id=simulation_id)
+        published_reports[report_id] = report
+        if take_interrupt("cancel_after_publish"):
+            # ReportAgent.generate_report saves the completed report, then calls
+            # progress_callback('completed', 100, ...): the stage updater raises
+            # PipelineCancelled there on a user cancel.
+            cancel_pipeline()
+            progress_callback("completed", 100, "report generated")
+        return report
+
+    real_clear_report_attempt = _po.PipelineOrchestrator._clear_report_attempt_artifacts
+
+    def clear_report_attempt(state):
+        real_clear_report_attempt(state)
+        if take_interrupt("cancel_before_meta"):
+            cancel_pipeline()  # the next stage update, right after the mint, raises
 
     # Keep this transition test focused on durable stage contracts, not provider,
     # telemetry, or final-report quality systems.
@@ -1108,6 +1151,17 @@ def _exercise_prepare_run_resume(
         del stubs["_write_run_manifest"], stubs["_update_manifest"]
     for name, replacement in stubs.items():
         monkeypatch.setattr(_po.PipelineOrchestrator, name, replacement)
+    monkeypatch.setattr(_po.PipelineOrchestrator, "_clear_report_attempt_artifacts",
+                        staticmethod(clear_report_attempt))
+    real_complete_stage = _po.PipelineOrchestrator._complete_stage
+
+    def complete_stage(self, state, stage, message="完成", *, reused=False):
+        if stage == _po.STAGE_REPORT and not reused and take_interrupt("complete_stage_crash"):
+            raise RuntimeError("backend restarted before the REPORT stage completed")
+        return real_complete_stage(self, state, stage, message, reused=reused)
+
+    monkeypatch.setattr(_po.PipelineOrchestrator, "_complete_stage", complete_stage)
+
     class FakeReportAgent(_po.ReportAgent):
         # Keeps the class-level helpers (the reuse-path ledger repair calls
         # them) while skipping the real agent's service construction.

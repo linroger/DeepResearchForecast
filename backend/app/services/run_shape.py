@@ -19,8 +19,11 @@ was admitted with (the second admission snapshot next to the orchestrator's
 ``lineage_refusal`` decides whether a stage may reuse its artifact given what
 was recomputed earlier in the same attempt or, through the durable
 ``lineage_invalidated`` map kept by ``invalidate_downstream``, in an earlier
-attempt whose rebuild never finished.  The orchestrator owns the thin hooks
-that call these helpers; nothing here does I/O.
+attempt whose rebuild never finished.  The companion ``lineage_rebuilt`` map
+names the artifact such a rebuild already produced from current inputs, so an
+attempt cut off after publishing it (before the stage completed) reuses it
+instead of regenerating it.  The orchestrator owns the thin hooks that call
+these helpers; nothing here does I/O.
 """
 
 from __future__ import annotations
@@ -100,6 +103,13 @@ _PASS_THROUGH_UPSTREAM: dict[str, tuple[str, ...]] = {"run": ("prepare",)}
 # It outlives the attempt, so a rebuild that fails (the usual reason a run is
 # resumed) cannot hand the stale artifact back to the next attempt.
 LINEAGE_INVALIDATED_OPTION = "lineage_invalidated"
+# ``state.options`` key of the durable map ``{stage: artifact_id}``: for a stage
+# still listed in ``lineage_invalidated``, the artifact its rebuild started
+# producing from current inputs (REPORT: the minted report_id).  Exactly that
+# artifact is exempt from the stored refusal; any older one (for example a
+# report the simulation-id fallback lookup finds) is still refused.  Entries
+# only exist for invalidated stages and are dropped with them.
+LINEAGE_REBUILT_OPTION = "lineage_rebuilt"
 # The id each stage's reused artifact must be bound to, named for the refusal
 # reason ("graph_id_mismatch", "simulation_id_mismatch").
 _BOUND_ID_LABEL: dict[str, str] = {
@@ -275,6 +285,8 @@ def lineage_refusal(
     bound_ids: Optional[tuple[Any, Any]] = None,
     exempt: Iterable[str] = (),
     invalidated: Optional[Mapping[str, Any]] = None,
+    artifact_id: Any = None,
+    rebuilt: Optional[Mapping[str, Any]] = None,
 ) -> Optional[str]:
     """Why ``stage`` must not reuse its artifact this attempt, or None.
 
@@ -284,9 +296,12 @@ def lineage_refusal(
     and refuses.  ``exempt`` lists upstream stages whose recompute is a
     declared design choice rather than staleness.  ``invalidated`` is the
     durable ``lineage_invalidated`` map: a stage still listed there was made
-    stale in an earlier attempt and refuses with the stored reason.  Evidence
-    from this attempt is reported first, so a same-attempt refusal names its
-    direct cause.
+    stale in an earlier attempt and refuses with the stored reason, unless
+    ``artifact_id`` is the artifact ``rebuilt`` (the durable
+    ``lineage_rebuilt`` map) records for the stage, i.e. the one its rebuild
+    produced from current inputs.  An unset ``artifact_id`` never matches.
+    Evidence from this attempt is reported first, so a same-attempt refusal
+    names its direct cause.
     """
     if bound_ids is not None:
         bound, current = bound_ids
@@ -298,7 +313,9 @@ def lineage_refusal(
         if upstream in recomputed_set and upstream not in skipped:
             return f"{upstream}_recomputed"
     if isinstance(invalidated, Mapping) and stage in invalidated:
-        return str(invalidated[stage] or "lineage_invalidated")
+        fresh_id = rebuilt.get(stage) if isinstance(rebuilt, Mapping) else None
+        if not (artifact_id and fresh_id and str(artifact_id) == str(fresh_id)):
+            return str(invalidated[stage] or "lineage_invalidated")
     return None
 
 
@@ -345,6 +362,12 @@ def downstream_stages(
     return [name for name in PIPELINE_STAGES if name in reached]
 
 
+def _str_map(value: Any) -> dict[str, str]:
+    if not isinstance(value, Mapping):
+        return {}
+    return {str(key): str(item) for key, item in value.items()}
+
+
 def invalidate_downstream(
     invalidated: Any,
     stage: str,
@@ -356,18 +379,85 @@ def invalidate_downstream(
     ``stage`` itself is rebuilt from current inputs, so its entry is dropped;
     every guarded downstream stage is added with ``<stage>_recomputed`` unless
     it is already listed (the first, root-cause reason is kept).  An entry is
-    cleared only here, when its own stage is recomputed.
+    cleared here, when its own stage is recomputed, or by
+    ``settle_reused_rebuild`` when the stage reuses its rebuilt artifact.
     """
-    out = (
-        {str(key): str(value) for key, value in invalidated.items()}
-        if isinstance(invalidated, Mapping) else {}
-    )
+    out = _str_map(invalidated)
     out.pop(stage, None)
     reason = f"{stage}_recomputed"
     for downstream in downstream_stages(stage, exemptions=exemptions):
         if downstream in LINEAGE_UPSTREAM:
             out.setdefault(downstream, reason)
     return out
+
+
+def settle_rebuilt(
+    rebuilt: Any,
+    stage: str,
+    *,
+    exemptions: Optional[Mapping[str, Iterable[str]]] = None,
+) -> dict[str, str]:
+    """The durable ``lineage_rebuilt`` map after ``stage`` was recomputed.
+
+    ``stage``'s own entry goes with its invalidation (``invalidate_downstream``
+    drops that too).  Every downstream entry is dropped as well: the artifact
+    it names was built from the output ``stage`` just replaced, so the
+    downstream invalidation applies to it again.
+    """
+    out = _str_map(rebuilt)
+    for name in (stage, *downstream_stages(stage, exemptions=exemptions)):
+        out.pop(name, None)
+    return out
+
+
+def mark_rebuilt(
+    invalidated: Any, rebuilt: Any, stage: str, artifact_id: Any,
+) -> dict[str, str]:
+    """The durable ``lineage_rebuilt`` map once ``stage`` starts rebuilding ``artifact_id``.
+
+    Recorded only while ``stage`` is invalidated (otherwise nothing refuses
+    its artifacts) and only for a real id; any earlier rebuild of the stage is
+    replaced, because only the newest one was built from the current inputs.
+    """
+    out = _str_map(rebuilt)
+    if artifact_id and isinstance(invalidated, Mapping) and stage in invalidated:
+        out[stage] = str(artifact_id)
+    return out
+
+
+def settle_reused_rebuild(
+    invalidated: Any, rebuilt: Any, stage: str,
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Both durable maps after ``stage`` completed by reusing an artifact.
+
+    A stage listed in ``rebuilt`` passes its guard only with the artifact
+    named there, so completing it by reuse finishes that rebuild: the stage's
+    entry leaves both maps.  A stage without a rebuilt entry changes nothing.
+    """
+    stale = _str_map(invalidated)
+    fresh = _str_map(rebuilt)
+    if stage in fresh:
+        stale.pop(stage, None)
+        fresh.pop(stage, None)
+    return stale, fresh
+
+
+def fork_base_record(base_pin: Any, fork_pin: Any, base_pipeline_id: Any) -> dict[str, Any]:
+    """How a fork's pin relates to its base pipeline's pin.
+
+    A fork captures the ambient knobs at fork time but reuses upstream
+    artifacts (research, graph, and for a scenario fork the ontology) that the
+    base built under the base's pin.  ``identity_diff`` (``{knob: [base,
+    fork]}``) discloses where the two differ, so the mixed shape of the reused
+    stages is visible.  A base admitted before the pin existed has nothing to
+    compare: ``sha256`` and ``identity_diff`` are then None.
+    """
+    base = base_pin if isinstance(base_pin, Mapping) else None
+    return {
+        "pipeline_id": str(base_pipeline_id) if base_pipeline_id else None,
+        "sha256": base.get("sha256") if base is not None else None,
+        "identity_diff": diff(base, fork_pin)["identity"] if base is not None else None,
+    }
 
 
 def carry_forward_resolved(prior: Any, fresh: Any) -> dict[str, Any]:
