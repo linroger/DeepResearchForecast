@@ -16,9 +16,19 @@ Graph export hits the Zep API (read-only) and respects the same 429
 retry-after handling as the app. Use --skip-graph to re-export everything
 else without network calls.
 
+Language variants: a report or research dossier that has a published translation
+(report: the variant passes the publication audit; dossier: its translation status is
+"available" for the current source bytes) is exported beside the primary as
+report.<lang>.md / dossier.<lang>.md, and meta.json maps each language to its file
+(``report_languages`` / ``dossier_languages``).
+
 Usage:
     cd backend && uv run python scripts/export_demo_site_data.py [--skip-graph] [--only RUN_KEY]
     cd backend && uv run python scripts/export_demo_site_data.py --only RUN_KEY --research-log-only
+    cd backend && uv run python scripts/export_demo_site_data.py --only RUN_KEY --reports-only
+    # read the graph through a running backend instead of opening the graph store
+    cd backend && uv run python scripts/export_demo_site_data.py --only RUN_KEY \
+        --graph-api http://127.0.0.1:5001
 """
 
 from __future__ import annotations
@@ -60,7 +70,13 @@ RUNS = {
     # added 2026-07-16 — MiniMax run with additive decision-channel simulation,
     # forecast-data charts (no source-quality), and groupable metric trajectories
     "grid-storage-2040": "pipe_0e1b84d2682a",
+    # added 2026-09-19 — first completed GLM-5.3 run (Chinese report, English variant)
+    "datacenter-2030": "pipe_1ee2fae33f8c",
+    # added 2026-09-29 — GLM-5.3 run with the per-round reply step; English report
+    # with a published Chinese variant
+    "quantum-2040": "pipe_6c4190b31f0b",
 }
+LANGUAGES = ("en", "zh")
 
 PLACEHOLDER_MARKER = "本章节生成失败"
 REQUIRED_STAGES = ("research", "ontology", "graph", "prepare", "run", "report")
@@ -456,28 +472,44 @@ def copy_markdown_assets(
     source_dir: str,
     output_dir: str,
     destination_namespace: str,
+    retained_sha256: dict | None = None,
 ) -> list[str]:
-    """Copy all safe local chart links into one isolated static-site namespace."""
-    namespace = _validate_namespace(destination_namespace, "asset namespace")
-    paths = _markdown_asset_paths(markdown)
-    output_assets = os.path.join(output_dir, namespace)
-    if os.path.isdir(output_assets):
-        shutil.rmtree(output_assets)
+    """Copy all safe local chart links into one isolated static-site namespace.
 
+    Every referenced asset is resolved before the namespace is replaced, so a
+    missing chart fails the export without deleting the published ones.
+    ``retained_sha256`` (the published manifest, for a refresh) keeps a published
+    chart whose source file is gone, but only while its bytes match the manifest.
+    """
+    namespace = _validate_namespace(destination_namespace, "asset namespace")
     source_root = os.path.realpath(source_dir)
-    exported = []
-    for relative_path in paths:
+    plan = []
+    for relative_path in _markdown_asset_paths(markdown):
         source = os.path.realpath(os.path.join(source_root, relative_path))
         if os.path.commonpath([source, source_root]) != source_root:
             raise ValueError(f"unsafe local Markdown asset: {relative_path}")
-        if not os.path.isfile(source):
-            raise FileNotFoundError(f"referenced Markdown asset is missing: {relative_path}")
         output_relative = f"{namespace}/{os.path.basename(relative_path)}"
-        destination = os.path.join(output_dir, output_relative)
-        os.makedirs(os.path.dirname(destination), exist_ok=True)
-        _copy_static_asset(source, destination)
-        exported.append(output_relative)
-    return exported
+        published = os.path.join(output_dir, output_relative)
+        expected = (retained_sha256 or {}).get(output_relative)
+        if os.path.isfile(source):
+            plan.append((output_relative, source))
+        elif expected and os.path.isfile(published) and _sha256_file(published) == expected:
+            plan.append((output_relative, published))
+        else:
+            raise FileNotFoundError(f"referenced Markdown asset is missing: {relative_path}")
+
+    output_assets = os.path.join(output_dir, namespace)
+    staging = output_assets + ".staging"
+    if os.path.isdir(staging):
+        shutil.rmtree(staging)
+    for output_relative, source in plan:
+        os.makedirs(staging, exist_ok=True)
+        _copy_static_asset(source, os.path.join(staging, os.path.basename(output_relative)))
+    if os.path.isdir(output_assets):
+        shutil.rmtree(output_assets)
+    if plan:
+        os.replace(staging, output_assets)
+    return [output_relative for output_relative, _source in plan]
 
 
 def rebase_markdown_assets(
@@ -500,13 +532,19 @@ def rebase_markdown_assets(
     return MARKDOWN_LINK_RE.sub(_replace, markdown or "")
 
 
-def copy_report_assets(markdown: str, report_dir: str, output_dir: str) -> list[str]:
+def copy_report_assets(
+    markdown: str,
+    report_dir: str,
+    output_dir: str,
+    retained_sha256: dict | None = None,
+) -> list[str]:
     """Copy report-local chart assets, removing stale report charts."""
     return copy_markdown_assets(
         markdown,
         report_dir,
         output_dir,
         destination_namespace="charts",
+        retained_sha256=retained_sha256,
     )
 
 
@@ -600,12 +638,35 @@ def rebuild_graph(key: str, out_dir: str) -> str:
     return graph_id
 
 
-def export_graph(graph_id: str) -> dict:
-    """Fetch nodes/edges from Zep and trim to what the site renderer needs."""
-    from app.services.graph_builder import GraphBuilderService
+def export_graph(graph_id: str, graph_api: str | None = None) -> dict:
+    """Fetch nodes/edges and trim to what the site renderer needs.
 
-    builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
-    data = builder.get_graph_data(graph_id)
+    ``graph_api`` (e.g. http://127.0.0.1:5001) reads the graph through a running
+    backend's /api/graph/data endpoint, so the export never opens the embedded
+    graph store that the backend process owns.
+    """
+    if graph_api:
+        import urllib.error
+        import urllib.parse
+        import urllib.request
+
+        url = (
+            graph_api.rstrip("/") + "/api/graph/data/"
+            + urllib.parse.quote(graph_id, safe="") + "?full=true"
+        )
+        try:
+            with urllib.request.urlopen(url, timeout=120) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            raise RuntimeError(f"graph API returned HTTP {exc.code} for {graph_id}") from exc
+        if not payload.get("success"):
+            raise RuntimeError(f"graph API error for {graph_id}: {payload.get('error')}")
+        data = payload.get("data") or {}
+    else:
+        from app.services.graph_builder import GraphBuilderService
+
+        builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
+        data = builder.get_graph_data(graph_id)
     nodes = [{
         "id": n["uuid"],
         "name": n.get("name") or "",
@@ -623,11 +684,240 @@ def export_graph(graph_id: str) -> dict:
     return {"nodes": nodes, "links": links}
 
 
+def _markdown_language(markdown: str) -> str | None:
+    """'en' / 'zh' for an English or Chinese report, else None."""
+    from app.services.report_agent import ReportAgent
+
+    source_lang, _target, _name = ReportAgent._detect_translation_target(markdown or "")
+    return source_lang
+
+
+def published_report_variants(
+    report_id: str, report_dir: str, primary_lang: str | None,
+) -> dict:
+    """{lang: markdown} for report translations that pass the publication audit.
+
+    Placeholder sections are stripped exactly like the primary report.  A variant
+    that is not publishable (missing, failed or stale audit) is never exported.
+    """
+    from app.services.report_agent import ReportManager
+
+    previous_root = ReportManager.REPORTS_DIR
+    ReportManager.REPORTS_DIR = os.path.join(UPLOADS, "reports")
+    try:
+        variants = {}
+        for lang in LANGUAGES:
+            if lang == primary_lang:
+                continue
+            path = os.path.join(report_dir, f"full_report.{lang}.md")
+            if not os.path.isfile(path) or not ReportManager.is_publishable(report_id, lang):
+                continue
+            with open(path, encoding="utf-8") as f:
+                variants[lang] = strip_placeholder_sections(f.read())
+        return variants
+    finally:
+        ReportManager.REPORTS_DIR = previous_root
+
+
+def published_dossier_variants(handoff: str, primary_lang: str | None) -> dict:
+    """{lang: markdown} for research-dossier translations bound to the current source.
+
+    Requires the translation status "available" for the current research_report.md
+    bytes and a hard-passed audit whose fingerprint matches the variant bytes.
+    """
+    source = os.path.join(handoff, "research_report.md")
+    if not os.path.isfile(source):
+        return {}
+    source_sha = _sha256_file(source)
+    variants = {}
+    for lang in LANGUAGES:
+        if lang == primary_lang:
+            continue
+        variant = os.path.join(handoff, f"research_report.{lang}.md")
+        status = _read_json(os.path.join(handoff, f"research_report.translation.{lang}.json")) or {}
+        audit = _read_json(os.path.join(handoff, f"research_report.final_audit.{lang}.json")) or {}
+        if not (
+            os.path.isfile(variant)
+            and status.get("status") == "available"
+            and status.get("source_sha256") == source_sha
+            and audit.get("hard_passed") is True
+            and audit.get("markdown_sha256") == _sha256_file(variant)
+        ):
+            continue
+        with open(variant, encoding="utf-8") as f:
+            variants[lang] = f.read()
+    return variants
+
+
+def _write_language_set(
+    out: str,
+    stem: str,
+    primary_md: str,
+    variants: dict,
+    primary_lang: str | None,
+) -> dict:
+    """Write <stem>.md plus <stem>.<lang>.md; return {lang: file name}."""
+    with open(os.path.join(out, f"{stem}.md"), "w", encoding="utf-8") as f:
+        f.write(primary_md)
+    languages = {primary_lang or "und": f"{stem}.md"}
+    for lang, markdown in sorted(variants.items()):
+        name = f"{stem}.{lang}.md"
+        with open(os.path.join(out, name), "w", encoding="utf-8") as f:
+            f.write(markdown)
+        languages[lang] = name
+    for lang in LANGUAGES:  # drop variants that are no longer published
+        stale = os.path.join(out, f"{stem}.{lang}.md")
+        if lang not in languages and os.path.isfile(stale):
+            os.remove(stale)
+    return languages
+
+
+def export_dossier(
+    key: str, handoff: str, out: str, retained_sha256: dict | None = None,
+) -> tuple[list, dict]:
+    """Export dossier.md (+ published translations) and their research charts."""
+    with open(os.path.join(handoff, "research_report.md"), encoding="utf-8") as f:
+        dossier_md = f.read()
+    primary_lang = _markdown_language(dossier_md)
+    variants = published_dossier_variants(handoff, primary_lang)
+    # One copy for every language: the asset namespace is rebuilt from scratch, so
+    # copying per language would delete the charts another language references.
+    assets = copy_markdown_assets(
+        "\n\n".join([dossier_md, *variants.values()]),
+        handoff,
+        out,
+        destination_namespace="research-charts",
+        retained_sha256=retained_sha256,
+    )
+    rebased = {
+        lang: rebase_markdown_assets(markdown, key, destination_namespace="research-charts")
+        for lang, markdown in variants.items()
+    }
+    languages = _write_language_set(
+        out,
+        "dossier",
+        rebase_markdown_assets(dossier_md, key, destination_namespace="research-charts"),
+        rebased,
+        primary_lang,
+    )
+    return assets, languages
+
+
+def export_report(
+    key: str, report_id: str, out: str, retained_sha256: dict | None = None,
+) -> tuple[list, dict]:
+    """Export report.md (+ published translations) and their charts."""
+    report_dir = os.path.join(UPLOADS, "reports", report_id)
+    with open(os.path.join(report_dir, "full_report.md"), encoding="utf-8") as f:
+        cleaned = strip_placeholder_sections(f.read())
+    primary_lang = _markdown_language(cleaned)
+    variants = published_report_variants(report_id, report_dir, primary_lang)
+    assets = copy_report_assets(
+        "\n\n".join([cleaned, *variants.values()]), report_dir, out, retained_sha256
+    )
+    languages = _write_language_set(
+        out,
+        "report",
+        rebase_report_assets(cleaned, key),
+        {lang: rebase_report_assets(markdown, key) for lang, markdown in variants.items()},
+        primary_lang,
+    )
+    return assets, languages
+
+
+def _publication_summary(audit) -> dict | None:
+    if not isinstance(audit, dict):
+        return None
+    return {
+        "hard_passed": audit.get("hard_passed"),
+        "publish_passed": (audit.get("publish_gate") or {}).get("passed"),
+        "scenario_contract_valid": (audit.get("scenario_contract") or {}).get("valid"),
+        "citation_coverage": (audit.get("citation_grounding") or {}).get("resolved_coverage"),
+        "semantic_citations_passed": (audit.get("semantic_citations") or {}).get("passed"),
+        "markdown_sha256": audit.get("markdown_sha256"),
+        "forecast_sha256": audit.get("forecast_sha256"),
+    }
+
+
+def refresh_demo_reports(key: str, pipeline_id: str) -> dict:
+    """Refresh report/dossier text and their language variants only.
+
+    Graph, forum, ontology, research log and actors stay exactly as published; the
+    report (and a dossier that has a published translation) is re-exported from its
+    current bytes together with every published translation, and meta.json records
+    the language maps and the new hashes.  A translation that is no longer published
+    is removed with its hash.
+    """
+    state = _read_json(os.path.join(UPLOADS, "pipelines", pipeline_id, "pipeline_state.json"))
+    if not isinstance(state, dict):
+        raise RuntimeError(f"pipeline state missing for {pipeline_id}")
+    out = os.path.join(OUT_ROOT, key)
+    metadata_path = os.path.join(out, "meta.json")
+    metadata = _read_json(metadata_path)
+    if not isinstance(metadata, dict):
+        raise RuntimeError(f"demo metadata missing for {key}")
+    if metadata.get("pipeline_id") != pipeline_id:
+        raise RuntimeError(
+            f"demo metadata pipeline id {metadata.get('pipeline_id')!r} does not match {pipeline_id!r}"
+        )
+    refreshed_prefixes = ["charts/", "report."]
+    published = metadata.get("artifact_sha256") or {}
+    report_assets, report_languages = export_report(key, state["report_id"], out, published)
+    metadata["report_assets"] = report_assets
+    metadata["report_languages"] = report_languages
+    handoff = os.path.join(UPLOADS, "pipelines", pipeline_id, "handoff")
+    source = os.path.join(handoff, "research_report.md")
+    dossier_variants = {}
+    if os.path.isfile(source):
+        with open(source, encoding="utf-8") as f:
+            dossier_variants = published_dossier_variants(handoff, _markdown_language(f.read()))
+    # Only a dossier with a published (or previously published) translation is
+    # re-exported: a refresh never rewrites a single-language dossier it has no
+    # reason to touch.
+    if dossier_variants or metadata.get("dossier_languages"):
+        dossier_assets, dossier_languages = export_dossier(key, handoff, out, published)
+        metadata["dossier_assets"] = dossier_assets
+        metadata["dossier_languages"] = dossier_languages
+        refreshed_prefixes += ["research-charts/", "dossier."]
+    refreshed = {
+        path: _sha256_file(os.path.join(out, path))
+        for path in (
+            *report_languages.values(),
+            *report_assets,
+            *(metadata.get("dossier_languages") or {}).values(),
+            *(metadata.get("dossier_assets") or []),
+        )
+        if os.path.isfile(os.path.join(out, path))
+    }
+    # Existing entries keep their order; refreshed ones get new digests, entries
+    # for files no longer published are dropped, and new files are appended.
+    artifact_sha256 = {}
+    for path, digest in published.items():
+        if path in refreshed:
+            artifact_sha256[path] = refreshed[path]
+        elif not path.startswith(tuple(refreshed_prefixes)):
+            artifact_sha256[path] = digest
+    for path, digest in refreshed.items():
+        artifact_sha256.setdefault(path, digest)
+    metadata["artifact_sha256"] = artifact_sha256
+    audit = _read_json(os.path.join(UPLOADS, "reports", state["report_id"], "final_audit.json"))
+    metadata["publication"] = _publication_summary(audit)
+    # Keep the file's existing indentation so a refresh does not reformat it.
+    with open(metadata_path, encoding="utf-8") as f:
+        second_line = (f.read().split("\n", 2) + ["", ""])[1]
+    indent = len(second_line) - len(second_line.lstrip(" ")) or 2
+    with open(metadata_path, "w", encoding="utf-8") as f:
+        json.dump(metadata, f, ensure_ascii=False, indent=indent)
+        f.write("\n")
+    return metadata
+
+
 def export_run(
     key: str,
     pipeline_id: str,
     skip_graph: bool,
     require_publishable: bool = False,
+    graph_api: str | None = None,
 ) -> None:
     state = _read_json(os.path.join(UPLOADS, "pipelines", pipeline_id, "pipeline_state.json"))
     if not state:
@@ -648,22 +938,7 @@ def export_run(
         out,
         retain_existing_if_missing=True,
     )
-    dossier_src = os.path.join(handoff, "research_report.md")
-    with open(dossier_src, encoding="utf-8") as f:
-        dossier_md = f.read()
-    dossier_assets = copy_markdown_assets(
-        dossier_md,
-        handoff,
-        out,
-        destination_namespace="research-charts",
-    )
-    dossier_md = rebase_markdown_assets(
-        dossier_md,
-        key,
-        destination_namespace="research-charts",
-    )
-    with open(os.path.join(out, "dossier.md"), "w", encoding="utf-8") as f:
-        f.write(dossier_md)
+    dossier_assets, dossier_languages = export_dossier(key, handoff, out)
     for name in ("actors.json", "sources.json"):
         src = os.path.join(handoff, name)
         if os.path.exists(src):
@@ -691,7 +966,7 @@ def export_run(
 
         graph_id = state["graph_id"]
         try:
-            graph = export_graph(graph_id)
+            graph = export_graph(graph_id, graph_api=graph_api)
         except ApiError as e:
             if getattr(e, "status_code", None) != 404:
                 raise
@@ -714,14 +989,9 @@ def export_run(
     forum = export_forum(os.path.join(UPLOADS, "simulations", state["simulation_id"]))
     _write_json(os.path.join(out, "forum.json"), forum)
 
-    # stage 6 — final report (placeholder sections stripped for presentation)
-    report_dir = os.path.join(UPLOADS, "reports", state["report_id"])
-    report_md = open(os.path.join(report_dir, "full_report.md"), encoding="utf-8").read()
-    cleaned = strip_placeholder_sections(report_md)
-    report_assets = copy_report_assets(cleaned, report_dir, out)
-    cleaned = rebase_report_assets(cleaned, key)
-    with open(os.path.join(out, "report.md"), "w", encoding="utf-8") as f:
-        f.write(cleaned)
+    # stage 6 — final report (placeholder sections stripped for presentation) and
+    # every published translation of it
+    report_assets, report_languages = export_report(key, state["report_id"], out)
 
     # run metadata for the site cards/header
     run_state = _read_json(os.path.join(UPLOADS, "simulations", state["simulation_id"], "run_state.json")) or {}
@@ -729,13 +999,13 @@ def export_run(
     agents = cfg.get("agent_configs") or cfg.get("agents") or []
     artifact_paths = [
         "research_log.txt",
-        "dossier.md",
+        *dossier_languages.values(),
         "actors.json",
         "sources.json",
         "ontology.json",
         "graph.json",
         "forum.json",
-        "report.md",
+        *report_languages.values(),
         *dossier_assets,
         *report_assets,
     ]
@@ -759,16 +1029,10 @@ def export_run(
         "research_log": research_log,
         "dossier_assets": dossier_assets,
         "report_assets": report_assets,
+        "dossier_languages": dossier_languages,
+        "report_languages": report_languages,
         "artifact_sha256": artifact_sha256,
-        "publication": {
-            "hard_passed": audit.get("hard_passed"),
-            "publish_passed": (audit.get("publish_gate") or {}).get("passed"),
-            "scenario_contract_valid": (audit.get("scenario_contract") or {}).get("valid"),
-            "citation_coverage": (audit.get("citation_grounding") or {}).get("resolved_coverage"),
-            "semantic_citations_passed": (audit.get("semantic_citations") or {}).get("passed"),
-            "markdown_sha256": audit.get("markdown_sha256"),
-            "forecast_sha256": audit.get("forecast_sha256"),
-        } if isinstance(audit, dict) else None,
+        "publication": _publication_summary(audit),
     })
     print(f"ok {key}: exported -> {out}")
 
@@ -787,6 +1051,15 @@ def main() -> int:
         action="store_true",
         help="refresh only prompt + exact merged research log metadata/assets",
     )
+    ap.add_argument(
+        "--reports-only",
+        action="store_true",
+        help="refresh only report/dossier text and their published translations",
+    )
+    ap.add_argument(
+        "--graph-api",
+        help="read the knowledge graph from a running backend (e.g. http://127.0.0.1:5001)",
+    )
     args = ap.parse_args()
 
     runs = {args.only: RUNS[args.only]} if args.only else RUNS
@@ -798,12 +1071,20 @@ def main() -> int:
                 require_publishable=args.require_publishable,
             )
             print(f"ok {key}: refreshed research provenance ({metadata['line_count']} lines)")
+        elif args.reports_only:
+            metadata = refresh_demo_reports(key, pid)
+            dossier_languages = sorted(metadata.get("dossier_languages") or {})
+            print(
+                f"ok {key}: refreshed report {sorted(metadata['report_languages'])}"
+                f", dossier {dossier_languages or 'unchanged'}"
+            )
         else:
             export_run(
                 key,
                 pid,
                 skip_graph=args.skip_graph,
                 require_publishable=args.require_publishable,
+                graph_api=args.graph_api,
             )
     return 0
 

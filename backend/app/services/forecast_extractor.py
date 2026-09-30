@@ -46,6 +46,35 @@ def _cfg(name: str, default: Any) -> Any:
     except Exception:  # noqa: BLE001 — config import must never break extraction
         return default
 
+
+def forecast_language_rule(language: str) -> str:
+    """Output-language directive for the structured-forecast prompts.
+
+    The forecast prompts are written in Chinese, so without this rule an English
+    report got a Chinese headline, scenario names, criteria and rationales in
+    forecast.json — which the dashboard, the scenario chart and the executive brief
+    all display verbatim.  Empty ``language`` returns "" (prompt unchanged).
+    """
+    lang = str(language or "").strip()
+    if not lang:
+        return ""
+    lowered = lang.lower()
+    if lowered.startswith(("zh", "chinese")) or "中文" in lang:
+        return (
+            "\n\n【输出语言】所有可读文本字段（headline、情景名、summary、key_drivers、"
+            "base_rate_anchor、adjustment_rationale、resolution_criteria、key_uncertainties、"
+            "confidence_rationale、critique_note、missed_signals 等）一律使用简体中文；"
+            "JSON 键名与枚举值（low/medium/high）保持原样。"
+        )
+    return (
+        f"\n\n[OUTPUT LANGUAGE] Write every human-readable string value in {lang}: "
+        "headline, scenario names, summaries, key drivers, base-rate anchors, adjustment "
+        "rationales, resolution criteria, key uncertainties, confidence rationale, critique "
+        "notes and missed signals. Keep JSON keys and enum values (low/medium/high) exactly "
+        "as specified."
+    )
+
+
 # JSON schema the extractor asks the model to fill. Mirrored in the prompt.
 _FORECAST_INSTRUCTIONS = """你是预测校准专家。基于下面的预测报告，抽取一个**机器可读**的结构化预测对象。
 只输出 JSON，不要解释。字段：
@@ -1136,7 +1165,8 @@ def strip_machine_market_table(text: str) -> Tuple[str, int]:
 
 
 def extract_structured_forecast(report_markdown: str, llm,
-                                situation_brief: Optional[str] = None) -> Dict[str, Any]:
+                                situation_brief: Optional[str] = None,
+                                language: str = "") -> Dict[str, Any]:
     """Run one LLM pass to produce a validated structured forecast object.
 
     ``llm`` must expose ``chat_json(messages, temperature, max_tokens)``. Returns a
@@ -1156,6 +1186,7 @@ def extract_structured_forecast(report_markdown: str, llm,
     if situation_brief:
         user += f"\n\n[态势简报]\n{situation_brief[:2000]}"
     user += f"\n\n[预测报告]\n{content}"
+    user += forecast_language_rule(language)
     raw = llm.chat_json(
         messages=[{"role": "user", "content": user}],
         temperature=0.2,
@@ -3850,7 +3881,8 @@ def build_spine_user_prompt(*, central_question: str = "", horizon: str = "",
                             base_distribution: Optional[Dict[str, float]] = None,
                             quantitative_facts: str = "",
                             market_block: str = "",
-                            context_pack: Optional[str] = None) -> Tuple[str, bool]:
+                            context_pack: Optional[str] = None,
+                            language: str = "") -> Tuple[str, bool]:
     """EVAL-11: the spine draw's user prompt, plus whether the WorldState anchor is active.
 
     Extracted verbatim from ``derive_forecast_spine`` (same defaults, same input caps, same
@@ -3929,6 +3961,9 @@ def build_spine_user_prompt(*, central_question: str = "", horizon: str = "",
         user = _spine_prompt_head(labels, base_rates_supplied=anchors_supplied) + user
     else:
         user = _SPINE_INSTRUCTIONS + user
+    # Output-language rule last (after every block), exactly where derive_forecast_spine
+    # used to append it; "" leaves the prompt unchanged.
+    user += forecast_language_rule(language)
     return user, anchor_ws
 
 
@@ -3945,7 +3980,8 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
                           base_distribution: Optional[Dict[str, float]] = None,
                           quantitative_facts: str = "",
                           market_block: str = "",
-                          context_pack: Optional[str] = None) -> Dict[str, Any]:
+                          context_pack: Optional[str] = None,
+                          language: str = "") -> Dict[str, Any]:
     """NEXTSTEPS P0-1: derive the structured forecast *spine* from research +
     simulation SIGNALS — *before* any prose is written.
 
@@ -3971,7 +4007,7 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
         central_question=central_question, horizon=horizon, situation_brief=situation_brief,
         forecast_inputs=forecast_inputs, signal_pack=signal_pack,
         base_distribution=base_distribution, quantitative_facts=quantitative_facts,
-        market_block=market_block, context_pack=context_pack)
+        market_block=market_block, context_pack=context_pack, language=language)
 
     max_tokens = int(_cfg("REPORT_SPINE_MAX_TOKENS", 6144))  # R2-CAL-11: 2048→6144
     floor = _coerce_float(_cfg("FORECAST_PROB_FLOOR", 0.0)) or 0.0
@@ -4350,7 +4386,7 @@ def _critique_attempted(forecast: Dict[str, Any], single_pass: bool) -> Dict[str
     return forecast
 
 
-def self_critique_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
+def self_critique_forecast(forecast: Dict[str, Any], llm, language: str = "") -> Dict[str, Any]:
     """Red-team + recalibrate a structured forecast (EXECPLAN2 I-3-5).
 
     Runs one adversarial LLM pass that pushes back on overconfidence / base-rate
@@ -4387,7 +4423,7 @@ def self_critique_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
                   + _json.dumps(_llm_forecast_view(forecast), ensure_ascii=False))
         called = True
         raw = llm.chat_json(
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": prompt + forecast_language_rule(language)}],
             temperature=0.2,
             max_tokens=2048,
         )
@@ -4544,7 +4580,7 @@ _PREMORTEM_INSTRUCTIONS = """你是预测红队的「事前验尸（pre-mortem�
   "overconfident_scenario": "情景名（可空）" }"""
 
 
-def premortem_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
+def premortem_forecast(forecast: Dict[str, Any], llm, language: str = "") -> Dict[str, Any]:
     """R2-CAL-8 pre-mortem: imagine the forecast failed badly, surface missed signals,
     and gently widen uncertainty (append key_uncertainties + shave the overconfident
     peak toward the underweighted scenario, bounded). Gated by REPORT_PREMORTEM; on any
@@ -4565,7 +4601,8 @@ def premortem_forecast(forecast: Dict[str, Any], llm) -> Dict[str, Any]:
         raw = llm.chat_json(
             messages=[{"role": "user",
                        "content": _PREMORTEM_INSTRUCTIONS + "\n\n[预测对象]\n"
-                       + _json.dumps(_llm_forecast_view(forecast), ensure_ascii=False)}],
+                       + _json.dumps(_llm_forecast_view(forecast), ensure_ascii=False)
+                       + forecast_language_rule(language)}],
             temperature=0.3,
             max_tokens=1024,
         )

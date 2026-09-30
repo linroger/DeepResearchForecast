@@ -1,0 +1,3101 @@
+{
+  "central_question": "How will quantum computing develop in the United States, China, and the European Union from 2026 through 2040 across hardware modalities, funding, supply chains and security policy, and what will its economic and cryptographic impact be?",
+  "as_of_date": "2026-09-28",
+  "situation_brief": {
+    "current_situation": "Quantum computing has passed from the NISQ era into early error correction in the laboratory: Google's Willow (105 qubits, December 2024) demonstrated below-threshold surface-code error correction and claimed the first verifiable quantum advantage in October 2025; Quantinuum's Helios (November 2025) holds the fidelity frontier with 99.921% all-pairs two-qubit fidelity and 48 error-corrected logical qubits; China's Zuchongzhi 3.2 (December 2025) replicated below-threshold correction about a year behind Google. Global revenue was only $1.4 billion in 2025 (QED-C) but private investment surged to $12.6 billion in 2025 and cumulative public commitments reached $56.7 billion.",
+    "context": "Vendor roadmaps cluster first fault-tolerant machines at 2028-2030 (IBM Starling 2029, QuEra Libra 2028, Quantinuum Apollo ~2030) while calibrated expert judgment (GRI 2025: 28-49% CRQC probability within ten years) and BCG (full fault tolerance after 2040) sit later. NIST draft IR 8547 would deprecate RSA/ECC after 2030 and disallow after 2035; US federal migration is costed at ~$7.1 billion. Export controls (US September 2024 rule, EU September 2025 alignment, Entity List additions) and China's rare-earth retaliation are splitting supply chains.",
+    "dynamics": "A 2025 funding boom (private investment 6.3x 2024 levels) runs ahead of demonstrated commercial value; DARPA's QBI independently tests utility-scale claims by 2033; helium-3 and dilution refrigerators form a European-controlled choke point that China is localizing around; harvest-now-decrypt-later makes the security window effectively open today, so PQC migration costs land before quantum commercial value.",
+    "fault_lines": [
+      "Vendor fault-tolerance claims versus independent expert timelines and DARPA verification",
+      "US private-capital-led leadership versus China's opaque state funding (~$15 billion cited, unverifiable) versus EU coordinated deployment",
+      "Export controls accelerating Chinese self-sufficiency while disrupting its talent and hardware access",
+      "Helium-3 and dilution-refrigerator supply concentration in three European firms",
+      "Cryptographic risk window: enterprise migration needs 12-15+ years while expert CRQC medians point to mid-to-late 2030s"
+    ],
+    "catalysts": [
+      "IBM Starling delivery at specification (2029) or milestone slips",
+      "DARPA QBI Stage C verification verdicts by 2033",
+      "Google's next milestone, a long-lived logical qubit requiring millions of components",
+      "NIST finalization of IR 8547 and federal migration deadlines",
+      "China's kiloqubit machine targeted around 2030",
+      "IonQ's ~10,000-qubit Oxford Ionics chip promised for 2027",
+      "Annual GRI expert survey revisions of CRQC probability"
+    ]
+  },
+  "actors": [
+    {
+      "name": "IBM",
+      "type": "Organization",
+      "role": "Superconducting hardware leader with the sector's most explicit fault-tolerance roadmap",
+      "stance": "Commits to IBM Quantum Starling in 2029 (200 logical qubits, 100 million gates) and Blue Jay 2033+ (2,000 logical qubits, 1 billion gates); claims users will demonstrate quantum advantage by end-2026",
+      "description": "Operates Heron r1/r2/r3 (133-156 qubits) and Nighthawk (120 programmable qubits); demonstrated qLDPC gross-code [[144,12,12]] fault-tolerant memory in Nature 2024, encoding 12 logical qubits in 288 physical (~10x less overhead than surface code); building Starling in Poughkeepsie, New York.",
+      "stated_vs_revealed": "Publicly dates every milestone; asserts only it will run hundreds of logical qubits by decade's end — a competitive claim, not a measurement",
+      "memory": "Delivered Nature-grade gross-code memory (2024) and incremental fleet upgrades 2023-2026",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "IBM Quantum"
+      ],
+      "goals": [
+        "Deliver Starling at specification by 2029",
+        "Demonstrate user quantum advantage by end-2026 on Nighthawk",
+        "Be the only organization running hundreds of logical qubits by decade's end"
+      ],
+      "constraints": [
+        "Real-time error-correction decoding still prototyped (Kookaburra, 2026)",
+        "Cryogenic supply chain and helium-3 costs"
+      ],
+      "assets": [
+        "Dated hardware roadmap",
+        "qLDPC gross-code IP demonstrated in Nature",
+        "Cloud fleet and enterprise customer base"
+      ],
+      "vulnerabilities": [
+        "Roadmap slip would damage credibility given public specificity"
+      ],
+      "incentives": [
+        {
+          "driver": "Commercial leadership in fault-tolerant quantum computing",
+          "gains_if": "Starling delivers at spec, converting roadmap credibility into enterprise revenue",
+          "loses_if": "Gate-count or logical-qubit specifications slip past 2030",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Enterprise computing",
+          "roadmap credibility"
+        ],
+        "beliefs": [
+          "qLDPC codes decisively beat surface-code overhead"
+        ],
+        "identity": "Incumbent supercomputing/quantum incumbent",
+        "frame": "Quantum as an HPC accelerator with staged scaling"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Owns the most dated, specific fault-tolerance roadmap in the report"
+      }
+    },
+    {
+      "name": "Google Quantum AI",
+      "type": "Organization",
+      "role": "Error-correction research leader",
+      "stance": "Publishes milestones, not dates; claims first verifiable quantum advantage (October 2025) on Willow",
+      "description": "Willow (105 qubits, December 2024) achieved below-threshold surface-code error correction, halving error per code-distance step; roadmap of six milestones culminating in controlling 1 million qubits; joined DARPA QBI Stage A in September 2025; reportedly added neutral atoms as a second modality in March 2026.",
+      "stated_vs_revealed": "Avoids dates publicly while executive statements point to ~2030 commercial applications",
+      "memory": "2019 beyond-classical milestone through Willow to October 2025 advantage claim",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Long-lived logical qubit (next milestone)",
+        "Commercial applications within ~5 years (Neven, February 2025)",
+        "Scale to 1 million qubits"
+      ],
+      "constraints": [
+        "Next milestone requires millions of components — orders-of-magnitude scale-up"
+      ],
+      "assets": [
+        "Below-threshold error-correction firsts",
+        "Deep Alphabet funding",
+        "Two modalities (superconducting, reportedly neutral atoms)"
+      ],
+      "vulnerabilities": [
+        "Undated roadmap invites perception of slower pace than IBM"
+      ],
+      "incentives": [
+        {
+          "driver": "Scientific firsts converting into cloud/AI platform advantage",
+          "gains_if": "Long-lived logical qubit achieved before rivals' dated machines",
+          "loses_if": "IBM or Quantinuum commercializes fault tolerance first",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Milestone-driven science"
+        ],
+        "beliefs": [
+          "Below-threshold scaling will compound"
+        ],
+        "identity": "Research-frontier lab inside a hyperscaler",
+        "frame": "Error correction is the path to utility scale"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.93,
+        "basis": "Holds the below-threshold and verifiable-advantage firsts"
+      }
+    },
+    {
+      "name": "Quantinuum",
+      "type": "Organization",
+      "role": "Highest-fidelity trapped-ion vendor",
+      "stance": "Targets Apollo, a fully fault-tolerant universal machine, by 2030; separately claims scalable universal fault tolerance by 2029",
+      "description": "US/UK firm; Helios (November 2025) delivers 98 fully connected qubits at 99.921% all-pairs two-qubit fidelity, 48 error-corrected logical qubits at ~2:1 Iceberg-code encoding (lowest demonstrated overhead), 94-logical-qubit GHZ record; 12-logical-qubit chemistry workflow with Microsoft (September 2024).",
+      "stated_vs_revealed": "Roadmap says 2030; a company blog pulls the claim forward to 2029",
+      "memory": "H2-1 launch 2023 through Helios 2025 logical-qubit records",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Apollo by 2030 with millions of gates on hundreds of logical qubits",
+        "Be the substrate for Microsoft's stack"
+      ],
+      "constraints": [
+        "Trapped-ion scaling to thousands of physical qubits unproven"
+      ],
+      "assets": [
+        "Fidelity frontier",
+        "Lowest error-correction overhead demonstrated",
+        "Microsoft partnership"
+      ],
+      "vulnerabilities": [
+        "Two internal fault-tolerance dates (2029 vs 2030) create credibility risk"
+      ],
+      "incentives": [
+        {
+          "driver": "Fidelity-led fault tolerance with minimal overhead",
+          "gains_if": "Apollo delivers universal fault tolerance ~2030",
+          "loses_if": "Superconducting or neutral-atom scale-out overtakes ion fidelity edge",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Precision over scale"
+        ],
+        "beliefs": [
+          "High physical fidelity minimizes logical overhead"
+        ],
+        "identity": "US/UK trapped-ion champion",
+        "frame": "Quality-first scaling"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "Holds fidelity and overhead records underpinning the Steady climb path"
+      }
+    },
+    {
+      "name": "Global Risk Institute / evolutionQ",
+      "type": "Other",
+      "role": "Independent calibrator of cryptographically-relevant-quantum-computer timelines via expert surveys",
+      "stance": "2025 report (26 experts, March 2026): CRQC probability 28-49% within ten years, 51-70% within fifteen, ~15% within five",
+      "description": "Quantum Threat Timeline Report series shows ten-year averages climbing every edition: 17-31% (2023), 19-34% (2024), 28-49% (2025); 92% of experts assign ≥50% within twenty years; most experts say covert state programs could shift timelines by two or more years, implying the survey may understate the threat.",
+      "stated_vs_revealed": "Methodologically cautious while noting the series' highest-ever ten-year estimate",
+      "memory": "Annual editions tracking rising expert probability since 2019",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "amplifier",
+      "aliases": [
+        "GRI",
+        "IonQ",
+        "Quantum Threat Timeline Report"
+      ],
+      "goals": [
+        "Provide calibrated threat timelines"
+      ],
+      "constraints": [
+        "Expert-elicitation method, not measurement"
+      ],
+      "assets": [
+        "Seven-edition time series",
+        "Expert network"
+      ],
+      "vulnerabilities": [
+        "Survey may lag covert programs"
+      ],
+      "incentives": [
+        {
+          "driver": "Risk-informed security policy",
+          "gains_if": "Timelines prove well-calibrated and drive early PQC migration",
+          "loses_if": "Rapid hardware progress makes surveys look complacent",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Calibrated risk assessment"
+        ],
+        "beliefs": [
+          "CRQC quite likely by 2035"
+        ],
+        "identity": "Independent threat-timeline authority",
+        "frame": "Security decisions should follow expert probability, not vendor optimism"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "Primary calibration baseline for CRQC forecasts"
+      }
+    },
+    {
+      "name": "QuEra",
+      "type": "Organization",
+      "role": "Neutral-atom logical-qubit leader",
+      "stance": "Launches Libra in 2028 with 256 logical qubits at 10^-6 logical error; policy of roadmaping only scientifically demonstrated building blocks",
+      "description": "Harvard/MIT lineage; demonstrated 48 logical qubits from 250+ physical (Nature, December 2023) and an end-to-end fault-tolerant architecture with up to 96 logical qubits (November 2025); Gemini (2025, first deployed at AIST Japan) offers 260 physical qubits; gigaquop successor of 1,000+ logical qubits targeted 2028/29; cites 99.77% two-qubit fidelity.",
+      "stated_vs_revealed": "Unusually disciplined: only roadmaps demonstrated building blocks",
+      "memory": "Aquila 2022 through 48-logical-qubit Nature paper to Gemini deployment",
+      "influence": "medium",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Libra delivery 2028 on Amazon Braket",
+        "Gigaquop machine 2028/29"
+      ],
+      "constraints": [
+        "Laser stack is the defining engineering challenge of neutral atoms"
+      ],
+      "assets": [
+        "Peer-reviewed logical-qubit demonstrations",
+        "Credibility policy on roadmap claims"
+      ],
+      "vulnerabilities": [
+        "256-logical-qubit target is far beyond current demonstrations"
+      ],
+      "incentives": [
+        {
+          "driver": "Convert logical-qubit science firsts into cloud revenue",
+          "gains_if": "Libra ships 2028 near spec",
+          "loses_if": "Neutral-atom fidelity plateaus below 10^-6 logical error",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Scientific demonstration before promises"
+        ],
+        "beliefs": [
+          "Neutral atoms scale via parallelism"
+        ],
+        "identity": "Harvard-spinout neutral-atom pioneer",
+        "frame": "Logical qubits as the product"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.8,
+        "basis": "2028 Libra date is the earliest dated fault-tolerance claim among credible vendors"
+      }
+    },
+    {
+      "name": "PsiQuantum",
+      "type": "Organization",
+      "role": "Photonic fault-tolerance bet with large government backing",
+      "stance": "Utility-scale photonic systems targeted at datacenters under construction in Brisbane and Chicago; no public logical-qubit demonstration",
+      "description": "Omega chipset (announced 26 February 2025, published in Nature) contains all components for million-qubit-scale fusion-based machines fabricated in a high-volume fab; selected with Microsoft for the final US2QC/QBI phase; cites a $125 million DARPA agreement and $100 million in proposed CHIPS Act incentives.",
+      "stated_vs_revealed": "States component completeness while the hardest system-level demonstrations remain unpublished",
+      "memory": "Omega announcement 2025 and DARPA Stage C selection",
+      "influence": "medium",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "First utility-scale photonic system",
+        "Leverage fab manufacturing for scaling"
+      ],
+      "constraints": [
+        "No logical-qubit count demonstrated publicly"
+      ],
+      "assets": [
+        "Government backing (DARPA, CHIPS)",
+        "Semiconductor fab approach"
+      ],
+      "vulnerabilities": [
+        "All-or-nothing photonic bet with no intermediate milestones shown"
+      ],
+      "incentives": [
+        {
+          "driver": "Fusion-based photonic fault tolerance at fab scale",
+          "gains_if": "An Omega-fabricated system runs utility-scale circuits",
+          "loses_if": "Photon loss and scaling delays leave it behind ion/superconducting rivals",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Manufacturability over qubit-count publicity"
+        ],
+        "beliefs": [
+          "Semiconductor fabs are the only path to a million qubits"
+        ],
+        "identity": "Government-backed photonic moonshot",
+        "frame": "Skip NISQ entirely"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.72,
+        "basis": "QBI Stage C finalist; Brisbane/Chicago datacenters are watchable catalysts"
+      }
+    },
+    {
+      "name": "Microsoft",
+      "type": "Organization",
+      "role": "Topological-qubit developer and Azure distribution channel",
+      "stance": "Majorana 1 (February 2025) billed as first topological processor; remains pre-error-correction",
+      "description": "Roadmap: 4x2 tetron array to demonstrate entanglement, measurement-based braiding and error detection on two logical qubits, toward 27x13 array; claims Floquet codes cut overhead ~10x; selected for final US2QC/QBI phase; partnered with Quantinuum on 12 logical qubits (2024).",
+      "stated_vs_revealed": "Hypes Majorana 1 while hedging with partner hardware on Azure",
+      "memory": "US2QC selection and Quantinuum logical-qubit partnership",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Azure Quantum"
+      ],
+      "goals": [
+        "Validate topological qubits via braiding demos",
+        "Be the cloud substrate for partners' hardware"
+      ],
+      "constraints": [
+        "Topological path is earliest-stage of all modalities"
+      ],
+      "assets": [
+        "Azure distribution",
+        "Dual-track topological + partnership strategy"
+      ],
+      "vulnerabilities": [
+        "Majorana results have faced scientific scrutiny historically; no error correction yet"
+      ],
+      "incentives": [
+        {
+          "driver": "Platform capture via cloud distribution regardless of which modality wins",
+          "gains_if": "Topological overhead claims hold or partners succeed on Azure",
+          "loses_if": "Topological path stalls and partners choose rival clouds",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Platform strategy"
+        ],
+        "beliefs": [
+          "Topological qubits cut overhead ~10x via Floquet codes"
+        ],
+        "identity": "Hyperscaler with a frontier hardware bet",
+        "frame": "Own the stack, whichever qubit wins"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "QBI finalist and cloud gatekeeper"
+      }
+    },
+    {
+      "name": "DARPA",
+      "type": "Government",
+      "role": "Independent verifier of utility-scale quantum claims via the Quantum Benchmarking Initiative",
+      "stance": "Tests whether any approach reaches utility-scale operation by 2033",
+      "description": "QBI runs Stage A (concept), Stage B (R&D plan and prototypes; 11 companies selected 6 November 2025) and Stage C (government verification); Microsoft and PsiQuantum in final US2QC phase; Google Quantum AI joined Stage A September 2025; Stage B awards reported up to $15 million; PsiQuantum's expanded agreement $125 million; new QBIT solicitations open through late 2026.",
+      "stated_vs_revealed": "Positioned as neutral arbiter; funding concentration in finalists shapes the market",
+      "memory": "US2QC pilot expanded into QBI with staged cohorts 2024-2026",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "arbiter",
+      "aliases": [
+        "QBI",
+        "US2QC"
+      ],
+      "goals": [
+        "Verify utility-scale operation by 2033",
+        "Keep an open pipeline of candidate approaches"
+      ],
+      "constraints": [
+        "Publishes no per-company award sizes"
+      ],
+      "assets": [
+        "Verification authority",
+        "Funding channel"
+      ],
+      "vulnerabilities": [
+        "Attrition of Stage B companies could undercut the field's credibility"
+      ],
+      "incentives": [
+        {
+          "driver": "Separate genuine capability from vendor hype for national-security investment",
+          "gains_if": "A concept survives Stage C verification",
+          "loses_if": "All Stage B approaches fail, signaling a Long winter",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Mission-driven verification"
+        ],
+        "beliefs": [
+          "Independent benchmarking disciplines the market"
+        ],
+        "identity": "Defense advanced-research gatekeeper",
+        "frame": "Utility scale is a testable claim by 2033"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Its 2033 verification verdict is a named inflection indicator"
+      }
+    },
+    {
+      "name": "US Department of Energy",
+      "type": "Government",
+      "role": "Major public quantum R&D funder, national-lab ecosystem operator and dominant Western helium-3 supplier",
+      "stance": "Sustains research funding (~$1 billion government-wide baseline) and the Isotope Program",
+      "description": "Isotope Program sources all He-3 from tritium processing at Savannah River Site, making 'thousands of liters' available yearly for federal allocations; deems the shortage 'mitigated' for federal users while commercial buyers face $1,900-$2,600/liter bulk prices.",
+      "stated_vs_revealed": "Declares the shortage mitigated while commercial market remains tight",
+      "memory": "2008 He-3 crisis managed via recycling; ongoing Savannah River supply",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "DOE"
+      ],
+      "goals": [
+        "Sustain national-lab quantum research",
+        "Manage helium-3 allocation"
+      ],
+      "constraints": [
+        "No program-level DOE quantum budget appears in the evidence"
+      ],
+      "assets": [
+        "National labs",
+        "Helium-3 supply"
+      ],
+      "vulnerabilities": [
+        "Commercial quantum demand sits outside managed federal He-3 allocation"
+      ],
+      "incentives": [
+        {
+          "driver": "National security and scientific leadership",
+          "gains_if": "Labs contribute to fault-tolerance milestones",
+          "loses_if": "He-3 bottleneck chokes domestic superconducting scaling",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Stewardship of strategic isotopes"
+        ],
+        "beliefs": [
+          "Federal allocation is sufficient"
+        ],
+        "identity": "Civil and security research backbone",
+        "frame": "Quantum as strategic national capability"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Controls a named supply-chain choke point"
+      }
+    },
+    {
+      "name": "White House OSTP / NQI",
+      "type": "Government",
+      "role": "Sets US national quantum strategy and reauthorization funding levels",
+      "stance": "NQI reauthorization pending: S.3597 ordered reported by Senate Commerce on 14 April 2026, extending NQI to December 2034, but with no stated dollar authorization",
+      "description": "Federal quantum research spending ~$1 billion/year baseline (2022); lapsed H.R. 6213 would have authorized $1.8 billion FY2025-2029; Lofgren stated in April 2026 the current bill 'does not have any funds authorized'; NSM-10 sets 2035 federal PQC migration target.",
+      "stated_vs_revealed": "Strategic commitment proclaimed while authorizations lapse",
+      "memory": "2018 NQI Act; 2024 lapsed reauthorization; 2026 Senate action",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "NQI",
+        "OSTP"
+      ],
+      "goals": [
+        "Enact reauthorization with funding",
+        "Complete federal PQC migration by 2035"
+      ],
+      "constraints": [
+        "Authorization lapsed since 2024; congressional gridlock"
+      ],
+      "assets": [
+        "Policy coordination authority",
+        "National laboratories and standards bodies"
+      ],
+      "vulnerabilities": [
+        "Policy baseline fragile without enacted funding"
+      ],
+      "incentives": [
+        {
+          "driver": "Maintain US quantum leadership against China",
+          "gains_if": "S.3597 passes with appropriations",
+          "loses_if": "Prolonged lapse erodes research continuity and talent",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "US technological primacy"
+        ],
+        "beliefs": [
+          "Competition with China justifies sustained funding"
+        ],
+        "identity": "Executive science-policy hub",
+        "frame": "Quantum as national-security asset"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 1,
+        "score": 0.8,
+        "basis": "Reauthorization outcome shapes the US funding trajectory"
+      }
+    },
+    {
+      "name": "US Department of Commerce / BIS",
+      "type": "Government",
+      "role": "Administers export controls on quantum technology to China",
+      "stance": "Expanding controls: 2024 interim final rule, Entity List additions, outbound investment restrictions",
+      "description": "September 2024 rule added quantum ECCNs with deemed-export licensing; presumption of denial for dilution refrigerators to Chinese research groups and cryogenic circuits to Chinese quantum suppliers; Entity List additions 2020-2021 (CAS/USTC), March 2025 (seven supply-chain entities), September 2025 (32 entities incl. CAS National Time Service Center); outbound investment ban effective 2 January 2025; Remote Access Security Act passed the House 369-22 in January 2026; also channels $100 million proposed CHIPS incentives to PsiQuantum.",
+      "stated_vs_revealed": "Security rationale stated; effects include bifurcation driving the Fragmented multipolarity scenario",
+      "memory": "Successive Entity List waves 2020-2025 and 2024 rule",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "arbiter",
+      "aliases": [
+        "BIS"
+      ],
+      "goals": [
+        "Deny China US-origin quantum-enabling items",
+        "Extend controls to remote cloud access"
+      ],
+      "constraints": [
+        "RUSI assesses controls may run counter to long-run US competitiveness by accelerating Chinese substitution"
+      ],
+      "assets": [
+        "Licensing authority",
+        "Entity List"
+      ],
+      "vulnerabilities": [
+        "Quantum supply chain is shallower and more dispersed than semiconductors — easier to innovate around"
+      ],
+      "incentives": [
+        {
+          "driver": "Slow China's quantum and cryptanalytic capability",
+          "gains_if": "Controls disrupt Chinese hardware and talent development (as RUSI finds)",
+          "loses_if": "Localization (QuantumCTek, Origin refrigerators) neutralizes the pressure",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Technology denial"
+        ],
+        "beliefs": [
+          "Choke points can be held",
+          "Allied alignment strengthens effect"
+        ],
+        "identity": "Export-control enforcer",
+        "frame": "Quantum as a controlled strategic technology"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Controls are a core mechanism in two of four scenarios"
+      }
+    },
+    {
+      "name": "Chinese Academy of Sciences / USTC",
+      "type": "Government",
+      "role": "Runs China's state quantum labs and flagship milestone programs under Pan Jianwei",
+      "stance": "Delivers superconducting parity and photonic leadership; roughly a year behind the US in error correction",
+      "description": "Zuchongzhi 3.0 (March 2025): 105 qubits, 99.62% parallel two-qubit fidelity, claims 10^15-fold RCS speedup (self-reported); Zuchongzhi 3.2 (December 2025): 107 qubits, below-threshold distance-7 correction, Λ=1.40(6) — first outside the US; Jiuzhang 3.0 (255 photons, 2023) and Jiuzhang 4.0 (3,050-photon programmable boson sampling, August 2025); National Lab for Quantum Information Science established 2017; quantum megaproject since 2016.",
+      "stated_vs_revealed": "Self-reported speedup claims lack comparable classical counterfactuals; peer-reviewed work (Zuchongzhi 3.2) is more measured",
+      "memory": "Zuchongzhi-2 (2021) through Zuchongzhi 3.2 below-threshold replication (2025)",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "USTC",
+        "NLQIS"
+      ],
+      "goals": [
+        "1,000-qubit-class superconducting machine around 2030",
+        "Close the error-correction gap with the US"
+      ],
+      "constraints": [
+        "Entity List restrictions since 2020-2021",
+        "Two-qubit fidelity below US leaders (99.62% vs 99.921%)"
+      ],
+      "assets": [
+        "State megaproject funding",
+        "Photonic advantage line",
+        "Deep talent pool under Pan Jianwei"
+      ],
+      "vulnerabilities": [
+        "US export controls disrupted talent and hardware access (RUSI)"
+      ],
+      "incentives": [
+        {
+          "driver": "State-directed technological self-reliance",
+          "gains_if": "Kiloqubit and Λ≥2 milestones land by 2030",
+          "loses_if": "Fidelity and cryogenics gaps persist, cementing second place",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Plan-driven mandates",
+          "self-sufficiency"
+        ],
+        "beliefs": [
+          "State patience outlasts Western funding cycles"
+        ],
+        "identity": "China's flagship quantum research complex",
+        "frame": "Quantum as a top national S&T priority (second only to AI in the 14th Five-Year Plan)"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "China's principal hardware-milestone engine and US benchmark rival"
+      }
+    },
+    {
+      "name": "Origin Quantum",
+      "type": "Organization",
+      "role": "Leading Chinese commercial quantum hardware firm",
+      "stance": "State-directed NISQ focus: Wukong (72 qubits, 2024) and Wukong-180; targeting 1,000-qubit-class machine around 2030",
+      "description": "Raised only ~$150-165 million, all from domestic investors; Wukong-180's 99.90% fidelities are self-reported, not independently benchmarked; no significant published error-correction work; missed its own 1,024-qubit-by-2025 target; built SL1000 dilution refrigerator line (Hefei, June 2024) and Tianji 4.0 control system (500+ qubits).",
+      "stated_vs_revealed": "Ambitious public targets versus unmet 2025 promise and unbenchmarked specs",
+      "memory": "Wukong 2024 launch, SL1000 line, larger domestic rounds 2024-2026",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Kiloqubit-class machine by ~2030",
+        "Domestic cryogenics self-sufficiency"
+      ],
+      "constraints": [
+        "Thin private capital",
+        "Track record of missed targets"
+      ],
+      "assets": [
+        "Domestic market position",
+        "Localizing supply chain"
+      ],
+      "vulnerabilities": [
+        "No error-correction publications; missed 2025 qubit target"
+      ],
+      "incentives": [
+        {
+          "driver": "National substitution mandate plus commercial survival",
+          "gains_if": "Kiloqubit delivery meets the state goal",
+          "loses_if": "Fidelity stagnates below threshold requirements",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Indigenous substitution"
+        ],
+        "beliefs": [
+          "Scale first, fidelity later"
+        ],
+        "identity": "China's commercial hardware champion",
+        "frame": "Serve state goals under export-control pressure"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.65,
+        "basis": "China kiloqubit-by-2030 forecast hinges on it"
+      }
+    },
+    {
+      "name": "Chinese government (NDRC/MOST)",
+      "type": "Government",
+      "role": "Sets China's quantum strategy through five-year plans and state funds",
+      "stance": "Quantum designated a top future industry; announced a $138 billion public-private fund in 2025 for emerging technologies including quantum (per US congressional testimony)",
+      "description": "14th Five-Year Plan ranked quantum information second among cutting-edge fields; 2016 S&T megaproject; widely cited ~$15 billion public funding (unverifiable, from non-public plan document per Merics); retaliated with rare-earth export controls October 2025 (69% of reserves, ~90% of processing); Tianyan quantum cloud platform drew 37 million+ visits from 60+ countries.",
+      "stated_vs_revealed": "Announces large funds; actual quantum-specific allocations unverifiable",
+      "memory": "Five-year plan designations, megaproject since 2016, 2025 fund announcement",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "NDRC",
+        "MOST",
+        "MOFCOM"
+      ],
+      "goals": [
+        "Quantum self-sufficiency under export controls",
+        "Leverage rare-earth choke points in retaliation"
+      ],
+      "constraints": [
+        "Private quantum capital only ~$255 million cumulative (SCSP)",
+        "Opacity of funding invites skepticism"
+      ],
+      "assets": [
+        "State funding at scale",
+        "Rare-earth control",
+        "Domestic demand mobilization"
+      ],
+      "vulnerabilities": [
+        "Reliance on state money signals weak private-market validation"
+      ],
+      "incentives": [
+        {
+          "driver": "Technological parity or leadership versus the US",
+          "gains_if": "State patience delivers catch-up as Western funding retrenches (Long winter path)",
+          "loses_if": "Controls plus fidelity gaps keep China a generation behind",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "State-directed industrial policy"
+        ],
+        "beliefs": [
+          "Sustained funding beats boom-bust cycles"
+        ],
+        "identity": "Centrally planning state",
+        "frame": "Quantum as a strategic race with the West"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Its funding sustains China's catch-up across scenarios"
+      }
+    },
+    {
+      "name": "European Commission",
+      "type": "Government",
+      "role": "Runs EU Quantum Flagship, EuroHPC deployment and Quantum Europe Strategy; aligns dual-use controls",
+      "stance": "Coordinated deployment and allied export-control alignment with the US, UK and Japan",
+      "description": "EuroHPC: €900 million from Horizon Europe plus €320 million from CEF-2; six quantum computers procured by July 2026; 2026 quantum calls worth €119 million; 8 September 2025 Delegated Regulation added quantum computers, cryogenic components and cooling systems to the EU dual-use list; European public pledges total ~$12 billion (Merics).",
+      "stated_vs_revealed": "Strategic ambitions stated; deployment budgets remain modest versus rivals",
+      "memory": "Flagship since 2018; EuroHPC quantum acquisitions 2023-2026",
+      "influence": "medium",
+      "simulation_tier": 1,
+      "role_class": "stakeholder",
+      "aliases": [
+        "EuroHPC Joint Undertaking",
+        "European Commission"
+      ],
+      "goals": [
+        "Deploy quantum systems across member states",
+        "Align security policy with allies"
+      ],
+      "constraints": [
+        "Procurements to date are NISQ-scale, tens of millions of euros",
+        "No single EU hardware champion"
+      ],
+      "assets": [
+        "Multi-instrument funding",
+        "Regulatory alignment influence"
+      ],
+      "vulnerabilities": [
+        "Fragmented national programs dilute impact"
+      ],
+      "incentives": [
+        {
+          "driver": "European technological sovereignty",
+          "gains_if": "EuroHPC deployments seed a European fault-tolerance champion (IQM, Pasqal)",
+          "loses_if": "US and Chinese champions dominate, leaving Europe an adopter",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Coordination, sovereignty"
+        ],
+        "beliefs": [
+          "Pooling member-state resources compensates for scale"
+        ],
+        "identity": "Supranational strategy body",
+        "frame": "Quantum Europe as a third pole"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 1,
+        "score": 0.7,
+        "basis": "Central to EU regional forecast and multipolarity scenario"
+      }
+    },
+    {
+      "name": "NIST",
+      "type": "Government",
+      "role": "Sets post-quantum cryptography standards and migration deadlines",
+      "stance": "Draft IR 8547: deprecate quantum-vulnerable algorithms after 2030, disallow after 2035",
+      "description": "Published first three final PQC standards in 2024; rationale for the 2035 cutoff is expectation of a viable quantum breaking technique by then; CMVP validation capacity constrains migration pace; OMB/CISA/NIST July 2024 report estimated ~$7.1 billion (2024 dollars) for prioritized federal civilian migration 2025-2035.",
+      "stated_vs_revealed": "Draft dates (2030/2035) signal a threat expected sooner than vendor comfort",
+      "memory": "2024 standards; November 2024 draft IR 8547",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "arbiter",
+      "goals": [
+        "Finalize IR 8547",
+        "Drive early migration of high-risk systems"
+      ],
+      "constraints": [
+        "Vendor and CMVP certification capacity limits migration speed"
+      ],
+      "assets": [
+        "Standards authority",
+        "De facto global influence on deadlines"
+      ],
+      "vulnerabilities": [
+        "Deadlines could be forced earlier by cryptanalysis advances"
+      ],
+      "incentives": [
+        {
+          "driver": "Foreclose harvest-now-decrypt-later exposure",
+          "gains_if": "Migration completes before a CRQC exists",
+          "loses_if": "Deadlines slip while expert CRQC probabilities rise",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Cryptographic agility",
+          "risk management"
+        ],
+        "beliefs": [
+          "A viable quantum attack is plausible by 2035"
+        ],
+        "identity": "US standards institute with global reach",
+        "frame": "Migration is a near-term cost regardless of machine timing"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Its deadlines structure the PQC risk window and migration economics"
+      }
+    },
+    {
+      "name": "IQM",
+      "type": "Organization",
+      "role": "EU (Finland) superconducting vendor targeting fault tolerance by 2030",
+      "stance": "Claims directional tile codes cut per-logical per-round error up to 1,000x versus surface code at ~30 physical qubits per logical",
+      "description": "Announced tile codes 23 June 2026; roadmap targets fault tolerance by 2030 and a path to 1 million qubits; preparing Nasdaq listing via merger with Real Asset Acquisition Corp.",
+      "stated_vs_revealed": "Aggressive 2030 date framed around efficiency claims rather than demonstrated systems",
+      "memory": "June 2026 tile-code announcement and listing plan",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Fault tolerance by 2030",
+        "Public listing to fund scaling"
+      ],
+      "constraints": [
+        "EU fault-tolerance forecast on EuroHPC infrastructure only 25% by 2032 given NISQ-scale procurements"
+      ],
+      "assets": [
+        "Error-correction efficiency claim",
+        "Capital-markets access"
+      ],
+      "vulnerabilities": [
+        "Tile-code claims not yet fielded at scale"
+      ],
+      "incentives": [
+        {
+          "driver": "Become Europe's fault-tolerance champion",
+          "gains_if": "Listing funds a 2030 fault-tolerant system",
+          "loses_if": "Claims stall at lab scale while US vendors ship",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "European tech sovereignty"
+        ],
+        "beliefs": [
+          "Code efficiency beats qubit-count scaling"
+        ],
+        "identity": "Nordic superconducting champion",
+        "frame": "Overhead reduction as the scaling path"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Best EU fault-tolerance bet; central to European 2032 forecast"
+      }
+    },
+    {
+      "name": "Bluefors",
+      "type": "Organization",
+      "role": "Finnish dilution-refrigerator maker holding a choke point in the quantum supply chain",
+      "stance": "Dominant supplier with ~70% market share jointly with Oxford Instruments and Leiden Cryogenics; hedging helium-3 via Interlune lunar deliveries",
+      "description": "A Bluefors XLD1000sl holds about 40 liters of helium-3; refrigerators can take months to procure and cost more than the QPU they host; exports to Chinese research groups face US presumption of denial; contracted with Interlune for up to 10,000 liters/year of lunar He-3 for 2028-2037.",
+      "stated_vs_revealed": "Commercial neutrality while sitting on a strategic bottleneck both blocs want controlled",
+      "memory": "Interlune contract 2025 for 2028-2037 deliveries",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "intermediary",
+      "goals": [
+        "Meet surging cryogenic demand",
+        "Secure He-3 supply"
+      ],
+      "constraints": [
+        "Helium-3 scarcity and price ($1,900-$2,600/liter bulk; >$10,000 purified)"
+      ],
+      "assets": [
+        "~70% market share (with two peers)",
+        "Finnish/EU jurisdiction outside US control of the firms themselves"
+      ],
+      "vulnerabilities": [
+        "EU dual-use list now covers cryogenic cooling systems; Chinese localization (QuantumCTek, Origin) erodes the monopoly"
+      ],
+      "incentives": [
+        {
+          "driver": "Choke-point rents on cryogenics",
+          "gains_if": "Superconducting/topological scaling proceeds and China stays import-dependent",
+          "loses_if": "Chinese refrigerators reach parity or neutral atoms win the modality race",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Precision manufacturing",
+          "supply security"
+        ],
+        "beliefs": [
+          "Cryogenic demand grows with fault tolerance"
+        ],
+        "identity": "European critical-node firm",
+        "frame": "Quiet choke-point power"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Named choke point under export-control regimes"
+      }
+    },
+    {
+      "name": "QED-C",
+      "type": "Other",
+      "role": "Industry consortium tracking companies, investment, revenue and jobs",
+      "stance": "Counts 556 pure-play quantum companies and $56.7 billion cumulative public commitments at end-2025; projects $3 billion market by 2028",
+      "description": "State of the Global Quantum Industry 2026: 7,418 quantum-engaged organizations, EU leads pure-play counts (173 vs US 164), revenue $1.4 billion in 2025 with North America ~44% share, workforce ~16,500; counts $4.9 billion global quantum VC in 2025, up 192%.",
+      "stated_vs_revealed": "Neutral measurement role",
+      "memory": "Annual reports with restating vintages (e.g., McKinsey's 2023 restatement)",
+      "influence": "low",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "goals": [
+        "Standardized industry measurement"
+      ],
+      "constraints": [
+        "Scope differences versus McKinsey create conflicting headline figures"
+      ],
+      "assets": [
+        "Company-level dataset",
+        "Annual series"
+      ],
+      "vulnerabilities": [
+        "Its 2025 US venture figure (> $2.7 billion) unconfirmed on primary pages"
+      ],
+      "incentives": [
+        {
+          "driver": "Industry visibility and measurement discipline",
+          "gains_if": "Its series becomes the reference for milestone testing",
+          "loses_if": "Definitional disputes undermine credibility",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Industry growth",
+          "data transparency"
+        ],
+        "beliefs": [
+          "Ecosystem breadth predicts value"
+        ],
+        "identity": "Consortium tracker",
+        "frame": "Growth measured in companies and revenue"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Provides indicator baselines for market-size forecasts"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "IBM",
+      "target": "Google Quantum AI",
+      "type": "COMPETES_WITH",
+      "relation_label": "superconducting fault-tolerance race",
+      "since": "2019",
+      "basis": "Both publish superconducting roadmaps; IBM dates milestones, Google claims error-correction firsts [S1][S3][S19]",
+      "valence": "adversarial",
+      "polarity": -0.4,
+      "strength": 0.8,
+      "sign": "-"
+    },
+    {
+      "source": "DARPA",
+      "target": "IBM",
+      "type": "INFLUENCES",
+      "relation_label": "benchmarking and funding channel",
+      "since": "2025",
+      "basis": "QBI stages and funds candidate approaches; nearly 20 companies entered Stage A [S11][S12]",
+      "valence": "transactional",
+      "polarity": 0.4,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "DARPA",
+      "target": "PsiQuantum",
+      "type": "FUNDS",
+      "relation_label": "expanded $125 million Stage C agreement",
+      "since": "2024",
+      "basis": "Final US2QC/QBI phase selection and reported $125 million agreement [S42][S60]",
+      "valence": "allied",
+      "polarity": 0.7,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "DARPA",
+      "target": "Microsoft",
+      "type": "FUNDS",
+      "relation_label": "final US2QC/QBI phase selection",
+      "since": "2024",
+      "basis": "Microsoft selected with PsiQuantum for the final phase [S42]",
+      "valence": "allied",
+      "polarity": 0.6,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "DARPA",
+      "target": "Google Quantum AI",
+      "type": "INFLUENCES",
+      "relation_label": "QBI Stage A verification",
+      "since": "2025",
+      "basis": "Google Quantum AI joined QBI Stage A in September 2025 [S12]",
+      "valence": "transactional",
+      "polarity": 0.4,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "Microsoft",
+      "target": "Quantinuum",
+      "type": "PARTNERS_WITH",
+      "relation_label": "12-logical-qubit chemistry workflow",
+      "since": "2024",
+      "basis": "September 2024 joint demonstration [S26][S50]",
+      "valence": "allied",
+      "polarity": 0.7,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "Global Risk Institute / evolutionQ",
+      "target": "Quantinuum",
+      "type": "COMPETES_WITH",
+      "relation_label": "trapped-ion rivalry",
+      "since": "2022",
+      "basis": "Both sell trapped-ion systems with divergent scaling claims [S24][S48]",
+      "valence": "adversarial",
+      "polarity": -0.4,
+      "strength": 0.7,
+      "sign": "-"
+    },
+    {
+      "source": "US Department of Commerce / BIS",
+      "target": "Chinese Academy of Sciences / USTC",
+      "type": "SANCTIONS",
+      "relation_label": "Entity List additions and presumption of denial",
+      "since": "2020",
+      "basis": "CAS/USTC-linked entities listed 2020-2021; dilution refrigerator exports face presumption of denial [S41][S73]",
+      "valence": "adversarial",
+      "polarity": -0.9,
+      "strength": 0.9,
+      "sign": "-"
+    },
+    {
+      "source": "US Department of Commerce / BIS",
+      "target": "Chinese government (NDRC/MOST)",
+      "type": "SANCTIONS",
+      "relation_label": "quantum export and investment restrictions",
+      "since": "2024",
+      "basis": "Outbound investment ban effective 2 January 2025; September 2024 rule; September 2025 entity additions [S13][S41][S71]",
+      "valence": "adversarial",
+      "polarity": -0.8,
+      "strength": 0.8,
+      "sign": "-"
+    },
+    {
+      "source": "Chinese government (NDRC/MOST)",
+      "target": "US Department of Commerce / BIS",
+      "type": "OPPOSES",
+      "relation_label": "rare-earth export-control retaliation",
+      "since": "2024",
+      "basis": "December 2024 mineral bar and 9 October 2025 MOFCOM rare-earth controls [S101][S102]",
+      "valence": "adversarial",
+      "polarity": -0.7,
+      "strength": 0.7,
+      "sign": "-"
+    },
+    {
+      "source": "Chinese government (NDRC/MOST)",
+      "target": "Chinese Academy of Sciences / USTC",
+      "type": "FUNDS",
+      "relation_label": "state megaproject and national lab",
+      "since": "2016",
+      "basis": "2016 quantum megaproject; NLQIS established 2017 under Pan Jianwei [S64]",
+      "valence": "allied",
+      "polarity": 0.9,
+      "strength": 0.9,
+      "sign": "+"
+    },
+    {
+      "source": "Chinese government (NDRC/MOST)",
+      "target": "Origin Quantum",
+      "type": "BACKS",
+      "relation_label": "domestic substitution mandate and state ecosystem",
+      "since": "2020",
+      "basis": "State-directed NISQ focus and 1,000-qubit-class goal around 2030 [S65]",
+      "valence": "allied",
+      "polarity": 0.7,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "European Commission",
+      "target": "IQM",
+      "type": "SUPPORTS",
+      "relation_label": "EuroHPC ecosystem and funding calls",
+      "since": "2023",
+      "basis": "EuroHPC procurement and 2026 quantum technology funding calls [S76][S79]",
+      "valence": "allied",
+      "polarity": 0.6,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "European Commission",
+      "target": "US Department of Commerce / BIS",
+      "type": "ALLY_OF",
+      "relation_label": "aligned dual-use controls",
+      "since": "2025",
+      "basis": "8 September 2025 Delegated Regulation aligning with US, UK and Japanese controls [S84][S85]",
+      "valence": "allied",
+      "polarity": 0.6,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "Bluefors",
+      "target": "IBM",
+      "type": "SUPPLIES",
+      "relation_label": "dilution refrigeration for superconducting systems",
+      "since": "2019",
+      "basis": "Bluefors among three firms holding ~70% of the refrigerator market; refrigerators can cost more than the QPU [S41][S94]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "US Department of Energy",
+      "target": "Bluefors",
+      "type": "OTHER",
+      "relation_label": "helium-3 allocation dependency",
+      "since": "2008",
+      "basis": "DOE Isotope Program supplies He-3 from Savannah River; commercial buyers face tight market outside federal allocation [S14][S39]",
+      "valence": "neutral",
+      "polarity": 0.0,
+      "strength": 0.5
+    },
+    {
+      "source": "NIST",
+      "target": "White House OSTP / NQI",
+      "type": "PARTNERS_WITH",
+      "relation_label": "PQC standards and NSM-10 2035 migration target",
+      "since": "2022",
+      "basis": "NSM-10 sets 2035 target; NIST draft IR 8547 deprecates after 2030 and disallows after 2035 [S10][S105]",
+      "valence": "allied",
+      "polarity": 0.7,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "Global Risk Institute / evolutionQ",
+      "target": "NIST",
+      "type": "INFLUENCES",
+      "relation_label": "expert timelines informing migration deadlines",
+      "since": "2019",
+      "basis": "GRI threat-timeline series tracks CRQC probability that NIST's 2035 rationale anticipates [S5][S120]",
+      "valence": "directional",
+      "polarity": 0.4,
+      "strength": 0.4,
+      "sign": "+"
+    },
+    {
+      "source": "QuEra",
+      "target": "Google Quantum AI",
+      "type": "COMPETES_WITH",
+      "relation_label": "neutral-atom vs superconducting logical-qubit race",
+      "since": "2023",
+      "basis": "QuEra's 48-logical-qubit and 96-logical-qubit demonstrations versus Google's below-threshold results; Google reportedly adding neutral atoms [S30][S31][S34]",
+      "valence": "adversarial",
+      "polarity": -0.3,
+      "strength": 0.5,
+      "sign": "-"
+    },
+    {
+      "source": "Global Risk Institute / evolutionQ",
+      "target": "QuEra",
+      "type": "COMPETES_WITH",
+      "relation_label": "logical-qubit roadmap race",
+      "since": "2023",
+      "basis": "Competing 2028 logical-qubit claims: IonQ ~1,600 logical by 2028 vs QuEra Libra 256 logical in 2028 [S4][S48]",
+      "valence": "adversarial",
+      "polarity": -0.3,
+      "strength": 0.5,
+      "sign": "-"
+    },
+    {
+      "source": "QED-C",
+      "target": "White House OSTP / NQI",
+      "type": "INFLUENCES",
+      "relation_label": "industry data informing policy",
+      "since": "2020",
+      "basis": "QED-C tracks $56.7 billion cumulative public commitments and industry metrics cited in policy debate [S63][S8]",
+      "valence": "neutral",
+      "polarity": 0.2,
+      "strength": 0.3,
+      "sign": "+"
+    },
+    {
+      "source": "Chinese Academy of Sciences / USTC",
+      "target": "Google Quantum AI",
+      "type": "COMPETES_WITH",
+      "relation_label": "US-China superconducting quantum race",
+      "since": "2021",
+      "basis": "Zuchongzhi 3.0 matches Willow's 105 qubits; Zuchongzhi 3.2 replicated below-threshold correction about a year after Google [S1][S20][S22]",
+      "valence": "adversarial",
+      "polarity": -0.6,
+      "strength": 0.8,
+      "sign": "-"
+    }
+  ],
+  "hot_topics": [
+    "IBM Starling 2029 delivery at specification (200 logical qubits, 100 million gates)",
+    "DARPA QBI Stage C verification of utility-scale operation by 2033",
+    "GRI expert CRQC probability rising (28-49% within ten years)",
+    "NIST IR 8547 finalization: RSA/ECC deprecation after 2030, disallowance after 2035",
+    "US NQI reauthorization (S.3597) without enacted dollar authorization",
+    "Helium-3 scarcity and dilution-refrigerator choke point held by three European firms",
+    "China's kiloqubit target around 2030 and Zuchongzhi Λ≥2 demonstration",
+    "2025 private investment boom ($12.6 billion) vulnerable to retrenchment",
+    "EU-US export-control alignment and China's rare-earth retaliation",
+    "IonQ's 2027 ~10,000-qubit chip and 2028 cryptographic-relevance claim",
+    "Harvest-now-decrypt-later exposure window for data needing confidentiality past ~2030",
+    "Quantum market revenue path from $1.4 billion (2025) toward $3 billion (2028) and $28-72 billion (2035)"
+  ],
+  "key_events": [
+    {
+      "date": "2019",
+      "event": "Google counts its beyond-classical computation milestone as achieved (Sycamore-era).",
+      "staleness_days": 2827,
+      "is_stale": true
+    },
+    {
+      "date": "2021",
+      "event": "USTC demonstrates Zuchongzhi-2, a 66-qubit superconducting quantum computational advantage.",
+      "staleness_days": 2096,
+      "is_stale": true
+    },
+    {
+      "date": "2022-11",
+      "event": "QuEra's analog Aquila machine provides 256 physical atoms.",
+      "staleness_days": 1427,
+      "is_stale": true
+    },
+    {
+      "date": "2023-05-09",
+      "event": "Quantinuum launches H2-1 with 32 fully connected trapped-ion qubits and a Quantum Volume record of 65,536.",
+      "staleness_days": 1238,
+      "is_stale": true
+    },
+    {
+      "date": "2023-10",
+      "event": "Harvard/MIT/QuEra collaboration demonstrates 99.5% two-qubit fidelity in parallel on 60 neutral atoms.",
+      "staleness_days": 1093,
+      "is_stale": true
+    },
+    {
+      "date": "2023-12",
+      "event": "Harvard/MIT/QuEra presents first logical processor: 48 logical qubits from 250+ physical.",
+      "staleness_days": 1032,
+      "is_stale": true
+    },
+    {
+      "date": "2024-01",
+      "event": "Origin Quantum launches Wukong with 72 working qubits plus 126 couplers.",
+      "staleness_days": 1001,
+      "is_stale": true
+    },
+    {
+      "date": "2024-06",
+      "event": "Quantinuum expands H2-1 to 56 qubits; with JPMorgan Chase runs random circuit sampling claimed 100x better than Google's 2019 result.",
+      "staleness_days": 849,
+      "is_stale": true
+    },
+    {
+      "date": "2024-06-25",
+      "event": "Pasqal announces loading over 1,000 atoms in a single shot in a quantum processor.",
+      "staleness_days": 825,
+      "is_stale": true
+    },
+    {
+      "date": "2024-09",
+      "event": "Microsoft and Quantinuum report 12 logical qubits with an end-to-end chemistry workflow on H2.",
+      "staleness_days": 757,
+      "is_stale": true
+    },
+    {
+      "date": "2024-12",
+      "event": "Google's Willow (105 qubits) demonstrates below-threshold surface-code error correction.",
+      "staleness_days": 666,
+      "is_stale": true
+    },
+    {
+      "date": "2025-02-19",
+      "event": "Microsoft announces Majorana 1, billed as the first topological-qubit processor.",
+      "staleness_days": 586,
+      "is_stale": true
+    },
+    {
+      "date": "2025-02-26",
+      "event": "PsiQuantum announces Omega photonic chipset (published in Nature).",
+      "staleness_days": 579,
+      "is_stale": true
+    },
+    {
+      "date": "2025-03-03",
+      "event": "USTC announces Zuchongzhi 3.0, a 105-qubit superconducting processor (PRL 134, 090601).",
+      "staleness_days": 574,
+      "is_stale": true
+    },
+    {
+      "date": "2025-04-03",
+      "event": "DARPA announces nearly 20 companies entering QBI Stage A.",
+      "staleness_days": 543,
+      "is_stale": true
+    },
+    {
+      "date": "2025-06",
+      "event": "IBM commits to Starling in 2029 and Blue Jay in 2033+.",
+      "staleness_days": 484,
+      "is_stale": true
+    },
+    {
+      "date": "2025-09-08",
+      "event": "European Commission adopts Delegated Regulation adding quantum computers and components to the EU dual-use control list.",
+      "staleness_days": 385,
+      "is_stale": true
+    },
+    {
+      "date": "2025-09-12",
+      "event": "US Federal Register rule effective adding 32 entities, 23 under China, including CAS National Time Service Center.",
+      "staleness_days": 381,
+      "is_stale": true
+    },
+    {
+      "date": "2025-10",
+      "event": "Google claims first verifiable quantum advantage on Willow.",
+      "staleness_days": 362,
+      "is_stale": false
+    },
+    {
+      "date": "2025-10",
+      "event": "Oxford Ionics claims a 99.99% two-qubit gate fidelity world record.",
+      "staleness_days": 362,
+      "is_stale": false
+    },
+    {
+      "date": "2025-11-06",
+      "event": "DARPA selects 11 companies for Quantum Benchmarking Initiative Stage B.",
+      "staleness_days": 326,
+      "is_stale": false
+    },
+    {
+      "date": "2025-11",
+      "event": "Quantinuum releases Helios: 98 fully connected qubits, 99.921% all-pairs two-qubit fidelity, 48 error-corrected logical qubits.",
+      "staleness_days": 331,
+      "is_stale": false
+    },
+    {
+      "date": "2025-12-22",
+      "event": "Zuchongzhi 3.2 (107 qubits) below-threshold error correction published in PRL (distance-7, Λ = 1.40(6)).",
+      "staleness_days": 280,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01-08",
+      "event": "Senator Todd Young introduces S.3597, the National Quantum Initiative Reauthorization Act of 2026.",
+      "staleness_days": 263,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01",
+      "event": "US House passes the Remote Access Security Act 369-22 to extend export controls to remote cloud access.",
+      "staleness_days": 270,
+      "is_stale": false
+    },
+    {
+      "date": "2026-03-09",
+      "event": "MOFCOM announces broad controls on rare-earth and battery materials and technology (announced 9 October 2025 per report; March 2026 QBIT solicitation also this month).",
+      "staleness_days": 203,
+      "is_stale": false
+    },
+    {
+      "date": "2026-03-09",
+      "event": "DARPA publishes QBIT Stage A solicitation (DARPA-PA-26-02-02) with 30 November 2026 deadline.",
+      "staleness_days": 203,
+      "is_stale": false
+    },
+    {
+      "date": "2026-04-14",
+      "event": "US Senate Commerce Committee orders S.3597 reported favorably with a substitute amendment.",
+      "staleness_days": 167,
+      "is_stale": false
+    },
+    {
+      "date": "2026-04-29",
+      "event": "House Science Committee markup where Ranking Member Lofgren states the bill 'does not have any funds authorized'.",
+      "staleness_days": 152,
+      "is_stale": false
+    },
+    {
+      "date": "2026-06-23",
+      "event": "IQM announces directional tile codes, targeting fault tolerance by 2030.",
+      "staleness_days": 97,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07-01",
+      "event": "Zhejiang University group publishes first demonstration of zero-noise extrapolation on logical qubits in Nature Communications.",
+      "staleness_days": 89,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07-23",
+      "event": "EuroHPC had procured and inaugurated six quantum computers across Europe by this date.",
+      "staleness_days": 67,
+      "is_stale": false
+    },
+    {
+      "date": "2024-09-06",
+      "event": "US Commerce interim final rule effective (89 FR 72926) adding quantum technologies to the Commerce Control List.",
+      "staleness_days": 752,
+      "is_stale": true
+    },
+    {
+      "date": "2025-01-02",
+      "event": "US outbound investment rules effective, prohibiting US investment in Chinese quantum computing, military quantum sensing and quantum communication.",
+      "staleness_days": 634,
+      "is_stale": true
+    },
+    {
+      "date": "2025-08-12",
+      "event": "USTC posts programmable 3,050-photon Gaussian boson sampling demonstration (arXiv:2508.09092).",
+      "staleness_days": 412,
+      "is_stale": true
+    },
+    {
+      "date": "2024-07-25",
+      "event": "H.R. 6213 reported, would have authorized $1.8 billion for FY2025-2029; lapsed without enactment.",
+      "staleness_days": 795,
+      "is_stale": true
+    },
+    {
+      "date": "2025-03",
+      "event": "BIS adds seven Chinese supply-chain entities including cryogenics companies Scikro and Physike.",
+      "staleness_days": 576,
+      "is_stale": true
+    },
+    {
+      "date": "2024-11",
+      "event": "NIST releases initial public draft of IR 8547 transition plan.",
+      "staleness_days": 696,
+      "is_stale": true
+    },
+    {
+      "date": "2026-03-09",
+      "event": "Global Risk Institute / evolutionQ Quantum Threat Timeline Report 2025 published (26 experts).",
+      "staleness_days": 203,
+      "is_stale": false
+    }
+  ],
+  "quantitative_facts": [
+    {
+      "metric": "qubit count",
+      "value": "105",
+      "series": "Google Willow",
+      "unit": "qubits",
+      "as_of_date": "2024-12-01",
+      "geography": "United States",
+      "definition": "superconducting processor demonstrating below-threshold surface-code error correction",
+      "source": "Google (Nature)",
+      "value_type": "actual",
+      "source_url": "https://blog.google/innovation-and-ai/technology/research/google-willow-quantum-chip/",
+      "tier": "S3",
+      "value_num": 105.0,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Google (Nature)",
+      "staleness_days": 666,
+      "is_stale": true
+    },
+    {
+      "metric": "two-qubit gate fidelity (parallel)",
+      "value": "99.62",
+      "series": "Zuchongzhi 3.0",
+      "unit": "%",
+      "as_of_date": "2025-03-03",
+      "geography": "China",
+      "definition": "105-qubit superconducting processor, 182 couplers, 72 μs coherence",
+      "source": "USTC, Physical Review Letters 134, 090601",
+      "value_type": "actual",
+      "source_url": "https://en.ustc.edu.cn/info/1007/5015.htm",
+      "tier": "S3",
+      "value_num": 99.62,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "USTC, Physical Review Letters 134, 090601",
+      "staleness_days": 574,
+      "is_stale": true
+    },
+    {
+      "metric": "logical qubits",
+      "value": "200",
+      "series": "IBM Starling target",
+      "unit": "logical qubits",
+      "as_of_date": "2029-12-31",
+      "geography": "United States",
+      "definition": "fault-tolerant computer running 100 million quantum gates, Poughkeepsie NY",
+      "source": "IBM",
+      "value_type": "target",
+      "source_url": "https://www.ibm.com/quantum/blog/large-scale-ftqc",
+      "tier": "S3",
+      "value_num": 200.0,
+      "year": 2029,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "IBM",
+      "staleness_days": -1190,
+      "is_stale": false
+    },
+    {
+      "metric": "physical qubits",
+      "value": "98",
+      "series": "Quantinuum Helios",
+      "unit": "qubits",
+      "as_of_date": "2025-11-01",
+      "geography": "United States/United Kingdom",
+      "definition": "fully connected trapped-ion qubits",
+      "source": "Quantinuum",
+      "value_type": "actual",
+      "source_url": "https://www.quantinuum.com/blog/introducing-helios-the-most-accurate-quantum-computer-in-the-world",
+      "tier": "S3",
+      "value_num": 98.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States/United Kingdom",
+      "analyst": "Quantinuum",
+      "staleness_days": 331,
+      "is_stale": false
+    },
+    {
+      "metric": "two-qubit gate fidelity (all pairs)",
+      "value": "99.921",
+      "series": "Quantinuum Helios",
+      "unit": "%",
+      "as_of_date": "2025-11-01",
+      "geography": "United States/United Kingdom",
+      "definition": "all-pairs two-qubit fidelity on Helios",
+      "source": "Quantinuum (arXiv:2511.05465)",
+      "value_type": "actual",
+      "source_url": "https://www.quantinuum.com/blog/introducing-helios-the-most-accurate-quantum-computer-in-the-world",
+      "tier": "S3",
+      "value_num": 99.921,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States/United Kingdom",
+      "analyst": "Quantinuum (arXiv:2511.05465)",
+      "staleness_days": 331,
+      "is_stale": false
+    },
+    {
+      "metric": "error-corrected logical qubits",
+      "value": "48",
+      "series": "Quantinuum Helios",
+      "unit": "logical qubits",
+      "as_of_date": "2025-11-01",
+      "geography": "United States/United Kingdom",
+      "definition": "Iceberg code at roughly 2:1 encoding",
+      "source": "Quantinuum",
+      "value_type": "actual",
+      "source_url": "https://www.quantinuum.com/blog/introducing-helios-the-most-accurate-quantum-computer-in-the-world",
+      "tier": "S3",
+      "value_num": 48.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States/United Kingdom",
+      "analyst": "Quantinuum",
+      "staleness_days": 331,
+      "is_stale": false
+    },
+    {
+      "metric": "two-qubit gate fidelity",
+      "value": "99.99",
+      "series": "Oxford Ionics",
+      "unit": "%",
+      "as_of_date": "2025-10-01",
+      "geography": "United Kingdom",
+      "definition": "claimed world record (selected-pair convention)",
+      "source": "Oxford Ionics (an IonQ company)",
+      "value_type": "actual",
+      "source_url": "https://www.ionq.com/blog/accelerating-towards-fault-tolerance-unlocking-99-99-two-qubit-gate",
+      "tier": "S3",
+      "value_num": 99.99,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United Kingdom",
+      "analyst": "Oxford Ionics (an IonQ company)",
+      "staleness_days": 362,
+      "is_stale": false
+    },
+    {
+      "metric": "physical qubits",
+      "value": "260",
+      "series": "QuEra Gemini",
+      "unit": "qubits",
+      "as_of_date": "2025-01-01",
+      "geography": "United States",
+      "definition": "neutral-atom machine at 99.5% physical gate fidelity, first deployed at AIST Japan",
+      "source": "QuEra",
+      "value_type": "actual",
+      "source_url": "https://www.quera.com/ai-info-page",
+      "tier": "S3",
+      "value_num": 260.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "QuEra",
+      "staleness_days": 635,
+      "is_stale": true
+    },
+    {
+      "metric": "logical qubits",
+      "value": "256",
+      "series": "QuEra Libra target",
+      "unit": "logical qubits",
+      "as_of_date": "2028-12-31",
+      "geography": "United States",
+      "definition": "from >10,000 physical qubits at 10^-6 logical error rate, on Amazon Braket",
+      "source": "QuEra",
+      "value_type": "target",
+      "source_url": "https://www.quera.com/questions/when-will-fault-tolerant-quantum-computers-be-available",
+      "tier": "S3",
+      "value_num": 256.0,
+      "year": 2028,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "QuEra",
+      "staleness_days": -825,
+      "is_stale": false
+    },
+    {
+      "metric": "detected photons",
+      "value": "255",
+      "series": "Jiuzhang 3.0",
+      "unit": "photons",
+      "as_of_date": "2023-01-01",
+      "geography": "China",
+      "definition": "boson sampling",
+      "source": "USTC",
+      "value_type": "actual",
+      "source_url": "https://en.ustc.edu.cn/info/1007/5015.htm",
+      "tier": "S3",
+      "value_num": 255.0,
+      "year": 2023,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "USTC",
+      "staleness_days": 1366,
+      "is_stale": true
+    },
+    {
+      "metric": "photons",
+      "value": "3050",
+      "series": "Jiuzhang 4.0",
+      "unit": "photons",
+      "as_of_date": "2025-08-12",
+      "geography": "China",
+      "definition": "programmable Gaussian boson sampling (arXiv:2508.09092)",
+      "source": "USTC",
+      "value_type": "actual",
+      "source_url": "https://arxiv.org/html/2508.09092v1",
+      "tier": "S3",
+      "value_num": 3050.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "USTC",
+      "staleness_days": 412,
+      "is_stale": true
+    },
+    {
+      "metric": "physical qubits",
+      "value": "180",
+      "series": "Wukong-180",
+      "unit": "computational qubits",
+      "as_of_date": "2025-12-01",
+      "geography": "China",
+      "definition": "company-reported 99.90% single-qubit, two-qubit and readout fidelity, self-reported",
+      "source": "Origin Quantum",
+      "value_type": "actual",
+      "source_url": "https://quantumcomputingreport.com/origin-quantum-unveils-origin-wukong-180-fourth-generation-quantum-computer/",
+      "tier": "S3",
+      "value_num": 180.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "Origin Quantum",
+      "staleness_days": 301,
+      "is_stale": false
+    },
+    {
+      "metric": "suppression factor",
+      "value": "1.40(6)",
+      "series": "Zuchongzhi 3.2",
+      "unit": "Λ (dimensionless)",
+      "as_of_date": "2025-12-22",
+      "geography": "China",
+      "definition": "below-threshold distance-7 surface code, 107 qubits, first outside the US",
+      "source": "Physical Review Letters via Quantum Computing Report",
+      "value_type": "actual",
+      "source_url": "https://quantumcomputingreport.com/ustcs-zuchongzhi-3-2-achieves-below-threshold-qec-milestone/",
+      "tier": "S3",
+      "value_num": 1.4,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "Physical Review Letters via Quantum Computing Report",
+      "staleness_days": 280,
+      "is_stale": false
+    },
+    {
+      "metric": "US federal quantum R&D spending",
+      "value": "1",
+      "series": "US federal",
+      "unit": "billion USD",
+      "as_of_date": "2022-01-01",
+      "period_end": "2022-12-31",
+      "geography": "United States",
+      "definition": "quantum information science research, CBO baseline",
+      "source": "CBO",
+      "value_type": "estimate",
+      "source_url": "https://www.cbo.gov/publication/60891",
+      "tier": "S1",
+      "value_num": 1.0,
+      "year": 2022,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "CBO",
+      "staleness_days": 1731,
+      "is_stale": true
+    },
+    {
+      "metric": "authorization in lapsed bill",
+      "value": "1.8",
+      "series": "H.R. 6213",
+      "unit": "billion USD",
+      "as_of_date": "2024-07-25",
+      "period_end": "FY2025-2029",
+      "geography": "United States",
+      "definition": "CBO cost estimate $1.3 billion; lapsed without enactment",
+      "source": "CBO / H.R. 6213",
+      "value_type": "target",
+      "source_url": "https://www.cbo.gov/publication/60891",
+      "tier": "S1",
+      "value_num": 1.8,
+      "year": 2024,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "CBO / H.R. 6213",
+      "staleness_days": 795,
+      "is_stale": true
+    },
+    {
+      "metric": "cumulative global public quantum funding",
+      "value": "56.7",
+      "series": "QED-C global public commitments",
+      "unit": "billion USD",
+      "as_of_date": "2025-12-31",
+      "geography": "Global",
+      "definition": "rise of more than $12.7 billion during 2025 alone",
+      "source": "QED-C",
+      "value_type": "estimate",
+      "source_url": "https://quantumconsortium.org/global-quantum-computing-market-to-double/",
+      "tier": "S3",
+      "value_num": 56.7,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "QED-C",
+      "metric_family": "cumulative deployment",
+      "staleness_days": 271,
+      "is_stale": false
+    },
+    {
+      "metric": "Chinese government quantum funding",
+      "value": "15",
+      "series": "China public funding",
+      "unit": "billion USD (approximately)",
+      "as_of_date": "2022-01-01",
+      "geography": "China",
+      "definition": "originates from McKinsey 2022 Monitor reading of non-public 14th Five-Year Plan document; unverifiable",
+      "source": "McKinsey Quantum Technology Monitor",
+      "value_type": "estimate",
+      "source_url": "https://merics.org/en/report/chinas-long-view-quantum-tech-has-us-and-eu-playing-catch",
+      "tier": "S3",
+      "value_num": 15.0,
+      "year": 2022,
+      "value_kind": "forecast",
+      "region": "China",
+      "analyst": "McKinsey Quantum Technology Monitor",
+      "staleness_days": 1731,
+      "is_stale": true
+    },
+    {
+      "metric": "cumulative US private quantum funding",
+      "value": "3.7",
+      "series": "SCSP",
+      "unit": "billion USD (approximately)",
+      "as_of_date": "2025-01-01",
+      "geography": "United States",
+      "definition": "versus about $255 million for China",
+      "source": "SCSP 2025 gaps analysis",
+      "value_type": "estimate",
+      "source_url": "https://www.scsp.ai/reports/2025-gaps-analysis/gaps-analysis/quantum/",
+      "tier": "S3",
+      "value_num": 3.7,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "SCSP 2025 gaps analysis",
+      "metric_family": "cumulative deployment",
+      "staleness_days": 635,
+      "is_stale": true
+    },
+    {
+      "metric": "cumulative Chinese private quantum funding",
+      "value": "255",
+      "series": "SCSP",
+      "unit": "million USD (approximately)",
+      "as_of_date": "2025-01-01",
+      "geography": "China",
+      "definition": "versus about $3.7 billion for the United States",
+      "source": "SCSP 2025 gaps analysis",
+      "value_type": "estimate",
+      "source_url": "https://www.scsp.ai/reports/2025-gaps-analysis/gaps-analysis/quantum/",
+      "tier": "S3",
+      "value_num": 255.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "China",
+      "analyst": "SCSP 2025 gaps analysis",
+      "metric_family": "cumulative deployment",
+      "staleness_days": 635,
+      "is_stale": true
+    },
+    {
+      "metric": "Origin Quantum total raise",
+      "value": "150-165",
+      "series": "Origin Quantum",
+      "unit": "million USD (approximately)",
+      "as_of_date": "2025-01-01",
+      "geography": "China",
+      "definition": "entirely from domestic investors",
+      "source": "Report citing Origin Quantum",
+      "value_type": "estimate",
+      "source_url": "https://postquantum.com/quantum-computing-companies/origin-quantum/",
+      "tier": "S3",
+      "value_num": 157.5,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "China",
+      "analyst": "Report citing Origin Quantum",
+      "staleness_days": 635,
+      "is_stale": true
+    },
+    {
+      "metric": "global quantum start-up investment",
+      "value": "12.6",
+      "series": "McKinsey PitchBook series",
+      "unit": "billion USD",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "6.3 times the 2024 level; public sources supplied only 3% of 2025 start-up funding",
+      "source": "McKinsey Quantum Technology Monitor 2026",
+      "value_type": "actual",
+      "source_url": "https://www.mckinsey.com/featured-insights/charts/quantum-investment-surge",
+      "tier": "S3",
+      "value_num": 12.6,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "McKinsey Quantum Technology Monitor 2026",
+      "staleness_days": 271,
+      "is_stale": false
+    },
+    {
+      "metric": "global quantum start-up investment",
+      "value": "1.7",
+      "series": "McKinsey PitchBook series",
+      "unit": "billion USD",
+      "as_of_date": "2023-12-31",
+      "period_end": "2023",
+      "geography": "Global",
+      "definition": "down 27% from $2.35 billion in 2022 (April 2024 Monitor vintage)",
+      "source": "McKinsey Quantum Technology Monitor",
+      "value_type": "actual",
+      "source_url": "https://www.mckinsey.com/~/media/mckinsey/business%20functions/mckinsey%20digital/our%20insights/steady%20progress%20in%20approaching%20the%20quantum%20advantage/quantum-technology-monitor-april-2024.pdf",
+      "tier": "S3",
+      "value_num": 1.7,
+      "year": 2023,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "McKinsey Quantum Technology Monitor",
+      "staleness_days": 1002,
+      "is_stale": true
+    },
+    {
+      "metric": "global quantum venture capital",
+      "value": "4.9",
+      "series": "QED-C",
+      "unit": "billion USD",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "up 192% from 2024's previous record; narrower venture scope than McKinsey",
+      "source": "QED-C",
+      "value_type": "actual",
+      "source_url": "https://quantumconsortium.org/global-quantum-computing-market-to-double/",
+      "tier": "S3",
+      "value_num": 4.9,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "QED-C",
+      "staleness_days": 271,
+      "is_stale": false
+    },
+    {
+      "metric": "global quantum-computing revenue",
+      "value": "1.4",
+      "series": "QED-C",
+      "unit": "billion USD",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "North America roughly 44% share",
+      "source": "QED-C State of the Global Quantum Industry 2026",
+      "value_type": "actual",
+      "source_url": "https://8441224.fs1.hubspotusercontent-na1.net/hubfs/8441224/2026%20SGQIR/SGQI%202026%20Booklet_Web%20Final.pdf",
+      "tier": "S3",
+      "value_num": 1.4,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "QED-C State of the Global Quantum Industry 2026",
+      "metric_family": "market share",
+      "staleness_days": 271,
+      "is_stale": false
+    },
+    {
+      "metric": "global quantum-computing revenue forecast",
+      "value": "3",
+      "series": "QED-C projection",
+      "unit": "billion USD",
+      "as_of_date": "2028-12-31",
+      "period_end": "2028",
+      "geography": "Global",
+      "definition": "roughly 30% annual growth",
+      "source": "QED-C",
+      "value_type": "forecast",
+      "source_url": "https://8441224.fs1.hubspotusercontent-na1.net/hubfs/8441224/2026%20SGQIR/SGQI%202026%20Booklet_Web%20Final.pdf",
+      "tier": "S3",
+      "value_num": 3.0,
+      "year": 2028,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "QED-C",
+      "metric_family": "growth rate",
+      "staleness_days": -825,
+      "is_stale": false
+    },
+    {
+      "metric": "pure-play quantum companies in EU",
+      "value": "173",
+      "series": "QED-C company count",
+      "unit": "companies",
+      "as_of_date": "2025-12-31",
+      "geography": "European Union",
+      "definition": "ahead of United States at 164",
+      "source": "QED-C",
+      "value_type": "actual",
+      "source_url": "https://8441224.fs1.hubspotusercontent-na1.net/hubfs/8441224/2026%20SGQIR/SGQI%202026%20Booklet_Web%20Final.pdf",
+      "tier": "S3",
+      "value_num": 173.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "QED-C",
+      "staleness_days": 271,
+      "is_stale": false
+    },
+    {
+      "metric": "pure-play quantum companies in US",
+      "value": "164",
+      "series": "QED-C company count",
+      "unit": "companies",
+      "as_of_date": "2025-12-31",
+      "geography": "United States",
+      "definition": "behind EU at 173",
+      "source": "QED-C",
+      "value_type": "actual",
+      "source_url": "https://8441224.fs1.hubspotusercontent-na1.net/hubfs/8441224/2026%20SGQIR/SGQI%202026%20Booklet_Web%20Final.pdf",
+      "tier": "S3",
+      "value_num": 164.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "QED-C",
+      "staleness_days": 271,
+      "is_stale": false
+    },
+    {
+      "metric": "pure-play quantum workforce",
+      "value": "16500",
+      "series": "QED-C",
+      "unit": "professionals (approximately)",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "up almost 2,000 from 2024; 8,200+ new job/internship openings, up 11%",
+      "source": "QED-C",
+      "value_type": "actual",
+      "source_url": "https://8441224.fs1.hubspotusercontent-na1.net/hubfs/8441224/2026%20SGQIR/SGQI%202026%20Booklet_Web%20Final.pdf",
+      "tier": "S3",
+      "value_num": 16500.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "QED-C",
+      "staleness_days": 271,
+      "is_stale": false
+    },
+    {
+      "metric": "economic value for companies by 2035",
+      "value": "1.3-2.7",
+      "series": "McKinsey",
+      "unit": "trillion USD",
+      "as_of_date": "2035-12-31",
+      "period_end": "2035",
+      "geography": "Global",
+      "definition": "cumulative economic value, Quantum Technology Monitor 2026",
+      "source": "McKinsey",
+      "value_type": "forecast",
+      "source_url": "https://www.mckinsey.com/capabilities/mckinsey-technology/our-insights/mckinsey-quantum-technology-monitor-2026-a-commercial-tipping-point",
+      "tier": "S3",
+      "value_num": 2.0,
+      "year": 2035,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "McKinsey",
+      "metric_family": "cumulative deployment",
+      "staleness_days": -3381,
+      "is_stale": false
+    },
+    {
+      "metric": "economic value creation by 2040",
+      "value": "450-850",
+      "series": "BCG",
+      "unit": "billion USD",
+      "as_of_date": "2040-12-31",
+      "period_end": "2040",
+      "geography": "Global",
+      "definition": "sustained by $90-170 billion annual hardware and software market",
+      "source": "BCG",
+      "value_type": "forecast",
+      "source_url": "https://www.bcg.com/publications/2024/long-term-forecast-for-quantum-computing-still-looks-bright",
+      "tier": "S3",
+      "value_num": 650.0,
+      "year": 2040,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "BCG",
+      "staleness_days": -5208,
+      "is_stale": false
+    },
+    {
+      "metric": "quantum-computing revenue 2035 forecast",
+      "value": "28-72",
+      "series": "McKinsey 2025 Monitor",
+      "unit": "billion USD",
+      "as_of_date": "2035-12-31",
+      "period_end": "2035",
+      "geography": "Global",
+      "definition": "within total quantum-technology market of up to $97 billion",
+      "source": "McKinsey Quantum Technology Monitor 2025",
+      "value_type": "forecast",
+      "source_url": "https://www.mckinsey.com/capabilities/tech-and-ai/our-insights/the-year-of-quantum-from-concept-to-reality-in-2025",
+      "tier": "S3",
+      "value_num": 50.0,
+      "year": 2035,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "McKinsey Quantum Technology Monitor 2025",
+      "metric_family": "annual revenue",
+      "staleness_days": -3381,
+      "is_stale": false
+    },
+    {
+      "metric": "quantum-computing revenue 2040 forecast",
+      "value": "20.20",
+      "series": "MarketsandMarkets",
+      "unit": "billion USD",
+      "as_of_date": "2035-12-31",
+      "period_end": "2035",
+      "geography": "Global",
+      "definition": "from $3.52 billion in 2025; reported, not independently confirmed",
+      "source": "MarketsandMarkets via SpinQ",
+      "value_type": "forecast",
+      "source_url": "https://www.spinq.com/news-detail/quantum-computing-valuation-navigating-the-hype-and-the-future",
+      "tier": "S3",
+      "value_num": 20.2,
+      "year": 2035,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "MarketsandMarkets via SpinQ",
+      "metric_family": "annual revenue",
+      "staleness_days": -3381,
+      "is_stale": false
+    },
+    {
+      "metric": "quantum-computing market 2030 forecast",
+      "value": "7.3",
+      "series": "BCC Research",
+      "unit": "billion USD",
+      "as_of_date": "2030-12-31",
+      "period_end": "2030",
+      "geography": "Global",
+      "definition": "from $1.6 billion in 2025 at 34.6% CAGR",
+      "source": "BCC Research",
+      "value_type": "forecast",
+      "source_url": "https://www.bccresearch.com/pressroom/ift/global-quantum-computing-market-to-grow-346?srsltid=AU7gw4XWlFkNffwIRtpDHvXk4wxhORLsIAcKI5Pk5ZMqOl8tx2VptjcG",
+      "tier": "S3",
+      "value_num": 7.3,
+      "year": 2030,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "BCC Research",
+      "metric_family": "growth rate",
+      "staleness_days": -1555,
+      "is_stale": false
+    },
+    {
+      "metric": "finance sector value by 2035",
+      "value": "400-600",
+      "series": "McKinsey",
+      "unit": "billion USD",
+      "as_of_date": "2035-12-31",
+      "period_end": "2035",
+      "geography": "Global",
+      "definition": "average impact of 3.0-4.5% across sector; 1-8% impact hypotheses applied to sub-sector baselines",
+      "source": "McKinsey, documented via third-party critique",
+      "value_type": "forecast",
+      "source_url": "https://postquantum.com/quantum-computing/mckinsey-quantum-finance-600b/",
+      "tier": "S3",
+      "value_num": 500.0,
+      "year": 2035,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "McKinsey, documented via third-party critique",
+      "staleness_days": -3381,
+      "is_stale": false
+    },
+    {
+      "metric": "pharmaceuticals value by 2035",
+      "value": "50-400",
+      "series": "McKinsey",
+      "unit": "billion USD",
+      "as_of_date": "2035-12-31",
+      "period_end": "2035",
+      "geography": "Global",
+      "definition": "assumes 5-20% R&D savings and 5-15% clinical-trial savings",
+      "source": "McKinsey 2026 Monitor via secondary analysis",
+      "value_type": "forecast",
+      "source_url": "https://postquantum.com/industry-news/mckinsey-quantum-monitor-2026/",
+      "tier": "S3",
+      "value_num": 225.0,
+      "year": 2035,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "McKinsey 2026 Monitor via secondary analysis",
+      "staleness_days": -3381,
+      "is_stale": false
+    },
+    {
+      "metric": "federal PQC migration cost estimate",
+      "value": "7.1",
+      "series": "OMB report to Congress",
+      "unit": "billion USD (2024 dollars, approximately)",
+      "as_of_date": "2024-07-01",
+      "period_end": "2025-2035",
+      "geography": "United States",
+      "definition": "prioritized federal civilian systems only, excludes national security systems",
+      "source": "OMB with ONCD, CISA and NIST",
+      "value_type": "estimate",
+      "source_url": "https://postquantum.com/security-pqc/white-house-pqc-estimate/",
+      "tier": "S3",
+      "value_num": 7.1,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "OMB with ONCD, CISA and NIST",
+      "staleness_days": 819,
+      "is_stale": true
+    },
+    {
+      "metric": "PQC products-and-services market",
+      "value": "1.9",
+      "series": "Future Market Insights",
+      "unit": "billion USD",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "reported, not independently confirmed",
+      "source": "Future Market Insights",
+      "value_type": "estimate",
+      "source_url": "https://www.futuremarketinsights.com/reports/post-quantum-cryptography-pqc-migration-market",
+      "tier": "S3",
+      "value_num": 1.9,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Future Market Insights",
+      "staleness_days": 271,
+      "is_stale": false
+    },
+    {
+      "metric": "expert probability of CRQC within ten years",
+      "value": "28-49",
+      "series": "GRI/evolutionQ 2025",
+      "unit": "%",
+      "as_of_date": "2026-03-09",
+      "period_end": "2036",
+      "geography": "Global",
+      "definition": "averaged over 26 experts; highest in series history",
+      "source": "Global Risk Institute / evolutionQ",
+      "value_type": "estimate",
+      "source_url": "https://globalriskinstitute.org/publication/quantum-threat-timeline-report-2025b/",
+      "tier": "S3",
+      "value_num": 38.5,
+      "year": 2036,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Global Risk Institute / evolutionQ",
+      "staleness_days": 203,
+      "is_stale": false
+    },
+    {
+      "metric": "expert probability of CRQC within fifteen years",
+      "value": "51-70",
+      "series": "GRI/evolutionQ 2025",
+      "unit": "%",
+      "as_of_date": "2026-03-09",
+      "period_end": "2041",
+      "geography": "Global",
+      "definition": "averaged over 26 experts",
+      "source": "Global Risk Institute / evolutionQ",
+      "value_type": "estimate",
+      "source_url": "https://globalriskinstitute.org/publication/quantum-threat-timeline-report-2025b/",
+      "tier": "S3",
+      "value_num": 60.5,
+      "year": 2041,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Global Risk Institute / evolutionQ",
+      "staleness_days": 203,
+      "is_stale": false
+    },
+    {
+      "metric": "bulk helium-3 price",
+      "value": "1900-2600",
+      "series": "industry accounts",
+      "unit": "USD per liter",
+      "as_of_date": "2025-01-01",
+      "geography": "Global",
+      "definition": "purification to dilution-refrigerator grade exceeds $10,000 per liter; historical US auction prices $40-85",
+      "source": "industry analyses",
+      "value_type": "estimate",
+      "source_url": "https://postquantum.com/quantum-systems-integration/helium-3-quantum-computing/",
+      "tier": "S3",
+      "value_num": 2250.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "industry analyses",
+      "staleness_days": 635,
+      "is_stale": true
+    },
+    {
+      "metric": "rare-earth reserve share",
+      "value": "69",
+      "series": "China rare earths",
+      "unit": "% of global reserves",
+      "as_of_date": "2025-01-01",
+      "geography": "China",
+      "definition": "about 90% of processing",
+      "source": "Report citing rare-earth data",
+      "value_type": "actual",
+      "source_url": "https://warontherocks.com/cogs-of-war/the-supply-chain-chokepoints-in-quantum/",
+      "tier": "S3",
+      "value_num": 69.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "Report citing rare-earth data",
+      "metric_family": "market share",
+      "staleness_days": 635,
+      "is_stale": true
+    },
+    {
+      "metric": "dilution-refrigerator market share",
+      "value": "70",
+      "series": "analyst estimate",
+      "unit": "% (approximately)",
+      "as_of_date": "2025-01-01",
+      "geography": "Finland/UK/Netherlands",
+      "definition": "Bluefors, Oxford Instruments, Leiden Cryogenics combined",
+      "source": "analyst estimate",
+      "value_type": "estimate",
+      "source_url": "https://postquantum.com/china-quantum-ambition/china-supply-chain-self-sufficiency/",
+      "tier": "S3",
+      "value_num": 70.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Finland/UK/Netherlands",
+      "analyst": "analyst estimate",
+      "metric_family": "market share",
+      "staleness_days": 635,
+      "is_stale": true
+    },
+    {
+      "metric": "EuroHPC quantum-technology funding calls",
+      "value": "119",
+      "series": "EuroHPC 2026 calls",
+      "unit": "million EUR",
+      "as_of_date": "2026-01-01",
+      "period_end": "2026",
+      "geography": "European Union",
+      "definition": "including EUR 20 million trapped-ion and EUR 20 million superconducting platform calls",
+      "source": "EuroHPC JU",
+      "value_type": "actual",
+      "source_url": "https://thequantuminsider.com/2026/08/24/eurohpc-119m-funding-calls-quantum-technologies/",
+      "tier": "S3",
+      "value_num": 119.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "EuroHPC JU",
+      "staleness_days": 270,
+      "is_stale": false
+    },
+    {
+      "metric": "European public quantum pledges",
+      "value": "12",
+      "series": "Merics tally",
+      "unit": "billion USD (approximately)",
+      "as_of_date": "2025-01-01",
+      "geography": "Europe (UK, Germany, France, EU, Netherlands)",
+      "definition": "public pledges",
+      "source": "Merics",
+      "value_type": "estimate",
+      "source_url": "https://merics.org/en/report/chinas-long-view-quantum-tech-has-us-and-eu-playing-catch",
+      "tier": "S3",
+      "value_num": 12.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Europe (UK, Germany, France, EU, Netherlands)",
+      "analyst": "Merics",
+      "staleness_days": 635,
+      "is_stale": true
+    },
+    {
+      "metric": "China emerging-technology fund",
+      "value": "138",
+      "series": "congressional testimony",
+      "unit": "billion USD",
+      "as_of_date": "2025-01-01",
+      "geography": "China",
+      "definition": "CCP-announced fund for public-private partnerships in emerging tech including quantum; from US congressional testimony, not a verified Chinese budget document",
+      "source": "Lofgren statement, House Science Committee",
+      "value_type": "estimate",
+      "source_url": "https://lofgren.house.gov/media/press-releases/ranking-member-lofgrens-opening-statement-markup-national-quantum-initiative",
+      "tier": "S1",
+      "value_num": 138.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "China",
+      "analyst": "Lofgren statement, House Science Committee",
+      "staleness_days": 635,
+      "is_stale": true
+    },
+    {
+      "metric": "PsiQuantum DARPA agreement",
+      "value": "125",
+      "series": "secondary reporting",
+      "unit": "million USD",
+      "as_of_date": "2025-01-01",
+      "geography": "United States",
+      "definition": "expanded Stage C agreement; plus $100 million proposed CHIPS Act incentives",
+      "source": "secondary reporting citing PsiQuantum",
+      "value_type": "estimate",
+      "source_url": "https://www.psiquantum.com/news-import/psiquantum-signs-125-million-agreement-with-darpa",
+      "tier": "S3",
+      "value_num": 125.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "secondary reporting citing PsiQuantum",
+      "staleness_days": 635,
+      "is_stale": true
+    },
+    {
+      "metric": "IonQ 2028 roadmap",
+      "value": "1600",
+      "series": "IonQ June 2025 roadmap",
+      "unit": "logical qubits (approximately)",
+      "as_of_date": "2028-12-31",
+      "geography": "United States",
+      "definition": "~20,000 physical at ~10^-7 error in 2028; 2,000,000+ physical by 2030",
+      "source": "IonQ",
+      "value_type": "target",
+      "source_url": "https://postquantum.com/industry-news/ionqroadmap-crqc/",
+      "tier": "S3",
+      "value_num": 1600.0,
+      "year": 2028,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "IonQ",
+      "staleness_days": -825,
+      "is_stale": false
+    },
+    {
+      "metric": "IonQ acquisition of Oxford Ionics",
+      "value": "1.1",
+      "series": "M&A",
+      "unit": "billion USD (approximately)",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025",
+      "geography": "United States/United Kingdom",
+      "definition": "consolidation deal",
+      "source": "secondary analysis of McKinsey 2026 Monitor",
+      "value_type": "actual",
+      "source_url": "https://postquantum.com/industry-news/mckinsey-quantum-monitor-2026/",
+      "tier": "S3",
+      "value_num": 1.1,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States/United Kingdom",
+      "analyst": "secondary analysis of McKinsey 2026 Monitor",
+      "staleness_days": 271,
+      "is_stale": false
+    },
+    {
+      "metric": "China kiloqubit target",
+      "value": "1000",
+      "series": "China national goal",
+      "unit": "qubits (qubit-class)",
+      "as_of_date": "2030-12-31",
+      "geography": "China",
+      "definition": "1,000-qubit-class machine by around 2030, reported",
+      "source": "report citing Origin Quantum / Chinese goals",
+      "value_type": "target",
+      "source_url": "https://postquantum.com/quantum-computing-companies/origin-quantum/",
+      "tier": "S3",
+      "value_num": 1000.0,
+      "year": 2030,
+      "value_kind": "forecast",
+      "region": "China",
+      "analyst": "report citing Origin Quantum / Chinese goals",
+      "staleness_days": -1555,
+      "is_stale": false
+    },
+    {
+      "metric": "quantum jobs projection 2035",
+      "value": "250000",
+      "series": "McKinsey",
+      "unit": "new jobs (almost, approximately)",
+      "as_of_date": "2035-12-31",
+      "period_end": "2035",
+      "geography": "Global",
+      "definition": "fewer than half of 2025 quantum jobs would be filled absent pipeline changes",
+      "source": "McKinsey",
+      "value_type": "forecast",
+      "source_url": "https://www.quantumjobs.us/quantum-computing-jobs",
+      "tier": "S3",
+      "value_num": 250000.0,
+      "year": 2035,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "McKinsey",
+      "staleness_days": -3381,
+      "is_stale": false
+    },
+    {
+      "metric": "quantum jobs projection 2035",
+      "value": "840000",
+      "series": "The Quantum Insider",
+      "unit": "jobs (approximately)",
+      "as_of_date": "2035-12-31",
+      "period_end": "2035",
+      "geography": "Global",
+      "definition": "about 250,000 jobs by 2030",
+      "source": "The Quantum Insider",
+      "value_type": "forecast",
+      "source_url": "https://thequantuminsider.com/2024/09/13/the-quantum-insider-projects-1-trillion-in-economic-impact-from-quantum-computing-by-2035/",
+      "tier": "S3",
+      "value_num": 840000.0,
+      "year": 2035,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "The Quantum Insider",
+      "staleness_days": -3381,
+      "is_stale": false
+    },
+    {
+      "metric": "Heron r2/r3 qubit count",
+      "value": "156",
+      "series": "IBM fleet",
+      "unit": "qubits",
+      "as_of_date": "2025-01-01",
+      "geography": "United States",
+      "definition": "Heron r1 has 133; Nighthawk 120 programmable",
+      "source": "IBM",
+      "value_type": "actual",
+      "source_url": "https://www.ibm.com/quantum/hardware",
+      "tier": "S3",
+      "value_num": 156.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "IBM",
+      "staleness_days": 635,
+      "is_stale": true
+    },
+    {
+      "metric": "IBM gross-code encoding",
+      "value": "12 logical into 288 physical",
+      "series": "IBM qLDPC",
+      "unit": "logical/physical qubits",
+      "as_of_date": "2024-01-01",
+      "period_end": "2024",
+      "geography": "United States",
+      "definition": "[[144,12,12]] code, roughly 10x fewer than surface code, Nature 2024",
+      "source": "IBM",
+      "value_type": "actual",
+      "source_url": "https://www.ibm.com/quantum/blog/large-scale-ftqc",
+      "tier": "S3",
+      "value_num": 12.0,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "IBM",
+      "staleness_days": 1001,
+      "is_stale": true
+    },
+    {
+      "metric": "Quantum Volume record",
+      "value": "65536",
+      "series": "Quantinuum H2-1",
+      "unit": "Quantum Volume",
+      "as_of_date": "2023-05-09",
+      "geography": "United States/United Kingdom",
+      "definition": "32 fully connected qubits at launch",
+      "source": "Quantinuum",
+      "value_type": "actual",
+      "source_url": "https://www.quantinuum.com/blog/quantinuum-launches-the-most-benchmarked-quantum-computer-in-the-world-and-publishes-all-the-data",
+      "tier": "S3",
+      "value_num": 65536.0,
+      "year": 2023,
+      "value_kind": "actual",
+      "region": "United States/United Kingdom",
+      "analyst": "Quantinuum",
+      "staleness_days": 1238,
+      "is_stale": true
+    },
+    {
+      "metric": "Liangyi Technology revenue",
+      "value": "74.35",
+      "series": "Chinese cryogenics firm",
+      "unit": "million yuan (¥)",
+      "as_of_date": "2024-12-31",
+      "period_end": "2024",
+      "geography": "China",
+      "definition": "up 177% year on year",
+      "source": "report citing company results",
+      "value_type": "actual",
+      "source_url": "https://postquantum.com/china-quantum-ambition/china-supply-chain-self-sufficiency/",
+      "tier": "S3",
+      "value_num": 74.35,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "report citing company results",
+      "metric_family": "annual revenue",
+      "staleness_days": 636,
+      "is_stale": true
+    },
+    {
+      "metric": "Tianyan cloud platform visits",
+      "value": "37",
+      "series": "China Telecom Tianyan",
+      "unit": "million visits (over, reported)",
+      "as_of_date": "2025-01-01",
+      "geography": "China",
+      "definition": "users from more than 60 countries",
+      "source": "reported",
+      "value_type": "estimate",
+      "source_url": "https://postquantum.com/china-quantum-ambition/china-supply-chain-self-sufficiency/",
+      "tier": "S3",
+      "value_num": 37.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "China",
+      "analyst": "reported",
+      "staleness_days": 635,
+      "is_stale": true
+    },
+    {
+      "metric": "quantum-engaged organizations worldwide",
+      "value": "7418",
+      "series": "QED-C",
+      "unit": "organizations",
+      "as_of_date": "2025-12-31",
+      "geography": "Global",
+      "definition": "including 556 pure-play quantum companies, up 8% since 2024",
+      "source": "QED-C",
+      "value_type": "actual",
+      "source_url": "https://quantumconsortium.org/global-quantum-computing-market-to-double/",
+      "tier": "S3",
+      "value_num": 7418.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "QED-C",
+      "staleness_days": 271,
+      "is_stale": false
+    }
+  ],
+  "contested_claims": [
+    {
+      "claim": "Two-qubit gate fidelity record for trapped ions",
+      "positions": [
+        {
+          "stance": "99.99% two-qubit fidelity world record (October 2025)",
+          "sources": [
+            "https://www.ionq.com/blog/accelerating-towards-fault-tolerance-unlocking-99-99-two-qubit-gate"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "99.97% cited by another tracker",
+          "sources": [
+            "https://postquantum.com/quantum-modalities/trapped-ion-qubits/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "selected-pair versus all-pairs fidelity conventions differ"
+    },
+    {
+      "claim": "Chinese government quantum funding magnitude",
+      "positions": [
+        {
+          "stance": "approximately $15 billion, from a non-public 14th Five-Year Plan document (Merics could not verify the $150 billion variant)",
+          "sources": [
+            "https://merics.org/en/report/chinas-long-view-quantum-tech-has-us-and-eu-playing-catch",
+            "https://postquantum.com/china-quantum-ambition/china-quantum-investment-unknowable/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Chinese public claims of over $15 billion",
+          "sources": [
+            "https://itif.org/publications/2024/09/09/how-innovative-is-china-in-quantum/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "$17.6 billion figure described as mostly public",
+          "sources": [
+            "https://www.linkedin.com/posts/r%C3%A9mi-berthon-443245165_china-has-invested-176-billion-in-quantum-activity-7430199239961595905-p1Qq"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "opaque Chinese budget documents, unverifiable provenance and differing definitions of public versus private commitment"
+    },
+    {
+      "claim": "Global quantum start-up investment in 2025",
+      "positions": [
+        {
+          "stance": "$12.6 billion including capital-market deals beyond venture rounds",
+          "sources": [
+            "https://www.mckinsey.com/featured-insights/charts/quantum-investment-surge"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "$4.9 billion of venture capital only",
+          "sources": [
+            "https://quantumconsortium.org/global-quantum-computing-market-to-double/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "scope: McKinsey includes capital-market deals while QED-C screens PitchBook venture deals narrowly"
+    },
+    {
+      "claim": "Global quantum start-up investment in 2023",
+      "positions": [
+        {
+          "stance": "$1.7 billion (April 2024 Monitor vintage)",
+          "sources": [
+            "https://www.mckinsey.com/~/media/mckinsey/business%20functions/mckinsey%20digital/our%20insights/steady%20progress%20in%20approaching%20the%20quantum%20advantage/quantum-technology-monitor-april-2024.pdf"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "$1.3 billion (2025 retrospective restatement)",
+          "sources": [
+            "https://www.mckinsey.com/capabilities/tech-and-ai/our-insights/the-year-of-quantum-from-concept-to-reality-in-2025"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "McKinsey restates history across Monitor vintages"
+    },
+    {
+      "claim": "Global quantum-computing revenue baseline",
+      "positions": [
+        {
+          "stance": "$1.4 billion in 2025",
+          "sources": [
+            "https://8441224.fs1.hubspotusercontent-na1.net/hubfs/8441224/2026%20SGQIR/SGQI%202026%20Booklet_Web%20Final.pdf"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "more than $1 billion in 2025",
+          "sources": [
+            "https://www.mckinsey.com/capabilities/mckinsey-technology/our-insights/mckinsey-quantum-technology-monitor-2026-a-commercial-tipping-point"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "approximately $1 billion in 2024",
+          "sources": [
+            "https://thequantuminsider.com/2024/09/13/the-quantum-insider-projects-1-trillion-in-economic-impact-from-quantum-computing-by-2035/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "$4 billion for 2024 circulates but unconfirmed",
+          "sources": [],
+          "tier": null
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "different scope definitions of vendor revenue and restatement across report vintages"
+    },
+    {
+      "claim": "Quantum-computing revenue forecast for 2035",
+      "positions": [
+        {
+          "stance": "$28-72 billion (McKinsey 2025 Monitor), updated to $43-71 billion in 2026 Monitor",
+          "sources": [
+            "https://www.mckinsey.com/capabilities/tech-and-ai/our-insights/the-year-of-quantum-from-concept-to-reality-in-2025",
+            "https://postquantum.com/industry-news/mckinsey-quantum-monitor-2026/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "$19.44 billion by 2035 (Precedence Research)",
+          "sources": [
+            "https://www.precedenceresearch.com/quantum-computing-market"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "$18.91 billion by 2035 at 29% CAGR (SNS Insider)",
+          "sources": [
+            "https://www.snsinsider.com/reports/quantum-computing-market-2740"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "scope (vendor revenue vs hardware, software and services) and adoption assumptions"
+    },
+    {
+      "claim": "DARPA QBI Stage B award size",
+      "positions": [
+        {
+          "stance": "up to $15 million per company (secondary reporting)",
+          "sources": [
+            "https://quantumcomputingreport.com/darpas-quantum-benchmarking-initiative-qbi-advances-with-eleven-teams-moving-to-stage-b/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "$1-5 million Phase B (grant aggregator)",
+          "sources": [
+            "https://grantedai.com/grants/quantum-benchmarking-initiative-phase-b-darpa-c3c8cefb"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "likely different funding instruments; DARPA publishes no per-company award sizes"
+    },
+    {
+      "claim": "US 2025 quantum venture capital",
+      "positions": [
+        {
+          "stance": "more than $2.7 billion in US venture capital, about $1 billion more than 2024, in coverage of QED-C's 2026 report",
+          "sources": [
+            "https://quantumconsortium.org/global-quantum-computing-market-to-double/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "could not be confirmed on the primary page",
+          "sources": [
+            "https://quantumconsortium.org/global-quantum-computing-market-to-double/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "figure circulates in secondary coverage but was not confirmed on the primary page"
+    },
+    {
+      "claim": "China's $138 billion emerging-technology fund",
+      "positions": [
+        {
+          "stance": "$138 billion fund announced by China in 2025 for public-private partnerships in emerging technologies including quantum",
+          "sources": [
+            "https://lofgren.house.gov/media/press-releases/ranking-member-lofgrens-opening-statement-markup-national-quantum-initiative"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "figure comes from US congressional testimony, not a verified Chinese budget document"
+    },
+    {
+      "claim": "USTC's quantum-advantage speedup claims",
+      "positions": [
+        {
+          "stance": "Zuchongzhi 3.0 ran an 83-qubit, 32-layer RCS task 10^15 times faster than the fastest supercomputer and one million times faster than Google's latest published result",
+          "sources": [
+            "https://en.ustc.edu.cn/info/1007/5015.htm",
+            "https://link.aps.org/doi/10.1103/PhysRevLett.134.090601"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "self-reported claim without a comparable classical-cost counterfactual",
+          "sources": [
+            "https://en.ustc.edu.cn/info/1007/5015.htm"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "claims depend on the assumed best classical algorithm; self-reported without independent verification"
+    },
+    {
+      "claim": "Wukong-180 fidelity versus Zuchongzhi 3.0",
+      "positions": [
+        {
+          "stance": "Wukong-180: 99.90% single-qubit, two-qubit and readout fidelity (company-reported)",
+          "sources": [
+            "https://quantumcomputingreport.com/origin-quantum-unveils-origin-wukong-180-fourth-generation-quantum-computer/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Zuchongzhi 3.0: 99.62% two-qubit fidelity peer-reviewed",
+          "sources": [
+            "https://en.ustc.edu.cn/info/1007/5015.htm"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Wukong-180 figures are self-reported specifications, not independently benchmarked"
+    },
+    {
+      "claim": "First fault-tolerant machine timing",
+      "positions": [
+        {
+          "stance": "vendor roadmaps cluster 2028-2030 (QuEra Libra 2028, IBM Starling 2029, Quantinuum Apollo 2030)",
+          "sources": [
+            "https://www.quera.com/questions/when-will-fault-tolerant-quantum-computers-be-available",
+            "https://www.ibm.com/quantum/blog/large-scale-ftqc",
+            "https://www.quantinuum.com/press-releases/quantinuum-unveils-accelerated-roadmap-to-achieve-universal-fault-tolerant-quantum-computing-by-2030"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "BCG expects broad quantum advantage 2030-2040 and full fault tolerance only after 2040",
+          "sources": [
+            "https://www.bcg.com/publications/2024/long-term-forecast-for-quantum-computing-still-looks-bright"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "GRI 2025 experts: CRQC at only 28-49% within ten years",
+          "sources": [
+            "https://globalriskinstitute.org/publication/quantum-threat-timeline-report-2025b/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "definitions of fault tolerance span megaquop to billion-gate systems; vendor claims versus calibrated independent judgment"
+    },
+    {
+      "claim": "Quantinuum universal fault tolerance date",
+      "positions": [
+        {
+          "stance": "Apollo, fully fault-tolerant universal machine, targeted in 2030",
+          "sources": [
+            "https://www.quantinuum.com/press-releases/quantinuum-unveils-accelerated-roadmap-to-achieve-universal-fault-tolerant-quantum-computing-by-2030"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "company blog pulls scalable universal fault-tolerant computers forward to by 2029",
+          "sources": [
+            "https://www.quantinuum.com/blog/quantinuum-overcomes-last-major-hurdle-to-deliver-scalable-universal-fault-tolerant-quantum-computers-by-2029"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "different company statements with shifting definitions and dates"
+    },
+    {
+      "claim": "McKinsey finance-sector value estimate quality",
+      "positions": [
+        {
+          "stance": "$400-600 billion of value by 2035",
+          "sources": [
+            "https://postquantum.com/quantum-computing/mckinsey-quantum-finance-600b/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "criticized as top-down with an AI-overlap problem; BCG concedes its own near-term NISQ value assumptions have proved optimistic",
+          "sources": [
+            "https://postquantum.com/quantum-computing/mckinsey-quantum-finance-600b/",
+            "https://www.bcg.com/publications/2024/long-term-forecast-for-quantum-computing-still-looks-bright"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "top-down impact-hypothesis method and overlap with generative AI value"
+    },
+    {
+      "claim": "Helium-3 shortage status",
+      "positions": [
+        {
+          "stance": "DOE's position that the shortage has been mitigated",
+          "sources": [
+            "https://www.isotopes.gov/Supply-and-Demand-of-Helium-3"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "commercial buyers face bulk prices of $1,900-2,600 per liter and purification above $10,000 per liter",
+          "sources": [
+            "https://postquantum.com/quantum-systems-integration/helium-3-quantum-computing/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "DOE statement covers federal allocations only, while quantum computing is a new commercial demand stream outside the managed federal allocation"
+    }
+  ],
+  "forecast_inputs": {
+    "scenarios": [
+      {
+        "name": "Steady climb",
+        "probability": 0.4,
+        "narrative": "Incremental progress on roadmaps delivers early fault-tolerant machines around 2030-2033 with the US leading, moderate commercial value by 2035 and cryptographic relevance after 2035."
+      },
+      {
+        "name": "Quantum leap",
+        "probability": 0.15,
+        "narrative": "Error-correction breakthroughs in one modality (likely superconducting or neutral-atom) deliver utility-scale quantum computing before 2030, triggering large economic value and an urgent PQC crisis."
+      },
+      {
+        "name": "Long winter",
+        "probability": 0.3,
+        "narrative": "Scaling stalls on fidelity and overhead across all modalities, commercial value stays niche through 2035, and hype-driven funding retrenches while China's state funding sustains catch-up."
+      },
+      {
+        "name": "Fragmented multipolarity",
+        "probability": 0.15,
+        "narrative": "Different regions lead different modalities and applications, export controls split supply chains, and no single region dominates fault tolerance or commercial advantage by 2035."
+      }
+    ],
+    "base_rates": [],
+    "drivers": [],
+    "indicators": []
+  }
+}

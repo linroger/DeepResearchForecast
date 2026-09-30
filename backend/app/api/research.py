@@ -563,7 +563,7 @@ def _run_research_translation(pipeline_id: str, lang: str) -> None:
             os.replace(tmp, audit_path)
             _write_research_status(status_path, {
                 "status": "failed", "available": False, "source_sha256": source_sha,
-                "issues": list(audit.get("issues") or [])[:12],
+                "issues": list(audit.get("issues") or result.get("issues") or [])[:12],
             })
             return
         for path, text in (
@@ -617,6 +617,7 @@ def start_research_translation(pipeline_id: str, lang: str):
         _research_translation_inflight.add((pipeline_id, lang))
     _write_research_status(status_path, {
         "status": "generating", "available": False, "source_sha256": source_sha,
+        "owner": f"pid:{os.getpid()}",
     })
     threading.Thread(
         target=_run_research_translation, args=(pipeline_id, lang), daemon=True,
@@ -639,6 +640,16 @@ def get_research_translation(pipeline_id: str, lang: str):
     if not os.path.isdir(handoff):
         return jsonify({"success": False, "error": "管线不存在"}), 404
     status = _read_research_status(status_path) or {"status": "unavailable", "available": False}
+    if status.get("status") == "generating":
+        from ..services.report_agent import ReportManager
+        if not ReportManager._translation_owner_alive(status.get("owner")):
+            # The worker died with its process (backend restart): report it so the
+            # UI offers a retry instead of waiting on a translation nobody runs.
+            status = {
+                **status,
+                "status": "interrupted",
+                "issues": ["previous translation attempt stopped before completion"],
+            }
     source_sha = _research_source_sha(src_path)
     report_md = None
     if (status.get("status") == "available"

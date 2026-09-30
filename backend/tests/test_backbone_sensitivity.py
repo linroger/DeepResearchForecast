@@ -825,7 +825,7 @@ _MOVED = (0.3, 0.45, 0.15, 0.1)
 _MOVED_NAMES = _NAMES + ("Residual",)
 
 
-def _critique_stub(forecast, llm):
+def _critique_stub(forecast, llm, language=""):
     """A pre-prose critique that moves every probability and adds a residual scenario."""
     return dict(forecast, scenarios=_rows(list(_MOVED), _MOVED_NAMES), critiqued=True)
 
@@ -842,7 +842,7 @@ def report_env(monkeypatch, tmp_path):
     }.items():
         monkeypatch.setattr(Config, name, value, raising=False)
     monkeypatch.setattr(fe, "self_critique_forecast", _critique_stub)
-    monkeypatch.setattr(fe, "premortem_forecast", lambda forecast, llm: forecast)
+    monkeypatch.setattr(fe, "premortem_forecast", lambda forecast, llm, language="": forecast)
     tel.set_stage("report")
     yield tmp_path
     tel.set_stage(None)

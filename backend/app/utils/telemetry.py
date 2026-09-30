@@ -14,6 +14,7 @@ import hashlib
 import json
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -725,18 +726,42 @@ def render_telemetry_appendix(stage_telemetry: Optional[Dict[str, Any]],
     return "\n".join(lines)
 
 
+_LLM_CACHE_BYPASS: "contextvars.ContextVar[bool]" = contextvars.ContextVar(
+    "llm_cache_bypass", default=False
+)
+
+
 class LLMCache:
     """Content-addressed in-memory cache of identical chat() calls (I-6-0).
 
     Keyed by (provider, model, messages, temperature, max_tokens, response_format).
     Off unless ``Config.LLM_CACHE_ENABLED``. In-memory only (bounded) — identical
     decomposition/extraction calls across a pipeline return instantly and free.
+
+    ``bypass()`` scopes a code path that must get fresh samples (a user-triggered
+    retry of a rejected translation would otherwise replay the rejected responses
+    byte-for-byte).  The flag is a ContextVar, so it follows copied contexts into
+    worker threads and never leaks into unrelated concurrent calls.
     """
 
     _lock = threading.Lock()
     _store: "Dict[str, str]" = {}
     _order: List[str] = []
     _max_entries = 2048
+
+    @classmethod
+    @contextmanager
+    def bypass(cls):
+        """Neither read nor write the cache inside this context."""
+        token = _LLM_CACHE_BYPASS.set(True)
+        try:
+            yield
+        finally:
+            _LLM_CACHE_BYPASS.reset(token)
+
+    @classmethod
+    def bypassed(cls) -> bool:
+        return bool(_LLM_CACHE_BYPASS.get())
 
     @classmethod
     def key(cls, provider: str, model: str, messages: Any, temperature: float,
@@ -749,11 +774,15 @@ class LLMCache:
 
     @classmethod
     def get(cls, key: str) -> Optional[str]:
+        if cls.bypassed():
+            return None
         with cls._lock:
             return cls._store.get(key)
 
     @classmethod
     def put(cls, key: str, value: str) -> None:
+        if cls.bypassed():
+            return
         with cls._lock:
             if key not in cls._store:
                 cls._order.append(key)

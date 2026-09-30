@@ -162,6 +162,8 @@ a { color: inherit; }
 .md-body h3 { font-size: 1.05rem; }
 .md-body blockquote { border-left: 3px solid var(--orange); margin: 1em 0; padding: 2px 18px; color: #555; background: #FAFAFA; }
 .md-body table { border-collapse: collapse; width: 100%; font-size: .85rem; display: block; overflow-x: auto; }
+/* long URLs in reference lists must wrap instead of widening the page on phones */
+.md-body a { overflow-wrap: anywhere; }
 .md-body th, .md-body td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; }
 .md-body th { background: #FAFAFA; font-family: var(--mono); font-size: .72rem; }
 .md-body code { font-family: var(--mono); font-size: .85em; background: #F4F4F4; padding: 1px 5px; }
@@ -245,6 +247,11 @@ a { color: inherit; }
 .forum-switch button:last-child { border-right: none; }
 .forum-switch button.active { background: #000; color: #fff; }
 .forum-stats { font-family: var(--mono); font-size: .7rem; color: #888; }
+
+/* report / dossier language versions */
+.doc-lang { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; padding: 4px 0 14px; }
+.doc-lang-label { font-family: var(--mono); font-size: .7rem; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .04em; }
+.doc-lang-note { font-size: .78rem; color: #777; }
 
 .feed { display: flex; flex-direction: column; gap: 10px; }
 .feed-item { border: 1px solid var(--border); padding: 14px 16px; }

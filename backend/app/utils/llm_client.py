@@ -9,12 +9,14 @@ LLM客户端封装
 对外接口统一为 chat() / chat_json()，调用方无需关心底层提供方。
 """
 
+import contextvars
 import json
 import os
 import re
 import subprocess
 import threading
 import time
+from contextlib import contextmanager
 from typing import Optional, Dict, Any, List, Tuple
 
 from ..config import Config
@@ -64,6 +66,32 @@ try:
     )
 except Exception:  # noqa: BLE001 — openai 不可导入时退化为仅重试 RuntimeError
     _RETRYABLE_API_ERRORS = ()
+
+
+# Per-context request timeout (seconds) for chat()'s OpenAI-compatible calls.  The
+# client-wide 600 s read timeout suits long report sections, but a translation call
+# that sits on a dead HTTP/2 stream should be retried in minutes, not after 10.
+_CALL_TIMEOUT_S: "contextvars.ContextVar[Optional[float]]" = contextvars.ContextVar(
+    "llm_call_timeout_s", default=None
+)
+
+
+@contextmanager
+def llm_call_timeout(seconds: Optional[float]):
+    """Bound every chat() request in this context (and copied contexts) to ``seconds``.
+
+    A timeout raises ``APITimeoutError``, which chat() retries with backoff.
+    ``None`` / 0 keeps the client default.
+    """
+    try:
+        value = float(seconds) if seconds else None
+    except (TypeError, ValueError):
+        value = None
+    token = _CALL_TIMEOUT_S.set(value if value and value > 0 else None)
+    try:
+        yield
+    finally:
+        _CALL_TIMEOUT_S.reset(token)
 
 
 def _err_brief(exc: Exception) -> str:
@@ -1648,6 +1676,9 @@ class LLMClient:
         # Kimi K2.7 Code 网关按推理开关硬校验温度（开=1/关=0.6），覆盖调用方温度。
         kwargs["temperature"] = self._coerce_temperature(temperature, serving_provider, extra_body)
 
+        timeout_override = _CALL_TIMEOUT_S.get()
+        if timeout_override:
+            kwargs["timeout"] = timeout_override
         response = client.chat.completions.create(**kwargs)
         # 捕获精确 token 用量供计量（I-5-0）；无 usage 字段时为 None，chat() 走粗估。
         usage = _usage_from_response(response)

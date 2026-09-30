@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="site.css?v=20260930a">
 </head>
 <body>
 
@@ -19,7 +19,7 @@
     <a href="#video" data-i18n="nav.video">Video</a>
     <a href="#how" data-i18n="nav.how">How it works</a>
     <button class="lang-toggle" type="button">中文</button>
-    <a class="gh-btn" href="https://github.com/linroger/DeepAgentForecast">GitHub →</a>
+    <a class="gh-btn" href="https://github.com/linroger/DeepResearchForecast">GitHub →</a>
   </span>
 </nav>
 
@@ -33,7 +33,7 @@
   <p class="lead" data-i18n="hero.lead">A deep-research agent (DeerFlow) searches the web and builds an evidence-grounded dossier; the system constructs a local temporal knowledge graph (Graphiti), generates digital personas for the real-world actors it found, runs a multi-agent population simulation (OASIS, dual-platform), and a report agent synthesizes the forecast. The pages below show every stage of real runs, unedited.</p>
   <div class="hero-actions">
     <a class="primary-btn" href="#demos" data-i18n="hero.cta">View the demo forecasts ↓</a>
-    <a class="ghost-btn" href="https://github.com/linroger/DeepAgentForecast#getting-started" data-i18n="hero.run">Run it yourself</a>
+    <a class="ghost-btn" href="https://github.com/linroger/DeepResearchForecast#quickstart" data-i18n="hero.run">Run it yourself</a>
   </div>
 </header>
 
@@ -41,15 +41,22 @@
   <h2><span class="diamond">◇</span> <span data-i18n="demos.h2">Live demos — real end-to-end runs</span></h2>
   <p class="section-sub" data-i18n="demos.sub">Each card is one full pipeline run. Click through to walk the whole workflow: deep-research log → research dossier → ontology → knowledge graph → simulated forum → final forecast.</p>
   <div class="card-grid">
+    <a class="run-card" href="demo.html?run=quantum-2040">
+      <div class="run-top"><span class="run-status" data-i18n="demos.completed">● completed · full pipeline</span><span class="run-lang">EN/中文</span></div>
+      <h3 data-i18n="card.quantum.title">Quantum computing to 2040 — the US, China &amp; EU race</h3>
+      <p class="run-prompt">“Forecast the development of quantum computing in the United States, China, and the European Union from 2026 through 2040, and its impact on the economy. Compare the leading hardware modalities (superconducting, trapped-ion, neutral-atom, photonic, spin/silicon, and topological qubits) on physical qubit counts, two-qubit gate fidelity, logical-qubit demonstrations, error-correction overhead, and the timeline to fault-tolerant, commercially useful machines… Assess the economic impact… and the cost and timing of migrating to post-quantum cryptography… End with four mutually exclusive scenarios totaling 100%, 10-12 resolution-ready binary forecasts with dates and probabilities, and sourced visualizations.”</p>
+      <p class="run-meta" data-i18n="card.quantum.meta">29-round calendar simulation · 18 personas · 137-node knowledge graph · 10 binary forecasts &amp; 5 scenarios — superconducting vs. trapped-ion, neutral-atom, photonic, spin &amp; topological qubits; US / China / EU strategy, funding &amp; export controls; fault-tolerance timelines and the post-quantum-cryptography window, run end-to-end on GLM-5.3 · report and dossier in English &amp; Chinese</p>
+      <span class="run-cta" data-i18n="demos.cta">Walk through the run →</span>
+    </a>
     <a class="run-card" href="demo.html?run=datacenter-2030">
-      <div class="run-top"><span class="run-status" data-i18n="demos.completed">● completed · full pipeline</span><span class="run-lang">ZH</span></div>
+      <div class="run-top"><span class="run-status" data-i18n="demos.completed">● completed · full pipeline</span><span class="run-lang">中文/EN</span></div>
       <h3 data-i18n="card.dc.title">Global data centers to 2030 — the US–China compute race</h3>
       <p class="run-prompt">“针对 2030 年前的全球数据中心市场开展全面预测分析，重点聚焦美国与中国两大核心市场：市场规模、区域细分格局、核心增长驱动力、行业主要风险，以及 AI 驱动的算力扩容、电力资源限制、冷却技术迭代变革；2026–2030 营收规模、CAGR 与 IT 装机容量预测；托管、超大规模、企业级、边缘四大细分赛道拆解；年度算力容量增速、服务器出货与电力负载扩容预判。”</p>
       <p class="run-meta" data-i18n="card.dc.meta">17-round calendar simulation · 18 personas · 107-node knowledge graph · 14 binary forecasts &amp; 5 scenarios — revenue/CAGR &amp; IT-capacity outlook, colocation vs. hyperscale vs. enterprise vs. edge segmentation, power &amp; cooling constraints, and the US–China compute decoupling, researched end-to-end on GLM-5.3 via the linear research engine</p>
       <span class="run-cta" data-i18n="demos.cta">Walk through the run →</span>
     </a>
     <a class="run-card" href="demo.html?run=grid-storage-2040">
-      <div class="run-top"><span class="run-status" data-i18n="demos.completed">● completed · full pipeline</span><span class="run-lang">EN</span></div>
+      <div class="run-top"><span class="run-status" data-i18n="demos.completed">● completed · full pipeline</span><span class="run-lang">EN/中文</span></div>
       <h3 data-i18n="card.grid.title">Global grid-scale energy storage through 2040</h3>
       <p class="run-prompt">“Forecast the global grid-scale energy-storage industry from 2026 through 2040. Compare lithium iron phosphate, sodium-ion, flow batteries, thermal storage, compressed-air storage, pumped hydro, hydrogen-derived storage… Quantify GW/GWh deployment, duration mix, installed cost, levelized cost of storage… End with four mutually exclusive scenarios, 10–12 resolution-ready binary forecasts, and sourced visualizations of deployment, costs, technology shares, and regional policy milestones.”</p>
       <p class="run-meta" data-i18n="card.grid.meta">29-round calendar simulation · 19 personas · 183-node knowledge graph · 11 binary forecasts &amp; 5 scenarios — LFP vs. sodium-ion, flow, thermal, CAES &amp; long-duration routes across 8 regions, with an additive decision-channel simulation that moved the base case to LDES-Diversified</p>
@@ -175,8 +182,8 @@
   </ol>
   <pre class="quickstart"><code># run it yourself — no graph DB to host (embedded Graphiti/FalkorDB);
 # all you need is a Claude/Codex CLI login or any LLM API key
-git clone https://github.com/linroger/DeepAgentForecast.git
-cd DeepAgentForecast && ./setup.sh   # interactive: picks your LLM provider
+git clone https://github.com/linroger/DeepResearchForecast.git
+cd DeepResearchForecast && ./setup.sh   # interactive: picks your LLM provider
 npm run dev   # → http://localhost:3000/research</code></pre>
 </section>
 
@@ -185,9 +192,9 @@ npm run dev   # → http://localhost:3000/research</code></pre>
     <a href="https://github.com/bytedance/deer-flow">DeerFlow</a> (ByteDance),
     <a href="https://github.com/getzep/graphiti">Graphiti</a> (Zep) and
     <a href="https://github.com/666ghj/MiroFish">MiroFish</a> · AGPL-3.0 ·
-    <a href="https://github.com/linroger/DeepAgentForecast">github.com/linroger/DeepAgentForecast</a></p>
+    <a href="https://github.com/linroger/DeepResearchForecast">github.com/linroger/DeepResearchForecast</a></p>
 </footer>
 
-<script src="i18n.js?v=20260927a"></script>
+<script src="i18n.js?v=20260930a"></script>
 </body>
 </html>

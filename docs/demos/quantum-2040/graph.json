@@ -1,0 +1,2569 @@
+{
+ "nodes": [
+  {
+   "id": "fff256a0-e872-44a7-ba9f-b1c876368212",
+   "name": "rare earths",
+   "labels": [
+    "CriticalMaterial"
+   ],
+   "summary": "MOFCOM broadened rare-earth export controls on 9 October 2025; China controls 69% of global rare-earth reserves and about 90% of processing\nThe PRC announced new export controls on rare earth materials in October 2025"
+  },
+  {
+   "id": "fe96813a-8a35-411d-8736-1357c4c3c0da",
+   "name": "CAS National Time Service Center",
+   "labels": [
+    "Government"
+   ],
+   "summary": "In September 2025 BIS listed CAS's National Time Service Center among 32 entities on the Entity List, constraining China's quantum ecosystem"
+  },
+  {
+   "id": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "name": "European Commission",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "EuroHPC: €900 million from Horizon Europe plus €320 million from CEF-2; six quantum computers procured by July 2026; 2026 quantum calls worth €119 million; 8 September 2025 Delegated Regulation added \nOn 8 September 2025 the European Commission adopted a Delegated Regulation adding quantum computers, electronic components for cryogenic temperatures, parametric signal amplifiers, cryogenic cooling systems and wafer probes to the EU dual-use control list, aligning with US, UK and Japanese controls.\nIISS assesses that the US and allies, including the EU under the European Commission's Delegated R"
+  },
+  {
+   "id": "fd4aadb7-ad02-4725-9f05-671621a4818a",
+   "name": "Global Risk Institute / evolutionQ",
+   "labels": [
+    "Other"
+   ],
+   "summary": "Global Risk Institute and evolutionQ jointly produce the Quantum Threat Timeline Report series (26 experts per edition). The 2025 edition (published March 9, 2026) puts the averaged expert probability of a cryptographically relevant quantum computer (CRQC) at 28–49% within ten years — the highest ten-year estimate in the survey's seven-edition history — and 51–70% within fifteen years, judging a CRQC \"quite likely\" by 2035; the averaged optimistic five-year likelihood is about 15%. Ten-year averages have climbed every edition: 17–31% (2023), 19–34% (2024), 28–49% (2025). Thirteen of 26 respond"
+  },
+  {
+   "id": "fd38d0e2-afc6-4c04-ab09-e6dd0a99c223",
+   "name": "Wukong",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "In January 2024 Origin Quantum launched Wukong, with 72 working qubits plus 126 couplers (198 on chip)"
+  },
+  {
+   "id": "f9472aaa-2b80-4c1f-9d88-c0fe13425a47",
+   "name": "Omega chipset",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "PsiQuantum announced its Omega chipset on February 26, 2025, containing all components for million-qubit-scale fusion-based machines fabricated in a high-volume fab, with compute centers under construction in Brisbane and Chicago; no logical-qubit count is publicly demonstrated.\nA PsiQuantum Omega-fabricated system running utility-scale circuits would raise the probability of the quantum-leap scenario."
+  },
+  {
+   "id": "f90e82b7-fb07-4bf0-8cfc-69665ccd079f",
+   "name": "EU dual-use control list Delegated Regulation 2025",
+   "labels": [
+    "QuantumProgram"
+   ],
+   "summary": "On 8 September 2025 the European Commission adopted a Delegated Regulation adding quantum computers, electronic components for cryogenic temperatures, parametric signal amplifiers, cryogenic cooling systems and wafer probes to the EU dual-use control list, aligning with US, UK and Japanese controls.\nThe EU dual-use control list Delegated Regulation adopted 8 September 2025 adds quantum computers, cryogenic electronic components, parametric signal amplifiers, cryogenic cooling systems and wafer probes to export controls.\nThe 8 September 2025 EU Delegated Regulation adds parametric signal amplif"
+  },
+  {
+   "id": "f8fca2b5-d34c-4cac-aecd-6feaa8fdb642",
+   "name": "Blue Jay",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "In June 2025 IBM committed to Blue Jay in 2033+ with 2,000 qubits and 1 billion gates"
+  },
+  {
+   "id": "f7e83d33-9e63-455e-80d5-1aef5b429635",
+   "name": "Poughkeepsie, New York",
+   "labels": [],
+   "summary": "IBM Quantum Starling is to be built in Poughkeepsie, New York"
+  },
+  {
+   "id": "f5402e9c-2a99-48de-9041-4ed56858ac56",
+   "name": "cryogenic cooling systems",
+   "labels": [
+    "CriticalMaterial"
+   ],
+   "summary": "The 8 September 2025 EU Delegated Regulation adds cryogenic cooling systems to the EU dual-use control list."
+  },
+  {
+   "id": "eeb696ea-276f-44b5-a6c3-414574a16591",
+   "name": "IQM",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Announced tile codes 23 June 2026; roadmap targets fault tolerance by 2030 and a path to 1 million qubits; preparing Nasdaq listing via merger with Real Asset Acquisition Corp.\nIQM operates as a European quantum hardware company within the EU, reporting in June 2026 that directional tile codes cut per-logical, per-round error by up to 1,000x versus the surface code at about 30 physical qubits per logical qubit, targeting fault tolerance by 2030\nIQM reported directional tile codes on June 23, 2026 — up to a 1,000x reduction in per-logical per-round error versus the surface code at ~30 physical "
+  },
+  {
+   "id": "eceb5e07-8e64-487b-8793-363f911768a3",
+   "name": "Nature",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "PsiQuantum's Omega chipset results were published in Nature.\nChina's Jiuzhang line published a programmable photonic processor in Nature in 2022, part of its boson-sampling records.\nIQM reported directional tile codes on June 23, 2026 — up to a 1,000x reduction in per-logical per-round error versus the surface code at ~30 physical qubits per logical — targeting fault tolerance by 2030"
+  },
+  {
+   "id": "ec933c0a-f1ce-4343-8ffd-20c1c6032ce2",
+   "name": "Zuchongzhi 3.0",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "Zuchongzhi 3.0 is China's superconducting quantum processor (March 2025) with 105 qubits, 182 couplers, and 72 μs coherence time. Parallel fidelities: 99.90% single-qubit, 99.62% two-qubit, and 99.13% readout.\nIn March 2025 USTC's Zuchongzhi 3.0 (105 qubits, 99.62% two-qubit fidelity) ran an 83-qubit, 32-layer random circuit sampling task that USTC claims is 10^15 times faster than the fastest supercomputer\nSuperconducting qubit counts reached US-China parity at 105 qubits between Google's Willow and Zuchongzhi 3.0\nThe CAS/USTC complex delivered Zuchongzhi 3.0, a 105-qubit, 182-coupler superco"
+  },
+  {
+   "id": "e814ea91-425d-40b0-86e5-ee5847239bf0",
+   "name": "Pan Jianwei",
+   "labels": [],
+   "summary": "China's quantum ecosystem centered on USTC and the Chinese Academy of Sciences operates under the leadership of Pan Jianwei"
+  },
+  {
+   "id": "e60e4dd9-952f-4f15-a65f-f3c63bf62da7",
+   "name": "Cryptographic Module Validation Program",
+   "labels": [
+    "Government"
+   ],
+   "summary": "NIST advises organizations to begin migrating to post-quantum cryptography, with cryptographic modules validated under the Cryptographic Module Validation Program (CMVP)."
+  },
+  {
+   "id": "e55a0d72-7557-44a0-8f21-21b28c47a287",
+   "name": "Starling-class machines",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "DARPA QBI stage-C verdicts will verify utility-scale operation by 2033, including logical-qubit counts and logical error rates on Starling-class machines."
+  },
+  {
+   "id": "e41e437c-f9d3-4bbd-bbd7-bd539e46f35f",
+   "name": "PitchBook",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "McKinsey's quantum-technology start-up investment series (recording ~$0.2B in 2019, $2.1B in 2021, and $12.6B in 2025) is sourced from PitchBook data\nQED-C screens PitchBook venture deals to count $4.9 billion of global quantum venture capital in 2025, up 192% from 2024's previous record"
+  },
+  {
+   "id": "df7a110e-cf00-4b35-8327-b032b5048af5",
+   "name": "Germany",
+   "labels": [
+    "Government"
+   ],
+   "summary": "A German quantum computer procurement launched on 24 November 2023 totaling EUR 42.71 million is co-funded by EuroHPC JU, Germany's BMBF and Bavaria\nGermany's BMBF co-funds a EUR 42.71 million quantum computer procurement launched on 24 November 2023\nBavaria co-funds a German quantum computer procurement launched on 24 November 2023 totaling EUR 42.71 million"
+  },
+  {
+   "id": "df71d6ac-c3e9-40fa-8331-5202458c2877",
+   "name": "National Quantum Initiative Reauthorization Act of 2026",
+   "labels": [
+    "QuantumProgram"
+   ],
+   "summary": "S.3597, introduced by Senator Todd Young on 8 January 2026. On 14 April 2026 the Senate Commerce Committee ordered it reported favorably with an amendment in the nature of a substitute; it extends the National Quantum Initiative five years, to December 2034. No CBO cost estimate exists and neither the amended text nor the committee's release states a dollar authorization; at a 29 April 2026 House Science Committee markup, Ranking Member Zoe Lofgren stated the bill \"does not have any funds authorized.\" A circulated \"$138 billion\" figure is actually China's 2025 emerging-technology fund, not a U"
+  },
+  {
+   "id": "dee70412-9860-4111-81f0-bc0a56a5035f",
+   "name": "QBI Stage A",
+   "labels": [],
+   "summary": "Google Quantum AI joined DARPA's QBI Stage A in September 2025"
+  },
+  {
+   "id": "da7faeae-7335-4125-8630-f1615f7950ae",
+   "name": "Chinese government (NDRC/MOST)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "14th Five-Year Plan ranked quantum information second among cutting-edge fields; 2016 S&T megaproject; widely cited ~$15 billion public funding (unverifiable, from non-public plan document per Merics)"
+  },
+  {
+   "id": "d91442c0-d342-415b-a80d-fda9c26bc9e7",
+   "name": "qLDPC codes",
+   "labels": [],
+   "summary": "Willow's below-threshold error correction halved the logical error rate at each step from 3x3 to 7x7 grids, while qLDPC codes cut qubit requirements roughly 10x."
+  },
+  {
+   "id": "d82e6116-fd40-495d-a2ca-79f81cd73b77",
+   "name": "Reuters",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Hartmut Neven's statement that Google aims to release commercial applications within five years was told to Reuters in February 2025\nHartmut Neven told Reuters in February 2025 that Google aims to have commercial quantum applications within five years.\nGoogle told Reuters in February 2025 that commercial quantum computing applications would arrive within five years."
+  },
+  {
+   "id": "d569b702-fb25-4f87-8213-0efff0d60a14",
+   "name": "QuantumCTek",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "QuantumCTek's ez-Q Fridge entered mass production in February 2024, rated just under the 600 μW BIS control threshold, as part of accelerated domestic substitution\nChina's state funding backs its domestic quantum industry including QuantumCTek, whose refrigerator and interconnect production grew in response to US controls"
+  },
+  {
+   "id": "d382863b-0dd8-4103-ba93-c19e9a053afa",
+   "name": "OpenSSL Corporation",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "NIST IR 8547's 2030 and 2035 post-quantum cryptography deadlines impose migration requirements discussed by OpenSSL Corporation"
+  },
+  {
+   "id": "d1398f5b-29fd-4597-9adc-7b7023bd3592",
+   "name": "S.3597",
+   "labels": [
+    "QuantumProgram"
+   ],
+   "summary": "Senator Todd Young introduced S.3597, the National Quantum Initiative Reauthorization Act of 2026, on 8 January 2026\nOn 14 April 2026 the Senate Commerce Committee ordered S.3597 reported favorably with an amendment in the nature of a substitute; it extends the National Quantum Initiative five years, to December 2034\nS.3597, the National Quantum Initiative Reauthorization Act of 2026, extends the National Quantum Initiative five years, to December 2034\nAt a House Science Committee markup on 29 April 2026, Ranking Member Zoe Lofgren stated that 'At the moment, this bill does not have any funds "
+  },
+  {
+   "id": "d008a0a8-805c-48da-807a-9c442f78114c",
+   "name": "Quantinuum H2",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "Quantinuum's H2 product page claims >99.9% two-qubit fidelity\nQuantinuum launched H2-1 on May 9, 2023 with 32 fully connected trapped-ion qubits and a Quantum Volume record of 65,536.\nIn June 2024 Quantinuum expanded H2-1 to 56 qubits\nIn June 2024 Quantinuum expanded H2-1 to 56 qubits"
+  },
+  {
+   "id": "ce677085-ab4c-43c6-b323-b188c1a93753",
+   "name": "Jiuzhang 3.0",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "USTC's Jiuzhang 3.0 detected 255 photons in 2023, with a 10^16-fold speedup over supercomputers claimed in the authors' own account."
+  },
+  {
+   "id": "cabe4b83-d55e-42d1-a844-888e6d90253b",
+   "name": "Tianji 4.0 control system",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "Origin Quantum has developed the Tianji 4.0 control system, which supports 500+ qubits."
+  },
+  {
+   "id": "c65fa42c-6f5d-46bd-a45f-9802f4446daa",
+   "name": "DARPA Quantum Benchmarking Initiative",
+   "labels": [
+    "QuantumProgram"
+   ],
+   "summary": "DARPA runs the Quantum Benchmarking Initiative (QBI), which advances with companies targeting industrially useful quantum computers.\nThe DARPA Quantum Benchmarking Initiative awarded PsiQuantum an expanded $125M Stage C award."
+  },
+  {
+   "id": "c59e1c41-1773-45a4-818c-5e0bebe6208b",
+   "name": "Harvard",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The Harvard/QuEra line demonstrated 99.5% two-qubit fidelity on 60 atoms in October 2023, 48 logical qubits from 250+ physical in December 2023, and an end-to-end fault-tolerant architecture with up to 96 logical qubits in November 2025"
+  },
+  {
+   "id": "c37923e4-30cd-4240-93f9-9de8956892d3",
+   "name": "Senator Todd Young",
+   "labels": [],
+   "summary": "Senator Todd Young introduced S.3597, the National Quantum Initiative Reauthorization Act of 2026, on 8 January 2026"
+  },
+  {
+   "id": "c322d918-50fa-45ab-8de4-843c1a7c34fd",
+   "name": "IBM Heron r2/r3",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "IBM's 2025-2026 fleet includes Heron r2/r3 processors with 156 qubits."
+  },
+  {
+   "id": "c035e26d-5da2-411d-9e51-9e95331be7d0",
+   "name": "battery materials",
+   "labels": [
+    "CriticalMaterial"
+   ],
+   "summary": "The PRC announced new export controls on battery materials and related technology in October 2025"
+  },
+  {
+   "id": "bf657624-1bea-4088-a010-fe2d4bb02025",
+   "name": "White House OSTP / NQI",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Federal quantum research spending ~$1 billion/year baseline (2022); lapsed H.R. 6213 would have authorized $1.8 billion FY2025-2029; Lofgren stated in April 2026 the current bill 'does not have any fu"
+  },
+  {
+   "id": "bef7b407-aec7-4840-af5e-46cbb40bb599",
+   "name": "Gidney",
+   "labels": [],
+   "summary": "Gidney's sub-million-qubit RSA-2048 factoring estimates drove the upward revision of CRQC expert probabilities"
+  },
+  {
+   "id": "be30d9ef-0649-477f-b7ce-e79404a296a9",
+   "name": "Bluefors XLD1000sl",
+   "labels": [],
+   "summary": "A single Bluefors XLD1000sl dilution refrigerator holds about 40 liters of helium-3."
+  },
+  {
+   "id": "bd67571a-800a-4f0e-a2c5-4cf68f4c685e",
+   "name": "PIAST-Q",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "By 23 July 2026 EuroHPC had procured and inaugurated six quantum computers across Europe, including PIAST-Q in Poznań"
+  },
+  {
+   "id": "bc98b51b-2034-476b-a9ca-5ca55ef545ad",
+   "name": "Amazon Braket",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "QuEra's Libra, targeting 256 logical qubits from >10,000 physical qubits at a 10^-6 logical error rate, is set to launch on Amazon Braket in 2028."
+  },
+  {
+   "id": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "name": "Origin Quantum",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Raised only ~$150-165 million, all from domestic investors; Wukong-180's 99.90% fidelities are self-reported, not independently benchmarked; no significant published error-correction work; missed its \nOrigin Quantum's Wukong-180 (180 computational qubits) carries company-reported averages of 99.90% single-qubit, two-qubit and readout fidelity — self-reported specifications, not independently benchmarked\nOrigin Quantum's Wukong-180 carries self-reported 99.90% fidelities, above Zuchongzhi 3.0's peer-reviewed 99.62% two-qubit fidelity from USTC\nOrigin Quantum commercially offers the Wukong-180 w"
+  },
+  {
+   "id": "bbc0e24f-df72-459b-9482-89b044d91faf",
+   "name": "United States",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The US dominates private quantum capital with roughly $3.7 billion cumulative private funding versus about $255 million for China, per SCSP's 2025 gaps analysis.\nSCSP's 2025 gaps analysis puts cumulative US private quantum funding at roughly $3.7 billion, informing assessments of US quantum capital leadership.\nCoverage of QED-C's 2026 report cites a US 2025 figure of more than $2.7 billion in quantum venture capital, about $1 billion more than in 2024, though it could not be confirmed on the primary page.\nUS export controls targeted China's quantum sector and, per RUSI, accelerated China's dom"
+  },
+  {
+   "id": "baf00f7d-5946-45c9-aad8-7ce71b628ba3",
+   "name": "CISA",
+   "labels": [
+    "Government"
+   ],
+   "summary": "OMB partnered with CISA, ONCD and NIST on the July 2024 report to Congress on post-quantum cryptography migration costs."
+  },
+  {
+   "id": "b906ac48-4bdb-4042-9cb5-1fda31515437",
+   "name": "The Quantum Insider",
+   "labels": [
+    "Other"
+   ],
+   "summary": "The Quantum Insider projects about 250,000 quantum-computing jobs by 2030 and 840,000 by 2035.\nThe Quantum Insider reported that EuroHPC JU opened €119M in funding calls for quantum technologies"
+  },
+  {
+   "id": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "name": "IBM",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Operates Heron r1/r2/r3 (133-156 qubits) and Nighthawk (120 programmable qubits); demonstrated qLDPC gross-code [[144,12,12]] fault-tolerant memory in Nature 2024, encoding 12 logical qubits in 288 ph\nIBM claims user-demonstrated quantum advantage by end-2026 on its Nighthawk quantum processor.\nIBM's 2025-2026 quantum fleet comprises Heron r1 with 133 qubits.\nIBM's 2025-2026 fleet includes Heron r2/r3 processors with 156 qubits.\nIBM's 2025-2026 fleet includes Nighthawk with 120 programmable qubits and a square lattice with 218 tunable couplers; a community source reports median two-qubit gate "
+  },
+  {
+   "id": "b117da2d-82ea-4f29-9a81-28ecb5f8f040",
+   "name": "April 2024 Monitor",
+   "labels": [],
+   "summary": "McKinsey's own vintages restate history: its 2025 retrospective counts $1.3 billion for 2023 start-up investment, whereas the April 2024 Monitor had reported $1.7 billion for 2023"
+  },
+  {
+   "id": "ae6592fe-3d8a-49f1-90d6-b62eea0f98d1",
+   "name": "Quantinuum Helios",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "Quantinuum released its Helios trapped-ion quantum computer in November 2025 with 98 fully connected qubits, 48 fully error-corrected logical qubits at roughly 2:1 encoding (Iceberg code), described as the most accurate commercial quantum computer\nQuantinuum's Helios (November 2025) pairs 98 fully connected physical qubits with 99.921% two-qubit gate fidelity across all pairs\nHelios has demonstrated 48 fully error-corrected logical qubits at roughly 2:1 physical-to-logical encoding under the Iceberg code"
+  },
+  {
+   "id": "add68307-18ac-44b7-9d0c-645307d6243c",
+   "name": "Horizon Europe",
+   "labels": [
+    "QuantumProgram"
+   ],
+   "summary": "EuroHPC's budget draws €900 million from Horizon Europe for research and innovation"
+  },
+  {
+   "id": "abc62405-d8e9-4404-82c8-ef3f4721bfad",
+   "name": "EU Quantum Flagship",
+   "labels": [
+    "QuantumProgram"
+   ],
+   "summary": "The EU bets on coordinated quantum deployment through the Quantum Flagship, EuroHPC systems and national programs."
+  },
+  {
+   "id": "aac1f571-014c-421c-9e75-1eae2ce3762c",
+   "name": "Akin Gump",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Akin Gump published analysis of the EU's updated Dual-Use Export Control List highlighting key changes for emerging technologies"
+  },
+  {
+   "id": "aaa320ed-e5de-4056-b96f-e559c2596f1c",
+   "name": "IISS",
+   "labels": [
+    "Other"
+   ],
+   "summary": "IISS assesses that no single country dominates the quantum supply chain, with export-regime effectiveness resting on a small number of geographically dispersed critical-node firms.\nIISS assesses that the US and allies, including the EU under the European Commission's Delegated Regulation, have built aligned export controls covering almost the entire quantum 'stack' — complete quantum computers, enabling components, equipment and advanced materials — but regime effectiveness depends on a small number of geographically dispersed critical-node firms"
+  },
+  {
+   "id": "a43ef287-6961-4435-9b7c-5659edabf088",
+   "name": "Majorana 1",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "Majorana 1 is Microsoft's topological-qubit processor, announced February 19, 2025, billed as the first topological-qubit processor. It remains pre-error-correction: a 4x2 tetron array is to demonstrate entanglement, measurement-based braiding and error detection on two logical qubits, toward a 27x13 array. Microsoft claims Floquet codes cut overhead roughly tenfold, and DARPA selected it for the final US2QC/QBI phase.\nIn February 2025 Microsoft announced Majorana 1\nMicrosoft's topological Majorana 1 processor (February 2025) remains pre-error-correction, with a 4x2 tetron-array roadmap toward"
+  },
+  {
+   "id": "a40b91b1-a4e1-43cf-aed7-fe53eee0dccd",
+   "name": "Real Asset Acquisition Corp",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "IQM's roadmap targeting fault tolerance by 2030 and a path to 1 million qubits is backed by a planned Nasdaq listing through merger with Real Asset Acquisition Corp."
+  },
+  {
+   "id": "a088e2d4-ded0-4c79-a25e-f09961b1877f",
+   "name": "Origin SL1000 refrigerator line",
+   "labels": [
+    "CriticalMaterial"
+   ],
+   "summary": "Origin Quantum's SL1000 refrigerator line went operational in Hefei in June 2024 as part of domestic substitution driven by US export controls"
+  },
+  {
+   "id": "9d4775ae-ae6a-40aa-95f1-6442a12d5f4e",
+   "name": "Iceberg code",
+   "labels": [
+    "CriticalMaterial"
+   ],
+   "summary": "Quantinuum Helios reports 48 fully error-corrected logical qubits at roughly 2:1 encoding using the Iceberg code\nHelios has demonstrated 48 fully error-corrected logical qubits at roughly 2:1 physical-to-logical encoding under the Iceberg code"
+  },
+  {
+   "id": "981f4e8a-9528-4824-afa5-af12beb65da1",
+   "name": "RSA",
+   "labels": [],
+   "summary": "NIST's draft transition plan would deprecate RSA cryptography after 2030 and disallow it after 2035 under NIST IR 8547 migration deadlines.\nNIST's draft transition plan IR 8547 would deprecate quantum-vulnerable algorithms such as RSA-2048 after 2030 and disallow them by 2035.\nGidney's sub-million-qubit RSA-2048 factoring estimates drove the upward revision of CRQC expert probabilities\nGoogle Quantum AI published reduced resource estimates for elliptic-curve breaking, contributing to cryptanalysis that raised the CRQC threat timeline estimates\nA 'Pinnacle Architecture' analysis places RSA-2048"
+  },
+  {
+   "id": "95ae26c5-65ea-43cd-99ec-eaca866f97eb",
+   "name": "Quantum Computing Report",
+   "labels": [
+    "Other"
+   ],
+   "summary": "Quantum Computing Report is an outlet that summarized a Physical Review Letters paper reporting Zuchongzhi 3.2 (107 qubits) reaching below-threshold error correction with a distance-7 code and suppression factor Λ = 1.40(6), published December 22, 2025.\nQuantum Computing Report calls Zuchongzhi 3.2's December 2025 below-threshold error correction the first such milestone outside the United States, about a year after Google\nQuantum Computing Report summarized the December 2025 Physical Review Letters paper on Zuchongzhi 3.2's below-threshold error correction"
+  },
+  {
+   "id": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "name": "Chinese Academy of Sciences / USTC",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "China's flagship quantum lab complex (NLQIS est. 2017 under Pan Jianwei). USTC answered Google's 2019 milestone with Zuchongzhi-2, a 66-qubit superconducting advantage demonstration (2021). Zuchongzhi 3.0 (announced March 3, 2025; PRL 134, 090601): 105 qubits, 182 couplers, 72 μs coherence, 99.90% single-qubit, 99.62% two-qubit, 99.13% readout fidelity; USTC self-reportedly claims its 83-qubit, 32-layer RCS benchmark is 10^15× faster than the fastest supercomputer and 1M× faster than Google's latest result. Zuchongzhi 3.2 (107 qubits) achieved below-threshold error correction with distance-7 s"
+  },
+  {
+   "id": "8c8b77af-07a4-4709-bcf6-ea52f34ac24d",
+   "name": "EU",
+   "labels": [
+    "Government"
+   ],
+   "summary": "IQM operates as a European quantum hardware company within the EU, reporting in June 2026 that directional tile codes cut per-logical, per-round error by up to 1,000x versus the surface code at about 30 physical qubits per logical qubit, targeting fault tolerance by 2030\nMerics tallies public quantum pledges by the UK, Germany, France, the EU and the Netherlands at about USD 12 billion"
+  },
+  {
+   "id": "80cd8522-2754-46a8-a00c-fedb389c4074",
+   "name": "Physical Review Letters",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Physical Review Letters published Zuchongzhi 3.0's results as paper 134, 090601, announced 3 March 2025.\nPhysical Review Letters published Zuchongzhi 3.2's below-threshold error-correction result (distance-7, Λ = 1.40(6)) as an Editors' Suggestion on 22 December 2025.\nQuantum Computing Report summarized the December 2025 Physical Review Letters paper on Zuchongzhi 3.2's below-threshold error correction"
+  },
+  {
+   "id": "808f68a0-bfcf-49ee-ba1b-f3f6a7790407",
+   "name": "Oxford Ionics",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Oxford Ionics is an IonQ company and claims a 99.99% two-qubit fidelity world record as of October 2025\nIn October 2025 Oxford Ionics claimed a 99.99% two-qubit fidelity record, competing against Quantinuum whose Helios reached 99.921% all-pairs fidelity on 98 qubits in November 2025\nIonQ is acquiring Oxford Ionics, which reported a 99.99% two-qubit gate fidelity in October 2025\nIonQ's June 2025 roadmap targets about 10,000 physical qubits in 2027 on an Oxford Ionics chip, ~20,000 physical (≈1,600 logical at ~10−7 error) in 2028, and ≥2,000,000 physical qubits by 2030\nHartmut Neven's statement"
+  },
+  {
+   "id": "7c7567ed-b369-4902-a410-09e7caaec7c3",
+   "name": "Frontier",
+   "labels": [],
+   "summary": "Google says a random circuit sampling benchmark on Willow ran in under five minutes versus a claimed ~10^25 years on the Frontier supercomputer."
+  },
+  {
+   "id": "78fbd547-7674-4e51-9d07-839b4da95213",
+   "name": "BCG",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Boston Consulting Group (BCG) expects broad quantum advantage between 2030 and 2040 and full fault tolerance only after 2040, a more conservative timeline than vendor roadmaps clustering first fault-tolerant machines at 2028–2030.\nBCG's assessment of full fault tolerance after 2040 contradicts and tempers IonQ's 2028 cryptographic-relevance claim"
+  },
+  {
+   "id": "78db7e45-8c94-4f4d-9cc1-700f5891e95e",
+   "name": "Senate Commerce Committee",
+   "labels": [
+    "Government"
+   ],
+   "summary": "On 14 April 2026 the Senate Commerce Committee ordered S.3597 reported favorably with an amendment in the nature of a substitute; it extends the National Quantum Initiative five years, to December 2034\nThe U.S. Senate Committee on Commerce, Science, & Transportation, led by Cantwell and Young, unanimously passed the National Quantum Initiative Reauthorization Act (S.3597, 119th Congress) out of committee on World Quantum Day."
+  },
+  {
+   "id": "75c7d94f-f86b-4ad2-81cd-237bdedc80b9",
+   "name": "AFWERX",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Interlune received an AFWERX SBIR contract in November 2025.\nAFWERX awarded an SBIR contract in November 2025 to a company claiming 99%-pure He-3 separation demonstrated in early 2025."
+  },
+  {
+   "id": "74d042b7-b7dd-4596-b29a-1eea801cae9f",
+   "name": "Post-Quantum",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Post-Quantum published an article arguing that McKinsey's $600 billion quantum finance number doesn't add up\nPost-Quantum reported the White House's $7.1 billion estimate to migrate federal civilian systems to post-quantum cryptography"
+  },
+  {
+   "id": "731582b4-983b-4439-a334-f721482eb87f",
+   "name": "VLQ",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "By 23 July 2026 EuroHPC had procured and inaugurated six quantum computers across Europe, including VLQ in Ostrava"
+  },
+  {
+   "id": "6da85896-25e2-4b3a-a84e-6d5fbfb5a0fb",
+   "name": "PsiQuantum",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Omega chipset (announced 26 February 2025, published in Nature) contains all components for million-qubit-scale fusion-based machines fabricated in a high-volume fab; selected with Microsoft for the f\nPsiQuantum announced its Omega chipset on February 26, 2025, containing all components for million-qubit-scale fusion-based machines fabricated in a high-volume fab, with compute centers under construction in Brisbane and Chicago; no logical-qubit count is publicly demonstrated.\nPsiQuantum's Omega chipset results were published in Nature.\nThe US2QC/QBI program's final phase selected PsiQuantum, w"
+  },
+  {
+   "id": "6cd6de1e-c9e7-4ab1-ab3d-78020c182fd9",
+   "name": "Libra",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "QuEra's Libra fault-tolerant machine is roadmap-planned for 2028 with 256 logical qubits."
+  },
+  {
+   "id": "6cb55027-6b53-46a0-95e0-be796c16b601",
+   "name": "Jiuzhang photonic processor line",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "China's Jiuzhang line published a programmable photonic processor in Nature in 2022, part of its boson-sampling records."
+  },
+  {
+   "id": "6b5ad345-d2b5-4b7f-a8f0-9b482db2f674",
+   "name": "NSF",
+   "labels": [
+    "Government"
+   ],
+   "summary": "H.R. 6213 would have let DOE, NSF and NIST reprogram $1.1 billion of previously authorized amounts; it lapsed without enactment"
+  },
+  {
+   "id": "6a0c3d15-daa6-4f62-a5c2-e4b42c48755d",
+   "name": "JPMorgan Chase",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "In June 2024 Quantinuum, with JPMorgan Chase, ran random circuit sampling on H2-1 claimed to improve 100x on Google's 2019 result at about 30,000x lower power than classical supercomputers"
+  },
+  {
+   "id": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "name": "Quantinuum",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "US/UK firm; Helios (November 2025) delivers 98 fully connected qubits at 99.921% all-pairs two-qubit fidelity, 48 error-corrected logical qubits at ~2:1 Iceberg-code encoding (lowest demonstrated over\nQuantinuum released its Helios trapped-ion quantum computer in November 2025 with 98 fully connected qubits, 48 fully error-corrected logical qubits at roughly 2:1 encoding (Iceberg code), described as the most accurate commercial quantum computer\nQuantinuum's H2 product page claims >99.9% two-qubit fidelity\nQuantinuum Helios reports 48 fully error-corrected logical qubits at roughly 2:1 encoding"
+  },
+  {
+   "id": "69bde2d5-64dd-4645-a306-d0264fce6e3c",
+   "name": "Physike",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "In March 2025 BIS added seven Chinese supply-chain entities including the cryogenics company Physike to export controls."
+  },
+  {
+   "id": "691cacfd-c34f-455c-a75c-a60bfbacdbc6",
+   "name": "Aquila",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "QuEra's analog Aquila machine provided 256 physical atoms in November 2022."
+  },
+  {
+   "id": "6844517f-554f-45b3-81ce-f62449d3eb62",
+   "name": "BMBF",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Germany's BMBF co-funds a EUR 42.71 million quantum computer procurement launched on 24 November 2023"
+  },
+  {
+   "id": "67c62edd-bda1-49db-aabf-9108949f7dca",
+   "name": "Quantum Computing Cybersecurity Preparedness Act",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The Quantum Computing Cybersecurity Preparedness Act of December 2022 reinforced National Security Memorandum 10's (May 2022) target of completing post-quantum migration across federal systems by 2035."
+  },
+  {
+   "id": "67911fee-48a6-4365-b508-c21825363657",
+   "name": "Starling",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "IBM's Starling fault-tolerant machine is roadmap-planned for 2029 with 200 logical qubits running 100 million gates.\nIBM Quantum Starling is to be built in Poughkeepsie, New York"
+  },
+  {
+   "id": "6753b5a1-cce2-4b6f-b1d7-5143b7a1b2b1",
+   "name": "Wukong-180",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "Origin Quantum's Wukong-180 (180 computational qubits) carries company-reported averages of 99.90% single-qubit, two-qubit and readout fidelity — self-reported specifications, not independently benchmarked\nOrigin Quantum commercially offers the Wukong-180 with 180 computational qubits\nOrigin Quantum unveiled the Origin Wukong-180, its fourth-generation quantum computer."
+  },
+  {
+   "id": "661f1f50-a5ac-43de-9c9b-7f59c2d2adf6",
+   "name": "Bluefors",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "A Bluefors XLD1000sl holds about 40 liters of helium-3; refrigerators can take months to procure and cost more than the QPU they host; exports to Chinese research groups face US presumption of denial;\nBluefors, Oxford Instruments and Leiden Cryogenics together hold roughly 70% of the global dilution-refrigerator market, Europe's clearest quantum choke point.\nBluefors and Leiden Cryogenics are among three firms (with Oxford Instruments) holding roughly 70% of the global dilution-refrigerator market.\nFinland's Bluefors is one of three firms holding roughly 70% of the global dilution-refrigerator"
+  },
+  {
+   "id": "631fe338-0365-446f-8535-690b770b011e",
+   "name": "Jiuzhang 4.0",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "USTC posted the programmable 3,050-photon Jiuzhang 4.0 boson-sampling demonstration in August 2025"
+  },
+  {
+   "id": "61b9fe61-9100-4b13-bdd0-2c63a7286495",
+   "name": "DOE",
+   "labels": [
+    "Government"
+   ],
+   "summary": "DOE holds the position that the He-3 shortage 'has been mitigated', but this covers federal allocations only, leaving commercial buyers facing a tighter market."
+  },
+  {
+   "id": "5fa4e4a8-625e-45fa-8793-41553f211843",
+   "name": "Scikro",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "In March 2025 BIS added seven Chinese supply-chain entities including the cryogenics company Scikro to export controls."
+  },
+  {
+   "id": "5f2ee910-0912-4328-a7e7-f2edd6ed2ede",
+   "name": "Marks & Clerk",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Marks & Clerk cited quantum-computing value projections of over $450 billion of economic value by 2040, consistent with McKinsey-derived estimates"
+  },
+  {
+   "id": "5df8efa0-fba8-464f-acf0-a6474c283e6a",
+   "name": "Intel",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Bulk helium-3, traded at $1,900–$2,600 per liter, is a mandatory input for dilution refrigeration in some spin-qubit machines such as Intel's silicon-spin path."
+  },
+  {
+   "id": "5deabd63-7eae-4e45-9128-e6e873c5a874",
+   "name": "post-quantum cryptography migration",
+   "labels": [],
+   "summary": "Future Market Insights estimated the PQC products-and-services market at $1.9 billion in 2025.\nThe Global Risk Institute/evolutionQ Quantum Threat Timeline Report 2025 shapes the perceived urgency of post-quantum cryptography migration by putting the probability of a cryptographically relevant quantum computer at 28–49% within ten years and 92% of experts assigning at least 50% probability within twenty years."
+  },
+  {
+   "id": "5d4b54b4-eef5-413c-84f8-f49612c82038",
+   "name": "OMB",
+   "labels": [
+    "Government"
+   ],
+   "summary": "In a July 2024 report to Congress, OMB together with ONCD, CISA and NIST estimated about $7.1 billion (2024 dollars) to migrate prioritized federal civilian systems to post-quantum cryptography over 2025–2035, excluding national security systems.\nOMB partnered with ONCD, CISA and NIST on the July 2024 report to Congress estimating ~$7.1 billion in federal post-quantum cryptography migration costs.\nOMB partnered with ONCD, CISA and NIST on the July 2024 report to Congress estimating ~$7.1 billion in federal post-quantum cryptography migration costs."
+  },
+  {
+   "id": "5a018e28-f0c7-4a7f-a16c-0ba2cccae3c1",
+   "name": "parametric signal amplifiers",
+   "labels": [
+    "CriticalMaterial"
+   ],
+   "summary": "The 8 September 2025 EU Delegated Regulation adds parametric signal amplifiers to the EU dual-use control list."
+  },
+  {
+   "id": "58d7bb55-6585-44a7-b9d2-05f3e33b0e9c",
+   "name": "directional tile codes",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "Finland's IQM announced 'directional tile codes' on 23 June 2026, reducing per-logical, per-round error rates by up to 1,000x versus the surface code at roughly 30 physical qubits per logical qubit."
+  },
+  {
+   "id": "5761101e-48d1-46d8-9707-8ea3b2177742",
+   "name": "ITIF",
+   "labels": [
+    "Other"
+   ],
+   "summary": "ITIF cites Chinese public claims of over $15 billion in government quantum funding, consistent with the figure originating from the McKinsey 2022 Quantum Technology Monitor\nITIF cites Chinese public claims of over $15 billion in state quantum funding."
+  },
+  {
+   "id": "56c8faf4-7c98-40c9-8693-a1dcfffd1b9b",
+   "name": "Lightsynq",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "IonQ pursues M&A-driven scaling through the photonic-interconnect firm Lightsynq"
+  },
+  {
+   "id": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "name": "DARPA",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "QBI runs Stage A (concept), Stage B (R&D plan and prototypes; 11 companies selected 6 November 2025) and Stage C (government verification); Microsoft and PsiQuantum in final US2QC phase; Google Quantu\nDARPA selected 11 companies for Quantum Benchmarking Initiative Stage B on November 6, 2025\nDARPA selected Microsoft (Majorana 1, a pre-error-correction topological-qubit processor) for the final US2QC/QBI phase, announced with Majorana 1 on 19 February 2025.\nDARPA runs the Quantum Benchmarking Initiative, which aims to determine whether any quantum computing approach can reach utility-scale oper"
+  },
+  {
+   "id": "52c3cbda-63b7-4402-9cc9-ca4cffdf6fe6",
+   "name": "Interlune",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Bluefors has hedged its helium-3 supply with lunar deliveries of up to 10,000 liters per year from Interlune for 2028–2037.\nInterlune claims 99%-pure helium-3 separation demonstrated in early 2025, with its chief executive citing purified prices near $20 million per kilogram (about 7,500 liters).\nInterlune received an AFWERX SBIR contract in November 2025.\nInterlune produces pure Helium-3 from domestic helium using novel cryogenic technology to expand Helium-3 supply for quantum computing."
+  },
+  {
+   "id": "521eb92f-5108-4532-b19d-e397dd979880",
+   "name": "CEF-2",
+   "labels": [
+    "QuantumProgram"
+   ],
+   "summary": "EuroHPC's budget draws EUR 320 million from CEF-2 for HPC, quantum and data interconnection"
+  },
+  {
+   "id": "50ef9722-2303-4466-a2cc-57ba71f5e057",
+   "name": "Post-Quantum Cryptography project",
+   "labels": [
+    "QuantumProgram"
+   ],
+   "summary": "NIST runs the Post-Quantum Cryptography project, hosted on the CSRC"
+  },
+  {
+   "id": "4ee26ccc-d776-4506-8860-779bb069f416",
+   "name": "US Department of Commerce / BIS",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "September 2024 rule added quantum ECCNs with deemed-export licensing; presumption of denial for dilution refrigerators to Chinese research groups and cryogenic circuits to Chinese quantum suppliers; E\nThe Department of Commerce proposed $100 million in federal incentives to PsiQuantum under the CHIPS and Science Act\nIn September 2025 BIS listed CAS's National Time Service Center among 32 entities on the Entity List, constraining China's quantum ecosystem\nThe US Department of Commerce added quantum entities linked to the Chinese Academy of Sciences to the Entity List in 2020–2021.\nIn March 2025"
+  },
+  {
+   "id": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "name": "QuEra",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "QuEra is a neutral-atom quantum computing company with Harvard/MIT lineage. Its analog Aquila machine provided 256 physical atoms in November 2022. The Harvard/MIT/QuEra collaboration demonstrated 99.5% two-qubit fidelity in parallel on 60 neutral atoms in October 2023, and in December 2023 presented the first logical processor with 48 logical qubits from 250+ physical qubits (Nature). Gemini, launched 2025 with 260 physical qubits at 99.5% physical gate fidelity (company cites 99.77% two-qubit gate fidelity), was first deployed at AIST in Japan as a roughly 100-logical-qubit QEC testbed. In N"
+  },
+  {
+   "id": "4ceddbcd-bd74-43f5-b50b-9bb838df1879",
+   "name": "Future Market Insights",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Future Market Insights estimated the PQC products-and-services market at $1.9 billion in 2025."
+  },
+  {
+   "id": "4c9aa724-2a24-4148-bd22-8e75921fcb60",
+   "name": "IBM Kookaburra",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "In 2026, IBM Kookaburra prototypes a real-time error-correction decoder while Nighthawk runs 7,500-gate circuits across up to three 120-qubit modules.\nIBM's 2026 milestone has Kookaburra prototyping a real-time error-correction decoder, followed by a 2028 15,000-gate milestone."
+  },
+  {
+   "id": "4c8e6427-3feb-4520-aa37-39566f2a9079",
+   "name": "Oxford Instruments",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Oxford Instruments is a cryogenics equipment vendor. Dilution refrigerators from Oxford Instruments, Bluefors and Leiden Cryogenics held roughly 70% of the dilution refrigerator market per an analyst estimate. Dilution refrigeration, and with it helium-3 (trading at $1,900–$2,600 per liter), is mandatory for superconducting, topological and some spin-qubit machines.\nBluefors, Oxford Instruments and Leiden Cryogenics together hold roughly 70% of the global dilution-refrigerator market, Europe's clearest quantum choke point.\nOxford Instruments and Leiden Cryogenics are among three firms (with Bl"
+  },
+  {
+   "id": "4c78e4e1-64e2-4107-9e52-585d3dfd143d",
+   "name": "Zuchongzhi 3.2",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "Zuchongzhi 3.2 is China's superconducting quantum processor with 107 qubits that achieved below-threshold error correction using a distance-7 code with suppression factor Λ = 1.40(6), per a Physical Review Letters paper summarized by Quantum Computing Report; published December 22, 2025.\nZuchongzhi 3.2 (107 qubits) reached below-threshold error correction (distance-7, Λ = 1.40(6)) in December 2025, which Quantum Computing Report calls the first such milestone outside the United States, about a year after Google\nQuantum Computing Report calls Zuchongzhi 3.2's December 2025 below-threshold error"
+  },
+  {
+   "id": "45957d6d-f4ff-47c6-bcad-9b7b7ff4dc9f",
+   "name": "Merics",
+   "labels": [
+    "Other"
+   ],
+   "summary": "Merics states it could not verify the USD 150 billion figure that the McKinsey 2022 Quantum Technology Monitor attributed to the non-public 14th Five-Year Plan document, though the ~$15 billion government funding figure originates from that Monitor"
+  },
+  {
+   "id": "3beb7995-943d-4dda-9b2c-d95f89b4bc55",
+   "name": "QuEra Gemini",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "QuEra's Gemini neutral-atom quantum processor, launched 2025 and first deployed at AIST in Japan, offers 260 physical qubits at 99.5% physical gate fidelity and serves as a roughly 100-logical-qubit QEC testbed. Part of the Harvard/QuEra neutral-atom line, which demonstrated 48 logical qubits from 250+ physical qubits (December 2023) and an end-to-end fault-tolerant architecture with up to 96 logical qubits (November 2025).\nIn November 2025 QuEra shipped Gemini (260 qubits) and published an end-to-end fault-tolerant architecture with up to 96 logical qubits"
+  },
+  {
+   "id": "3a4e9c04-5076-4f91-93bd-1a7b26fd6c8a",
+   "name": "Zoe Lofgren",
+   "labels": [],
+   "summary": "At a House Science Committee markup on 29 April 2026, Ranking Member Zoe Lofgren stated that 'At the moment, this bill does not have any funds authorized', referring to S.3597"
+  },
+  {
+   "id": "382beb2a-0efc-4137-9495-a328bb189b4f",
+   "name": "helium-3",
+   "labels": [
+    "CriticalMaterial"
+   ],
+   "summary": "Helium-3 supply is a choke-point input for dilution refrigeration used in quantum hardware.\nBulk helium-3, traded at $1,900–$2,600 per liter, is a mandatory input for dilution refrigeration in some spin-qubit machines such as Intel's silicon-spin path.\nThe US DOE Isotope Program, the dominant Western supplier of helium-3, sources all of its He-3 from tritium processing at the Savannah River Site, South Carolina, making thousands of liters available each year.\nA single Bluefors XLD1000sl dilution refrigerator holds about 40 liters of helium-3.\nInterlune claims 99%-pure helium-3 separation demon"
+  },
+  {
+   "id": "36affc23-004d-4c6a-9f9c-8dff7f662669",
+   "name": "CBO",
+   "labels": [
+    "Government"
+   ],
+   "summary": "CBO used an estimated $1 billion of US federal agency quantum information science research spending in 2022 as baseline in scoring H.R. 6213 reauthorization legislation, estimating $1.3 billion cost for $1.8 billion in authorized FY2025-2029 appropriations\nNo program-level DOE quantum budget appears in the evidence beyond the CBO's $1 billion government-wide baseline, with unspent authorized capacity across DOE, NSF and NIST"
+  },
+  {
+   "id": "3601195a-52b0-4165-becf-9c7b8d9dc304",
+   "name": "NIST IR 8547",
+   "labels": [
+    "QuantumProgram"
+   ],
+   "summary": "NIST is finalizing NIST IR 8547, its draft post-quantum cryptography transition plan with federal migration deadlines.\nNIST's draft transition plan IR 8547 would deprecate quantum-vulnerable algorithms such as RSA-2048 after 2030 and disallow them by 2035.\nNIST IR 8547 (initial public draft, November 2024), NIST's transition plan, proposes deprecating quantum-vulnerable public-key algorithms (RSA, ECDSA, ECDH, finite-field Diffie-Hellman) after 2030 and disallowing them entirely after 2035.\nNIST IR 8547's 2030 and 2035 post-quantum cryptography deadlines impose migration requirements discussed"
+  },
+  {
+   "id": "355a0b15-6a69-4699-a802-0033fc991822",
+   "name": "China",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The US dominates private quantum capital with roughly $3.7 billion cumulative private funding versus about $255 million for China, per SCSP's 2025 gaps analysis.\nOrigin Quantum, China's leading commercial quantum hardware firm, has raised only about $150–165 million entirely from domestic investors, running on state-directed Chinese funding.\nITIF cites Chinese public claims of over $15 billion in state quantum funding.\nUS export controls targeted China's quantum sector and, per RUSI, accelerated China's domestic refrigerator and interconnect industry\nChina retaliated against US export controls"
+  },
+  {
+   "id": "33808200-7819-4335-aa0c-0945f7adce5c",
+   "name": "Nighthawk",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "IBM claims user-demonstrated quantum advantage by end-2026 on its Nighthawk quantum processor.\nIBM's 2025-2026 fleet includes Nighthawk with 120 programmable qubits and a square lattice with 218 tunable couplers; a community source reports median two-qubit gate fidelity of about 99.76% on the best Nighthawk device.\nIn 2026 IBM's Nighthawk is to run 7,500-gate circuits across up to three 120-qubit modules"
+  },
+  {
+   "id": "31aff789-785d-44a1-b39f-29412228b720",
+   "name": "Leiden Cryogenics",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Leiden Cryogenics is a dilution refrigeration vendor. Dilution refrigerators from Leiden Cryogenics, Bluefors and Oxford Instruments held roughly 70% of the market per an analyst estimate. Dilution refrigeration is mandatory for superconducting, topological and some spin-qubit machines and depends on helium-3 supply (bulk helium-3 traded at $1,900–$2,600 per liter).\nBluefors and Leiden Cryogenics are among three firms (with Oxford Instruments) holding roughly 70% of the global dilution-refrigerator market.\nOxford Instruments and Leiden Cryogenics are among three firms (with Bluefors) holding r"
+  },
+  {
+   "id": "31372611-12ea-41b5-8b68-f31b5444fe46",
+   "name": "Willow chip",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "Google's Willow chip (105 qubits) demonstrated below-threshold surface-code error correction in December 2024, halving error rates with each code-distance step, and in October 2025 Google claimed the first verifiable quantum advantage on the same chip.\nGoogle says a random circuit sampling benchmark on Willow ran in under five minutes versus a claimed ~10^25 years on the Frontier supercomputer.\nWillow's below-threshold error correction halved the logical error rate at each step from 3x3 to 7x7 grids, while qLDPC codes cut qubit requirements roughly 10x.\nUSTC's Zuchongzhi 3.2 reached below-thre"
+  },
+  {
+   "id": "2eb6a80f-e7c1-4343-9ac2-1f24d2a7ba01",
+   "name": "Microsoft",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Roadmap: 4x2 tetron array to demonstrate entanglement, measurement-based braiding and error detection on two logical qubits, toward 27x13 array; claims Floquet codes cut overhead ~10x; selected for fi\nIn February 2025 Microsoft announced Majorana 1\nDARPA selected Microsoft (Majorana 1, a pre-error-correction topological-qubit processor) for the final US2QC/QBI phase, announced with Majorana 1 on 19 February 2025.\nThe US2QC/QBI program's final phase selected Microsoft's Majorana 1 topological-qubit effort, which aims to demonstrate entanglement, measurement-based braiding and quantum error dete"
+  },
+  {
+   "id": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "name": "NIST",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "NIST (National Institute of Standards and Technology, US) published its first three final post-quantum cryptography standards in 2024. Its draft transition plan, NIST IR 8547 (initial public draft, November 2024), proposes deprecating quantum-vulnerable public-key algorithms (RSA, ECDSA, ECDH, finite-field Diffie-Hellman) after 2030 and disallowing them entirely after 2035, making migration a near-term cost regardless of when a code-breaking machine exists; the 2035 cutoff reflects expectation of a viable quantum breaking technique by then. Finalization of NIST IR 8547 and its federal migratio"
+  },
+  {
+   "id": "29f138ae-4b34-4567-b37e-10f60930bfc4",
+   "name": "SCSP",
+   "labels": [
+    "Other"
+   ],
+   "summary": "SCSP estimates cumulative Chinese private quantum funding at roughly $255 million versus about $3.7 billion for the United States.\nSCSP's 2025 gaps analysis puts cumulative US private quantum funding at roughly $3.7 billion, informing assessments of US quantum capital leadership."
+  },
+  {
+   "id": "29733982-a2fd-4d70-ba55-c960230fbfb2",
+   "name": "McKinsey",
+   "labels": [
+    "Other"
+   ],
+   "summary": "Consulting firm cited in a quantum-computing forecast report. McKinsey projects $1.3–2.7 trillion of economic value for companies worldwide from quantum computing by 2035.\nMcKinsey's quantum-technology start-up investment series (recording ~$0.2B in 2019, $2.1B in 2021, and $12.6B in 2025) is sourced from PitchBook data\nMcKinsey's own vintages restate history: its 2025 retrospective counts $1.3 billion for 2023 start-up investment, whereas the April 2024 Monitor had reported $1.7 billion for 2023\nQED-C's pure-play company count shows the EU leading with 173 firms ahead of the US, while McKinse"
+  },
+  {
+   "id": "293464ec-b14b-40f2-9c8d-6e5f4d9fafc1",
+   "name": "H.R. 6213",
+   "labels": [
+    "QuantumProgram"
+   ],
+   "summary": "CBO used an estimated $1 billion of US federal agency quantum information science research spending in 2022 as baseline in scoring H.R. 6213 reauthorization legislation, estimating $1.3 billion cost for $1.8 billion in authorized FY2025-2029 appropriations\nH.R. 6213 would have let DOE, NSF and NIST reprogram $1.1 billion of previously authorized amounts; it lapsed without enactment\nH.R. 6213 would have let DOE, NSF and NIST reprogram $1.1 billion of previously authorized amounts; it lapsed without enactment\nH.R. 6213 would have let DOE, NSF and NIST reprogram $1.1 billion of previously authori"
+  },
+  {
+   "id": "2851c568-54e3-4794-973b-f0419a824155",
+   "name": "MIT",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "MIT partnered with Harvard University and QuEra to demonstrate 99.5% two-qubit gate fidelity on 60 neutral atom qubits"
+  },
+  {
+   "id": "26d51911-bfca-44d2-887d-8b3283e987cc",
+   "name": "QED-C",
+   "labels": [
+    "Other"
+   ],
+   "summary": "State of the Global Quantum Industry 2026: 7,418 quantum-engaged organizations, EU leads pure-play counts (173 vs US 164), revenue $1.4 billion in 2025 with North America ~44% share, workforce ~16,500\nQED-C's pure-play company count shows the EU leading with 173 firms ahead of the US, while McKinsey's Monitor describes most quantum start-ups as US-based — a definitional difference between the two data providers."
+  },
+  {
+   "id": "24e5b02a-fd89-45cf-b9ff-548c9fff7ec2",
+   "name": "US Department of Energy",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Isotope Program sources all He-3 from tritium processing at Savannah River Site, making 'thousands of liters' available yearly for federal allocations; deems the shortage 'mitigated' for federal users\nH.R. 6213 would have let DOE, NSF and NIST reprogram $1.1 billion of previously authorized amounts; it lapsed without enactment\nNo program-level DOE quantum budget appears in the evidence beyond the CBO's $1 billion government-wide baseline, with unspent authorized capacity across DOE, NSF and NIST"
+  },
+  {
+   "id": "247f742a-4b03-472b-8726-8e3800416a79",
+   "name": "US DOE Isotope Program",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The US DOE Isotope Program, the dominant Western supplier of helium-3, sources all of its He-3 from tritium processing at the Savannah River Site, South Carolina, making thousands of liters available each year.\nThe US DOE Isotope Program sources all of its helium-3 from tritium processing at the Savannah River Site, South Carolina."
+  },
+  {
+   "id": "243a5416-9f9d-418e-a0f0-6f73af4f99e5",
+   "name": "Bavaria",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Bavaria co-funds a German quantum computer procurement launched on 24 November 2023 totaling EUR 42.71 million"
+  },
+  {
+   "id": "22d4e408-ca5e-48af-80be-a6b9a3b65990",
+   "name": "ECC",
+   "labels": [],
+   "summary": "NIST deprecation of elliptic-curve cryptography (ECC) begins in 2030"
+  },
+  {
+   "id": "1fa68917-ceed-4a27-a480-1f8184b2ca6b",
+   "name": "IBM Heron r1",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "IBM's 2025-2026 quantum fleet comprises Heron r1 with 133 qubits."
+  },
+  {
+   "id": "1eaecfef-cf4a-40a8-a2d7-ee0ba54f5370",
+   "name": "Apollo",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "Quantinuum's roadmap targets Apollo in 2030, a fully fault-tolerant universal machine executing millions of gates on thousands of physical and hundreds of logical qubits; a later company blog pulls universal fault tolerance forward to \"by 2029\""
+  },
+  {
+   "id": "1e170a3f-8dd1-4f2d-a904-54db32108b5f",
+   "name": "harvest-now-decrypt-later",
+   "labels": [],
+   "summary": "The Cloud Security Alliance describes harvest-now-decrypt-later as \"not a forecast — it is an ongoing operation\"."
+  },
+  {
+   "id": "1adedc23-1ee7-40b1-a7f0-778ebcaab776",
+   "name": "Pinnacle Architecture",
+   "labels": [],
+   "summary": "A 'Pinnacle Architecture' analysis places RSA-2048 factoring below 100,000 physical qubits under aggressive assumptions"
+  },
+  {
+   "id": "19f21580-a6f1-439d-bf10-9decda18914a",
+   "name": "CHIPS and Science Act",
+   "labels": [
+    "QuantumProgram"
+   ],
+   "summary": "US federal statute providing funding incentives; PsiQuantum cites $100 million in proposed federal incentives under the CHIPS and Science Act from the Department of Commerce, alongside its $125 million DARPA agreement. It is the clearest CHIPS-linked dollar figure in the quantum-computing evidence reviewed.\nPsiQuantum received $100 million in proposed CHIPS Act incentives."
+  },
+  {
+   "id": "1977bf7e-5059-41bb-b1b0-8da4bd8d3d89",
+   "name": "AIST",
+   "labels": [
+    "Government"
+   ],
+   "summary": "QuEra's Gemini quantum computer, launched in 2025 with 260 physical qubits at 99.5% physical gate fidelity, was first deployed at AIST in Japan as a roughly 100-logical-qubit QEC testbed"
+  },
+  {
+   "id": "171cef60-bf49-499c-806b-f98501094c18",
+   "name": "National Security Memorandum 10",
+   "labels": [
+    "Government"
+   ],
+   "summary": "National Security Memorandum 10 is reported to set 2035 as the target for completing federal migration to post-quantum standards, complementing NIST's published final post-quantum standards and draft IR 8547 transition plan.\nThe Quantum Computing Cybersecurity Preparedness Act of December 2022 reinforced National Security Memorandum 10's (May 2022) target of completing post-quantum migration across federal systems by 2035."
+  },
+  {
+   "id": "16ce3df0-f81b-4ca7-8e76-bacf4bc1d04c",
+   "name": "ONCD",
+   "labels": [
+    "Government"
+   ],
+   "summary": "OMB partnered with ONCD, CISA and NIST on the July 2024 report to Congress estimating ~$7.1 billion in federal post-quantum cryptography migration costs.\nONCD and NIST, together with OMB and CISA, co-authored the July 2024 report to Congress estimating ~$7.1 billion in federal post-quantum cryptography migration costs.\nCISA and ONCD, together with OMB and NIST, co-authored the July 2024 report to Congress estimating ~$7.1 billion in federal post-quantum cryptography migration costs."
+  },
+  {
+   "id": "14996e65-14c7-452d-aeaa-3920e4a09281",
+   "name": "China's 14th Five-Year Plan (2021–2025)",
+   "labels": [
+    "QuantumProgram"
+   ],
+   "summary": "China's 14th Five-Year Plan (2021–2025) designated quantum information the second-ranked cutting-edge science and technology field, driving the state ecosystem behind the CAS/USTC complex delivering China's flagship quantum results.\nChina's plan-driven mandates under the 14th Five-Year Plan support commercial quantum development, with Origin Quantum's Wukong machines serving a national goal of a 1,000-qubit-class machine by around 2030."
+  },
+  {
+   "id": "0fac4363-2ff2-4647-bc12-1ae9d9eeef4d",
+   "name": "Cloud Security Alliance",
+   "labels": [
+    "Other"
+   ],
+   "summary": "The Cloud Security Alliance describes harvest-now-decrypt-later as \"not a forecast — it is an ongoing operation\".\nThe Cloud Security Alliance's characterization of harvest-now-decrypt-later against AI infrastructure as 'not a forecast — it is an ongoing operation' reinforces the urgency behind NIST's 2030 deprecation and 2035 disallowance of RSA/ECC cryptography."
+  },
+  {
+   "id": "0e886c69-608b-4183-b737-38303a4742a4",
+   "name": "dilution refrigeration",
+   "labels": [
+    "CriticalMaterial"
+   ],
+   "summary": "Helium-3 supply is a choke-point input for dilution refrigeration used in quantum hardware.\nLeiden Cryogenics, hosted in the Netherlands, is one of three firms holding roughly 70% of the global dilution-refrigerator market.\nFinland's Bluefors is one of three firms holding roughly 70% of the global dilution-refrigerator market, a key quantum choke point.\nThe UK's Oxford Instruments is one of three firms holding roughly 70% of the global dilution-refrigerator market.\nThe EU dual-use control list Delegated Regulation adopted 8 September 2025 adds quantum computers, cryogenic electronic components"
+  },
+  {
+   "id": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "name": "IonQ",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Quantum Threat Timeline Report series shows ten-year averages climbing every edition: 17-31% (2023), 19-34% (2024), 28-49% (2025); 92% of experts assign ≥50% within twenty years; most experts say cove\nOxford Ionics is an IonQ company and claims a 99.99% two-qubit fidelity world record as of October 2025\nIonQ is acquiring Oxford Ionics, which reported a 99.99% two-qubit gate fidelity in October 2025\nIonQ's June 2025 roadmap targets about 10,000 physical qubits in 2027 on an Oxford Ionics chip, ~20,000 physical (≈1,600 logical at ~10−7 error) in 2028, and ≥2,000,000 physical qubits by 2030\nIonQ "
+  },
+  {
+   "id": "0854ed08-c860-443a-85b8-18ea49e1cc8a",
+   "name": "Zuchongzhi-2",
+   "labels": [
+    "QuantumProcessor"
+   ],
+   "summary": "USTC developed Zuchongzhi-2, a 66-qubit superconducting quantum computational advantage demonstration in 2021."
+  },
+  {
+   "id": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "Google Quantum AI",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "US quantum hardware leader (superconducting; secondary reporting says it added neutral atoms as a second modality in March 2026). Willow (105 qubits, December 2024) achieved the first below-threshold surface-code error correction, halving error rate at each step from 3×3 to 7×7 grids; October 2025: claimed first verifiable quantum advantage on Willow, with an RCS benchmark run in under five minutes versus a claimed ~10^25 years on Frontier. Roadmap: six milestones culminating in controlling 1 million qubits; next milestone is a long-lived logical qubit requiring millions of components (undated"
+  },
+  {
+   "id": "0524ceb5-a7f4-4730-ab1d-cf78b78ca6d1",
+   "name": "elliptic-curve cryptography",
+   "labels": [],
+   "summary": "NIST's draft transition plan would deprecate elliptic-curve cryptography after 2030 and disallow it after 2035."
+  },
+  {
+   "id": "012ba247-4f9b-4c16-9893-5db4949133b0",
+   "name": "Hartmut Neven",
+   "labels": [],
+   "summary": "Hartmut Neven, speaking for Google, told Reuters in February 2025 that Google aims to release commercial applications within five years, i.e. around 2030\nHartmut Neven told Reuters in February 2025 that Google aims to have commercial quantum applications within five years."
+  }
+ ],
+ "links": [
+  {
+   "source": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "target": "6753b5a1-cce2-4b6f-b1d7-5143b7a1b2b1",
+   "name": "DEVELOPS",
+   "fact": "Origin Quantum developed Wukong-180 with 180 computational qubits, serving a national goal of a 1,000-qubit-class machine by around 2030, though it has published no significant error-correction work."
+  },
+  {
+   "source": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "target": "bd67571a-800a-4f0e-a2c5-4cf68f4c685e",
+   "name": "PROCURED",
+   "fact": "By 23 July 2026 EuroHPC had procured and inaugurated six quantum computers across Europe, including PIAST-Q in Poznań"
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "4ee26ccc-d776-4506-8860-779bb069f416",
+   "name": "SANCTIONS",
+   "fact": "The US Department of Commerce added quantum entities linked to the Chinese Academy of Sciences to the Entity List in 2020–2021."
+  },
+  {
+   "source": "dee70412-9860-4111-81f0-bc0a56a5035f",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "SUPPORTS",
+   "fact": "Google Quantum AI joined DARPA's QBI Stage A in September 2025"
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "c322d918-50fa-45ab-8de4-843c1a7c34fd",
+   "name": "PRODUCES",
+   "fact": "IBM's 2025-2026 fleet includes Heron r2/r3 processors with 156 qubits."
+  },
+  {
+   "source": "31372611-12ea-41b5-8b68-f31b5444fe46",
+   "target": "d91442c0-d342-415b-a80d-fda9c26bc9e7",
+   "name": "COMPARED_WITH",
+   "fact": "Willow's below-threshold error correction halved the logical error rate at each step from 3x3 to 7x7 grids, while qLDPC codes cut qubit requirements roughly 10x."
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "4c78e4e1-64e2-4107-9e52-585d3dfd143d",
+   "name": "DEVELOPS",
+   "fact": "USTC developed Zuchongzhi 3.2, which reached below-threshold error correction with suppression factor Λ=1.40 in December 2025"
+  },
+  {
+   "source": "243a5416-9f9d-418e-a0f0-6f73af4f99e5",
+   "target": "df7a110e-cf00-4b35-8327-b032b5048af5",
+   "name": "FUNDS",
+   "fact": "Bavaria co-funds a German quantum computer procurement launched on 24 November 2023 totaling EUR 42.71 million"
+  },
+  {
+   "source": "fd4aadb7-ad02-4725-9f05-671621a4818a",
+   "target": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "name": "COMPETES_WITH",
+   "fact": "Competing 2028 logical-qubit claims: IonQ ~1,600 logical by 2028 vs QuEra Libra 256 logical in 2028 [S4][S48]（sign=-，strength=0.5，valence=adversarial，polarity=-0.30）"
+  },
+  {
+   "source": "6da85896-25e2-4b3a-a84e-6d5fbfb5a0fb",
+   "target": "f9472aaa-2b80-4c1f-9d88-c0fe13425a47",
+   "name": "ANNOUNCED",
+   "fact": "PsiQuantum announced its Omega chipset on February 26, 2025, containing all components for million-qubit-scale fusion-based machines fabricated in a high-volume fab, with compute centers under construction in Brisbane and Chicago; no logical-qubit count is publicly demonstrated."
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "33808200-7819-4335-aa0c-0945f7adce5c",
+   "name": "PRODUCES",
+   "fact": "IBM's 2025-2026 fleet includes Nighthawk with 120 programmable qubits and a square lattice with 218 tunable couplers; a community source reports median two-qubit gate fidelity of about 99.76% on the best Nighthawk device."
+  },
+  {
+   "source": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "target": "2eb6a80f-e7c1-4343-9ac2-1f24d2a7ba01",
+   "name": "FUNDS",
+   "fact": "Microsoft selected with PsiQuantum for the final phase [S42]（sign=+，strength=0.7，valence=allied，polarity=0.60）"
+  },
+  {
+   "source": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "target": "6753b5a1-cce2-4b6f-b1d7-5143b7a1b2b1",
+   "name": "UNVEILED",
+   "fact": "Origin Quantum unveiled the Origin Wukong-180, its fourth-generation quantum computer."
+  },
+  {
+   "source": "4ee26ccc-d776-4506-8860-779bb069f416",
+   "target": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "name": "SANCTIONS",
+   "fact": "CAS/USTC-linked entities listed 2020-2021; dilution refrigerator exports face presumption of denial [S41][S73]（sign=-，strength=0.9，valence=adversarial，polarity=-0.90）"
+  },
+  {
+   "source": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "target": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "name": "COMPETES_WITH",
+   "fact": "Origin Quantum's 2021 promise of 1,024 qubits by 2025 went unmet, a caution against vendor roadmap claims like IonQ's aggressive 2025 roadmap."
+  },
+  {
+   "source": "df71d6ac-c3e9-40fa-8331-5202458c2877",
+   "target": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "name": "INFLUENCES",
+   "fact": "The National Quantum Initiative Reauthorization Act of 2026 (S.3597) is legislation affecting U.S. quantum programs including agency activities tracked alongside DARPA's quantum computing initiatives."
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "33808200-7819-4335-aa0c-0945f7adce5c",
+   "name": "ROADMAP_MILESTONE",
+   "fact": "In 2026 IBM's Nighthawk is to run 7,500-gate circuits across up to three 120-qubit modules"
+  },
+  {
+   "source": "80cd8522-2754-46a8-a00c-fedb389c4074",
+   "target": "ec933c0a-f1ce-4343-8ffd-20c1c6032ce2",
+   "name": "PUBLISHED",
+   "fact": "Physical Review Letters published Zuchongzhi 3.0's results as paper 134, 090601, announced 3 March 2025."
+  },
+  {
+   "source": "5d4b54b4-eef5-413c-84f8-f49612c82038",
+   "target": "16ce3df0-f81b-4ca7-8e76-bacf4bc1d04c",
+   "name": "PARTNERS_WITH",
+   "fact": "OMB partnered with ONCD, CISA and NIST on the July 2024 report to Congress estimating ~$7.1 billion in federal post-quantum cryptography migration costs."
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "4c9aa724-2a24-4148-bd22-8e75921fcb60",
+   "name": "PRODUCES",
+   "fact": "In 2026, IBM Kookaburra prototypes a real-time error-correction decoder while Nighthawk runs 7,500-gate circuits across up to three 120-qubit modules."
+  },
+  {
+   "source": "fd4aadb7-ad02-4725-9f05-671621a4818a",
+   "target": "fd4aadb7-ad02-4725-9f05-671621a4818a",
+   "name": "PARTNERS_WITH",
+   "fact": "The Global Risk Institute and evolutionQ jointly produced the Quantum Threat Timeline Report 2025 (26 experts, published March 2026), which puts the averaged probability of a cryptographically relevant quantum computer at 28–49% within ten years."
+  },
+  {
+   "source": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "target": "3601195a-52b0-4165-becf-9c7b8d9dc304",
+   "name": "DRAFTS",
+   "fact": "NIST is finalizing NIST IR 8547, its draft post-quantum cryptography transition plan with federal migration deadlines."
+  },
+  {
+   "source": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "target": "6753b5a1-cce2-4b6f-b1d7-5143b7a1b2b1",
+   "name": "MANUFACTURES",
+   "fact": "Origin Quantum commercially offers the Wukong-180 with 180 computational qubits"
+  },
+  {
+   "source": "2851c568-54e3-4794-973b-f0419a824155",
+   "target": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "name": "PARTNERS_WITH",
+   "fact": "MIT partnered with Harvard University and QuEra to demonstrate 99.5% two-qubit gate fidelity on 60 neutral atom qubits"
+  },
+  {
+   "source": "fd4aadb7-ad02-4725-9f05-671621a4818a",
+   "target": "5deabd63-7eae-4e45-9128-e6e873c5a874",
+   "name": "INFLUENCES",
+   "fact": "The Global Risk Institute/evolutionQ Quantum Threat Timeline Report 2025 shapes the perceived urgency of post-quantum cryptography migration by putting the probability of a cryptographically relevant quantum computer at 28–49% within ten years and 92% of experts assigning at least 50% probability within twenty years."
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "ec933c0a-f1ce-4343-8ffd-20c1c6032ce2",
+   "name": "DEVELOPED",
+   "fact": "In March 2025 USTC's Zuchongzhi 3.0 (105 qubits, 99.62% two-qubit fidelity) ran an 83-qubit, 32-layer random circuit sampling task that USTC claims is 10^15 times faster than the fastest supercomputer"
+  },
+  {
+   "source": "eeb696ea-276f-44b5-a6c3-414574a16591",
+   "target": "eceb5e07-8e64-487b-8793-363f911768a3",
+   "name": "PUBLISHED_IN",
+   "fact": "IQM reported directional tile codes on June 23, 2026 — up to a 1,000x reduction in per-logical per-round error versus the surface code at ~30 physical qubits per logical — targeting fault tolerance by 2030"
+  },
+  {
+   "source": "4ee26ccc-d776-4506-8860-779bb069f416",
+   "target": "69bde2d5-64dd-4645-a306-d0264fce6e3c",
+   "name": "SANCTIONS",
+   "fact": "In March 2025 BIS added seven Chinese supply-chain entities including the cryogenics company Physike to export controls."
+  },
+  {
+   "source": "382beb2a-0efc-4137-9495-a328bb189b4f",
+   "target": "0e886c69-608b-4183-b737-38303a4742a4",
+   "name": "SUPPLIES",
+   "fact": "Helium-3 supply is a choke-point input for dilution refrigeration used in quantum hardware."
+  },
+  {
+   "source": "26d51911-bfca-44d2-887d-8b3283e987cc",
+   "target": "bf657624-1bea-4088-a010-fe2d4bb02025",
+   "name": "INFLUENCES",
+   "fact": "QED-C tracks $56.7 billion cumulative public commitments and industry metrics cited in policy debate [S63][S8]（sign=+，strength=0.3，valence=neutral，polarity=0.20）"
+  },
+  {
+   "source": "5d4b54b4-eef5-413c-84f8-f49612c82038",
+   "target": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "name": "PARTNERS_WITH",
+   "fact": "In a July 2024 report to Congress, OMB together with ONCD, CISA and NIST estimated about $7.1 billion (2024 dollars) to migrate prioritized federal civilian systems to post-quantum cryptography over 2025–2035, excluding national security systems."
+  },
+  {
+   "source": "4c78e4e1-64e2-4107-9e52-585d3dfd143d",
+   "target": "31372611-12ea-41b5-8b68-f31b5444fe46",
+   "name": "COMPETES_WITH",
+   "fact": "USTC's Zuchongzhi 3.2 reached below-threshold error correction with suppression factor Λ=1.40 in December 2025, competing with Google's Willow result cited at Λ≈2.14"
+  },
+  {
+   "source": "6da85896-25e2-4b3a-a84e-6d5fbfb5a0fb",
+   "target": "eceb5e07-8e64-487b-8793-363f911768a3",
+   "name": "PUBLISHED_IN",
+   "fact": "PsiQuantum's Omega chipset results were published in Nature."
+  },
+  {
+   "source": "80cd8522-2754-46a8-a00c-fedb389c4074",
+   "target": "4c78e4e1-64e2-4107-9e52-585d3dfd143d",
+   "name": "PUBLISHED",
+   "fact": "Physical Review Letters published Zuchongzhi 3.2's below-threshold error-correction result (distance-7, Λ = 1.40(6)) as an Editors' Suggestion on 22 December 2025."
+  },
+  {
+   "source": "fd4aadb7-ad02-4725-9f05-671621a4818a",
+   "target": "78fbd547-7674-4e51-9d07-839b4da95213",
+   "name": "INFLUENCES",
+   "fact": "Independent expert judgment from the Global Risk Institute's 2025 survey of 26 experts (28-49% probability of a cryptographically relevant quantum computer within ten years, 51-70% within fifteen) sits later than BCG's expectation of broad quantum advantage between 2030 and 2040, framing the gap with vendor roadmaps"
+  },
+  {
+   "source": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "target": "50ef9722-2303-4466-a2cc-57ba71f5e057",
+   "name": "RUNS",
+   "fact": "NIST runs the Post-Quantum Cryptography project, hosted on the CSRC"
+  },
+  {
+   "source": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "target": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "name": "COMPETES_WITH",
+   "fact": "IonQ's June 2025 roadmap claim of ~1,600 logical qubits at 10^-7 error by 2028 and 2,000,000 physical qubits by 2030 sits far outside demonstrated trapped-ion capability (e.g., Quantinuum's Helios/Apollo line) and reads as public-market positioning."
+  },
+  {
+   "source": "355a0b15-6a69-4699-a802-0033fc991822",
+   "target": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "name": "BACKS",
+   "fact": "China's state-directed support sustains domestic quantum production lines at Origin Quantum amid catch-up under export controls"
+  },
+  {
+   "source": "baf00f7d-5946-45c9-aad8-7ce71b628ba3",
+   "target": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "name": "PARTNERS_WITH",
+   "fact": "CISA and NIST, together with OMB and ONCD, co-authored the July 2024 report to Congress estimating ~$7.1 billion to migrate prioritized federal civilian systems to post-quantum cryptography over 2025–2035."
+  },
+  {
+   "source": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "target": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "name": "COMPETES_WITH",
+   "fact": "Origin Quantum's Wukong-180 carries self-reported 99.90% fidelities, above Zuchongzhi 3.0's peer-reviewed 99.62% two-qubit fidelity from USTC"
+  },
+  {
+   "source": "bf657624-1bea-4088-a010-fe2d4bb02025",
+   "target": "bf657624-1bea-4088-a010-fe2d4bb02025",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "White House OSTP / NQI 亦称 OSTP"
+  },
+  {
+   "source": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "target": "bc98b51b-2034-476b-a9ca-5ca55ef545ad",
+   "name": "PARTNERS_WITH",
+   "fact": "QuEra's Libra, targeting 256 logical qubits from >10,000 physical qubits at a 10^-6 logical error rate, is set to launch on Amazon Braket in 2028."
+  },
+  {
+   "source": "78db7e45-8c94-4f4d-9cc1-700f5891e95e",
+   "target": "df71d6ac-c3e9-40fa-8331-5202458c2877",
+   "name": "APPROVES",
+   "fact": "The U.S. Senate Committee on Commerce, Science, & Transportation, led by Cantwell and Young, unanimously passed the National Quantum Initiative Reauthorization Act (S.3597, 119th Congress) out of committee on World Quantum Day."
+  },
+  {
+   "source": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "target": "6a0c3d15-daa6-4f62-a5c2-e4b42c48755d",
+   "name": "PARTNERS_WITH",
+   "fact": "In June 2024 Quantinuum, with JPMorgan Chase, ran random circuit sampling on H2-1 claimed to improve 100x on Google's 2019 result at about 30,000x lower power than classical supercomputers"
+  },
+  {
+   "source": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "target": "6da85896-25e2-4b3a-a84e-6d5fbfb5a0fb",
+   "name": "FUNDS",
+   "fact": "Final US2QC/QBI phase selection and reported $125 million agreement [S42][S60]（sign=+，strength=0.8，valence=allied，polarity=0.70）"
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "COMPETES_WITH",
+   "fact": "Both publish superconducting roadmaps; IBM dates milestones, Google claims error-correction firsts [S1][S3][S19]（sign=-，strength=0.8，valence=adversarial，polarity=-0.40）"
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "COMPETES_WITH",
+   "fact": "IBM asserts it is the only organization that will run hundreds of logical qubits by decade's end, a competitive claim against rivals like Google Quantum AI."
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "COMPETES_WITH",
+   "fact": "USTC answered Google's 2019 beyond-classical computation milestone with Zuchongzhi-2, a 66-qubit superconducting quantum computational advantage demonstration in 2021."
+  },
+  {
+   "source": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "target": "1977bf7e-5059-41bb-b1b0-8da4bd8d3d89",
+   "name": "SUPPLIES",
+   "fact": "QuEra's Gemini quantum computer, launched in 2025 with 260 physical qubits at 99.5% physical gate fidelity, was first deployed at AIST in Japan as a roughly 100-logical-qubit QEC testbed"
+  },
+  {
+   "source": "3a4e9c04-5076-4f91-93bd-1a7b26fd6c8a",
+   "target": "d1398f5b-29fd-4597-9adc-7b7023bd3592",
+   "name": "CRITICIZES_FUNDING_OF",
+   "fact": "At a House Science Committee markup on 29 April 2026, Ranking Member Zoe Lofgren stated that 'At the moment, this bill does not have any funds authorized', referring to S.3597"
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Chinese Academy of Sciences / USTC 亦称 USTC"
+  },
+  {
+   "source": "382beb2a-0efc-4137-9495-a328bb189b4f",
+   "target": "6da85896-25e2-4b3a-a84e-6d5fbfb5a0fb",
+   "name": "SUPPLIES",
+   "fact": "Cryogenic supply for systems such as PsiQuantum's is slow and expensive, with helium-3 near $2,500 per liter."
+  },
+  {
+   "source": "355a0b15-6a69-4699-a802-0033fc991822",
+   "target": "bbc0e24f-df72-459b-9482-89b044d91faf",
+   "name": "OPPOSES",
+   "fact": "China retaliated against US export controls with rare-earth controls"
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "4c9aa724-2a24-4148-bd22-8e75921fcb60",
+   "name": "PLANS_TO_DELIVER",
+   "fact": "IBM's 2026 milestone has Kookaburra prototyping a real-time error-correction decoder, followed by a 2028 15,000-gate milestone."
+  },
+  {
+   "source": "24e5b02a-fd89-45cf-b9ff-548c9fff7ec2",
+   "target": "24e5b02a-fd89-45cf-b9ff-548c9fff7ec2",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "US Department of Energy 亦称 DOE"
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "67911fee-48a6-4365-b508-c21825363657",
+   "name": "DEVELOPS",
+   "fact": "IBM's Starling fault-tolerant machine is roadmap-planned for 2029 with 200 logical qubits running 100 million gates."
+  },
+  {
+   "source": "661f1f50-a5ac-43de-9c9b-7f59c2d2adf6",
+   "target": "382beb2a-0efc-4137-9495-a328bb189b4f",
+   "name": "SUPPLIES",
+   "fact": "Bluefors sources Helium-3 (via Interlune, including lunar Helium-3) to supply quantum computing customers' dilution refrigeration needs."
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "name": "COMPETES_WITH",
+   "fact": "IBM and QuEra compete on quantum computing hardware milestones, with IBM's Starling planned for 2029 and QuEra's Libra for 2028."
+  },
+  {
+   "source": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "target": "cabe4b83-d55e-42d1-a844-888e6d90253b",
+   "name": "DEVELOPED",
+   "fact": "Origin Quantum has developed the Tianji 4.0 control system, which supports 500+ qubits."
+  },
+  {
+   "source": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "target": "add68307-18ac-44b7-9d0c-645307d6243c",
+   "name": "RECEIVES_FUNDING_FROM",
+   "fact": "EuroHPC's budget draws €900 million from Horizon Europe for research and innovation"
+  },
+  {
+   "source": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "target": "4c78e4e1-64e2-4107-9e52-585d3dfd143d",
+   "name": "COMPETES_WITH",
+   "fact": "Zuchongzhi 3.2 (107 qubits) reached below-threshold error correction (distance-7, Λ = 1.40(6)) in December 2025, which Quantum Computing Report calls the first such milestone outside the United States, about a year after Google"
+  },
+  {
+   "source": "355a0b15-6a69-4699-a802-0033fc991822",
+   "target": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "name": "BACKS",
+   "fact": "Origin Quantum, China's leading commercial quantum hardware firm, has raised only about $150–165 million entirely from domestic investors, running on state-directed Chinese funding."
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "IBM 亦称 IBM Quantum"
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "name": "COMPETES_WITH",
+   "fact": "IBM's fault-tolerance roadmap competes with IonQ's projection of a machine it frames as cryptographically relevant for 2028"
+  },
+  {
+   "source": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "target": "ae6592fe-3d8a-49f1-90d6-b62eea0f98d1",
+   "name": "DEVELOPED",
+   "fact": "Quantinuum's Helios (November 2025) pairs 98 fully connected physical qubits with 99.921% two-qubit gate fidelity across all pairs"
+  },
+  {
+   "source": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "target": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "name": "INFLUENCES",
+   "fact": "NIST's 2035 disallowance of RSA and elliptic-curve cryptography points against IonQ's 2028 cryptographic-relevance claim, as expert consensus places such capability later"
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "name": "COMPETES_WITH",
+   "fact": "IBM and Quantinuum compete on fault-tolerance roadmaps, with IBM Quantum Starling targeted for 2029 versus Quantinuum's Apollo targeted for 2030"
+  },
+  {
+   "source": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "INFLUENCES",
+   "fact": "Google Quantum AI joined QBI Stage A in September 2025 [S12]（sign=+，strength=0.5，valence=transactional，polarity=0.40）"
+  },
+  {
+   "source": "4ee26ccc-d776-4506-8860-779bb069f416",
+   "target": "6da85896-25e2-4b3a-a84e-6d5fbfb5a0fb",
+   "name": "FUNDS",
+   "fact": "The Department of Commerce proposed $100 million in federal incentives to PsiQuantum under the CHIPS and Science Act"
+  },
+  {
+   "source": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "target": "808f68a0-bfcf-49ee-ba1b-f3f6a7790407",
+   "name": "PLANS_TO_USE_CHIP_FROM",
+   "fact": "IonQ's June 2025 roadmap targets about 10,000 physical qubits in 2027 on an Oxford Ionics chip, ~20,000 physical (≈1,600 logical at ~10−7 error) in 2028, and ≥2,000,000 physical qubits by 2030"
+  },
+  {
+   "source": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "target": "fd38d0e2-afc6-4c04-ab09-e6dd0a99c223",
+   "name": "LAUNCHED",
+   "fact": "In January 2024 Origin Quantum launched Wukong, with 72 working qubits plus 126 couplers (198 on chip)"
+  },
+  {
+   "source": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "target": "1eaecfef-cf4a-40a8-a2d7-ee0ba54f5370",
+   "name": "PLANS_TO_BUILD",
+   "fact": "Quantinuum's roadmap targets Apollo in 2030, a fully fault-tolerant universal machine executing millions of gates on thousands of physical and hundreds of logical qubits; a later company blog pulls universal fault tolerance forward to \"by 2029\""
+  },
+  {
+   "source": "baf00f7d-5946-45c9-aad8-7ce71b628ba3",
+   "target": "5d4b54b4-eef5-413c-84f8-f49612c82038",
+   "name": "PARTNERS_WITH",
+   "fact": "OMB partnered with ONCD, CISA and NIST on the July 2024 report to Congress estimating ~$7.1 billion in federal post-quantum cryptography migration costs."
+  },
+  {
+   "source": "5d4b54b4-eef5-413c-84f8-f49612c82038",
+   "target": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "name": "PARTNERS_WITH",
+   "fact": "OMB partnered with NIST, ONCD and CISA on the July 2024 report to Congress estimating ~$7.1 billion to migrate prioritized federal civilian systems to post-quantum cryptography over 2025–2035."
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "4ee26ccc-d776-4506-8860-779bb069f416",
+   "name": "SANCTIONS",
+   "fact": "The US Department of Commerce's interim final rule effective 6 September 2024 (89 FR 72926) added and revised Commerce Control List entries for quantum technologies, imposing controls affecting Chinese organizations such as the Chinese Academy of Sciences."
+  },
+  {
+   "source": "52c3cbda-63b7-4402-9cc9-ca4cffdf6fe6",
+   "target": "382beb2a-0efc-4137-9495-a328bb189b4f",
+   "name": "SUPPLIES",
+   "fact": "Interlune produces pure Helium-3 from domestic helium using novel cryogenic technology to expand Helium-3 supply for quantum computing."
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "f8fca2b5-d34c-4cac-aecd-6feaa8fdb642",
+   "name": "COMMITTED_TO",
+   "fact": "In June 2025 IBM committed to Blue Jay in 2033+ with 2,000 qubits and 1 billion gates"
+  },
+  {
+   "source": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "target": "808f68a0-bfcf-49ee-ba1b-f3f6a7790407",
+   "name": "ACQUIRES",
+   "fact": "IonQ acquired Oxford Ionics in a consolidation deal worth roughly $1.1 billion in 2025."
+  },
+  {
+   "source": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "target": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "name": "COMPETES_WITH",
+   "fact": "IonQ competes with IBM on fault-tolerance timelines, claiming cryptographically relevant machines by 2028 versus IBM's Starling in 2029 with 200 logical qubits running 100 million gates."
+  },
+  {
+   "source": "6844517f-554f-45b3-81ce-f62449d3eb62",
+   "target": "df7a110e-cf00-4b35-8327-b032b5048af5",
+   "name": "FUNDS",
+   "fact": "Germany's BMBF co-funds a EUR 42.71 million quantum computer procurement launched on 24 November 2023"
+  },
+  {
+   "source": "baf00f7d-5946-45c9-aad8-7ce71b628ba3",
+   "target": "16ce3df0-f81b-4ca7-8e76-bacf4bc1d04c",
+   "name": "PARTNERS_WITH",
+   "fact": "CISA and ONCD, together with OMB and NIST, co-authored the July 2024 report to Congress estimating ~$7.1 billion in federal post-quantum cryptography migration costs."
+  },
+  {
+   "source": "012ba247-4f9b-4c16-9893-5db4949133b0",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "WORKS_AT",
+   "fact": "Hartmut Neven, speaking for Google, told Reuters in February 2025 that Google aims to release commercial applications within five years, i.e. around 2030"
+  },
+  {
+   "source": "1adedc23-1ee7-40b1-a7f0-778ebcaab776",
+   "target": "981f4e8a-9528-4824-afa5-af12beb65da1",
+   "name": "REDUCES_RESOURCE_ESTIMATES_FOR",
+   "fact": "A 'Pinnacle Architecture' analysis places RSA-2048 factoring below 100,000 physical qubits under aggressive assumptions"
+  },
+  {
+   "source": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "target": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "name": "COMPETES_WITH",
+   "fact": "Google competes with IonQ on fault-tolerance timelines; IonQ is the only major vendor claiming cryptographically relevant quantum computing by 2028, while Google's milestones place such capability later"
+  },
+  {
+   "source": "355a0b15-6a69-4699-a802-0033fc991822",
+   "target": "c035e26d-5da2-411d-9e51-9e95331be7d0",
+   "name": "EXPORT_CONTROLS",
+   "fact": "The PRC announced new export controls on battery materials and related technology in October 2025"
+  },
+  {
+   "source": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "target": "6cd6de1e-c9e7-4ab1-ab3d-78020c182fd9",
+   "name": "DEVELOPS",
+   "fact": "QuEra's Libra fault-tolerant machine is roadmap-planned for 2028 with 256 logical qubits."
+  },
+  {
+   "source": "4ee26ccc-d776-4506-8860-779bb069f416",
+   "target": "da7faeae-7335-4125-8630-f1615f7950ae",
+   "name": "SANCTIONS",
+   "fact": "Outbound investment ban effective 2 January 2025; September 2024 rule; September 2025 entity additions [S13][S41][S71]（sign=-，strength=0.8，valence=adversarial，polarity=-0.80）"
+  },
+  {
+   "source": "3601195a-52b0-4165-becf-9c7b8d9dc304",
+   "target": "d382863b-0dd8-4103-ba93-c19e9a053afa",
+   "name": "INFLUENCES",
+   "fact": "NIST IR 8547's 2030 and 2035 post-quantum cryptography deadlines impose migration requirements discussed by OpenSSL Corporation"
+  },
+  {
+   "source": "61b9fe61-9100-4b13-bdd0-2c63a7286495",
+   "target": "382beb2a-0efc-4137-9495-a328bb189b4f",
+   "name": "INFLUENCES",
+   "fact": "DOE holds the position that the He-3 shortage 'has been mitigated', but this covers federal allocations only, leaving commercial buyers facing a tighter market."
+  },
+  {
+   "source": "14996e65-14c7-452d-aeaa-3920e4a09281",
+   "target": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "name": "SUPPORTS",
+   "fact": "China's plan-driven mandates under the 14th Five-Year Plan support commercial quantum development, with Origin Quantum's Wukong machines serving a national goal of a 1,000-qubit-class machine by around 2030."
+  },
+  {
+   "source": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "target": "2eb6a80f-e7c1-4343-9ac2-1f24d2a7ba01",
+   "name": "SUPPORTS",
+   "fact": "The US2QC/QBI program's final phase selected Microsoft's Majorana 1 topological-qubit effort, which aims to demonstrate entanglement, measurement-based braiding and quantum error detection on two logical qubits in a 4x2 tetron array toward a 27x13 array."
+  },
+  {
+   "source": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "target": "3beb7995-943d-4dda-9b2c-d95f89b4bc55",
+   "name": "DEVELOPED",
+   "fact": "In November 2025 QuEra shipped Gemini (260 qubits) and published an end-to-end fault-tolerant architecture with up to 96 logical qubits"
+  },
+  {
+   "source": "aac1f571-014c-421c-9e75-1eae2ce3762c",
+   "target": "f90e82b7-fb07-4bf0-8cfc-69665ccd079f",
+   "name": "INFLUENCES",
+   "fact": "Akin Gump published analysis of the EU's updated Dual-Use Export Control List highlighting key changes for emerging technologies"
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "ce677085-ab4c-43c6-b323-b188c1a93753",
+   "name": "DEVELOPED",
+   "fact": "USTC's Jiuzhang 3.0 detected 255 photons in 2023, with a 10^16-fold speedup over supercomputers claimed in the authors' own account."
+  },
+  {
+   "source": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "target": "eeb696ea-276f-44b5-a6c3-414574a16591",
+   "name": "SUPPORTS",
+   "fact": "A forecast scenario (25% probability) holds that a fault-tolerant system from an EU-headquartered vendor such as IQM, which targets fault tolerance by 2030 with directional tile codes, could operate on EuroHPC infrastructure by 31 December 2032; EuroHPC procurements to date are NISQ-scale, in the tens of millions of euros"
+  },
+  {
+   "source": "661f1f50-a5ac-43de-9c9b-7f59c2d2adf6",
+   "target": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "name": "SUPPLIES",
+   "fact": "Bluefors among three firms holding ~70% of the refrigerator market; refrigerators can cost more than the QPU [S41][S94]（sign=+，strength=0.7，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "target": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "name": "COMPETES_WITH",
+   "fact": "QuEra and Quantinuum compete on fault-tolerance roadmaps, with Libra targeted for 2028 (256 logical qubits) versus Apollo targeted for 2030"
+  },
+  {
+   "source": "0fac4363-2ff2-4647-bc12-1ae9d9eeef4d",
+   "target": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "name": "INFLUENCES",
+   "fact": "The Cloud Security Alliance's characterization of harvest-now-decrypt-later against AI infrastructure as 'not a forecast — it is an ongoing operation' reinforces the urgency behind NIST's 2030 deprecation and 2035 disallowance of RSA/ECC cryptography."
+  },
+  {
+   "source": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "target": "2eb6a80f-e7c1-4343-9ac2-1f24d2a7ba01",
+   "name": "SUPPORTS",
+   "fact": "DARPA selected Microsoft's Majorana 1 (announced February 19, 2025, billed as the first topological-qubit processor) for the final US2QC/QBI phase."
+  },
+  {
+   "source": "b117da2d-82ea-4f29-9a81-28ecb5f8f040",
+   "target": "29733982-a2fd-4d70-ba55-c960230fbfb2",
+   "name": "RESTATED_BY",
+   "fact": "McKinsey's own vintages restate history: its 2025 retrospective counts $1.3 billion for 2023 start-up investment, whereas the April 2024 Monitor had reported $1.7 billion for 2023"
+  },
+  {
+   "source": "36affc23-004d-4c6a-9f9c-8dff7f662669",
+   "target": "24e5b02a-fd89-45cf-b9ff-548c9fff7ec2",
+   "name": "INFLUENCES",
+   "fact": "No program-level DOE quantum budget appears in the evidence beyond the CBO's $1 billion government-wide baseline, with unspent authorized capacity across DOE, NSF and NIST"
+  },
+  {
+   "source": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "target": "521eb92f-5108-4532-b19d-e397dd979880",
+   "name": "RECEIVES_FUNDING_FROM",
+   "fact": "EuroHPC's budget draws EUR 320 million from CEF-2 for HPC, quantum and data interconnection"
+  },
+  {
+   "source": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "target": "6da85896-25e2-4b3a-a84e-6d5fbfb5a0fb",
+   "name": "FUNDS",
+   "fact": "PsiQuantum received an expanded $125 million Stage C agreement under the final US2QC phase, which the company calls its most valuable US government agreement to date"
+  },
+  {
+   "source": "bef7b407-aec7-4840-af5e-46cbb40bb599",
+   "target": "981f4e8a-9528-4824-afa5-af12beb65da1",
+   "name": "REDUCES_RESOURCE_ESTIMATES_FOR",
+   "fact": "Gidney's sub-million-qubit RSA-2048 factoring estimates drove the upward revision of CRQC expert probabilities"
+  },
+  {
+   "source": "c37923e4-30cd-4240-93f9-9de8956892d3",
+   "target": "d1398f5b-29fd-4597-9adc-7b7023bd3592",
+   "name": "INTRODUCED",
+   "fact": "Senator Todd Young introduced S.3597, the National Quantum Initiative Reauthorization Act of 2026, on 8 January 2026"
+  },
+  {
+   "source": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "target": "d008a0a8-805c-48da-807a-9c442f78114c",
+   "name": "DEVELOPED",
+   "fact": "Quantinuum's H2 product page claims >99.9% two-qubit fidelity"
+  },
+  {
+   "source": "eceb5e07-8e64-487b-8793-363f911768a3",
+   "target": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "name": "PUBLISHED",
+   "fact": "Nature published a USTC-related demonstration with a programmable photonic processor, noting prior photonic machines were restricted to static gate sequences and vulnerable to spoofing."
+  },
+  {
+   "source": "5f2ee910-0912-4328-a7e7-f2edd6ed2ede",
+   "target": "29733982-a2fd-4d70-ba55-c960230fbfb2",
+   "name": "CITES",
+   "fact": "Marks & Clerk cited quantum-computing value projections of over $450 billion of economic value by 2040, consistent with McKinsey-derived estimates"
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "eceb5e07-8e64-487b-8793-363f911768a3",
+   "name": "PUBLISHED_IN",
+   "fact": "In 2024 IBM demonstrated its gross-code fault-tolerant memory in Nature"
+  },
+  {
+   "source": "da7faeae-7335-4125-8630-f1615f7950ae",
+   "target": "da7faeae-7335-4125-8630-f1615f7950ae",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Chinese government (NDRC/MOST) 亦称 NDRC"
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "631fe338-0365-446f-8535-690b770b011e",
+   "name": "DEVELOPED",
+   "fact": "USTC posted the programmable 3,050-photon Jiuzhang 4.0 boson-sampling demonstration in August 2025"
+  },
+  {
+   "source": "808f68a0-bfcf-49ee-ba1b-f3f6a7790407",
+   "target": "d82e6116-fd40-495d-a2ca-79f81cd73b77",
+   "name": "REPORTED_BY",
+   "fact": "Hartmut Neven's statement that Google aims to release commercial applications within five years was told to Reuters in February 2025"
+  },
+  {
+   "source": "29733982-a2fd-4d70-ba55-c960230fbfb2",
+   "target": "26d51911-bfca-44d2-887d-8b3283e987cc",
+   "name": "REPORTS_REVENUE_ALONGSIDE",
+   "fact": "McKinsey estimates global quantum-computing revenue of more than $1 billion in 2025, while QED-C reports $1.4 billion, both indicating revenue remains small"
+  },
+  {
+   "source": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "target": "2eb6a80f-e7c1-4343-9ac2-1f24d2a7ba01",
+   "name": "SUPPORTS",
+   "fact": "DARPA selected Microsoft (Majorana 1, a pre-error-correction topological-qubit processor) for the final US2QC/QBI phase, announced with Majorana 1 on 19 February 2025."
+  },
+  {
+   "source": "29f138ae-4b34-4567-b37e-10f60930bfc4",
+   "target": "bbc0e24f-df72-459b-9482-89b044d91faf",
+   "name": "INFLUENCES",
+   "fact": "SCSP's 2025 gaps analysis puts cumulative US private quantum funding at roughly $3.7 billion, informing assessments of US quantum capital leadership."
+  },
+  {
+   "source": "4c8e6427-3feb-4520-aa37-39566f2a9079",
+   "target": "31aff789-785d-44a1-b39f-29412228b720",
+   "name": "COMPETES_WITH",
+   "fact": "Oxford Instruments and Leiden Cryogenics are among three firms (with Bluefors) holding roughly 70% of the global dilution-refrigerator market."
+  },
+  {
+   "source": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "target": "eeb696ea-276f-44b5-a6c3-414574a16591",
+   "name": "SUPPORTS",
+   "fact": "EuroHPC procurement and 2026 quantum technology funding calls [S76][S79]（sign=+，strength=0.5，valence=allied，polarity=0.60）"
+  },
+  {
+   "source": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "target": "c65fa42c-6f5d-46bd-a45f-9802f4446daa",
+   "name": "FUNDS",
+   "fact": "DARPA runs the Quantum Benchmarking Initiative (QBI), which advances with companies targeting industrially useful quantum computers."
+  },
+  {
+   "source": "247f742a-4b03-472b-8726-8e3800416a79",
+   "target": "382beb2a-0efc-4137-9495-a328bb189b4f",
+   "name": "SUPPLIES",
+   "fact": "The US DOE Isotope Program, the dominant Western supplier of helium-3, sources all of its He-3 from tritium processing at the Savannah River Site, South Carolina, making thousands of liters available each year."
+  },
+  {
+   "source": "382beb2a-0efc-4137-9495-a328bb189b4f",
+   "target": "5df8efa0-fba8-464f-acf0-a6474c283e6a",
+   "name": "SUPPLIES",
+   "fact": "Bulk helium-3, traded at $1,900–$2,600 per liter, is a mandatory input for dilution refrigeration in some spin-qubit machines such as Intel's silicon-spin path."
+  },
+  {
+   "source": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "target": "31372611-12ea-41b5-8b68-f31b5444fe46",
+   "name": "DEVELOPS",
+   "fact": "Google's Willow chip (105 qubits) demonstrated below-threshold surface-code error correction in December 2024, halving error rates with each code-distance step, and in October 2025 Google claimed the first verifiable quantum advantage on the same chip."
+  },
+  {
+   "source": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "target": "d008a0a8-805c-48da-807a-9c442f78114c",
+   "name": "DEVELOPED",
+   "fact": "Quantinuum launched H2-1 on May 9, 2023 with 32 fully connected trapped-ion qubits and a Quantum Volume record of 65,536."
+  },
+  {
+   "source": "31372611-12ea-41b5-8b68-f31b5444fe46",
+   "target": "ec933c0a-f1ce-4343-8ffd-20c1c6032ce2",
+   "name": "REACHED_PARITY_WITH",
+   "fact": "Superconducting qubit counts reached US-China parity at 105 qubits between Google's Willow and Zuchongzhi 3.0"
+  },
+  {
+   "source": "6cb55027-6b53-46a0-95e0-be796c16b601",
+   "target": "eceb5e07-8e64-487b-8793-363f911768a3",
+   "name": "PUBLISHED_IN",
+   "fact": "China's Jiuzhang line published a programmable photonic processor in Nature in 2022, part of its boson-sampling records."
+  },
+  {
+   "source": "eeb696ea-276f-44b5-a6c3-414574a16591",
+   "target": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "name": "COMPETES_WITH",
+   "fact": "IQM reported in June 2026 that directional tile codes cut per-logical, per-round error by up to 1,000x versus the surface code at about 30 physical qubits per logical qubit, targeting fault tolerance by 2030, competing with IBM's surface-code and qLDPC approaches."
+  },
+  {
+   "source": "31aff789-785d-44a1-b39f-29412228b720",
+   "target": "0e886c69-608b-4183-b737-38303a4742a4",
+   "name": "SUPPLIES",
+   "fact": "Leiden Cryogenics, hosted in the Netherlands, is one of three firms holding roughly 70% of the global dilution-refrigerator market."
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "33808200-7819-4335-aa0c-0945f7adce5c",
+   "name": "CLAIMS_ADVANTAGE_ON",
+   "fact": "IBM claims user-demonstrated quantum advantage by end-2026 on its Nighthawk quantum processor."
+  },
+  {
+   "source": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "target": "981f4e8a-9528-4824-afa5-af12beb65da1",
+   "name": "DEPRECATES",
+   "fact": "NIST's draft transition plan would deprecate RSA cryptography after 2030 and disallow it after 2035 under NIST IR 8547 migration deadlines."
+  },
+  {
+   "source": "45957d6d-f4ff-47c6-bcad-9b7b7ff4dc9f",
+   "target": "8c8b77af-07a4-4709-bcf6-ea52f34ac24d",
+   "name": "ANALYZES",
+   "fact": "Merics tallies public quantum pledges by the UK, Germany, France, the EU and the Netherlands at about USD 12 billion"
+  },
+  {
+   "source": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "target": "731582b4-983b-4439-a334-f721482eb87f",
+   "name": "PROCURED",
+   "fact": "By 23 July 2026 EuroHPC had procured and inaugurated six quantum computers across Europe, including VLQ in Ostrava"
+  },
+  {
+   "source": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "COMPETES_WITH",
+   "fact": "QuEra's 48-logical-qubit and 96-logical-qubit demonstrations versus Google's below-threshold results; Google reportedly adding neutral atoms [S30][S31][S34]（sign=-，strength=0.5，valence=adversarial，polarity=-0.30）"
+  },
+  {
+   "source": "95ae26c5-65ea-43cd-99ec-eaca866f97eb",
+   "target": "80cd8522-2754-46a8-a00c-fedb389c4074",
+   "name": "SUMMARIZED",
+   "fact": "Quantum Computing Report summarized the December 2025 Physical Review Letters paper on Zuchongzhi 3.2's below-threshold error correction"
+  },
+  {
+   "source": "4ee26ccc-d776-4506-8860-779bb069f416",
+   "target": "fe96813a-8a35-411d-8736-1357c4c3c0da",
+   "name": "SANCTIONS",
+   "fact": "In September 2025 BIS listed CAS's National Time Service Center among 32 entities on the Entity List, constraining China's quantum ecosystem"
+  },
+  {
+   "source": "661f1f50-a5ac-43de-9c9b-7f59c2d2adf6",
+   "target": "52c3cbda-63b7-4402-9cc9-ca4cffdf6fe6",
+   "name": "PARTNERS_WITH",
+   "fact": "Bluefors announced it will source lunar Helium-3 from Interlune to power the next phase of quantum industry growth"
+  },
+  {
+   "source": "4ceddbcd-bd74-43f5-b50b-9bb838df1879",
+   "target": "5deabd63-7eae-4e45-9128-e6e873c5a874",
+   "name": "ESTIMATES",
+   "fact": "Future Market Insights estimated the PQC products-and-services market at $1.9 billion in 2025."
+  },
+  {
+   "source": "78db7e45-8c94-4f4d-9cc1-700f5891e95e",
+   "target": "d1398f5b-29fd-4597-9adc-7b7023bd3592",
+   "name": "REPORTED_FAVORABLY",
+   "fact": "On 14 April 2026 the Senate Commerce Committee ordered S.3597 reported favorably with an amendment in the nature of a substitute; it extends the National Quantum Initiative five years, to December 2034"
+  },
+  {
+   "source": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "target": "b906ac48-4bdb-4042-9cb5-1fda31515437",
+   "name": "REPORTS_ON",
+   "fact": "The Quantum Insider reported that EuroHPC JU opened €119M in funding calls for quantum technologies"
+  },
+  {
+   "source": "fd4aadb7-ad02-4725-9f05-671621a4818a",
+   "target": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "name": "INFLUENCES",
+   "fact": "The GRI 2025 survey of 26 experts, making a cryptographically relevant quantum computer 'quite likely' by 2035 (28–49% within ten years, 51–70% within fifteen), aligns with expert consensus and NIST's 2035 disallowance of RSA and elliptic-curve cryptography, pointing to cryptographic relevance in the mid-2030s or later."
+  },
+  {
+   "source": "bbc0e24f-df72-459b-9482-89b044d91faf",
+   "target": "355a0b15-6a69-4699-a802-0033fc991822",
+   "name": "SANCTIONS",
+   "fact": "US export controls targeted China's quantum sector and, per RUSI, accelerated China's domestic refrigerator and interconnect industry"
+  },
+  {
+   "source": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "target": "a088e2d4-ded0-4c79-a25e-f09961b1877f",
+   "name": "MANUFACTURES",
+   "fact": "Origin Quantum's SL1000 refrigerator line went operational in Hefei in June 2024 as part of domestic substitution driven by US export controls"
+  },
+  {
+   "source": "c65fa42c-6f5d-46bd-a45f-9802f4446daa",
+   "target": "6da85896-25e2-4b3a-a84e-6d5fbfb5a0fb",
+   "name": "SUPPORTS",
+   "fact": "The DARPA Quantum Benchmarking Initiative awarded PsiQuantum an expanded $125M Stage C award."
+  },
+  {
+   "source": "f90e82b7-fb07-4bf0-8cfc-69665ccd079f",
+   "target": "f5402e9c-2a99-48de-9041-4ed56858ac56",
+   "name": "CONTROLS",
+   "fact": "The 8 September 2025 EU Delegated Regulation adds cryogenic cooling systems to the EU dual-use control list."
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "4c78e4e1-64e2-4107-9e52-585d3dfd143d",
+   "name": "BACKS",
+   "fact": "The CAS/USTC complex's Zuchongzhi 3.2 (107 qubits) demonstrated below-threshold error correction with a distance-7 surface code (suppression factor Λ = 1.40(6)), published as a PRL Editors' Suggestion on 22 December 2025."
+  },
+  {
+   "source": "2eb6a80f-e7c1-4343-9ac2-1f24d2a7ba01",
+   "target": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "name": "PARTNERS_WITH",
+   "fact": "Microsoft and Quantinuum created 12 logical qubits and demonstrated a hybrid end-to-end chemistry simulation"
+  },
+  {
+   "source": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "target": "bf657624-1bea-4088-a010-fe2d4bb02025",
+   "name": "PARTNERS_WITH",
+   "fact": "NSM-10 sets 2035 target; NIST draft IR 8547 deprecates after 2030 and disallows after 2035 [S10][S105]（sign=+，strength=0.7，valence=allied，polarity=0.70）"
+  },
+  {
+   "source": "f90e82b7-fb07-4bf0-8cfc-69665ccd079f",
+   "target": "5a018e28-f0c7-4a7f-a16c-0ba2cccae3c1",
+   "name": "CONTROLS",
+   "fact": "The 8 September 2025 EU Delegated Regulation adds parametric signal amplifiers to the EU dual-use control list."
+  },
+  {
+   "source": "661f1f50-a5ac-43de-9c9b-7f59c2d2adf6",
+   "target": "31aff789-785d-44a1-b39f-29412228b720",
+   "name": "COMPETES_WITH",
+   "fact": "Bluefors and Leiden Cryogenics are among three firms (with Oxford Instruments) holding roughly 70% of the global dilution-refrigerator market."
+  },
+  {
+   "source": "14996e65-14c7-452d-aeaa-3920e4a09281",
+   "target": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "name": "SUPPORTS",
+   "fact": "China's 14th Five-Year Plan (2021–2025) designated quantum information the second-ranked cutting-edge science and technology field, driving the state ecosystem behind the CAS/USTC complex delivering China's flagship quantum results."
+  },
+  {
+   "source": "2eb6a80f-e7c1-4343-9ac2-1f24d2a7ba01",
+   "target": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "name": "PARTNERS_WITH",
+   "fact": "September 2024 joint demonstration [S26][S50]（sign=+，strength=0.7，valence=allied，polarity=0.70）"
+  },
+  {
+   "source": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "target": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "name": "COMPETES_WITH",
+   "fact": "Google and IBM compete on quantum computing hardware milestones, with vendor roadmaps clustering the first fault-tolerant machines at 2028–2030."
+  },
+  {
+   "source": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "target": "e60e4dd9-952f-4f15-a65f-f3c63bf62da7",
+   "name": "PARTNERS_WITH",
+   "fact": "NIST advises organizations to begin migrating to post-quantum cryptography, with cryptographic modules validated under the Cryptographic Module Validation Program (CMVP)."
+  },
+  {
+   "source": "4c8e6427-3feb-4520-aa37-39566f2a9079",
+   "target": "0e886c69-608b-4183-b737-38303a4742a4",
+   "name": "SUPPLIES",
+   "fact": "The UK's Oxford Instruments is one of three firms holding roughly 70% of the global dilution-refrigerator market."
+  },
+  {
+   "source": "3601195a-52b0-4165-becf-9c7b8d9dc304",
+   "target": "981f4e8a-9528-4824-afa5-af12beb65da1",
+   "name": "INFLUENCES",
+   "fact": "NIST's draft transition plan IR 8547 would deprecate quantum-vulnerable algorithms such as RSA-2048 after 2030 and disallow them by 2035."
+  },
+  {
+   "source": "012ba247-4f9b-4c16-9893-5db4949133b0",
+   "target": "d82e6116-fd40-495d-a2ca-79f81cd73b77",
+   "name": "INTERVIEWED_BY",
+   "fact": "Hartmut Neven told Reuters in February 2025 that Google aims to have commercial quantum applications within five years."
+  },
+  {
+   "source": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "target": "9d4775ae-ae6a-40aa-95f1-6442a12d5f4e",
+   "name": "USES",
+   "fact": "Quantinuum Helios reports 48 fully error-corrected logical qubits at roughly 2:1 encoding using the Iceberg code"
+  },
+  {
+   "source": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "target": "2eb6a80f-e7c1-4343-9ac2-1f24d2a7ba01",
+   "name": "PARTNERS_WITH",
+   "fact": "Quantinuum's 12-logical-qubit partnership with Microsoft signals an incentive for Quantinuum to be the substrate for Microsoft's stack"
+  },
+  {
+   "source": "bf657624-1bea-4088-a010-fe2d4bb02025",
+   "target": "d1398f5b-29fd-4597-9adc-7b7023bd3592",
+   "name": "EXTENDS",
+   "fact": "S.3597, the National Quantum Initiative Reauthorization Act of 2026, extends the National Quantum Initiative five years, to December 2034"
+  },
+  {
+   "source": "da7faeae-7335-4125-8630-f1615f7950ae",
+   "target": "4ee26ccc-d776-4506-8860-779bb069f416",
+   "name": "OPPOSES",
+   "fact": "December 2024 mineral bar and 9 October 2025 MOFCOM rare-earth controls [S101][S102]（sign=-，strength=0.7，valence=adversarial，polarity=-0.70）"
+  },
+  {
+   "source": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "target": "6753b5a1-cce2-4b6f-b1d7-5143b7a1b2b1",
+   "name": "DEVELOPED",
+   "fact": "Origin Quantum's Wukong-180 (180 computational qubits) carries company-reported averages of 99.90% single-qubit, two-qubit and readout fidelity — self-reported specifications, not independently benchmarked"
+  },
+  {
+   "source": "26d51911-bfca-44d2-887d-8b3283e987cc",
+   "target": "29733982-a2fd-4d70-ba55-c960230fbfb2",
+   "name": "PROVIDES_DATA_COMPARED_WITH",
+   "fact": "QED-C's pure-play company count shows the EU leading with 173 firms ahead of the US, while McKinsey's Monitor describes most quantum start-ups as US-based — a definitional difference between the two data providers."
+  },
+  {
+   "source": "c59e1c41-1773-45a4-818c-5e0bebe6208b",
+   "target": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "name": "PARTNERS_WITH",
+   "fact": "The Harvard/QuEra line demonstrated 99.5% two-qubit fidelity on 60 atoms in October 2023, 48 logical qubits from 250+ physical in December 2023, and an end-to-end fault-tolerant architecture with up to 96 logical qubits in November 2025"
+  },
+  {
+   "source": "5d4b54b4-eef5-413c-84f8-f49612c82038",
+   "target": "baf00f7d-5946-45c9-aad8-7ce71b628ba3",
+   "name": "PARTNERS_WITH",
+   "fact": "OMB partnered with CISA, ONCD and NIST on the July 2024 report to Congress on post-quantum cryptography migration costs."
+  },
+  {
+   "source": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "target": "abc62405-d8e9-4404-82c8-ef3f4721bfad",
+   "name": "PARTNERS_WITH",
+   "fact": "The EU bets on coordinated quantum deployment through the Quantum Flagship, EuroHPC systems and national programs."
+  },
+  {
+   "source": "95ae26c5-65ea-43cd-99ec-eaca866f97eb",
+   "target": "4c78e4e1-64e2-4107-9e52-585d3dfd143d",
+   "name": "EVALUATED",
+   "fact": "Quantum Computing Report calls Zuchongzhi 3.2's December 2025 below-threshold error correction the first such milestone outside the United States, about a year after Google"
+  },
+  {
+   "source": "f90e82b7-fb07-4bf0-8cfc-69665ccd079f",
+   "target": "0e886c69-608b-4183-b737-38303a4742a4",
+   "name": "CONTROLS",
+   "fact": "The EU dual-use control list Delegated Regulation adopted 8 September 2025 adds quantum computers, cryogenic electronic components, parametric signal amplifiers, cryogenic cooling systems and wafer probes to export controls."
+  },
+  {
+   "source": "2eb6a80f-e7c1-4343-9ac2-1f24d2a7ba01",
+   "target": "a43ef287-6961-4435-9b7c-5659edabf088",
+   "name": "DEVELOPS",
+   "fact": "Microsoft's topological Majorana 1 processor (February 2025) remains pre-error-correction, with a 4x2 tetron-array roadmap toward a 27x13 array and a claim that Floquet codes cut overhead roughly tenfold."
+  },
+  {
+   "source": "355a0b15-6a69-4699-a802-0033fc991822",
+   "target": "d569b702-fb25-4f87-8213-0efff0d60a14",
+   "name": "BACKS",
+   "fact": "China's state funding backs its domestic quantum industry including QuantumCTek, whose refrigerator and interconnect production grew in response to US controls"
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "COMPETES_WITH",
+   "fact": "Zuchongzhi 3.0 matches Willow's 105 qubits; Zuchongzhi 3.2 replicated below-threshold correction about a year after Google [S1][S20][S22]（sign=-，strength=0.8，valence=adversarial，polarity=-0.60）"
+  },
+  {
+   "source": "355a0b15-6a69-4699-a802-0033fc991822",
+   "target": "fff256a0-e872-44a7-ba9f-b1c876368212",
+   "name": "EXPORT_CONTROLS",
+   "fact": "The PRC announced new export controls on rare earth materials in October 2025"
+  },
+  {
+   "source": "5761101e-48d1-46d8-9707-8ea3b2177742",
+   "target": "355a0b15-6a69-4699-a802-0033fc991822",
+   "name": "INFLUENCES",
+   "fact": "ITIF cites Chinese public claims of over $15 billion in state quantum funding."
+  },
+  {
+   "source": "661f1f50-a5ac-43de-9c9b-7f59c2d2adf6",
+   "target": "0e886c69-608b-4183-b737-38303a4742a4",
+   "name": "SUPPLIES",
+   "fact": "Finland's Bluefors is one of three firms holding roughly 70% of the global dilution-refrigerator market, a key quantum choke point."
+  },
+  {
+   "source": "fd4aadb7-ad02-4725-9f05-671621a4818a",
+   "target": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Global Risk Institute / evolutionQ 亦称 IonQ"
+  },
+  {
+   "source": "75c7d94f-f86b-4ad2-81cd-237bdedc80b9",
+   "target": "52c3cbda-63b7-4402-9cc9-ca4cffdf6fe6",
+   "name": "FUNDS",
+   "fact": "Interlune received an AFWERX SBIR contract in November 2025."
+  },
+  {
+   "source": "8c8b77af-07a4-4709-bcf6-ea52f34ac24d",
+   "target": "eeb696ea-276f-44b5-a6c3-414574a16591",
+   "name": "SUPPORTS",
+   "fact": "IQM operates as a European quantum hardware company within the EU, reporting in June 2026 that directional tile codes cut per-logical, per-round error by up to 1,000x versus the surface code at about 30 physical qubits per logical qubit, targeting fault tolerance by 2030"
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "1fa68917-ceed-4a27-a480-1f8184b2ca6b",
+   "name": "PRODUCES",
+   "fact": "IBM's 2025-2026 quantum fleet comprises Heron r1 with 133 qubits."
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "COMPETES_WITH",
+   "fact": "In superconducting hardware the US led on fidelity and error-correction milestones, with Google's Willow and China's Zuchongzhi reaching qubit-count parity while IBM pursues its Starling roadmap"
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "COMPETES_WITH",
+   "fact": "USTC claims Zuchongzhi 3.0's random circuit sampling task is one million times faster than Google's latest published result"
+  },
+  {
+   "source": "aaa320ed-e5de-4056-b96f-e559c2596f1c",
+   "target": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "name": "INFLUENCES",
+   "fact": "IISS assesses that the US and allies, including the EU under the European Commission's Delegated Regulation, have built aligned export controls covering almost the entire quantum 'stack' — complete quantum computers, enabling components, equipment and advanced materials — but regime effectiveness depends on a small number of geographically dispersed critical-node firms"
+  },
+  {
+   "source": "16ce3df0-f81b-4ca7-8e76-bacf4bc1d04c",
+   "target": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "name": "PARTNERS_WITH",
+   "fact": "ONCD and NIST, together with OMB and CISA, co-authored the July 2024 report to Congress estimating ~$7.1 billion in federal post-quantum cryptography migration costs."
+  },
+  {
+   "source": "75c7d94f-f86b-4ad2-81cd-237bdedc80b9",
+   "target": "382beb2a-0efc-4137-9495-a328bb189b4f",
+   "name": "FUNDS",
+   "fact": "AFWERX awarded an SBIR contract in November 2025 to a company claiming 99%-pure He-3 separation demonstrated in early 2025."
+  },
+  {
+   "source": "4ee26ccc-d776-4506-8860-779bb069f416",
+   "target": "4ee26ccc-d776-4506-8860-779bb069f416",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "US Department of Commerce / BIS 亦称 BIS"
+  },
+  {
+   "source": "da7faeae-7335-4125-8630-f1615f7950ae",
+   "target": "da7faeae-7335-4125-8630-f1615f7950ae",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Chinese government (NDRC/MOST) 亦称 MOST"
+  },
+  {
+   "source": "52c3cbda-63b7-4402-9cc9-ca4cffdf6fe6",
+   "target": "382beb2a-0efc-4137-9495-a328bb189b4f",
+   "name": "SUPPLIES",
+   "fact": "Interlune claims 99%-pure helium-3 separation demonstrated in early 2025, with its chief executive citing purified prices near $20 million per kilogram (about 7,500 liters)."
+  },
+  {
+   "source": "eceb5e07-8e64-487b-8793-363f911768a3",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "PUBLISHED_IN",
+   "fact": "Google's Willow result demonstrating quantum error correction below the surface code threshold was published in Nature."
+  },
+  {
+   "source": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "COMPETES_WITH",
+   "fact": "IBM states its users will demonstrate quantum advantage over classical computing by the end of 2026, with Nighthawk running 7,500-gate circuits and Kookaburra prototyping real-time error correction, competing with Google's October 2025 claim of the first verifiable quantum advantage on Willow."
+  },
+  {
+   "source": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "target": "ae6592fe-3d8a-49f1-90d6-b62eea0f98d1",
+   "name": "DEVELOPED",
+   "fact": "Quantinuum released its Helios trapped-ion quantum computer in November 2025 with 98 fully connected qubits, 48 fully error-corrected logical qubits at roughly 2:1 encoding (Iceberg code), described as the most accurate commercial quantum computer"
+  },
+  {
+   "source": "382beb2a-0efc-4137-9495-a328bb189b4f",
+   "target": "be30d9ef-0649-477f-b7ce-e79404a296a9",
+   "name": "SUPPLIES",
+   "fact": "A single Bluefors XLD1000sl dilution refrigerator holds about 40 liters of helium-3."
+  },
+  {
+   "source": "2eb6a80f-e7c1-4343-9ac2-1f24d2a7ba01",
+   "target": "6da85896-25e2-4b3a-a84e-6d5fbfb5a0fb",
+   "name": "PARTNERS_WITH",
+   "fact": "Microsoft and PsiQuantum were selected together by DARPA for the final US2QC/QBI phase"
+  },
+  {
+   "source": "bbc0e24f-df72-459b-9482-89b044d91faf",
+   "target": "355a0b15-6a69-4699-a802-0033fc991822",
+   "name": "COMPETES_WITH",
+   "fact": "The US dominates private quantum capital with roughly $3.7 billion cumulative private funding versus about $255 million for China, per SCSP's 2025 gaps analysis."
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "0854ed08-c860-443a-85b8-18ea49e1cc8a",
+   "name": "DEVELOPED",
+   "fact": "USTC developed Zuchongzhi-2, a 66-qubit superconducting quantum computational advantage demonstration in 2021."
+  },
+  {
+   "source": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "target": "b1836cc0-88df-49e8-b38f-fab97b1bc69b",
+   "name": "INFLUENCES",
+   "fact": "QBI stages and funds candidate approaches; nearly 20 companies entered Stage A [S11][S12]（sign=+，strength=0.5，valence=transactional，polarity=0.40）"
+  },
+  {
+   "source": "fd4aadb7-ad02-4725-9f05-671621a4818a",
+   "target": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "name": "COMPETES_WITH",
+   "fact": "Both sell trapped-ion systems with divergent scaling claims [S24][S48]（sign=-，strength=0.7，valence=adversarial，polarity=-0.40）"
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "ec933c0a-f1ce-4343-8ffd-20c1c6032ce2",
+   "name": "DEVELOPED",
+   "fact": "USTC developed the 105-qubit Zuchongzhi 3.0 superconducting processor, benchmarked in Phys. Rev. Lett."
+  },
+  {
+   "source": "eeb696ea-276f-44b5-a6c3-414574a16591",
+   "target": "58d7bb55-6585-44a7-b9d2-05f3e33b0e9c",
+   "name": "DEVELOPED",
+   "fact": "Finland's IQM announced 'directional tile codes' on 23 June 2026, reducing per-logical, per-round error rates by up to 1,000x versus the surface code at roughly 30 physical qubits per logical qubit."
+  },
+  {
+   "source": "74d042b7-b7dd-4596-b29a-1eea801cae9f",
+   "target": "29733982-a2fd-4d70-ba55-c960230fbfb2",
+   "name": "CRITIQUES",
+   "fact": "Post-Quantum published an article arguing that McKinsey's $600 billion quantum finance number doesn't add up"
+  },
+  {
+   "source": "da7faeae-7335-4125-8630-f1615f7950ae",
+   "target": "bbd84263-62e7-492a-a8d6-d878839bfd49",
+   "name": "BACKS",
+   "fact": "State-directed NISQ focus and 1,000-qubit-class goal around 2030 [S65]（sign=+，strength=0.6，valence=allied，polarity=0.70）"
+  },
+  {
+   "source": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "target": "808f68a0-bfcf-49ee-ba1b-f3f6a7790407",
+   "name": "ACQUIRES",
+   "fact": "IonQ is acquiring Oxford Ionics, which reported a 99.99% two-qubit gate fidelity in October 2025"
+  },
+  {
+   "source": "661f1f50-a5ac-43de-9c9b-7f59c2d2adf6",
+   "target": "4c8e6427-3feb-4520-aa37-39566f2a9079",
+   "name": "COMPETES_WITH",
+   "fact": "Bluefors, Oxford Instruments and Leiden Cryogenics together hold roughly 70% of the global dilution-refrigerator market, Europe's clearest quantum choke point."
+  },
+  {
+   "source": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "target": "4ee26ccc-d776-4506-8860-779bb069f416",
+   "name": "ALLY_OF",
+   "fact": "8 September 2025 Delegated Regulation aligning with US, UK and Japanese controls [S84][S85]（sign=+，strength=0.7，valence=allied，polarity=0.60）"
+  },
+  {
+   "source": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "target": "d82e6116-fd40-495d-a2ca-79f81cd73b77",
+   "name": "INTERVIEWED_BY",
+   "fact": "Google told Reuters in February 2025 that commercial quantum computing applications would arrive within five years."
+  },
+  {
+   "source": "eeb696ea-276f-44b5-a6c3-414574a16591",
+   "target": "a40b91b1-a4e1-43cf-aed7-fe53eee0dccd",
+   "name": "PARTNERS_WITH",
+   "fact": "IQM's roadmap targeting fault tolerance by 2030 and a path to 1 million qubits is backed by a planned Nasdaq listing through merger with Real Asset Acquisition Corp."
+  },
+  {
+   "source": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "target": "f90e82b7-fb07-4bf0-8cfc-69665ccd079f",
+   "name": "INFLUENCES",
+   "fact": "EuroHPC JU launched four new calls in June 2026 to boost quantum innovation and standardisation in Europe, in the context of the 2025 EU dual-use control list update"
+  },
+  {
+   "source": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "target": "6da85896-25e2-4b3a-a84e-6d5fbfb5a0fb",
+   "name": "SUPPORTS",
+   "fact": "The US2QC/QBI program's final phase selected PsiQuantum, whose Quantum Compute Centers under construction in Brisbane and Chicago target the first utility-scale systems."
+  },
+  {
+   "source": "da7faeae-7335-4125-8630-f1615f7950ae",
+   "target": "fff256a0-e872-44a7-ba9f-b1c876368212",
+   "name": "CONTROLS_EXPORTS_OF",
+   "fact": "MOFCOM broadened rare-earth export controls on 9 October 2025; China controls 69% of global rare-earth reserves and about 90% of processing"
+  },
+  {
+   "source": "0fac4363-2ff2-4647-bc12-1ae9d9eeef4d",
+   "target": "1e170a3f-8dd1-4f2d-a904-54db32108b5f",
+   "name": "DESCRIBES",
+   "fact": "The Cloud Security Alliance describes harvest-now-decrypt-later as \"not a forecast — it is an ongoing operation\"."
+  },
+  {
+   "source": "808f68a0-bfcf-49ee-ba1b-f3f6a7790407",
+   "target": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "name": "COMPETES_WITH",
+   "fact": "In October 2025 Oxford Ionics claimed a 99.99% two-qubit fidelity record, competing against Quantinuum whose Helios reached 99.921% all-pairs fidelity on 98 qubits in November 2025"
+  },
+  {
+   "source": "16ce3df0-f81b-4ca7-8e76-bacf4bc1d04c",
+   "target": "5d4b54b4-eef5-413c-84f8-f49612c82038",
+   "name": "PARTNERS_WITH",
+   "fact": "In July 2024, OMB together with ONCD, CISA and NIST delivered a report to Congress estimating ~$7.1 billion (2024 dollars) to migrate prioritized federal civilian information systems to post-quantum cryptography over 2025–2035."
+  },
+  {
+   "source": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "target": "ec933c0a-f1ce-4343-8ffd-20c1c6032ce2",
+   "name": "BACKS",
+   "fact": "The CAS/USTC complex delivered Zuchongzhi 3.0, a 105-qubit, 182-coupler superconducting processor announced 3 March 2025 and published in Physical Review Letters 134, 090601."
+  },
+  {
+   "source": "6da85896-25e2-4b3a-a84e-6d5fbfb5a0fb",
+   "target": "f9472aaa-2b80-4c1f-9d88-c0fe13425a47",
+   "name": "DEVELOPED",
+   "fact": "A PsiQuantum Omega-fabricated system running utility-scale circuits would raise the probability of the quantum-leap scenario."
+  },
+  {
+   "source": "26d51911-bfca-44d2-887d-8b3283e987cc",
+   "target": "e41e437c-f9d3-4bbd-bbd7-bd539e46f35f",
+   "name": "SCREENS_DEALS_FROM",
+   "fact": "QED-C screens PitchBook venture deals to count $4.9 billion of global quantum venture capital in 2025, up 192% from 2024's previous record"
+  },
+  {
+   "source": "52c3cbda-63b7-4402-9cc9-ca4cffdf6fe6",
+   "target": "382beb2a-0efc-4137-9495-a328bb189b4f",
+   "name": "SUPPLIES",
+   "fact": "Interlune will supply Helium-3 sourced from the Moon to Bluefors for quantum computing dilution refrigeration"
+  },
+  {
+   "source": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "target": "df7a110e-cf00-4b35-8327-b032b5048af5",
+   "name": "FUNDS",
+   "fact": "A German quantum computer procurement launched on 24 November 2023 totaling EUR 42.71 million is co-funded by EuroHPC JU, Germany's BMBF and Bavaria"
+  },
+  {
+   "source": "3601195a-52b0-4165-becf-9c7b8d9dc304",
+   "target": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "name": "INFLUENCES",
+   "fact": "NIST IR 8547 (initial public draft, November 2024), NIST's transition plan, proposes deprecating quantum-vulnerable public-key algorithms (RSA, ECDSA, ECDH, finite-field Diffie-Hellman) after 2030 and disallowing them entirely after 2035."
+  },
+  {
+   "source": "fd4aadb7-ad02-4725-9f05-671621a4818a",
+   "target": "fd4aadb7-ad02-4725-9f05-671621a4818a",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Global Risk Institute / evolutionQ 亦称 GRI"
+  },
+  {
+   "source": "2eb6a80f-e7c1-4343-9ac2-1f24d2a7ba01",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "COMPETES_WITH",
+   "fact": "Microsoft's competing topological quantum path remains pre-error-correction, targeting two logical qubits before scaling, in rivalry with Google's demonstrated below-threshold error correction on Willow."
+  },
+  {
+   "source": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "target": "56c8faf4-7c98-40c9-8693-a1dcfffd1b9b",
+   "name": "ACQUIRED",
+   "fact": "IonQ pursues M&A-driven scaling through the photonic-interconnect firm Lightsynq"
+  },
+  {
+   "source": "2eb6a80f-e7c1-4343-9ac2-1f24d2a7ba01",
+   "target": "a43ef287-6961-4435-9b7c-5659edabf088",
+   "name": "DEVELOPED",
+   "fact": "In February 2025 Microsoft announced Majorana 1"
+  },
+  {
+   "source": "36affc23-004d-4c6a-9f9c-8dff7f662669",
+   "target": "293464ec-b14b-40f2-9c8d-6e5f4d9fafc1",
+   "name": "SCORED",
+   "fact": "CBO used an estimated $1 billion of US federal agency quantum information science research spending in 2022 as baseline in scoring H.R. 6213 reauthorization legislation, estimating $1.3 billion cost for $1.8 billion in authorized FY2025-2029 appropriations"
+  },
+  {
+   "source": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "target": "e55a0d72-7557-44a0-8f21-21b28c47a287",
+   "name": "EVALUATES",
+   "fact": "DARPA QBI stage-C verdicts will verify utility-scale operation by 2033, including logical-qubit counts and logical error rates on Starling-class machines."
+  },
+  {
+   "source": "4ee26ccc-d776-4506-8860-779bb069f416",
+   "target": "5fa4e4a8-625e-45fa-8793-41553f211843",
+   "name": "SANCTIONS",
+   "fact": "In March 2025 BIS added seven Chinese supply-chain entities including the cryogenics company Scikro to export controls."
+  },
+  {
+   "source": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "target": "0524ceb5-a7f4-4730-ab1d-cf78b78ca6d1",
+   "name": "DEPRECATES",
+   "fact": "NIST's draft transition plan would deprecate elliptic-curve cryptography after 2030 and disallow it after 2035."
+  },
+  {
+   "source": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "target": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "name": "PARTNERS_WITH",
+   "fact": "The Harvard/MIT/QuEra collaboration demonstrated 99.5% two-qubit fidelity in parallel on 60 neutral atoms in October 2023, and in December 2023 presented the first logical processor with 48 logical qubits from 250+ physical qubits."
+  },
+  {
+   "source": "31372611-12ea-41b5-8b68-f31b5444fe46",
+   "target": "7c7567ed-b369-4902-a410-09e7caaec7c3",
+   "name": "OUTPERFORMS",
+   "fact": "Google says a random circuit sampling benchmark on Willow ran in under five minutes versus a claimed ~10^25 years on the Frontier supercomputer."
+  },
+  {
+   "source": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "target": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "name": "JOINED",
+   "fact": "Google Quantum AI joined Quantum Benchmarking Initiative Stage A in September 2025"
+  },
+  {
+   "source": "26d51911-bfca-44d2-887d-8b3283e987cc",
+   "target": "bbc0e24f-df72-459b-9482-89b044d91faf",
+   "name": "INFLUENCES",
+   "fact": "Coverage of QED-C's 2026 report cites a US 2025 figure of more than $2.7 billion in quantum venture capital, about $1 billion more than in 2024, though it could not be confirmed on the primary page."
+  },
+  {
+   "source": "52c3cbda-63b7-4402-9cc9-ca4cffdf6fe6",
+   "target": "661f1f50-a5ac-43de-9c9b-7f59c2d2adf6",
+   "name": "SUPPLIES",
+   "fact": "Bluefors has hedged its helium-3 supply with lunar deliveries of up to 10,000 liters per year from Interlune for 2028–2037."
+  },
+  {
+   "source": "293464ec-b14b-40f2-9c8d-6e5f4d9fafc1",
+   "target": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "name": "AUTHORIZES_REPROGRAMMING_FOR",
+   "fact": "H.R. 6213 would have let DOE, NSF and NIST reprogram $1.1 billion of previously authorized amounts; it lapsed without enactment"
+  },
+  {
+   "source": "e814ea91-425d-40b0-86e5-ee5847239bf0",
+   "target": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "name": "LEADS",
+   "fact": "China's quantum ecosystem centered on USTC and the Chinese Academy of Sciences operates under the leadership of Pan Jianwei"
+  },
+  {
+   "source": "293464ec-b14b-40f2-9c8d-6e5f4d9fafc1",
+   "target": "6b5ad345-d2b5-4b7f-a8f0-9b482db2f674",
+   "name": "AUTHORIZES_REPROGRAMMING_FOR",
+   "fact": "H.R. 6213 would have let DOE, NSF and NIST reprogram $1.1 billion of previously authorized amounts; it lapsed without enactment"
+  },
+  {
+   "source": "29733982-a2fd-4d70-ba55-c960230fbfb2",
+   "target": "e41e437c-f9d3-4bbd-bbd7-bd539e46f35f",
+   "name": "SOURCES_DATA_FROM",
+   "fact": "McKinsey's quantum-technology start-up investment series (recording ~$0.2B in 2019, $2.1B in 2021, and $12.6B in 2025) is sourced from PitchBook data"
+  },
+  {
+   "source": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "target": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "name": "COMPETES_WITH",
+   "fact": "Google and QuEra compete on quantum computing hardware milestones toward the first fault-tolerant machines."
+  },
+  {
+   "source": "808f68a0-bfcf-49ee-ba1b-f3f6a7790407",
+   "target": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "name": "OWNED_BY",
+   "fact": "Oxford Ionics is an IonQ company and claims a 99.99% two-qubit fidelity world record as of October 2025"
+  },
+  {
+   "source": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "target": "22d4e408-ca5e-48af-80be-a6b9a3b65990",
+   "name": "DEPRECATES",
+   "fact": "NIST deprecation of elliptic-curve cryptography (ECC) begins in 2030"
+  },
+  {
+   "source": "0567e57c-2a12-45a3-9601-51dcc33ab499",
+   "target": "981f4e8a-9528-4824-afa5-af12beb65da1",
+   "name": "REDUCES_RESOURCE_ESTIMATES_FOR",
+   "fact": "Google Quantum AI published reduced resource estimates for elliptic-curve breaking, contributing to cryptanalysis that raised the CRQC threat timeline estimates"
+  },
+  {
+   "source": "293464ec-b14b-40f2-9c8d-6e5f4d9fafc1",
+   "target": "24e5b02a-fd89-45cf-b9ff-548c9fff7ec2",
+   "name": "AUTHORIZES_REPROGRAMMING_FOR",
+   "fact": "H.R. 6213 would have let DOE, NSF and NIST reprogram $1.1 billion of previously authorized amounts; it lapsed without enactment"
+  },
+  {
+   "source": "78fbd547-7674-4e51-9d07-839b4da95213",
+   "target": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "name": "INFLUENCES",
+   "fact": "BCG's assessment of full fault tolerance after 2040 contradicts and tempers IonQ's 2028 cryptographic-relevance claim"
+  },
+  {
+   "source": "67911fee-48a6-4365-b508-c21825363657",
+   "target": "f7e83d33-9e63-455e-80d5-1aef5b429635",
+   "name": "LOCATED_IN",
+   "fact": "IBM Quantum Starling is to be built in Poughkeepsie, New York"
+  },
+  {
+   "source": "fd4aadb7-ad02-4725-9f05-671621a4818a",
+   "target": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "name": "INFLUENCES",
+   "fact": "GRI threat-timeline series tracks CRQC probability that NIST's 2035 rationale anticipates [S5][S120]（sign=+，strength=0.4，valence=directional，polarity=0.40）"
+  },
+  {
+   "source": "ae6592fe-3d8a-49f1-90d6-b62eea0f98d1",
+   "target": "9d4775ae-ae6a-40aa-95f1-6442a12d5f4e",
+   "name": "USES",
+   "fact": "Helios has demonstrated 48 fully error-corrected logical qubits at roughly 2:1 physical-to-logical encoding under the Iceberg code"
+  },
+  {
+   "source": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "target": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "name": "COMPETES_WITH",
+   "fact": "IonQ's June 2025 roadmap claims ~1,600 logical qubits at ~10−7 error by 2028 while QuEra targets 1,000+ logical qubits in 2028/29, competing on aggressive fault-tolerance timelines."
+  },
+  {
+   "source": "da7faeae-7335-4125-8630-f1615f7950ae",
+   "target": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "name": "FUNDS",
+   "fact": "2016 quantum megaproject; NLQIS established 2017 under Pan Jianwei [S64]（sign=+，strength=0.9，valence=allied，polarity=0.90）"
+  },
+  {
+   "source": "4e9b70e7-787f-49e4-ba21-1396dc0b3511",
+   "target": "691cacfd-c34f-455c-a75c-a60bfbacdbc6",
+   "name": "DEVELOPED",
+   "fact": "QuEra's analog Aquila machine provided 256 physical atoms in November 2022."
+  },
+  {
+   "source": "19f21580-a6f1-439d-bf10-9decda18914a",
+   "target": "6da85896-25e2-4b3a-a84e-6d5fbfb5a0fb",
+   "name": "SUPPORTS",
+   "fact": "PsiQuantum received $100 million in proposed CHIPS Act incentives."
+  },
+  {
+   "source": "ce677085-ab4c-43c6-b323-b188c1a93753",
+   "target": "92fce351-c9bb-41e1-bab5-bc16d56d4fa9",
+   "name": "DEVELOPED",
+   "fact": "USTC's Jiuzhang 3.0 detected 255 photons in 2023, with a 10^16-fold speedup over supercomputers claimed in the authors' own account"
+  },
+  {
+   "source": "67c62edd-bda1-49db-aabf-9108949f7dca",
+   "target": "171cef60-bf49-499c-806b-f98501094c18",
+   "name": "SUPPORTS",
+   "fact": "The Quantum Computing Cybersecurity Preparedness Act of December 2022 reinforced National Security Memorandum 10's (May 2022) target of completing post-quantum migration across federal systems by 2035."
+  },
+  {
+   "source": "fe65fc95-e009-4066-b212-05d11314b3bc",
+   "target": "f90e82b7-fb07-4bf0-8cfc-69665ccd079f",
+   "name": "ADOPTED",
+   "fact": "On 8 September 2025 the European Commission adopted a Delegated Regulation adding quantum computers, electronic components for cryogenic temperatures, parametric signal amplifiers, cryogenic cooling systems and wafer probes to the EU dual-use control list, aligning with US, UK and Japanese controls."
+  },
+  {
+   "source": "24e5b02a-fd89-45cf-b9ff-548c9fff7ec2",
+   "target": "661f1f50-a5ac-43de-9c9b-7f59c2d2adf6",
+   "name": "HELIUM_3_ALLOCATION_DEPENDENCY",
+   "fact": "DOE Isotope Program supplies He-3 from Savannah River; commercial buyers face tight market outside federal allocation [S14][S39]（strength=0.5，valence=neutral，polarity=0.00）"
+  },
+  {
+   "source": "171cef60-bf49-499c-806b-f98501094c18",
+   "target": "2d23719e-5cdb-4dc7-956f-f798b768af6f",
+   "name": "PARTNERS_WITH",
+   "fact": "National Security Memorandum 10 is reported to set 2035 as the target for completing federal migration to post-quantum standards, complementing NIST's published final post-quantum standards and draft IR 8547 transition plan."
+  },
+  {
+   "source": "5434054e-0434-4a46-b621-516dfd8f8498",
+   "target": "0aff910d-dbc0-4958-b6de-c525166d0c53",
+   "name": "INFLUENCES",
+   "fact": "DARPA's Quantum Benchmarking Initiative independently tests whether any vendor approach, including IonQ's, reaches utility-scale quantum operation by 2033, providing an external check on vendor claims."
+  },
+  {
+   "source": "69fd9717-8cd3-44f8-a23d-4d6e5d3d4caa",
+   "target": "d008a0a8-805c-48da-807a-9c442f78114c",
+   "name": "EXPANDED",
+   "fact": "In June 2024 Quantinuum expanded H2-1 to 56 qubits"
+  }
+ ],
+ "graph_id": "mirofish_e208b596d44f4a7d"
+}

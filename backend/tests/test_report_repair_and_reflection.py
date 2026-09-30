@@ -699,14 +699,24 @@ def test_purity_number_folding_accepts_reformat_rejects_corruption():
     thousands separators) is accepted by the batch path; digit-content changes
     are still rejected. The strict multiset (bilingual path) stays strict."""
     # (1) Full-width digits in a CJK segment, English translation with ASCII digits.
-    seg_fullwidth = "市场规模１０００亿元"
-    good_en = "market size totals 1000 billion yuan"
+    seg_fullwidth = "市场共有１０００家企业"
+    good_en = "the market has 1000 companies"
     # Pre-COST-1 the strict multiset rejected exactly this legitimate pair:
     assert ReportAgent._translation_number_multiset(seg_fullwidth) \
         != ReportAgent._translation_number_multiset(good_en)
     a = _repair_agent(llm=_JsonChatLLM({"1": good_en}))
     mapping = a._translate_impurity_segments([seg_fullwidth], "English")
     assert mapping == [(seg_fullwidth, good_en)]
+
+    # (1b) A full-width amount is one rendered token: 1000亿元 is 100 billion yuan.
+    # The frozen-numeral rendering "1000 billion yuan" is ten times too large.
+    seg_amount = "市场规模１０００亿元"
+    a = _repair_agent(llm=_JsonChatLLM({"1": "market size totals ⟦QA⟧"}))
+    assert a._translate_impurity_segments([seg_amount], "English") == [
+        (seg_amount, "market size totals RMB 100 billion")
+    ]
+    a = _repair_agent(llm=_JsonChatLLM({"1": "market size totals 1000 billion yuan"}))
+    assert a._translate_impurity_segments([seg_amount], "English") == []
 
     # (2) Thousands separator dropped by a legitimate Chinese rendering.
     seg_latin = "The market reached 1,000 units across all regions"

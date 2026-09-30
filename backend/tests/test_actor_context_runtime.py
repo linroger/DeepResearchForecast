@@ -925,8 +925,10 @@ def test_sparse_legacy_dossier_gets_a_safe_pack_without_fake_report_coverage():
 
 
 def test_role_context_reaches_real_reddit_and_twitter_oasis_system_messages(tmp_path, monkeypatch):
-    import camel.utils.token_counting as camel_token_counting
-    from oasis import generate_reddit_agent_graph, generate_twitter_agent_graph
+    oasis = pytest.importorskip("oasis")
+    camel_token_counting = pytest.importorskip("camel.utils.token_counting")
+    generate_reddit_agent_graph = oasis.generate_reddit_agent_graph
+    generate_twitter_agent_graph = oasis.generate_twitter_agent_graph
 
     # OASIS builds each agent on camel's default OpenAI model, whose constructor
     # demands a non-empty OPENAI_API_KEY; nothing here calls the model.  The

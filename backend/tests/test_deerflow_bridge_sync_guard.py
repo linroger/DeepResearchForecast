@@ -546,6 +546,18 @@ class SubagentExecutor:
     ) == once
 
 
+@pytest.mark.skipif(
+    not (
+        Path(__file__).resolve().parents[2]
+        / "deer-flow-2.0.0"
+        / "backend"
+        / "packages"
+        / "harness"
+        / "deerflow"
+        / "client.py"
+    ).is_file(),
+    reason="vendored deer-flow harness snapshot is not present in this checkout",
+)
 def test_subagent_overlay_preserves_current_vendor_observability(tmp_path):
     repo_root = Path(__file__).resolve().parents[2]
     vendor_root = repo_root / "deer-flow-2.0.0"
@@ -593,6 +605,18 @@ def test_subagent_overlay_preserves_current_vendor_observability(tmp_path):
         assert preserved in executor_source
 
 
+@pytest.mark.skipif(
+    not (
+        Path(__file__).resolve().parents[2]
+        / "deer-flow-2.0.0"
+        / "backend"
+        / "packages"
+        / "harness"
+        / "deerflow"
+        / "client.py"
+    ).is_file(),
+    reason="vendored deer-flow harness snapshot is not present in this checkout",
+)
 def test_subagent_overlay_fails_closed_on_model_inheritance_drift(tmp_path):
     repo_root = Path(__file__).resolve().parents[2]
     vendor_harness = (

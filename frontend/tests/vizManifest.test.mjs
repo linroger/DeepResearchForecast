@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   filterVizGalleryByMarkdown,
+  localizeChartCaption,
   normalizeVizGallery,
   safeChartPath,
 } from '../src/utils/vizManifest.js'
@@ -103,4 +104,17 @@ test('rejects traversal, encoded traversal, absolute, and backslash paths', () =
   ]) {
     assert.equal(safeChartPath(path), '')
   }
+})
+
+test('localizes builder chart captions only for the Chinese view', () => {
+  assert.equal(localizeChartCaption('Scenario Probabilities', 'zh'), '情景概率')
+  assert.equal(localizeChartCaption('Event Timeline ', 'zh'), '事件时间线')
+  assert.equal(
+    localizeChartCaption('Market-Implied P(yes) History vs Model', 'zh'),
+    '市场隐含 P(是) 历史与模型对比',
+  )
+  assert.equal(localizeChartCaption('Scenario Probabilities', 'en'), 'Scenario Probabilities')
+  assert.equal(localizeChartCaption('Scenario Probabilities', ''), 'Scenario Probabilities')
+  assert.equal(localizeChartCaption('A future chart', 'zh'), 'A future chart')
+  assert.equal(localizeChartCaption(undefined, 'zh'), '')
 })
