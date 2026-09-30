@@ -5,9 +5,12 @@ de-duplicated market exposure.
   ReportAgent actually sends carries no 【模拟量化信号】 block; legacy_prompt restores it.
 - FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE (default off): with a live market pack injected,
   the binary draw's dossier view drops the bridge's machine-appended
-  "## Prediction Market Signals" table (fence-aware), so market prices reach _draw only
-  through the live pack; binary_quality.market_table_stripped records the count and survives
-  ReportAgent's rescore into forecast.json. Knob off → prompts byte-identical.
+  "## Prediction Market Signals" table (fence-aware; a fence left open above the EOF table
+  does not hide it), so market prices reach _draw only through the live pack;
+  binary_quality.market_table_stripped records the count and survives ReportAgent's rescore
+  into forecast.json. A heading left only inside fenced code (market_table_strip_skipped) and
+  a live pack past the draw's slice cap (market_pack_truncated) are flagged, never silent.
+  Knob off → prompts byte-identical.
 - seed_scenario_pin: names + resolution criteria only.
 
 Offline: FakeLLMClient / routed chat_json stubs, no network.
@@ -17,6 +20,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import os
 
 import pytest
@@ -154,6 +158,37 @@ def test_strip_machine_market_table_no_match_is_identity():
     assert strip_machine_market_table(None) == ("", 0)
 
 
+@pytest.mark.parametrize("body", [
+    "body\n~~~\ncode\n",                  # stray tilde fence never closed
+    "body\n````\ncode\n```\n",           # four-backtick fence a three-backtick line cannot close
+    "body\n```python\nprint(1)\n",        # unclosed backtick fence
+], ids=["tilde-unclosed", "four-closed-by-three", "backtick-unclosed"])
+def test_strip_machine_market_table_unclosed_fence_above_eof_table(body):
+    """An LLM-written fence left open above the bridge's EOF table must not hide it: the bridge
+    appends the section at EOF and sees it outside any fence, so the tail is stripped too."""
+    out, n = strip_machine_market_table(body + "\n" + _BRIDGE_TABLE)
+    assert n == 1
+    assert out == body
+    assert "(m-stale)" not in out
+
+
+def test_strip_machine_market_table_unclosed_fence_tail_bounds():
+    # stale sections the bridge could not upsert (it saw them inside its open fence) all go;
+    # an H1/H2 after the table ends the section as usual
+    text = ("body\n```\ncode\n"
+            "## Prediction Market Signals\n| old | 20% |\n\n"
+            "## Prediction Market Signals\n| new | 22% |\n"
+            "## Later\nkept\n")
+    out, n = strip_machine_market_table(text)
+    assert n == 2
+    assert out == "body\n```\ncode\n## Later\nkept\n"
+    # a fence left open inside the machine section is already swallowed by it: counted once
+    out, n = strip_machine_market_table("body\n## Prediction Market Signals\n```\n| a |\n")
+    assert (out, n) == ("body", 1)
+    # an unclosed fence with no machine heading after it is left alone
+    assert strip_machine_market_table("body\n~~~\ncode\n") == ("body\n~~~\ncode\n", 0)
+
+
 def _draw_prompts(llm):
     return [m["content"] for call in llm.calls for m in call["messages"]
             if "[Research dossier]" in m["content"]]
@@ -227,6 +262,45 @@ def test_binary_draw_strip_frees_tail_budget(monkeypatch):
     _, on = _extract(monkeypatch, knob=True, dossier=dossier)
     assert all("KEY-CONCLUSION" not in p.split("[Research dossier]", 1)[1] for p in off)
     assert all("KEY-CONCLUSION" in p.split("[Research dossier]", 1)[1] for p in on)
+
+
+def test_binary_draw_strip_skipped_is_never_silent(monkeypatch, caplog):
+    """A machine heading left only inside closed fenced code is not stripped (CommonMark reads
+    it as quoted code), but the operator is told the stale prices still reach the draw."""
+    dossier = ("# Report\n\nBody [S1].\n\n"
+               "````markdown\n```\n## Prediction Market Signals\n"
+               "| quoted stale row (m-stale) | 23% |\n````\n")
+    with caplog.at_level(logging.WARNING, logger="app.services.forecast_extractor"):
+        out, prompts = _extract(monkeypatch, knob=True, dossier=dossier)
+    assert prompts
+    assert all(p.split("[Research dossier]", 1)[1] == "\n" + dossier for p in prompts)
+    assert out["binary_quality"]["market_table_strip_skipped"] == 1
+    assert "market_table_stripped" not in out["binary_quality"]
+    assert any("Prediction Market Signals" in r.getMessage() for r in caplog.records)
+    off, _ = _extract(monkeypatch, knob=False, dossier=dossier)
+    assert "market_table_strip_skipped" not in off["binary_quality"]
+    stripped, _ = _extract(monkeypatch, knob=True)          # a real strip is not "skipped"
+    assert "market_table_strip_skipped" not in stripped["binary_quality"]
+
+
+def test_binary_draw_strip_flags_truncated_live_pack(monkeypatch):
+    """Once the dossier table is stripped the live pack is the only market view, so markets
+    past the draw's slice cap reach the prompt nowhere: record it (knob off: no new key)."""
+    cap = fe._BINARY_MARKET_PACK_CHARS
+    filler = "| 2 | Filler market question (m-filler) | polymarket | 50% | 1,000 |\n"
+    big_pack = (_LIVE_PACK + "\n" + filler * (cap // len(filler) + 1)
+                + "| 99 | Beyond the cap (m-beyond-cap) | polymarket | 40% | 9 |")
+    assert len(big_pack) > cap
+    out, prompts = _extract(monkeypatch, knob=True, market_pack=big_pack)
+    assert prompts
+    for prompt in prompts:
+        assert big_pack[:cap] in prompt and "(m-beyond-cap)" not in prompt
+    assert out["binary_quality"]["market_table_stripped"] == 1
+    assert out["binary_quality"]["market_pack_truncated"] is True
+    off, _ = _extract(monkeypatch, knob=False, market_pack=big_pack)
+    assert "market_pack_truncated" not in off["binary_quality"]
+    within_cap, _ = _extract(monkeypatch, knob=True)
+    assert "market_pack_truncated" not in within_cap["binary_quality"]
 
 
 # ------------------------------------ market_table_stripped survives the report rescore

@@ -1094,27 +1094,44 @@ def strip_machine_market_table(text: str) -> Tuple[str, int]:
     一并删除）。围栏感知（markdown_fence_transition）：围栏代码块内的 ``## `` 行既不开启
     也不结束一个节。这是 DRF 自有的重实现，镜像研究桥 upsert 的契约（桥在追加新表前用
     同一匹配删掉旧表）。返回 ``(text, n_removed)``；未命中 → 原文不变、0。纯函数、离线。
+
+    未闭合围栏兜底：正文里一个到文末都没闭合的围栏（孤立的 ``~~~``、四个反引号开启却只用
+    三个反引号关闭等）会把桥追加在文末的节吞进「代码块」。桥只按三个反引号切换围栏且总把
+    该节追加到文末，在它看来这张表在围栏之外——所以该未闭合围栏开启行之后的尾段按同样的
+    节规则、不看围栏再扫一遍，否则旗标开着过时表照样进入 _draw。
     """
     src = text or ""
-    kept: List[str] = []
+    lines = src.split("\n")
+    drop = [False] * len(lines)
     removed = 0
     skipping = False
     fence_state: MarkdownFenceState = None
-    for line in src.split("\n"):
+    fence_opened_at = 0
+    for i, line in enumerate(lines):
         was_in_fence = fence_state is not None
         fence_state, is_fence_line = markdown_fence_transition(line, fence_state)
+        if fence_state is not None and not was_in_fence:
+            fence_opened_at = i
         if not (is_fence_line or was_in_fence):
             if _MACHINE_MARKET_HEADING_RE.match(line.rstrip()):
                 skipping = True
                 removed += 1
-                continue
-            if skipping and _MARKDOWN_H1_H2_BOUNDARY_RE.match(line):
+            elif skipping and _MARKDOWN_H1_H2_BOUNDARY_RE.match(line):
                 skipping = False
-        if not skipping:
-            kept.append(line)
+        drop[i] = skipping
+    # 围栏到文末仍未闭合、且其开启行不在已删节内（在已删节内则节已延伸到文末）→ 尾段兜底。
+    if fence_state is not None and not drop[fence_opened_at]:
+        skipping = False
+        for i in range(fence_opened_at + 1, len(lines)):
+            if _MACHINE_MARKET_HEADING_RE.match(lines[i].rstrip()):
+                skipping = True
+                removed += 1
+            elif skipping and _MARKDOWN_H1_H2_BOUNDARY_RE.match(lines[i]):
+                skipping = False
+            drop[i] = skipping
     if not removed:
         return src, 0
-    return "\n".join(kept), removed
+    return "\n".join(line for line, dropped in zip(lines, drop, strict=True) if not dropped), removed
 
 
 def extract_structured_forecast(report_markdown: str, llm,
@@ -1261,6 +1278,8 @@ _BINARY_MARKET_RULE = (
     "extra field \"market_anchor\": {\"market_id\": \"<id from the table>\", "
     "\"implied_yes_prob\": 0.0-1.0}; OMIT market_anchor entirely when no listed market applies."
 )
+# PM-2：二元 _draw 提示词里市场包的字符上限（4000→8000，让相关性门控后的更多市场进入锚定视野）。
+_BINARY_MARKET_PACK_CHARS = 8000
 
 # ------------------------------------------------- source 溯源确定性校验（编造溯源修复）
 # 取证（report_9147b3f6a0a9 6/12、report_c83f21765b96 9/20、report_1b70ace5c9e8 8/13）：模型把
@@ -3051,7 +3070,9 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     [, near_match{qid: fid}]}。None/空 → 提示词与输出逐字节不变。
     REPORT-10（FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE，默认关）：market_aware 时切片前用
     strip_machine_market_table 删掉 dossier 里的机器市场表，删除节数记
-    binary_quality.market_table_stripped；旗标关或未注入市场包 → 提示词逐字节不变。
+    binary_quality.market_table_stripped（删表后市场包超出 _draw 切片上限另记
+    market_pack_truncated；标题行只剩在围栏代码块内、一节未删记 market_table_strip_skipped）；
+    旗标关或未注入市场包 → 提示词逐字节不变。
     """
     target_rows = _clean_target_propositions(target_propositions)
     market_aware = (bool(_cfg("PREDICTION_MARKETS_ENABLED", True))
@@ -3061,11 +3082,25 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     # 末尾那份研究期的机器市场表是同一批价格的第二份（可能过时）副本——在切片前删掉，市场价
     # 只经 market_pack 一个入口进入 _draw，且该表不再占用 head+tail 的尾部预算。
     market_table_stripped = 0
+    market_table_strip_skipped = 0
+    market_pack_truncated = False
     if market_aware and bool(_cfg("FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE", False)):
         content, market_table_stripped = strip_machine_market_table(content)
         if market_table_stripped:
             logger.info("二元预测抽取：dossier 视图删除 %d 个机器市场表节（市场价仅经实时市场包注入）",
                         market_table_stripped)
+            # 删表后实时市场包是唯一的市场视图：超出 _draw 切片上限的市场在提示词里再无处可见
+            # （market_lookup 回填仍会确定性锚定它们）——显式记下，供晋升前对比。
+            market_pack_truncated = len(str(market_pack)) > _BINARY_MARKET_PACK_CHARS
+            if market_pack_truncated:
+                logger.warning("二元预测抽取：市场包 %d 字超出 %d 字切片上限，dossier 市场表已删，"
+                               "上限之后的市场不再出现在提示词中", len(str(market_pack)),
+                               _BINARY_MARKET_PACK_CHARS)
+        elif any(_MACHINE_MARKET_HEADING_RE.match(line.rstrip()) for line in content.split("\n")):
+            # 标题行仍在却一节也没删（只剩已闭合围栏代码块内的引用）→ 不静默：记下供运维核对。
+            market_table_strip_skipped = 1
+            logger.warning("二元预测抽取：dossier 仍含「## Prediction Market Signals」标题行但位于"
+                           "围栏代码块内，未删除（其中的市场价仍会进入 _draw）")
     _bbudget = int(_cfg("FORECAST_BINARY_EXTRACT_BUDGET", 48000))
     _bhr = _coerce_float(_cfg("FORECAST_EXTRACT_HEAD_RATIO", 0.6))
     content = slice_head_tail(content, _bbudget, _bhr if _bhr is not None else 0.6)
@@ -3163,8 +3198,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         if sim_sensitive:
             user += f"\n\n[Simulation quantitative signals]\n{str(signal_pack)[:4000]}"
         if market_aware:
-            # PM-2：市场表切片 4000→8000，让相关性门控后的更多市场进入锚定视野。
-            user += f"\n\n[Prediction market signals]\n{str(market_pack)[:8000]}"
+            user += f"\n\n[Prediction market signals]\n{str(market_pack)[:_BINARY_MARKET_PACK_CHARS]}"
         if scenarios:
             scenario_rows = [
                 {
@@ -3319,6 +3353,10 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
             _bq_prov["market_window_ended_excluded"] = len(window_ended_rows)
         if market_table_stripped:
             _bq_prov["market_table_stripped"] = market_table_stripped
+        if market_table_strip_skipped:
+            _bq_prov["market_table_strip_skipped"] = market_table_strip_skipped
+        if market_pack_truncated:
+            _bq_prov["market_pack_truncated"] = True
         if provenance_downgrades:
             _bq_prov.setdefault("issues", []).append(
                 f"{provenance_downgrades} forecast(s) claimed a simulation signal that was never "
