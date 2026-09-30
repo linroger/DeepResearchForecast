@@ -1610,6 +1610,16 @@ class Config:
     # Default false: it adds a model call and changes the plan prompt; off = brief,
     # plan, actors.json and every prompt byte-identical.  Forwarded to the v3 child.
     RESEARCH_QUESTION_SPEC = os.environ.get('RESEARCH_QUESTION_SPEC', 'false').strip().lower() == 'true'
+    # RESEARCH-12 question spec consumers (backend only): a valid actors.json
+    # question_spec (schema, status ok/partial, spec_sha256 recomputed; anything else is
+    # ignored) supplies the simulation calendar's horizon below every deterministic
+    # prompt date (skipping the LLM fallback; horizon_source 'question_spec') and
+    # _infer_horizon_date's fallback, is prepended to the spine prompt's research
+    # inputs, is disclosed in the report's resolution section and is summarized in
+    # forecast.json question_spec.  Default true is safe: without a spec (needs
+    # RESEARCH_QUESTION_SPEC) every consumer is byte-identical.  False = shadow mode
+    # (the spec stays persisted but unused).
+    QUESTION_SPEC_DOWNSTREAM = os.environ.get('QUESTION_SPEC_DOWNSTREAM', 'true').strip().lower() == 'true'
     # Forecast-input extraction master switch (EXECPLAN2 I-0-5), read by the legacy
     # bridge's extraction prompt and the report agent's forecast-inputs block (both
     # already read this name); parsed exactly like the bridge (unset or empty = true,

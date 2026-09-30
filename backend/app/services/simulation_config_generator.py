@@ -39,6 +39,7 @@ from ..utils.actors import (
 from ..utils.dates import parse_as_of
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
+from . import question_spec
 from .zep_entity_reader import EntityNode, ZepEntityReader
 from .actor_context import (
     ACTOR_CONTEXT_VERSION,
@@ -945,8 +946,9 @@ class SimulationConfigGenerator:
         * as_of：actors["as_of_date"] 经 parse_as_of 解析；不可解析/缺失 → 运行日 +
           warning ``as_of_defaulted``。
         * 判定日阶梯：sim_timeline.extract_horizon（确定性四层，输入 =
-          模拟需求 + "\\n" + central_question）→ _llm_extract_horizon（单次 JSON 兜底）
-          → default_horizon(as_of, SIM_HORIZON_DEFAULT_MONTHS)。
+          模拟需求 + "\\n" + central_question）→ 研究问题规范的判定日（RESEARCH-12，
+          QUESTION_SPEC_DOWNSTREAM；horizon_source='question_spec'，命中即不调 LLM）
+          → _llm_extract_horizon（单次 JSON 兜底）→ default_horizon(as_of, SIM_HORIZON_DEFAULT_MONTHS)。
         * target_max = min(SIM_CALENDAR_TARGET_MAX_ROUNDS, max_rounds, OASIS_DEFAULT_MAX_ROUNDS)
           （后两者未设/非正视为 ∞）——显式回合上限只粗化时间粒度、绝不截断预测期
           （build_timeline 记 round_cap_coarsened）。
@@ -958,9 +960,15 @@ class SimulationConfigGenerator:
         if as_of_defaulted:
             logger.warning(f"as_of_date 不可解析（{as_of_raw!r}），默认取运行日 {as_of.isoformat()}")
 
-        # 判定日阶梯：确定性抽取 → LLM 兜底 → 默认 12 个月
+        # 判定日阶梯：确定性抽取 → 问题规范判定日 → LLM 兜底 → 默认 12 个月
         cq = str(actors.get("central_question", "") or "") if isinstance(actors, dict) else ""
         horizon = sim_timeline.extract_horizon(f"{simulation_requirement}\n{cq}", as_of)
+        if horizon is None:
+            # RESEARCH-12：研究阶段钉住的判定日（actors.json question_spec，哈希复核）排在提示词
+            # 显式日期之后、LLM 兜底之前；无规范/旗标关/越界 → None，阶梯与旧路径逐字节一致。
+            spec_day = question_spec.spec_horizon_date(question_spec.downstream_spec(actors), as_of)
+            if spec_day is not None:
+                horizon = sim_timeline.HorizonResult(spec_day.isoformat(), "question_spec", "", False, 0.9)
         if horizon is None:
             horizon = self._llm_extract_horizon(context, as_of)
         if horizon is None:

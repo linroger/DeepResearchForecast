@@ -9385,6 +9385,8 @@ class PipelineOrchestrator:
         委托 sim_timeline.extract_horizon 的四层确定性抽取（explicit_date/anchored_period/
         relative/bare_year——bare_year 层即旧实现，行为超集）。as_of 取 actors.as_of_date
         （不可解析→今天）。无合法候选 → None（不做日期映射）；任何异常回退旧的裸年份正则。
+        RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：确定性抽取落空时回退到 actors.json 问题规范
+        的判定日（哈希复核、(as_of, as_of+30年] 内）；无规范/旗标关 → 与旧行为一致。
         """
         text = str(prompt or "")
         if isinstance(actors, dict):
@@ -9392,12 +9394,16 @@ class PipelineOrchestrator:
         try:
             from datetime import date as _date
             from ..utils import sim_timeline
+            from . import question_spec as _qspec
             as_of = None
             if isinstance(actors, dict):
                 parsed = parse_as_of(actors.get("as_of_date"))
                 as_of = parsed.date() if parsed else None
             hr = sim_timeline.extract_horizon(text, as_of or _date.today())
-            return hr.horizon_date if hr else None
+            if hr:
+                return hr.horizon_date
+            spec_day = _qspec.spec_horizon_date(_qspec.downstream_spec(actors), as_of or _date.today())
+            return spec_day.isoformat() if spec_day else None
         except Exception:  # noqa: BLE001 — degrade-safe：模块缺失/异常时保持旧行为
             # 数字边界（非 \b：\b 在中日韩字符旁不触发，"2027年" 取不到年份）。
             years = [int(y) for y in re.findall(r"(?<!\d)(20\d{2})(?!\d)", text)]

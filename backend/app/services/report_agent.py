@@ -32,6 +32,7 @@ from ..utils.security import UnsafeIdError, contained_child, is_safe_id, safe_id
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
 from .hindcast_policy import as_hindcast_pin, hindcast_forecast_block
+from . import question_spec as _qspec
 from . import translation_dates as _tdates
 from . import translation_quantities as _tq
 from .zep_tools import (
@@ -3339,6 +3340,13 @@ class ReportAgent:
                 forecast_inputs = _actors.forecast_inputs_block(self.actors) or ""
             except Exception:  # noqa: BLE001 — forecast_inputs 为可选增强
                 forecast_inputs = ""
+            # RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：研究问题规范块置于研究输入最前（6000 字上限
+            # 保住它），各情景 resolution_criteria 采用同一结果定义、判定来源与判定日。经 spine_kwargs
+            # 的 forecast_inputs 槽进入 build_spine_user_prompt，EVAL-11 影子检查见到同一文本；
+            # 无规范 / 旗标关 → 块为空，提示词逐字节不变。
+            _qspec_block = _qspec.render_spine_block(_qspec.downstream_spec(self.actors))
+            if _qspec_block:
+                forecast_inputs = _qspec_block + ("\n\n" + forecast_inputs if forecast_inputs else "")
             # Foglamp WP1 (1D, I-16/I-18)：预测骨架是概率权威。默认政策 diagnostic_only 下，
             # 模拟信号包（WorldState 份额、联盟结构、反事实差异等 elicited model projection）
             # **不得进入概率生成输入**——研究先验已经播种了 WorldState，再喂回骨架就是同一
@@ -4021,6 +4029,12 @@ class ReportAgent:
         _pack_digests = getattr(self, "_context_pack_digests", None)
         if isinstance(_pack_digests, dict) and _pack_digests:
             forecast["context_pack"] = {kind: dict(d) for kind, d in _pack_digests.items()}
+        # RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：研究问题规范摘要（哈希、判定日、结果定义、判定来源、
+        # 默认假设）随最终 forecast.json 落盘，终审的 forecast 哈希随之覆盖它；不进发布门、不改账本。
+        # 无规范 / 旗标关时不加键（forecast.json 逐字节不变）。
+        _question_spec = _qspec.downstream_spec(self.actors)
+        if _question_spec is not None:
+            forecast["question_spec"] = _qspec.summary(_question_spec)
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
@@ -5662,9 +5676,12 @@ class ReportAgent:
         except Exception:  # noqa: BLE001
             indicators = []
         # WAVE9：判定章节跟随报告输出语言（此前硬编码中文标题，英文报告里出现整段中文章节）。
+        # RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：有已复核的研究问题规范时披露操作化定义与每条
+        # 默认假设；无规范 / 旗标关 → question_spec=None，章节逐字节不变。
         block = render_resolution_block(
             self._forecast_spine, indicators,
-            language=getattr(self, "output_language", None) or "Chinese")
+            language=getattr(self, "output_language", None) or "Chinese",
+            question_spec=_qspec.downstream_spec(self.actors))
         if not block:
             return
         new_md = (report.markdown_content or "").rstrip() + "\n\n" + block + "\n"
