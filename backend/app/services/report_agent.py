@@ -38,6 +38,7 @@ from ..utils.security import UnsafeIdError, contained_child, is_safe_id, safe_id
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
 from .hindcast_policy import as_hindcast_pin, hindcast_forecast_block
+from . import question_spec as _qspec
 from . import translation_dates as _tdates
 from . import translation_quantities as _tq
 from .zep_tools import (
@@ -1688,6 +1689,8 @@ class ReportAgent:
         self.hindcast: Optional[Dict[str, Any]] = as_hindcast_pin(hindcast)
         self._hindcast_pin_cache: Any = _HINDCAST_PIN_UNRESOLVED
         self._hindcast_lookup_failed = False
+        # RESEARCH-12：(问题规范, 判定日是否采用) 懒缓存（_question_spec_for_run；None = 尚未核对）。
+        self._question_spec_run: Optional[Tuple[Optional[Dict[str, Any]], bool]] = None
         # VIZ-2: 研究期图表清单渲染成「可引用图表」块，钉进各章节提示词（章节据此用标准 markdown
         # 图片语法引用图形）；charts_manifest 缺省/空/解析失败时为空串 → 注入自动跳过（degrade-safe）。
         try:
@@ -2811,6 +2814,39 @@ class ReportAgent:
             return ""
         return ""
 
+    def _question_spec_for_run(self) -> Tuple[Optional[Dict[str, Any]], bool]:
+        """RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：本报告采用的研究问题规范（哈希复核；无规范 /
+        被拒 / 旗标关 → None），及其判定日是否即本次运行的判定日（question_spec.horizon_applies：
+        日历模式以模拟实际采用的判定日为准——提示词显式日期优先于规范；否则须落在 as_of 窗口内）。
+        不一致时骨架提示词不采用规范块（避免两个相互矛盾的判定日）、判定章节标注「未采用」、
+        forecast.json question_spec.horizon_applied=false。每份报告只算一次（不一致只告警一次）；
+        任何异常 → 视为无规范（degrade-safe，与旧行为一致）。"""
+        cached = getattr(self, "_question_spec_run", None)
+        if cached is not None:
+            return cached
+        spec: Optional[Dict[str, Any]] = None
+        applied = True
+        try:
+            spec = _qspec.downstream_spec(self.actors)
+            if spec is not None:
+                from datetime import date as _date
+                from ..utils.dates import parse_as_of
+                parsed = parse_as_of(self.actors.get("as_of_date"))
+                as_of = parsed.date() if parsed else _date.today()
+                run_horizon = self._temporal_horizon_date()
+                applied = _qspec.horizon_applies(spec, as_of, run_horizon)
+                if not applied:
+                    why = (f"不是本次运行的判定日 {run_horizon}" if run_horizon
+                           else f"不在 as_of {as_of.isoformat()} 之后 {_qspec.MAX_HORIZON_YEARS} 年窗口内")
+                    logger.warning(
+                        f"研究问题规范判定日 {spec['horizon'].get('date')} {why}：骨架不采用问题规范块，"
+                        "判定章节标注未采用，forecast.json question_spec.horizon_applied=false")
+        except Exception as exc:  # noqa: BLE001 — 规范为可选增强，核对失败按无规范处理
+            logger.warning(f"研究问题规范判定日核对失败（按无规范处理）: {exc}")
+            spec, applied = None, True
+        self._question_spec_run = (spec, applied)
+        return self._question_spec_run
+
     # ──────────────────────────────────────────────────────────────
     # 预测市场信号包（Polymarket 公开 Gamma API；市场隐含概率 = 校准锚点）
     # ──────────────────────────────────────────────────────────────
@@ -3350,6 +3386,21 @@ class ReportAgent:
                 forecast_inputs = _actors.forecast_inputs_block(self.actors) or ""
             except Exception:  # noqa: BLE001 — forecast_inputs 为可选增强
                 forecast_inputs = ""
+            # RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：研究问题规范块置于研究输入最前（6000 字上限
+            # 保住它），各情景 resolution_criteria 采用同一结果定义、判定来源与判定日。经 spine_kwargs
+            # 的 forecast_inputs 槽进入 build_spine_user_prompt，EVAL-11 影子检查见到同一文本；
+            # 无规范 / 旗标关 / 规范判定日不是本次运行的判定日 → 块为空，提示词逐字节不变。
+            # build_spine_user_prompt 截的是研究输入的尾部：块把研究输入推过上限时告警（不再静默）。
+            _qspec_spec, _qspec_applied = self._question_spec_for_run()
+            _qspec_block = _qspec.render_spine_block(_qspec_spec) if _qspec_applied else ""
+            if _qspec_block:
+                forecast_inputs = _qspec_block + ("\n\n" + forecast_inputs if forecast_inputs else "")
+                _inputs_cap = int(getattr(Config, "REPORT_SPINE_INPUT_CAP_INPUTS", 6000))
+                if len(forecast_inputs) > _inputs_cap:
+                    logger.warning(
+                        f"问题规范块（{len(_qspec_block)} 字）置于研究输入最前：研究输入共 {len(forecast_inputs)} 字，"
+                        f"超出 REPORT_SPINE_INPUT_CAP_INPUTS={_inputs_cap}，末尾 "
+                        f"{len(forecast_inputs) - _inputs_cap} 字被截断")
             # Foglamp WP1 (1D, I-16/I-18)：预测骨架是概率权威。默认政策 diagnostic_only 下，
             # 模拟信号包（WorldState 份额、联盟结构、反事实差异等 elicited model projection）
             # **不得进入概率生成输入**——研究先验已经播种了 WorldState，再喂回骨架就是同一
@@ -4070,6 +4121,12 @@ class ReportAgent:
         _model_provenance = self._model_provenance_block()
         if _model_provenance is not None:
             forecast["model_provenance"] = _model_provenance
+        # RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：研究问题规范摘要（哈希、判定日、结果定义、判定来源、
+        # 默认假设）随最终 forecast.json 落盘，终审的 forecast 哈希随之覆盖它；不进发布门、不改账本。
+        # horizon_applied 记规范判定日是否即本次运行的判定日。无规范 / 旗标关时不加键（逐字节不变）。
+        _question_spec, _qspec_applied = self._question_spec_for_run()
+        if _question_spec is not None:
+            forecast["question_spec"] = _qspec.summary(_question_spec, horizon_applied=_qspec_applied)
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
@@ -5711,9 +5768,14 @@ class ReportAgent:
         except Exception:  # noqa: BLE001
             indicators = []
         # WAVE9：判定章节跟随报告输出语言（此前硬编码中文标题，英文报告里出现整段中文章节）。
+        # RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：有已复核的研究问题规范时披露操作化定义与每条
+        # 默认假设（判定日不是本次运行的判定日时标注未采用）；无规范 / 旗标关 → question_spec=None，
+        # 章节逐字节不变。
+        _question_spec, _qspec_applied = self._question_spec_for_run()
         block = render_resolution_block(
             self._forecast_spine, indicators,
-            language=getattr(self, "output_language", None) or "Chinese")
+            language=getattr(self, "output_language", None) or "Chinese",
+            question_spec=_question_spec, question_spec_horizon_applied=_qspec_applied)
         if not block:
             return
         new_md = (report.markdown_content or "").rstrip() + "\n\n" + block + "\n"

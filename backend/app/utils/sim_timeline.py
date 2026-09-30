@@ -56,10 +56,10 @@ _HORIZON_MAX_MONTHS = 360
 @dataclass(frozen=True)
 class HorizonResult:
     horizon_date: str      # ISO YYYY-MM-DD
-    source: str            # "explicit_date"|"anchored_period"|"relative"|"bare_year"|"llm"|"default"
-    matched_text: str      # 命中的原文片段，llm/default 为 ""
+    source: str            # "explicit_date"|"anchored_period"|"relative"|"bare_year"|"question_spec"|"llm"|"default"
+    matched_text: str      # 命中的原文片段，question_spec/llm/default 为 ""
     defaulted: bool
-    confidence: float      # 确定性层 1.0；llm 0.7；default 0.3
+    confidence: float      # 确定性层 1.0；question_spec 0.9；llm 0.7；default 0.3
 
 
 @dataclass(frozen=True)
