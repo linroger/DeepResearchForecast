@@ -16423,9 +16423,28 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
                 extra_contested: list = []
                 if quant and _env_flag("RESEARCH_QUANT_RECONCILE", True):
                     try:
-                        extra_contested, _unit_errors = reconcile_quantitative(quant)
+                        extra_contested, unit_errors = reconcile_quantitative(quant)
+                        if unit_errors:
+                            meta["quant_unit_warnings"] = unit_errors
+                            plog.write("warn", f"extract-only: quant reconcile: {len(unit_errors)} probable "
+                                               "unit-scale (~1000x) disagreement(s)")
                     except Exception:  # noqa: BLE001 — 数值对账是加法
                         extra_contested = []
+                    # TIME-4: the full run's quant sanity check (claimed actuals dated after
+                    # the reference date, extreme growth), with its reference date: the
+                    # extracted as_of_date clamped to the run date, else today (UTC).
+                    # Additive: meta only; quantitative.json is unchanged.
+                    try:
+                        _sanity_ref, _ = _clamp_asof_reference(
+                            _parse_date(obj.get("as_of_date")), _dt.datetime.now(_dt.timezone.utc).date())
+                        _implausible = flag_implausible_quant(quant, _sanity_ref)
+                        if _implausible:
+                            meta["quant_implausible"] = _implausible
+                            plog.write("warn", f"extract-only: quant sanity: {len(_implausible)} implausible/"
+                                               f"future-dated fact(s) against {_sanity_ref.isoformat()}: "
+                                               f"{_implausible[:2]}")
+                    except Exception as _sanity_err:  # noqa: BLE001 — 数值体检是加法
+                        plog.write("warn", f"extract-only: quant sanity check skipped (non-fatal): {_sanity_err}")
                 if quant:
                     _atomic_write_text(out_dir / QUANTITATIVE_FILENAME, json.dumps(quant, ensure_ascii=False, indent=2))
                     meta["quantitative_count"] = len(quant)

@@ -175,6 +175,12 @@ ACTOR_PROMPT_CEILING = 60
 MAX_TIMELINE_ROWS = 40
 MAX_QUANT_ROWS = 60
 MAX_CONTESTED_ROWS = 15
+# Quantitative sanity checks (RESEARCH_QUANT_RECONCILE, the legacy engine's
+# reconcile_quantitative / flag_implausible_quant): contested.json takes at
+# most this many reconciled numeric disagreements, and meta keeps at most
+# QUANT_SANITY_MAX_FLAGS unit-scale warnings and implausible-fact flags.
+QUANT_RECONCILE_MAX_CONTESTED = 10
+QUANT_SANITY_MAX_FLAGS = 20
 # forecast_inputs rows the facts task asks for (RESEARCH_V3_FORECAST_INPUTS).
 MAX_FORECAST_DRIVERS = 8
 MAX_FORECAST_INDICATORS = 8
@@ -8185,7 +8191,12 @@ class _Engine:
         before any row is stamped or any of the four files is written; the
         returned counts then carry ``verified_facts`` and the private
         ``_evidence`` (the verified_facts.json payload) that
-        :meth:`_publish_evidence` writes."""
+        :meth:`_publish_evidence` writes.
+
+        With RESEARCH_QUANT_RECONCILE (default on) :meth:`_quant_sanity` adds
+        the reconciled numeric disagreements to contested.json (actors.json
+        keeps the extracted claims, as in the legacy engine) and its warnings
+        to meta; it never changes a quant row."""
         plan = self.plan
         verify = _env_flag(self.env, "RESEARCH_VERIFIED_FACTS", True)
         if getattr(self.args, "no_actors", False):
@@ -8249,6 +8260,10 @@ class _Engine:
             self._quant_provenance(quant, ref_date + _dt.timedelta(days=1), verify=verify, typing=typing)
         if self.pit is not None:
             self._count_parametric_suspects(timeline, quant, typing=typing)
+        # After typing (the claimed-actual test reads its epistemic_class), with
+        # typing's publication bound: the day after the plan's as-of.
+        reconciled = (self._quant_sanity(quant, ref_date + _dt.timedelta(days=1))
+                      if quant and _env_flag(self.env, "RESEARCH_QUANT_RECONCILE", True) else [])
         # Typed runs count forecast target dates as future-dated, never as fresh
         # (by date, and by the as_of_is_target / published_after_as_of flags
         # when typing stamped them).
@@ -8281,11 +8296,13 @@ class _Engine:
         for row in obj.get("actors") or []:
             if isinstance(row, dict):
                 row.pop("intelligence", None)
+        contested_rows = contested + reconciled
         names = {
             "actors": (self._filename("ACTORS_FILENAME", "actors.json"), obj, len(obj.get("actors") or []), "actors"),
             "timeline": (self._filename("TIMELINE_FILENAME", "timeline.json"), timeline, len(timeline), "events"),
             "quantitative": (self._filename("QUANTITATIVE_FILENAME", "quantitative.json"), quant, len(quant), "rows"),
-            "contested": (self._filename("CONTESTED_FILENAME", "contested.json"), contested, len(contested), "claims"),
+            "contested": (self._filename("CONTESTED_FILENAME", "contested.json"), contested_rows,
+                          len(contested_rows), "claims"),
         }
         for filename, payload, count, unit in names.values():
             self.write_json(self.out_dir / filename, payload, internal=False)
@@ -8294,7 +8311,7 @@ class _Engine:
             "actors_count": len(obj.get("actors") or []),
             "relationships_count": len(obj.get("relationships") or []),
             "timeline_count": len(timeline), "quantitative_count": len(quant),
-            "contested_count": len(contested), "has_situation_brief": bool(obj["situation_brief"]),
+            "contested_count": len(contested_rows), "has_situation_brief": bool(obj["situation_brief"]),
             "_actors_obj": obj}
         if evidence is not None:
             # Binds the projection to the exact quantitative.json it indexes (a
@@ -8303,6 +8320,48 @@ class _Engine:
             counts["verified_facts"] = dict(evidence["payload"]["counts"])
             counts["_evidence"] = evidence
         return counts
+
+    def _quant_sanity(self, quant: Sequence[Mapping[str, Any]], as_of: _dt.date) -> list[dict]:
+        """The legacy engine's quantitative sanity checks (RESEARCH_QUANT_RECONCILE).
+        Read-only: the bridge helpers get copies of the rows, so no quant row
+        changes.
+
+        * ``reconcile_quantitative`` groups the rows by (metric, unit): its
+          probable unit-scale (~1000x) errors go to ``meta.quant_unit_warnings``,
+          and its synthesized disagreements (origin ``quant_reconcile``) are
+          returned for contested.json, at most QUANT_RECONCILE_MAX_CONTESTED,
+          counted in ``meta.quant_reconcile_contested``;
+        * ``flag_implausible_quant`` checks the claimed actuals
+          (:func:`_claimed_actual`) against ``as_of``, the last day a cited
+          source can have published on: future-dated actuals and extreme
+          growth rates go to ``meta.quant_implausible``.
+
+        Each meta list keeps at most QUANT_SANITY_MAX_FLAGS entries.  Degrade-safe:
+        a missing or failing helper is recorded by :meth:`bridge_call` in
+        ``analytics_errors``, a result of another shape is ignored, and the
+        run goes on."""
+        extra: list[dict] = []
+        result = self.bridge_call("reconcile_quantitative", [dict(row) for row in quant])
+        if isinstance(result, tuple) and len(result) == 2 and all(isinstance(part, list) for part in result):
+            found, unit_errors = result
+            if unit_errors:
+                self.meta["quant_unit_warnings"] = unit_errors[:QUANT_SANITY_MAX_FLAGS]
+                self.log("warn", f"v3: quant reconcile: {len(unit_errors)} probable unit-scale (~1000x) "
+                                 "disagreement(s)")
+            found = [dict(row) for row in found if isinstance(row, dict)]
+            extra = found[:QUANT_RECONCILE_MAX_CONTESTED]
+            if extra:
+                self.meta["quant_reconcile_contested"] = len(extra)
+                capped = f" (the first {len(extra)} of {len(found)})" if len(found) > len(extra) else ""
+                self.log("ok", f"v3: quant reconcile: +{len(extra)} contested claim(s) from numeric "
+                               f"disagreement{capped}")
+        claimed = [dict(row) for row in quant if _claimed_actual(row)]
+        implausible = self.bridge_call("flag_implausible_quant", claimed, as_of)
+        if isinstance(implausible, list) and implausible:
+            self.meta["quant_implausible"] = implausible[:QUANT_SANITY_MAX_FLAGS]
+            self.log("warn", f"v3: quant sanity: {len(implausible)} implausible/future-dated fact(s): "
+                             f"{implausible[:2]}")
+        return extra
 
     def _count_parametric_suspects(self, timeline: Sequence[Mapping[str, Any]],
                                    quant: Sequence[Mapping[str, Any]], *, typing: bool) -> None:
@@ -9319,6 +9378,19 @@ def classify_quant_row(row: Mapping[str, Any], as_of: _dt.date) -> dict:
     if flags:
         out["epistemic_flags"] = flags
     return out
+
+
+def _claimed_actual(row: Mapping[str, Any]) -> bool:
+    """Whether a quantitative row presents its value as an actual — the rows
+    the future-dated check of ``flag_implausible_quant`` applies to.  A row
+    :func:`classify_quant_row` typed (RESEARCH_QUANT_TYPING) is one when it is
+    ``reported`` or flagged ``future_dated_reported`` (an actual or estimate
+    dated after as-of, typed unknown); any other row when its ``value_type``
+    is ``actual`` or absent, so forecast, estimate and target rows are not."""
+    if "epistemic_class" in row:
+        return (row.get("epistemic_class") == "reported"
+                or "future_dated_reported" in (row.get("epistemic_flags") or ()))
+    return row.get("value_type") in (None, "actual")
 
 
 # A number in exponent notation ("1.2E6"): the fact tokenizer reads its parts

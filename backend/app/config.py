@@ -1645,6 +1645,19 @@ class Config:
     # child's reading stay as they were.
     RESEARCH_EVIDENCE_GRADING = (os.environ.get('RESEARCH_EVIDENCE_GRADING', 'true').strip().lower()
                                  or 'true') in ('1', 'true', 'yes', 'on')
+    # Quantitative sanity checks of the research child (TIME-4): quantitative rows on the
+    # same metric and unit that disagree by > 10% become contested.json claims (origin
+    # quant_reconcile; v3 adds at most 10), a ~1000x gap is also a probable unit-scale
+    # error in meta.quant_unit_warnings, and claimed actuals dated after the research
+    # as-of (or with > 150% growth) are listed in meta.quant_implausible.  Read-only:
+    # quantitative.json never changes.  The legacy engine has always run them under this
+    # bridge-read name (its full run lists quant_implausible regardless of the knob);
+    # TIME-4 restores them in v3 and the extract-only salvage.  Parsed like the bridge
+    # (blank = true, else 1/true/yes/on), so the default keeps the legacy engine as it
+    # was; false = v3 and extract-only artifacts and meta byte-identical to before.
+    # Forwarded to every research child.
+    RESEARCH_QUANT_RECONCILE = (os.environ.get('RESEARCH_QUANT_RECONCILE', 'true').strip().lower()
+                                or 'true') in ('1', 'true', 'yes', 'on')
     # RESEARCH-11 v3 forecast inputs: the facts extraction also asks for the drivers
     # and dated leading indicators (precision-preserving dates, never padded) that
     # fill actors.json forecast_inputs.drivers / .indicators, which v3 wrote empty.
