@@ -112,11 +112,24 @@ def test_outline_lockstep(report_env, monkeypatch):
         monkeypatch.setattr(Config, "REPORT_NARRATIVE_SYNC", sync, raising=False)
         a = _generating_agent()
         report_id = f"r_lock_{sync}"
+        folder = os.path.join(report_env, report_id)
+        seen = []
+
+        def section(section, outline, previous_sections, progress_callback=None,
+                    section_index=0, _agent=a, _folder=folder, _seen=seen):
+            # What the section prompts see: the summary is already repaired at planning
+            # (step 1), not only by the late resync after assembly.
+            _seen.append((outline.summary, _agent._outline_summary,
+                          json.loads(_read(os.path.join(_folder, "outline.json")))["summary"]))
+            return SECTION_BODY
+
+        a._generate_section = section
         report = a.generate_report(report_id=report_id)
         assert report.status == ReportStatus.COMPLETED
-        folder = os.path.join(report_env, report_id)
+        expected = FIXED_SUMMARY if sync else STALE_SUMMARY
+        assert seen == [(expected, expected, expected)]
         summary = report.outline.summary
-        assert summary == (FIXED_SUMMARY if sync else STALE_SUMMARY)
+        assert summary == expected
         # Outline, meta outline, the quote-audit exemption and the published blockquote agree.
         assert a._outline_summary == summary
         assert json.loads(_read(os.path.join(folder, "outline.json")))["summary"] == summary
@@ -180,6 +193,7 @@ def test_repair_before_lint(reports_dir, monkeypatch):
             {"where": "body", "scenario": "D：超预期上行", "alias": "超预期上行",
              "from": "10%", "to": "5%"},
         ],
+        "applied_count": 2, "summary_count": 0, "body_count": 2,
         # The sum statement's addends (B 25% vs 30%, C 25% vs 20%) are reported, never rewritten.
         "unresolved": 2,
     }
@@ -219,6 +233,8 @@ def test_late_summary_resync_keeps_lockstep(reports_dir):
     assert (folder / "full_report.md").read_text(encoding="utf-8") == report.markdown_content
     assert [row["where"] for row in a._logic_number_repair["applied"]] == [
         "outline_summary", "outline_summary", "body", "body"]
+    assert (a._logic_number_repair["applied_count"], a._logic_number_repair["summary_count"],
+            a._logic_number_repair["body_count"]) == (4, 2, 2)
     from app.services import logic_number as LN
     assert LN.audit_markdown(report.markdown_content, FFE1_ROWS)["fixable"] == 0
     assert a._audit_quote_provenance(report.markdown_content)["ungrounded"] == ungrounded_before
@@ -236,10 +252,19 @@ def test_late_summary_resync_keeps_lockstep(reports_dir):
 
 
 def test_repair_runs_after_purity_and_before_lint_and_stabilizer(report_env, monkeypatch):
-    monkeypatch.setattr(Config, "REPORT_EDITORIAL_LINT", True, raising=False)
-    monkeypatch.setattr(Config, "REPORT_CITATION_FINALIZER", True, raising=False)
+    for name in ("REPORT_EDITORIAL_LINT", "REPORT_CITATION_FINALIZER", "REPORT_STRUCTURED_FORECAST",
+                 "FORECAST_EMIT_BINARY", "REPORT_VISUALIZATIONS", "REPORT_THREE_PART_SKELETON",
+                 "REPORT_RESOLUTION_SECTION", "REPORT_LANGUAGE_PURITY"):
+        monkeypatch.setattr(Config, name, True, raising=False)
+    monkeypatch.setattr(Config, "REPORT_FORECAST_SPINE_FIRST", False, raising=False)
     a = _generating_agent()
     calls = []
+    # The structured-forecast block's steps, recorded in place (the spine is already pinned).
+    for step in ("_prepend_binary_forecasts_section", "_inject_visualizations",
+                 "_apply_three_part_skeleton", "_append_resolution_section",
+                 "_apply_language_purity"):
+        setattr(a, step, lambda report_id, report, _step=step: calls.append(_step))
+    a._finalize_structured_forecast = lambda report_id, md, report=None: calls.append("finalize")
     real_repair = a._repair_logic_number
 
     def repair(report_id, report):
@@ -257,8 +282,25 @@ def test_repair_runs_after_purity_and_before_lint_and_stabilizer(report_env, mon
     a._apply_report_lint = lint
     a._stabilize_publish_markdown = stabilize
     a.generate_report(report_id="r_order")
-    assert [c if isinstance(c, str) else c[0] for c in calls] == ["repair", "lint", "stabilize"]
-    assert "在基准扩张（35%）路径下" in calls[1][1]
+    assert [c if isinstance(c, str) else c[0] for c in calls] == [
+        "finalize", "_prepend_binary_forecasts_section", "_inject_visualizations",
+        "_apply_three_part_skeleton", "_append_resolution_section", "_apply_language_purity",
+        "repair", "lint", "stabilize"]
+    assert "在基准扩张（35%）路径下" in calls[-2][1]
+
+
+def test_repair_record_counts_beyond_the_cap(reports_dir):
+    from app.services import logic_number as LN
+    md = "# T\n\n" + "\n\n".join(f"第{i}段：A情景（40%）。" for i in range(30)) + "\n"
+    folder = _prepare(reports_dir, "r_many", md)
+    a = _agent()
+    report = SimpleNamespace(markdown_content=md)
+    a._repair_logic_number("r_many", report)
+    record = a._logic_number_repair
+    assert len(record["applied"]) == LN.LOGIC_NUMBER_FINDINGS_CAP < 30
+    assert (record["applied_count"], record["summary_count"], record["body_count"]) == (30, 0, 30)
+    assert "A情景（40%）" not in report.markdown_content
+    assert (folder / "full_report.md").read_text(encoding="utf-8") == report.markdown_content
 
 
 def test_repair_failure_is_degrade_safe(reports_dir, monkeypatch):
@@ -314,6 +356,8 @@ def test_ffe1_fixture_publishes_synced_numbers(report_env, monkeypatch):
         {"where": "body", "scenario": "A：基准扩张", "alias": "基准扩张",
          "from": "40%", "to": "35%"},
     ]
+    assert (logic["repair"]["applied_count"], logic["repair"]["summary_count"],
+            logic["repair"]["body_count"]) == (3, 2, 1)
     assert audit["policy_version"] == 3
     assert not any("骨架不一致" in issue or "(S11)" in issue for issue in audit["hard_issues"])
     assert a.llm.calls == []                                   # zero LLM calls added

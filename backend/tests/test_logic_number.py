@@ -6,6 +6,7 @@ and S11 (anchored on the first occurrence of the full scenario name) passed it.
 """
 
 import logging
+import time
 
 import pytest
 
@@ -24,6 +25,7 @@ def _rows(*pairs):
 
 FFE1_ROWS = _rows(("A：基准扩张（管道打折后稳步兑现）", 0.35), ("B：电力受限", 0.30),
                   ("C：财务紧缩", 0.20), ("D：超预期上行", 0.05), ("E：其它/混合路径", 0.10))
+EN_ROWS = _rows(("A: Base case", 0.45), ("B: Bull case", 0.20), ("C: Bear case", 0.35))
 FFE1_SUMMARY = (
     "基准情景（40%）下2030年全球IT装机容量达190–210 GW，但电力硬约束（30%）与融资紧缩（20%）"
     "构成合计50%的下行尾部。"
@@ -147,6 +149,12 @@ def test_guards_and_decimal():
     ("有40%的可能性维持基准扩张", "有35%的可能性维持基准扩张"),
     ("40%的概率 **基准情景**", "35%的概率 **基准情景**"),
     ("The base case at 40% probability.", "The base case at 35% probability."),
+    # A conditional opener whose condition is the slot's own scenario keeps the slot.
+    ("若基准情景（40%）成立，则装机稳步兑现", "若基准情景（35%）成立，则装机稳步兑现"),
+    ("如果进入基准情景（40%），电力约束缓解", "如果进入基准情景（35%），电力约束缓解"),
+    ("If the base case (40%) holds, capex rises.", "If the base case (35%) holds, capex rises."),
+    ("若干年后基准情景（40%）仍是主路径", "若干年后基准情景（35%）仍是主路径"),       # 若干 is no 若
+    ("在基准扩张（40%）路径下装机稳步兑现", "在基准扩张（35%）路径下装机稳步兑现"),
 ])
 def test_strict_slot_forms(text, fixed):
     rows = _rows(("A：基准扩张", 0.35), ("B：Recession", 0.40), ("C：其它", 0.25))
@@ -181,8 +189,18 @@ def test_non_slots_and_matches_give_no_finding(text):
     ("上行（10%）情形下", "上行（5%）情形下"),
     ("在基准（40%）下", "在基准（35%）下"),
     ("The upside (10%) is thin.", "The upside (5%) is thin."),
-    ("仅10%概率上行", "仅5%概率上行"),           # right after a probability word
     ("**下行**：25%的概率", "**下行**：30%的概率"),
+    ("维持现状（10%）情形下", "维持现状（30%）情形下"),
+    ("租金维持现状（70%）", None),               # a rent that stays put
+    # After "N%的概率" a weak alias needs a scenario word right after it.
+    ("仅10%概率走向上行情景", "仅5%概率走向上行情景"),
+    ("有40%的概率走向基准路径", "有35%的概率走向基准路径"),
+    ("仅10%概率上行", None),
+    ("油价有40%的概率上行", None),               # a price move
+    ("电价在2027年有60%的可能性上行", None),
+    ("需求有40%的概率下行", None),
+    ("托管租金有70%的概率维持现状", None),
+    ("有40%的概率维持基准水平", None),           # a level, not the base case
 ])
 def test_weak_aliases_count_only_when_free_standing(text, fixed):
     rows = _rows(("A：基准扩张", 0.35), ("B：下行", 0.30), ("D：超预期上行", 0.05),
@@ -195,16 +213,54 @@ def test_weak_aliases_count_only_when_free_standing(text, fixed):
         assert LN.substitute_probability_slots(text, findings)[0] == fixed
 
 
-@pytest.mark.parametrize("text", [
-    "此前基准情景（40%）偏高。",
-    "基准情景（40%）已下调至35%。",
-    "Originally Scenario A (40%) led.",
-    "Scenario A (40%) was cut to 35%.",
+@pytest.mark.parametrize("text, rows, guard", [
+    ("此前基准情景（40%）偏高。", FFE1_ROWS, "history"),
+    ("基准情景（40%）已下调至35%。", FFE1_ROWS, "history"),
+    ("Originally Scenario A (40%) led.", FFE1_ROWS, "history"),
+    ("Scenario A (40%) was cut to 35%.", FFE1_ROWS, "history"),
+    ("基准情景（40%）→ 35%", FFE1_ROWS, "history"),
+    ("基准情景（40%）较上一版下调5个百分点", FFE1_ROWS, "history"),
+    ("上季度基准情景（40%）偏高。", FFE1_ROWS, "history"),
+    ("Last quarter's base case (55%) was higher.", EN_ROWS, "history"),
+    ("Base case (40%), down from 45%.", EN_ROWS, "history"),
+    # Markets and outside forecasters: never the pipeline's own scenario numbers.
+    ("高盛的基准情景（60%概率）", FFE1_ROWS, "market"),
+    ("据IEA，基准情景（60%）", FFE1_ROWS, "market"),
+    ("市场隐含的基准情景（60%）", FFE1_ROWS, "market"),
+    ("基准情景（60%）（高盛）", FFE1_ROWS, "market"),
+    ("Consensus base case (60%)", EN_ROWS, "market"),
+    ("Polymarket prices the bull case at 30% probability", EN_ROWS, "market"),
+    ("某分析师称“基准情景（60%）下装机放缓”", FFE1_ROWS, "market"),
+    # Someone else's words are never edited.
+    ("他写道：“基准情景（60%）下装机放缓”", FFE1_ROWS, "quote"),
+    ("「基准情景（60%）」", FFE1_ROWS, "quote"),
+    ('He wrote "the bear case (60%) is underpriced".', EN_ROWS, "quote"),
+    # A conditional probability is not the scenario's own.
+    ("若进入电力受限情景，则有40%的概率出现财务紧缩", FFE1_ROWS, "conditional"),
+    ("在B情景下，有60%的概率进入财务紧缩", FFE1_ROWS, "conditional"),
+    ("在B情景下有60%的概率进入财务紧缩", FFE1_ROWS, "conditional"),
+    ("若电力受限，财务紧缩（60%概率）随之而来", FFE1_ROWS, "conditional"),
+    ("If the bull case fails, the bear case (60%) takes over.", EN_ROWS, "conditional"),
 ])
-def test_history_context_is_reported_not_rewritten(text):
-    findings = LN.find_probability_slots(text, FFE1_ROWS)
-    assert [(f["status"], f["guard"]) for f in findings] == [("unresolved", "history")]
+def test_guarded_contexts_are_reported_not_rewritten(text, rows, guard):
+    findings = LN.find_probability_slots(text, rows)
+    assert [(f["status"], f["guard"]) for f in findings] == [("unresolved", guard)], text
+    assert "replacement" not in findings[0]
     assert LN.substitute_probability_slots(text, findings) == (text, [])
+
+
+def test_conditional_opener_governs_only_its_clause():
+    """"在…情景下" heads its own clause; the next clause's number-first slot is D's own."""
+    text = "在基准扩张（40%）路径下装机稳步兑现，仅10%概率超预期上行。"
+    findings = LN.find_probability_slots(text, FFE1_ROWS)
+    assert _statuses(findings) == [("基准扩张", 40, 35, "fixable"), ("超预期上行", 10, 5, "fixable")]
+    # 若 governs the rest of its sentence.
+    governed = "若电力受限，在基准路径下装机放缓，财务紧缩（60%概率）随之而来。"
+    assert [(f["status"], f["guard"]) for f in LN.find_probability_slots(governed, FFE1_ROWS)] == [
+        ("unresolved", "conditional")]
+    # The next sentence is out of its reach.
+    later = "若电力受限，装机放缓。财务紧缩（60%概率）。"
+    assert [f["status"] for f in LN.find_probability_slots(later, FFE1_ROWS)] == ["fixable"]
 
 
 def test_conflicting_slot_and_bad_inputs():
@@ -231,6 +287,15 @@ def test_substitution_skips_stale_or_overlapping_spans():
     assert fixed == "基准情景（35%），A情景（40%）" and len(applied) == 1
 
 
+def _sum_guarded_reference(text, start, end):
+    """The sum guard as the sync reads it: the shield of the token's sentence."""
+    for lo, hi in NS._sentence_bounds(text):
+        if lo <= start < hi:
+            shield = NS._sum_shield(text, lo, hi)
+            return shield is None or (start, end) in shield
+    return False
+
+
 def test_public_guards_match_the_sync():
     text = "电力受限（30%）与融资紧缩（20%）合计50%，基准情景（40%），由40%下调至35%，份额40%"
     for match in NS._INT_PERCENT_RE.finditer(text):
@@ -240,6 +305,20 @@ def test_public_guards_match_the_sync():
     spans = [m.span() for m in NS._INT_PERCENT_RE.finditer(text)]
     assert [NS.sum_guarded(text, *span) for span in spans] == [True, True, True, False, False,
                                                                False, False]
+    # The text-bound checkers answer exactly as the per-call guards and the sync do.
+    cited = ("据高盛，基准情景（60%）偏高。电力受限（30%）与融资紧缩（20%）合计50%；基准情景（40%）"
+             "1+2 3%。Polymarket prices B at 30%. 份额40%\n基准情景（35%）（彭博）")
+    for sample in (text, cited, "40%", ""):
+        sums, markets = NS.sum_guard_for(sample), NS.market_guard_for(sample)
+        positions = [m.span() for m in NS._INT_PERCENT_RE.finditer(sample)]
+        positions += [(0, 1), (len(sample), len(sample) + 1), (len(sample) + 5, len(sample) + 6)]
+        for start, end in positions:
+            assert sums(start, end) is NS.sum_guarded(sample, start, end) \
+                is _sum_guarded_reference(sample, start, end), (sample, start)
+            assert markets(start, end) is NS.market_guarded(sample, start, end) \
+                is NS._MarketCitations(sample)(start, end), (sample, start)
+    assert NS.market_guarded(cited, cited.index("60%"), cited.index("60%") + 3) is True
+    assert NS.market_guarded(cited, cited.index("40%"), cited.index("40%") + 3) is False
     assert NS.quantity_guarded("我们给基准扩张40%的概率", 7, 10) is True
     assert NS.quantity_guarded("我们给基准扩张40%的概率", 7, 10, ("A：基准扩张",)) is False
 
@@ -327,6 +406,59 @@ def test_s11_mismatch_strings():
     assert LN.s11_mismatches("# T\n\n基准情景（40%）", _rows((long_name, 0.35), ("E：其它", 0.65)),
                              reference="spine") == [
         f"scenario '{long_name[:28]}': prose 40% vs spine 35%"]
+
+
+def test_s11_leaves_out_numbers_that_are_not_the_reports_own():
+    rows = _rows(("A：基准扩张", 0.35), ("B：电力受限", 0.25), ("C：财务紧缩", 0.25),
+                 ("E：其它", 0.15))
+    md = ("# T\n\n高盛的基准情景（60%）偏乐观。\n\n他写道：“电力受限（50%）”。\n\n"
+          "若进入电力受限情景，则有45%的概率出现财务紧缩。\n\n此前基准情景（55%）偏高。\n\n"
+          "正文：A情景（40%）。")
+    audit = LN.audit_markdown(md, rows)
+    assert [(f["claimed"], f.get("guard")) for f in audit["findings"]] == [
+        (60, "market"), (50, "quote"), (45, "conditional"), (55, "history"), (40, None)]
+    assert LN.s11_mismatches(md, rows, reference="forecast.json") == [
+        "scenario 'A：基准扩张': prose 40% vs forecast.json 35%"]
+
+
+# ------------------------------------------------------------------ cost on model text
+@pytest.mark.parametrize("md", [
+    "# T\n\n基准情景（40%）" + " " * 20000 + "x",               # history tail after a slot
+    "# T\n\n基准情景：" + " " * 20000 + "x",                     # colon slot
+    "# T\n\n基准情景：40%" + " " * 20000 + "x",
+    "# T\n\n基准情景（概率" + " " * 20000 + "x",                  # bracket slot
+    "# T\n\n基准情景（40%" + " " * 20000 + "x",
+    "# T\n\n基准情景" + "* " * 20000 + "x",
+    "# T\n\n40%" + " " * 20000 + "的概率" + " " * 20000 + "x",     # number-first slot
+    "# T\n\nbase case" + " " * 20000 + "at" + " " * 20000 + "x",
+    "# a" + " " * 50000 + "b\n\n基准情景（40%）",                 # heading line
+    "# T\n\n" + "“" * 20000 + "基准情景（40%）",                   # unclosed quotes
+    "# T\n\n" + "若" * 20000 + "基准情景（40%）",
+])
+def test_degenerate_model_text_stays_linear(md):
+    started = time.perf_counter()
+    LN.audit_markdown(md, FFE1_ROWS)
+    assert time.perf_counter() - started < 1.0
+
+
+def test_guards_are_built_once_per_paragraph(monkeypatch):
+    bounds_calls, market_builds = [], []
+    real_bounds, real_market = NS._sentence_bounds, NS._MarketCitations
+
+    def counting_bounds(text):
+        bounds_calls.append(len(text))
+        return real_bounds(text)
+
+    def counting_market(text):
+        market_builds.append(len(text))
+        return real_market(text)
+
+    monkeypatch.setattr(NS, "_sentence_bounds", counting_bounds)
+    monkeypatch.setattr(NS, "_MarketCitations", counting_market)
+    md = "# T\n\n" + "".join(f"第{i}句A情景（40%）。" for i in range(300))
+    audit = LN.audit_markdown(md, FFE1_ROWS)
+    assert audit["count"] == audit["fixable"] == 300
+    assert len(bounds_calls) == len(market_builds) == 1
 
 
 def test_resolve_gate(caplog):

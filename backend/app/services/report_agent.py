@@ -6607,13 +6607,14 @@ class ReportAgent:
 
         对成稿（跳过摘要 blockquote——它只与大纲摘要一并改写，见 _repair_outline_summary_numbers /
         _resync_summary_blockquote，单独改写会破坏与 self._outline_summary 的一致）做
-        logic_number.audit_markdown，把 fixable 槽位的数字换成骨架值；区间/数量/合计守卫命中的
-        unresolved 槽位只计数、绝不改写。全部算完后一次提交：report.markdown_content 与
-        full_report.md（放在语言纯度之后、编辑 lint 与 _stabilize_publish_markdown 之前，稳定器与
-        终审的 SHA 指纹因此覆盖修复后的字节），摘要补同步时连同 outline.summary /
-        self._outline_summary / outline.json。结果记 self._logic_number_repair = {applied,
-        unresolved}。REPORT_NARRATIVE_SYNC 关或骨架无情景时不做任何事（成稿逐字节不变）；任何失败
-        仅告警。"""
+        logic_number.audit_markdown，把 fixable 槽位的数字换成骨架值；区间/数量/合计/市场/引语/
+        条件/历史守卫命中的 unresolved 槽位只计数、绝不改写。全部算完后一次提交：
+        report.markdown_content 与 full_report.md（放在语言纯度之后、编辑 lint 与
+        _stabilize_publish_markdown 之前，稳定器与终审的 SHA 指纹因此覆盖修复后的字节），摘要补同步时
+        连同 outline.summary / self._outline_summary / outline.json。结果记
+        self._logic_number_repair = {applied（截断明细）, applied_count / summary_count / body_count
+        （未截断总数）, unresolved}。REPORT_NARRATIVE_SYNC 关或骨架无情景时不做任何事（成稿逐字节不变）；
+        任何失败仅告警。"""
         if not getattr(Config, "REPORT_NARRATIVE_SYNC", True):
             return
         scenarios = self._spine_scenario_rows()
@@ -6632,8 +6633,12 @@ class ReportAgent:
         except Exception as _ln_err:  # noqa: BLE001 — 确定性修复为增强，失败保留原文
             logger.warning(f"概率槽修复失败（忽略，保留原文）: {_ln_err}")
             return
+        # applied 只留前 LOGIC_NUMBER_FINDINGS_CAP 条明细；*_count 为未截断的总数（摘要 + 正文）。
         self._logic_number_repair = {
             "applied": applied_rows[:_ln.LOGIC_NUMBER_FINDINGS_CAP],
+            "applied_count": len(applied_rows),
+            "summary_count": len(applied_rows) - len(applied),
+            "body_count": len(applied),
             "unresolved": audit["unresolved"],
         }
         if new_summary is not None:

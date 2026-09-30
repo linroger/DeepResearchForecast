@@ -95,7 +95,7 @@ import re
 from bisect import bisect_left, bisect_right
 from collections import Counter
 from functools import lru_cache
-from typing import Any, Dict, List, NamedTuple, Optional, Pattern, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Pattern, Sequence, Set, Tuple
 
 NARRATIVE_SYNC_LOG_CAP = 24
 _EXCERPT_MAX_CHARS = 180
@@ -1094,6 +1094,29 @@ def _sum_shield(text: str, start: int, end: int) -> Optional[Set[_Span]]:
 # REPORT-3's alias-aware slot audit (logic_number.py) skips the numbers the sync skips.
 # These are the sync's own guards under public names, with no change in behaviour; a
 # token span covers a percent with its sign ("40%") or a two-decimal fraction ("0.40").
+# The market and sum guards also come as checkers bound to one text
+# (``market_guard_for`` / ``sum_guard_for``), so checking many tokens of a text stays
+# linear in it.
+
+class _SumShields:
+    """``sum_guarded`` for the tokens of one text: its sentences are found once and
+    each sentence's shield is computed once, on first use."""
+
+    def __init__(self, text: str) -> None:
+        self._text = text
+        self._bounds = _sentence_bounds(text)
+        self._starts = [lo for lo, _ in self._bounds]
+        self._shields: Dict[int, Optional[Set[_Span]]] = {}
+
+    def __call__(self, start: int, end: int) -> bool:
+        sentence = bisect_right(self._starts, start) - 1
+        if sentence < 0 or start >= self._bounds[sentence][1]:
+            return False
+        if sentence not in self._shields:
+            self._shields[sentence] = _sum_shield(self._text, *self._bounds[sentence])
+        shield = self._shields[sentence]
+        return shield is None or (start, end) in shield
+
 
 def range_guarded(text: str, start: int, end: int) -> bool:
     """``text[start:end]`` is a range endpoint or one end of a stated move (range guard)."""
@@ -1110,11 +1133,24 @@ def sum_guarded(text: str, start: int, end: int) -> bool:
     """``text[start:end]`` takes part in a sum statement of its sentence (sum guard):
     the total or an addend of "合计50%", any number of a sentence with an arithmetic
     '+', or of one whose sum word has no identifiable total and addends."""
-    for lo, hi in _sentence_bounds(text):
-        if lo <= start < hi:
-            shield = _sum_shield(text, lo, hi)
-            return shield is None or (start, end) in shield
-    return False
+    return _SumShields(text)(start, end)
+
+
+def sum_guard_for(text: str) -> Callable[[int, int], bool]:
+    """``sum_guarded`` bound to ``text``: ``check(start, end)`` for many of its tokens."""
+    return _SumShields(text)
+
+
+def market_guarded(text: str, start: int, end: int) -> bool:
+    """``text[start:end]`` is cited from a market or an outside forecaster (market
+    guard): a market word earlier in its sentence, within 40 characters before it or
+    right after it ("高盛的基准情景（60%）", "Polymarket prices the bull case at 30%")."""
+    return _MarketCitations(text)(start, end)
+
+
+def market_guard_for(text: str) -> Callable[[int, int], bool]:
+    """``market_guarded`` bound to ``text``: ``check(start, end)`` for many of its tokens."""
+    return _MarketCitations(text)
 
 
 def _format_replacement(text: str, token: _Token, new_pct: int) -> str:
