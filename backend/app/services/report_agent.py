@@ -1653,7 +1653,8 @@ class ReportAgent:
 
         TIME-5 numeric_guard_mode: 已发布二元阈值数值一致性影子检查的模式（off | shadow）。编排器主报告 /
             种子报告传入准入时钉住的 safety_policy_v1.numeric_guard_mode；缺省 None（API 重生成 / 对话路径）
-            读当前 Config.NUMERIC_GUARD_MODE。非法值按 shadow 运行并告警。
+            读当前 Config.NUMERIC_GUARD_MODE。非法值按 shadow 运行并告警。检查本身不改任何产物内容；
+            shadow 在二元提示词里多索取 latest_actual，模型起草的二元与概率可能因此与 off 不同。
         """
         self.graph_id = graph_id
         self.simulation_id = simulation_id
@@ -4102,23 +4103,32 @@ class ReportAgent:
         # TIME-5（NUMERIC_GUARD_MODE，默认 shadow）：已发布二元阈值的数值一致性影子检查——每条二元盖
         # binary['numeric_guard'] 章（阈值 vs 同指标最新实际值：status_quo_contradiction / scale_mismatch /
         # inverted_interval），汇总并入 forecast.quality.numeric_guards（无二元 → not_run，情景区间照查）。
-        # 只合并进既有 dict，绝不重赋 forecast['binary_quality']；不改概率、正文、发布门、终审与政策版本，
-        # 不发 LLM 调用。回测运行以 as_of 为「今天」（晚于 as_of 的实际值不绑定）。失败 → status 'error'。
+        # 只合并进既有 dict，绝不重赋 forecast['binary_quality']；检查本身不改概率、正文、发布门、终审与
+        # 政策版本，不发 LLM 调用（shadow 追加在二元提示词里的 latest_actual 规则属于抽取，可能改变起草）。
+        # 回测运行以钉住的 as_of 为「今天」且要求日期可读（所述期间结束晚于 as_of、或无可读日期的实际值
+        # 都不绑定）；as_of 读不出时不回落系统日期（那会把 as_of 之后的信息当作已知）→ status 'error'。
+        # 失败 → status 'error'。
         if _ng_mode == _numeric_guards.MODE_SHADOW:
             _ng_today = None
+            _ng_error = None
             if _hindcast is not None:
                 try:
                     _ng_today = datetime.strptime(str(_hindcast.get("as_of"))[:10], "%Y-%m-%d").date()
                 except (TypeError, ValueError):
-                    _ng_today = None
+                    _ng_error = "hindcast_as_of_unreadable"
             try:
-                forecast.setdefault("quality", {})["numeric_guards"] = _numeric_guards.stamp_forecast(
-                    forecast, quant_rows=getattr(self, "quantitative", None) or [], mode=_ng_mode,
-                    scale_ratio=getattr(Config, "NUMERIC_GUARD_SCALE_RATIO",
-                                        _numeric_guards.DEFAULT_SCALE_RATIO),
-                    margin=getattr(Config, "NUMERIC_GUARD_STATUS_QUO_MARGIN",
-                                   _numeric_guards.DEFAULT_STATUS_QUO_MARGIN),
-                    today=_ng_today)
+                if _ng_error is not None:
+                    logger.warning(f"数值一致性影子检查跳过：回测钉 as_of 不可读（{_hindcast.get('as_of')!r}）")
+                    forecast.setdefault("quality", {})["numeric_guards"] = {
+                        "mode": _ng_mode, "status": "error", "error": _ng_error}
+                else:
+                    forecast.setdefault("quality", {})["numeric_guards"] = _numeric_guards.stamp_forecast(
+                        forecast, quant_rows=getattr(self, "quantitative", None) or [], mode=_ng_mode,
+                        scale_ratio=getattr(Config, "NUMERIC_GUARD_SCALE_RATIO",
+                                            _numeric_guards.DEFAULT_SCALE_RATIO),
+                        margin=getattr(Config, "NUMERIC_GUARD_STATUS_QUO_MARGIN",
+                                       _numeric_guards.DEFAULT_STATUS_QUO_MARGIN),
+                        today=_ng_today, require_as_of=_hindcast is not None)
             except Exception as _nge:  # noqa: BLE001 — 影子诊断，绝不阻断定稿
                 logger.warning(f"数值一致性影子检查失败（忽略，不影响产物）: {_nge}")
                 try:

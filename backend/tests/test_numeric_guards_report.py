@@ -156,6 +156,8 @@ def test_extractor_off_is_identical_to_the_pre_change_call():
         out = fe.extract_binary_forecasts("# Dossier\n\nBody.", llm, min_count=2,
                                           numeric_guard_mode=mode)
         assert [c["messages"] for c in llm.calls] == [c["messages"] for c in baseline_llm.calls], mode
+        assert [c["max_tokens"] for c in llm.calls] == [c["max_tokens"] for c in baseline_llm.calls] == [
+            4096] * len(llm.calls), mode
         assert json.dumps(out, sort_keys=True) == json.dumps(baseline, sort_keys=True), mode
         assert "latest_actual" not in llm.calls[0]["messages"][0]["content"]
         assert all("latest_actual" not in b for b in out["binary_forecasts"])
@@ -181,6 +183,23 @@ def test_extractor_shadow_asks_for_and_keeps_a_sanitized_latest_actual(monkeypat
                                            "as_of": "2026-08-31", "source_ref": "S5"}
     assert "latest_actual" not in rows["F3"]
     assert "numeric_guard" not in rows["F1"]  # stamping belongs to ReportAgent, not the extractor
+
+
+@pytest.mark.parametrize("min_count,expected", [(2, 4096 + 64 * 10), (15, 4096 + 64 * 15)])
+def test_shadow_draw_gets_room_for_the_latest_actual_field(min_count, expected):
+    rows = [dict(copy.deepcopy(_F13), id=f"F{i}", statement=f"{_F13['statement']} (variant {i})")
+            for i in range(1, min_count + 1)]
+    responses = [{"binary_forecasts": rows}] * 4
+    shadow_llm = FakeLLMClient(json_responses=copy.deepcopy(responses))
+    fe.extract_binary_forecasts("# Dossier\n\nBody.", shadow_llm, min_count=min_count,
+                                numeric_guard_mode="shadow")
+    off_llm = FakeLLMClient(json_responses=copy.deepcopy(responses))
+    fe.extract_binary_forecasts("# Dossier\n\nBody.", off_llm, min_count=min_count, numeric_guard_mode="off")
+    assert shadow_llm.calls[0]["max_tokens"] == expected
+    assert off_llm.calls[0]["max_tokens"] == 4096
+    # the allowance also counts the target propositions a draw must restate
+    assert fe._binary_draw_max_tokens(12, True) == 4096 + 64 * 12
+    assert fe._binary_draw_max_tokens(40, False) == 4096
 
 
 # ── ReportAgent finalization ─────────────────────────────────────────────────
@@ -294,10 +313,52 @@ def test_hindcast_run_judges_future_actuals_against_its_as_of(monkeypatch, repor
     monkeypatch.setattr(ReportAgent, "_hindcast_pin", lambda self: {"as_of": "2026-01-15"})
     monkeypatch.setattr(ra, "hindcast_forecast_block", lambda pin, **kw: {"as_of": pin["as_of"]})
     fc, _text, _ = _run(monkeypatch, report_env, "report_hindcast", "shadow")
-    assert str(seen["today"]) == "2026-01-15"
+    assert str(seen["today"]) == "2026-01-15" and seen["require_as_of"] is True
     f13 = next(b for b in fc["binary_forecasts"] if b["id"] == "F1")["numeric_guard"]
     # the drafted actual is dated 2026-02-01, after the as_of: it never binds
     assert f13["status"] == "unbound" and f13["latest_actual"] is None
+
+
+def test_live_run_does_not_require_dates(monkeypatch, report_env):
+    seen = {}
+    real = ng.stamp_forecast
+
+    def spy(forecast, **kwargs):
+        seen.update(kwargs)
+        return real(forecast, **kwargs)
+
+    monkeypatch.setattr(ng, "stamp_forecast", spy)
+    _run(monkeypatch, report_env, "report_live", "shadow")
+    assert seen["today"] is None and seen["require_as_of"] is False
+
+
+def test_hindcast_with_unreadable_as_of_never_falls_back_to_today(monkeypatch, report_env):
+    def no_stamp(*args, **kwargs):
+        raise AssertionError("stamping against the system date would look past the as-of")
+
+    monkeypatch.setattr(ng, "stamp_forecast", no_stamp)
+    monkeypatch.setattr(ReportAgent, "_hindcast_pin", lambda self: {"as_of": "early 2026"})
+    monkeypatch.setattr(ra, "hindcast_forecast_block", lambda pin, **kw: {"as_of": pin["as_of"]})
+    fc, _text, _ = _run(monkeypatch, report_env, "report_hindcast_bad", "shadow")
+    assert fc["quality"]["numeric_guards"] == {"mode": "shadow", "status": "error",
+                                               "error": "hindcast_as_of_unreadable"}
+    assert len(fc["binary_forecasts"]) == 3 and all("numeric_guard" not in b for b in fc["binary_forecasts"])
+
+
+def test_config_fingerprint_tells_off_from_shadow():
+    from app.utils import cost_accounting
+
+    assert "numeric_guard_mode" in cost_accounting.SAFETY_POLICY_FIELDS
+
+    def fingerprint(policy):
+        options = {"safety_policy_v1": policy}
+        return cost_accounting.config_fingerprint(options, None, forecast_knobs=False)
+
+    base = {"version": "safety-policy/v1", "n_forecast_seeds": 1}
+    off, shadow = fingerprint(dict(base, numeric_guard_mode="off")), fingerprint(dict(base, numeric_guard_mode="shadow"))
+    assert off["safety_policy"]["numeric_guard_mode"] == "off"
+    assert cost_accounting.config_hash(off) != cost_accounting.config_hash(shadow)
+    assert fingerprint(base)["safety_policy"]["numeric_guard_mode"] is None  # pinned before the key
 
 
 def test_env_example_documents_the_three_knobs():

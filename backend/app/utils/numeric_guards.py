@@ -20,21 +20,28 @@ base_rate_anchor cites a source marker ([S<n>]); a misparse is a reading error
 that no citation justifies.  A stamp is ``flagged`` iff it carries an
 unjustified finding.
 
+A negated event ("never falls below 8%", "fails to recover above 10%", "未超过")
+is read with the inverted comparator its YES outcome needs; ranges are read
+only where they are ranges ("~" before a figure means "approximately", "from
+40% to 30%" is a trajectory, "the 2026 ~$700B level" is a year and an amount).
+
 Binding order: the binary's own ``latest_actual`` field (drafted together with
 the binary under NUMERIC_GUARD_MODE=shadow) when its value parses, its as_of is
-not in the future and its unit is compatible; else the single research
-quantitative row (value_type ``actual`` or missing) whose metric tokens (Latin
-words plus CJK bigrams) match the claim's metric span with Jaccard >= 0.5 and a
-margin >= 0.15 over the runner-up, with a compatible unit; else ``unbound``.
-Units are compatible when unit class and currency are equal and the class is
-not ``unknown``: a measure such as GW or tonnes never binds, because the guard
-cannot tell GW from GWh.
+already known (the stated period has ended by ``today``) and its unit is
+compatible; else the single research quantitative row that states an actual
+(see :func:`_row_is_actual`) whose metric tokens (Latin words plus CJK bigrams)
+match the claim's metric span with Jaccard >= 0.5 and a margin >= 0.15 over
+the runner-up, with a compatible unit; else ``unbound``.  Units are compatible
+when unit class and currency are equal and the class is not ``unknown``: a
+measure such as GW or tonnes never binds, because the guard cannot tell GW
+from GWh.
 
 Shadow only: :func:`stamp_forecast` writes ``binary['numeric_guard']`` stamps
 and returns the ``quality.numeric_guards`` summary.  Nothing here changes a
-probability, the report markdown, the publish gate or the final audit; enforce
-mode is deliberately not implemented (it needs prospective evidence, ADR 0002
-I-21).
+probability, the report markdown, the publish gate or the final audit (the
+latest_actual request that shadow adds to the binary prompt is the extractor's
+and can shift what the model drafts); enforce mode is deliberately not
+implemented (it needs prospective evidence, ADR 0002 I-21).
 
 Pure and stdlib-only; no I/O; the public functions never raise (an internal
 error yields ``unchecked`` / ``None`` / ``[]`` / an ``error`` summary).
@@ -47,6 +54,8 @@ import math
 import re
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+
+from . import quant_typing
 
 SCHEMA = 1
 
@@ -87,7 +96,8 @@ _EPS = 1e-9
 # ── Quantity parsing ─────────────────────────────────────────────────────────
 _MONTHS = (r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?"
            r"|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)")
-_NUMBER_RE = re.compile(r"(?<![\d.,])(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d)")
+# A number with thousands separators, decimals and an optional exponent ("1e-6").
+_NUMBER_RE = re.compile(r"(?<![\d.,])(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][-+−]?\d+)?(?!\d)")
 # Calendar dates masked before scanning (length-preserving): ISO days, US days,
 # 年月(日), and a year followed by a two-digit month or fiscal-year tail.
 _DATE_MASK_RES = (
@@ -130,23 +140,29 @@ _PREFIX_AT_RE = re.compile(r"(?P<tok>" + _PREFIX_TOKEN + r")[ \u00a0]?", re.I)
 _SIGN_AT_RE = re.compile(r"[-−][ \u00a0]?")
 
 _KIND_CLASS, _KIND_MEASURE, _KIND_SCALE, _KIND_CURRENCY = "class", "measure", "scale", "currency"
+# A time span ("30 days", "3个月", "1个交易日"): a measure that states a window or a
+# persistence requirement, never the level a binary resolves on.
+_KIND_DURATION = "duration"
 # A single-letter scale (k/m/b/t): before a "/" it reads as a scale only after a currency
 # ("$5B/yr"), never in "500 t/y" or "3% m/m".
 _KIND_LETTER_SCALE = "letter_scale"
 _NOT_LETTER = r"(?![A-Za-z])"
 # Unit tokens read after a number (and anywhere in a unit string), tried in
-# order at one position: classes before measures before scale words before
-# currencies before the single-letter scales, and 万亿 before 亿/万.  Reading
-# stops after a class (%, pp, bp) or a measure: nothing scales a percentage.
+# order at one position: classes before measures (durations included) before
+# scale words before currencies before the single-letter scales, and 万亿
+# before 亿/万.  Reading stops after a class (%, pp, bp) or a measure: nothing
+# scales a percentage.
 _UNIT_TOKENS: Tuple[Tuple[re.Pattern, str, Any], ...] = tuple(
     (re.compile(pattern, re.I), kind, value) for pattern, kind, value in (
         (r"percentage[ \-]?points?" + _NOT_LETTER + r"|pp(?:ts?)?" + _NOT_LETTER + r"|个百分点|百分点",
          _KIND_CLASS, "pp"),
         (r"basis[ \-]?points?" + _NOT_LETTER + r"|bps?" + _NOT_LETTER + r"|个基点|基点", _KIND_CLASS, "bp"),
         (r"%|％|per[ \-]?cent" + _NOT_LETTER + r"|percent" + _NOT_LETTER, _KIND_CLASS, "percent"),
-        (r"(?:[kmgt]wh?|tonnes?|tons?|mt|kt|bbl|barrels?|mb/d|b/d|bpd|km|kg|hours?|days?|weeks?"
-         r"|months?|years?|times|x)" + _NOT_LETTER + r"|倍|千瓦时|千瓦|兆瓦|吉瓦|太瓦|吨|桶|公里|小时|个月|天|年",
-         _KIND_MEASURE, None),
+        (r"(?:(?:consecutive|straight|successive|calendar|business|trading)[ \-]+){0,2}"
+         r"(?:sessions?|hours?|days?|weeks?|months?|quarters?|years?)" + _NOT_LETTER
+         + r"|个?交易日|个季度|个星期|小时|个月|星期|天|周|年", _KIND_DURATION, None),
+        (r"(?:[kmgt]wh?|tonnes?|tons?|mt|kt|bbl|barrels?|mb/d|b/d|bpd|km|kg|times|x)" + _NOT_LETTER
+         + r"|倍|千瓦时|千瓦|兆瓦|吉瓦|太瓦|吨|桶|公里", _KIND_MEASURE, None),
         (r"trillions?" + _NOT_LETTER + r"|(?:trn|tn)" + _NOT_LETTER, _KIND_SCALE, 10 ** 12),
         (r"billions?" + _NOT_LETTER + r"|(?:bln|bn)" + _NOT_LETTER, _KIND_SCALE, 10 ** 9),
         (r"millions?" + _NOT_LETTER + r"|(?:mln|mn)" + _NOT_LETTER, _KIND_SCALE, 10 ** 6),
@@ -178,8 +194,17 @@ _UNIT_TOKENS: Tuple[Tuple[re.Pattern, str, Any], ...] = tuple(
 _UNIT_SYMBOL_RE = re.compile(_PREFIX_TOKEN, re.I)
 _UNIT_GAP_RE = re.compile(r"[ \u00a0]{0,2}")
 _MAX_UNIT_TOKENS = 4
-_RANGE_SEP_RE = re.compile(r"[ \u00a0]*(?:[–—\u2011~～]|-(?![ \u00a0]*[A-Za-z])|to(?![A-Za-z])|至|到)[ \u00a0]*",
+# Range separators.  ASCII "~" separates only when written tight between two
+# numbers ("700~725"): with a space or before a currency ("the 2026 ~$700B
+# level") it means "approximately".
+_RANGE_SEP_RE = re.compile(r"~(?=\d)|[ \u00a0]*(?:[–—\u2011～]|-(?![ \u00a0]*[A-Za-z])|to(?![A-Za-z])|至|到)[ \u00a0]*",
                            re.I)
+# A tight hyphen, dash or tilde ("2000-2500亿元", "2000~2500亿元"), the only
+# separator after which a bare year-like first bound still opens a range with a
+# marked second bound.
+_TIGHT_DASH_SEPS = frozenset(("-", "–", "—", "\u2011", "~", "～"))
+# "from 40% to 30%", "从40%至30%": a trajectory, not an interval.
+_TRAJECTORY_BEFORE_RE = re.compile(r"(?:\bfrom|从|由)[ \u00a0]*$", re.I)
 _AND_SEP_RE = re.compile(r"[ \u00a0]*(?:and(?![A-Za-z])|&|和|与)[ \u00a0]*", re.I)
 
 
@@ -190,11 +215,11 @@ def _ascii_letter(char: str) -> bool:
 def _read_units(text: str, pos: int, *, symbols: bool = False, currency_known: bool = False,
                 limit: int = _MAX_UNIT_TOKENS) -> Tuple[Dict[str, Any], int]:
     """Consecutive unit tokens from ``pos``: ``({scale, currency, cls, measure,
-    cny_mark}, end)``.  Stops at the first non-token and after a class or a
-    measure.  ``currency_known`` (a prefix such as $) lets a single-letter scale
-    stand before a slash ("$5B/yr")."""
+    duration, cny_mark}, end)``.  Stops at the first non-token and after a class
+    or a measure (a duration is a measure).  ``currency_known`` (a prefix such as
+    $) lets a single-letter scale stand before a slash ("$5B/yr")."""
     marks: Dict[str, Any] = {"scale": None, "currency": None, "cls": None, "measure": False,
-                             "cny_mark": False}
+                             "duration": False, "cny_mark": False}
     end = pos
     for _ in range(limit):
         gap = _UNIT_GAP_RE.match(text, end)
@@ -220,8 +245,9 @@ def _read_units(text: str, pos: int, *, symbols: bool = False, currency_known: b
         token = found.group(0)
         if kind == _KIND_CLASS:
             marks["cls"] = marks["cls"] or value
-        elif kind == _KIND_MEASURE:
+        elif kind in (_KIND_MEASURE, _KIND_DURATION):
             marks["measure"] = True
+            marks["duration"] = kind == _KIND_DURATION
         elif kind in (_KIND_SCALE, _KIND_LETTER_SCALE):
             marks["scale"] = (marks["scale"] or 1) * value
         else:
@@ -229,7 +255,7 @@ def _read_units(text: str, pos: int, *, symbols: bool = False, currency_known: b
             marks["cny_mark"] = marks["cny_mark"] or code == "CNY"
             marks["currency"] = marks["currency"] or code
         end = found.end()
-        if kind in (_KIND_CLASS, _KIND_MEASURE):
+        if kind in (_KIND_CLASS, _KIND_MEASURE, _KIND_DURATION):
             break
     return marks, end
 
@@ -298,7 +324,15 @@ def _read_side(text: str, pos: int, *, allow_prefix_at: bool) -> Optional[Dict[s
     number = _NUMBER_RE.match(text, at)
     if not number:
         return None
-    return _finish_side(text, pos, number, prefix, negative)
+    side = _finish_side(text, pos, number, prefix, negative)
+    return None if _is_identifier(text, side, number) else side
+
+
+def _is_identifier(text: str, side: Mapping[str, Any], number: re.Match) -> bool:
+    """A bare number glued to letters that are no unit ("28nm", "5G", "10th",
+    "1990s"): a name or an ordinal, not a quantity."""
+    return (side["prefix"] is None and not _has_marks(side["marks"])
+            and _ascii_letter(text[number.end():number.end() + 1]))
 
 
 def _finish_side(text: str, start: int, number: re.Match, prefix: Optional[str],
@@ -310,7 +344,7 @@ def _finish_side(text: str, start: int, number: re.Match, prefix: Optional[str],
     if prefix_currency == "JPY" and (prefix or "") in ("¥", "￥") and marks["cny_mark"]:
         currency = "CNY"  # ¥ with 元 is renminbi
     marks = dict(marks, currency=currency)
-    value = Decimal(number.group(0).replace(",", ""))
+    value = Decimal(number.group(0).replace(",", "").replace("−", "-"))
     return {"start": start, "end": end, "number": number.group(0), "value": -value if negative else value,
             "marks": marks, "prefix": prefix}
 
@@ -322,6 +356,7 @@ def _inherit(side: Dict[str, Any], other: Mapping[str, Any]) -> Dict[str, Any]:
             marks[key] = other[key]
     if not marks.get("measure") and other.get("measure") and not marks.get("cls"):
         marks["measure"] = True
+        marks["duration"] = bool(other.get("duration"))
     return dict(side, marks=marks)
 
 
@@ -329,11 +364,30 @@ def _side_value(side: Mapping[str, Any]) -> float:
     return float(side["value"] * Decimal(side["marks"].get("scale") or 1))
 
 
+def _range_blocked(masked: str, side_a: Mapping[str, Any], sep: re.Match, side_b: Mapping[str, Any]) -> bool:
+    """True when "A <sep> B" reads as two figures rather than one range: sides
+    measuring different things ("5% to $10 billion"), a marked amount before a
+    bare year ("10% to 2030") or a bare year before a marked amount ("2026 -
+    $700B") -- except a tight dash rising to an unprefixed amount ("2000-2500
+    亿元"), the one written range whose first bound looks like a year."""
+    kind_a, kind_b = _kind(side_a["marks"]), _kind(side_b["marks"])
+    if kind_a and kind_b and kind_a != kind_b:
+        return True
+    if _has_marks(side_a["marks"]) and _bare_year_side(side_b):
+        return True
+    if _bare_year_side(side_a) and (_has_marks(side_b["marks"]) or side_b["prefix"] is not None):
+        return not (masked[sep.start():sep.end()] in _TIGHT_DASH_SEPS and side_b["prefix"] is None
+                    and side_b["value"] >= side_a["value"])
+    return False
+
+
 def _scan(text: str, *, and_ranges: bool = False) -> List[Dict[str, Any]]:
     """Every number in ``text`` as a hit: ``{start, end, raw, date, year_like}``
     for a calendar date, else also ``{lo, hi, unit_class, currency,
-    scale_explicit, range, has_marks}``.  ``and_ranges`` also reads "A and B"
-    as a range (the body of a between-claim)."""
+    scale_explicit, range, has_marks, duration}``.  ``and_ranges`` also reads "A
+    and B" as a range (the body of a between-claim).  A number glued to letters
+    that are no unit ("28nm") is skipped, and "from A to B" is two figures (a
+    trajectory), never a range."""
     source = str(text or "")
     masked = _mask_dates(source)
     hits: List[Dict[str, Any]] = []
@@ -371,19 +425,20 @@ def _scan(text: str, *, and_ranges: bool = False) -> List[Dict[str, Any]]:
             pos = number.end()
             continue
         side_a = _finish_side(masked, side_start, number, prefix, negative)
+        if _is_identifier(masked, side_a, number):
+            pos = number.end()
+            continue
         side_b = None
-        for sep_re in ((_RANGE_SEP_RE, _AND_SEP_RE) if and_ranges else (_RANGE_SEP_RE,)):
-            sep = sep_re.match(masked, side_a["end"])
-            if sep:
-                side_b = _read_side(masked, sep.end(), allow_prefix_at=True)
-                if side_b:
-                    break
+        if not _TRAJECTORY_BEFORE_RE.search(masked, max(0, side_start - 8), side_start):
+            for sep_re in ((_RANGE_SEP_RE, _AND_SEP_RE) if and_ranges else (_RANGE_SEP_RE,)):
+                sep = sep_re.match(masked, side_a["end"])
+                if sep:
+                    side_b = _read_side(masked, sep.end(), allow_prefix_at=True)
+                    if side_b is not None and _range_blocked(masked, side_a, sep, side_b):
+                        side_b = None
+                    if side_b is not None:
+                        break
         year_like = _bare_year_side(side_a)
-        if side_b is not None:
-            kind_a, kind_b = _kind(side_a["marks"]), _kind(side_b["marks"])
-            if (kind_a and kind_b and kind_a != kind_b) or (
-                    _has_marks(side_a["marks"]) and _bare_year_side(side_b)):
-                side_b = None  # "5% to $10 billion", "10% to 2030": two figures, not one range
         if side_b is not None:
             b_bare = _bare_year_side(side_b)
             side_a, side_b = _inherit(side_a, side_b["marks"]), _inherit(side_b, side_a["marks"])
@@ -404,7 +459,7 @@ def _scan(text: str, *, and_ranges: bool = False) -> List[Dict[str, Any]]:
             "year_like": year_like, "lo": lo, "hi": hi, "unit_class": unit_class,
             "currency": marks.get("currency") if unit_class == "currency" else None,
             "scale_explicit": bool(marks.get("scale")), "range": side_b is not None,
-            "has_marks": _has_marks(marks) or prefix is not None,
+            "has_marks": _has_marks(marks) or prefix is not None, "duration": bool(marks.get("duration")),
         })
         pos = max(end, number.end())
     return hits
@@ -414,7 +469,7 @@ def _unit_marks(unit: str) -> Dict[str, Any]:
     """Unit tokens anywhere in a unit string ("USD billion", "% of GDP", "亿元")."""
     text = str(unit or "")
     total: Dict[str, Any] = {"scale": None, "currency": None, "cls": None, "measure": False,
-                             "cny_mark": False}
+                             "duration": False, "cny_mark": False}
     i = 0
     while i < len(text):
         char = text[i]
@@ -430,6 +485,7 @@ def _unit_marks(unit: str) -> Dict[str, Any]:
         total["currency"] = total["currency"] or marks["currency"]
         total["cls"] = total["cls"] or marks["cls"]
         total["measure"] = total["measure"] or marks["measure"]
+        total["duration"] = total["duration"] or marks["duration"]
         i = end
     return total
 
@@ -483,17 +539,19 @@ def parse_quantity(text: Any, unit: Any = "") -> Optional[Dict[str, Any]]:
 
 
 # ── Threshold claims ─────────────────────────────────────────────────────────
-_AUX = r"(?:(?:does|do|did|will|would|shall|should|could|may|might|to)\s+)?"
 # (pattern, comparator, strict): a strict comparator ("over", "under", "top")
 # pairs only with a number right after it, so "over the next 3 years" is not a
-# threshold; "the top 3" / "a top 10" are rankings, never a comparator.
+# threshold; "the top 3" / "a top 10" are rankings, never a comparator.  A
+# negated event ("does not exceed", "never falls below", "未超过") is read as
+# its comparator plus the negator before it (:func:`_negation`).
 _COMPARATORS: Tuple[Tuple[re.Pattern, str, bool], ...] = tuple(
     (re.compile(pattern, re.I), comparator, strict) for pattern, comparator, strict in (
         (r"\bat\s+most\b|\bno\s+(?:more|greater|higher)\s+than\b|\bnot\s+(?:more|greater|higher)\s+than\b"
-         r"|\b" + _AUX + r"not\s+(?:exceed(?:s|ed|ing)?|surpass(?:es|ed|ing)?|top|go\s+above"
-         r"|rise\s+above|climb\s+above)\b|\bnever\s+exceeds?\b", "<=", False),
+         r"|\bat\s+or\s+(?:below|under)\b|\bequal\s+to\s+or\s+(?:less|lower|fewer)\s+than\b"
+         r"|\b(?:less|lower|fewer)\s+than\s+or\s+equal\s+to\b", "<=", False),
         (r"\bat\s+least\b|\bno\s+(?:less|fewer|lower)\s+than\b|\bnot\s+(?:less|fewer|lower)\s+than\b"
-         r"|\b" + _AUX + r"not\s+(?:fall|drop|dip|go|slip)\s+below\b", ">=", False),
+         r"|\bat\s+or\s+(?:above|over)\b|\bequal\s+to\s+or\s+(?:greater|more|higher)\s+than\b"
+         r"|\b(?:greater|more|higher)\s+than\s+or\s+equal\s+to\b", ">=", False),
         (r"\bbetween\b", "between", False),
         (r"\b(?:ris(?:e|es|ing|en)|rose|climb(?:s|ed|ing)?|trad(?:e|es|ed|ing)|clos(?:e|es|ed|ing)"
          r"|settl(?:e|es|ed|ing)|stay(?:s|ed|ing)?|remain(?:s|ed|ing)?|break(?:s|ing)?|broke)\s+above\b"
@@ -510,12 +568,40 @@ _COMPARATORS: Tuple[Tuple[re.Pattern, str, bool], ...] = tuple(
         (r"≤|<=", "<=", False),
         (r"(?<![<>=])>(?!=)", ">", False),
         (r"(?<![<>=])<(?!=)", "<", False),
-        (r"不超过|不高于|至多|不多于|不大于|最多", "<=", False),
-        (r"不低于|不少于|至少|不小于|最少", ">=", False),
+        (r"不超过|不高于|至多|不多于|不大于|最多|(?:达到|等于)或(?:低于|少于|小于)", "<=", False),
+        (r"不低于|不少于|至少|不小于|最少|(?:达到|等于)或(?:超过|高于|大于|超出)", ">=", False),
         (r"介于|在(?=[^，。；;,\n]{1,40}?之间)", "between", False),
         (r"超过|高于|大于|突破|超出|多于", ">", False),
         (r"低于|少于|跌破|小于", "<", False),
     ))
+# Comparators written after the number ("7500亿美元以上", "5% or more").
+_SUFFIX_COMPARATORS: Tuple[Tuple[re.Pattern, str], ...] = tuple(
+    (re.compile(pattern, re.I), comparator) for pattern, comparator in (
+        (r"[ \u00a0]*(?:[及或]?以上|or\s+(?:more|higher|greater|above|over)\b|and\s+(?:above|over)\b)", ">="),
+        (r"[ \u00a0]*(?:[及或]?以下|or\s+(?:less|lower|fewer|below|under)\b|and\s+(?:below|under)\b)", "<="),
+    ))
+# The comparator of the negated event: "does not exceed K" holds iff the level is <= K.
+_NEGATED = {">": "<=", ">=": "<", "<": ">=", "<=": ">", "between": "between"}
+_NEGATION_WINDOW = 60
+# EN negators, read within three words before the comparator that open no new
+# clause ("fails to recover above", "won't exceed", "whether or not" and "not
+# only" excluded); ZH negators right before it, after at most an adverb
+# ("不会再跌破", "未超过") -- or, for a suffix comparator, before the verb that
+# states the level ("未达到1万亿元以上").
+_EN_NEGATOR = (r"(?:(?<![A-Za-z'’])(?:never|(?<!or )not(?!\s+(?:only|just|merely|necessarily)\b)|cannot|unless"
+               r"|no\s+longer|fail(?:s|ed|ing)?\s+to|without)(?![A-Za-z])"
+               r"|(?<![A-Za-z'’])[A-Za-z]+n['’]t(?![A-Za-z]))")
+_EN_CLAUSE_BREAK = r"(?:and|or|but|nor|while|whereas|whether|if|when|although|though|because|which|that|who|so|then)"
+_NEGATION_EN_RE = re.compile(
+    _EN_NEGATOR + r"(?:\s+(?!" + _EN_CLAUSE_BREAK + r"\b)[A-Za-z][A-Za-z'’\-]*){0,3}\s+$", re.I)
+_ZH_NEGATOR = r"(?:从来没有|从未|从不|并未|尚未|未能|未曾|没有|没能|不会|不能|不再|不得|无法|未|没|不)"
+_ZH_ADVERB = r"(?:再次|再度|能够|可能|再|能|会|曾|有)?"
+_NEGATION_ZH_RE = re.compile(_ZH_NEGATOR + _ZH_ADVERB + r"\s*$")
+_NEGATION_ZH_LEVEL_RE = re.compile(
+    _ZH_NEGATOR + _ZH_ADVERB
+    + r"(?:达到|达|维持在|保持在|维持|保持|站上|站稳|回到|回升至|升至|涨至|增至|降至|跌至|处于|在|为|是)?\s*$")
+_NEGATOR_RE = re.compile(_EN_NEGATOR + "|" + _ZH_NEGATOR, re.I)
+_NEVER_RE = re.compile(r"\bnever\b|从来没有|从未|从不", re.I)
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 _STRICT_GAP_RE = re.compile(r"\s*(?:(?:about|around|approximately|approx\.?|roughly|nearly|almost|some|~|≈"
                             r"|约)\s*)?", re.I)
@@ -523,17 +609,22 @@ _GAP_PUNCT_RE = re.compile(r"[,;:!?，；：。！？\n]")
 _GAP_MAX_EN = 30
 _GAP_MAX_ZH = 12
 _CLAUSE_SPLIT_RE = re.compile(r"[;；。\n]|(?<!\d)\.(?!\d)")
-# A decline verb or noun right before a comparator makes the number a size of
-# decline ("contracts by more than 1%", "falls more than 20%", "下降超过10%"),
-# not a level the latest actual can be compared with: no pair.
+# A size-of-change construction makes the number a size of decline, not a level
+# the latest actual can be compared with: no pair.  "<decline> by" and "a
+# <decline> of" (and 跌幅/降幅) do so before any comparator ("contracts by more
+# than 1%", "falls by between 5% and 10%"); a bare decline verb only before a
+# magnitude comparator ("falls more than 20%", "下降超过10%") -- never before a
+# level comparator ("sinks below $100", "falls between 28% and 38%").
 _DECLINE_VERBS = (r"fall(?:s|ing|en)?|fell|drop(?:s|ped|ping)?|declin(?:e|es|ed|ing)|decreas(?:e|es|ed|ing)"
                   r"|contract(?:s|ed|ing)?|shr(?:ink|inks|ank|inking)|slump(?:s|ed|ing)?|plung(?:e|es|ed|ing)"
                   r"|los(?:e|es|t|ing)|slid(?:e|es|ing)?|dip(?:s|ped|ping)?|tumbl(?:e|es|ed|ing)"
                   r"|s(?:ink|inks|ank|inking)|cut(?:s|ting)?")
-_DECLINE_BEFORE_RE = re.compile(
-    r"(?:\b(?:" + _DECLINE_VERBS + r")(?:\s+[A-Za-z']+){0,3}?\s+by|\b(?:" + _DECLINE_VERBS
-    + r")|\b(?:decline|drop|fall|contraction|loss|cut|decrease|reduction)\s+of)\s*$"
-    r"|(?:下降|下跌|减少|萎缩|回落|下滑|缩减|收缩|跌幅|降幅|减幅)了?\s*$", re.I)
+_DECLINE_SIZE_BEFORE_RE = re.compile(
+    r"(?:\b(?:" + _DECLINE_VERBS + r")(?:\s+[A-Za-z']+){0,3}?\s+by"
+    r"|\b(?:decline|drop|fall|contraction|loss|cut|decrease|reduction)\s+of)\s*$|(?:跌幅|降幅|减幅)\s*$", re.I)
+_DECLINE_VERB_BEFORE_RE = re.compile(
+    r"\b(?:" + _DECLINE_VERBS + r")\s*$|(?:下降|下跌|减少|萎缩|回落|下滑|缩减|收缩)了?\s*$", re.I)
+_LEVEL_COMPARATOR_RE = re.compile(r"below|under|between|跌破|介于|^在$", re.I)
 
 _EVENT_AVERAGE_RE = re.compile(r"\baverag(?:e|es|ed|ing)\b|\bmean\b|平均|均值", re.I)
 _EVENT_TOUCH_RE = re.compile(
@@ -586,14 +677,69 @@ def _is_threshold_hit(hit: Mapping[str, Any]) -> bool:
     return not hit["date"] and not hit.get("year_like")
 
 
+def _negation(clause: str, at: int, *, level_verb: bool = False) -> Optional[Dict[str, Any]]:
+    """The negator governing the comparator that starts at ``at`` (with
+    ``level_verb``, the number of a suffix comparator): ``{'start', 'never'}``,
+    or None when the reading is not negated -- no negator, or an even number of
+    them ("does not fail to exceed")."""
+    low = max(0, at - _NEGATION_WINDOW)
+    before = clause[low:at]
+    for pattern in (_NEGATION_EN_RE, _NEGATION_ZH_LEVEL_RE if level_verb else _NEGATION_ZH_RE):
+        match = pattern.search(before)
+        if match is None:
+            continue
+        if len(_NEGATOR_RE.findall(match.group(0))) % 2 == 0:
+            return None
+        return {"start": low + match.start(), "never": bool(_NEVER_RE.search(match.group(0)))}
+    return None
+
+
+def _pair(clause: str, start: int, comparator: str, hit: Dict[str, Any], *,
+          level_verb: bool = False) -> Dict[str, Any]:
+    """One reading: ``{start, comparator, hit, negated, never}``.  A negated
+    event takes the inverted comparator and starts at its negator, so the text
+    before ``start`` names the metric."""
+    negation = _negation(clause, start, level_verb=level_verb)
+    if negation is None:
+        return {"start": start, "comparator": comparator, "hit": hit, "negated": False, "never": False}
+    return {"start": negation["start"], "comparator": _NEGATED[comparator], "hit": hit, "negated": True,
+            "never": negation["never"]}
+
+
+def _size_of_change(clause: str, start: int, end: int) -> bool:
+    before = clause[max(0, start - 60):start]
+    if _DECLINE_SIZE_BEFORE_RE.search(before):
+        return True
+    return not _LEVEL_COMPARATOR_RE.search(clause[start:end]) and bool(_DECLINE_VERB_BEFORE_RE.search(before))
+
+
+def _suffix_comparators(clause: str, hits: List[Dict[str, Any]]) -> List[Tuple[Dict[str, Any], str, int, int]]:
+    """``(hit, comparator, span start, span end)`` for each threshold number
+    followed by a suffix comparator ("以上", "or more")."""
+    found = []
+    for hit in hits:
+        if not _is_threshold_hit(hit):
+            continue
+        for pattern, comparator in _SUFFIX_COMPARATORS:
+            match = pattern.match(clause, hit["end"])
+            if match and match.end() > match.start():
+                found.append((hit, comparator, match.start(), match.end()))
+                break
+    return found
+
+
 def _pairs(clause: str) -> List[Dict[str, Any]]:
-    """Comparator-number pairs in one clause."""
-    comparators = _comparator_matches(clause)
+    """Comparator-number pairs in one clause (see :func:`_pair`): a comparator
+    before its number, then a suffix comparator after a number no comparator
+    before it claimed.  A size-of-change construction yields no pair."""
     hits = _scan(clause)
+    suffixes = _suffix_comparators(clause, hits)
+    comparators = [item for item in _comparator_matches(clause)
+                   if not any(item[0] < end and start < item[1] for _h, _c, start, end in suffixes)]
     pairs: List[Dict[str, Any]] = []
     for index, (start, end, comparator, strict) in enumerate(comparators):
         next_start = comparators[index + 1][0] if index + 1 < len(comparators) else len(clause)
-        if _DECLINE_BEFORE_RE.search(clause, max(0, start - 60), start):
+        if _size_of_change(clause, start, end):
             continue
         cjk = bool(_CJK_RE.match(clause[start:start + 1]))
         if comparator == "between":
@@ -602,12 +748,23 @@ def _pairs(clause: str) -> List[Dict[str, Any]]:
             if hit is None or not hit.get("range"):
                 continue
         else:
-            hit = next((h for h in hits if h["start"] >= end), None)
+            # A bare year after the comparator is a reference ("exceeds its 2019 peak of $5B",
+            # "the 2026 ~$700B level"): the figure it introduces is the threshold.  A strict
+            # comparator pairs only with the number right after it.
+            hit = next((h for h in hits if h["start"] >= end
+                        and (strict or h["date"] or not h.get("year_like"))), None)
             if hit is None or hit["start"] >= next_start:
                 continue
         if not _gap_ok(clause[end:hit["start"]], strict=strict, cjk=cjk) or not _is_threshold_hit(hit):
             continue
-        pairs.append({"start": start, "comparator": comparator, "hit": hit})
+        pairs.append(_pair(clause, start, comparator, hit))
+    paired = {pair["hit"]["start"] for pair in pairs}
+    for hit, comparator, _start, _end in suffixes:
+        before = clause[max(0, hit["start"] - 60):hit["start"]]
+        if hit["start"] in paired or _DECLINE_SIZE_BEFORE_RE.search(before) \
+                or _DECLINE_VERB_BEFORE_RE.search(before):
+            continue  # already read, or a size of decline ("下降10%以上", "falls 20% or more")
+        pairs.append(_pair(clause, hit["start"], comparator, hit, level_verb=True))
     return pairs
 
 
@@ -618,25 +775,35 @@ def _clauses(criteria: str) -> List[str]:
 def _parse_threshold_claim(statement: Any, criteria: Any) -> Optional[Dict[str, Any]]:
     statement_text = str(statement or "")
     criteria_text = str(criteria or "")
-    chosen, pairs = "", []
+    chosen, levels, persistence = "", [], False
     for clause in [statement_text, *_clauses(criteria_text)]:
         pairs = _pairs(clause)
-        if pairs:
+        # A time span ("for at least 30 days", "至少1个交易日") is a window or a
+        # persistence requirement, never the level: the clause's levels decide.
+        levels = [pair for pair in pairs if not pair["hit"].get("duration")]
+        if levels:
             chosen = clause
+            persistence = len(levels) < len(pairs)
             break
-    if len(pairs) != 1:
+    if len(levels) != 1:
         return None
-    pair = pairs[0]
+    pair = levels[0]
     hit = pair["hit"]
     comparator = pair["comparator"]
     threshold_hi = hit["hi"] if (hit.get("range") or comparator == "between") else None
+    event = _event_type(f"{statement_text} {criteria_text}")
+    if event != "average" and (pair["never"] or persistence):
+        # "never falls below K" negates "falls below K at some point"; a level held for a
+        # span, or on at least one day, is path-dependent: both read as a touch.
+        event = "touch"
     return {
         "comparator": comparator,
         "threshold": hit["lo"],
         "threshold_hi": threshold_hi,
         "unit_class": hit["unit_class"],
         "currency": hit["currency"],
-        "event_type": _event_type(f"{statement_text} {criteria_text}"),
+        "event_type": event,
+        "negated": pair["negated"],
         "text": chosen.strip()[:_CLAIM_TEXT_MAX_CHARS],
         "metric": chosen[:pair["start"]].strip()[:_CLAIM_TEXT_MAX_CHARS],
         "raw": hit["raw"],
@@ -647,13 +814,20 @@ def parse_threshold_claim(statement: Any, criteria: Any) -> Optional[Dict[str, A
     """The single numeric threshold a binary resolves on, or None.
 
     Returns ``{'comparator', 'threshold', 'threshold_hi', 'event_type', 'text'}``
-    plus ``unit_class``, ``currency``, ``metric`` (the span before the
-    comparator, used to bind research rows) and ``raw``.  ``comparator`` is one
-    of > >= < <= between; ``threshold``/``threshold_hi`` are base-unit numbers as
-    written (``threshold_hi`` for a between or written range, else None).
-    ``event_type`` is touch | average | settle | unknown.  The statement is read
-    first, then each criteria clause; zero or two+ comparator-number pairs in
-    the chosen clause -> None.
+    plus ``negated``, ``unit_class``, ``currency``, ``metric`` (the span before
+    the comparator or its negator, used to bind research rows) and ``raw``.
+    ``comparator`` is one of > >= < <= between -- for a negated event ("does not
+    exceed", "never falls below", "未超过", "fails to recover above") the
+    inverted comparator the YES outcome needs, with ``negated`` True.
+    Comparators written after the number ("以上", "以下", "or more", "or less")
+    count too.  ``threshold``/``threshold_hi`` are base-unit numbers as written
+    (``threshold_hi`` for a between or written range, else None).
+    ``event_type`` is touch | average | settle | unknown; "never ..." and a
+    level held for a time span ("for at least 30 days", "至少1个交易日") read as
+    touch (a negated touch holds only while the level never crosses).  The
+    statement is read first, then each criteria clause; zero or two+
+    comparator-number pairs in the chosen clause -> None (time spans are not
+    counted).
     """
     try:
         return _parse_threshold_claim(statement, criteria)
@@ -698,19 +872,65 @@ def _jaccard(a: frozenset, b: frozenset) -> float:
     return len(a & b) / len(union) if union else 0.0
 
 
-_AS_OF_RE = re.compile(r"^\s*(\d{4})(?:[-/.](\d{1,2})(?:[-/.](\d{1,2}))?)?")
+# The stated date or period of an as_of / period_end value, finest first.
+_YEAR = r"((?:19|20)\d{2})"
+_PERIOD_DAY_RE = re.compile(r"(?<!\d)" + _YEAR + r"[-/.](\d{1,2})[-/.](\d{1,2})(?!\d)")
+_PERIOD_MONTH_RE = re.compile(r"(?<!\d)" + _YEAR + r"(?:[-/.]|\s*年\s*)(0?[1-9]|1[0-2])(?!\d)")
+_PERIOD_QUARTER_RE = re.compile(
+    r"(?<![A-Za-z\d])(?:Q([1-4])[\s,/-]*" + _YEAR + r"|" + _YEAR + r"[\s/-]*Q([1-4]))(?!\d)", re.I)
+_PERIOD_HALF_RE = re.compile(
+    r"(?<![A-Za-z\d])(?:H([12])[\s,/-]*" + _YEAR + r"|" + _YEAR + r"[\s/-]*H([12]))(?!\d)", re.I)
+_PERIOD_MONTH_NAME_RE = re.compile(
+    r"\b(" + _MONTHS + r")\b\.?[\s,]*(?:\d{1,2}(?:st|nd|rd|th)?[\s,]*)?" + _YEAR + r"(?!\d)", re.I)
+_PERIOD_YEAR_RE = re.compile(r"(?<!\d)" + _YEAR + r"(?!\d)")
+_MONTH_ABBREVIATIONS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 
 
-def _is_future(as_of: Any, today: _dt.date) -> bool:
-    """True when ``as_of`` starts after ``today``; an unreadable date is not future."""
-    match = _AS_OF_RE.match(str(as_of or ""))
-    if not match:
-        return False
+def _month_end(year: int, month: int) -> _dt.date:
+    following = _dt.date(year + month // 12, month % 12 + 1, 1)
+    return following - _dt.timedelta(days=1)
+
+
+def _period_end(text: str) -> Optional[_dt.date]:
+    """The LAST day of the date or period ``text`` states -- an ISO day, a
+    year-month (年月), a quarter, a half, a month name, else December 31 of the
+    latest year named -- or None without a 19xx/20xx year or with an impossible
+    date.  A period is known only once it has ended: "2026", "FY2026" and
+    "2026-Q4" end on 2026-12-31 (the rule quant_typing applies under
+    RESEARCH-4)."""
     try:
-        start = _dt.date(int(match.group(1)), int(match.group(2) or 1), int(match.group(3) or 1))
-    except ValueError:
-        return False
-    return start > today
+        match = _PERIOD_DAY_RE.search(text)
+        if match:
+            return _dt.date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        match = _PERIOD_MONTH_RE.search(text)
+        if match:
+            return _month_end(int(match.group(1)), int(match.group(2)))
+        for pattern, months in ((_PERIOD_QUARTER_RE, 3), (_PERIOD_HALF_RE, 6)):
+            match = pattern.search(text)
+            if match:
+                part, year = (match.group(1), match.group(2)) if match.group(1) else (
+                    match.group(4), match.group(3))
+                return _month_end(int(year), int(part) * months)
+        match = _PERIOD_MONTH_NAME_RE.search(text)
+        if match:
+            month = _MONTH_ABBREVIATIONS.index(match.group(1)[:3].lower()) + 1
+            return _month_end(int(match.group(2)), month)
+        years = [int(year) for year in _PERIOD_YEAR_RE.findall(text)]
+        return _dt.date(max(years), 12, 31) if years else None
+    except ValueError:  # month 13, Feb 30
+        return None
+
+
+def _not_yet_known(value: Any, today: _dt.date, *, require_date: bool) -> bool:
+    """True when the date or period ``value`` states ends after ``today``; a
+    missing or unreadable value counts as not yet known only when
+    ``require_date`` (a hindcast, where no date means no proof it precedes the
+    as-of)."""
+    text = _readable(value)
+    end = _period_end(text) if text and text.strip() else None
+    if end is None:
+        return require_date
+    return end > today
 
 
 def _compatible(claim: Mapping[str, Any], quantity: Mapping[str, Any]) -> bool:
@@ -734,19 +954,49 @@ def sanitize_latest_actual(raw: Any) -> Optional[Dict[str, str]]:
     return out if out["value"] else None
 
 
-def _prepare_rows(quant_rows: Any, today: _dt.date) -> List[Tuple[Mapping[str, Any], Dict[str, Any], frozenset]]:
-    """Research rows eligible as a latest actual: value_type actual or missing,
-    not typed projected, as_of not in the future, value parses."""
+# value_type labels that state an actual: RESEARCH-4's "actual", the legacy
+# engine's "observed" (deerflow_research quant schema) and their synonyms; none
+# at all is read by the other typing fields.
+_ACTUAL_VALUE_TYPES = frozenset(("", "actual", "observed", "reported", "historical"))
+
+
+def _label(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _row_is_actual(row: Mapping[str, Any], today: _dt.date, *, require_date: bool) -> bool:
+    """A research row that states an ACTUAL value known by ``today``.
+
+    The class is quant_typing.quant_class's reading of the row (the stamped
+    epistemic_class, else RESEARCH-4's value_type rule, else the legacy
+    value_kind): ``reported`` binds, ``projected`` never does, and ``unknown``
+    binds only for a row that carries none of those fields (the spec's
+    "value_type missing").  The value_type must still be an actual label, so
+    an estimate, forecast or target never binds, and neither the as_of_date
+    nor the period_end may end after ``today`` (with ``require_date`` the
+    as_of_date must be readable)."""
+    value_type = _label(row.get("value_type"))
+    if value_type not in _ACTUAL_VALUE_TYPES:
+        return False
+    klass = quant_typing.quant_class(row, today)
+    untyped = not (value_type == "actual" or _label(row.get("epistemic_class"))
+                   or _label(row.get("value_kind")))
+    if klass != quant_typing.REPORTED and not (klass == quant_typing.UNKNOWN and untyped):
+        return False
+    return not (_not_yet_known(row.get("as_of_date"), today, require_date=require_date)
+                or _not_yet_known(row.get("period_end"), today, require_date=False))
+
+
+def _prepare_rows(quant_rows: Any, today: _dt.date, *,
+                  require_date: bool = False) -> List[Tuple[Mapping[str, Any], Dict[str, Any], frozenset]]:
+    """Research rows eligible as a latest actual (:func:`_row_is_actual`) whose
+    value parses and whose metric has tokens."""
     prepared = []
     for row in list(quant_rows or ()):
         if not isinstance(row, Mapping):
             continue
         try:
-            if str(row.get("value_type") or "").strip().lower() not in ("", "actual"):
-                continue
-            if str(row.get("epistemic_class") or "").strip().lower() == "projected":
-                continue
-            if _is_future(row.get("as_of_date"), today):
+            if not _row_is_actual(row, today, require_date=require_date):
                 continue
             value = row.get("value")
             quantity = _parse_quantity("" if value is None else value, row.get("unit") or "")
@@ -761,10 +1011,11 @@ def _prepare_rows(quant_rows: Any, today: _dt.date) -> List[Tuple[Mapping[str, A
 
 
 def _bind(binary: Mapping[str, Any], claim: Mapping[str, Any], prepared: List[Tuple[Any, ...]],
-          today: _dt.date) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+          today: _dt.date, *, require_date: bool = False
+          ) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
     """``(latest_actual record, parsed quantity)`` or ``(None, None)``."""
     field = sanitize_latest_actual(binary.get("latest_actual"))
-    if field is not None and not _is_future(field["as_of"], today):
+    if field is not None and not _not_yet_known(field["as_of"], today, require_date=require_date):
         quantity = _parse_quantity(field["value"], field["unit"])
         if quantity is not None and _compatible(claim, quantity):
             return dict(field, basis=BASIS_LLM_FIELD), quantity
@@ -784,7 +1035,7 @@ def _bind(binary: Mapping[str, Any], claim: Mapping[str, Any], prepared: List[Tu
         "value": _text_field(row.get("value")),
         "unit": _text_field(row.get("unit")),
         "as_of": _text_field(row.get("as_of_date")),
-        "source_ref": _text_field(row.get("source_ref")),
+        "source_ref": _text_field(row.get("source_ref") or row.get("source")),
         "basis": BASIS_QUANT_ROW,
     }
     return record, quantity
@@ -857,12 +1108,18 @@ def _findings(binary: Mapping[str, Any], claim: Mapping[str, Any], actual: Optio
     if findings:
         return findings  # a misparse makes any status-quo reading meaningless
     event = claim["event_type"]
+    negated = bool(claim.get("negated"))
     probability = _probability(binary)
     state = _status_quo(claim, actual, margin)
     if probability is None or state is None or event in ("average",) or claim["comparator"] == "between":
         return findings
-    contradicted = ((state == "satisfied" and probability < 0.5)
-                    or (state == "violated" and probability > 0.5 and event != "touch"))
+    # A touch is settled by a level already past K, never refuted by one short of it; a
+    # negated touch ("never falls below K") is the mirror: only a level already past the
+    # inverted comparator's K refutes it.  Other events read both sides.
+    satisfied_counts = not (event == "touch" and negated)
+    violated_counts = not (event == "touch" and not negated)
+    contradicted = ((state == "satisfied" and probability < 0.5 and satisfied_counts)
+                    or (state == "violated" and probability > 0.5 and violated_counts))
     if contradicted:
         justified = bool(_SOURCE_MARKER_RE.search(
             f"{binary.get('adjustment_rationale') or ''} {binary.get('base_rate_anchor') or ''}"))
@@ -871,7 +1128,8 @@ def _findings(binary: Mapping[str, Any], claim: Mapping[str, Any], actual: Optio
             f"latest actual {_num(actual['lo'])}"
             + (f"–{_num(actual['hi'])}" if actual["hi"] != actual["lo"] else "")
             + f" already {'satisfies' if state == 'satisfied' else 'violates'} "
-            f"'{claim['comparator']} {_num(claim['threshold'])}' ({event} event) by at least "
+            f"'{claim['comparator']} {_num(claim['threshold'])}' ({'negated ' if negated else ''}{event} "
+            f"event) by at least "
             f"{_num(margin * 100)}% of the threshold, yet p={_num(probability)}", justified))
     return findings
 
@@ -886,13 +1144,13 @@ def _stamp(status: str, claim: Optional[Dict[str, Any]], latest_actual: Optional
 
 
 def _check(binary: Mapping[str, Any], prepared: List[Tuple[Any, ...]], *, scale_ratio: float,
-           margin: float, today: _dt.date) -> Dict[str, Any]:
+           margin: float, today: _dt.date, require_as_of: bool = False) -> Dict[str, Any]:
     if not isinstance(binary, Mapping):
         raise TypeError("binary forecast is not an object")
     claim = _parse_threshold_claim(binary.get("statement"), binary.get("resolution_criteria"))
     if claim is None:
         return _stamp(STATUS_NOT_NUMERIC, None, None, [])
-    latest_actual, actual = _bind(binary, claim, prepared, today)
+    latest_actual, actual = _bind(binary, claim, prepared, today, require_date=require_as_of)
     findings = _findings(binary, claim, actual, scale_ratio=scale_ratio, margin=margin)
     if any(not finding["justified"] for finding in findings):
         status = STATUS_FLAGGED
@@ -930,19 +1188,24 @@ def _as_date(today: Any) -> _dt.date:
 
 def check_binary(binary: Any, *, quant_rows: Iterable[Any] = (), scale_ratio: float = DEFAULT_SCALE_RATIO,
                  status_quo_margin: float = DEFAULT_STATUS_QUO_MARGIN,
-                 today: Optional[_dt.date] = None) -> Dict[str, Any]:
+                 today: Optional[_dt.date] = None, require_as_of: bool = False) -> Dict[str, Any]:
     """The numeric-guard stamp of one binary forecast.
 
     ``{'schema': 1, 'status', 'claim', 'latest_actual', 'findings'}``; status is
     ok | flagged | unbound | not_numeric | unchecked (an internal error, with
     ``error`` naming its type -- never ``ok``).  ``latest_actual`` is
     ``{value, unit, as_of, source_ref, basis: llm_field|quant_row}`` or None.
-    ``today`` (default: the system date) decides what counts as a future as_of.
+    ``today`` (default: the system date) decides what is not yet known: an
+    as_of or period_end whose stated period ENDS after it never binds ("2026"
+    ends on 2026-12-31).  ``require_as_of`` (a hindcast, ``today`` being its
+    pinned as-of) also refuses an as_of that is missing or unreadable.
     """
     try:
         day = _as_date(today)
         ratio, margin = _settings(scale_ratio, status_quo_margin)
-        return _check(binary, _prepare_rows(quant_rows, day), scale_ratio=ratio, margin=margin, today=day)
+        strict = bool(require_as_of)
+        return _check(binary, _prepare_rows(quant_rows, day, require_date=strict), scale_ratio=ratio,
+                      margin=margin, today=day, require_as_of=strict)
     except Exception as exc:  # noqa: BLE001 — an internal error is 'unchecked', never 'ok'
         return _unchecked(exc)
 
@@ -985,9 +1248,10 @@ def check_scenarios(scenarios: Any) -> List[Dict[str, Any]]:
 
 def stamp_forecast(forecast: Any, *, quant_rows: Iterable[Any] = (), mode: str = MODE_SHADOW,
                    scale_ratio: float = DEFAULT_SCALE_RATIO, margin: float = DEFAULT_STATUS_QUO_MARGIN,
-                   today: Optional[_dt.date] = None) -> Dict[str, Any]:
+                   today: Optional[_dt.date] = None, require_as_of: bool = False) -> Dict[str, Any]:
     """Stamp every binary (``b['numeric_guard']``) and return the
-    ``quality.numeric_guards`` summary.
+    ``quality.numeric_guards`` summary (``today`` and ``require_as_of`` as in
+    :func:`check_binary`).
 
     ``{'mode', 'status': ran|not_run, 'n_binaries', 'n_numeric', 'n_bound',
     'by_status', 'findings_by_code', 'scenario_findings', 'scale_ratio',
@@ -1000,13 +1264,14 @@ def stamp_forecast(forecast: Any, *, quant_rows: Iterable[Any] = (), mode: str =
         ratio, m = _settings(scale_ratio, margin)
         binaries = forecast.get("binary_forecasts") if isinstance(forecast, Mapping) else None
         rows = [b for b in binaries if isinstance(b, dict)] if isinstance(binaries, list) else []
-        prepared = _prepare_rows(quant_rows, day) if rows else []
+        strict = bool(require_as_of)
+        prepared = _prepare_rows(quant_rows, day, require_date=strict) if rows else []
         by_status: Dict[str, int] = {}
         by_code: Dict[str, int] = {}
         n_numeric = n_bound = 0
         for binary in rows:
             try:
-                stamp = _check(binary, prepared, scale_ratio=ratio, margin=m, today=day)
+                stamp = _check(binary, prepared, scale_ratio=ratio, margin=m, today=day, require_as_of=strict)
             except Exception as exc:  # noqa: BLE001 — one bad row is 'unchecked', the rest still run
                 stamp = _unchecked(exc)
             binary["numeric_guard"] = stamp

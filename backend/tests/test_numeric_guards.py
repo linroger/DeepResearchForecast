@@ -379,3 +379,193 @@ def test_public_functions_never_raise():
     assert ng.check_scenarios([None, {"resolution_criteria": None}, 5]) == []
     assert ng.check_scenarios(7) == []
     assert ng.stamp_forecast({"binary_forecasts": [None, "x"]})["status"] == "not_run"
+
+
+# ── negated events (review round 1) ───────────────────────────────────────────
+TARIFF = ("Despite the Feb 2026 SCOTUS IEEPA ruling, the US monthly effective tariff rate never falls "
+          "below 8% in any month through December 2027.")  # report_aa776d75c630 / 74dc3a07fdaa, p=0.8
+EV_SHARE = "The US EV share of new vehicle sales fails to recover above 10% by the end of 2028."  # b283f119e40e
+
+
+@pytest.mark.parametrize("statement,comparator,threshold,event", [
+    (TARIFF, ">=", 8.0, "touch"),
+    (EV_SHARE, "<=", 10.0, "settle"),
+    ("Brent won't exceed $100 in 2027", "<=", 100.0, "unknown"),
+    ("Brent doesn't fall below $60 in 2027", ">=", 60.0, "unknown"),
+    ("Brent is not above $100 in 2027", "<=", 100.0, "unknown"),
+    ("Brent fails to exceed $100 in 2027", "<=", 100.0, "unknown"),
+    ("CPI cannot fall below 2% in 2027", ">=", 2.0, "unknown"),
+    ("Brent will no longer exceed $100 in 2027", "<=", 100.0, "unknown"),
+    ("GDP growth will not exceed 2% in 2027", "<=", 2.0, "unknown"),
+    ("Brent never exceeds $100 in 2027", "<=", 100.0, "touch"),
+    ("Brent does not close the year above $100", "<=", 100.0, "settle"),
+    ("Bitcoin does not trade above $150,000 at any point in 2026", "<=", 150000.0, "touch"),
+    ("Resolves YES unless the rate exceeds 5%", "<=", 5.0, "unknown"),
+    ("出口同比未超过10%", "<=", 10.0, "unknown"),
+    ("人民币兑美元汇率不会跌破7.5", ">=", 7.5, "unknown"),
+    ("上证指数没有突破3500点", "<=", 3500.0, "unknown"),
+    ("寒武纪总市值从未跌破5000亿元", ">=", 5e11, "touch"),
+    ("寒武纪总市值未达到1万亿元以上", "<", 1e12, "unknown"),
+])
+def test_negated_comparators_are_inverted(statement, comparator, threshold, event):
+    claim = ng.parse_threshold_claim(statement, "")
+    assert claim is not None, statement
+    assert (claim["comparator"], claim["threshold"], claim["event_type"], claim["negated"]) == (
+        comparator, threshold, event, True), statement
+
+
+@pytest.mark.parametrize("statement,comparator", [
+    ("Whether or not Brent exceeds $100 in 2027", ">"),
+    ("It is not clear whether Brent exceeds $100 in 2027", ">"),
+    ("Brent does not fail to exceed $100 in 2027", ">"),  # two negators cancel
+    ("If tariffs are not repealed, imports exceed $3 trillion in 2027", ">"),
+    ("未来一年出口同比超过10%", ">"),
+    ("出口不断突破10%", ">"),
+    ("关税税率不超过20%", "<="),  # 不超过 is itself the comparator
+    ("Core inflation is no more than 2.5% in December 2027", "<="),
+])
+def test_non_negations_keep_the_comparator(statement, comparator):
+    claim = ng.parse_threshold_claim(statement, "")
+    assert (claim["comparator"], claim["negated"]) == (comparator, False), statement
+
+
+def test_negated_real_binaries_are_not_false_flags():
+    tariff = dict(_binary(TARIFF, 0.8, value="16.5", unit="%"), id="F5")
+    stamp = ng.check_binary(tariff, today=TODAY)
+    assert stamp["claim"]["comparator"] == ">=" and stamp["claim"]["negated"] is True
+    assert stamp["status"] == "ok" and stamp["findings"] == []
+    # a negated touch holds only while the level never crosses: a level still clear of K
+    # says nothing at a low p, a level already past K refutes it
+    assert ng.check_binary(dict(tariff, probability=0.2), today=TODAY)["findings"] == []
+    broken = ng.check_binary(dict(tariff, latest_actual=dict(tariff["latest_actual"], value="5")), today=TODAY)
+    assert [f["code"] for f in broken["findings"]] == ["status_quo_contradiction"]
+    assert "negated touch event" in broken["findings"][0]["detail"]
+
+    ev = _binary(EV_SHARE, 0.62, value="7", unit="%")
+    assert ng.check_binary(ev, today=TODAY)["status"] == "ok"
+    low = ng.check_binary(dict(ev, probability=0.3), today=TODAY)
+    assert low["status"] == "flagged" and [f["code"] for f in low["findings"]] == ["status_quo_contradiction"]
+    # the metric span stops before the negator, so research rows still bind
+    rows = [{"metric": "US EV share of new vehicle sales", "value": "7", "unit": "%",
+             "as_of_date": "2026-06-30", "value_type": "actual", "source_ref": "S2"}]
+    bound = ng.check_binary(_binary(EV_SHARE, 0.62), quant_rows=rows, today=TODAY)
+    assert bound["latest_actual"]["basis"] == "quant_row" and bound["status"] == "ok"
+
+
+# ── ranges: "~", year + amount, trajectories (review round 1) ─────────────────
+def test_tilde_before_a_figure_means_approximately():
+    assert ng.parse_quantity("2025 ~$400B")["hi"] == 2025.0  # the year alone, no 2025..400B range
+    approx = _q("~$700-725B")
+    assert (approx["lo"], approx["hi"], approx["currency"]) == (7e11, 7.25e11, "USD")
+    assert (_q("700~725")["lo"], _q("700~725")["hi"]) == (700.0, 725.0)
+    assert (_q("5%~7%")["lo"], _q("5%~7%")["hi"]) == (5.0, 7.0)
+    assert (_q("80～120")["lo"], _q("80～120")["hi"]) == (80.0, 120.0)
+    claim = ng.parse_threshold_claim("Big-tech AI capex in 2030 exceeds the 2026 ~$700B level", "")
+    assert (claim["comparator"], claim["threshold"], claim["threshold_hi"], claim["currency"]) == (
+        ">", 7e11, None, "USD")
+    stamp = ng.check_binary(_binary("Big-tech AI capex in 2030 exceeds the 2026 ~$700B level", 0.6), today=TODAY)
+    assert stamp["findings"] == [] and stamp["status"] == "unbound"
+
+
+def test_year_next_to_a_marked_amount_is_not_a_range():
+    for text in ("2026 - $700B", "2025-400B", "2026 to $700 billion"):
+        assert ng.parse_quantity(text)["hi"] == ng.parse_quantity(text)["lo"], text
+    for text in ("2000-2500亿元", "2000~2500亿元"):  # a tight dash rising to an amount stays a range
+        tight = _q(text)
+        assert (tight["lo"], tight["hi"], tight["currency"]) == (2e11, 2.5e11, "CNY"), text
+
+
+def test_trajectories_are_not_intervals():
+    assert _q("from 40% to 30%")["hi"] == 40.0
+    assert _q("从40%至30%")["hi"] == 40.0
+    scenarios = [
+        {"name": "Capex band", "resolution_criteria": (
+            "Hyperscaler capex in 2030 lands within +/-40% of the 2026 ~$700-725B level.")},  # aa776d75c630
+        {"name": "EV slide", "resolution_criteria": "EV share falls from 40% to 30% by 2030"},
+        {"name": "ZH slide", "resolution_criteria": "电动车渗透率从40%至30%"},
+        {"name": "Real inversion", "resolution_criteria": "Inflation of 4%–2% through 2027"},
+    ]
+    assert [f["scenario"] for f in ng.check_scenarios(scenarios)] == ["Real inversion"]
+
+
+# ── size of decline vs level (review round 1) ─────────────────────────────────
+def test_decline_verbs_do_not_suppress_level_comparators():
+    real = ("China's combined share of global mature-node (≥28nm) semiconductor capacity falls between "
+            "28% and 38% by 2030.")  # report_c80ca48e67d1
+    claim = ng.parse_threshold_claim(real, "")
+    assert (claim["comparator"], claim["threshold"], claim["threshold_hi"], claim["unit_class"]) == (
+        "between", 28.0, 38.0, "percent")
+    for verb in ("sinks", "slumps", "plunges", "tumbles", "falls", "drops"):
+        claim = ng.parse_threshold_claim(f"The stock {verb} below $100 in 2027", "")
+        assert (claim["comparator"], claim["threshold"]) == ("<", 100.0), verb
+    # sizes of decline still yield no pair
+    for size in ("Brent falls by between 5% and 10% in 2027", "a drop of under 5% in 2027",
+                 "Brent falls 20% or more in 2026", "出口同比下降10%以上", "跌幅低于5%"):
+        assert ng.parse_threshold_claim(size, "") is None, size
+    # a name glued to letters is no quantity
+    assert ng.parse_quantity("28nm") is None and ng.parse_quantity("5G") is None
+
+
+# ── suffix and inclusive comparators (review round 1) ────────────────────────
+@pytest.mark.parametrize("statement,comparator,threshold,event", [
+    ("2026年Gartner口径全球数据中心系统IT支出实际达到7500亿美元以上。", ">=", 7.5e11, "unknown"),  # ffe1ea6bf50d
+    ("寒武纪（688256.SH）于2026年12月31日前盘中总市值维持在1万亿元以上至少1个交易日。", ">=", 1e12, "touch"),
+    ("2026年全球数据中心电力需求容量同比增长达到28%以上。", ">=", 28.0, "unknown"),  # ffe1ea6bf50d
+    ("2026年AI芯片液冷渗透率达到或超过50%。", ">=", 50.0, "unknown"),  # ffe1ea6bf50d
+    ("2027年失业率在5%及以下", "<=", 5.0, "unknown"),
+    ("US unemployment is at or above 5% in 2027", ">=", 5.0, "unknown"),
+    ("US unemployment is at or below 4% in 2027", "<=", 4.0, "unknown"),
+    ("US unemployment is 5% or more in 2027", ">=", 5.0, "unknown"),
+    ("US unemployment is 4% or less in 2027", "<=", 4.0, "unknown"),
+    ("Brent stays above $100 for at least 30 consecutive days in 2027", ">", 100.0, "touch"),
+])
+def test_suffix_and_inclusive_comparators(statement, comparator, threshold, event):
+    claim = ng.parse_threshold_claim(statement, "")
+    assert claim is not None, statement
+    assert (claim["comparator"], claim["threshold"], claim["event_type"]) == (comparator, threshold, event)
+    assert claim["text"] == statement.strip()  # read from the statement itself
+
+
+# ── research-row vocabulary and dating (review round 1) ───────────────────────
+def test_quant_row_vocabulary_matches_the_repo():
+    claim = {k: v for k, v in F13.items() if k != "latest_actual"}
+    claim["statement"] = "US data center capex falls below $1.5 trillion by end-2027"
+
+    def bound(row):
+        return ng.check_binary(claim, quant_rows=[row], today=TODAY)["latest_actual"]
+
+    base = _capex_row("760")
+    base.pop("value_type")
+    base.pop("source_ref")
+    assert bound(dict(base, value_kind="forecast", source="Dell'Oro")) is None  # value_kind-only forecast
+    legacy = bound(dict(base, value_type="observed", value_kind="actual", source="Dell'Oro"))
+    assert legacy["basis"] == "quant_row" and legacy["source_ref"] == "Dell'Oro"  # legacy engine row
+    assert bound(dict(base, value_type="observed"))["basis"] == "quant_row"
+    assert bound(dict(base, value_type="estimate")) is None
+    assert bound(dict(base, epistemic_class="unknown")) is None
+    assert bound(dict(base, epistemic_class="reported", value_type="actual"))["basis"] == "quant_row"
+    assert bound(dict(base, value_type="actual", period_end="2026-12-31")) is None  # period not over yet
+
+
+@pytest.mark.parametrize("as_of,binds", [
+    ("2026", False), ("2026-Q4", False), ("Dec 2026", False), ("FY2026", False), ("2026年12月", False),
+    ("2026-01-10", True), ("2025", True), ("2025-Q4", True), ("", False), ("not stated", False),
+])
+def test_hindcast_binds_only_periods_that_ended_by_its_as_of(as_of, binds):
+    as_of_day = dt.date(2026, 1, 15)
+    binary = dict(F13, latest_actual=dict(F13["latest_actual"], as_of=as_of))
+    stamp = ng.check_binary(binary, today=as_of_day, require_as_of=True)
+    assert (stamp["latest_actual"] is not None) is binds, as_of
+    row = _capex_row("760", metric="US single-year data-centre capex", as_of=as_of)
+    no_field = {k: v for k, v in F13.items() if k != "latest_actual"}
+    summary_forecast = {"binary_forecasts": [no_field]}
+    ng.stamp_forecast(summary_forecast, quant_rows=[row], today=as_of_day, require_as_of=True)
+    assert (summary_forecast["binary_forecasts"][0]["numeric_guard"]["latest_actual"] is not None) is binds
+
+
+def test_live_runs_bind_undated_actuals_and_ended_periods():
+    for as_of in ("", "2026-Q2", "June 2026"):
+        binary = dict(F13, latest_actual=dict(F13["latest_actual"], as_of=as_of))
+        assert ng.check_binary(binary, today=TODAY)["latest_actual"] is not None, as_of
+    assert ng.check_binary(dict(F13, latest_actual=dict(F13["latest_actual"], as_of="2026-Q4")),
+                           today=TODAY)["latest_actual"] is None
