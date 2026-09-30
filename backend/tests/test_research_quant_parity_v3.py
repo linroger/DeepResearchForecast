@@ -7,12 +7,17 @@ v3 finalize and in the extract-only salvage:
 * rows on the same (metric, unit) that disagree become contested.json claims
   (origin ``quant_reconcile``; v3 adds at most QUANT_RECONCILE_MAX_CONTESTED),
   a ~1000x gap is also a probable unit-scale error in meta.quant_unit_warnings;
-  v3 compares rows only within one scope (period, geography, reported or
-  projected), so a trajectory, a series over time or two regions never
-  disagree, and the claim and warning name their scope;
+  v3 compares rows only within one scope (period end and length, geography,
+  reported or projected), so a trajectory, a series over time, a year next to
+  its fourth quarter, a multi-year total next to its last year or two regions
+  never disagree, and the claim and warning name their scope; probable
+  unit-scale errors come first under the cap;
 * claimed actuals dated after the as-of are listed in meta.quant_implausible
   (v3: typed rows by epistemic_class, otherwise value_type actual or absent;
-  the bound is a pinned run's as-of, else the day after the plan's);
+  the bound is a pinned run's as-of, else the day after the plan's), and v3
+  also lists claimed actuals whose period_end ends after it;
+* the extract-only reference date is never after today and ignores a year-
+  or month-only extraction;
 * capped meta lists keep their totals in meta.quant_sanity_truncated, and an
   extract-only salvage of a v3 handoff drops the v3 run's sanity keys;
 * quantitative.json never changes, actors.json keeps the extracted claims, and
@@ -128,7 +133,7 @@ def test_v3_run_records_unit_scale_error_and_future_dated_actual(tmp_path, bridg
 
     # The scope of rows dated only by as_of_date is its year.
     assert meta["quant_unit_warnings"] == [{"metric": "Data-centre electricity use", "unit": "TWh",
-                                            "ratio": 1000.0, "values": ["1.2", "1200"], "scope": "2025"}]
+                                            "ratio": 1000.0, "values": ["1.2", "1200"], "scope": "as of 2025"}]
     assert meta["quant_implausible"] == [FUTURE_ACTUAL_FLAG]
     assert not any("Installed capacity" in flag for flag in meta["quant_implausible"])
     assert meta["quant_reconcile_contested"] == 1
@@ -137,7 +142,7 @@ def test_v3_run_records_unit_scale_error_and_future_dated_actual(tmp_path, bridg
     assert contested[:-1] == _model_contested(out)
     reconciled = contested[-1]
     assert reconciled["origin"] == "quant_reconcile" and reconciled["status"] == "contested"
-    assert reconciled["claim"] == "Data-centre electricity use (2025)"
+    assert reconciled["claim"] == "Data-centre electricity use (as of 2025)"
     assert [position["stance"].split(" (")[0] for position in reconciled["positions"]] == ["1.2 TWh", "1200 TWh"]
     assert "probable unit-scale error" in reconciled["why_they_differ"]
     assert meta["contested_count"] == len(contested) == 2
@@ -203,21 +208,27 @@ def test_sanity_helpers_degrade_safe(tmp_path, bridge, monkeypatch, fixed_as_of,
 
 
 def test_reconciled_contested_rows_are_capped(tmp_path, bridge, fixed_as_of):
-    """Twelve disagreeing metrics: contested.json gains the first ten; a 2x gap
-    is a disagreement but no unit-scale warning."""
+    """Twelve disagreeing metrics: contested.json gains ten, the probable
+    unit-scale error (found last) first, then the first nine 2x gaps (a
+    disagreement but no unit-scale warning)."""
     metrics = [f"Regional capacity {chr(ord('A') + index)}" for index in range(12)]
-    facts = [_fact(metric, value, "GW", "2025-12-31") for metric in metrics for value in ("10", "20")]
+    facts = [_fact(metric, value, "GW", "2025-12-31") for metric in metrics[:11] for value in ("10", "20")]
+    facts += [_fact(metrics[11], value, "GW", "2025-12-31") for value in ("1.2", "1200")]
     meta, plog, out = _run(tmp_path, bridge, "capped", facts)
 
     assert lr.QUANT_RECONCILE_MAX_CONTESTED == 10
     contested = _load(out / "contested.json")
     assert contested[:1] == _model_contested(out)
-    assert [row["claim"] for row in contested[1:]] == [f"{metric} (2025)" for metric in metrics[:10]]
+    assert [row["claim"] for row in contested[1:]] == [f"{metric} (as of 2025)"
+                                                       for metric in [metrics[11], *metrics[:9]]]
+    assert "probable unit-scale error" in contested[1]["why_they_differ"]
+    assert not any("probable unit-scale error" in row["why_they_differ"] for row in contested[2:])
     assert all(row["origin"] == "quant_reconcile" for row in contested[1:])
     assert meta["quant_reconcile_contested"] == 10 and meta["contested_count"] == 11
     assert meta["quant_sanity_truncated"] == {"quant_reconcile_contested": 12}
     assert _load(out / "meta.json")["quant_sanity_truncated"] == {"quant_reconcile_contested": 12}
-    assert "quant_unit_warnings" not in meta and "quant_implausible" not in meta
+    assert [warning["metric"] for warning in meta["quant_unit_warnings"]] == [metrics[11]]
+    assert "quant_implausible" not in meta
     assert ("v3: quant reconcile: +10 contested claim(s) from numeric disagreement (the first 10 of 12)"
             in plog.of("ok"))
 
@@ -244,6 +255,15 @@ SCOPED_FACTS = [
     # An actual and a forecast for one period.
     _v3_fact("Installed storage", "180", "GW", "2025", "Global"),
     _v3_fact("Installed storage", "250", "GW", "2025", "Global", "forecast"),
+    # A fiscal year next to its fourth quarter (review round 2: Nvidia FY2025 vs Q4).
+    _v3_fact("Data-centre revenue", "115.2", "USD billion", "FY2025", "Global", series="10-K"),
+    _v3_fact("Data-centre revenue", "35.6", "USD billion", "Q4 2025", "Global", series="Q4 release"),
+    # A year next to its December.
+    _v3_fact("EV sales", "1.5", "million units", "2025", "US", series="Cox annual"),
+    _v3_fact("EV sales", "0.15", "million units", "2025-12", "US", series="Cox monthly"),
+    # A cumulative multi-year forecast next to its last year's.
+    _v3_fact("Data-centre capex", "6700", "USD billion", "2025-2030", "Global", "forecast", "McKinsey"),
+    _v3_fact("Data-centre capex", "1500", "USD billion", "2030", "Global", "forecast", "Dell'Oro"),
     # The same quarter and country (US is the United States), 1000x apart.
     _v3_fact("Data-centre electricity use", "1.2", "TWh", "2025-Q2", "US", series="EIA"),
     _v3_fact("Data-centre electricity use", "1200", "TWh", "2025-Q2", "United States", series="Utility filings"),
@@ -251,16 +271,18 @@ SCOPED_FACTS = [
 
 
 def test_v3_reconciles_only_rows_of_one_scope(tmp_path, bridge, fixed_as_of):
-    """A trajectory, a series over time, two regions and an actual next to a
-    forecast add no contested claim and no unit warning; the same-period
-    ~1000x pair still does, named by its scope."""
+    """A trajectory, a series over time, two regions, an actual next to a
+    forecast, a year next to its fourth quarter or December and a multi-year
+    total next to its last year add no contested claim and no unit warning;
+    the same-period ~1000x pair still does, named by its scope."""
     meta, _, out = _run(tmp_path, bridge, "scoped", SCOPED_FACTS)
 
     quant = _load(out / "quantitative.json")
     # On (metric, unit) alone, as the legacy engine groups, every group disagrees.
     unscoped, _ = bridge.reconcile_quantitative(copy.deepcopy(quant))
     assert [row["claim"] for row in unscoped] == [
-        "Grid-scale storage power", "Battery pack price", "Data-centre electricity use", "Installed storage"]
+        "Grid-scale storage power", "Battery pack price", "Data-centre electricity use", "Installed storage",
+        "Data-centre revenue", "EV sales", "Data-centre capex"]
 
     contested = _load(out / "contested.json")
     assert contested[:-1] == _model_contested(out)
@@ -295,6 +317,43 @@ def test_claimed_actuals_follow_quant_typing(tmp_path, bridge, monkeypatch, fixe
     assert meta["quant_implausible"] == expected
     classes = [row.get("epistemic_class") for row in _load(out / "quantitative.json")]
     assert classes == (["unknown", "projected", "reported", "unknown"] if typing else [None] * 4)
+
+
+# Claimed actuals whose period_end ends after the as-of (review round 2): the
+# bridge helper reads only as_of_date, and a v3 row states its period apart.
+UNFINISHED_FACTS = [
+    _v3_fact("Data-centre revenue", "51.2", "USD billion", "2027-Q3", "Global"),       # flagged
+    _v3_fact("Quantum funding", "12", "EUR million", "2026", "EU"),                    # year not over: flagged
+    _v3_fact("Installed capacity", "260", "GW", "2027-Q3", "Global", "forecast"),      # projected: never
+    _v3_fact("Rack density", "40", "kW", "2027-Q3", "Global", "estimate"),             # projected: never
+    _v3_fact("Battery pack price", "115", "USD/kWh", "2024", "Global"),                # ended: never
+    # Its as_of_date is after the as-of too: the helper's one flag only.
+    dict(_fact("Operating capacity", "185", "GW", "2027-06-30"), period_end="2027-06-30"),
+]
+
+
+@pytest.mark.parametrize("typing", [False, True], ids=["untyped", "typed"])
+def test_claimed_actuals_for_an_unfinished_period_are_implausible(tmp_path, bridge, monkeypatch, fixed_as_of,
+                                                                  typing):
+    monkeypatch.setenv("RESEARCH_QUANT_TYPING", "true" if typing else "false")
+    meta, plog, out = _run(tmp_path, bridge, "unfinished", UNFINISHED_FACTS)
+
+    assert meta["quant_implausible"] == [
+        FUTURE_ACTUAL_FLAG,
+        "Data-centre revenue: period_end 2027-Q3 ends AFTER research cutoff 2026-09-29 "
+        "(claimed-actual for an unfinished period)",
+        "Quantum funding: period_end 2026 ends AFTER research cutoff 2026-09-29 "
+        "(claimed-actual for an unfinished period)"]
+    assert _load(out / "meta.json")["quant_implausible"] == meta["quant_implausible"]
+    assert any(line.startswith("v3: quant sanity: 3 implausible/future-dated fact(s)") for line in plog.of("warn"))
+    quant = _load(out / "quantitative.json")
+    assert [(row["metric"], row["period_end"]) for row in quant] == [
+        (fact["metric"], fact["period_end"]) for fact in UNFINISHED_FACTS]
+    if typing:
+        # The program classifier types the flagged rows as it reads them.
+        assert [row["epistemic_class"] for row in quant] == [
+            "unknown", "unknown", "projected", "projected", "reported", "unknown"]
+        assert all("future_dated_reported" in quant[index]["epistemic_flags"] for index in (0, 1, 5))
 
 
 def test_an_actual_published_the_day_after_the_plan_date_is_not_implausible(tmp_path, bridge, fixed_as_of):
@@ -343,6 +402,37 @@ def test_claimed_actual(row, claimed):
     assert lr._claimed_actual(row) is claimed
 
 
+UNFINISHED_ROW = {"metric": "Data-centre revenue", "value": "51.2", "unit": "USD billion", "period_end": "2027-Q3",
+                  "as_of_date": "2026-08-27", "value_type": "actual"}
+
+
+@pytest.mark.parametrize("change, flagged", [
+    ({}, True),
+    ({"epistemic_class": "unknown", "epistemic_flags": ["future_dated_reported"]}, True),
+    ({"value_type": None}, True),
+    ({"period_end": "2026"}, True),
+    ({"period_end": "Q4 2026", "as_of_date": None}, True),
+    ({"period_end": "2026-09-30"}, True),
+    ({"period_end": AS_OF.isoformat()}, False),          # ends on the cutoff
+    ({"period_end": "2025"}, False),
+    ({"period_end": "cumulative"}, False),               # unreadable: no end
+    ({"period_end": "n/a"}, False),
+    ({"period_end": None}, False),
+    ({"as_of_date": "2027-01-01"}, False),               # the helper's date check owns it
+    ({"as_of_date": "2027"}, False),
+    ({"value_type": "forecast"}, False),
+    ({"value_type": "estimate"}, False),
+    ({"epistemic_class": "projected"}, False),
+])
+def test_unfinished_period_flags(change, flagged):
+    row = {**UNFINISHED_ROW, **change}
+    before = copy.deepcopy(row)
+    flags = lr._unfinished_period_flags([row], AS_OF)
+    assert row == before
+    assert flags == ([f"Data-centre revenue: period_end {row['period_end']} ends AFTER research cutoff "
+                      f"{AS_OF.isoformat()} (claimed-actual for an unfinished period)"] if flagged else [])
+
+
 @pytest.mark.parametrize("first, second, same", [
     # Period: the end of period_end, whatever its spelling.
     ({"period_end": "2030"}, {"period_end": "2030-12-31"}, True),
@@ -350,8 +440,21 @@ def test_claimed_actual(row, claimed):
     ({"period_end": "2030"}, {"period_end": "2035"}, False),
     ({"period_end": "2025-Q1"}, {"period_end": "2025-Q2"}, False),
     ({"period_end": "2025-06"}, {"period_end": "Jun 2025"}, True),
+    ({"period_end": "2025-Q4"}, {"period_end": "Q4 2025"}, True),
+    ({"period_end": "2025-2030"}, {"period_end": "FY2025-30"}, True),
+    # ... and its length: a year never meets a quarter, half or month ending
+    # with it, nor a multi-year span its last year or a span starting elsewhere.
+    ({"period_end": "2025"}, {"period_end": "2025-Q4"}, False),
+    ({"period_end": "FY2025"}, {"period_end": "Q4 2025"}, False),
+    ({"period_end": "2025"}, {"period_end": "2025-12"}, False),
+    ({"period_end": "2025"}, {"period_end": "2025-H2"}, False),
+    ({"period_end": "2025-Q4"}, {"period_end": "2025-12"}, False),
+    ({"period_end": "2025-Q4"}, {"period_end": "2025-12-31"}, False),
+    ({"period_end": "2025-2030"}, {"period_end": "2030"}, False),
+    ({"period_end": "2025-2030"}, {"period_end": "2020-2030"}, False),
     # Unreadable periods by their text; a placeholder is no period.
     ({"period_end": "Cumulative"}, {"period_end": " cumulative "}, True),
+    ({"period_end": "cumulative"}, {"period_end": "2025"}, False),
     ({"period_end": "cumulative"}, {"period_end": "lifetime"}, False),
     ({"period_end": "n/a", "as_of_date": "2025-03-01"}, {"as_of_date": "2025-11-20"}, True),
     # Without a period: the year of as_of_date (two polls weeks apart meet).
@@ -384,13 +487,39 @@ def test_quant_scope(first, second, same):
 
 @pytest.mark.parametrize("row, label", [
     ({"period_end": "2030", "geography": "Global", "as_of_date": "2026-07-15"}, "2030, Global"),
-    ({"as_of_date": "2025-12-31"}, "2025"),
+    ({"as_of_date": "2025-12-31"}, "as of 2025"),
     ({"geography": "  United   States "}, "United States"),
+    ({"period_end": "2030", "geography": "Global", "value_type": "forecast"}, "2030, Global, projected"),
+    ({"period_end": "2025", "value_type": "actual", "epistemic_class": "reported"}, "2025"),
+    ({"period_end": "2025", "value_type": "actual", "epistemic_class": "unknown"}, "2025, unclassified"),
+    ({"value_type": "target"}, "projected"),
     ({"period_end": "N/A"}, ""),
     ({}, ""),
 ])
 def test_quant_scope_label(row, label):
     assert lr._quant_scope(row)[1] == label
+
+
+# Review round 2: scopes that differ only by class, or by a period_end year
+# against an as_of_date year, once shared a label (the claim text the report
+# block shows and the contested chart's category).
+DISTINCT_SCOPE_ROWS = [
+    {"period_end": "2025", "geography": "Global", "value_type": "actual"},
+    {"period_end": "2025", "geography": "Global", "value_type": "forecast"},
+    {"period_end": "2025", "geography": "Global", "value_type": "actual", "epistemic_class": "unknown"},
+    {"period_end": "2024"},
+    {"as_of_date": "2024-05-01"},
+    {"period_end": "2025-Q4"},
+    {"period_end": "2025"},
+    {},
+    {"value_type": "forecast"},
+]
+
+
+def test_quant_scope_labels_of_different_keys_differ():
+    scopes = [lr._quant_scope(row) for row in DISTINCT_SCOPE_ROWS]
+    assert len({key for key, _label in scopes}) == len(scopes)
+    assert len({label for _key, label in scopes}) == len(scopes)
 
 
 def test_quant_scopes_are_copies_in_first_seen_order():
@@ -463,11 +592,11 @@ def test_quant_sanity_is_read_only_and_caps_every_list():
     assert rows == before
     assert seen["reconcile"] == [["Capacity", "Capacity"], ["Target"]]
     assert seen["flag"][1] == AS_OF and [row["metric"] for row in seen["flag"][0]] == ["Capacity", "Capacity"]
-    assert extra == ([{"claim": f"Capacity {index} (2025)", "origin": "quant_reconcile"} for index in range(6)]
-                     + [{"claim": f"Target {index}", "origin": "quant_reconcile"} for index in range(4)])
+    assert extra == ([{"claim": f"Capacity {index} (as of 2025)", "origin": "quant_reconcile"} for index in range(6)]
+                     + [{"claim": f"Target {index} (projected)", "origin": "quant_reconcile"} for index in range(4)])
     assert stub.meta == {
-        "quant_unit_warnings": ([{"metric": f"Capacity {index}", "scope": "2025"} for index in range(13)]
-                                + [{"metric": f"Target {index}"} for index in range(7)]),
+        "quant_unit_warnings": ([{"metric": f"Capacity {index}", "scope": "as of 2025"} for index in range(13)]
+                                + [{"metric": f"Target {index}", "scope": "projected"} for index in range(7)]),
         "quant_reconcile_contested": 10,
         "quant_implausible": [f"flag {index}" for index in range(20)],
         "quant_sanity_truncated": {"quant_unit_warnings": 26, "quant_reconcile_contested": 12,
@@ -489,11 +618,30 @@ def test_quant_sanity_keeps_the_scopes_before_a_failed_reconcile():
     stub = _SanityStub(types.SimpleNamespace(reconcile_quantitative=reconcile,
                                              flag_implausible_quant=lambda rows, as_of: []))
     rows = [dict(ROWS[0], metric=metric, period_end=period) for metric, period in
-            (("Capacity", "2025"), ("Load", "2026"), ("Price", "2027"))]
-    assert lr._Engine._quant_sanity(stub, rows, AS_OF) == [{"claim": "Capacity (2025)", "origin": "quant_reconcile"}]
+            (("Capacity", "2023"), ("Load", "2024"), ("Price", "2025"))]
+    assert lr._Engine._quant_sanity(stub, rows, AS_OF) == [{"claim": "Capacity (2023)", "origin": "quant_reconcile"}]
     assert calls == ["Capacity", "Load"]
     assert stub.analytics_errors == [{"helper": "reconcile_quantitative", "error": "RuntimeError: helper broke"}]
     assert stub.meta == {"quant_reconcile_contested": 1}
+
+
+def test_quant_sanity_period_flags_follow_the_helper_under_one_cap():
+    """The unfinished-period flags follow the helper's under the one cap (the
+    truncation total counts both), and stand without the helper."""
+    rows = [dict(UNFINISHED_ROW, metric=f"Revenue {index}") for index in range(2)]
+    period_flags = lr._unfinished_period_flags(rows, AS_OF)
+    assert len(period_flags) == 2
+    helper_flags = [f"flag {index}" for index in range(19)]
+    stub = _SanityStub(types.SimpleNamespace(reconcile_quantitative=lambda rows: ([], []),
+                                             flag_implausible_quant=lambda rows, as_of: list(helper_flags)))
+    assert lr._Engine._quant_sanity(stub, copy.deepcopy(rows), AS_OF) == []
+    assert stub.meta == {"quant_implausible": [*helper_flags, period_flags[0]],
+                         "quant_sanity_truncated": {"quant_implausible": 21}}
+
+    stub = _SanityStub(types.SimpleNamespace(reconcile_quantitative=lambda rows: ([], [])))
+    assert lr._Engine._quant_sanity(stub, copy.deepcopy(rows), AS_OF) == []
+    assert stub.analytics_errors == [{"helper": "flag_implausible_quant", "error": "unavailable"}]
+    assert stub.meta == {"quant_implausible": period_flags}
 
 
 # =============================================================== Config
@@ -621,6 +769,31 @@ def test_extract_only_reference_date_defaults_to_today_and_is_clamped(tmp_path, 
     past_actual = [{"metric": "Grid capacity", "value": "90", "unit": "GW", "as_of_date": "2024-06-30"}]
     meta, _, _ = _extract_only(tmp_path / "stale", monkeypatch, as_of_date="2020-01-15", facts=past_actual)
     assert "quant_implausible" not in meta
+
+
+def test_extract_only_reference_date_is_never_after_today_nor_a_period_start(tmp_path, monkeypatch):
+    """A future extracted as_of_date does not hide a 2099 actual (no source
+    publishes after the run date), and a year- or month-only one names no
+    cutoff day: read as its first day it would flag that period's actuals.
+    The stale clamp is widened so only the coarse reading decides."""
+    meta, _, _ = _extract_only(tmp_path / "future", monkeypatch, as_of_date="2099-12-31")
+    (flag,) = meta["quant_implausible"]
+    prefix = "Operating capacity: as_of 2099-06-30 is AFTER research cutoff "
+    assert flag.startswith(prefix)
+    assert dt.date.fromisoformat(flag[len(prefix):len(prefix) + 10]) <= _utc_today()
+
+    monkeypatch.setenv("RESEARCH_ASOF_MAX_LAG_DAYS", "400")
+    last_month_end = _utc_today().replace(day=1) - dt.timedelta(days=1)
+    actual = [{"metric": "Grid capacity", "value": "90", "unit": "GW", "as_of_date": last_month_end.isoformat()}]
+    for coarse in (last_month_end.strftime("%Y-%m"), str(last_month_end.year)):
+        meta, _, _ = _extract_only(tmp_path / coarse, monkeypatch, as_of_date=coarse, facts=actual)
+        assert "quant_implausible" not in meta, coarse
+    # A day is still the reference: the same actual is after a day before it.
+    day_before = (last_month_end - dt.timedelta(days=1)).isoformat()
+    meta, _, _ = _extract_only(tmp_path / "day", monkeypatch, as_of_date=day_before, facts=actual)
+    assert meta["quant_implausible"] == [
+        f"Grid capacity: as_of {last_month_end.isoformat()} is AFTER research cutoff {day_before} "
+        "(claimed-actual with future date)"]
 
 
 def test_extract_only_sanity_failure_is_additive(tmp_path, monkeypatch):

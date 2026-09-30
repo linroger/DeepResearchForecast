@@ -177,9 +177,13 @@ MAX_QUANT_ROWS = 60
 MAX_CONTESTED_ROWS = 15
 # Quantitative sanity checks (RESEARCH_QUANT_RECONCILE, the legacy engine's
 # reconcile_quantitative / flag_implausible_quant): contested.json takes at
-# most this many reconciled numeric disagreements, and meta keeps at most
-# QUANT_SANITY_MAX_FLAGS unit-scale warnings and implausible-fact flags
-# (meta.quant_sanity_truncated then holds the totals before the cut).
+# most this many reconciled numeric disagreements (probable unit-scale errors
+# first), and meta keeps at most QUANT_SANITY_MAX_FLAGS unit-scale warnings
+# and implausible-fact flags (meta.quant_sanity_truncated then holds the
+# totals before the cut).  In contested.json the reconciled claims follow
+# the model's (at most MAX_CONTESTED_ROWS), and report_agent's contested
+# block renders only its first 15 claims, so after 15 model claims no
+# reconciled claim reaches the report prompt (a report-side limit).
 QUANT_RECONCILE_MAX_CONTESTED = 10
 QUANT_SANITY_MAX_FLAGS = 20
 # forecast_inputs rows the facts task asks for (RESEARCH_V3_FORECAST_INPUTS).
@@ -8333,19 +8337,24 @@ class _Engine:
         changes.
 
         * ``reconcile_quantitative`` runs once per scope (:func:`_quant_scopes`:
-          same period, geography and reported/projected), since it compares
-          every row on one (metric, unit) and a v3 row keeps its period and
-          geography outside the metric — across scopes a forecast trajectory,
-          a series over time or two regions would read as disagreements.  Its
-          probable unit-scale (~1000x) errors go to ``meta.quant_unit_warnings``,
-          and its synthesized disagreements (origin ``quant_reconcile``) are
-          returned for contested.json, at most QUANT_RECONCILE_MAX_CONTESTED,
-          counted in ``meta.quant_reconcile_contested``; both name their scope
-          (the claim's suffix, the warning's ``scope``);
+          same period end and length, geography and reported/projected),
+          since it compares every row on one (metric, unit) and a v3 row keeps
+          its period and geography outside the metric — across scopes a
+          forecast trajectory, a series over time, a year next to its fourth
+          quarter or two regions would read as disagreements.  Its probable
+          unit-scale (~1000x) errors go to ``meta.quant_unit_warnings``, and
+          its synthesized disagreements (origin ``quant_reconcile``) are
+          returned for contested.json, the probable unit-scale errors first
+          and at most QUANT_RECONCILE_MAX_CONTESTED, counted in
+          ``meta.quant_reconcile_contested``; both name their scope (the
+          claim's suffix, the warning's ``scope``);
         * ``flag_implausible_quant`` checks the claimed actuals
           (:func:`_claimed_actual`) against ``as_of``, the last day a cited
           source can have published on: future-dated actuals and extreme
-          growth rates go to ``meta.quant_implausible``.
+          growth rates go to ``meta.quant_implausible``, followed by the
+          claimed actuals for a period that ends after ``as_of``
+          (:func:`_unfinished_period_flags`; the helper reads only
+          ``as_of_date``, and a v3 row states its period in ``period_end``).
 
         Each meta list keeps at most QUANT_SANITY_MAX_FLAGS entries;
         ``meta.quant_sanity_truncated`` records the total before any cut, by
@@ -8368,6 +8377,9 @@ class _Engine:
                     found.append(claim)
             unit_errors.extend({**warning, "scope": label} if label and isinstance(warning, dict) else warning
                                for warning in result[1])
+        # Probable unit-scale errors first, so the cap keeps them; the sort is
+        # stable, so each kind keeps its scopes' first-seen order.
+        found.sort(key=lambda claim: "probable unit-scale error" not in str(claim.get("why_they_differ") or ""))
         truncated: dict[str, int] = {}
         if unit_errors:
             self.meta["quant_unit_warnings"] = unit_errors[:QUANT_SANITY_MAX_FLAGS]
@@ -8385,8 +8397,10 @@ class _Engine:
             self.log("ok", f"v3: quant reconcile: +{len(extra)} contested claim(s) from numeric "
                            f"disagreement{capped}")
         claimed = [dict(row) for row in quant if _claimed_actual(row)]
+        unfinished = _unfinished_period_flags(claimed, as_of)
         implausible = self.bridge_call("flag_implausible_quant", claimed, as_of)
-        if isinstance(implausible, list) and implausible:
+        implausible = [*(implausible if isinstance(implausible, list) else ()), *unfinished]
+        if implausible:
             self.meta["quant_implausible"] = implausible[:QUANT_SANITY_MAX_FLAGS]
             if len(implausible) > QUANT_SANITY_MAX_FLAGS:
                 truncated["quant_implausible"] = len(implausible)
@@ -9415,7 +9429,8 @@ def classify_quant_row(row: Mapping[str, Any], as_of: _dt.date) -> dict:
 
 def _claimed_actual(row: Mapping[str, Any]) -> bool:
     """Whether a quantitative row presents its value as an actual — the rows
-    the future-dated check of ``flag_implausible_quant`` applies to.  A row
+    the future-dated checks (``flag_implausible_quant``,
+    :func:`_unfinished_period_flags`) apply to.  A row
     :func:`classify_quant_row` typed (RESEARCH_QUANT_TYPING) is one when it is
     ``reported`` or flagged ``future_dated_reported`` (an actual or estimate
     dated after as-of, typed unknown); any other row when its ``value_type``
@@ -9426,17 +9441,48 @@ def _claimed_actual(row: Mapping[str, Any]) -> bool:
     return row.get("value_type") in (None, "actual")
 
 
+def _unfinished_period_flags(rows: Sequence[Mapping[str, Any]], as_of: _dt.date) -> list[str]:
+    """``meta.quant_implausible`` entries, in ``flag_implausible_quant``'s
+    style, for the claimed actuals among ``rows`` whose ``period_end`` ends
+    after ``as_of`` (read as :func:`classify_quant_row` reads it, which types
+    such a row ``future_dated_reported``): an actual for a period that has
+    not ended.  The bridge helper reads only ``as_of_date``, so a row whose
+    ``as_of_date`` already starts after ``as_of`` is left to its date check
+    (one entry per row; YYYY, YYYY-MM and YYYY-MM-DD, the forms the facts
+    prompt asks for, read the same first day in both).  Pure: reads the
+    rows, never changes one."""
+    flags: list[str] = []
+    for row in rows:
+        if not _claimed_actual(row):
+            continue
+        period_text = _collapse(row.get("period_end"), 80)
+        end = _loose_period_bounds(period_text)[1]
+        if end is None or end <= as_of:
+            continue
+        stated = _loose_period_bounds(row.get("as_of_date"))[0]
+        if stated is not None and stated > as_of:
+            continue
+        flags.append(f"{str(row.get('metric') or '')[:60]}: period_end {period_text} ends AFTER research cutoff "
+                     f"{as_of.isoformat()} (claimed-actual for an unfinished period)")
+    return flags
+
+
 def _quant_scope(row: Mapping[str, Any]) -> tuple[tuple[Any, ...], str]:
     """``(key, label)`` of what a quantitative row measures beyond its
     (metric, unit): two rows are readings of one quantity, so a gap between
     them is a disagreement, only under one key (:func:`_quant_scopes`).
 
-    * Period: the end of ``period_end``, read as :func:`classify_quant_row`
-      reads it (an unreadable period by its own text); else the year of
-      ``as_of_date``, which without a period is when the number was current,
-      so two sources' readings of one figure published months apart still
-      meet (a sub-annual series states its periods in ``period_end``); None
-      when the row states neither.
+    * Period: the end and the length of ``period_end``, read as
+      :func:`classify_quant_row` reads it (:func:`_loose_period_bounds`) — a
+      month, quarter or half by its precision, a span of several years
+      ("2025-2030", "FY2025-29") by its first day too, and a year or a day
+      as a point ("2030" is "2030-12-31" and "by 2030") — so a year never
+      meets its fourth quarter, second half or December, nor a multi-year
+      total its last year; an unreadable period by its own text.  Else the
+      year of ``as_of_date``, which without a period is when the number was
+      current, so two sources' readings of one figure published months apart
+      still meet (a sub-annual series states its periods in ``period_end``);
+      None when the row states neither.
     * Geography: its canonical ``region`` (set from ``geography`` by the
       bridge's ``enrich_quantitative_rows``) or ``geography``, ignoring case
       and spacing; rows without one meet only each other.
@@ -9445,24 +9491,34 @@ def _quant_scope(row: Mapping[str, Any]) -> tuple[tuple[Any, ...], str]:
       ``target`` value_type and reported for any other.
 
     ``series`` is no part of it: it names the source's series, so different
-    sources on one quantity carry different series.  The label names the
-    period and geography as the row states them ("" when it states neither)."""
+    sources on one quantity carry different series.  The label names each
+    part a reader needs to tell scopes apart: the period as the row states
+    it ("as of 2025" for an ``as_of_date`` year), the geography as stated,
+    and the class unless reported ("projected", else "unclassified"); ""
+    for a reported row that states neither period nor geography."""
     period_text = _collapse(row.get("period_end"), 80)
+    period: tuple[Any, ...] | None
     if any(ch.isalnum() for ch in period_text) and period_text.casefold() not in _NO_PERIOD:
-        end = _loose_period_bounds(period_text)[1]
-        period: tuple[str, Any] | None = ("period", end.isoformat() if end is not None else period_text.casefold())
+        start, end, precision = _loose_period_bounds(period_text)
+        if start is None or end is None:
+            period = ("text", period_text.casefold())
+        elif start.year < end.year:
+            period = ("period", end.isoformat(), ("range", start.isoformat()))
+        else:
+            period = ("period", end.isoformat(), precision if precision in _MONTHS_PER else "point")
         period_label = period_text
     else:
         end = _loose_period_bounds(row.get("as_of_date"))[1]
         period = ("year", end.year) if end is not None else None
-        period_label = str(end.year) if end is not None else ""
+        period_label = f"as of {end.year}" if end is not None else ""
     geography = _collapse(row.get("geography"), 80)
     region = " ".join(str(row.get("region") or geography).casefold().split())
     if "epistemic_class" in row:
         kind = str(row.get("epistemic_class"))
     else:
         kind = "projected" if row.get("value_type") in ("forecast", "target") else "reported"
-    return (period, region, kind), ", ".join(part for part in (period_label, geography) if part)
+    kind_label = "" if kind == "reported" else "projected" if kind == "projected" else "unclassified"
+    return (period, region, kind), ", ".join(part for part in (period_label, geography, kind_label) if part)
 
 
 def _quant_scopes(rows: Sequence[Mapping[str, Any]]) -> list[tuple[str, list[dict]]]:

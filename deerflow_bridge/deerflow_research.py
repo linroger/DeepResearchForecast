@@ -16432,11 +16432,18 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
                         extra_contested = []
                     # TIME-4: the full run's quant sanity check (claimed actuals dated after
                     # the reference date, extreme growth), with its reference date: the
-                    # extracted as_of_date clamped to the run date, else today (UTC).
+                    # extracted as_of_date when it names a day, clamped to the run date
+                    # (a stale one is the run date) and never after it (no source
+                    # publishes later), else today (UTC).  A year or month names no
+                    # cutoff day (its first day would flag that period's actuals).
                     # Additive: meta only; quantitative.json is unchanged.
                     try:
+                        _today = _dt.datetime.now(_dt.timezone.utc).date()
+                        _extracted_as_of = str(obj.get("as_of_date") or "")
                         _sanity_ref, _ = _clamp_asof_reference(
-                            _parse_date(obj.get("as_of_date")), _dt.datetime.now(_dt.timezone.utc).date())
+                            _parse_date(_extracted_as_of) if _DATE_FULL_RE.match(_extracted_as_of) else None,
+                            _today)
+                        _sanity_ref = min(_sanity_ref, _today)
                         _implausible = flag_implausible_quant(quant, _sanity_ref)
                         if _implausible:
                             meta["quant_implausible"] = _implausible
