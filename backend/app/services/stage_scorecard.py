@@ -17,6 +17,13 @@ nothing and reuses the existing rule owners instead of copying their rules:
   ``PipelineOrchestrator._assess_run_health`` flag (parity is pinned by
   ``tests/test_stage_scorecard.py``).
 
+EVAL-16 adds the tool-call contracts (each must be 0): research
+``invalid_tool_calls`` / ``unknown_tool_calls`` summed by the v3 engine into
+``meta.kiqs`` (not applicable to other engines), and report
+``unknown_tool_calls``, the ``tool_unknown`` rows of the report's
+``agent_log.jsonl``.  :data:`RATE_METRICS` names the rates the offline
+cross-run aggregate (``scripts/stage_scorecard.py aggregate``) pools.
+
 The scorecard is observability, never a gate: it cannot change a pipeline's
 ``status`` or ``pipeline_health``, and it is written beside the pipeline state
 (``<pipeline_dir>/stage_scorecard.json``), never into the report folder.
@@ -279,6 +286,36 @@ def _research_metrics(paths: Mapping[str, Any], digests: dict) -> dict:
 
     metrics["actor_count"] = _actor_count(paths, meta_status, meta, digests)
     metrics["market_state"] = _market_state(paths, digests)
+    metrics.update(_kiq_tool_call_counts(meta_status, meta))
+    return metrics
+
+
+def _kiq_tool_call_counts(meta_status: str, meta: Optional[dict]) -> dict:
+    """EVAL-16: invalid_tool_calls / unknown_tool_calls of the v3 KIQ agents (meta.kiqs).
+
+    Only the v3 engine's KIQ agents answer tool calls with INVALID_TOOL_CALL /
+    UNKNOWN_TOOL, so the counts are not applicable to a meta that names another
+    engine (or names none and has no ``kiqs`` block, the pre-v3 engines).  A v3
+    meta without them (a run before EVAL-16) is not_instrumented, never a pass.
+    """
+    metrics: dict[str, dict] = {}
+    for name in ("invalid_tool_calls", "unknown_tool_calls"):
+        src = f"handoff/meta.json:kiqs.{name}"
+        err, kiqs = _field(meta, meta_status, "kiqs", src)
+        engine = meta.get("research_engine") if meta_status == MEASURED else None
+        if meta_status == MEASURED and engine != "v3" and (engine is not None or "kiqs" not in meta):
+            metrics[name] = _unavailable(NOT_APPLICABLE, src,
+                                         "not a v3 run: the research engine has no KIQ agents")
+        elif err is not None:
+            metrics[name] = err
+        elif not isinstance(kiqs, dict):
+            metrics[name] = _unavailable(UNREADABLE, src, "kiqs is not an object")
+        elif name not in kiqs:
+            metrics[name] = _unavailable(NOT_INSTRUMENTED, src, f"kiqs has no '{name}' field")
+        else:
+            count = _as_count(kiqs[name])
+            metrics[name] = _metric(count, source=src) if count is not None else _unavailable(
+                UNREADABLE, src, f"{name} is not a count")
     return metrics
 
 
@@ -592,7 +629,44 @@ def _report_metrics(paths: Mapping[str, Any], thresholds: Mapping[str, float],
             UNREADABLE, src, "anchored_count is not a count")
         comparison = anchored
     metrics["market_anchor_count"] = err or _metric(comparison, source=src)
+    metrics["unknown_tool_calls"] = _tool_unknown_rows(paths, digests)
     return metrics
+
+
+def _tool_unknown_rows(paths: Mapping[str, Any], digests: dict) -> dict:
+    """EVAL-16: the ``action == "tool_unknown"`` rows of the report's agent_log.jsonl.
+
+    ReportAgent writes one such row whenever the report model names a tool that
+    does not exist (ReAct, native and ``_execute_tool`` dispatch paths); only
+    those rows count, never the ordinary ``tool_call`` rows.  The log is
+    append-only, so every attempt that wrote to this report counts (a resumed
+    report keeps the sections of earlier attempts).  A non-empty line that is
+    not a JSON object could hide a row, so it makes the count unreadable.
+    """
+    src = "report/agent_log.jsonl:action=tool_unknown"
+    path = paths.get("agent_log")
+    if not isinstance(path, str) or not os.path.exists(path):
+        return _unavailable(ARTIFACT_MISSING, src)
+    count = malformed = 0
+    try:
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except (ValueError, RecursionError):
+                    row = None
+                if not isinstance(row, dict):
+                    malformed += 1
+                elif row.get("action") == "tool_unknown":
+                    count += 1
+    except (OSError, UnicodeDecodeError):
+        return _unavailable(UNREADABLE, src)
+    digests["agent_log"] = _sha256(path)
+    if malformed:
+        return _unavailable(UNREADABLE, src, f"{malformed} line(s) are not JSON objects")
+    return _metric(count, source=src)
 
 
 def _scenario_metrics(forecast: Optional[dict], status: str,
@@ -705,6 +779,8 @@ _CHECKS: dict[str, tuple[tuple[str, Predicate], ...]] = {
         ("plan_fallback", _is_zero),
         ("synthesis_fallback_sections", _is_zero),
         ("market_state", _market_ok),
+        ("invalid_tool_calls", _is_zero),
+        ("unknown_tool_calls", _is_zero),
     ),
     "ontology": (
         ("stage_status", _stage_completed),
@@ -734,7 +810,24 @@ _CHECKS: dict[str, tuple[tuple[str, Predicate], ...]] = {
         ("probability_sum_ok", _is_true),
         ("has_residual_scenario", _is_true),
         ("citation_coverage", lambda r, t: r["value"] >= t["citation_coverage_min"]),
+        ("unknown_tool_calls", _is_zero),
     ),
+}
+
+# EVAL-16: the rate metrics (num/den records) per stage, with the direction that
+# is better; the cross-run aggregate (scripts/stage_scorecard.py aggregate) pools
+# them.  Every other metric is a count, flag or state.
+HIGHER_IS_BETTER = "higher"
+LOWER_IS_BETTER = "lower"
+RATE_METRICS: dict[str, dict[str, str]] = {
+    "research": {"kiq_completion": HIGHER_IS_BETTER, "kiq_fallback_rate": LOWER_IS_BETTER,
+                 "verified_share": HIGHER_IS_BETTER,
+                 "number_verification_pass_rate": HIGHER_IS_BETTER,
+                 "tool_failure_rate": LOWER_IS_BETTER},
+    "graph": {"core_actor_coverage": HIGHER_IS_BETTER},
+    "run": {"organic_share": HIGHER_IS_BETTER, "organic_round_coverage": HIGHER_IS_BETTER},
+    "report": {"citation_coverage": HIGHER_IS_BETTER,
+               "semantic_citation_unverifiable_ratio": LOWER_IS_BETTER},
 }
 
 
@@ -1024,6 +1117,7 @@ def resolve_inputs(pipeline_id: str, state: Optional[Mapping[str, Any]] = None) 
                 ReportManager._get_report_folder(pipeline_state.report_id), "forecast.json")
             paths["final_audit"] = ReportManager._get_report_final_audit_path(
                 pipeline_state.report_id)
+            paths["agent_log"] = ReportManager._get_agent_log_path(pipeline_state.report_id)
         except ValueError:  # an unsafe report id resolves to "artifact missing"
             pass
     return {
