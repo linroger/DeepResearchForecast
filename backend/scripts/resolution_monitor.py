@@ -38,6 +38,12 @@ EVAL-2（settlement events v2，确定性、无 LLM）：
   RESOLUTION_SETTLE_LEDGER=true（默认）时 ``run --all-recent`` 在逐报告循环后也跑一次。
   ensemble / evaluation 行永不扫描。
 
+EVAL-3（影子可观测面）：``run`` 与 ``summary`` 的持续校准一律走结算折叠——情景校准
+``calibration_summary(fold_settlements=True)``、二元校准 ``binary_calibration_summary``，
+两者只计 forecast_resolution.admissible() 放行的条目，其余按原因计入 ``excluded``；
+Running score 标注 Brier 口径（情景 multi-class sum, 0-2；二元 binary, 0-1）；未经闸门的
+market_brier 行标明 ungated / not calibration，免被误读为校准数。
+
 设计与 scripts/scheduled_rerun.py 同构：脚本自撑 sys.path、Config 旋钮经 getattr 读取
 （本文件不拥有 config.py）、全链路 degrade-safe——任何网络失败只产出**部分**报告，
 绝不抛异常、绝不改动任何在线管线语义。``--dry-run`` 全程不写盘（纯观测）。
@@ -506,10 +512,15 @@ def render_monitor_md(*, report_id: str, as_of: str,
                       anchored_count: int,
                       degraded: bool,
                       settlement: Optional[Dict[str, Any]] = None,
-                      settlement_events: Optional[List[Dict[str, Any]]] = None) -> str:
+                      settlement_events: Optional[List[Dict[str, Any]]] = None,
+                      binary_calibration: Optional[Dict[str, Any]] = None) -> str:
     """把一次监测结果渲染成确定性 markdown（无 LLM）。空信号也产出可读骨架。
 
-    EVAL-2：传入 ``settlement``（结算计数）时追加「## Settlement」段；缺省 None → 输出不变。"""
+    EVAL-2：传入 ``settlement``（结算计数）时追加「## Settlement」段；缺省 None → 输出不变。
+    EVAL-3：Running score 标注 Brier 口径（情景 = multi-class sum, 0-2；二元 = binary, 0-1），
+    未经闸门的 market_brier 行标明 ungated / not calibration；
+    ``calibration`` 带 ``excluded`` 时列出按原因的排除计数；传入 ``binary_calibration``
+    （forecast_ledger.binary_calibration_summary）时追加结算折叠后的二元校准行。"""
     lines: List[str] = [
         f"# Resolution Monitor — {report_id}",
         "",
@@ -530,12 +541,26 @@ def render_monitor_md(*, report_id: str, as_of: str,
         "",
         "## Running score (from ledger)",
         "",
-        f"- Market-resolved binary forecasts: **{mb_n}**; mean Brier: "
-        f"**{mb if mb is not None else '—'}**",
-        f"- Scenario forecasts resolved: **{cb_n}**; mean Brier: "
+        f"- Market-resolved binary forecasts (all settlements, ungated; not calibration): "
+        f"**{mb_n}**; mean Brier (binary, 0-1): **{mb if mb is not None else '—'}**",
+        f"- Scenario forecasts resolved: **{cb_n}**; mean Brier (multi-class sum, 0-2): "
         f"**{cb if cb is not None else '—'}**; calibration error: "
         f"**{ce if ce is not None else '—'}**",
     ]
+    if "excluded" in calibration:
+        lines.append("- Scenario forecasts excluded from calibration: "
+                     f"{_reason_counts(calibration.get('excluded'))}")
+    if binary_calibration is not None:
+        bb = binary_calibration.get("mean_brier")
+        bce = binary_calibration.get("calibration_error")
+        lines += [
+            f"- Binary forecasts scored (settlement fold, point-in-time gate): "
+            f"**{binary_calibration.get('n_resolved') or 0}**; mean Brier (binary, 0-1): "
+            f"**{bb if bb is not None else '—'}**; calibration error: "
+            f"**{bce if bce is not None else '—'}**",
+            "- Binary forecasts excluded from calibration: "
+            f"{_reason_counts(binary_calibration.get('excluded'))}",
+        ]
 
     # ── 本次新判定 ──
     lines += ["", "## Newly resolved markets", ""]
@@ -682,10 +707,9 @@ def _load_sealed_forecast(report_id: str) -> Optional[Dict[str, Any]]:
 
 
 def _is_production_primary(row: Any) -> bool:
-    """生产 primary commit 行：唯一可被生产校准计分的预测目标（I-21）。"""
-    return (isinstance(row, dict) and row.get("row_type") == "commit"
-            and row.get("calibration_role") == "primary"
-            and _ledger.is_production_calibration_row(row))
+    """生产 primary commit 行：唯一可被生产校准计分的预测目标（I-21）。
+    与结算折叠共用同一谓词（forecast_ledger.is_production_primary_commit），两处永不分叉。"""
+    return _ledger.is_production_primary_commit(row)
 
 
 def _commit_target_meta(row: Dict[str, Any], *,
@@ -961,7 +985,10 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
         settlement_summary["not_recorded"] = _settlement.NOT_PRODUCTION_PRIMARY
 
     # ── 汇总分数（账本读取；dry-run 也能读，只是不含本次未写入的新判定）──
-    calibration = _ledger.calibration_summary(ledger_dir)
+    # EVAL-3：监测是影子可观测面——校准一律走结算折叠 + admissible() 时点闸门（报告路径另由
+    # FORECAST_LEDGER_SETTLEMENT_FOLD 决定，默认不变）。
+    calibration = _ledger.calibration_summary(ledger_dir, fold_settlements=True)
+    binary_calibration = _ledger.binary_calibration_summary(ledger_dir)
     market_brier = _ledger.market_brier_summary(ledger_dir)
 
     md = render_monitor_md(
@@ -970,7 +997,8 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
         calibration=calibration, market_brier=market_brier,
         anchored_count=len(anchored), degraded=degraded,
         settlement=settlement_summary,
-        settlement_events=settlement["events"] + settlement["terminal"])
+        settlement_events=settlement["events"] + settlement["terminal"],
+        binary_calibration=binary_calibration)
 
     report_path: Optional[str] = None
     if not dry_run and write_report:
@@ -997,6 +1025,7 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
         "resolution_records": records,
         "settlement": settlement_summary,
         "calibration": calibration,
+        "binary_calibration": binary_calibration,
         "market_brier": market_brier,
         "degraded": degraded,
         "dry_run": bool(dry_run),
@@ -1250,7 +1279,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.cmd == "summary":
         _print_json({
             "market_brier": _ledger.market_brier_summary(),
-            "scenario_calibration": _ledger.calibration_summary(),
+            "scenario_calibration": _ledger.calibration_summary(fold_settlements=True),
+            "binary_calibration": _ledger.binary_calibration_summary(),
         })
         return 0
     return 2  # 不可达（subparser required）

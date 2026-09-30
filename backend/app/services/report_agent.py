@@ -3072,6 +3072,66 @@ class ReportAgent:
                 stamp["marker_pipeline_id"] = marker_pipeline_id
         return stamp
 
+    # EVAL-3: the three numbers forecast['historical_calibration'] has always carried. With
+    # FORECAST_LEDGER_SETTLEMENT_FOLD off the report keeps exactly this shape, so the additive
+    # exclusion counts of calibration_summary never reach forecast.json.
+    _HISTORICAL_CALIBRATION_KEYS = ("n_resolved", "mean_brier", "calibration_error")
+
+    def _historical_calibration_as_of(self) -> Optional[str]:
+        """EVAL-3: the point-in-time cut of the folded historical calibration.
+
+        The ledger context's ``as_of_date``, else the research actors' ``as_of_date``,
+        each only when it is a canonical, non-future YYYY-MM-DD date (``validate_as_of``,
+        the rule the ledger commit applies); else None, and ``admissible`` then cuts at
+        now. Tests build agents via ``__new__``, so both attributes are read with getattr.
+        """
+        from ..utils.point_in_time import validate_as_of
+        for source in (getattr(self, "ledger_context", None), getattr(self, "actors", None)):
+            if isinstance(source, dict):
+                try:
+                    return validate_as_of(source.get("as_of_date"))
+                except ValueError:
+                    continue
+        return None
+
+    def _attach_historical_calibration(self, forecast: Dict[str, Any]) -> None:
+        """NEXTSTEPS P2-4 + EVAL-3: surface the ledger's historical calibration in ``forecast``.
+
+        FORECAST_LEDGER_SETTLEMENT_FOLD off (default): the historical read, a bare
+        ``calibration_summary()``; when anything resolved, its three numbers become
+        ``forecast['historical_calibration']`` (byte-identical to before) and one note joins
+        ``confidence_rationale``. On: the scenario summary folds the settlement events and is
+        cut at ``_historical_calibration_as_of``; ``historical_calibration`` is written when
+        the scenario or the binary summary scored anything and keeps every summary field plus
+        ``as_of``, the Brier ``scale`` and a binary-scale ``binary`` block. The rationale note
+        stays the scenario one. Nothing is recalibrated. Degrade-safe: any failure leaves
+        ``forecast`` without the block.
+        """
+        try:
+            from .forecast_ledger import calibration_summary as _cal
+            if getattr(Config, "FORECAST_LEDGER_SETTLEMENT_FOLD", False):
+                from .forecast_ledger import binary_calibration_summary
+                as_of = self._historical_calibration_as_of()
+                _cs = _cal(as_of=as_of)
+                binary = binary_calibration_summary(as_of=as_of)
+                if _cs.get("n_resolved") or binary.get("n_resolved"):
+                    block = dict(_cs)
+                    block.update({"as_of": as_of, "scale": "multiclass_sum", "binary": binary})
+                    forecast["historical_calibration"] = block
+            else:
+                _cs = _cal()
+                if _cs.get("n_resolved"):
+                    forecast["historical_calibration"] = {
+                        key: _cs[key] for key in self._HISTORICAL_CALIBRATION_KEYS if key in _cs}
+            if _cs.get("n_resolved"):
+                _note = (f"历史校准：已解析 {_cs['n_resolved']} 个预测，平均 Brier "
+                         f"{_cs.get('mean_brier')}，校准误差 {_cs.get('calibration_error')}")
+                forecast["confidence_rationale"] = (
+                    (str(forecast.get("confidence_rationale") or "").strip()
+                     + " ｜" + _note).strip(" ｜"))
+        except Exception:  # noqa: BLE001
+            pass
+
     def _finalize_structured_forecast(self, report_id: str, report_markdown: str,
                                       report: Optional["Report"] = None) -> None:
         """Persist the final forecast.json.
@@ -3349,18 +3409,7 @@ class ReportAgent:
         # 让信心由 track record 赚得而非自评；无已解析样本时不改（degrade-safe）。
         # EVAL-13：评估运行绝不读生产校准（生产 track record 不得影响评估样本的信心）。
         if getattr(Config, "REPORT_FORECAST_LEDGER", True) and _evaluation is None:
-            try:
-                from .forecast_ledger import calibration_summary as _cal
-                _cs = _cal()
-                if _cs.get("n_resolved"):
-                    forecast["historical_calibration"] = _cs
-                    _note = (f"历史校准：已解析 {_cs['n_resolved']} 个预测，平均 Brier "
-                             f"{_cs.get('mean_brier')}，校准误差 {_cs.get('calibration_error')}")
-                    forecast["confidence_rationale"] = (
-                        (str(forecast.get("confidence_rationale") or "").strip()
-                         + " ｜" + _note).strip(" ｜"))
-            except Exception:  # noqa: BLE001
-                pass
+            self._attach_historical_calibration(forecast)
         # REPORT-1：骨架因概率不可读被弃用时，把其复核摘要并入 quality.probability_parse。
         _spine_review = getattr(self, "_spine_probability_review", None)
         if _spine_review:
