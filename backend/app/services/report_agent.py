@@ -3885,7 +3885,7 @@ class ReportAgent:
         except Exception:  # noqa: BLE001
             pass
         # REPORT-3：别名感知概率槽观测（REPORT_LOGIC_NUMBER_GATE != off；off 时不加键）。此处是成稿
-        # 草稿（正文修复在其后），终审另记最终字节上的 logic_number；只记录，不进发布门。
+        # 草稿（正文修复在其后），终审以最终字节上的 logic_number（含修复记录）覆盖本值；只记录，不进发布门。
         try:
             _ln_observation = self._logic_number_observation(report_markdown, forecast)
             if _ln_observation is not None:
@@ -6585,9 +6585,10 @@ class ReportAgent:
     def _resync_summary_blockquote(report: "Report", md: str, scenarios: List[Dict[str, Any]]
                                    ) -> Tuple[str, Optional[str], List[Dict[str, str]]]:
         """REPORT-3：成稿阶段的摘要补同步（只计算，不改任何状态）。规划时骨架尚无情景（成稿后
-        抽取的旧路径）或其后概率又被移动时，摘要仍可能与最终情景不符；仅当成稿里恰有一行等于
-        "> {outline.summary}" 时才改写该行，并返回改写后的摘要供调用方与 report.outline.summary /
-        self._outline_summary 一并提交（四者保持逐字节一致）。找不到唯一的那一行则不改。
+        抽取的旧路径）或其后概率又被移动时，摘要仍可能与最终情景不符；仅当成稿里恰有一处整行块
+        等于 "> {outline.summary}"（摘要含换行时为多行：首行带 "> "，其后是 blockquote 的惰性续行）
+        时才改写该块，并返回改写后的摘要供调用方与 report.outline.summary / self._outline_summary
+        一并提交（四者保持逐字节一致）。找不到唯一的那一块则不改。
         返回 (成稿, 新摘要或 None, 改写记录)。"""
         from . import logic_number as _ln
         summary = getattr(getattr(report, "outline", None), "summary", None)
@@ -6595,12 +6596,18 @@ class ReportAgent:
             summary, _ln.find_probability_slots(summary, scenarios))
         if not applied:
             return md, None, []
-        lines = md.split("\n")
-        hits = [index for index, line in enumerate(lines) if line == f"> {summary}"]
+        block = f"> {summary}"
+        hits: List[int] = []
+        position = md.find(block)
+        while position >= 0 and len(hits) < 2:
+            end = position + len(block)
+            if (position == 0 or md[position - 1] == "\n") and (end == len(md) or md[end] == "\n"):
+                hits.append(position)
+            position = md.find(block, position + 1)
         if len(hits) != 1:
             return md, None, []
-        lines[hits[0]] = f"> {new_summary}"
-        return "\n".join(lines), new_summary, [{"where": "outline_summary", **row} for row in applied]
+        synced = md[:hits[0]] + f"> {new_summary}" + md[hits[0] + len(block):]
+        return synced, new_summary, [{"where": "outline_summary", **row} for row in applied]
 
     def _repair_logic_number(self, report_id: str, report: "Report") -> None:
         """REPORT-3：稳定器之前的确定性别名概率槽修复（零 token）。
@@ -9795,6 +9802,12 @@ class ReportAgent:
             quality["quote_provenance"] = quote_audit
             quality["numeric_consistency"] = numeric_audit
             quality["implausible_stats"] = stat_audit
+            # REPORT-3: the final-bytes alias-slot observation (with this run's repair record)
+            # replaces the draft one _finalize_structured_forecast took before the repair.
+            if logic_number_audit is not None:
+                quality["logic_number"] = logic_number_audit
+            else:
+                quality.pop("logic_number", None)
             quality["final_audit"] = audit
             forecast["quality"] = quality
             if getattr(Config, "REPORT_PUBLISH_GATE", False):

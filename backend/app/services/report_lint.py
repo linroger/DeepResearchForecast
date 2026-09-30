@@ -804,7 +804,8 @@ def check_scenario_probabilities(md: str, spine: Optional[Dict[str, Any]],
 
     REPORT-3：alias_aware=True（REPORT_LOGIC_NUMBER_GATE=numeric）时再并入别名槽不符
     （logic_number.s11_mismatches，「基准情景（40%）」对 A=0.35），同一格式、去重后同受 8 条上限；
-    默认 False 时输出逐字节不变。只检测不改写。"""
+    检测异常时失败即关闭（记一条 "logic-number alias audit failed: <类型>"，与
+    ReportAgent._audit_numeric_consistency 一致）。默认 False 时输出逐字节不变。只检测不改写。"""
     if not isinstance(spine, dict):
         return []
     issues: List[str] = []
@@ -834,11 +835,14 @@ def check_scenario_probabilities(md: str, spine: Optional[Dict[str, Any]],
             pv = min(near, key=lambda x: abs(x - p))
             issues.append(f"scenario '{name[:28]}': prose {pv}% vs spine {p}%")
     if alias_aware:
-        from .logic_number import s11_mismatches  # 惰性：仅 numeric 需要，模块级不引入服务层依赖
+        try:
+            from .logic_number import s11_mismatches  # 惰性：仅 numeric 需要，模块级不引入服务层依赖
 
-        for message in s11_mismatches(text, spine.get("scenarios") or [], reference="spine"):
-            if message not in issues:
-                issues.append(message)
+            for message in s11_mismatches(text, spine.get("scenarios") or [], reference="spine"):
+                if message not in issues:
+                    issues.append(message)
+        except Exception as exc:  # noqa: BLE001 — 硬规则检测失败 → fail closed（记为一条不符）
+            issues.append(f"logic-number alias audit failed: {type(exc).__name__}")
     return issues[:8]
 
 

@@ -16,26 +16,36 @@ scenario by an alias:
 * ``N% 的概率 / 可能性 ALIAS`` ("仅10%概率超预期上行");
 * ``ALIAS at N% probability``.
 
+In the alias-first forms a scenario word may follow the alias ("基准扩张情景（40%）",
+"Recession scenario (30%)").
+
 Aliases (``derive_scenario_aliases``) are the full name, an enumerator label at the
 start of the name ("A：" → 情景A / A情景 / Scenario A / scenario A), the core after
 the label, the head of the core before its first bracket or separator, and role words
 ("基准情景", "baseline", "upside" …) resolved to the one scenario whose name carries
-the role keyword.  The roles deliberately do not use
-``forecast_extractor._is_residual_scenario_name``: it counts 基准 / baseline as
-residual, so "基准情景" would never resolve on "A：基准扩张".  An alias that could
+the role keyword as a tag ("A：基准扩张", "D：超预期上行", "(baseline equilibrium)"; not
+"Bull case: rates fall and other regions follow" for the residual role, nor "低于基准").
+The roles deliberately do not use ``forecast_extractor._is_residual_scenario_name``: it
+counts 基准 / baseline as residual, so "基准情景" would never resolve on "A：基准扩张".  An alias that could
 name two scenarios is dropped.  A bare role word, 维持现状 or a two-character CJK name
-part is also an ordinary word ("价格上行（10%）" is a price move), so before a bracket,
-colon or "at" slot it counts only when it stands free (after punctuation, a preposition
-or a determiner), and after "N%的概率" only with a scenario word right after it
-("有40%的概率走向基准路径"; "油价有40%的概率上行" is a price move).
+part is also an ordinary word ("价格上行（10%）" is a price move, "from the baseline (18%)
+to 45%" a level), so before a bracket, colon or "at" slot it counts only when it stands
+free (after punctuation, a preposition or a determiner), and then names a scenario only
+with a signal: a probability word in the slot, a scenario word right after the alias or
+the slot, or a label position ("- 上行（10%）：…").  A free weak alias without one is
+``unresolved`` (guard ``weak_alias``).  After "N%的概率" a weak alias counts only with a
+scenario word right after it ("有40%的概率走向基准路径"; "油价有40%的概率上行" is a price
+move).
 
 A slot whose number differs from the scenario's probability by more than ``tol_pt``
-points is a finding.  REPORT-2's range, quantity, sum and market guards
-(``narrative_sync``), an inline quotation, a conditional opener ("若进入B情景，则有40%
-的概率…") and a history context ("此前…", "…已下调至35%", "…→ 35%") make it
-``unresolved``: it is reported, never rewritten.  Everything else is ``fixable``, and
-``substitute_probability_slots`` rewrites exactly the number, keeping its format
-("40%" → "35%", "0.40" → "0.35", "约40%" → "约35%").
+points is a finding.  An unsignalled weak alias, REPORT-2's range, quantity, sum and
+market guards (``narrative_sync``), an inline quotation, a conditional opener ("若进入B
+情景，则有40%的概率…") and a history context ("此前…", "…已下调至35%", "…→ 35%",
+"trimmed the bull case (35%) to 30%") make it ``unresolved``: it is reported, never
+rewritten.  Everything else is ``fixable``, and ``substitute_probability_slots``
+rewrites exactly the number, keeping its format ("40%" → "35%", "0.40" → "0.35",
+"约40%" → "约35%").  The guards decide only whether a rewrite is safe: the 'numeric'
+gate's S11 strings (``s11_mismatches``) carry every finding, fixable or unresolved.
 ``audit_markdown`` scans a report, skipping fenced blocks, the References appendix,
 the deterministic Part-1 block and every blockquote except the system summary
 blockquote right after the H1.  No LLM, no IO.
@@ -87,23 +97,68 @@ _GENERIC_ALIAS_KEYS = frozenset({
     "case", "cases", "scenario", "scenarios", "path", "outcome",
     "情景", "场景", "路径", "情形",
 })
-# Role words, each resolved to the unique scenario whose name holds the role keyword.
-_ROLE_ALIASES: Tuple[Tuple[Tuple[str, ...], Pattern[str]], ...] = (
+
+
+# A role keyword may close a name part before a scenario word ("Chokepoint Bear Case",
+# "D 上行情景").
+_ROLE_TRAILING_WORD = (r"(?:[ \t-]*+(?:情景|场景|路径|情形|(?:case|scenario|path|outcome)s?)"
+                       r"(?![A-Za-z]))?")
+
+
+class _RoleKeyword(NamedTuple):
+    """A role keyword anywhere in a name, and closing a part of it (_holds_role)."""
+
+    anywhere: Pattern[str]
+    closing: Pattern[str]
+
+
+def _role_keyword(keyword: str) -> _RoleKeyword:
+    return _RoleKeyword(re.compile(keyword, re.I),
+                        re.compile(r"(?:" + keyword + r")" + _ROLE_TRAILING_WORD + r"$", re.I))
+
+
+# Role words, each resolved to the unique scenario whose name holds the role keyword as a
+# tag (``_holds_role``), never inside a description or after a comparison: "Bull case:
+# rates fall and other regions follow" is no residual scenario, "低于基准的放缓" / "Below
+# baseline" no base case.  Real names carry the tag at the head ("A：基准扩张", "A 基准情景：
+# …", "Bull S-Curve — …"), at the end of a part ("D超预期上行", "Actuator/Battery Chokepoint
+# Bear Case", "Muddle-Through (status-quo baseline)", "(Chokepoint Reflexivity, base
+# case)") or opening a bracket or slash part ("Managed Fragmentation (baseline
+# equilibrium)", "Other / Status Quo").
+_ROLE_ALIASES: Tuple[Tuple[Tuple[str, ...], _RoleKeyword], ...] = (
     (("基准情景", "基准", "主情景", "base case", "baseline scenario", "baseline"),
-     re.compile(r"基准|主情景|(?<![a-z])(?:baseline|base[\s-]?case)", re.I)),
+     _role_keyword(r"基准|主情景|(?<![A-Za-z])(?:baseline|base[\s-]?case)(?![A-Za-z])")),
     (("上行情景", "上行", "upside", "bull case"),
-     re.compile(r"上行|(?<![a-z])(?:upside|bull)", re.I)),
+     _role_keyword(r"上行|(?<![A-Za-z])(?:upside|bull(?:ish)?)(?![A-Za-z])")),
     (("下行情景", "下行", "downside", "bear case"),
-     re.compile(r"下行|(?<![a-z])(?:downside|bear)", re.I)),
+     _role_keyword(r"下行|(?<![A-Za-z])(?:downside|bear(?:ish)?)(?![A-Za-z])")),
     (("维持现状", "兜底", "其他情景", "其它情景", "status quo"),
-     re.compile(r"维持现状|兜底|其他|其它|(?<![a-z])(?:status[\s-]quo|other)", re.I)),
+     _role_keyword(r"维持现状|兜底|其他|其它|(?<![A-Za-z])(?:status[\s-]quo|others?)(?![A-Za-z])")),
+)
+# For the role check the name's enumerator may also be glued to a CJK core or spaced
+# from it without punctuation ("A基准扩张：…", "A 基准情景：…", "情景A维持现状").
+_ROLE_LABEL_RE = re.compile(
+    r"(?:[Ss]cenario[ \t]+|情景[ \t]*)?(?:IV|V|I{1,3}|[A-E])"
+    r"(?:[ \t]*[：:.、．)）]|[ \t]*(?=[\u3400-\u9fff]))[ \t]*")
+# Name parts and the delimiter before each; a part opening the name or following a
+# bracket or a slash is a tag, one after a colon or a dash a description.
+_NAME_PART_SPLIT_RE = re.compile(r"([（()）;；—–:：/])")
+_TAG_OPENERS = frozenset("（(/")
+_ROLE_COMPARATIVE_RE = re.compile(
+    r"(?:低于|高于|好于|差于|弱于|强于|不及|超过|超出|偏离|相对|相比|较|对比"
+    r"|(?<![A-Za-z])(?:below|above|beyond|over|under|than|versus|vs\.?|relative[ \t]+to"
+    r"|compared[ \t]+(?:to|with))(?![A-Za-z])[ \t]*+(?:the[ \t]++)?)$",
+    re.I,
 )
 # Weak aliases are also ordinary words ("价格上行（10%）" is a price move, "高于基准（40%）" a
 # benchmark, "租金维持现状（70%）" a rent that stays put): the bare role words, 维持现状 and
-# two-character CJK name parts.  Before a bracket, colon or "at" slot one names a
-# scenario only when it stands free — after punctuation, the line start, a CJK
-# preposition / conjunction or an English determiner; after "N%的概率" only with a
-# scenario word right after it (_SCENARIO_WORD_RE).
+# two-character CJK name parts.  Before a bracket, colon or "at" slot one is read only
+# when it stands free — after punctuation, the line start, a CJK preposition /
+# conjunction or an English determiner — and even then names a scenario only with a
+# signal (``_weak_alias_signalled``): "from the baseline (18%) to 45%", "the upside (12%)
+# to our price target", "油价方面，上行（10%）空间有限" and "相对基准（40%）的偏离" stand free
+# but name a level, a price move or a benchmark.  After "N%的概率" a weak alias counts
+# only with a scenario word right after it (_SCENARIO_WORD_RE).
 _WEAK_ROLE_ALIASES = frozenset({"基准", "上行", "下行", "兜底", "维持现状",
                                 "baseline", "upside", "downside"})
 _FREE_CJK_LEADS = frozenset("在与和及或、即为是按以对")
@@ -125,24 +180,43 @@ _HEDGE = r"(?:(?:约|大约|~|～|≈)" + _WS + r"|(?:about|approx\.?)[ \t]++)?"
 # 1-3 digits with an optional decimal part and a percent sign; only ASCII digits, since a
 # replacement is written in ASCII.
 _PERCENT = r"(?P<num>[0-9]{1,3}(?:\.[0-9]+)?)" + _WS + r"(?P<sym>[%％])"
+_SCENARIO_WORD = r"(?:情景|场景|路径|情形|(?i:case|scenario|path)(?![A-Za-z]))"
+# Between an alias and its bracket or colon: emphasis, spaces and an optional scenario
+# word ("基准扩张情景（40%）", "**Recession** scenario (30%)").
+_ALIAS_SUFFIX = (_EMPHASIS + _WS + r"(?:(?P<scen>" + _SCENARIO_WORD + r")" + _EMPHASIS + _WS
+                 + r")?")
 _ALIAS_TAILS: Tuple[Tuple[str, Pattern[str]], ...] = (
     ("percent", re.compile(
-        _EMPHASIS + _WS + r"[（(]" + _WS + r"(?:(?:概率|probability)" + _WS + r"[:：]?" + _WS + r")?"
+        _ALIAS_SUFFIX + r"[（(]" + _WS + r"(?:(?:概率|probability)" + _WS + r"[:：]?" + _WS + r")?"
         + _HEDGE + _PERCENT + _WS + r"(?:的?" + _WS + r"(?:概率|可能性)|probability)?" + _WS
         + r"[)）]",
         re.I)),
     ("decimal", re.compile(
-        _EMPHASIS + _WS + r"[（(]" + _WS + r"(?:概率|probability)" + _WS + r"[:：=]?" + _WS
+        _ALIAS_SUFFIX + r"[（(]" + _WS + r"(?:概率|probability)" + _WS + r"[:：=]?" + _WS
         + _HEDGE + r"(?P<num>0?\.[0-9]{2})(?![0-9])" + _WS + r"[)）]",
         re.I)),
     ("percent", re.compile(
-        _EMPHASIS + _WS + r"[:：]" + _WS + _EMPHASIS + _WS + _HEDGE + _PERCENT + _WS
+        _ALIAS_SUFFIX + r"[:：]" + _WS + _EMPHASIS + _WS + _HEDGE + _PERCENT + _WS
         + r"(?:的" + _WS + r")?(?:概率|可能性|probability(?![A-Za-z]))",
         re.I)),
     ("percent", re.compile(
-        _EMPHASIS + r"[ \t]++at[ \t]++" + _HEDGE + _PERCENT + _WS + r"probability(?![A-Za-z])",
+        _EMPHASIS + r"(?:[ \t]++(?P<scen>(?:case|scenario|path)(?![A-Za-z]))" + _EMPHASIS + r")?"
+        + r"[ \t]++at[ \t]++" + _HEDGE + _PERCENT + _WS + r"probability(?![A-Za-z])",
         re.I)),
 )
+# Signals that a free weak alias names a scenario (_weak_alias_signalled): a probability
+# word in its slot, a scenario word right after the alias (the tail's ``scen``) or right
+# after the slot ("上行（10%）情形下"), or a label position — the alias opens its line (after
+# indentation and an optional quote, heading, list or table marker and emphasis) and a
+# colon, a table bar or the line end closes the slot ("- 上行（10%）：需求超预期",
+# "## Upside (10%)"), or a bold alias is followed by a colon ("… **上行**（10%）：…").
+_PROBABILITY_WORD_RE = re.compile(r"概率|可能性|probability", re.I)
+_LABEL_LEAD_CHARS = 16
+_LABEL_LEAD_RE = re.compile(
+    r"[ \t]*+(?:>[ \t]*+)?(?:#{1,6}[ \t]++|(?:[-*+]|[0-9]{1,3}[.)])[ \t]++|[0-9]{1,3}、[ \t]*+"
+    r"|\|[ \t]*+)?[*_]{0,3}+")
+_LABEL_END_RE = re.compile(r"[*_]{0,3}+[ \t]*+(?:[:：|]|$)", re.M)
+_COLON_END_RE = re.compile(r"[*_]{0,3}+[ \t]*+[:：]")
 # "N% 的概率 / 可能性 ALIAS", optionally with an occurrence verb before the alias
 # ("有40%的概率进入基准情景").
 _NUMBER_FIRST_RE = re.compile(
@@ -152,12 +226,12 @@ _EMPHASIS_RE = re.compile(_EMPHASIS)
 # After "N%的概率" a weak alias names a scenario only with a scenario word right after
 # it ("有40%的概率走向基准路径"): "油价有40%的概率上行" is a price move, "有70%的概率维持现状"
 # a rent that stays put, "有40%的概率维持基准水平" a level.
-_SCENARIO_WORD_RE = re.compile(
-    _EMPHASIS + _WS + r"(?:情景|场景|路径|情形|(?i:case|scenario|path)(?![A-Za-z]))")
+_SCENARIO_WORD_RE = re.compile(_EMPHASIS + _WS + _SCENARIO_WORD)
 
 # ------------------------------------------------------------------ guards
-# Besides REPORT-2's range, quantity, sum and market guards (narrative_sync), three
-# contexts make a finding unresolved — reported, never rewritten:
+# Besides an unsignalled weak alias (``weak_alias``) and REPORT-2's range, quantity, sum
+# and market guards (narrative_sync), three contexts make a finding unresolved —
+# reported, never rewritten:
 # * quote: the number sits inside an inline quotation (“…”, "…", 「…」, 『…』, ‘…’);
 #   someone else's words are never edited;
 # * conditional: a conditional opener earlier in the slot's sentence ("若进入电力受限情景，
@@ -168,8 +242,13 @@ _SCENARIO_WORD_RE = re.compile(
 #   one right after its comma): "在基准扩张（40%）路径下装机稳步兑现，仅10%概率超预期上行"
 #   gives D's own probability;
 # * history: the slot states an earlier value or a change ("此前基准情景（40%）", "上季度
-#   基准情景（40%）", "基准情景（40%）已下调至35%", "基准情景（40%）→ 35%", "基准情景（40%）较
-#   上一版下调5个百分点", "Last quarter's base case (55%)", "Base (40%), down from 45%").
+#   基准情景（40%）", "原预测的基准情景（40%）", "相比初版报告中基准情景（40%）的判断", "Before the
+#   red-team critique, the base case (40%)", "基准情景（40%）已下调至35%", "基准情景（40%）→ 35%",
+#   "基准情景（40%）较上一版下调5个百分点", "Last quarter's base case (55%)", "Base (40%), down
+#   from 45%", "from the baseline (18%) to 45%"), or a move verb governs it earlier in its
+#   clause ("The pre-mortem trimmed the bull case (35%)", "将基准情景（40%）的概率下调").  A
+#   "to / 至 / 到 N%" counts only right after the slot: "基准情景（40%）下电动车在2030年达到45%"
+#   gives the base case's own probability.
 _QUOTE_RE = re.compile(
     r"“[^“”\n]{0,300}”|「[^「」\n]{0,300}」|『[^『』\n]{0,300}』|‘[^‘’\n]{0,300}’"
     r"|\"[^\"\n]{0,300}\"")
@@ -187,12 +266,15 @@ _CONDITIONAL_RE = re.compile(
 _OWN_CONDITION_RE = re.compile(
     r"[ \t*_]*+(?:(?:进入|出现|走向|落入|实现|发生|处于|the|our|a)(?![A-Za-z])[ \t*_]*+)?", re.I)
 _CLAUSE_BREAK_RE = re.compile(r"[，,、：:]")
-_HISTORY_LOOKBACK_CHARS = 24
+_HISTORY_LOOKBACK_CHARS = 48
 _HISTORY_BEFORE_RE = re.compile(
-    r"(?:此前|之前|原先|原本|原来|先前|最初|初判|初始|上一版|前一版|旧版|前版|上一?期|上一?季度?"
-    r"|上次|上一轮|去年|上年|上月"
+    r"(?:此前|之前|原先|原本|原来|先前|最初|初判|初始|初版|初稿|草稿|原预测|原判断|原版|上一版|前一版"
+    r"|旧版|前版|上一?期|上一?季度?|上次|上一轮|去年|上年|上月|批判前|评审前|修订前|调整前"
     r"|(?<![A-Za-z])(?:previously|previous|prior|earlier|initially|originally|formerly"
-    r"|last[ \t]+(?:quarter|year|month|week|round|version|update|report|edition))(?![A-Za-z]))"
+    r"|last[ \t]+(?:quarter|year|month|week|round|version|update|report|edition)"
+    r"|(?:first|initial|original|earlier)[ \t]+draft"
+    r"|before[ \t]+(?:the[ \t]+)?(?:[A-Za-z-]+[ \t]+){0,2}?(?:critique|review|revision"
+    r"|pre-?mortem|update))(?![A-Za-z]))"
     r"[^。；;！？!?\n]{0,12}$",
     re.I,
 )
@@ -205,14 +287,23 @@ _HISTORY_AFTER_RE = re.compile(
     + r"(?:下调|上调|调降|调升|下修|上修|降至|升至|降为|升为|调整|修正)"
     r"|(?:(?:was|were|is|are|(?:has|have|had)[ \t]++been)[ \t]++)?"
     r"(?:revised|cut|lowered|raised|trimmed|reduced|increased|moved)(?![A-Za-z])"
-    r"|(?:down|up)[ \t]++from(?![A-Za-z]))",
+    r"|(?:down|up)[ \t]++from(?![A-Za-z])"
+    r"|(?:(?:down|up|back)[ \t]++)?(?:to(?![A-Za-z])|至|到)" + _WS
+    + r"[0-9]{1,3}(?:\.[0-9]++)?" + _WS + r"[%％])",
     re.I,
 )
-# Guards that find a number which is not this report's current probability of the named
-# scenario (a market's or an outside forecaster's, a quotation's, a conditional or an
-# earlier one): the audit reports it, but it contradicts nothing, so it is no S11
-# mismatch.  Range, quantity and sum findings may be stale claims and stay in S11.
-_NOT_OWN_CLAIM_GUARDS = frozenset({"market", "quote", "conditional", "history"})
+# A move verb earlier in the slot's clause: English past forms ("trimmed the bull case"),
+# or 把 / 将 right before the alias with a move verb after the slot in the same clause
+# ("将基准情景（40%）的概率下调"; "将基准情景（40%）作为主路径" moves nothing).
+_HISTORY_MOVE_BEFORE_RE = re.compile(
+    r"(?<![A-Za-z])(?:trimmed|cut|raised|lowered|revised|reduced|increased|lifted|shaved|pared"
+    r"|downgraded|upgraded|nudged|marked[ \t]+(?:down|up))(?![A-Za-z])[^，,；;。.！？!?\n]{0,32}$",
+    re.I,
+)
+_HISTORY_HANDLE_BEFORE_RE = re.compile(r"(?:把|将)[^，,；;。！？!?\n]{0,8}$")
+_HISTORY_MOVE_AFTER_RE = re.compile(
+    r"[^，,；;。！？!?\n]{0,12}?(?:下调|上调|调低|调高|调降|调升|下修|上修|削减|压低|降低|提高|降|升"
+    r"|调整|修正)")
 
 # ------------------------------------------------------------------ markdown scope
 # The heading text keeps its trailing spaces (callers strip it): a lazy text before an
@@ -220,6 +311,12 @@ _NOT_OWN_CLAIM_GUARDS = frozenset({"market", "quote", "conditional", "history"})
 _HEADING_RE = re.compile(r"^[ \t]{0,3}(#{1,6})(?:[ \t]+(.*))?$")
 _REFERENCES_HEADING_RE = re.compile(r"^(?:references?|参考文献|参考来源)(?![A-Za-z])", re.I)
 _BLOCKQUOTE_RE = re.compile(r"^[ \t]{0,3}>")
+# Any non-blank line right after a blockquote line continues it lazily (CommonMark) — an
+# outline summary holding a newline is published as "> line 1\nline 2" — unless it starts
+# a new block: a heading or fence (handled first), a list item, a table row, a thematic
+# break or an HTML block.
+_LAZY_BREAK_RE = re.compile(
+    r"[ \t]{0,3}(?:[-*+](?:[ \t]|$)|[0-9]{1,9}[.)](?:[ \t]|$)|(?:[-*_][ \t]*+){3,}$|\||<)")
 _HEADING_STRIP_CHARS = " \t*_"
 
 
@@ -324,28 +421,52 @@ def _name_aliases(name: str) -> List[Tuple[str, str]]:
     return aliases
 
 
+def _holds_role(name: str, keyword: _RoleKeyword) -> bool:
+    """``name`` holds the role keyword as a tag (see _ROLE_ALIASES): opening the core
+    or a bracket / slash part, or closing any part (a scenario word may follow), and
+    never right after a comparison."""
+    label = _ROLE_LABEL_RE.match(name)
+    pieces = _NAME_PART_SPLIT_RE.split(name[label.end():] if label else name)
+    for position in range(0, len(pieces), 2):
+        part = pieces[position].strip(" \t*_")
+        if not part:
+            continue
+        opening = keyword.anywhere.match(part)
+        if opening and (position == 0 or pieces[position - 1] in _TAG_OPENERS):
+            return True
+        closing = keyword.closing.search(part)
+        if closing and not _ROLE_COMPARATIVE_RE.search(part, 0, closing.start()):
+            return True
+    return False
+
+
 @lru_cache(maxsize=64)
 def _alias_table(names: Tuple[str, ...]) -> _AliasTable:
     """Compile the aliases of the scenarios called ``names`` (by position).
 
-    A role word is offered to every scenario whose name holds its keyword.  An alias
-    whose key (``_alias_key``) would then name more than one scenario is dropped and
-    counted; the survivors form one alternation, longest alias first, with one named
-    group per alias so a match tells its scenario.
+    A role word is offered to every scenario whose name holds its keyword as a tag
+    (``_holds_role``).  An alias whose key (``_alias_key``) would then name more than
+    one scenario is dropped and counted, and so is a role word whose keyword occurs in
+    names only outside a tag; the survivors form one alternation, longest alias first,
+    with one named group per alias so a match tells its scenario.
     """
     entries: List[Tuple[str, str, int]] = []
     for index, name in enumerate(names):
         if name:
             entries += [(alias, pattern, index) for alias, pattern in _name_aliases(name)]
+    untagged: Set[str] = set()
     for role_aliases, keyword in _ROLE_ALIASES:
-        for index, name in enumerate(names):
-            if name and keyword.search(name):
-                entries += [(alias, _role_pattern(alias), index) for alias in role_aliases]
+        holders = [index for index, name in enumerate(names) if name and _holds_role(name, keyword)]
+        for index in holders:
+            entries += [(alias, _role_pattern(alias), index) for alias in role_aliases]
+        if not holders and any(name and keyword.anywhere.search(name) for name in names):
+            untagged.update(_alias_key(alias) for alias in role_aliases)
 
     owners: Dict[str, Set[int]] = {}
     for alias, _pattern, index in entries:
         owners.setdefault(_alias_key(alias), set()).add(index)
     ambiguous = sum(1 for indexes in owners.values() if len(indexes) > 1)
+    ambiguous += len(untagged - owners.keys())
     kept: Dict[Tuple[str, str], int] = {}
     for alias, pattern, index in entries:
         if len(owners[_alias_key(alias)]) == 1:
@@ -386,6 +507,27 @@ def _stands_free(text: str, start: int) -> bool:
     if last.isascii() and last.isalpha():
         return _TRAILING_WORD_RE.search(before).group(0).lower() in _FREE_LATIN_LEADS
     return not last.isdigit()
+
+
+def _label_position(text: str, alias: "re.Match[str]", slot_end: int) -> bool:
+    """The alias labels its line (see the signals above _PROBABILITY_WORD_RE)."""
+    start = alias.start()
+    if text[max(0, start - 2):start] in ("**", "__") and _COLON_END_RE.match(text, slot_end):
+        return True
+    lead_lo = max(0, start - _LABEL_LEAD_CHARS)
+    newline = text.rfind("\n", lead_lo, start)
+    if newline < 0 and lead_lo > 0:
+        return False
+    return (_LABEL_LEAD_RE.fullmatch(text, newline + 1, start) is not None
+            and _LABEL_END_RE.match(text, slot_end) is not None)
+
+
+def _weak_alias_signalled(text: str, alias: "re.Match[str]", tail: "re.Match[str]") -> bool:
+    """A free weak alias names a scenario: a probability word in its slot, a scenario word
+    right after the alias or the slot, or a label position."""
+    return bool(tail.group("scen") or _PROBABILITY_WORD_RE.search(tail.group(0))
+                or _SCENARIO_WORD_RE.match(text, tail.end())
+                or _label_position(text, alias, tail.end()))
 
 
 def _scenario_name(row: Any) -> str:
@@ -450,6 +592,7 @@ class _Slot(NamedTuple):
     form: str               # "percent" | "decimal"
     token_end: int          # end of the guarded token (after the percent sign)
     alias_first: bool       # the alias comes before the number
+    unsignalled: bool       # a free weak alias without a scenario signal (never rewritten)
 
 
 def _collect_slots(text: str, table: _AliasTable) -> Tuple[Dict[Tuple[int, int], _Slot], int]:
@@ -458,12 +601,13 @@ def _collect_slots(text: str, table: _AliasTable) -> Tuple[Dict[Tuple[int, int],
     slots: Dict[Tuple[int, int], _Slot] = {}
     conflicted: Set[Tuple[int, int]] = set()
 
-    def record(number: "re.Match[str]", alias: "re.Match[str]", form: str) -> None:
+    def record(number: "re.Match[str]", alias: "re.Match[str]", form: str,
+               unsignalled: bool = False) -> None:
         span = number.span("num")
         token_end = number.end("sym") if form == "percent" else number.end("num")
         slot = _Slot(table.group_index[alias.lastgroup], alias.group(0),
                      min(alias.start(), span[0]), max(alias.end(), number.end()), form, token_end,
-                     alias.start() < span[0])
+                     alias.start() < span[0], unsignalled)
         previous = slots.get(span)
         if previous is None:
             slots[span] = slot
@@ -471,12 +615,13 @@ def _collect_slots(text: str, table: _AliasTable) -> Tuple[Dict[Tuple[int, int],
             conflicted.add(span)
 
     for alias in table.regex.finditer(text):
-        if alias.lastgroup in table.weak_groups and not _stands_free(text, alias.start()):
+        weak = alias.lastgroup in table.weak_groups
+        if weak and not _stands_free(text, alias.start()):
             continue
         for form, tail_re in _ALIAS_TAILS:
             tail = tail_re.match(text, alias.end())
             if tail:
-                record(tail, alias, form)
+                record(tail, alias, form, weak and not _weak_alias_signalled(text, alias, tail))
                 break
     for number in _NUMBER_FIRST_RE.finditer(text):
         position = number.end()
@@ -509,6 +654,17 @@ def _conditional(text: str, slot: _Slot) -> bool:
     return False
 
 
+def _history(text: str, slot: _Slot) -> bool:
+    """The slot states an earlier value or a change (see the history guard above)."""
+    lookback = max(0, slot.lo - _HISTORY_LOOKBACK_CHARS)
+    if (_HISTORY_BEFORE_RE.search(text, lookback, slot.lo)
+            or _HISTORY_AFTER_RE.match(text, slot.hi)
+            or _HISTORY_MOVE_BEFORE_RE.search(text, lookback, slot.lo)):
+        return True
+    return bool(slot.alias_first and _HISTORY_HANDLE_BEFORE_RE.search(text, lookback, slot.lo)
+                and _HISTORY_MOVE_AFTER_RE.match(text, slot.hi))
+
+
 class _Guards:
     """The guards of one scanned text, in order; ``guard(start, slot, name)`` names the
     first that fires, or None.  The sum, market and quotation checks are built once, on
@@ -530,6 +686,8 @@ class _Guards:
 
     def guard(self, start: int, slot: _Slot, name: str) -> Optional[str]:
         text = self._text
+        if slot.unsignalled:
+            return "weak_alias"
         if range_guarded(text, start, slot.token_end):
             return "range"
         if quantity_guarded(text, start, slot.token_end, (name,)):
@@ -547,8 +705,7 @@ class _Guards:
             return "quote"
         if _conditional(text, slot):
             return "conditional"
-        if (_HISTORY_BEFORE_RE.search(text, max(0, slot.lo - _HISTORY_LOOKBACK_CHARS), slot.lo)
-                or _HISTORY_AFTER_RE.match(text, slot.hi)):
+        if _history(text, slot):
             return "history"
         return None
 
@@ -603,8 +760,8 @@ def find_probability_slots(text: Any, scenarios: Sequence[Dict[str, Any]], *,
     Each finding is ``{code, alias, scenario, claimed, expected_pct, start, end,
     excerpt, status, number, unit}``: ``claimed`` in percent points, ``start`` /
     ``end`` the span of the number itself, ``status`` ``fixable`` (with its
-    ``replacement``) or ``unresolved`` (with the ``guard`` that fired: range /
-    quantity / sum / market / quote / conditional / history).  Scenarios whose
+    ``replacement``) or ``unresolved`` (with the ``guard`` that fired: weak_alias /
+    range / quantity / sum / market / quote / conditional / history).  Scenarios whose
     probability is not a number in [0, 1] yield none.
     """
     if not isinstance(text, str) or not text:
@@ -664,7 +821,8 @@ def _scannable_spans(md: str, skip_summary_blockquote: bool, skipped: Counter) -
     The summary blockquote is the first blockquote after the H1 with only blank lines
     or the Part-1 block in between (``assemble_full_report`` writes "> {summary}"
     right under the title; the Part-1 block is later inserted between them), and it
-    runs to the first line that is no blockquote.
+    runs to the first line that is no blockquote.  A blockquote's lazy continuation
+    lines (``_LAZY_BREAK_RE``) are part of it.
     """
     lines = md.split("\n")
     spans: List[Tuple[int, int]] = []
@@ -674,10 +832,12 @@ def _scannable_spans(md: str, skip_summary_blockquote: bool, skipped: Counter) -
     references_level: Optional[int] = None
     summary: Optional[str] = None      # None → "pending" (after the H1) → "open" → "done"
     previous_scanned = False
+    in_quote = False                   # the previous line is a blockquote line with text
     for index, line in enumerate(lines):
         lo, hi = offset, offset + len(line)
         offset = hi + 1
         stripped = line.strip()
+        continues_quote, in_quote = in_quote, False
         inside_fence = fence is not None
         fence, fence_line = markdown_fence_transition(line, fence)
         reason: Optional[str] = None
@@ -694,7 +854,10 @@ def _scannable_spans(md: str, skip_summary_blockquote: bool, skipped: Counter) -
             binary_end = None if index == binary_end else binary_end
         else:
             heading = _HEADING_RE.match(line)
-            quote = heading is None and _BLOCKQUOTE_RE.match(line) is not None
+            quote = heading is None and (
+                _BLOCKQUOTE_RE.match(line) is not None
+                or (continues_quote and bool(stripped) and _LAZY_BREAK_RE.match(line) is None))
+            in_quote = quote and bool(stripped.lstrip(">").strip())
             if heading:
                 level = len(heading.group(1))
                 if references_level is not None and level <= references_level:
@@ -772,13 +935,12 @@ def audit_markdown(md: Any, scenarios: Sequence[Dict[str, Any]], *,
 def s11_mismatches(md: Any, scenarios: Sequence[Dict[str, Any]], *, reference: str) -> List[str]:
     """Every fixable or unresolved alias-slot mismatch of ``md`` as an S11 string
     ("scenario 'X': prose 40% vs forecast.json 35%"), deduplicated, in text order —
-    the 'numeric' gate feeds these into the existing hard S11 paths.  A number that is
-    not the report's current probability of the scenario (market, quote, conditional
-    or history guard) contradicts nothing and is left out."""
+    the 'numeric' gate feeds these into the existing hard S11 paths.  The gate fails
+    closed: a guard only decides that a rewrite is unsafe, and its heuristics (a
+    generic 'market' / 市场, a conditional or history cue, a weak alias) can fire on the
+    report's own stale number, so unresolved findings stay in."""
     messages: List[str] = []
     for finding in audit_markdown(md, scenarios, max_findings=None)["findings"]:
-        if finding.get("guard") in _NOT_OWN_CLAIM_GUARDS:
-            continue
         message = (f"scenario '{finding['scenario'][:28]}': prose {finding['claimed']}% "
                    f"vs {reference} {finding['expected_pct']}%")
         if message not in messages:

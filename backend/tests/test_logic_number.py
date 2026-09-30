@@ -71,6 +71,51 @@ def test_role_alias_needs_a_unique_holder():
         ("A：基准扩张", 0.35), ("B：基准偏弱", 0.3), ("C：其它", 0.35))) == []
 
 
+def test_role_keyword_must_be_a_tag():
+    """A role keyword inside a description or after a comparison names no role (review
+    round 2): "other" in a bull case's description, "低于基准的放缓"."""
+    rows = _rows(("Soft landing", 0.5), ("Bull case: rates fall and other regions follow", 0.2),
+                 ("Recession", 0.3))
+    aliases, stats = LN.derive_scenario_aliases(rows)
+    assert "status quo" not in aliases and aliases["bull case"] == 1
+    assert stats["ambiguous_alias"] == 5                      # the five residual-role words
+    assert LN.find_probability_slots("The status quo (50%) persists.", rows) == []
+    for name in ("A：低于基准的放缓", "A：低于基准", "A: Below baseline"):
+        comparative = _rows((name, 0.3), ("B：高增长", 0.7))
+        assert "基准情景" not in LN.derive_scenario_aliases(comparative)[0], name
+        assert LN.find_probability_slots("基准情景（50%）仍是主路径", comparative) == [], name
+    # A description after a colon or a dash is no tag.
+    described, _ = LN.derive_scenario_aliases(_rows(
+        ("A: Base case — upside capped by power", 0.6), ("B: Recession: others follow", 0.4)))
+    assert "upside" not in described and "status quo" not in described
+
+
+@pytest.mark.parametrize("name, role_alias", [
+    # Real names from archived forecasts: the tag opens the core (after a spaced or glued
+    # enumerator), closes a part (a scenario word may follow) or opens a bracket / slash.
+    ("A：基准扩张（管道打折后稳步兑现）", "基准情景"),
+    ("A 基准情景：管道打折兑现，债务化扩张延续", "基准情景"),
+    ("A基准扩张：管道部分兑现，债务化融资延续", "基准情景"),
+    ("D超预期上行：AI收入爆发+电力瓶颈突破", "上行情景"),
+    ("D 上行情景：AI收入超预期+芯片/电力约束双双解除", "上行情景"),
+    ("情景A维持现状", "status quo"),
+    ("E. 混合下行/其它：电力与融资约束叠加或维持现状", "兜底"),
+    ("Managed Fragmentation (baseline equilibrium)", "base case"),
+    ("Oscillating Bipolar Equilibrium (Chokepoint Reflexivity, base case)", "baseline"),
+    ("Managed Interdependence / Muddle-Through (status-quo baseline)", "base case"),
+    ("Managed Interdependence / Muddle-Through (status-quo baseline)", "status quo"),
+    ("Actuator/Battery Chokepoint Bear Case", "bear case"),
+    ("Credit-Market Tail — Deep-Bear / 2000-Magnitude ($0.8–1.2T)", "downside"),
+    ("B: Mild downside", "bear case"),
+    ("Other / Status Quo", "status quo"),
+    ("S2 — AI泡沫局部破裂+成熟节点灾难性过剩（BEAR）", "下行情景"),
+])
+def test_role_tags_in_real_names(name, role_alias):
+    aliases, stats = LN.derive_scenario_aliases(_rows((name, 0.6), ("Z：高增长", 0.4)))
+    assert aliases.get(role_alias) == 0, name
+    assert stats["ambiguous_alias"] == 0, name
+
+
 def test_enumerator_forms():
     aliases, _ = LN.derive_scenario_aliases(_rows(
         ("Scenario B: Recession", 0.25), ("III. Collapse", 0.1), ("情景C：温和复苏", 0.65)))
@@ -180,18 +225,38 @@ def test_non_slots_and_matches_give_no_finding(text):
     assert LN.find_probability_slots(text, rows) == []
 
 
+WEAK = "weak_alias"                     # reported as unresolved, never rewritten
+
+
 @pytest.mark.parametrize("text, fixed", [
     ("价格上行（10%）", None),                  # a price move, not the upside scenario
     ("需求下行（25%）", None),
     ("高于基准（40%）", None),                  # a benchmark
     ("EPS upside (10%)", None),
     ("2030上行（10%）", None),
-    ("上行（10%）情形下", "上行（5%）情形下"),
-    ("在基准（40%）下", "在基准（35%）下"),
-    ("The upside (10%) is thin.", "The upside (5%) is thin."),
-    ("**下行**：25%的概率", "**下行**：30%的概率"),
-    ("维持现状（10%）情形下", "维持现状（30%）情形下"),
     ("租金维持现状（70%）", None),               # a rent that stays put
+    # Free-standing, but with no scenario signal: a level, a price move or a benchmark.
+    ("在基准（40%）下", WEAK),
+    ("The upside (10%) is thin.", WEAK),
+    ("油价方面，上行（10%）空间有限", WEAK),
+    ("相对基准（40%）的偏离", WEAK),
+    ("与基准（40%）相比", WEAK),
+    ("情景概率：**基准**（40%）；**上行**（10%）", [WEAK, WEAK]),
+    # A scenario word right after the slot or the alias, a probability word in the slot,
+    # or a label position names the scenario.
+    ("上行（10%）情形下", "上行（5%）情形下"),
+    ("维持现状（10%）情形下", "维持现状（30%）情形下"),
+    ("在基准路径（40%）下", "在基准路径（35%）下"),
+    ("the upside case (10%)", "the upside case (5%)"),
+    ("油价方面，上行（概率10%）空间有限", "油价方面，上行（概率5%）空间有限"),
+    ("**下行**：25%的概率", "**下行**：30%的概率"),
+    ("- 上行（10%）：需求超预期", "- 上行（5%）：需求超预期"),
+    ("2、上行（10%）：需求超预期", "2、上行（5%）：需求超预期"),
+    ("## 上行（10%）", "## 上行（5%）"),
+    ("| 下行（25%） | 融资收紧 |", "| 下行（30%） | 融资收紧 |"),
+    ("> 上行（10%）：需求超预期", "> 上行（5%）：需求超预期"),
+    ("情景拆分，**上行**（10%）：需求超预期", "情景拆分，**上行**（5%）：需求超预期"),
+    ("前言。上行（10%）：需求超预期", WEAK),     # mid-line and not bold: no label
     # After "N%的概率" a weak alias needs a scenario word right after it.
     ("仅10%概率走向上行情景", "仅5%概率走向上行情景"),
     ("有40%的概率走向基准路径", "有35%的概率走向基准路径"),
@@ -202,13 +267,51 @@ def test_non_slots_and_matches_give_no_finding(text):
     ("托管租金有70%的概率维持现状", None),
     ("有40%的概率维持基准水平", None),           # a level, not the base case
 ])
-def test_weak_aliases_count_only_when_free_standing(text, fixed):
+def test_weak_aliases_need_a_scenario_signal(text, fixed):
     rows = _rows(("A：基准扩张", 0.35), ("B：下行", 0.30), ("D：超预期上行", 0.05),
                  ("E：其它", 0.30))
     findings = LN.find_probability_slots(text, rows)
     if fixed is None:
         assert findings == [], text
+    elif fixed == WEAK or isinstance(fixed, list):
+        guards = fixed if isinstance(fixed, list) else [fixed]
+        assert [(f["status"], f["guard"]) for f in findings] == [
+            ("unresolved", guard) for guard in guards], text
+        assert LN.substitute_probability_slots(text, findings) == (text, [])
     else:
+        assert [f["status"] for f in findings] == ["fixable"], text
+        assert LN.substitute_probability_slots(text, findings)[0] == fixed
+
+
+@pytest.mark.parametrize("text", [
+    "EV share rises from the baseline (18%) to 45% by 2035.",
+    "Penetration is above the baseline (18%).",
+    "We see the upside (12%) to our price target as limited.",
+])
+def test_weak_english_aliases_are_never_rewritten(text):
+    """The review probes: 'baseline' / 'upside' stand free after a determiner but name
+    a level or a price target; the default-on repair must not write the scenario's
+    probability over them."""
+    rows = _rows(("Base case: steady adoption", 0.45), ("Upside: policy acceleration", 0.25),
+                 ("Downside: stall", 0.30))
+    md = "# EV outlook\n\n" + text + "\n"
+    audit = LN.audit_markdown(md, rows, skip_summary_blockquote=True, max_findings=None)
+    assert (audit["fixable"], audit["unresolved"]) == (0, 1)
+    assert audit["findings"][0]["guard"] == "weak_alias"
+    assert LN.substitute_probability_slots(md, audit["findings"]) == (md, [])
+    # The strong role words still name the scenarios.
+    assert _statuses(LN.find_probability_slots("The base case (40%) holds.", rows)) == [
+        ("base case", 40, 45, "fixable")]
+
+
+def test_scenario_word_may_follow_an_alias():
+    rows = _rows(("A：基准扩张", 0.35), ("B：Recession", 0.40), ("C：其它", 0.25))
+    for text, fixed in (("基准扩张情景（40%）", "基准扩张情景（35%）"),
+                        ("**Recession** scenario (30%)", "**Recession** scenario (40%)"),
+                        ("Recession scenario at 30% probability",
+                         "Recession scenario at 40% probability"),
+                        ("基准扩张路径：40%概率", "基准扩张路径：35%概率")):
+        findings = LN.find_probability_slots(text, rows)
         assert [f["status"] for f in findings] == ["fixable"], text
         assert LN.substitute_probability_slots(text, findings)[0] == fixed
 
@@ -223,6 +326,17 @@ def test_weak_aliases_count_only_when_free_standing(text, fixed):
     ("上季度基准情景（40%）偏高。", FFE1_ROWS, "history"),
     ("Last quarter's base case (55%) was higher.", EN_ROWS, "history"),
     ("Base case (40%), down from 45%.", EN_ROWS, "history"),
+    # Revision narratives (review round 2): an earlier draft, a move verb earlier in the
+    # clause, or a "to N%" right after the slot.
+    ("The pre-mortem trimmed the bull case (35%) to 30%.", EN_ROWS, "history"),
+    ("The critique trimmed the bull case (35%) sharply.", EN_ROWS, "history"),
+    ("相比初版报告中基准情景（40%）的判断，本版下调至35%。", FFE1_ROWS, "history"),
+    ("原预测的基准情景（40%）偏乐观，红队批判后降至35%。", FFE1_ROWS, "history"),
+    ("Before the red-team critique, the base case (40%) looked too high.", EN_ROWS, "history"),
+    ("In the first draft, the base case (40%) looked too high.", EN_ROWS, "history"),
+    ("批判前基准情景（40%）偏高。", FFE1_ROWS, "history"),
+    ("我们将基准情景（40%）的概率下调。", FFE1_ROWS, "history"),
+    ("Scenario A (40%) to 35% after the critique.", FFE1_ROWS, "history"),
     # Markets and outside forecasters: never the pipeline's own scenario numbers.
     ("高盛的基准情景（60%概率）", FFE1_ROWS, "market"),
     ("据IEA，基准情景（60%）", FFE1_ROWS, "market"),
@@ -247,6 +361,15 @@ def test_guarded_contexts_are_reported_not_rewritten(text, rows, guard):
     assert [(f["status"], f["guard"]) for f in findings] == [("unresolved", guard)], text
     assert "replacement" not in findings[0]
     assert LN.substitute_probability_slots(text, findings) == (text, [])
+
+
+def test_history_cues_stay_in_their_place():
+    """A "to / 到 N%" counts only right after the slot, and 把 / 将 only with a move verb:
+    the base case's own stale probability is still repaired."""
+    for text in ("基准情景（40%）下电动车在2030年达到45%。", "基准情景（40%）下装机在2030年前回升到45%。",
+                 "我们将基准情景（40%）作为主路径。", "The base case (40%) sees EVs rise to 45%."):
+        rows = EN_ROWS if text.startswith("The") else FFE1_ROWS
+        assert [f["status"] for f in LN.find_probability_slots(text, rows)] == ["fixable"], text
 
 
 def test_conditional_opener_governs_only_its_clause():
@@ -382,6 +505,26 @@ def test_markdown_scope():
     assert LN.audit_markdown(open_marker, FFE1_ROWS)["fixable"] == 1
 
 
+def test_blockquote_lazy_continuation_belongs_to_it():
+    """A summary with a newline is published as "> line 1\nline 2": the second line is
+    the blockquote's lazy continuation, never body text (review round 2)."""
+    md = "# T\n\n> 装机稳步兑现。\n基准情景（40%）下装机稳步兑现。\n\n正文里A情景（40%）。\n"
+    scanned = LN.audit_markdown(md, FFE1_ROWS)
+    assert [f["alias"] for f in scanned["findings"]] == ["基准情景", "A情景"]
+    skipped = LN.audit_markdown(md, FFE1_ROWS, skip_summary_blockquote=True)
+    assert [f["alias"] for f in skipped["findings"]] == ["A情景"]
+    assert skipped["skipped"]["summary_blockquote"] == 2
+    # A later quote's continuation is a quote too; a list item, a heading or a blank
+    # line ends the blockquote.
+    later = ("# T\n\n正文。\n\n> 某券商：\n基准情景（40%）偏高\n\n> 引语\n- A情景（40%）\n\n"
+             "> 引语\n## A情景（40%）\n")
+    audit = LN.audit_markdown(later, FFE1_ROWS)
+    lines = [later[later.rfind("\n", 0, f["start"]) + 1:later.find("\n", f["start"])]
+             for f in audit["findings"]]
+    assert lines == ["- A情景（40%）", "## A情景（40%）"]
+    assert audit["skipped"]["blockquote"] == 4
+
+
 def test_audit_caps_findings_and_repair_takes_all():
     md = "# T\n\n" + "\n".join(f"第{i}段：A情景（40%）。" for i in range(30))
     capped = LN.audit_markdown(md, FFE1_ROWS)
@@ -408,17 +551,44 @@ def test_s11_mismatch_strings():
         f"scenario '{long_name[:28]}': prose 40% vs spine 35%"]
 
 
-def test_s11_leaves_out_numbers_that_are_not_the_reports_own():
+def test_s11_carries_every_unresolved_finding():
+    """The numeric gate fails closed: the guards only decide that a rewrite is unsafe,
+    so market, quote, conditional, history and weak-alias findings reach S11 too."""
     rows = _rows(("A：基准扩张", 0.35), ("B：电力受限", 0.25), ("C：财务紧缩", 0.25),
-                 ("E：其它", 0.15))
+                 ("D：超预期上行", 0.05), ("E：其它", 0.10))
     md = ("# T\n\n高盛的基准情景（60%）偏乐观。\n\n他写道：“电力受限（50%）”。\n\n"
           "若进入电力受限情景，则有45%的概率出现财务紧缩。\n\n此前基准情景（55%）偏高。\n\n"
-          "正文：A情景（40%）。")
+          "油价方面，上行（15%）空间有限。\n\n正文：A情景（40%）。")
     audit = LN.audit_markdown(md, rows)
     assert [(f["claimed"], f.get("guard")) for f in audit["findings"]] == [
-        (60, "market"), (50, "quote"), (45, "conditional"), (55, "history"), (40, None)]
+        (60, "market"), (50, "quote"), (45, "conditional"), (55, "history"),
+        (15, "weak_alias"), (40, None)]
     assert LN.s11_mismatches(md, rows, reference="forecast.json") == [
-        "scenario 'A：基准扩张': prose 40% vs forecast.json 35%"]
+        "scenario 'A：基准扩张': prose 60% vs forecast.json 35%",
+        "scenario 'B：电力受限': prose 50% vs forecast.json 25%",
+        "scenario 'C：财务紧缩': prose 45% vs forecast.json 25%",
+        "scenario 'A：基准扩张': prose 55% vs forecast.json 35%",
+        "scenario 'D：超预期上行': prose 15% vs forecast.json 5%",
+        "scenario 'A：基准扩张': prose 40% vs forecast.json 35%",
+    ]
+
+
+@pytest.mark.parametrize("text, rows", [
+    ("For the data-center market, the base case (40%) remains the main path.",
+     _rows(("A: Base case", 0.35), ("B: Bull case", 0.30), ("E: Other", 0.35))),
+    ("在当前市场环境下，基准情景（40%）仍是主路径。",
+     _rows(("A：基准扩张", 0.35), ("B：电力受限", 0.30), ("E：其它", 0.35))),
+    ("数据中心市场的基准情景（40%）仍是主路径。",
+     _rows(("A：基准扩张", 0.35), ("B：电力受限", 0.30), ("E：其它", 0.35))),
+])
+def test_s11_does_not_fail_open_on_a_generic_market_word(text, rows):
+    """A market-forecast report says 市场 / market everywhere: the market guard keeps
+    the repair away, but the stale own probability still reaches S11."""
+    md = "# T\n\n" + text + "\n"
+    audit = LN.audit_markdown(md, rows)
+    assert [(f["status"], f["guard"]) for f in audit["findings"]] == [("unresolved", "market")]
+    assert LN.s11_mismatches(md, rows, reference="spine") == [
+        f"scenario '{rows[0]['name']}': prose 40% vs spine 35%"]
 
 
 # ------------------------------------------------------------------ cost on model text
@@ -434,7 +604,14 @@ def test_s11_leaves_out_numbers_that_are_not_the_reports_own():
     "# a" + " " * 50000 + "b\n\n基准情景（40%）",                 # heading line
     "# T\n\n" + "“" * 20000 + "基准情景（40%）",                   # unclosed quotes
     "# T\n\n" + "若" * 20000 + "基准情景（40%）",
-])
+    "# T\n\n基准情景（40%）to 40." + "0" * 20000 + "x",           # trailing "to N%"
+    "# T\n\n" + "trimmed " * 5000 + "基准情景（40%）",              # move verb before
+    "# T\n\n" + "将" * 20000 + "基准情景（40%）" + "的" * 20000,
+    "# T\n\n" + " " * 20000 + "上行（10%）" + "*" * 20000,           # label position
+    "# T\n\n上行" + " " * 20000 + "情景" + " " * 20000 + "x",       # scenario word
+    "# T\n\n> q\n" + "-" * 20000 + "x",                           # lazy continuation
+    "# T\n\n" + "".join(f"> q{i}\n上行（10%）\n" for i in range(3000)),
+], ids=lambda md: f"{len(md)}-chars")
 def test_degenerate_model_text_stays_linear(md):
     started = time.perf_counter()
     LN.audit_markdown(md, FFE1_ROWS)

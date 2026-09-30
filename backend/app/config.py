@@ -958,8 +958,9 @@ class Config:
     # 情景名的首次出现，report_ffe1ea6bf50d 摘要 blockquote 的「基准情景（40%）」（A=0.35）因此过了终审。
     # 严格槽位（别名（N%）/ 别名：N% 概率 / N% 的概率 别名 …）+ REPORT-2 的区间/数量/合计守卫找出与骨架
     # 不符的数字。off = 不审计；observe（默认）= 只记 forecast.quality.logic_number 与 final_audit.json 的
-    # logic_number，不进 hard_issues / 发布门；numeric = 把别名槽不符并入 S11（_audit_numeric_consistency
-    # 与 report_lint.check_scenario_probabilities），经既有硬路径阻止发布。numeric 改变一条硬发布规则，
+    # logic_number，不进 hard_issues / 发布门；numeric = 把别名槽不符（可修复与未解决的全部——守卫只决定
+    # 能否改写；检测异常记为不符，失败即关闭）并入 S11（_audit_numeric_consistency 与
+    # report_lint.check_scenario_probabilities），经既有硬路径阻止发布。numeric 改变一条硬发布规则，
     # 因此必须同时提升 REPORT_FINAL_AUDIT_POLICY_VERSION 并提供重放工具——属 owner 决策，本 WP 不提升。
     # 未知值按 observe 处理并告警。确定性修复（大纲摘要同步 + 稳定器之前的正文槽位替换）只受
     # REPORT_NARRATIVE_SYNC 控制。默认 observe 是安全的：只读观测，任何硬规则与发布结果不变。

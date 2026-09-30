@@ -251,6 +251,39 @@ def test_late_summary_resync_keeps_lockstep(reports_dir):
     assert "在基准扩张（35%）路径下" in report2.markdown_content
 
 
+def test_late_resync_of_a_multiline_summary(reports_dir):
+    """An outline summary with a newline is published as "> line 1\nline 2" (review round
+    2): the resync rewrites the whole block together with the outline summary, and a
+    block it cannot find is left whole — its continuation line is never body text."""
+    summary = "装机稳步兑现。\n基准情景（40%）下电力约束决定节奏。"
+    fixed = summary.replace("基准情景（40%）", "基准情景（35%）")
+    md = _draft().replace(f"> {STALE_SUMMARY}", f"> {summary}")
+    folder = _prepare(reports_dir, "r_multi", md)
+    outline = ReportOutline(title="2030 全球数据中心展望", summary=summary, sections=[])
+    report = SimpleNamespace(markdown_content=md, outline=outline)
+    a = _agent(_outline_summary=summary)
+    a._repair_logic_number("r_multi", report)
+    assert outline.summary == fixed == a._outline_summary
+    assert f"\n> {fixed}\n" in report.markdown_content
+    assert "在基准扩张（35%）路径下" in report.markdown_content
+    assert (folder / "full_report.md").read_text(encoding="utf-8") == report.markdown_content
+    assert json.loads((folder / "outline.json").read_text(encoding="utf-8"))["summary"] == fixed
+    assert [row["where"] for row in a._logic_number_repair["applied"]] == [
+        "outline_summary", "body", "body"]
+
+    # The published block differs from "> {summary}": outline and blockquote stay together.
+    decorated = _draft().replace(f"> {STALE_SUMMARY}",
+                                 "> **装机稳步兑现。**\n基准情景（40%）下电力约束决定节奏。")
+    _prepare(reports_dir, "r_multi_decorated", decorated)
+    outline2 = ReportOutline(title="T", summary=summary, sections=[])
+    report2 = SimpleNamespace(markdown_content=decorated, outline=outline2)
+    b = _agent(_outline_summary=summary)
+    b._repair_logic_number("r_multi_decorated", report2)
+    assert outline2.summary == summary == b._outline_summary
+    assert "\n基准情景（40%）下电力约束决定节奏。\n" in report2.markdown_content
+    assert "在基准扩张（35%）路径下" in report2.markdown_content
+
+
 def test_repair_runs_after_purity_and_before_lint_and_stabilizer(report_env, monkeypatch):
     for name in ("REPORT_EDITORIAL_LINT", "REPORT_CITATION_FINALIZER", "REPORT_STRUCTURED_FORECAST",
                  "FORECAST_EMIT_BINARY", "REPORT_VISUALIZATIONS", "REPORT_THREE_PART_SKELETON",
@@ -470,6 +503,57 @@ def test_default_gate_changes_no_hard_rule(reports_dir, monkeypatch):
     assert any("情景概率/骨架不一致" in issue for issue in audits["numeric"]["hard_issues"])
     assert any("(S11)" in issue for issue in audits["numeric"]["publish_gate"]["hard_issues"])
     assert not any("(S11)" in issue for issue in audits["observe"]["publish_gate"]["hard_issues"])
+
+
+def test_sealed_forecast_carries_the_final_logic_number_audit(reports_dir, monkeypatch):
+    """forecast.json's quality.logic_number is the final-bytes audit plus this run's repair
+    record, not the draft-stage value _finalize_structured_forecast took before the repair
+    (review round 2); gate off removes it."""
+    repair = {"applied": [{"where": "body", "scenario": "A：基准扩张", "alias": "基准扩张",
+                           "from": "40%", "to": "35%"}],
+              "applied_count": 1, "summary_count": 0, "body_count": 1, "unresolved": 0}
+    stale = {"findings": [], "count": 3, "fixable": 3, "unresolved": 0, "skipped": {}}
+    repaired_md = ALIAS_ONLY_MD.replace("（40%）", "（35%）")
+    sealed = {}
+    for mode in ("observe", "off"):
+        monkeypatch.setattr(Config, "REPORT_LOGIC_NUMBER_GATE", mode, raising=False)
+        report_id = f"r_sealed_{mode}"
+        _audit_folder(reports_dir, report_id, repaired_md)
+        path = reports_dir / report_id / "forecast.json"
+        forecast = json.loads(path.read_text(encoding="utf-8"))
+        forecast["quality"] = {"logic_number": stale}
+        path.write_text(json.dumps(forecast, ensure_ascii=False), encoding="utf-8")
+        a = _agent(_logic_number_repair=repair)
+        report = SimpleNamespace(markdown_content=repaired_md, failed_sections=[])
+        audit = a._audit_final_published_markdown(report_id, report)
+        sealed[mode] = (audit, json.loads(path.read_text(encoding="utf-8"))["quality"])
+    audit, quality = sealed["observe"]
+    assert quality["logic_number"] == audit["logic_number"]
+    assert (quality["logic_number"]["count"], quality["logic_number"]["fixable"]) == (0, 0)
+    assert quality["logic_number"]["repair"] == repair
+    audit_off, quality_off = sealed["off"]
+    assert "logic_number" not in audit_off and "logic_number" not in quality_off
+
+
+def test_lint_alias_s11_fails_closed(monkeypatch):
+    """An exception inside the numeric-mode alias audit is a mismatch, not a skipped lint
+    (review round 2), exactly as in ReportAgent._audit_numeric_consistency."""
+    from app.services import logic_number as LN
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(LN, "s11_mismatches", boom)
+    forecast = _spine()
+    failure = "logic-number alias audit failed: RuntimeError"
+    assert RL.check_scenario_probabilities(ALIAS_ONLY_MD, forecast, alias_aware=True) == [failure]
+    assert RL.check_scenario_probabilities(ALIAS_ONLY_MD, forecast) == []
+    _cleaned, lint = RL.lint_report(ALIAS_ONLY_MD, "Chinese", mode="final", spine=forecast,
+                                    alias_aware_s11=True)
+    assert lint["scenario_prob_mismatches"] == [failure]
+    monkeypatch.setattr(Config, "REPORT_LOGIC_NUMBER_GATE", "numeric", raising=False)
+    assert _agent()._audit_numeric_consistency(ALIAS_ONLY_MD, forecast)[
+        "scenario_prob_mismatches"] == [failure]
 
 
 def test_config_default_and_env_example():
