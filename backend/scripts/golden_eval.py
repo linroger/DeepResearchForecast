@@ -21,10 +21,23 @@ INTENDED WORKFLOW (the whole point — read this before using):
      ``app.services.golden_set.forecaster_view(q)`` only (id, question,
      resolution_criteria, as_of_date; every other field is grader-only and
      answer-bearing) and run the pipeline framed at the question's ``as_of_date``.
-     ``as_of_date`` is the forecast origin, not a model knowledge cutoff: research
-     is not point-in-time yet, so no replay is a fair as-of forecast.
-     As-of runs must set PREDICTION_MARKETS_ENABLED=false (or use hindcast market
-     admission once available): live Polymarket odds leak the outcome.
+     ``as_of_date`` is the forecast origin, not a model knowledge cutoff.
+     Pass it as the run's ``as_of`` (TIME-7): ``PipelineOrchestrator.start(brief,
+     as_of=q["as_of_date"], ...)`` or the ``as_of`` field of POST
+     /api/research/run and /api/v1/run. It needs HINDCAST_ENABLED=true and
+     RESEARCH_ENGINE=v3; otherwise the run is refused, never run live. A
+     hindcast pins ``hindcast_policy_v1``: v3 research dated to as_of (the brief
+     carries a point-in-time rule and fetched pages are labelled LIVE PAGE),
+     prediction markets withheld in research and report (live odds leak the
+     outcome), and the graph anchored at the pin. Without an ``evaluation``
+     context it is an evaluation run with eval_run_id ``hindcast_<YYYYMMDD>``.
+     Retrieval is labelled, not clamped (search is unbounded, pages are served
+     as they are now), and the models may already know the outcome, so every
+     hindcast is characterization-only (ADR 0002 I-21), never a fair as-of
+     forecast. A replay started without ``as_of`` (for example with only the
+     ``evaluation`` context of step 2) is a live run: it must set
+     PREDICTION_MARKETS_ENABLED=false, because live Polymarket odds leak the
+     outcome.
   2. Start the run as an evaluation run (EVAL-13):
      ``PipelineOrchestrator.start(brief, evaluation={"eval_run_id": ..., "target":
      evaluation_target_from_golden(q)})``. Its reports never read production

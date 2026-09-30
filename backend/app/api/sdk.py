@@ -44,6 +44,8 @@ from ..config import Config
 from ..services.pipeline_orchestrator import (
     PipelineManager,
     PipelineOrchestrator,
+    RunAdmissionError,
+    admit_hindcast_as_of,
     preflight_pipeline,
 )
 from ..services.report_agent import ReportManager
@@ -88,6 +90,9 @@ def v1_run():
         max_rounds: int   OASIS 最大轮数（可选）
         language: str     Chinese | English | auto（可选）
         model: str        研究模型（可选；须在 Config.SUPPORTED_DEERFLOW_MODELS 内）
+        as_of: str        回测 as-of 日期（可选，TIME-7）：规范 YYYY-MM-DD、不晚于今天（UTC）；
+                          需 HINDCAST_ENABLED=true 且研究引擎为 v3，否则 400（绝不按实时运行）。
+                          准入后为评估运行（characterization-only）。
     """
     try:
         data = request.get_json(silent=True) or {}
@@ -124,6 +129,14 @@ def v1_run():
         if model:
             model = model.lower()
 
+        # TIME-7 回测准入（与 SPA 路由同一条规则：PipelineOrchestrator 的 admit_hindcast_as_of）。
+        as_of = data.get('as_of')
+        if as_of is not None:
+            try:
+                admit_hindcast_as_of(as_of)
+            except RunAdmissionError as e:
+                return _err(str(e))
+
         # 起飞前体检（与 SPA 路由同一套，杜绝漂移）
         preflight_errors = preflight_pipeline(mode=mode, model=model)
         if preflight_errors:
@@ -133,15 +146,21 @@ def v1_run():
                 "preflight_errors": preflight_errors,
             }), 400
 
-        state = PipelineOrchestrator.start(
-            prompt=prompt,
-            mode=mode,
-            project_name=data.get('project_name'),
-            depth=depth,
-            max_rounds=max_rounds,
-            language=language,
-            model=model,
-        )
+        try:
+            state = PipelineOrchestrator.start(
+                prompt=prompt,
+                mode=mode,
+                project_name=data.get('project_name'),
+                depth=depth,
+                max_rounds=max_rounds,
+                language=language,
+                model=model,
+                as_of=as_of,
+            )
+        except RunAdmissionError as e:
+            # start() re-checks the admission before creating anything; any other
+            # ValueError is an internal fault (500 below).
+            return _err(str(e))
         return _ok({
             "pipeline_id": state.pipeline_id,
             "task_id": state.task_id,

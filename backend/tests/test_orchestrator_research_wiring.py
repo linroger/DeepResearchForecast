@@ -1799,10 +1799,14 @@ def test_v3_engine_forces_single_outer_track_and_logs_once(monkeypatch):
     assert len(log.of("info")) == 2
 
 
-def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options=None):
+def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options=None,
+                               runner_kwargs=None, expect_status="completed",
+                               handoff_files=None):
     """Run the real ``_run`` state machine for a fresh research-only pipeline
     with the research subprocess layer faked; return which topology ran (and,
-    for a single lane, the engine the stage asked the runner for)."""
+    for a single lane, the engine the stage asked the runner for).
+    ``runner_kwargs`` (a list) collects each single-lane runner call's kwargs;
+    ``handoff_files`` ({name: text}) are written to the handoff dir before the run."""
     monkeypatch.setattr(_po.Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"),
                         raising=False)
     monkeypatch.setattr(_po.Config, "UPLOAD_FOLDER", str(tmp_path / "uploads"),
@@ -1834,9 +1838,7 @@ def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options
     engines = []
     report = "Evidence-backed research report with citations [S1]. " * 20
 
-    def fake_single(prompt, handoff_dir, **kwargs):
-        calls.append(("single", kwargs.get("budget_lane_id")))
-        engines.append(kwargs.get("research_engine"))
+    def research_result(handoff_dir):
         with open(os.path.join(handoff_dir, "research_report.md"), "w",
                   encoding="utf-8") as fh:
             fh.write(report)
@@ -1848,13 +1850,26 @@ def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options
             "research_telemetry": {"tokens_in": 0, "tokens_out": 0},
         }
 
+    def fake_single(prompt, handoff_dir, **kwargs):
+        calls.append(("single", kwargs.get("budget_lane_id")))
+        engines.append(kwargs.get("research_engine"))
+        if runner_kwargs is not None:
+            runner_kwargs.append(kwargs)
+        return research_result(handoff_dir)
+
     def fake_parallel(self, state, handoff_dir, upd, n_tracks):
         calls.append(("parallel", n_tracks))
         return fake_single(state.prompt, handoff_dir)
 
+    def fake_synthesis_recovery(self, state, handoff_dir, upd, manifest_path):
+        calls.append(("synthesis_recovery", os.path.basename(manifest_path)))
+        return research_result(handoff_dir)
+
     monkeypatch.setattr(_po.DeerFlowResearchRunner, "run", staticmethod(fake_single))
     monkeypatch.setattr(
         _po.PipelineOrchestrator, "_run_parallel_research_tracks", fake_parallel)
+    monkeypatch.setattr(
+        _po.PipelineOrchestrator, "_run_research_synthesis_recovery", fake_synthesis_recovery)
 
     pid = f"pipe_topology_{engine}_{tracks}"
     _po.PipelineManager.ensure_dirs(pid)
@@ -1864,8 +1879,11 @@ def _drive_research_only_stage(monkeypatch, tmp_path, *, engine, tracks, options
     )
     state.handoff_dir = _po.PipelineManager.handoff_dir(pid)
     os.makedirs(state.handoff_dir, exist_ok=True)
+    for name, text in (handoff_files or {}).items():
+        with open(os.path.join(state.handoff_dir, name), "w", encoding="utf-8") as fh:
+            fh.write(text)
     _po.PipelineOrchestrator._run(state)
-    assert state.status == "completed", state.error
+    assert state.status == expect_status, state.error
     if options is not None:
         return calls, engines
     return calls
@@ -1894,8 +1912,10 @@ class _FakeResearchProc:
         return 0
 
 
-def _launch_capturing_child(monkeypatch, tmp_path, **run_kwargs):
-    """Launch the real runner against a fake Popen; return the child cmd/env."""
+def _launch_capturing_child(monkeypatch, tmp_path, *, actors=None, **run_kwargs):
+    """Launch the real runner against a fake Popen; return the child cmd/env
+    (and the runner's result under ``"result"``).  ``actors``, when given, is the
+    handoff actors.json the child left behind."""
     deerflow_dir = tmp_path / "deer-flow"
     deerflow_dir.mkdir()
     (deerflow_dir / "deerflow_research.py").write_text("# entry\n", encoding="utf-8")
@@ -1905,6 +1925,8 @@ def _launch_capturing_child(monkeypatch, tmp_path, **run_kwargs):
     (handoff / artifact).write_text(
         "Evidence: the regulator published the 2026 capacity figures [S1]. " * 12,
         encoding="utf-8")
+    if actors is not None:
+        (handoff / "actors.json").write_text(json.dumps(actors), encoding="utf-8")
     monkeypatch.setattr(_po.Config, "DEERFLOW_DIR", str(deerflow_dir))
     monkeypatch.setattr(_po.Config, "UPLOAD_FOLDER", str(tmp_path / "uploads"))
     monkeypatch.setattr(_po, "_sync_deerflow_bridge_if_stale", lambda _p: None)
@@ -1916,7 +1938,7 @@ def _launch_capturing_child(monkeypatch, tmp_path, **run_kwargs):
         return _FakeResearchProc()
 
     monkeypatch.setattr(_po.subprocess, "Popen", fake_popen)
-    _po.DeerFlowResearchRunner.run(
+    captured["result"] = _po.DeerFlowResearchRunner.run(
         "Will X happen?", str(handoff), on_progress=lambda _p, _m: None, **run_kwargs)
     return captured
 
@@ -2303,3 +2325,529 @@ def test_judge_bound_probe_is_false_without_a_contract_manifest(tmp_path):
     """Single-lane runs publish no research contract manifest; the probe must
     answer False instead of raising (the AttributeError skipped research lint)."""
     assert _po._research_report_is_judge_bound(str(tmp_path)) is False
+
+
+# ── TIME-7: a pinned hindcast's as-of reaches only a v3 child; graph anchor = pin ──
+
+from datetime import date  # noqa: E402
+
+from app.services import hindcast_policy as _hp  # noqa: E402
+
+HINDCAST_AS_OF = "2024-06-01"
+
+
+def _hindcast_pin(as_of=HINDCAST_AS_OF):
+    return _hp.capture_hindcast_policy_v1(as_of, research_engine="v3", today_utc=date(2026, 9, 30))
+
+
+def test_runner_hands_a_pinned_as_of_to_the_v3_child(monkeypatch, tmp_path):
+    """The hindcast values are written after every Config forward, so they win
+    (markets on and the as-of pin off in Config), and an ambient value never decides."""
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    monkeypatch.setattr(_po.Config, "PREDICTION_MARKETS_ENABLED", True, raising=False)
+    monkeypatch.setattr(_po.Config, "RESEARCH_AS_OF_PIN", False, raising=False)
+    monkeypatch.setenv("RESEARCH_AS_OF", "2020-01-01")
+
+    child = _launch_capturing_child(monkeypatch, tmp_path, timeout=900, as_of=HINDCAST_AS_OF,
+                                    actors={"as_of_date": HINDCAST_AS_OF, "actors": []})
+
+    env = child["env"]
+    assert env["RESEARCH_ENGINE"] == "v3"
+    assert env["RESEARCH_AS_OF"] == HINDCAST_AS_OF
+    assert env["PREDICTION_MARKETS_ENABLED"] == "false"
+    assert env["RESEARCH_AS_OF_PIN"] == "true"
+    assert HINDCAST_AS_OF not in " ".join(child["cmd"])  # env contract only, no new CLI flag
+    assert child["result"]["actors"]["as_of_date"] == HINDCAST_AS_OF
+
+
+@pytest.mark.parametrize("actors", [None, {"as_of_date": "2026-09-30", "actors": []},
+                                    {"actors": []}, ["not", "an", "object"]])
+def test_pinned_child_must_date_actors_to_the_pin(monkeypatch, tmp_path, actors):
+    """actors.json as_of_date anchors the simulation calendar: a hindcast whose child
+    left no actors.json, or dated it otherwise, fails closed (resumable)."""
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    with pytest.raises(RuntimeError, match="hindcast_as_of_mismatch"):
+        _launch_capturing_child(monkeypatch, tmp_path, timeout=900, as_of=HINDCAST_AS_OF,
+                                actors=actors)
+
+
+def test_live_child_keeps_the_model_dated_actors(monkeypatch, tmp_path):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    child = _launch_capturing_child(monkeypatch, tmp_path, timeout=900,
+                                    actors={"as_of_date": "2026-09-30", "actors": []})
+    assert child["result"]["actors"]["as_of_date"] == "2026-09-30"
+
+
+class _ManualWatchdog:
+    """``threading.Timer`` stand-in: the fake child fires the research watchdog itself."""
+
+    armed = []
+
+    def __init__(self, interval, function):
+        self.function = function
+        self.daemon = False
+        _ManualWatchdog.armed.append(self)
+
+    def start(self):
+        return None
+
+    def cancel(self):
+        return None
+
+
+class _KilledDuringFinalizeProc:
+    """A child the watchdog kills after it wrote research_report.md (v3 writes the report,
+    then makes its structured-extraction calls), optionally after actors.json as well."""
+
+    pid = 4243
+
+    def __init__(self, handoff, actors):
+        self.handoff = handoff
+        self.actors = actors
+        self.killed = False
+
+    @property
+    def stdout(self):
+        yield "2026-09-30T00:00:00+00:00 [stage] research:v3:finalize start\n"
+        (self.handoff / "research_report.md").write_text(
+            "Evidence: the regulator published the capacity figures [S1]. " * 12,
+            encoding="utf-8")
+        if self.actors is not None:
+            (self.handoff / "actors.json").write_text(json.dumps(self.actors), encoding="utf-8")
+        _ManualWatchdog.armed[-1].function()
+        yield "2026-09-30T00:00:01+00:00 [stage] extracting\n"
+
+    def poll(self):
+        return -9 if self.killed else None
+
+    def wait(self, timeout=None):
+        return -9
+
+
+def _run_killed_during_finalize(monkeypatch, tmp_path, *, actors=None, **run_kwargs):
+    """Run the real runner over a child the watchdog kills during finalize; return the
+    result (or the raised exception) and the ITEM-14 salvage calls."""
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    monkeypatch.delenv("RESEARCH_EXTRACT_ONLY_SALVAGE", raising=False)
+    deerflow_dir = tmp_path / "deer-flow"
+    deerflow_dir.mkdir()
+    (deerflow_dir / "deerflow_research.py").write_text("# entry\n", encoding="utf-8")
+    handoff = tmp_path / "handoff"
+    handoff.mkdir()
+    monkeypatch.setattr(_po.Config, "DEERFLOW_DIR", str(deerflow_dir))
+    monkeypatch.setattr(_po.Config, "UPLOAD_FOLDER", str(tmp_path / "uploads"))
+    monkeypatch.setattr(_po, "_sync_deerflow_bridge_if_stale", lambda _p: None)
+    monkeypatch.setattr(_po, "_kill_process_group",
+                        lambda proc, *a, **k: setattr(proc, "killed", True))
+    monkeypatch.setattr(_ManualWatchdog, "armed", [])
+    monkeypatch.setattr(_po.threading, "Timer", _ManualWatchdog)
+    monkeypatch.setattr(_po.subprocess, "Popen",
+                        lambda cmd, **kwargs: _KilledDuringFinalizeProc(handoff, actors))
+    salvages = []
+
+    def fake_salvage(deerflow_dir, handoff_dir, prompt, model, depth, language, env, on_progress):
+        salvages.append(dict(env))
+        return True
+
+    monkeypatch.setattr(_po, "_run_extract_only_salvage", fake_salvage)
+    try:
+        outcome = _po.DeerFlowResearchRunner.run(
+            "Will X happen?", str(handoff), on_progress=lambda _p, _m: None, timeout=900,
+            **run_kwargs)
+    except RuntimeError as exc:
+        outcome = exc
+    return outcome, salvages
+
+
+def test_timed_out_live_child_still_gets_the_extract_only_salvage(monkeypatch, tmp_path):
+    """Control: the fake really reaches ITEM-14 (live runs are unchanged)."""
+    outcome, salvages = _run_killed_during_finalize(monkeypatch, tmp_path)
+    assert isinstance(outcome, dict) and outcome["exit_code"] == 0
+    assert len(salvages) == 1 and "RESEARCH_AS_OF" not in salvages[0]
+
+
+def test_timed_out_hindcast_never_launches_the_legacy_salvage(monkeypatch, tmp_path):
+    """--extract-only runs the legacy engine, which ignores RESEARCH_AS_OF: a pinned
+    hindcast fails closed instead (a resume lets v3 finish finalize)."""
+    outcome, salvages = _run_killed_during_finalize(monkeypatch, tmp_path, as_of=HINDCAST_AS_OF)
+    assert isinstance(outcome, RuntimeError)
+    assert str(outcome).startswith("hindcast_salvage_refused:")
+    assert HINDCAST_AS_OF in str(outcome)
+    assert salvages == []
+
+
+def test_hindcast_killed_after_its_actors_were_written_continues(monkeypatch, tmp_path):
+    """Killed after v3 wrote actors.json dated to the pin: nothing to salvage, the
+    report and the pinned actors are kept."""
+    outcome, salvages = _run_killed_during_finalize(
+        monkeypatch, tmp_path, as_of=HINDCAST_AS_OF,
+        actors={"as_of_date": HINDCAST_AS_OF, "actors": []})
+    assert isinstance(outcome, dict) and outcome["actors"]["as_of_date"] == HINDCAST_AS_OF
+    assert salvages == []
+
+
+@pytest.mark.parametrize("engine", ["v3", "legacy"])
+def test_ambient_research_as_of_never_reaches_a_live_child(monkeypatch, tmp_path, engine):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", engine, raising=False)
+    monkeypatch.setattr(_po.Config, "PREDICTION_MARKETS_ENABLED", True, raising=False)
+    monkeypatch.setenv("RESEARCH_AS_OF", HINDCAST_AS_OF)
+
+    child = _launch_capturing_child(monkeypatch, tmp_path, timeout=900)
+
+    assert "RESEARCH_AS_OF" not in child["env"]
+    assert child["env"]["PREDICTION_MARKETS_ENABLED"] == "true"
+
+
+def test_live_child_env_is_identical_with_or_without_the_as_of_argument(monkeypatch, tmp_path):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    envs = []
+    for name, extra in (("omitted", {}), ("explicit", {"as_of": None}), ("empty", {"as_of": ""})):
+        root = tmp_path / name
+        root.mkdir()
+        env = _launch_capturing_child(monkeypatch, root, timeout=900, **extra)["env"]
+        envs.append({key: value.replace(os.path.realpath(root), "<root>").replace(str(root), "<root>")
+                     for key, value in env.items()})
+    assert envs[0] == envs[1] == envs[2]
+    assert "RESEARCH_AS_OF" not in envs[0]
+
+
+@pytest.mark.parametrize("config_engine, kwargs", [
+    ("v3", {"research_engine": "legacy"}),
+    ("legacy", {}),
+    ("v3", {"evidence_only": True}),
+    ("v3", {"synthesis_manifest_path": "/tmp/evidence_synthesis_manifest.json"}),
+])
+def test_pinned_as_of_on_a_non_v3_child_fails_before_launch(monkeypatch, tmp_path, config_engine, kwargs):
+    """Only v3 honours a pinned as-of: any other child is refused before Popen (a
+    launched child would make the fake runner return normally) and before the
+    prompt file exists."""
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", config_engine, raising=False)
+
+    with pytest.raises(RuntimeError, match="hindcast_engine_mismatch"):
+        _launch_capturing_child(monkeypatch, tmp_path, timeout=900, as_of=HINDCAST_AS_OF, **kwargs)
+
+    assert not list((tmp_path / "handoff").glob(".prompt-*"))
+
+
+def test_research_stage_passes_the_pinned_as_of_to_the_runner(monkeypatch, tmp_path):
+    seen = []
+    calls, engines = _drive_research_only_stage(
+        monkeypatch, tmp_path, engine="v3", tracks=3,
+        options={_hp.HINDCAST_POLICY_OPTION: _hindcast_pin()}, runner_kwargs=seen)
+    assert calls == [("single", "outer-track-1")] and engines == ["v3"]
+    assert [kwargs["as_of"] for kwargs in seen] == [HINDCAST_AS_OF]
+
+
+@pytest.mark.parametrize("options", [
+    {},
+    # An as-of equal to today is pinned but live (TIME-6): no as-of reaches research.
+    {_hp.HINDCAST_POLICY_OPTION: _hp.capture_hindcast_policy_v1(
+        "2026-09-30", research_engine="v3", today_utc=date(2026, 9, 30))},
+])
+def test_research_stage_without_a_hindcast_pin_passes_no_as_of(monkeypatch, tmp_path, options):
+    seen = []
+    _drive_research_only_stage(monkeypatch, tmp_path, engine="v3", tracks=1,
+                               options=options, runner_kwargs=seen)
+    assert [kwargs["as_of"] for kwargs in seen] == [None]
+
+
+def test_research_stage_refuses_a_pinned_hindcast_on_the_legacy_engine(monkeypatch, tmp_path):
+    """Config drift after admission (or on resume) selects legacy: the stage fails
+    closed before any lane runs, with a resumable, named error."""
+    seen = []
+    calls, engines = _drive_research_only_stage(
+        monkeypatch, tmp_path, engine="legacy", tracks=3,
+        options={_hp.HINDCAST_POLICY_OPTION: _hindcast_pin()}, runner_kwargs=seen,
+        expect_status="failed")
+    assert calls == [] and engines == [] and seen == []
+    persisted = _po.PipelineManager.load("pipe_topology_legacy_3")
+    assert "hindcast_engine_mismatch" in persisted["error"]
+    assert persisted["stages"][_po.STAGE_RESEARCH]["status"] == "failed"
+
+
+def test_research_stage_refuses_a_pinned_hindcast_synthesis_recovery(monkeypatch, tmp_path):
+    """A global-synthesis manifest (written only by legacy parallel lanes) in a pinned
+    hindcast's handoff dir never reaches the legacy synthesis child, which runs without
+    the as-of: the stage fails closed before any spend, with a named, resumable error."""
+    manifest = {"evidence_synthesis_manifest.json": "{}"}
+    calls, engines = _drive_research_only_stage(
+        monkeypatch, tmp_path, engine="v3", tracks=1,
+        options={_hp.HINDCAST_POLICY_OPTION: _hindcast_pin()}, handoff_files=manifest,
+        expect_status="failed")
+    assert calls == [] and engines == []
+    persisted = _po.PipelineManager.load("pipe_topology_v3_1")
+    assert "hindcast_synthesis_refused" in persisted["error"]
+    assert HINDCAST_AS_OF in persisted["error"]
+    assert persisted["stages"][_po.STAGE_RESEARCH]["status"] == "failed"
+
+    # Control: the same handoff dir without a pin takes the recovery branch.
+    calls, _engines = _drive_research_only_stage(
+        monkeypatch, tmp_path / "live", engine="v3", tracks=1, options={},
+        handoff_files=manifest)
+    assert calls == [("synthesis_recovery", "evidence_synthesis_manifest.json")]
+
+
+def _anchor_state(**options):
+    return _po.PipelineState(pipeline_id="pipe_hindcast_anchor", prompt="Will X happen?",
+                             options=dict(options))
+
+
+def _dated(url, date_str):
+    return {"title": "t", "url": url, "tier": "S1", "date": date_str}
+
+
+def test_hindcast_graph_anchor_is_the_pin_and_records_later_sources():
+    pin = _hindcast_pin()
+    state = _anchor_state(**{_hp.HINDCAST_POLICY_OPTION: pin})
+    sources = [
+        _dated("https://early.example/a", "2024-05-20"),
+        _dated("https://late.example/a", "2025-03-01"),
+        _dated("https://same-day.example/a", HINDCAST_AS_OF),     # not after the as-of
+        _dated("https://late.example/a", "2025-03-01"),            # recorded once
+        {"title": "undated", "url": "https://undated.example/a"},
+        _dated("", "2026-01-01"),                                  # nothing to record
+        "not a source",
+        _dated("https://month.example/a", "2024-07"),              # a later month counts
+    ]
+
+    anchor = _po.PipelineOrchestrator._pin_hindcast_graph_anchor(state, pin, sources)
+
+    assert anchor == datetime(2024, 6, 1, tzinfo=timezone.utc)
+    assert state.options["hindcast_violations"] == ["https://late.example/a",
+                                                    "https://month.example/a"]
+    # The check's coverage is explicit: source rows, the URL-less one included.
+    assert state.options["hindcast_source_dates"] == {"dated": 6, "undated": 1, "after_as_of": 4,
+                                                     "ambiguous": 0}
+    # EVAL-1: the pinned date is the ledger pre-registration anchor.
+    assert state.options["as_of_date_validated"] == HINDCAST_AS_OF
+    # Without the pin, the R2-RES-7 validator would have rolled the anchor forward.
+    rolled, note = _po.PipelineOrchestrator._validate_as_of_date(
+        {"as_of_date": HINDCAST_AS_OF}, sources)
+    assert rolled.date().isoformat() == "2026-01-01" and "早于最新来源日" in note
+
+
+def test_hindcast_graph_anchor_rebuild_drops_stale_violations_and_caps_them():
+    pin = _hindcast_pin()
+    state = _anchor_state(hindcast_violations=["https://stale.example"],
+                          as_of_date_validated="2026-01-01")
+    _po.PipelineOrchestrator._pin_hindcast_graph_anchor(
+        state, pin, [_dated("https://early.example/a", "2024-01-01")])
+    assert "hindcast_violations" not in state.options
+    assert state.options["as_of_date_validated"] == HINDCAST_AS_OF
+
+    many = [_dated(f"https://late.example/{i}", "2025-01-01") for i in range(80)]
+    _po.PipelineOrchestrator._pin_hindcast_graph_anchor(state, pin, many)
+    assert state.options["hindcast_violations"] == [
+        f"https://late.example/{i}" for i in range(_po.HINDCAST_VIOLATIONS_MAX)]
+    assert _po.HINDCAST_VIOLATIONS_MAX == 50
+    # The URL list is capped; the count of later-dated rows is not.
+    assert state.options["hindcast_source_dates"] == {"dated": 80, "undated": 0, "after_as_of": 80,
+                                                     "ambiguous": 0}
+
+
+def test_hindcast_graph_anchor_records_that_undated_sources_were_not_checked():
+    """RESEARCH_SOURCE_DATES is off by default, so v3 sources.json rows carry no date:
+    no violations then means "not checked", and the coverage record says so."""
+    pin = _hindcast_pin()
+    state = _anchor_state()
+    undated = [{"title": "t", "url": f"https://undated.example/{i}", "tier": "S1"} for i in range(3)]
+    _po.PipelineOrchestrator._pin_hindcast_graph_anchor(state, pin, undated)
+    assert "hindcast_violations" not in state.options
+    assert state.options["hindcast_source_dates"] == {"dated": 0, "undated": 3, "after_as_of": 0,
+                                                     "ambiguous": 0}
+    _po.PipelineOrchestrator._pin_hindcast_graph_anchor(state, pin, None)
+    assert state.options["hindcast_source_dates"] == {"dated": 0, "undated": 0, "after_as_of": 0,
+                                                     "ambiguous": 0}
+
+
+def test_hindcast_graph_anchor_reads_coarse_source_dates_at_their_precision():
+    """A year or month is not its first day: one that starts on or before the pin but
+    ends after it is ambiguous (neither cleared nor a violation), one that ends by the
+    pin is cleared, and one that starts after it is a violation."""
+    pin = _hindcast_pin()
+    state = _anchor_state()
+    sources = [
+        _dated("https://year.example/a", "2024"),                   # 2024: spans the pin
+        _dated("https://month.example/a", "2024-06"),               # June 2024: spans it
+        _dated("https://cjk-month.example/a", "2024年6月"),          # June 2024: spans it
+        _dated("https://may.example/a", "2024-05"),                 # ends before the pin
+        _dated("https://last-year.example/a", "2023"),              # ends before the pin
+        _dated("https://next-month.example/a", "2024-07"),          # starts after the pin
+        # A declared precision widens a date, never narrows it (v3 date_precision).
+        dict(_dated("https://declared-month.example/a", "2024-06-01"), date_precision="month"),
+        dict(_dated("https://declared-day.example/a", "2024"), date_precision="day"),
+        dict(_dated("https://bad-precision.example/a", "2024-05-31"), date_precision="decade"),
+    ]
+
+    anchor = _po.PipelineOrchestrator._pin_hindcast_graph_anchor(state, pin, sources)
+
+    assert anchor == datetime(2024, 6, 1, tzinfo=timezone.utc)
+    assert state.options["hindcast_violations"] == ["https://next-month.example/a"]
+    assert state.options["hindcast_source_dates"] == {"dated": 9, "undated": 0, "after_as_of": 1,
+                                                     "ambiguous": 5}
+    assert state.options["as_of_date_validated"] == HINDCAST_AS_OF
+
+    # A month or year that ends on the pin is cleared, not ambiguous.
+    end_of_june = _hindcast_pin("2024-06-30")
+    _po.PipelineOrchestrator._pin_hindcast_graph_anchor(
+        state, end_of_june, [_dated("https://month.example/a", "2024-06")])
+    assert state.options["hindcast_source_dates"] == {"dated": 1, "undated": 0, "after_as_of": 0,
+                                                     "ambiguous": 0}
+    new_years_eve = _hindcast_pin("2024-12-31")
+    _po.PipelineOrchestrator._pin_hindcast_graph_anchor(
+        state, new_years_eve, [_dated("https://year.example/a", "2024")])
+    assert state.options["hindcast_source_dates"] == {"dated": 1, "undated": 0, "after_as_of": 0,
+                                                     "ambiguous": 0}
+    assert "hindcast_violations" not in state.options
+
+
+@pytest.mark.parametrize("bad_as_of", ["2024-6-1", None, "2999-01-01"])
+def test_hindcast_graph_anchor_fails_closed_on_a_bad_pin(bad_as_of):
+    pin = dict(_hindcast_pin(), as_of=bad_as_of)
+    state = _anchor_state(as_of_date_validated="2024-06-01")
+    with pytest.raises(ValueError):
+        _po.PipelineOrchestrator._pin_hindcast_graph_anchor(state, pin, [])
+
+
+class _StopAtIngest(RuntimeError):
+    pass
+
+
+def _drive_graph_stage(monkeypatch, tmp_path, *, options, actors, sources):
+    """Run the real ``_run`` over a fresh full pipeline (research and ontology faked)
+    up to the graph stage's text ingest, where a sentinel stops the attempt.  Return
+    the state and what the graph layer received."""
+    monkeypatch.setattr(_po.Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"),
+                        raising=False)
+    monkeypatch.setattr(_po.Config, "UPLOAD_FOLDER", str(tmp_path / "uploads"), raising=False)
+    for name, value in {
+        "RESEARCH_ENGINE": "v3",
+        "RESEARCH_PARALLEL_TRACKS": 1,
+        "REPORT_LINT": False,
+        "CAST_RECONCILE": False,
+        "EMBED_WARM_AT_RESEARCH": False,
+        "PIPELINE_VIZ_ARTIFACTS": False,
+        "VALIDATE_AS_OF_DATE": True,
+    }.items():
+        monkeypatch.setattr(_po.Config, name, value, raising=False)
+    for name, replacement in {
+        "_start_heartbeat": lambda self, state: None,
+        "_init_telemetry_flush": lambda self, state: None,
+        "_write_run_manifest": lambda self, state: None,
+        "_update_manifest": lambda self, state, stage, **kwargs: None,
+        "_record_research_telemetry": lambda self, state, value: None,
+        "_maybe_warm_embedder": lambda self, state, actors: None,
+        "_surface_research_quality": lambda self, state, handoff_dir: {},
+        "_surface_forecast_confidence_penalty": lambda self, state, handoff_dir: None,
+        "_flush_run_telemetry": lambda self, state, **kwargs: None,
+    }.items():
+        monkeypatch.setattr(_po.PipelineOrchestrator, name, replacement)
+    monkeypatch.setattr(_po, "_finalize_research_contract", lambda *a, **k: None)
+    report = "Evidence-backed research report with citations [S1]. " * 20
+
+    def fake_research(prompt, handoff_dir, **kwargs):
+        path = os.path.join(handoff_dir, "research_report.md")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(report)
+        return {"report": report, "report_path": path, "evidence_pack": None,
+                "actor_dossier": "", "actors": actors, "sources": sources, "timeline": None,
+                "exit_code": 0, "research_telemetry": {}}
+
+    monkeypatch.setattr(_po.DeerFlowResearchRunner, "run", staticmethod(fake_research))
+    project = SimpleNamespace(project_id="proj_hindcast", name="Hindcast", files=[],
+                              ontology=None, analysis_summary="", status=None,
+                              graph_id=None, simulation_requirement="", total_text_length=0)
+    monkeypatch.setattr(_po.ProjectManager, "create_project",
+                        classmethod(lambda cls, name: project))
+    monkeypatch.setattr(_po.ProjectManager, "get_project", classmethod(lambda cls, pid: project))
+    monkeypatch.setattr(_po.ProjectManager, "save_project", classmethod(lambda cls, p: None))
+    monkeypatch.setattr(_po.ProjectManager, "save_extracted_text",
+                        classmethod(lambda cls, pid, text: None))
+
+    class FakeOntologyGenerator:
+        def generate(self, **kwargs):
+            return {"entity_types": [{"name": "Organization"}], "edge_types": [],
+                    "analysis_summary": ""}
+
+    monkeypatch.setattr(_po, "OntologyGenerator", FakeOntologyGenerator)
+    seen = {"validator_calls": 0}
+
+    def fake_seed(builder, graph_id, seed_actors, valid_at=None):
+        seen["valid_at"] = valid_at
+        return 0
+
+    monkeypatch.setattr(_po, "_seed_research_actors", fake_seed)
+    monkeypatch.setattr(_po, "_validate_actor_graph_seed_contract", lambda *a, **k: None)
+    real_validator = _po.PipelineOrchestrator._validate_as_of_date
+
+    def spy_validator(actors_arg, sources_arg):
+        seen["validator_calls"] += 1
+        return real_validator(actors_arg, sources_arg)
+
+    monkeypatch.setattr(_po.PipelineOrchestrator, "_validate_as_of_date",
+                        staticmethod(spy_validator))
+
+    class FakeGraphBuilder:
+        def __init__(self, **kwargs):
+            pass
+
+        def create_graph(self, name):
+            return "graph_hindcast"
+
+        def set_ontology(self, graph_id, ontology):
+            return None
+
+        def add_text_batches(self, graph_id, chunks, batch_size=10, progress_callback=None,
+                             reference_time=None):
+            seen["reference_time"] = reference_time
+            raise _StopAtIngest("STOP_AT_INGEST")
+
+    monkeypatch.setattr(_po, "GraphBuilderService", FakeGraphBuilder)
+    pid = "pipe_hindcast_graph"
+    _po.PipelineManager.ensure_dirs(pid)
+    state = _po.PipelineState(pipeline_id=pid, prompt="Will the ECB cut by the end of 2024?",
+                              mode="full", status="running", options=dict(options))
+    state.handoff_dir = _po.PipelineManager.handoff_dir(pid)
+    _po.PipelineOrchestrator._run(state)
+    assert state.status == "failed" and "STOP_AT_INGEST" in (state.error or ""), state.error
+    return state, seen
+
+
+_GRAPH_ACTORS = {"as_of_date": HINDCAST_AS_OF, "central_question": "Will the ECB cut?",
+                 "actors": [{"name": "ECB", "type": "Organization"}], "relationships": []}
+_GRAPH_SOURCES = [_dated("https://early.example/a", "2024-05-20"),
+                  _dated("https://late.example/a", "2025-03-01")]
+
+
+def test_graph_stage_anchors_a_pinned_hindcast_at_its_as_of(monkeypatch, tmp_path):
+    """The real graph stage: the actor seeds and every research chunk are anchored at the
+    pin, the later-dated source is recorded (never adopted) and the roll-forward
+    validator is not consulted."""
+    state, seen = _drive_graph_stage(
+        monkeypatch, tmp_path, options={_hp.HINDCAST_POLICY_OPTION: _hindcast_pin()},
+        actors=_GRAPH_ACTORS, sources=_GRAPH_SOURCES)
+
+    pinned = datetime(2024, 6, 1, tzinfo=timezone.utc)
+    assert seen["valid_at"] == pinned
+    assert seen["reference_time"] == pinned
+    assert seen["validator_calls"] == 0
+    assert state.options["hindcast_violations"] == ["https://late.example/a"]
+    assert state.options["hindcast_source_dates"] == {"dated": 2, "undated": 0, "after_as_of": 1,
+                                                     "ambiguous": 0}
+    assert state.options["as_of_date_validated"] == HINDCAST_AS_OF
+    assert "as_of_date_correction" not in state.options
+
+
+def test_graph_stage_without_a_pin_keeps_the_roll_forward_validator(monkeypatch, tmp_path):
+    """Control (R2-RES-7 unchanged): the same inputs without a pin roll the anchor forward
+    to the newest source date and record no hindcast fields."""
+    state, seen = _drive_graph_stage(monkeypatch, tmp_path, options={},
+                                     actors=_GRAPH_ACTORS, sources=_GRAPH_SOURCES)
+
+    rolled = datetime(2025, 3, 1, tzinfo=timezone.utc)
+    assert seen["validator_calls"] == 1
+    assert seen["valid_at"] == rolled and seen["reference_time"] == rolled
+    assert state.options["as_of_date_validated"] == "2025-03-01"
+    assert "as_of_date_correction" in state.options
+    assert "hindcast_violations" not in state.options
+    assert "hindcast_source_dates" not in state.options

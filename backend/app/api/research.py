@@ -25,6 +25,8 @@ from ..services.pipeline_orchestrator import (
     PipelineManager,
     PipelineOrchestrator,
     PipelineState,
+    RunAdmissionError,
+    admit_hindcast_as_of,
     preflight_pipeline,
     refresh_research_artifact_manifest,
     research_dossier_is_sealed,
@@ -57,6 +59,9 @@ def run_pipeline():
         project_name: str      可选
         depth: str             quick | standard | deep（默认 standard）
         max_rounds: int        OASIS 最大轮数（可选，截断模拟）
+        as_of: str             回测 as-of 日期（可选，TIME-7）：规范 YYYY-MM-DD、不晚于今天（UTC）；
+                               需 HINDCAST_ENABLED=true 且研究引擎为 v3，否则 400（绝不按实时运行）。
+                               准入后为评估运行（characterization-only）。
     """
     try:
         data = request.get_json(silent=True) or {}
@@ -97,6 +102,15 @@ def run_pipeline():
         if model:
             model = model.lower()
 
+        # TIME-7 回测准入：带 as_of 的请求 fail-closed（HINDCAST_ENABLED / 规范且不在未来的日期 /
+        # v3 引擎），不满足即 400，在体检与任何目录/任务之前。
+        as_of = data.get('as_of')
+        if as_of is not None:
+            try:
+                admit_hindcast_as_of(as_of)
+            except RunAdmissionError as e:
+                return jsonify({"success": False, "error": str(e)}), 400
+
         # 起飞前体检：把"研究跑完 40 分钟后才发现 Zep Key 是占位符"这类失败提前到现在
         preflight_errors = preflight_pipeline(mode=mode, model=model)
         if preflight_errors:
@@ -106,15 +120,21 @@ def run_pipeline():
                 "preflight_errors": preflight_errors,
             }), 400
 
-        state = PipelineOrchestrator.start(
-            prompt=prompt,
-            mode=mode,
-            project_name=data.get('project_name'),
-            depth=depth,
-            max_rounds=max_rounds,
-            language=language,
-            model=model,
-        )
+        try:
+            state = PipelineOrchestrator.start(
+                prompt=prompt,
+                mode=mode,
+                project_name=data.get('project_name'),
+                depth=depth,
+                max_rounds=max_rounds,
+                language=language,
+                model=model,
+                as_of=as_of,
+            )
+        except RunAdmissionError as e:
+            # start() re-checks the admission before creating anything; any other
+            # ValueError is an internal fault (500 below).
+            return jsonify({"success": False, "error": str(e)}), 400
         return jsonify({
             "success": True,
             "data": {
