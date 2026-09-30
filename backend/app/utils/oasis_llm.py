@@ -586,6 +586,17 @@ def create_oasis_model(config: Dict[str, Any], use_boost: bool = False):
         )
 
     model = _create_openai_model(config, use_boost=use_boost)
+    # INFRA-6: the overrides below (UA, extra_body, fallback guard) follow the resolved provider,
+    # but _create_openai_model takes base_url/model from LLM_BASE_URL/LLM_MODEL_NAME (env, else
+    # the global Config provider's endpoint). When only the simulation config names a provider
+    # other than the global one, the two can belong to different providers: warn, do not guess.
+    global_provider = (Config.LLM_PROVIDER or '').strip().lower()
+    if not os.environ.get('LLM_PROVIDER') and global_provider and provider != global_provider:
+        logger.warning(
+            f"OASIS: 模拟配置 llm_provider={provider} 与全局 LLM_PROVIDER={global_provider} 不一致且未设置"
+            f"环境变量 LLM_PROVIDER：UA/extra_body/故障转移按 {provider}，base_url/model 却取自 "
+            f"LLM_BASE_URL/LLM_MODEL_NAME，二者可能分属不同提供方——请设置 LLM_PROVIDER 或重新准备模拟"
+        )
     # 仅 Kimi-for-coding 网关按 UA 校验 coding-agent 身份；其它提供方没有默认头，不替换客户端。
     _inject_coding_agent_ua(model, provider)
     # 推理模型(kimi/minimax/deepseek/qwen/glm)默认关闭推理，避免 reasoning 吃光 token 预算

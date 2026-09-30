@@ -20,7 +20,11 @@ from typing import Optional, Dict, Any, List, Tuple
 from ..config import Config
 from .llm_text import flatten_content, has_dangling_think, normalize_finish_reason, strip_think
 from .logger import get_logger
-from .provider_overrides import FALLBACK_REASONING_EFFORTS, openai_compat_request_overrides
+from .provider_overrides import (
+    FALLBACK_REASONING_EFFORTS,
+    openai_compat_request_overrides,
+    provider_temperature,
+)
 
 logger = get_logger('mirofish.llm_client')
 
@@ -1341,9 +1345,9 @@ class LLMClient:
             "tools": tools_schema,
             "tool_choice": "auto",
         }
-        self._apply_reasoning_options(kwargs, serving_provider)
+        extra_body = self._apply_reasoning_options(kwargs, serving_provider)
         # Kimi K2.7 Code 网关按推理开关硬校验温度（开=1/关=0.6），覆盖调用方温度。
-        kwargs["temperature"] = self._coerce_temperature(temperature, serving_provider)
+        kwargs["temperature"] = self._coerce_temperature(temperature, serving_provider, extra_body)
         # LLM-1: 此前原生工具路径完全绕过 chat() 的韧性/观测栈（无重试、无熔断记账、无计量、
         # 无预算门）——REPORT_NATIVE_TOOLS 默认开时每章一次裸调用。对齐 chat()：瞬时错误退避重试、
         # 422 记入熔断、成功后计量+预算检查。原生工具没有 CLI 回退（CLI 无 tools=），最终失败原样
@@ -1562,18 +1566,21 @@ class LLMClient:
         cleaned = self._clean_content(raw)
         return cleaned, cleaned != raw.strip()
 
-    def _coerce_temperature(self, temperature: float, provider: str) -> float:
+    def _coerce_temperature(self, temperature: float, provider: str,
+                            extra_body: Optional[Dict]) -> float:
         """按提供方约束修正采样温度（``provider`` 为实际服务本次请求的提供方）。
 
         Kimi K2.7 Code 网关（api.kimi.com/coding，model=kimi-k2.7 / kimi-for-coding）对
         temperature 做硬校验，只接受单一允许值：开启推理时必须 ``1``，关闭推理
         (thinking.type=disabled) 时必须 ``0.6``，传入其它值一律 400 invalid_request_error。
         本仓库各调用点（report/oasis/graphiti/zep）会传 0.0~0.7 等任意温度并对失败重试
-        （graphiti 还做升温重试），全部会被网关拒绝。故对 kimi 提供方按本次发送的 extra_body
-        （是否关推理）强制为网关允许值；其它提供方原样返回，行为不变。INFRA-6: 规则本身在
-        provider_overrides.openai_compat_request_overrides（与 _apply_reasoning_options 同源）。
+        （graphiti 还做升温重试），全部会被网关拒绝。故对 kimi 提供方按本次实际发送的
+        ``extra_body``（_apply_reasoning_options 的返回值，是否关推理）强制为网关允许值；其它
+        提供方原样返回，行为不变。INFRA-6: 规则本身在 provider_overrides.provider_temperature
+        （与 openai_compat_request_overrides 同源）；按已发送的 extra_body 判定而非再读一次
+        推理开关，推理体与温度不会在同一请求内错配。
         """
-        return openai_compat_request_overrides(provider, temperature)["temperature"]
+        return provider_temperature(provider, temperature, extra_body)
 
     def _apply_reasoning_options(self, kwargs: Dict[str, Any], provider: str) -> Optional[Dict]:
         """Apply reasoning controls for ``provider``, the provider actually serving this request.
@@ -1636,10 +1643,10 @@ class LLMClient:
 
         # 推理模型(kimi/minimax/deepseek/qwen/glm)：默认关闭推理，避免 reasoning 吃光
         # max_tokens 导致 content 为空。非推理提供方不带 extra_body。
-        self._apply_reasoning_options(kwargs, serving_provider)
+        extra_body = self._apply_reasoning_options(kwargs, serving_provider)
 
         # Kimi K2.7 Code 网关按推理开关硬校验温度（开=1/关=0.6），覆盖调用方温度。
-        kwargs["temperature"] = self._coerce_temperature(temperature, serving_provider)
+        kwargs["temperature"] = self._coerce_temperature(temperature, serving_provider, extra_body)
 
         response = client.chat.completions.create(**kwargs)
         # 捕获精确 token 用量供计量（I-5-0）；无 usage 字段时为 None，chat() 走粗估。

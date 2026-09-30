@@ -8,8 +8,9 @@ An OpenAI-compatible request can carry three provider-specific overrides:
 - the Kimi K2.7 Code gateway's temperature rule.
 
 The LLMClient transport (primary, fast-tier and fallback clients), the OASIS model factory
-and the settings / preflight connectivity probes all read these rules from
-openai_compat_request_overrides(), keyed by the provider that actually serves the request.
+and the settings / preflight / doctor.sh connectivity probes all read these rules from
+openai_compat_request_overrides() (LLMClient applies its temperature rule, provider_temperature(),
+to the extra_body it attached), keyed by the provider that actually serves the request.
 Before INFRA-6 each of them kept a hand-synced copy.
 
 Pure apart from reading Config, which is imported inside the function (config.py never
@@ -70,15 +71,22 @@ def openai_compat_request_overrides(
     return {
         "default_headers": headers,
         "extra_body": extra_body,
-        "temperature": _provider_temperature(pid, temperature, extra_body),
+        "temperature": provider_temperature(pid, temperature, extra_body),
     }
 
 
-def _provider_temperature(provider: str, temperature: Optional[float],
-                          extra_body: Dict[str, Any]) -> Optional[float]:
-    """``temperature`` after ``provider``'s rule, given the ``extra_body`` the request sends."""
-    if temperature is None or provider != "kimi":
+def provider_temperature(provider: Optional[str], temperature: Optional[float],
+                         extra_body: Optional[Dict[str, Any]]) -> Optional[float]:
+    """``temperature`` after ``provider``'s rule, given the ``extra_body`` the request sends.
+
+    openai_compat_request_overrides() applies it to the body it returns. LLMClient applies it
+    to the extra_body it has just attached to a request, so the temperature always matches the
+    thinking mode of the body actually sent: the thinking knobs are read once per request.
+    ``provider`` is matched case-insensitively; ``None`` temperature stays ``None``.
+    """
+    pid = (provider or "").strip().lower()
+    if temperature is None or pid != "kimi":
         return temperature
-    thinking = extra_body.get("thinking")
+    thinking = (extra_body or {}).get("thinking")
     thinking_disabled = isinstance(thinking, dict) and thinking.get("type") == "disabled"
     return _KIMI_TEMPERATURE_NO_THINKING if thinking_disabled else _KIMI_TEMPERATURE_THINKING

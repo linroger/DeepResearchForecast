@@ -5,16 +5,21 @@ The helper owns the Kimi coding-agent User-Agent, the reasoning ``extra_body`` a
 temperature rule. Golden tests compare it, and each call site that now uses it (LLMClient
 client construction and request kwargs, the settings and preflight probes, the OASIS model
 factory), with a frozen copy of the pre-INFRA-6 logic across every provider, temperature
-and thinking-knob combination. The two documented fixes are tested on their own: a fast-tier
-call served by LLM_FAST_PROVIDER gets that provider's overrides and metering, and the OASIS
-model gets the extra_body of the provider _resolve_provider picked. No network, no real LLM:
-every OpenAI client and the camel ModelFactory are fakes that record what they receive.
+and thinking-knob combination. The documented fixes are tested on their own: a fast-tier
+call served by LLM_FAST_PROVIDER gets that provider's overrides, metering and error
+attribution, the OASIS model gets the extra_body of the provider _resolve_provider picked, and
+the doctor.sh inline probe sends the same request as the preflight probe (Kimi 0.6, not 0). No
+network, no real LLM: every OpenAI client and the camel ModelFactory are fakes that record what
+they receive.
 """
 
 import ast
 import importlib.util
 import itertools
 import json
+import re
+import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -29,9 +34,11 @@ from app.utils import telemetry as tel
 from app.utils.provider_overrides import (
     FALLBACK_REASONING_EFFORTS,
     openai_compat_request_overrides,
+    provider_temperature,
 )
 
 BACKEND = Path(__file__).resolve().parents[1]
+DOCTOR_SH = BACKEND.parent / "scripts" / "doctor.sh"
 UA = "golden-agent/9.9"
 LOOPBACK = "http://127.0.0.1:9/v1"
 # Every PROVIDER_META provider, the fallback-only Antigravity alias and an unknown id.
@@ -200,6 +207,13 @@ def test_kimi_temperature_rule_follows_the_thinking_knob(monkeypatch):
     # force_disable_thinking sends the disable body, so the thinking-off value applies
     assert openai_compat_request_overrides("kimi", 0, force_disable_thinking=True)["temperature"] == 0.6
     assert openai_compat_request_overrides("glm", 0.2)["temperature"] == 0.2
+    # the rule LLMClient applies to the extra_body it attached (case-insensitive provider)
+    disabled = {"thinking": {"type": "disabled"}}
+    assert provider_temperature(" Kimi ", 0.2, disabled) == 0.6
+    assert provider_temperature("kimi", 0.2, None) == 1.0
+    assert provider_temperature("kimi", 0.2, {"thinking": {"type": "enabled"}}) == 1.0
+    assert provider_temperature("kimi", None, disabled) is None
+    assert provider_temperature("glm", 0.2, disabled) == 0.2
 
 
 def test_returned_extra_body_is_a_fresh_copy():
@@ -247,13 +261,22 @@ def test_helper_module_imports_no_llm_sdk_or_http_client():
     assert imported == {"copy", "typing", "..config"}
 
 
+def _doctor_inline_probe_source():
+    """The Python heredoc doctor.sh runs when backend/scripts/preflight.py is absent."""
+    blocks = re.findall(r"<<'PY'\n(.*?)\nPY\n", DOCTOR_SH.read_text(encoding="utf-8"), flags=re.S)
+    matching = [block for block in blocks if "def probe_openai_compat" in block]
+    assert len(matching) == 1
+    return matching[0]
+
+
 def test_call_sites_keep_no_copy_of_the_rules():
     """One source of truth: the call sites read the UA, the thinking bodies and the Kimi
     temperature rule only through the helper."""
-    call_sites = ("app/utils/llm_client.py", "app/utils/oasis_llm.py", "app/api/settings.py",
-                  "scripts/preflight.py")
-    for rel in call_sites:
-        source = (BACKEND / rel).read_text(encoding="utf-8")
+    call_sites = {rel: (BACKEND / rel).read_text(encoding="utf-8")
+                  for rel in ("app/utils/llm_client.py", "app/utils/oasis_llm.py", "app/api/settings.py",
+                              "scripts/preflight.py")}
+    call_sites["scripts/doctor.sh (inline probe)"] = _doctor_inline_probe_source()
+    for rel, source in call_sites.items():
         for copy_marker in ("LLM_USER_AGENT", "_DISABLE_THINKING_EXTRA_BODY", "reasoning_extra_body(",
                             "== 'kimi'", '== "kimi"', "0.6 if"):
             assert copy_marker not in source, (rel, copy_marker)
@@ -298,18 +321,49 @@ def test_golden_client_request_kwargs(monkeypatch):
                     assert _canonical(got) == _canonical(expected), (provider, temperature, states)
 
 
-def test_fast_tier_on_another_provider_uses_that_providers_overrides(monkeypatch):
-    """Primary kimi, fast tier served by qwen: the fast-tier request carries qwen's extra_body
-    and the caller's temperature (not kimi's 0.6), and the call metadata and meter name qwen.
-    The strong tier on the same client keeps kimi's overrides."""
+def test_request_temperature_follows_the_extra_body_it_sends(monkeypatch):
+    """The thinking knobs are read once per request and the Kimi temperature is derived from the
+    extra_body that request carries, so a knob that changes between two reads can never pair
+    thinking.type=disabled with temperature 1.0 (a 400 on the K2.7 Code gateway)."""
     transports = {}
     client = _client_for("kimi", monkeypatch, transports)
+    monkeypatch.setattr(Config, "LLM_TIERED_ROUTING", False, raising=False)
+    monkeypatch.setattr(Config, "LLM_TELEMETRY_ENABLED", False, raising=False)
+    reads = []
+
+    def body_that_flips_after_one_read(cls, provider=None):
+        reads.append(provider)
+        return {"thinking": {"type": "disabled"}} if len(reads) == 1 else None
+
+    monkeypatch.setattr(Config, "reasoning_extra_body", classmethod(body_that_flips_after_one_read))
+    messages = [{"role": "user", "content": "q"}]
+    tools = [{"type": "function", "function": {"name": "noop", "parameters": {"type": "object"}}}]
+    for send in (lambda: client._chat_openai(messages, 0.2, 64),
+                 lambda: client.chat_with_tools(messages, tools, temperature=0.2)):
+        reads.clear()
+        send()
+        sent = transports["kimi"].calls[-1]
+        assert reads == ["kimi"]
+        assert sent["extra_body"] == {"thinking": {"type": "disabled"}} and sent["temperature"] == 0.6
+
+
+def _route_fast_tier_to_qwen(monkeypatch):
+    """Tiered routing on, with the fast tier served by a qwen second client."""
     monkeypatch.setattr(Config, "LLM_TIERED_ROUTING", True, raising=False)
     monkeypatch.setattr(Config, "LLM_FAST_MODEL", "qwen-fast", raising=False)
     monkeypatch.setattr(Config, "LLM_STRONG_MODEL", None, raising=False)
     monkeypatch.setattr(Config, "LLM_FAST_PROVIDER", "qwen", raising=False)
     monkeypatch.setattr(Config, "LLM_FAST_BASE_URL", "http://127.0.0.1:8/v1", raising=False)
     monkeypatch.setattr(Config, "LLM_FAST_API_KEY", "sk-fast", raising=False)
+
+
+def test_fast_tier_on_another_provider_uses_that_providers_overrides(monkeypatch):
+    """Primary kimi, fast tier served by qwen: the fast-tier request carries qwen's extra_body
+    and the caller's temperature (not kimi's 0.6), and the call metadata and meter name qwen.
+    The strong tier on the same client keeps kimi's overrides."""
+    transports = {}
+    client = _client_for("kimi", monkeypatch, transports)
+    _route_fast_tier_to_qwen(monkeypatch)
     monkeypatch.setattr(Config, "LLM_TELEMETRY_ENABLED", True, raising=False)
     monkeypatch.setattr(Config, "LLM_CACHE_ENABLED", True, raising=False)
     monkeypatch.setattr(Config, "LLM_RUN_BUDGET_TOKENS", 0, raising=False)
@@ -349,6 +403,39 @@ def test_fast_tier_on_another_provider_uses_that_providers_overrides(monkeypatch
     finally:
         tel.set_run_context(None)
         tel.LLMMeter.reset(run_id)
+
+
+def test_fast_tier_failures_name_the_serving_provider(monkeypatch):
+    """Primary kimi, fast tier on qwen: an empty reply or a reply without choices raises an
+    error attributed to qwen, whose hint names qwen's thinking knob, not kimi's."""
+    transports = {}
+    client = _client_for("kimi", monkeypatch, transports)
+    _route_fast_tier_to_qwen(monkeypatch)
+    monkeypatch.setattr(Config, "LLM_TELEMETRY_ENABLED", False, raising=False)
+    qwen_transport, provider = client._serving_endpoint(True)
+    assert provider == "qwen" and qwen_transport is transports["qwen"]
+    messages = [{"role": "user", "content": "q"}]
+
+    qwen_transport.chat.completions.create = lambda **kwargs: _resp("", "length")
+    with pytest.raises(lc.EmptyCompletion) as empty:
+        client._chat_openai(messages, 0.2, 64, tier="fast")
+    assert empty.value.provider == "qwen" and "provider=qwen" in str(empty.value)
+    assert "LLM_DISABLE_THINKING" in str(empty.value)
+    assert "LLM_KIMI_DISABLE_THINKING" not in str(empty.value)
+
+    # a MiniMax-style error envelope without choices (2049 = invalid key: deterministic)
+    envelope = SimpleNamespace(choices=[], usage=None, model=None,
+                               model_extra={"base_resp": {"status_code": 2049, "status_msg": "invalid api key"}})
+    qwen_transport.chat.completions.create = lambda **kwargs: envelope
+    with pytest.raises(lc.LLMEmptyChoices) as no_choices:
+        client._chat_openai(messages, 0.2, 64, tier="fast")
+    assert no_choices.value.provider == "qwen" and "provider=qwen" in str(no_choices.value)
+    tools = [{"type": "function", "function": {"name": "noop", "parameters": {"type": "object"}}}]
+    with pytest.raises(lc.LLMEmptyChoices) as tool_error:
+        client.chat_with_tools(messages, tools, temperature=0.2, tier="fast")
+    assert tool_error.value.provider == "qwen" and tool_error.value.deterministic
+    assert "provider=qwen" in str(tool_error.value)
+    assert transports["kimi"].calls == []
 
 
 def test_fast_tier_kimi_second_client_gets_the_user_agent_and_temperature_rule(monkeypatch):
@@ -465,6 +552,36 @@ def test_golden_probe_requests_match_legacy_and_production_headers(monkeypatch, 
     assert all(r.created[-1]["extra_body"] == {"thinking": {"type": "disabled"}} for r in kimi)
 
 
+def test_doctor_inline_probe_sends_the_preflight_request(monkeypatch, capsys):
+    """doctor.sh's inline fallback probe (used when backend/scripts/preflight.py is absent)
+    imports the helper and sends exactly the preflight probe's request for every provider and
+    knob combination; before INFRA-6 it sent temperature 0 to Kimi, which K2.7 Code rejects."""
+    source = _doctor_inline_probe_source()
+    tree = ast.parse(source)
+    assert any(isinstance(node, ast.ImportFrom) and node.module == "app.utils.provider_overrides"
+               and [alias.name for alias in node.names] == ["openai_compat_request_overrides"]
+               for node in ast.walk(tree))
+    functions = [node for node in tree.body
+                 if isinstance(node, ast.FunctionDef) and node.name in ("emit", "probe_openai_compat")]
+    assert len(functions) == 2
+    namespace = {"Config": Config, "openai_compat_request_overrides": openai_compat_request_overrides,
+                 "sys": sys, "time": time, "failures": 0}
+    exec(compile(ast.Module(body=functions, type_ignores=[]), str(DOCTOR_SH), "exec"), namespace)
+    monkeypatch.setattr(openai, "OpenAI", _RecordingOpenAI)
+    for states in KNOB_STATES:
+        _set_knobs(monkeypatch, states)
+        for provider in OPENAI_COMPAT:
+            namespace["probe_openai_compat"]("LLM_PROVIDER", provider, "sk-probe", LOOPBACK, "m-probe")
+            recorder = _RecordingOpenAI.built[-1]
+            legacy_client, legacy_request = _legacy_probe(provider, "sk-probe", LOOPBACK, "m-probe", 25)
+            assert _canonical(recorder.kwargs) == _canonical(legacy_client), provider
+            assert _canonical(recorder.created[-1]) == _canonical(legacy_request), (provider, states)
+    assert namespace["failures"] == 0
+    assert "live completion OK" in capsys.readouterr().out
+    kimi = [r for r in _RecordingOpenAI.built if r.kwargs.get("default_headers")]
+    assert kimi and all(r.created[-1]["temperature"] == 0.6 for r in kimi)
+
+
 # ---------------------------------------------------------------- OASIS model factory
 @pytest.fixture
 def camel_factory(monkeypatch):
@@ -530,6 +647,31 @@ def test_oasis_model_uses_the_resolved_providers_extra_body(monkeypatch, camel_f
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     model = oasis_llm.create_oasis_model({})
     assert "extra_body" not in model.model_config_dict  # openai has no thinking body
+
+
+def test_oasis_warns_when_only_the_sim_config_names_another_provider(monkeypatch, camel_factory):
+    """The OASIS endpoint and model still come from LLM_BASE_URL/LLM_MODEL_NAME, so a provider
+    named only by the simulation config (env LLM_PROVIDER unset) that differs from the global
+    LLM_PROVIDER is flagged; every consistent combination stays silent."""
+    warnings = []
+    monkeypatch.setattr(oasis_llm.logger, "warning", lambda message, *a, **k: warnings.append(str(message)))
+    monkeypatch.setattr(Config, "LLM_PROVIDER", "minimax", raising=False)
+
+    def mismatch_warnings(config, env_provider):
+        warnings.clear()
+        if env_provider is None:
+            monkeypatch.delenv("LLM_PROVIDER", raising=False)
+        else:
+            monkeypatch.setenv("LLM_PROVIDER", env_provider)
+        oasis_llm.create_oasis_model(config)
+        return [w for w in warnings if "llm_provider=" in w]
+
+    flagged = mismatch_warnings({"llm_provider": "qwen"}, None)
+    assert len(flagged) == 1 and "llm_provider=qwen" in flagged[0] and "LLM_PROVIDER=minimax" in flagged[0]
+    assert mismatch_warnings({"llm_provider": "MiniMax"}, None) == []
+    assert mismatch_warnings({}, None) == []
+    assert mismatch_warnings({"llm_provider": "qwen"}, "qwen") == []
+    assert mismatch_warnings({"llm_provider": "qwen"}, "kimi") == []
 
 
 def test_inject_coding_agent_ua_wrapper(monkeypatch):
