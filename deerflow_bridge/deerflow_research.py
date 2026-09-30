@@ -15826,18 +15826,24 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
         payload["horizon_degraded"] = degraded_stage
         payload["degraded_queries"] = degraded_queries
     all_queries_failed = initial_all_transport_failed
+    transport_failures = refresh_diagnostics.get("transport_failure_count", 0)
     payload["status"] = {
         "attempted": True,
         "query_count": len(queries),
         "successful_query_count": refresh_diagnostics.get("successful_query_count", 0),
-        "transport_failure_count": refresh_diagnostics.get("transport_failure_count", 0),
+        "transport_failure_count": transport_failures,
         "tool_observation_count": len(tool_candidates),
         "refresh_candidate_count": len(refreshed_markets),
         "candidate_count": len(combined_candidates),
         "selected_count": len(markets),
+        # RESEARCH-3: some queries failed and none found a candidate, so market
+        # coverage is unknown: 'partial_transport_failure', never the generic
+        # 'no_equivalent_market' (which would read as "no such market exists").
         "empty_reason": None if markets else (
             "all_candidates_irrelevant" if combined_candidates else (
-                "transport_failure" if all_queries_failed else "no_equivalent_market"
+                "transport_failure" if all_queries_failed else (
+                    "partial_transport_failure" if transport_failures > 0 else "no_equivalent_market"
+                )
             )
         ),
     }

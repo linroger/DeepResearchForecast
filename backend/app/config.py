@@ -1433,6 +1433,16 @@ class Config:
     # run first; off = byte-identical tool text, caches and meta.  The parent forwards
     # it to every research child (search_tools / cached_fetch / linear_research).
     RESEARCH_SOURCE_TAXONOMY = os.environ.get('RESEARCH_SOURCE_TAXONOMY', 'false').strip().lower() == 'true'
+    # RESEARCH-3 absence discipline (v3): web search is relevance-ranked and undated, so
+    # an empty search is not evidence that something did not happen.  On: an empty
+    # search answers NO_RESULTS plus that sentence, the KIQ task and the section rules
+    # each gain one line (state an absence only when a cited source says so), and
+    # findings that state an absence are counted per KIQ (record absence_cues) and per
+    # run (meta.absence_findings) without changing any tag.  Default false: it changes
+    # agent and writer prompts, which needs a live comparison run first; off = tool
+    # text, prompts, KIQ records and meta byte-identical.  Forwarded to the v3 child.
+    RESEARCH_ABSENCE_DISCIPLINE = os.environ.get(
+        'RESEARCH_ABSENCE_DISCIPLINE', 'false').strip().lower() == 'true'
     # RESEARCH-11 v3 question spec: one post-scout JSON call (reusing the plan call's
     # cached prefix) pins the operational question, outcome definition, resolution
     # source, horizon and reference class, and discloses at most 3 defaults it chose

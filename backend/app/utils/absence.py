@@ -153,10 +153,12 @@ _EMPTY_REASONS = frozenset({"no_equivalent_market", "all_candidates_irrelevant",
 def market_status(payload: Any, *, enabled: bool) -> SlotStatus:
     """Classify a ``prediction_markets.json`` payload into a prompt-slot status.
 
-    ``status.state`` (the merge's rich label) is read first.  Without it, a
-    transport failure on any query makes the result ``unavailable``: the bridge
-    folds a partial outage with no candidates into ``no_equivalent_market``, so
-    that label is trusted as ``empty`` only when every query succeeded.  An
+    ``status.state`` (the merge's rich label) is read first.  Without it, an
+    explicit ``transport_failure`` / ``partial_transport_failure`` empty reason
+    or a transport failure on any query makes the result ``unavailable``:
+    snapshots written before RESEARCH-3 fold a partial outage with no
+    candidates into ``no_equivalent_market``, so that label is trusted as
+    ``empty`` only when every query succeeded.  An
     unknown (missing, null or unreadable) query count cannot prove that, so any
     transport failure then counts as partial too.
     """
@@ -177,7 +179,8 @@ def market_status(payload: Any, *, enabled: bool) -> SlotStatus:
     if state in _STATE_UNAVAILABLE:
         return unavailable(state)
     empty_reason = str(status.get("empty_reason") or "").strip().lower()
-    if empty_reason == "transport_failure":
+    # The bridge labels a partial outage with no candidate explicitly (RESEARCH-3).
+    if empty_reason in ("transport_failure", "partial_transport_failure"):
         return unavailable(empty_reason)
     failures = _count(status.get("transport_failure_count"))
     successes = _count(status.get("successful_query_count"))

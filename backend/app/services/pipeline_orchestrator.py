@@ -2245,6 +2245,7 @@ RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_SOURCE_TAXONOMY", "bool"),
 )
 RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
+    ("RESEARCH_ABSENCE_DISCIPLINE", "bool"),
     ("RESEARCH_AS_OF_PIN", "bool"),
     ("RESEARCH_EVIDENCE_QUOTES", "str"),
     ("RESEARCH_EVIDENCE_SUPPORTS", "bool"),
@@ -7060,9 +7061,14 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
         "empty_reason_counts": empty_reason_counts,
         **status_totals,
         "attempted_query_count": status_totals["query_count"],
+        # A failed query with no candidate means coverage is unknown: never the
+        # generic 'no_equivalent_market' (the bridge collector's rule, RESEARCH-3).
         "empty_reason": None if selected else (
             "all_candidates_irrelevant" if candidate_count else (
-                "transport_failure" if all_network_attempts_failed else "no_equivalent_market"
+                "transport_failure" if all_network_attempts_failed else (
+                    "partial_transport_failure" if status_totals["transport_failure_count"] > 0
+                    else "no_equivalent_market"
+                )
             )
         ),
     }

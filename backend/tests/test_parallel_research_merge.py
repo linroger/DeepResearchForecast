@@ -335,7 +335,9 @@ def test_market_snapshot_merge_transport_requires_every_attempt_to_fail():
     assert merged["status"]["query_count"] == 6
     assert merged["status"]["successful_query_count"] == 2
     assert merged["status"]["transport_failure_count"] == 4
-    assert merged["status"]["empty_reason"] == "no_equivalent_market"
+    # RESEARCH-3: a partial outage with no candidate is labelled, never folded
+    # into the generic 'no_equivalent_market'.
+    assert merged["status"]["empty_reason"] == "partial_transport_failure"
     assert merged["status"]["state"] == "partial_transport_failure"
     assert merged["status"]["empty_reason_counts"] == {
         "transport_failure": 1, "no_equivalent_market": 1,
