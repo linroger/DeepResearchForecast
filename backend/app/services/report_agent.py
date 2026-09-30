@@ -291,8 +291,10 @@ class ReportLogger:
     ):
         """INFRA-5: 记录一次派发前被拒绝的工具调用（参数非 JSON / 缺工具名 / 参数无效）。
 
-        只记事件骨架（工具名、拒绝原因、至多 300 字符的调用原文摘录），不含任何章节草稿正文，
-        故不在 api/report.py 的 _AGENT_LOG_DRAFT_FIELDS 草稿闸门之列。
+        只记事件骨架（工具名、拒绝原因、调用原文摘录），不含任何章节草稿正文，故不在
+        api/report.py 的 _AGENT_LOG_DRAFT_FIELDS 草稿闸门之列。摘录经 report_tool_args.rejection_excerpt
+        收窄：至多 300 字符，并在首个 'Final Answer'、空行或首个完整 JSON 对象之后截断——未闭合的
+        <tool_call> 块会一直延伸到回复末尾，可能带上其后的章节正文。
         """
         self.log(
             action="tool_rejected",
@@ -302,7 +304,7 @@ class ReportLogger:
             details={
                 "tool_name": tool_name or "",
                 "reason": reason,
-                "raw_excerpt": ("" if raw_excerpt is None else str(raw_excerpt))[:300],
+                "raw_excerpt": _rta.rejection_excerpt(raw_excerpt),
                 "message": f"拒绝工具调用: {tool_name or '(无工具名)'}"
             }
         )
@@ -1159,15 +1161,20 @@ def _looks_truncated(text: Optional[str]) -> bool:
     return False
 
 
+def _has_contamination_marker(text: str) -> bool:
+    """正文含污染标记：系统提示泄漏 / 工具框架残留（CONTAMINATION_MARKERS），以及
+    INFRA-5（LLM_TRANSPORT_STRICT，默认开）下的 <think> 推理残留（_REASONING_LEAK_MARKERS）。"""
+    for marker in CONTAMINATION_MARKERS:
+        if marker in text:
+            return True
+    return bool(getattr(Config, "LLM_TRANSPORT_STRICT", True)) and any(m in text for m in _REASONING_LEAK_MARKERS)
+
+
 def _looks_contaminated(text: Optional[str]) -> bool:
     """判断一段拟用作章节正文的文本是否被污染 / 无效。"""
     if not text or not text.strip():
         return True
-    for marker in CONTAMINATION_MARKERS:
-        if marker in text:
-            return True
-    # INFRA-5（LLM_TRANSPORT_STRICT，默认开）：推理残留 <think> 标签进入正文即判污染。
-    if getattr(Config, "LLM_TRANSPORT_STRICT", True) and any(m in text for m in _REASONING_LEAK_MARKERS):
+    if _has_contamination_marker(text):
         return True
     # RQ-1：短于下限判无效，但含图表标记（Mermaid/内嵌图 + 简短图注）的短章节是合法产出，
     # 豁免长度门（与 pipeline_orchestrator 健康门的图表豁免同源，避免两侧判定漂移）。
@@ -10760,6 +10767,27 @@ class ReportAgent:
         )
         return charged
 
+    def _note_skipped_parse_errors(self, tool_calls: List[Dict[str, Any]], selected: Dict[str, Any], *,
+                                   section_title: Optional[str] = None, section_index: Optional[int] = None,
+                                   track: bool = True) -> str:
+        """INFRA-5: 同一回复里未被处理的无法解析块（_select_tool_call 选了别的调用）留痕并告知模型。
+
+        每个这样的块记一次不计费的被拒调用（track=False 的 chat 对话不动报告级计数）与一行
+        tool_rejected，不占本章免费额度（本轮已处理选中的调用）；返回拼在本轮 Observation 前的说明。
+        没有这样的块时（含宽容解析关闭：列表里没有错误条目）返回空串，Observation 逐字节不变。
+        """
+        skipped = [c for c in tool_calls if c is not selected and "_parse_error" in c]
+        for entry in skipped:
+            kind = entry.get("_kind") or _rta.KIND_ARGS_NOT_JSON
+            if track:
+                self._count_tool_event(_rta.OUTCOME_FOR_KIND.get(kind, "rejected_parse"))
+            self._safe_report_log("log_tool_rejection", section_title, None,
+                                  f"{kind}: {entry['_parse_error']}（同一回复另有被处理的调用，本块未执行）",
+                                  entry.get("raw"), section_index=section_index)
+        if skipped:
+            logger.warning(f"同一回复中 {len(skipped)} 个无法解析的工具调用块未执行（不计工具预算）")
+        return _rta.skipped_blocks_note([str(c["_parse_error"]) for c in skipped])
+
     @staticmethod
     def _select_tool_call(tool_calls: List[Dict[str, Any]]) -> Dict[str, Any]:
         """INFRA-5: 取首个格式良好的调用；全部解析失败时取第一个错误条目（非空列表）。
@@ -10776,19 +10804,28 @@ class ReportAgent:
         """INFRA-5: 去掉解析层的私有键（'_repairs' 等），供 chat() 对外返回。"""
         return {k: v for k, v in call.items() if not str(k).startswith("_")}
 
-    def _screen_native_tool_call(self, call: Dict[str, Any], repair_on: bool) -> Optional[Tuple[str, str, str]]:
-        """INFRA-5: 原生工具调用的派发前检查；可派发时返回 None，否则 (结局, 类型, 原因)。
+    def _screen_native_unknown_tool(self, call: Dict[str, Any]) -> Optional[Tuple[str, str, str]]:
+        """INFRA-5 / RESEARCH-15(b): 原生工具调用的工具名名单校验；合法时返回 None，否则 (结局, 类型, 原因)。
 
-        未知工具名（RESEARCH-15(b)，fail-closed，不受 REPORT_TOOL_ARG_REPAIR 控制）先判；
-        self.tools 为空（仅测试替身）时与 ReAct 路径一致跳过名单校验。其余两项随开关：
-        INFRA-1 的 arguments_error（参数不是 JSON 对象）与 validate_call（必填/as_of/limit）。
+        fail-closed、不受 REPORT_TOOL_ARG_REPAIR 控制：调用方在降级安全的参数校验之外调用它，
+        自身异常照常抛出（_generate_section 回退 ReAct），绝不按可派发处理。
+        self.tools 为空（仅测试替身）时与 ReAct 路径一致跳过名单校验。
         """
         name = call.get("name")
         if self.tools and name not in self._valid_tool_names():
             return ("rejected_unknown", "unknown_tool",
                     f"'{name}' 不是可用工具。请从以下工具中选择：{', '.join(sorted(self.tools.keys()))}")
+        return None
+
+    @staticmethod
+    def _screen_native_tool_args(call: Dict[str, Any], repair_on: bool) -> Optional[Tuple[str, str, str]]:
+        """INFRA-5（REPORT_TOOL_ARG_REPAIR）: 原生工具调用的参数检查；可派发时返回 None，否则 (结局, 类型, 原因)。
+
+        INFRA-1 的 arguments_error（参数不是 JSON 对象）与 validate_call（必填/as_of/limit）。
+        """
         if not repair_on:
             return None
+        name = call.get("name")
         if call.get("arguments_error"):
             return ("rejected_parse", _rta.KIND_ARGS_NOT_JSON,
                     f"工具参数不是有效的 JSON 对象（{call['arguments_error']}）。"
@@ -10835,66 +10872,48 @@ class ReportAgent:
             return self._parse_tool_calls_tolerant(response)
         return self._parse_tool_calls_legacy(response)
 
-    # INFRA-5: <tool_call> 块的宽容匹配——块内任意内容都交给 report_tool_args 解析，
-    # 不再要求块内是一个完整的 {...}（旧正则匹配不上的块会被静默丢弃）。
-    _TOOL_CALL_BLOCK_RE = re.compile(r'<tool_call>\s*(.*?)\s*</tool_call>', re.DOTALL)
-    # 裸 JSON 兜底：响应末尾以 {"name": / {"tool": 开头的 JSON（与历史格式3同一正则）。
-    _BARE_TOOL_JSON_RE = re.compile(r'(\{"(?:name|tool)"\s*:.*?\})\s*$', re.DOTALL)
-
     def _parse_tool_calls_tolerant(self, response: str) -> List[Dict[str, Any]]:
         """INFRA-5: 宽容解析工具调用。
 
-        每个 <tool_call> 块经 report_tool_args.parse_tool_call_block（整体 JSON → 首个对象 →
-        补齐括号）与 normalize_envelope（键名归一、扁平参数上提、字符串化 parameters 解码）。
+        <tool_call> 块由 report_tool_args.split_tool_call_blocks 线性切分（块内任意内容都交给解析，
+        不再要求是一个完整的 {...}；旧正则匹配不上的块会被静默丢弃）。每个块经
+        parse_tool_call_block_repairs（整体 JSON → 首个对象 → 补齐括号）与 normalize_envelope
+        （键名归一、扁平参数上提、字符串化 parameters 解码）。
         无法恢复的块不再丢弃，而是产出 {'_parse_error': 原因, 'raw': 原文[:500], '_kind': 类型}
         条目，由调用方回给模型一条纠正性 Observation。成功条目的 '_repairs' 列出所做修复。
         最后一个闭合块之后仍有未闭合的 <tool_call>（回复被 max_tokens 截断，或误用 </invoke> 等
         闭合标签）时，其后全文按同一流程作为一个块处理（修复标记 unterminated_block）。
-        裸 JSON 兜底（无 <tool_call> 块）沿用历史的两种形态与「工具名须合法」约束，只把
+        裸 JSON 兜底（无 <tool_call> 块）沿用历史的两种候选与「工具名须合法」约束，只把
         json.loads 换成同一套修复；裸 JSON 解析失败不产出错误条目（可能只是正文里的花括号）。
+        切分与候选定位都不用回溯正则：模型文本上的 <tool_call>\\s*(.*?)\\s*</tool_call> 在未闭合开标签
+        + 长空白串时是三次方回溯，且 _sre 匹配期间不释放 GIL（并发章节线程全被卡住）。
         """
-        text = response or ""
-        blocks: List[Tuple[str, Optional[str]]] = []
-        last_end = 0
-        for match in self._TOOL_CALL_BLOCK_RE.finditer(text):
-            blocks.append((match.group(1), None))
-            last_end = match.end()
-        open_tag = text.rfind("<tool_call>")
-        if open_tag >= last_end:
-            blocks.append((text[open_tag + len("<tool_call>"):].strip(), _rta.REPAIR_UNTERMINATED_BLOCK))
         tool_calls: List[Dict[str, Any]] = []
-        for block, block_repair in blocks:
-            obj, repair, error = _rta.parse_tool_call_block(block)
+        for block, block_repair in _rta.split_tool_call_blocks(response):
+            obj, repairs, error = _rta.parse_tool_call_block_repairs(block)
             if obj is None:
                 tool_calls.append({"_parse_error": error, "raw": block[:500],
                                    "_kind": _rta.KIND_ARGS_NOT_JSON})
                 continue
-            call, repairs = _rta.normalize_envelope(obj)
+            call, envelope_repairs = _rta.normalize_envelope(obj)
             name = call.get("name")
             if not isinstance(name, str) or not name:
                 tool_calls.append({"_parse_error": "missing tool name", "raw": block[:500],
                                    "_kind": _rta.KIND_MISSING_NAME})
                 continue
-            call["_repairs"] = [r for r in (block_repair, repair) if r] + repairs
+            call["_repairs"] = ([block_repair] if block_repair else []) + repairs + envelope_repairs
             tool_calls.append(call)
         if tool_calls:
             return tool_calls
 
-        stripped = text.strip()
-        candidates = []
-        if stripped.startswith('{') and stripped.endswith('}'):
-            candidates.append(stripped)
-        match = self._BARE_TOOL_JSON_RE.search(stripped)
-        if match:
-            candidates.append(match.group(1))
-        for candidate in candidates:
-            obj, repair, _error = _rta.parse_tool_call_block(candidate)
+        for candidate in _rta.bare_tool_call_candidates(response):
+            obj, repairs, _error = _rta.parse_tool_call_block_repairs(candidate)
             if obj is None:
                 continue
-            call, repairs = _rta.normalize_envelope(obj)
+            call, envelope_repairs = _rta.normalize_envelope(obj)
             name = call.get("name")
             if isinstance(name, str) and name in self._valid_tool_names():
-                call["_repairs"] = ([repair] if repair else []) + repairs
+                call["_repairs"] = repairs + envelope_repairs
                 return [call]
         return []
 
@@ -11774,7 +11793,7 @@ class ReportAgent:
         """T4.5: 用原生 tool calling 生成章节（无正则解析/无 conflict_retries）。
 
         INFRA-5: 被拒的工具调用（未知工具名 / 参数非 JSON / 参数无效）以 role=tool 'ERROR: …'
-        回包、不派发；LLM_TRANSPORT_STRICT 下被污染/过短的正文抛出，由 _generate_section 回退 ReAct。
+        回包、不派发；LLM_TRANSPORT_STRICT 下含污染标记的正文抛出，由 _generate_section 回退 ReAct。
         """
         logger.info(f"原生 tool calling 生成章节: {section.title}")
         if self.report_logger:
@@ -11872,11 +11891,13 @@ class ReportAgent:
                 for c in calls:
                     # INFRA-5: 派发前检查。被拒调用不执行，以 role=tool 'ERROR: …' 回包（assistant 消息里
                     # 的每个 tool_call_id 都必须有回包）；未知工具与免费额度内的被拒调用不计预算。
-                    try:
-                        screened = self._screen_native_tool_call(c, _repair_on)
-                    except Exception as se:  # noqa: BLE001 — 校验为旁路，自身失败按可派发处理
-                        logger.debug(f"原生工具调用校验失败（按可派发处理）: {se}")
-                        screened = None
+                    screened = self._screen_native_unknown_tool(c)
+                    if screened is None:
+                        try:
+                            screened = self._screen_native_tool_args(c, _repair_on)
+                        except Exception as se:  # noqa: BLE001 — 参数校验为增强，自身失败按可派发处理
+                            logger.debug(f"原生工具调用参数校验失败（按可派发处理）: {se}")
+                            screened = None
                     if screened is not None:
                         _outcome, _kind, _reason = screened
                         _charged = False
@@ -11974,11 +11995,13 @@ class ReportAgent:
 
     @staticmethod
     def _raise_if_native_contaminated(text: Optional[str], section_title: str) -> None:
-        """INFRA-5（LLM_TRANSPORT_STRICT，默认开）：原生路径的章节正文与 ReAct 同口径做污染检测，
-        被污染（系统提示泄漏 / 工具框架残留 / <think> 推理残留 / 过短）即抛出，由 _generate_section
-        按其它原生失败一样回退 ReAct（ReAct 自带纠正重试与占位符兜底）。开关关闭时不检测（历史行为）。"""
-        if getattr(Config, "LLM_TRANSPORT_STRICT", True) and _looks_contaminated(text):
-            raise RuntimeError(f"原生 tool calling 章节正文疑似被污染或无效（{section_title}），回退 ReAct")
+        """INFRA-5（LLM_TRANSPORT_STRICT，默认开）：原生路径的章节正文含污染标记（系统提示泄漏 /
+        工具框架残留 / <think> 推理残留，_has_contamination_marker）即抛出，由 _generate_section 按其它
+        原生失败一样回退 ReAct（ReAct 自带纠正重试与占位符兜底）。只看标记、不套 _looks_contaminated 的
+        MIN_VALID_SECTION_CHARS 长度门：短而干净的原生正文照旧采纳，不因篇幅整章重跑 ReAct。
+        开关关闭时不检测（历史行为）。"""
+        if getattr(Config, "LLM_TRANSPORT_STRICT", True) and text and _has_contamination_marker(text):
+            raise RuntimeError(f"原生 tool calling 章节正文含污染标记（{section_title}），回退 ReAct")
 
     def _generate_section_react(
         self,
@@ -12237,6 +12260,9 @@ class ReportAgent:
 
                 # 只执行第一个工具调用（INFRA-5: 首个格式良好的调用优先；宽容解析关闭时即 tool_calls[0]）
                 call = self._select_tool_call(tool_calls)
+                # INFRA-5: 同一回复里其余无法解析的块不计预算、留痕，并在本轮 Observation 前告知模型。
+                _skipped_note = self._note_skipped_parse_errors(
+                    tool_calls, call, section_title=section.title, section_index=section_index)
 
                 # INFRA-5: 无法恢复的 <tool_call> 块（参数非 JSON / 缺工具名）不再被静默丢弃——
                 # 回给模型纠正性 Observation；免费额度内不计入工具调用预算。
@@ -12251,7 +12277,8 @@ class ReportAgent:
                     messages.append({"role": "assistant", "content": response})
                     messages.append({
                         "role": "user",
-                        "content": _rta.rejection_observation(_kind, str(call["_parse_error"]), charged=_charged),
+                        "content": _skipped_note + _rta.rejection_observation(
+                            _kind, str(call["_parse_error"]), charged=_charged),
                     })
                     continue
 
@@ -12269,7 +12296,7 @@ class ReportAgent:
                     messages.append({"role": "assistant", "content": response})
                     messages.append({
                         "role": "user",
-                        "content": (
+                        "content": _skipped_note + (
                             f"【工具错误】'{call['name']}' 不是可用工具。请从以下工具中选择重新调用："
                             f"{', '.join(sorted(self.tools.keys()))}"
                         ),
@@ -12291,7 +12318,7 @@ class ReportAgent:
                         messages.append({"role": "assistant", "content": response})
                         messages.append({
                             "role": "user",
-                            "content": _rta.rejection_observation(
+                            "content": _skipped_note + _rta.rejection_observation(
                                 _rta.KIND_INVALID_PARAMS, _param_error, tool_name=call["name"], charged=_charged),
                         })
                         continue
@@ -12334,7 +12361,7 @@ class ReportAgent:
                 messages.append({"role": "assistant", "content": response})
                 messages.append({
                     "role": "user",
-                    "content": REACT_OBSERVATION_TEMPLATE.format(
+                    "content": _skipped_note + REACT_OBSERVATION_TEMPLATE.format(
                         tool_name=call["name"],
                         result=result,
                         tool_calls_count=tool_calls_count,
@@ -13242,9 +13269,12 @@ class ReportAgent:
             # 执行工具调用（限制数量）
             tool_results = []
             rejection_note = ""  # INFRA-5: 本轮被拒调用的纠正性说明（取代工具结果）
+            skipped_note = ""  # INFRA-5: 同一回复里未执行的无法解析块的说明（拼在 Observation 前）
             # 每轮最多执行1次工具调用（INFRA-5: 首个格式良好的调用优先；关闭宽容解析时即 tool_calls[0]）
             call = self._select_tool_call(tool_calls)
             if len(tool_calls_made) + _charged_rejections < self.MAX_TOOL_CALLS_PER_CHAT:
+                # INFRA-5: 同一回复里其余无法解析的块留痕并告知模型（对话不动报告级计数）。
+                skipped_note = self._note_skipped_parse_errors(tool_calls, call, track=False)
                 _param_error = None
                 if _repair_on and "_parse_error" not in call:
                     _param_error = _rta.validate_call(call["name"], call.get("parameters"))
@@ -13273,7 +13303,8 @@ class ReportAgent:
             
             # 将结果添加到消息
             messages.append({"role": "assistant", "content": response})
-            observation = rejection_note or "\n".join([f"[{r['tool']}结果]\n{r['result']}" for r in tool_results])
+            observation = skipped_note + (
+                rejection_note or "\n".join([f"[{r['tool']}结果]\n{r['result']}" for r in tool_results]))
             messages.append({
                 "role": "user",
                 "content": observation + CHAT_OBSERVATION_SUFFIX

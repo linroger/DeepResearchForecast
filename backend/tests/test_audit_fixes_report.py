@@ -409,8 +409,7 @@ def test_native_path_slices_batch_and_logs_results():
                     {"id": f"c{k}", "name": "quick_search", "arguments": {"query": str(k)}}
                     for k in range(4)
                 ]}
-            # INFRA-5: native bodies now pass _looks_contaminated (>= MIN_VALID_SECTION_CHARS=800).
-            return {"content": "本章正文" * 250, "tool_calls": []}
+            return {"content": "本章正文" * 100, "tool_calls": []}
 
         def chat(self, **kw):
             return "fallback"

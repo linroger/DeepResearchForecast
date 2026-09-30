@@ -10,13 +10,21 @@ Offline (scripted LLM doubles, no network):
     rebuilt from raw_arguments, charge after dispatch, evidence-preserving forced final,
     LLM_TRANSPORT_STRICT contamination fallback to ReAct;
   * chat() dispatch, and report telemetry tool_calls under concurrent sections;
-  * every flag off restores the legacy behaviour.
+  * every flag off restores the legacy behaviour;
+  * review round 1: linear block splitting (no regex backtracking on model text),
+    zero-width characters kept inside values, malformed blocks beside a valid one
+    recorded, skeleton-only rejection excerpts, blank-primary fallbacks, the tool
+    contracts pinned to _define_tools / _execute_tool, and the native name check
+    failing closed.
 """
 
+import inspect
 import json
 import os
+import re
 import sys
 import threading
+import time
 
 import pytest
 
@@ -198,6 +206,21 @@ def test_parse_block_zero_width_characters_are_removed():
     assert obj == {"name": "x", "parameters": {"q": "a"}} and repair == rta.REPAIR_BRACE_BALANCED
 
 
+def test_parse_block_keeps_zero_width_characters_inside_values():
+    # a ZWJ inside a value while the block fails for an unrelated reason (trailing text)
+    obj, repairs, _ = rta.parse_tool_call_block_repairs(
+        '{"name":"quick_search","parameters":{"query":"a\u200db"}}} x')
+    assert obj["parameters"]["query"] == "a\u200db" and repairs == [rta.REPAIR_FIRST_OBJECT]
+    # a BOM outside the JSON goes and is reported; the Persian ZWNJ inside the value stays
+    obj, repairs, _ = rta.parse_tool_call_block_repairs(
+        '\ufeff{"name":"x","parameters":{"q":"\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645"}} trailing')
+    assert obj["parameters"]["q"] == "\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645"
+    assert repairs == [rta.REPAIR_INVISIBLE_CHARS, rta.REPAIR_FIRST_OBJECT]
+    # the spec contract reports the deciding repair
+    obj, repair, _ = rta.parse_tool_call_block('\ufeff{"name":"x","parameters":{"q":"a"}} trailing')
+    assert obj == {"name": "x", "parameters": {"q": "a"}} and repair == rta.REPAIR_FIRST_OBJECT
+
+
 @pytest.mark.parametrize("text", [
     "garbage", "", "   ", '{"name":"x","parameters":{"q":"trunc', '{"name":"x"]', "[1, 2]",
 ])
@@ -205,6 +228,62 @@ def test_parse_block_unrecoverable_returns_error(text):
     obj, repair, error = rta.parse_tool_call_block(text)
     assert obj is None and repair is None
     assert isinstance(error, str) and error
+
+
+# ─────────────────────────── block splitting / bare candidates ───────────────────────────
+# The backtracking patterns these helpers replace; used here on small inputs only.
+_LEGACY_BLOCK_RE = re.compile(r'<tool_call>\s*(.*?)\s*</tool_call>', re.DOTALL)
+_LEGACY_BARE_RE = re.compile(r'(\{"(?:name|tool)"\s*:.*?\})\s*$', re.DOTALL)
+
+
+@pytest.mark.parametrize("text", [
+    "", "no tags", "<tool_call>{}</tool_call>", "<tool_call>  </tool_call>",
+    '<tool_call>\n  {"a": 1}  \n</tool_call> tail <tool_call> x </tool_call>',
+    "<tool_call><tool_call>{}</tool_call>", "</tool_call><tool_call>{}</tool_call>",
+    "<tool_call>{} unclosed", "<tool_call>a</tool_call><tool_call>b",
+])
+def test_split_blocks_matches_the_lazy_regex_it_replaces(text):
+    closed = [block for block, repair in rta.split_tool_call_blocks(text) if repair is None]
+    assert closed == [m.group(1) for m in _LEGACY_BLOCK_RE.finditer(text)]
+
+
+def test_split_blocks_unterminated_tail_is_the_text_after_the_last_opener():
+    assert rta.split_tool_call_blocks("<tool_call>a</tool_call>x<tool_call> b <tool_call> c ") == [
+        ("a", None), ("c", rta.REPAIR_UNTERMINATED_BLOCK)]
+    assert rta.split_tool_call_blocks("<tool_call>a</tool_call> tail") == [("a", None)]
+
+
+@pytest.mark.parametrize("text", [
+    '{"name": "a", "parameters": {}}', 'pre {"name": "a"} mid {"tool": "b"}', '  {"x": 1}  ',
+    'text {"name" : 1}', 'text {"name": 1} tail', '{"name":', "",
+])
+def test_bare_candidates_match_the_legacy_regex(text):
+    stripped = text.strip()
+    expected = [stripped] if stripped.startswith("{") and stripped.endswith("}") else []
+    match = _LEGACY_BARE_RE.search(stripped)
+    expected += [match.group(1)] if match else []
+    assert rta.bare_tool_call_candidates(text) == expected
+
+
+@pytest.mark.parametrize("reply, kind", [
+    ("<tool_call>" + "\n" * 20000 + "{", rta.KIND_MISSING_NAME),  # "{" balances to {}: no name
+    ("<tool_call>" * 5000, rta.KIND_ARGS_NOT_JSON),
+    ("<tool_call>" + " " * 20000 + "x", rta.KIND_ARGS_NOT_JSON),
+    ("<tool_call>{}</tool_call>" * 2000 + "<tool_call>" + "\n" * 20000, rta.KIND_ARGS_NOT_JSON),
+    ("前文 " + '{"name": "quick_search", ' * 4000 + "}", None),
+])
+def test_parse_tool_calls_is_linear_on_degenerate_replies(monkeypatch, reply, kind):
+    # the lazy block regex took ~12 s on an unclosed opener + 4,000 spaces, holding the GIL
+    monkeypatch.setattr(Config, "REPORT_TOOL_ARG_REPAIR", True, raising=False)
+    a = _agent()
+    started = time.perf_counter()
+    calls = a._parse_tool_calls(reply)
+    assert time.perf_counter() - started < 1.0
+    if kind is None:
+        assert calls == []
+    else:
+        assert calls and all("_parse_error" in c for c in calls)
+        assert calls[-1]["_kind"] == kind
 
 
 # ───────────────────────────────── normalize_envelope ─────────────────────────────────
@@ -250,6 +329,43 @@ def test_validate_reports_missing_required_param():
     assert rta.validate_call("get_simulation_context", {}) is None  # supplies its own query
 
 
+def test_validate_blank_primary_takes_the_fallback_value_in_place():
+    # _execute_tool reads query only when interview_topic is absent, so a blank topic is filled
+    params = {"interview_topic": "", "query": "宿舍甲醛"}
+    assert rta.validate_call("interview_agents", params) is None
+    assert params["interview_topic"] == "宿舍甲醛"
+    params = {"actor_name": None, "query": "Alice"}
+    assert rta.validate_call("opinion_shift", params) is None and params["actor_name"] == "Alice"
+    params = {"query": "Alice"}
+    assert rta.validate_call("opinion_shift", params) is None and params == {"query": "Alice"}
+    assert "interview_topic" in rta.validate_call("interview_agents", {"interview_topic": " ", "query": ""})
+
+
+def test_tool_contracts_match_report_agent_tool_definitions(monkeypatch):
+    monkeypatch.setattr(Config, "GRAPH_COMMUNITY_RETRIEVAL", True, raising=False)
+    tools = _agent(base_simulation_id="base_sim")._define_tools()  # every conditional tool included
+    legacy = ReportAgent._LEGACY_TOOL_ALIASES
+    source = inspect.getsource(ReportAgent._execute_tool)
+    for alias, target in rta.TOOL_ALIASES.items():
+        assert alias in legacy and target in tools
+    for tool, required in rta.REQUIRED_PARAMS.items():
+        assert tool in tools or tool in legacy, tool
+        for param in required:
+            if tool in tools:
+                assert param in tools[tool]["parameters"], (tool, param)
+            else:  # legacy alias: no advertised schema, _execute_tool reads the key directly
+                assert f'parameters.get("{param}"' in source, (tool, param)
+    for tool, groups in rta.ALTERNATIVE_REQUIRED_PARAMS.items():
+        assert tool in tools
+        for group in groups:
+            assert set(group) <= set(tools[tool]["parameters"]), (tool, group)
+    for (tool, param), fallbacks in rta.PARAM_FALLBACKS.items():
+        assert param in rta.REQUIRED_PARAMS[tool]
+        for fallback in fallbacks:
+            # the in-place fill relies on _execute_tool reading the fallback only when the key is absent
+            assert f'parameters.get("{param}", parameters.get("{fallback}"' in source, (tool, param)
+
+
 def test_validate_alternative_groups_for_trace_cascade():
     assert rta.validate_call("trace_cascade", {"source": "A", "target": "B"}) is None
     assert rta.validate_call("trace_cascade", {"center": "A"}) is None
@@ -292,6 +408,23 @@ def test_rejection_budget_charges_after_cap_and_observation_text():
     assert rta.CHARGED_NOTE in rta.rejection_observation(rta.KIND_ARGS_NOT_JSON, "x", charged=True)
     assert "quick_search" in rta.rejection_observation(rta.KIND_INVALID_PARAMS, "缺少必填参数 query",
                                                        tool_name="quick_search")
+
+
+def test_rejection_excerpt_is_skeleton_only():
+    raw = '{"name": "quick_search", "parameters": {"query": "Fed\nFinal Answer: 本章正文' + "很长" * 200
+    assert rta.rejection_excerpt(raw) == '{"name": "quick_search", "parameters": {"query": "Fed'
+    assert rta.rejection_excerpt('{"name": "x"} 之后的正文') == '{"name": "x"}'
+    assert rta.rejection_excerpt('{"a": 1\n\n本章正文') == '{"a": 1'
+    assert rta.rejection_excerpt('{"q": "a}b"} tail') == '{"q": "a}b"}'
+    assert len(rta.rejection_excerpt("x" * 1000)) == rta.REJECTION_EXCERPT_CHARS
+    assert rta.rejection_excerpt(None) == ""
+
+
+def test_skipped_blocks_note_text():
+    assert rta.skipped_blocks_note([]) == ""
+    note = rta.skipped_blocks_note(["Expecting value", "Expecting value", "missing tool name"])
+    assert note.startswith("（本次回复中另有 3 个工具调用块无法解析（Expecting value；missing tool name），未执行；")
+    assert note.endswith("）\n")
 
 
 # ──────────────────────────────── _parse_tool_calls ────────────────────────────────
@@ -375,6 +508,49 @@ def test_react_malformed_call_is_surfaced_and_not_charged(monkeypatch, report_di
     assert not {"content", "response", "thought"} & set(rejected[0]["details"])
     _, outcomes = a._tool_counters_snapshot()
     assert outcomes["rejected_parse"] == 1 and outcomes["dispatched"] == 1
+
+
+def test_react_malformed_block_beside_a_valid_one_is_recorded(monkeypatch, report_dir):
+    monkeypatch.setattr(Config, "REPORT_TOOL_ARG_REPAIR", True, raising=False)
+    monkeypatch.setattr(Config, "REPORT_TOOL_MAX_REJECTED_PER_SECTION", 0, raising=False)
+    a = _agent()
+    a.report_logger = ReportLogger("r_bad_then_good")
+    a.llm = _ScriptLLM([
+        '<tool_call>{broken</tool_call>\n'
+        '<tool_call>{"name": "quick_search", "parameters": {"query": "gold"}}</tool_call>',
+        "Final Answer: " + BODY,
+    ])
+    executed = _recording_executor(a)
+    assert BODY in _run_react(a)
+    assert executed == [("quick_search", {"query": "gold"})]
+    assert a._section_tool_calls == 1  # the skipped block is not charged, even with no free rejections
+    observation = next(t for t in _user_texts(a.llm.calls[-1:]) if "RESULT[quick_search]" in t)
+    assert observation.startswith("（本次回复中另有 1 个工具调用块无法解析（")
+    rejected = [r for r in _read_agent_log(report_dir, "r_bad_then_good") if r["action"] == "tool_rejected"]
+    assert len(rejected) == 1 and rejected[0]["details"]["reason"].startswith("args_not_json")
+    assert rejected[0]["details"]["raw_excerpt"] == "{broken"
+    _, outcomes = a._tool_counters_snapshot()
+    assert outcomes["rejected_parse"] == 1 and outcomes["dispatched"] == 1
+
+
+def test_react_rejection_row_excerpt_never_carries_draft_prose(monkeypatch, report_dir):
+    # third tool-call/Final-Answer conflict: the degrade path keeps an unterminated block whose
+    # raw text runs into the Final Answer body
+    monkeypatch.setattr(Config, "REPORT_TOOL_ARG_REPAIR", True, raising=False)
+    a = _agent()
+    a.report_logger = ReportLogger("r_excerpt")
+    conflicted = ('<tool_call>{"name": "quick_search", "parameters": {"query": "Fed\n'
+                  'Final Answer: 本章正文草稿' + "。" * 50)
+    a.llm = _ScriptLLM([conflicted] * 3 + [
+        '<tool_call>{"name": "quick_search", "parameters": {"query": "gold"}}</tool_call>',
+        "Final Answer: " + BODY,
+    ])
+    _recording_executor(a)
+    assert BODY in _run_react(a)
+    rejected = [r for r in _read_agent_log(report_dir, "r_excerpt") if r["action"] == "tool_rejected"]
+    assert len(rejected) == 1
+    assert rejected[0]["details"]["raw_excerpt"] == '{"name": "quick_search", "parameters": {"query": "Fed'
+    assert "本章正文" not in json.dumps(rejected[0], ensure_ascii=False)
 
 
 def test_react_seventh_rejection_is_charged(monkeypatch):
@@ -553,6 +729,39 @@ def test_native_charges_only_after_dispatch(monkeypatch):
     assert seen == [0] and a._section_tool_calls == 1
 
 
+def test_native_argument_screening_degrades_safe_but_name_check_does_not(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_TOOL_ARG_REPAIR", True, raising=False)
+
+    def _broken_validator(*_args, **_kwargs):
+        raise RuntimeError("validator bug")
+
+    monkeypatch.setattr(rta, "validate_call", _broken_validator)
+    a = _agent()
+    calls = [{"id": "u1", "name": "no_such_tool", "arguments": {"query": "q"}},
+             {"id": "ok", "name": "quick_search", "arguments": {"query": "q"}}]
+    a.llm = _NativeLLM([_tool_turn(*calls)])
+    executed = _recording_executor(a)
+    assert _run_native(a) == BODY
+    assert executed == [("quick_search", {"query": "q"})]  # a broken validator lets a known call run
+    (_assistant, replies), = _assistant_and_replies(a.llm.tool_messages[-1])
+    by_id = {r["tool_call_id"]: r["content"] for r in replies}
+    assert by_id["u1"].startswith("ERROR: ") and "不是可用工具" in by_id["u1"]
+
+
+def test_native_tool_name_check_failure_is_never_dispatchable():
+    a = _agent()
+
+    def _broken_names():
+        raise RuntimeError("tool registry unavailable")
+
+    a._valid_tool_names = _broken_names
+    a.llm = _NativeLLM([_tool_turn({"id": "c1", "name": "quick_search", "arguments": {"query": "q"}})])
+    executed = _recording_executor(a)
+    with pytest.raises(RuntimeError, match="tool registry unavailable"):
+        _run_native(a)  # _generate_section falls back to ReAct on this
+    assert executed == []
+
+
 def _exhausting_native(monkeypatch, evidence_flag, chars=12000):
     monkeypatch.setattr(Config, "REPORT_TOOL_ARG_REPAIR", True, raising=False)
     monkeypatch.setattr(Config, "REPORT_NATIVE_FINAL_WITH_EVIDENCE", evidence_flag, raising=False)
@@ -631,6 +840,19 @@ def test_native_think_leak_kept_when_not_strict(monkeypatch):
     assert a.llm.react_calls == 0
 
 
+def test_native_contamination_markers_fall_back_but_short_clean_body_is_kept(monkeypatch):
+    monkeypatch.setattr(Config, "LLM_TRANSPORT_STRICT", True, raising=False)
+    # a clean native body under MIN_VALID_SECTION_CHARS is adopted as before (no length gate)
+    a = _native_then_react_agent("短正文")
+    section, outline = _section()
+    assert a._generate_section(section, outline, previous_sections=[]) == "短正文"
+    assert a.llm.react_calls == 0
+    # a tool-framework remnant (CONTAMINATION_MARKERS) sends the section to ReAct
+    a = _native_then_react_agent(BODY + "\n<tool_call>")
+    assert a._generate_section(section, outline, previous_sections=[]) == EN_BODY.strip()
+    assert a.llm.react_calls >= 1
+
+
 # ─────────────────────────────────────── chat() ───────────────────────────────────────
 def test_chat_dispatch_surfaces_malformed_call(monkeypatch):
     monkeypatch.setattr(Config, "REPORT_TOOL_ARG_REPAIR", True, raising=False)
@@ -647,6 +869,23 @@ def test_chat_dispatch_surfaces_malformed_call(monkeypatch):
     assert out["tool_calls"] == [{"name": "quick_search", "parameters": {"query": "gold"}}]
     assert out["sources"] == ["gold"]
     assert any(t.startswith("工具调用参数不是有效的 JSON") for t in _user_texts(a.llm.calls))
+
+
+def test_chat_notes_malformed_block_beside_a_valid_one(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_TOOL_ARG_REPAIR", True, raising=False)
+    a = _agent()
+    a._resolve_report_cached = lambda: None
+    a.llm = _ScriptLLM([
+        '<tool_call>{broken</tool_call><tool_call>{"name": "quick_search", "parameters": {"query": "gold"}}'
+        '</tool_call>',
+        "黄金价格上行。",
+    ])
+    executed = _recording_executor(a)
+    out = a.chat("金价怎么样？")
+    assert executed == [("quick_search", {"query": "gold"})]
+    assert out["response"] == "黄金价格上行。"
+    observation = next(t for t in _user_texts(a.llm.calls) if "[quick_search结果]" in t)
+    assert observation.startswith("（本次回复中另有 1 个工具调用块无法解析（")
 
 
 def test_chat_dispatch_flag_off_is_legacy(monkeypatch):
