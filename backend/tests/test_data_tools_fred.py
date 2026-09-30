@@ -3,13 +3,14 @@
 Offline: every request goes to a fake transport that records it.  Pinned here:
 the alias table and the pre-call rejection of anything that is not a series
 id; the vintage invariant (both realtime bounds equal the pin, the pin never
-after as_of, no unpinned retry) and the America/Chicago vendor clock with its
-fallback; the conservative status mapping; the deterministic rendering (units
-DRF's page-number parser reads, true change endpoints, derived values labelled
-derived, the 2600-character cap, English or Chinese support sentences); the
-secrecy of the API key in results, cache files and logs; the cache rules; and
-that the module stays inert and self-contained until the research engine binds
-it (TIME-13).
+after as_of, no unpinned retry, no answer stamped outside the pin served) and
+the America/Chicago vendor clock with its fallback; the conservative status
+mapping; the deterministic rendering (units DRF's page-number parser reads,
+true change endpoints, exact derived arithmetic labelled derived, the
+2600-character cap, English or Chinese support sentences); the secrecy of the
+API key in results, cache files and logs, whole or in part across any cut; the
+cache and throttle rules; and that the module stays inert and self-contained
+until the research engine binds it (TIME-13).
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ import logging
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -76,7 +78,7 @@ def window_rows(params):
 
 
 class NoCache:
-    def get(self, key):
+    def get(self, key, max_age_s=None):
         return None
 
     def put(self, key, payload, ttl_s=None):
@@ -265,6 +267,109 @@ def test_no_request_is_ever_sent_with_realtime_end_after_as_of():
                                 historical=False)[0] == dtools.STATUS_UNAVAILABLE
 
 
+def _stamped(row, start, end):
+    return {**row, "realtime_start": start, "realtime_end": end}
+
+
+def test_answers_stamped_with_the_pinned_period_are_accepted():
+    pin = PAST.isoformat()
+    _, series_payload, _ = meta()
+    series_payload = {"realtime_start": pin, "realtime_end": pin,
+                      "seriess": [_stamped(series_payload["seriess"][0], pin, pin)]}
+    rows = monthly(dt.date(2018, 1, 1), [str(250 + i) for i in range(26)])
+    # FRED clips a row's real-time period to the request; an unclipped period holding the pin agrees too.
+    rows = [_stamped(row, pin, pin) for row in rows[:13]] + [_stamped(row, "2019-06-01", "9999-12-31")
+                                                             for row in rows[13:]]
+    transport = FakeTransport(series=(200, series_payload, ""),
+                              obs=(200, {"realtime_start": pin, "realtime_end": pin, "observations": rows}, ""))
+    result = call(transport, as_of=PAST, pit=PAST)
+    assert result.status == dtools.STATUS_OK and "Latest: 275 (2020-02-01)" in result.page_text
+
+
+def _off_pin_answers(stage, where, stamp):
+    """The fake answers of one request whose response or one of whose rows carries ``stamp``."""
+    status, series_payload, text = meta()
+    if stage == "series":
+        if where == "response":
+            series_payload.update(stamp)
+        else:
+            series_payload["seriess"][0].update(stamp)
+        return {"series": (status, series_payload, text)}
+    rows = monthly(dt.date(2018, 1, 1), [str(250 + i) for i in range(26)])
+    payload = {"observations": rows}
+    if where == "response":
+        payload.update(stamp)
+    else:
+        rows[-1].update(stamp)
+    return {"series/observations": (200, payload, "")}
+
+
+@pytest.mark.parametrize("stage", ["series", "series/observations"])
+@pytest.mark.parametrize("where", ["response", "row"])
+@pytest.mark.parametrize("pin, stamp, expected", [
+    # A historical pin answered with today's revision: never labelled the pinned vintage.
+    (PAST, {"realtime_start": "2026-09-30", "realtime_end": "2026-09-30"}, dtools.STATUS_NO_VINTAGE),
+    # Today's pin answered with a period that ended before it.
+    (TODAY, {"realtime_start": "2020-01-01", "realtime_end": "2026-09-29"}, dtools.STATUS_UNAVAILABLE),
+])
+def test_an_answer_stamped_outside_the_pin_is_never_served_as_the_pinned_vintage(stage, where, pin, stamp,
+                                                                                  expected, cache):
+    transport = FakeTransport()
+    transport.answers.update(_off_pin_answers(stage, where, stamp))
+    result = call(transport, as_of=pin, pit=pin, cache=cache)
+    assert result.status == expected and result.page_text == "" and result.facts == ()
+    assert "outside" in result.detail and pin.isoformat() in result.detail
+    assert ("never substituted" in result.detail) == (pin == PAST)
+    assert len(transport.calls) == (1 if stage == "series" else 2)
+    assert_pinned(transport.calls, pin, pin)
+    assert not os.path.isdir(cache.root) or not os.listdir(cache.root)
+
+
+@pytest.mark.parametrize("stamp", [{"realtime_start": "yesterday", "realtime_end": "2026-09-30"},
+                                   {"realtime_start": "2026-09-30"},
+                                   {"realtime_start": "2026-09-30", "realtime_end": 20260930}])
+def test_a_malformed_real_time_stamp_contradicts_the_pin(stamp):
+    status, payload, text = meta()
+    payload["seriess"][0].update(stamp)
+    result = call(FakeTransport(series=(status, payload, text)))
+    assert result.status == dtools.STATUS_UNAVAILABLE and "outside the requested vintage" in result.detail
+
+
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="setting the host time zone needs time.tzset")
+def test_a_naive_now_is_local_time_like_datetime_now():
+    saved = os.environ.get("TZ")
+    os.environ["TZ"] = "Asia/Shanghai"
+    time.tzset()
+    try:
+        # 07:30 on 1 October in Shanghai is 23:30 UTC and 18:30 in Chicago on 30 September; read as
+        # UTC it would be 02:30 on 1 October in Chicago, a day ahead of FRED.
+        naive = dt.datetime(2026, 10, 1, 7, 30)
+        assert dtools.vendor_today_chicago(naive) == dt.date(2026, 9, 30)
+        assert dtools.fred_pit(dt.date(2026, 10, 1), naive) == dt.date(2026, 9, 30)
+        transport = FakeTransport()
+        ahead = call(transport, as_of=dt.date(2026, 10, 1), pit=dt.date(2026, 10, 1), now=naive)
+        assert ahead.status == dtools.STATUS_INVALID_INPUT and transport.calls == []
+        # A naive instant that has no UTC equivalent reads as the current instant; nothing raises.
+        assert dtools.fred_pit(PAST, dt.datetime.min) == PAST
+    finally:
+        if saved is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = saved
+        time.tzset()
+
+
+def test_the_vendor_clock_never_raises_at_the_datetime_limits(monkeypatch):
+    assert dtools.vendor_today_chicago(dt.datetime.min.replace(tzinfo=UTC)) == dt.date.min
+    assert dtools.vendor_today_chicago(dt.datetime.max.replace(tzinfo=UTC)) == dt.date(9999, 12, 31)
+
+    def missing_zone(name):
+        raise dtools.ZoneInfoNotFoundError(name)
+
+    monkeypatch.setattr(dtools, "ZoneInfo", missing_zone)
+    assert dtools.vendor_today_chicago(dt.datetime.min.replace(tzinfo=UTC)) == dt.date.min
+
+
 # ---------------------------------------------------------------------------
 # Honesty: status mapping
 # ---------------------------------------------------------------------------
@@ -273,20 +378,25 @@ _DOES_NOT_EXIST = (400, {"error_code": 400, "error_message": "Bad Request.  The 
                                                              "but may exist in FRED."}, "")
 
 
-def test_does_not_exist_at_a_historical_pin_is_no_vintage_without_an_unpinned_retry():
-    transport = FakeTransport(series=_DOES_NOT_EXIST)
-    result = call(transport, as_of=PAST, pit=PAST)
+@pytest.mark.parametrize("stage, sent", [("series", 1), ("series/observations", 2)])
+def test_does_not_exist_at_a_historical_pin_is_no_vintage_without_an_unpinned_retry(stage, sent, cache):
+    transport = FakeTransport()
+    transport.answers[stage] = _DOES_NOT_EXIST
+    result = call(transport, as_of=PAST, pit=PAST, cache=cache)
     assert result.status == dtools.STATUS_NO_VINTAGE
-    assert len(transport.calls) == 1
+    assert len(transport.calls) == sent
     assert_pinned(transport.calls, PAST, PAST)
     assert "never substituted" in result.detail and result.page_text == ""
+    assert not os.path.isdir(cache.root) or not os.listdir(cache.root)
 
 
-def test_does_not_exist_at_todays_pin_is_not_found():
-    transport = FakeTransport(series=_DOES_NOT_EXIST)
-    result = call(transport, series="NOSUCHSERIES")
+@pytest.mark.parametrize("stage, sent", [("series", 1), ("series/observations", 2)])
+def test_does_not_exist_at_todays_pin_is_not_found(stage, sent):
+    transport = FakeTransport()
+    transport.answers[stage] = _DOES_NOT_EXIST
+    result = call(transport)
     assert result.status == dtools.STATUS_NOT_FOUND
-    assert len(transport.calls) == 1
+    assert len(transport.calls) == sent
 
 
 def test_empty_series_metadata_is_no_vintage_historically_and_not_found_today():
@@ -327,7 +437,7 @@ def test_a_raising_transport_or_cache_never_raises():
     assert result.status == dtools.STATUS_UNAVAILABLE and KEY not in repr(result)
 
     class BrokenCache:
-        def get(self, key):
+        def get(self, key, max_age_s=None):
             raise OSError("disk gone")
 
     broken = call(FakeTransport(), cache=BrokenCache())
@@ -410,7 +520,8 @@ def test_header_yoy_and_facts_label_source_vintage_and_derivation():
     assert result.date == "2026-09-30"
     assert result.provenance == {"vendor": "fred", "series_id": "CPIAUCSL", "vintage": "2026-09-30",
                                  "observation_start": "2016-09-30", "observation_end": "2026-09-30",
-                                 "units": "Index 1982-1984=100", "frequency": "Monthly"}
+                                 "units": "Index 1982-1984=100", "frequency": "Monthly",
+                                 "fetched_at": "2026-09-30T17:00:00Z"}
     level, yoy = result.facts
     assert (level["value"], level["value_type"], level["provenance_kind"]) == ("323.5", "actual", "structured")
     assert (yoy["value"], yoy["provenance_kind"], yoy["base_date"]) == ("3.85", "derived", "2024-08-01")
@@ -421,6 +532,21 @@ def test_header_yoy_and_facts_label_source_vintage_and_derivation():
     assert all("FRED/ALFRED" in s and "CPIAUCSL" in s and "2026-09-30" in s for s in result.supports)
     assert all("derived by DRF" in s for s in result.supports if "year-on-year" in s or "change over" in s)
     assert result.supports[0].endswith(": 323.5 for August 2025.")
+
+
+def test_derived_lines_are_exact_at_the_limits_of_a_value():
+    # 32 significant digits: the default 28-digit context rounds the difference and cannot quantize
+    # the percent change (InvalidOperation), which dropped the whole lookup.
+    transport = FakeTransport(obs=observations([{"date": "2024-09-01", "value": "0.000000000001"},
+                                               {"date": "2025-09-01", "value": "99999999999999999999.999999999999"}]))
+    result = call(transport)
+    assert result.status == dtools.STATUS_OK
+    lines = result.page_text.split("\n")
+    assert lines[2].startswith("Year-on-year: 9999999999999999999999999999999800.00% (derived by DRF")
+    assert lines[3] == ("Change over 12 months: +99999999999999999999.999999999998 "
+                        "(+9999999999999999999999999999999800.00%) from 0.000000000001 (2024-09-01) to "
+                        "99999999999999999999.999999999999 (2025-09-01) (derived by DRF from the pinned levels)")
+    assert result.facts[1]["value"] == "9999999999999999999999999999999800.00"
 
 
 def test_percent_series_verify_through_the_page_number_parser():
@@ -573,6 +699,81 @@ def test_the_key_never_appears_in_results_cache_files_or_logs(tmp_path, caplog):
     assert KEY not in caplog.text
 
 
+def key_fragments(text, size=8):
+    """The ``size``-character pieces of KEY that ``text`` holds."""
+    return sorted({KEY[i:i + size] for i in range(len(KEY) - size + 1) if KEY[i:i + size] in text})
+
+
+def _proxy_page(offset):
+    """A proxy's HTML error page echoing the request URL, with the key starting at ``offset``."""
+    head = "<html><body><h1>400 Bad Request</h1>"
+    echo = "<p>GET /fred/series?series_id=CPIAUCSL&realtime_start=2026-09-30&realtime_end=2026-09-30&api_key="
+    page = head + "-" * (offset - len(head) - len(echo)) + echo + KEY + "&file_type=json</p></body></html>"
+    assert page.index(KEY) == offset
+    return page
+
+
+_BODY_TAIL_ECHO = "\n" * 480 + "key " + KEY + " is not registered"
+
+
+@pytest.mark.parametrize("stage", ["series", "series/observations"])
+@pytest.mark.parametrize("answer", [
+    # The 160-character clip of a 400's message falls inside the echoed key.
+    (400, {"error_message": "E" * 129 + KEY}, ""),
+    (400, None, _proxy_page(145)),
+    (400, None, _proxy_page(150).replace("api_key=", "key: ")),
+    (0, None, "E" * 150 + KEY),
+    # A body longer than 500 characters: the cut falls inside the key, and whitespace collapses after it.
+    (400, None, _BODY_TAIL_ECHO),
+    # A transport that already cut its body at 500 characters, inside the key.
+    (400, None, _BODY_TAIL_ECHO[:500]),
+    (0, None, _BODY_TAIL_ECHO[:500]),
+])
+def test_no_part_of_the_key_survives_a_cut(stage, answer, tmp_path, caplog):
+    caplog.set_level(logging.DEBUG)
+    transport = FakeTransport()
+    transport.answers[stage] = answer
+    result = call(transport, cache_dir=str(tmp_path / "c"))
+    assert result.status == dtools.STATUS_UNAVAILABLE
+    assert key_fragments(repr(dataclasses.asdict(result))) == []
+    assert key_fragments(caplog.text) == []
+
+
+def test_no_part_of_the_key_survives_a_metadata_clip(tmp_path):
+    cache_dir = tmp_path / "c"
+    transport = FakeTransport(series=meta(title="T" * 230 + KEY, units="U" * 150 + KEY))
+    result = call(transport, cache_dir=str(cache_dir))
+    assert result.status == dtools.STATUS_OK
+    assert key_fragments(repr(dataclasses.asdict(result))) == []
+    assert all(key_fragments(path.read_text(encoding="utf-8")) == [] for path in cache_dir.iterdir())
+
+
+def test_the_default_transport_redacts_an_echoed_key_before_its_own_cut(monkeypatch):
+    import httpx
+
+    monkeypatch.setattr(logging.getLogger("httpx"), "filters", list(logging.getLogger("httpx").filters))
+
+    class Echo:
+        status_code = 400
+        text = _BODY_TAIL_ECHO
+
+        def json(self):
+            raise ValueError("no JSON")
+
+    monkeypatch.setattr(httpx, "get", lambda url, **kwargs: Echo())
+    code, payload, text = dtools._httpx_transport("https://x.test/fred/series", {"api_key": KEY}, 1, {})
+    assert (code, payload, len(text)) == (400, None, 500) and key_fragments(text) == []
+    result = dtools.fred_series("cpi", as_of=TODAY, pit=TODAY, key=KEY, now=NOW, cache=NoCache())
+    assert result.status == dtools.STATUS_UNAVAILABLE
+    assert key_fragments(repr(dataclasses.asdict(result))) == []
+
+
+def test_an_invalid_series_echo_never_holds_part_of_the_key():
+    result = call(FakeTransport(), series="x" * 60 + KEY)
+    assert result.status == dtools.STATUS_INVALID_INPUT
+    assert key_fragments(repr(dataclasses.asdict(result))) == []
+
+
 def test_a_past_vintage_repeat_call_makes_zero_transport_calls(cache):
     first, second = FakeTransport(), FakeTransport()
     one = call(first, as_of=PAST, pit=PAST, cache=cache)
@@ -603,6 +804,46 @@ def test_ttl_zero_does_not_cache_todays_vintage(tmp_path, monkeypatch):
     call(first, cache=cache)
     call(second, cache=cache)
     assert len(first.calls) == len(second.calls) == 2
+
+
+def test_a_lowered_ttl_shortens_entries_already_cached_at_todays_vintage(tmp_path, monkeypatch):
+    clock = [1_000_000.0]
+    cache = dtools._DiskCache(str(tmp_path / "c"), 3600, clock=lambda: clock[0])
+    call(FakeTransport(), cache=cache)
+    entry = json.loads(Path(cache.path(f"fred|CPIAUCSL|{TODAY}|{TODAY}|10")).read_text(encoding="utf-8"))
+    assert entry["ttl_s"] == 6 * 3600                 # written under the default 6 hours
+    clock[0] += 3601
+    monkeypatch.setenv("DATA_FRED_CACHE_TTL_H", "1")
+    second = FakeTransport()
+    call(second, cache=cache)
+    assert len(second.calls) == 2                     # older than the current 1 hour: a miss
+    monkeypatch.setenv("DATA_FRED_CACHE_TTL_H", "0")
+    third = FakeTransport()
+    call(third, cache=cache)
+    assert len(third.calls) == 2                      # 0: today's vintage is never served from the cache
+
+
+def test_the_open_vintage_ttl_never_shortens_a_closed_vintage(cache, monkeypatch):
+    call(FakeTransport(), as_of=PAST, pit=PAST, cache=cache)
+    monkeypatch.setenv("DATA_FRED_CACHE_TTL_H", "0")
+    again = FakeTransport()
+    assert call(again, as_of=PAST, pit=PAST, cache=cache).status == dtools.STATUS_OK
+    assert again.calls == []
+
+
+def test_provenance_says_when_fred_answered_and_a_cache_hit_keeps_it(cache):
+    one = call(FakeTransport(), as_of=PAST, pit=PAST, cache=cache)
+    later = FakeTransport()
+    two = call(later, as_of=PAST, pit=PAST, cache=cache, now=NOW + dt.timedelta(hours=3))
+    assert later.calls == []
+    assert one.provenance["fetched_at"] == two.provenance["fetched_at"] == "2026-09-30T17:00:00Z"
+    path = Path(cache.path(f"fred|CPIAUCSL|{PAST}|{PAST}|10"))
+    entry = json.loads(path.read_text(encoding="utf-8"))
+    del entry["payload"]["fetched_at"]
+    path.write_text(json.dumps(entry), encoding="utf-8")
+    refetch = FakeTransport()
+    assert call(refetch, as_of=PAST, pit=PAST, cache=cache).status == dtools.STATUS_OK
+    assert len(refetch.calls) == 2                    # an entry without fetched_at is a miss
 
 
 def test_failures_are_never_cached(cache):
@@ -663,6 +904,11 @@ def test_the_default_cache_lives_in_DATA_TOOLS_CACHE_DIR(tmp_path):
     ("abc", None, dt.date(2026, 9, 30), "2016-09-30"),
     (None, 0, dt.date(2026, 9, 30), "2025-09-30"),
     ("3", None, dt.date(2026, 9, 30), "2023-09-30"),
+    # A whole number that arrives as a float or a string (a tool argument) is honoured, never the default.
+    ("3", 5.0, dt.date(2026, 9, 30), "2021-09-30"),
+    ("3", "5", dt.date(2026, 9, 30), "2021-09-30"),
+    ("3", " 7.0 ", dt.date(2026, 9, 30), "2019-09-30"),
+    (None, 500.0, dt.date(2026, 9, 30), "1986-09-30"),
 ])
 def test_window_years_knob_is_clamped_and_leap_day_safe(env, argument, as_of, expected_start, monkeypatch):
     if env is not None:
@@ -670,6 +916,14 @@ def test_window_years_knob_is_clamped_and_leap_day_safe(env, argument, as_of, ex
     transport = FakeTransport()
     call(transport, as_of=as_of, pit=min(as_of, TODAY), window_years=argument)
     assert transport.calls[1]["params"]["observation_start"] == expected_start
+
+
+@pytest.mark.parametrize("value", [5.5, "abc", "", "5 years", True, float("nan"), float("inf"), [5]])
+def test_an_unusable_window_is_invalid_input_with_zero_calls(value):
+    transport = FakeTransport()
+    result = call(transport, window_years=value)
+    assert result.status == dtools.STATUS_INVALID_INPUT and "window_years" in result.detail
+    assert transport.calls == []
 
 
 def test_timeout_knob(monkeypatch):
@@ -752,6 +1006,31 @@ def test_throttle_spaces_requests():
     throttle.wait()
     assert sleeps == [0.3]
     assert dtools._FRED_THROTTLE.min_interval_s == 0 and dtools._Throttle(0.5).min_interval_s == 0.5
+
+
+class CountingThrottle(dtools._Throttle):
+    def __init__(self):
+        super().__init__(0)
+        self.waits = 0
+
+    def wait(self):
+        self.waits += 1
+
+
+def test_every_sent_request_and_only_those_waits_on_the_throttle(monkeypatch, cache):
+    throttle = CountingThrottle()
+    monkeypatch.setattr(dtools, "_FRED_THROTTLE", throttle)
+    fresh = FakeTransport()
+    call(fresh, as_of=PAST, pit=PAST, cache=cache)
+    assert throttle.waits == len(fresh.calls) == 2
+    hit, refused = FakeTransport(), FakeTransport()
+    call(hit, as_of=PAST, pit=PAST, cache=cache)       # a cache hit sends nothing
+    call(refused, series="bank of japan rate")        # rejected before any request
+    dtools._fred_get(refused, "series", {"series_id": "GDP"}, key=KEY, pit=TODAY, as_of=TODAY, timeout=1)
+    assert hit.calls == refused.calls == [] and throttle.waits == 2
+    failing = FakeTransport(series=(503, None, ""))
+    call(failing, cache=cache)
+    assert len(failing.calls) == 1 and throttle.waits == 3
 
 
 # ---------------------------------------------------------------------------

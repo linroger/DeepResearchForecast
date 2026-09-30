@@ -20,7 +20,9 @@ The contract of :func:`fred_series`:
   with ``pit <= as_of``; a request that would not is never sent.  The caller
   fixes ``pit`` once per run (``fred_pit(as_of)``), and a historical pit never
   falls back to the latest revisions: a vintage FRED does not hold is
-  ``no_vintage``, never a second, unpinned request.
+  ``no_vintage``, never a second, unpinned request.  The answer is checked too:
+  a response or row stamped with a real-time period that excludes the pin is
+  ``no_vintage`` at a historical pin and ``unavailable`` at today's.
 * Honesty.  ALFRED's error semantics are unverified against the live API, so
   the mapping is conservative: an HTTP 400 saying the series "does not exist"
   is ``not_found`` at FRED's today and ``no_vintage`` at an earlier pin; any
@@ -33,11 +35,14 @@ The contract of :func:`fred_series`:
 * Secrecy.  The API key goes into the request parameters only: never into a
   result field, URL, cache file or log line.  The default transport redacts
   ``api_key=`` from httpx's request log line and reports an exception by its
-  type name alone (the message can echo the request URL).
+  type name alone (the message can echo the request URL).  Vendor text is
+  redacted whole before anything cuts it, so no clip leaves part of the key.
 * Cache.  Only successful fetches are stored (file name: sha256 of
   ``fred|ID|pit|as_of|window``; atomic writes; an unreadable file is a miss):
   for 30 days when the vintage is before FRED's today (it can no longer
-  change), else for DATA_FRED_CACHE_TTL_H hours.
+  change), else for DATA_FRED_CACHE_TTL_H hours, read at every lookup.  The
+  provenance's ``fetched_at`` says when FRED answered: at today's still-open
+  vintage, the values are those published by then.
 
 Environment knobs, read on every call: DATA_TOOLS_CACHE_DIR (default
 ``<module dir>/.cache/data_cache``), DATA_FRED_CACHE_TTL_H (6),
@@ -58,7 +63,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, fields
-from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
+from decimal import ROUND_HALF_EVEN, Context, Decimal, InvalidOperation, localcontext
 from types import MappingProxyType
 from typing import Any, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -92,7 +97,8 @@ class DataResult:
     of both.  ``model_text`` is what the research agent reads; ``page_text`` the
     rendered value lines registered as the fetched page (empty unless ok);
     ``supports`` self-contained value sentences for citation spans; ``date`` the
-    vintage day (ISO); ``provenance`` the request identity; ``facts`` structured
+    vintage day (ISO); ``provenance`` the request identity (when ok, also the
+    UTC instant the vendor answered, ``fetched_at``); ``facts`` structured
     values (``provenance_kind`` ``structured`` for a vendor value, ``derived``
     for a DRF computation); ``detail`` why a lookup did not succeed.
     """
@@ -150,6 +156,37 @@ def _redact_secret_params(text: str) -> str:
     return _SECRET_PARAM_RE.sub(r"\1REDACTED", text)
 
 
+def _redact_text(text: str, secret: str) -> str:
+    """``text`` with every occurrence of ``secret`` and every ``api_key=`` query value redacted.
+    Vendor text is redacted whole, before any cut: a cut made first could leave part of the key."""
+    if secret:
+        text = text.replace(secret, "[redacted]")
+    return _redact_secret_params(text) if "api_key=" in text.lower() else text
+
+
+_KEY_TAIL_MIN = 4  # the shortest trailing key fragment _drop_key_tail removes
+
+
+def _drop_key_tail(text: str, secret: str) -> str:
+    """``text`` without a trailing fragment of ``secret`` (at least four characters): what is left
+    of an echoed key when a transport's own length limit cut the body inside it."""
+    for size in range(len(secret) - 1, _KEY_TAIL_MIN - 1, -1):
+        if text.endswith(secret[:size]):
+            return text[:-size] + "[redacted]"
+    return text
+
+
+def _redact_json(value: Any, secret: str) -> Any:
+    """A parsed JSON answer with every string in it passed through :func:`_redact_text`."""
+    if isinstance(value, str):
+        return _redact_text(value, secret)
+    if isinstance(value, list):
+        return [_redact_json(item, secret) for item in value]
+    if isinstance(value, Mapping):
+        return {name: _redact_json(item, secret) for name, item in value.items()}
+    return value
+
+
 def _redact_arg(value: Any) -> Any:
     text = str(value)
     return _redact_secret_params(text) if "api_key=" in text.lower() else value
@@ -187,7 +224,8 @@ def _httpx_transport(url: str, params: Mapping[str, str], timeout: float,
 
         _install_httpx_redaction()
         response = httpx.get(url, params=dict(params), headers=dict(headers), timeout=timeout)
-        text = response.text[:_BODY_CHARS]
+        # Redacted whole, then cut: a proxy's error page may echo the request URL and its key.
+        text = _redact_text(response.text, str(params.get("api_key") or ""))[:_BODY_CHARS]
         try:
             payload = response.json()
         except ValueError:
@@ -228,8 +266,9 @@ _FRED_THROTTLE = _Throttle(0.5)
 class _DiskCache:
     """A JSON file per key under ``root``, named by the key's sha256.  Only ``status == "ok"``
     payloads are stored, each with its own time to live (``ttl_s`` is the default); a missing,
-    truncated, corrupt, expired or future-dated entry is a miss.  Writes go to a temporary file
-    that replaces the entry atomically, and a failed write only skips caching."""
+    truncated, corrupt, expired or future-dated entry is a miss, and so is one older than a read's
+    ``max_age_s`` (a TTL lowered since the write takes effect at once).  Writes go to a temporary
+    file that replaces the entry atomically, and a failed write only skips caching."""
 
     def __init__(self, root: str, ttl_s: float, *, clock: Callable[[], float] = time.time) -> None:
         self.root = str(root)
@@ -239,7 +278,7 @@ class _DiskCache:
     def path(self, key: str) -> str:
         return os.path.join(self.root, hashlib.sha256(key.encode("utf-8")).hexdigest() + ".json")
 
-    def get(self, key: str) -> Optional[dict]:
+    def get(self, key: str, max_age_s: Optional[float] = None) -> Optional[dict]:
         try:
             with open(self.path(key), encoding="utf-8") as handle:
                 entry = json.load(handle)
@@ -251,6 +290,8 @@ class _DiskCache:
         if not (_finite_number(stored_at) and _finite_number(ttl_s) and isinstance(payload, dict)
                 and payload.get("status") == STATUS_OK):
             return None
+        if max_age_s is not None:
+            ttl_s = min(ttl_s, max_age_s)
         age = self._clock() - stored_at
         return payload if 0 <= age < ttl_s else None
 
@@ -353,13 +394,18 @@ VENDOR_TZ = "America/Chicago"
 # Chicago is UTC-6 (CST) or UTC-5 (CDT): UTC minus six hours is never a later calendar date.
 _FALLBACK_UTC_OFFSET = _dt.timedelta(hours=6)
 _ISO_DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+_UTC_STAMP_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
 
 
 def _utc_instant(now: Any) -> _dt.datetime:
-    """``now`` in UTC (a naive datetime is read as UTC); the current instant when ``now`` is not a
-    datetime."""
+    """``now`` in UTC; a naive datetime is local time, Python's own reading (``datetime.now()``
+    on a host east of UTC is not read hours late, which would put FRED's today a day ahead).  The
+    current instant when ``now`` is not a datetime or cannot be placed in UTC."""
     if isinstance(now, _dt.datetime):
-        return now.replace(tzinfo=_dt.timezone.utc) if now.tzinfo is None else now.astimezone(_dt.timezone.utc)
+        try:
+            return now.astimezone(_dt.timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            pass
     return _dt.datetime.now(_dt.timezone.utc)
 
 
@@ -370,8 +416,12 @@ def vendor_today_chicago(now: Optional[_dt.datetime] = None) -> _dt.date:
     instant = _utc_instant(now)
     try:
         return instant.astimezone(ZoneInfo(VENDOR_TZ)).date()
-    except (ZoneInfoNotFoundError, OSError, ValueError):
+    except (ZoneInfoNotFoundError, OSError, ValueError, OverflowError):
+        pass
+    try:
         return (instant - _FALLBACK_UTC_OFFSET).date()
+    except OverflowError:  # within six hours of datetime.min: no earlier date exists
+        return _dt.date.min
 
 
 def _as_date(value: Any) -> Optional[_dt.date]:
@@ -445,12 +495,23 @@ def _timeout_s() -> float:
     return _env_number("DATA_TOOL_TIMEOUT_S", 20, low=1, high=120)
 
 
-def _window_years(value: Any) -> int:
-    """The observation window in years: ``value`` when it is an int, else DATA_FRED_WINDOW_YEARS
-    (default 10); either clamped to 1-40."""
-    if isinstance(value, int) and not isinstance(value, bool):
-        return min(max(value, 1), 40)
-    return int(_env_number("DATA_FRED_WINDOW_YEARS", 10, low=1, high=40))
+def _window_years(value: Any) -> Optional[int]:
+    """The observation window in years, clamped to 1-40: ``value`` when it is a whole number (an
+    int, an integral float or a numeric string such as "5", as a tool argument may arrive),
+    DATA_FRED_WINDOW_YEARS (default 10) when it is None, and None (invalid input, never a silent
+    default) for anything else."""
+    if value is None:
+        return int(_env_number("DATA_FRED_WINDOW_YEARS", 10, low=1, high=40))
+    if isinstance(value, str):
+        try:
+            value = float(value.strip())
+        except ValueError:
+            return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if isinstance(value, float) and not (math.isfinite(value) and value.is_integer()):
+        return None
+    return min(max(int(value), 1), 40)
 
 
 # ---------------------------------------------------------------------------
@@ -524,16 +585,32 @@ def _fmt(value: Decimal, style: _UnitStyle) -> str:
     return _number(value, style) + style.suffix
 
 
+# Derived arithmetic runs in this context.  A value _VALUE_RE admits has at most 32 significant
+# digits (20 before the point, 12 after), so a difference is exact here (the default 28-digit
+# context would round it) and a percent change, below 10**35, quantizes to hundredths within
+# 80 digits (the default context signals InvalidOperation instead).
+_ARITHMETIC = Context(prec=80, rounding=ROUND_HALF_EVEN)
+_HUNDREDTHS = Decimal("0.01")
+
+
+def _percent_change(latest: Decimal, base: Decimal) -> Decimal:
+    """``(latest - base) / base`` in percent, to two decimals (``base`` is positive)."""
+    with localcontext(_ARITHMETIC):
+        return ((latest - base) / base * 100).quantize(_HUNDREDTHS)
+
+
 def _change(latest: Decimal, base: Decimal, style: _UnitStyle) -> str:
     """``latest - base`` with its sign, in percentage points for a rate, else in the series' unit
     followed by the relative change when the base is positive."""
-    delta = latest - base
+    with localcontext(_ARITHMETIC):  # abs() rounds to the context too
+        delta = latest - base
+        size = abs(delta)
     sign = "+" if delta > 0 else "-" if delta < 0 else ""
     if style.rate:
-        return f"{sign}{_number(abs(delta), style)} percentage points"
-    text = f"{sign}{_number(abs(delta), style)}{style.suffix}"
+        return f"{sign}{_number(size, style)} percentage points"
+    text = f"{sign}{_number(size, style)}{style.suffix}"
     if base > 0:
-        relative = (delta / base * 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+        relative = _percent_change(latest, base)
         text += f" ({'+' if relative > 0 else ''}{relative}%)"
     return text
 
@@ -577,7 +654,9 @@ def _twelve_month_base(points: Sequence[tuple[_dt.date, Decimal]],
 
 @dataclass(frozen=True)
 class _Snapshot:
-    """A successful FRED fetch: series metadata and the pinned observations, oldest first."""
+    """A successful FRED fetch: series metadata, the pinned observations (oldest first) and the UTC
+    instant FRED answered (``fetched_at``: at today's still-open vintage, the values are those
+    published by then)."""
 
     series_id: str
     title: str
@@ -588,6 +667,7 @@ class _Snapshot:
     observation_start: _dt.date
     observation_end: _dt.date
     points: tuple[tuple[_dt.date, Decimal], ...]
+    fetched_at: str
 
     def to_payload(self) -> dict:
         return {
@@ -596,6 +676,7 @@ class _Snapshot:
             "vintage": self.vintage.isoformat(), "observation_start": self.observation_start.isoformat(),
             "observation_end": self.observation_end.isoformat(),
             "observations": [[day.isoformat(), str(value)] for day, value in self.points],
+            "fetched_at": self.fetched_at,
         }
 
     @classmethod
@@ -612,11 +693,12 @@ class _Snapshot:
                 if day is None or not isinstance(value_text, str) or not _VALUE_RE.fullmatch(value_text):
                     return None
                 points.append((day, Decimal(value_text)))
+            fetched_at = payload["fetched_at"]
         except (KeyError, TypeError, ValueError, InvalidOperation):
             return None
-        if None in days or not points:
+        if None in days or not points or not (isinstance(fetched_at, str) and _UTC_STAMP_RE.fullmatch(fetched_at)):
             return None
-        return cls(*texts, *days, tuple(points))
+        return cls(*texts, *days, tuple(points), fetched_at)
 
 
 def alfred_url(series_id: str, vintage: _dt.date) -> str:
@@ -658,7 +740,7 @@ def _render(snapshot: _Snapshot, *, language: str) -> DataResult:
     periodic = cadence in ("monthly", "quarterly", "annual")
     base = _twelve_month_base(points, exact=periodic)
     if base is not None and periodic and not style.rate and base[1] > 0:
-        yoy = ((latest - base[1]) / base[1] * 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+        yoy = _percent_change(latest, base[1])
         head.append(f"Year-on-year: {yoy}% ({_YOY_BASIS})")
         supports.append(_support(snapshot, language, f"{period}同比变化 {yoy}%（{_YOY_BASIS_ZH}）。" if chinese
                                  else f"year-on-year change {yoy}% {period} ({_YOY_BASIS})."))
@@ -712,7 +794,7 @@ def _provenance(snapshot: _Snapshot) -> dict:
     return {"vendor": "fred", "series_id": snapshot.series_id, "vintage": snapshot.vintage.isoformat(),
             "observation_start": snapshot.observation_start.isoformat(),
             "observation_end": snapshot.observation_end.isoformat(), "units": snapshot.units,
-            "frequency": snapshot.frequency}
+            "frequency": snapshot.frequency, "fetched_at": snapshot.fetched_at}
 
 
 # ---------------------------------------------------------------------------
@@ -735,7 +817,10 @@ def _pinned(params: Mapping[str, str], pit: _dt.date, as_of: _dt.date) -> bool:
 def _fred_get(transport: Transport, path: str, params: Mapping[str, str], *, key: str, pit: _dt.date,
               as_of: _dt.date, timeout: float) -> tuple[int, Any, str]:
     """One FRED GET through ``transport``, throttled.  A request that breaks :func:`_pinned` is
-    never sent (status :data:`_REFUSED`); a transport that raises or answers malformed is status 0."""
+    never sent (status :data:`_REFUSED`); a transport that raises or answers malformed is status 0.
+    The answer comes back with the key redacted from its body text and from every string of its
+    JSON, whole and before any cut, so no later clip can leave part of the key behind (a proxy's
+    error page may echo the request URL; a transport's own 500-character cut may leave a tail)."""
     if not _pinned(params, pit, as_of):
         return _REFUSED, None, ""
     _FRED_THROTTLE.wait()
@@ -748,7 +833,8 @@ def _fred_get(transport: Transport, path: str, params: Mapping[str, str], *, key
             and not isinstance(answer[0], bool)):
         return 0, None, "malformed transport answer"
     code, payload, text = answer
-    return code, payload, str(text or "")[:_BODY_CHARS]
+    text = _drop_key_tail(_redact_text(str(text or ""), key), key)
+    return code, _redact_json(payload, key), text[:_BODY_CHARS]
 
 
 def _http_failure(code: int, payload: Any, text: str, *, series_id: str, pit: _dt.date,
@@ -791,15 +877,39 @@ def _parse_observations(rows: Any, *, start: _dt.date, end: _dt.date) -> tuple[t
     return tuple(sorted(found.items()))
 
 
-def fred_series(series: Any, *, as_of: Any, pit: Any, key: Any, window_years: Optional[int] = None,
+def _at_vintage(stamped: Any, pit: _dt.date) -> bool:
+    """Whether an answer, or one row of it, agrees with the pin.  FRED stamps each with the
+    real-time period it describes (``realtime_start``/``realtime_end``), which must contain
+    ``pit``: an answer that ignored the pin and carries later revisions fails here instead of
+    being labelled the pinned vintage.  Without either stamp nothing contradicts the pinned
+    request; a stamp that is not a date is a contradiction."""
+    if not isinstance(stamped, Mapping):
+        return True
+    start, end = stamped.get("realtime_start"), stamped.get("realtime_end")
+    if start is None and end is None:
+        return True
+    low, high = _as_date(start), _as_date(end)
+    return low is not None and high is not None and low <= pit <= high
+
+
+def _off_vintage(series_id: str, pit: _dt.date, historical: bool) -> tuple[str, str]:
+    """``(status, detail)`` of an answer stamped with a real-time period that excludes the pin."""
+    if historical:
+        return STATUS_NO_VINTAGE, (f"FRED/ALFRED answered {series_id} with values outside the vintage of "
+                                   f"{pit.isoformat()}; later revisions are never substituted")
+    return STATUS_UNAVAILABLE, f"FRED answered {series_id} with values outside the requested vintage {pit.isoformat()}"
+
+
+def fred_series(series: Any, *, as_of: Any, pit: Any, key: Any, window_years: Any = None,
                 language: str = ENGLISH, transport: Optional[Transport] = None, cache: Optional[_DiskCache] = None,
                 now: Optional[_dt.datetime] = None) -> DataResult:
     """One FRED/ALFRED series as published on ``pit`` (see the module docstring for the contract).
 
-    ``as_of`` ends the observation window, which starts ``window_years`` earlier (None:
-    DATA_FRED_WINDOW_YEARS); ``pit`` is the run's vintage pin (:func:`fred_pit`), never after
-    ``as_of`` or FRED's today; ``key`` is the FRED API key.  ``transport``, ``cache`` and ``now``
-    (the current instant) are injectable for tests.  Never raises.
+    ``as_of`` ends the observation window, which starts ``window_years`` earlier (a whole number,
+    clamped to 1-40; None: DATA_FRED_WINDOW_YEARS); ``pit`` is the run's vintage pin
+    (:func:`fred_pit`), never after ``as_of`` or FRED's today; ``key`` is the FRED API key.
+    ``transport``, ``cache`` and ``now`` (the current instant; a naive datetime is local time) are
+    injectable for tests.  Never raises.
     """
     secret = key if isinstance(key, str) and _FRED_KEY_RE.fullmatch(key) else ""
     try:
@@ -811,36 +921,44 @@ def fred_series(series: Any, *, as_of: Any, pit: Any, key: Any, window_years: Op
     return _scrub(result, secret)
 
 
-def _fred_series(series: Any, *, as_of: Any, pit: Any, key: str, window_years: Optional[int], language: str,
+def _fred_series(series: Any, *, as_of: Any, pit: Any, key: str, window_years: Any, language: str,
                  transport: Optional[Transport], cache: Optional[_DiskCache],
                  now: Optional[_dt.datetime]) -> DataResult:
     series_id = resolve_series(series)
     if series_id is None:
-        return _failure(STATUS_INVALID_INPUT, f"{_clip(series, 80)!r} is not a FRED series; {_ALIAS_HINT}")
+        shown = _clip(_redact_text(series, key) if isinstance(series, str) else series, 80)
+        return _failure(STATUS_INVALID_INPUT, f"{shown!r} is not a FRED series; {_ALIAS_HINT}")
     as_of_day, pit_day = _as_date(as_of), _as_date(pit)
     if as_of_day is None or pit_day is None:
         return _failure(STATUS_INVALID_INPUT, "as_of and the vintage pin must be dates (YYYY-MM-DD)")
-    today = vendor_today_chicago(now)
+    instant = _utc_instant(now)
+    today = vendor_today_chicago(instant)
     if pit_day > as_of_day or pit_day > today:
         return _failure(STATUS_INVALID_INPUT, (
             f"the vintage pin {pit_day.isoformat()} is after as_of {as_of_day.isoformat()} or FRED's today "
             f"{today.isoformat()}; pin with fred_pit(as_of)"))
+    window = _window_years(window_years)
+    if window is None:
+        return _failure(STATUS_INVALID_INPUT, "window_years must be a whole number of years (1-40), or None for "
+                                              "the DATA_FRED_WINDOW_YEARS default")
     item_key = f"fred:{series_id}@{pit_day.isoformat()}"
     url = alfred_url(series_id, pit_day)
     if not key:
         return _failure(STATUS_UNAVAILABLE, "no valid FRED API key is configured", key=item_key, url=url)
-    window = _window_years(window_years)
     start = _years_before(as_of_day, window)
     historical = pit_day < today
     provenance = {"vendor": "fred", "series_id": series_id, "vintage": pit_day.isoformat(),
                   "observation_start": start.isoformat(), "observation_end": as_of_day.isoformat()}
     cache = cache if cache is not None else _DiskCache(_cache_root(), _open_vintage_ttl_s())
     cache_key = f"fred|{series_id}|{pit_day.isoformat()}|{as_of_day.isoformat()}|{window}"
-    snapshot = _cached_snapshot(cache.get(cache_key), series_id=series_id, pit=pit_day, as_of=as_of_day)
+    # An open vintage's entry lives at most the current DATA_FRED_CACHE_TTL_H, whatever it was at the write.
+    stored = cache.get(cache_key, max_age_s=None if historical else _open_vintage_ttl_s())
+    snapshot = _cached_snapshot(stored, series_id=series_id, pit=pit_day, as_of=as_of_day)
     hit = snapshot is not None
     if snapshot is None:
         outcome = _fetch(series_id, key=key, pit=pit_day, as_of=as_of_day, start=start, historical=historical,
-                         transport=transport or _httpx_transport)
+                         transport=transport or _httpx_transport,
+                         fetched_at=instant.replace(microsecond=0, tzinfo=None).isoformat() + "Z")
         if isinstance(outcome, tuple):
             status, detail = outcome
             logger.debug("data_tools: FRED %s at vintage %s -> %s", series_id, pit_day.isoformat(), status)
@@ -862,9 +980,10 @@ def _cached_snapshot(payload: Any, *, series_id: str, pit: _dt.date, as_of: _dt.
 
 
 def _fetch(series_id: str, *, key: str, pit: _dt.date, as_of: _dt.date, start: _dt.date, historical: bool,
-           transport: Transport) -> _Snapshot | tuple[str, str]:
+           transport: Transport, fetched_at: str) -> _Snapshot | tuple[str, str]:
     """The series metadata and observations as published on ``pit``: a :class:`_Snapshot`, or the
-    ``(status, detail)`` of the first failure.  Nothing is retried."""
+    ``(status, detail)`` of the first failure.  Nothing is retried, and an answer whose real-time
+    stamps exclude the pin fails (:func:`_at_vintage`)."""
     realtime = {"realtime_start": pit.isoformat(), "realtime_end": pit.isoformat()}
     timeout = _timeout_s()
     code, payload, text = _fred_get(transport, "series", {"series_id": series_id, **realtime}, key=key, pit=pit,
@@ -881,6 +1000,8 @@ def _fetch(series_id: str, *, key: str, pit: _dt.date, as_of: _dt.date, start: _
         return STATUS_NOT_FOUND, f"FRED has no series {series_id}; {_ALIAS_HINT}"
     if str(info.get("id") or series_id).upper() != series_id:
         return STATUS_UNAVAILABLE, "FRED answered with metadata of another series"
+    if not (_at_vintage(payload, pit) and _at_vintage(info, pit)):
+        return _off_vintage(series_id, pit, historical)
     code, payload, text = _fred_get(
         transport, "series/observations",
         {"series_id": series_id, **realtime, "observation_start": start.isoformat(),
@@ -889,8 +1010,12 @@ def _fetch(series_id: str, *, key: str, pit: _dt.date, as_of: _dt.date, start: _
     failure = _http_failure(code, payload, text, series_id=series_id, pit=pit, historical=historical)
     if failure:
         return failure
+    observation_rows = payload.get("observations")
+    if not _at_vintage(payload, pit) or (isinstance(observation_rows, list)
+                                         and not all(_at_vintage(row, pit) for row in observation_rows)):
+        return _off_vintage(series_id, pit, historical)
     frequency = _clip(info.get("frequency"), 60)
-    points = _parse_observations(payload.get("observations"), start=start, end=as_of)
+    points = _parse_observations(observation_rows, start=start, end=as_of)
     if not points:
         return STATUS_NOT_FOUND, (
             f"FRED holds no observation of {series_id} ({frequency or 'frequency not stated'}) between "
@@ -898,4 +1023,5 @@ def _fetch(series_id: str, *, key: str, pit: _dt.date, as_of: _dt.date, start: _
     return _Snapshot(series_id=series_id, title=_clip(info.get("title"), _TITLE_CHARS) or series_id,
                      units=_clip(info.get("units"), _LABEL_CHARS), frequency=frequency,
                      seasonal_adjustment=_clip(info.get("seasonal_adjustment_short"), 20),
-                     vintage=pit, observation_start=start, observation_end=as_of, points=points)
+                     vintage=pit, observation_start=start, observation_end=as_of, points=points,
+                     fetched_at=fetched_at)
