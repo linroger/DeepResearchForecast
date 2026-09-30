@@ -172,6 +172,23 @@ def cost_is_estimated(provider: str) -> bool:
     return provider in _ESTIMATED_COST_PROVIDERS or provider not in _COST_PER_1K
 
 
+# XRUN-8: CLI subscription providers — their $0 is "zero marginal cost inside a plan",
+# not "free"; snapshot() labels such volume with cost_basis='subscription'.
+_SUBSCRIPTION_PROVIDERS = frozenset({"claude-cli", "codex-cli"})
+
+
+def _declared_subscription_providers() -> frozenset:
+    """EVAL-17: providers the operator declared flat-rate (Config.LLM_SUBSCRIPTION_PROVIDERS,
+    a comma list such as a coding-plan or token-plan endpoint), lower-cased. Unset, empty or
+    an unreadable config → empty set, so cost_basis keeps its built-in classification."""
+    try:
+        from ..config import Config
+        raw = str(getattr(Config, "LLM_SUBSCRIPTION_PROVIDERS", "") or "")
+    except Exception:  # noqa: BLE001 — config unavailable: no declared plans
+        return frozenset()
+    return frozenset(p.strip().lower() for p in raw.split(",") if p.strip())
+
+
 # ---------------------------------------------------------------- meter
 @dataclass
 class _Counter:
@@ -181,9 +198,13 @@ class _Counter:
     completion_tokens: int = 0
     latency_ms: float = 0.0
     cost_usd: float = 0.0
+    # EVAL-17: prompt tokens the provider served from its prompt cache (research engine v3
+    # reports them as ``cached=`` on its [usage] lines). Informational split only: they are
+    # not added to prompt_tokens/total_tokens and do not change cost_usd.
+    prompt_cache_read_tokens: int = 0
 
     def add(self, prompt_tokens: int, completion_tokens: int, latency_ms: float,
-            cost_usd: float, cached: bool) -> None:
+            cost_usd: float, cached: bool, prompt_cache_read_tokens: int = 0) -> None:
         self.calls += 1
         if cached:
             self.cached += 1
@@ -191,6 +212,7 @@ class _Counter:
         self.completion_tokens += completion_tokens
         self.latency_ms += latency_ms
         self.cost_usd += cost_usd
+        self.prompt_cache_read_tokens += prompt_cache_read_tokens
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -201,7 +223,87 @@ class _Counter:
             "total_tokens": self.prompt_tokens + self.completion_tokens,
             "latency_ms": round(self.latency_ms, 1),
             "cost_usd": round(self.cost_usd, 6),
+            "prompt_cache_read_tokens": self.prompt_cache_read_tokens,
         }
+
+
+# EVAL-17: the counter keys summed across attempts into run_telemetry.json's
+# cumulative_total and cumulative_by_stage.
+CUMULATIVE_COUNTER_KEYS = ("calls", "cached", "prompt_tokens", "completion_tokens",
+                           "total_tokens", "latency_ms", "cost_usd", "prompt_cache_read_tokens")
+
+
+def add_counter_dicts(base: Any, current: Any) -> Dict[str, Any]:
+    """EVAL-17: key-wise sum of two counter dicts (``_Counter.as_dict`` shape) over
+    CUMULATIVE_COUNTER_KEYS. A missing key or a non-dict side counts as 0; a key whose
+    values cannot be added (e.g. a string) is left out rather than raising."""
+    b = base if isinstance(base, dict) else {}
+    c = current if isinstance(current, dict) else {}
+    out: Dict[str, Any] = {}
+    for k in CUMULATIVE_COUNTER_KEYS:
+        try:
+            out[k] = round((b.get(k) or 0) + (c.get(k) or 0), 6)
+        except TypeError:
+            continue
+    return out
+
+
+def add_stage_counter_dicts(base_by_stage: Any, current_by_stage: Any) -> Dict[str, Dict[str, Any]]:
+    """EVAL-17: per-stage :func:`add_counter_dicts` over the union of both stage maps
+    (base stages first, then stages new in ``current``). Non-dict inputs count as empty."""
+    b = base_by_stage if isinstance(base_by_stage, dict) else {}
+    c = current_by_stage if isinstance(current_by_stage, dict) else {}
+    stages = list(b) + [s for s in c if s not in b]
+    return {str(s): add_counter_dicts(b.get(s), c.get(s)) for s in stages}
+
+
+def previous_attempt_carry(prev: Any) -> Optional[Dict[str, Any]]:
+    """EVAL-17: the history a new run_telemetry.json attempt carries forward from the file
+    it replaces (``prev``, its parsed content), or None when ``prev`` holds none. This is
+    the one merge rule behind the pipeline's incremental flush and
+    :meth:`LLMMeter.write_run_telemetry`, so the two cannot drift apart.
+
+    - A file qualifies on its own calls or on its cumulative fields: an attempt that made
+      no LLM call (cancelled right after a resume, a provider outage or quota cap before
+      the first call) still carries the pipeline's history.
+    - The per-stage base is the file's cumulative_by_stage, or its by_stage for a file
+      written before EVAL-17.
+    - ``partial`` marks a pre-EVAL-17 file that already spans attempts (it has
+      cumulative_total but kept only its last attempt's by_stage), so the per-stage rows
+      under-report against cumulative_total. Once set it is carried forward.
+    """
+    if not isinstance(prev, dict):
+        return None
+    total = prev.get("total")
+    calls = total.get("calls") if isinstance(total, dict) else None
+    if not (calls or prev.get("cumulative_total") or prev.get("cumulative_by_stage")):
+        return None
+    return {
+        "previous_attempt": {
+            "total": total,
+            "report_id": prev.get("report_id"),
+            "status": prev.get("status"),
+        },
+        "cumulative_total": prev.get("cumulative_total") or total or {},
+        "cumulative_by_stage": prev.get("cumulative_by_stage") or prev.get("by_stage") or {},
+        "partial": bool(prev.get("cumulative_by_stage_partial")
+                        or (prev.get("cumulative_total") and not prev.get("cumulative_by_stage"))),
+    }
+
+
+def apply_previous_attempt_carry(data: Dict[str, Any], carry: Optional[Dict[str, Any]]) -> None:
+    """EVAL-17: fold a :func:`previous_attempt_carry` result into the snapshot ``data`` in
+    place: previous_attempt, cumulative_total and cumulative_by_stage (base + this attempt),
+    plus cumulative_by_stage_partial when the base is partial. No-op for None."""
+    if not carry:
+        return
+    data["previous_attempt"] = carry["previous_attempt"]
+    data["cumulative_total"] = add_counter_dicts(carry["cumulative_total"], data.get("total"))
+    data["cumulative_by_stage"] = add_stage_counter_dicts(
+        carry["cumulative_by_stage"], data.get("by_stage"))
+    if carry["partial"]:
+        # cumulative_total stays authoritative; the split misses early attempts.
+        data["cumulative_by_stage_partial"] = True
 
 
 @dataclass
@@ -258,21 +360,29 @@ class LLMMeter:
     @classmethod
     def record(cls, provider: str, model: str, prompt_tokens: int, completion_tokens: int,
                latency_ms: float, *, cached: bool = False, stage: Optional[str] = None,
-               run_id: Optional[str] = None, finish_reason: Optional[str] = None) -> None:
+               run_id: Optional[str] = None, finish_reason: Optional[str] = None,
+               prompt_cache_read_tokens: int = 0) -> None:
         """Accumulate one LLM call. ``finish_reason`` (INFRA-1, normalized by
-        llm_text.normalize_finish_reason) is tallied per stage when given."""
+        llm_text.normalize_finish_reason) is tallied per stage when given.
+        ``prompt_cache_read_tokens`` (EVAL-17) is the provider-reported cache-read share of
+        the prompt, clamped to >= 0 (unparseable → 0); it never changes cost."""
         rid, stg, fallback = cls._attribute(run_id, stage)
         cost = 0.0 if cached else estimate_cost(provider, prompt_tokens, completion_tokens)
+        try:
+            pcr = max(0, int(prompt_cache_read_tokens or 0))
+        except (TypeError, ValueError, OverflowError):
+            pcr = 0
         warn_calls = 0
         first_fallback = False
         with cls._lock:
             rm = cls._runs.setdefault(rid, _RunMeter())
-            rm.total.add(prompt_tokens, completion_tokens, latency_ms, cost, cached)
-            rm.by_stage.setdefault(stg, _Counter()).add(prompt_tokens, completion_tokens, latency_ms, cost, cached)
+            rm.total.add(prompt_tokens, completion_tokens, latency_ms, cost, cached, pcr)
+            rm.by_stage.setdefault(stg, _Counter()).add(
+                prompt_tokens, completion_tokens, latency_ms, cost, cached, pcr)
             rm.by_model.setdefault(f"{provider}:{model}", _Counter()).add(
-                prompt_tokens, completion_tokens, latency_ms, cost, cached)
+                prompt_tokens, completion_tokens, latency_ms, cost, cached, pcr)
             if fallback:
-                rm.fallback.add(prompt_tokens, completion_tokens, latency_ms, cost, cached)
+                rm.fallback.add(prompt_tokens, completion_tokens, latency_ms, cost, cached, pcr)
                 first_fallback = rm.fallback.calls == 1
             if finish_reason:
                 reasons = rm.finish_reasons.setdefault(stg, {})
@@ -337,8 +447,12 @@ class LLMMeter:
           truncation_repaired}}`` (integer counts only) from record_structured(), and
           ``structured_outputs_by_stage``: ``{label: {stage: {same four counts}}}``; both
           present only when at least one was recorded.
+        - ``prompt_cache_read_tokens`` (EVAL-17) inside every counter (total, by_stage,
+          by_model, fallback_attributed, unattributed_process): the provider-reported
+          prompt-cache reads passed to record(); 0 when none were.
         """
         rid = run_id or _current_run.get() or _DEFAULT_BUCKET
+        declared_sub = _declared_subscription_providers()
         with cls._lock:
             g = cls._runs.get(_DEFAULT_BUCKET)
             unattributed = g.total.as_dict() if g else _Counter().as_dict()
@@ -364,14 +478,18 @@ class LLMMeter:
             )
             # XRUN-8: CLI 订阅提供方的 $0 不是「免费」而是「订阅内边际成本 0」。显式标注计价
             # 基准，避免 ~940K token 的报告 run 在成本审计里显得凭空免费。
-            _sub = {"claude-cli", "codex-cli"}
+            # EVAL-17: providers declared flat-rate via LLM_SUBSCRIPTION_PROVIDERS (matched
+            # case-insensitively) count as subscription too; cost_usd stays their API-rate
+            # equivalent. Empty knob → the built-in CLI set only (unchanged classification).
             _vol_providers = {k.split(":", 1)[0] for k, v in by_model.items()
                               if v.get("total_tokens", 0) > 0}
+            _sub = {p for p in _vol_providers
+                    if p in _SUBSCRIPTION_PROVIDERS or p.strip().lower() in declared_sub}
             if not _vol_providers:
                 cost_basis = "api"
-            elif _vol_providers <= _sub:
+            elif _sub == _vol_providers:
                 cost_basis = "subscription"
-            elif _vol_providers & _sub:
+            elif _sub:
                 cost_basis = "mixed"
             else:
                 cost_basis = "api"
@@ -438,6 +556,12 @@ class LLMMeter:
         （以及它指向的 report_id）凭空消失，跨 run 的 token 审计对不上账。改为合并：保留上一
         attempt 的 total/report_id 摘要（previous_attempt），并滚动累计 cumulative_total，
         使文件既反映「本 attempt」又反映「整条管线」的真实开销。首写行为不变。
+
+        EVAL-17: the merge is :func:`previous_attempt_carry` + :func:`apply_previous_attempt_carry`,
+        the same rule as the pipeline's run_telemetry flush (cumulative_by_stage included).
+        Every call treats the file on disk as the previous attempt, so call it once per
+        attempt; the pipeline itself flushes through PipelineOrchestrator._flush_run_telemetry,
+        which fixes the base at the attempt start.
         """
         import os as _os
         from .atomic import write_json_atomic
@@ -448,22 +572,7 @@ class LLMMeter:
             if _os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     prev = json.load(f)
-                if isinstance(prev, dict) and (prev.get("total") or {}).get("calls"):
-                    data["previous_attempt"] = {
-                        "total": prev.get("total"),
-                        "report_id": prev.get("report_id"),
-                        "status": prev.get("status"),
-                    }
-                    base = prev.get("cumulative_total") or prev.get("total") or {}
-                    cur = data.get("total") or {}
-                    cum: Dict[str, Any] = {}
-                    for k in ("calls", "cached", "prompt_tokens", "completion_tokens",
-                              "total_tokens", "latency_ms", "cost_usd"):
-                        try:
-                            cum[k] = round((base.get(k) or 0) + (cur.get(k) or 0), 6)
-                        except TypeError:
-                            continue
-                    data["cumulative_total"] = cum
+                apply_previous_attempt_carry(data, previous_attempt_carry(prev))
         except Exception:  # noqa: BLE001 — 合并是观测增益，失败退回单 attempt 覆盖写
             pass
         write_json_atomic(path, data)

@@ -112,6 +112,17 @@ STAGE_BANDS: dict[str, tuple[int, int]] = {
 # research_only 模式下，研究阶段独占 0-100
 RESEARCH_ONLY_BANDS: dict[str, tuple[int, int]] = {STAGE_RESEARCH: (0, 100)}
 
+# EVAL-17: LLMMeter band (not a pipeline stage) for the simulation-subprocess spend of the
+# extra ensemble seeds. The seeds' prepare/persona calls meter under "ensemble"; their
+# ReportAgent calls meter under "report" (ReportAgent.generate_report sets its own stage).
+SIM_METER_STAGE_ENSEMBLE = "ensemble_sim"
+# EVAL-17: per-simulation exactly-once sim-meter markers in state.options:
+# {simulation_id: {meter_run_token, stage, recorded_at}}.
+SIM_METER_MARKERS_OPTION = "sim_llm_telemetry_recorded_by_sim"
+# Pre-EVAL-17 single-slot marker {simulation_id, meter_run_token, recorded_at}: honoured on
+# read, migrated into the map, and still mirrored for the main run's recordings.
+SIM_METER_LEGACY_MARKER_OPTION = "sim_llm_telemetry_recorded"
+
 ACTOR_INTELLIGENCE_SCHEMA_VERSION = "actor-intelligence/v1"
 ACTOR_INTELLIGENCE_POLICY_VERSION = "actor-intelligence-policy/v1"
 ACTOR_INTELLIGENCE_LINEAGE_FILENAME = "actor_intelligence_lineage.json"
@@ -2341,9 +2352,9 @@ def _flush_failed_research_attempt_spend(spend: Optional[dict[str, Any]],
     if not bool(getattr(Config, "LLM_TELEMETRY_ENABLED", True)):
         return False
     try:
-        # 仅用于审计日志（LLMMeter 无 prompt-cache 字段位）；脏值绝不影响入账本身。
+        # EVAL-17: 进审计日志，也作 prompt_cache_read_tokens 进计量；脏值退回 0，绝不影响入账本身。
         t_cached = max(0, int(spend.get("tokens_cached") or 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         t_cached = 0
     try:
         from ..utils.telemetry import LLMMeter
@@ -2364,6 +2375,7 @@ def _flush_failed_research_attempt_spend(spend: Optional[dict[str, Any]],
             latency_ms=wall_ms,
             stage=STAGE_RESEARCH,
             run_id=str(run_id) if run_id else None,  # None → contextvar/单活跃 run 回退
+            prompt_cache_read_tokens=t_cached,
         )
         logger.warning(
             "研究 attempt 以 %s 终止，已消耗 tokens in=%d out=%d cached=%d（model=%s）——"
@@ -8197,6 +8209,13 @@ class PipelineOrchestrator:
     # POST /resume 都能在对方落盘 running 之前通过状态检查，对同一管线起两条 _run
     # 线程（双倍烧额度 + 状态互相覆盖）。
     _lifecycle_lock: threading.Lock = threading.Lock()
+    # EVAL-17: serialises _record_sim_run_telemetry. The main run and up to
+    # ENSEMBLE_SEED_CONCURRENCY seed threads read-check-write one marker map in
+    # state.options; class-level so instances built without __init__ have it too.
+    # _note_ensemble_member_simulation takes it as well: it is the only other seed-thread
+    # write to state.options, and the full save inside _record_sim_run_telemetry
+    # (asdict) must never iterate a dict another seed thread is growing.
+    _sim_meter_lock: threading.Lock = threading.Lock()
 
     def __init__(self) -> None:
         # I-4-6: 运行中临时产物扫描的「上次扫描壁钟」按阶段节流戳（仅本实例/本次运行有效）。
@@ -8204,8 +8223,9 @@ class PipelineOrchestrator:
         # W9-3: run_telemetry.json 增量落盘状态（attempt 起点由 _init_telemetry_flush 填充）。
         self._tel_lock = threading.Lock()
         self._tel_path: Optional[str] = None
-        self._tel_prev: Optional[dict] = None
-        self._tel_prev_cum: Optional[dict] = None
+        # EVAL-17: what this attempt carries forward from the previous run_telemetry.json
+        # (telemetry.previous_attempt_carry), fixed at the attempt start.
+        self._tel_carry: Optional[dict] = None
         self._tel_last_flush_calls: int = 0
         # INFRA-7: stages recomputed (not reused) in this attempt, read by the
         # resume lineage guards; this attempt's stage_reuse_v1 records, passed
@@ -8229,18 +8249,13 @@ class PipelineOrchestrator:
     def _init_telemetry_flush(self, state: "PipelineState") -> None:
         """attempt 起点：定位 run_telemetry.json 并捕获上一 attempt 的账作为合并基底。"""
         self._tel_path = os.path.join(PipelineManager._dir(state.pipeline_id), "run_telemetry.json")
-        self._tel_prev = None
-        self._tel_prev_cum = None
+        self._tel_carry = None
         self._tel_last_flush_calls = 0
         try:
-            prev = _read_json(self._tel_path)
-            if isinstance(prev, dict) and (prev.get("total") or {}).get("calls"):
-                self._tel_prev = {
-                    "total": prev.get("total"),
-                    "report_id": prev.get("report_id"),
-                    "status": prev.get("status"),
-                }
-                self._tel_prev_cum = prev.get("cumulative_total") or prev.get("total") or {}
+            # EVAL-17: the shared carry-forward rule (a zero-call attempt keeps the history;
+            # per-stage base with the pre-EVAL-17 by_stage fallback and partial marker).
+            from ..utils.telemetry import previous_attempt_carry
+            self._tel_carry = previous_attempt_carry(_read_json(self._tel_path))
         except Exception:  # noqa: BLE001 — 基底捕获失败按首写处理
             pass
 
@@ -8254,7 +8269,7 @@ class PipelineOrchestrator:
         tpath = self._tel_path
         if not tpath:
             return
-        from ..utils.telemetry import LLMMeter
+        from ..utils.telemetry import LLMMeter, apply_previous_attempt_carry
         from ..utils.atomic import write_json_atomic
         with self._tel_lock:
             try:
@@ -8268,18 +8283,9 @@ class PipelineOrchestrator:
                     data.update(extra)
                 if not final:
                     data["in_flight"] = True  # 运行中快照标记（终版落盘时消失）
-                if self._tel_prev:
-                    data["previous_attempt"] = self._tel_prev
-                    base = self._tel_prev_cum or {}
-                    cur = data.get("total") or {}
-                    cum: dict[str, Any] = {}
-                    for k in ("calls", "cached", "prompt_tokens", "completion_tokens",
-                              "total_tokens", "latency_ms", "cost_usd"):
-                        try:
-                            cum[k] = round((base.get(k) or 0) + (cur.get(k) or 0), 6)
-                        except TypeError:
-                            continue
-                    data["cumulative_total"] = cum
+                # EVAL-17: cumulative_total and the per-stage cumulative_by_stage both survive
+                # resumes (base fixed at the attempt start).
+                apply_previous_attempt_carry(data, self._tel_carry)
                 write_json_atomic(tpath, data, fsync=final)
                 self._tel_last_flush_calls = int((data.get("total") or {}).get("calls") or 0)
             except Exception as _fe:  # noqa: BLE001 — 遥测落盘失败不得影响管线
@@ -9661,6 +9667,15 @@ class PipelineOrchestrator:
                 or not getattr(Config, "REPORT_STRUCTURED_FORECAST", True)
                 or state.options.get("ensemble_done")):
             return
+        # EVAL-17: a seed whose process died hard (SIGKILL, OOM, host reboot) before the
+        # metering finally in _do_seed ran left a simulation that is neither checkpointed nor
+        # recorded, and the resumed ensemble re-runs that seed under a new simulation. Meter
+        # every persisted member once here; the per-simulation marker makes recorded ones
+        # no-ops.
+        _members = state.options.get("ensemble_member_simulations")
+        if isinstance(_members, dict):
+            for _member_sim in list(_members):
+                self._record_sim_run_telemetry(state, _member_sim, stage=SIM_METER_STAGE_ENSEMBLE)
         if not (project and graph_id and state.report_id):
             return
         from ..utils.atomic import write_json_atomic
@@ -9755,6 +9770,13 @@ class PipelineOrchestrator:
             except Exception:  # noqa: BLE001
                 pass
             _prev = _done_seeds.get(seed)
+            if _prev and _prev.get("simulation_id"):
+                # EVAL-17: a checkpointed seed's simulation spend is real whether its report is
+                # reused below or the seed re-runs under a new simulation. A seed completed
+                # before seed metering existed was never recorded; the per-simulation marker
+                # makes this a no-op for one recorded when it ran.
+                self._record_sim_run_telemetry(
+                    state, _prev.get("simulation_id"), stage=SIM_METER_STAGE_ENSEMBLE)
             if _prev and _prev.get("report_id"):
                 _fc_prev = self._read_report_forecast(_prev.get("report_id"))
                 if _fc_prev and _fc_prev.get("scenarios"):
@@ -9767,10 +9789,19 @@ class PipelineOrchestrator:
                                        "resumed_from_checkpoint": True})
                     forecasts.append(_fc_prev)
                     return
-            sim_id, rid, fc = self._run_one_seed(
-                state, project, graph_id, actors, research, report_md,
-                seed=seed, max_rounds=max_rounds, scenario_spine=_spine,
-            )
+            # EVAL-17: meter the seed simulation's subprocess spend exactly once under
+            # 'ensemble_sim' on every exit (success, failure, cancel) once it exists.
+            _sink: list = []
+            try:
+                sim_id, rid, fc = self._run_one_seed(
+                    state, project, graph_id, actors, research, report_md,
+                    seed=seed, max_rounds=max_rounds, scenario_spine=_spine,
+                    sim_id_sink=_sink,
+                )
+            finally:
+                if _sink:
+                    self._record_sim_run_telemetry(
+                        state, _sink[0], stage=SIM_METER_STAGE_ENSEMBLE)
             with _ckpt_lock:
                 _done_seeds[seed] = {
                     "k": k, "seed": seed, "simulation_id": sim_id, "report_id": rid,
@@ -10034,26 +10065,35 @@ class PipelineOrchestrator:
         No pipeline owns a member's simulation as its ``simulation_id``, so without
         this map a later /api/report/generate on it would key a second PRODUCTION
         primary; ``ledger_identity_for_simulation`` reads it to keep it an
-        ensemble member. Persisted by the ensemble's own state saves.
+        ensemble member. Persisted by the ensemble's own state saves. Seed threads call it
+        concurrently with the full state save in _record_sim_run_telemetry, so the write
+        takes the same lock (EVAL-17).
         """
         if simulation_id:
-            state.options.setdefault("ensemble_member_simulations", {})[str(simulation_id)] = int(seed)
+            with PipelineOrchestrator._sim_meter_lock:
+                state.options.setdefault(
+                    "ensemble_member_simulations", {})[str(simulation_id)] = int(seed)
 
     def _run_one_seed(self, state: "PipelineState", project: Any, graph_id: str,
                       actors: Any, research: dict, report_md: str, *,
                       seed: int, max_rounds: Optional[int],
-                      scenario_spine: Optional[list] = None) -> tuple:
+                      scenario_spine: Optional[list] = None,
+                      sim_id_sink: Optional[list] = None) -> tuple:
         """对同一图谱跑一次额外 (prepare→run→report)，返回 (sim_id, report_id, forecast|None)。
 
         自包含、串行、运行在管线线程内；不触碰主 sim/report 的 id 与状态。带停滞看门狗。
         W9-5 ``scenario_spine``：主跑的情景脊柱（名+判定标准），钉给种子的 ReportAgent 使
         种子对同一组命名情景打分（概率自由）；报告链尚未支持该参数时回退旧签名。
+        EVAL-17 ``sim_id_sink``: receives the seed's simulation_id as soon as it exists, so
+        the caller can meter the seed simulation's spend even when this method raises.
         """
         sim_manager = SimulationManager()
         _is_http = bool(Config.PROVIDER_META.get(Config.LLM_PROVIDER, {}).get('openai_compat'))
         sim_state = sim_manager.create_simulation(
             project.project_id, graph_id, enable_twitter=True, enable_reddit=True)
         sim_id = sim_state.simulation_id
+        if sim_id_sink is not None:
+            sim_id_sink.append(sim_id)
         self._note_ensemble_member_simulation(state, sim_id, seed)
         # SIM-11 (pairs with SIM-7): HTTP/openai-compat providers tolerate higher
         # persona fan-out; raise the default 8→16 (configurable via PARALLEL_PROFILE_COUNT).
@@ -11889,6 +11929,12 @@ class PipelineOrchestrator:
         if t_in <= 0 and t_out <= 0:
             return  # 该研究模型未报 usage → 无可计量 token，跳过合成记录
         try:
+            # EVAL-17: the runner's summed [usage] cached= reads (no new parsing here); a
+            # malformed value degrades to 0 instead of dropping the whole record.
+            t_cached = max(0, int(telemetry.get("tokens_cached") or 0))
+        except (TypeError, ValueError, OverflowError):
+            t_cached = 0
+        try:
             from ..utils.telemetry import LLMMeter
             model = str(telemetry.get("model") or getattr(Config, "DEERFLOW_MODEL", "claude"))
             # 研究模型名映射到一个计价 provider 键：CLI 订阅类（claude/codex）边际成本为 0，
@@ -11903,98 +11949,181 @@ class PipelineOrchestrator:
                 latency_ms=wall_ms,
                 stage=STAGE_RESEARCH,
                 run_id=state.pipeline_id,
+                prompt_cache_read_tokens=t_cached,
             )
         except Exception as e:  # noqa: BLE001
             logger.debug("[%s] 研究阶段合成计量跳过: %s", state.pipeline_id, e)
 
     # -- 内部：模拟阶段遥测 (DEFECT-3) -------------------------------------
 
+    @staticmethod
+    def _sim_meter_markers(state: PipelineState) -> tuple[dict[str, Any], bool]:
+        """EVAL-17: a copy of the per-simulation sim-meter markers, plus whether the
+        pre-EVAL-17 single slot had to be migrated into it.
+
+        The legacy slot only ever held the main run's marker (seeds were never recorded),
+        so it migrates as a stage='run' entry; a map entry already present for that
+        simulation wins. The caller stores the copy back when it writes.
+        """
+        stored = state.options.get(SIM_METER_MARKERS_OPTION)
+        markers: dict[str, Any] = dict(stored) if isinstance(stored, dict) else {}
+        legacy = state.options.get(SIM_METER_LEGACY_MARKER_OPTION)
+        legacy_sid = str(legacy.get("simulation_id") or "") if isinstance(legacy, dict) else ""
+        if legacy_sid and legacy_sid not in markers:
+            markers[legacy_sid] = {
+                "meter_run_token": str(legacy.get("meter_run_token") or ""),
+                "stage": STAGE_RUN,
+                "recorded_at": legacy.get("recorded_at"),
+            }
+            return markers, True
+        return markers, False
+
     def _record_sim_run_telemetry(
-        self, state: PipelineState, simulation_id: Optional[str]
+        self, state: PipelineState, simulation_id: Optional[str], *,
+        stage: str = STAGE_RUN,
     ) -> None:
         """DEFECT-3: 把模拟子进程落盘的 sim_llm_telemetry.json 纳入统一计量（恰好一次）。
 
         RUN 的 LLM 调用发生在 detached 子进程——contextvars 与 LLMMeter 都不跨进程，
         这是 run_telemetry.json 拿到模拟花费的唯一入口。镜像 _record_research_telemetry：
-        (1) 始终 stash 摘要到 state.options['sim_llm_telemetry']（计量关闭也是免费观测）；
-        (2) 计量开启且确有 token 时，向 LLMMeter 写一条 stage='run' 的合成记录
+        (1) 主模拟（stage='run'）始终 stash 摘要到 state.options['sim_llm_telemetry']
+            （计量关闭也是免费观测）；
+        (2) 计量开启且确有 token 时，向 LLMMeter 写一条 ``stage`` 的合成记录
             （provider/model 取快照自报值；缺失时按研究路径同款映射兜底——CLI 订阅类
             claude/codex → 'claude-cli' 边际成本 0，其余复用同名 provider 定价表）。
 
-        恰好一次（跨 attempt 持久）：state.options['sim_llm_telemetry_recorded'] 记住
-        快照的 ``meter_run_token``（每次子进程启动铸新、同进程重写不变）。同一场运行的
-        后续边界调用（成功收尾、后续 resume 的复用路径）全部跳过；重跑产生新 token →
-        新一笔真实花费照记。标记先持久化、计量后写：中间窗口崩溃宁可少记（诚实下限），
-        绝不双计。成功、复用与失败边界各调用一次；全程 degrade-safe，绝不抛出。
+        EVAL-17: ``stage`` is 'run' for the main simulation and SIM_METER_STAGE_ENSEMBLE
+        ('ensemble_sim') for an extra ensemble seed's simulation; a seed never touches the
+        'sim_llm_telemetry' stash.
+
+        恰好一次（跨 attempt 持久）：state.options[SIM_METER_MARKERS_OPTION][simulation_id]
+        记住快照的 ``meter_run_token``（每次子进程启动铸新、同进程重写不变）及 stage/
+        recorded_at。同一场运行的后续边界调用（成功收尾、后续 resume 的复用路径）全部跳过；
+        重跑产生新 token → 新一笔真实花费照记。标记先持久化、计量后写：中间窗口崩溃宁可
+        少记（诚实下限），绝不双计。EVAL-17: markers are kept per simulation, so recording a
+        seed can no longer evict the main run's marker. The pre-EVAL-17 single slot
+        'sim_llm_telemetry_recorded' is honoured on read and migrated into the map (a resumed
+        legacy run never double counts), and is still written for stage='run' so a rollback
+        to older code cannot double count the main simulation either. When the marker save
+        fails, the marker is rolled back and nothing is metered, so a later boundary or
+        resume retries instead of trusting a marker that exists only in memory. The whole
+        check-and-mark runs under self._sim_meter_lock because seed threads record
+        concurrently. 成功、复用与失败边界各调用一次；全程 degrade-safe，绝不抛出。
         """
         try:
             if not simulation_id:
                 return
-            tel_path = os.path.join(
-                SimulationRunner.RUN_STATE_DIR, str(simulation_id),
-                "sim_llm_telemetry.json")
-            tel = _read_json(tel_path)
-            if not isinstance(tel, dict):
-                return
-            token = str(tel.get("meter_run_token") or "") or (
-                _sha256_file(tel_path) or "")
-            marker = state.options.get("sim_llm_telemetry_recorded")
-            if (isinstance(marker, dict)
-                    and str(marker.get("simulation_id") or "") == str(simulation_id)
-                    and str(marker.get("meter_run_token") or "") == token):
-                return  # 恰好一次：这场子进程运行已入账
-            # 先解析全部字段（解析失败 → 不入账也不落标记，下个边界重试）。
-            t_in = int(tel.get("prompt_tokens") or 0)
-            t_out = int(tel.get("completion_tokens") or 0)
-            calls = int(tel.get("calls") or 0)
-            model = str(tel.get("model") or "unknown")
-            provider = str(tel.get("provider") or "")
-            if not provider or provider == "unknown":
-                provider = "claude-cli" if model in ("claude", "codex") else model
-            try:
-                wall_ms = float(tel.get("wall_s") or 0.0) * 1000.0
-            except (TypeError, ValueError):
-                wall_ms = 0.0
-            state.options["sim_llm_telemetry"] = {
-                "provider": provider,
-                "model": model,
-                "calls": calls,
-                "errors": int(tel.get("errors") or 0),
-                "prompt_tokens": t_in,
-                "completion_tokens": t_out,
-                "total_tokens": int(tel.get("total_tokens") or (t_in + t_out)),
-                "by_source": (tel.get("by_source")
-                              if isinstance(tel.get("by_source"), dict) else {}),
-                "wall_s": tel.get("wall_s"),
-            }
-            state.options["sim_llm_telemetry_recorded"] = {
-                "simulation_id": str(simulation_id),
-                "meter_run_token": token,
-                "recorded_at": _utcnow(),
-            }
-            try:
-                PipelineManager.save(state)
-            except Exception:  # noqa: BLE001 — stash/标记落盘失败不影响主流程
-                pass
-            if not bool(getattr(Config, "LLM_TELEMETRY_ENABLED", True)):
-                return
-            if t_in <= 0 and t_out <= 0:
-                return  # 无可计量 token（空场/0 调用）→ 不写空记录
-            from ..utils.telemetry import LLMMeter
-            LLMMeter.record(
-                provider=provider,
-                model=model,
-                prompt_tokens=t_in,
-                completion_tokens=t_out,
-                latency_ms=wall_ms,
-                stage=STAGE_RUN,
-                run_id=state.pipeline_id,
-            )
-            logger.info(
-                "[%s] 模拟子进程花费已入账 stage='run'（provider=%s model=%s "
-                "calls=%d tokens in=%d out=%d）",
-                state.pipeline_id, provider, model, calls, t_in, t_out,
-            )
+            sid = str(simulation_id)
+            with self._sim_meter_lock:
+                tel_path = os.path.join(
+                    SimulationRunner.RUN_STATE_DIR, sid, "sim_llm_telemetry.json")
+                tel = _read_json(tel_path)
+                if not isinstance(tel, dict):
+                    return
+                token = str(tel.get("meter_run_token") or "") or (
+                    _sha256_file(tel_path) or "")
+                markers, migrated = self._sim_meter_markers(state)
+                prior = markers.get(sid)
+                legacy = state.options.get(SIM_METER_LEGACY_MARKER_OPTION)
+                if ((isinstance(prior, dict)
+                        and str(prior.get("meter_run_token") or "") == token)
+                        or (isinstance(legacy, dict)
+                            and str(legacy.get("simulation_id") or "") == sid
+                            and str(legacy.get("meter_run_token") or "") == token)):
+                    if migrated:
+                        state.options[SIM_METER_MARKERS_OPTION] = markers
+                        if state.owner_boot_id is not None:  # W9-2: see the marker save below
+                            state.heartbeat_at = _utcnow()
+                        try:
+                            PipelineManager.save(state)
+                        except Exception:  # noqa: BLE001 — 迁移落盘失败：旧槽仍被读取兜底
+                            pass
+                    return  # 恰好一次：这场子进程运行已入账
+                # 先解析全部字段（解析失败 → 不入账也不落标记，下个边界重试）。
+                t_in = int(tel.get("prompt_tokens") or 0)
+                t_out = int(tel.get("completion_tokens") or 0)
+                calls = int(tel.get("calls") or 0)
+                model = str(tel.get("model") or "unknown")
+                provider = str(tel.get("provider") or "")
+                if not provider or provider == "unknown":
+                    provider = "claude-cli" if model in ("claude", "codex") else model
+                try:
+                    wall_ms = float(tel.get("wall_s") or 0.0) * 1000.0
+                except (TypeError, ValueError):
+                    wall_ms = 0.0
+                recorded_at = _utcnow()
+                # The marker slots as they were, for the rollback when the save below fails.
+                prior_slots = {key: state.options[key]
+                               for key in (SIM_METER_MARKERS_OPTION,
+                                           SIM_METER_LEGACY_MARKER_OPTION)
+                               if key in state.options}
+                if stage == STAGE_RUN:
+                    state.options["sim_llm_telemetry"] = {
+                        "provider": provider,
+                        "model": model,
+                        "calls": calls,
+                        "errors": int(tel.get("errors") or 0),
+                        "prompt_tokens": t_in,
+                        "completion_tokens": t_out,
+                        "total_tokens": int(tel.get("total_tokens") or (t_in + t_out)),
+                        "by_source": (tel.get("by_source")
+                                      if isinstance(tel.get("by_source"), dict) else {}),
+                        "wall_s": tel.get("wall_s"),
+                    }
+                    state.options[SIM_METER_LEGACY_MARKER_OPTION] = {
+                        "simulation_id": sid,
+                        "meter_run_token": token,
+                        "recorded_at": recorded_at,
+                    }
+                markers[sid] = {
+                    "meter_run_token": token,
+                    "stage": stage,
+                    "recorded_at": recorded_at,
+                }
+                state.options[SIM_METER_MARKERS_OPTION] = markers
+                # W9-2: a full save must not overwrite the fresh on-disk heartbeat with a stale
+                # in-memory one. Seed threads call this too, and nothing refreshes their in-memory
+                # heartbeat_at (the watchdog and the seed poll loop only touch the disk copy).
+                if state.owner_boot_id is not None:
+                    state.heartbeat_at = _utcnow()
+                try:
+                    PipelineManager.save(state)
+                except Exception as save_err:  # noqa: BLE001 — 落盘失败不影响主流程
+                    # EVAL-17: exactly-once needs the marker on disk before the spend is
+                    # metered. A marker living only in memory would be lost by a crash before
+                    # the next successful save, and the resume would record this run again.
+                    # Roll the marker back and meter nothing: a later boundary or resume
+                    # retries, and until then the spend is under-counted, never doubled.
+                    for key in (SIM_METER_MARKERS_OPTION, SIM_METER_LEGACY_MARKER_OPTION):
+                        if key in prior_slots:
+                            state.options[key] = prior_slots[key]
+                        else:
+                            state.options.pop(key, None)
+                    logger.warning(
+                        "[%s] 模拟计量标记落盘失败：本边界不入账，留待后续边界或 resume 重试"
+                        "（stage='%s' simulation=%s）: %s",
+                        state.pipeline_id, stage, sid, save_err,
+                    )
+                    return
+                if not bool(getattr(Config, "LLM_TELEMETRY_ENABLED", True)):
+                    return
+                if t_in <= 0 and t_out <= 0:
+                    return  # 无可计量 token（空场/0 调用）→ 不写空记录
+                from ..utils.telemetry import LLMMeter
+                LLMMeter.record(
+                    provider=provider,
+                    model=model,
+                    prompt_tokens=t_in,
+                    completion_tokens=t_out,
+                    latency_ms=wall_ms,
+                    stage=stage,
+                    run_id=state.pipeline_id,
+                )
+                logger.info(
+                    "[%s] 模拟子进程花费已入账 stage='%s'（simulation=%s provider=%s model=%s "
+                    "calls=%d tokens in=%d out=%d）",
+                    state.pipeline_id, stage, sid, provider, model, calls, t_in, t_out,
+                )
         except Exception as e:  # noqa: BLE001 — 计量是观测增益，绝不放大失败
             logger.debug("[%s] 模拟阶段合成计量跳过: %s", state.pipeline_id, e)
 
