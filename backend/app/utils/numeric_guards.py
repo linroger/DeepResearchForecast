@@ -21,7 +21,8 @@ that no citation justifies.  A stamp is ``flagged`` iff it carries an
 unjustified finding.
 
 A negated event ("never falls below 8%", "fails to recover above 10%", "未超过")
-is read with the inverted comparator its YES outcome needs; ranges are read
+and a criteria clause stating the NO outcome ("Resolves NO if the rate exceeds
+3%") are read with the inverted comparator the YES outcome needs; ranges are read
 only where they are ranges ("~" before a figure means "approximately", "from
 40% to 30%" is a trajectory, "the 2026 ~$700B level" is a year and an amount).
 
@@ -634,20 +635,27 @@ _NEGATION_WINDOW = 60
 # EN negators, read within three words before the comparator that open no new
 # clause ("fails to recover above", "won't exceed", "unless the rate exceeds";
 # "whether or not" and "not only" excluded).  A bare "not" negates only after an
-# auxiliary or modal ("does not exceed", "will likely not exceed") outside a
-# relative clause: "EVs not sold in China", "loans not performing" and "loans
-# that are not performing" name the metric.  "without" negates only within one
-# word of the comparator ("without ever exceeding"), never a condition such as
-# "without subsidies EV share exceeds".  ZH negators right before it, after at
-# most an adverb ("不会再跌破", "未超过") -- or, for a suffix comparator, before
-# the verb that states the level ("未达到1万亿元以上").
-_EN_AUX = (r"(?:do|does|did|will|would|shall|should|can|could|may|might|must|is|are|was|were|am|be|been"
-           r"|has|have|had)")
+# auxiliary or modal ("does not exceed", "will likely not exceed"): "EVs not sold
+# in China" and "loans not performing" name the metric.  No negator but "unless"
+# negates right after a relative pronoun: "loans that are not performing",
+# "loans that aren't performing" and "loans that never perform" name the metric
+# too.  A "never" right after an auxiliary is read with it ("has never been at
+# levels above"), so "that are never repaid" is a relative clause as well, and a
+# bare "never" before a past participle and a prepositional phrase is a reduced
+# relative clause ("EVs never sold in China exceeds 40%").  "without" negates
+# only within one word of the comparator ("without ever exceeding"), never a
+# condition such as "without subsidies EV share exceeds".  ZH negators right
+# before it, after at most an adverb ("不会再跌破", "未超过") -- or, for a suffix
+# comparator, before the verb that states the level ("未达到1万亿元以上").
+_EN_AUX_WORDS = ("do", "does", "did", "will", "would", "shall", "should", "can", "could", "may", "might", "must",
+                 "is", "are", "was", "were", "am", "be", "been", "has", "have", "had")
+_EN_AUX = "(?:" + "|".join(_EN_AUX_WORDS) + ")"
 _EN_AUX_ADVERB = r"(?:still|yet|also|even|likely|probably|possibly|certainly|definitely|really|actually)"
-_EN_NOT = (r"(?<!\bthat )(?<!\bwhich )(?<!\bwho )" + _EN_AUX + r"(?:\s+" + _EN_AUX_ADVERB + r")?\s+not"
-           r"(?!\s+(?:only|just|merely|necessarily)\b)")
-_EN_NEGATOR = (r"(?:(?<![A-Za-z'’])(?:never|cannot|unless|no\s+longer|fail(?:s|ed|ing)?\s+to|" + _EN_NOT + r")"
-               r"|(?<![A-Za-z'’])[A-Za-z]+n['’]t)(?![A-Za-z])")
+_EN_NOT = (_EN_AUX + r"(?:\s+" + _EN_AUX_ADVERB + r")?\s+(?:never|not(?!\s+(?:only|just|merely|necessarily)\b))")
+_EN_NEVER = ("".join(r"(?<!\b" + word + " )" for word in _EN_AUX_WORDS)
+             + r"never(?!\s+[A-Za-z]+(?:ed|en|ld|lt|wn)\s+(?:in|by|to|at|from)\s+[A-Za-z\d])")
+_EN_NEGATOR = (r"(?<![A-Za-z'’])(?:unless|(?<!\bthat )(?<!\bwhich )(?<!\bwho )(?:" + _EN_NEVER
+               + r"|cannot|no\s+longer|fail(?:s|ed|ing)?\s+to|" + _EN_NOT + r"|[A-Za-z]+n['’]t))(?![A-Za-z])")
 _EN_WITHOUT = r"(?<![A-Za-z'’])without(?![A-Za-z])"
 _EN_CLAUSE_BREAK = r"(?:and|or|but|nor|while|whereas|whether|if|when|although|though|because|which|that|who|so|then)"
 _EN_WORD = r"\s+(?!" + _EN_CLAUSE_BREAK + r"\b)[A-Za-z][A-Za-z'’\-]*"
@@ -860,6 +868,25 @@ def _clauses(criteria: str) -> List[str]:
     return [part for part in _CLAUSE_SPLIT_RE.split(criteria) if part.strip()]
 
 
+# The outcome a clause states: "Resolves NO if the rate exceeds 3%", "NO unless
+# ...", "No: ..." (and the YES forms, so "Resolves NO if A, YES if B" reads B as
+# stated).  "resolves no later than" states none.
+_POLARITY_RE = re.compile(
+    r"(?<![A-Za-z])[\"“'‘]?(yes|no)\b[\"”'’]?(?:\s*[:：]|\s*(?:[,\-–—]\s*)?(?:only\s+)?"
+    r"(?:if|when|whenever|unless|should|in\s+(?:the\s+)?(?:case|event))(?![A-Za-z]))", re.I)
+
+
+def _states_no(clause: str, start: int) -> bool:
+    """True when the outcome word nearest before the reading at ``start`` is NO:
+    the clause states when the binary resolves NO, so YES needs the inverse."""
+    polarity = None
+    for match in _POLARITY_RE.finditer(clause):
+        if match.start(1) >= start:
+            break
+        polarity = match.group(1).lower()
+    return polarity == "no"
+
+
 def _parse_threshold_claim(statement: Any, criteria: Any) -> Optional[Dict[str, Any]]:
     statement_text = str(statement or "")
     criteria_text = str(criteria or "")
@@ -877,7 +904,11 @@ def _parse_threshold_claim(statement: Any, criteria: Any) -> Optional[Dict[str, 
         return None
     pair = levels[0]
     hit = pair["hit"]
-    comparator = pair["comparator"]
+    comparator, negated = pair["comparator"], pair["negated"]
+    if _states_no(chosen, pair["start"]):
+        # "Resolves NO if the rate exceeds 3%" resolves YES iff the rate is <= 3%; a
+        # negated NO clause ("NO unless the rate is below 3%") reads as written.
+        comparator, negated = _NEGATED[comparator], not negated
     threshold_hi = hit["hi"] if (hit.get("range") or comparator == "between") else None
     event = _event_type(f"{statement_text} {criteria_text}")
     if event != "average" and (pair["never"] or persistence):
@@ -891,7 +922,7 @@ def _parse_threshold_claim(statement: Any, criteria: Any) -> Optional[Dict[str, 
         "unit_class": hit["unit_class"],
         "currency": hit["currency"],
         "event_type": event,
-        "negated": pair["negated"],
+        "negated": negated,
         "text": chosen.strip()[:_CLAIM_TEXT_MAX_CHARS],
         "metric": chosen[:pair["start"]].strip()[:_CLAIM_TEXT_MAX_CHARS],
         "raw": hit["raw"][:_CLAIM_TEXT_MAX_CHARS],
@@ -906,7 +937,9 @@ def parse_threshold_claim(statement: Any, criteria: Any) -> Optional[Dict[str, A
     the comparator or its negator, used to bind research rows) and ``raw``.
     ``comparator`` is one of > >= < <= between -- for a negated event ("does not
     exceed", "never falls below", "未超过", "fails to recover above") the
-    inverted comparator the YES outcome needs, with ``negated`` True.
+    inverted comparator the YES outcome needs, with ``negated`` True.  A clause
+    that states the NO outcome ("Resolves NO if the rate exceeds 3%") inverts it
+    once more, so "NO unless the rate is below 3%" reads '<' 3, not negated.
     Comparators written after the number ("以上", "以下", "or more", "or less")
     count too.  ``threshold``/``threshold_hi`` are base-unit numbers as written
     (``threshold_hi`` for a between or written range, else None).
@@ -964,10 +997,16 @@ def _jaccard(a: frozenset, b: frozenset) -> float:
 _YEAR = r"((?:19|20)\d{2})"
 _PERIOD_DAY_RE = re.compile(r"(?<!\d)" + _YEAR + r"[-/.](\d{1,2})[-/.](\d{1,2})(?!\d)")
 _PERIOD_MONTH_RE = re.compile(r"(?<!\d)" + _YEAR + r"(?:[-/.]|\s*年\s*)(0?[1-9]|1[0-2])(?!\d)")
+# A quarter or half of a split fiscal year ("Q4 2026/27") has no calendar end to
+# read: it falls through to the split year (_PERIOD_SPLIT_YEAR_RE).
+_SPLIT_TAIL = r"(?![-/–]\d)"
 _PERIOD_QUARTER_RE = re.compile(
-    r"(?<![A-Za-z\d])(?:Q([1-4])[\s,/-]*" + _YEAR + r"|" + _YEAR + r"[\s/-]*Q([1-4]))(?!\d)", re.I)
+    r"(?<![A-Za-z\d])(?:Q([1-4])[\s,/-]*" + _YEAR + _SPLIT_TAIL + r"|" + _YEAR + r"[\s/-]*Q([1-4]))(?!\d)", re.I)
 _PERIOD_HALF_RE = re.compile(
-    r"(?<![A-Za-z\d])(?:H([12])[\s,/-]*" + _YEAR + r"|" + _YEAR + r"[\s/-]*H([12]))(?!\d)", re.I)
+    r"(?<![A-Za-z\d])(?:H([12])[\s,/-]*" + _YEAR + _SPLIT_TAIL + r"|" + _YEAR + r"[\s/-]*H([12]))(?!\d)", re.I)
+# A split or multi-year period with an abbreviated end year ("2026/27", "FY2026-27",
+# "2025/26 season", "2026–28"); an ISO year-month ("2026-11") is read first.
+_PERIOD_SPLIT_YEAR_RE = re.compile(r"(?<!\d)" + _YEAR + r"[-/–](\d{2})(?!\d)")
 # A slash date with the year last: US month/day or day-first ("09/15/2026", "15/09/2026").
 _PERIOD_SLASH_DAY_RE = re.compile(r"(?<![\d/])(\d{1,2})/(\d{1,2})/" + _YEAR + r"(?!\d)")
 # A month name with an optional day before or after it ("Sep 15, 2026", "15 September 2026").
@@ -996,14 +1035,24 @@ def _slash_day(match: re.Match) -> Optional[_dt.date]:
     return max(readings) if readings else None
 
 
+def _split_end_year(match: re.Match) -> Optional[int]:
+    """The end year of a split period ("2026/27" -> 2027, "1999/00" -> 2000), or
+    None when the two digits name no later year ("2026-15")."""
+    first, tail = int(match.group(1)), int(match.group(2))
+    end = first + 1 if first % 100 == 99 and tail == 0 else first - first % 100 + tail
+    return end if end > first else None
+
+
 def _period_end(text: str) -> Optional[_dt.date]:
     """The LAST day of the date or period ``text`` states -- an ISO day, a
     slash day (:func:`_slash_day`), a year-month (年月), a quarter, a half, a
     month name (with its day when one is given: "Sep 15, 2026"), else December
-    31 of the latest year named -- or None without a 19xx/20xx year or with an
-    impossible date.  A period is known only once it has ended: "2026",
-    "FY2026" and "2026-Q4" end on 2026-12-31 (the rule quant_typing applies
-    under RESEARCH-4)."""
+    31 of the latest year named, a split year counting as its end year -- or
+    None without a 19xx/20xx year or with an impossible date.  A period is
+    known only once it has ended: "2026", "FY2026" and "2026-Q4" end on
+    2026-12-31 (the rule quant_typing applies under RESEARCH-4); "2026/27",
+    "FY2026-27" and "Q4 2026/27" end on 2027-12-31, the latest a split fiscal
+    year can end."""
     try:
         match = _PERIOD_DAY_RE.search(text)
         if match:
@@ -1027,6 +1076,7 @@ def _period_end(text: str) -> Optional[_dt.date]:
             year, day = int(match.group(4)), match.group(1) or match.group(3)
             return _dt.date(year, month, int(day)) if day else _month_end(year, month)
         years = [int(year) for year in _PERIOD_YEAR_RE.findall(text)]
+        years += [end for end in map(_split_end_year, _PERIOD_SPLIT_YEAR_RE.finditer(text)) if end]
         return _dt.date(max(years), 12, 31) if years else None
     except ValueError:  # month 13, Feb 30
         return None
@@ -1196,8 +1246,21 @@ def _status_quo(claim: Mapping[str, Any], actual: Mapping[str, Any], margin: flo
     return "satisfied" if below else "violated" if above else None
 
 
+def _horizon_gap_days(binary: Mapping[str, Any], as_of: str) -> Optional[int]:
+    """Days from the end of the latest actual's stated period to the end of the
+    binary's horizon_year, or None when either is unreadable: a flow or
+    cumulative metric read years before its horizon ("installations exceed
+    40,000 in 2026" against a January figure) is a growth path, not an excursion,
+    and prospective evidence needs to tell the two apart."""
+    horizon_end = _period_end(_readable(binary.get("horizon_year")) or "")
+    as_of_end = _period_end(as_of) if as_of else None
+    if horizon_end is None or as_of_end is None:
+        return None
+    return (horizon_end - as_of_end).days
+
+
 def _findings(binary: Mapping[str, Any], claim: Mapping[str, Any], actual: Optional[Mapping[str, Any]],
-              *, scale_ratio: float, margin: float) -> List[Dict[str, Any]]:
+              *, scale_ratio: float, margin: float, as_of: str = "") -> List[Dict[str, Any]]:
     findings: List[Dict[str, Any]] = []
     k_hi = claim.get("threshold_hi")
     if k_hi is not None and _inverted(claim["threshold"], k_hi):
@@ -1235,14 +1298,15 @@ def _findings(binary: Mapping[str, Any], claim: Mapping[str, Any], actual: Optio
     if contradicted:
         justified = bool(_SOURCE_MARKER_RE.search(
             f"{binary.get('adjustment_rationale') or ''} {binary.get('base_rate_anchor') or ''}"))
-        findings.append(_finding(
+        findings.append(dict(_finding(
             CODE_STATUS_QUO, SEVERITY_EXCURSION,
             f"latest actual {_num(actual['lo'])}"
             + (f"–{_num(actual['hi'])}" if actual["hi"] != actual["lo"] else "")
             + f" already {'satisfies' if state == 'satisfied' else 'violates'} "
             f"'{claim['comparator']} {_num(claim['threshold'])}' ({'negated ' if negated else ''}{event} "
             f"event) by at least "
-            f"{_num(margin * 100)}% of the threshold, yet p={_num(probability)}", justified))
+            f"{_num(margin * 100)}% of the threshold, yet p={_num(probability)}", justified),
+            horizon_gap_days=_horizon_gap_days(binary, as_of)))
     return findings
 
 
@@ -1263,7 +1327,8 @@ def _check(binary: Mapping[str, Any], prepared: List[Tuple[Any, ...]], *, scale_
     if claim is None:
         return _stamp(STATUS_NOT_NUMERIC, None, None, [])
     latest_actual, actual = _bind(binary, claim, prepared, today, require_date=require_as_of)
-    findings = _findings(binary, claim, actual, scale_ratio=scale_ratio, margin=margin)
+    findings = _findings(binary, claim, actual, scale_ratio=scale_ratio, margin=margin,
+                         as_of=(latest_actual or {}).get("as_of") or "")
     if any(not finding["justified"] for finding in findings):
         status = STATUS_FLAGGED
     elif latest_actual is None:
@@ -1307,6 +1372,8 @@ def check_binary(binary: Any, *, quant_rows: Iterable[Any] = (), scale_ratio: fl
     ok | flagged | unbound | not_numeric | unchecked (an internal error, with
     ``error`` naming its type -- never ``ok``).  ``latest_actual`` is
     ``{value, unit, as_of, source_ref, basis: llm_field|quant_row}`` or None.
+    A ``status_quo_contradiction`` finding also carries ``horizon_gap_days``
+    (:func:`_horizon_gap_days`; diagnostic only, it changes no status).
     ``today`` (default: the system date) decides what is not yet known: an
     as_of or period_end whose stated period ENDS after it never binds ("2026"
     ends on 2026-12-31).  ``require_as_of`` (a hindcast, ``today`` being its

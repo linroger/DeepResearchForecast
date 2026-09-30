@@ -409,6 +409,11 @@ EV_SHARE = "The US EV share of new vehicle sales fails to recover above 10% by t
     ("上证指数没有突破3500点", "<=", 3500.0, "unknown"),
     ("寒武纪总市值从未跌破5000亿元", ">=", 5e11, "touch"),
     ("寒武纪总市值未达到1万亿元以上", "<", 1e12, "unknown"),
+    # review round 3: "never" after an auxiliary, and a relative-clause negator that
+    # no longer cancels the real one
+    ("Brent has never been at levels above $150 in 2027", "<=", 150.0, "touch"),
+    ("Brent will likely never exceed $150 in 2027", "<=", 150.0, "touch"),
+    ("Loans that aren't performing won't exceed 5% of the book", "<=", 5.0, "unknown"),
 ])
 def test_negated_comparators_are_inverted(statement, comparator, threshold, event):
     claim = ng.parse_threshold_claim(statement, "")
@@ -426,6 +431,11 @@ def test_negated_comparators_are_inverted(statement, comparator, threshold, even
     ("Share of global EVs not sold in China exceeds 40% in 2027", ">"),
     ("Loans not performing exceed 5% of the book", ">"),
     ("Loans that are not performing exceed 5% of the book", ">"),
+    # review round 3: contractions and "never" inside the metric
+    ("Loans that aren't performing exceed 5% of the book at end of 2026", ">"),
+    ("The share of EVs never sold in China exceeds 40% in 2027", ">"),
+    ("Loans that never perform exceed 5% of the book", ">"),
+    ("Loans that are never repaid exceed 5% of the book", ">"),
     ("Without subsidies EV share exceeds 30%", ">"),
     ("未来一年出口同比超过10%", ">"),
     ("出口不断突破10%", ">"),
@@ -435,6 +445,49 @@ def test_negated_comparators_are_inverted(statement, comparator, threshold, even
 def test_non_negations_keep_the_comparator(statement, comparator):
     claim = ng.parse_threshold_claim(statement, "")
     assert (claim["comparator"], claim["negated"]) == (comparator, False), statement
+
+
+def test_metric_internal_negators_are_not_false_flags():
+    # review round 3 probes: both levels already satisfy the comparator at p=0.8
+    loans = _binary("Loans that aren't performing exceed 5% of the book at end of 2026", 0.8, value="9", unit="%")
+    evs = _binary("The share of EVs never sold in China exceeds 40% in 2027", 0.8, value="60", unit="%")
+    for binary in (loans, evs):
+        stamp = ng.check_binary(binary, today=TODAY)
+        assert (stamp["status"], stamp["findings"]) == ("ok", []), binary["statement"]
+
+
+# ── NO-polarity criteria (review round 3) ──────────────────────────────────────
+@pytest.mark.parametrize("criteria,comparator,threshold,negated,event", [
+    ("Resolves NO if the rate exceeds 3% on 2026-12-31.", "<=", 3.0, True, "settle"),
+    ("Resolves NO unless the rate is below 3% on 2026-12-31.", "<", 3.0, False, "settle"),
+    ("Resolves NO if the rate does not exceed 3%.", ">", 3.0, False, "unknown"),
+    ("Resolves NO if Brent trades above $100 at any point in 2027.", "<=", 100.0, True, "touch"),
+    ('Resolves "No" if the rate exceeds 3%.', "<=", 3.0, True, "unknown"),
+    ("NO: the rate exceeds 3%.", "<=", 3.0, True, "unknown"),
+    # the outcome word nearest before the reading governs it
+    ("Resolves NO if talks collapse, YES if the rate exceeds 3%.", ">", 3.0, False, "unknown"),
+    ("Resolves YES if the rate exceeds 3%, NO if it does not.", ">", 3.0, False, "unknown"),
+    ("Resolves no later than 31 January 2027 if the rate exceeds 3%.", ">", 3.0, False, "unknown"),
+])
+def test_a_clause_stating_no_reads_the_inverse(criteria, comparator, threshold, negated, event):
+    claim = ng.parse_threshold_claim("The rate question", criteria)
+    assert (claim["comparator"], claim["threshold"], claim["negated"], claim["event_type"]) == (
+        comparator, threshold, negated, event), criteria
+
+
+def test_no_polarity_probes_are_not_false_flags():
+    def rate(criteria, p, value):
+        return dict(_binary("The rate question", p, value=value, unit="%"), resolution_criteria=criteria)
+
+    exceeds = "Resolves NO if the rate exceeds 3% on 2026-12-31."
+    unless_below = "Resolves NO unless the rate is below 3% on 2026-12-31."
+    for binary in (rate(exceeds, 0.2, "5"), rate(unless_below, 0.8, "1.5")):
+        stamp = ng.check_binary(binary, today=TODAY)
+        assert (stamp["status"], stamp["findings"]) == ("ok", []), binary["resolution_criteria"]
+    # the inverse reading still catches a real contradiction
+    for binary in (rate(exceeds, 0.8, "5"), rate(unless_below, 0.2, "1.5")):
+        stamp = ng.check_binary(binary, today=TODAY)
+        assert [f["code"] for f in stamp["findings"]] == ["status_quo_contradiction"], binary
 
 
 def test_negated_real_binaries_are_not_false_flags():
@@ -564,6 +617,9 @@ def test_quant_row_vocabulary_matches_the_repo():
 @pytest.mark.parametrize("as_of,binds", [
     ("2026", False), ("2026-Q4", False), ("Dec 2026", False), ("FY2026", False), ("2026年12月", False),
     ("2026-01-10", True), ("2025", True), ("2025-Q4", True), ("", False), ("not stated", False),
+    # split fiscal years end in their second year (review round 3)
+    ("2025/26", False), ("2025-26", False), ("2025–26", False), ("FY2025-26", False), ("FY2025/26", False),
+    ("2025/26 season", False), ("Q4 2025/26", False), ("2024/25", True), ("FY2024-25", True),
 ])
 def test_hindcast_binds_only_periods_that_ended_by_its_as_of(as_of, binds):
     as_of_day = dt.date(2026, 1, 15)
@@ -575,6 +631,20 @@ def test_hindcast_binds_only_periods_that_ended_by_its_as_of(as_of, binds):
     summary_forecast = {"binary_forecasts": [no_field]}
     ng.stamp_forecast(summary_forecast, quant_rows=[row], today=as_of_day, require_as_of=True)
     assert (summary_forecast["binary_forecasts"][0]["numeric_guard"]["latest_actual"] is not None) is binds
+
+
+def test_status_quo_findings_record_the_horizon_gap():
+    # report_970e5aa53841 F7 shape: a January cumulative figure read against a year-end threshold
+    humanoids = dict(_binary("Cumulative global humanoid installations exceed 40,000 units in 2026", 0.72,
+                             value="16,000", unit="units", as_of="2026-01-01"), horizon_year=2026)
+    (finding,) = ng.check_binary(humanoids, today=TODAY)["findings"]
+    assert (finding["code"], finding["horizon_gap_days"]) == ("status_quo_contradiction", 364)
+    (finding,) = ng.check_binary(dict(F13, horizon_year=2027), today=TODAY)["findings"]
+    assert finding["horizon_gap_days"] == 698  # 2026-02-01 to 2027-12-31
+    # no horizon_year, or an undated actual: no gap, and the status is unchanged
+    for binary in (dict(F13), dict(F13, horizon_year=2027, latest_actual=dict(F13["latest_actual"], as_of=""))):
+        stamp = ng.check_binary(binary, today=TODAY)
+        assert stamp["status"] == "flagged" and stamp["findings"][0]["horizon_gap_days"] is None
 
 
 def test_live_runs_bind_undated_actuals_and_ended_periods():
