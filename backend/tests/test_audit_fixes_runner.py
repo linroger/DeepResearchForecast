@@ -153,6 +153,57 @@ def test_agent_stats_first_last_not_inverted(sim_env):
     assert stats[0]["last_action_time"] == "2026-07-02T05:00:00"
 
 
+# ------------------------------------------------- SIM-5 organic vs injected per agent
+def test_agent_stats_split_organic_and_injected_actions(sim_env):
+    sim_id = "sim_sim5_stats"
+    _write_actions(sim_env / sim_id, "twitter", [
+        # agent 0: the top-influence fallback poster — timeline replays only
+        {"round": 1, "timestamp": "2026-07-02T01:00:00", "agent_id": 0, "agent_name": "Top",
+         "action_type": "CREATE_POST", "action_args": {"content": "e1", "is_scheduled_event": True}},
+        {"round": 2, "timestamp": "2026-07-02T02:00:00", "agent_id": 0, "agent_name": "Top",
+         "action_type": "CREATE_POST", "action_args": {"content": "e2", "is_scheduled_event": True}},
+        {"round": 3, "timestamp": "2026-07-02T03:00:00", "agent_id": 0, "agent_name": "Top",
+         "action_type": "CREATE_POST", "action_args": {"content": "e3", "is_scheduled_event": True}},
+        # agent 1: a round-0 seed post, a seed follow, a sampled like, one organic comment
+        {"round": 0, "timestamp": "2026-07-02T00:00:01", "agent_id": 1, "agent_name": "Org",
+         "action_type": "CREATE_POST", "action_args": {"content": "seed"}},
+        {"round": 1, "timestamp": "2026-07-02T01:00:01", "agent_id": 1, "agent_name": "Org",
+         "action_type": "FOLLOW", "action_args": {"is_seed_action": True}},
+        {"round": 2, "timestamp": "2026-07-02T02:00:01", "agent_id": 1, "agent_name": "Org",
+         "action_type": "LIKE_POST", "action_args": {"post_id": 1, "is_engagement_sample": True}},
+        {"round": 2, "timestamp": "2026-07-02T02:00:02", "agent_id": 1, "agent_name": "Org",
+         "action_type": "CREATE_COMMENT", "action_args": {"content": "reply", "post_id": 1}},
+        # agent 2: organic only
+        {"round": 1, "timestamp": "2026-07-02T01:00:02", "agent_id": 2, "agent_name": "Solo",
+         "action_type": "CREATE_POST", "action_args": {"content": "own"}},
+    ])
+    stats = SimulationRunner.get_agent_stats(sim_id)
+    by_id = {s["agent_id"]: s for s in stats}
+    # sort order is still total_actions (API compatibility)
+    assert [s["agent_id"] for s in stats] == [1, 0, 2]
+    assert (by_id[0]["organic_actions"], by_id[0]["injected_actions"]) == (0, 3)
+    assert by_id[0]["organic_action_types"] == {}
+    assert (by_id[1]["organic_actions"], by_id[1]["injected_actions"]) == (1, 3)
+    assert by_id[1]["organic_action_types"] == {"CREATE_COMMENT": 1}
+    assert by_id[1]["action_types"] == {"CREATE_COMMENT": 1, "LIKE_POST": 1, "FOLLOW": 1,
+                                        "CREATE_POST": 1}
+    assert (by_id[2]["organic_actions"], by_id[2]["injected_actions"]) == (1, 0)
+    assert all(s["organic_actions"] + s["injected_actions"] == s["total_actions"] for s in stats)
+
+
+def test_agent_stats_provenance_off_keeps_legacy_fields(sim_env, monkeypatch):
+    monkeypatch.setattr(Config, "SIM_EVENT_PROVENANCE", False)
+    sim_id = "sim_sim5_stats_off"
+    _write_actions(sim_env / sim_id, "twitter", [
+        {"round": 1, "timestamp": "2026-07-02T01:00:00", "agent_id": 0, "agent_name": "Top",
+         "action_type": "CREATE_POST", "action_args": {"content": "e1", "is_scheduled_event": True}},
+    ])
+    stats = SimulationRunner.get_agent_stats(sim_id)
+    assert set(stats[0]) == {"agent_id", "agent_name", "total_actions", "twitter_actions",
+                             "reddit_actions", "action_types", "first_action_time",
+                             "last_action_time"}
+
+
 # ------------------------------------------------- RUN-13 / XRUN-2(2)
 def test_run_summary_excludes_seeds_and_scheduled_from_organic(sim_env):
     sim_id = "sim_run13"

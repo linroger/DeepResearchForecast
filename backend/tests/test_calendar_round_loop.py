@@ -784,5 +784,96 @@ def test_hours_mode_untouched(tmp_path, monkeypatch):
         assert "period_label" not in e and "period_end" not in e
 
 
+# ===========================================================================
+# 9) SIM-5：定时事件来源标注 / 同帖者同轮多事件 / 缺发帖者记日志 / 情感投递遥测
+# ===========================================================================
+def _event_feed_posts(sim_dir):
+    """FakeEnv 为 ManualAction（定时事件）写的 create_post trace 行内容（有机行除外）。"""
+    conn = sqlite3.connect(os.path.join(sim_dir, "twitter_simulation.db"))
+    rows = conn.execute("SELECT action, info FROM trace").fetchall()
+    conn.close()
+    posts = []
+    for action, info in rows:
+        content = json.loads(info).get("content") or ""
+        if action == "create_post" and "strategic move" not in content:
+            posts.append(content)
+    return posts
+
+
+def _logged_event_rows(sim_dir):
+    return [e for e in _read_events(sim_dir)
+            if (e.get("action_args") or {}).get("is_scheduled_event")]
+
+
+def test_same_poster_events_in_one_round_all_fire(tmp_path, monkeypatch):
+    sim_dir = str(tmp_path)
+    envs = []
+    _patch_runtime(monkeypatch, sim_dir, envs)
+    monkeypatch.setenv("SIM_DECISION_CHANNEL_INBAND", "false")
+    cfg = _calendar_config()
+    cfg["event_config"]["scheduled_events"] = [
+        {"round": 1, "date": "2026-11-05", "content": "[2026-11-05] 事件A发生", "poster_agent_id": 0},
+        {"round": 1, "date": "2026-11-20", "content": "[2026-11-20] 事件B发生", "poster_agent_id": 0},
+    ]
+    _run(cfg, sim_dir)
+
+    posted = _event_feed_posts(sim_dir)
+    assert len(posted) == 2                               # 此前按 agent 覆盖只发出最后一条
+    logged = _logged_event_rows(sim_dir)
+    assert [(e["round"], e["agent_id"]) for e in logged] == [(2, 0), (2, 0)]
+    assert sorted(e["action_args"]["content"] for e in logged) == sorted(posted)
+    assert posted[0].endswith("事件A发生") and posted[1].endswith("事件B发生")
+
+    # 情感状态行以 SYSTEM 记录注入、被 camel 丢弃——摘要如实记录（SIM_AGENT_DYNAMICS 默认开）
+    with open(os.path.join(sim_dir, "twitter_dynamics_summary.json"), encoding="utf-8") as f:
+        summary = json.load(f)
+    assert summary["prompt_delivery"] == "system_record_dropped_by_context_creator"
+    assert {"rounds_observed", "rounds_with_received_signal", "active"} <= set(summary)
+
+
+@pytest.mark.parametrize("flag", [None, "false"])
+def test_event_posts_labelled_by_default_and_verbatim_when_off(tmp_path, monkeypatch, flag):
+    sim_dir = str(tmp_path)
+    envs = []
+    _patch_runtime(monkeypatch, sim_dir, envs)
+    monkeypatch.setenv("SIM_DECISION_CHANNEL_INBAND", "false")
+    if flag is not None:
+        monkeypatch.setenv("SIM_EVENT_PROVENANCE", flag)
+    _run(_calendar_config(), sim_dir)
+
+    logged = _logged_event_rows(sim_dir)
+    assert len(logged) == 1
+    args = logged[0]["action_args"]
+    if flag is None:
+        assert args["content"] == ("[WORLD EVENT · scheduled on the research timeline · "
+                                   "not a statement by any actor] [2026-11-05] 事件A发生")
+        assert args["event_provenance"] == "research_timeline"
+    else:
+        assert args == {"content": "[2026-11-05] 事件A发生", "is_scheduled_event": True}
+    assert _event_feed_posts(sim_dir) == [args["content"]]  # 帖文与落账同一字符串
+    # 世界时钟的 CONFIRMED EVENTS 段仍是研究时间线原文
+    notes = [n for n in _world_clock_notes(envs[0]) if "round 2/3" in n]
+    assert notes and "## CONFIRMED EVENTS THIS PERIOD\n[2026-11-05] 事件A发生" in notes[0]
+
+
+def test_event_without_poster_or_content_is_skipped_and_logged(tmp_path, monkeypatch, capsys):
+    sim_dir = str(tmp_path)
+    envs = []
+    _patch_runtime(monkeypatch, sim_dir, envs)
+    monkeypatch.setenv("SIM_DECISION_CHANNEL_INBAND", "false")
+    cfg = _calendar_config()
+    cfg["event_config"]["scheduled_events"] = [
+        {"round": 1, "date": "2026-11-05", "content": "[2026-11-05] 事件A发生", "poster_agent_id": None},
+        {"round": 1, "date": "2026-11-06", "content": "", "poster_agent_id": 1},
+    ]
+    _run(cfg, sim_dir)
+
+    assert _event_feed_posts(sim_dir) == []
+    assert _logged_event_rows(sim_dir) == []
+    out = capsys.readouterr().out
+    assert "第 2 轮定时事件缺发帖者，跳过: '[2026-11-05] 事件A发生'" in out
+    assert "第 2 轮定时事件缺内容，跳过: '2026-11-06'" in out
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-x", "-q"]))

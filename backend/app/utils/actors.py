@@ -760,9 +760,15 @@ def extract_relationship_rows(actors: Optional[Any]) -> List[Dict[str, Any]]:
     return out
 
 
-def situation_brief_block(actors: Optional[Any], english: bool = False) -> str:
+def situation_brief_block(actors: Optional[Any], english: bool = False,
+                          honest_label: bool = False) -> str:
     """把 situation_brief 渲染为紧凑的提示块（默认中文标题；english=True 用英文标题，
-    供英文模拟的 agent 可见世界简报使用）；缺失返回空串。"""
+    供英文模拟的 agent 可见世界简报使用）；缺失返回空串。
+
+    SIM-5 honest_label=True：标题如实标注为「研究综述，未逐条标注来源；背景参考，并非已核实
+    事实」——v3 situation_brief 不带 [S#] 来源标记，不得自称「实证/权威」。只有 agent 可见的
+    世界简报（SimulationConfigGenerator._build_world_brief，受 SIM_WORLD_BRIEF_HONEST_LABEL
+    控制）传 True；其余调用点默认 False，逐字节不变。"""
     sb = actors.get("situation_brief") if isinstance(actors, dict) else None
     if not isinstance(sb, dict):
         return ""
@@ -770,11 +776,14 @@ def situation_brief_block(actors: Optional[Any], english: bool = False) -> str:
         prose = (("Current situation", "current_situation"), ("Background", "context"),
                  ("Tensions and dynamics", "dynamics"))
         lists = (("Fault lines", "fault_lines"), ("Potential triggers", "catalysts"))
-        title = "## Situation brief (deep-research evidence, authoritative background)"
+        title = ("## Situation brief (research synthesis, not individually sourced; "
+                 "background, not verified fact)" if honest_label
+                 else "## Situation brief (deep-research evidence, authoritative background)")
     else:
         prose = (("当前态势", "current_situation"), ("来龙去脉", "context"), ("张力/动态", "dynamics"))
         lists = (("争议断层", "fault_lines"), ("潜在触发", "catalysts"))
-        title = "## 局势简报（深度研究实证，作为权威背景）"
+        title = ("## 局势简报（深度研究综述，未逐条标注来源；作为背景参考，并非已核实事实）"
+                 if honest_label else "## 局势简报（深度研究实证，作为权威背景）")
     parts: List[str] = []
     for label, key in prose:
         v = str(sb.get(key, "") or "").strip()

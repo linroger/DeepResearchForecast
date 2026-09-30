@@ -1899,7 +1899,11 @@ class SimulationConfigGenerator:
                           else "## 核心预测问题（这个世界正在争论什么）\n")
                          + question[:self.WORLD_BRIEF_QUESTION_CHARS])
         try:
-            brief_block = situation_brief_block(actors, english=english)
+            # SIM-5: agent 可见的世界简报如实标注未逐条溯源的研究综述（SIM_WORLD_BRIEF_HONEST_LABEL，
+            # 默认开；关 → 旧「权威背景」标题）。
+            brief_block = situation_brief_block(
+                actors, english=english,
+                honest_label=bool(getattr(Config, "SIM_WORLD_BRIEF_HONEST_LABEL", True)))
         except Exception:  # noqa: BLE001 — 局势简报渲染失败绝不阻断配置生成
             brief_block = ""
         if brief_block:

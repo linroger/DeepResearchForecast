@@ -33,7 +33,7 @@ import random  # noqa: E402
 import run_parallel_simulation as rps  # noqa: E402
 from action_logger import PlatformActionLogger  # noqa: E402
 from camel.types import OpenAIBackendRole  # noqa: E402
-from oasis import ManualAction  # noqa: E402
+from oasis import ActionType, ManualAction  # noqa: E402
 from oasis.social_platform.database import create_db  # noqa: E402
 
 from app.services.simulation_config_generator import (  # noqa: E402
@@ -397,6 +397,11 @@ class _LoopEnv:
         for agent, act in actions.items():
             for a in (act if isinstance(act, list) else [act]):
                 if isinstance(a, ManualAction):
+                    if a.action_type == ActionType.CREATE_POST:   # 定时事件帖同样上 feed
+                        conn.execute(
+                            "INSERT INTO post (user_id, content, created_at, num_likes, "
+                            "num_dislikes, num_shares) VALUES (?, ?, 't', 0, 0, 0)",
+                            (agent.agent_id, a.action_args["content"]))
                     conn.execute(
                         "INSERT INTO trace (user_id, created_at, action, info) VALUES (?, 't', ?, ?)",
                         (agent.agent_id, a.action_type.value, json.dumps(a.action_args)))
@@ -616,13 +621,33 @@ def test_world_brief_uses_english_headings_for_english_runs():
     brief = _gen("English")._build_world_brief(
         "Forecast quantum computing through 2040.", ACTORS, ["export controls", "PQC migration"])
     assert "## Forecast question (what this world is debating)" in brief
-    assert "## Situation brief (deep-research evidence, authoritative background)" in brief
+    assert ("## Situation brief (research synthesis, not individually sourced; "
+            "background, not verified fact)" in brief)            # SIM-5 诚实标题（默认开）
+    assert "authoritative" not in brief
     assert "### Current situation\nLogical qubits are scaling." in brief
     assert "### Fault lines" in brief
     assert "## Hot topics\nexport controls; PQC migration" in brief
     assert not re.search(r"[一-鿿]", brief)
     legacy = _gen()._build_world_brief("预测量子计算", ACTORS, ["出口管制"])
     assert "## 核心预测问题" in legacy and "## 热点话题\n出口管制" in legacy   # 未判定语言 → 旧标题
+    assert "## 局势简报（深度研究综述，未逐条标注来源；作为背景参考，并非已核实事实）" in legacy
+
+
+def test_world_brief_honest_label_off_restores_authoritative_titles(monkeypatch):
+    from app.config import Config
+    from app.utils.actors import situation_brief_block
+
+    monkeypatch.setattr(Config, "SIM_WORLD_BRIEF_HONEST_LABEL", False)
+    english = _gen("English")._build_world_brief("Forecast quantum computing.", ACTORS, [])
+    assert "## Situation brief (deep-research evidence, authoritative background)" in english
+    chinese = _gen()._build_world_brief("预测量子计算", ACTORS, [])
+    assert "## 局势简报（深度研究实证，作为权威背景）" in chinese
+    # 其余调用点（本体/报告/事件配置上下文）不传 honest_label → 旧标题逐字节不变
+    assert situation_brief_block(ACTORS) == (
+        "## 局势简报（深度研究实证，作为权威背景）\n### 当前态势\nLogical qubits are scaling.\n"
+        "### 争议断层\n- Vendor timelines vs independent verification")
+    assert situation_brief_block(ACTORS, english=True).startswith(
+        "## Situation brief (deep-research evidence, authoritative background)\n")
 
 
 class _Entity:
@@ -718,3 +743,166 @@ def test_self_like_guard_refuses_own_posts_and_comments(tmp_path):
     other._internal_tools = {"like_post": _Tool(like_post)}
     rps._wrap_agent_self_like_guard(_Graph({2: other}), str(tmp_path / "missing.db"), msgs.append)
     assert asyncio.run(other._internal_tools["like_post"].func(post_id=1))["success"] is True
+
+
+# ---------------------------------------------------------------------------
+# 9) SIM-5：定时事件帖不冒充发帖行为者（候选打分、提示作者位、ResponseLog、轮循环接线）
+# ---------------------------------------------------------------------------
+EVENT_LABEL = "[WORLD EVENT · scheduled on the research timeline · not a statement by any actor] "
+EVENT_TEXT = EVENT_LABEL + "BIS adds Origin Quantum to the Entity List."
+EVENT_AUTHOR = "SCHEDULED WORLD EVENT (research timeline; posted on the feed, not said by any actor)"
+
+
+def _event_thread(is_event):
+    thread = _thread(5, 2, EVENT_TEXT)   # 事件挂在 IBM 账号下（最高影响力回退）
+    if is_event:
+        thread.update({"is_scheduled_event": True, "quoted_is_event": False})
+    return thread
+
+
+def test_event_thread_candidates_skip_follow_and_stance_bonuses():
+    profiles = rps._build_reaction_profiles(_config())
+    follows = {(1, 2), (2, 1)}
+    legacy = rps.select_reaction_candidates(1, {5: _event_thread(False)}, profiles, follows, {})
+    assert legacy[0]["score"] == 5.75       # 点名 3 + 关注 1 + 被关注 0.5 + 同立场 0.25 + 新帖 1
+    assert legacy[0]["reasons"] == ["it mentions you", "you follow the author"]
+    event = rps.select_reaction_candidates(1, {5: _event_thread(True)}, profiles, follows, {})
+    assert event[0]["score"] == 4.0          # 只剩点名 + 新帖
+    assert event[0]["reasons"] == ["a scheduled world event that concerns you"]
+    # 发帖账号（IBM）不把事件当作「自己的帖子」：无人回复也照常入选、不提示「别人回复了你」
+    assert rps.select_reaction_candidates(2, {5: _event_thread(False)}, profiles, set(), {}) == []
+    own = rps.select_reaction_candidates(2, {5: _event_thread(True)}, profiles, set(), {})
+    assert [c["post_id"] for c in own] == [5]
+    assert "other actors replied to your post" not in own[0]["reasons"]
+
+
+def test_event_thread_prompt_renders_world_event_not_the_poster():
+    event = {**_event_thread(True), "reasons": ["a scheduled world event that concerns you"]}
+    quote = {**_thread(7, 1, "Origin: we will appeal the listing."), "quoted": EVENT_TEXT,
+             "quoted_author_id": 2, "is_scheduled_event": False, "quoted_is_event": True}
+    normal = {**_thread(8, 2, "IBM says Starling remains on schedule for 2029."),
+              "is_scheduled_event": False, "quoted_is_event": False}
+    prompt = rps.build_reaction_prompt(2, "IBM", [event, quote, normal], AGENT_NAMES,
+                                       "twitter", "2027-H1", "English")
+    assert f"[1] post_id=5 — {EVENT_AUTHOR}:" in prompt
+    assert "post_id=5 — IBM wrote:" not in prompt and "post_id=5 — you wrote:" not in prompt
+    assert f'  (quoting {EVENT_AUTHOR}: "{EVENT_LABEL}' in prompt
+    assert "(quoting you:" not in prompt
+    assert "post_id=8 — you wrote:" in prompt                     # 非事件帖照旧
+    assert "7. A post marked SCHEDULED was placed on the feed" in prompt
+    assert prompt.endswith("You cannot publish a new standalone post in this step.")
+
+
+def test_prompt_without_event_candidates_is_unchanged():
+    cand = {**_thread(7, 2, "IBM says Starling remains on schedule for 2029."),
+            "reasons": ["it touches your priorities (roadmap)"]}
+    flagged = {**cand, "is_scheduled_event": False, "quoted_is_event": False}
+    base = rps.build_reaction_prompt(0, "BIS", [cand], AGENT_NAMES, "twitter", "2027-H1", "English")
+    assert rps.build_reaction_prompt(0, "BIS", [flagged], AGENT_NAMES, "twitter", "2027-H1",
+                                     "English") == base
+    assert "post_id=7 — IBM wrote:" in base and "SCHEDULED" not in base
+
+
+def test_memory_note_names_the_world_event_not_the_poster():
+    actions = [
+        {"agent_id": 1, "action_type": "CREATE_COMMENT",
+         "action_args": {"content": "Origin: we will appeal.", "post_content": EVENT_TEXT + "\n",
+                         "post_author_name": "IBM"}},
+        {"agent_id": 1, "action_type": "LIKE_POST",
+         "action_args": {"post_content": EVENT_TEXT, "post_author_name": "IBM"}},
+        {"agent_id": 1, "action_type": "CREATE_COMMENT",
+         "action_args": {"content": "Origin: noted.", "post_content": "IBM: Starling on schedule.",
+                         "post_author_name": "IBM"}},
+    ]
+    note = rps._reaction_memory_note(1, actions, AGENT_NAMES, {EVENT_TEXT})
+    assert note == ("# YOUR RESPONSES THIS PERIOD\n"
+                    "You responded to the scheduled world event: \"Origin: we will appeal.\"\n"
+                    "You endorsed the scheduled world event.\n"
+                    "You replied to IBM's post: \"Origin: noted.\"")
+    legacy = rps._reaction_memory_note(1, actions, AGENT_NAMES)
+    assert legacy.startswith("# YOUR RESPONSES THIS PERIOD\nYou replied to IBM's post: ")
+    assert "scheduled world event" not in legacy
+
+
+@pytest.mark.parametrize("provenance_on", [True, False])
+def test_reaction_phase_marks_event_threads(tmp_path, monkeypatch, provenance_on):
+    db = _make_db(tmp_path / "twitter_simulation.db")
+    pid = _add_post(db, 2, EVENT_TEXT)
+    calls = []
+    _install_fake_helper(monkeypatch, db, calls)
+    agents = {aid: _Agent(aid, ALL_TWITTER_TOOLS) for aid in AGENTS}
+    state = {"window_start": 0, "round_start": 0}
+    if provenance_on:
+        state["event_contents"] = {EVENT_TEXT}
+    asyncio.run(rps.run_reaction_phase(
+        _Env(), db, sorted(agents.items()), _config(), 0, "2026-H2", "twitter",
+        AGENT_NAMES, state, _trace_rowid(db), None, random.Random(7), lambda _m: None))
+
+    prompts = {c["agent"]: c["prompt"] for c in calls}
+    if provenance_on:
+        assert set(prompts) == {0, 1, 2}                    # IBM 也回应这条世界事件
+        for prompt in prompts.values():
+            assert f"post_id={pid} — {EVENT_AUTHOR}:" in prompt
+            assert "wrote:" not in prompt
+        for agent in agents.values():
+            content, _role = agent.memory[0]
+            assert content.startswith(
+                "# YOUR RESPONSES THIS PERIOD\nYou responded to the scheduled world event: ")
+    else:
+        assert set(prompts) == {0, 1}                       # 旧行为：IBM 视其为自己的帖子
+        assert all(f"post_id={pid} — IBM wrote:" in p for p in prompts.values())
+        assert agents[0].memory[0][0].startswith("# YOUR RESPONSES THIS PERIOD\nYou replied to IBM's post")
+
+
+@pytest.mark.parametrize("flag", [None, "false"])
+def test_round_loop_reaction_sees_scheduled_event_as_world_event(tmp_path, monkeypatch, flag):
+    sim_dir = str(tmp_path)
+    with open(os.path.join(sim_dir, "twitter_profiles.csv"), "w", encoding="utf-8") as f:
+        f.write("agent_id\n")
+    envs, calls = [], []
+
+    async def _fake_graph_gen(profile_path=None, model=None, available_actions=None):
+        return _LoopGraph()
+
+    def _fake_make(agent_graph=None, platform=None, database_path=None, semaphore=None):
+        _make_db(database_path)
+        env = _LoopEnv(agent_graph, database_path)
+        envs.append(env)
+        _install_fake_helper(monkeypatch, database_path, calls)
+        return env
+
+    monkeypatch.setattr(rps, "create_model", lambda config, use_boost=False: object())
+    monkeypatch.setattr(rps, "generate_twitter_agent_graph", _fake_graph_gen)
+    monkeypatch.setattr(rps, "build_oasis_platform", lambda *a, **k: None)
+    monkeypatch.setattr(rps.oasis, "make", _fake_make)
+    monkeypatch.setattr(rps, "get_oasis_semaphore", lambda *a, **k: None)
+    monkeypatch.setenv("SIM_DECISION_CHANNEL_INBAND", "false")
+    if flag is not None:
+        monkeypatch.setenv("SIM_EVENT_PROVENANCE", flag)
+    cfg = _loop_config()
+    cfg["event_config"]["scheduled_events"] = [{
+        "round": 0, "date": "2026-10-15", "poster_agent_id": 2, "poster_name": "IBM",
+        "content": "BIS adds Origin Quantum to the Entity List."}]
+
+    asyncio.run(rps.run_twitter_simulation(
+        cfg, sim_dir, action_logger=PlatformActionLogger("twitter", sim_dir)))
+
+    conn = sqlite3.connect(os.path.join(sim_dir, "twitter_simulation.db"))
+    pid, content = conn.execute(
+        "SELECT post_id, content FROM post WHERE content LIKE '%Entity List.'").fetchone()
+    conn.close()
+    round1 = calls[:3]
+    assert len(round1) == 3
+    if flag is None:
+        assert content == EVENT_TEXT                       # feed 帖带来源前缀
+        assert all(f"post_id={pid} — IBM wrote:" not in c["prompt"] for c in calls)
+        assert all(f"post_id={pid} — you wrote:" not in c["prompt"] for c in calls)
+        assert any(f"post_id={pid} — {EVENT_AUTHOR}:" in c["prompt"] for c in round1)
+        bis_notes = [n for n, _r in envs[0].agent_graph.get_agent(0).memory
+                     if n.startswith("# YOUR RESPONSES THIS PERIOD")]
+        assert bis_notes[0].startswith(
+            "# YOUR RESPONSES THIS PERIOD\nYou responded to the scheduled world event: ")
+    else:
+        assert content == "BIS adds Origin Quantum to the Entity List."
+        assert any(f"post_id={pid} — IBM wrote:" in c["prompt"] for c in round1)
+        assert not any("SCHEDULED WORLD EVENT" in c["prompt"] for c in calls)

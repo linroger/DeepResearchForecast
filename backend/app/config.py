@@ -1590,6 +1590,19 @@ class Config:
     # 世界简报注入：把「预测问题 + 局势简报 + 热点话题」拼成 ≤1400 字的共同世界背景，写入模拟配置
     # world_brief 字段，运行时追加到每个 agent 的 system prompt——agent 知道这个世界在争论什么。
     SIM_WORLD_BRIEF = os.environ.get('SIM_WORLD_BRIEF', 'true').strip().lower() == 'true'
+    # SIM-5 世界简报诚实标题：v3 situation_brief 是未逐条标注来源（无 [S#]）的研究综述，旧标题
+    # 却称其为「深度研究实证/权威背景」。开启 → 标题改为「研究综述，未逐条标注来源；背景参考，
+    # 并非已核实事实」（仅 SimulationConfigGenerator._build_world_brief 这一处 agent 可见的
+    # 调用点）。默认开是诚实修正；关闭 → 旧标题逐字节恢复。
+    SIM_WORLD_BRIEF_HONEST_LABEL = os.environ.get(
+        'SIM_WORLD_BRIEF_HONEST_LABEL', 'true').strip().lower() == 'true'
+    # SIM-5 定时事件来源标注（ADR-0002 I-11）：研究时间线事件/情景注入由名字匹配或最高影响力
+    # 回退选中的真实行为者发帖，此前被当作该行为者的自发行为（动作统计、议程分层、派系图、立场
+    # 轨迹、决策名册、回应阶段的「X wrote:」与 ResponseLog）。开启 → feed 帖带
+    # [WORLD EVENT …]/[SCENARIO ASSUMPTION …] 前缀、日志行带 event_provenance，上述消费端全部
+    # 剔除或改标注入内容。默认开是诚实修正（注入内容从不冒充行为者）；关闭 → 旧行为逐字节恢复
+    # （同帖者同轮事件合并、缺发帖者静默丢弃这两处 bug 修复不受开关影响）。
+    SIM_EVENT_PROVENANCE = os.environ.get('SIM_EVENT_PROVENANCE', 'true').strip().lower() == 'true'
     # 人格设计（实证语境工程）：对有档案的真实主体（政府/企业/机构），在画像 LLM 调用中要求产出
     # 结构化 persona_design（identity/views_beliefs/incentives/objectives/relations/red_lines/
     # decision_style/rhetoric），严格接地于研究档案、禁止发明立场；多样性来自真实主体的真实差异。

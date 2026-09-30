@@ -812,6 +812,24 @@ def _flag_true(name: str, default: str) -> bool:
     return _cfg_flag(name, default).strip().lower() in ("true", "1", "yes", "on")
 
 
+def _event_provenance_enabled() -> bool:
+    """SIM-5 SIM_EVENT_PROVENANCE（默认开）：定时事件帖带来源前缀，回应阶段/立场轨迹/
+    决策名册不再把注入内容记作发帖行为者的行为。false → 旧行为逐字节一致。"""
+    return _flag_true("SIM_EVENT_PROVENANCE", "true")
+
+
+def _event_post_contents_for_run(event_config: Any) -> set:
+    """SIM-5：回应阶段识别事件帖用的帖文集合（与 fire_scheduled_events 同一标注助手生成）。
+    开关关 / 无定时事件 → 空集（回应阶段逐字节走旧路径）。"""
+    if not _event_provenance_enabled() or not isinstance(event_config, dict):
+        return set()
+    try:
+        from app.services.sim_event_provenance import event_post_contents
+        return event_post_contents(event_config.get("scheduled_events") or [], labelled=True)
+    except Exception:  # noqa: BLE001 — 附加层，失败只退回旧渲染，绝不中断模拟
+        return set()
+
+
 # IPC相关常量
 IPC_COMMANDS_DIR = "ipc_commands"
 IPC_RESPONSES_DIR = "ipc_responses"
@@ -1899,6 +1917,12 @@ def _build_dynamics_tracker(config, log_info):
         return None
 
 
+# SIM-5: {plat}_dynamics_summary.json 的 prompt_delivery——_inject_agent_dynamics 写的是
+# SYSTEM 记录，camel ScoreBasedContextCreator 只保留首条系统消息，状态行因此从未送达模型。
+# 改为 USER 投递（及把硬编码中文状态行本地化）是另一项所有者决策，这里只如实记录。
+_DYNAMICS_PROMPT_DELIVERY = "system_record_dropped_by_context_creator"
+
+
 def _inject_agent_dynamics(active_agents, tracker, log_info):
     """Append each active agent's current-state line as a fresh SYSTEM memory record
     for this round. astep() reads memory.get_context(), so the note becomes the
@@ -2554,31 +2578,48 @@ async def fire_scheduled_events(env, event_config, loop_round, agent_names, acti
 
     复用 initial_posts 的注入路径（matched poster → ManualAction(CREATE_POST)）。无匹配事件 → 0。
     返回成功触发的事件数。
+
+    SIM-5：同一发帖者同轮多个事件按列表累积（此前按 agent 覆盖，只发出最后一条却全部计数）；
+    缺发帖者/内容的事件逐条记日志（此前静默丢弃）——两者不受开关影响。SIM_EVENT_PROVENANCE
+    开（默认）→ 发帖与落账内容带来源前缀，落账 action_args 附 event_provenance。
     """
     events = event_config.get("scheduled_events", []) or []
     due = [e for e in events if int(e.get("round", -1)) == loop_round]
     if not due:
         return 0
-    actions = {}
+    provenance_on = _event_provenance_enabled()
+    if provenance_on:
+        from app.services.sim_event_provenance import classify_event, label_event_post
+    actions: Dict[Any, List[Any]] = {}
     fired = 0
     for ev in due:
         agent_id = ev.get("poster_agent_id")
         content = str(ev.get("content", "") or "")
         if agent_id is None or not content:
+            log_info(
+                f"第 {loop_round + 1} 轮定时事件缺{'发帖者' if agent_id is None else '内容'}，"
+                f"跳过: {_truncate_text(content or ev.get('date') or '', 80)!r}"
+            )
             continue
+        logged_args: Dict[str, Any] = {"content": content, "is_scheduled_event": True}
+        if provenance_on:
+            provenance = classify_event(ev)
+            content = label_event_post(content, provenance)
+            logged_args = {"content": content, "is_scheduled_event": True,
+                           "event_provenance": provenance}
         try:
             agent = env.agent_graph.get_agent(agent_id)
-            actions[agent] = ManualAction(
+            actions.setdefault(agent, []).append(ManualAction(
                 action_type=ActionType.CREATE_POST,
                 action_args={"content": content},
-            )
+            ))
             if action_logger:
                 action_logger.log_action(
                     round_num=loop_round + 1,
                     agent_id=agent_id,
                     agent_name=(agent_names or {}).get(agent_id, f"Agent_{agent_id}"),
                     action_type="CREATE_POST",
-                    action_args={"content": content, "is_scheduled_event": True},
+                    action_args=logged_args,
                 )
             fired += 1
         except Exception:
@@ -2867,8 +2908,15 @@ def _score_stance_trajectory(
         - trajectory: [{round, by_stance:{...发声量...}, net_sentiment}]
         - polarization_index: agent 级净情感分布的方差（[0,1] 量级，越大越极化）
         - net_sentiment_by_agent: agent_id -> 平均净情感（供互动比/社区主导立场使用）
+
+    SIM-5：SIM_EVENT_PROVENANCE 开（默认）→ 跳过注入行（round≤0 种子、定时事件回放、种子
+    动作、采样点赞），立场轨迹只反映行为者自发的发声。
     """
     from collections import defaultdict
+
+    skip_injected = _event_provenance_enabled()
+    if skip_injected:
+        from app.services.sim_event_provenance import is_injected_row
 
     per_round: Dict[int, Dict[str, Any]] = {}
     sent_sum_by_agent: Dict[int, float] = defaultdict(float)
@@ -2881,6 +2929,8 @@ def _score_stance_trajectory(
         agent_id = rec.get("agent_id")
         round_num = rec.get("round")
         if agent_id is None or round_num is None:
+            continue
+        if skip_injected and is_injected_row(rec.get("action_args"), round_num):
             continue
         agent_id = int(agent_id)
         round_num = int(round_num)
@@ -3284,7 +3334,11 @@ class PlatformSimulation:
 # ============== NEXTSTEPS P1-1/P1-2/P1-4: post-sim decision channel helpers ==============
 def _read_actions_for_decision_channel(simulation_dir: str) -> List[Dict[str, Any]]:
     """读取两平台 actions.jsonl 的动作记录（跳过 round_start/end/sim_end 事件），
-    汇成 [{round, agent_id, agent_name}] 供决策通道按轮回放。失败/缺失 → []。"""
+    汇成 [{round, agent_id, agent_name}] 供决策通道按轮回放。失败/缺失 → []。
+
+    SIM-5：SIM_EVENT_PROVENANCE 开（默认）→ 跳过定时事件回放与采样点赞行（发帖账号/采样者
+    并未作出该动作），与 in-band 名册只见有机+回应动作一致。"""
+    skip_injected = _event_provenance_enabled()
     out: List[Dict[str, Any]] = []
     for plat in ("twitter", "reddit"):
         path = os.path.join(simulation_dir, plat, "actions.jsonl")
@@ -3302,6 +3356,11 @@ def _read_actions_for_decision_channel(simulation_dir: str) -> List[Dict[str, An
                         continue
                     if rec.get("event_type") or rec.get("agent_id") is None:
                         continue
+                    if skip_injected:
+                        _args = rec.get("action_args")
+                        if isinstance(_args, dict) and (_args.get("is_scheduled_event")
+                                                        or _args.get("is_engagement_sample")):
+                            continue
                     out.append({"round": rec.get("round", 0),
                                 "agent_id": rec.get("agent_id"),
                                 "agent_name": rec.get("agent_name", "")})
@@ -4452,6 +4511,9 @@ def select_reaction_candidates(
         话题与自己利益重合（每个重合词 +0.5，上限 +2）、关注作者 +1 / 被作者关注 +0.5、
         立场不同 +0.5 / 相同 +0.25、本轮新帖 +1（上轮 +0.3）；
       * 分散：本轮已分配给其他回应者的次数 −0.75/次，已有评论 −0.2/条（封顶 10 条）。
+      * SIM-5：定时事件帖（thread["is_scheduled_event"]）的发帖账号不是说话者——对任何回应者
+        都不算「自己的帖子」，不给关注/立场加分；点名加分改用原因「a scheduled world event
+        that concerns you」，话题与新帖加分不变。
     返回候选 dict（帖子字段 + score + reasons），按分数降序；同分新帖优先。
     """
     me = profiles.get(int(reactor_id)) or {}
@@ -4473,7 +4535,8 @@ def select_reaction_candidates(
         ]
         reasons: List[str] = []
         score = 0.0
-        if author == reactor_id:
+        is_event = bool(thread.get("is_scheduled_event"))
+        if author == reactor_id and not is_event:
             if not newer_from_others:
                 continue
             score += 3.0
@@ -4492,21 +4555,23 @@ def select_reaction_candidates(
             )
             if _text_mentions(discussion, aliases):
                 score += 3.0
-                reasons.append("it mentions you")
+                reasons.append("a scheduled world event that concerns you" if is_event
+                               else "it mentions you")
             overlap = my_tokens & _reaction_topic_tokens(
                 str(thread.get("content") or "") + " " + str(thread.get("quoted") or "")
             )
             if overlap:
                 score += min(2.0, 0.5 * len(overlap))
                 reasons.append("it touches your priorities (" + ", ".join(sorted(overlap)[:4]) + ")")
-            if (reactor_id, author) in follows:
-                score += 1.0
-                reasons.append("you follow the author")
-            if (author, reactor_id) in follows:
-                score += 0.5
-            author_stance = (profiles.get(author) or {}).get("stance") or ""
-            if my_stance and author_stance:
-                score += 0.5 if author_stance != my_stance else 0.25
+            if not is_event:
+                if (reactor_id, author) in follows:
+                    score += 1.0
+                    reasons.append("you follow the author")
+                if (author, reactor_id) in follows:
+                    score += 0.5
+                author_stance = (profiles.get(author) or {}).get("stance") or ""
+                if my_stance and author_stance:
+                    score += 0.5 if author_stance != my_stance else 0.25
         score += 1.0 if thread.get("recent") else 0.3
         score -= 0.75 * float(assigned.get(pid, 0))
         score -= 0.2 * min(len(comments), 10)
@@ -4529,12 +4594,19 @@ def build_reaction_prompt(
     period_label: str = "",
     language: str = "",
 ) -> str:
-    """回应阶段的用户提示：候选帖（含已有回复与相关原因）+ 作答要求。"""
+    """回应阶段的用户提示：候选帖（含已有回复与相关原因）+ 作答要求。
+
+    SIM-5：定时事件帖（is_scheduled_event / quoted_is_event）的作者位渲染为来源标注
+    （SCHEDULED WORLD EVENT …），绝不渲染成发帖行为者「X wrote:」；无事件候选 → 逐字节不变。"""
     def who(aid: Any) -> str:
         try:
             return agent_names.get(int(aid), f"Agent_{int(aid)}")
         except (TypeError, ValueError):
             return "Unknown"
+
+    has_event = any(c.get("is_scheduled_event") or c.get("quoted_is_event") for c in candidates)
+    if has_event:
+        from app.services.sim_event_provenance import event_author_label
 
     reddit = platform == "reddit"
     lines = [
@@ -4545,13 +4617,20 @@ def build_reaction_prompt(
         "",
     ]
     for idx, cand in enumerate(candidates, start=1):
-        own = cand.get("author_id") == reactor_id
-        author = "you" if own else who(cand.get("author_id"))
-        lines.append(f"[{idx}] post_id={cand['post_id']} — {author} wrote:")
+        if cand.get("is_scheduled_event"):
+            lines.append(f"[{idx}] post_id={cand['post_id']} — "
+                         f"{event_author_label(cand.get('content'))}:")
+        else:
+            own = cand.get("author_id") == reactor_id
+            author = "you" if own else who(cand.get("author_id"))
+            lines.append(f"[{idx}] post_id={cand['post_id']} — {author} wrote:")
         lines.append('"' + _truncate_text(cand.get("content"), _REACTION_POST_CHARS) + '"')
         if cand.get("quoted"):
             quoted_by = cand.get("quoted_author_id")
-            source = who(quoted_by) if quoted_by is not None else "another post"
+            if cand.get("quoted_is_event"):
+                source = event_author_label(cand["quoted"])
+            else:
+                source = who(quoted_by) if quoted_by is not None else "another post"
             lines.append(
                 f'  (quoting {source}: "' + _truncate_text(cand["quoted"], _REACTION_QUOTED_CHARS) + '")'
             )
@@ -4586,8 +4665,13 @@ def build_reaction_prompt(
         f"5. Keep it to 1-3 sentences (at most {_REACTION_MAX_WORDS} words){language_clause}.",
         f"6. In the same turn, also call {endorse} only if {reactor_name} would publicly endorse "
         "it; never like your own post.",
-        "You cannot publish a new standalone post in this step.",
     ]
+    if has_event:
+        lines.append(
+            "7. A post marked SCHEDULED was placed on the feed by the simulation's event timeline; "
+            "no actor said it. Respond to the event itself, not to the account it appears under."
+        )
+    lines.append("You cannot publish a new standalone post in this step.")
     return "\n".join(lines).strip()
 
 
@@ -4607,9 +4691,13 @@ def _make_reaction_agent(agent, tools: List[Any]):
 
 
 def _reaction_memory_note(
-    agent_id: int, actions: List[Dict[str, Any]], agent_names: Dict[int, str]
+    agent_id: int, actions: List[Dict[str, Any]], agent_names: Dict[int, str],
+    event_contents: Any = frozenset(),
 ) -> str:
-    """把某 agent 本阶段的回应动作压成一条简短记忆（供后续轮次保持连续性）。"""
+    """把某 agent 本阶段的回应动作压成一条简短记忆（供后续轮次保持连续性）。
+
+    SIM-5：回应对象是定时事件帖（post_content ∈ event_contents）时不写「You replied to X's
+    post」——事件不是发帖行为者说的话；event_contents 为空 → 逐字节不变。"""
     parts: List[str] = []
     for action in actions:
         if action.get("agent_id") != agent_id:
@@ -4617,11 +4705,19 @@ def _reaction_memory_note(
         kind = action.get("action_type")
         args = action.get("action_args") or {}
         target = args.get("post_author_name") or args.get("comment_author_name") or "another actor"
+        on_event = (bool(event_contents) and kind in ("CREATE_COMMENT", "LIKE_POST")
+                    and str(args.get("post_content") or "").strip() in event_contents)
         if kind == "CREATE_COMMENT":
             text = _truncate_text(args.get("content"), _REACTION_NOTE_CHARS)
-            parts.append(f"You replied to {target}'s post: \"{text}\"")
+            if on_event:
+                parts.append(f"You responded to the scheduled world event: \"{text}\"")
+            else:
+                parts.append(f"You replied to {target}'s post: \"{text}\"")
         elif kind == "LIKE_POST":
-            parts.append(f"You endorsed (liked) {target}'s post.")
+            if on_event:
+                parts.append("You endorsed the scheduled world event.")
+            else:
+                parts.append(f"You endorsed (liked) {target}'s post.")
         elif kind == "LIKE_COMMENT":
             parts.append(f"You endorsed (liked) {target}'s reply.")
     if not parts:
@@ -4660,6 +4756,13 @@ async def run_reaction_phase(
         )
         if not threads:
             return [], last_rowid
+        # SIM-5：event_contents 由调用方按 SIM_EVENT_PROVENANCE 预置（关/无事件 → 空集 → 线程
+        # 不带任何新键，候选与提示逐字节不变）；帖文与日志用同一 label_event_post，精确匹配。
+        event_contents = reaction_state.get("event_contents") or frozenset()
+        if event_contents:
+            for thread in threads.values():
+                thread["is_scheduled_event"] = thread["content"].strip() in event_contents
+                thread["quoted_is_event"] = thread["quoted"].strip() in event_contents
         profiles = reaction_state.get("profiles")
         if profiles is None:
             profiles = _build_reaction_profiles(config)
@@ -4734,7 +4837,7 @@ async def run_reaction_phase(
         try:
             from camel.types import OpenAIBackendRole
             for aid, agent, _prompt in plans:
-                note = _reaction_memory_note(aid, actions, agent_names)
+                note = _reaction_memory_note(aid, actions, agent_names, event_contents)
                 if note and hasattr(agent, "update_memory"):
                     agent.update_memory(
                         BaseMessage.make_user_message(role_name="ResponseLog", content=note),
@@ -5035,7 +5138,7 @@ async def run_twitter_simulation(
     last_active_ids: set = set()  # T3.5: 近因加成——上一轮活跃的 agent 下一轮更易被激活
     # RUN-4: 默认 false = 死轮清空近因集（旧行为）；true 时跨死轮保留，级联不被时段空档打断
     _recency_carry = _flag_true("SIM_RECENCY_CARRY", "false")
-    # I-2-1: 逐智能体动态情感状态（默认关；SIM_AGENT_DYNAMICS=true 时生效）
+    # I-2-1: 逐智能体动态情感状态（默认开；SIM_AGENT_DYNAMICS=false 关闭）
     dynamics_tracker = _build_dynamics_tracker(config, log_info)
     dyn_name_to_id = {name: aid for aid, name in agent_names.items()}
 
@@ -5048,6 +5151,9 @@ async def run_twitter_simulation(
     # SIM-REACT: 每轮发帖后的回应阶段（默认开）；候选窗口水位在每轮有机 step 前推进。
     _reaction_on = _reaction_phase_enabled()
     _reaction_state: Dict[str, Any] = {}
+    # SIM-5: 全部定时事件的帖文（带来源前缀）一次性预置——回应阶段据此把事件帖渲染为世界事件
+    # 而非发帖行为者的发言；按全量事件而非已触发事件计算，断点续跑安全。开关关 → 空集。
+    _reaction_state["event_contents"] = _event_post_contents_for_run(event_config)
     _sim_language = _sim_output_language(config)
     if _reaction_on:
         log_info(f"回应阶段已启用（每轮发帖后回应他人帖子；输出语言={_sim_language or '未指定'}）")
@@ -5148,7 +5254,8 @@ async def run_twitter_simulation(
             _write_ckpt(round_num + 1)  # RUN-7: 死轮也推进检查点
             continue
 
-        # I-2-1: 注入本轮动态情感状态到各活跃 agent 的系统提示（默认关 → no-op）
+        # I-2-1: 注入本轮动态情感状态（默认开）。以 SYSTEM 记录写入，camel 上下文构造器只保留
+        # 首条系统消息、丢弃其后 SYSTEM 记录 → 该行实际送不到模型（dynamics_summary 如实记录）。
         _inject_agent_dynamics(active_agents, dynamics_tracker, log_info)
 
         # CAL-TEMPORAL: 日历模式注入本轮世界时钟头（时段/进度/本轮已确认事件/上一时段演化摘要）。
@@ -5232,7 +5339,7 @@ async def run_twitter_simulation(
                     total_actions += len(_reaction_actions)
                     round_action_count += len(_reaction_actions)
 
-        # I-2-1: 用本轮实际动作更新动态情感状态（默认关 → no-op）
+        # I-2-1: 用本轮实际动作更新动态情感状态（默认开；状态行注入见上，被 camel 丢弃）
         _observe_agent_dynamics(dynamics_tracker, actual_actions, dyn_name_to_id)
 
         # ITEM 20 (SIM_ENGAGEMENT_SAMPLER): 有机动作落账后补一层被动点赞（本轮活跃者→本轮新帖）。
@@ -5281,9 +5388,12 @@ async def run_twitter_simulation(
         # 死在模拟进程内，报告阶段无法对 hollow sim 施加"不得叙述情绪演化"的 caveat。
         try:
             from app.utils.atomic import write_json_atomic
+            # SIM-5: prompt_delivery 如实记录状态行的投递结果——SYSTEM 记录被 camel 丢弃，
+            # 情感状态从未进入模型提示（见 tests/test_camel_context_delivery.py）。
             write_json_atomic(
                 os.path.join(simulation_dir, f"{_plat}_dynamics_summary.json"),
-                dynamics_tracker.dynamics_summary(),
+                {**dynamics_tracker.dynamics_summary(),
+                 "prompt_delivery": _DYNAMICS_PROMPT_DELIVERY},
             )
         except Exception as _dyn_err:  # noqa: BLE001
             log_info(f"dynamics_summary 写出失败（不影响模拟）: {_dyn_err}")
@@ -5586,7 +5696,7 @@ async def run_reddit_simulation(
     last_active_ids: set = set()  # T3.5: 近因加成——上一轮活跃的 agent 下一轮更易被激活
     # RUN-4: 默认 false = 死轮清空近因集（旧行为）；true 时跨死轮保留，级联不被时段空档打断
     _recency_carry = _flag_true("SIM_RECENCY_CARRY", "false")
-    # I-2-1: 逐智能体动态情感状态（默认关；SIM_AGENT_DYNAMICS=true 时生效）
+    # I-2-1: 逐智能体动态情感状态（默认开；SIM_AGENT_DYNAMICS=false 关闭）
     dynamics_tracker = _build_dynamics_tracker(config, log_info)
     dyn_name_to_id = {name: aid for aid, name in agent_names.items()}
 
@@ -5599,6 +5709,9 @@ async def run_reddit_simulation(
     # SIM-REACT: 每轮发帖后的回应阶段（默认开）；候选窗口水位在每轮有机 step 前推进。
     _reaction_on = _reaction_phase_enabled()
     _reaction_state: Dict[str, Any] = {}
+    # SIM-5: 全部定时事件的帖文（带来源前缀）一次性预置——回应阶段据此把事件帖渲染为世界事件
+    # 而非发帖行为者的发言；按全量事件而非已触发事件计算，断点续跑安全。开关关 → 空集。
+    _reaction_state["event_contents"] = _event_post_contents_for_run(event_config)
     _sim_language = _sim_output_language(config)
     if _reaction_on:
         log_info(f"回应阶段已启用（每轮发帖后回应他人帖子；输出语言={_sim_language or '未指定'}）")
@@ -5699,7 +5812,8 @@ async def run_reddit_simulation(
             _write_ckpt(round_num + 1)  # RUN-7: 死轮也推进检查点
             continue
 
-        # I-2-1: 注入本轮动态情感状态到各活跃 agent 的系统提示（默认关 → no-op）
+        # I-2-1: 注入本轮动态情感状态（默认开）。以 SYSTEM 记录写入，camel 上下文构造器只保留
+        # 首条系统消息、丢弃其后 SYSTEM 记录 → 该行实际送不到模型（dynamics_summary 如实记录）。
         _inject_agent_dynamics(active_agents, dynamics_tracker, log_info)
 
         # CAL-TEMPORAL: 日历模式注入本轮世界时钟头（时段/进度/本轮已确认事件/上一时段演化摘要）。
@@ -5783,7 +5897,7 @@ async def run_reddit_simulation(
                     total_actions += len(_reaction_actions)
                     round_action_count += len(_reaction_actions)
 
-        # I-2-1: 用本轮实际动作更新动态情感状态（默认关 → no-op）
+        # I-2-1: 用本轮实际动作更新动态情感状态（默认开；状态行注入见上，被 camel 丢弃）
         _observe_agent_dynamics(dynamics_tracker, actual_actions, dyn_name_to_id)
 
         # ITEM 20 (SIM_ENGAGEMENT_SAMPLER): 有机动作落账后补一层被动点赞（本轮活跃者→本轮新帖）。
@@ -5832,9 +5946,12 @@ async def run_reddit_simulation(
         # 死在模拟进程内，报告阶段无法对 hollow sim 施加"不得叙述情绪演化"的 caveat。
         try:
             from app.utils.atomic import write_json_atomic
+            # SIM-5: prompt_delivery 如实记录状态行的投递结果——SYSTEM 记录被 camel 丢弃，
+            # 情感状态从未进入模型提示（见 tests/test_camel_context_delivery.py）。
             write_json_atomic(
                 os.path.join(simulation_dir, f"{_plat}_dynamics_summary.json"),
-                dynamics_tracker.dynamics_summary(),
+                {**dynamics_tracker.dynamics_summary(),
+                 "prompt_delivery": _DYNAMICS_PROMPT_DELIVERY},
             )
         except Exception as _dyn_err:  # noqa: BLE001
             log_info(f"dynamics_summary 写出失败（不影响模拟）: {_dyn_err}")

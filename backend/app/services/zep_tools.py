@@ -2465,16 +2465,43 @@ class ZepToolsService:
         if not stats and not timeline:
             return "（该模拟暂无可用的结构化结果数据）"
 
-        stats_sorted = sorted(stats, key=lambda s: s.get("total_actions", 0), reverse=True)
-        lines = ["## 模拟量化结果（结构化，可直接引用）", "", f"### 最活跃 Agent（Top {top_n}，按总动作数）"]
+        # SIM-5（SIM_EVENT_PROVENANCE，默认开）：按 agent 自发动作排名、只列自发动作 >0 者，
+        # 计数与类型都取 organic_* 字段——时间线事件回放挂在名字匹配/最高影响力回退的行为者
+        # 名下，不得抬高其议程设置分层（report_agent._OUTCOME_ACTOR_LINE_RE 行格式不变）。
+        # 开关关 → 旧输出逐字节不变。
+        provenance_on = bool(getattr(Config, "SIM_EVENT_PROVENANCE", True))
+        if provenance_on:
+            def _count(s):
+                return int(s.get("organic_actions", s.get("total_actions", 0)) or 0)
+
+            def _types(s):
+                return s.get("organic_action_types", s.get("action_types")) or {}
+
+            ranked = [s for s in stats if _count(s) > 0]
+            header = f"### 最活跃 Agent（Top {top_n}，按自发动作数）"
+        else:
+            def _count(s):
+                return s.get("total_actions", 0)
+
+            def _types(s):
+                return s.get("action_types") or {}
+
+            ranked = stats
+            header = f"### 最活跃 Agent（Top {top_n}，按总动作数）"
+        stats_sorted = sorted(ranked, key=_count, reverse=True)
+        lines = ["## 模拟量化结果（结构化，可直接引用）", "", header]
         for s in stats_sorted[:top_n]:
-            at = s.get("action_types") or {}
+            at = _types(s)
             at_str = "、".join(f"{k}×{v}" for k, v in sorted(at.items(), key=lambda x: -x[1])[:5])
-            lines.append(f"- {s.get('agent_name','?')}(id={s.get('agent_id')}): 共 {s.get('total_actions',0)} 次动作 [{at_str}]")
+            lines.append(f"- {s.get('agent_name','?')}(id={s.get('agent_id')}): 共 {_count(s)} 次动作 [{at_str}]")
+        if provenance_on:
+            injected = sum(int(s.get("injected_actions", 0) or 0) for s in stats)
+            if injected > 0:
+                lines.append(f"（已剔除注入动作 {injected} 次：种子/时间线事件回放/采样点赞——非行为者自发）")
 
         breakdown: Dict[str, int] = {}
         for s in stats:
-            for atype, c in (s.get("action_types") or {}).items():
+            for atype, c in _types(s).items():
                 breakdown[atype] = breakdown.get(atype, 0) + int(c)
         if breakdown:
             lines.append("")
@@ -2503,12 +2530,33 @@ class ZepToolsService:
         # 把 target_user_name 纳入候选键。
         target_keys = ("post_author_name", "original_author_name", "comment_author_name",
                        "quoted_author_name", "target_user_name", "followee_name", "target_name")
+        # SIM-5（SIM_EVENT_PROVENANCE，默认开）：对定时事件帖的回应是对新闻的反应，不是与发帖
+        # 账号（名字匹配/最高影响力回退的行为者）的结盟证据——不把其作者名计为互动对象；
+        # 事件回放行与采样点赞（随机采样，非 agent 选择）整行跳过。开关关 → 旧聚类不变。
+        provenance_on = bool(getattr(Config, "SIM_EVENT_PROVENANCE", True))
+        event_contents: set = set()
+        if provenance_on:
+            event_contents = {
+                str((a.action_args or {}).get("content", "") or "").strip()
+                for a in actions if (a.action_args or {}).get("is_scheduled_event")
+            }
+            event_contents.discard("")
         agent_targets: Dict[int, set] = {}
         agent_name: Dict[int, str] = {}
         for a in actions:
             agent_name[a.agent_id] = a.agent_name
             args = a.action_args or {}
+            skip_keys: set = set()
+            if provenance_on:
+                if args.get("is_scheduled_event") or args.get("is_engagement_sample"):
+                    continue
+                if str(args.get("post_content", "") or "").strip() in event_contents:
+                    skip_keys.add("post_author_name")
+                if str(args.get("original_content", "") or "").strip() in event_contents:
+                    skip_keys.update(("original_author_name", "quoted_author_name"))
             for k in target_keys:
+                if k in skip_keys:
+                    continue
                 v = str(args.get(k, "") or "").strip()
                 if v:
                     agent_targets.setdefault(a.agent_id, set()).add(v)
@@ -2782,6 +2830,18 @@ class ZepToolsService:
         mine = [a for a in actions if normalize_name(a.agent_name) == target or normalize_name(a.agent_name).find(target) >= 0]
         if not mine:
             return f"（未找到名为「{actor_name}」的 agent 的动作记录）"
+        # SIM-5（SIM_EVENT_PROVENANCE，默认开）：挂在该行为者名下的种子/时间线事件回放/采样
+        # 点赞不是它的行为轨迹——剔除并注明条数。开关关 → 旧输出逐字节不变。
+        injected = 0
+        if getattr(Config, "SIM_EVENT_PROVENANCE", True):
+            from .sim_event_provenance import is_injected_row
+            organic = [a for a in mine
+                       if not is_injected_row(getattr(a, "action_args", None), a.round_num)]
+            injected = len(mine) - len(organic)
+            if not organic:
+                return (f"（「{actor_name}」名下没有自发动作：{injected} 次均为注入动作——"
+                        "种子/时间线事件回放/采样点赞）")
+            mine = organic
         by_round: Dict[int, Dict[str, int]] = {}
         for a in mine:
             r = by_round.setdefault(a.round_num, {})
@@ -2791,6 +2851,8 @@ class ZepToolsService:
             at = by_round[rn]
             lines.append(f"- round {rn}: " + "、".join(f"{k}×{v}" for k, v in sorted(at.items(), key=lambda x: -x[1])))
         lines.append(f"合计 {len(mine)} 次动作，跨 {len(by_round)} 轮。")
+        if injected:
+            lines.append(f"（已剔除注入动作 {injected} 次：种子/时间线事件回放/采样点赞——非行为者自发）")
         return "\n".join(lines)
 
     def scenario_diff(self, base_sim_id: str, scenario_sim_id: str) -> str:
@@ -2838,9 +2900,14 @@ class ZepToolsService:
                 f"{rn}:{bvol.get(rn,0)}→{svol.get(rn,0)}" for rn in rounds[:48]
             ))
 
-        # Top-actor 活跃度 delta
-        b_by = {s.get("agent_name"): s.get("total_actions", 0) for s in base_stats}
-        s_by = {s.get("agent_name"): s.get("total_actions", 0) for s in scen_stats}
+        # Top-actor 活跃度 delta。SIM-5（SIM_EVENT_PROVENANCE，默认开）：只比自发动作——情景注入
+        # 事件挂在发帖行为者名下，按总动作数会把注入本身读成该行为者的活跃度变化。
+        if getattr(Config, "SIM_EVENT_PROVENANCE", True):
+            count_key, delta_header = "organic_actions", "### Top-actor 活跃度 delta（按变化幅度，仅自发动作）"
+        else:
+            count_key, delta_header = "total_actions", "### Top-actor 活跃度 delta（按变化幅度）"
+        b_by = {s.get("agent_name"): s.get(count_key, s.get("total_actions", 0)) for s in base_stats}
+        s_by = {s.get("agent_name"): s.get(count_key, s.get("total_actions", 0)) for s in scen_stats}
         names = set(b_by) | set(s_by)
         deltas = sorted(
             ((n, s_by.get(n, 0) - b_by.get(n, 0)) for n in names if n),
@@ -2848,7 +2915,7 @@ class ZepToolsService:
         )[:10]
         if deltas:
             lines.append("")
-            lines.append("### Top-actor 活跃度 delta（按变化幅度）")
+            lines.append(delta_header)
             for n, d in deltas:
                 lines.append(f"- {n}: {b_by.get(n,0)} → {s_by.get(n,0)}（Δ {d:+d}）")
         return "\n".join(lines)
