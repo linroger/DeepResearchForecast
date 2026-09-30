@@ -17,6 +17,7 @@ import copy
 import hashlib
 import inspect
 import json
+import logging
 import os
 import re
 from pathlib import Path
@@ -265,8 +266,10 @@ def test_secondary_flip_is_backbone_sensitive():
     assert result["schema"] == "backbone-sensitivity/v1"
     assert result["note"] == "shadow diagnostic; probabilities unchanged"
     assert result["status"] == "backbone_sensitive"
-    assert result["providers"] == {"primary": {"provider": "primary", "model": "p-1"},
-                                   "secondary": {"provider": "other", "model": "o-1"}}
+    assert result["providers"] == {
+        "primary": {"provider": "primary", "model": "p-1", "served_model": None},
+        "secondary": {"provider": "other", "model": "o-1", "served_model": None}}
+    assert result["within_basis"] == bs.WITHIN_BASIS
     assert (result["calls"], result["max_abs_delta"], result["skipped"]) == (2, 0.15, [])
     assert result["cross"]["leader_agree"] is False and result["cross"]["max_abs_delta"] == 0.2
     assert result["within"]["tv"] == 0.0 and result["within"]["leader_agree"] is True
@@ -304,7 +307,8 @@ def test_control_uses_the_primary_strong_tier_model():
         providers="primary,other", client_factory=factory, max_tokens=100)
     # the served model, not LLM_MODEL_NAME, is the primary identity: "primary"/"p-strong" is
     # the same backbone and is skipped; the control runs on p-strong
-    assert result["providers"]["primary"] == {"provider": "primary", "model": "p-strong"}
+    assert result["providers"]["primary"] == {"provider": "primary", "model": "p-strong",
+                                              "served_model": None}
     assert result["skipped"] == [{"provider": "primary", "reason": "same_as_primary"}]
     assert [c["model"] for c in log] == ["p-strong", "o-1"]
     assert primary.model == "p-1" and result["status"] == "stable"
@@ -315,7 +319,8 @@ def test_control_uses_the_primary_strong_tier_model():
     cli_result = bs.run_spine_backbone_check(
         follow_prompt="F", primary_spine=_spine(), primary_llm=cli, providers=["other"],
         client_factory=_Factory({"other": ("o-1", [_spine()])}, cli_log), max_tokens=100)
-    assert cli_result["providers"]["primary"] == {"provider": "claude-cli", "model": "claude-opus"}
+    assert cli_result["providers"]["primary"] == {"provider": "claude-cli", "model": "claude-opus",
+                                                  "served_model": None}
     assert [(c["provider"], c["model"]) for c in cli_log] == [
         ("claude-cli", "claude-opus"), ("other", "o-1")]
 
@@ -335,7 +340,8 @@ def test_same_provider_unchecked():
     # the same provider label on a different model is a distinct backbone
     other_model, *_ = _check(_spine(), None, providers=("primary",),
                              table={"primary": ("p-2", [_spine()])})
-    assert other_model["providers"]["secondary"] == {"provider": "primary", "model": "p-2"}
+    assert other_model["providers"]["secondary"] == {"provider": "primary", "model": "p-2",
+                                                     "served_model": None}
     assert other_model["status"] == "stable"
 
 
@@ -351,6 +357,23 @@ def test_parse_and_policy_helpers():
     for disabled in (None, "junk", {}, {"enabled": False, "providers": ["glm"]},
                      {"enabled": "true"}, {"enabled": 1}, bs.DISABLED_POLICY):
         assert bs.enabled_policy(disabled) is None
+
+
+def test_capture_policy_warns_on_invalid_threshold_at_admission(caplog):
+    def cfg(enabled, delta):
+        return SimpleNamespace(BACKBONE_CHECK_ENABLED=enabled, BACKBONE_CHECK_PROVIDERS="glm",
+                               BACKBONE_CHECK_MAX_ABS_DELTA=delta)
+
+    with caplog.at_level(logging.WARNING, logger=bs.logger.name):
+        assert bs.capture_policy(cfg(True, float("nan")))["max_abs_delta"] is None
+        assert bs.capture_policy(cfg(True, 1.5))["max_abs_delta"] == 1.5
+    warnings = [r.getMessage() for r in caplog.records if r.name == bs.logger.name]
+    assert len(warnings) == 2 and all("unchecked:invalid_threshold" in w for w in warnings)
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger=bs.logger.name):
+        bs.capture_policy(cfg(True, 0.15))
+        bs.capture_policy(cfg(False, 1.5))  # off: the threshold is never used, no noise
+    assert [r for r in caplog.records if r.name == bs.logger.name] == []
 
 
 def test_budget_exceeded_propagates():
@@ -377,23 +400,32 @@ def test_other_errors_unchecked():
     review["scenarios"][0]["probability"] = "about a third"
     needs_review, *_ = _check(_spine(), review)
     assert needs_review["status"] == "unchecked:unreadable_draw:secondary"
-    bad_threshold, *_ = _check(_spine(), _spine(), max_abs_delta=None)
-    assert bad_threshold["status"] == "unchecked:invalid_threshold"
     assert bs.unchecked_artifact("error:KeyError")["status"] == "unchecked:error:KeyError"
+
+
+@pytest.mark.parametrize("threshold", [None, float("nan"), 0, -0.1, 1.5, "abc"])
+def test_invalid_threshold_makes_no_llm_call(threshold):
+    # An unusable pinned threshold could never classify the draws: the check stops before
+    # building a secondary client or paying for either spine draw.
+    result, _primary, factory, log = _check(_spine(), _spine(), max_abs_delta=threshold)
+    assert result["status"] == "unchecked:invalid_threshold"
+    assert (result["calls"], log, factory.asked) == (0, [], [])
+    assert result["cross"] is None and result["within"] is None
 
 
 # ------------------------------------------------------ real LLMClient: cache bypass
 PRIMARY, PRIMARY_MODEL, SECONDARY = "minimax", "MiniMax-M3", "deepseek"
 
 
-def _resp(content):
+def _resp(content, served_model):
     message = SimpleNamespace(content=content, tool_calls=[])
     return SimpleNamespace(choices=[SimpleNamespace(message=message, finish_reason="stop")],
-                           usage=None)
+                           usage=None, model=served_model)
 
 
 class _Transport:
-    """A fake OpenAI client serving one JSON reply forever; records request kwargs."""
+    """A fake OpenAI client serving one JSON reply forever (reporting ``served:<requested
+    model>`` as the served model); records request kwargs."""
 
     def __init__(self, reply):
         self.reply, self.calls = reply, []
@@ -401,7 +433,7 @@ class _Transport:
 
     def _create(self, **kwargs):
         self.calls.append(kwargs)
-        return _resp(self.reply)
+        return _resp(self.reply, f"served:{kwargs.get('model')}")
 
 
 @pytest.fixture
@@ -462,10 +494,87 @@ def test_controls_bypass_cache(real_clients):
     assert {c["model"] for c in transports[PRIMARY].calls} == {"primary-strong"}
     assert {c["model"] for c in transports[SECONDARY].calls} == {"deepseek-chat"}
     assert [r["status"] for r in results] == ["stable", "stable"]
+    # served_model is what the provider reported serving each backbone's draw
     assert results[0]["providers"] == {
-        "primary": {"provider": PRIMARY, "model": "primary-strong"},
-        "secondary": {"provider": SECONDARY, "model": "deepseek-chat"}}
+        "primary": {"provider": PRIMARY, "model": "primary-strong",
+                    "served_model": "served:primary-strong"},
+        "secondary": {"provider": SECONDARY, "model": "deepseek-chat",
+                      "served_model": "served:deepseek-chat"}}
     assert (primary.use_cache, primary._pinned) == (True, False)
+
+
+def test_cli_backbones_record_the_model_they_are_asked_for(real_clients, monkeypatch):
+    """A claude-cli / codex-cli client from the real _build_ensemble_client inherits
+    LLM_MODEL_NAME (MiniMax-M3 under this minimax primary), which the CLI never receives: the
+    recorded identity is the model actually requested (None = the CLI's account default), and
+    backbones are compared on it. No draw is made."""
+    primary = lc.LLMClient()
+    ident = bs._identity(primary, bs._spine_model(primary))
+    assert ident == {"provider": PRIMARY, "model": "primary-strong", "served_model": None}
+    for name in ("claude-cli", "codex-cli"):
+        skipped = []
+        client, secondary = bs._pick_secondary([name], ident, fe._build_ensemble_client, skipped)
+        assert client.model == PRIMARY_MODEL and lc.claude_cli_model_arg(client.model) is None
+        assert secondary == {"provider": name, "model": None, "served_model": None}
+        assert skipped == [] and (client._pinned, client.use_cache) == (True, False)
+
+    # A claude-cli primary that inherited the non-claude name also runs the CLI default, so a
+    # claude-cli candidate is the same backbone (skipped) and codex-cli is distinct.
+    cli_primary = lc.LLMClient(provider="claude-cli")
+    cli_ident = bs._identity(cli_primary, bs._spine_model(cli_primary))
+    assert cli_ident == {"provider": "claude-cli", "model": None, "served_model": None}
+    skipped = []
+    client, secondary = bs._pick_secondary(["claude-cli", "codex-cli"], cli_ident,
+                                           fe._build_ensemble_client, skipped)
+    assert skipped == [{"provider": "claude-cli", "reason": "same_as_primary"}]
+    assert secondary == {"provider": "codex-cli", "model": None, "served_model": None}
+
+    # A claude id does reach the Claude CLI and is recorded as such.
+    monkeypatch.setattr(Config, "LLM_MODEL_NAME", "claude-opus-4-8", raising=False)
+    _client, named = bs._pick_secondary(["claude-cli"], ident, fe._build_ensemble_client, [])
+    assert named == {"provider": "claude-cli", "model": "claude-opus-4-8", "served_model": None}
+
+    # Through the check: the record never names the inherited model, while the control keeps
+    # the client's own model (the CLI drops it exactly as it did for the spine draw).
+    log = []
+    scripted = _ScriptedLLM([_spine()], provider="claude-cli", model=PRIMARY_MODEL, log=log)
+    factory = _Factory({"claude-cli": (PRIMARY_MODEL, []), "other": ("o-1", [_spine()])}, log)
+    result = bs.run_spine_backbone_check(
+        follow_prompt="F", primary_spine=_spine(), primary_llm=scripted,
+        providers=["claude-cli", "other"], client_factory=factory, max_tokens=100)
+    assert result["providers"]["primary"] == {"provider": "claude-cli", "model": None,
+                                              "served_model": None}
+    assert result["skipped"] == [{"provider": "claude-cli", "reason": "same_as_primary"}]
+    assert [(c["provider"], c["model"]) for c in log] == [
+        ("claude-cli", PRIMARY_MODEL), ("other", "o-1")]
+    assert result["status"] == "stable"
+
+
+def test_ensemble_client_never_sends_the_primary_key_elsewhere(real_clients, monkeypatch):
+    """A keyless secondary provider fails to construct instead of inheriting the primary's
+    LLM_API_KEY (LLMClient's fallback) and sending it to that provider's default_base."""
+    for name in ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "MINIMAX_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(ValueError, match="DEEPSEEK_API_KEY"):
+        fe._build_ensemble_client(SECONDARY)
+    with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+        fe._build_ensemble_client("openai")
+
+    # the check records the keyless candidate as unusable and takes the next one
+    primary = lc.LLMClient()
+    skipped = []
+    _client, secondary = bs._pick_secondary(
+        [SECONDARY, "codex-cli"], bs._identity(primary, bs._spine_model(primary)),
+        fe._build_ensemble_client, skipped)
+    assert skipped == [{"provider": SECONDARY, "reason": "construct_failed:ValueError"}]
+    assert secondary["provider"] == "codex-cli"
+
+    # a configured key is the provider's own; the primary's own name keeps LLM_API_KEY
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek")
+    deepseek = fe._build_ensemble_client(SECONDARY)
+    assert (deepseek.api_key, deepseek.base_url) == (
+        "sk-deepseek", Config.PROVIDER_META[SECONDARY]["default_base"])
+    assert fe._build_ensemble_client(PRIMARY).api_key == "sk-primary"
 
 
 # =============================================================== 4. report level
@@ -602,7 +711,9 @@ def test_enabled_records_block_probabilities_unchanged(report_env, monkeypatch):
 
     assert record["schema"] == "backbone-sensitivity/v1" and record["calls"] == 2
     assert record["status"] == "backbone_sensitive"
-    assert record["providers"]["secondary"] == {"provider": "other", "model": "other-1"}
+    assert record["providers"]["secondary"] == {"provider": "other", "model": "other-1",
+                                                "served_model": None}
+    assert record["within_basis"] == bs.WITHIN_BASIS
     assert record["cross"]["leader_agree"] is False
     # within = pre-critique spine vs control: zero, although the critique moved every
     # probability of the published spine and added a scenario
@@ -654,6 +765,35 @@ def test_report_other_errors_recorded_unchecked(report_env, monkeypatch):
     assert record["note"] == "shadow diagnostic; probabilities unchanged"
     assert [s["probability"] for s in json.loads(text)["scenarios"]] == list(_MOVED)
     assert tel.get_run_context()[1] == "report"
+
+
+def test_enabled_without_a_spine_records_no_spine(report_env, monkeypatch):
+    # The spine derivation produced no scenarios (the post-prose extraction publishes instead):
+    # an opted-in run says so, a run that never opted in still has no key at all.
+    built = _secondary_factory(monkeypatch, _spine(), [])
+    monkeypatch.setattr(fe, "derive_forecast_spine", lambda llm, **kwargs: None)
+    monkeypatch.setattr(fe, "extract_structured_forecast", lambda md, llm, **kwargs: _spine())
+    published = {}
+    for label, policy in (("on", dict(_ENABLED)), ("off", None)):
+        report_id = f"report_no_spine_{label}"
+        (report_env / "reports" / report_id).mkdir(parents=True)
+        log = []
+        agent = _agent(_RouterLLM(_spine(), _spine(), log))
+        agent.backbone_check_policy = policy
+        agent._derive_and_pin_forecast_spine(report_id)
+        assert agent._forecast_spine is None and agent._backbone_sensitivity is None
+        agent._finalize_structured_forecast(report_id, "# T\n\nBody text.")
+        published[label] = json.loads(
+            (report_env / "reports" / report_id / "forecast.json").read_text(encoding="utf-8"))
+        assert [c for c in log if _FOLLOW_MARKER in c["prompt"]] == []
+    assert built == []  # nothing to check: no secondary client, no draw
+    assert "backbone_sensitivity" not in (published["off"].get("quality") or {})
+    record = published["on"]["quality"].pop("backbone_sensitivity")
+    assert (record["status"], record["calls"], record["note"]) == (
+        "unchecked:no_spine", 0, "shadow diagnostic; probabilities unchanged")
+    if not published["on"]["quality"]:
+        published["on"].pop("quality")
+    assert published["on"] == published["off"]
 
 
 def test_only_the_main_report_stage_sets_the_policy():

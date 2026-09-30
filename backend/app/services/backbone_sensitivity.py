@@ -13,10 +13,22 @@ temperature:
   whose (provider, model) differs from the primary's, also pinned and uncached.
 
 ``cross`` compares the control with the secondary (identical prompt, only the backbone
-differs). ``within`` compares the pre-critique primary spine with the control (same
-backbone, sampling noise only). A cross difference counts as backbone sensitivity only
-while the within difference stays under the threshold; otherwise the backbone does not
-even agree with itself and the cross difference cannot be attributed to it.
+differs). ``within`` compares the published pre-critique spine with the control, both from
+the primary backbone. It is not pure sampling noise: that spine was drawn on the free spine
+prompt (no pinned names, possibly with the REPORT-1 retry note, and pooled over K draws when
+REPORT_SPINE_SELFCONSISTENCY_K > 1), while the control is one draw on the fixed-name follow
+prompt, so ``within`` bundles sampling noise with the free-vs-follow prompt difference (the
+record carries this as ``within_basis``). A cross difference counts as backbone sensitivity
+only while the within difference stays under the threshold; otherwise the primary backbone
+does not even reproduce its own spine and the cross difference cannot be attributed to the
+backbone.
+
+A backbone's identity is its provider plus the model its requests name. A CLI subscription
+provider can run a model the client never names: the Claude CLI is given ``--model`` only for
+a claude id/alias (llm_client.claude_cli_model_arg), so a claude-cli client that inherited
+another provider's LLM_MODEL_NAME runs the account default, and ``codex exec`` is never given
+a model. Such a backbone is recorded with model None (never the inherited name), and each
+identity also carries the ``served_model`` the provider reported for its draw, if any.
 
 Shadow only (ADR 0002 decision 6): the artifact is recorded in forecast.quality and never
 moves a probability, an interval, a rendered table or the publish gate. Known limit: a
@@ -32,17 +44,23 @@ Everything except ``run_spine_backbone_check`` is pure and offline-testable.
 from __future__ import annotations
 
 import copy
+import logging
 import math
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from ..utils.llm_client import CLI_PROVIDERS
+from ..utils.llm_client import CLI_PROVIDERS, claude_cli_model_arg
 from ..utils.probability_parse import PROB_REVIEW
 from ..utils.telemetry import BudgetExceeded
 from . import forecast_extractor as _fe
 from .ensemble import _norm_name
 
+logger = logging.getLogger(__name__)
+
 SCHEMA = "backbone-sensitivity/v1"
 NOTE = "shadow diagnostic; probabilities unchanged"
+# What ``within`` compares (see the module docstring): not sampling noise alone.
+WITHIN_BASIS = ("pre-critique spine (free spine prompt, pooled when K>1) vs one control draw "
+                "on the fixed-name follow prompt: sampling noise plus the prompt difference")
 
 STATUS_STABLE = "stable"
 STATUS_BACKBONE_SENSITIVE = "backbone_sensitive"
@@ -70,6 +88,12 @@ def _as_float(value: Any) -> Optional[float]:
     return number if math.isfinite(number) else None
 
 
+def _threshold(value: Any) -> Optional[float]:
+    """The comparison threshold as a float in (0, 1], or None when it is unusable."""
+    number = _as_float(value)
+    return number if number is not None and 0.0 < number <= 1.0 else None
+
+
 def parse_providers(raw: Any) -> List[str]:
     """Provider names from a comma-separated string or a list: lower-cased, blanks dropped,
     duplicates removed, order kept."""
@@ -83,13 +107,23 @@ def parse_providers(raw: Any) -> List[str]:
 
 
 def capture_policy(config: Any) -> Dict[str, Any]:
-    """The admission-time ``backbone_check`` pin, snapshotted from the ambient Config."""
-    return {
+    """The admission-time ``backbone_check`` pin, snapshotted from the ambient Config.
+
+    An opted-in pin whose threshold is outside (0, 1] (or NaN) is still recorded as given;
+    the check then records ``unchecked:invalid_threshold`` without any LLM call, and the
+    operator is warned here, at admission.
+    """
+    raw_delta = getattr(config, "BACKBONE_CHECK_MAX_ABS_DELTA", DEFAULT_MAX_ABS_DELTA)
+    policy = {
         "enabled": bool(getattr(config, "BACKBONE_CHECK_ENABLED", False)),
         "providers": parse_providers(getattr(config, "BACKBONE_CHECK_PROVIDERS", "")),
-        "max_abs_delta": _as_float(getattr(config, "BACKBONE_CHECK_MAX_ABS_DELTA",
-                                           DEFAULT_MAX_ABS_DELTA)),
+        "max_abs_delta": _as_float(raw_delta),
     }
+    if policy["enabled"] and _threshold(raw_delta) is None:
+        logger.warning(
+            f"BACKBONE_CHECK_MAX_ABS_DELTA={raw_delta!r} is not in (0, 1]: the backbone check "
+            "of this run will record unchecked:invalid_threshold and make no LLM call")
+    return policy
 
 
 def enabled_policy(pin: Any) -> Optional[Dict[str, Any]]:
@@ -173,8 +207,8 @@ def classify(cross: Any, within: Any, max_abs_delta: Any) -> str:
     * ``unchecked:<reason>``: the threshold is not in (0, 1], an agreement is missing, or an
       agreement matched no scenario name (nothing comparable).
     """
-    threshold = _as_float(max_abs_delta)
-    if threshold is None or not 0.0 < threshold <= 1.0:
+    threshold = _threshold(max_abs_delta)
+    if threshold is None:
         return f"{UNCHECKED}:invalid_threshold"
     for label, agreement in (("cross", cross), ("within", within)):
         if not isinstance(agreement, dict):
@@ -194,13 +228,19 @@ def artifact(status: str, *, primary: Optional[Dict[str, Any]] = None,
              calls: int = 0, max_abs_delta: Any = None,
              skipped: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     """The ``forecast.quality.backbone_sensitivity`` record. ``calls`` counts spine draws
-    attempted (a draw's JSON repair turn, if any, is not counted separately)."""
+    attempted (a draw's JSON repair turn, if any, is not counted separately). Each of
+    ``providers.primary`` / ``providers.secondary`` is {provider, model, served_model}:
+    ``model`` is the model the backbone's requests name (None when a CLI subscription
+    provider runs its account default) and ``served_model`` the model the provider reported
+    serving that backbone's draw in this check (the control draw for the primary; None when
+    it reports none or the draw did not complete)."""
     return {
         "schema": SCHEMA,
         "providers": {"primary": primary, "secondary": secondary},
         "status": status,
         "cross": cross,
         "within": within,
+        "within_basis": WITHIN_BASIS,
         "calls": int(calls),
         "max_abs_delta": max_abs_delta,
         "skipped": list(skipped or []),
@@ -214,28 +254,61 @@ def unchecked_artifact(reason: str) -> Dict[str, Any]:
 
 
 # ------------------------------------------------------------------ the check
+def _provider(client: Any) -> str:
+    return str(getattr(client, "provider", "") or "").lower()
+
+
+def _requested_model(provider: str, model: Any) -> Optional[str]:
+    """The model a request of ``provider`` names when its client's ``model`` is ``model``, or
+    None when a CLI subscription provider runs its account default.
+
+    An OpenAI-compatible request carries ``model``. The Claude CLI is given ``--model`` only
+    for a claude id/alias (claude_cli_model_arg: e.g. a claude-cli client built by
+    _build_ensemble_client inherits LLM_MODEL_NAME, which under a MiniMax primary is
+    MiniMax-M3 and never reaches the CLI); ``codex exec`` is never given a model.
+    """
+    name = None if model is None else str(model)
+    if provider == "claude-cli":
+        return claude_cli_model_arg(name)
+    if provider == "codex-cli":
+        return None
+    return name
+
+
 def _identity(client: Any, model: Any) -> Dict[str, Any]:
-    return {"provider": str(getattr(client, "provider", "") or "").lower(),
-            "model": None if model is None else str(model)}
+    """A backbone's recorded identity: provider plus the model its requests name (see
+    _requested_model). ``served_model`` is filled in after the backbone's draw."""
+    provider = _provider(client)
+    return {"provider": provider, "model": _requested_model(provider, model),
+            "served_model": None}
 
 
-def _primary_identity(primary_llm: Any) -> Dict[str, Any]:
-    """The primary backbone as the spine draw was served: provider plus the strong-tier model
-    (the model a chat_json call without a tier resolves to, tier routing included).
+def _spine_model(primary_llm: Any) -> Any:
+    """The client model the primary spine draw ran with: the strong-tier resolution (the model
+    a chat_json call without a tier resolves to, tier routing included).
 
-    CLI subscription providers ignore the tier alias (claude-cli passes its own ``model``,
-    codex-cli none), so their served model is the client's own ``model``.
+    CLI subscription providers ignore the tier alias (the tier only affects metering there),
+    so their model is the client's own ``model``.
     """
     resolve = getattr(primary_llm, "_model_for_tier", None)
-    provider = str(getattr(primary_llm, "provider", "") or "").lower()
-    if callable(resolve) and provider not in CLI_PROVIDERS:
-        model = resolve("strong")
-    else:
-        model = getattr(primary_llm, "model", None)
-    return _identity(primary_llm, model)
+    if callable(resolve) and _provider(primary_llm) not in CLI_PROVIDERS:
+        return resolve("strong")
+    return getattr(primary_llm, "model", None)
 
 
-def _control_client(primary_llm: Any, model: Optional[str]) -> Any:
+def _served_model(client: Any) -> Optional[str]:
+    """The model the provider reported serving ``client``'s last call (INFRA-1 call metadata),
+    or None when it reports none."""
+    last_call_meta = getattr(client, "last_call_meta", None)
+    try:
+        meta = last_call_meta() if callable(last_call_meta) else None
+    except Exception:  # noqa: BLE001 — metadata is best-effort; never fails the check
+        return None
+    served = meta.get("served_model") if isinstance(meta, dict) else None
+    return served if isinstance(served, str) and served else None
+
+
+def _control_client(primary_llm: Any, model: Any) -> Any:
     """A same-backbone control: the primary client pinned to the spine's model, uncached.
 
     Order matters: the model is resolved on the unpinned primary first (a pinned client's
@@ -251,7 +324,12 @@ def _control_client(primary_llm: Any, model: Optional[str]) -> Any:
 def _pick_secondary(providers: List[str], primary: Dict[str, Any],
                     client_factory: Callable[[str], Any],
                     skipped: List[Dict[str, str]]) -> Tuple[Any, Optional[Dict[str, Any]]]:
-    """The first provider whose client constructs and differs from the primary backbone."""
+    """The first provider whose client constructs and differs from the primary backbone.
+
+    Backbones are compared on their recorded identity (provider + requested model), so a CLI
+    candidate is compared on the model it would actually be asked for, never on an inherited
+    name it would not receive.
+    """
     for name in providers:
         try:
             client = client_factory(name)
@@ -284,8 +362,9 @@ def run_spine_backbone_check(*, follow_prompt: str, primary_spine: Dict[str, Any
     ``follow_prompt`` is the spine prompt with ``primary_spine``'s scenario names pinned
     (forecast_extractor.spine_follow_prompt); ``primary_spine`` is the within-backbone
     baseline (the spine before any critique); ``client_factory`` builds a client for a
-    provider name (forecast_extractor._build_ensemble_client). No secondary backbone means no
-    LLM call. BudgetExceeded propagates; other errors yield ``unchecked:error:<Type>``.
+    provider name (forecast_extractor._build_ensemble_client). No secondary backbone or an
+    unusable threshold means no LLM call. BudgetExceeded propagates; other errors yield
+    ``unchecked:error:<Type>``.
     """
     skipped: List[Dict[str, str]] = []
     primary: Optional[Dict[str, Any]] = None
@@ -296,18 +375,24 @@ def run_spine_backbone_check(*, follow_prompt: str, primary_spine: Dict[str, Any
         return artifact(status, primary=primary, secondary=secondary, calls=calls,
                         max_abs_delta=_as_float(max_abs_delta), skipped=skipped, **extra)
 
+    # An unusable threshold could never classify the draws: fail before paying for them.
+    if _threshold(max_abs_delta) is None:
+        return _record(f"{UNCHECKED}:invalid_threshold")
     try:
-        primary = _primary_identity(primary_llm)
+        spine_model = _spine_model(primary_llm)
+        primary = _identity(primary_llm, spine_model)
         secondary_llm, secondary = _pick_secondary(
             parse_providers(providers), primary, client_factory, skipped)
         if secondary_llm is None:
             return _record(f"{UNCHECKED}:no_distinct_secondary")
-        control = _control_client(primary_llm, primary["model"])
+        control = _control_client(primary_llm, spine_model)
         calls += 1
         control_draw = _fe._spine_draw(control, follow_prompt, SPINE_TEMPERATURE, max_tokens)
+        primary["served_model"] = _served_model(control)
         calls += 1
         secondary_draw = _fe._spine_draw(secondary_llm, follow_prompt, SPINE_TEMPERATURE,
                                          max_tokens)
+        secondary["served_model"] = _served_model(secondary_llm)
     except BudgetExceeded:
         raise
     except Exception as exc:  # noqa: BLE001 — shadow diagnostic: record, never break the report

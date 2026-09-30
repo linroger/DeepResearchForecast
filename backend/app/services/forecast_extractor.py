@@ -2977,9 +2977,11 @@ def _build_ensemble_client(provider: str) -> Any:
         直接 ``LLMClient(provider=p)``；
       - OpenAI 兼容提供方从 PROVIDER_META 取 default_base/default_model，Key 依次尝试
         ``<PROVIDER>_API_KEY`` → 该提供方的 key_env（如 DEEPSEEK_API_KEY）→ 当且仅当与主提供方
-        同名时的 Config.LLM_API_KEY；缺 Key 时 LLMClient 构造抛 ValueError。
-    未知提供方（不在 PROVIDER_META）→ LLMClient 构造抛 ValueError。两类异常都由
-    ``_run_ensemble_draws`` 捕获 → 跳过该模型并记 flag（绝不阻断主抽取）。"""
+        同名时的 Config.LLM_API_KEY；三者皆无时此处直接抛 ValueError——不能把 api_key=None 交给
+        LLMClient：其构造会回退到 Config.LLM_API_KEY，把主提供方的 Key 发往副提供方的 default_base。
+    未知提供方（不在 PROVIDER_META）→ LLMClient 构造抛 ValueError。两类异常都由调用方捕获
+    （``_run_ensemble_draws`` 跳过该模型并记 flag；EVAL-11 骨架跨底座检查记
+    construct_failed 并试下一个候选），绝不阻断主流程。"""
     import os as _os
     from ..config import Config
     from ..utils.llm_client import LLMClient
@@ -2991,6 +2993,10 @@ def _build_ensemble_client(provider: str) -> Any:
     key = (_os.environ.get(f"{p.upper()}_API_KEY")
            or (_os.environ.get(str(meta.get("key_env"))) if meta.get("key_env") else None)
            or (Config.LLM_API_KEY if p == str(Config.LLM_PROVIDER or "").lower() else None))
+    if not key:
+        key_envs = dict.fromkeys(e for e in (f"{p.upper()}_API_KEY", meta.get("key_env")) if e)
+        raise ValueError(f"提供方 {p} 未配置 API Key（{' / '.join(key_envs)}）；"
+                         "主提供方的 Key 不会发往其他提供方的端点")
     return LLMClient(provider=p, api_key=key,
                      base_url=meta.get("default_base"),
                      model=meta.get("default_model"))

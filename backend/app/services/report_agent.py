@@ -3156,7 +3156,10 @@ class ReportAgent:
         model_comparison and the API path never set it. The spine prompt is rebuilt from the
         exact kwargs the spine was drawn with, ``pre_critique_spine``'s scenario names are
         pinned in the follow prompt, and the artifact lands in ``self._backbone_sensitivity``
-        for _finalize_structured_forecast (forecast.quality.backbone_sensitivity). Never
+        for _finalize_structured_forecast (forecast.quality.backbone_sensitivity). ``within``
+        compares ``pre_critique_spine`` (the free spine prompt, pooled when
+        REPORT_SPINE_SELFCONSISTENCY_K > 1) with one control draw on the fixed-name follow
+        prompt, so it bundles sampling noise with the free-vs-follow prompt difference. Never
         touches ``self._forecast_spine`` / ``self._forecast_spine_block``: probabilities are
         unchanged. BudgetExceeded propagates; any other error records
         ``unchecked:error:<Type>``. The calls are metered under the telemetry stage
@@ -3647,8 +3650,14 @@ class ReportAgent:
             forecast["hindcast"] = hindcast_forecast_block(
                 _hindcast, research_audit=_hindcast.get("research_audit"))
         # EVAL-11：骨架跨底座影子检查的记录（仅准入钉开启的主报告才有）。只记录：不改概率 / 区间 /
-        # 渲染，不进发布门；未运行时不加键（forecast.json 逐字节不变）。
+        # 渲染，不进发布门；未开启时不加键（forecast.json 逐字节不变）。已开启但没有叙事前骨架可查
+        # （骨架推导失败 / 无情景 / 关闭 REPORT_FORECAST_SPINE_FIRST）时记 unchecked:no_spine，
+        # 使「已开启但无可查」与「未开启」可区分。
         _backbone = getattr(self, "_backbone_sensitivity", None)
+        if _backbone is None and getattr(self, "backbone_check_policy", None) is not None:
+            from . import backbone_sensitivity as _bs
+            if _bs.enabled_policy(self.backbone_check_policy) is not None:
+                _backbone = _bs.unchecked_artifact("no_spine")
         if isinstance(_backbone, dict):
             _bq0 = forecast.get("quality")
             _bq = dict(_bq0) if isinstance(_bq0, dict) else {}
