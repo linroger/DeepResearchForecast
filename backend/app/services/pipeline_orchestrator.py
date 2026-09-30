@@ -48,6 +48,11 @@ from typing import Any, Callable, Optional
 from ..config import Config
 from ..models.project import ProjectManager, ProjectStatus
 from ..models.task import TaskManager
+from ..services.hindcast_policy import (
+    HINDCAST_POLICY_OPTION,
+    as_of_enforcement_record,
+    hindcast_policy,
+)
 from ..services.graph_builder import (
     GraphBuilderService,
     build_actor_graph_seed_manifest,
@@ -7333,6 +7338,43 @@ def evaluation_context_for_simulation(simulation_id: Optional[str]) -> Optional[
         return _fail_closed_evaluation_pin(lookup_failed=True)
 
 
+def hindcast_pin_for_simulation(simulation_id: Optional[str]) -> Optional[dict[str, Any]]:
+    """TIME-6: the hindcast pin of the pipeline that ran ``simulation_id``, else None.
+
+    ``ReportAgent._hindcast_pin`` falls back to this lookup when no ``hindcast``
+    kwarg was passed (``/api/report`` regenerate and chat), so those entry points
+    withhold live market data from a hindcast too. Same owner scan as
+    ``evaluation_context_for_simulation`` (newest pipeline first; a seed-ensemble
+    member's simulation belongs to the pipeline that recorded it). A
+    shared-simulation batch child without a pin of its own defers to the pipeline
+    it borrowed the simulation from, provided that pipeline still names the same
+    simulation. Exceptions from the scan propagate to the caller.
+    """
+    if not simulation_id:
+        return None
+    simulation_id = str(simulation_id)
+    owner = _ledger_owner_of_simulation(simulation_id)
+    if owner is None:
+        return None
+    pipeline_id, data, _is_member, _seed = owner
+    pin = hindcast_policy(data.get("options"))
+    seen = {pipeline_id}
+    while pin is None and len(seen) <= _SHARED_SIMULATION_MAX_HOPS:
+        if data.get("simulation_id") != simulation_id:
+            break  # a seed-ensemble member's simulation is its own pipeline's, never borrowed
+        options = data.get("options") if isinstance(data.get("options"), dict) else {}
+        origin_id = options.get("shared_simulation_from")
+        if not isinstance(origin_id, str) or not origin_id or origin_id in seen:
+            break
+        seen.add(origin_id)
+        origin = PipelineManager.load(origin_id)
+        if not isinstance(origin, dict) or origin.get("simulation_id") != simulation_id:
+            break
+        pin = hindcast_policy(origin.get("options"))
+        data = origin
+    return pin
+
+
 def preflight_pipeline(mode: str = "full", model: Optional[str] = None) -> list[str]:
     """启动管线前的快速体检：把会在几十分钟后才暴露的配置错误提前到 POST /run 时。
 
@@ -7937,6 +7979,10 @@ def _build_run_manifest(state: "PipelineState") -> dict[str, Any]:
         # secrets_redacted / key_packages，避免观测字段被误脱敏。
         "redacted_flag": True,
     }
+    _hindcast = hindcast_policy(opts)
+    if _hindcast is not None:
+        # TIME-6: a pinned hindcast records how its as-of date was enforced (only then).
+        manifest["resolved"]["as_of_enforcement"] = as_of_enforcement_record(_hindcast)
     if bool(getattr(Config, "MANIFEST_CAPTURE_VERSIONS", False)):
         pkgs = _capture_key_packages()
         if pkgs:
@@ -8936,6 +8982,11 @@ class PipelineOrchestrator:
             # (the admission pin is carried, never re-captured; the fork shares the base's
             # handoff dir, whose marker names the base, so the pin must travel in options).
             new_state.options[EVALUATION_RUN_OPTION] = _evaluation_pin
+        _hindcast_pin = base_state.options.get(HINDCAST_POLICY_OPTION)
+        if isinstance(_hindcast_pin, dict):
+            # TIME-6: a what-if fork reuses the base's as-of research, so it keeps the base's
+            # hindcast pin (carried, never re-captured) and its reports withhold live markets too.
+            new_state.options[HINDCAST_POLICY_OPTION] = dict(_hindcast_pin)
         if (overlay or {}).get("max_rounds"):
             try:
                 new_state.options["max_rounds"] = int(overlay["max_rounds"])
@@ -9752,6 +9803,12 @@ class PipelineOrchestrator:
         return _evaluation_pin_of(state.pipeline_id, {"options": state.options or {},
                                                       "handoff_dir": state.handoff_dir})
 
+    @staticmethod
+    def _hindcast_agent_kwargs(state: "PipelineState") -> dict[str, Any]:
+        """TIME-6: ``{'hindcast': pin}`` for a pinned hindcast run's ReportAgent, else {}."""
+        pin = hindcast_policy(state.options)
+        return {"hindcast": pin} if pin is not None else {}
+
     @classmethod
     def _assign_evaluation_context(cls, agent: Any, state: "PipelineState") -> None:
         """EVAL-13: give a report agent this run's evaluation context.
@@ -9983,6 +10040,9 @@ class PipelineOrchestrator:
             "sources": research.get("sources"),
             "research_report": report_md,
         }
+        # TIME-6：回测运行的种子报告同样扣下市场——钉随构造参数直接交给报告，不依赖报告侧
+        # 按模拟 id 的所属管线查找（种子模拟不是任何管线自己的 simulation_id）。
+        _agent_kwargs.update(self._hindcast_agent_kwargs(state))
         # W9-5：把主跑情景脊柱钉给种子报告（scenario_spine 参数由报告链工作流并行落地；
         # 尚未支持时 TypeError → 回退旧签名，落地顺序无关）。
         try:
@@ -14637,6 +14697,9 @@ class PipelineOrchestrator:
                     "scenario_label": _scenario_label,
                     "base_simulation_id": _base_sim_id,
                 }
+                # TIME-6：回测运行把钉交给报告（不读/不重报价/不现抓预测市场，盖 hindcast 章）；
+                # 实时运行不加该参数，构造调用逐字节不变。
+                _ra_kwargs.update(self._hindcast_agent_kwargs(state))
                 # W9-8: 研究昂贵产物直通报告链——quantitative(339 行)/contested(29 条)/
                 # timeline(101 事件)/graph_priors(_structural) 此前落盘后零下游读者。
                 # 构造参数由报告链工作流并行落地（None 默认）；尚未支持时 TypeError →
