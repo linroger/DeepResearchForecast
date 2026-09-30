@@ -2846,7 +2846,8 @@ class ReportAgent:
                     if rows:
                         self._market_status = _absence.present("research_snapshot")
                         # EVAL-6：快照 payload 的顶层 as_of 记进每行 snapshot_as_of（行已带则保留），
-                        # 锚点据此标定研究期价的取价时刻；MARKET_ANCHOR_PRICE_TIME 关 → 行不变。
+                        # 锚点据此标定研究期价（as_of 是快照落盘时刻，只是取价时刻的上界）；
+                        # MARKET_ANCHOR_PRICE_TIME 关 → 行不变。
                         from ..utils.prediction_markets import stamp_snapshot_as_of
                         rows = stamp_snapshot_as_of(
                             rows[:max_n],
@@ -2915,13 +2916,13 @@ class ReportAgent:
             candidates = client.snapshot_for_queries(
                 queries, max_total=max_n, min_volume=min_vol,
                 max_per_event=max_per_event)
+            # 现抓时刻只取一次、紧跟抓价（早于相关性打分的 LLM 调用）：既写恢复工件的 as_of，
+            # 也作每行 snapshot_as_of（EVAL-6，无 report_id 时行照样带上）。
+            fetched_at = datetime.now(timezone.utc).isoformat()
             scored = score_market_relevance(_market_llm, question, candidates)
             markets = [row for row in scored if row.get("relevance_score") is not None]
             if markets:
                 logger.info(f"预测市场现抓兜底：{len(markets)} 个活跃市场（queries={queries}）")
-                # 现抓时刻只取一次：既写恢复工件的 as_of，也作每行 snapshot_as_of（EVAL-6，
-                # 无 report_id 时行照样带上）。
-                fetched_at = datetime.now(timezone.utc).isoformat()
                 report_id = str(getattr(self, "_active_report_id", "") or "")
                 if report_id:
                     try:

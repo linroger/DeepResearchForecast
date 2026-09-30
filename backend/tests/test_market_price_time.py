@@ -291,6 +291,22 @@ def test_live_fallback_without_report_id_still_stamps_rows(enabled, flag, monkey
     assert stamp is not None and before <= stamp <= datetime.now(UTC)
 
 
+def test_live_fallback_fetch_time_precedes_relevance_scoring(enabled, flag, monkeypatch):
+    """The fetch time is taken when the prices arrive, not after the relevance LLM call."""
+    _live_fallback(monkeypatch, _market())
+    seen = {}
+
+    def _slow_scorer(*_a, **_k):
+        seen["scoring_started"] = datetime.now(UTC)
+        while datetime.now(UTC) <= seen["scoring_started"]:
+            pass                                          # the LLM call takes time
+        return [{**_market(), "relevance_score": 8.0}]
+
+    monkeypatch.setattr(pm, "score_market_relevance", _slow_scorer)
+    rows = _agent(llm=object())._load_prediction_markets()
+    assert datetime.fromisoformat(rows[0]["snapshot_as_of"]) <= seen["scoring_started"]
+
+
 def test_live_fallback_flag_off_rows_unchanged(enabled, flag, monkeypatch):
     flag(False)
     _live_fallback(monkeypatch, _market())
@@ -434,6 +450,24 @@ def test_build_price_rows_carries_price_time_into_price_track():
     assert snapshot["markets"][1] == {"market_id": "m2", "price_at_research": 0.2,
                                       "implied_yes_prob": 0.2, "price_delta": None,
                                       "requote_failed": False}
+
+
+@pytest.mark.parametrize("partial", [
+    {"price_time_basis": "requote"},                          # a basis with no time
+    {"price_time": T1.isoformat()},                           # a time with no basis
+    {"price_time": "", "price_time_basis": "snapshot"},
+    {"price_time": T1.isoformat(), "price_time_basis": None},
+    {"price_time": 1727687700, "price_time_basis": "requote"},
+])
+def test_price_track_never_carries_half_a_price_time_pair(partial):
+    anchored = [{"id": "F1", "statement": "s1",
+                 "market_anchor": {"market_id": "m1", "question": "q1",
+                                   "implied_yes_prob": 0.41, **partial}}]
+    rows = rm.build_price_rows(anchored)
+    assert rows == [{"market_id": "m1", "question": "q1", "implied_yes_prob": 0.41,
+                     "price_at_research": 0.41, "forecast_id": "F1", "statement": "s1"}]
+    snapshot = rm._price_snapshot("r1", "2026-10-01", [{**rows[0], **partial}])
+    assert not any(k in snapshot["markets"][0] for k in _PRICE_TIME_KEYS)
 
 
 # ------------------------------------------------------------------ helpers

@@ -912,7 +912,8 @@ class Config:
     FORECAST_MARKET_ANCHOR_MIN_EQUIVALENCE = os.environ.get('FORECAST_MARKET_ANCHOR_MIN_EQUIVALENCE', 'near').strip().lower()
     # EVAL-6（市场价时溯源）：重报价拿到现价的市场行记 quoted_at（取价时刻，UTC ISO；之后
     # 再次重报价失败时保留，因为留下的价仍是那次报价），研究 handoff 快照行 / 报告期现抓行记
-    # snapshot_as_of（快照 as_of / 现抓时刻）；_build_market_anchor 据此给锚点写 price_time +
+    # snapshot_as_of（快照 as_of / 现抓时刻，只是取价时刻的上界：研究快照 as_of 在落盘时才取，
+    # 其中智能体工具检索到的行可能更早就已报价）；_build_market_anchor 据此给锚点写 price_time +
     # price_time_basis（requote|snapshot，时刻未知则两键都不写）。basis=requote 时锚点的
     # price_at_research 实为报告期重报价（历史字段名）。纯溯源字段，不动任何概率、锚定决策或
     # 发布闸门，因此默认开；false → 市场行与 forecast.json 锚点逐字节复现旧形状。

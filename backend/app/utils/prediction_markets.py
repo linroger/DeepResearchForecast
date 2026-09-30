@@ -283,7 +283,8 @@ def drop_window_ended_rows(rows: Any) -> Tuple[List[Any], int]:
 
 
 # EVAL-6 (MARKET_ANCHOR_PRICE_TIME): when a row's implied_yes_prob was observed. A requote
-# stamps ``quoted_at``; a research or report-time snapshot row carries ``snapshot_as_of``.
+# stamps ``quoted_at``; a research or report-time snapshot row carries ``snapshot_as_of``,
+# which dates the price by the snapshot's as_of: an upper bound on when it was observed.
 PRICE_TIME_BASIS_REQUOTE = "requote"
 PRICE_TIME_BASIS_SNAPSHOT = "snapshot"
 
@@ -296,7 +297,9 @@ def price_time_enabled() -> bool:
 def stamp_snapshot_as_of(rows: Any, as_of: Any) -> List[Dict[str, Any]]:
     """Shallow copies of the dict rows, each dated by the snapshot time ``as_of``.
 
-    A row that lacks ``snapshot_as_of`` gains ``as_of``; a row that already carries one
+    ``as_of`` is when the snapshot was written or fetched, an upper bound on when each row's
+    price was observed (a research snapshot also holds agent-tool rows priced earlier in the
+    run). A row that lacks ``snapshot_as_of`` gains ``as_of``; a row that already carries one
     keeps its own. A blank or non-string ``as_of`` stamps nothing. MARKET_ANCHOR_PRICE_TIME
     off → the dict rows themselves, untouched, so every artifact stays byte-identical.
     Never raises."""
@@ -318,10 +321,13 @@ def market_price_time(row: Any) -> Optional[Tuple[str, str]]:
     ``quoted_at`` (stamped by requote_markets on a fresh price and kept through a later
     failed requote, whose retained price is still that quote) → basis 'requote'; otherwise
     ``snapshot_as_of`` (the research snapshot's as_of or the report-time fetch time) →
-    basis 'snapshot'. Only a zone-aware ISO date-time counts (parse_stamp_strict, no bare
-    dates) and it is returned exactly as stored. A row whose quoted_at is present but
-    unusable is unknown, never 'snapshot': its price came from a requote, so the snapshot
-    time would misdate it. Never raises."""
+    basis 'snapshot'. A 'snapshot' time is an upper bound on when the price was observed,
+    not the exact moment: the research bridge takes its as_of when it writes the snapshot,
+    after merging agent-tool rows that may have been priced hours earlier, and rows carry
+    no per-row observation time yet. Only a zone-aware ISO date-time counts
+    (parse_stamp_strict, no bare dates) and it is returned exactly as stored. A row whose
+    quoted_at is present but unusable is unknown, never 'snapshot': its price came from a
+    requote, so the snapshot time would misdate it. Never raises."""
     if not isinstance(row, dict):
         return None
     quoted_at = row.get("quoted_at")
