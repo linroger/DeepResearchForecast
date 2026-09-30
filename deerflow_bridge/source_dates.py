@@ -27,6 +27,13 @@ Three layers:
 
 The extractors are DRF-original and unproven on real pages, which is why the
 knob that feeds them into the research artifacts defaults off.
+
+A fourth layer is the point-in-time rule of a gated hindcast (TIME-8):
+:func:`resolve_upper` reads a value as the latest day it is consistent with (a
+day is that day, a month / quarter / half / year the end of that period),
+:func:`availability` is the later of a source's published and modified days (a
+live page reflects its latest edit) and :func:`gate` is the one cut rule:
+``admit`` / ``same_day`` / ``late`` / ``unverifiable``.
 """
 
 from __future__ import annotations
@@ -550,3 +557,139 @@ def resolve(candidates: Iterable[Any], *, now: Any) -> dict[str, Any]:
             best[role], ranks[role] = parsed, rank
     return {"published": best[ROLE_PUBLISHED], "modified": best[ROLE_MODIFIED],
             "rank": ranks[ROLE_PUBLISHED], "rejected": rejected}
+
+
+# ------------------------------------------------------------------ point in time (TIME-8)
+GATE_ADMIT = "admit"
+GATE_SAME_DAY = "same_day"
+GATE_LATE = "late"
+GATE_UNVERIFIABLE = "unverifiable"
+SAME_DAY_EXCLUDE = "exclude"
+SAME_DAY_INCLUDE = "include"
+
+# parse_published rejects values after its ``now``; the upper-bound reader keeps
+# them, because a date after today is certainly after any as-of date.
+_NO_FUTURE_LIMIT = _dt.date(9999, 12, 31)
+_QUARTER_RE = re.compile(r"q(?P<q1>[1-4])[\s-]{0,3}(?P<y1>\d{4})|(?P<y2>\d{4})[\s-]{0,3}q(?P<q2>[1-4])", re.I)
+_HALF_RE = re.compile(r"h(?P<h1>[12])[\s-]{0,3}(?P<y1>\d{4})|(?P<y2>\d{4})[\s-]{0,3}h(?P<h2>[12])", re.I)
+# Search providers (Serper, Google news rows) report recent rows relative to now.
+_RELATIVE_RE = re.compile(
+    r"(?P<n>\d{1,4}|an?|one)\s{1,3}(?P<unit>sec(?:ond)?|min(?:ute)?|hour|hr|day|week|month|year)s?\s{1,3}ago",
+    re.I)
+# Days per unit, rounded down so the day read is never earlier than the real one:
+# the upper bound errs late, which the gate reads as not yet available.
+_RELATIVE_UNIT_DAYS = {"sec": 0, "second": 0, "min": 0, "minute": 0, "hour": 0, "hr": 0,
+                       "day": 1, "week": 7, "month": 28, "year": 365}
+_RELATIVE_WORDS = {"just now": 0, "today": 0, "yesterday": 1}
+_CANONICAL_DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _period_end(year: int, last_month: int) -> _dt.date | None:
+    """The last day of ``last_month`` in ``year`` (None before MIN_YEAR)."""
+    if year < MIN_YEAR:
+        return None
+    return interval_bounds(f"{year:04d}-{last_month:02d}")[1]
+
+
+def _relative_upper(text: str, now: Any) -> _dt.date | None:
+    lowered = text.lower()
+    if lowered in _RELATIVE_WORDS:
+        return _utc_today(now) - _dt.timedelta(days=_RELATIVE_WORDS[lowered])
+    match = _RELATIVE_RE.fullmatch(text)
+    if match is None:
+        return None
+    count = 1 if match["n"].lower() in ("a", "an", "one") else int(match["n"])
+    unit = match["unit"].lower()
+    return _utc_today(now) - _dt.timedelta(days=count * _RELATIVE_UNIT_DAYS[unit])
+
+
+def resolve_upper(value: Any, *, now: Any = None) -> _dt.date | None:
+    """The latest UTC calendar day consistent with ``value``, or None.
+
+    A day (or an instant, converted to UTC first) is that day; ``YYYY-MM`` /
+    "May 2024" the month's last day; ``YYYY`` December 31; "Q3 2024" /
+    "2024Q3" the quarter's last day; "H1 2025" / "2025H2" the half's last day;
+    a relative "3 days ago" / "yesterday" the day that far before ``now``'s UTC
+    date (the wall clock by default).  Every form :func:`parse_published`
+    accepts is read, including a date after today (it is not rejected here:
+    it is after any as-of date).  None for anything else and before 1900.
+    Never raises."""
+    try:
+        if value is None or isinstance(value, bool):
+            return None
+        if isinstance(value, PubDate):
+            value = value.value
+        if isinstance(value, _dt.datetime):
+            return to_utc(value).date()
+        if isinstance(value, _dt.date):
+            return value
+        text = value if isinstance(value, (int, float)) else _raw_text(value)
+        if isinstance(text, str):
+            if not text:
+                return None
+            match = _QUARTER_RE.fullmatch(text)
+            if match:
+                quarter = int(match["q1"] or match["q2"])
+                return _period_end(int(match["y1"] or match["y2"]), quarter * 3)
+            match = _HALF_RE.fullmatch(text)
+            if match:
+                half = int(match["h1"] or match["h2"])
+                return _period_end(int(match["y1"] or match["y2"]), half * 6)
+            relative = _relative_upper(text, now)
+            if relative is not None:
+                return relative
+        parsed, _reason = parse_published(text, now=_NO_FUTURE_LIMIT)
+        return interval_bounds(parsed.value)[1] if parsed is not None else None
+    except Exception:  # noqa: BLE001 — an unreadable date is no date
+        return None
+
+
+def availability(published: Any, modified: Any, *, now: Any = None) -> _dt.date | None:
+    """The day a source became available as it is served now: the later of
+    :func:`resolve_upper` of its published and modified values (a live page
+    reflects its latest edit), or None when neither resolves."""
+    days = [day for day in (resolve_upper(published, now=now), resolve_upper(modified, now=now))
+            if day is not None]
+    return max(days) if days else None
+
+
+def _cutoff(as_of: Any) -> _dt.date | None:
+    if isinstance(as_of, _dt.datetime):
+        return to_utc(as_of).date()
+    if isinstance(as_of, _dt.date):
+        return as_of
+    # Only the canonical spelling: an as-of is validated upstream, never guessed here.
+    if not isinstance(as_of, str) or not _CANONICAL_DAY_RE.fullmatch(as_of.strip()):
+        return None
+    try:
+        return _dt.date.fromisoformat(as_of.strip())
+    except ValueError:
+        return None
+
+
+def gate(avail: Any, as_of: Any, *, same_day: str = SAME_DAY_EXCLUDE) -> str:
+    """The point-in-time verdict of a source available on ``avail`` for a
+    research ``as_of`` date: ``late`` after as_of, or on it unless ``same_day``
+    is ``include`` (then ``same_day``); ``admit`` before it; ``unverifiable``
+    when ``avail`` is None or does not resolve (:func:`resolve_upper` reads a
+    non-date value).  Strict by default: any ``same_day`` other than
+    ``include`` excludes the as-of day, and an as_of that is no date gates
+    everything ``late`` (fail closed).  Never raises."""
+    cutoff = _cutoff(as_of)
+    if cutoff is None:
+        return GATE_LATE
+    day = avail if isinstance(avail, _dt.date) and not isinstance(avail, _dt.datetime) else resolve_upper(avail)
+    if day is None:
+        return GATE_UNVERIFIABLE
+    if day < cutoff:
+        return GATE_ADMIT
+    if day == cutoff and same_day == SAME_DAY_INCLUDE:
+        return GATE_SAME_DAY
+    return GATE_LATE
+
+
+def url_date(url: Any) -> _dt.date | None:
+    """The latest day consistent with the date in ``url``'s path
+    (:func:`from_url`: a day, or a month read as its last day), or None."""
+    candidates = from_url(url)
+    return resolve_upper(candidates[0][3]) if candidates else None

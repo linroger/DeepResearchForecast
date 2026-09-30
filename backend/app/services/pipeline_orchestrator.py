@@ -51,9 +51,11 @@ from ..models.project import ProjectManager, ProjectStatus
 from ..models.task import TaskManager
 from ..services.hindcast_policy import (
     HINDCAST_POLICY_OPTION,
+    PIT_RESEARCH_ENV_PREFIX,
     as_of_enforcement_record,
     capture_hindcast_policy_v1,
     hindcast_policy,
+    pit_research_env,
 )
 from ..services.graph_builder import (
     GraphBuilderService,
@@ -2511,6 +2513,7 @@ class DeerFlowResearchRunner:
         synthesis_manifest_path: Optional[str] = None,
         research_engine: Optional[str] = None,
         as_of: Optional[str] = None,
+        pit: Optional[dict[str, Any]] = None,
         _spend: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """运行研究子进程，阻塞直到结束。返回 handoff 摘要。
@@ -2545,6 +2548,13 @@ class DeerFlowResearchRunner:
         raises ``hindcast_salvage_refused`` instead of launching the legacy
         ``--extract-only`` salvage.  An ambient ``RESEARCH_AS_OF`` never reaches a
         child (live runs stay live).
+
+        TIME-8 ``pit``: the pinned hindcast's ``hindcast_policy_v1['pit']`` block.  With
+        ``as_of`` set and ``pit['gates']`` True the child gets ``RESEARCH_PIT_GATES`` /
+        ``_SAME_DAY`` / ``_UNDATED`` / ``_PROVIDER_BOUNDS`` / ``_OVERFETCH`` from that block
+        (never from the current Config, so a resume keeps the admitted gates) and
+        ``RESEARCH_SOURCE_DATES=true``, written after the as-of exports; otherwise every
+        ``RESEARCH_PIT_*`` key is removed, so an ambient value never half-activates gates.
 
         W9-9 ``kg_graph_id``：非空且 RESEARCH_MCP_KG 开启时，把 DEER_FLOW_EXTENSIONS_CONFIG_PATH
         指向部署目录的 extensions_config.json 并注入 DRF_MCP_KG_GRAPH_ID——研究子进程可经 MCP
@@ -2737,6 +2747,13 @@ class DeerFlowResearchRunner:
             env["RESEARCH_AS_OF"] = as_of
             env["PREDICTION_MARKETS_ENABLED"] = "false"
             env["RESEARCH_AS_OF_PIN"] = "true"
+        # TIME-8: the point-in-time gates come only from the admission pin's 'pit' block
+        # (never Config, never ambient env) and only for a pinned hindcast; written after
+        # the as-of exports and the registry forward, so RESEARCH_SOURCE_DATES is on.
+        for _pit_key in [key for key in env if key.startswith(PIT_RESEARCH_ENV_PREFIX)]:
+            env.pop(_pit_key)
+        if as_of:
+            env.update(pit_research_env(pit))
         # RESEARCH-1: fetch-layer shell detection and the per-call fetch bound
         # come from Config too (cached_fetch / research_gateway / linear_research
         # read them from os.environ with the same defaults).
@@ -13920,6 +13937,9 @@ class PipelineOrchestrator:
                             model_concurrency_global=_single_model_concurrency,
                             research_engine=_research_engine,
                             as_of=_hindcast_pin["as_of"] if _hindcast_pin else None,
+                            # TIME-8: the admission pin's gates (None: no pin, or a pin
+                            # admitted before TIME-8 -> no gates).
+                            pit=(_hindcast_pin or {}).get("pit"),
                         )
                 state.research_pid = None  # 子进程已结束，清掉以免 reconcile 误杀复用 PID
                 # PAR-2：并行轨 PID 清单也一并清空（研究阶段已结束，避免 reconcile 误杀复用 PID）。

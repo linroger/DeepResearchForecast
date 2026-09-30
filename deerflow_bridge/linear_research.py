@@ -5565,8 +5565,16 @@ class _Engine:
         # (and, with RESEARCH_SOURCE_DATE_TEXT_FALLBACK, default on, page-head
         # datelines and URL paths), shown in tool row headers, the SOURCE INDEX
         # and References and written to sources.json, the quant rows
-        # (source_date / as_of_after_source) and meta.source_dates.
-        self.source_dates = _env_flag(self.env, "RESEARCH_SOURCE_DATES", False)
+        # (source_date / as_of_after_source) and meta.source_dates.  The
+        # point-in-time gates of a gated hindcast (TIME-8, ``tools.pit``) read
+        # these dates, so they keep them on.
+        pit = getattr(self.tools, "pit", None)
+        pit = pit if isinstance(pit, rg.PitPolicy) else None
+        self.source_dates = _env_flag(self.env, "RESEARCH_SOURCE_DATES", False) or pit is not None
+        if pit is not None:
+            self.log("stage", f"point-in-time gates on (as of {pit.as_of.isoformat()}; same-day "
+                              f"{pit.same_day}, undated {pit.undated}, provider bounds "
+                              f"{'on' if pit.provider_bounds else 'off'}, overfetch {pit.overfetch})")
         if hasattr(self.tools, "source_dates"):
             self.tools.source_dates = self.source_dates
             self.tools.date_text_fallback = _env_flag(self.env, "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", True)
@@ -8969,16 +8977,41 @@ def _default_gateway_factory(args: Any, plog: Any, bridge: Any, preset: Preset) 
                            reserve_share=RESERVE_SHARE)
 
 
+def _pit_policy(env: Mapping[str, Any] | None) -> rg.PitPolicy | None:
+    """The point-in-time gates of a gated hindcast (TIME-8), else None.
+
+    Only a hindcast (RESEARCH_AS_OF before today) whose parent set
+    RESEARCH_PIT_GATES gets gates; the parent writes the RESEARCH_PIT_* values
+    from the run's admission pin, never from its current config.  Unknown text
+    reads as the strict choice: same-day excluded, undated pages dropped, and
+    an overfetch outside 1..4 clamped (unparseable: 1)."""
+    as_of = _hindcast_as_of(env)
+    if as_of is None or not _env_flag(env, "RESEARCH_PIT_GATES", False):
+        return None
+    env = env or {}
+    same_day = str(env.get("RESEARCH_PIT_SAME_DAY", "") or "").strip().lower()
+    undated = str(env.get("RESEARCH_PIT_UNDATED", "") or "").strip().lower()
+    overfetch = _parse_knob(env.get("RESEARCH_PIT_OVERFETCH", ""), 1)
+    return rg.PitPolicy(as_of=_dt.date.fromisoformat(as_of),
+                        same_day="include" if same_day == "include" else "exclude",
+                        undated="flag" if undated == "flag" else "drop",
+                        provider_bounds=_env_flag(env, "RESEARCH_PIT_PROVIDER_BOUNDS", True),
+                        overfetch=max(1, min(4, overfetch)) if overfetch is not None else 1)
+
+
 def _default_tools_factory(ledger: rg.SourceLedger, pages_dir: Path, bridge: Any, plog: Any,
                            limits: rg.ToolLimits) -> rg.ResearchTools:
     """Production tools: real search (search_tools) and fetch (cached_fetch).
 
     A hindcast (RESEARCH_AS_OF before today) labels every fetched page as live
-    (``vintage_as_of``)."""
+    (``vintage_as_of``); a gated one (RESEARCH_PIT_GATES, TIME-8) also gets the
+    point-in-time gates (``pit``), which record source dates whatever
+    RESEARCH_SOURCE_DATES says."""
+    pit = _pit_policy(os.environ)
     return rg.ResearchTools(ledger, pages_dir, bridge=bridge, plog=plog, limits=limits,
-                            source_dates=_env_flag(os.environ, "RESEARCH_SOURCE_DATES", False),
+                            source_dates=_env_flag(os.environ, "RESEARCH_SOURCE_DATES", False) or pit is not None,
                             date_text_fallback=_env_flag(os.environ, "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", True),
-                            vintage_as_of=_hindcast_as_of(os.environ))
+                            vintage_as_of=_hindcast_as_of(os.environ), pit=pit)
 
 
 # ===========================================================================

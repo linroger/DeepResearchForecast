@@ -2851,3 +2851,136 @@ def test_graph_stage_without_a_pin_keeps_the_roll_forward_validator(monkeypatch,
     assert "as_of_date_correction" in state.options
     assert "hindcast_violations" not in state.options
     assert "hindcast_source_dates" not in state.options
+
+
+# ── TIME-8: the admission pin's point-in-time gates reach only a pinned v3 child ──
+
+_PIT_CONFIG = {"PIT_GATES": True, "PIT_SAME_DAY_POLICY": "include", "PIT_UNDATED_POLICY": "flag",
+               "PIT_PROVIDER_DATE_BOUNDS": False, "PIT_SEARCH_OVERFETCH": 3}
+_PIT_CHILD_ENV = {"RESEARCH_PIT_GATES": "true", "RESEARCH_PIT_SAME_DAY": "include",
+                  "RESEARCH_PIT_UNDATED": "flag", "RESEARCH_PIT_PROVIDER_BOUNDS": "false",
+                  "RESEARCH_PIT_OVERFETCH": "3"}
+
+
+def _set_pit_config(monkeypatch, **values):
+    for name, value in values.items():
+        monkeypatch.setattr(_po.Config, name, value, raising=False)
+
+
+def _pit_keys(env):
+    return {key: value for key, value in env.items() if key.startswith("RESEARCH_PIT_")}
+
+
+def test_capture_pins_configs_pit_gates_normalized(monkeypatch):
+    _set_pit_config(monkeypatch, **_PIT_CONFIG)
+    assert _hindcast_pin()["pit"] == {"gates": True, "same_day": "include", "undated": "flag",
+                                      "provider_bounds": False, "overfetch": 3}
+    _set_pit_config(monkeypatch, PIT_GATES=False, PIT_SAME_DAY_POLICY="maybe", PIT_UNDATED_POLICY="",
+                    PIT_PROVIDER_DATE_BOUNDS=True, PIT_SEARCH_OVERFETCH=9)
+    assert _hindcast_pin()["pit"] == {"gates": False, "same_day": "exclude", "undated": "drop",
+                                      "provider_bounds": True, "overfetch": 4}
+
+
+@pytest.mark.parametrize("pit, expected", [
+    (None, {}),
+    ({}, {}),
+    ({"gates": False, "same_day": "include"}, {}),
+    ({"gates": "true"}, {}),  # only a real True turns the gates on
+    ({"gates": True}, {"RESEARCH_PIT_GATES": "true", "RESEARCH_PIT_SAME_DAY": "exclude",
+                       "RESEARCH_PIT_UNDATED": "drop", "RESEARCH_PIT_PROVIDER_BOUNDS": "false",
+                       "RESEARCH_PIT_OVERFETCH": "1", "RESEARCH_SOURCE_DATES": "true"}),
+    ({"gates": True, "same_day": "include", "undated": "flag", "provider_bounds": False, "overfetch": 3},
+     {**_PIT_CHILD_ENV, "RESEARCH_SOURCE_DATES": "true"}),
+    ({"gates": True, "same_day": "INCLUDE", "undated": "keep", "provider_bounds": True, "overfetch": "x"},
+     {"RESEARCH_PIT_GATES": "true", "RESEARCH_PIT_SAME_DAY": "exclude", "RESEARCH_PIT_UNDATED": "drop",
+      "RESEARCH_PIT_PROVIDER_BOUNDS": "true", "RESEARCH_PIT_OVERFETCH": "1", "RESEARCH_SOURCE_DATES": "true"}),
+])
+def test_pit_research_env_reads_the_pin_strictly(pit, expected):
+    assert _hp.pit_research_env(pit) == expected
+
+
+def test_runner_hands_the_pinned_pit_gates_to_the_v3_child(monkeypatch, tmp_path):
+    """The child gets the gates admitted into the pin, not today's Config (changed after
+    admission here), and RESEARCH_SOURCE_DATES is forced on over the registry forward."""
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    _set_pit_config(monkeypatch, **_PIT_CONFIG)
+    pin = _hindcast_pin()
+    _set_pit_config(monkeypatch, PIT_GATES=False, PIT_SAME_DAY_POLICY="exclude", PIT_UNDATED_POLICY="drop",
+                    PIT_PROVIDER_DATE_BOUNDS=True, PIT_SEARCH_OVERFETCH=1)
+    monkeypatch.setattr(_po.Config, "RESEARCH_SOURCE_DATES", False, raising=False)
+    monkeypatch.setenv("RESEARCH_PIT_UNDATED", "drop")
+    monkeypatch.setenv("RESEARCH_PIT_STRAY", "x")
+
+    child = _launch_capturing_child(monkeypatch, tmp_path, timeout=900, as_of=HINDCAST_AS_OF, pit=pin["pit"],
+                                    actors={"as_of_date": HINDCAST_AS_OF, "actors": []})
+
+    env = child["env"]
+    assert _pit_keys(env) == _PIT_CHILD_ENV
+    assert env["RESEARCH_SOURCE_DATES"] == "true"
+    assert env["RESEARCH_AS_OF"] == HINDCAST_AS_OF
+
+
+@pytest.mark.parametrize("engine", ["v3", "legacy"])
+def test_ambient_pit_env_never_reaches_a_live_child(monkeypatch, tmp_path, engine):
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", engine, raising=False)
+    monkeypatch.setattr(_po.Config, "RESEARCH_SOURCE_DATES", False, raising=False)
+    for name, value in {**_PIT_CHILD_ENV, "RESEARCH_PIT_STRAY": "x"}.items():
+        monkeypatch.setenv(name, value)
+
+    child = _launch_capturing_child(monkeypatch, tmp_path, timeout=900, pit={"gates": True})
+
+    assert _pit_keys(child["env"]) == {}
+    if engine == "v3":
+        assert child["env"]["RESEARCH_SOURCE_DATES"] == "false"
+
+
+@pytest.mark.parametrize("pit", [None, {"gates": False, "same_day": "include"}])
+def test_a_pin_without_active_gates_sends_no_pit_env(monkeypatch, tmp_path, pit):
+    """A pin admitted before TIME-8 (no 'pit') or with the gates off: the hindcast runs
+    exactly as TIME-7 left it, whatever the ambient env says."""
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    monkeypatch.setattr(_po.Config, "RESEARCH_SOURCE_DATES", False, raising=False)
+    monkeypatch.setenv("RESEARCH_PIT_GATES", "true")
+
+    child = _launch_capturing_child(monkeypatch, tmp_path, timeout=900, as_of=HINDCAST_AS_OF, pit=pit,
+                                    actors={"as_of_date": HINDCAST_AS_OF, "actors": []})
+
+    assert _pit_keys(child["env"]) == {}
+    assert child["env"]["RESEARCH_SOURCE_DATES"] == "false"
+    assert child["env"]["RESEARCH_AS_OF"] == HINDCAST_AS_OF
+
+
+def test_research_stage_passes_the_admission_pins_pit_block(monkeypatch, tmp_path):
+    _set_pit_config(monkeypatch, **_PIT_CONFIG)
+    pin = _hindcast_pin()
+    # Config drift after admission never reaches the launch: the pin decides.
+    _set_pit_config(monkeypatch, PIT_GATES=False, PIT_SEARCH_OVERFETCH=1)
+    seen = []
+    _drive_research_only_stage(monkeypatch, tmp_path, engine="v3", tracks=1,
+                               options={_hp.HINDCAST_POLICY_OPTION: pin}, runner_kwargs=seen)
+    assert [(kwargs["as_of"], kwargs["pit"]) for kwargs in seen] == [(HINDCAST_AS_OF, pin["pit"])]
+    assert seen[0]["pit"]["gates"] is True and seen[0]["pit"]["overfetch"] == 3
+
+
+@pytest.mark.parametrize("options", [
+    {},
+    # A pin admitted before TIME-8 carries no 'pit' block: no gates.
+    {_hp.HINDCAST_POLICY_OPTION: {key: value for key, value in _hindcast_pin().items() if key != "pit"}},
+])
+def test_research_stage_without_a_pit_block_passes_no_gates(monkeypatch, tmp_path, options):
+    seen = []
+    _drive_research_only_stage(monkeypatch, tmp_path, engine="v3", tracks=1, options=options,
+                               runner_kwargs=seen)
+    assert [kwargs["pit"] for kwargs in seen] == [None]
+
+
+def test_pit_config_defaults_and_env_example():
+    """Defaults: gates on, strict same-day and undated policies, provider bounds on,
+    no over-fetch; every knob is documented in .env.example with that default."""
+    assert (_po.Config.PIT_GATES, _po.Config.PIT_SAME_DAY_POLICY, _po.Config.PIT_UNDATED_POLICY,
+            _po.Config.PIT_PROVIDER_DATE_BOUNDS, _po.Config.PIT_SEARCH_OVERFETCH) == (
+        True, "exclude", "drop", True, 1)
+    env_example = (Path(__file__).resolve().parents[2] / ".env.example").read_text(encoding="utf-8")
+    for line in ("# PIT_GATES=true ", "# PIT_SAME_DAY_POLICY=exclude ", "# PIT_UNDATED_POLICY=drop ",
+                 "# PIT_PROVIDER_DATE_BOUNDS=true ", "# PIT_SEARCH_OVERFETCH=1 "):
+        assert line in env_example, line
