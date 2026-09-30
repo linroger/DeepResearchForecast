@@ -56,20 +56,25 @@ The contract of :func:`edgar_statements` (SEC EDGAR XBRL company facts):
   on or before ``as_of`` (dates parsed with ``date.fromisoformat`` and compared
   as dates; a fact whose dates do not parse is skipped), at the value that
   filing reported: the latest filing on or before ``as_of`` wins, so an
-  amendment or a recast counts from its own filing date.  A post-condition
-  re-checks every served value and fails closed (``unavailable``).
+  amendment or a recast counts from its own filing date.  A fact whose period
+  ends after its own filing date (a context-date typo) is skipped too, so no
+  served period ends after ``as_of``.  A post-condition re-checks every served
+  value and fails closed (``unavailable``).
 * Never derived.  A quarter is a 60-115 day span and a fiscal year a 300-400
   day span reported by an annual-report form; no fourth quarter is computed
   from the annual total and no year-to-date figure is split, so quarterly
   cash-flow lines are served as fiscal years.  Tags are tried in priority
   order and the first (tag, unit) pair reporting a period owns it: values are
-  never summed across tags, and each period keeps its own unit.
+  never summed across tags, and each period keeps its own unit.  A table row
+  whose values were filed under more than one tag marks the cells of the other
+  tags and names every tag, so no change of concept is hidden.
 * Identity.  A CIK is used as given; a ticker is resolved through SEC's current
   ticker map, which the result says when ``as_of`` is in the past.  The
   User-Agent SEC requires (a name and a contact address) is sent with every
   request and never written into a result, cache file or log line.
 * Cache.  The ticker map and each company's companyfacts (reduced to the tags
-  the statement lines use) are cached for DATA_EDGAR_CACHE_TTL_H hours whatever
+  the statement lines use, which the entry records: an entry reduced to another
+  tag set is a miss) are cached for DATA_EDGAR_CACHE_TTL_H hours whatever
   ``as_of`` is: facts filed after ``as_of`` are dropped when the statement is
   read, so one fetch serves every date.
 
@@ -1140,6 +1145,11 @@ EDGAR_LINES_US_GAAP: tuple[EdgarLine, ...] = (
 )
 _EDGAR_TAGS = tuple(dict.fromkeys(tag for line in EDGAR_LINES_US_GAAP for tag in line.tags))
 _FACT_FIELDS = ("start", "end", "val", "filed", "form", "accn")  # what the cache keeps of a fact
+# A table cell filed under another tag than its row's latest value carries the mark of its tag: one
+# mark per other tag of the longest tag list (a test pins that there are enough).
+_EDGAR_TAG_MARKS = ("†", "‡")
+# What a fallback tag measures beyond its line's label, said wherever a row shows a value of it.
+_EDGAR_TAG_NOTES: Mapping[str, str] = MappingProxyType({"LongTermDebt": "includes the current portion"})
 _CIK_RE = re.compile(r"[0-9]{10}")
 _CIK_INPUT_RE = re.compile(r"[0-9]{1,10}")
 _TICKER_RE = re.compile(r"[A-Z0-9.-]{1,10}")
@@ -1199,13 +1209,15 @@ def _fact_value(value: Any) -> Optional[Decimal]:
 
 def _parse_fact(row: Any, tag: str, unit: str) -> Optional[_FiledValue]:
     """One companyfacts row as a :class:`_FiledValue`; None when any part of it is malformed: a date
-    that does not parse, a non-numeric value, a start after the end, or no form or accession to
-    say which filing reported it."""
+    that does not parse, a period that ends after the filing reporting it (a context-date typo: a
+    period is filed as an actual only once it has ended, so with ``filed <= as_of`` no served
+    period ends after ``as_of``), a non-numeric value, a start after the end, or no form or
+    accession to say which filing reported it."""
     if not isinstance(row, Mapping):
         return None
     filed, end, value = _iso_day(row.get("filed")), _iso_day(row.get("end")), _fact_value(row.get("val"))
     form, accn = row.get("form"), row.get("accn")
-    if filed is None or end is None or value is None:
+    if filed is None or end is None or value is None or end > filed:
         return None
     if not (isinstance(form, str) and _FORM_RE.fullmatch(form.strip())
             and isinstance(accn, str) and _ACCN_RE.fullmatch(accn.strip())):
@@ -1390,10 +1402,14 @@ def _company_facts(cik: str, *, transport: Transport, cache: _DiskCache, agent: 
     """The company's filing history (``us_gaap_present``, ``facts`` as :func:`_needed_facts` keeps
     them and ``fetched_at``, when SEC answered), cached for DATA_EDGAR_CACHE_TTL_H hours whatever the
     as-of date, or the ``(status, detail)`` of the failure.  A 404 is ``no_xbrl_facts``; an answer
-    without a facts object, or of another CIK, establishes nothing and is ``unavailable``."""
+    without a facts object, or of another CIK, establishes nothing and is ``unavailable``.  The
+    snapshot records the tags and fact fields it was reduced to: one reduced to another set (an
+    earlier :data:`EDGAR_LINES_US_GAAP`) is a miss, so a line or fallback tag added since is never
+    read as untagged."""
     cache_key = f"edgar|companyfacts|{cik}"
     stored = cache.get(cache_key, max_age_s=_edgar_ttl_s())
     if (isinstance(stored, Mapping) and stored.get("kind") == "companyfacts" and stored.get("cik") == cik
+            and stored.get("tags") == list(_EDGAR_TAGS) and stored.get("fields") == list(_FACT_FIELDS)
             and isinstance(stored.get("us_gaap_present"), bool) and isinstance(stored.get("facts"), Mapping)
             and isinstance(stored.get("fetched_at"), str) and _UTC_STAMP_RE.fullmatch(stored["fetched_at"])):
         return dict(stored)
@@ -1412,7 +1428,8 @@ def _company_facts(cik: str, *, transport: Transport, cache: _DiskCache, agent: 
     if us_gaap is not None and not isinstance(us_gaap, Mapping):
         return STATUS_UNAVAILABLE, "SEC EDGAR answered with us-gaap facts that are not an object"
     snapshot = {"status": STATUS_OK, "vendor": "sec_edgar", "kind": "companyfacts", "cik": cik,
-                "us_gaap_present": bool(us_gaap), "facts": _needed_facts(us_gaap or {}), "fetched_at": fetched_at}
+                "tags": list(_EDGAR_TAGS), "fields": list(_FACT_FIELDS), "us_gaap_present": bool(us_gaap),
+                "facts": _needed_facts(us_gaap or {}), "fetched_at": fetched_at}
     cache.put(cache_key, snapshot, _edgar_ttl_s())
     return snapshot
 
@@ -1450,14 +1467,15 @@ def _edgar_sections(facts: Mapping[str, Any], as_of: _dt.date, *, quarterly: boo
 
 def _postcondition_breaches(sections: Sequence[_Section], as_of: _dt.date) -> int:
     """How many served values break the as-filed contract (0 when none does): not a filed value of
-    the period and line it serves, filed after ``as_of``, or without the form and accession that
-    identify its filing."""
+    the period and line it serves, filed after ``as_of``, of a period ending after its filing (so
+    after ``as_of``), or without the form and accession that identify its filing."""
     breaches = 0
     for section in sections:
         for line, _, served in section.lines:
             for end, fact in served.items():
                 breaches += not (isinstance(fact, _FiledValue) and fact.end == end and fact.tag in line.tags
-                                 and isinstance(fact.filed, _dt.date) and fact.filed <= as_of and bool(fact.form)
+                                 and isinstance(fact.filed, _dt.date) and fact.end <= fact.filed <= as_of
+                                 and bool(fact.form)
                                  and isinstance(fact.accn, str) and bool(_ACCN_RE.fullmatch(fact.accn)))
     return breaches
 
@@ -1536,15 +1554,50 @@ def _edgar_sentence(who: str, line: EdgarLine, fact: _FiledValue, annual: bool, 
             f"(accession {fact.accn}): {value}.")
 
 
+def _row_tags(line: EdgarLine, served: Mapping[_dt.date, _FiledValue],
+              columns: Sequence[_dt.date]) -> tuple[Optional[str], dict[str, str]]:
+    """The tag of a row's latest shown value and {other tag: its mark} for each other tag the row's
+    shown values were filed under, in the line's priority order; ``(None, {})`` for a row showing no
+    value."""
+    shown = [served[end].tag for end in columns if end in served]
+    if not shown:
+        return None, {}
+    return shown[0], dict(zip((tag for tag in line.tags if tag != shown[0] and tag in shown), _EDGAR_TAG_MARKS))
+
+
+def _tag_text(tag: str) -> str:
+    """``us-gaap:TAG``, with what the tag measures beyond its line's label when that differs."""
+    note = _EDGAR_TAG_NOTES.get(tag)
+    return f"us-gaap:{tag} ({note})" if note else f"us-gaap:{tag}"
+
+
+def _tag_legend(line: EdgarLine, served: Mapping[_dt.date, _FiledValue], columns: Sequence[_dt.date]) -> Optional[str]:
+    """The line naming a row's tags when its shown values were filed under more than one tag (a change
+    of concept the table must not hide: the other tags' cells carry their marks) or under a tag that
+    measures more than the label says; None otherwise."""
+    latest, marks = _row_tags(line, served, columns)
+    if latest is None or not (marks or latest in _EDGAR_TAG_NOTES):
+        return None
+    if not marks:
+        return f"{line.label}: {_tag_text(latest)}."
+    return (f"{line.label} mixes tags: " + "; ".join(f"{mark} = {_tag_text(tag)}" for tag, mark in marks.items())
+            + f"; unmarked = {_tag_text(latest)}.")
+
+
 def _edgar_table(section: _Section, columns: Sequence[_dt.date], as_of: _dt.date) -> list[str]:
-    """The section's lines as a pipe table, one column per period end (latest first)."""
+    """The section's lines as a pipe table, one column per period end (latest first); a cell filed
+    under another tag than its row's latest value carries that tag's mark (:func:`_row_tags`)."""
     if not columns:
         return [f"{line.label}: " + (f"no value filed on or before {as_of.isoformat()}" if tagged else EDGAR_UNTAGGED)
                 for line, tagged, _ in section.lines]
     rows = ["| Line | " + " | ".join(end.isoformat() for end in columns) + " |", "|---|" + "---|" * len(columns)]
     for line, tagged, served in section.lines:
-        cells = ([_edgar_cell(served[end]) if end in served else _NO_VALUE for end in columns] if tagged
-                 else [EDGAR_UNTAGGED] * len(columns))
+        if tagged:
+            marks = _row_tags(line, served, columns)[1]
+            cells = [_edgar_cell(served[end]) + marks.get(served[end].tag, "") if end in served else _NO_VALUE
+                     for end in columns]
+        else:
+            cells = [EDGAR_UNTAGGED] * len(columns)
         rows.append(f"| {line.label} | " + " | ".join(cells) + " |")
     return rows
 
@@ -1572,6 +1625,11 @@ def _edgar_model_text(sections: Sequence[_Section], columns: Sequence[Sequence[_
                      "year-to-date difference is never derived.")
     else:
         lines.append(f"{_NO_VALUE} = no fiscal-year value filed for that period on or before {day}.")
+    for section, section_columns in zip(sections, columns):
+        for line, _, served in section.lines:
+            legend = _tag_legend(line, served, section_columns)
+            if legend:
+                lines.append(legend)
     lines.append(f"Latest filing served: {latest.form} filed {latest.filed.isoformat()} (accession {latest.accn}).")
     if omitted:
         lines.append("Older periods are omitted.")
@@ -1712,8 +1770,9 @@ def _edgar_statements(company: Any, *, as_of: Any, freq: Any, user_agent: Any, l
     if breaches:
         logger.warning("data_tools: SEC EDGAR CIK %s: %d served value(s) broke the as-filed post-condition; "
                        "nothing served", cik, breaches)
-        return _failure(STATUS_UNAVAILABLE, "a value to be served was not filed on or before as_of or lacked its "
-                                            "filing identity, so nothing is served (as-filed post-condition)",
+        return _failure(STATUS_UNAVAILABLE, "a value to be served was not filed on or before as_of, was of a period "
+                                            "ending after its filing or lacked its filing identity, so nothing is "
+                                            "served (as-filed post-condition)",
                         key=key, url=url, provenance=provenance, source=EDGAR_SOURCE)
     if not any(served for section in sections for _, _, served in section.lines):
         return _failure(STATUS_NOT_FOUND, f"no {mode} us-gaap statement value of CIK {cik} was filed on or before "

@@ -309,6 +309,26 @@ def test_malformed_facts_are_skipped():
                                  dtools.SPAN_ANNUAL)) == [dt.date(2024, 9, 28)]
 
 
+def test_a_period_ending_after_its_own_filing_is_never_served():
+    """A context-date typo (a 10-K filed 2024-11-01 reporting a balance "at" 2204-09-28) passes the
+    filing-date gate; a period is filed as an actual only once it has ended, so the fact is skipped."""
+    on_the_day = _fact("2024-11-01", 1, "2024-11-01")
+    assert dtools._parse_fact(on_the_day, "Assets", "USD").end == dt.date(2024, 11, 1)
+    assert dtools._parse_fact(dict(on_the_day, end="2024-11-02"), "Assets", "USD") is None
+    typo = _fact("2204-09-28", 36_498_000_000, "2024-11-01")
+    transport = with_facts({"Assets": {"units": {"USD": [
+        _fact("2023-09-30", 352_583_000_000, "2024-11-01"), _fact("2024-09-28", 364_980_000_000, "2024-11-01"), typo]}},
+        "GrossProfit": {"units": {"USD": [dict(typo, start="2203-10-01")]}}})
+    for freq in ("annual", "quarterly"):
+        result = call(transport, company="320193", as_of=dt.date(2025, 1, 1), freq=freq)
+        assert result.status == dtools.STATUS_OK
+        assert columns(result) == ["2024-09-28", "2023-09-30"] and row(result, "Total assets") == ["364,980", "352,583"]
+        assert "2204" not in result.model_text + result.page_text and "36,498" not in result.model_text
+        [assets] = [fact for fact in result.facts if fact["metric"] == "Total assets"]
+        assert (assets["observation_date"], assets["value"]) == ("2024-09-28", "364980000000")
+        assert row(result, "Gross profit") == [dtools.EDGAR_UNTAGGED] * 2  # its only fact is malformed
+
+
 def test_the_latest_filing_wins_ties_to_the_later_accession():
     first = _fact("2024-09-28", 1_000_000, "2024-11-01", start="2023-09-30", accn="0000320193-24-000123")
     second = dict(first, val=2_000_000, accn="0000320193-24-000124")
@@ -344,6 +364,24 @@ def test_a_served_value_without_its_filing_identity_fails_closed(monkeypatch):
 
     monkeypatch.setattr(dtools, "_as_filed", anonymous)
     assert call(as_of=dt.date(2024, 11, 15)).status == dtools.STATUS_UNAVAILABLE
+
+
+def test_an_injected_period_ending_after_its_filing_fails_closed(monkeypatch):
+    """Filed by as_of, but of a period that had not ended: the post-condition refuses it too."""
+    real = dtools._as_filed
+
+    def future_period(tag_rows, as_of, span, annual_forms=dtools.EDGAR_ANNUAL_FORMS):
+        served = real(tag_rows, as_of, span, annual_forms)
+        if tag_rows and tag_rows[0][0] == "Assets":
+            served[dt.date(2204, 9, 28)] = dtools._FiledValue(
+                val=Decimal(1), unit="USD", tag="Assets", form="10-K", filed=dt.date(2024, 11, 1),
+                accn="0000320193-24-000123", end=dt.date(2204, 9, 28), start=None, span_days=None)
+        return served
+
+    monkeypatch.setattr(dtools, "_as_filed", future_period)
+    result = call(as_of=dt.date(2024, 11, 15))
+    assert result.status == dtools.STATUS_UNAVAILABLE and "post-condition" in result.detail
+    assert "2204" not in result.model_text and result.facts == ()
 
 
 @pytest.mark.parametrize("answer, status, detail", [
@@ -470,11 +508,21 @@ def test_a_lowered_ttl_shortens_entries_already_cached(tmp_path, monkeypatch):
     assert len(transport.urls("companyfacts")) == 2
 
 
+def _stored_companyfacts(**changes):
+    payload = {"status": "ok", "kind": "companyfacts", "cik": "0000320193", "tags": list(dtools._EDGAR_TAGS),
+               "fields": list(dtools._FACT_FIELDS), "us_gaap_present": True, "facts": {},
+               "fetched_at": "2026-09-30T17:00:00Z", **changes}
+    return json.dumps({"stored_at": 0, "ttl_s": 3600,
+                       "payload": {key: value for key, value in payload.items() if value is not None}})
+
+
 @pytest.mark.parametrize("stored", [
     '{"stored_at": 1', "[]",
     '{"stored_at": 0, "ttl_s": 3600, "payload": {"status": "ok", "kind": "companyfacts"}}',
-    '{"stored_at": 0, "ttl_s": 3600, "payload": {"status": "ok", "kind": "companyfacts", "cik": "0000789019", '
-    '"us_gaap_present": true, "facts": {}, "fetched_at": "2026-09-30T17:00:00Z"}}',
+    _stored_companyfacts(cik="0000789019"),
+    _stored_companyfacts(tags=None, fields=None),  # written before entries recorded their reduction
+    _stored_companyfacts(tags=["Assets"]),
+    _stored_companyfacts(fields=["end", "val", "filed", "form", "accn"]),
 ])
 def test_a_corrupt_or_foreign_cache_entry_is_a_miss(stored, tmp_path):
     cache = dtools._DiskCache(str(tmp_path / "cache"), 3600, clock=lambda: 5.0)
@@ -483,6 +531,30 @@ def test_a_corrupt_or_foreign_cache_entry_is_a_miss(stored, tmp_path):
     transport = FakeSEC()
     assert call(transport, company="320193", cache=cache).status == dtools.STATUS_OK
     assert len(transport.urls("companyfacts")) == 1
+
+
+def test_a_well_formed_cache_entry_is_a_hit(tmp_path):
+    """The entry the misses above vary, one field each: read without a request."""
+    cache = dtools._DiskCache(str(tmp_path / "cache"), 3600, clock=lambda: 5.0)
+    Path(cache.root).mkdir(parents=True)
+    Path(cache.path("edgar|companyfacts|0000320193")).write_text(_stored_companyfacts(), encoding="utf-8")
+    transport = FakeSEC()
+    assert call(transport, company="320193", cache=cache).status == dtools.STATUS_NOT_FOUND  # its facts: none
+    assert transport.urls("companyfacts") == []
+
+
+def test_a_snapshot_reduced_to_another_tag_set_is_refetched(tmp_path, monkeypatch):
+    """An entry cut to an earlier line table must not read a line or fallback tag added since as untagged."""
+    cache = dtools._DiskCache(str(tmp_path / "cache"), 3600)
+    transport = FakeSEC()
+    with monkeypatch.context() as earlier:
+        earlier.setattr(dtools, "_EDGAR_TAGS", tuple(tag for tag in dtools._EDGAR_TAGS if tag != "Assets"))
+        cut = call(transport, cache=cache)
+        assert row(cut, "Total assets") == [dtools.EDGAR_UNTAGGED] * len(columns(cut))
+    assert row(call(transport, cache=cache), "Total assets") == ["364,980", "36,171"]
+    assert len(transport.urls("companyfacts")) == 2
+    call(transport, cache=cache)  # the refetched entry, cut to the current tags, is reused
+    assert len(transport.urls("companyfacts")) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -668,6 +740,56 @@ def test_share_counts_keep_their_unit():
     result = call(_filer(), company="999999", as_of=dt.date(2026, 1, 1))
     assert row(result, "Diluted shares")[0] == "15,408,095,000 shares"
     assert sentences(result, "Diluted shares")[0]["value"] == "15,408,095,000 shares (15.4 billion shares)"
+
+
+def test_a_row_mixing_tags_marks_the_other_tags_cells_and_names_every_tag():
+    """LongTermDebt includes the current portion: a change of concept the table must not hide."""
+    transport = with_facts({
+        "LongTermDebtNoncurrent": {"units": {"USD": [_fact("2024-09-28", 85_750_000_000, "2024-11-01")]}},
+        "LongTermDebt": {"units": {"USD": [_fact("2008-09-27", 105_103_000_000, "2008-11-05")]}},
+        "RevenueFromContractWithCustomerExcludingAssessedTax": {"units": {"USD": [
+            _fact("2024-09-28", 391_035_000_000, "2024-11-01", start="2023-09-30")]}},
+        "Revenues": {"units": {"USD": [_fact("2015-09-26", 233_715_000_000, "2015-10-28", start="2014-09-28")]}},
+        "SalesRevenueNet": {"units": {"USD": [_fact("2008-09-27", 32_479_000_000, "2008-11-05", start="2007-09-30")]}},
+        "Assets": {"units": {"USD": [_fact("2024-09-28", 364_980_000_000, "2024-11-01"),
+                                     _fact("2015-09-26", 290_479_000_000, "2015-10-28")]}}})
+    result = call(transport, company="320193", as_of=dt.date(2025, 1, 1))
+    assert columns(result) == ["2024-09-28", "2015-09-26", "2008-09-27"]
+    assert row(result, "Long-term debt") == ["85,750", "—", "105,103†"]
+    assert row(result, "Revenue") == ["391,035", "233,715†", "32,479‡"]
+    assert row(result, "Total assets") == ["364,980", "290,479", "—"]  # one tag: nothing marked
+    legend = result.model_text.splitlines()
+    assert ("Long-term debt mixes tags: † = us-gaap:LongTermDebt (includes the current portion); "
+            "unmarked = us-gaap:LongTermDebtNoncurrent.") in legend
+    assert ("Revenue mixes tags: † = us-gaap:Revenues; ‡ = us-gaap:SalesRevenueNet; "
+            "unmarked = us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax.") in legend
+    assert not any(text.startswith("Total assets") for text in legend)
+    assert "†" not in result.page_text and "‡" not in result.page_text  # each sentence names its own tag
+    assert {match["tag"] for match in sentences(result, "Revenue")} == {
+        "RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "SalesRevenueNet"}
+
+
+def test_a_row_under_one_tag_is_marked_only_when_the_tag_says_more_than_its_label():
+    transport = with_facts({"LongTermDebt": {"units": {"USD": [
+        _fact("2024-09-28", 106_629_000_000, "2024-11-01"), _fact("2008-09-27", 105_103_000_000, "2008-11-05")]}}})
+    result = call(transport, company="320193", as_of=dt.date(2025, 1, 1))
+    assert row(result, "Long-term debt") == ["106,629", "105,103"]
+    assert "Long-term debt: us-gaap:LongTermDebt (includes the current portion)." in result.model_text.splitlines()
+    plain = call(as_of=dt.date(2024, 11, 15))
+    assert "mixes tags" not in plain.model_text and "us-gaap:" not in plain.model_text
+
+
+def test_the_marks_follow_the_shown_columns_and_suffice_for_every_line():
+    assert max(len(line.tags) for line in dtools.EDGAR_LINES_US_GAAP) - 1 <= len(dtools._EDGAR_TAG_MARKS)
+    line = next(line for line in dtools.EDGAR_LINES_US_GAAP if line.label == "Long-term debt")
+    served = dtools._as_filed(usd_rows([("LongTermDebtNoncurrent", [_fact("2024-09-28", 1, "2024-11-01")]),
+                                        ("LongTermDebt", [_fact("2008-09-27", 2, "2008-11-05")])]),
+                              dt.date(2025, 1, 1), dtools.SPAN_ANNUAL)
+    latest, older = dt.date(2024, 9, 28), dt.date(2008, 9, 27)
+    assert dtools._row_tags(line, served, [latest, older]) == ("LongTermDebtNoncurrent", {"LongTermDebt": "†"})
+    assert dtools._row_tags(line, served, [latest]) == ("LongTermDebtNoncurrent", {})  # the older column is cut
+    assert dtools._tag_legend(line, served, [latest]) is None
+    assert dtools._row_tags(line, served, []) == (None, {})
 
 
 def test_the_spec_sentence_and_the_structured_facts():
