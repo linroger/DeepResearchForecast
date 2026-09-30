@@ -180,6 +180,17 @@ def test_as_of_today_is_pinned_but_live():
     late = datetime(2026, 9, 30, 23, 59, tzinfo=timezone.utc)
     assert hp.capture_hindcast_policy_v1(
         "2026-09-30", research_engine="v3", today_utc=late)["hindcast"] is False
+    assert hp.capture_hindcast_policy_v1(
+        "2026-09-30", research_engine="v3", today_utc=late.replace(tzinfo=None))["hindcast"] is False
+    # An aware datetime in another zone counts by its UTC date, not its local one:
+    # 2026-09-30T23:00-05:00 is already 2026-10-01 in UTC, so 09-30 lies in the past ...
+    new_york_late = datetime(2026, 9, 30, 23, 0, tzinfo=timezone(timedelta(hours=-5)))
+    assert hp.capture_hindcast_policy_v1(
+        "2026-09-30", research_engine="v3", today_utc=new_york_late)["hindcast"] is True
+    # ... while 2026-10-01T01:00+09:00 is still 2026-09-30 in UTC.
+    tokyo_early = datetime(2026, 10, 1, 1, 0, tzinfo=timezone(timedelta(hours=9)))
+    assert hp.capture_hindcast_policy_v1(
+        "2026-09-30", research_engine="v3", today_utc=tokyo_early)["hindcast"] is False
     yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
     assert hp.capture_hindcast_policy_v1(yesterday, research_engine="v3")["hindcast"] is True
 
@@ -192,6 +203,19 @@ def test_as_of_today_is_pinned_but_live():
 ])
 def test_hindcast_policy_ignores_anything_but_a_hindcast_pin(options):
     assert hp.hindcast_policy(options) is None
+
+
+@pytest.mark.parametrize("value", [
+    None, {}, "2024-06-01", [("version", "hindcast-policy/v1")], LIVE_PIN,
+    dict(PIN, version="hindcast-policy/v0"), dict(PIN, hindcast="true"),
+])
+def test_as_hindcast_pin_accepts_only_a_hindcast_pin(value):
+    assert hp.as_hindcast_pin(value) is None
+
+
+def test_as_hindcast_pin_returns_a_copy():
+    pin = hp.as_hindcast_pin(PIN)
+    assert pin == PIN and pin is not PIN
 
 
 def test_hindcast_policy_returns_a_copy():
@@ -208,14 +232,43 @@ def test_forecast_block_and_enforcement_record():
 
 
 # ───────────────────────────── report-stage markets ──────────────────────────
-def test_constructor_stores_only_a_dict_pin(env):
-    agent = ReportAgent(graph_id="g1", simulation_id="sim_1", simulation_requirement=QUESTION,
-                        llm_client=FakeLLMClient(), zep_tools=object(), hindcast=PIN)
+NOT_A_PIN = [LIVE_PIN, {}, dict(PIN, version="hindcast-policy/v0"), "2024-06-01"]
+
+
+def _constructed(**kwargs):
+    return ReportAgent(graph_id="g1", simulation_id="sim_1", simulation_requirement=QUESTION,
+                       llm_client=FakeLLMClient(), zep_tools=object(), **kwargs)
+
+
+def test_constructor_stores_only_a_hindcast_pin(env):
+    agent = _constructed(hindcast=PIN)
     assert agent.hindcast == PIN and agent._hindcast_pin() == PIN
-    plain = ReportAgent(graph_id="g1", simulation_id="sim_1", simulation_requirement=QUESTION,
-                        llm_client=FakeLLMClient(), zep_tools=object(), hindcast="2024-06-01")
-    assert plain.hindcast is None
+    assert agent._markets_withheld_status() == WITHHELD
     assert "hindcast" in inspect.signature(ReportAgent.__init__).parameters
+    # A live pin (as-of today), {} or anything else is stored as "not given".
+    for value in NOT_A_PIN:
+        assert _constructed(hindcast=value).hindcast is None
+
+
+@pytest.mark.parametrize("value", NOT_A_PIN)
+def test_kwarg_that_is_not_a_hindcast_pin_behaves_as_no_pin(env, market_calls, monkeypatch, value):
+    """A live pin or {} passed as the kwarg changes nothing: no withholding, label or as-of year."""
+    agent = _constructed(hindcast=value)
+    assert agent._hindcast_pin() is None and agent._markets_withheld_status() is None
+    assert agent._load_prediction_markets() == []
+    assert market_calls == ["client"]                     # the live fallback still ran
+    assert agent._market_status == absence.unavailable("report_fallback_error")
+    # The same holds when the attribute is set on an agent built without __init__.
+    _finalize_env(monkeypatch)
+    monkeypatch.setattr(fe, "extract_binary_forecasts", _fake_extract([]))
+    horizon_calls = _horizon_spy(monkeypatch)
+    for report_id in ("r_value", "r_none"):
+        os.makedirs(ReportManager._get_report_folder(report_id), exist_ok=True)
+    _bare_agent(hindcast=value)._finalize_structured_forecast("r_value", MARKDOWN)
+    _bare_agent()._finalize_structured_forecast("r_none", MARKDOWN)
+    assert "hindcast" not in _read_forecast("r_value")
+    assert horizon_calls == [{"horizon_date": None}, {"horizon_date": None}]
+    assert _read_forecast_text("r_value") == _read_forecast_text("r_none")
 
 
 def test_pinned_report_makes_no_market_call(env, market_calls, monkeypatch):
@@ -296,14 +349,36 @@ def test_pin_discovered_from_the_owning_pipeline(env, market_calls, monkeypatch)
     assert lookups == ["sim_hind", "sim_live"]
 
 
-def test_pin_lookup_failure_counts_as_no_pin(env, monkeypatch):
+def test_pin_lookup_failure_withholds_markets_only(env, market_calls, monkeypatch):
+    """A lookup that raises is no pin (no label, no as-of year), but markets fail closed."""
     def boom(simulation_id):
         raise OSError("pipeline dir unreadable")
 
     monkeypatch.setattr(po, "_ledger_owner_of_simulation", boom)
-    assert _bare_agent()._hindcast_pin() is None
-    # The kwarg wins without any scan.
+    lookup_failed = absence.unavailable("hindcast_lookup_failed")
+    agent = _bare_agent()
+    assert agent._hindcast_pin() is None
+    assert agent._markets_withheld_status() == lookup_failed
+    assert agent._load_prediction_markets() == []
+    assert agent._market_status == lookup_failed and agent._markets_stale is False
+    agent._prediction_markets = [dict(MARKET_ROW)]
+    agent._refresh_market_prices_for_extraction()
+    assert agent._prediction_markets == [MARKET_ROW]
+    assert market_calls == []
+    # Finalization: the market slot says why it is empty; no hindcast block, today's year.
+    _finalize_env(monkeypatch)
+    monkeypatch.setattr(fe, "extract_binary_forecasts", _fake_extract([]))
+    horizon_calls = _horizon_spy(monkeypatch)
+    os.makedirs(ReportManager._get_report_folder("r_lookup_failed"), exist_ok=True)
+    _bare_agent()._finalize_structured_forecast("r_lookup_failed", MARKDOWN)
+    forecast = _read_forecast("r_lookup_failed")
+    assert "hindcast" not in forecast
+    assert horizon_calls == [{"horizon_date": None}]
+    assert forecast["quality"]["prompt_slot_states"]["market"] == lookup_failed.to_dict()
+    assert market_calls == []
+    # The kwarg wins without any scan, so no lookup can fail.
     assert _bare_agent(hindcast=PIN)._hindcast_pin() == PIN
+    assert _bare_agent(hindcast=PIN)._markets_withheld_status() == WITHHELD
 
 
 # ───────────────────────────── forecast.json ─────────────────────────────────
@@ -377,6 +452,39 @@ def test_fork_carries_the_pin(env):
             assert persisted[hp.HINDCAST_POLICY_OPTION] is not PIN
         else:
             assert hp.HINDCAST_POLICY_OPTION not in persisted
+
+
+@pytest.mark.parametrize("shared_simulation", [False, True])
+def test_question_fork_carries_the_pin(env, market_calls, shared_simulation):
+    """A batch question fork answers from the base's as-of research: it stays a hindcast."""
+    import scripts.batch_runs as batch_runs
+
+    for pipeline_id, options in (("pipe_hind_base", {hp.HINDCAST_POLICY_OPTION: PIN}),
+                                 ("pipe_live_base", {})):
+        base = _save_pipeline(pipeline_id, f"sim_{pipeline_id}", **options)
+        base.graph_id = "graph_1"
+        po.PipelineManager.save(base)
+        fork = batch_runs.fork_question(pipeline_id, "Will the ECB cut again by mid-2025?",
+                                        shared_simulation=shared_simulation)
+        _settle(fork.pipeline_id)
+        fork_state = po.PipelineState.from_dict(po.PipelineManager.load(fork.pipeline_id))
+        persisted = fork_state.options
+        if not options:
+            assert hp.HINDCAST_POLICY_OPTION not in persisted
+            assert po.PipelineOrchestrator._hindcast_agent_kwargs(fork_state) == {}
+            continue
+        assert persisted[hp.HINDCAST_POLICY_OPTION] == PIN
+        assert persisted[hp.HINDCAST_POLICY_OPTION] is not PIN
+        # The fork's own report stage passes the pin, so its report withholds markets ...
+        assert po.PipelineOrchestrator._hindcast_agent_kwargs(fork_state) == {"hindcast": PIN}
+        # ... and a regeneration on the simulation the fork ran finds the pin as well.
+        if not shared_simulation:
+            fork_state.simulation_id = "sim_question_fork"
+            po.PipelineManager.save(fork_state)
+        agent = _bare_agent(simulation_id=fork_state.simulation_id)
+        assert agent._hindcast_pin() == PIN
+        assert agent._load_prediction_markets() == [] and agent._market_status == WITHHELD
+    assert market_calls == []
 
 
 def test_run_manifest_records_as_of_enforcement_only_when_pinned(env, monkeypatch):

@@ -9,6 +9,13 @@ Search and fetch are not clamped to the as-of date (``search: 'unbounded'``,
 ``fetch: 'label'``): the run is labelled as characterization-only instead, and
 contamination is reported as ``not_assessed`` until an assessor exists.
 
+``markets: 'withheld'`` (and run.json ``live_data_withheld``) speaks for the whole
+run together with admission (TIME-7), the only creator of a pin, which also runs
+the research child with ``PREDICTION_MARKETS_ENABLED=false``: no research-time
+market snapshot (``prediction_markets.json``, ``market_price_history.json``) then
+exists for the simulation's market priors, the persona market block or the report
+visualizer to read, and the report stage never reads, requotes or live-fetches one.
+
 An as-of equal to today is pinned but live (``hindcast`` False), so
 :func:`hindcast_policy` returns None for it and nothing changes.
 
@@ -33,11 +40,14 @@ def capture_hindcast_policy_v1(as_of: str, *, research_engine: str,
     The caller validates ``as_of`` (``utils.point_in_time.validate_as_of``); an
     unparseable value raises ValueError here. ``hindcast`` is True only when the
     as-of date lies strictly before today's UTC date (``today_utc`` injects it; a
-    ``datetime`` is reduced to its date).
+    ``datetime`` is reduced to its UTC date: an aware one is converted to UTC
+    first, a naive one is taken as UTC).
     """
     if today_utc is None:
         today = datetime.now(timezone.utc).date()
     elif isinstance(today_utc, datetime):
+        if today_utc.utcoffset() is not None:
+            today_utc = today_utc.astimezone(timezone.utc)
         today = today_utc.date()
     else:
         today = today_utc
@@ -54,21 +64,29 @@ def capture_hindcast_policy_v1(as_of: str, *, research_engine: str,
     }
 
 
+def as_hindcast_pin(value: Any) -> Optional[dict[str, Any]]:
+    """``value`` as a hindcast pin (a copy), or None when it is not one.
+
+    A pin counts only when it is an object of this policy version whose
+    ``hindcast`` flag is True: an as-of equal to today is pinned but live, and a
+    missing, empty or foreign value is no pin.
+    """
+    if not isinstance(value, Mapping):
+        return None
+    if value.get("version") != HINDCAST_POLICY_VERSION or value.get("hindcast") is not True:
+        return None
+    return dict(value)
+
+
 def hindcast_policy(options: Any) -> Optional[dict[str, Any]]:
     """The run's hindcast pin (a copy), or None for a live run.
 
-    ``options`` is a pipeline's ``state.options``. The pin counts only when it is
-    an object of this policy version whose ``hindcast`` flag is True: an as-of
-    equal to today is pinned but live, and a missing or foreign value is no pin.
+    ``options`` is a pipeline's ``state.options``; its ``hindcast_policy_v1``
+    value counts as described in :func:`as_hindcast_pin`.
     """
     if not isinstance(options, Mapping):
         return None
-    pin = options.get(HINDCAST_POLICY_OPTION)
-    if not isinstance(pin, Mapping):
-        return None
-    if pin.get("version") != HINDCAST_POLICY_VERSION or pin.get("hindcast") is not True:
-        return None
-    return dict(pin)
+    return as_hindcast_pin(options.get(HINDCAST_POLICY_OPTION))
 
 
 def hindcast_forecast_block(pin: Mapping[str, Any], *,

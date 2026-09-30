@@ -60,6 +60,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.config import Config  # noqa: E402
 from app.services.ensemble import aggregate_forecasts  # noqa: E402
+from app.services.hindcast_policy import HINDCAST_POLICY_OPTION  # noqa: E402
 from app.services.pipeline_orchestrator import (  # noqa: E402
     EVALUATION_RUN_OPTION,
     PIPELINE_SCHEMA_VERSION,
@@ -316,6 +317,12 @@ def fork_question(
         # the base's cell identity; carried in options, so its lane survives the loss of the
         # base's handoff marker.
         options[EVALUATION_RUN_OPTION] = evaluation_pin
+    hindcast_pin = (base_state.options or {}).get(HINDCAST_POLICY_OPTION)
+    if isinstance(hindcast_pin, dict):
+        # TIME-6: the fork answers its question from the base's as-of research, so it keeps
+        # the base's hindcast pin (carried, never re-captured, as in fork()); its reports then
+        # withhold live market odds and carry the hindcast label.
+        options[HINDCAST_POLICY_OPTION] = dict(hindcast_pin)
     if max_rounds:
         try:
             options["max_rounds"] = int(max_rounds)

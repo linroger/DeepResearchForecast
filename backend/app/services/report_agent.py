@@ -31,7 +31,7 @@ from ..utils.logger import get_logger
 from ..utils.security import UnsafeIdError, contained_child, is_safe_id, safe_id
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMMeter, set_run_context, get_run_context
-from .hindcast_policy import hindcast_forecast_block
+from .hindcast_policy import as_hindcast_pin, hindcast_forecast_block
 from .zep_tools import (
     ZepToolsService, 
     SearchResult, 
@@ -1603,6 +1603,7 @@ class ReportAgent:
         TIME-6 hindcast: 回测运行的 hindcast_policy_v1 钉（编排器主报告/种子报告传入）。缺省 None 时
             由 _hindcast_pin 按模拟 id 查回所属管线的钉（覆盖 API 重生成/对话）；两者皆无 = 实时运行，
             行为逐字节不变。有钉时报告阶段不读/不重报价/不现抓预测市场，forecast.json 盖 hindcast 章。
+            只有真正的回测钉（本版本且 hindcast 为真）才算数：as_of 等于今天的实时钉、{} 或其他值一律视为未传入。
         """
         self.graph_id = graph_id
         self.simulation_id = simulation_id
@@ -1698,10 +1699,11 @@ class ReportAgent:
         # _resolve_evaluation_context 按模拟 id 查回所属管线的持久化标记（覆盖 API 重生成）；
         # 两者皆无 = 生产运行，行为不变。测试经 __new__ 构造时缺失，读取一律走 getattr。
         self.evaluation_context: Optional[Dict[str, Any]] = None
-        # TIME-6: 回测钉（见 docstring）；非 dict 一律视为未传入。按模拟 id 的查找结果懒缓存一次。
-        # 测试经 __new__ 构造时二者缺失，读取一律走 getattr。
-        self.hindcast: Optional[Dict[str, Any]] = hindcast if isinstance(hindcast, dict) else None
+        # TIME-6: 回测钉（见 docstring）；只存真正的回测钉，其余一律视为未传入。按模拟 id 的查找结果
+        # 懒缓存一次；查找抛错时记下，市场据此失败即扣下。测试经 __new__ 构造时三者缺失，读取一律走 getattr。
+        self.hindcast: Optional[Dict[str, Any]] = as_hindcast_pin(hindcast)
         self._hindcast_pin_cache: Any = _HINDCAST_PIN_UNRESOLVED
+        self._hindcast_lookup_failed = False
 
         self.llm = llm_client or LLMClient()
         self.zep_tools = zep_tools or ZepToolsService()
@@ -2634,15 +2636,18 @@ class ReportAgent:
     def _hindcast_pin(self) -> Optional[Dict[str, Any]]:
         """TIME-6: this report's hindcast policy pin, or None for a live report.
 
-        The ``hindcast`` constructor kwarg (orchestrator main and seed reports) wins.
-        Otherwise the pipeline that ran ``simulation_id`` is looked up once and
-        cached (``pipeline_orchestrator.hindcast_pin_for_simulation``), so entry points
-        that build a ReportAgent without orchestrator context (``/api/report``
-        regenerate and chat) still withhold live market data from a hindcast. A
-        lookup that raises is logged and counts as no pin.
+        The ``hindcast`` constructor kwarg (orchestrator main and seed reports) wins
+        when it is a real hindcast pin (``hindcast_policy.as_hindcast_pin``; a live
+        pin or ``{}`` counts as not given). Otherwise the pipeline that ran
+        ``simulation_id`` is looked up once and cached
+        (``pipeline_orchestrator.hindcast_pin_for_simulation``), so entry points that
+        build a ReportAgent without orchestrator context (``/api/report`` regenerate
+        and chat) still withhold live market data from a hindcast. A lookup that
+        raises is logged and counts as no pin (no hindcast block, no as-of year), but
+        it is remembered so that markets stay withheld (``_markets_withheld_status``).
         """
-        given = getattr(self, "hindcast", None)
-        if isinstance(given, dict):
+        given = as_hindcast_pin(getattr(self, "hindcast", None))
+        if given is not None:
             return given
         cached = getattr(self, "_hindcast_pin_cache", _HINDCAST_PIN_UNRESOLVED)
         if cached is not _HINDCAST_PIN_UNRESOLVED:
@@ -2653,10 +2658,26 @@ class ReportAgent:
             try:
                 from .pipeline_orchestrator import hindcast_pin_for_simulation
                 found = hindcast_pin_for_simulation(simulation_id)
-            except Exception as exc:  # noqa: BLE001 — 查找失败按实时运行处理（不阻断报告）
-                logger.warning(f"回测钉查找失败（按实时运行处理）: {exc}")
+            except Exception as exc:  # noqa: BLE001 — 查找失败不阻断报告：不盖章，但市场失败即扣下
+                logger.warning(f"回测钉查找失败（不盖 hindcast 章，预测市场扣下）: {exc}")
+                self._hindcast_lookup_failed = True
         self._hindcast_pin_cache = found if isinstance(found, dict) else None
         return self._hindcast_pin_cache
+
+    def _markets_withheld_status(self) -> Optional["_absence.SlotStatus"]:
+        """TIME-6: why this report keeps market data out, or None when markets load as usual.
+
+        A hindcast pin withholds them: ``not_run('hindcast_markets_withheld')``. A pin
+        lookup that raised withholds them too, ``unavailable('hindcast_lookup_failed')``
+        (fail closed, like EVAL-13's evaluation lookup): markets are an optional
+        enhancement, so a live report only loses its market table, whereas live odds
+        in an unrecognised hindcast would not be honest.
+        """
+        if self._hindcast_pin() is not None:
+            return _absence.not_run("hindcast_markets_withheld")
+        if getattr(self, "_hindcast_lookup_failed", False):
+            return _absence.unavailable("hindcast_lookup_failed")
+        return None
 
     def _load_prediction_markets(self) -> List[Dict[str, Any]]:
         """加载本次运行的预测市场快照（规整化 schema，见 utils.prediction_markets）。
@@ -2672,10 +2693,12 @@ class ReportAgent:
         forecast.quality.prompt_slot_states 使用。现抓兜底行为本身不变。
 
         TIME-6：回测运行（_hindcast_pin）一律扣下市场——不读 handoff 快照、不重报价、不现抓，
-        槽状态记为 not_run('hindcast_markets_withheld')（提示词据此写明「本次运行未启用」而非「无市场」）。
+        槽状态记为 not_run('hindcast_markets_withheld')（提示词据此写明「本次运行未启用」而非「无市场」）；
+        回测钉查找抛错时同样扣下，记为 unavailable('hindcast_lookup_failed')（见 _markets_withheld_status）。
         """
-        if self._hindcast_pin():
-            self._market_status = _absence.not_run("hindcast_markets_withheld")
+        _withheld = self._markets_withheld_status()
+        if _withheld is not None:
+            self._market_status = _withheld
             self._markets_stale = False
             return []
         self._market_status = _absence.unavailable("no_market_snapshot")
@@ -2834,8 +2857,8 @@ class ReportAgent:
         就地更新 self._prediction_markets（供 extract_binary_forecasts 的 markets 回填/校验）
         与 self._market_pack（渲染的市场表，Δ 列随之刷新）。无缓存快照/未开旗标/失败 → 原样
         （degrade-safe，_requote_snapshot 内部已把整体成败写进 _markets_stale）。
-        TIME-6：回测运行（_hindcast_pin）直接返回，不发任何市场请求。"""
-        if self._hindcast_pin():
+        TIME-6：市场被扣下（回测钉或钉查找失败，见 _markets_withheld_status）时直接返回，不发任何市场请求。"""
+        if self._markets_withheld_status() is not None:
             return
         rows = getattr(self, "_prediction_markets", None)
         if not rows or not getattr(Config, "PREDICTION_MARKETS_ENABLED", True):
