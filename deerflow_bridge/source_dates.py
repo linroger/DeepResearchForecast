@@ -659,13 +659,19 @@ def page_availability(candidates: Iterable[Any], *, now: Any = None) -> _dt.date
     its published pick and its latest modified candidate, each read with
     :func:`resolve_upper`, or None when none reads.
 
-    The published pick is the highest-ranked published candidate that reads
-    (the first one on a tie), as :func:`resolve` picks it, except that a date
-    after today is kept: it is after any as-of.  A lower-ranked published
-    candidate is not the page's date (a bare "Date:" line of a scheduled event,
-    or a ``<time>`` tag of a related item beside the page's own metadata, is an
-    event date, not the page's availability).  Every modified candidate counts,
-    whatever its rank: a page is served in its latest edit.  Never raises."""
+    The published pick is the highest-ranked published candidate that reads,
+    as :func:`resolve` picks it, except that a date after today is kept (it is
+    after any as-of) and a tie among metadata candidates (provider keys,
+    JSON-LD, ``<meta>`` tags: their order says nothing about which one dates
+    the page) takes the latest day, so the verdict never depends on that
+    order and fails closed.  A tie among in-document candidates (``<time>``
+    tags, head datelines) keeps the first, the page's own byline, as
+    :func:`resolve` does: a later one dates an event or a related item.  A
+    lower-ranked published candidate is not the page's date either (a bare
+    "Date:" line of a scheduled event, or a ``<time>`` tag of a related item
+    beside the page's own metadata, is an event date, not the page's
+    availability).  Every modified candidate counts, whatever its rank: a
+    page is served in its latest edit.  Never raises."""
     pick: _dt.date | None = None
     pick_rank = 0
     days: list[_dt.date] = []
@@ -682,6 +688,8 @@ def page_availability(candidates: Iterable[Any], *, now: Any = None) -> _dt.date
             days.append(day)
         elif pick is None or rank > pick_rank:
             pick, pick_rank = day, rank
+        elif rank == pick_rank and rank >= RANK_META_TAG:
+            pick = max(pick, day)
     if pick is not None:
         days.append(pick)
     return max(days) if days else None

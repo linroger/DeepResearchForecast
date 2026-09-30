@@ -592,9 +592,8 @@ def test_a_source_sighted_late_while_its_page_is_fetched_is_withheld(tmp_path, m
                                                "fetch_admitted", "search_late_dropped")} == {
         "fetch_late_withheld": 1, "fetch_units_spent_withheld": 1, "fetch_admitted": 0, "search_late_dropped": 1}
     assert (stats["fetches"], stats["failures"], outcomes["fetch_ok"]) == (1, 0, 0)
-    if when == "during_fetch":
-        # Withheld before storage.
-        assert pages_on_disk(tools) == []
+    # Withheld before storage: the verdict is recorded before the page is written.
+    assert pages_on_disk(tools) == []
     # Remembered for the run and refused free after a resume.
     assert tools.fetch(_STORY_URL, agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
     ledger.flush()
@@ -622,6 +621,135 @@ def test_a_source_withheld_undated_stays_withheld_after_a_dated_sighting(tmp_pat
     assert fetch.urls == [url]
     row = ledger.get(1)
     assert (row["pit_status"], row["published"], row["fetched"]) == ("undated_withheld", "2024-05-01", False)
+
+
+# ------------------------------------------ a late sighting holds whatever the order
+
+_SITE0 = "https://site0.example/page-0"
+
+
+def _query_search(rows):
+    return lambda query, n: json.dumps({"query": query, "results": rows[query]})
+
+
+@pytest.mark.parametrize("undated", ["drop", "flag"])
+def test_a_late_sighting_of_a_source_without_a_row_is_remembered(tmp_path, undated):
+    search = _query_search({"grid late": [hit(0, date="2025-01-10")], "grid undated": [hit(0)]})
+    fetch = CountingFetch(UNDATED_PAGE)
+    tools, ledger = make_tools(tmp_path, pit=policy(undated=undated), search_fn=search, fetch_fn=fetch)
+
+    assert tools.search("grid late", agent_id="k1").startswith("NO_IN_WINDOW_RESULTS: 1 result was")
+    # A later undated sighting (another query, provider or agent) never gives it an [S<n>] ...
+    assert tools.search("grid undated", agent_id="k2").startswith("NO_IN_WINDOW_RESULTS: 1 result was")
+    assert len(ledger) == 0
+    # ... and its fetch is refused before any budget, whatever flag would store.
+    assert tools.fetch(_SITE0, agent_id="k1") == rg.MSG_OUT_OF_WINDOW_SOURCE
+    assert fetch.urls == [] and pages_on_disk(tools) == [] and tools.stats()["fetches"] == 0
+    pit = tools.stats()["pit"]
+    assert (pit["search_late_dropped"], pit["search_undated_shown"], pit["fetch_prefetch_refused"]) == (2, 0, 1)
+    # Recorded beside the ledger, so a resumed attempt holds it too.
+    saved = json.loads((tmp_path / "t" / rg.PIT_WITHHELD_FILE).read_text(encoding="utf-8"))
+    assert saved == [{"url": _SITE0, "pit_status": "late"}]
+    resumed = rg.ResearchTools(rg.SourceLedger(ledger.path), tools.pages_dir, search_fn=search, fetch_fn=fetch,
+                               clock=lambda: NOW, pit=policy(undated=undated))
+    assert resumed.search("grid undated", agent_id="k1").startswith("NO_IN_WINDOW_RESULTS: 1 result was")
+    assert resumed.fetch(_SITE0, agent_id="k1") == rg.MSG_OUT_OF_WINDOW_SOURCE
+    assert fetch.urls == [] and len(resumed.ledger) == 0
+
+
+@pytest.mark.parametrize("queries", [["grid late"], ["grid undated", "grid late"]],
+                         ids=["late_sighting_first", "registered_first"])
+def test_a_late_sighting_refuses_a_fetch_its_page_dates_would_admit_in_either_order(tmp_path, queries):
+    search = _query_search({"grid undated": [hit(0)], "grid late": [hit(0, date="2025-01-10")]})
+    fetch = CountingFetch((dated_page("Published: 2024-01-01"), {"article:published_time": "2024-01-01"}))
+    tools, ledger = make_tools(tmp_path, pit=policy(), search_fn=search, fetch_fn=fetch)
+    for query in queries:
+        tools.search(query, agent_id="k1")
+
+    assert tools.fetch(_SITE0, agent_id="k1") == rg.MSG_OUT_OF_WINDOW_SOURCE
+
+    assert fetch.urls == [] and pages_on_disk(tools) == [] and tools.stats()["fetches"] == 0
+    assert [row["pit_status"] for row in ledger.rows()] == ([] if len(queries) == 1 else ["late"])
+
+
+@pytest.mark.parametrize("payload", [
+    [hit(0, date="2025-01-10"), hit(0), hit(1, published="2024-05-01")],
+    [hit(0), hit(0, date="2025-01-10"), hit(1, published="2024-05-01")],
+], ids=["late_row_first", "undated_row_first"])
+@pytest.mark.parametrize("undated", ["drop", "flag"])
+def test_the_rows_of_one_source_in_a_payload_share_its_verdict_whatever_their_order(tmp_path, payload, undated):
+    fetch = CountingFetch(UNDATED_PAGE)
+    tools, ledger = make_tools(tmp_path, pit=policy(undated=undated), search_fn=searcher(*payload), fetch_fn=fetch)
+
+    text = tools.search("grid queues", agent_id="k1")
+
+    assert entry_titles(text) == ["[S1] Hit 1"] and "site0.example" not in text
+    assert [row["url"] for row in ledger.rows()] == ["https://site1.example/page-1"]
+    assert tools.stats()["pit"]["search_late_dropped"] == 2
+    assert tools.fetch(_SITE0, agent_id="k1") == rg.MSG_OUT_OF_WINDOW_SOURCE and fetch.urls == []
+
+
+def test_the_rows_of_a_registered_source_mark_it_late_with_the_late_row_date(tmp_path):
+    search = _query_search({"grid first": [hit(0)],
+                            "grid second": [hit(0), hit(0, date="2025-01-10"), hit(1, published="2024-05-01")]})
+    tools, ledger = make_tools(tmp_path, pit=policy(undated="flag"), search_fn=search)
+    assert tools.search("grid first", agent_id="k1").split("\n", 1)[0].endswith(" — undated")
+
+    assert entry_titles(tools.search("grid second", agent_id="k1")) == ["[S2] Hit 1"]
+
+    row = ledger.get(1)
+    assert (row["pit_status"], row["published"], row["fetched"]) == ("late", "2025-01-10", False)
+    # The cached text that showed [S1] is dropped.
+    again = tools.search("grid first", agent_id="k2")
+    assert not again.startswith(rg._CACHED_SEARCH_NOTE) and "[S1]" not in again
+
+
+def test_the_rows_of_an_admitted_source_show_the_date_its_verdict_read(tmp_path):
+    tools, _ledger = make_tools(tmp_path, pit=policy(), search_fn=searcher(hit(0), hit(0, published="2024-05-01")))
+    lines = [line for line in tools.search("grid queues", agent_id="k1").split("\n") if line.startswith("[S")]
+    assert lines == ["[S1] Hit 0 — site0.example (tier 3) — published 2024-05-01"] * 2
+    assert tools.stats()["pit"]["search_undated_shown"] == 0
+
+
+@pytest.mark.parametrize("sighting", ["registered_and_marked", "rowless_record"])
+def test_a_source_marked_late_between_its_verdict_and_registration_is_not_shown(tmp_path, monkeypatch, sighting):
+    tools, ledger = make_tools(tmp_path, pit=policy(),
+                               search_fn=searcher(hit(0, published="2024-05-01"), hit(1, published="2024-05-02")))
+    verdicts = tools._pit_search_verdicts
+
+    def verdicts_then_sighting(results):
+        decided = verdicts(results)
+        # Meanwhile a concurrent sighting dates site0 late: another agent's fetch
+        # registered it and a third agent's search marked it, or a search recorded
+        # it without a row.
+        if sighting == "registered_and_marked":
+            tools._pit_mark_late(ledger.register(_SITE0, "Hit 0", "", "fetch", "k2")["sid"])
+        else:
+            tools._save_pit_withholds({rg.canonical_url(_SITE0): (_SITE0, "late")})
+        return decided
+
+    monkeypatch.setattr(tools, "_pit_search_verdicts", verdicts_then_sighting)
+    text = tools.search("grid queues", agent_id="k1")
+
+    assert entry_titles(text) == ["[S2] Hit 1"] and "site0.example" not in text
+    assert ledger.get(1)["pit_status"] == "late"
+    assert tools.stats()["pit"]["search_late_dropped"] == 1
+
+
+def test_a_late_record_without_a_row_marks_a_row_registered_meanwhile(tmp_path, monkeypatch):
+    tools, ledger = make_tools(tmp_path, pit=policy(), search_fn=searcher(hit(0, date="2025-01-10")))
+    verdict = tools._pit_search_verdict
+
+    def verdict_then_registration(url, items):
+        decided = verdict(url, items)
+        # A concurrent search registers the source after this verdict found no row for it.
+        ledger.register(url, "Hit 0", "", "search", "k2")
+        return decided
+
+    monkeypatch.setattr(tools, "_pit_search_verdict", verdict_then_registration)
+    assert tools.search("grid queues", agent_id="k1").startswith("NO_IN_WINDOW_RESULTS: 1 result was")
+    assert ledger.get(1)["pit_status"] == "late"
+    assert tools.fetch(_SITE0, agent_id="k1") == rg.MSG_OUT_OF_WINDOW_SOURCE
 
 
 @pytest.mark.parametrize("result", [
@@ -678,6 +806,37 @@ def test_page_head_datelines_gate_even_without_the_text_date_fallback(tmp_path):
     assert tools.fetch("https://a.example/story", agent_id="k1").startswith(
         "[S1] Grid connection report — a.example (tier 3) — published 2024-01-01; updated 2024-03-01 — full page")
     assert ledger.get(1)["pit_status"] == "admitted"
+
+
+@pytest.mark.parametrize("meta", [
+    {"publishedTime": "2024-01-02", "dc.date": "2024-08-01"},
+    {"dc.date": "2024-08-01", "publishedTime": "2024-01-02"},
+], ids=["in_window_key_first", "late_key_first"])
+def test_equally_ranked_metadata_dates_withhold_the_page_whatever_their_order(tmp_path, meta):
+    tools, ledger = make_tools(tmp_path, pit=policy(), fetch_fn=CountingFetch((UNDATED_PAGE, meta)))
+    assert tools.fetch("https://a.example/story", agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
+    assert pages_on_disk(tools) == [] and len(ledger) == 0
+
+
+def test_an_admitted_page_never_shows_a_date_after_as_of(tmp_path):
+    # TIME-2 cannot read the quarter, so it would show the page-head dateline: the gate reads both.
+    late = CountingFetch((dated_page("Published: July 1, 2024"), {"publishedTime": "Q1 2024"}))
+    tools, ledger = make_tools(tmp_path, pit=policy(), fetch_fn=late)
+    assert tools.fetch("https://a.example/story", agent_id="k1") == rg.MSG_FETCH_WITHHELD_LATE
+    assert pages_on_disk(tools) == [] and len(ledger) == 0
+
+    in_window = CountingFetch((dated_page("Published: May 1, 2024"), {"publishedTime": "Q1 2024"}))
+    tools, ledger = make_tools(tmp_path, pit=policy(), fetch_fn=in_window, name="ok")
+    assert tools.fetch("https://a.example/story", agent_id="k1").startswith(
+        "[S1] Grid connection report — a.example (tier 3) — published 2024-05-01 — full page")
+    assert ledger.get(1)["pit_status"] == "admitted"
+
+    # Without the text date fallback TIME-2 shows no date here, and the quarter admits the page.
+    tools, ledger = make_tools(tmp_path, pit=policy(), fetch_fn=late, name="no_fallback")
+    tools.date_text_fallback = False
+    header = tools.fetch("https://a.example/story", agent_id="k1").split("\n", 1)[0]
+    assert header.startswith("[S1] Grid connection report — a.example (tier 3) — full page")
+    assert (ledger.get(1)["pit_status"], ledger.get(1).get("published")) == ("admitted", None)
 
 
 def test_a_withhold_without_a_row_holds_across_a_resume(tmp_path):

@@ -171,6 +171,32 @@ def test_page_availability_skips_what_does_not_read():
                                  "2024-01-01"), (7, "x", "published")]) is None
 
 
+@pytest.mark.parametrize("meta", [
+    {"publishedTime": "2024-01-02", "dc.date": "2024-08-01"},
+    {"dc.date": "2024-08-01", "publishedTime": "2024-01-02"},
+])
+def test_a_tie_among_provider_keys_takes_the_latest_day_whatever_their_order(meta):
+    assert sd.page_availability(_meta(**meta)) == dt.date(2024, 8, 1)
+    assert sd.gate(sd.page_availability(_meta(**meta)), AS_OF) == "late"
+    # TIME-2's display pick keeps the first; the gate's day is never earlier.
+    assert sd.resolve(_meta(**meta), now=NOW)["published"].value == next(iter(meta.values()))
+
+
+@pytest.mark.parametrize("items", [["2024-01-01", "2024-09-01"], ["2024-09-01", "2024-01-01"]])
+def test_metadata_ties_take_the_latest_day_and_in_document_ties_the_first(items):
+    # A JSON-LD list is dated by its latest item, in either order.
+    ld = ('<script type="application/ld+json">{"itemListElement": ['
+          + ", ".join(f'{{"datePublished": "{value}"}}' for value in items) + "]}</script>")
+    assert sd.page_availability(sd.from_html(ld)) == dt.date(2024, 9, 1)
+    for rank, source in ((6, "json_ld"), (5, "meta_tag")):
+        stored = sd.from_fetch_meta({"html_dates": [[rank, source, "published", value] for value in items]})
+        assert sd.page_availability(stored) == dt.date(2024, 9, 1)
+    # <time> tags and head datelines keep the first: the page's own byline comes first.
+    times = sd.from_fetch_meta({"html_dates": [[4, "time_tag", "published", value] for value in items]})
+    assert sd.page_availability(times) == dt.date.fromisoformat(items[0])
+    assert sd.page_availability(_head(*(f"Published: {value}" for value in items))) == dt.date.fromisoformat(items[0])
+
+
 @pytest.mark.parametrize("as_of", [None, "", "2024-6-1", "not a date", 20240601])
 def test_an_unusable_as_of_gates_everything_late(as_of):
     assert sd.gate(dt.date(2000, 1, 1), as_of) == "late"
