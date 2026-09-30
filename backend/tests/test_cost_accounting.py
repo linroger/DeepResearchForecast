@@ -184,8 +184,8 @@ def test_totals_equal_sum_of_stages():
                                       "tok_total", "wall_s", "usd", "cost_basis"]
     assert card["research_cache_hit_ratio"] == 0.6
     assert card["repo_git_sha"] == "abc123" and card["attempts"] == {
-        "scope": "cumulative", "resumed": False, "resume_count": 0,
-        "started_at": "2026-09-30T00:00:00+00:00"}
+        "scope": "cumulative", "wall_scope": "cumulative", "resumed": False,
+        "resume_count": 0, "started_at": "2026-09-30T00:00:00+00:00"}
     assert card["completeness"] == {"complete": True, "reasons": [],
                                     "estimated_cost_share": 0.0}
     json.dumps(card, allow_nan=False)
@@ -220,8 +220,11 @@ def test_stage_numbers_come_from_cumulative_by_stage():
     assert [card["stages"][s]["cost_basis"] for s in ("research", "report", "run")] == [
         "unknown", "unknown", "mixed"]
     assert card["totals"]["cost_basis"] == "unknown"
+    # Nothing shows that the research / report windows cover the earlier attempts' calls.
+    assert card["attempts"]["wall_scope"] == "last_execution"
     assert card["completeness"]["reasons"] == [
-        "estimated_cost_share_last_attempt_only:earlier_calls=26"]
+        "estimated_cost_share_last_attempt_only:earlier_calls=26",
+        "wall_last_execution_only:research", "wall_last_execution_only:report"]
 
 
 def test_resumed_run_never_labels_earlier_spend_with_the_last_attempts_basis():
@@ -243,7 +246,8 @@ def test_resumed_run_never_labels_earlier_spend_with_the_last_attempts_basis():
     assert card["totals"]["cost_basis"] == "unknown"
     assert card["completeness"] == {
         "complete": False, "estimated_cost_share": 0.0,
-        "reasons": ["estimated_cost_share_last_attempt_only:earlier_calls=40"]}
+        "reasons": ["estimated_cost_share_last_attempt_only:earlier_calls=40",
+                    "wall_last_execution_only:research"]}
     # A last attempt with no call at all: the snapshot says 'api' without any volume.
     idle = dict(tel, total=_counter(0, 0, 0), by_stage={}, by_model={}, cost_basis="api",
                 cumulative_total=research, cumulative_by_stage={"research": research})
@@ -251,7 +255,8 @@ def test_resumed_run_never_labels_earlier_spend_with_the_last_attempts_basis():
     assert card["stages"]["research"]["cost_basis"] == card["totals"]["cost_basis"] == "unknown"
     assert card["completeness"] == {
         "complete": False, "estimated_cost_share": None,
-        "reasons": ["estimated_cost_share_last_attempt_only:earlier_calls=40"]}
+        "reasons": ["estimated_cost_share_last_attempt_only:earlier_calls=40",
+                    "wall_last_execution_only:research"]}
     # A partial per-stage split still counts the earlier calls cumulative_total holds.
     partial = dict(tel, cumulative_by_stage={"report": report}, cumulative_by_stage_partial=True)
     card = _card(partial, walls={}, stage_status={}, options=_options(stage_reuse_v1=None))
@@ -411,8 +416,25 @@ def test_config_hash_order_invariant_and_changes_with_pinned_seeds(monkeypatch):
     assert fp["research"] == {"model": "glm", "depth": "deep", "engine": "v3"}
     assert fp["report"] == producer and fp["graph"]["model_name"] == "glm-5-air"
     assert fp["options"] == {"max_rounds": 9, "research_language": "English"}
-    assert fp["forecast"] == {"ensemble_models": "", "market_anchoring": True,
+    assert fp["forecast"] == {"ensemble_models": [], "market_anchoring": True,
                               "prediction_markets_enabled": True}
+
+
+def test_ensemble_models_hash_as_the_extractor_applies_them():
+    """One ensemble spelled differently shares a hash; a different ensemble does not."""
+    def record(models):
+        return ca.config_hash_record(_options(), MANIFEST, config=SimpleNamespace(
+            **{**vars(_CFG), "FORECAST_ENSEMBLE_MODELS": models}))
+
+    base = record("openai,deepseek")
+    assert base["fingerprint"]["forecast"]["ensemble_models"] == ["openai", "deepseek"]
+    for spelling in ("openai, deepseek", " OpenAI ,deepseek,", "openai,,deepseek",
+                     "openai,deepseek,openai", ["openai", " DeepSeek "]):
+        assert record(spelling)["config_hash"] == base["config_hash"], spelling
+    for other in ("deepseek,openai", "openai", "openai,deepseek,glm", ""):
+        assert record(other)["config_hash"] != base["config_hash"], other
+    assert record("")["fingerprint"]["forecast"]["ensemble_models"] == []
+    assert record(None)["fingerprint"]["forecast"]["ensemble_models"] is None
 
 
 def test_card_reuses_the_report_stage_pin_else_recomputes(monkeypatch):
@@ -452,29 +474,37 @@ def test_card_reuses_the_report_stage_pin_else_recomputes(monkeypatch):
 
 
 # ------------------------------------------------------------ compute-matched norm
+def _matched(variant, control, **extra):
+    """compute_matched's full result for a comparable pair."""
+    return {"variant_tok": variant, "control_tok": control, "comparable": True, "reasons": [],
+            **extra}
+
+
 def test_compute_matched_tolerance():
     def card(report_tok, **stages):
         rows = {"report": {"tok_total": report_tok}} if report_tok is not None else {}
         rows.update({name: {"tok_total": tok} for name, tok in stages.items()})
-        return {"schema": ca.COST_CARD_SCHEMA, "stages": rows}
+        return {"schema": ca.COST_CARD_SCHEMA, "stages": rows,
+                "completeness": {"complete": True, "reasons": []}}
 
     control = card(1000)
-    assert ca.compute_matched(card(1150), control, "report") == {
-        "matched": True, "variant_tok": 1150, "control_tok": 1000, "rel_gap": 0.15}
+    assert ca.compute_matched(card(1150), control, "report") == _matched(
+        1150, 1000, matched=True, rel_gap=0.15)
     assert ca.compute_matched(card(1151), control, "report")["matched"] is False
-    assert ca.compute_matched(card(850), control, "report") == {
-        "matched": True, "variant_tok": 850, "control_tok": 1000, "rel_gap": -0.15}
+    assert ca.compute_matched(card(850), control, "report") == _matched(
+        850, 1000, matched=True, rel_gap=-0.15)
     assert ca.compute_matched(card(849), control, "report")["matched"] is False
     assert ca.compute_matched(card(1250), control, "report", tol=0.3)["matched"] is True
     assert ca.compute_matched(card(1001), control, "report", tol=0)["matched"] is False
     # Stage-level: other stages' spend never enters the comparison; a missing stage spent 0.
     assert ca.compute_matched(card(1000, graph=10), card(1000, graph=99_999), "report")[
         "matched"] is True
-    assert ca.compute_matched(card(None), card(None), "report") == {
-        "matched": True, "variant_tok": 0, "control_tok": 0, "rel_gap": 0.0}
-    assert ca.compute_matched(card(10), card(None), "report") == {
-        "matched": False, "variant_tok": 10, "control_tok": 0, "rel_gap": None}
+    assert ca.compute_matched(card(None), card(None), "report") == _matched(
+        0, 0, matched=True, rel_gap=0.0)
+    assert ca.compute_matched(card(10), card(None), "report") == _matched(
+        10, 0, matched=False, rel_gap=None)
     real = _card()
+    assert real["completeness"]["complete"] is True
     assert ca.compute_matched(real, real, "report")["matched"] is True
     for bad_tol in (-0.1, float("nan"), float("inf"), "x"):
         with pytest.raises(ValueError):
@@ -486,11 +516,84 @@ def test_compute_matched_tolerance():
     assert "compute_matched" in (ca.__doc__ or "") and "A/B" in (ca.__doc__ or "")
 
 
+def test_compute_matched_fails_closed_on_incomplete_cards():
+    """Review probe: two cards whose report stage was never metered spent 0 tokens each;
+    that is unknown spend, not matched spend."""
+    def unmetered():
+        return ca.build_cost_card(pipeline_id="pipe_x", mode="full", run_telemetry=None,
+                                  stage_walls={}, run_manifest=None, options={},
+                                  stage_status={"report": "completed"})
+
+    result = ca.compute_matched(unmetered(), unmetered(), "report")
+    assert result == {
+        "matched": False, "variant_tok": 0, "control_tok": 0, "rel_gap": 0.0,
+        "comparable": False,
+        "reasons": ["variant:run_telemetry_missing", "variant:unmetered_stage:report",
+                    "control:run_telemetry_missing", "control:unmetered_stage:report"]}
+    # A last_attempt_only variant (earlier attempts' report calls missing) at 900 tokens is
+    # within 15% of a cumulative control at 1000, but its real spend is unknown.
+    def report_card(tok, **tel_over):
+        tel = _telemetry(by_stage={"research": _counter(4, 10_000, 2_000),
+                                   "run": _counter(12, 9_000, 1_500),
+                                   "report": _counter(20, tok - 100, 100)}, **tel_over)
+        return _card(tel, baseline=3)
+
+    control = report_card(1000)
+    assert control["completeness"]["complete"] is True
+    variant = report_card(900, previous_attempt={"total": _counter(5, 1, 1)})
+    assert variant["attempts"]["scope"] == "last_attempt_only"
+    result = ca.compute_matched(variant, control, "report")
+    assert (result["matched"], result["comparable"], result["reasons"]) == (
+        False, False, ["variant:last_attempt_only"])
+    assert (result["variant_tok"], result["control_tok"], result["rel_gap"]) == (900, 1000, -0.1)
+    # Every reason that can undercount a stage's tokens blocks it, on either side.
+    for over, reason in (({"in_flight": True}, "run_telemetry_in_flight"),
+                         ({"cumulative_by_stage_partial": True}, "cumulative_by_stage_partial")):
+        gapped = report_card(1000, **over)
+        assert ca.compute_matched(control, gapped, "report")["reasons"] == [f"control:{reason}"]
+    stale = _card(_telemetry(), baseline=1, tel_sha=START_SHA)
+    assert "variant:run_telemetry_predates_attempt" in ca.compute_matched(
+        stale, control, "report")["reasons"]
+    grown = _card(baseline=1)
+    assert ca.compute_matched(grown, control, "report")["reasons"] == [
+        "variant:unattributed_process_growth:+2"]
+    # Stage-scoped reasons block their own stage only; USD / wall reasons block nothing.
+    no_run = _telemetry()
+    del no_run["by_stage"]["run"]
+    no_run_card = _card(no_run)
+    assert no_run_card["completeness"]["reasons"] == ["unmetered_stage:run"]
+    assert ca.compute_matched(no_run_card, _card(), "report")["matched"] is True
+    assert ca.compute_matched(no_run_card, _card(), "run")["reasons"] == [
+        "variant:unmetered_stage:run"]
+    seeds = _options(ensemble_wall={"started_at": "t0", "finished_at": "t1"})
+    seeds["safety_policy_v1"]["n_forecast_seeds"] = 3
+    seed_gap = _card(options=seeds)
+    assert seed_gap["completeness"]["reasons"] == ["seeds_without_ensemble_sim:n_forecast_seeds=3"]
+    assert ca.compute_matched(seed_gap, seed_gap, "report")["comparable"] is True
+    for stage in ("ensemble", "ensemble_sim"):
+        assert ca.compute_matched(seed_gap, _card(), stage)["comparable"] is False
+    neutral = copy.deepcopy(_card())
+    neutral["completeness"] = {"complete": False, "reasons": [
+        "estimated_cost_share:0.3", "estimated_cost_share_last_attempt_only:earlier_calls=2",
+        "wall_last_execution_only:report", "wall_spans_attempts:report"]}
+    assert ca.compute_matched(neutral, _card(), "report")["matched"] is True
+    # An unknown reason, or no readable reason list, fails closed.
+    unknown = copy.deepcopy(_card())
+    unknown["completeness"] = {"complete": False, "reasons": ["some_future_gap"]}
+    assert ca.compute_matched(unknown, _card(), "graph")["reasons"] == [
+        "variant:some_future_gap"]
+    bare = {"schema": ca.COST_CARD_SCHEMA, "stages": {"report": {"tok_total": 5}}}
+    assert ca.compute_matched(_card(), bare, "report")["reasons"] == [
+        "control:completeness_missing"]
+
+
 # ------------------------------------------------------------ the _run hook
 def _drive_run(monkeypatch, tmp_path, *, pid, flag=True, outcome="completed",
-               unattributed_mid_run=0):
+               unattributed_mid_run=0, resume=False):
     """Run the real ``_run`` (research_only) with a faked research child that meters one
-    research call; telemetry flushes and run.json are real."""
+    research call; telemetry flushes and run.json are real. ``resume`` continues the stored
+    pipeline the way ``PipelineOrchestrator.resume`` prepares it (the failed or cancelled
+    current stage reset, ``resume_count`` + 1); otherwise its stages start empty."""
     for name, value in {
         "RESEARCH_ENGINE": "v3",
         "RESEARCH_PARALLEL_TRACKS": 1,
@@ -537,7 +640,13 @@ def _drive_run(monkeypatch, tmp_path, *, pid, flag=True, outcome="completed",
              po.PipelineState(pipeline_id=pid, prompt="Will capacity exceed 250 GW by 2027?",
                               mode="research_only", options={"research_language": None}))
     state.status = "running"
-    state.stages = {}
+    if resume:
+        current = state.stages.get(state.current_stage)
+        if current is not None and current.status in ("failed", "cancelled"):
+            po._reset_stage_attempt(current)
+        state.options["resume_count"] = int(state.options.get("resume_count") or 0) + 1
+    else:
+        state.stages = {}
     state.handoff_dir = po.PipelineManager.handoff_dir(pid)
     os.makedirs(state.handoff_dir, exist_ok=True)
     po.PipelineManager.save(state)
@@ -588,14 +697,126 @@ def test_hook_card_is_cumulative_across_attempts(roots, monkeypatch):
     assert state.status == "completed"
     card = _load(os.path.join(po.PipelineManager._dir(pid), ca.COST_CARD_FILENAME))
     assert (card["attempts"]["scope"], card["attempts"]["resumed"]) == ("cumulative", True)
+    assert card["attempts"]["wall_scope"] == "last_execution"
     assert card["stages"]["research"]["calls"] == 2
     assert card["stages"]["research"]["tok_total"] == 3_000
     _assert_totals_are_stage_sums(card)
     # One of the two research calls is the failed attempt's, whose cost basis and model mix
     # the meter no longer holds: labelled unknown, and the share check says it is partial.
     assert card["stages"]["research"]["cost_basis"] == card["totals"]["cost_basis"] == "unknown"
+    # Research re-executed in a fresh window: its wall is attempt 2's execution only.
     assert card["completeness"]["reasons"] == [
-        "estimated_cost_share_last_attempt_only:earlier_calls=1"]
+        "estimated_cost_share_last_attempt_only:earlier_calls=1",
+        "wall_last_execution_only:research"]
+
+
+def test_resumed_failed_stage_discloses_its_last_execution_wall(roots, monkeypatch):
+    """Review probe: research fails, the pipeline is resumed and research succeeds. Its row
+    counts both attempts' calls, while its wall window was reset and covers attempt 2 only:
+    the card must say so rather than label that wall cumulative."""
+    pid = "pipe_eval18wallresume"
+    failed = _drive_run(monkeypatch, roots, pid=pid, outcome="failed")
+    assert failed.status == "failed" and failed.current_stage == po.STAGE_RESEARCH
+    first_window = failed.stages[po.STAGE_RESEARCH].started_at
+    state = _drive_run(monkeypatch, roots, pid=pid, resume=True)
+    assert state.status == "completed" and state.options["resume_count"] == 1
+    research = state.stages[po.STAGE_RESEARCH]
+    assert research.started_at != first_window          # the resume reset the window
+    record = state.options[ca.COST_CARD_WINDOWS_OPTION][po.STAGE_RESEARCH]
+    assert record == {"started_at": research.started_at, "earlier_calls": 1}
+    card = _load(os.path.join(po.PipelineManager._dir(pid), ca.COST_CARD_FILENAME))
+    assert card["attempts"]["scope"] == "cumulative"
+    assert card["attempts"]["wall_scope"] == "last_execution"
+    assert card["stages"]["research"]["calls"] == 2
+    assert card["stages"]["research"]["wall_s"] == round(
+        po._stage_walls(state)[po.STAGE_RESEARCH], 1)
+    assert "wall_last_execution_only:research" in card["completeness"]["reasons"]
+    assert card["completeness"]["complete"] is False
+    assert cli.rebuild(pid)["completeness"] == card["completeness"]
+
+
+def _window(start, end):
+    return {"started_at": f"2026-09-30T{start}:00+00:00",
+            "finished_at": f"2026-09-30T{end}:00+00:00"}
+
+
+def test_wall_windows_against_their_calls():
+    """Attempt 3 started at 03:00. research ran once (attempt 1) and is reused; report
+    failed in attempt 1, succeeded in attempt 2 and is reused; graph was re-executed in
+    this attempt without its window being reset; run re-executed in a fresh window."""
+    windows = {"research": _window("00:00", "00:10"), "graph": _window("00:20", "03:30"),
+               "run": _window("03:40", "03:50"), "report": _window("02:00", "02:30")}
+    records = {stage: {"started_at": windows[stage]["started_at"], "earlier_calls": earlier}
+               for stage, earlier in (("research", 0), ("graph", 0), ("run", 12),
+                                      ("report", 20))}
+    latest = {"graph": _counter(30, 40_000, 5_000), "run": _counter(12, 9_000, 1_500)}
+    cumulative = {"research": _counter(4, 10_000, 2_000),
+                  "graph": _counter(60, 80_000, 10_000),
+                  "run": _counter(24, 18_000, 3_000),
+                  "report": _counter(41, 120_000, 30_000)}
+    tel = _telemetry(by_stage=latest, previous_attempt={"total": _counter(1, 1, 1)},
+                     cumulative_by_stage=cumulative)
+    options = _options(**{ca.COST_CARD_WINDOWS_OPTION: records})
+    options[ca.COST_CARD_ATTEMPT_OPTION] = ca.cost_card_attempt_record(
+        resume_count=2, started_at="2026-09-30T03:00:00+00:00",
+        unattributed_calls_at_start=3, run_telemetry_sha256=None)
+
+    def reasons(opts, stage_windows=windows):
+        card = ca.build_cost_card(
+            pipeline_id="pipe_w", mode="full", run_telemetry=tel, stage_walls={},
+            stage_windows=stage_windows, run_manifest=MANIFEST, options=opts,
+            stage_status=STAGE_STATUS)
+        assert card["attempts"]["wall_scope"] == "last_execution"
+        return [r for r in card["completeness"]["reasons"] if r.startswith("wall_")]
+
+    # research: covered by its only execution. graph: spans the attempt boundary. run and
+    # report (still flagged in the attempt that reuses it): earlier executions uncovered.
+    assert reasons(options) == ["wall_spans_attempts:graph", "wall_last_execution_only:run",
+                                "wall_last_execution_only:report"]
+    # Without a record for the current window the card cannot show coverage: fail closed.
+    for broken in ({}, {"started_at": "2026-09-30T00:05:00+00:00", "earlier_calls": 0},
+                   {"started_at": windows["research"]["started_at"], "earlier_calls": None},
+                   {"started_at": windows["research"]["started_at"], "earlier_calls": False}):
+        opts = copy.deepcopy(options)
+        opts[ca.COST_CARD_WINDOWS_OPTION]["research"] = broken
+        assert "wall_last_execution_only:research" in reasons(opts)
+    # A stage whose earlier calls have no window at all (reset, not yet re-run).
+    no_research = {k: v for k, v in windows.items() if k != "research"}
+    assert "wall_last_execution_only:research" in reasons(options, no_research)
+    # Seed simulations are timed by the ensemble window.
+    seeds = _telemetry(by_stage={}, previous_attempt={"total": _counter(1, 1, 1)},
+                       cumulative_by_stage={"ensemble_sim": _counter(5, 10, 10)})
+    ensemble = {"ensemble": _window("01:00", "02:00")}
+    card = ca.build_cost_card(pipeline_id="pipe_w", mode="full", run_telemetry=seeds,
+                              stage_walls={"ensemble": 3600.0}, stage_windows=ensemble,
+                              run_manifest=MANIFEST, options=options, stage_status={})
+    assert "wall_last_execution_only:ensemble" in card["completeness"]["reasons"]
+    options[ca.COST_CARD_WINDOWS_OPTION]["ensemble"] = {
+        "started_at": ensemble["ensemble"]["started_at"], "earlier_calls": 0}
+    card = ca.build_cost_card(pipeline_id="pipe_w", mode="full", run_telemetry=seeds,
+                              stage_walls={"ensemble": 3600.0}, stage_windows=ensemble,
+                              run_manifest=MANIFEST, options=options, stage_status={})
+    assert not [r for r in card["completeness"]["reasons"] if r.startswith("wall_")]
+    # One attempt: the windows are the only executions.
+    assert _card()["attempts"]["wall_scope"] == "cumulative"
+
+
+def test_cost_card_window_record():
+    carry = {"cumulative_by_stage": {"research": _counter(3, 1, 1),
+                                     "ensemble": _counter(2, 1, 1),
+                                     "ensemble_sim": _counter(5, 1, 1)},
+             "partial": False}
+    assert ca.cost_card_window_record("research", started_at="t", carry=carry) == {
+        "started_at": "t", "earlier_calls": 3}
+    assert ca.cost_card_window_record("ensemble", started_at="t", carry=carry)[
+        "earlier_calls"] == 7
+    assert ca.cost_card_window_record("report", started_at="t", carry=carry)[
+        "earlier_calls"] == 0
+    assert ca.cost_card_window_record("report", started_at="t", carry=None)[
+        "earlier_calls"] == 0
+    partial = dict(carry, partial=True)
+    assert ca.cost_card_window_record("report", started_at="t", carry=partial)[
+        "earlier_calls"] is None
 
 
 def test_flag_off_no_file(roots, monkeypatch):
@@ -611,7 +832,8 @@ def test_flag_off_no_file(roots, monkeypatch):
         "pipe_eval18on")
     assert "cost_card" not in off.artifacts and "cost_card" not in off_disk["artifacts"]
     assert set(on_disk["artifacts"]) - set(off_disk["artifacts"]) == {"cost_card"}
-    assert set(on_disk["options"]) - set(off_disk["options"]) == {ca.COST_CARD_ATTEMPT_OPTION}
+    assert set(on_disk["options"]) - set(off_disk["options"]) == {ca.COST_CARD_ATTEMPT_OPTION,
+                                                                  ca.COST_CARD_WINDOWS_OPTION}
     assert set(off_disk["options"]) <= set(on_disk["options"])
     assert ca.CONFIG_HASH_OPTION not in off_disk["options"]
 
@@ -643,6 +865,7 @@ def test_flag_off_hook_is_byte_identical(roots, monkeypatch):
     orch._write_cost_card(state)
     po.PipelineOrchestrator._pin_config_hash(state, report_id="r_x",
                                              report_producer={"provider": "p"})
+    orch._note_cost_card_window(state, "report", "2026-09-30T01:00:00+00:00")
     assert snapshot() == before and state.to_dict() == state_before
     # A card written while the knob was on is left alone too (no removal, no pointer drop).
     card_path = os.path.join(pdir, ca.COST_CARD_FILENAME)
@@ -700,6 +923,19 @@ def test_write_cost_card_never_raises(roots, monkeypatch):
     assert state.artifacts == ["not", "a", "dict"]
     assert os.path.exists(os.path.join(po.PipelineManager._dir(state.pipeline_id),
                                        ca.COST_CARD_FILENAME))
+    # The window record, pinned from the progress callback: never without this attempt's
+    # telemetry carry (no record beats a wrong one), and never raising.
+    started = "2026-09-30T00:00:00+00:00"
+    orch._note_cost_card_window(state, "report", started)
+    assert ca.COST_CARD_WINDOWS_OPTION not in state.options
+    orch._init_telemetry_flush(state)
+    with monkeypatch.context() as patch:
+        patch.setattr(ca, "cost_card_window_record", explode)
+        orch._note_cost_card_window(state, "report", started)
+    assert ca.COST_CARD_WINDOWS_OPTION not in state.options
+    orch._note_cost_card_window(state, "report", started)
+    assert state.options[ca.COST_CARD_WINDOWS_OPTION] == {
+        "report": {"started_at": started, "earlier_calls": 0}}
 
 
 def test_telemetry_failure_still_writes_the_card(roots, monkeypatch):
@@ -881,6 +1117,31 @@ def test_pin_failure_drops_a_stale_pin(roots, monkeypatch):
     assert ca.CONFIG_HASH_OPTION not in state.options
     assert "config_hash" not in po.PipelineOrchestrator._report_ledger_context(
         state, "sim_x", run_kind="pipeline", seed=0)
+
+
+def test_new_report_drops_the_previous_reports_pin(roots, monkeypatch):
+    """Review probe: a new report is minted, then the attempt ends (a cancel raised from the
+    first progress callback) before _generate_stage_report pins the new report. The card
+    must not reuse the old report's pin for the new report."""
+    state = _report_state("pipe_eval18newreport")
+    state.options[ca.CONFIG_HASH_OPTION] = ca.config_hash_record(
+        state.options, MANIFEST, report_producer={"provider": "old", "model_name": "old-m"},
+        report_id="r_old18")
+    state.options["forecast_ledger"] = {"report_id": "r_old18", "status": "committed"}
+    po.PipelineOrchestrator._clear_report_attempt_artifacts(state)
+    state.report_id = "r_new18"
+    assert ca.CONFIG_HASH_OPTION not in state.options
+    assert "forecast_ledger" not in state.options
+    state.status = "cancelled"
+    card = po.pipeline_cost_card(state)
+    assert card["config"]["source"] == "recomputed" and card["config"]["report_id"] is None
+    assert card["config"]["fingerprint"]["report"] == {"provider": None, "model_name": None}
+    # Knob off: the attempt boundary leaves the pin alone (every EVAL-18 hook is a no-op).
+    monkeypatch.setattr(Config, "COST_CARD_ENABLED", False, raising=False)
+    kept = _report_state("pipe_eval18newreportoff")
+    kept.options[ca.CONFIG_HASH_OPTION] = pin = ca.config_hash_record(kept.options, MANIFEST)
+    po.PipelineOrchestrator._clear_report_attempt_artifacts(kept)
+    assert kept.options[ca.CONFIG_HASH_OPTION] == pin
 
 
 # ------------------------------------------------------------------------ CLI

@@ -3,8 +3,9 @@
 Rebuilds the drf-cost-card/v1 card (app/utils/cost_accounting.py) from the durable
 files a pipeline leaves behind, with the same gatherer the orchestrator's ``_run``
 finally block uses (pipeline_orchestrator.pipeline_cost_card): pipeline_state.json
-(options with the report stage's ``config_hash_v1`` pin and the attempt start's
-``cost_card_attempt_v1`` record, stage timestamps and statuses), run_telemetry.json
+(options with the report stage's ``config_hash_v1`` pin, the attempt start's
+``cost_card_attempt_v1`` record and the ``cost_card_windows_v1`` wall-window records,
+stage timestamps and statuses), run_telemetry.json
 and run.json. Offline: it reads files under uploads/ only - no network, no LLM,
 no Flask. The main use is an attempt reconciled as an orphan, which never reached
 the finally block that writes its card.

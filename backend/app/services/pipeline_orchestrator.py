@@ -4227,20 +4227,21 @@ def _run_extract_only_salvage(
                 pass
 
 
-def _stage_walls(state: "PipelineState") -> dict[str, float]:
-    """ITEM-18：从各阶段的 started_at→finished_at 时间戳算出每阶段墙钟秒数（stage → seconds）。
+def _stage_windows(state: "PipelineState") -> dict[str, tuple[str, str, float]]:
+    """ITEM-18：每阶段计入墙钟的时间窗 stage → (started_at, finished_at, seconds)。
 
-    供 build_stage_telemetry 把编排器的阶段级墙钟与 LLMMeter 的 token/成本合并。仅在两端时间戳
-    都存在且差值非负时计入（未开始/未结束/时钟回拨 → 跳过，degrade-safe，绝不抛）。"""
-    walls: dict[str, float] = {}
+    仅在两端时间戳都存在且差值非负时计入（未开始/未结束/时钟回拨 → 跳过，degrade-safe，绝不抛）。
+    EVAL-18 的成本卡据此判断各阶段墙钟窗是否覆盖其调用（见 cost_accounting 模块文档）。"""
+    windows: dict[str, tuple[str, str, float]] = {}
     for name, st in (getattr(state, "stages", None) or {}).items():
-        started = _parse_iso(getattr(st, "started_at", None))
-        finished = _parse_iso(getattr(st, "finished_at", None))
+        started_raw = getattr(st, "started_at", None)
+        finished_raw = getattr(st, "finished_at", None)
+        started, finished = _parse_iso(started_raw), _parse_iso(finished_raw)
         if started is None or finished is None:
             continue
         dt = (finished - started).total_seconds()
         if dt >= 0:
-            walls[str(name)] = dt
+            windows[str(name)] = (started_raw, finished_raw, dt)
     # W9-2：多种子集成不占 stages（避免污染阶段带/前端渲染），墙钟从 options.ensemble_wall
     # 补入——此前 report 完成后的 +1h31m 集成窗口不归属任何阶段带（遥测里凭空消失）。
     try:
@@ -4249,10 +4250,17 @@ def _stage_walls(state: "PipelineState") -> dict[str, float]:
         if e0 is not None and e1 is not None:
             edt = (e1 - e0).total_seconds()
             if edt >= 0:
-                walls["ensemble"] = edt
+                windows["ensemble"] = (ew.get("started_at"), ew.get("finished_at"), edt)
     except Exception:  # noqa: BLE001 — 纯观测，绝不抛
         pass
-    return walls
+    return windows
+
+
+def _stage_walls(state: "PipelineState") -> dict[str, float]:
+    """ITEM-18：从各阶段的 started_at→finished_at 时间戳算出每阶段墙钟秒数（stage → seconds）。
+
+    供 build_stage_telemetry 把编排器的阶段级墙钟与 LLMMeter 的 token/成本合并。"""
+    return {name: window[2] for name, window in _stage_windows(state).items()}
 
 
 def _read_bytes(path: str) -> Optional[bytes]:
@@ -4270,9 +4278,9 @@ def pipeline_cost_card(state: "PipelineState") -> dict[str, Any]:
     One gatherer for the ``_run`` finally hook and ``scripts/cost_card.py`` (offline
     rebuild), so both project the same inputs: run_telemetry.json (parsed, plus the sha256
     of the same bytes) and run.json from the pipeline dir, and from the state the stage
-    walls and statuses and the options, with the report stage's ``config_hash_v1`` pin and
-    the attempt start's ``cost_card_attempt_v1`` record (the unattributed-spend baseline).
-    Pure apart from those reads.
+    timing windows and statuses and the options, with the report stage's ``config_hash_v1``
+    pin, the attempt start's ``cost_card_attempt_v1`` record (the unattributed-spend
+    baseline) and the ``cost_card_windows_v1`` window records. Pure apart from those reads.
     """
     from ..utils.cost_accounting import build_cost_card
     raw = _read_bytes(os.path.join(PipelineManager._dir(state.pipeline_id), "run_telemetry.json"))
@@ -4282,13 +4290,16 @@ def pipeline_cost_card(state: "PipelineState") -> dict[str, Any]:
             run_telemetry = json.loads(raw)
         except ValueError:
             run_telemetry = None
+    windows = _stage_windows(state)
     return build_cost_card(
         pipeline_id=state.pipeline_id,
         mode=state.mode,
         status=state.status,
         run_telemetry=run_telemetry,
         run_telemetry_sha256=hashlib.sha256(raw).hexdigest() if raw is not None else None,
-        stage_walls=_stage_walls(state),
+        stage_walls={name: window[2] for name, window in windows.items()},
+        stage_windows={name: {"started_at": window[0], "finished_at": window[1]}
+                       for name, window in windows.items()},
         run_manifest=_read_json(PipelineManager.manifest_path(state.pipeline_id)),
         options=state.options,
         stage_status={name: getattr(st, "status", None)
@@ -8562,6 +8573,32 @@ class PipelineOrchestrator:
             logger.warning("[%s] 保存成本卡 attempt 记录失败（忽略）: %s",
                            getattr(state, "pipeline_id", None), exc)
 
+    def _note_cost_card_window(self, state: "PipelineState", window: str,
+                               started_at: Optional[str]) -> None:
+        """EVAL-18: pin ``options['cost_card_windows_v1'][window]`` as a wall window opens.
+
+        Records the calls earlier attempts had already made in the window's stages (from
+        this attempt's telemetry carry, the same base its run_telemetry.json cumulative
+        numbers are built on), so the cost card can tell a window that covers all of its
+        stage's calls (a stage reused since its only execution) from one that covers only
+        the latest execution. The caller saves the state. Never raises; a failure, or an
+        instance whose attempt telemetry was never initialised (no carry to read), leaves
+        no record for this window (the card then flags it whenever earlier attempts spent
+        in it). Knob off → nothing at all.
+        """
+        if not bool(getattr(Config, "COST_CARD_ENABLED", True)) or not self._tel_path:
+            return
+        try:
+            from ..utils.cost_accounting import COST_CARD_WINDOWS_OPTION, cost_card_window_record
+            records = state.options.get(COST_CARD_WINDOWS_OPTION)
+            records = dict(records) if isinstance(records, dict) else {}
+            records[window] = cost_card_window_record(
+                window, started_at=started_at, carry=getattr(self, "_tel_carry", None))
+            state.options[COST_CARD_WINDOWS_OPTION] = records
+        except Exception as exc:  # noqa: BLE001 — 成本卡为观测增益，失败不影响管线
+            logger.debug("[%s] 成本卡墙钟窗记录失败（忽略）: %s",
+                         getattr(state, "pipeline_id", None), exc)
+
     def _write_cost_card(self, state: "PipelineState") -> None:
         """EVAL-18: write the terminal attempt's <pipeline_dir>/cost_card.json.
 
@@ -10066,6 +10103,8 @@ class PipelineOrchestrator:
                                state.pipeline_id, _ce)
 
         state.options.setdefault("ensemble_wall", {})["started_at"] = _utcnow()
+        self._note_cost_card_window(  # EVAL-18
+            state, "ensemble", state.options["ensemble_wall"]["started_at"])
         try:
             _set_stage("ensemble")
         except Exception:  # noqa: BLE001
@@ -10681,6 +10720,7 @@ class PipelineOrchestrator:
             st.message = message
             if st.started_at is None:
                 st.started_at = _utcnow()
+                self._note_cost_card_window(state, stage, st.started_at)  # EVAL-18
             state.current_stage = stage
             # I-5-6: 记录最近一次进度信号的壁钟时间戳，供状态 API 计算 elapsed/stale，
             # 让 UI 把「长时间无进度」诚实地呈现为「仍在思考」而非「卡死的进度条」。
@@ -11472,6 +11512,11 @@ class PipelineOrchestrator:
         # EVAL-1: the previous attempt's ledger receipt must not pass for the verdict of
         # the new report (a cancelled/halted attempt never replaces it).
         state.options.pop("forecast_ledger", None)
+        if bool(getattr(Config, "COST_CARD_ENABLED", True)):
+            # EVAL-18: nor may the previous report's config_hash pin describe the new report
+            # when the attempt ends before _generate_stage_report pins it (the card recomputes).
+            from ..utils.cost_accounting import CONFIG_HASH_OPTION
+            state.options.pop(CONFIG_HASH_OPTION, None)
         stale_names = {
             name for name in list(state.artifacts)
             if name.endswith("_partial") or name == "report_viz_manifest"
