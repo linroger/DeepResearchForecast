@@ -800,7 +800,9 @@ class Config:
     # 的情景分布差异，记入 forecast.quality.backbone_sensitivity。纯影子诊断：不改概率、区间、渲染与
     # 发布门。准入时钉进 safety_policy_v1.backbone_check（resume 不重新捕获；缺失即关闭）；种子报告 /
     # model_comparison / API 重生成从不运行。默认关是安全的：不发任何额外 LLM 调用，forecast.json 与
-    # 全部提示词逐字节不变；开启时每次运行多 2 次骨架调用。
+    # 全部提示词逐字节不变；开启时每次运行多 2 次骨架调用。对照与副底座调用与主报告共用该提供方的
+    # 进程级 422/429 熔断状态（失败计入连败、成功清零、熔断改变后续调用的服务方），故主提供方熔断
+    # 已有连败或处于冷却时不发调用（记 unchecked:primary_throttled），同样状态的副候选被跳过。
     BACKBONE_CHECK_ENABLED = os.environ.get('BACKBONE_CHECK_ENABLED', 'false').strip().lower() == 'true'
     # 副底座候选：逗号分隔的提供方名（构造方式同 FORECAST_ENSEMBLE_MODELS）。空 = 无副底座
     # （开启时记 unchecked:no_distinct_secondary，不发调用）。

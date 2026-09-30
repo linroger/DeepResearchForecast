@@ -157,6 +157,22 @@ def _cb_reset(provider: str) -> None:
             st["consec429"] = 0.0
 
 
+def circuit_breaker_quiet(provider: str) -> bool:
+    """True when ``provider``'s 422/429 circuit breaker holds no failure streak and no cooldown.
+
+    The breaker is process-wide per provider: every chat() of any client of that provider counts
+    its failures toward the trip and resets the streaks on success, and a trip decides which
+    provider serves every later call. EVAL-11's shadow backbone check reads this so its own
+    calls never feed a breaker that a throttled provider is already building toward.
+    """
+    with _CB_LOCK:
+        st = _CB_STATE.get(str(provider or "").lower())
+        if not st:
+            return True
+        return (st.get("consec", 0.0) <= 0 and st.get("consec429", 0.0) <= 0
+                and st.get("tripped_until", 0.0) <= time.monotonic())
+
+
 # LLM-3: 回退提供方的 OpenAI 连接池缓存。此前每次失败转移都重建 LLMClient/OpenAI 客户端
 # （每次一个新 httpx 连接池 + TLS 握手）；键=(provider, model, base_url)。只缓存底层 OpenAI
 # 客户端（官方文档保证线程安全），LLMClient 实例仍逐调用新建（逐调用元数据见 _CALL_META）。

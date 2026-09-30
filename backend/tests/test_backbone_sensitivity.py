@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import re
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -267,10 +268,13 @@ def test_secondary_flip_is_backbone_sensitive():
     assert result["note"] == "shadow diagnostic; probabilities unchanged"
     assert result["status"] == "backbone_sensitive"
     assert result["providers"] == {
-        "primary": {"provider": "primary", "model": "p-1", "served_model": None},
+        "primary": {"provider": "primary", "model": "p-1", "served_model": None,
+                    "spine_served_by": None},
         "secondary": {"provider": "other", "model": "o-1", "served_model": None}}
     assert result["within_basis"] == bs.WITHIN_BASIS
-    assert (result["calls"], result["max_abs_delta"], result["skipped"]) == (2, 0.15, [])
+    # the pinned threshold is its own key; max_abs_delta only ever names an observed maximum
+    assert (result["calls"], result["threshold"], result["skipped"]) == (2, 0.15, [])
+    assert "max_abs_delta" not in result
     assert result["cross"]["leader_agree"] is False and result["cross"]["max_abs_delta"] == 0.2
     assert result["within"]["tv"] == 0.0 and result["within"]["leader_agree"] is True
     # one control draw (the primary backbone, pinned + uncached) then one secondary draw, both
@@ -308,7 +312,7 @@ def test_control_uses_the_primary_strong_tier_model():
     # the served model, not LLM_MODEL_NAME, is the primary identity: "primary"/"p-strong" is
     # the same backbone and is skipped; the control runs on p-strong
     assert result["providers"]["primary"] == {"provider": "primary", "model": "p-strong",
-                                              "served_model": None}
+                                              "served_model": None, "spine_served_by": None}
     assert result["skipped"] == [{"provider": "primary", "reason": "same_as_primary"}]
     assert [c["model"] for c in log] == ["p-strong", "o-1"]
     assert primary.model == "p-1" and result["status"] == "stable"
@@ -320,7 +324,7 @@ def test_control_uses_the_primary_strong_tier_model():
         follow_prompt="F", primary_spine=_spine(), primary_llm=cli, providers=["other"],
         client_factory=_Factory({"other": ("o-1", [_spine()])}, cli_log), max_tokens=100)
     assert cli_result["providers"]["primary"] == {"provider": "claude-cli", "model": "claude-opus",
-                                                  "served_model": None}
+                                                  "served_model": None, "spine_served_by": None}
     assert [(c["provider"], c["model"]) for c in cli_log] == [
         ("claude-cli", "claude-opus"), ("other", "o-1")]
 
@@ -413,6 +417,124 @@ def test_invalid_threshold_makes_no_llm_call(threshold):
     assert result["cross"] is None and result["within"] is None
 
 
+def _check_served(spine_served_by):
+    log = []
+    primary = _ScriptedLLM([_spine()], log=log)
+    factory = _Factory({"other": ("o-1", [_spine()])}, log)
+    result = bs.run_spine_backbone_check(
+        follow_prompt="F", primary_spine=_spine(), primary_llm=primary, providers=["other"],
+        client_factory=factory, max_tokens=100, spine_served_by=spine_served_by)
+    return result, factory, log
+
+
+def test_fallback_served_spine_is_unchecked():
+    # Any spine call served by LLM_FALLBACK_PROVIDER (the first draw, a K>1 follow draw, the
+    # REPORT-1 retry) makes ``within`` a cross-backbone comparison: no verdict and no call.
+    for served in (["fallback"], ["primary", "fallback"], ["fallback", "primary"]):
+        result, factory, log = _check_served(served)
+        assert result["status"] == "unchecked:spine_served_by_fallback"
+        assert (result["calls"], log, factory.asked) == (0, [], [])
+        assert result["providers"]["primary"]["spine_served_by"] == served
+        assert result["cross"] is None and result["within"] is None
+    # served by the primary, replayed from the cache, or not reported: compared as usual
+    for served in (["primary"], ["primary", "cache"], [None], []):
+        result, factory, log = _check_served(served)
+        assert result["status"] == "stable" and result["calls"] == 2
+        assert result["providers"]["primary"]["spine_served_by"] == served
+    observed = ["primary"]
+    result, *_ = _check_served(observed)
+    observed.append("fallback")  # the record keeps its own copy
+    assert result["providers"]["primary"]["spine_served_by"] == ["primary"]
+
+
+def test_spine_call_observer_delegates_and_records_who_served():
+    class _Served(FakeLLMClient):
+        """FakeLLMClient whose calls report who served them (None = no metadata)."""
+
+        def __init__(self, served, **kwargs):
+            super().__init__(**kwargs)
+            self.served, self._meta = list(served), None
+
+        def _stamp(self):
+            who = self.served.pop(0)
+            self._meta = None if who is None else {"served_by": who}
+
+        def chat(self, messages, **kwargs):
+            reply = super().chat(messages, **kwargs)
+            self._stamp()
+            return reply
+
+        def chat_json(self, messages, **kwargs):
+            reply = super().chat_json(messages, **kwargs)
+            self._stamp()
+            return reply
+
+        def last_call_meta(self):
+            return self._meta
+
+    llm = _Served(["primary", "fallback", None], json_responses=[{"a": 1}, {"b": 2}],
+                  responses=["text"], provider="minimax", model="m-1")
+    observer = bs.SpineCallObserver(llm)
+    assert (observer.provider, observer.model) == ("minimax", "m-1")  # attributes delegated
+    msgs = [{"role": "user", "content": "x"}]
+    assert observer.chat_json(messages=msgs, temperature=0.2, max_tokens=9) == {"a": 1}
+    assert observer.chat(msgs) == "text"
+    assert observer.chat_json(msgs) == {"b": 2}
+    assert observer.served_by == ["primary", "fallback", None]
+    # the wrapped client received exactly these calls, arguments unchanged
+    assert [c["kind"] for c in llm.calls] == ["chat_json", "chat", "chat_json"]
+    assert (llm.calls[0]["messages"], llm.calls[0]["temperature"],
+            llm.calls[0]["max_tokens"]) == (msgs, 0.2, 9)
+
+    class _Broken(FakeLLMClient):
+        def chat_json(self, messages, **kwargs):
+            raise RuntimeError("provider down")
+
+    failing = bs.SpineCallObserver(_Broken())
+    with pytest.raises(RuntimeError, match="provider down"):
+        failing.chat_json(msgs)
+    assert failing.served_by == []  # a call that never completed was served by nobody
+    # without a wrapped client an attribute is plainly missing (no __getattr__ recursion)
+    assert not hasattr(bs.SpineCallObserver.__new__(bs.SpineCallObserver), "model")
+
+
+def test_throttled_provider_makes_no_call(monkeypatch):
+    # The control shares the primary provider's process-wide 422/429 breaker: while it holds a
+    # streak or a cooldown the check stays out of it entirely.
+    monkeypatch.setattr(lc, "_CB_STATE", {})
+    for state in ({"consec": 1.0}, {"consec429": 2.0},
+                  {"consec": 0.0, "consec429": 0.0, "tripped_until": time.monotonic() + 60}):
+        lc._CB_STATE["primary"] = dict(state)
+        assert lc.circuit_breaker_quiet("Primary") is False
+        result, _primary, factory, log = _check(_spine(), _spine())
+        assert result["status"] == "unchecked:primary_throttled"
+        assert (result["calls"], log, factory.asked) == (0, [], [])
+        assert result["providers"]["primary"]["provider"] == "primary"
+    # streaks reset by a success and the cooldown over: quiet again
+    lc._CB_STATE["primary"] = {"consec": 0.0, "consec429": 0.0,
+                               "tripped_until": time.monotonic() - 1}
+    assert lc.circuit_breaker_quiet("primary") is True and lc.circuit_breaker_quiet("") is True
+    # a secondary candidate whose own breaker is building toward a trip is skipped
+    lc._CB_STATE["other"] = {"consec429": 1.0}
+    table = {"other": ("o-1", [_spine()]), "third": ("t-1", [_spine()])}
+    result, _primary, factory, log = _check(_spine(), None, providers=("other", "third"),
+                                            table=table)
+    assert result["skipped"] == [{"provider": "other", "reason": "throttled"}]
+    assert result["providers"]["secondary"]["provider"] == "third"
+    assert [c["provider"] for c in log] == ["primary", "third"]
+    assert result["status"] == "stable"
+
+
+def test_same_served_model_helper():
+    def pair(a, b):
+        return bs._same_served_model({"served_model": a}, {"served_model": b})
+
+    assert pair("Model-X ", "model-x") is True
+    assert pair("model-x", "model-y") is False
+    for a, b in ((None, None), ("", ""), ("model-x", None), (None, "model-x")):
+        assert pair(a, b) is False  # nothing reported on a side: no evidence either way
+
+
 # ------------------------------------------------------ real LLMClient: cache bypass
 PRIMARY, PRIMARY_MODEL, SECONDARY = "minimax", "MiniMax-M3", "deepseek"
 
@@ -497,10 +619,64 @@ def test_controls_bypass_cache(real_clients):
     # served_model is what the provider reported serving each backbone's draw
     assert results[0]["providers"] == {
         "primary": {"provider": PRIMARY, "model": "primary-strong",
-                    "served_model": "served:primary-strong"},
+                    "served_model": "served:primary-strong", "spine_served_by": None},
         "secondary": {"provider": SECONDARY, "model": "deepseek-chat",
                       "served_model": "served:deepseek-chat"}}
     assert (primary.use_cache, primary._pinned) == (True, False)
+
+
+def test_same_served_model_is_unchecked(real_clients):
+    """Two provider labels a proxy routes to one model are not a cross-backbone pair: both
+    providers report the same served model, so the check refuses a verdict (the metrics are
+    kept for the record)."""
+    transports = real_clients
+    primary = lc.LLMClient()
+
+    def factory(name):
+        return lc.LLMClient(provider=name, api_key="sk-2", base_url="http://127.0.0.1:2/v1",
+                            model="primary-strong")
+
+    result = bs.run_spine_backbone_check(
+        follow_prompt="FOLLOW PROMPT", primary_spine=_spine(), primary_llm=primary,
+        providers=[SECONDARY], client_factory=factory, max_tokens=6144)
+    assert result["status"] == "unchecked:same_served_model"
+    assert (result["providers"]["primary"]["served_model"],
+            result["providers"]["secondary"]["served_model"]) == (
+        "served:primary-strong", "served:primary-strong")
+    assert result["calls"] == 2
+    assert len(transports[PRIMARY].calls) == len(transports[SECONDARY].calls) == 1
+    # what the metrics alone would have claimed
+    assert bs.classify(result["cross"], result["within"], 0.15) == "stable"
+
+
+def test_observer_sees_a_fallback_served_spine_draw(real_clients, monkeypatch):
+    """The real LLMClient failover: the unpinned primary's spine draw is served by
+    LLM_FALLBACK_PROVIDER; the observer records it and the check makes no call."""
+    transports = real_clients
+    for name, value in {"LLM_FALLBACK_PROVIDER": SECONDARY, "LLM_FALLBACK_MODEL": "deepseek-chat",
+                        "LLM_FALLBACK_BASE_URL": "http://127.0.0.1:3/v1",
+                        "LLM_FALLBACK_API_KEY": "sk-fallback"}.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(lc, "_FB_OPENAI_CLIENTS", {})
+    monkeypatch.setattr(lc, "_FB_AUTH_UNAVAILABLE_UNTIL", {})
+    monkeypatch.setattr(lc, "_cb_tripped", lambda provider: provider == PRIMARY)
+
+    primary = lc.LLMClient()
+    observer = bs.SpineCallObserver(primary)
+    spine = fe.derive_forecast_spine(observer, central_question="Will adoption accelerate?")
+    assert spine.get("scenarios")
+    assert observer.served_by == ["fallback"]
+    assert transports[PRIMARY].calls == [] and len(transports[SECONDARY].calls) == 1
+
+    asked = []
+    result = bs.run_spine_backbone_check(
+        follow_prompt="FOLLOW PROMPT", primary_spine=spine, primary_llm=primary,
+        providers=["codex-cli"], client_factory=lambda name: asked.append(name),
+        max_tokens=6144, spine_served_by=observer.served_by)
+    assert result["status"] == "unchecked:spine_served_by_fallback" and result["calls"] == 0
+    assert result["providers"]["primary"]["spine_served_by"] == ["fallback"]
+    assert asked == [] and transports[PRIMARY].calls == []
+    assert len(transports[SECONDARY].calls) == 1
 
 
 def test_cli_backbones_record_the_model_they_are_asked_for(real_clients, monkeypatch):
@@ -543,7 +719,7 @@ def test_cli_backbones_record_the_model_they_are_asked_for(real_clients, monkeyp
         follow_prompt="F", primary_spine=_spine(), primary_llm=scripted,
         providers=["claude-cli", "other"], client_factory=factory, max_tokens=100)
     assert result["providers"]["primary"] == {"provider": "claude-cli", "model": None,
-                                              "served_model": None}
+                                              "served_model": None, "spine_served_by": None}
     assert result["skipped"] == [{"provider": "claude-cli", "reason": "same_as_primary"}]
     assert [(c["provider"], c["model"]) for c in log] == [
         ("claude-cli", PRIMARY_MODEL), ("other", "o-1")]
@@ -574,7 +750,41 @@ def test_ensemble_client_never_sends_the_primary_key_elsewhere(real_clients, mon
     deepseek = fe._build_ensemble_client(SECONDARY)
     assert (deepseek.api_key, deepseek.base_url) == (
         "sk-deepseek", Config.PROVIDER_META[SECONDARY]["default_base"])
-    assert fe._build_ensemble_client(PRIMARY).api_key == "sk-primary"
+
+    # The primary's own name reuses LLM_API_KEY only on the primary's own endpoint (never on
+    # the provider's default_base), also when the settings menu mirrored it into key_env; a
+    # distinct key of the provider's own goes to the provider's default_base.
+    own = fe._build_ensemble_client(PRIMARY)
+    assert (own.api_key, own.base_url) == ("sk-primary", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("MINIMAX_API_KEY", "sk-primary")
+    assert fe._build_ensemble_client(PRIMARY).base_url == "http://127.0.0.1:1/v1"
+    monkeypatch.setenv("MINIMAX_API_KEY", "sk-minimax-own")
+    distinct = fe._build_ensemble_client(PRIMARY)
+    assert (distinct.api_key, distinct.base_url) == (
+        "sk-minimax-own", Config.PROVIDER_META[PRIMARY]["default_base"])
+
+
+def test_primary_key_behind_a_proxy_stays_on_the_proxy(real_clients, monkeypatch):
+    """An 'openai' primary behind a proxy with OPENAI_API_KEY unset: listing 'openai' as a
+    candidate must never build a client for api.openai.com carrying the proxy's key."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    for name, value in {"LLM_PROVIDER": "openai", "LLM_BASE_URL": "http://my-proxy.example/v1",
+                        "LLM_API_KEY": "sk-proxy", "LLM_MODEL_NAME": "gpt-4o"}.items():
+        monkeypatch.setattr(Config, name, value, raising=False)
+    client = fe._build_ensemble_client("openai")
+    assert (client.api_key, client.base_url, client.model) == (
+        "sk-proxy", "http://my-proxy.example/v1", "gpt-4o-mini")
+    # the check still takes it as a distinct backbone (another model), reached via the proxy
+    primary = lc.LLMClient()
+    skipped = []
+    picked, ident = bs._pick_secondary(["openai"], bs._identity(primary, bs._spine_model(primary)),
+                                       fe._build_ensemble_client, skipped)
+    assert (picked.api_key, picked.base_url) == ("sk-proxy", "http://my-proxy.example/v1")
+    assert ident["model"] == "gpt-4o-mini" and skipped == []
+    # a key of the provider's own goes to the provider's own endpoint
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    own = fe._build_ensemble_client("openai")
+    assert (own.api_key, own.base_url) == ("sk-openai", Config.PROVIDER_META["openai"]["default_base"])
 
 
 # =============================================================== 4. report level
@@ -713,6 +923,9 @@ def test_enabled_records_block_probabilities_unchanged(report_env, monkeypatch):
     assert record["status"] == "backbone_sensitive"
     assert record["providers"]["secondary"] == {"provider": "other", "model": "other-1",
                                                 "served_model": None}
+    # the spine derivation went through the observer: one call, whose server the fake does not
+    # report
+    assert record["providers"]["primary"]["spine_served_by"] == [None]
     assert record["within_basis"] == bs.WITHIN_BASIS
     assert record["cross"]["leader_agree"] is False
     # within = pre-critique spine vs control: zero, although the critique moved every
@@ -734,6 +947,51 @@ def test_enabled_records_block_probabilities_unchanged(report_env, monkeypatch):
     assert ([c["prompt"] for c in log if _FOLLOW_MARKER not in c["prompt"]]
             == [c["prompt"] for c in off_log])
     assert off_agent._forecast_spine["scenarios"] == agent._forecast_spine["scenarios"]
+
+
+class _ServedRouterLLM(_RouterLLM):
+    """_RouterLLM whose calls report who served them (scripted per call, then 'primary')."""
+
+    def __init__(self, spine, control, log, served):
+        super().__init__(spine, control, log)
+        self.served, self._meta = list(served), None
+
+    def chat_json(self, messages, **kwargs):
+        reply = super().chat_json(messages, **kwargs)
+        self._meta = {"served_by": self.served.pop(0) if self.served else "primary"}
+        return reply
+
+    def last_call_meta(self):
+        return self._meta
+
+
+def test_report_fallback_served_spine_recorded_unchecked(report_env, monkeypatch):
+    built = _secondary_factory(monkeypatch, _spine(), [])
+    _off_agent, off_log, off_json = _run_report(report_env, "report_fb_off")
+    # K=2: only the FIRST spine draw failed over; the last call's metadata alone says 'primary'
+    for k, served in ((1, ["fallback"]), (2, ["fallback", "primary"])):
+        monkeypatch.setattr(Config, "REPORT_SPINE_SELFCONSISTENCY_K", k, raising=False)
+        report_id = f"report_fb_k{k}"
+        (report_env / "reports" / report_id).mkdir(parents=True)
+        log = []
+        agent = _agent(_ServedRouterLLM(_spine(), _spine(), log, served))
+        agent.backbone_check_policy = dict(_ENABLED)
+        agent._derive_and_pin_forecast_spine(report_id)
+        agent._finalize_structured_forecast(report_id, "# T\n\nBody text.")
+        forecast = json.loads(
+            (report_env / "reports" / report_id / "forecast.json").read_text(encoding="utf-8"))
+        record = forecast["quality"].pop("backbone_sensitivity")
+        assert record["status"] == "unchecked:spine_served_by_fallback" and record["calls"] == 0
+        assert record["providers"]["primary"]["spine_served_by"] == served
+        # no control draw: the only follow-prompt call is the spine's own K=2 draw
+        assert len([c for c in log if _FOLLOW_MARKER in c["prompt"]]) == k - 1
+        assert [s["probability"] for s in forecast["scenarios"]] == list(_MOVED)
+        if k == 1:
+            if not forecast["quality"]:
+                forecast.pop("quality")
+            assert forecast == json.loads(off_json)
+            assert [c["prompt"] for c in log] == [c["prompt"] for c in off_log]
+    assert built == []  # no secondary client was ever built
 
 
 def test_report_budget_exceeded_propagates_and_keeps_spine(report_env, monkeypatch):

@@ -3030,12 +3030,18 @@ class ReportAgent:
         Degrade-safe: any failure leaves ``self._forecast_spine=None`` and the block
         empty, so sections behave exactly as the pre-spine path.
         """
+        from . import backbone_sensitivity as _bs
         from . import forecast_extractor as _fe
         self._spine_probability_review = None
         # EVAL-11：影子跨底座检查的输入——骨架实际所用的参数与批判前骨架（检查在下方 try 之外运行）。
+        # 开启时骨架推导经观察器调用主客户端，逐次记下每次骨架调用的服务方（主 / 回退 / 缓存）；
+        # 未开启时照旧直接传 self.llm（调用与提示词逐字节不变）。
         self._backbone_sensitivity = None
         pre_critique_spine: Optional[Dict[str, Any]] = None
         spine_kwargs: Dict[str, Any] = {}
+        spine_calls: Optional[_bs.SpineCallObserver] = None
+        if _bs.enabled_policy(getattr(self, "backbone_check_policy", None)) is not None:
+            spine_calls = _bs.SpineCallObserver(self.llm)
         try:
             from ..utils import actors as _actors
             try:
@@ -3085,7 +3091,8 @@ class ReportAgent:
                 "signal_pack": signal_pack,
                 "market_block": market_pack,
             }
-            spine = _fe.derive_forecast_spine(self.llm, **spine_kwargs)
+            spine = _fe.derive_forecast_spine(
+                self.llm if spine_calls is None else spine_calls, **spine_kwargs)
             if not spine or not spine.get("scenarios"):
                 # REPORT-1：骨架因概率不可读被置空时保留复核摘要，_finalize 并入
                 # forecast.quality.probability_parse（回退成稿后抽取的原因可审计）。
@@ -3145,10 +3152,13 @@ class ReportAgent:
         # EVAL-11：影子跨底座检查置于上方 try/except 之外——其失败（含向上抛出的 BudgetExceeded）
         # 绝不能经由那个 except 丢弃已发布的骨架。仅在骨架已钉住时运行；未开启时不发任何调用。
         if pre_critique_spine is not None and self._forecast_spine is not None:
-            self._run_backbone_check(pre_critique_spine, spine_kwargs)
+            self._run_backbone_check(
+                pre_critique_spine, spine_kwargs,
+                spine_served_by=None if spine_calls is None else spine_calls.served_by)
 
     def _run_backbone_check(self, pre_critique_spine: Dict[str, Any],
-                            spine_kwargs: Dict[str, Any]) -> None:
+                            spine_kwargs: Dict[str, Any], *,
+                            spine_served_by: Optional[List[Optional[str]]] = None) -> None:
         """EVAL-11 (P15): shadow cross-backbone sensitivity check of the published spine.
 
         Runs only when the orchestrator handed this agent an enabled ``backbone_check_policy``
@@ -3159,8 +3169,11 @@ class ReportAgent:
         for _finalize_structured_forecast (forecast.quality.backbone_sensitivity). ``within``
         compares ``pre_critique_spine`` (the free spine prompt, pooled when
         REPORT_SPINE_SELFCONSISTENCY_K > 1) with one control draw on the fixed-name follow
-        prompt, so it bundles sampling noise with the free-vs-follow prompt difference. Never
-        touches ``self._forecast_spine`` / ``self._forecast_spine_block``: probabilities are
+        prompt, so it bundles sampling noise with the free-vs-follow prompt difference.
+        ``spine_served_by`` is who served each call of the spine derivation
+        (SpineCallObserver): a spine the fallback provider drew any part of is not a
+        within-backbone baseline and is recorded unchecked without a call. Never touches
+        ``self._forecast_spine`` / ``self._forecast_spine_block``: probabilities are
         unchanged. BudgetExceeded propagates; any other error records
         ``unchecked:error:<Type>``. The calls are metered under the telemetry stage
         'backbone_check'; the previous stage is restored afterwards.
@@ -3185,6 +3198,7 @@ class ReportAgent:
                 client_factory=_fe._build_ensemble_client,
                 max_tokens=int(getattr(Config, "REPORT_SPINE_MAX_TOKENS", 6144)),
                 max_abs_delta=policy["max_abs_delta"],
+                spine_served_by=spine_served_by,
             )
             logger.info(f"骨架跨底座影子检查: {self._backbone_sensitivity.get('status')}")
         except BudgetExceeded:
