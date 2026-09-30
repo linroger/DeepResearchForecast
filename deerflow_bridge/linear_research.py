@@ -2818,28 +2818,37 @@ def _split_tag(text: str) -> tuple[str, str]:
 
 
 # Evidence clauses (RESEARCH-7): an "EVIDENCE:" / "Evidence:" / "证据：" label
-# (bold or not) opens a finding's clause only where it starts a word (no letter
-# or CJK character right before it: "关键证据：" is prose) and a quoted string
-# ("…", “…”, 「…」) opens the clause, after optional [S<n>] markers, emphasis and
-# separators (_CLAUSE_LEAD_RE): "Supporting Evidence: capacity reached …" and a
-# label inside the quoted passage are prose too.  The LAST such label splits.
-# Up to EVIDENCE_QUOTES_PER_FACT quoted strings follow, each optionally bound
-# to a source by an [S<n>] marker written right before it.
-_EVIDENCE_LABEL_RE = re.compile(r"(?:\*\*|__)?(?:EVIDENCE|Evidence|证据)(?:\*\*|__)?[ \t]{0,3}[:：](?:\*\*|__)?")
-_CLAUSE_LEAD_RE = re.compile(r"(?:[ \t*_:：,，;；\-–—]|\[S\d{1,9}\])*")
+# (emphasised or not; [S<n>] markers before its colon belong to the clause and
+# bind its first quote) opens a finding's clause only where it starts a word
+# (no letter or CJK character right before it: "关键证据：" is prose) and a
+# quoted string ("…", “…”, 「…」) opens the clause, after optional [S<n>]
+# markers, verification tags, emphasis and separators (_CLAUSE_LEAD_RE):
+# "Supporting Evidence: capacity reached …" and a label inside the quoted
+# passage are prose too.  The LAST such label splits.  Up to
+# EVIDENCE_QUOTES_PER_FACT quoted strings follow, each optionally bound to a
+# source by an [S<n>] marker written right before it.  Separators, an opening
+# bracket and loose emphasis a finding ends with before its label
+# (_FINDING_TAIL_CHARS: "… [S1] — EVIDENCE:", "… (EVIDENCE: …)") are dropped;
+# emphasis closing a word ("**176 GW** EVIDENCE:") stays.
+_EVIDENCE_LABEL_RE = re.compile(r"[*_]{0,2}(?:EVIDENCE|Evidence|证据)[*_]{0,2}"
+                                r"(?P<refs>(?:[ \t]?\[S\d{1,9}\])*)[ \t]{0,3}[:：][*_]{0,2}")
+_CLAUSE_LEAD_RE = re.compile(rf"(?:[ \t*_:：,，;；\-–—]|\[S\d{{1,9}}\]|(?i:{_TAG_RE.pattern}))*")
+_FINDING_TAIL_CHARS = " \t*_:：,，;；-–—(（"
 _QUOTE_OPEN_RE = re.compile("[\"“「]")
 _QUOTE_CLOSERS = {"\"": "\"", "“": "”", "「": "」"}
 _BOUND_MARKER_RE = re.compile(r"\[S(\d{1,9})\]$")
-_BOUND_MARKER_TRIM = " \t:：,，;；-–—"
+_BOUND_MARKER_TRIM = " \t*_:：,，;；-–—"
 # What the REPORTED-number audit never checks, removed before the fact's
-# numbers are read: scientific-notation exponents (10^9, 10**-3, 10⁹, 1.2e9),
+# numbers are read: scientific-notation exponents (10^9, 10**-3, 10⁹, 1.2e9;
+# "**" only after a base of 10, so a bold number, "**99%**", is still read),
 # bibliographic ids (vol./pp./No./article numbers, DOIs, arXiv ids), dates
 # written with month names or CJK date units, and bare years 1900-2100
 # (calendar dates are already skipped by fact_number_tokens).
 _MONTHS = (r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?"
            r"|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b\.?")
 _UNCHECKABLE_NUMBER_RES = (
-    re.compile(r"(?:\b10[ \t]?)?(?:\^|\*\*)[ \t]?[-−+]?\d{1,3}|(?:\b10)?[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+|(?<=\d)[eE][-+]?\d{1,3}\b"),
+    re.compile(r"\b10[ \t]?\*\*[-−+]?\d{1,3}|(?:\b10[ \t]?)?\^[ \t]?[-−+]?\d{1,3}|(?:\b10)?[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+"
+               r"|(?<=\d)[eE][-+]?\d{1,3}\b"),
     re.compile(r"\b(?:vols?|pp?|nos?|iss)\.[ \t]?\d[\d.,/–-]*|\b(?:article|art\.)[ \t]?(?:no\.?[ \t]?|#[ \t]?)?\d[\d.,/-]*"
                r"|\bdoi(?:[ \t]?[:.]|[ \t])[ \t]?\S+|\barxiv(?:[ \t]?:|\.org/)[ \t]?\S+", re.I),
     re.compile(rf"\b\d{{1,2}}(?:st|nd|rd|th)?[ \t]{_MONTHS}|\b{_MONTHS}[ \t]\d{{1,2}}(?:st|nd|rd|th)?\b"
@@ -2851,15 +2860,26 @@ _UNCHECKABLE_NUMBER_RES = (
 def _split_evidence_clause(text: str) -> tuple[str, str | None]:
     """``(finding, clause)``: the text before the last evidence label that
     opens a clause (see _EVIDENCE_LABEL_RE) and the clause after it, or
-    ``(text, None)`` when no label does.  Linear: a label's lead scan stops
-    at the next label's first letter."""
+    ``(text, None)`` when no label does; the clause starts at the [S<n>]
+    markers written before the label's colon.  Linear: a label's lead scan
+    stops at the next label's first letter."""
     for match in reversed(list(_EVIDENCE_LABEL_RE.finditer(text))):
         if match.start() and text[match.start() - 1].isalpha():
             continue
         lead = _CLAUSE_LEAD_RE.match(text, match.end())
         if _QUOTE_OPEN_RE.match(text, lead.end()):
-            return text[:match.start()], text[match.end():]
+            return text[:match.start()], text[match.start("refs"):]
     return text, None
+
+
+def _finding_before_clause(text: str) -> str:
+    """A finding's text split off before its evidence label, without the
+    separators, opening bracket and loose emphasis it ends with
+    (_FINDING_TAIL_CHARS); emphasis closing its last word stays."""
+    kept = text.rstrip(_FINDING_TAIL_CHARS)
+    tail = text[len(kept):]
+    closing = len(tail) - len(tail.lstrip("*_"))
+    return kept + tail[:closing] if kept else ""
 
 
 def _bound_sid(lead: str) -> int | None:
@@ -2916,7 +2936,9 @@ def _claimed_tag(bullet: str, body: str, clause: str | None) -> str:
     """The tag the agent wrote on a finding (``bullet`` = ``body`` + evidence
     label + ``clause``): the last one outside the quoted strings of its
     clause (a quoted page passage may itself say "(reported)"), else one
-    written inside the quote marks, else REPORTED."""
+    written inside the quote marks, else REPORTED.  Off reads the last tag
+    of the whole bullet (:func:`_split_tag`), which audit keeps as the fact's
+    tag; enforce works with this one."""
     if clause is not None:
         outside = f"{body} {_unquoted(clause)}"
         if _TAG_RE.search(outside):
@@ -3093,19 +3115,48 @@ class _EvidenceChecker:
             fact["number_check_missing"] = missing
 
 
-def _apply_evidence(fact: dict, claimed: str, clause: str | None, mode: str, checker: _EvidenceChecker) -> None:
+def _verified_rules(tag: str, text: str, sids: Sequence[int], ledger_get: Callable[[int], Mapping[str, Any] | None],
+                    page_numbers: Callable[[int], frozenset[str] | None]) -> dict:
+    """What the VERIFIED rules of :func:`postprocess_notes` make of a finding
+    (``text`` citing ``sids``) tagged ``tag``: its ``tag`` and, for a VERIFIED
+    one, ``verification`` no_fetched_source (no cited fetched page → REPORTED)
+    or ``verified_numbers`` (it has number tokens) and ``missing_numbers`` (a
+    number token on none of the cited fetched pages → UNVERIFIED)."""
+    if tag != "VERIFIED":
+        return {"tag": tag}
+    fetched = [sid for sid in sids if (ledger_get(sid) or {}).get("fetched")]
+    if not fetched:
+        return {"tag": "REPORTED", "verification": "no_fetched_source"}
+    tokens = fact_number_tokens(text)
+    if not tokens:
+        return {"tag": tag}
+    available: set[str] = set()
+    for sid in fetched:
+        available |= page_numbers(sid) or frozenset()
+    missing = _missing_numbers(text, tokens, available)
+    if not missing:
+        return {"tag": tag, "verified_numbers": True}
+    return {"tag": "UNVERIFIED", "verified_numbers": False, "missing_numbers": missing}
+
+
+def _apply_evidence(fact: dict, claimed: str, clause: str | None, mode: str, checker: _EvidenceChecker,
+                    enforce_tag: str) -> None:
     """Record a fact's evidence (RESEARCH-7) and, in enforce mode, act on it.
 
     ``claimed_tag`` is the tag the agent wrote; ``evidence`` the located
     quotes (when none of the quoted strings is found, a passage with nested
-    straight quotes is tried whole: :func:`_outer_quote`);
+    straight quotes is tried whole: :func:`_outer_quote`, which can locate a
+    fact's evidence but never fail it);
     ``evidence_status`` verified (a quote located) | failed (quotes
     checked, none located) | absent (no clause, no quoted string or no quote
     that could be checked: never a demotion); ``evidence_unchecked`` (only
     when there is one) why each quote never checked was not
     (EVIDENCE_UNCHECKED_*); ``evidence_near_miss`` whether a missed quote
     starts or ends verbatim.  ``evidence_verdict`` says what enforce does
-    (audit records it and changes no tag):
+    (audit records it and changes no tag), weighed on ``enforce_tag``: what
+    the VERIFIED rules (:func:`_verified_rules`) make of the claimed tag on
+    the fact's text, the fact's own tag in enforce mode (audit keeps the tag
+    off gives the whole bullet):
 
     * ``evidence_not_on_page`` — quotes checked, none located, on a fact not
       already UNVERIFIED → UNVERIFIED;
@@ -3113,7 +3164,9 @@ def _apply_evidence(fact: dict, claimed: str, clause: str | None, mode: str, che
       numbers (all on its pages, or the fact would already be UNVERIFIED) are
       not all inside the evidence windows of its page quotes → REPORTED.  A
       fact whose quotes were located only in search text has no page window,
-      so its numbers are outside page evidence too.
+      so its numbers are outside page evidence too: stricter than applying
+      the rule to facts with a page quote only, a VERIFIED fact with quotes
+      keeps its tag only on page evidence that holds its numbers.
 
     A fact left REPORTED gets the REPORTED-number audit (``number_check``)."""
     quotes = _clause_quotes(clause) if clause else []
@@ -3123,8 +3176,7 @@ def _apply_evidence(fact: dict, claimed: str, clause: str | None, mode: str, che
         whole = checker.locate([outer], fact["sids"])
         if whole.entries:
             check = whole
-        else:
-            check.missed += whole.missed
+        elif check.missed:
             check.near = check.near or whole.near
     entries = check.entries
     fact["claimed_tag"] = claimed
@@ -3135,9 +3187,9 @@ def _apply_evidence(fact: dict, claimed: str, clause: str | None, mode: str, che
         fact["evidence_unchecked"] = check.unchecked
     verdict = None
     outside: list[str] = []
-    if check.missed and not entries and fact["tag"] != "UNVERIFIED":
+    if check.missed and not entries and enforce_tag != "UNVERIFIED":
         verdict = "evidence_not_on_page"
-    elif entries and fact["tag"] == "VERIFIED":
+    elif entries and enforce_tag == "VERIFIED":
         tokens = fact_number_tokens(fact["text"])
         if tokens:
             window_numbers = page_number_set("\n\n".join(check.windows)) if check.windows else frozenset()
@@ -3237,12 +3289,15 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
       otherwise the fact is kept but tagged UNVERIFIED.
 
     ``evidence_mode`` audit or enforce (RESEARCH-7; off changes nothing):
-    each finding's markers are read from the WHOLE bullet and its tag from
-    the whole bullet outside the clause's quoted strings
+    each finding's markers are read from the WHOLE bullet and its claimed tag
+    from the whole bullet outside the clause's quoted strings
     (:func:`_claimed_tag`); its last EVIDENCE clause is split off
     (:func:`_split_evidence_clause`; the fact text excludes it and gets the
     markers only the clause carried; a label that leaves no finding before it
-    splits nothing), and :func:`_apply_evidence` locates the
+    splits nothing).  Enforce applies the rules above to the claimed tag and
+    the fact text; audit changes no tag: the tag, verification,
+    verified_numbers and missing_numbers are what off makes of the whole
+    bullet.  :func:`_apply_evidence` locates the
     clause's quotes in ``page_text(sid)`` of the cited fetched sources and in
     the search text of the cited sources (``row_text(sid)``, by default
     :func:`_row_search_texts` of the ledger row).
@@ -3261,18 +3316,27 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
     facts: list[dict] = []
     unsourced: list[str] = []
     for bullet in sections["findings"]:
-        clause = None
+        text, tag = _split_tag(bullet)
+        claimed, clause, off_reading = tag, None, None
         if evidence:
             body, clause = _split_evidence_clause(bullet)
-            if clause is not None and len(_collapse(strip_unknown_citations(_split_tag(body)[0], known)[0])) < 3:
-                body, clause = bullet, None
-            tag = _claimed_tag(bullet, body, clause)
+            if clause is not None:
+                finding = _split_tag(body)[0]
+                if len(_finding_before_clause(_collapse(strip_unknown_citations(finding, known)[0]))) < 3:
+                    body, clause = bullet, None
+                else:
+                    if evidence_mode == EVIDENCE_AUDIT:
+                        off_text, off_sids = strip_unknown_citations(text, known)
+                        off_reading = (_collapse(off_text), off_sids)
+                    text = finding
+            claimed = _claimed_tag(bullet, body, clause)
+            if evidence_mode == EVIDENCE_ENFORCE:
+                tag = claimed
             all_sids = strip_unknown_citations(bullet, known)[1]
-            text = _split_tag(body)[0]
-        else:
-            text, tag = _split_tag(bullet)
         text, sids = strip_unknown_citations(text, known)
         text = _collapse(text)
+        if clause is not None:
+            text = _finding_before_clause(text)
         if len(text) < 3:
             continue
         if evidence:
@@ -3285,24 +3349,14 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
             continue
         fact: dict[str, Any] = {"kiq": kiq_id, "text": text, "sids": sids, "tag": tag,
                                 "verified_numbers": None}
-        if tag == "VERIFIED":
-            fetched = [sid for sid in sids if (ledger_get(sid) or {}).get("fetched")]
-            if not fetched:
-                fact["tag"] = "REPORTED"
-                fact["verification"] = "no_fetched_source"
-            else:
-                tokens = fact_number_tokens(text)
-                if tokens:
-                    available: set[str] = set()
-                    for sid in fetched:
-                        available |= page_numbers(sid) or frozenset()
-                    missing = _missing_numbers(text, tokens, available)
-                    fact["verified_numbers"] = not missing
-                    if missing:
-                        fact["tag"] = "UNVERIFIED"
-                        fact["missing_numbers"] = missing
+        # Audit weighs the whole bullet as off does (``off_reading``, set when
+        # a clause was split off), so it changes no tag.
+        fact.update(_verified_rules(tag, *(off_reading or (text, sids)), ledger_get, page_numbers))
         if checker is not None:
-            _apply_evidence(fact, tag, clause, evidence_mode, checker)
+            enforced = fact["tag"]
+            if evidence_mode == EVIDENCE_AUDIT:
+                enforced = _verified_rules(claimed, text, sids, ledger_get, page_numbers)["tag"]
+            _apply_evidence(fact, claimed, clause, evidence_mode, checker, enforced)
         facts.append(fact)
 
     def cleaned(items: list[str]) -> list[str]:

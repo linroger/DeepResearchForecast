@@ -210,7 +210,8 @@ def test_table_window_is_widened_to_the_whole_table_and_its_caption():
     "| a |\n" * 35_000,
     "1," * 100_000,
     ">#" * 100_000,
-])
+], ids=["brackets", "image_openers", "link_openers", "long_link_texts", "bare_urls", "plain_letters", "emphasis",
+        "page_labels", "combining_marks", "cjk_spaced", "table_rows", "digit_commas", "blockquote_heading_leads"])
 def test_adversarial_200k_inputs_finish_in_under_a_second(page):
     started = time.perf_counter()
     for quote in ("a" * 30 + " ... " + "b" * 30, "z" * 40, "a" * 40):

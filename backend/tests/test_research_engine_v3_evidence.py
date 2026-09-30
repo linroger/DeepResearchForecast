@@ -27,6 +27,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 import types
 from pathlib import Path
 
@@ -165,6 +166,31 @@ def test_audit_parses_spans_without_changing_tags_or_keeping_the_clause():
         "reported_numbers": {"checked": 1, "missing": 0, "not_checkable": 0}}
 
 
+def test_audit_gives_every_fact_the_tag_fields_off_gives_it():
+    """Audit changes no tag, whatever the clause holds (a number the page
+    lacks, a tag-like page parenthetical, a passage without the fact's
+    number): each fact's tag, verification, verified_numbers and
+    missing_numbers are off's, and its verdict is what enforce acts on."""
+    notes = findings(
+        '- Capacity reached 176 GW [S1] (VERIFIED) EVIDENCE: "The minister said 999 GW of connections were '
+        'approved in 2022"',
+        '- Net income rose 5% to $4.2 billion [S6] (VERIFIED) EVIDENCE: "Net income (reported) rose 5% to '
+        '$4.2 billion in the second quarter"',
+        f'- Operators run 40 sites across the region [S1] (VERIFIED) EVIDENCE: "{QUOTE_HEAD}"',
+        f'- Growth is 12% a year [S2] (VERIFIED) EVIDENCE: "{ROWS[2]["snippet"][:-15]}"',
+        "- The 2022 baseline was 150 GW of installed capacity [S1] (VERIFIED)")
+    keys = ("tag", "verification", "verified_numbers", "missing_numbers")
+    off, audit, enforce = (post(notes, mode) for mode in ("off", "audit", "enforce"))
+    assert [[fact.get(key) for key in keys] for fact in audit] == [[fact.get(key) for key in keys] for fact in off]
+    assert off[0]["tag"] == "UNVERIFIED" and off[0]["missing_numbers"] == ["999"]     # the quote's number
+    assert off[1]["tag"] == "REPORTED"                                                 # the quote's "(reported)"
+    assert [fact["claimed_tag"] for fact in audit] == [fact["claimed_tag"] for fact in enforce] == ["VERIFIED"] * 5
+    verdicts = [fact.get("evidence_verdict") for fact in enforce]
+    assert [fact.get("evidence_verdict") for fact in audit] == verdicts
+    assert verdicts == ["evidence_not_on_page", None, "numbers_outside_evidence", None, None]
+    assert [fact["tag"] for fact in enforce] == ["UNVERIFIED", "VERIFIED", "REPORTED", "REPORTED", "VERIFIED"]
+
+
 def test_enforce_keeps_a_verified_176_gw_fact_whose_span_contains_176():
     (fact,) = post(findings(f'- Installed capacity reached 176 GW in 2023 [S1] (VERIFIED) EVIDENCE: "{QUOTE_176}"'),
                    "enforce")
@@ -287,14 +313,30 @@ def test_a_marker_written_after_each_quote_still_finds_both_quotes():
 
 def test_a_tag_like_parenthetical_of_the_page_stays_in_the_quote():
     """"(reported)" in a quoted page passage is page text: the quote is located
-    as written, and the agent's tag is the one outside the quote marks."""
+    as written, and the claimed tag is the one outside the quote marks.
+    Enforce works with the claimed tag; audit keeps the tag off reads (the
+    last one of the whole bullet) and records what enforce would do."""
     quote = "Net income (reported) rose 5% to $4.2 billion in the second quarter"
     notes = findings(f'- Net income rose 5% to $4.2 billion [S6] (VERIFIED) EVIDENCE: "{quote}"')
-    for mode in ("audit", "enforce"):
+    (off,) = post(notes, "off")
+    assert off["tag"] == "REPORTED"
+    for mode, tag in (("audit", "REPORTED"), ("enforce", "VERIFIED")):
         (fact,) = post(notes, mode)
-        assert fact["tag"] == fact["claimed_tag"] == "VERIFIED"
+        assert fact["tag"] == tag and fact["claimed_tag"] == "VERIFIED"
         assert fact["text"] == "Net income rose 5% to $4.2 billion [S6]"
         assert fact["evidence"][0]["quote"] == quote and fact["evidence"][0]["basis"] == "exact"
+        assert "evidence_verdict" not in fact and "verification" not in fact
+    # The verdict audit records is the one enforce acts on, weighed on the
+    # claimed tag: here the page's 17% lies far outside the quoted passage.
+    page = f"{RESULTS_PAGE} {FILLER * 6}Adjusted net income rose 17% in the third quarter."
+    notes = findings(f'- Net income rose 5% and adjusted net income 17% [S6] (VERIFIED) EVIDENCE: "{quote}"')
+    audited, enforced = (lr.postprocess_notes("K1", notes, ROWS.get, lambda sid: lr.page_number_set(page),
+                                              evidence_mode=mode, page_text=lambda sid: page)[1]["facts"][0]
+                         for mode in ("audit", "enforce"))
+    assert audited["tag"] == "REPORTED" and audited["evidence_verdict"] == "numbers_outside_evidence"
+    assert "verification" not in audited
+    assert enforced["tag"] == "REPORTED" and enforced["verification"] == "numbers_outside_evidence"
+    assert enforced["outside_evidence_numbers"] == ["17"]
 
 
 def test_a_quote_from_a_capped_search_only_source_is_unchecked():
@@ -334,6 +376,90 @@ def test_a_tag_or_marker_written_after_the_clause_is_still_parsed():
     assert chinese["text"] == "数据中心装机容量为176吉瓦 [S1]"
 
 
+@pytest.mark.parametrize("bullet, text", [
+    (f'- Capacity reached 176 GW [S1] (VERIFIED) *EVIDENCE:* "{QUOTE_HEAD}"', "Capacity reached 176 GW [S1]"),
+    (f'- Capacity reached 176 GW [S1] (VERIFIED) — EVIDENCE: "{QUOTE_HEAD}"', "Capacity reached 176 GW [S1]"),
+    (f'- Capacity reached 176 GW [S1] (VERIFIED); EVIDENCE: "{QUOTE_HEAD}"', "Capacity reached 176 GW [S1]"),
+    (f'- Capacity reached 176 GW [S1] (VERIFIED) (EVIDENCE: "{QUOTE_HEAD}")', "Capacity reached 176 GW [S1]"),
+    (f'- Capacity reached 176 GW [S1] (VERIFIED)，证据：「{QUOTE_HEAD}」', "Capacity reached 176 GW [S1]"),
+    (f'- Capacity reached 176 GW [S1] _EVIDENCE_: "{QUOTE_HEAD}" (VERIFIED)', "Capacity reached 176 GW [S1]"),
+    (f'- Capacity reached 176 GW EVIDENCE [S1]: "{QUOTE_HEAD}" (VERIFIED)', "Capacity reached 176 GW [S1]"),
+    (f'- Capacity reached 176 GW [S1] EVIDENCE: (VERIFIED) "{QUOTE_HEAD}"', "Capacity reached 176 GW [S1]"),
+    (f'- Capacity reached 176 GW [S1] EVIDENCE: (已核实) “{QUOTE_HEAD}”', "Capacity reached 176 GW [S1]"),
+    (f'- Capacity reached 176 GW — [S99] EVIDENCE: [S1] "{QUOTE_HEAD}" (VERIFIED)', "Capacity reached 176 GW [S1]"),
+    (f'- Capacity reached **176 GW** [S1] (VERIFIED) EVIDENCE: "{QUOTE_HEAD}"', "Capacity reached **176 GW** [S1]"),
+    (f'- Capacity reached **176 GW** EVIDENCE: [S1] "{QUOTE_HEAD}" (VERIFIED)', "Capacity reached **176 GW** [S1]"),
+], ids=["single_emphasis", "dash", "semicolon", "parenthesised", "cjk_comma", "underscore_emphasis",
+        "marker_before_colon", "tag_before_quote", "cjk_tag_before_quote", "unknown_marker", "bold_number",
+        "bold_number_then_label"])
+def test_label_variants_split_the_clause_and_leave_no_separator_behind(bullet, text):
+    """Emphasised labels, a marker before the colon, a tag between label and
+    quote, separators or an opening bracket before the label: the clause is
+    split, its quote located, and the finding ends at its last word or marker
+    (bold closing a word stays)."""
+    for mode in ("audit", "enforce"):
+        (fact,) = post(findings(bullet), mode)
+        assert fact["text"] == text and fact["sids"] == [1]
+        assert fact["tag"] == fact["claimed_tag"] == "VERIFIED" and "verification" not in fact
+        assert fact["evidence_status"] == "verified"
+        assert [(e["sid"], e["quote"], e["target"]) for e in fact["evidence"]] == [(1, QUOTE_HEAD, "page")]
+
+
+def test_markers_before_the_label_colon_bind_the_first_quote():
+    """'EVIDENCE [S4]: "q"' binds q to S4 as 'EVIDENCE: [S4] "q"' does; an
+    unbound quote is looked for in the cited sources in order."""
+    notes = findings(f'- Capacity reached 176 GW in 2023 [S1][S4] (VERIFIED) EVIDENCE [S4]: "{QUOTE_HEAD}"',
+                     f'- Capacity reached 176 GW in 2023 [S1][S4] (VERIFIED) EVIDENCE: [S4] "{QUOTE_HEAD}"',
+                     f'- Capacity reached 176 GW in 2023 [S1][S4] (VERIFIED) **EVIDENCE [S4]:** "{QUOTE_HEAD}"',
+                     f'- Capacity reached 176 GW in 2023 [S1][S4] (VERIFIED) EVIDENCE: "{QUOTE_HEAD}"')
+    facts = lr.postprocess_notes("K1", notes, ROWS.get, lambda sid: lr.page_number_set(PAGE),
+                                 evidence_mode="enforce", page_text=lambda sid: PAGE)[1]["facts"]
+    assert [fact["evidence"][0]["sid"] for fact in facts] == [4, 4, 4, 1]
+    assert {fact["text"] for fact in facts} == {"Capacity reached 176 GW in 2023 [S1][S4]"}
+    assert all(fact["tag"] == "VERIFIED" for fact in facts)
+
+
+def test_a_verified_fact_quoting_only_search_text_is_reported():
+    """Stricter than 'VERIFIED with a page span': a VERIFIED fact whose only
+    located quote is a search snippet has no page evidence window for its
+    numbers, so enforce makes it REPORTED (numbers_outside_evidence) even
+    though its numbers are on the cited page; audit records the same and
+    keeps off's tag."""
+    notes = findings(f'- Installed capacity reached 176 GW [S1] (VERIFIED) EVIDENCE: "{SNIPPET_QUOTE}"',
+                     f'- Installed capacity reached 176 GW [S1][S2] (VERIFIED) EVIDENCE: '
+                     f'"{ROWS[2]["snippets"][1][:-24]}"')
+    own_snippet, other_snippet = post(notes, "enforce")
+    for fact in (own_snippet, other_snippet):
+        assert fact["evidence_status"] == "verified" and fact["verified_numbers"] is True
+        assert {entry["target"] for entry in fact["evidence"]} == {"snippet"}
+        assert fact["tag"] == "REPORTED" and fact["verification"] == "numbers_outside_evidence"
+        assert fact["outside_evidence_numbers"] == ["176"]
+    assert other_snippet["evidence"][0]["sid"] == 2
+    for audited, off in zip(post(notes, "audit"), post(notes, "off"), strict=True):
+        assert audited["tag"] == off["tag"] and audited["evidence_verdict"] == "numbers_outside_evidence"
+
+
+@pytest.mark.parametrize("bullet", [
+    "EVIDENCE" + "[S1]" * 50_000,
+    "EVIDENCE" + " [S1]" * 40_000,
+    "*EVIDENCE*:" * 18_000,
+    "EVIDENCE: (VERIFIED)" * 10_000,
+    "(VERIFIED) " * 18_000 + f'EVIDENCE: "{QUOTE_HEAD}"',
+    " — " * 60_000 + f'EVIDENCE: "{QUOTE_HEAD}"',
+    "a" + " *" * 100_000 + f' EVIDENCE: "{QUOTE_HEAD}"',
+    "(" * 200_000 + f'EVIDENCE: "{QUOTE_HEAD}"',
+    "证据：「" * 50_000,
+    "EVIDENCE [S1]" * 15_000,
+    '"' * 200_000,
+], ids=["refs_without_colon", "spaced_refs_without_colon", "emphasised_labels", "tag_leads", "tags",
+        "dashes", "loose_emphasis", "open_brackets", "cjk_labels", "labels_with_refs", "straight_quotes"])
+def test_clause_parsing_of_a_200k_finding_takes_under_a_second(bullet):
+    started = time.perf_counter()
+    for mode in ("audit", "enforce"):
+        post(findings(f"- Capacity {bullet} [S1] (VERIFIED)"), mode)
+    assert time.perf_counter() - started < 1.0
+
+
 def test_nested_quotes_and_a_tag_inside_the_quote_marks_do_not_fail_a_real_passage():
     notes = findings('- Capacity reached 176 GW in 2023 [S4] (VERIFIED) EVIDENCE: "the agency said "installed '
                      'capacity reached 176 GW" in 2023, a record"',
@@ -348,6 +474,27 @@ def test_nested_quotes_and_a_tag_inside_the_quote_marks_do_not_fail_a_real_passa
     (invented,) = post(findings(f'- Capacity reached 176 GW [S1] (VERIFIED) EVIDENCE: "{FABRICATED}" "{FABRICATED}!"'),
                        "enforce")
     assert invented["tag"] == "UNVERIFIED" and invented["evidence_status"] == "failed"
+
+
+@pytest.mark.parametrize("bullet", [
+    '- Capacity reached 176 GW in 2023, up from 150 GW [S1] (VERIFIED) EVIDENCE: "reached 176 GW" "up from 150 GW"',
+    '- 装机容量达到176吉瓦 [S5] (已核实) 证据："国家能源局发布年度统计公报" "装机容量达到176吉瓦"',
+], ids=["english", "cjk"])
+def test_the_whole_passage_fallback_never_fails_quotes_too_short_to_check(bullet):
+    """Two verbatim quotes, each under the length floor, are unchecked; the
+    fallback reading them as one passage ('q1" "q2') finds nothing, and that
+    is no evidence against the finding: absent, tag kept, no verdict."""
+    for mode in ("audit", "enforce"):
+        (fact,) = post(findings(bullet), mode)
+        assert fact["tag"] == fact["claimed_tag"] == "VERIFIED"
+        assert fact["evidence_status"] == "absent" and fact["evidence_unchecked"] == ["length", "length"]
+        assert fact["evidence_near_miss"] is False
+        assert "evidence_verdict" not in fact and "verification" not in fact
+    # A checked quote that is not on the page still fails the finding.
+    (failed,) = post(findings(f'- Capacity reached 176 GW [S1] (VERIFIED) EVIDENCE: "reached 176 GW" "{FABRICATED}"'),
+                     "enforce")
+    assert failed["tag"] == "UNVERIFIED" and failed["evidence_status"] == "failed"
+    assert failed["evidence_unchecked"] == ["length"]
 
 
 def test_quotes_are_located_in_every_snippet_sighting_and_the_title():
@@ -369,17 +516,21 @@ def test_quotes_are_located_in_every_snippet_sighting_and_the_title():
 def test_the_reported_number_audit_skips_years_exponents_and_bibliographic_ids():
     notes = findings(
         "- The survey (vol. 31, pp. 118-126, No. 4, article 5521, doi:10.1000/xyz123) in 2021 and on 14 March "
-        "found 176 GW, about 10^9 kWh or 10⁹ W [S1] (REPORTED)",
+        "found 176 GW, about 10^9 kWh, 10**-3 of it or 10⁹ W [S1] (REPORTED)",
         "- An analyst expects 12% growth and 9,999 new sites [S2] (REPORTED)",
         "- The programme started in 2019 [S2] (REPORTED)",
-        "- Capacity rose to 150 GW in 2022 [S1] (VERIFIED)")
+        "- Capacity rose to 150 GW in 2022 [S1] (VERIFIED)",
+        "- Analysts expect **99%** growth and **12%** a year [S2] (REPORTED)")
     for mode in ("audit", "enforce"):
-        excluded, missing, years, verified = post(notes, mode)
+        excluded, missing, years, verified, bold = post(notes, mode)
         assert excluded["number_check"] == "ok" and "number_check_missing" not in excluded
         assert missing["number_check"] == "missing" and missing["number_check_missing"] == ["9999"]
         assert years["number_check"] == "not_checkable"
         assert "number_check" not in verified
-        assert [f["tag"] for f in (excluded, missing, years, verified)] == ["REPORTED"] * 3 + ["VERIFIED"]
+        # Bold is emphasis, not an exponent: the missing 99 is reported.
+        assert bold["number_check"] == "missing" and bold["number_check_missing"] == ["99"]
+        assert [f["tag"] for f in (excluded, missing, years, verified, bold)] == [
+            "REPORTED", "REPORTED", "REPORTED", "VERIFIED", "REPORTED"]
 
 
 def test_evidence_summary_counts_other_contracts_as_not_requested():
