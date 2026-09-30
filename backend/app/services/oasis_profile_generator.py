@@ -33,6 +33,7 @@ from ..utils.actors import (
     roster_block,
 )
 from ..utils.atomic import write_text_atomic, write_json_atomic  # EXECPLAN2 F-5-0/F-5-1 原子写
+from ..utils.ctxpool import submit_with_context
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
 from .actor_role_prompt import (
@@ -1023,10 +1024,10 @@ class OasisProfileGenerator:
             return None
         
         try:
-            # 并行执行edges和nodes搜索
+            # 并行执行edges和nodes搜索（INFRA-9：带上提交线程的 run/stage 上下文）
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                edge_future = executor.submit(search_edges)
-                node_future = executor.submit(search_nodes)
+                edge_future = submit_with_context(executor, search_edges)
+                node_future = submit_with_context(executor, search_nodes)
                 
                 # 获取结果
                 edge_result = edge_future.result(timeout=30)
@@ -2409,9 +2410,10 @@ class OasisProfileGenerator:
         
         # 使用线程池并行执行
         with concurrent.futures.ThreadPoolExecutor(max_workers=parallel_count) as executor:
-            # 提交所有任务
+            # 提交所有任务。INFRA-9：每个任务带一份提交线程的 contextvars 副本，人设 LLM 调用
+            # 才能归属到本管线 run（否则两条 run 并发时落 '_global'，逃过 per-run 预算/熔断）。
             future_to_entity = {
-                executor.submit(generate_single_profile, idx, entity): (idx, entity)
+                submit_with_context(executor, generate_single_profile, idx, entity): (idx, entity)
                 for idx, entity in enumerate(entities)
             }
             

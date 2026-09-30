@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import atexit
+import copy
 import glob
 import hashlib
 import json
@@ -800,6 +801,26 @@ def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
             getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
             or "diagnostic_only"),
     }
+
+
+def fork_safety_policy_v1(base_options: Any) -> Optional[dict[str, Any]]:
+    """INFRA-9: the ``safety_policy_v1`` pin a fork of a base run receives.
+
+    Scenario and batch-question forks reuse the base's research and graph and
+    continue its forecast, so they keep the base's containment semantics: a
+    deep copy of the base pin with origin ``fork_inherited``. A base admitted
+    before the pin existed yields a capture at fork admission (origin
+    ``fork_admission``: the current safe policy, never a reconstruction of the
+    base's unknown legacy defaults). Returns None when
+    FORK_INHERIT_SAFETY_POLICY is off; the fork then carries no pin and every
+    site reads the ambient Config (legacy).
+    """
+    if not bool(getattr(Config, "FORK_INHERIT_SAFETY_POLICY", True)):
+        return None
+    base_policy = base_options.get("safety_policy_v1") if isinstance(base_options, dict) else None
+    if isinstance(base_policy, dict):
+        return {**copy.deepcopy(base_policy), "origin": "fork_inherited"}
+    return capture_safety_policy_v1("fork_admission")
 
 
 def capture_run_shape_v1(options: Any, origin: str) -> Optional[dict[str, Any]]:
@@ -8930,6 +8951,10 @@ class PipelineOrchestrator:
             # the base run's exact actor requirement instead of consulting
             # today's ambient dual-track flag.
             new_state.options["actor_intelligence_policy_v1"] = dict(_actor_policy)
+        # INFRA-9：分叉沿用 base 的安全政策钉（base 无钉则按分叉准入捕获）；旋钮关闭 = 不写（旧行为）。
+        _safety_policy = fork_safety_policy_v1(base_state.options)
+        if _safety_policy is not None:
+            new_state.options["safety_policy_v1"] = _safety_policy
         _evaluation_pin = cls._evaluation_pin(base_state)
         if _evaluation_pin is not None:
             # EVAL-13: a what-if fork of an evaluation run stays in the evaluation lane
@@ -14832,9 +14857,13 @@ class PipelineOrchestrator:
                                         _rpath, _existing.rstrip() + "\n\n" + _appendix.rstrip() + "\n")
                 except Exception as _ste:  # noqa: BLE001 — 阶段遥测为观测增益，失败不影响管线终态
                     logger.debug(f"[{state.pipeline_id}] 阶段级遥测处理失败（忽略）: {_ste}")
-                LLMMeter.reset(state.pipeline_id)
             except Exception as _te:
                 logger.debug(f"[{state.pipeline_id}] 写入 run_telemetry 失败（忽略）: {_te}")
+            # INFRA-9：reset 是本 run 在 LLMMeter 与活跃 run 注册表里的权威终局，放在遥测 try 之外
+            # （仍在其后：上面的落盘/阶段遥测要先读计量）。此前它在 try 内，终版落盘任一步抛错就被
+            # 跳过——该 run 的计量与活跃登记滞留到进程结束，此后每条单独运行的管线都面对 2 个「活跃」
+            # run，单活跃 run 回退归属失效。
+            LLMMeter.reset(state.pipeline_id)
             # EVAL-15: 分阶段记分卡侧车。放在遥测 try 之外（与之平级）——遥测块任何一步抛错都
             # 不得让终态管线缺记分卡、或让上一 attempt 的摘要冒充本次结果。记分卡不读 LLMMeter，
             # 位于 reset 之后无影响；方法自身兜住一切异常。

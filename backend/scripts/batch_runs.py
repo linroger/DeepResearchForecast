@@ -75,6 +75,7 @@ from app.services.pipeline_orchestrator import (  # noqa: E402
     PipelineState,
     StageState,
     evaluation_pin_for_question_fork,
+    fork_safety_policy_v1,
     preflight_pipeline,
 )
 from app.services.report_agent import ReportManager  # noqa: E402
@@ -316,6 +317,11 @@ def fork_question(
         # the base's cell identity; carried in options, so its lane survives the loss of the
         # base's handoff marker.
         options[EVALUATION_RUN_OPTION] = evaluation_pin
+    # INFRA-9：与 PipelineOrchestrator.fork() 同一规则——问题分叉沿用锚点的安全政策钉（锚点无钉则
+    # 按分叉准入捕获）；FORK_INHERIT_SAFETY_POLICY 关闭 = 不写（旧行为）。
+    safety_policy = fork_safety_policy_v1(base_state.options)
+    if safety_policy is not None:
+        options["safety_policy_v1"] = safety_policy
     if max_rounds:
         try:
             options["max_rounds"] = int(max_rounds)
