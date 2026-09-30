@@ -1258,6 +1258,16 @@ class Config:
     # 默认开是安全的：只改 agent 可见的占位措辞（不含数字/百分号，herding guard 不变）+
     # 轨迹附加键 delta_state_counts；关闭 → 头部与轨迹逐字节回到旧行为。
     SIM_ABSENCE_MARKERS = os.environ.get('SIM_ABSENCE_MARKERS', 'true').strip().lower() == 'true'
+    # SIM-6：逐时段上下文如实送达。世界时钟事件段改标「研究时间线上的预期事件，结果事先未知」
+    # （不再称 CONFIRMED）、情景注入标 SCENARIO ASSUMPTION；摘要落后于时钟时注明其覆盖时段；
+    # sampled agent 缺席事件轮后首次激活时补报漏掉的日程事件；全平台死轮的到期事件并入下一次
+    # 摘要；摘要事件/帖文分段整行封顶带省略标记（不再静默截断 900 字符）；无状态的回应阶段
+    # 辅助 agent 也拿到本期事件与变化。默认开是安全的：只改 agent 可见措辞（诊断性质的模拟），
+    # 不新增 LLM 调用，占位措辞仍由 SIM_ABSENCE_MARKERS 决定；关闭 → agent 可见文本逐字节回到旧行为。
+    SIM_PERIOD_CONTEXT_V2 = os.environ.get('SIM_PERIOD_CONTEXT_V2', 'true').strip().lower() == 'true'
+    # SIM-6：漏报事件补报块的字符上限（整行保留、最新优先，超出部分以 "(+N earlier scheduled
+    # events omitted)" 标注）；只影响缺席过事件轮的 agent，控制记忆增长与 token 成本。
+    SIM_EVENT_CATCHUP_MAX_CHARS = int(os.environ.get('SIM_EVENT_CATCHUP_MAX_CHARS', '1200') or '1200')
     # 决策通道改为逐轮在环内引出承诺并推进 WorldState（仅日历模式；关闭则回退事后一次性通道）。
     SIM_DECISION_CHANNEL_INBAND = os.environ.get('SIM_DECISION_CHANNEL_INBAND', 'true').strip().lower() == 'true'
     # WorldState.step 熵地板：按时段天数向种子基率先验混合，防止长时域份额锁死（仅日历模式生效）。
