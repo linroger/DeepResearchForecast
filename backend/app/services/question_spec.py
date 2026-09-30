@@ -13,9 +13,15 @@ side of that contract:
   or edited spec never steers a forecast);
 * :func:`spec_horizon_date` is the simulation calendar's horizon rung, ranked
   below the deterministic prompt dates and above the LLM fallback;
+* :func:`horizon_applies` tells the report whether the spec's deadline is the run's
+  horizon (an explicit prompt date outranks the spec; a day outside the as_of window
+  is never used), so a spec that defines a different deadline never steers the spine;
 * :func:`render_spine_block` is the Chinese block prepended to the spine prompt's
   research inputs, so scenario resolution criteria share the spec's outcome,
-  source and deadline;
+  source and deadline.  Under the bridge's field caps it is at most about 2.6k
+  characters; build_spine_user_prompt head-truncates the research inputs, so the
+  block survives and the research inputs' tail is what a long block cuts (the
+  report agent logs that cut);
 * :func:`render_resolution_disclosure` is the report's "How to verify" subsection
   that discloses the operational definitions and every default assumption;
 * :func:`summary` is forecast.json ``question_spec``.
@@ -46,7 +52,8 @@ USABLE_STATUSES = ("ok", "partial")
 # A horizon day is used only in (as_of, as_of + this many years] (the bridge's window).
 MAX_HORIZON_YEARS = 30
 # forecast.json ``question_spec`` keys (summary()).
-SUMMARY_KEYS = ("spec_sha256", "horizon_date", "outcome_definition", "resolution_source", "assumptions")
+SUMMARY_KEYS = ("spec_sha256", "horizon_date", "outcome_definition", "resolution_source", "assumptions",
+                "horizon_applied")
 
 SPINE_BLOCK_HEADER = ("[问题规范（操作化定义；各情景 resolution_criteria 须采用此结果定义、判定来源与判定日；"
                       "情景集合须划分该结果空间）]")
@@ -128,21 +135,52 @@ def _window_end(as_of: date) -> date:
     return as_of.replace(year=year, day=min(as_of.day, calendar.monthrange(year, as_of.month)[1]))
 
 
+def _iso_day(value: Any) -> str:
+    """``value`` when it is a real calendar day written YYYY-MM-DD; else ``""``."""
+    if not isinstance(value, str) or not _ISO_DAY_RE.match(value):
+        return ""
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return ""
+    return value
+
+
+def _spec_day(spec: Any) -> str:
+    """The spec's ``horizon.date`` as a valid ISO day, or ``""``."""
+    horizon = spec.get("horizon") if isinstance(spec, Mapping) else None
+    return _iso_day(horizon.get("date")) if isinstance(horizon, Mapping) else ""
+
+
 def spec_horizon_date(spec: Any, as_of: Any) -> Optional[date]:
     """The spec's ``horizon.date`` when it is an ISO day in (as_of, as_of + 30y]; else None."""
     if isinstance(as_of, datetime):
         as_of = as_of.date()
-    if not isinstance(spec, Mapping) or not isinstance(as_of, date):
+    if not isinstance(as_of, date):
         return None
-    horizon = spec.get("horizon")
-    raw = horizon.get("date") if isinstance(horizon, Mapping) else None
-    if not isinstance(raw, str) or not _ISO_DAY_RE.match(raw):
+    raw = _spec_day(spec)
+    if not raw:
         return None
-    try:
-        day = date.fromisoformat(raw)
-    except ValueError:
-        return None
+    day = date.fromisoformat(raw)
     return day if as_of < day <= _window_end(as_of) else None
+
+
+def horizon_applies(spec: Any, as_of: Any, run_horizon: Any = "") -> bool:
+    """Whether the spec's deadline is this run's horizon.
+
+    ``run_horizon`` is the ISO day the run resolved (the simulation calendar's
+    horizon_date; ``""`` when there is none, e.g. hours mode).  When it is known it is
+    authoritative: the deadline applies only when it is that day (an explicit prompt
+    date outranks the spec in the simulation ladder).  Without it the deadline applies
+    when :func:`spec_horizon_date` accepts it for ``as_of``.  A spec without a valid
+    day (a label alone, or nothing) cannot conflict with the run: True."""
+    day = _spec_day(spec)
+    if not day:
+        return True
+    run = str(run_horizon or "").strip()
+    if run:
+        return run == day
+    return spec_horizon_date(spec, as_of) is not None
 
 
 def _text(value: Any) -> str:
@@ -164,7 +202,7 @@ def _fields(spec: Any) -> Dict[str, Any]:
         "source_kind": _text(source.get("kind")),
         "source_url": _text(source.get("url")),
         "label": _text(horizon.get("label")),
-        "date": _text(horizon.get("date")),
+        "date": _iso_day(horizon.get("date")),
         "reference_class": _text(spec.get("reference_class")),
         "assumptions": [(text, slot) for text, slot in assumptions if text],
     }
@@ -199,11 +237,14 @@ def render_spine_block(spec: Any) -> str:
     return "\n".join([SPINE_BLOCK_HEADER, *lines]) if lines else ""
 
 
-def render_resolution_disclosure(spec: Any, language: str = "Chinese") -> str:
+def render_resolution_disclosure(spec: Any, language: str = "Chinese", horizon_applied: bool = True) -> str:
     """The "How to verify" subsection: heading, one lead line, then the outcome,
     resolution source, deadline, reference class and every assumption the spec
     has (English when ``language`` starts with "en", else Chinese, the rule of
-    render_resolution_block); ``""`` when it has none of them."""
+    render_resolution_block); ``""`` when it has none of them.  The lead line
+    mentions disclosed defaults only when the spec has assumptions.
+    ``horizon_applied=False`` (see :func:`horizon_applies`) annotates the deadline
+    row: the run used another horizon, so the scenario criteria do not follow it."""
     f = _fields(spec)
     zh = not str(language or "").strip().lower().startswith("en")
     rows: List[str] = []
@@ -218,13 +259,15 @@ def render_resolution_disclosure(spec: Any, language: str = "Chinese") -> str:
             rows.append(line)
         deadline = _deadline(f["label"], f["date"], "（", "）")
         if deadline:
-            rows.append(f"- **判定日**：{deadline}")
+            note = "" if horizon_applied else "——未采用：本预测的判定日与此不同，下列情景判定标准以本预测的判定日为准"
+            rows.append(f"- **判定日**：{deadline}{note}")
         if f["reference_class"]:
             rows.append(f"- **参考类**：{f['reference_class']}")
         for text, slot in f["assumptions"]:
             rows.append(f"- **默认假设（{_SLOT_ZH.get(slot, slot or '结果')}）**：{text}")
         head = [DISCLOSURE_HEADING_ZH,
-                "研究阶段在制定计划时固定了问题的操作化定义，并披露了未经询问而采用的默认假设。"]
+                "研究阶段在制定计划时固定了问题的操作化定义"
+                + ("，并披露了未经询问而采用的默认假设。" if f["assumptions"] else "。")]
     else:
         if f["outcome"]:
             rows.append(f"- **Outcome:** {f['outcome']}")
@@ -234,28 +277,32 @@ def render_resolution_disclosure(spec: Any, language: str = "Chinese") -> str:
             rows.append(line + (f" — {f['source_url']}" if f["source_url"] else ""))
         deadline = _deadline(f["label"], f["date"], " (", ")")
         if deadline:
-            rows.append(f"- **Deadline:** {deadline}")
+            note = "" if horizon_applied else (" — not applied: this forecast's horizon differs, and the "
+                                               "scenario criteria below follow that horizon")
+            rows.append(f"- **Deadline:** {deadline}{note}")
         if f["reference_class"]:
             rows.append(f"- **Reference class:** {f['reference_class']}")
         for text, slot in f["assumptions"]:
             rows.append(f"- **Default assumption ({_SLOT_EN.get(slot, slot or 'outcome')}):** {text}")
         head = [DISCLOSURE_HEADING_EN,
-                "The research run fixed this operational definition of the question at planning time "
-                "and disclosed the defaults it chose instead of asking."]
+                "The research run fixed this operational definition of the question at planning time"
+                + (" and disclosed the defaults it chose instead of asking." if f["assumptions"] else ".")]
     return "\n".join(head + rows) if rows else ""
 
 
-def summary(spec: Mapping[str, Any]) -> Dict[str, Any]:
-    """forecast.json ``question_spec``: the spec hash, horizon date (None when the spec
-    has none), outcome definition, resolution source and assumptions (copies)."""
+def summary(spec: Mapping[str, Any], horizon_applied: bool = True) -> Dict[str, Any]:
+    """forecast.json ``question_spec``: the spec hash, horizon date (None unless the spec
+    has a valid ISO day), outcome definition (one line; ``""`` unless text), resolution
+    source and assumptions (copies), and whether the deadline was this run's horizon
+    (``horizon_applied``, see :func:`horizon_applies`)."""
     spec = spec if isinstance(spec, Mapping) else {}
-    horizon = spec.get("horizon") if isinstance(spec.get("horizon"), Mapping) else {}
     source = spec.get("resolution_source") if isinstance(spec.get("resolution_source"), Mapping) else {}
     rows = spec.get("assumptions") if isinstance(spec.get("assumptions"), list) else []
     return {
         "spec_sha256": spec.get("spec_sha256"),
-        "horizon_date": horizon.get("date") or None,
-        "outcome_definition": spec.get("outcome_definition") or "",
+        "horizon_date": _spec_day(spec) or None,
+        "outcome_definition": _text(spec.get("outcome_definition")),
         "resolution_source": copy.deepcopy(dict(source)),
         "assumptions": [copy.deepcopy(dict(row)) for row in rows if isinstance(row, Mapping)],
+        "horizon_applied": bool(horizon_applied),
     }

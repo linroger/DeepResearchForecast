@@ -4308,7 +4308,8 @@ def upsert_binary_forecasts_block(markdown: str, block: str) -> tuple[str, str]:
 def render_resolution_block(forecast: Optional[Dict[str, Any]],
                             indicators: Optional[List[Dict[str, Any]]] = None,
                             language: str = "Chinese",
-                            question_spec: Optional[Dict[str, Any]] = None) -> str:
+                            question_spec: Optional[Dict[str, Any]] = None,
+                            question_spec_horizon_applied: bool = True) -> str:
     """NEXTSTEPS P2-2: 渲染一个**确定性**的「如何验证本预测」章节。
 
     逐情景列出可证伪的判定标准 + 来自 forecast_inputs 的带日期/触发型观察指标（并把指标绑定到
@@ -4320,7 +4321,8 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
 
     RESEARCH-12：传入 question_spec（已复核的研究问题规范）时，在导语之后、各情景判定标准之前
     插入「操作化定义与默认假设」小节（question_spec.render_resolution_disclosure）；None 时输出
-    逐字节不变。
+    逐字节不变。question_spec_horizon_applied=False（规范判定日不是本次运行的判定日）时判定日
+    一行标注未采用。
     """
     if not isinstance(forecast, dict):
         return ""
@@ -4342,7 +4344,8 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
             "",
         ]
     if question_spec is not None:
-        disclosure = render_resolution_disclosure(question_spec, language)
+        disclosure = render_resolution_disclosure(question_spec, language,
+                                                  horizon_applied=question_spec_horizon_applied)
         if disclosure:
             lines += [disclosure, ""]
     lines.append("### 各情景判定标准" if zh else "### Per-Scenario Resolution Criteria")

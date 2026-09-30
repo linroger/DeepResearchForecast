@@ -1615,8 +1615,9 @@ class Config:
     # ignored) supplies the simulation calendar's horizon below every deterministic
     # prompt date (skipping the LLM fallback; horizon_source 'question_spec') and
     # _infer_horizon_date's fallback, is prepended to the spine prompt's research
-    # inputs, is disclosed in the report's resolution section and is summarized in
-    # forecast.json question_spec.  Default true is safe: without a spec (needs
+    # inputs (only when its deadline is the run's horizon), is disclosed in the
+    # report's resolution section and is summarized in forecast.json question_spec
+    # (horizon_applied records that check).  Default true is safe: without a spec (needs
     # RESEARCH_QUESTION_SPEC) every consumer is byte-identical.  False = shadow mode
     # (the spec stays persisted but unused).
     QUESTION_SPEC_DOWNSTREAM = os.environ.get('QUESTION_SPEC_DOWNSTREAM', 'true').strip().lower() == 'true'

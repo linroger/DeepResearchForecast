@@ -11,6 +11,11 @@ spec_sha256 recomputed with the bridge's canonical JSON profile) feed:
 * the report's resolution section (operational definitions and every assumption);
 * forecast.json ``question_spec`` (final write only; the publish gate is unchanged).
 
+A spec whose deadline is not the run's horizon (an explicit prompt date won the
+simulation ladder, or the day is outside the as_of window) never reaches the spine;
+the disclosure marks its deadline as not applied and forecast.json records
+``horizon_applied: false``.
+
 Without a spec, with a spec that fails its checks, or with the flag off, every consumer
 is byte-identical.  Offline: FakeLLMClient-based router, a bare config generator whose
 LLM calls are scripted, and the offline prepare harness of test_actor_context_runtime.
@@ -24,6 +29,7 @@ import json
 import logging
 import os
 import sys
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import date, datetime
 from types import SimpleNamespace
@@ -46,6 +52,7 @@ from app.services.simulation_config_generator import (
 from app.services.simulation_manager import SimulationManager
 from app.services.zep_entity_reader import FilteredEntities
 from app.utils import sim_timeline
+from app.utils.actors import forecast_inputs_block
 from app.utils.canonical_json import canonical_json_sha256
 from tests.conftest import FakeLLMClient
 
@@ -119,7 +126,13 @@ SUMMARY = {
         {"text": "The IEA year-end estimate resolves the question when published.", "slot": "resolution_source"},
         {"text": "Capacity means IT load in GW, not grid connection requests (单位：吉瓦).", "slot": "units"},
     ],
+    "horizon_applied": True,
 }
+DEADLINE_EN = "- **Deadline:** by 31 December 2027 (2027-12-31)"
+DEADLINE_ZH = "- **判定日**：by 31 December 2027（2027-12-31）"
+NOT_APPLIED_EN = (" — not applied: this forecast's horizon differs, and the scenario criteria below "
+                  "follow that horizon")
+NOT_APPLIED_ZH = "——未采用：本预测的判定日与此不同，下列情景判定标准以本预测的判定日为准"
 
 
 def _spec() -> dict:
@@ -232,6 +245,10 @@ def test_downstream_spec_degrades_safe_on_an_unexpected_error(flag, monkeypatch,
 # ================================================================ golden parity
 
 def test_golden_fixture_sha_equals_the_bridge_normalizer():
+    """The bridge/backend parity pin on the shared golden fixture: it runs the bridge's own
+    normalizer and hash (deerflow_bridge/linear_research.py) against the fixture, so a
+    change on the bridge side fails here even though the bridge's test file does not read
+    the fixture."""
     spec = lr.normalize_question_spec(GOLDEN["raw_reply"], question=GOLDEN["question"], as_of=GOLDEN["as_of"])
     assert spec == GOLDEN_SPEC
     assert GOLDEN_SPEC["spec_sha256"] == GOLDEN_SHA
@@ -298,6 +315,71 @@ def test_render_resolution_disclosure_and_summary():
     summary["resolution_source"]["name"] = "mutated"
     assert spec == GOLDEN_SPEC
     assert qs.summary({**spec, "horizon": {"label": "by 2027", "date": ""}})["horizon_date"] is None
+    assert qs.summary(spec, horizon_applied=False) == {**SUMMARY, "horizon_applied": False}
+
+
+def test_summary_copies_only_typed_values():
+    """A spec re-signed by another producer passes the integrity checks with mistyped
+    fields; forecast.json never carries them."""
+    for bad_day in (20271231, "2027-02-30", "31/12/2027", " 2027-12-31", None):
+        spec = _resigned({**_spec(), "horizon": {"label": "by 2027", "date": bad_day, "basis": "explicit"}})
+        assert qs.load_question_spec({"question_spec": spec}) is not None, bad_day
+        assert qs.summary(spec)["horizon_date"] is None, bad_day
+        assert DEADLINE_EN not in qs.render_resolution_disclosure(spec, "English")
+        assert "判定日：by 2027\n" in qs.render_spine_block(spec)          # the label alone
+    for bad_outcome in (42, ["x"], {"text": "x"}, None):
+        spec = _resigned({**_spec(), "outcome_definition": bad_outcome})
+        assert qs.summary(spec)["outcome_definition"] == "", bad_outcome
+    assert qs.summary({**_spec(), "outcome_definition": "At least\n250  GW."})["outcome_definition"] == \
+        "At least 250 GW."
+
+
+def test_disclosure_lead_line_names_defaults_only_when_there_are_some():
+    spec = _resigned({**_spec(), "assumptions": []})
+    assert qs.load_question_spec({"question_spec": spec}) is not None
+    en = qs.render_resolution_disclosure(spec, "English").split("\n")
+    assert en[1] == "The research run fixed this operational definition of the question at planning time."
+    assert not any(line.startswith("- **Default assumption") for line in en)
+    zh = qs.render_resolution_disclosure(spec, "Chinese").split("\n")
+    assert zh[1] == "研究阶段在制定计划时固定了问题的操作化定义。"
+    assert not any(line.startswith("- **默认假设") for line in zh)
+    assert "本次运行的默认假设" not in qs.render_spine_block(spec)
+    # With assumptions the lead names them (the pinned DISCLOSURE_* constants).
+    assert qs.render_resolution_disclosure(_spec(), "English").split("\n")[1].endswith(
+        "and disclosed the defaults it chose instead of asking.")
+
+
+def test_horizon_applies():
+    spec = _spec()
+    as_of = date(2026, 10, 1)
+    assert qs.horizon_applies(spec, as_of) is True                        # in window, no run horizon
+    assert qs.horizon_applies(spec, datetime(2026, 10, 1, 9, 0)) is True
+    assert qs.horizon_applies(spec, date(2028, 3, 1)) is False            # already past
+    assert qs.horizon_applies(spec, date(1990, 1, 1)) is False            # beyond +30y
+    assert qs.horizon_applies(spec, as_of, SPEC_DAY) is True              # the run used it
+    assert qs.horizon_applies(spec, as_of, " 2027-12-31 ") is True
+    assert qs.horizon_applies(spec, as_of, "2030-12-31") is False         # an explicit prompt date won
+    assert qs.horizon_applies(spec, date(2028, 3, 1), SPEC_DAY) is True   # the run horizon is authoritative
+    assert qs.horizon_applies(spec, as_of, None) is True
+    # Without a valid day (label only, nothing, mistyped) there is nothing to conflict.
+    label_only = {**spec, "horizon": {"label": "by the end of 2027", "date": "", "basis": "implied"}}
+    for undated in (label_only, {**spec, "horizon": {"date": 20271231}}, {}, None):
+        assert qs.horizon_applies(undated, as_of, "2030-12-31") is True
+        assert qs.horizon_applies(undated, date(2028, 3, 1)) is True
+
+
+def test_disclosure_marks_an_unapplied_deadline():
+    en = qs.render_resolution_disclosure(_spec(), "English", horizon_applied=False)
+    assert en == DISCLOSURE_EN.replace(DEADLINE_EN, DEADLINE_EN + NOT_APPLIED_EN)
+    zh = qs.render_resolution_disclosure(_spec(), "Chinese", horizon_applied=False)
+    assert zh == DISCLOSURE_ZH.replace(DEADLINE_ZH, DEADLINE_ZH + NOT_APPLIED_ZH)
+    # Nothing to mark without a deadline row.
+    undated = {**_spec(), "horizon": {"label": "", "date": "", "basis": "implied"}}
+    assert qs.render_resolution_disclosure(undated, "English", horizon_applied=False) == \
+        qs.render_resolution_disclosure(undated, "English")
+    block = fe.render_resolution_block(FORECAST, INDICATORS, language="English", question_spec=_spec(),
+                                       question_spec_horizon_applied=False)
+    assert DEADLINE_EN + NOT_APPLIED_EN + "\n" in block
 
 
 # ================================================================ simulation horizon ladder
@@ -588,6 +670,86 @@ def test_full_report_resolution_section_lists_definitions_and_every_assumption(r
     assert with_spec.full.replace(DISCLOSURE_EN + "\n\n", "", 1) == without.full
     flag(False)
     assert _report(report_env, "r_rs_shadow", _actors()).full == without.full
+
+
+@contextmanager
+def _report_agent_warnings():
+    """WARNING messages of 'mirofish.report_agent' (that logger does not propagate, so
+    caplog never sees them)."""
+
+    class _Probe(logging.Handler):
+        def __init__(self):
+            super().__init__(level=logging.WARNING)
+            self.messages = []
+
+        def emit(self, record):
+            self.messages.append(record.getMessage())
+
+    probe = _Probe()
+    target = logging.getLogger("mirofish.report_agent")
+    target.addHandler(probe)
+    try:
+        yield probe.messages
+    finally:
+        target.removeHandler(probe)
+
+
+def _calendar_horizon(root, horizon_date):
+    """The simulation's calendar temporal_config (what ReportAgent._temporal_horizon_date reads)."""
+    sim_dir = os.path.join(str(root), "sims", "sim_qspec")
+    os.makedirs(sim_dir, exist_ok=True)
+    with open(os.path.join(sim_dir, "simulation_config.json"), "w", encoding="utf-8") as fh:
+        json.dump({"temporal_config": {"mode": "calendar", "horizon_date": horizon_date}}, fh)
+
+
+def test_a_spec_deadline_that_is_not_the_run_horizon_never_reaches_the_spine(report_env):
+    _calendar_horizon(report_env, "2030-12-31")        # e.g. "Who leads by 2030?" won the sim ladder
+    with _report_agent_warnings() as warnings:
+        conflict = _report(report_env, "r_hz_conflict", _actors())
+    (note,) = [message for message in warnings if "研究问题规范判定日" in message]     # logged once
+    assert f"{SPEC_DAY} 不是本次运行的判定日 2030-12-31" in note
+    plain = _report(report_env, "r_hz_plain", _actors(spec=False))
+    assert "[预测时间范围]\n2030-12-31" in conflict.prompt
+    assert conflict.prompt == plain.prompt              # no spec block, so no second deadline
+    assert conflict.final["question_spec"] == {**SUMMARY, "horizon_applied": False}
+    assert DISCLOSURE_EN.replace(DEADLINE_EN, DEADLINE_EN + NOT_APPLIED_EN) in conflict.full
+
+
+def test_a_spec_deadline_the_run_used_is_applied(report_env):
+    _calendar_horizon(report_env, SPEC_DAY)
+    with _report_agent_warnings() as warnings:
+        run = _report(report_env, "r_hz_same", _actors())
+    assert not [message for message in warnings if "研究问题规范判定日" in message]
+    assert f"[预测时间范围]\n{SPEC_DAY}" in run.prompt and SPINE_BLOCK in run.prompt
+    assert run.final["question_spec"] == SUMMARY
+    assert DISCLOSURE_EN in run.full and NOT_APPLIED_EN not in run.full
+
+
+def test_an_out_of_window_spec_deadline_is_not_applied_without_a_calendar(report_env):
+    with _report_agent_warnings() as warnings:
+        run = _report(report_env, "r_hz_past", _actors(as_of="2028-03-01"))
+    (note,) = [message for message in warnings if "研究问题规范判定日" in message]
+    assert f"{SPEC_DAY} 不在 as_of 2028-03-01 之后 30 年窗口内" in note
+    plain = _report(report_env, "r_hz_past_plain", _actors(spec=False, as_of="2028-03-01"))
+    assert qs.SPINE_BLOCK_HEADER not in run.prompt and run.prompt == plain.prompt
+    assert run.final["question_spec"] == {**SUMMARY, "horizon_applied": False}
+    assert DEADLINE_EN + NOT_APPLIED_EN + "\n" in run.full
+
+
+def test_spine_block_logs_when_it_pushes_research_inputs_past_the_cap(report_env, monkeypatch):
+    actors = _actors()
+    with _report_agent_warnings() as warnings:
+        _report(report_env, "r_cap_default", actors)
+    assert not [message for message in warnings if "REPORT_SPINE_INPUT_CAP_INPUTS" in message]
+    cap = len(SPINE_BLOCK) + 10
+    monkeypatch.setattr(Config, "REPORT_SPINE_INPUT_CAP_INPUTS", cap, raising=False)
+    with _report_agent_warnings() as warnings:
+        run = _report(report_env, "r_cap_small", actors)
+    (note,) = [message for message in warnings if "REPORT_SPINE_INPUT_CAP_INPUTS" in message]
+    inputs = SPINE_BLOCK + "\n\n" + forecast_inputs_block(actors)
+    assert f"（{len(SPINE_BLOCK)} 字）" in note and f"共 {len(inputs)} 字" in note
+    assert f"={cap}，末尾 {len(inputs) - cap} 字被截断" in note
+    assert SPINE_BLOCK + "\n\n" + inputs[len(SPINE_BLOCK) + 2:cap] + "\n\n[" in run.prompt   # block kept, tail cut
 
 
 FORECAST = {"scenarios": [{"name": "Upside path", "probability": 0.6, "resolution_criteria": "IEA ≥ 250 GW"},
