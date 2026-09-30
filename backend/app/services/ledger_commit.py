@@ -289,7 +289,9 @@ def commit_report(*, report_id: str, report_status: Any, error: Optional[str],
     its final audit's issues when ``final_audit_path_fn`` locates one. Unknown
     context keys are ignored. An ``evaluation`` record class (EVAL-13) writes
     ``characterization_only`` rows into ``forecast_ledger.evaluation_ledger_dir()``
-    unless ``d`` names another directory.
+    unless ``d`` names another directory. REPORT-11: a committed row carries the
+    sealed forecast's ``quality.probability_shape`` as
+    ``objective_signals.probability_shape`` while FORECAST_PROBABILITY_SHAPE is on.
     """
     ctx: Mapping[str, Any] = ledger_context if isinstance(ledger_context, Mapping) else {}
     now_utc = _utc(now)
@@ -338,6 +340,14 @@ def commit_report(*, report_id: str, report_status: Any, error: Optional[str],
             d=d, now_utc=now_utc)
 
     as_of_date, as_of_source = resolve_as_of(ctx, actors, now_utc)
+    # REPORT-11: the sealed forecast's probability-shape telemetry rides on the row as
+    # objective_signals; with FORECAST_PROBABILITY_SHAPE off (or a forecast without it)
+    # the call and the row are unchanged.
+    signal_kwargs: Dict[str, Any] = {}
+    quality = forecast.get("quality")
+    shape = quality.get("probability_shape") if isinstance(quality, dict) else None
+    if isinstance(shape, dict) and getattr(Config, "FORECAST_PROBABILITY_SHAPE", True):
+        signal_kwargs["objective_signals"] = {"probability_shape": shape}
     status, row = forecast_ledger.commit_published_forecast(
         forecast,
         report_id=report_id,
@@ -357,6 +367,7 @@ def commit_report(*, report_id: str, report_status: Any, error: Optional[str],
         committed_at=now_utc.isoformat(),
         target_variant=_target_variant(receipt["record_class"], ctx, scenario_label),
         characterization_only=evaluation_row,
+        **signal_kwargs,
     )
     receipt["status"] = status
     if isinstance(row, dict):

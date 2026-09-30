@@ -38,6 +38,7 @@ from ..utils.security import UnsafeIdError, contained_child, is_safe_id, safe_id
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
 from .hindcast_policy import as_hindcast_pin, hindcast_forecast_block
+from . import probability_shape as _pshape
 from . import question_spec as _qspec
 from . import translation_dates as _tdates
 from . import translation_quantities as _tq
@@ -3521,6 +3522,11 @@ class ReportAgent:
                     and getattr(Config, "REPORT_FORECAST_SELF_CRITIQUE", False)):
                 try:
                     _forecast_language = getattr(self, "output_language", None) or ""
+                    # REPORT-11（FORECAST_PROBABILITY_SHAPE）：批判前快照情景概率——未批判骨架此前从不
+                    # 落盘，批判对概率形状的影响无从度量。评审成功（critiqued）时在评审 / 验尸调用之后
+                    # 记入 quality.pre_critique_scenarios（两者提示词不变）；旗标关不快照、不加键。
+                    _pre_critique = (_pshape.scenario_snapshot(spine.get("scenarios"))
+                                     if getattr(Config, "FORECAST_PROBABILITY_SHAPE", True) else None)
                     _critiqued = _fe.self_critique_forecast(
                         spine, self.llm, language=_forecast_language
                     )
@@ -3529,6 +3535,8 @@ class ReportAgent:
                     )
                     if _critiqued.get("scenarios"):
                         spine = _critiqued
+                        if _pre_critique is not None:
+                            _pshape.stamp_pre_critique(spine, _pre_critique)
                         logger.info(
                             f"预测骨架已先于叙事完成红队自校准（{len(spine['scenarios'])} 情景）"
                         )
@@ -3838,10 +3846,15 @@ class ReportAgent:
         # 如骨架推导失败的 91f5 型运行）保留原有的成稿后批判。
         if (getattr(Config, "REPORT_FORECAST_SELF_CRITIQUE", False)
                 and not forecast.get("critiqued")):
+            # REPORT-11：成稿后批判同样快照批判前情景概率，评审成功时记入 quality.pre_critique_scenarios。
+            _pre_critique = (_pshape.scenario_snapshot(forecast.get("scenarios"))
+                             if getattr(Config, "FORECAST_PROBABILITY_SHAPE", True) else None)
             forecast = self_critique_forecast(
                 forecast, self.llm,
                 language=getattr(self, "output_language", None) or "",
             )
+            if _pre_critique is not None:
+                _pshape.stamp_pre_critique(forecast, _pre_critique)
         # XRUN-16(1): 骨架情景数与最终情景数漂移检测（正文按骨架 N 情景撰写、交付却是
         # M 情景 ⇒ 必然矛盾）；随 forecast.json quality 落盘供健康门消费。
         try:
@@ -4073,6 +4086,24 @@ class ReportAgent:
             except Exception as _be:  # noqa: BLE001 — additive; never break finalization
                 logger.warning(f"二元预测抽取失败（忽略，不影响情景预测）: {_be}")
                 _binary_extraction_failed = True
+        # REPORT-11：概率政策标记与概率形状遥测——置于二元块（含对账重算记分卡）之后，此后不再有步骤
+        # 移动情景 / 二元概率。政策标记与形状旗标无关（形状关时开了护栏的运行仍可识别）；形状纯观测，
+        # 任何门都不读，随下方 forecast.json 落盘（终审指纹覆盖它），发布提交时抄入账本行
+        # objective_signals。护栏关时不写 forecast_policy；形状关时不写 probability_shape（forecast.json
+        # 回到旧形态）。probability_shape 从不抛出（纯函数，失败返回空块）。
+        if getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False):
+            _fq0 = forecast.get("quality")
+            _fq = dict(_fq0) if isinstance(_fq0, dict) else {}
+            _fq["forecast_policy"] = {"binary_symmetric_guard": True}
+            forecast["quality"] = _fq
+        if getattr(Config, "FORECAST_PROBABILITY_SHAPE", True):
+            _fq0 = forecast.get("quality")
+            _fq = dict(_fq0) if isinstance(_fq0, dict) else {}
+            _fq["probability_shape"] = _pshape.probability_shape(
+                forecast.get("scenarios"), forecast.get("binary_forecasts"),
+                pre_critique_scenarios=_fq.get("pre_critique_scenarios"),
+                policy=_fq.get("forecast_policy") or {"binary_symmetric_guard": False})
+            forecast["quality"] = _fq
         # RQ-2：质量门失败 → 按维度单次定向修复（引用回填 / 引文接地 / 占位符解析），
         # 重跑受影响审计一次并把 before/after 记进 forecast['quality']['repair']（合并，不覆盖）。
         # 置于发布门之前 ⇒ 发布门只对修复后的审计结果打分一次，避免二次降级。任何失败仅告警。

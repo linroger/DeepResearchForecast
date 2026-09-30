@@ -832,6 +832,10 @@ def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
         "simulation_forecast_effect": str(
             getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
             or "diagnostic_only"),
+        # REPORT-11: probability-moving binary prompt policy. Recorded for audit like the
+        # other report-stage keys; the report stage reads the ambient Config.
+        "forecast_binary_symmetric_guard": bool(
+            getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False)),
         "backbone_check": (
             backbone_sensitivity.capture_policy(Config)
             if origin in ("admission", "fork_admission")
