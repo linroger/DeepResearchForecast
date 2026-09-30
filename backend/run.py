@@ -36,6 +36,9 @@ def main():
     # while CONFIG_STRICT_VALIDATION is on (preflight / PipelineOrchestrator.start).
     for issue in Config.config_issues():
         print(f"WARN config {issue.level}: {issue.message}")
+    # INFRA-8: model settings that silently do nothing (never stop the server).
+    for warning in Config.validation_warnings():
+        print(f"WARN config: {warning}")
 
     # 创建应用
     app = create_app()

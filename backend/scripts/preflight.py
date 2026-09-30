@@ -121,6 +121,18 @@ def environment_report(
     # Lightweight informational checks the run gate does not block on but which
     # are genuinely useful in a readiness panel: placeholder credentials.
     _append_placeholder_checks(checks, df_model)
+    # INFRA-8: model settings that silently do nothing (a fallback model without a
+    # fallback provider, a CLI tier model that resolves to cli-default) are WARN rows.
+    for i, warning in enumerate(Config.validation_warnings()):
+        checks.append(
+            {
+                "id": f"config.warning.{i}",
+                "severity": SEVERITY_WARN,
+                "ok": False,
+                "message": warning,
+                "fix": None,
+            }
+        )
 
     if deep:
         # In-process deep probes (text/json document path). doctor.sh prefers the

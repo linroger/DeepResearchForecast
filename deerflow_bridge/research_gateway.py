@@ -941,6 +941,43 @@ def _weighted_units(usage: Mapping[str, Any], weights: Mapping[str, float]) -> f
             + output * weights.get("output", 1.0))
 
 
+# INFRA-8: distinct served ids kept per configured model in UsageLedger's ``models`` summary;
+# a new id beyond the cap counts under SERVED_OTHER_KEY.  Mirrors the backend's
+# app.utils.model_provenance MAX_SERVED_IDS / OTHER_SERVED_KEY (the bridge cannot import it).
+MAX_SERVED_IDS = 16
+SERVED_OTHER_KEY = "_other"
+
+
+def model_id_of(model: Any) -> str | None:
+    """The model id a LangChain chat model is configured with (``model_name`` for
+    OpenAI-compatible models, ``model`` for Anthropic); None when it carries neither."""
+    for attr in ("model_name", "model"):
+        value = getattr(model, attr, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def served_model_of(message: Any) -> str | None:
+    """The model id the provider reported serving ``message`` (``response_metadata``
+    ``model_name`` from OpenAI-compatible APIs, ``model`` from Anthropic); None when absent."""
+    meta = _as_mapping(getattr(message, "response_metadata", None)) or {}
+    for key in ("model_name", "model"):
+        value = meta.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _count_served(served: dict[str, int], served_id: str | None) -> None:
+    """Count one call served by ``served_id`` (capped, see MAX_SERVED_IDS); None is not counted."""
+    if not served_id:
+        return
+    if served_id not in served and sum(1 for key in served if key != SERVED_OTHER_KEY) >= MAX_SERVED_IDS:
+        served_id = SERVED_OTHER_KEY
+    served[served_id] = served.get(served_id, 0) + 1
+
+
 class _UsageBucket:
     __slots__ = ("calls", "input", "cached", "cache_write", "output", "reasoning",
                  "units", "failures", "retries", "fallback_calls", "estimated_calls")
@@ -973,16 +1010,23 @@ class UsageLedger:
 
     Per-call rows are capped (``MAX_ROWS``) so a pathological run cannot grow
     ``meta.json`` without bound; the number of dropped rows is reported.
+
+    ``record_models`` (INFRA-8, RECORD_MODEL_PROVENANCE): rows carry the configured
+    ``model`` and the provider-reported ``served_model``, and :meth:`to_dict` adds
+    ``models`` = ``{model: {calls, served: {served id: calls}}}`` over every call (rows
+    dropped by the cap included).  Off, rows and snapshot are exactly as before.
     """
 
     MAX_ROWS = 2000
 
-    def __init__(self) -> None:
+    def __init__(self, *, record_models: bool = True) -> None:
         self._lock = threading.Lock()
         self._total = _UsageBucket()
         self._phases: dict[str, _UsageBucket] = {}
         self._rows: list[dict[str, Any]] = []
         self._rows_dropped = 0
+        self.record_models = bool(record_models)
+        self._models: dict[str, dict[str, Any]] = {}
 
     def _buckets(self, phase: str) -> tuple[_UsageBucket, _UsageBucket]:
         bucket = self._phases.get(phase)
@@ -992,7 +1036,8 @@ class UsageLedger:
 
     def record_call(self, *, phase: str, label: str, kind: str, usage: Mapping[str, Any],
                     units: float, latency_s: float, served_by: str, attempt: int,
-                    estimated: bool) -> None:
+                    estimated: bool, model: str | None = None,
+                    served_model: str | None = None) -> None:
         with self._lock:
             for bucket in self._buckets(phase):
                 bucket.calls += 1
@@ -1006,8 +1051,12 @@ class UsageLedger:
                     bucket.fallback_calls += 1
                 if estimated:
                     bucket.estimated_calls += 1
+            if self.record_models:
+                entry = self._models.setdefault(model or "unknown", {"calls": 0, "served": {}})
+                entry["calls"] += 1
+                _count_served(entry["served"], served_model)
             if len(self._rows) < self.MAX_ROWS:
-                self._rows.append({
+                row: dict[str, Any] = {
                     "phase": phase,
                     "label": label,
                     "kind": kind,
@@ -1017,7 +1066,11 @@ class UsageLedger:
                     "latency_s": round(float(latency_s), 3),
                     "served_by": served_by,
                     "attempt": int(attempt),
-                })
+                }
+                if self.record_models:
+                    row["model"] = model
+                    row["served_model"] = served_model
+                self._rows.append(row)
             else:
                 self._rows_dropped += 1
 
@@ -1044,12 +1097,16 @@ class UsageLedger:
     def to_dict(self) -> dict[str, Any]:
         """JSON-safe snapshot (ints, floats, strings only)."""
         with self._lock:
-            return {
+            out: dict[str, Any] = {
                 "total": self._total.to_dict(),
                 "phases": {name: bucket.to_dict() for name, bucket in self._phases.items()},
                 "calls": [dict(row) for row in self._rows],
                 "calls_dropped": self._rows_dropped,
             }
+            if self.record_models:
+                out["models"] = {name: {"calls": entry["calls"], "served": dict(entry["served"])}
+                                 for name, entry in self._models.items()}
+            return out
 
 
 # ===========================================================================
@@ -1331,6 +1388,8 @@ class _ModelSlot:
     def __init__(self, name: str, model: Any) -> None:
         self.name = name
         self.model = without_sdk_retries(model)
+        # INFRA-8: the configured model id recorded on every usage row of this slot.
+        self.model_id = model_id_of(self.model)
         self.profile = detect_profile(self.model)
         self.level = 0
         self.disabled_reason: str | None = None
@@ -1427,11 +1486,12 @@ class ModelGateway:
                  reserve_share: float = 0.0,
                  sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic,
-                 max_attempts: int = 5) -> None:
+                 max_attempts: int = 5, record_models: bool = True) -> None:
         if model is None:
             raise ValueError("ModelGateway requires a model")
         self.plog = plog
-        self.ledger = UsageLedger()
+        # INFRA-8: record_models (RECORD_MODEL_PROVENANCE) adds model / served ids to the ledger.
+        self.ledger = UsageLedger(record_models=record_models)
         self.max_concurrency = max(1, int(max_concurrency))
         self.budget_units = max(0.0, float(budget_units or 0.0))
         self.reserve_share = min(1.0, max(0.0, float(reserve_share or 0.0)))
@@ -1858,7 +1918,7 @@ class ModelGateway:
         self.ledger.record_call(
             phase=request.phase, label=request.label, kind=request.kind, usage=usage,
             units=units, latency_s=latency, served_by=slot.name, attempt=attempt,
-            estimated=estimated,
+            estimated=estimated, model=slot.model_id, served_model=served_model_of(message),
         )
         line = (f"tokens in={int(usage['input'])} out={int(usage['output'])} "
                 f"total={int(usage['total'])} phase={request.phase}:{request.label} "

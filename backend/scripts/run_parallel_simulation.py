@@ -2231,6 +2231,12 @@ _SIM_LLM_USAGE: Dict[str, Any] = {
 }
 # main() 钉定、__main__ 的 finally 消费：任何退出路径都能写终版快照。
 _SIM_LLM_TELEMETRY_SINK: Dict[str, Any] = {"dir": None, "config": None}
+# INFRA-8 (RECORD_MODEL_PROVENANCE): requested model -> {calls, served: {id: calls}} of the
+# direct camel calls (OpenAI-compatible OASIS agents), whose response.model is the id the
+# provider reported serving. Synthetic completions ('chatcmpl-cli-': the CLI bridge and the
+# LLMClient failover) are not counted here: those calls went through LLMClient, which counts
+# them with their own requested label and served id in this process's LLMMeter.
+_SIM_DIRECT_MODEL_RESOLUTION: Dict[str, Dict[str, Any]] = {}
 
 
 def _record_sim_llm_usage(source: str, model: str,
@@ -2266,23 +2272,38 @@ def _record_sim_llm_error() -> None:
         pass
 
 
-def _accumulate_sim_llm_response(response: Any) -> None:
+def _record_sim_direct_model(requested_model: Any, served_model: Any) -> None:
+    """INFRA-8: count one direct camel call under the model it requested, with the id the
+    provider reported serving it (thread-safe, never raises)."""
+    try:
+        from app.utils.model_provenance import count_served
+        label = str(getattr(requested_model, "value", requested_model) or "").strip() or "unknown"
+        with _SIM_LLM_USAGE_LOCK:
+            entry = _SIM_DIRECT_MODEL_RESOLUTION.setdefault(label, {"calls": 0, "served": {}})
+            entry["calls"] += 1
+            count_served(entry["served"], served_model)
+    except Exception:  # noqa: BLE001 — 出处记录绝不影响调用路径
+        pass
+
+
+def _accumulate_sim_llm_response(response: Any, requested_model: Any = None) -> None:
     """从一次 chat-completion 响应提取 usage 并入账（degrade-safe）。
 
     oasis_llm._build_chat_completion 伪造的估算响应 id 恒以 'chatcmpl-cli-' 开头
     （CLI 桥接与 LLMClient 回退路径）→ source='estimate'；其余带 usage 的响应视为
-    提供方真实值 → source='provider'；无 usage → source='missing'（token 记 0）。"""
+    提供方真实值 → source='provider'；无 usage → source='missing'（token 记 0）。
+    INFRA-8: ``requested_model`` (the camel backend's model_type) given, a real provider
+    response is also counted under it with its served id (_record_sim_direct_model)."""
     try:
         model = str(getattr(response, "model", "") or "unknown")
+        synthetic = str(getattr(response, "id", "") or "").startswith("chatcmpl-cli-")
+        if requested_model is not None and not synthetic:
+            _record_sim_direct_model(requested_model, getattr(response, "model", None))
         usage = getattr(response, "usage", None)
         if usage is None:
             _record_sim_llm_usage("missing", model, 0, 0)
             return
-        source = (
-            "estimate"
-            if str(getattr(response, "id", "") or "").startswith("chatcmpl-cli-")
-            else "provider"
-        )
+        source = "estimate" if synthetic else "provider"
         _record_sim_llm_usage(
             source, model,
             getattr(usage, "prompt_tokens", 0),
@@ -2368,6 +2389,29 @@ def _wrap_llm_client_usage(client: Any) -> Any:
     return client
 
 
+def _sim_model_resolution(provider: str) -> Dict[str, Dict[str, Any]]:
+    """INFRA-8: ``{'provider:requested label': {calls, served}}`` of this simulation.
+
+    The direct camel calls, labelled for the simulation ``provider``
+    (model_provenance.effective_model_label), plus every LLMClient call this process metered
+    (LLMMeter ``model_resolution``, all stages merged): the CLI bridge, the failover path, the
+    decision channel and in-band evolution, each under the label its transport requested.
+    """
+    from app.utils.model_provenance import effective_model_label, merge_resolution_entries
+    from app.utils.telemetry import LLMMeter
+
+    with _SIM_LLM_USAGE_LOCK:
+        direct = {label: {"calls": entry["calls"], "served": dict(entry["served"])}
+                  for label, entry in _SIM_DIRECT_MODEL_RESOLUTION.items()}
+    out: Dict[str, Dict[str, Any]] = {}
+    for label, entry in direct.items():
+        merge_resolution_entries(out, {f"{provider}:{effective_model_label(provider, label)}": entry})
+    metered = LLMMeter.snapshot().get("model_resolution")
+    for stage_entries in (metered.values() if isinstance(metered, dict) else ()):
+        merge_resolution_entries(out, stage_entries)
+    return out
+
+
 def _write_sim_llm_telemetry(simulation_dir: str,
                              config: Optional[Dict[str, Any]] = None,
                              log_info=None) -> None:
@@ -2409,6 +2453,11 @@ def _write_sim_llm_telemetry(simulation_dir: str,
             "wall_s": round(max(0.0, time.time() - _SIM_LLM_METER_STARTED), 3),
             "written_at": datetime.now().isoformat(),
         }
+        if _flag_true("RECORD_MODEL_PROVENANCE", "true"):
+            try:
+                payload["model_resolution"] = _sim_model_resolution(str(provider or "unknown"))
+            except Exception:  # noqa: BLE001 — 出处缺失不影响 token 快照落盘
+                pass
         write_json_atomic(
             os.path.join(simulation_dir, SIM_LLM_TELEMETRY_FILE), payload)
         if log_info:
@@ -2437,7 +2486,8 @@ def _wrap_model_llm_counter(model) -> Dict[str, int]:
                     _record_sim_llm_error()
                     raise
                 # DEFECT-3: 逐调用累计 usage（真实/估算按来源分桶）；纯附加，绝不抛出。
-                _accumulate_sim_llm_response(result)
+                # INFRA-8: 同时按请求模型记下提供方自报的服务模型。
+                _accumulate_sim_llm_response(result, getattr(model, "model_type", None))
                 return result
             model._arequest_chat_completion = _acounted
         else:
@@ -2451,7 +2501,7 @@ def _wrap_model_llm_counter(model) -> Dict[str, int]:
                     counter["errors"] += 1
                     _record_sim_llm_error()
                     raise
-                _accumulate_sim_llm_response(result)  # DEFECT-3（同上）
+                _accumulate_sim_llm_response(result, getattr(model, "model_type", None))  # DEFECT-3/INFRA-8（同上）
                 return result
             model._request_chat_completion = _counted
     except Exception:  # noqa: BLE001 — 遥测是附加物，绝不阻断模型创建

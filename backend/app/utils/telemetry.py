@@ -18,6 +18,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from .model_provenance import count_served, effective_model_label
+
 # ---------------------------------------------------------------- run context
 # Tag every LLM call with the run (pipeline/report id) and stage that issued it,
 # so telemetry can be attributed without threading ids through every call.
@@ -190,6 +192,16 @@ def _declared_subscription_providers() -> frozenset:
     return frozenset(p.strip().lower() for p in raw.split(",") if p.strip())
 
 
+def _model_provenance_enabled() -> bool:
+    """INFRA-8: Config.RECORD_MODEL_PROVENANCE (default on). An unreadable config records
+    nothing, so the snapshot stays as it was before the knob existed."""
+    try:
+        from ..config import Config
+        return bool(getattr(Config, "RECORD_MODEL_PROVENANCE", True))
+    except Exception:  # noqa: BLE001 — config unavailable: record no provenance
+        return False
+
+
 # ---------------------------------------------------------------- meter
 @dataclass
 class _Counter:
@@ -319,6 +331,8 @@ class _RunMeter:
     finish_reasons: Dict[str, Dict[str, int]] = field(default_factory=dict)
     # INFRA-2: {label: {stage: {ok, repaired, failed, truncation_repaired}}}（record_structured）。
     structured: Dict[str, Dict[str, Dict[str, int]]] = field(default_factory=dict)
+    # INFRA-8: {stage: {'provider:requested label': {'calls': n, 'served': {served id: n}}}}.
+    model_resolution: Dict[str, Dict[str, Dict[str, Any]]] = field(default_factory=dict)
 
 
 # INFRA-2: chat_json 结构化输出的结局。ok = 首轮即得合法 JSON 对象；repaired = 修复轮才得到；
@@ -362,17 +376,30 @@ class LLMMeter:
     def record(cls, provider: str, model: str, prompt_tokens: int, completion_tokens: int,
                latency_ms: float, *, cached: bool = False, stage: Optional[str] = None,
                run_id: Optional[str] = None, finish_reason: Optional[str] = None,
-               prompt_cache_read_tokens: int = 0) -> None:
+               prompt_cache_read_tokens: int = 0, served_model: Optional[str] = None,
+               requested_model: Optional[str] = None, aggregate: bool = False) -> None:
         """Accumulate one LLM call. ``finish_reason`` (INFRA-1, normalized by
         llm_text.normalize_finish_reason) is tallied per stage when given.
         ``prompt_cache_read_tokens`` (EVAL-17) is the provider-reported cache-read share of
-        the prompt, clamped to >= 0 (unparseable → 0); it never changes cost."""
+        the prompt, clamped to >= 0 (unparseable → 0); it never changes cost.
+
+        INFRA-8 (RECORD_MODEL_PROVENANCE): the call is also counted per stage under
+        ``provider:requested label`` with the provider-reported ``served_model`` (None = not
+        reported, counted in calls only). ``requested_model`` is the label the transport
+        actually requested; None derives it from ``provider`` and ``model``
+        (model_provenance.effective_model_label). by_model keys are unchanged.
+        ``aggregate=True`` marks a synthetic record of a child process's whole spend (the
+        research child, the simulation child): its provider/model label is no call's
+        requested model, so it is never counted in ``model_resolution``."""
         rid, stg, fallback = cls._attribute(run_id, stage)
         cost = 0.0 if cached else estimate_cost(provider, prompt_tokens, completion_tokens)
         try:
             pcr = max(0, int(prompt_cache_read_tokens or 0))
         except (TypeError, ValueError, OverflowError):
             pcr = 0
+        resolution_key = None
+        if not aggregate and _model_provenance_enabled():
+            resolution_key = f"{provider}:{requested_model or effective_model_label(provider, model)}"
         warn_calls = 0
         first_fallback = False
         with cls._lock:
@@ -388,6 +415,11 @@ class LLMMeter:
             if finish_reason:
                 reasons = rm.finish_reasons.setdefault(stg, {})
                 reasons[finish_reason] = reasons.get(finish_reason, 0) + 1
+            if resolution_key is not None:
+                entry = rm.model_resolution.setdefault(stg, {}).setdefault(
+                    resolution_key, {"calls": 0, "served": {}})
+                entry["calls"] += 1
+                count_served(entry["served"], served_model)
             if rid == _DEFAULT_BUCKET and rm.total.calls in _GLOBAL_BUCKET_WARN_AT:
                 warn_calls = rm.total.calls
         if first_fallback:
@@ -451,6 +483,10 @@ class LLMMeter:
         - ``prompt_cache_read_tokens`` (EVAL-17) inside every counter (total, by_stage,
           by_model, fallback_attributed, unattributed_process): the provider-reported
           prompt-cache reads passed to record(); 0 when none were.
+        - ``model_resolution`` (INFRA-8): ``{stage: {'provider:requested label': {calls,
+          served: {served id: calls}}}}``, at most model_provenance.MAX_SERVED_IDS served ids
+          per entry (later ids under '_other'); present only when at least one call was
+          recorded with RECORD_MODEL_PROVENANCE on (``aggregate`` records never count).
         """
         rid = run_id or _current_run.get() or _DEFAULT_BUCKET
         declared_sub = _declared_subscription_providers()
@@ -518,6 +554,12 @@ class LLMMeter:
                     structured_by_stage[label] = {stg: dict(counts) for stg, counts in by_stage.items()}
                 out["structured_outputs"] = structured
                 out["structured_outputs_by_stage"] = structured_by_stage
+            if rm.model_resolution:
+                out["model_resolution"] = {
+                    stg: {key: {"calls": entry["calls"], "served": dict(entry["served"])}
+                          for key, entry in entries.items()}
+                    for stg, entries in rm.model_resolution.items()
+                }
             if rid != _DEFAULT_BUCKET:
                 out["unattributed_process"] = unattributed
             return out

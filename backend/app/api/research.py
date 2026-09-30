@@ -401,6 +401,16 @@ def preflight():
     mode = request.args.get('mode', 'full')
     if mode not in ('full', 'research_only'):
         mode = 'full'
+    # INFRA-8: an unknown research model is refused like POST /run refuses it, instead of
+    # being reported as a warning row of a readiness document for a model that cannot run.
+    model = (request.args.get('model') or '').strip() or None
+    if model is not None and model.lower() not in Config.SUPPORTED_DEERFLOW_MODELS:
+        return jsonify({
+            "success": False,
+            "error": f"model 必须是 {', '.join(Config.SUPPORTED_DEERFLOW_MODELS)} 之一",
+        }), 400
+    if model:
+        model = model.lower()  # 与 POST /run 同样归一，两种响应都按该模型体检
 
     if (request.args.get('format') or '').strip().lower() == 'full':
         # 复用 backend/scripts/preflight.py 的 environment_report()（同一引擎，零漂移）。
@@ -413,13 +423,12 @@ def preflight():
                 sys.path.insert(0, _scripts_dir)
             from preflight import environment_report  # type: ignore
             deep = (request.args.get('deep') or '').strip().lower() in ('1', 'true', 'yes')
-            model = (request.args.get('model') or '').strip() or None
             report = environment_report(mode=mode, model=model, deep=deep)
             return jsonify({"success": True, "data": report})
         except Exception as e:
             logger.warning(f"preflight format=full 降级到精简响应: {e}")
 
-    errors = preflight_pipeline(mode=mode)
+    errors = preflight_pipeline(mode=mode, model=model)
     return jsonify({"success": True, "data": {"ready": not errors, "errors": errors, "mode": mode}})
 
 

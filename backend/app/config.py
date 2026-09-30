@@ -599,6 +599,22 @@ class Config:
     # options.lineage_rebuilt）在打断后的下次 resume 被复用而非再生成。默认开：以重算成本换取不复用陈旧产物
     # （fail closed）；关闭 = 旧的逐阶段存在性复用。
     RESUME_LINEAGE_GUARDS = os.environ.get('RESUME_LINEAGE_GUARDS', 'true').strip().lower() == 'true'
+    # INFRA-8: model provenance. On, LLMMeter records per stage which model each call requested
+    # (the effective label: a claude-cli call without --model is 'cli-default') and which model
+    # the provider reported serving it (snapshot 'model_resolution'; the simulation child writes
+    # its own into sim_llm_telemetry.json); research v3 ledger rows and usage summaries carry
+    # model/served_model and the v3 work-dir identity gains the resolved model id (a side
+    # without one stays compatible, so existing work dirs still resume); run.json resolved
+    # blocks gain requested_model/requested_source/requested_models/served_models/
+    # model_resolution; forecast.json gains a 'model_provenance' block. The per-call labels and
+    # served ids of LLMClient calls come from LLMMeter, so they need LLM_TELEMETRY_ENABLED=true;
+    # a stage with no recorded call names the configured provider/model pair instead, marked
+    # requested_source='configured' (tier routing or failover may have sent another model).
+    # Both children get this value from Config (research-child registry, simulation env).
+    # Default on: it only adds recorded keys and changes no call, routing or gate; the one
+    # behavioural effect is that a research resume no longer reuses a v3 work dir produced by
+    # a different resolved model id. Off = byte-identical to before.
+    RECORD_MODEL_PROVENANCE = os.environ.get('RECORD_MODEL_PROVENANCE', 'true').strip().lower() == 'true'
     # INFRA-9：分叉继承安全政策钉。开启时情景分叉（PipelineOrchestrator.fork）与批次问题分叉
     # （scripts/batch_runs.fork_question）深拷贝 base 的 options.safety_policy_v1（origin=fork_inherited）；
     # base 无钉（Foglamp WP1 之前准入）时在分叉准入时捕获当前环境政策（默认 Config 下即安全政策，
@@ -2251,6 +2267,43 @@ class Config:
         if include_audit:
             errors.extend(cls.config_errors())
         return errors
+
+    @classmethod
+    def validation_warnings(cls) -> list:
+        """INFRA-8: model settings that silently do nothing (warnings only, never refuse a run).
+
+        - LLM_FALLBACK_MODEL set while LLM_FALLBACK_PROVIDER is empty: failover is off, so the
+          fallback model is never used.
+        - LLM_FAST_MODEL / LLM_STRONG_MODEL set for a CLI primary (claude-cli / codex-cli) to a
+          model other than LLM_MODEL_NAME: the CLI transport never receives a tier model
+          (claude-cli is given --model from LLM_MODEL_NAME, and only for a claude id/alias;
+          codex-cli never), so every call runs LLM_MODEL_NAME's effective model or the CLI
+          account's default ('cli-default'), whatever the tier model names.
+
+        run.py prints them at startup; scripts/preflight.py lists them as WARN rows.
+        """
+        from .utils.model_provenance import CLI_DEFAULT_LABEL, effective_model_label
+        warnings = []
+        fb_model = (os.environ.get('LLM_FALLBACK_MODEL', '') or '').strip()
+        fb_provider = (os.environ.get('LLM_FALLBACK_PROVIDER', '') or '').strip()
+        if fb_model and not fb_provider:
+            warnings.append(
+                f"LLM_FALLBACK_MODEL={fb_model} is set but LLM_FALLBACK_PROVIDER is empty: "
+                "failover is off and the fallback model is never used"
+            )
+        provider = (cls.LLM_PROVIDER or '').strip().lower()
+        if provider in ('claude-cli', 'codex-cli'):
+            runs = effective_model_label(provider, cls.LLM_MODEL_NAME)
+            runs_text = ("the CLI account's default model" if runs == CLI_DEFAULT_LABEL
+                         else f"{runs} (from LLM_MODEL_NAME)")
+            for name in ('LLM_FAST_MODEL', 'LLM_STRONG_MODEL'):
+                value = getattr(cls, name, None)
+                if value and value.strip() != (cls.LLM_MODEL_NAME or '').strip():
+                    warnings.append(
+                        f"{name}={value} is set for LLM_PROVIDER={provider} but is ignored: the "
+                        f"CLI is never given a tier model, so every call runs {runs_text}"
+                    )
+        return warnings
 
 
 # ------------------------------------------------------------------

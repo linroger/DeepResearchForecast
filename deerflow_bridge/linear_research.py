@@ -1217,23 +1217,47 @@ def _unique_stale_path(out_dir: Path) -> Path:
     return candidate
 
 
+def _identity_matches(stored: Any, identity: Mapping[str, Any]) -> bool:
+    """Whether a stored v3 identity is this run's.
+
+    Every key must be equal except ``model_id`` (INFRA-8, the resolved model id,
+    added only when resolvable): a side without one is compatible, so a work dir
+    written before it existed (or when resolution failed) still resumes, while
+    two different resolved ids never share a work dir.
+    """
+    if not isinstance(stored, dict):
+        return False
+    current = dict(identity)
+    stored_id, current_id = stored.get("model_id"), current.get("model_id")
+    if stored_id and current_id and stored_id != current_id:
+        return False
+    return ({k: v for k, v in stored.items() if k != "model_id"}
+            == {k: v for k, v in current.items() if k != "model_id"})
+
+
 def _open_work_dir(out_dir: Path, identity: Mapping[str, Any],
                    writer: Callable[[Path, str], None],
                    reporter: _Reporter) -> tuple[Path, _RunState, bool]:
     """Reuse ``v3/`` only when its state proves the same run identity.
 
-    Anything else (another question/depth/model/language/engine version, a
-    corrupt or missing state file) is archived to ``v3.stale-<utc>`` so
-    artifacts of a different run can never leak into this one.  Returns
+    Anything else (another question/depth/model/language/engine version or
+    resolved model id, a corrupt or missing state file) is archived to
+    ``v3.stale-<utc>`` so artifacts of a different run can never leak into
+    this one.  A reused state without a ``model_id`` adopts this run's, so a
+    later resume under another resolved model is refused.  Returns
     ``(work_dir, state, resumed)``.
     """
     work = out_dir / WORK_DIRNAME
     if work.exists():
         data = _read_json(work / STATE_FILENAME)
         if (isinstance(data, dict) and data.get("engine_version") == ENGINE_VERSION
-                and data.get("identity") == dict(identity)
+                and _identity_matches(data.get("identity"), identity)
                 and isinstance(data.get("phases"), dict) and isinstance(data.get("kiqs"), dict)):
-            return work, _RunState(work / STATE_FILENAME, data, writer), True
+            state = _RunState(work / STATE_FILENAME, data, writer)
+            if identity.get("model_id") and not data["identity"].get("model_id"):
+                data["identity"]["model_id"] = identity["model_id"]
+                state.save()
+            return work, state, True
         target = _unique_stale_path(out_dir)
         work.rename(target)
         reporter.write("warn", f"v3: previous work dir belongs to another run identity or is "
@@ -5878,6 +5902,13 @@ class _Engine:
         if self.pinned_as_of:
             # Only pinned runs carry it, so a live run's work dir is never archived.
             identity["as_of"] = self.pinned_as_of
+        # INFRA-8 RECORD_MODEL_PROVENANCE (default on): the concrete model id the --model
+        # stanza resolves to joins the identity only when resolvable, so a resume under an
+        # edited stanza cannot reuse this work dir (see _identity_matches).
+        self.record_models = _env_flag(env, "RECORD_MODEL_PROVENANCE", True)
+        self.model_id = _resolved_model_id(args) if self.record_models else None
+        if self.model_id:
+            identity["model_id"] = self.model_id
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.work, self.state, self.resumed = _open_work_dir(
             self.out_dir, identity, self._write_internal, reporter)
@@ -5978,6 +6009,11 @@ class _Engine:
         self.stored_shells: dict[int, str] = (
             self._unmark_stored_shells() if self.shell_detection and self.resumed else {})
         self.gateway = gateway_factory(args, reporter, bridge, self.preset)
+        ledger = getattr(self.gateway, "ledger", None)
+        if isinstance(ledger, rg.UsageLedger):
+            # INFRA-8: the ledger follows this engine's RECORD_MODEL_PROVENANCE (the env the
+            # parent forwards from its Config), whatever the factory built it with.
+            ledger.record_models = self.record_models
         # Every model call (the gateway's json/text calls go through its
         # invoke) and every search/fetch passes through these wrappers: the
         # tally tells a provider that never answered from a phase that ran out
@@ -8814,6 +8850,10 @@ class _Engine:
             self.log("warn", f"v3: usage.json not written ({exc})")
         self.meta["usage"] = {"total": ledger["total"], "phases": ledger["phases"],
                               "calls_recorded": len(ledger["calls"]), "calls_dropped": ledger["calls_dropped"]}
+        if getattr(self, "record_models", False):
+            # INFRA-8: which model the run asked for (stanza, resolved id) and which ids served it.
+            self.meta["model_resolution"] = {"model": self.model_name or None, "model_id": self.model_id,
+                                             "models": ledger.get("models") or {}}
         self.meta["tools"] = self.tools.stats()
         if self.pit is not None:
             # This attempt's final gate counts (a resumed audit's run scope needs them).
@@ -9507,6 +9547,35 @@ def _deerflow_app_config(args: Any) -> Any:
     config = AppConfig.from_file(path)
     set_app_config(config)
     return config
+
+
+def _resolved_model_id(args: Any) -> str | None:
+    """INFRA-8: the concrete model id (``model:`` field) of the ``--model`` stanza in the
+    DeerFlow config named by ``--config`` (DeerFlow's own resolution without one), or
+    None when it cannot be resolved (no deerflow package, unknown stanza, unreadable
+    config).
+
+    Not side-effect free: ``AppConfig.from_file`` applies the file's singleton configs
+    (title, summarization, memory, subagents, tool search, guardrails, checkpointer,
+    stream bridge, ACP; a changed checkpointer config resets the checkpointer and store),
+    and ``get_app_config`` caches the process-wide config.  Both are what the gateway
+    factory does right after with the same file (``_deerflow_app_config`` /
+    ``create_chat_model``), so the child ends in the same state; the cost is one extra
+    parse of the config file per run."""
+    try:
+        path = str(getattr(args, "config", None) or "").strip()
+        if path:
+            from deerflow.config.app_config import AppConfig  # lazy: the backend venv has no deerflow
+
+            config = AppConfig.from_file(path)
+        else:
+            from deerflow.config import get_app_config
+
+            config = get_app_config()
+        model_id = getattr(config.get_model_config(getattr(args, "model", None)), "model", None)
+    except Exception:  # noqa: BLE001 — identity then omits the id (compatible either way)
+        return None
+    return (model_id.strip() or None) if isinstance(model_id, str) else None
 
 
 def _default_gateway_factory(args: Any, plog: Any, bridge: Any, preset: Preset) -> rg.ModelGateway:
