@@ -133,6 +133,14 @@ RESOLVED_BLOCK_FOR_STAGE: dict[str, str] = {
     "report": "report",
 }
 PROVIDER_STAMPED_STAGES: tuple[str, ...] = ("ontology", "graph", "report")
+# ``state.options`` key of ``{"report_id", "provider", "model_name"}``: the report
+# the unfinished REPORT stage minted and the provider pair producing it.  REPORT
+# reuse is keyed on the persisted report, not on the stage bit, so an attempt cut
+# off after publishing (before ``_complete_stage``) is finished by a later attempt
+# that reuses the report; that reuse stamps run.json with this pair instead of
+# keeping the carried-forward stamp of the report it replaced.  Dropped when the
+# REPORT stage completes.
+REPORT_PRODUCER_OPTION = "report_producer_v1"
 # Filled while RUN executes (not at attempt start).  A RUN restamp keeps only
 # the values the current attempt's RUN wrote: the carried-forward block may
 # hold the replaced simulation's values.
@@ -449,15 +457,52 @@ def fork_base_record(base_pin: Any, fork_pin: Any, base_pipeline_id: Any) -> dic
     artifacts (research, graph, and for a scenario fork the ontology) that the
     base built under the base's pin.  ``identity_diff`` (``{knob: [base,
     fork]}``) discloses where the two differ, so the mixed shape of the reused
-    stages is visible.  A base admitted before the pin existed has nothing to
-    compare: ``sha256`` and ``identity_diff`` are then None.
+    stages is visible.  A per-run option the fork does not carry (the fork's
+    value is None while the base's is set: a scenario fork never copies the
+    base's depth or research_language, because it reuses the research they
+    shaped) is not drift and is left out.  A base admitted before the pin
+    existed has nothing to compare: ``sha256`` and ``identity_diff`` are then
+    None.
     """
     base = base_pin if isinstance(base_pin, Mapping) else None
+    identity_diff = None
+    if base is not None:
+        identity_diff = {
+            key: pair for key, pair in diff(base, fork_pin)["identity"].items()
+            if not (key in IDENTITY_OPTIONS and pair[1] is None)
+        }
     return {
         "pipeline_id": str(base_pipeline_id) if base_pipeline_id else None,
         "sha256": base.get("sha256") if base is not None else None,
-        "identity_diff": diff(base, fork_pin)["identity"] if base is not None else None,
+        "identity_diff": identity_diff,
     }
+
+
+def producer_record(report_id: Any, provider: Mapping[str, Any]) -> dict[str, Any]:
+    """The ``REPORT_PRODUCER_OPTION`` value for a newly minted report."""
+    pair = provider if isinstance(provider, Mapping) else {}
+    return {
+        "report_id": str(report_id),
+        "provider": _plain(pair.get("provider")),
+        "model_name": _plain(pair.get("model_name")),
+    }
+
+
+def reused_report_stamp(record: Any, report_id: Any) -> Optional[dict[str, Any]]:
+    """The run.json ``resolved.report`` stamp for a reused report, or None to keep it.
+
+    Without a pending ``record`` (no mint since the REPORT stage last
+    completed) the carried-forward stamp already describes the reused report.
+    With one, the mint restamped the block for the report it minted: reusing
+    that report stamps the recorded producer; reusing any other report (the
+    minted one never reached disk and the simulation-id fallback found an
+    older one) stamps an unknown producer rather than the minted report's.
+    """
+    if not isinstance(record, Mapping):
+        return None
+    if report_id and str(report_id) == str(record.get("report_id")):
+        return {"provider": record.get("provider"), "model_name": record.get("model_name")}
+    return {"provider": None, "model_name": None}
 
 
 def carry_forward_resolved(prior: Any, fresh: Any) -> dict[str, Any]:

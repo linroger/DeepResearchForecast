@@ -9247,8 +9247,9 @@ class PipelineOrchestrator:
         Consults this attempt's recomputes and the durable
         ``options.lineage_invalidated`` map, so a stage made stale by an earlier
         attempt whose rebuild failed is still refused.  ``artifact_id`` names
-        the candidate artifact (REPORT: its report_id); when it is the one
-        ``options.lineage_rebuilt`` records for the stage, the durable entry
+        the candidate artifact (REPORT: its report_id, passed only for a
+        COMPLETED report, so an unfinished minted report is never exempt);
+        when it is the one ``options.lineage_rebuilt`` records for the stage, the durable entry
         does not refuse it (a rebuild from current inputs cut off before the
         stage completed).  A refusal is recorded in the invalidated map and
         leaves a ``reuse_refused: <reason>`` note under
@@ -9350,9 +9351,12 @@ class PipelineOrchestrator:
         stale and loses its rebuilt artifact.  A reuse settles the stage's
         interrupted rebuild when the reused artifact is the rebuilt one.  The
         maps are saved with the stage's completion, so the invalidation
-        survives a failed downstream rebuild.  Pure in-memory bookkeeping; the
-        caller does not swallow its errors (the guard is an honesty check and
-        fails closed).
+        survives a failed downstream rebuild.  With the guards off a recompute
+        still drops the rebuilt artifacts it made stale (a map only a guards-on
+        attempt wrote), so a later guards-on attempt cannot exempt an artifact
+        built before this recompute; nothing else is touched.  Pure in-memory
+        bookkeeping; the caller does not swallow its errors (the guard is an
+        honesty check and fails closed).
         """
         guards = bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True))
         invalidated = state.options.get(run_shape.LINEAGE_INVALIDATED_OPTION)
@@ -9364,9 +9368,13 @@ class PipelineOrchestrator:
                 self._store_lineage_map(state, run_shape.LINEAGE_REBUILT_OPTION, rebuilt)
             return
         self._attempt_recomputed().add(stage)
-        if not guards:
-            return
         exemptions = run_shape.lineage_exemptions(state.options)
+        if not guards:
+            if run_shape.LINEAGE_REBUILT_OPTION in state.options:
+                self._store_lineage_map(
+                    state, run_shape.LINEAGE_REBUILT_OPTION,
+                    run_shape.settle_rebuilt(rebuilt, stage, exemptions=exemptions))
+            return
         self._store_lineage_map(
             state, run_shape.LINEAGE_INVALIDATED_OPTION,
             run_shape.invalidate_downstream(invalidated, stage, exemptions=exemptions))
@@ -9383,9 +9391,11 @@ class PipelineOrchestrator:
         invalidation and refuse the fresh ontology on the next resume.  The
         recompute is recorded (and persisted) as soon as the artifact is
         saved; ``_complete_stage`` repeats it idempotently.  A crash before
-        this save only costs a redundant rebuild.
+        this save only costs a redundant rebuild.  With the guards off only an
+        existing ``lineage_rebuilt`` map is settled (see ``_record_stage_lineage``).
         """
-        if not bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
+        if (not bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True))
+                and run_shape.LINEAGE_REBUILT_OPTION not in state.options):
             return
         self._record_stage_lineage(state, stage, reused=False)
         PipelineManager.save(state)
@@ -9415,7 +9425,12 @@ class PipelineOrchestrator:
                 stage, artifact_id))
 
     def _record_stage_decision(self, state: "PipelineState", stage: str, reused: bool) -> None:
-        """INFRA-7: typed reuse fact per stage + run.json provider stamp on recompute."""
+        """INFRA-7: typed reuse fact per stage + run.json provider stamp on recompute.
+
+        A reused REPORT whose mint is still pending (``options.report_producer_v1``,
+        written when an earlier attempt minted it) is stamped with the recorded
+        producer; the record is dropped once REPORT completes either way.
+        """
         if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
             return
         record = {"stage": stage, "reused": bool(reused), "at": _utcnow()}
@@ -9428,6 +9443,43 @@ class PipelineOrchestrator:
         attempt_records.append(dict(record))
         if not reused:
             self._stamp_run_manifest_stage(state, stage)
+        elif stage == STAGE_REPORT:
+            stamp = run_shape.reused_report_stamp(
+                state.options.get(run_shape.REPORT_PRODUCER_OPTION), state.report_id)
+            if stamp is not None:
+                self._stamp_run_manifest_stage(state, stage, provider=stamp)
+        if stage == STAGE_REPORT:
+            state.options.pop(run_shape.REPORT_PRODUCER_OPTION, None)
+
+    def _record_report_mint(self, state: "PipelineState", report_id: str) -> None:
+        """INFRA-7: remember who produces a newly minted report (caller saves the state).
+
+        Stored with the minted report_id in the same state save, so a later
+        attempt that reuses this report (published, but its attempt ended
+        before ``_complete_stage``) can stamp run.json with its real producer.
+        """
+        if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+            return
+        state.options[run_shape.REPORT_PRODUCER_OPTION] = run_shape.producer_record(
+            report_id, _current_provider_pair())
+
+    def _stamp_produced_artifact(self, state: "PipelineState", stage: str) -> None:
+        """INFRA-7: restamp run.json as soon as ``stage`` starts or finishes producing
+        an artifact whose reuse is keyed on the persisted artifact, not on the stage bit.
+
+        ONTOLOGY (after ``save_project``) and REPORT (after the minted id is
+        saved) can be reused by an attempt that never reached their
+        ``_complete_stage`` restamp; without this, run.json would keep naming
+        the replaced artifact's producer (or none on a fresh run).  REPORT
+        uses the pair recorded at the mint.
+        """
+        if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+            return
+        provider = None
+        if stage == STAGE_REPORT:
+            provider = run_shape.reused_report_stamp(
+                state.options.get(run_shape.REPORT_PRODUCER_OPTION), state.report_id)
+        self._stamp_run_manifest_stage(state, stage, provider=provider)
 
     def _reset_run_manifest_simulation(self, state: "PipelineState") -> None:
         """INFRA-7: RUN re-executes, so run.json's simulation block restarts fresh.
@@ -9441,13 +9493,16 @@ class PipelineOrchestrator:
             return
         self._stamp_run_manifest_stage(state, STAGE_RUN)
 
-    def _stamp_run_manifest_stage(self, state: "PipelineState", stage: str) -> None:
+    def _stamp_run_manifest_stage(self, state: "PipelineState", stage: str, *,
+                                  provider: Optional[dict[str, Any]] = None) -> None:
         """Restamp the run.json ``resolved`` block of a stage recomputed this attempt.
 
         Reused stages keep the stamp carried forward from the attempt that
-        produced them.  A missing run.json is left missing (the attempt-start
-        writer owns creating it); any failure is swallowed like every other
-        run.json writer.
+        produced them.  ``provider`` overrides the current provider pair for a
+        provider-stamped stage (the recorded producer of a reused report).  A
+        missing run.json is left missing (the attempt-start writer owns
+        creating it); any failure is swallowed like every other run.json
+        writer.
         """
         if not bool(getattr(Config, "RECORD_RUN_MANIFEST", True)):
             return
@@ -9466,7 +9521,8 @@ class PipelineOrchestrator:
             resolved = manifest.get("resolved")
             resolved = resolved if isinstance(resolved, dict) else {}
             run_shape.stamp_resolved_stage(
-                resolved, stage, fresh=fresh, provider=_current_provider_pair(),
+                resolved, stage, fresh=fresh,
+                provider=provider if provider is not None else _current_provider_pair(),
                 sim_runtime=self._attempt_sim_runtime())
             manifest["resolved"] = resolved
             manifest["updated_at"] = _utcnow()
@@ -13673,8 +13729,10 @@ class PipelineOrchestrator:
                 project.status = ProjectStatus.ONTOLOGY_GENERATED
                 ProjectManager.save_project(project)
                 # INFRA-7：本体复用以 project.ontology 存在为准（非阶段位）——新本体一落盘即结清其血统
-                # 失效项，否则在 _complete_stage 前被打断的 attempt 会让下次 resume 拒绝这份新本体。
+                # 失效项并改戳 run.json，否则在 _complete_stage 前被打断的 attempt 会让下次 resume
+                # 拒绝这份新本体，或复用它却沿用被替换本体的 provider 戳。
                 self._record_lineage_artifact_replaced(state, STAGE_ONTOLOGY)
+                self._stamp_produced_artifact(state, STAGE_ONTOLOGY)
                 # T6.3: 把本体落到 handoff/ontology.json，供 artifact 深链。
                 # ONT-10: 原子写（对齐 actors.json 的 write_json_atomic 约定）——半写的
                 # ontology.json 会让 resume 校验静默强制重建；失败留 warning 而非无声吞掉。
@@ -14526,14 +14584,18 @@ class PipelineOrchestrator:
                 except Exception:
                     existing_report = None
             # INFRA-7：报告必须绑定当前模拟，且 RUN 未在其后重跑（本 attempt，或尚未结清的此前
-            # attempt——该 attempt 为重建铸出的报告除外）；否则铸新报告。
+            # attempt——该 attempt 为重建铸出且已完成（COMPLETED）的报告除外；未写完的铸出报告不豁免）；
+            # 否则铸新报告。
             if (existing_report is not None
                     and getattr(existing_report, "status", None) != ReportStatus.FAILED
                     and self._lineage_refuses_reuse(
                         state, STAGE_REPORT,
                         bound_ids=(getattr(existing_report, "simulation_id", None),
                                    state.simulation_id),
-                        artifact_id=getattr(existing_report, "report_id", None))):
+                        artifact_id=(
+                            getattr(existing_report, "report_id", None)
+                            if getattr(existing_report, "status", None) == ReportStatus.COMPLETED
+                            else None))):
                 existing_report = None
             # ORCH-1: 复用前评估交付物本身。meta 说 COMPLETED 但全章占位/无 forecast.json 的
             # 报告若被复用，S1 健康门必再抛错 → resume 陷入「复用坏报告→健康门失败」死循环
@@ -14608,7 +14670,11 @@ class PipelineOrchestrator:
                 # INFRA-7：报告复用以已落盘报告为准（非阶段位）——记下本次铸出的报告是从当前上游重建的，
                 # 使发布后、阶段完成前被取消/熔断/重启打断的 attempt 下次复用它，而非再生成一份。
                 self._record_lineage_rebuild_started(state, STAGE_REPORT, report_id)
+                # INFRA-7：同一次落盘记下这份报告的生产者；run.json 随即改戳为它（被替换报告的旧戳作废），
+                # 发布后、阶段完成前被打断的 attempt 下次复用它时仍按此戳。
+                self._record_report_mint(state, report_id)
                 PipelineManager.save(state)
+                self._stamp_produced_artifact(state, STAGE_REPORT)
                 upd(5, "生成预测报告…")
                 # T4.6/T4.7: 情景报告 → 传情景标签 + base 模拟 id（反事实对比 scenario_diff）
                 _scenario_label = state.options.get("scenario_label")
