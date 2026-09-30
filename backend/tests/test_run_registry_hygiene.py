@@ -115,11 +115,17 @@ def _start():
 
 
 def _wait(pipeline_id):
-    """Join the pipeline thread; it deregisters itself as the last step of ``_run``."""
-    thread = po.PipelineOrchestrator._threads.get(pipeline_id)
-    if thread is not None:
-        thread.join(timeout=_WAIT_S)
-        assert not thread.is_alive(), f"{pipeline_id} did not finish"
+    """Join the pipeline thread, found by name rather than by registry membership.
+
+    ``_run`` pops ``_threads`` one statement before ``_cancel_events``, so a
+    missing ``_threads`` entry does not prove the run has finished. ``start()``
+    returns only after the thread is running, and a thread drops out of
+    ``threading.enumerate()`` only after ``_run`` (its finally included) returned.
+    """
+    for thread in threading.enumerate():
+        if thread.name == f"pipeline-{pipeline_id}":
+            thread.join(timeout=_WAIT_S)
+            assert not thread.is_alive(), f"{pipeline_id} did not finish"
 
 
 def _assert_clean_after_completion(pipeline_ids, mid_run):

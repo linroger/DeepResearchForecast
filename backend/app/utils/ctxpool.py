@@ -16,14 +16,18 @@ submitter.
 from __future__ import annotations
 
 import contextvars
-from concurrent.futures import Executor, Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Callable, TypeVar
 
 _T = TypeVar("_T")
 
 
-def submit_with_context(executor: Executor, fn: Callable[..., _T], /,
+def submit_with_context(executor: ThreadPoolExecutor, fn: Callable[..., _T], /,
                         *args: Any, **kwargs: Any) -> "Future[_T]":
-    """``executor.submit(fn, *args, **kwargs)`` run inside a copy of the caller's context."""
+    """``executor.submit(fn, *args, **kwargs)`` run inside a copy of the caller's context.
+
+    Thread executors only: a ``ProcessPoolExecutor`` would have to pickle the
+    bound ``Context.run``, and a ``Context`` cannot be pickled (``TypeError``).
+    """
     ctx = contextvars.copy_context()
     return executor.submit(ctx.run, fn, *args, **kwargs)

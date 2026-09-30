@@ -779,11 +779,15 @@ SAFETY_POLICY_VERSION = "safety-policy/v1"
 def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
     """Snapshot the containment-relevant effective flags at admission time.
 
-    ``origin`` records how the pin came to exist: ``admission`` (new run) or
+    ``origin`` records how the pin came to exist: ``admission`` (new run),
     ``resume_reconstructed_safe`` (legacy run resumed after WP1 — it receives
     the SAFE containment policy, never a reconstruction of unsafe legacy
     ambient defaults; reconstruction of an unsafe policy is not approval to
-    resume it).
+    resume it) or ``fork_admission`` (INFRA-9: a fork of such an unpinned
+    legacy base). The fourth origin, ``fork_inherited``, is never captured
+    here: ``fork_safety_policy_v1`` stamps it on a deep copy of the base's pin.
+    Every capture snapshots the ambient Config, which is the safe containment
+    policy only while the operator keeps the WP1 defaults.
     """
     return {
         "version": SAFETY_POLICY_VERSION,
@@ -808,12 +812,19 @@ def fork_safety_policy_v1(base_options: Any) -> Optional[dict[str, Any]]:
 
     Scenario and batch-question forks reuse the base's research and graph and
     continue its forecast, so they keep the base's containment semantics: a
-    deep copy of the base pin with origin ``fork_inherited``. A base admitted
-    before the pin existed yields a capture at fork admission (origin
-    ``fork_admission``: the current safe policy, never a reconstruction of the
-    base's unknown legacy defaults). Returns None when
-    FORK_INHERIT_SAFETY_POLICY is off; the fork then carries no pin and every
-    site reads the ambient Config (legacy).
+    deep copy of the base pin with origin ``fork_inherited`` (every other field,
+    ``pinned_at`` included, is the base's; the base's own origin stays on the
+    base's pin, reachable through the fork's ``base_pipeline_id``). A base
+    admitted before the pin existed yields a capture at fork admission (origin
+    ``fork_admission``: the current ambient policy, which is the safe policy
+    under the default Config, never a reconstruction of the base's unknown
+    legacy defaults). Returns None when FORK_INHERIT_SAFETY_POLICY is off; the
+    fork then carries no pin and every site reads the ambient Config (legacy).
+
+    Forks share the base's ``graph_id``, so a pin with ``sim_graph_feedback``
+    on lets the fork's simulations write into the graph the base and its
+    sibling forks read; callers report that with
+    ``warn_if_fork_feeds_shared_graph``.
     """
     if not bool(getattr(Config, "FORK_INHERIT_SAFETY_POLICY", True)):
         return None
@@ -821,6 +832,26 @@ def fork_safety_policy_v1(base_options: Any) -> Optional[dict[str, Any]]:
     if isinstance(base_policy, dict):
         return {**copy.deepcopy(base_policy), "origin": "fork_inherited"}
     return capture_safety_policy_v1("fork_admission")
+
+
+def warn_if_fork_feeds_shared_graph(policy: Optional[dict[str, Any]], *, fork_id: str,
+                                    base_pipeline_id: str, graph_id: Optional[str]) -> bool:
+    """INFRA-9: warn when a fork's safety pin turns on simulation → graph feedback.
+
+    The fork reuses the base's graph, so with ``sim_graph_feedback`` pinned on
+    its simulations (overlay-injected counterfactual events included) write
+    into the observed graph that the base and every sibling fork read. The pin
+    is kept as the spec requires; this only makes the consequence visible.
+    Returns whether the warning was logged.
+    """
+    if not (isinstance(policy, dict) and policy.get("sim_graph_feedback") and graph_id):
+        return False
+    logger.warning(
+        "[%s] 分叉自 %s 的安全政策钉（origin=%s）开启 sim_graph_feedback：本分叉的模拟活动"
+        "（情景分叉含注入的反事实事件）将写入与 base 及其他分叉共享的图谱 %s。",
+        fork_id, base_pipeline_id, policy.get("origin"), graph_id,
+    )
+    return True
 
 
 def capture_run_shape_v1(options: Any, origin: str) -> Optional[dict[str, Any]]:
@@ -8955,6 +8986,9 @@ class PipelineOrchestrator:
         _safety_policy = fork_safety_policy_v1(base_state.options)
         if _safety_policy is not None:
             new_state.options["safety_policy_v1"] = _safety_policy
+            warn_if_fork_feeds_shared_graph(_safety_policy, fork_id=new_id,
+                                            base_pipeline_id=base_pipeline_id,
+                                            graph_id=base_state.graph_id)
         _evaluation_pin = cls._evaluation_pin(base_state)
         if _evaluation_pin is not None:
             # EVAL-13: a what-if fork of an evaluation run stays in the evaluation lane

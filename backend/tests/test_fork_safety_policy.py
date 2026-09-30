@@ -6,6 +6,9 @@ no-op, so only the admission-time options of each fork are exercised.
 
 from __future__ import annotations
 
+import contextlib
+import logging
+
 import pytest
 
 from app.config import Config
@@ -147,6 +150,64 @@ def test_flag_off_fork_carries_no_pin_and_reads_ambient(roots, monkeypatch, make
         assert off_options[key] == on_options[key], key
     assert po.PipelineOrchestrator._pinned_safety(
         _persisted(off.pipeline_id), "n_forecast_seeds", Config.N_FORECAST_SEEDS) == 1
+
+
+@contextlib.contextmanager
+def _pipeline_warnings():
+    """The mirofish loggers do not propagate to root (caplog misses them): attach a handler."""
+    records = []
+
+    class _Handler(logging.Handler):
+        def emit(self, record):
+            records.append(record.getMessage())
+
+    handler = _Handler(level=logging.WARNING)
+    pipeline_logger = logging.getLogger(po.logger.name)
+    pipeline_logger.addHandler(handler)
+    try:
+        yield records
+    finally:
+        pipeline_logger.removeHandler(handler)
+
+
+def _feedback_warnings(records, fork_id):
+    return [m for m in records if m.startswith(f"[{fork_id}]") and "sim_graph_feedback" in m]
+
+
+@FORKS
+def test_fork_inheriting_graph_feedback_warns_about_the_shared_graph(roots, monkeypatch,
+                                                                     make_fork):
+    fed = _base("pipe_infra9_fed", pinned=True)  # admitted with SIM_GRAPH_FEEDBACK=true
+    quiet = _base("pipe_infra9_quiet", pinned=False)  # legacy base: fork_admission capture
+    _change_ambient(monkeypatch)  # ambient feedback is now off
+
+    with _pipeline_warnings() as records:
+        warned = make_fork(fed.pipeline_id)
+        silent = make_fork(quiet.pipeline_id)
+        monkeypatch.setattr(Config, "FORK_INHERIT_SAFETY_POLICY", False, raising=False)
+        legacy = make_fork(fed.pipeline_id)
+
+    # The inherited pin keeps feedback on and the fork is told which graph it shares.
+    assert warned.options["safety_policy_v1"]["sim_graph_feedback"] is True
+    [message] = _feedback_warnings(records, warned.pipeline_id)
+    assert fed.pipeline_id in message and "graph_infra9" in message
+    assert "fork_inherited" in message
+    # A fork whose pin keeps feedback off, and a knob-off (legacy) fork, stay silent.
+    assert silent.options["safety_policy_v1"]["sim_graph_feedback"] is False
+    assert _feedback_warnings(records, silent.pipeline_id) == []
+    assert _feedback_warnings(records, legacy.pipeline_id) == []
+
+
+def test_shared_graph_warning_helper_contract():
+    warn = po.warn_if_fork_feeds_shared_graph
+    fed = {"origin": "fork_inherited", "sim_graph_feedback": True}
+    with _pipeline_warnings() as records:
+        assert warn(fed, fork_id="pipe_f", base_pipeline_id="pipe_b", graph_id="g1") is True
+        assert warn({**fed, "sim_graph_feedback": False}, fork_id="pipe_f",
+                    base_pipeline_id="pipe_b", graph_id="g1") is False
+        assert warn(fed, fork_id="pipe_f", base_pipeline_id="pipe_b", graph_id=None) is False
+        assert warn(None, fork_id="pipe_f", base_pipeline_id="pipe_b", graph_id="g1") is False
+    assert len(records) == 1 and "g1" in records[0] and "pipe_b" in records[0]
 
 
 def test_fork_policy_helper_contract(monkeypatch):
