@@ -3258,12 +3258,14 @@ def _split_tag(text: str) -> tuple[str, str]:
 # EVIDENCE_QUOTES_PER_FACT quoted strings follow, each optionally bound to a
 # source by an [S<n>] marker written right before it.  Separators, an opening
 # bracket and loose emphasis a finding ends with before its label
-# (_FINDING_TAIL_CHARS: "… [S1] — EVIDENCE:", "… (EVIDENCE: …)") are dropped;
-# emphasis closing a word ("**176 GW** EVIDENCE:") stays.
+# (_FINDING_TAIL_CHARS: "… [S1] — EVIDENCE:", "… (EVIDENCE: …)", and a run of
+# ASCII hyphens with no letter or digit right before it: "… [S1] - EVIDENCE:")
+# are dropped; emphasis closing a word ("**176 GW** EVIDENCE:") and the minus
+# of a rating ("BBB- EVIDENCE:") stay.
 _EVIDENCE_LABEL_RE = re.compile(r"[*_]{0,2}(?:EVIDENCE|Evidence|证据)[*_]{0,2}"
                                 r"(?P<refs>(?:[ \t]?\[S\d{1,9}\])*)[ \t]{0,3}[:：][*_]{0,2}")
 _CLAUSE_LEAD_RE = re.compile(rf"(?:[ \t*_:：,，;；\-–—]|\[S\d{{1,9}}\]|(?i:{_TAG_RE.pattern}))*")
-_FINDING_TAIL_CHARS = " \t*_:：,，;；-–—(（"
+_FINDING_TAIL_CHARS = " \t*_:：,，;；–—(（"
 _QUOTE_OPEN_RE = re.compile("[\"“「]")
 _QUOTE_CLOSERS = {"\"": "\"", "“": "”", "「": "」"}
 _BOUND_MARKER_RE = re.compile(r"\[S(\d{1,9})\]$")
@@ -3277,7 +3279,7 @@ _BOUND_MARKER_TRIM = " \t*_:：,，;；-–—"
 _MONTHS = (r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?"
            r"|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b\.?")
 _UNCHECKABLE_NUMBER_RES = (
-    re.compile(r"\b10[ \t]?\*\*[-−+]?\d{1,3}|(?:\b10[ \t]?)?\^[ \t]?[-−+]?\d{1,3}|(?:\b10)?[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+"
+    re.compile(r"\b10[ \t]?\*\*[ \t]?[-−+]?\d{1,3}|(?:\b10[ \t]?)?\^[ \t]?[-−+]?\d{1,3}|(?:\b10)?[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+"
                r"|(?<=\d)[eE][-+]?\d{1,3}\b"),
     re.compile(r"\b(?:vols?|pp?|nos?|iss)\.[ \t]?\d[\d.,/–-]*|\b(?:article|art\.)[ \t]?(?:no\.?[ \t]?|#[ \t]?)?\d[\d.,/-]*"
                r"|\bdoi(?:[ \t]?[:.]|[ \t])[ \t]?\S+|\barxiv(?:[ \t]?:|\.org/)[ \t]?\S+", re.I),
@@ -3305,9 +3307,22 @@ def _split_evidence_clause(text: str) -> tuple[str, str | None]:
 def _finding_before_clause(text: str) -> str:
     """A finding's text split off before its evidence label, without the
     separators, opening bracket and loose emphasis it ends with
-    (_FINDING_TAIL_CHARS); emphasis closing its last word stays."""
-    kept = text.rstrip(_FINDING_TAIL_CHARS)
-    tail = text[len(kept):]
+    (_FINDING_TAIL_CHARS, and ASCII hyphen runs no letter or digit comes
+    right before); emphasis closing its last word stays, and so does a
+    hyphen ending its last token ("BBB-").  Linear: one backward scan."""
+    end = len(text)
+    while end:
+        if text[end - 1] in _FINDING_TAIL_CHARS:
+            end -= 1
+            continue
+        start = end
+        while start and text[start - 1] == "-":
+            start -= 1
+        if start == end or (start and text[start - 1].isalnum()):
+            break
+        end = start
+    kept = text[:end]
+    tail = text[end:]
     closing = len(tail) - len(tail.lstrip("*_"))
     return kept + tail[:closing] if kept else ""
 
@@ -3394,6 +3409,17 @@ def _outer_quote(clause: str) -> tuple[str, int | None] | None:
     first, last = clause.find('"'), clause.rfind('"')
     text = _collapse(clause[first + 1:last])
     return (text, _bound_sid(clause[:first])) if text else None
+
+
+def _nested_passage(clause: str) -> bool:
+    """Whether a clause's straight quotes are one passage that itself quotes
+    someone ('"The IEA said "176 GW" in its report"') rather than separate
+    quoted strings ('"reached 176 GW" "up from 150 GW"'): a quote the pair
+    scan (:func:`_quote_pairs`) reads as a closer instead opens an inner
+    quote, with whitespace before it and a letter or digit after it."""
+    return any(clause[close] == '"' and close and clause[close - 1].isspace()
+               and close + 1 < len(clause) and clause[close + 1].isalnum()
+               for _, close in _quote_pairs(clause))
 
 
 def _row_search_texts(row: Mapping[str, Any] | None) -> list[str]:
@@ -3575,8 +3601,10 @@ def _apply_evidence(fact: dict, claimed: str, clause: str | None, mode: str, che
 
     ``claimed_tag`` is the tag the agent wrote; ``evidence`` the located
     quotes (when none of the quoted strings is found, a passage with nested
-    straight quotes is tried whole: :func:`_outer_quote`, which can locate a
-    fact's evidence but never fail it);
+    straight quotes is tried whole: :func:`_outer_quote`; its miss fails the
+    fact only when the clause is one passage quoting someone
+    (:func:`_nested_passage`) or a quote of the pair scan missed too, so two
+    separate quotes too short to check are never failed through it);
     ``evidence_status`` verified (a quote located) | failed (quotes
     checked, none located) | absent (no clause, no quoted string or no quote
     that could be checked: never a demotion); ``evidence_unchecked`` (only
@@ -3606,7 +3634,8 @@ def _apply_evidence(fact: dict, claimed: str, clause: str | None, mode: str, che
         whole = checker.locate([outer], fact["sids"])
         if whole.entries:
             check = whole
-        elif check.missed:
+        elif check.missed or _nested_passage(clause):
+            check.missed += whole.missed
             check.near = check.near or whole.near
     entries = check.entries
     fact["claimed_tag"] = claimed

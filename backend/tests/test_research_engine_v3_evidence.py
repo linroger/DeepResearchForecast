@@ -389,14 +389,23 @@ def test_a_tag_or_marker_written_after_the_clause_is_still_parsed():
     (f'- Capacity reached 176 GW — [S99] EVIDENCE: [S1] "{QUOTE_HEAD}" (VERIFIED)', "Capacity reached 176 GW [S1]"),
     (f'- Capacity reached **176 GW** [S1] (VERIFIED) EVIDENCE: "{QUOTE_HEAD}"', "Capacity reached **176 GW** [S1]"),
     (f'- Capacity reached **176 GW** EVIDENCE: [S1] "{QUOTE_HEAD}" (VERIFIED)', "Capacity reached **176 GW** [S1]"),
+    (f'- S&P rates the issuer BBB- EVIDENCE: [S1] "{QUOTE_HEAD}" (VERIFIED)', "S&P rates the issuer BBB- [S1]"),
+    (f'- S&P rates the issuer BBB- EVIDENCE [S1]: "{QUOTE_HEAD}" (VERIFIED)', "S&P rates the issuer BBB- [S1]"),
+    (f'- The outlook points to A- — EVIDENCE: [S1] "{QUOTE_HEAD}" (VERIFIED)', "The outlook points to A- [S1]"),
+    (f'- Capacity reached 176 GW [S1] (VERIFIED) - EVIDENCE: "{QUOTE_HEAD}"', "Capacity reached 176 GW [S1]"),
+    (f'- Capacity reached 176 GW [S1] (VERIFIED) -- EVIDENCE: "{QUOTE_HEAD}"', "Capacity reached 176 GW [S1]"),
+    (f'- Capacity reached 176 GW [S1]-- EVIDENCE: "{QUOTE_HEAD}" (VERIFIED)', "Capacity reached 176 GW [S1]"),
 ], ids=["single_emphasis", "dash", "semicolon", "parenthesised", "cjk_comma", "underscore_emphasis",
         "marker_before_colon", "tag_before_quote", "cjk_tag_before_quote", "unknown_marker", "bold_number",
-        "bold_number_then_label"])
+        "bold_number_then_label", "rating_minus", "rating_minus_marker_before_colon", "rating_minus_then_dash",
+        "spaced_hyphen", "spaced_double_hyphen", "hyphens_after_marker"])
 def test_label_variants_split_the_clause_and_leave_no_separator_behind(bullet, text):
     """Emphasised labels, a marker before the colon, a tag between label and
     quote, separators or an opening bracket before the label: the clause is
     split, its quote located, and the finding ends at its last word or marker
-    (bold closing a word stays)."""
+    (bold closing a word stays, and so does the minus of a rating such as
+    'BBB-': a hyphen run is a separator only when no letter or digit is
+    right before it)."""
     for mode in ("audit", "enforce"):
         (fact,) = post(findings(bullet), mode)
         assert fact["text"] == text and fact["sids"] == [1]
@@ -477,9 +486,33 @@ def test_nested_quotes_and_a_tag_inside_the_quote_marks_do_not_fail_a_real_passa
 
 
 @pytest.mark.parametrize("bullet", [
+    '- Capacity reached 176 GW [S1] (VERIFIED) EVIDENCE: "The IEA said "global data-centre capacity hit 176 GW" '
+    'in its report"',
+    '- Capacity reached 176 GW [S1] (VERIFIED) EVIDENCE: "Officials said "we approved 176 GW of new connections '
+    'last year" today"',
+], ids=["attribution", "officials"])
+def test_a_fabricated_nested_passage_fails_even_when_its_outer_fragments_are_too_short(bullet):
+    """A passage that itself quotes someone ('"X said "…" in …"') is split by
+    the pair scan into its outer fragments, here both under the length floor
+    and unchecked; the passage is checked whole, and when it is not on the
+    page the finding fails: enforce makes it UNVERIFIED, audit records the
+    verdict and keeps the tag."""
+    for mode in ("audit", "enforce"):
+        (fact,) = post(findings(bullet), mode)
+        assert fact["claimed_tag"] == "VERIFIED" and fact["evidence"] == []
+        assert fact["evidence_status"] == "failed" and fact["evidence_unchecked"] == ["length", "length"]
+        assert fact["evidence_verdict"] == "evidence_not_on_page"
+        if mode == "enforce":
+            assert fact["tag"] == "UNVERIFIED" and fact["verification"] == "evidence_not_on_page"
+        else:
+            assert fact["tag"] == "VERIFIED" and "verification" not in fact
+
+
+@pytest.mark.parametrize("bullet", [
     '- Capacity reached 176 GW in 2023, up from 150 GW [S1] (VERIFIED) EVIDENCE: "reached 176 GW" "up from 150 GW"',
     '- 装机容量达到176吉瓦 [S5] (已核实) 证据："国家能源局发布年度统计公报" "装机容量达到176吉瓦"',
-], ids=["english", "cjk"])
+    '- Capacity reached 176 GW in 2023, up from 150 GW [S1] (VERIFIED) EVIDENCE: "reached 176 GW" and "up from 150 GW"',
+], ids=["english", "cjk", "english_joined"])
 def test_the_whole_passage_fallback_never_fails_quotes_too_short_to_check(bullet):
     """Two verbatim quotes, each under the length floor, are unchecked; the
     fallback reading them as one passage ('q1" "q2') finds nothing, and that
@@ -516,7 +549,7 @@ def test_quotes_are_located_in_every_snippet_sighting_and_the_title():
 def test_the_reported_number_audit_skips_years_exponents_and_bibliographic_ids():
     notes = findings(
         "- The survey (vol. 31, pp. 118-126, No. 4, article 5521, doi:10.1000/xyz123) in 2021 and on 14 March "
-        "found 176 GW, about 10^9 kWh, 10**-3 of it or 10⁹ W [S1] (REPORTED)",
+        "found 176 GW, about 10^9 kWh, 10**-3 of it, 10 ** 12 J or 10⁹ W [S1] (REPORTED)",
         "- An analyst expects 12% growth and 9,999 new sites [S2] (REPORTED)",
         "- The programme started in 2019 [S2] (REPORTED)",
         "- Capacity rose to 150 GW in 2022 [S1] (VERIFIED)",
