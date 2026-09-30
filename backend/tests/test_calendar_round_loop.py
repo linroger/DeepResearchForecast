@@ -865,6 +865,8 @@ def test_event_without_poster_or_content_is_skipped_and_logged(tmp_path, monkeyp
     cfg["event_config"]["scheduled_events"] = [
         {"round": 1, "date": "2026-11-05", "content": "[2026-11-05] 事件A发生", "poster_agent_id": None},
         {"round": 1, "date": "2026-11-06", "content": "", "poster_agent_id": 1},
+        # poster id no longer in the agent graph (pruned/renumbered): get_agent raises
+        {"round": 1, "date": "2026-11-07", "content": "[2026-11-07] 事件C发生", "poster_agent_id": 9},
     ]
     _run(cfg, sim_dir)
 
@@ -873,6 +875,7 @@ def test_event_without_poster_or_content_is_skipped_and_logged(tmp_path, monkeyp
     out = capsys.readouterr().out
     assert "第 2 轮定时事件缺发帖者，跳过: '[2026-11-05] 事件A发生'" in out
     assert "第 2 轮定时事件缺内容，跳过: '2026-11-06'" in out
+    assert "第 2 轮定时事件（发帖者 9）注入失败，跳过: KeyError: 9" in out
 
 
 if __name__ == "__main__":

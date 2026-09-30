@@ -28,6 +28,7 @@ from app.services.sim_event_provenance import (  # noqa: E402
     event_post_contents,
     is_injected_row,
     label_event_post,
+    strip_event_label,
 )
 
 RESEARCH_PREFIX = "[WORLD EVENT · scheduled on the research timeline · not a statement by any actor] "
@@ -61,6 +62,16 @@ def test_event_author_label_follows_the_post_label():
     assert event_author_label(RESEARCH_PREFIX + "x") == EVENT_AUTHOR_RESEARCH
     assert event_author_label(SCENARIO_PREFIX + "x") == EVENT_AUTHOR_SCENARIO
     assert EVENT_AUTHOR_RESEARCH.startswith("SCHEDULED WORLD EVENT (research timeline")
+
+
+def test_strip_event_label_inverts_label_event_post():
+    for provenance in (EVENT_PROVENANCE_RESEARCH, EVENT_PROVENANCE_SCENARIO):
+        assert strip_event_label(label_event_post("Event A.", provenance)) == "Event A."
+    assert strip_event_label("  " + RESEARCH_PREFIX + "  Event B.") == "Event B."
+    # text without a provenance label is returned unchanged
+    assert strip_event_label("IBM: Starling on schedule. ") == "IBM: Starling on schedule. "
+    assert strip_event_label("[WORLD EVENT] partial") == "[WORLD EVENT] partial"
+    assert strip_event_label(None) == ""
 
 
 def test_event_post_contents_skips_what_is_never_posted():

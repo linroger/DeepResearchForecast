@@ -784,13 +784,29 @@ def test_event_thread_prompt_renders_world_event_not_the_poster():
               "is_scheduled_event": False, "quoted_is_event": False}
     prompt = rps.build_reaction_prompt(2, "IBM", [event, quote, normal], AGENT_NAMES,
                                        "twitter", "2027-H1", "English")
-    assert f"[1] post_id=5 — {EVENT_AUTHOR}:" in prompt
+    assert f"[1] post_id=5 — {EVENT_AUTHOR}:\n\"BIS adds Origin Quantum to the Entity List.\"" in prompt
     assert "post_id=5 — IBM wrote:" not in prompt and "post_id=5 — you wrote:" not in prompt
-    assert f'  (quoting {EVENT_AUTHOR}: "{EVENT_LABEL}' in prompt
+    # 作者位已说明来源：正文里不再重复 feed 前缀（不挤占截断预算）
+    assert f'  (quoting {EVENT_AUTHOR}: "BIS adds Origin Quantum to the Entity List.")' in prompt
+    assert EVENT_LABEL.strip() not in prompt
     assert "(quoting you:" not in prompt
     assert "post_id=8 — you wrote:" in prompt                     # 非事件帖照旧
     assert "7. A post marked SCHEDULED was placed on the feed" in prompt
+    # 发帖账号（IBM）：库里事件帖记在它名下，自我背书守卫会拒绝点赞——提示里说明
+    assert "Event posts filed under your own account cannot be liked" in prompt
     assert prompt.endswith("You cannot publish a new standalone post in this step.")
+    other = rps.build_reaction_prompt(0, "BIS", [event, quote], AGENT_NAMES,
+                                      "twitter", "2027-H1", "English")
+    assert "7. A post marked SCHEDULED" in other and "filed under your own account" not in other
+
+
+def test_event_label_does_not_eat_the_quoted_event_budget():
+    body = "Commerce publishes the final rule: " + "x" * 200            # 235 字符 < 240
+    quote = {**_thread(7, 1, "Origin: we will appeal the listing."),
+             "quoted": EVENT_LABEL + body, "quoted_author_id": 2,
+             "is_scheduled_event": False, "quoted_is_event": True}
+    prompt = rps.build_reaction_prompt(0, "BIS", [quote], AGENT_NAMES, "twitter", "", "English")
+    assert f'  (quoting {EVENT_AUTHOR}: "{body}")' in prompt
 
 
 def test_prompt_without_event_candidates_is_unchanged():
@@ -806,15 +822,15 @@ def test_prompt_without_event_candidates_is_unchanged():
 def test_memory_note_names_the_world_event_not_the_poster():
     actions = [
         {"agent_id": 1, "action_type": "CREATE_COMMENT",
-         "action_args": {"content": "Origin: we will appeal.", "post_content": EVENT_TEXT + "\n",
-                         "post_author_name": "IBM"}},
+         "action_args": {"content": "Origin: we will appeal.", "post_id": 5,
+                         "post_content": EVENT_TEXT, "post_author_name": "IBM"}},
         {"agent_id": 1, "action_type": "LIKE_POST",
-         "action_args": {"post_content": EVENT_TEXT, "post_author_name": "IBM"}},
+         "action_args": {"post_id": 5, "post_content": EVENT_TEXT, "post_author_name": "IBM"}},
         {"agent_id": 1, "action_type": "CREATE_COMMENT",
-         "action_args": {"content": "Origin: noted.", "post_content": "IBM: Starling on schedule.",
-                         "post_author_name": "IBM"}},
+         "action_args": {"content": "Origin: noted.", "post_id": 6,
+                         "post_content": "IBM: Starling on schedule.", "post_author_name": "IBM"}},
     ]
-    note = rps._reaction_memory_note(1, actions, AGENT_NAMES, {EVENT_TEXT})
+    note = rps._reaction_memory_note(1, actions, AGENT_NAMES, {5})
     assert note == ("# YOUR RESPONSES THIS PERIOD\n"
                     "You responded to the scheduled world event: \"Origin: we will appeal.\"\n"
                     "You endorsed the scheduled world event.\n"
@@ -822,6 +838,77 @@ def test_memory_note_names_the_world_event_not_the_poster():
     legacy = rps._reaction_memory_note(1, actions, AGENT_NAMES)
     assert legacy.startswith("# YOUR RESPONSES THIS PERIOD\nYou replied to IBM's post: ")
     assert "scheduled world event" not in legacy
+
+
+def _add_like(db, author, post_id):
+    conn = sqlite3.connect(db)
+    cur = conn.execute(
+        "INSERT INTO like (user_id, post_id, created_at) VALUES (?, ?, '2026-01-01')",
+        (author, post_id))
+    conn.execute(
+        "INSERT INTO trace (user_id, created_at, action, info) VALUES (?, '2026-01-01', ?, ?)",
+        (author, "like_post", json.dumps({"post_id": post_id, "like_id": cur.lastrowid})))
+    conn.commit()
+    conn.close()
+
+
+def _quoted_event_db(tmp_path):
+    """事件帖（IBM 账号下）+ Origin 对它的引用帖：OASIS 把被引根帖正文复制进引用帖 post.content。"""
+    db = _make_db(tmp_path / "twitter_simulation.db")
+    ev = _add_post(db, 2, EVENT_TEXT)
+    quote = _add_post(db, 1, EVENT_TEXT, original=ev,
+                      quote="Origin: we will appeal the listing in court.")
+    return db, ev, quote
+
+
+def test_scheduled_event_post_ids_match_the_event_post_not_its_quotes(tmp_path):
+    db, ev, quote = _quoted_event_db(tmp_path)
+    other = _add_post(db, 1, "Origin: refrigerators ship on time.")
+    assert rps._scheduled_event_post_ids(db, [ev, quote, other, None, "x"], {EVENT_TEXT}) == {ev}
+    assert rps._scheduled_event_post_ids(db, [ev, quote], set()) == set()
+    assert rps._scheduled_event_post_ids(str(tmp_path / "missing.db"), [ev], {EVENT_TEXT}) == set()
+
+
+def test_reaction_phase_reply_to_a_quote_of_the_event_names_the_quoter(tmp_path, monkeypatch):
+    db, ev, quote = _quoted_event_db(tmp_path)
+    prompts = {}
+
+    class _Helper:
+        def __init__(self, agent, tools):
+            self.agent = agent
+
+        async def astep(self, message):
+            aid = self.agent.agent_id
+            prompts[aid] = message.content
+            if aid == 0:     # BIS 回应并点赞 Origin 的引用帖——回应的是 Origin，不是事件
+                _add_comment(db, 0, quote, "BIS: the appeal has no legal basis.")
+                _add_like(db, 0, quote)
+            else:            # 其余 agent 回应事件帖本身
+                _add_comment(db, aid, ev, f"{AGENT_NAMES[aid]} weighs the listing.")
+                if aid == 1:
+                    _add_like(db, 1, ev)
+
+    monkeypatch.setattr(rps, "_make_reaction_agent", lambda agent, tools: _Helper(agent, tools))
+    agents = {aid: _Agent(aid, ALL_TWITTER_TOOLS) for aid in AGENTS}
+    state = {"window_start": 0, "round_start": 0, "event_contents": {EVENT_TEXT}}
+    asyncio.run(rps.run_reaction_phase(
+        _Env(), db, sorted(agents.items()), _config(), 0, "2026-H2", "twitter",
+        AGENT_NAMES, state, _trace_rowid(db), None, random.Random(7), lambda _m: None))
+
+    assert set(prompts) == {0, 1, 2}
+    assert f"post_id={quote} — Origin Quantum wrote:" in prompts[0]
+    assert f"  (quoting {EVENT_AUTHOR}: " in prompts[0]
+    assert agents[0].memory[0][0] == (
+        "# YOUR RESPONSES THIS PERIOD\n"
+        "You replied to Origin Quantum's post: \"BIS: the appeal has no legal basis.\"\n"
+        "You endorsed (liked) Origin Quantum's post.")
+    assert agents[1].memory[0][0] == (
+        "# YOUR RESPONSES THIS PERIOD\n"
+        "You responded to the scheduled world event: \"Origin Quantum weighs the listing.\"\n"
+        "You endorsed the scheduled world event.")
+    assert agents[2].memory[0][0] == (
+        "# YOUR RESPONSES THIS PERIOD\n"
+        "You responded to the scheduled world event: \"IBM weighs the listing.\"")
 
 
 @pytest.mark.parametrize("provenance_on", [True, False])
@@ -854,11 +941,15 @@ def test_reaction_phase_marks_event_threads(tmp_path, monkeypatch, provenance_on
         assert agents[0].memory[0][0].startswith("# YOUR RESPONSES THIS PERIOD\nYou replied to IBM's post")
 
 
+@pytest.mark.parametrize("platform", ["twitter", "reddit"])
 @pytest.mark.parametrize("flag", [None, "false"])
-def test_round_loop_reaction_sees_scheduled_event_as_world_event(tmp_path, monkeypatch, flag):
+def test_round_loop_reaction_sees_scheduled_event_as_world_event(tmp_path, monkeypatch, flag,
+                                                                 platform):
+    # 两个平台循环各自预置 event_contents、各自写 dynamics_summary——同一断言覆盖两份副本
     sim_dir = str(tmp_path)
-    with open(os.path.join(sim_dir, "twitter_profiles.csv"), "w", encoding="utf-8") as f:
-        f.write("agent_id\n")
+    profile = "twitter_profiles.csv" if platform == "twitter" else "reddit_profiles.json"
+    with open(os.path.join(sim_dir, profile), "w", encoding="utf-8") as f:
+        f.write("agent_id\n" if platform == "twitter" else "[]")
     envs, calls = [], []
 
     async def _fake_graph_gen(profile_path=None, model=None, available_actions=None):
@@ -872,7 +963,10 @@ def test_round_loop_reaction_sees_scheduled_event_as_world_event(tmp_path, monke
         return env
 
     monkeypatch.setattr(rps, "create_model", lambda config, use_boost=False: object())
-    monkeypatch.setattr(rps, "generate_twitter_agent_graph", _fake_graph_gen)
+    monkeypatch.setattr(rps, f"generate_{platform}_agent_graph", _fake_graph_gen)
+    # Reddit 的规范化角色提示封印/校验针对真实档案——替身图无档案，跳过
+    monkeypatch.setattr(rps, "_enforce_canonical_reddit_system_messages", lambda *a, **k: [])
+    monkeypatch.setattr(rps, "_attest_canonical_reddit_system_messages", lambda *a, **k: None)
     monkeypatch.setattr(rps, "build_oasis_platform", lambda *a, **k: None)
     monkeypatch.setattr(rps.oasis, "make", _fake_make)
     monkeypatch.setattr(rps, "get_oasis_semaphore", lambda *a, **k: None)
@@ -884,10 +978,13 @@ def test_round_loop_reaction_sees_scheduled_event_as_world_event(tmp_path, monke
         "round": 0, "date": "2026-10-15", "poster_agent_id": 2, "poster_name": "IBM",
         "content": "BIS adds Origin Quantum to the Entity List."}]
 
-    asyncio.run(rps.run_twitter_simulation(
-        cfg, sim_dir, action_logger=PlatformActionLogger("twitter", sim_dir)))
+    run = rps.run_twitter_simulation if platform == "twitter" else rps.run_reddit_simulation
+    asyncio.run(run(cfg, sim_dir, action_logger=PlatformActionLogger(platform, sim_dir)))
 
-    conn = sqlite3.connect(os.path.join(sim_dir, "twitter_simulation.db"))
+    # 情感状态行以 SYSTEM 记录注入、被 camel 丢弃——两个平台的摘要都如实记录
+    with open(os.path.join(sim_dir, f"{platform}_dynamics_summary.json"), encoding="utf-8") as f:
+        assert json.load(f)["prompt_delivery"] == "system_record_dropped_by_context_creator"
+    conn = sqlite3.connect(os.path.join(sim_dir, f"{platform}_simulation.db"))
     pid, content = conn.execute(
         "SELECT post_id, content FROM post WHERE content LIKE '%Entity List.'").fetchone()
     conn.close()

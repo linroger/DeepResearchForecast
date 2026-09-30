@@ -75,6 +75,17 @@ def event_author_label(content: Any) -> str:
     return EVENT_AUTHOR_RESEARCH
 
 
+def strip_event_label(content: Any) -> str:
+    """The event text without its leading provenance label, for a slot that already names
+    the provenance (``event_author_label``); text without a label is returned unchanged."""
+    text = str(content or "")
+    body = text.lstrip()
+    for head in _LABEL_HEADS:
+        if body.startswith(head):
+            return body[len(head):].lstrip()
+    return text
+
+
 def event_post_contents(events: Optional[Iterable[Any]], labelled: bool) -> Set[str]:
     """The exact strings ``fire_scheduled_events`` posts for ``events``, stripped.
 

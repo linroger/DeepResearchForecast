@@ -110,6 +110,17 @@ def test_outcomes_without_injected_rows_have_no_note(sim_env):
     assert dict(_parse_outcome_actors(text)) == {"Alpha": 1, "Beta": 1}
 
 
+def test_outcomes_of_a_run_without_organic_actions_is_a_no_data_sentence(sim_env):
+    # hollow run: only seeds, event replays and sampled likes. The signal pack drops text that
+    # starts with '（' instead of falling back to the raw per-round mechanism numbers.
+    _write_actions(sim_env / "sim_hollow", [r for r in ROWS if r["round"] == 0
+                                            or r["action_args"].get("is_scheduled_event")
+                                            or r["action_args"].get("is_engagement_sample")])
+    text = _svc().simulation_outcomes("sim_hollow")
+    assert text == "（本次模拟没有行为者自发动作：7 次动作均为注入——种子/时间线事件回放/采样点赞）"
+    assert _parse_outcome_actors(text) == []
+
+
 def test_outcomes_flag_off_is_legacy(sim_env, monkeypatch):
     monkeypatch.setattr(Config, "SIM_EVENT_PROVENANCE", False)
     _write_actions(sim_env / "sim_legacy", ROWS)
@@ -159,6 +170,33 @@ def test_coalition_keeps_real_shared_targets(sim_env):
     text = _svc().coalition_map("g", "sim_coal2")
     assert "- 派系 1（2 人）: Beta、Gamma" in text or "- 派系 1（2 人）: Gamma、Beta" in text
     assert "Alpha" not in text.split("派系 1")[1]
+
+
+def test_coalition_keeps_engagement_with_an_actors_quote_of_an_event(sim_env):
+    # OASIS copies the quoted root text into the quote row's post.content, so replies to and
+    # likes of Alpha's quote carry the event text with Alpha as the author: that is real
+    # actor-to-actor engagement. Engaging the event post itself (Beta, Gamma in ROWS) is not.
+    event_post = {"post_id": 3, "post_content": EVENT, "post_author_name": FALLBACK}
+    quote = {"post_id": 12, "post_content": EVENT, "post_author_name": "Alpha"}
+    rows = [
+        _row(1, 0, FALLBACK, "CREATE_POST", content=EVENT, is_scheduled_event=True),
+        _row(1, 2, "Beta", "LIKE_POST", **event_post),
+        _row(1, 3, "Gamma", "CREATE_COMMENT", content="Gamma: this hurts.", **event_post),
+        _row(2, 1, "Alpha", "QUOTE_POST", quoted_id=3, new_post_id=12, original_content=EVENT,
+             original_author_name=FALLBACK, quote_content="Alpha: this is overdue."),
+        _row(2, 4, "Delta", "CREATE_COMMENT", content="Delta: no, it is premature.", **quote),
+        _row(2, 5, "Epsilon", "LIKE_POST", **quote),
+        # a repost of Alpha's quote names Alpha too (the root text rides along)
+        _row(2, 6, "Zeta", "REPOST", new_post_id=13, original_content=EVENT,
+             original_author_name="Alpha"),
+    ]
+    _write_actions(sim_env / "sim_coal_quote", rows)
+    text = _svc().coalition_map("g", "sim_coal_quote")
+    lines = text.splitlines()
+    assert len(lines) == 2 and lines[1].startswith("- 派系 1（3 人）: ")
+    assert set(lines[1].split(": ", 1)[1].split("、")) == {"Delta", "Epsilon", "Zeta"}
+    # the event post's account is not a shared target: Beta and Gamma stay apart
+    assert "Beta" not in text and "Gamma" not in text
 
 
 def test_coalition_flag_off_is_legacy(sim_env, monkeypatch):

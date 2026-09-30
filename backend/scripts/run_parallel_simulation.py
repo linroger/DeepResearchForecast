@@ -2580,8 +2580,8 @@ async def fire_scheduled_events(env, event_config, loop_round, agent_names, acti
     返回成功触发的事件数。
 
     SIM-5：同一发帖者同轮多个事件按列表累积（此前按 agent 覆盖，只发出最后一条却全部计数）；
-    缺发帖者/内容的事件逐条记日志（此前静默丢弃）——两者不受开关影响。SIM_EVENT_PROVENANCE
-    开（默认）→ 发帖与落账内容带来源前缀，落账 action_args 附 event_provenance。
+    缺发帖者/内容或发帖者不可用的事件逐条记日志（此前静默丢弃）——两者不受开关影响。
+    SIM_EVENT_PROVENANCE 开（默认）→ 发帖与落账内容带来源前缀，落账 action_args 附 event_provenance。
     """
     events = event_config.get("scheduled_events", []) or []
     due = [e for e in events if int(e.get("round", -1)) == loop_round]
@@ -2622,7 +2622,9 @@ async def fire_scheduled_events(env, event_config, loop_round, agent_names, acti
                     action_args=logged_args,
                 )
             fired += 1
-        except Exception:
+        except Exception as e:  # noqa: BLE001 — 如发帖者不在 agent 图中（裁剪/重编号）
+            log_info(f"第 {loop_round + 1} 轮定时事件（发帖者 {agent_id}）注入失败，跳过: "
+                     f"{type(e).__name__}: {e}")
             continue
     if actions:
         try:
@@ -4597,7 +4599,8 @@ def build_reaction_prompt(
     """回应阶段的用户提示：候选帖（含已有回复与相关原因）+ 作答要求。
 
     SIM-5：定时事件帖（is_scheduled_event / quoted_is_event）的作者位渲染为来源标注
-    （SCHEDULED WORLD EVENT …），绝不渲染成发帖行为者「X wrote:」；无事件候选 → 逐字节不变。"""
+    （SCHEDULED WORLD EVENT …），绝不渲染成发帖行为者「X wrote:」；作者位已说明来源，正文去掉
+    feed 前缀再截断（不挤占事件正文）；无事件候选 → 逐字节不变。"""
     def who(aid: Any) -> str:
         try:
             return agent_names.get(int(aid), f"Agent_{int(aid)}")
@@ -4606,7 +4609,10 @@ def build_reaction_prompt(
 
     has_event = any(c.get("is_scheduled_event") or c.get("quoted_is_event") for c in candidates)
     if has_event:
-        from app.services.sim_event_provenance import event_author_label
+        from app.services.sim_event_provenance import event_author_label, strip_event_label
+    # 发帖账号本身：事件帖在库里记在它名下，自我背书守卫会拒绝 like_post——提前说明
+    own_event = any(c.get("is_scheduled_event") and c.get("author_id") == reactor_id
+                    for c in candidates)
 
     reddit = platform == "reddit"
     lines = [
@@ -4617,22 +4623,25 @@ def build_reaction_prompt(
         "",
     ]
     for idx, cand in enumerate(candidates, start=1):
+        content = cand.get("content")
         if cand.get("is_scheduled_event"):
-            lines.append(f"[{idx}] post_id={cand['post_id']} — "
-                         f"{event_author_label(cand.get('content'))}:")
+            lines.append(f"[{idx}] post_id={cand['post_id']} — {event_author_label(content)}:")
+            content = strip_event_label(content)
         else:
             own = cand.get("author_id") == reactor_id
             author = "you" if own else who(cand.get("author_id"))
             lines.append(f"[{idx}] post_id={cand['post_id']} — {author} wrote:")
-        lines.append('"' + _truncate_text(cand.get("content"), _REACTION_POST_CHARS) + '"')
+        lines.append('"' + _truncate_text(content, _REACTION_POST_CHARS) + '"')
         if cand.get("quoted"):
             quoted_by = cand.get("quoted_author_id")
+            quoted = cand["quoted"]
             if cand.get("quoted_is_event"):
-                source = event_author_label(cand["quoted"])
+                source = event_author_label(quoted)
+                quoted = strip_event_label(quoted)
             else:
                 source = who(quoted_by) if quoted_by is not None else "another post"
             lines.append(
-                f'  (quoting {source}: "' + _truncate_text(cand["quoted"], _REACTION_QUOTED_CHARS) + '")'
+                f'  (quoting {source}: "' + _truncate_text(quoted, _REACTION_QUOTED_CHARS) + '")'
             )
         comments = cand.get("comments") or []
         if comments:
@@ -4670,6 +4679,8 @@ def build_reaction_prompt(
         lines.append(
             "7. A post marked SCHEDULED was placed on the feed by the simulation's event timeline; "
             "no actor said it. Respond to the event itself, not to the account it appears under."
+            + (" Event posts filed under your own account cannot be liked; reply to them instead."
+               if own_event else "")
         )
     lines.append("You cannot publish a new standalone post in this step.")
     return "\n".join(lines).strip()
@@ -4690,14 +4701,47 @@ def _make_reaction_agent(agent, tools: List[Any]):
     )
 
 
+def _scheduled_event_post_ids(db_path: str, post_ids: Any, event_contents: Any) -> set:
+    """SIM-5：post_ids 中哪些是定时事件帖本身——原帖（original_post_id 为空）且正文属于
+    event_contents。
+
+    按帖子身份判断，不能只比 post_content：OASIS quote_post 把被引根帖正文复制进引用帖的
+    post.content，对「某行为者引用事件」的评论/点赞也带着事件正文，回应的却是引用者的评论。
+    无事件/无目标/缺表/任何 sqlite 异常 → 空集（ResponseLog 退回旧措辞，degrade-safe）。"""
+    ids = set()
+    for pid in post_ids or ():
+        try:
+            ids.add(int(pid))
+        except (TypeError, ValueError):
+            continue
+    if not ids or not event_contents or not os.path.exists(db_path):
+        return set()
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            ordered = sorted(ids)
+            placeholders = ",".join("?" for _ in ordered)
+            rows = conn.execute(
+                "SELECT post_id, content FROM post WHERE original_post_id IS NULL "
+                f"AND post_id IN ({placeholders})",
+                ordered,
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001
+        return set()
+    return {int(pid) for pid, content in rows if str(content or "").strip() in event_contents}
+
+
 def _reaction_memory_note(
     agent_id: int, actions: List[Dict[str, Any]], agent_names: Dict[int, str],
-    event_contents: Any = frozenset(),
+    event_post_ids: Any = frozenset(),
 ) -> str:
     """把某 agent 本阶段的回应动作压成一条简短记忆（供后续轮次保持连续性）。
 
-    SIM-5：回应对象是定时事件帖（post_content ∈ event_contents）时不写「You replied to X's
-    post」——事件不是发帖行为者说的话；event_contents 为空 → 逐字节不变。"""
+    SIM-5：回应对象是定时事件帖本身（post_id ∈ event_post_ids，见 _scheduled_event_post_ids）
+    时不写「You replied to X's post」——事件不是发帖行为者说的话；对他人引用事件的帖子的回应
+    照旧记为回应引用者。event_post_ids 为空 → 逐字节不变。"""
     parts: List[str] = []
     for action in actions:
         if action.get("agent_id") != agent_id:
@@ -4705,8 +4749,12 @@ def _reaction_memory_note(
         kind = action.get("action_type")
         args = action.get("action_args") or {}
         target = args.get("post_author_name") or args.get("comment_author_name") or "another actor"
-        on_event = (bool(event_contents) and kind in ("CREATE_COMMENT", "LIKE_POST")
-                    and str(args.get("post_content") or "").strip() in event_contents)
+        on_event = False
+        if event_post_ids and kind in ("CREATE_COMMENT", "LIKE_POST"):
+            try:
+                on_event = int(args.get("post_id")) in event_post_ids
+            except (TypeError, ValueError):
+                on_event = False
         if kind == "CREATE_COMMENT":
             text = _truncate_text(args.get("content"), _REACTION_NOTE_CHARS)
             if on_event:
@@ -4836,8 +4884,12 @@ async def run_reaction_phase(
         # 连续性：把各自的回应压成一条 USER 记忆（SYSTEM 记录会被 camel 上下文构造器丢弃）。
         try:
             from camel.types import OpenAIBackendRole
+            event_post_ids = _scheduled_event_post_ids(
+                db_path, [(a.get("action_args") or {}).get("post_id") for a in actions],
+                event_contents,
+            )
             for aid, agent, _prompt in plans:
-                note = _reaction_memory_note(aid, actions, agent_names, event_contents)
+                note = _reaction_memory_note(aid, actions, agent_names, event_post_ids)
                 if note and hasattr(agent, "update_memory"):
                     agent.update_memory(
                         BaseMessage.make_user_message(role_name="ResponseLog", content=note),

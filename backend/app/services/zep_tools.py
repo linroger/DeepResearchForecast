@@ -2478,6 +2478,13 @@ class ZepToolsService:
                 return s.get("organic_action_types", s.get("action_types")) or {}
 
             ranked = [s for s in stats if _count(s) > 0]
+            if stats and not ranked:
+                # 全部动作都是注入：以「（」开头的无数据句，报告信号包据此整块自抑制，
+                # 不把逐轮动作量等机制数字回退进章节提示（WAVE9/LOOP-015）。
+                total = sum(int(s.get("total_actions", 0) or 0) for s in stats)
+                return ("（本次模拟没有行为者自发动作"
+                        + (f"：{total} 次动作均为注入——种子/时间线事件回放/采样点赞" if total else "")
+                        + "）")
             header = f"### 最活跃 Agent（Top {top_n}，按自发动作数）"
         else:
             def _count(s):
@@ -2533,33 +2540,38 @@ class ZepToolsService:
         # SIM-5（SIM_EVENT_PROVENANCE，默认开）：对定时事件帖的回应是对新闻的反应，不是与发帖
         # 账号（名字匹配/最高影响力回退的行为者）的结盟证据——不把其作者名计为互动对象；
         # 事件回放行与采样点赞（随机采样，非 agent 选择）整行跳过。开关关 → 旧聚类不变。
+        # 事件帖按 (正文, 发帖账号) 识别而非只比正文：OASIS 引用帖把被引根帖正文复制进
+        # post.content，对「另一行为者引用事件」的互动带着事件正文、作者却是引用者——那是
+        # 真实的行为者间互动，必须保留。
         provenance_on = bool(getattr(Config, "SIM_EVENT_PROVENANCE", True))
-        event_contents: set = set()
+        event_posts: set = set()
         if provenance_on:
-            event_contents = {
-                str((a.action_args or {}).get("content", "") or "").strip()
+            event_posts = {
+                (str((a.action_args or {}).get("content", "") or "").strip(),
+                 str(a.agent_name or "").strip())
                 for a in actions if (a.action_args or {}).get("is_scheduled_event")
             }
-            event_contents.discard("")
+            event_posts = {key for key in event_posts if key[0]}
+        # 作者键 → 该作者所写帖子的正文键（用于识别「该目标就是事件帖本身」）
+        author_content_keys = {"post_author_name": "post_content",
+                               "original_author_name": "original_content",
+                               "quoted_author_name": "original_content"}
         agent_targets: Dict[int, set] = {}
         agent_name: Dict[int, str] = {}
         for a in actions:
             agent_name[a.agent_id] = a.agent_name
             args = a.action_args or {}
-            skip_keys: set = set()
-            if provenance_on:
-                if args.get("is_scheduled_event") or args.get("is_engagement_sample"):
-                    continue
-                if str(args.get("post_content", "") or "").strip() in event_contents:
-                    skip_keys.add("post_author_name")
-                if str(args.get("original_content", "") or "").strip() in event_contents:
-                    skip_keys.update(("original_author_name", "quoted_author_name"))
+            if provenance_on and (args.get("is_scheduled_event") or args.get("is_engagement_sample")):
+                continue
             for k in target_keys:
-                if k in skip_keys:
-                    continue
                 v = str(args.get(k, "") or "").strip()
-                if v:
-                    agent_targets.setdefault(a.agent_id, set()).add(v)
+                if not v:
+                    continue
+                content_key = author_content_keys.get(k)
+                if (event_posts and content_key
+                        and (str(args.get(content_key, "") or "").strip(), v) in event_posts):
+                    continue
+                agent_targets.setdefault(a.agent_id, set()).add(v)
         if not agent_targets:
             return "（本次模拟没有可用于聚类的定向互动，无法形成派系图）"
 
