@@ -25,7 +25,10 @@ tools (simulation_outcomes, coalition_map incl. faction_brief's fallback,
 opinion_shift, scenario_diff) and every consumer of a what-if report's baseline
 (signal-pack diff block, comparison table, scenario_diff tool, outline diff
 sweep); the baseline verdict is written as quality.baseline_signal_pack_health.
-The summary is read once per simulation per report.
+The summary is read once per simulation per report. A comparison chapter whose
+table is suppressed carries a reader-facing line (no health field, no method
+words, clean under the report's leak linter), and the gated tools are neither
+listed in the prompts / native schemas nor nudged by the ReACT loop.
 """
 
 import json
@@ -39,8 +42,10 @@ import pytest
 import app.config as cfgmod
 import app.services.graphiti_client.runtime as rt_mod
 from app.config import Config
+from app.services import report_lint
 from app.services.report_agent import (
-    PLAN_USER_PROMPT_TEMPLATE, ReportAgent, ReportManager, salience_tiers_from_outcomes)
+    PLAN_USER_PROMPT_TEMPLATE, ReportAgent, ReportManager, ReportOutline, ReportSection,
+    salience_tiers_from_outcomes)
 from app.services.simulation_runner import SimulationRunner
 from app.services.zep_tools import ZepToolsService
 
@@ -473,8 +478,6 @@ def test_knob_defaults_on_and_is_documented():
         assert re.search(r"^# REPORT_SIGNAL_PACK_HEALTH_GATE=true\s+# REPORT-5", fh.read(), re.M)
 
 
-
-
 # ─────────────── FU-3: tools, outline and what-if baselines (REPORT-5 follow-up) ───────────────
 _BASE_NOTE = ("⚠️ 基线模拟未产出可用的行为数据（simulation_health={health}）——本报告不做基线与情景的"
               "行为对比；正文不得引用任何基线 vs 情景的行为差值。")
@@ -862,31 +865,85 @@ def test_comparison_table_unchanged_for_usable_runs_and_with_the_knob_off(run_st
     assert _table_agent()._scenario_diff_structured() == healthy
 
 
-def test_comparison_chapter_gets_the_line_instead_of_the_table(run_state, table_data, monkeypatch):
-    body = "正文：两种情景的差异只依据研究材料讨论。"
+# The reader-facing lines the comparison chapter carries in the table's place (copied, not
+# imported). Unlike the prompt-side lines above they ship in the published body, so they carry
+# no health field, no method words and no instruction to the writer.
+_BODY_NO_SCENARIO = {
+    "Chinese": "> 本情景没有可用的对比数据，本章仅依据研究材料讨论本情景与基线的差异。",
+    "English": ("> No usable comparison data is available for this scenario, so this chapter compares it "
+                "with the baseline using the research sources only."),
+}
+_BODY_NO_BASELINE = {
+    "Chinese": "> 基线没有可用的对比数据，本章仅依据研究材料讨论本情景与基线的差异。",
+    "English": ("> No usable comparison data is available for the baseline, so this chapter compares this "
+                "scenario with it using the research sources only."),
+}
+_CHAPTER_BODY = "正文：两种情景的差异只依据研究材料讨论。"
+
+
+def _comparison_chapter(report_id, language):
+    agent = _table_agent()
+    agent.output_language = language
+    return agent._prepend_comparison_table(report_id, _CHAPTER_BODY)
+
+
+@pytest.mark.parametrize("language", ["Chinese", "English"])
+def test_comparison_chapter_gets_a_reader_line_instead_of_the_table(run_state, table_data, language):
+    body = _CHAPTER_BODY
     run_state("ok")
     _write_summary(BASE_SIM_ID, "ok")
-    out = _table_agent()._prepend_comparison_table("r_fu3_ok", body)
+    out = _comparison_chapter("r_fu3_ok", language)
     assert out.startswith(_TABLE_HEAD) and out.endswith("\n\n" + body)
     assert (table_data / "r_fu3_ok" / "comparison.json").exists()
 
-    # hollow baseline + healthy fork: the baseline line in the table's place, no comparison.json
-    _write_summary(BASE_SIM_ID, "hollow")
-    assert (_table_agent()._prepend_comparison_table("r_fu3_base", body)
-            == _BASE_NOTE.format(health="hollow") + "\n\n" + body)
-    assert not (table_data / "r_fu3_base").exists()
+    # unusable baseline + healthy fork: the baseline reader line in the table's place, no comparison.json
+    for base_health in _UNUSABLE:
+        _write_summary(BASE_SIM_ID, base_health)
+        report_id = f"r_fu3_base_{base_health}"
+        assert _comparison_chapter(report_id, language) == _BODY_NO_BASELINE[language] + "\n\n" + body
+        assert not (table_data / report_id).exists()
 
-    # the run itself unusable: REPORT-5's line (it wins over the baseline's)
-    run_state("errored")
-    assert (_table_agent()._prepend_comparison_table("r_fu3_own", body)
-            == _NO_BEHAVIOUR.format(health="errored") + "\n\n" + body)
-    assert not (table_data / "r_fu3_own").exists()
+    # the run itself unusable: the scenario reader line (it wins over the baseline's)
+    for own_health in _UNUSABLE:
+        run_state(own_health)
+        report_id = f"r_fu3_own_{own_health}"
+        assert _comparison_chapter(report_id, language) == _BODY_NO_SCENARIO[language] + "\n\n" + body
+        assert not (table_data / report_id).exists()
 
     # no table for another reason (missing trajectory): the chapter stays as it was
     run_state("ok")
     _write_summary(BASE_SIM_ID, "ok")
     os.remove(os.path.join(Config.OASIS_SIMULATION_DATA_DIR, BASE_SIM_ID, "world_state_trajectory.json"))
-    assert _table_agent()._prepend_comparison_table("r_fu3_missing", body) == body
+    assert _comparison_chapter("r_fu3_missing", language) == body
+
+
+# Words a published body must never carry for these lines: the health field and its values,
+# the banned method vocabulary (SECTION_SYSTEM_PROMPT_TEMPLATE's 硬性禁令) and writer instructions.
+_NOT_FOR_READERS = ("simulation_health", "hollow", "errored", "模拟", "推演", "派系", "智能体",
+                    "simulation", "simulated", "agent", "正文不得", "不得", "⚠️")
+
+
+@pytest.mark.parametrize("language", ["Chinese", "English"])
+def test_comparison_reader_lines_pass_the_report_leak_linter(run_state, table_data, language):
+    for line in (_BODY_NO_SCENARIO[language], _BODY_NO_BASELINE[language]):
+        assert report_lint.leakage_hits(line) == []
+        assert report_lint.strip_leakage_sentences(line)[1] == 0
+        assert not [w for w in _NOT_FOR_READERS if w.lower() in line.lower()]
+    # the chapter as published: own run errored, and a hollow baseline under a healthy fork
+    run_state("errored")
+    _write_summary(BASE_SIM_ID, "ok")
+    own = _comparison_chapter("r_fu3_lint_own", language)
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, "hollow")
+    base = _comparison_chapter("r_fu3_lint_base", language)
+    for chapter, line in ((own, _BODY_NO_SCENARIO[language]), (base, _BODY_NO_BASELINE[language])):
+        assert chapter.startswith(line)
+        assert report_lint.leakage_hits(chapter) == []
+        assert report_lint.strip_leakage_sentences(chapter)[1] == 0
+    # what this guards against: the prompt-side line is flagged by the linter (it would be
+    # rewritten or deleted at publication), the baseline one ships an internal field
+    assert report_lint.leakage_hits(_NO_BEHAVIOUR.format(health="errored"))
+    assert "simulation_health" in _BASE_NOTE
 
 
 # ───────────────────── baseline verdict in forecast.json quality ─────────────────────
@@ -942,3 +999,174 @@ def test_no_baseline_verdict_for_usable_baselines_plain_reports_or_the_knob_off(
     monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
     quality = _finalize_quality(tmp_path, monkeypatch, "r_fu3_off")
     assert "baseline_signal_pack_health" not in quality and "signal_pack_health" not in quality
+
+
+# ───────────────── advertised tools: gated tools are neither listed nor nudged ─────────────────
+_ALL_GATED = frozenset({"simulation_outcomes", "opinion_shift", "coalition_map", "scenario_diff"})
+
+
+def _listing_agent(monkeypatch, *, base=BASE_SIM_ID):
+    monkeypatch.setattr(Config, "GRAPH_COMMUNITY_RETRIEVAL", False, raising=False)
+    agent = _tool_agent(base=base)
+    agent.tools = agent._define_tools()
+    return agent
+
+
+# The three renderers as they were before FU-3 (copied): the golden listings are built from them.
+def _legacy_tools_description(tools):
+    parts = ["可用工具："]
+    for name, tool in tools.items():
+        params = ", ".join([f"{k}: {v}" for k, v in tool["parameters"].items()])
+        parts.append(f"- {name}: {tool['description']}")
+        if params:
+            parts.append(f"  参数: {params}")
+    return "\n".join(parts)
+
+
+def _legacy_usage_hints(tools):
+    lines = [f"- {name}: {ReportAgent._TOOL_HINT_SUMMARIES[name]}"
+             for name in tools if name in ReportAgent._TOOL_HINT_SUMMARIES]
+    return "\n".join(lines) if lines else "（按上方工具描述使用）"
+
+
+def _legacy_schemas(tools):
+    return [{"type": "function", "function": {
+        "name": name, "description": tools[name].get("description", name),
+        "parameters": {"type": "object", "properties": {
+            p: {"type": "string", "description": str(d)} for p, d in tools[name]["parameters"].items()}}}}
+        for name in sorted(tools)]
+
+
+def _assert_listings(agent, hidden):
+    shown = {name: tool for name, tool in agent.tools.items() if name not in hidden}
+    assert agent._get_tools_description() == _legacy_tools_description(shown)
+    assert agent._tool_usage_hints() == _legacy_usage_hints(shown)
+    assert agent._to_openai_tool_schemas() == _legacy_schemas(shown)
+
+
+@pytest.mark.parametrize("health", _UNUSABLE)
+def test_gated_tools_are_not_advertised_on_an_unusable_run(run_state, monkeypatch, health):
+    run_state(health)
+    _write_summary(BASE_SIM_ID, "ok")
+    agent = _listing_agent(monkeypatch)
+    assert agent._gated_behaviour_tools() == _ALL_GATED
+    _assert_listings(agent, _ALL_GATED)
+    # still defined: a model that calls one anyway gets the line, not "unknown tool"
+    assert _ALL_GATED <= set(agent.tools)
+    assert agent._execute_tool("scenario_diff", {}) == _NO_BEHAVIOUR.format(health=health)
+    # a plain report has no scenario_diff to hide
+    plain = _listing_agent(monkeypatch, base=None)
+    assert plain._gated_behaviour_tools() == _ALL_GATED - {"scenario_diff"}
+    _assert_listings(plain, _ALL_GATED)
+
+
+@pytest.mark.parametrize("base_health", _UNUSABLE)
+def test_an_unusable_baseline_hides_only_scenario_diff(run_state, monkeypatch, base_health):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, base_health)
+    agent = _listing_agent(monkeypatch)
+    assert agent._gated_behaviour_tools() == {"scenario_diff"}
+    _assert_listings(agent, {"scenario_diff"})
+
+
+@pytest.mark.parametrize("own_health", [None, "ok", "truncated", "stalled", "{not json"])
+def test_tool_listings_byte_identical_on_usable_runs_and_with_the_knob_off(run_state, monkeypatch,
+                                                                           own_health):
+    if own_health is None:
+        os.makedirs(os.path.join(SimulationRunner.RUN_STATE_DIR, SIM_ID), exist_ok=True)
+    elif own_health.startswith("{"):
+        run_state(raw=own_health)
+    else:
+        run_state(own_health)
+    for base_health in _USABLE_BASELINES:
+        _write_summary(BASE_SIM_ID, base_health)
+        agent = _listing_agent(monkeypatch)
+        assert agent._gated_behaviour_tools() == frozenset(), base_health
+        _assert_listings(agent, set())
+    run_state("hollow")
+    _write_summary(BASE_SIM_ID, "errored")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    agent = _listing_agent(monkeypatch)
+    assert agent._gated_behaviour_tools() == frozenset()
+    _assert_listings(agent, set())
+
+
+_REACT_BODY = "这是一段足够长的中文正文内容。" * 60
+
+
+class _ScriptLLM:
+    """chat() replays scripted replies and records every message list it was sent."""
+
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.calls = []
+
+    def supports_native_tools(self):
+        return False
+
+    def chat(self, messages=None, temperature=0.3, max_tokens=4096, **kw):
+        self.calls.append([dict(m) for m in messages])
+        return self.replies.pop(0) if self.replies else "Final Answer: " + _REACT_BODY
+
+
+def _react_nudges(monkeypatch):
+    """Runs one ReACT section (an early answer, one quick_search, the answer) and returns the
+    tool sets named by the insufficient-tools nudge and by the observation's unused-tools hint."""
+    agent = _listing_agent(monkeypatch)
+    for name, value in (("situation_brief", ""), ("sources", []), ("research_report", ""),
+                        ("output_language", "Chinese"), ("_background_block", ""),
+                        ("_sources_index", ""), ("_signal_pack", ""), ("_forecast_spine", None),
+                        ("_forecast_spine_block", ""), ("_retrieval_query", None),
+                        ("_outline_degraded", False), ("_outline_summary", ""),
+                        ("_section_tool_calls", 0), ("report_logger", None), ("console_logger", None),
+                        ("MIN_TOOL_CALLS_PER_SECTION", 1), ("MAX_TOOL_CALLS_PER_SECTION", 12)):
+        setattr(agent, name, value)
+    agent._execute_tool = lambda name, params, report_context="": f"RESULT[{name}]"
+    agent.llm = _ScriptLLM([
+        "Final Answer: " + _REACT_BODY,
+        '<tool_call>\n{"name": "quick_search", "parameters": {"query": "q"}}\n</tool_call>',
+        "Final Answer: " + _REACT_BODY,
+    ])
+    section = ReportSection(title="正文1")
+    result = agent._generate_section_react(section, ReportOutline(title="T", summary="S", sections=[section]),
+                                           previous_sections=[])
+    assert _REACT_BODY in result
+    users = [m["content"] for m in agent.llm.calls[-1] if m.get("role") == "user"]  # the full history
+    early = [set(m.group(1).split(", ")) for t in users for m in re.finditer(r"推荐用一下他们: ([^）]*)）", t)]
+    later = [set(m.group(1).split("、")) for t in users for m in re.finditer(r"可补充视角的未用工具: ([^）]*)）", t)]
+    assert len(early) == 1 and len(later) == 1
+    system = agent.llm.calls[-1][0]["content"]
+    return early[0], later[0], system
+
+
+_RETRIEVAL_TOOLS = {"insight_forge", "panorama_search", "quick_search"}
+
+
+@pytest.mark.parametrize("health", _UNUSABLE)
+def test_react_loop_never_nudges_gated_tools(run_state, monkeypatch, health):
+    run_state(health)
+    _write_summary(BASE_SIM_ID, "ok")
+    early, later, system = _react_nudges(monkeypatch)
+    assert early == _RETRIEVAL_TOOLS and later == _RETRIEVAL_TOOLS - {"quick_search"}
+    assert not [name for name in _ALL_GATED if f"- {name}:" in system]
+    # an unusable baseline under a healthy fork: only scenario_diff drops out
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, health)
+    early, later, system = _react_nudges(monkeypatch)
+    assert early == _RETRIEVAL_TOOLS | (_ALL_GATED - {"scenario_diff"})
+    assert "- scenario_diff:" not in system and "- simulation_outcomes:" in system
+
+
+def test_react_loop_nudges_every_tool_on_usable_runs_and_with_the_knob_off(run_state, monkeypatch):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, "ok")
+    early, later, system = _react_nudges(monkeypatch)
+    assert early == _RETRIEVAL_TOOLS | _ALL_GATED
+    assert later == (_RETRIEVAL_TOOLS | _ALL_GATED) - {"quick_search"}
+    assert all(f"- {name}:" in system for name in _ALL_GATED)
+    run_state("hollow")
+    _write_summary(BASE_SIM_ID, "errored")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    early, later, system = _react_nudges(monkeypatch)
+    assert early == _RETRIEVAL_TOOLS | _ALL_GATED
+    assert all(f"- {name}:" in system for name in _ALL_GATED)

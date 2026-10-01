@@ -1112,12 +1112,27 @@ _SIGNAL_PACK_NO_BEHAVIOUR_NOTE = (
     "⚠️ 本次模拟未产出可用的行为数据（simulation_health={health}）——这不是「行为者无反应」的发现；"
     "正文不得引用任何基于模拟行为量或派系聚类的推演结论。"
 )
-# FU-3：情景报告的基线模拟非健康（_SIGNAL_PACK_HEALTH_SKIPS 里的状态）时，基线的每个消费方
-# （信号包的情景差异块、对比表、scenario_diff 工具、大纲的差异预取）改给这一行，不给基线数据。
+# FU-3：情景报告的基线模拟非健康（_SIGNAL_PACK_HEALTH_SKIPS 里的状态）时，基线的提示词侧消费方
+# （信号包的情景差异块、scenario_diff 工具、大纲的差异预取）改给这一行，不给基线数据；对比表
+# 的表位（成稿正文）改给下面的读者可见说明行。
 _BASELINE_NO_BEHAVIOUR_NOTE = (
     "⚠️ 基线模拟未产出可用的行为数据（simulation_health={health}）——本报告不做基线与情景的行为对比；"
     "正文不得引用任何基线 vs 情景的行为差值。"
 )
+# FU-3：对比章节正文里替代对比表的读者可见说明行（按成稿语言取一行）。上面两行写给撰写模型
+# （带健康字段、方法学词汇与对正文的指令），进成稿会被泄漏 lint 改写或删除、或把内部字段带给
+# 读者；这里只陈述「没有可用的对比数据，本章依据研究材料」。健康裁定只记在
+# quality.signal_pack_health / quality.baseline_signal_pack_health，不进正文。
+_COMPARISON_NO_SCENARIO_DATA_LINE = {
+    "zh": "> 本情景没有可用的对比数据，本章仅依据研究材料讨论本情景与基线的差异。",
+    "en": ("> No usable comparison data is available for this scenario, so this chapter compares it "
+           "with the baseline using the research sources only."),
+}
+_COMPARISON_NO_BASELINE_DATA_LINE = {
+    "zh": "> 基线没有可用的对比数据，本章仅依据研究材料讨论本情景与基线的差异。",
+    "en": ("> No usable comparison data is available for the baseline, so this chapter compares this "
+           "scenario with it using the research sources only."),
+}
 # 部分 / 降级完成的运行：块全部保留，包头后附审慎提示。
 _SIGNAL_PACK_PARTIAL_HEALTHS = ("truncated", "llm_degraded")
 _SIGNAL_PACK_PARTIAL_NOTE = (
@@ -3128,6 +3143,40 @@ class ReportAgent:
         if "scenario_diff" in skip:
             return _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=health)
         return self._baseline_behaviour_note()
+
+    def _comparison_body_note(self) -> str:
+        """FU-3：对比章节正文里替代对比表的读者可见说明行。裁定同 _scenario_diff_note（本报告模拟
+        不可用优先，其次基线不可用），措辞按成稿语言取 _COMPARISON_NO_*_DATA_LINE——不带健康字段、
+        方法学词汇或写作指令。非情景报告 / 门关 / 两侧都可用 → ""。"""
+        if not self.base_simulation_id:
+            return ""
+        zh = not str(getattr(self, "output_language", "") or "English").lower().startswith("en")
+        lang = "zh" if zh else "en"
+        _health, skip = self._behaviour_skips()
+        if "scenario_diff" in skip:
+            return _COMPARISON_NO_SCENARIO_DATA_LINE[lang]
+        if self._baseline_behaviour_note():
+            return _COMPARISON_NO_BASELINE_DATA_LINE[lang]
+        return ""
+
+    def _gated_behaviour_tools(self) -> frozenset[str]:
+        """FU-3：本报告里只会返回说明行的行为类工具（与 _execute_tool 的门同一裁定）。它们不进
+        ReACT 的「未使用工具」推荐集，也不进工具描述、使用建议与原生 tool schema——否则模型被推去
+        调用只给说明行的工具，白占工具调用预算。工具仍留在 self.tools：模型照旧调用时派发给说明行。
+        门关 / 健康运行且基线可用 → 空集（工具集与提示词逐字节不变）。读不到裁定 → 空集（只是增强）。"""
+        try:
+            _health, skip = self._behaviour_skips()
+            gated = set()
+            if "simulation_outcomes" in skip:
+                gated.update(("simulation_outcomes", "opinion_shift"))
+            if "coalition_map" in skip:
+                gated.add("coalition_map")
+            if getattr(self, "base_simulation_id", None) and self._scenario_diff_note():
+                gated.add("scenario_diff")
+            return frozenset(gated)
+        except Exception as e:  # noqa: BLE001 — 工具宣传过滤为增强，失败按旧工具集
+            logger.warning(f"行为类工具门裁定失败（按完整工具集宣传）: {e}")
+            return frozenset()
 
     def _baseline_health_record(self) -> Optional[Dict[str, Any]]:
         """FU-3：情景报告基线模拟的健康裁定，与 quality.signal_pack_health 同形。
@@ -11514,8 +11563,9 @@ class ReportAgent:
         （供 UI / diff 工具消费）。对比表为可选增强：任何失败只告警，返回已拼好的正文。
 
         FU-3：任一侧模拟按 REPORT-5 规则不可用时 _scenario_diff_structured 返回 None——表位改给
-        说明行（本报告模拟不可用 → REPORT-5 的同一说明行；基线不可用 → 基线说明行），不落
-        comparison.json。其余无表情形（缺轨迹 / 有效性裁定非 valid / 门关）正文逐字节不变。"""
+        读者可见的说明行（_comparison_body_note：本报告模拟不可用优先，其次基线不可用；不用写给
+        撰写模型的提示词说明行），不落 comparison.json。其余无表情形（缺轨迹 / 有效性裁定非 valid
+        / 门关）正文逐字节不变。"""
         try:
             diff_dict = self._scenario_diff_structured()
             if diff_dict:
@@ -11530,9 +11580,9 @@ class ReportAgent:
                     )
                     logger.info(f"已注入结构化对比表并写入 comparison.json: {report_id}")
             else:
-                _diff_note = self._scenario_diff_note()
-                if _diff_note:
-                    section_content = _diff_note + "\n\n" + section_content
+                _body_note = self._comparison_body_note()
+                if _body_note:
+                    section_content = _body_note + "\n\n" + section_content
         except Exception as _ct_err:  # noqa: BLE001 — 对比表为可选增强，失败不影响主流程
             logger.warning(f"注入结构化对比表失败（忽略）: {_ct_err}")
         return section_content
@@ -12203,9 +12253,12 @@ class ReportAgent:
         return False
     
     def _get_tools_description(self) -> str:
-        """生成工具描述文本"""
+        """生成工具描述文本（FU-3：本报告只给说明行的行为类工具不列出）"""
         desc_parts = ["可用工具："]
+        gated = self._gated_behaviour_tools()
         for name, tool in self.tools.items():
+            if name in gated:
+                continue
             params_desc = ", ".join([f"{k}: {v}" for k, v in tool["parameters"].items()])
             desc_parts.append(f"- {name}: {tool['description']}")
             if params_desc:
@@ -12229,9 +12282,11 @@ class ReportAgent:
     }
 
     def _tool_usage_hints(self) -> str:
-        """RPT-7: 从 live self.tools 渲染工具使用建议 bullets（工具被移除即不再出现）。"""
+        """RPT-7: 从 live self.tools 渲染工具使用建议 bullets（工具被移除即不再出现）。
+        FU-3：本报告只给说明行的行为类工具同样不列出。"""
+        gated = self._gated_behaviour_tools()
         lines = [f"- {name}: {self._TOOL_HINT_SUMMARIES[name]}"
-                 for name in self.tools if name in self._TOOL_HINT_SUMMARIES]
+                 for name in self.tools if name in self._TOOL_HINT_SUMMARIES and name not in gated]
         return "\n".join(lines) if lines else "（按上方工具描述使用）"
 
     def _lint_outline_titles(self, sections: List["ReportSection"]) -> int:
@@ -13004,11 +13059,13 @@ class ReportAgent:
         faction_brief / scenario_diff 等条件工具在被定义时即原生暴露，杜绝「prompt 中
         宣告但 tools= schema 缺失」的漂移。旧工具别名是 _execute_tool 的内部重定向，
         本就不应原生暴露，故不纳入。默认（条件工具关）时输出与历史静态名单逐字节一致。
+        FU-3：本报告只给说明行的行为类工具（_gated_behaviour_tools）不暴露。
         """
         schemas = []
+        gated = self._gated_behaviour_tools()
         for tname in sorted(self.tools.keys()):
             spec = self.tools.get(tname)
-            if not spec:
+            if not spec or tname in gated:
                 continue
             props = {}
             for pname, pdesc in (spec.get("parameters") or {}).items():
@@ -13350,6 +13407,8 @@ class ReportAgent:
                      "simulation_outcomes", "coalition_map", "opinion_shift"}
         if self.base_simulation_id:
             all_tools.add("scenario_diff")  # T4.7
+        # FU-3：本报告只给说明行的行为类工具不推荐（健康运行 / 门关时为空集，推荐集不变）。
+        all_tools -= self._gated_behaviour_tools()
 
         # 报告上下文，用于InsightForge的子问题生成
         report_context = f"章节标题: {section.title}\n模拟需求: {self.simulation_requirement}"
