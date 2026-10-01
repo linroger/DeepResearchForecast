@@ -1729,8 +1729,9 @@ class Config:
     # noun ("40 economists"); a value written as a range becomes low/high (range_kind
     # stated_range); meta.forecaster_attribution counts kept and dropped fields.  Default
     # false: the fields add ~5-10% extraction output and the forecaster names change which
-    # quant rows match an actor in PREPARE context packs (a row that matched still matches,
-    # but at the 32-row pack cap forecaster matches can displace later rows); off =
+    # quant rows match an actor in PREPARE context packs (a row that matched still matches
+    # and, at the 32-row pack cap, keeps its place: forecaster-only matches fill spare
+    # slots only, FU-10); off =
     # byte-identical facts prompt, quantitative.json and meta.  The parent forwards it to
     # the v3 child.
     RESEARCH_FORECASTER_ATTRIBUTION = os.environ.get(

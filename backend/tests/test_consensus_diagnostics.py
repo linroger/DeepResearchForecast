@@ -470,12 +470,11 @@ def test_forecaster_keys_never_unmatch_a_previously_matched_actor_row():
     assert all(name != "Unitree" for name, _ in gained)                  # actual rows gain nothing
 
 
-def test_at_the_pack_cap_new_forecaster_matches_displace_at_most_as_many_later_rows():
-    """The PREPARE pack keeps an actor's first 32 matched rows in row order
-    (``_relevant_rows``).  When that cap binds, an earlier row that newly
-    matches through its forecaster pushes a later, previously matched row out
-    of the pack: never more rows than it adds, always from the pack's end, and
-    each displaced row still matches the actor."""
+def test_at_the_pack_cap_forecaster_matches_never_displace_previously_matched_rows():
+    """FU-10 (RESEARCH-6 open issue): the PREPARE pack keeps an actor's first 32 matched
+    rows (``_relevant_rows``).  Rows that newly match through their forecaster fill
+    only the slots the previously matched rows leave, so attribution never pushes a
+    previously matched row out; the pack keeps row order."""
     goldman = {"name": "Goldman Sachs"}
     gaining = [{"metric": f"Projection {i}", "value": str(100 + i), "unit": "units", "period_end": "2030",
                 "value_type": "forecast", "source": "Reuters", "forecaster": "Goldman Sachs"} for i in range(5)]
@@ -485,12 +484,15 @@ def test_at_the_pack_cap_new_forecaster_matches_displace_at_most_as_many_later_r
     after = dr.enrich_quantitative_rows(_attributed(gaining + matching, REPORT)[0])
     old = [row["metric"] for row in actor_context._relevant_rows(before, goldman, 32)]
     new = [row["metric"] for row in actor_context._relevant_rows(after, goldman, 32)]
-    assert old == [f"Metric {i}" for i in range(32)]
-    assert new == [f"Projection {i}" for i in range(5)] + [f"Metric {i}" for i in range(27)]
-    gained = [metric for metric in new if metric not in old]
-    displaced = [metric for metric in old if metric not in new]
-    assert len(displaced) <= len(gained) and displaced == old[len(old) - len(displaced):]
-    assert all(actor_context._matches_structured_row(row, goldman) for row in after if row["metric"] in displaced)
+    assert old == new == [f"Metric {i}" for i in range(32)]
+    # Spare slots go to forecaster-only matches, in row order.
+    spare = [row["metric"] for row in actor_context._relevant_rows(after[:5] + after[5:30], goldman, 32)]
+    assert spare == [f"Projection {i}" for i in range(5)] + [f"Metric {i}" for i in range(25)]
+    capped = [row["metric"] for row in actor_context._relevant_rows(after[:5] + after[5:35], goldman, 32)]
+    assert capped == ["Projection 0", "Projection 1"] + [f"Metric {i}" for i in range(30)]
+    # Rows without attribution fields: exactly the first 32 matches, as before.
+    plain = [dict(row) for row in after if "forecaster" not in row]
+    assert actor_context._relevant_rows(plain + plain[:3], goldman, 32) == (plain + plain[:3])[:32]
 
 
 # =============================================================== diagnostics: pure
