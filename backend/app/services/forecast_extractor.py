@@ -367,7 +367,9 @@ _COLON_RANGE_RE = re.compile(
     re.I,
 )
 _CHINESE_RANGE_RE = re.compile(
-    rf"^\s*{_RANGE_METRIC}\s*(?:为|介于|在)?\s*"
+    # EVAL-14: one \s* around the optional verb (same language as "\s*(?:为|介于|在)?\s*"),
+    # which backtracked cubically on long whitespace runs.
+    rf"^\s*{_RANGE_METRIC}\s*(?:(?:为|介于|在)\s*)?"
     rf"{_range_value_pattern('lo')}\s*(?:至|到|-)\s*"
     rf"{_range_value_pattern('hi')}(?:\s*之间)?",
     re.I,
@@ -388,9 +390,28 @@ _COMPARATOR_RANGE_RE = re.compile(
 )
 _CHINESE_COMPARATOR_RANGE_RE = re.compile(
     rf"^\s*{_RANGE_METRIC}\s*(?P<operator>高于|超过|不低于|至少|"
+    # EVAL-14: negated forms, so the lazy metric never ends in 不 and reads 高于 / 少于.
+    rf"不少于|不小于|不高于|不大于|不多于|"
     rf"低于|少于|不超过|至多)\s*{_range_value_pattern('bound')}",
     re.I,
 )
+# EVAL-14 (RESEARCH-15 item c): a metric that swallowed a negation ("Revenue will not be"
+# above X, "Revenue never" exceeds X, 失业率不会 超过 X, 营收未 超过 X) would read the bare
+# comparator or interval after it the wrong way round, so such a clause is not parsed.
+# ("isn't" / "won't be" never reach here: the metric excludes apostrophes.)
+_RANGE_METRIC_NEGATION_RE = re.compile(
+    r"(?<![\w-])(?:not|no|never|cannot|neither|nor|(?:fail(?:s|ed|ing)?|unable)\s+to)(?![\w-])"
+    r"|(?:[不未没無无非]|不[会能得应再曾]|没有)$|不会|未能",
+    re.I,
+)
+# EVAL-14: comparators that include their bound (">=" / "<=" readings); the rest are strict.
+_INCLUSIVE_RANGE_OPS = frozenset({
+    ">=", "<=", "at least", "at most", "no less than", "not less than", "no fewer than",
+    "no lower than", "not lower than", "not below", "not under", "no more than",
+    "not more than", "no higher than", "not higher than", "not above", "not exceed",
+    "not exceeding", "不低于", "至少", "不少于", "不小于", "不超过", "至多", "不高于", "不大于",
+    "不多于",
+})
 
 
 def _normalise_metric_label(value: str) -> str:
@@ -605,7 +626,7 @@ def _extract_comparable_numeric_range(criteria: Any) -> Optional[Dict[str, Any]]
             if not match:
                 continue
             metric = _normalise_metric_label(match.group("metric"))
-            if not metric:
+            if not metric or _RANGE_METRIC_NEGATION_RE.search(match.group("metric").strip()):
                 break
             trailing = match_clause[match.end():]
             if not _supported_range_trailing(trailing):
@@ -635,14 +656,14 @@ def _extract_comparable_numeric_range(criteria: Any) -> Optional[Dict[str, Any]]
                     "exceeds", "高于", "超过", "不低于", "至少",
                     # EVAL-14: negated upper bounds read as lower bounds.
                     "no less than", "not less than", "no fewer than", "no lower than",
-                    "not lower than", "not below", "not under",
+                    "not lower than", "not below", "not under", "不少于", "不小于",
                 }
                 upper_ops = {
                     "<", "<=", "at most", "less than", "below", "under",
                     "低于", "少于", "不超过", "至多",
                     # EVAL-14: negated lower bounds read as upper bounds.
                     "no more than", "not more than", "no higher than", "not higher than",
-                    "not above", "not exceed", "not exceeding",
+                    "not above", "not exceed", "not exceeding", "不高于", "不大于", "不多于",
                 }
                 if re.fullmatch(r"(?:does|do|will|would|must|should|can) not exceed|"
                                 r"(?:doesn't|won't|don't) exceed", operator):
@@ -659,6 +680,9 @@ def _extract_comparable_numeric_range(criteria: Any) -> Optional[Dict[str, Any]]
                     "low": low,
                     "high": high,
                     "scope": scope,
+                    # EVAL-14: whether the bound itself satisfies the clause ("at least" vs
+                    # "more than"); binary_targets compares it with a target's comparator.
+                    "inclusive": operator in _INCLUSIVE_RANGE_OPS,
                 })
             break
     return candidates[0] if len(candidates) == 1 else None
@@ -1452,8 +1476,10 @@ _BINARY_TARGET_RULE = (
     "needs max_over_window or min_over_window. OMIT target for forecasts that do not resolve on one "
     "numeric threshold."
 )
-# EVAL-14：结构化 target 每条约 60 个输出 token，开启时按每条 64 token 放宽（关 → 不变）。
-_BINARY_TARGET_TOKENS_PER_ROW = 64
+# EVAL-14：结构化 target 对象实测（cl100k）：典型 69 token（紧凑）/ 83（缩进）；长指标名 + 长
+# resolution_source 105 / 123。按最坏的缩进长对象，开启时每条放宽 128 token、至少 10 条（关 → 不变），
+# 免得数值密集的一轮被 INFRA-3 截断丢尾行、补抽改变已发布集合（TIME-5 的教训）。
+_BINARY_TARGET_TOKENS_PER_ROW = 128
 
 # 二元 _draw 的输出上限。shadow 的 latest_actual 对象实测每条约 50 个输出 token（cl100k），真实二元行
 # 每条约 290-480 token：沿用 4096 会让 10-12 条的首轮回复被截断（INFRA-2 补括号修复丢尾行 → 行数不足
@@ -1465,7 +1491,7 @@ _BINARY_LATEST_ACTUAL_MIN_ROWS = 10
 
 def _binary_draw_max_tokens(rows: int, latest_actual: bool, structured_target: bool = False) -> int:
     """TIME-5：二元 _draw 的 max_tokens——off 为 4096；shadow 为 4096 + 64 × max(rows, 10)
-    （rows = 本轮索取条数 + 目标命题数）。EVAL-14：结构化 target 开启时再加 64 × max(rows, 10)。"""
+    （rows = 本轮索取条数 + 目标命题数）。EVAL-14：结构化 target 开启时再加 128 × max(rows, 10)。"""
     tokens = _BINARY_DRAW_MAX_TOKENS
     if latest_actual:
         tokens += _BINARY_LATEST_ACTUAL_TOKENS_PER_ROW * max(int(rows), _BINARY_LATEST_ACTUAL_MIN_ROWS)
@@ -1977,7 +2003,8 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
     非对象 / 无 value → 不加字段。缺省 False → 行逐字节不变。
     EVAL-14 ``keep_target``（仅 FORECAST_BINARY_STRUCTURED_TARGET 的抽取为真）：模型给出的 target 经
     binary_targets.validate_binary_target 校验——合格 → row['target']（规范化对象），不合格 →
-    row['target_rejected']（错误列表）；模型未给 → 不加字段。缺省 False → 行逐字节不变。"""
+    row['target_rejected']（错误列表；校验本身异常 → ['target_validation_error']，行照常保留）；
+    模型未给或给空对象 / 空列表 / 空串 → 不加字段。缺省 False → 行逐字节不变。"""
     strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
     out: List[Dict[str, Any]] = []
     seen: set = set()
@@ -2126,10 +2153,17 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
             latest_actual = sanitize_latest_actual(it.get("latest_actual"))
             if latest_actual is not None:
                 row["latest_actual"] = latest_actual
-        if keep_target and it.get("target") is not None:
+        raw_target = it.get("target")
+        # An empty object / list / string is the model's way of omitting the target.
+        if keep_target and raw_target is not None and (
+                not isinstance(raw_target, (dict, list, str)) or raw_target):
             from .binary_targets import validate_binary_target
-            clean_target, target_errors = validate_binary_target(
-                it.get("target"), statement=stmt, criteria=rc)
+            try:
+                clean_target, target_errors = validate_binary_target(
+                    raw_target, statement=stmt, criteria=rc)
+            except Exception as exc:  # noqa: BLE001 — enhancement: never drop the binary
+                logger.warning(f"二元预测结构化 target 校验异常（记为 target_rejected，行保留）: {exc!r}")
+                clean_target, target_errors = None, ["target_validation_error"]
             if clean_target is not None:
                 row["target"] = clean_target
             else:

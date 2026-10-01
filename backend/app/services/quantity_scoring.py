@@ -8,11 +8,15 @@ and for threshold ladders read off binary targets (:mod:`binary_targets`):
 - :func:`interval_score80` (Gneiting-Raftery interval score of the 80% interval
   [q10, q90]: width plus 10x any miss) and :func:`covered80` (inclusive bounds);
 - :func:`ape50` (absolute percentage error of the median), only for level-scale
-  units: a rate (%, pp, bp) already is a ratio, and a realized 0 has no percentage;
+  units: a rate (%, pp, bp in any spelling :func:`binary_targets.canonical_unit`
+  reads, e.g. "percent", "bps", "% of GDP") already is a ratio, an unreadable unit is
+  not known to be a level, and a realized 0 has no percentage;
 - :func:`rel_to_persistence` (score relative to the no-change forecast y0);
 - :func:`threshold_ladder_brier` (mean Brier over the rungs of one ladder).
 
-Stdlib only, no I/O; non-finite input raises ValueError rather than scoring.
+Stdlib plus the pure sibling :mod:`binary_targets` (unit reading and comparators; it
+imports only the stdlib at module level), no I/O; non-finite input raises ValueError
+rather than scoring.
 """
 
 from __future__ import annotations
@@ -20,15 +24,22 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, Optional, Sequence, Tuple
 
+from .binary_targets import RATE_UNITS, canonical_unit, comparator_holds
+
 QUANTILES = (0.1, 0.5, 0.9)
 INTERVAL_ALPHA = 0.2              # the 80% central interval
-RATE_UNITS = frozenset({"%", "pp", "bp"})
 
 
 def _finite(value: Any, name: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{name} must be a finite number, got {value!r}")
-    return float(value)
+    try:
+        number = float(value)
+    except OverflowError:
+        number = math.inf   # an int too large for a float is not finite
+    if not math.isfinite(number):
+        raise ValueError(f"{name} must be a finite number, got {value!r}")
+    return number
 
 
 def pinball(q: float, y: float, tau: float) -> float:
@@ -62,9 +73,11 @@ def covered80(q10: float, q90: float, y: float) -> bool:
 
 
 def ape50(q50: float, y: float, unit: str) -> Optional[float]:
-    """|q50 - y| / |y| for a level-scale unit; None for a rate unit (%, pp, bp) or y == 0."""
+    """|q50 - y| / |y| for a level-scale unit; None for a rate unit (%, pp, bp in any
+    spelling), an unreadable unit, or y == 0."""
     q50, y = _finite(q50, "q50"), _finite(y, "y")
-    if str(unit or "").strip() in RATE_UNITS or y == 0:
+    canonical = canonical_unit(unit)
+    if canonical is None or canonical[0] in RATE_UNITS or y == 0:
         return None
     return abs(q50 - y) / abs(y)
 
@@ -82,20 +95,6 @@ def rel_to_persistence(score: float, y: float, y0: Optional[float]) -> Tuple[Opt
     return score / baseline, None
 
 
-def _holds(y: float, comparator: str, threshold: float) -> bool:
-    if comparator == ">":
-        return y > threshold
-    if comparator == ">=":
-        return y >= threshold
-    if comparator == "<":
-        return y < threshold
-    if comparator == "<=":
-        return y <= threshold
-    if comparator == "==":
-        return y == threshold
-    raise ValueError(f"unknown comparator {comparator!r}")
-
-
 def threshold_ladder_brier(rungs: Sequence[Tuple[float, str, float]], y: float) -> float:
     """Mean Brier over a ladder's rungs ``(threshold, comparator, p)`` for realized y."""
     if not rungs:
@@ -106,6 +105,6 @@ def threshold_ladder_brier(rungs: Sequence[Tuple[float, str, float]], y: float) 
         p = _finite(p, "p")
         if not 0.0 <= p <= 1.0:
             raise ValueError(f"rung probability must be in [0, 1], got {p}")
-        outcome = 1.0 if _holds(y, comparator, _finite(threshold, "threshold")) else 0.0
+        outcome = 1.0 if comparator_holds(y, comparator, _finite(threshold, "threshold")) else 0.0
         total += (p - outcome) ** 2
     return total / len(rungs)

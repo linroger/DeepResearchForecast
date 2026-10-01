@@ -44,9 +44,25 @@ def test_interval_score_120_and_boundary_covered():
 def test_ape_disabled_for_rate_units():
     assert qs.ape50(110, 100, "GW") == pytest.approx(0.1)
     assert qs.ape50(110, 100, "USD") == pytest.approx(0.1)
-    for unit in ("%", "pp", "bp"):
-        assert qs.ape50(4.5, 4.0, unit) is None
+    assert qs.ape50(110, 100, "USD billion") == pytest.approx(0.1)
+    assert qs.ape50(110, 100, "million units") == pytest.approx(0.1)
+    # every spelling of a rate unit, not just the canonical symbols
+    for unit in ("%", "pp", "bp", "percent", "pct", "percentage", "percentage points",
+                 "bps", "basis points", "% of GDP", "pp YoY", "百分点", "基点"):
+        assert qs.ape50(4.5, 4.0, unit) is None, unit
+    # a unit that cannot be read is not known to be a level
+    for unit in (None, "", "% billion", 42):
+        assert qs.ape50(4.5, 4.0, unit) is None, unit
     assert qs.ape50(1.0, 0.0, "GW") is None
+
+
+def test_huge_integers_raise_value_error_not_overflow():
+    huge = 10 ** 400
+    for call in (lambda: qs.pinball(huge, 1.0, 0.5), lambda: qs.interval_score80(0, huge, 1),
+                 lambda: qs.ape50(1.0, huge, "GW"), lambda: qs.rel_to_persistence(1.0, 2.0, huge),
+                 lambda: qs.threshold_ladder_brier([(huge, ">", 0.5)], 1.0)):
+        with pytest.raises(ValueError):
+            call()
 
 
 def test_rel_to_persistence():
@@ -66,15 +82,34 @@ def test_threshold_ladder_brier_known():
         qs.threshold_ladder_brier([(1.0, ">", 1.5)], 2.0)
 
 
-def test_scoring_is_pure_stdlib():
+def _module_imports(module):
+    """(stdlib top-level modules, relative sibling modules) imported anywhere in ``module``."""
     import ast
     import inspect
-    tree = ast.parse(inspect.getsource(qs))
-    imported = {alias.name.split(".")[0] for node in ast.walk(tree)
-                if isinstance(node, (ast.Import, ast.ImportFrom))
-                for alias in getattr(node, "names", [])}
-    modules = {node.module.split(".")[0] for node in ast.walk(tree)
-               if isinstance(node, ast.ImportFrom) and node.module}
-    assert (imported | modules) <= {"__future__", "math", "typing", "annotations", "Any", "Dict",
-                                    "Optional", "Sequence", "Tuple"}
+    absolute, relative = set(), set()
+    for node in ast.walk(ast.parse(inspect.getsource(module))):
+        if isinstance(node, ast.Import):
+            absolute |= {alias.name.split(".")[0] for alias in node.names}
+        elif isinstance(node, ast.ImportFrom):
+            (relative if node.level else absolute).add((node.module or "").split(".")[0])
+    return absolute, relative
+
+
+def test_scoring_is_pure_stdlib():
+    import sys
+    from app.services import binary_targets
+    stdlib = set(sys.stdlib_module_names) | {"__future__"}
+    absolute, relative = _module_imports(qs)
+    assert absolute <= stdlib and relative == {"binary_targets"}
+    # the one sibling it uses is pure too: stdlib at module level, and its only relative
+    # import (the extractor, for the criteria cross-check) is lazy, inside a function
+    import ast
+    import inspect
+    tree = ast.parse(inspect.getsource(binary_targets))
+    top_level = {alias.name.split(".")[0] for node in tree.body
+                 if isinstance(node, ast.Import) for alias in node.names}
+    top_level |= {node.module.split(".")[0] for node in tree.body
+                  if isinstance(node, ast.ImportFrom) and node.module and not node.level}
+    assert top_level <= stdlib
+    assert not [node for node in tree.body if isinstance(node, ast.ImportFrom) and node.level]
     assert math.isfinite(qs.interval_score80(1, 2, 3))

@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from app.config import Config
+from app.services.binary_targets import threshold_ladder_audit
 from app.services.report_agent import (
     ReportAgent, ReportManager, render_market_comparison_block,
 )
@@ -311,6 +312,26 @@ def synchronize_market_comparison(
     return None
 
 
+def rebuild_binary_quality(
+        binaries: List[Dict[str, Any]], contract: Any, old_quality: Any) -> Dict[str, Any]:
+    """The binary_quality of a replayed forecast, rebuilt over the retained rows.
+
+    The scorecard is recomputed and carries the reconcile result; the extractor's
+    ensemble block is kept. A report written with FORECAST_BINARY_STRUCTURED_TARGET
+    (EVAL-14: its old block has ``threshold_ladder``, or a retained row still has a
+    validated ``target``) gets the threshold-ladder audit recomputed over the retained
+    rows, so a replay neither drops the audit nor keeps a removed rung in it.
+    """
+    old = old_quality if isinstance(old_quality, dict) else {}
+    quality = _binary_quality(binaries, min_count=10)
+    quality["proposition_consistency"] = contract
+    if isinstance(old.get("ensemble"), dict):
+        quality["ensemble"] = old["ensemble"]
+    if "threshold_ladder" in old or any(isinstance(row.get("target"), dict) for row in binaries):
+        quality["threshold_ladder"] = threshold_ladder_audit(binaries)
+    return quality
+
+
 def _language(markdown: str, filename: str) -> str:
     if filename.endswith(".zh.md"):
         return "Chinese"
@@ -487,13 +508,8 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
             row for row in (forecast_obj.get("binary_forecasts") or [])
             if isinstance(row, dict)
         ]
-        old_quality = forecast_obj.get("binary_quality") if isinstance(
-            forecast_obj.get("binary_quality"), dict) else {}
-        quality = _binary_quality(retained, min_count=10)
-        quality["proposition_consistency"] = contract
-        if isinstance(old_quality.get("ensemble"), dict):
-            quality["ensemble"] = old_quality["ensemble"]
-        forecast_obj["binary_quality"] = quality
+        forecast_obj["binary_quality"] = rebuild_binary_quality(
+            retained, contract, forecast_obj.get("binary_quality"))
         # Always rebuild/remove both comparison copies. This repairs a stale
         # partial backfill even after the offending circular binary was already
         # removed by an earlier attempt.

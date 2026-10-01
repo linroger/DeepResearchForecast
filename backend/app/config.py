@@ -991,8 +991,12 @@ class Config:
     # EVAL-14（P14）：数值阈值型二元的结构化 target——二元抽取提示词追加 STRUCTURED TARGET 规则，
     # 模型给出的 target 经 binary_targets.validate_binary_target 校验后存 row['target']（不合格存
     # target_rejected 及原因），报告在定稿概率上做同目标阈值阶梯单调性审计
-    # （binary_quality.threshold_ladder，只告警，不影响发布门与终审政策版本）。默认关：二元抽取
-    # 提示词、max_tokens 与 forecast.json 逐字节不变（开启会改变提示词，从而可能改变起草）。
+    # （binary_quality.threshold_ladder，只告警，不影响发布门与终审政策版本），并记入
+    # quality.forecast_policy.binary_structured_target。默认关：二元抽取提示词、max_tokens 与二元行
+    # 逐字节不变，forecast.json 不多任何键（开启会改变提示词，从而可能改变起草）。唯一不随此旗标的
+    # 改动是 RESEARCH-15(c) 要求的判定标准解析修复（否定比较词如 "does not exceed"/"no more than"/
+    # 不超过 按正确方向读，含否定词的子句不解析）：情景分区审计据此读到真实指标，可能新报
+    # overlapping_numeric_ranges——这是正确行为，不是旗标泄漏。
     FORECAST_BINARY_STRUCTURED_TARGET = os.environ.get('FORECAST_BINARY_STRUCTURED_TARGET', 'false').strip().lower() == 'true'
     # REPORT-11 概率形状遥测（默认开）：确定性计算情景形状（峰值 max_probability、归一化熵、距均匀分布的
     # TV 距离，叙事前 / 成稿后批判成功时另算批判前后差值）与二元预测形状（0.40-0.60 中间带 / 0.45-0.55

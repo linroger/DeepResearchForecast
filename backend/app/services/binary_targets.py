@@ -18,17 +18,20 @@ optional ``target`` object, and this module checks it deterministically:
   target (metric, unit, statistic, target date, window start) form a monotone
   ladder: the probability that the value exceeds a higher threshold must not
   exceed that of a lower one by more than :data:`LADDER_TOLERANCE`.  Warn only.
-* :func:`resolve_binary_by_target` settles a binary from one realized number,
-  so every binary linked to the same target (:func:`target_group_key`) resolves
-  from that single observation.
+* :func:`resolve_binary_by_target` settles a binary from one realized number in
+  BASE units (``threshold * scale`` units), so every binary linked to the same
+  target (:func:`target_group_key`, which leaves the magnitude out: ``USD billion
+  800`` and ``USD trillion 1`` link) resolves from that single observation.
 
 Units never convert across ``%``, ``pp`` and ``bp`` (a rate is never scaled);
 currency and count magnitudes (K/M/B/T, thousand ... trillion, 万/亿) fold into
 ``scale``, so ``threshold * scale`` is the value in base units.
 
-Pure: no I/O and no LLM.  The extractor helpers are imported lazily because
-``forecast_extractor`` imports this module (and :mod:`quantity_scoring` imports
-it without pulling the extractor in).
+Pure: no I/O and no LLM, and only stdlib imports at module level.  The extractor
+helpers are imported lazily inside the functions that need them, because
+``forecast_extractor`` imports this module; :mod:`quantity_scoring` imports it for
+:func:`canonical_unit` and :func:`comparator_holds`, which never touch the
+extractor.
 """
 
 from __future__ import annotations
@@ -58,6 +61,9 @@ AMBIGUOUS = "AMBIGUOUS"
 UNVERIFIABLE = "UNVERIFIABLE"
 
 CRITERIA_CONSISTENT = "consistent"
+# Same bound and direction, but one side is strict and the other inclusive ("> 170" against
+# "at least 170"): the two disagree only when the realized value equals the threshold.
+CRITERIA_BOUND_ONLY = "consistent_bound_only"
 CRITERIA_UNPARSED = "criteria_unparsed"
 
 # A higher threshold's exceedance probability may exceed a lower one's by at most this.
@@ -72,6 +78,14 @@ RESOLUTION_SOURCE_MAX_CHARS = 300
 TOLERANCE_BASIS_MAX_CHARS = 200
 
 _FLOAT_EPS = 1e-9
+# Base-unit values this close are the same number: threshold * scale carries float noise
+# (2.3 * 1e8 == 229999999.99999997), which must never flip a boundary resolution.
+_BASE_UNIT_REL_TOL = 1e-12
+# Horizontal whitespace runs collapse before the criteria regex runs: the extractor's
+# patterns backtrack super-linearly on long runs (newlines stay: they split clauses).
+_HORIZONTAL_SPACE_RUN_RE = re.compile(r"[^\S\n]+")
+# Magnitude words for ladder labels, so "1 trillion USD" never reads as "1 USD".
+_SCALE_LABELS = {1e3: "thousand", 1e6: "million", 1e9: "billion", 1e12: "trillion"}
 _ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _NUMERIC_TEXT_RE = re.compile(r"[-+]?\d+(?:\.\d+)?")
 _PATH_DEPENDENT_RE = re.compile(r"\bat\s+any\s+(?:point|time)\b|\bever\b|\bintraday\b|任何时候", re.I)
@@ -232,10 +246,14 @@ def _currencies_agree(left: str, right: str) -> bool:
 
 # ── small readers ────────────────────────────────────────────────────────────
 def _finite_number(value: Any) -> Optional[float]:
-    """A finite int/float (never a bool), else None."""
+    """A finite int/float (never a bool), else None.  An int too large for a float
+    (json.loads keeps a 400-digit literal as an int) is not finite either."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    number = float(value)
+    try:
+        number = float(value)
+    except (OverflowError, TypeError, ValueError):
+        return None
     return number if math.isfinite(number) else None
 
 
@@ -279,7 +297,7 @@ def _read_threshold(value: Any) -> Tuple[Optional[float], Optional[str]]:
         value = float(value.strip())
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None, "threshold_invalid"
-    if not math.isfinite(float(value)):
+    if _finite_number(value) is None:
         return None, "threshold_not_finite"
     return value, None
 
@@ -303,9 +321,32 @@ def _read_tolerance(value: Any) -> Tuple[Optional[Dict[str, Any]], Optional[str]
 
 
 def _tolerance_epsilon(tolerance: Mapping[str, Any], threshold: float) -> float:
+    """The tolerance half-width in the units of ``threshold`` (an absolute epsilon is
+    pre-registered in the target's own unit and scale, like the threshold)."""
     if tolerance.get("epsilon_abs") is not None:
         return float(tolerance["epsilon_abs"])
     return float(tolerance["epsilon_rel"]) * abs(threshold)
+
+
+def _target_scale(target: Mapping[str, Any]) -> Optional[float]:
+    """The target's magnitude: its ``scale`` (finite, > 0) or, when a raw target has
+    none, the scale :func:`canonical_unit` reads from its ``unit``; None if neither."""
+    if "scale" in target:
+        scale = _finite_number(target.get("scale"))
+        return scale if scale is not None and scale > 0 else None
+    unit = canonical_unit(target.get("unit"))
+    return unit[1] if unit is not None else None
+
+
+def _magnitude_label(threshold: float, scale: float, unit: Any) -> str:
+    """``800 billion USD`` / ``230 GW`` / ``5 x1e+07 units``: a rung's threshold with its
+    magnitude, so rungs of one group (which may differ in scale) read comparably."""
+    if math.isclose(scale, 1.0):
+        return f"{threshold:g} {unit}"
+    for factor, word in _SCALE_LABELS.items():
+        if math.isclose(scale, factor, rel_tol=_FLOAT_EPS):
+            return f"{threshold:g} {word} {unit}"
+    return f"{threshold:g} x{scale:g} {unit}"
 
 
 def _extractor():
@@ -316,7 +357,9 @@ def _extractor():
 # ── criteria cross-check ─────────────────────────────────────────────────────
 def _criteria_disagreement(clean: Mapping[str, Any], parsed: Mapping[str, Any]) -> Optional[str]:
     """Why the criteria interval ``parsed`` disagrees with the target, or None when they
-    agree.  Returns ``CRITERIA_UNPARSED`` when the parsed unit cannot be read."""
+    agree.  Returns ``CRITERIA_UNPARSED`` when the parsed unit cannot be read, and
+    ``CRITERIA_BOUND_ONLY`` when bound and direction agree but the parsed comparator's
+    strictness (``parsed['inclusive']``) differs from the target's."""
     parsed_unit = canonical_unit(parsed.get("unit"))
     if parsed_unit is None:
         return CRITERIA_UNPARSED
@@ -345,6 +388,10 @@ def _criteria_disagreement(clean: Mapping[str, Any], parsed: Mapping[str, Any]) 
     bound_value = bound * parsed_unit[1]
     if not math.isclose(target_value, bound_value, rel_tol=_FLOAT_EPS, abs_tol=1e-12):
         return f"threshold {target_value:g} vs criteria {bound_value:g} (base units)"
+    inclusive = parsed.get("inclusive")
+    if (comparator != "==" and isinstance(inclusive, bool)
+            and inclusive != (comparator in (">=", "<="))):
+        return CRITERIA_BOUND_ONLY
     return None
 
 
@@ -357,8 +404,10 @@ def validate_binary_target(target: Any, *, statement: Any = "",
     Errors are ``'code'`` or ``'code: detail'`` strings.  The clean target carries
     ``schema``, ``metric``, ``unit`` (canonical), ``scale`` (magnitude folded out of
     the unit), ``comparator``, ``threshold``, ``statistic``, ``target_date``,
-    ``window_start`` (None unless given), ``resolution_source``, ``criteria_check``
-    (``consistent`` | ``criteria_unparsed``) and, when pre-registered,
+    ``window_start`` (a window statistic's start; always None for ``value_on`` /
+    ``period_value``, whatever the model wrote, so it never splits a ladder group),
+    ``resolution_source``, ``criteria_check`` (``consistent`` |
+    ``consistent_bound_only`` | ``criteria_unparsed``) and, when pre-registered,
     ``resolution_tolerance``.  Never raises on malformed input.
     """
     if not isinstance(target, Mapping):
@@ -392,7 +441,8 @@ def validate_binary_target(target: Any, *, statement: Any = "",
     if target_date is None:
         errors.append("target_date_invalid")
 
-    raw_window = target.get("window_start")
+    # A window start means something only for a window statistic; elsewhere it is ignored.
+    raw_window = target.get("window_start") if statistic in WINDOW_STATISTICS else None
     window_start: Optional[str] = None
     if raw_window is not None:
         window_start = _strict_date(raw_window)
@@ -437,10 +487,11 @@ def validate_binary_target(target: Any, *, statement: Any = "",
     if tolerance is not None:
         clean["resolution_tolerance"] = tolerance
 
-    parsed = _extractor()._extract_comparable_numeric_range(criteria_text)
+    parsed = _extractor()._extract_comparable_numeric_range(
+        _HORIZONTAL_SPACE_RUN_RE.sub(" ", criteria_text))
     disagreement = _criteria_disagreement(clean, parsed) if parsed else CRITERIA_UNPARSED
-    if disagreement == CRITERIA_UNPARSED:
-        clean["criteria_check"] = CRITERIA_UNPARSED
+    if disagreement in (CRITERIA_UNPARSED, CRITERIA_BOUND_ONLY):
+        clean["criteria_check"] = disagreement
     elif disagreement:
         return None, [f"criteria_mismatch: {disagreement}"]
     else:
@@ -451,14 +502,17 @@ def validate_binary_target(target: Any, *, statement: Any = "",
 # ── same-target threshold ladders ────────────────────────────────────────────
 def target_group_key(target: Any) -> Optional[Tuple[str, str, str, str, Optional[str]]]:
     """``(metric label, unit, statistic, target_date, window_start)`` that links the
-    binaries resolving on the same number, or None when the target cannot be linked."""
+    binaries resolving on the same number, or None when the target cannot be linked.
+    The magnitude (``scale``) is left out, so thresholds compare in base units; a
+    window start counts only for a window statistic."""
     if not isinstance(target, Mapping):
         return None
     metric = _extractor()._normalise_metric_label(target.get("metric"))
     unit = target.get("unit")
     statistic = target.get("statistic")
     target_date = _strict_date(target.get("target_date"))
-    window = target.get("window_start")
+    window = (target.get("window_start")
+              if isinstance(statistic, str) and statistic in WINDOW_STATISTICS else None)
     if (not metric or not isinstance(unit, str) or not unit
             or not isinstance(statistic, str) or statistic not in STATISTICS
             or target_date is None or (window is not None and _strict_date(window) is None)):
@@ -480,12 +534,16 @@ def _ladder_rung(row: Any) -> Optional[Dict[str, Any]]:
     scale = _finite_number(target.get("scale"))
     if comparator not in (">", ">=", "<", "<=") or threshold is None or not scale or scale <= 0:
         return None
+    base = threshold * scale
+    if not math.isfinite(base):
+        return None
     # "> K" and "<= K" price the event Y > K; ">= K" and "< K" price Y >= K.
     strict = comparator in (">", "<=")
     exceedance = probability if comparator in (">", ">=") else 1.0 - probability
-    return {"key": key, "id": str(row.get("id") or ""), "base": threshold * scale,
+    return {"key": key, "id": str(row.get("id") or ""), "base": base,
             "strict": strict, "exceedance": exceedance,
-            "label": f"P(Y {'>' if strict else '>='} {threshold:g} {target.get('unit')})"}
+            "label": (f"P(Y {'>' if strict else '>='} "
+                      f"{_magnitude_label(threshold, scale, target.get('unit'))})")}
 
 
 def threshold_ladder_audit(binaries: Any) -> Dict[str, Any]:
@@ -542,28 +600,47 @@ def threshold_ladder_audit(binaries: Any) -> Dict[str, Any]:
 
 
 # ── resolution ───────────────────────────────────────────────────────────────
-def resolve_binary_by_target(target: Any, realized_value: Any) -> str:
+def resolve_binary_by_target(target: Any, realized_value: Any, *,
+                             realized_scale: Any = 1.0) -> str:
     """YES / NO / AMBIGUOUS / UNVERIFIABLE for a binary from one realized number.
 
-    ``realized_value`` is the target statistic's realized value in the target's own
-    unit and scale (the scale of ``threshold``).  A non-finite or non-numeric value,
-    or a target without a known comparator and finite threshold, is UNVERIFIABLE.  A
-    value within the target's PRE-REGISTERED ``resolution_tolerance`` of the threshold
-    is AMBIGUOUS (a malformed tolerance is UNVERIFIABLE: tolerance is never chosen at
-    resolution time); otherwise the exact comparator decides.
+    Contract: ``realized_value * realized_scale`` is the target statistic's realized
+    value in BASE units of the target's canonical unit, and it is compared with
+    ``threshold * scale``.  With the default ``realized_scale=1.0`` the caller passes
+    base units (``900e9`` for USD 900 billion), so one observation settles every
+    binary of a :func:`target_group_key` group whatever magnitude each row was
+    written in (``USD billion 800`` and ``USD trillion 1``); a caller holding the
+    number in some magnitude passes it (``900, realized_scale=1e9``).  A raw target
+    without ``scale`` takes it from its ``unit``.
+
+    A non-finite or non-numeric value or scale, or a target without a known
+    comparator, finite threshold and readable scale, is UNVERIFIABLE.  A value within
+    the target's PRE-REGISTERED ``resolution_tolerance`` of the threshold is AMBIGUOUS
+    (an ``epsilon_abs`` is in the target's own unit and scale, like the threshold; a
+    malformed tolerance is UNVERIFIABLE: tolerance is never chosen at resolution
+    time); otherwise the exact comparator decides (two base-unit values within
+    1e-12 relative of each other are equal: that is float noise from the scaling).
     """
     if not isinstance(target, Mapping):
         return UNVERIFIABLE
     value = _finite_number(realized_value)
+    value_scale = _finite_number(realized_scale)
     threshold = _finite_number(target.get("threshold"))
+    scale = _target_scale(target)
     comparator = target.get("comparator")
-    if (value is None or threshold is None or not isinstance(comparator, str)
+    if (value is None or value_scale is None or value_scale <= 0 or threshold is None
+            or scale is None or not isinstance(comparator, str)
             or comparator not in COMPARATORS):
         return UNVERIFIABLE
+    value_base, threshold_base = value * value_scale, threshold * scale
+    if not (math.isfinite(value_base) and math.isfinite(threshold_base)):
+        return UNVERIFIABLE
+    if math.isclose(value_base, threshold_base, rel_tol=_BASE_UNIT_REL_TOL, abs_tol=0.0):
+        value_base = threshold_base
     if target.get("resolution_tolerance") is not None:
         tolerance, problem = _read_tolerance(target.get("resolution_tolerance"))
         if problem:
             return UNVERIFIABLE
-        if abs(value - threshold) <= _tolerance_epsilon(tolerance, threshold):
+        if abs(value_base - threshold_base) <= _tolerance_epsilon(tolerance, threshold) * scale:
             return AMBIGUOUS
-    return YES if comparator_holds(value, comparator, threshold) else NO
+    return YES if comparator_holds(value_base, comparator, threshold_base) else NO
