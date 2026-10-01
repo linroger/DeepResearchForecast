@@ -1121,9 +1121,8 @@ def test_block_under_min_clusters_is_characterization_only():
 def test_null_calibration_at_min_clusters():
     """Seeded synthetic null data at MIN_CLUSTERS reports (every block null; 2 targets per
     report, 3 replicates): the familywise rate of non-advisory 'moves' over the four blocks
-    stays at or below 0.08 (nominal 5%; under 8 reports it is 9-15%). 400 resamples instead
-    of the default 2000 make the percentile bootstrap a little more liberal, so the check is
-    pessimistic."""
+    stays at or below 0.08 (nominal 5%; about 9-15% at 6-10 reports). 400 resamples keep the
+    test fast; at this size the rate is about 6% with 400 and with the default 2000."""
     n, sims = vas.MIN_CLUSTERS, 600
     arms = (vas.ARM_R, *vas.BLOCK_ARMS.values(), vas.ARM_FULL, vas.ARM_FULL_AA)
     rng = random.Random(20261002)
