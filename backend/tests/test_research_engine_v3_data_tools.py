@@ -18,6 +18,7 @@ is dated strictly before the as-of.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
 import re
 import string
@@ -280,3 +281,217 @@ def test_unusable_data_tools_are_not_bound(tmp_path, why, env, factory_fns):
     assert engine.agent_tools is lr.AGENT_TOOLS and engine.data_tool_names == ()
     assert engine.data_disabled == {"fred": why, "sec_edgar": why}
     assert "Official data" not in engine._kiq_task(_kiq("data"), [])
+
+
+# =============================================================== dispatch and governance
+
+def _scripted(*replies):
+    """A model answering its i-th call with ``replies[i]`` (the last one repeats)."""
+    state = {"n": 0}
+
+    def responder(call):
+        reply = replies[min(state["n"], len(replies) - 1)]
+        state["n"] += 1
+        return reply
+
+    return v3.ScriptedModel(responder)
+
+
+def _call(name, cid, **args):
+    return {"name": name, "args": args, "id": cid}
+
+
+NOTES = v3.ai("## Findings\n- Capacity was 176 GW in 2023 [S1] (REPORTED)\n## Conflicts\n## Open questions\n"
+              "## Discovered")
+
+
+def _agent_engine(tmp_path, model, fns, *, limits=None, data_tools=("macro_series", "company_filings")):
+    """A minimal engine for KiqAgent: real tools and gateway; ``data_tools`` () is an engine without them."""
+    ledger = rg.SourceLedger(tmp_path / "ledger.json")
+    tools = rg.ResearchTools(ledger, tmp_path / "pages", search_fn=v3.fake_search, fetch_fn=v3.page_text,
+                             limits=limits or rg.ToolLimits(max_data_total=10, max_data_per_agent=5), data_fns=fns)
+    engine = types.SimpleNamespace(
+        gateway=rg.ModelGateway(model, None, sleep=lambda s: None), tools=tools, ledger=ledger,
+        brief="RUN BRIEF\nquestion", language="English", preset=types.SimpleNamespace(agent_max_steps=4, workers=1),
+        log=lambda kind, message: None, units=float)
+    if data_tools:
+        engine.agent_tools = rg.data_tool_schema_list(["fred", "sec_edgar"])
+        engine.data_tool_names = tuple(data_tools)
+    return engine
+
+
+def _tool_texts(call):
+    return [content for kind, content in call["messages"] if kind == "tool"]
+
+
+def test_data_calls_share_the_step_cap_and_are_fetch_shaped(tmp_path):
+    fns = data_fns()
+    model = _scripted(v3.ai(tool_calls=[_call("macro_series", "c1", series="cpi"),
+                                        _call("macro_series", "c2", series="gdp"),
+                                        _call("company_filings", "c3", company="AAPL"),
+                                        _call("web_search", "c4", query="capacity 2023")]), NOTES)
+    engine = _agent_engine(tmp_path, model, fns)
+    outcome = lr.KiqAgent(engine, _kiq("data"), "Investigate K1: task", [], rg.Deadline(600)).run()
+    texts = _tool_texts(model.calls[1])
+    assert [text.split("\n", 1)[0].endswith("official data") for text in texts[:3]] == [True, True, True]
+    assert texts[3] == lr.TOOL_CALLS_SKIPPED_TEXT
+    assert [call["series"] for call in fns["macro_series"].calls] == ["cpi", "gdp"]
+    assert engine.tools.stats()["searches"] == 0
+    # Every call carries the engine's one tools list; the data rows count as read.
+    assert all(call["tools"] is engine.agent_tools for call in model.calls)
+    assert outcome.fetched == [1, 2, 3] and outcome.fallback is None
+    assert lr.tool_output_sids("company_filings", texts[2]) == (3, [3])
+
+
+def test_a_repeated_data_request_in_one_step_is_a_duplicate(tmp_path):
+    fns = data_fns()
+    model = _scripted(v3.ai(tool_calls=[_call("macro_series", "c1", series="cpi"),
+                                        _call("macro_series", "c2", series=" CPI ")]),
+                      v3.ai(tool_calls=[_call("company_filings", "c3", company="aapl", freq="annual"),
+                                        _call("company_filings", "c4", company="AAPL")]), NOTES)
+    engine = _agent_engine(tmp_path, model, fns)
+    lr.KiqAgent(engine, _kiq("data"), "Investigate K1: task", [], rg.Deadline(600)).run()
+    texts = _tool_texts(model.calls[2])
+    assert texts[1] == texts[3] == lr.DUPLICATE_CALL_TEXT
+    assert texts[0].startswith("[S1] ") and texts[2].startswith("[S2] ")
+    assert len(fns["macro_series"].calls) == len(fns["company_filings"].calls) == 1
+
+
+def test_the_per_kiq_data_allowance_is_enforced(tmp_path):
+    fns = data_fns()
+    model = _scripted(v3.ai(tool_calls=[_call("macro_series", "c1", series="cpi")]),
+                      v3.ai(tool_calls=[_call("macro_series", "c2", series="gdp")]), NOTES)
+    engine = _agent_engine(tmp_path, model, fns, limits=rg.ToolLimits(max_data_total=10, max_data_per_agent=1))
+    lr.KiqAgent(engine, _kiq("data"), "Investigate K1: task", [], rg.Deadline(600)).run()
+    assert _tool_texts(model.calls[2])[-1] == rg.MSG_DATA_BUDGET
+    assert len(fns["macro_series"].calls) == 1
+    assert engine.tools.stats()["data"]["per_agent"]["K1"]["data_calls"] == 1
+
+
+def test_unknown_and_invalid_calls_name_the_bound_tools_and_are_counted(tmp_path):
+    engine = _agent_engine(tmp_path, _scripted(NOTES), data_fns())
+    agent = lr.KiqAgent(engine, _kiq("data"), "Investigate K1: task", [], rg.Deadline(600))
+    assert agent._call_tool(_call("bloomberg", "c1", ticker="X")) == (
+        "UNKNOWN_TOOL: only web_search, web_fetch, macro_series and company_filings are available.")
+    assert agent._call_tool(_call("macro_series", "c2")).startswith("INVALID_TOOL_CALL: macro_series needs")
+    assert agent.call_counts() == {"invalid_tool_calls": 1, "unknown_tool_calls": 1, "tool_exceptions": 0}
+    assert lr.unknown_tool_text(("company_filings",)) == (
+        "UNKNOWN_TOOL: only web_search, web_fetch and company_filings are available.")
+
+
+def test_without_data_tools_a_data_call_is_unknown_and_takes_no_step_slot(tmp_path):
+    fns = data_fns()
+    model = _scripted(v3.ai(tool_calls=[_call("macro_series", "c1", series="cpi"),
+                                        _call("web_search", "c2", query="a b"), _call("web_search", "c3", query="c d"),
+                                        _call("web_search", "c4", query="e f")]), NOTES)
+    engine = _agent_engine(tmp_path, model, fns, data_tools=())
+    lr.KiqAgent(engine, _kiq("data"), "Investigate K1: task", [], rg.Deadline(600)).run()
+    texts = _tool_texts(model.calls[1])
+    assert texts[0] == "UNKNOWN_TOOL: only web_search and web_fetch are available."
+    assert lr.TOOL_CALLS_SKIPPED_TEXT not in texts and fns["macro_series"].calls == []
+    assert all(call["tools"] is lr.AGENT_TOOLS for call in model.calls)
+
+
+@pytest.mark.parametrize("taxonomy", [False, True])
+def test_data_failures_never_count_as_fetch_failures(tmp_path, taxonomy):
+    env = {**ALL_ON, **({"RESEARCH_SOURCE_TAXONOMY": "true"} if taxonomy else {})}
+    fns = data_fns(macro_series=DataFn(failed_result()), company_filings=DataFn(RuntimeError("boom")))
+    engine, _ = make_engine(tmp_path, env, fns=fns)
+    before = engine._tool_failures()
+    assert engine.tools.data("macro_series", {"series": "cpi"}, agent_id="K1") == rg.MSG_DATA_UNAVAILABLE
+    assert engine.tools.data("company_filings", {"company": "AAPL"}, agent_id="K1") == rg.MSG_DATA_UNAVAILABLE
+    assert engine._tool_failures() == before and before["fetch_failed"] == 0
+    assert engine.tools.stats()["data"]["data_failures"] == 2
+
+
+def test_a_stopped_run_answers_data_calls_cancelled(tmp_path):
+    fns = data_fns()
+    engine, _ = make_engine(tmp_path, ALL_ON, fns=fns)
+    engine.cancel()
+    assert engine.tools.data("macro_series", {"series": "cpi"}, agent_id="K1") == lr.CANCELLED_TOOL_TEXT
+    assert fns["macro_series"].calls == []
+
+
+# =============================================================== the run's vintage pin
+
+def _plan(as_of: str) -> lr.Plan:
+    return lr.build_plan(QUESTION, "English", as_of, lr.resolve_preset("standard", {}), 20, {}, None)
+
+
+def test_the_vintage_is_pinned_once_and_survives_a_resume(tmp_path, monkeypatch):
+    engine, _ = make_engine(tmp_path, ALL_ON, fns=data_fns())
+    assert engine._data_context() is None  # no plan yet: a data call answers unavailable
+    today = _today()
+    engine.plan = _plan(today.isoformat())
+    context = engine._data_context()
+    pit = dtools.fred_pit(today)
+    assert context == {"as_of": today, "pit": pit, "language": "English"}
+    pins = json.loads((engine.work / lr.DATA_PINS_FILENAME).read_text(encoding="utf-8"))
+    assert pins == {"as_of": today.isoformat(), "cutoff": today.isoformat(), "same_day": None,
+                    "pit": pit.isoformat()}
+    # A resumed attempt (same identity, same work dir) keeps the first attempt's vintage,
+    # whatever FRED's today is by then.
+    monkeypatch.setattr(dtools, "fred_pit", lambda *a, **k: pytest.fail("pinned again on resume"))
+    resumed, _ = make_engine(tmp_path, ALL_ON, fns=data_fns())
+    assert resumed.resumed
+    resumed.plan = _plan(today.isoformat())
+    assert resumed._data_context() == context
+    assert json.loads((resumed.work / lr.DATA_PINS_FILENAME).read_text(encoding="utf-8")) == pins
+
+
+def test_a_pin_of_another_as_of_is_replaced(tmp_path):
+    engine, plog = make_engine(tmp_path, ALL_ON, fns=data_fns())
+    (engine.work / lr.DATA_PINS_FILENAME).write_text(json.dumps(
+        {"as_of": "2020-01-01", "cutoff": "2020-01-01", "same_day": None, "pit": "2020-01-01"}), encoding="utf-8")
+    engine.plan = _plan("2024-06-03")
+    assert engine._data_context()["pit"] == dt.date(2024, 6, 3)
+    assert "holds another as-of" in plog.text()
+
+
+class FredTransport:
+    """FRED's two endpoints, recorded: series metadata and 24 monthly observations ending before the window end."""
+
+    def __init__(self):
+        self.calls: list[dict] = []
+
+    def __call__(self, url, params, timeout, headers):
+        self.calls.append({"url": url, "params": dict(params)})
+        if url.endswith("/series"):
+            return 200, {"seriess": [{"id": "CPIAUCSL", "title": "Consumer Price Index", "frequency": "Monthly",
+                                      "units": "Index 1982-1984=100", "seasonal_adjustment_short": "SA"}]}, ""
+        end = dt.date.fromisoformat(params["observation_end"])
+        year, month, rows = end.year - 2, end.month, []
+        for index in range(24):
+            rows.append({"date": dt.date(year, month, 1).isoformat(), "value": f"{300 + index}.5"})
+            year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+        return 200, {"observations": rows}, ""
+
+
+def _gated_env(monkeypatch, as_of="2024-06-03", same_day="exclude"):
+    for name, value in {**ALL_ON, "RESEARCH_AS_OF": as_of, "RESEARCH_PIT_GATES": "true",
+                        "RESEARCH_PIT_SAME_DAY": same_day, "RESEARCH_PIT_UNDATED": "drop"}.items():
+        monkeypatch.setenv(name, value)
+    return dict(os.environ)
+
+
+@pytest.mark.parametrize("same_day, cutoff", [("exclude", "2024-06-02"), ("include", "2024-06-03")])
+def test_a_gated_hindcast_pins_every_data_call_before_the_as_of(tmp_path, monkeypatch, same_day, cutoff):
+    """The production factory's FRED function in a gated hindcast: excluding same-day sources,
+    the request's realtime bounds and window end are the day before the as-of, and the data row
+    is dated (and admitted) strictly before it."""
+    env = _gated_env(monkeypatch, same_day=same_day)
+    transport = FredTransport()
+    monkeypatch.setattr(dtools, "_httpx_transport", transport)
+    engine, _ = make_engine(tmp_path, env, factory=lr._default_tools_factory)
+    assert engine.pit is not None and engine.pit.same_day == same_day
+    engine.plan = _plan("2024-06-03")
+    text = engine.tools.data("macro_series", {"series": "cpi"}, agent_id="K1")
+    assert text.startswith("[S1] ") and "official data" in text.split("\n", 1)[0]
+    assert {(call["params"]["realtime_start"], call["params"]["realtime_end"]) for call in transport.calls} == {
+        (cutoff, cutoff)}
+    assert transport.calls[1]["params"]["observation_end"] == cutoff
+    row = engine.ledger.get(1)
+    assert (row["published"], row["data"]["date"], row["pit_status"]) == (
+        cutoff, cutoff, "admitted" if same_day == "exclude" else "same_day")
+    assert json.loads((engine.work / lr.DATA_PINS_FILENAME).read_text(encoding="utf-8")) == {
+        "as_of": "2024-06-03", "cutoff": cutoff, "same_day": same_day, "pit": cutoff}
