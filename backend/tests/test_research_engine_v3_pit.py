@@ -155,6 +155,18 @@ class PitWorld(v3.World):
         }))
 
 
+class QuotingGapWorld(PitWorld):
+    """The gap review asks one follow-up whose question quotes a withheld brief's
+    marker (as a follow-up restating an open question can)."""
+
+    question: str | None = None
+
+    def gap(self, call):
+        self.question = f"Does the brief's 250 GW projection for 2030 hold [S{min(self.briefs)}]?"
+        return v3.ai(json.dumps({"verdict": "gaps", "follow_ups": [
+            {"question": self.question, "queries": ["capacity projection 2030"], "why": "unconfirmed projection"}]}))
+
+
 class SilentWriterWorld(PitWorld):
     """Every section writer returns nothing, so each section of the report is
     the deterministic fallback built from the KIQ records."""
@@ -341,8 +353,8 @@ def test_point_in_time_json_records_the_exact_counters_of_the_run(tmp_path, brid
     # The wall: each KIQ's brief cited by its findings was kept out; per KIQ the
     # brief-only finding, the mixed finding and the conflict (each carries the brief's
     # marker) left the digest whole, so no marker was stripped (FU-2).
-    assert audit["wall"] == {"sids_withheld": kiqs, "digest_lines_dropped": 3 * kiqs,
-                             "digest_markers_stripped": 0}
+    assert audit["wall"] == {"sids_withheld": kiqs, "digest_rule": lr.PIT_DIGEST_WALL_RULE,
+                             "digest_lines_dropped": 3 * kiqs, "digest_markers_stripped": 0}
     assert _load(out / "v3" / "state.json")[lr.PIT_DIGEST_WALL_KEY] == lr.PIT_DIGEST_WALL_RULE
     assert audit["status"] == "date_verified"
     assert meta["point_in_time"]["audit"] == {key: value for key, value in audit.items()
@@ -357,6 +369,28 @@ def test_point_in_time_json_records_the_exact_counters_of_the_run(tmp_path, brid
     pin = {"as_of": AS_OF, "pit": {"gates": True, "same_day": "exclude", "undated": "drop"}}
     assert hp.research_audit_record(json.loads(raw), hashlib.sha256(raw).hexdigest(), pin=pin) == {
         "status": "date_verified", "sha256": hashlib.sha256(raw).hexdigest()}
+
+
+def test_a_follow_up_question_quoting_a_withheld_marker_stays_out_of_the_digest(tmp_path, bridge, monkeypatch):
+    """FU-2 end to end: a gap follow-up whose question quotes a withheld brief's marker is
+    researched (its record keeps the question), but the digest the writers read shows its
+    block's header with the KIQ id alone, and the audit counts the withheld question as
+    one more line left out."""
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch, world_cls=QuotingGapWorld)
+    assert rc == 0, meta.get("error")
+    assert world.question and _load(out / "v3" / "kiq" / "G1F1.json")["question"] == world.question
+    digest = (out / "v3" / "digest.md").read_text(encoding="utf-8")
+    assert re.findall(r"^### G1F1.*$", digest, re.M) == ["### G1F1"]
+    assert "projection for 2030 hold" not in digest
+    assert not any(f"[S{sid}]" in digest for sid in world.briefs)
+    # Every researched KIQ, the follow-up included, fetched its own brief: per KIQ the
+    # three lines citing it are left out, plus the follow-up's question.
+    kiqs = len(world.briefs)
+    assert kiqs == len(list((out / "v3" / "kiq").glob("*.json"))) >= 5
+    audit = _load(out / lr.POINT_IN_TIME_FILENAME)
+    assert audit["wall"] == {"sids_withheld": kiqs, "digest_rule": lr.PIT_DIGEST_WALL_RULE,
+                             "digest_lines_dropped": 3 * kiqs + 1, "digest_markers_stripped": 0}
+    assert audit["status"] == "date_verified"
 
 
 def test_parametric_suspects_are_counted_and_kept(tmp_path, bridge, monkeypatch):
@@ -481,8 +515,8 @@ def test_a_digest_reused_from_an_earlier_build_leaves_its_wall_counts_unknown(tm
     assert rc == 0, meta.get("error")
     second = _load(out / lr.POINT_IN_TIME_FILENAME)
     assert (out / "v3" / "digest.md").read_bytes() == digest
-    assert second["wall"] == {"sids_withheld": first["wall"]["sids_withheld"], "digest_lines_dropped": None,
-                              "digest_markers_stripped": None}
+    assert second["wall"] == {"sids_withheld": first["wall"]["sids_withheld"], "digest_rule": "unknown",
+                              "digest_lines_dropped": None, "digest_markers_stripped": None}
     assert meta["point_in_time"]["audit"]["wall"] == second["wall"]
     assert second["status"] == first["status"] == "date_verified"
     assert any("leaves its digest counts unknown" in message for kind, message in plog.lines if kind == "warn")
@@ -792,7 +826,8 @@ def test_digest_never_shows_a_withheld_claim_beside_or_under_an_admissible_marke
     engine, logs = _wall_counts_engine(record, lambda sid: sid != 2,
                                        {lr.PIT_DIGEST_WALL_KEY: lr.PIT_DIGEST_WALL_RULE})
     assert lr._Engine._pit_wall_counts(engine) == {
-        "sids_withheld": 1, "digest_lines_dropped": 7, "digest_markers_stripped": 0}
+        "sids_withheld": 1, "digest_rule": lr.PIT_DIGEST_WALL_RULE, "digest_lines_dropped": 7,
+        "digest_markers_stripped": 0}
     assert logs == []
 
 
@@ -805,7 +840,8 @@ def test_wall_counts_are_unknown_for_a_digest_built_under_another_rule(state):
     record = {"id": "K1", "facts": [{"text": "Capacity reached 176 GW [S1][S2]", "tag": "VERIFIED"}]}
     engine, logs = _wall_counts_engine(record, lambda sid: sid != 2, state)
     assert lr._Engine._pit_wall_counts(engine) == {
-        "sids_withheld": 1, "digest_lines_dropped": None, "digest_markers_stripped": None}
+        "sids_withheld": 1, "digest_rule": "unknown", "digest_lines_dropped": None,
+        "digest_markers_stripped": None}
     assert [kind for kind, message in logs if "leaves its digest counts unknown" in message] == ["warn"]
 
 
