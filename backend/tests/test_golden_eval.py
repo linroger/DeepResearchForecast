@@ -814,6 +814,20 @@ def test_probe_report_wrong_schema_fails_loud(tmp_path, over):
         ge.load_probe_contamination(bare, gpath)
 
 
+@pytest.mark.parametrize("name,content", [("missing.json", None), ("broken.json", "{not json"), ("dir", "")])
+def test_unreadable_probe_report_raises_value_error(tmp_path, name, content):
+    """Review round 3: a missing, invalid or unreadable --probe-report raises the documented
+    ValueError, not a bare OSError or JSONDecodeError message."""
+    gpath, _fpath = _legacy_fixture(tmp_path)
+    path = tmp_path / name
+    if name == "dir":
+        path.mkdir()
+    elif content is not None:
+        path.write_text(content, encoding="utf-8")
+    with pytest.raises(ValueError, match=re.escape(f"--probe-report {path}: cannot read: ")):
+        ge.load_probe_contamination(str(path), str(gpath))
+
+
 @pytest.mark.usefixtures("isolated_ledgers")
 @pytest.mark.parametrize("summary,match", [
     ({"status": "flagged", "flagged_ids": "q1"}, "flagged_ids of type str"),    # never split as ['1', 'q']

@@ -1582,8 +1582,12 @@ def load_probe_contamination(probe_report: Optional[str], golden_path: str) -> D
     any id is flagged)."""
     if not probe_report:
         return {"status": PROBE_UNPROBED}
-    with open(probe_report, encoding="utf-8") as f:
-        report = json.load(f)
+    try:
+        with open(probe_report, encoding="utf-8") as f:
+            report = json.load(f)
+    except (OSError, ValueError) as exc:
+        # A missing path, a directory, undecodable bytes or invalid JSON: the same contract.
+        raise ValueError(f"--probe-report {probe_report}: cannot read: {exc}") from exc
     schema = report.get("schema") if isinstance(report, dict) else None
     if schema != PROBE_REPORT_SCHEMA:
         raise ValueError(f"--probe-report {probe_report}: schema {schema!r} is not {PROBE_REPORT_SCHEMA!r} "
