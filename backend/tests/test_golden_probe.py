@@ -452,6 +452,76 @@ def test_resume_zero_calls(tmp_path):
     assert second["summary"] == first["summary"]
 
 
+def test_resume_never_reuses_a_prompt_that_now_leaks(tmp_path, capsys):
+    """Review round 2: the leak guard runs before reuse, and validate_meta checks the rendered
+    prompts, so a marker that only the recall prompt shows (here its window end) gives the
+    same verdict on a resumed run as on a fresh one."""
+    q = BY_ID["uk-ge-2024-labour"]
+    first, _ = _run(tmp_path)
+    assert first["summary"]["status"] == "none_detected"
+    meta = json.loads(json.dumps(META))
+    window_end = gp._recall_until(q)
+    meta[q["id"]]["leak_markers"].append(window_end)
+    nd_prompt = "\n".join(m["content"] for m in gp.build_messages("nd", q, meta[q["id"]]))
+    assert gp.contains_marker(nd_prompt, [window_end]) is None      # only the recall prompt shows it
+
+    def resumed(out):
+        client = ScriptedClient(_honest)
+        report = gp.run_probe(QUESTIONS, meta, client=client, provider="deepseek", model="scripted-1",
+                              out_dir=str(out), golden_sha256="g" * 64, max_calls=200, confident_p=0.85,
+                              closed_book_attested=True)
+        return report, client
+    second, client = resumed(tmp_path / "probe")
+    assert client.calls == [] and second["cost"]["calls"] == 0
+    row = next(r for r in second["questions"] if r["question_id"] == q["id"])
+    assert row["arms"] == {"nd": "ok", "recall": "prompt_leak_blocked"}
+    assert second["summary"]["status"] == "inconclusive"
+    assert second["summary"]["inconclusive_reasons"] == ["recall_prompt_leak_blocked"]
+    arm = json.load(open(tmp_path / "probe" / "arms" / q["id"] / "recall.json"))
+    assert arm["status"] == "prompt_leak_blocked"
+    fresh, _ = resumed(tmp_path / "fresh")
+    assert fresh["summary"] == second["summary"]
+    # the meta itself is refused, so the CLI stops before building a client
+    errors = gp.validate_meta(meta, QUESTIONS)
+    assert errors == [f"{q['id']}: the recall probe prompt contains leak marker {window_end!r} "
+                      "(template text or the recall window)"]
+    meta_path = tmp_path / "meta.json"
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    built = []
+    assert gp.cmd_probe(_cli_args(tmp_path, live=True, meta=str(meta_path)),
+                        client_factory=lambda p, m: built.append(p)) == 2
+    assert built == [] and window_end in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("arm,field,stored", [
+    ("nd", "schema", "drf.golden_probe.arm.v0"),     # written under other parser semantics
+    ("nd", "value", "0.62"),                           # not what parse_nd returns
+    ("nd", "value", True),
+    ("nd", "arm", "recall"),
+    ("recall", "value", {"knows": False, "stated_outcome": "unknown", "details": ""}),
+    ("recall", "value", {"knows": False, "details": ""}),
+])
+def test_resume_rechecks_schema_and_value(tmp_path, arm, field, stored):
+    _run(tmp_path)
+    path = tmp_path / "probe" / "arms" / "us-pres-2024-trump" / f"{arm}.json"
+    doc = json.load(open(path))
+    doc[field] = stored
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    report, client = _run(tmp_path)
+    assert client.calls == [(arm, "us-pres-2024-trump", 0.0, gp.MAX_TOKENS)]
+    assert report["cost"]["reused_arms"] == 2 * len(QUESTIONS) - 1
+    assert json.load(open(path))["schema"] == gp.ARM_SCHEMA and report["summary"]["status"] == "none_detected"
+
+
+def test_repeated_arms_run_once(tmp_path):
+    client = ScriptedClient(_honest)
+    assert gp.cmd_probe(_cli_args(tmp_path, live=True, arms="nd, nd"), client_factory=lambda p, m: client) == 0
+    report = json.load(open(tmp_path / "cli" / "probe_report.json"))
+    assert report["arms"] == ["nd"] and report["cost"]["reused_arms"] == 0
+    assert len(client.calls) == len(QUESTIONS)
+    assert report["summary"]["inconclusive_reasons"].count("recall_arm_not_run") == 1
+
+
 def test_nothing_reaches_the_production_ledger(tmp_path, monkeypatch):
     from app.services import forecast_ledger
     ledger = tmp_path / "ledger"

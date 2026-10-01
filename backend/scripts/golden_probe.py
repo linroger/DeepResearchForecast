@@ -41,7 +41,9 @@ cap is reached the remaining arms are ``skipped_budget``, the status is inconclu
 the CLI exits 4. Nothing is written to any ledger: artifacts go under
 ``forecast_ledger.evaluation_ledger_dir()/probes/<provider>__<model>__<golden_sha8>/``
 (``arms/<qid>/<arm>.json`` and ``probe_report.json``), and an ``ok`` arm artifact with
-the same prompt hash, provider and model is reused on a rerun (zero calls).
+the same arm schema, prompt hash, provider and model and a value that still parses is
+reused on a rerun (zero calls). The leak guard runs before that reuse, so a prompt that
+contains a marker curated after the first run is blocked, never answered from disk.
 
 Opt-in: without GOLDEN_PROBE_ENABLED=true or --live the CLI prints how to opt in and
 exits 0 without building a client.
@@ -76,6 +78,7 @@ from app.services import eval_stats, golden_set  # noqa: E402
 from app.utils.atomic import write_json_atomic  # noqa: E402
 
 REPORT_SCHEMA = "drf.golden_probe.v1"
+# An arm artifact is reused only under this schema: bump it when a parser's semantics change.
 ARM_SCHEMA = "drf.golden_probe.arm.v1"
 META_PATH = os.path.join(_BACKEND, "tests", "eval", "golden_probe_meta.json")
 GOLDEN_PATH = os.path.join(_BACKEND, "tests", "eval", "golden_questions.json")
@@ -172,7 +175,8 @@ def validate_meta(meta: Dict[str, Dict[str, Any]], questions: Sequence[Dict[str,
     non-empty marker list or ``recall_uninformative: true`` with an empty one (never a weak
     marker invented to fill the list); a hindsight-framed row needs a probe_question; no
     marker may occur in the probe view the model is shown (the forecaster view with any
-    probe rewording)."""
+    probe rewording) nor anywhere in an arm's rendered prompt (the template text and the
+    recall window included: assert_answer_free would block that arm)."""
     errors: List[str] = []
     by_id = {q.get("id"): q for q in questions}
     for qid in sorted(set(meta) - set(by_id)):
@@ -205,6 +209,12 @@ def validate_meta(meta: Dict[str, Dict[str, Any]], questions: Sequence[Dict[str,
         hit = contains_marker(shown, markers)
         if hit is not None:
             errors.append(f"{qid}: leak marker {hit!r} occurs in the forecaster-visible text")
+            continue
+        for arm in ARMS:
+            try:
+                assert_answer_free(build_messages(arm, q, row), markers)
+            except PromptLeak as exc:
+                errors.append(f"{qid}: the {arm} {exc} (template text or the recall window)")
     return errors
 
 
@@ -379,14 +389,25 @@ def _arm_path(out_dir: str, qid: str, arm: str) -> str:
     return os.path.join(out_dir, "arms", safe, f"{arm}.json")
 
 
-def _reusable(path: str, sha: str, provider: str, model: str) -> Optional[Dict[str, Any]]:
+def _parsed_value(arm: str, value: Any) -> bool:
+    """Whether ``value`` is exactly what the arm's parser returns for it (a stored ok value)."""
+    if arm == ARM_ND:
+        return isinstance(value, (int, float)) and parse_probability(value) == value
+    return isinstance(value, dict) and parse_recall(value) == value
+
+
+def _reusable(path: str, arm: str, sha: str, provider: str, model: str) -> Optional[Dict[str, Any]]:
+    """The ok artifact at ``path`` when it was written under ARM_SCHEMA for the same arm,
+    prompt hash, provider and model and its value still parses; else None (call again)."""
     try:
         with open(path, encoding="utf-8") as f:
             doc = json.load(f)
     except (OSError, ValueError):
         return None
-    if (isinstance(doc, dict) and doc.get("status") == STATUS_OK and doc.get("prompt_sha256") == sha
-            and doc.get("provider") == provider and doc.get("model") == model):
+    if (isinstance(doc, dict) and doc.get("schema") == ARM_SCHEMA and doc.get("status") == STATUS_OK
+            and doc.get("arm") == arm and doc.get("prompt_sha256") == sha
+            and doc.get("provider") == provider and doc.get("model") == model
+            and _parsed_value(arm, doc.get("value"))):
         return doc
     return None
 
@@ -399,16 +420,18 @@ def _run_arm(client: Any, state: Dict[str, Any], arm: str, q: Dict[str, Any],
     path = _arm_path(out_dir, q["id"], arm)
     base = {"schema": ARM_SCHEMA, "question_id": q["id"], "arm": arm, "provider": provider,
             "model": model, "prompt_sha256": sha}
-    reused = _reusable(path, sha, provider, model)
-    if reused is not None:
-        counters["reused"] += 1
-        return reused
     try:
+        # Before any reuse: a leaking prompt is answered neither by a new call nor by an
+        # artifact a previous run wrote before the marker was curated.
         assert_answer_free(messages, meta_row.get("leak_markers") or [])
     except PromptLeak:
         doc = dict(base, status=STATUS_PROMPT_LEAK, value=None, raw_excerpt="", created_at=_now())
         write_json_atomic(path, doc)
         return doc
+    reused = _reusable(path, arm, sha, provider, model)
+    if reused is not None:
+        counters["reused"] += 1
+        return reused
     if state["calls"] >= state["max_calls"]:
         state["refused"] = True
         return dict(base, status=STATUS_SKIPPED_BUDGET, value=None, raw_excerpt="", created_at=_now())
@@ -449,7 +472,8 @@ def run_probe(questions: Sequence[Dict[str, Any]], meta: Dict[str, Dict[str, Any
 
     ``client`` is any object with chat_json (an LLMClient in production); it is metered
     by :func:`meter_calls` for the duration of the run. Unlabelled (ambiguous) rows are
-    skipped."""
+    skipped. A repeated arm is run once."""
+    arms = list(dict.fromkeys(arms))
     counters = {"reused": 0}
     rows: List[Dict[str, Any]] = []
     with meter_calls(client, max_calls) as state:
