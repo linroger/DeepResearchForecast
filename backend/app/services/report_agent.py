@@ -1691,6 +1691,7 @@ class ReportAgent:
         scenario_spine: Optional[List[Dict[str, Any]]] = None,
         hindcast: Optional[Dict[str, Any]] = None,
         numeric_guard_mode: Optional[str] = None,
+        interview_graph_feedback: Optional[bool] = None,
     ):
         """
         初始化Report Agent
@@ -1728,6 +1729,12 @@ class ReportAgent:
             种子报告传入准入时钉住的 safety_policy_v1.numeric_guard_mode；缺省 None（API 重生成 / 对话路径）
             读当前 Config.NUMERIC_GUARD_MODE。非法值按 shadow 运行并告警。检查本身不改任何产物内容；
             shadow 在二元提示词里多索取 latest_actual，模型起草的二元与概率可能因此与 off 不同。
+
+        FU-8 interview_graph_feedback: 采访回答能否写入观察图——有钉值的运行，编排器主报告 / 种子报告
+            传入该运行钉住的值（PipelineOrchestrator._interview_feedback_agent_kwargs），原样转交
+            zep_tools.interview_agents；只有 True 放行，其他非 None 值按 False（失败关闭）。缺省 None
+            （无钉值的运行、API 重生成 / 对话路径）时由 interview_agents 按模拟 id 查所属管线的钉
+            （共享模拟子管线跟随 base；无钉 → 环境值 Config.SIM_INTERVIEW_GRAPH_FEEDBACK）。
         """
         self.graph_id = graph_id
         self.simulation_id = simulation_id
@@ -1769,6 +1776,9 @@ class ReportAgent:
         self.hindcast: Optional[Dict[str, Any]] = as_hindcast_pin(hindcast)
         # TIME-5：数值一致性影子检查模式（见 docstring）。测试经 __new__ 构造时缺失，读取一律走 getattr。
         self._numeric_guard_mode = self._normalize_numeric_guard_mode(numeric_guard_mode)
+        # FU-8：采访事实写图的门（见 docstring）。测试经 __new__ 构造时缺失，读取一律走 getattr。
+        self.interview_graph_feedback: Optional[bool] = (
+            None if interview_graph_feedback is None else interview_graph_feedback is True)
         self._hindcast_pin_cache: Any = _HINDCAST_PIN_UNRESOLVED
         self._hindcast_lookup_failed = False
         # RESEARCH-12：(问题规范, 判定日是否采用) 懒缓存（_question_spec_for_run；None = 尚未核对）。
@@ -11059,6 +11069,8 @@ class ReportAgent:
                     simulation_requirement=self.simulation_requirement,
                     max_agents=max_agents,
                     graph_id=self.graph_id,  # T3.14: 把采访回答持久化为 typed 图谱事实
+                    # FU-8：编排器交来的该运行钉值；None → interview_agents 按模拟 id 查钉。
+                    feedback_allowed=getattr(self, "interview_graph_feedback", None),
                 )
                 return result.to_text()
             
