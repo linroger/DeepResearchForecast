@@ -490,6 +490,8 @@ def test_at_the_pack_cap_forecaster_matches_never_displace_previously_matched_ro
     assert spare == [f"Projection {i}" for i in range(5)] + [f"Metric {i}" for i in range(25)]
     capped = [row["metric"] for row in actor_context._relevant_rows(after[:5] + after[5:35], goldman, 32)]
     assert capped == ["Projection 0", "Projection 1"] + [f"Metric {i}" for i in range(30)]
+    # The view strips every key the bridge's attribution adds (its _CONSENSUS_KEYS).
+    assert actor_context._ATTRIBUTION_FIELDS == lr._CONSENSUS_KEYS
     # Rows without attribution fields: exactly the first 32 matches, as before.
     plain = [dict(row) for row in after if "forecaster" not in row]
     assert actor_context._relevant_rows(plain + plain[:3], goldman, 32) == (plain + plain[:3])[:32]

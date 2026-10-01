@@ -829,11 +829,11 @@ def _incident_relationships(
 
 
 # RESEARCH-6 forecaster attribution adds these fields to quantitative rows (none of them
-# existed on a row before it) and sets ``analyst`` to the forecaster, where it used to be
-# the source (the bridge's enrich_quantitative_rows fallback).  A row the actor matches
-# only through attribution must not push a row it matched without it out of a capped
-# pack (FU-10).
-_ATTRIBUTION_FIELDS = ("forecaster", "low", "high", "n_forecasters")
+# existed on a row before it; the bridge's _CONSENSUS_KEYS) and sets ``analyst`` to the
+# forecaster, where it used to be the source (the bridge's enrich_quantitative_rows
+# fallback).  A row the actor matches only through attribution must not push a row it
+# matched without it out of a capped pack (FU-10).
+_ATTRIBUTION_FIELDS = ("forecaster", "low", "high", "n_forecasters", "range_kind")
 
 
 def _unattributed_view(row: Mapping[str, Any]) -> Dict[str, Any]:
