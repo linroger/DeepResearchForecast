@@ -2249,7 +2249,8 @@ def _build_market_anchor(prob: Optional[float], market: Dict[str, Any], *,
 
     EVAL-6（MARKET_ANCHOR_PRICE_TIME，默认开）：市场行能定出取价时刻时追加 price_time +
     price_time_basis（见 prediction_markets.market_price_time）——行带 quoted_at → basis
-    'requote'，否则带 snapshot_as_of → basis 'snapshot'，都没有 → 两键都不写。basis 为
+    'requote'，否则带 observed_at（FU-11：研究桥逐行记的该行价格抓取时刻）→ basis
+    'observed'，否则带 snapshot_as_of → basis 'snapshot'，都没有 → 两键都不写。basis 为
     'requote' 时 price_at_research 实为报告期重报价，并非研究期价。basis 为 'snapshot' 时
     price_time 是研究 handoff 快照的 as_of 或报告期现抓兜底的抓取时刻，二者都只是取价时刻的
     上界（研究快照的 as_of 在落盘时才取，其中智能体工具检索到的行可能早数小时就已报价）。

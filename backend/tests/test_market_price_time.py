@@ -333,8 +333,10 @@ def test_live_fallback_flag_off_rows_unchanged(enabled, flag, monkeypatch):
     # ... a report-time requote beats both ...
     ({"quoted_at": T1.isoformat(), "observed_at": "2026-09-27T21:00:00Z",
       "snapshot_as_of": SNAPSHOT_AS_OF}, (T1.isoformat(), "requote")),
-    # ... and an unusable one is unknown, never the later snapshot time
-    ({"observed_at": "2026-09-27", "snapshot_as_of": SNAPSHOT_AS_OF}, None),
+    # ... and an unusable one is skipped: that price was fetched before the snapshot was
+    # written, so the snapshot's as_of still bounds it (an unusable quoted_at is unknown)
+    ({"observed_at": "2026-09-27", "snapshot_as_of": SNAPSHOT_AS_OF},
+     (SNAPSHOT_AS_OF, "snapshot")),
 ])
 def test_build_market_anchor_price_time_basis(flag, extra, expected):
     anchor = _anchor(_market(**extra))

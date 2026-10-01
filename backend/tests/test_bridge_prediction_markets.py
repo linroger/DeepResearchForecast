@@ -11,6 +11,8 @@ import os
 import sys
 from datetime import datetime, timezone
 
+import pytest
+
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _BRIDGE_DIR = os.path.join(_REPO_ROOT, "deerflow_bridge")
 if _BRIDGE_DIR not in sys.path:
@@ -1380,6 +1382,74 @@ def test_collector_price_time_off_writes_no_observation_time(tmp_path, monkeypat
     rows, _ = _collect_with_tool_and_refresh(tmp_path, monkeypatch, price_time=False)
     assert set(rows) == {"777", "691340"}
     assert not any("observed_at" in row for row in rows.values())
+
+
+def test_collector_price_time_off_differs_only_by_the_observation_time(tmp_path, monkeypatch):
+    """Knob off: prediction_markets.json is the knob-on payload without observed_at."""
+    (tmp_path / "off").mkdir()
+    (tmp_path / "on").mkdir()
+    _, off = _collect_with_tool_and_refresh(tmp_path / "off", monkeypatch, price_time=False)
+    _, on = _collect_with_tool_and_refresh(tmp_path / "on", monkeypatch, price_time=True)
+    for row in on["markets"]:
+        row.pop("observed_at")
+    assert off == on
+
+
+def test_merged_snapshot_never_pairs_a_fresher_price_with_an_older_fetch_time():
+    """FU-11: the freshest track wins the price; a fetch time from an older track that the
+    fresher row does not carry is dropped, never kept beside the newer price."""
+    from app.services.pipeline_orchestrator import merge_market_snapshots
+    older = {"as_of": "2026-07-11T00:00:00Z", "markets": [
+        {"market_id": "777", "implied_yes_prob": 0.30, "observed_at": "2026-07-11T00:00:00Z"}]}
+    fresher = {"as_of": "2026-07-11T06:00:00Z", "markets": [
+        {"market_id": "777", "implied_yes_prob": 0.42}]}
+    (row,) = merge_market_snapshots([older, fresher])["markets"]
+    assert row["implied_yes_prob"] == 0.42 and "observed_at" not in row
+    stamped = {"as_of": "2026-07-11T06:00:00Z", "markets": [
+        {"market_id": "777", "implied_yes_prob": 0.42, "observed_at": "2026-07-11T05:59:00Z"}]}
+    (row,) = merge_market_snapshots([older, stamped])["markets"]
+    assert (row["implied_yes_prob"], row["observed_at"]) == (0.42, "2026-07-11T05:59:00Z")
+
+
+@pytest.mark.parametrize("price_time", [True, False])
+def test_collector_dates_horizon_degraded_rows_by_their_fetch(tmp_path, monkeypatch, price_time):
+    """FU-11: a row found by the horizon-degradation retry is dated by that retry's fetch."""
+    row = {"market_id": "888", "question": "TSMC market share above 60%?", "implied_yes_prob": 0.2,
+           "volume": 500_000.0, "url": "https://polymarket.com/event/tsmc-share",
+           "end_date": "2026-12-31T00:00:00Z"}
+    calls = []
+
+    def _snapshot(queries, **kwargs):
+        calls.append(list(queries))
+        kwargs["diagnostics"].update({"attempted_query_count": 1, "successful_query_count": 1,
+                                      "transport_failure_count": 0})
+        return [] if len(calls) == 1 else [dict(row)]
+
+    monkeypatch.setattr(d, "_pm_resolve_queries", lambda *_a, **_k: ["TSMC market share 2030"])
+    monkeypatch.setattr(d, "_pm_snapshot", _snapshot)
+    monkeypatch.setattr(d, "score_market_relevance", lambda *_a, **_k: {"888": 9.0})  # 0-10 scale
+    monkeypatch.setattr(d, "_pm_now", lambda: datetime(2026, 7, 11, tzinfo=timezone.utc))
+    monkeypatch.setattr(d, "_utcnow", lambda: "2026-07-11T06:00:00+00:00")
+    monkeypatch.setenv("PREDICTION_MARKETS_ENABLED", "true")
+    monkeypatch.setenv("PREDICTION_MARKETS_PRICE_HISTORY", "false")
+    monkeypatch.setenv("PREDICTION_MARKETS_HORIZON_RETRY", "true")
+    monkeypatch.setenv("PREDICTION_MARKETS_MIN_RELEVANCE", "5")
+    monkeypatch.setenv("MARKET_ANCHOR_PRICE_TIME", "true" if price_time else "false")
+
+    class Log:
+        def write(self, level, message):
+            pass
+
+    d._collect_prediction_markets(tmp_path, "Will TSMC hold over 60% share in 2030?", "", {}, Log(),
+                                  model_name="test")
+    payload = json.loads((tmp_path / d.PREDICTION_MARKETS_FILENAME).read_text(encoding="utf-8"))
+    assert payload.get("horizon_degraded") and len(calls) >= 2
+    (kept,) = payload["markets"]
+    assert kept["market_id"] == "888" and kept["horizon_degraded"] == payload["horizon_degraded"]
+    if price_time:
+        assert kept["observed_at"] == "2026-07-11T06:00:00+00:00"
+    else:
+        assert "observed_at" not in kept
 
 
 def test_bridge_fanout_suppressed_when_harness_delegation_is_active(monkeypatch):

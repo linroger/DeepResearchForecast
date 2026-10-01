@@ -285,10 +285,11 @@ def drop_window_ended_rows(rows: Any) -> Tuple[List[Any], int]:
 # EVAL-6 (MARKET_ANCHOR_PRICE_TIME): when a row's implied_yes_prob was observed. A requote
 # stamps ``quoted_at``; a research or report-time snapshot row carries ``snapshot_as_of``,
 # which dates the price by the snapshot's as_of: an upper bound on when it was observed.
+# FU-11: research rows also carry the bridge's ``observed_at`` (when that row's price was
+# fetched), which the snapshot's as_of bounds from above.
 PRICE_TIME_BASIS_REQUOTE = "requote"
-PRICE_TIME_BASIS_SNAPSHOT = "snapshot"
-# FU-11: the research bridge's per-row ``observed_at`` (when that row's price was fetched).
 PRICE_TIME_BASIS_OBSERVED = "observed"
+PRICE_TIME_BASIS_SNAPSHOT = "snapshot"
 
 
 def price_time_enabled() -> bool:
@@ -329,9 +330,11 @@ def market_price_time(row: Any) -> Optional[Tuple[str, str]]:
     the price was observed, not the exact moment: the research bridge takes its as_of when
     it writes the snapshot, after merging agent-tool rows that may have been priced hours
     earlier. Only a zone-aware ISO date-time counts (parse_stamp_strict, no bare dates) and
-    it is returned exactly as stored. A row whose quoted_at (or observed_at) is present but
-    unusable is unknown, never a later basis: its price was fetched then, so a later time
-    would misdate it. Never raises."""
+    it is returned exactly as stored. A row whose quoted_at is present but unusable is
+    unknown, never 'snapshot': its price came from a later requote, so the earlier snapshot
+    time would misdate it. An unusable observed_at is skipped instead: that price was
+    fetched before the snapshot was written, so the snapshot's upper bound still holds.
+    Never raises."""
     if not isinstance(row, dict):
         return None
     quoted_at = row.get("quoted_at")
@@ -340,9 +343,7 @@ def market_price_time(row: Any) -> Optional[Tuple[str, str]]:
             return None
         return quoted_at, PRICE_TIME_BASIS_REQUOTE
     observed_at = row.get("observed_at")
-    if observed_at is not None:
-        if parse_stamp_strict(observed_at, allow_date=False) is None:
-            return None
+    if parse_stamp_strict(observed_at, allow_date=False) is not None:
         return observed_at, PRICE_TIME_BASIS_OBSERVED
     snapshot_as_of = row.get("snapshot_as_of")
     if parse_stamp_strict(snapshot_as_of, allow_date=False) is None:

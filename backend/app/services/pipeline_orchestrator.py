@@ -7210,6 +7210,9 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
             if existing is None or snap_as_of >= row_as_of.get(market_id, ""):
                 merged = dict(existing or {})
                 merged.update(row)
+                if "observed_at" not in row:
+                    # FU-11: an older track's fetch time never dates the fresher price.
+                    merged.pop("observed_at", None)
                 by_id[market_id] = merged
                 row_as_of[market_id] = snap_as_of
             by_id[market_id]["track_provenance"] = provenance
