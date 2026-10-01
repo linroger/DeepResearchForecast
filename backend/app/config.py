@@ -1162,6 +1162,20 @@ class Config:
     # 对账弹出锚点、修订概率却永久保留）。默认 0.6——高于锚点完整性下限
     # （_market_anchor_complete 的 0.5）：影响概率的门槛必须严于仅作展示的门槛。
     FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE = float(os.environ.get('FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE', '0.6') or '0.6')
+    # REPORT-12 (deterministic market blend): the 10pp divergence restatement asks the model
+    # only for a bounded market_weight w (plus a market-citing rationale, all or none) and code
+    # computes the revised probability (1-w)*p + w*m from DRF's own snapshot price m, stamps the
+    # formula in market_influence.blend and shows it in the Market Cross-Check.  Default off: it
+    # changes how published probabilities move, so it is promoted only through an outcome-blind
+    # (WP14) decision; off -> the legacy free-probability restatement, byte-identical.
+    FORECAST_MARKET_BLEND_ARITHMETIC = os.environ.get('FORECAST_MARKET_BLEND_ARITHMETIC', 'false').strip().lower() == 'true'
+    # REPORT-12: the largest market_weight accepted (a larger one rejects the whole revision).
+    # Default 0.8: markets are calibration anchors, not truth, so a blend never fully adopts the
+    # market price.  Read only while FORECAST_MARKET_BLEND_ARITHMETIC is on; clamped to [0, 1]
+    # so a blend always stays on the segment between the forecast and the market price, then
+    # floored to two decimals (the 0.01 grid the model's weight is rounded to), so the cap the
+    # prompt states is exactly the cap that is enforced.
+    FORECAST_MARKET_BLEND_WEIGHT_MAX = float(os.environ.get('FORECAST_MARKET_BLEND_WEIGHT_MAX', '0.8') or '0.8')
     # REPORT-10（信息墙）：注入实时市场包时，二元抽取的 dossier 视图删掉研究桥追加的机器市场表
     # （"## Prediction Market Signals" H2 节，研究期价格、可能过时），市场价只经实时市场包一个
     # 入口进入 _draw，且不再占用 head+tail 的尾部预算。默认关：删除会改变二元提示词进而可能
