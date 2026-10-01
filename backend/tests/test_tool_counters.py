@@ -3,15 +3,18 @@
 * the v3 KIQ agents count the calls answered with INVALID_TOOL_CALL /
   UNKNOWN_TOOL / TOOL_ERROR (the strings the model sees are unchanged), each KIQ
   record's stats carry them and meta.kiqs sums them (a record written before the
-  counters counts 0);
+  counters counts 0 and is counted in tool_counters_missing, so the scorecard
+  never reads a zero sum over it as evidence);
 * ReportAgent's tool_unknown agent_log rows (INFRA-5) on every path, and the
   scorecard contracts research invalid/unknown_tool_calls and report
-  unknown_tool_calls (== 0; not instrumented without an INFRA-5 marker, torn
-  log lines fail closed only when they may hide a row);
+  unknown_tool_calls (== 0; not instrumented without an INFRA-5 marker, never
+  below INFRA-5's telemetry count, torn log lines fail closed only when they
+  may hide a row);
 * ``scripts/stage_scorecard.py aggregate``: grouping by code sha and backbone
   (partial backbones of runs that stopped early), per-run distributions, pooled
   Wilson regression flags against the same backbone gated on a minimum run
-  count, and the exit codes judged on the current code.
+  count, and the exit codes judged on the current code (inconclusive when the
+  newest run's sha is unknown); runs are dated by their last attempt.
 
 Offline: fake search/fetch/LLM doubles, fixtures under tmp_path, no network.
 """
@@ -156,11 +159,12 @@ def test_meta_kiqs_sums(tmp_path, bridge, monkeypatch):
     kiqs = meta["kiqs"]
     assert kiqs["invalid_tool_calls"] == kiqs["unknown_tool_calls"] == len(records)
     assert kiqs["tool_exceptions"] == 0
+    assert "tool_counters_missing" not in kiqs  # written only when a record lacks the counters
     disk = json.loads((out / "meta.json").read_text(encoding="utf-8"))
     assert disk["kiqs"]["unknown_tool_calls"] == disk["kiqs"]["invalid_tool_calls"] == len(records)
 
     # A record kept by a resumed run that predates the counters counts 0 (every
-    # phase is reused, so no model call is made).
+    # phase is reused, so no model call is made) and is counted as missing them.
     first = sorted(records)[0]
     path = out / "v3" / "kiq" / f"{first}.json"
     stale = records[first]
@@ -172,9 +176,20 @@ def test_meta_kiqs_sums(tmp_path, bridge, monkeypatch):
                                                out_dir=out, model=silent)
     assert rc == 0 and model.calls == []
     assert meta["kiqs"]["unknown_tool_calls"] == meta["kiqs"]["invalid_tool_calls"] == len(records) - 1
+    assert meta["kiqs"]["tool_counters_missing"] == 1
+    # The scorecard reads the sums as a lower bound then.
+    record = sc._kiq_tool_call_counts(sc.MEASURED, meta)["unknown_tool_calls"]
+    assert (record["status"], record["value"]) == ("measured", len(records) - 1)
+    assert record["detail"] == "a lower bound: 1 KIQ record(s) predate the counters"
     assert lr._record_stat_count({"stats": {"unknown_tool_calls": True}}, "unknown_tool_calls") == 0
     assert lr._record_stat_count({"stats": "garbage"}, "unknown_tool_calls") == 0
     assert lr._record_stat_count({}, "unknown_tool_calls") == 0
+    complete = dict.fromkeys(lr.TOOL_CALL_COUNTERS, 0)
+    assert not lr._record_lacks_tool_counters({"stats": complete})
+    for stats in ("garbage", {}, dict(complete, tool_exceptions=True), dict(complete, unknown_tool_calls=-1),
+                  {k: v for k, v in complete.items() if k != "invalid_tool_calls"}):
+        assert lr._record_lacks_tool_counters({"stats": stats}), stats
+    assert lr._record_lacks_tool_counters({})
 
 
 # ====================================================== report tool_unknown rows
@@ -364,12 +379,30 @@ def test_scorecard_counts_tool_unknown(roots):
     assert card["checks"]["research"] == {"passed": None, "failed": [],
                                           "unevaluable": ["invalid_tool_calls", "unknown_tool_calls"]}
 
-    # A counter that is not a count is unreadable (fails closed).
-    ts._make_pipeline(meta=_kiqs(unknown_tool_calls=True, invalid_tool_calls="0"))
+    # A resumed v3 run that kept KIQ records from before EVAL-16 (tool_counters_missing):
+    # a zero sum is not evidence, a positive one is a lower bound and still fails.
+    ts._make_pipeline(meta=_kiqs(tool_counters_missing=2))
     card = ts._score()
-    for name in ("invalid_tool_calls", "unknown_tool_calls"):
-        assert ts._metric(card, "research", name)["status"] == "unreadable"
-    assert card["checks"]["research"]["failed"] == ["invalid_tool_calls", "unknown_tool_calls"]
+    record = ts._metric(card, "research", "unknown_tool_calls")
+    assert (record["status"], record["value"]) == ("not_instrumented", None)
+    assert record["detail"] == "2 KIQ record(s) predate the counters: a zero sum is not evidence"
+    assert card["checks"]["research"] == {"passed": None, "failed": [],
+                                          "unevaluable": ["invalid_tool_calls", "unknown_tool_calls"]}
+    ts._make_pipeline(meta=_kiqs(tool_counters_missing=1, unknown_tool_calls=3))
+    card = ts._score()
+    record = ts._metric(card, "research", "unknown_tool_calls")
+    assert (record["status"], record["value"]) == ("measured", 3)
+    assert record["detail"] == "a lower bound: 1 KIQ record(s) predate the counters"
+    assert card["checks"]["research"]["failed"] == ["unknown_tool_calls"]
+    assert card["checks"]["research"]["unevaluable"] == ["invalid_tool_calls"]
+
+    # A counter that is not a count is unreadable (fails closed).
+    for meta in (_kiqs(unknown_tool_calls=True, invalid_tool_calls="0"), _kiqs(tool_counters_missing="1")):
+        ts._make_pipeline(meta=meta)
+        card = ts._score()
+        for name in ("invalid_tool_calls", "unknown_tool_calls"):
+            assert ts._metric(card, "research", name)["status"] == "unreadable"
+        assert card["checks"]["research"]["failed"] == ["invalid_tool_calls", "unknown_tool_calls"]
 
     # Research only for v3: another engine has no KIQ agents (not applicable, skipped).
     for meta in ({"research_engine": "legacy", "actors_count": 3},
@@ -388,6 +421,62 @@ def test_scorecard_counts_tool_unknown(roots):
     card = ts._score()
     assert ts._metric(card, "research", "unknown_tool_calls")["status"] == "artifact_missing"
     assert {"invalid_tool_calls", "unknown_tool_calls"} <= set(card["checks"]["research"]["failed"])
+
+
+def test_report_unknown_count_cross_checks_telemetry_and_odd_actions(roots):
+    """INFRA-5's telemetry counts the unknown calls too: a lost tool_unknown row never
+    reads as a measured 0.  A row whose action is not a string stays local to the log."""
+    ts._make_pipeline()
+    telemetry = os.path.join(po.ReportManager._get_report_folder(ts.REPORT_ID), "telemetry.json")
+
+    def dispatch(rejected_unknown):
+        return {"dispatched": 4, "rejected_parse": 0, "rejected_params": 0,
+                "rejected_unknown": rejected_unknown, "repaired": 0}
+
+    # ReportAgent swallows a failed log write: no row, but telemetry.json counts 2.
+    ts._write(telemetry, {"totals": {"tool_calls": 4, "tool_dispatch": dispatch(2)}})
+    _write_agent_log([_log_row("report_start"), _log_row("tool_call")])
+    card = ts._score()
+    record = ts._metric(card, "report", "unknown_tool_calls")
+    assert (record["status"], record["value"]) == ("measured", 2)
+    assert record["detail"] == ("telemetry totals.tool_dispatch.rejected_unknown counts 2 unknown "
+                                "call(s) but the log holds 0 tool_unknown row(s): rows were lost, "
+                                "the telemetry count is used")
+    assert card["checks"]["report"]["failed"] == ["unknown_tool_calls"]
+    # The largest total of any attempt (each report_complete row and telemetry.json) is
+    # the floor; rows beyond it (earlier attempts, the dispatch fallback) still count.
+    ts._write(telemetry, {"totals": {"tool_calls": 4, "tool_dispatch": dispatch(1)}})
+    _write_agent_log([_log_row("tool_unknown", tool_name="a", path="react"),
+                      _log_row("report_complete", telemetry_totals={"tool_dispatch": dispatch(3)})])
+    assert ts._metric(ts._score(), "report", "unknown_tool_calls")["value"] == 3
+    _write_agent_log([_log_row("tool_unknown", tool_name="a", path="react"),
+                      _log_row("tool_unknown", tool_name="b", path="dispatch")])
+    record = ts._metric(ts._score(), "report", "unknown_tool_calls")
+    assert (record["value"], "detail" in record) == (2, False)
+    # A total that is not a count fails closed.
+    for bad in ("2", -1, True, None):
+        ts._write(telemetry, {"totals": {"tool_dispatch": dispatch(bad)}})
+        _write_agent_log([_log_row("report_start")])
+        card = ts._score()
+        record = ts._metric(card, "report", "unknown_tool_calls")
+        assert (record["status"], record["detail"]) == (
+            "unreadable", "telemetry totals.tool_dispatch.rejected_unknown is not a count"), bad
+        assert card["checks"]["report"]["failed"] == ["unknown_tool_calls"]
+
+    # A valid JSON row with an unhashable action (a hand-edited log) is no marker and no
+    # row: only this metric reads the log, every other report metric is still measured.
+    ts._write(telemetry, {"totals": {"tool_dispatch": dispatch(0)}})
+    for rows, expected in (([], 0), ([_log_row("tool_unknown", tool_name="a", path="native")], 1)):
+        _write_agent_log([dict(_log_row("report_start"), action=["tool_unknown"]),
+                          dict(_log_row("tool_call"), action={"name": "tool_unknown"})] + rows)
+        card = ts._score()
+        record = ts._metric(card, "report", "unknown_tool_calls")
+        assert (record["status"], record["value"]) == ("measured", expected)
+        assert all(metric["status"] == "measured" for metric in card["stages"]["report"]["metrics"].values())
+        assert card["checks"]["report"]["failed"] == ([] if expected == 0 else ["unknown_tool_calls"])
+    os.remove(telemetry)
+    _write_agent_log([dict(_log_row("tool_rejected"), action=["tool_rejected"])])
+    assert ts._metric(ts._score(), "report", "unknown_tool_calls")["status"] == "not_instrumented"
 
 
 def test_rate_metrics_cover_every_num_den_metric(roots):
@@ -433,8 +522,8 @@ def _run(base, pid, day, *, sha="aaa", backbone="glm", verified=(8, 10), failure
         card["checks"][stage] = {"passed": verdict,
                                  "failed": ["stage_status"] if verdict is False else [],
                                  "unevaluable": ["kiq_completion"] if verdict is None else []}
-    created = dt.datetime(2026, 9, day, 12, tzinfo=UTC) if day else None
-    return {"pipeline_id": pid, "created_at": created, "card": card}
+    run_at = dt.datetime(2026, 9, day, 12, tzinfo=UTC) if day else None
+    return {"pipeline_id": pid, "run_at": run_at, "card": card}
 
 
 def _flags(group):
@@ -455,10 +544,11 @@ def test_aggregate_grouping_wilson_min_runs_and_exit_codes(base_card):
     assert [(g["repo_git_sha"], g["backbone"]["report"]["provider"], g["runs"]) for g in groups] == [
         ("aaa", "glm", 4), ("aaa", "kimi", 1), ("bbb", "glm", 2)]
     assert groups[0]["pipelines"] == [f"pipe_old{i}" for i in range(4)]
-    assert groups[0]["first_created_at"].startswith("2026-09-01T12:00")
+    assert groups[0]["first_run_at"].startswith("2026-09-01T12:00")
     # Compared with the same backbone at an earlier sha (aaa/glm), never with aaa/kimi.
     assert [g["compared_to"] for g in groups] == [None, None, 0] and result["latest_group"] == 2
-    assert result["current"] == {"repo_git_sha": "bbb", "groups": [2], "unevaluable_share": 0.0}
+    assert result["current"] == {"repo_git_sha": "bbb", "groups": [2], "unevaluable_share": 0.0,
+                                 "reason": None}
     research = groups[0]["stages"]["research"]
     assert research["runs"] == 4
     assert research["contract"] == {"passed": 4, "failed": 0, "unevaluable": 0, "evaluable_runs": 4,
@@ -526,12 +616,13 @@ def test_aggregate_grouping_wilson_min_runs_and_exit_codes(base_card):
     # No run at all, or a pipeline that could not be scored, is never clean.
     assert cli.aggregate([])["exit_code"] == cli.EXIT_INCONCLUSIVE
     assert cli.aggregate([])["latest_group"] is None
+    assert cli.aggregate([])["current"]["reason"] == "no run"
     errors = [{"pipeline_id": "pipe_broken", "error": "ValueError: unreadable"}]
     assert cli.aggregate(old, errors=errors)["exit_code"] == cli.EXIT_INCONCLUSIVE
-    # A run without created_at sorts as the oldest.
+    # An undated run sorts as the oldest.
     result = cli.aggregate(old + [_run(base_card, "pipe_undated", None, sha="zzz")])
     assert result["groups"][0]["repo_git_sha"] == "zzz"
-    assert result["groups"][0]["first_created_at"] is None
+    assert result["groups"][0]["first_run_at"] is None
 
 
 def _stopped_at_graph(base, pid, day, sha):
@@ -584,7 +675,8 @@ def test_aggregate_baseline_current_code_and_partial_backbones(base_card):
     clean = _run(base_card, "pipe_x_glm", 3, sha="xxx")
     result = cli.aggregate([older, _run(base_card, "pipe_x_kimi", 2, sha="xxx", backbone="kimi",
                                         passed={"report": False}), clean])
-    assert result["current"] == {"repo_git_sha": "xxx", "groups": [1, 2], "unevaluable_share": 0.0}
+    assert result["current"] == {"repo_git_sha": "xxx", "groups": [1, 2], "unevaluable_share": 0.0,
+                                 "reason": None}
     assert result["exit_code"] == cli.EXIT_CONTRACT_FAILURES
     assert cli.aggregate([older, clean])["exit_code"] == cli.EXIT_CLEAN
 
@@ -614,13 +706,70 @@ def test_aggregate_baseline_current_code_and_partial_backbones(base_card):
     assert result["exit_code"] == cli.EXIT_CONTRACT_FAILURES
 
 
-def _pipeline(pid, created, sha, *, status="completed", **pipeline):
+def test_aggregate_unknown_current_code_is_inconclusive(base_card):
+    """Without the newest run's repo_git_sha the current code is unknown: no group is
+    judged and the verdict is inconclusive, never clean."""
+    # aaa/glm fails on day 1; a run without a sha (git missing or timed out, no
+    # run.json) is the newest, on day 2.
+    failing = _run(base_card, "pipe_aaa_fail", 1, passed={"report": False})
+    unknown = _run(base_card, "pipe_nosha", 2, sha=None)
+    result = cli.aggregate([failing, unknown])
+    assert [g["repo_git_sha"] for g in result["groups"]] == ["aaa", None]
+    assert result["current"] == {
+        "repo_git_sha": None, "groups": [], "unevaluable_share": None,
+        "reason": "the newest run has no repo_git_sha: the current code is unknown"}
+    assert (result["verdict"], result["exit_code"]) == ("inconclusive", cli.EXIT_INCONCLUSIVE)
+    # A failure of the sha-less run itself stays listed in its group, but it is not
+    # the current code's (inconclusive, not contract_failures).
+    result = cli.aggregate([_run(base_card, "pipe_aaa", 1),
+                            _run(base_card, "pipe_nosha_fail", 2, sha=None, passed={"report": False})])
+    assert result["exit_code"] == cli.EXIT_INCONCLUSIVE
+    assert [row["pipeline_id"] for row in result["groups"][-1]["contract_failures"]] == ["pipe_nosha_fail"]
+    # A newer run of known code is judged again.
+    result = cli.aggregate([failing, unknown, _run(base_card, "pipe_bbb", 3, sha="bbb")])
+    assert (result["current"]["groups"], result["current"]["reason"]) == ([2], None)
+    assert result["exit_code"] == cli.EXIT_CLEAN
+
+
+def _pipeline(pid, created, sha, *, status="completed", updated_at=None, **pipeline):
     state = ts._make_pipeline(pid, status=status, **pipeline)
     state.created_at = created
     po.PipelineManager.save(state)
-    ts._write(po.PipelineManager.manifest_path(pid), {
-        "repo_git_sha": sha, "resolved": {"research": {"model": "glm"},
-                                          "report": {"provider": "glm", "model_name": "glm-5.3"}}})
+    manifest = {"repo_git_sha": sha, "resolved": {"research": {"model": "glm"},
+                                                  "report": {"provider": "glm", "model_name": "glm-5.3"}}}
+    if updated_at is not None:
+        manifest["updated_at"] = updated_at
+    ts._write(po.PipelineManager.manifest_path(pid), manifest)
+
+
+def test_aggregate_dates_runs_by_their_last_attempt(roots, capsys):
+    """run.json's updated_at, restamped with repo_git_sha at every attempt, dates a run:
+    a pipeline created long ago but resumed under newer code is the newest run."""
+    _pipeline("pipe_eval16old", "2026-09-01T08:00:00+00:00", "sha_old")
+    # An updated_at that cannot be parsed falls back to the state's created_at.
+    _pipeline("pipe_eval16garbled", "2026-09-02T08:00:00+00:00", "sha_old", updated_at="yesterday")
+    _pipeline("pipe_eval16new", "2026-09-20T08:00:00+00:00", "sha_new",
+              updated_at="2026-09-20T09:15:00.250000+00:00")
+    # Created on 2026-08-30, resumed on 2026-09-25 under sha_resumed.
+    _pipeline("pipe_eval16resumed", "2026-08-30T08:00:00+00:00", "sha_resumed",
+              updated_at="2026-09-25T07:00:00.500000+00:00")
+
+    assert cli.main(["aggregate"]) == cli.EXIT_CLEAN
+    result = json.loads(capsys.readouterr().out)
+    assert [(g["repo_git_sha"], g["pipelines"]) for g in result["groups"]] == [
+        ("sha_old", ["pipe_eval16old", "pipe_eval16garbled"]), ("sha_new", ["pipe_eval16new"]),
+        ("sha_resumed", ["pipe_eval16resumed"])]
+    assert result["groups"][0]["last_run_at"] == "2026-09-02T08:00:00+00:00"
+    assert result["groups"][2]["first_run_at"] == "2026-09-25T07:00:00.500000+00:00"
+    assert result["current"]["repo_git_sha"] == "sha_resumed" and result["groups"][2]["compared_to"] == 1
+
+    # --since filters by the last attempt too: the resumed run is kept.
+    assert cli.main(["aggregate", "--since", "2026-09-21"]) == cli.EXIT_CLEAN
+    result = json.loads(capsys.readouterr().out)
+    assert [g["pipelines"] for g in result["groups"]] == [["pipe_eval16resumed"]]
+    assert [row["pipeline_id"] for row in result["skipped"]] == [
+        "pipe_eval16garbled", "pipe_eval16new", "pipe_eval16old"]
+    assert {row["reason"] for row in result["skipped"]} == {"last attempt before --since"}
 
 
 def test_aggregate_cli_groups_existing_runs_offline(roots, capsys, monkeypatch):
@@ -645,7 +794,7 @@ def test_aggregate_cli_groups_existing_runs_offline(roots, capsys, monkeypatch):
     assert result["skipped"] == [{"pipeline_id": "pipe_eval16cancel", "reason": "cancelled"},
                                  {"pipeline_id": "pipe_eval16run", "reason": "status 'running'"}]
     assert result["groups"][1]["compared_to"] == 0 and result["verdict"] == "clean"
-    assert result["groups"][1]["last_created_at"] == "2026-09-21T09:30:00+00:00"
+    assert result["groups"][1]["last_run_at"] == "2026-09-21T09:30:00+00:00"
     assert not os.path.exists(cli.aggregate_path())
     assert not os.path.exists(sc.sidecar_path("pipe_eval16a"))  # the aggregate writes no sidecar
 
@@ -654,7 +803,7 @@ def test_aggregate_cli_groups_existing_runs_offline(roots, capsys, monkeypatch):
     result = json.loads(out.out)
     assert result["since"] == "2026-09-20" and result["count"] == 2
     assert [g["repo_git_sha"] for g in result["groups"]] == ["sha_new"]
-    assert {"pipeline_id": "pipe_eval16a", "reason": "created before --since"} in result["skipped"]
+    assert {"pipeline_id": "pipe_eval16a", "reason": "last attempt before --since"} in result["skipped"]
     with open(cli.aggregate_path(), encoding="utf-8") as handle:
         assert json.load(handle) == result
     assert "wrote" in out.err
