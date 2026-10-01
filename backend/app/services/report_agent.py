@@ -1361,6 +1361,20 @@ def _mc_cell(x: Any) -> str:
     return str(x).replace("|", "／").replace("\n", " ").strip()
 
 
+def _mc_blend_work(blend: Any, zh: bool) -> str:
+    """REPORT-12：确定性市场混合（market_influence.blend）的代入数值算式（show-your-work），
+    追加在 Market Cross-Check 影响条目之后。四个值缺失或不在 [0, 1] → ""（degrade-safe，
+    不渲染半截算式）。"""
+    if not isinstance(blend, dict):
+        return ""
+    w, p, m, c = (_mc_float(blend.get(k)) for k in ("weight", "prior", "market", "computed"))
+    if not all(v is not None and 0.0 <= v <= 1.0 for v in (w, p, m, c)):
+        return ""
+    if zh:
+        return f"（混合 w={w:.2f}：{1 - w:.2f}·{p:.0%} + {w:.2f}·{m:.0%} = {c:.0%}）"
+    return f" (blend w={w:.2f}: {1 - w:.2f}·{p:.0%} + {w:.2f}·{m:.0%} = {c:.0%})"
+
+
 def _mc_comparisons_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, Any]]:
     """从 forecast 汇出对照行：优先 forecast['market_comparison']['comparisons']（PM-2 抽取器
     已算好的确定性负载），缺失时从 binary_forecasts[].market_anchor 现场推导（同字段口径）。
@@ -1418,7 +1432,7 @@ def _mc_influences_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, Any
         inf = b.get("market_influence")
         if not isinstance(inf, dict) or not str(inf.get("market_id") or "").strip():
             continue
-        out.append({
+        row: Dict[str, Any] = {
             "forecast_id": b.get("id"),
             "market_id": inf.get("market_id"),
             "market_question": inf.get("market_question"),
@@ -1429,7 +1443,11 @@ def _mc_influences_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, Any
             "match_confidence": _mc_float(inf.get("match_confidence")),
             "anchor_removed": bool(inf.get("anchor_removed", False)),
             "probability_restored": bool(inf.get("probability_restored", False)),
-        })
+        }
+        # REPORT-12：确定性市场混合的算式记录（无 blend 时行形状不变）。
+        if isinstance(inf.get("blend"), dict):
+            row["blend"] = dict(inf["blend"])
+        out.append(row)
     return out
 
 
@@ -1453,7 +1471,10 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
 
     REPORT-10 ``disclose_anchoring``（生产调用方传 REPORT_MARKET_XCHECK_DISCLOSURE，默认开）：
     说明句末尾追加一句披露——预测起草时已参考这些市场价格，Δ 是锚定之后的差值，而非对一个
-    独立于市场的估计的度量。缺省 False → 输出逐字节不变。"""
+    独立于市场的估计的度量。缺省 False → 输出逐字节不变。
+
+    REPORT-12：影响条目带确定性市场混合记录（blend）时，条目后追加代入数值的算式
+    （见 _mc_blend_work）；无 blend 的条目逐字节不变。"""
     if not isinstance(forecast, dict):
         return ""
     comps = _mc_comparisons_from_forecast(forecast)
@@ -1545,7 +1566,8 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             if zh:
                 item = (f"- {fid} — {q or '—'}（{mid}）：{move}"
                         f"（修订时市场 P(yes) {_pct(inf.get('price_at_revision'))}，"
-                        f"匹配置信度 {conf_s}）")
+                        f"匹配置信度 {conf_s}）"
+                        + _mc_blend_work(inf.get("blend"), zh))
                 if inf.get("anchor_removed"):
                     if inf.get("probability_restored"):
                         item += (f"—— 锚点在对账中被移除；概率已恢复为 "
@@ -1554,7 +1576,8 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                         item += "—— 锚点在对账中被移除（修订其后已被取代，未回滚）"
             else:
                 item = (f"- {fid} — {q or '—'} ({mid}): {move} at market P(yes) "
-                        f"{_pct(inf.get('price_at_revision'))}, match confidence {conf_s}")
+                        f"{_pct(inf.get('price_at_revision'))}, match confidence {conf_s}"
+                        + _mc_blend_work(inf.get("blend"), zh))
                 if inf.get("anchor_removed"):
                     if inf.get("probability_restored"):
                         item += (" — anchor removed in reconciliation; probability restored "
