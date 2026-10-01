@@ -467,16 +467,19 @@ def carry_binary_quality(old_quality: Dict[str, Any], quality: Dict[str, Any],
                          retained: List[Dict[str, Any]]) -> Dict[str, Any]:
     """``quality`` (the scorecard rebuilt from ``retained``) completed from the stored
     ``old_quality`` (FU-1): every key the rebuild does not produce is kept as stored
-    (ensemble, world_state_outcome, needs_review_*, market_window_ended_excluded and the
-    other extractor-only keys do not depend on which published rows remain), except
+    (world_state_outcome, needs_review_*, market_window_ended_excluded and the other
+    extractor-only keys do not depend on which published rows remain), except
+    ``ensemble``, which the caller keeps only when it is a dict (as before FU-1), and
     ``provenance_downgrades``, which is recounted from the retained rows (rows the
     extractor downgraded carry ``source_claimed``).  Issue lines: the withheld line
     first (as the extractor and ReportAgent order it), the rebuilt scorecard lines,
     then the stored lines that are not scorecard lines in their stored order, the
-    provenance line restated with the recounted number (dropped at zero).  Mutates and
-    returns ``quality``."""
+    provenance line restated with the recounted number (dropped at zero; written after
+    the scorecard lines, where the extractor puts it, when a non-zero count has no
+    stored line).  Only a list of stored issue lines is read.  Mutates and returns
+    ``quality``."""
     for key, value in old_quality.items():
-        if key != "issues" and key not in quality:
+        if key not in ("issues", "ensemble") and key not in quality:
             quality[key] = value
     downgrades: Optional[int] = None
     if "provenance_downgrades" in old_quality:
@@ -485,15 +488,21 @@ def carry_binary_quality(old_quality: Dict[str, Any], quality: Dict[str, Any],
     issues = quality.setdefault("issues", [])
     if quality.get("needs_review_count"):
         issues.insert(0, _binary_withheld_issue(quality["needs_review_count"]))
-    for line in old_quality.get("issues") or []:
+    scorecard_end = len(issues)
+    provenance_stored = False
+    stored_issues = old_quality.get("issues")
+    for line in stored_issues if isinstance(stored_issues, list) else []:
         if not isinstance(line, str):
             continue
         if _PROVENANCE_ISSUE_RE.match(line) and downgrades is not None:
+            provenance_stored = True
             line = _provenance_issue(downgrades) if downgrades else ""
         elif _WITHHELD_ISSUE_RE.fullmatch(line) or any(r.fullmatch(line) for r in _SCORE_ISSUE_RES):
             continue
         if line and line not in issues:
             issues.append(line)
+    if downgrades and not provenance_stored:
+        issues.insert(scorecard_end, _provenance_issue(downgrades))
     return quality
 
 
