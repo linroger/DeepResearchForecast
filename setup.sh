@@ -596,8 +596,8 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
   #   - source_dates.py is the source publication-date parser cached_fetch and
   #     research_gateway import by bare name (RESEARCH_SOURCE_DATES).
   #   - data_tools.py is the official-data vendor module (FRED/ALFRED
-  #     vintage-pinned macro series), imported by bare name once the research
-  #     engine binds it.
+  #     vintage-pinned macro series; SEC EDGAR as-filed company statements,
+  #     TIME-11), imported by bare name once the research engine binds it.
   #     Keep this list in sync with _sync_deerflow_bridge_if_stale in
   #     backend/app/services/pipeline_orchestrator.py (the launch-time drift guard).
   for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py evidence_spans.py source_dates.py data_tools.py; do

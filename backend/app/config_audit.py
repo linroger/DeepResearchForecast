@@ -94,6 +94,16 @@ RANGE_RULES: dict[str, Range] = {
     # Days; golden_eval._check_tolerance refuses a value outside 0..MAX_LEAD_TOLERANCE_DAYS
     # (3650) when it runs, so preflight names it first.
     "GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS": Range(0, True, 3650, True),
+    # EVAL-20: scripts/value_add_eval.py refuses to plan, run or score with a value outside
+    # these (a call cap below 1 refuses every non-empty plan).
+    "EVAL_PROBE_FIDELITY_MAX": _UNIT_INTERVAL,
+    "EVAL_INERT_MARGIN": _UNIT_INTERVAL,
+    "EVAL_ARM_REPLICATES": Range(1, True, None, False),
+    "EVAL_TARGETS_PER_BUNDLE": Range(1, True, None, False),
+    "EVAL_STUDY_MAX_CALLS": Range(1, True, None, False),
+    "EVAL_BOOTSTRAP_RESAMPLES": Range(1, True, None, False),
+    # A relative difference; the reader falls back to 0.02 outside [0, 1].
+    "REPORT_VERIFIED_FIGURE_REL_TOL": _UNIT_INTERVAL,
 }
 
 # Accepted values (compared after .strip().lower(), as Config reads them).
