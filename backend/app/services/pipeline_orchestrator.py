@@ -1680,7 +1680,7 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 # evidence_spans.py verbatim evidence-span matching), plus source_dates.py (the
 # source publication-date parser cached_fetch and research_gateway import) and
 # data_tools.py (TIME-10 official-data vendor tools: FRED/ALFRED vintage-pinned
-# macro series).
+# macro series; SEC EDGAR as-filed company statements, TIME-11).
 # setup.sh deploys the same set; test_deerflow_bridge_sync_guard pins the parity.
 _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
