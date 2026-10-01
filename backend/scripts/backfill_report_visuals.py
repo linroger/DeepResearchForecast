@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from app.config import Config
+from app.services.binary_targets import threshold_ladder_audit
 from app.services.report_agent import (
     ReportAgent, ReportManager, _nonfinite_nulled_artifact, render_market_comparison_block,
 )
@@ -339,6 +340,40 @@ def synchronize_market_comparison(
     return None
 
 
+def rebuild_binary_quality(
+        binaries: List[Dict[str, Any]], contract: Any, old_quality: Any) -> Dict[str, Any]:
+    """The binary_quality of a replayed forecast, rebuilt over the retained rows.
+
+    The scorecard is recomputed and carries the reconcile result; the extractor's
+    ensemble block is kept. A report written with FORECAST_BINARY_STRUCTURED_TARGET
+    (EVAL-14: its old block has ``threshold_ladder``, or a retained row still has a
+    validated ``target``) gets the threshold-ladder audit recomputed over the retained
+    rows, so a replay neither drops the audit nor keeps a removed rung in it.
+    """
+    old = old_quality if isinstance(old_quality, dict) else {}
+    quality = _binary_quality(binaries, min_count=10)
+    quality["proposition_consistency"] = contract
+    if isinstance(old.get("ensemble"), dict):
+        quality["ensemble"] = old["ensemble"]
+    if "threshold_ladder" in old or any(isinstance(row.get("target"), dict) for row in binaries):
+        quality["threshold_ladder"] = threshold_ladder_audit(binaries)
+    return quality
+
+
+def _report_completed_at(meta: Any) -> Optional[datetime]:
+    """When the report completed (meta.json ``completed_at``), in UTC; None when unknown.
+
+    A naive stamp is local time, as generate_report writes it (scripts/eval_bundle.py reads
+    it the same way)."""
+    stamp = meta.get("completed_at") if isinstance(meta, dict) else None
+    if not isinstance(stamp, str) or not stamp.strip():
+        return None
+    try:
+        return datetime.fromisoformat(stamp.strip()).astimezone(timezone.utc)
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
 def _language(markdown: str, filename: str) -> str:
     if filename.endswith(".zh.md"):
         return "Chinese"
@@ -603,10 +638,10 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
         ]
         old_quality = forecast_obj.get("binary_quality") if isinstance(
             forecast_obj.get("binary_quality"), dict) else {}
-        quality = _binary_quality(retained, min_count=10)
-        quality["proposition_consistency"] = contract
-        if isinstance(old_quality.get("ensemble"), dict):
-            quality["ensemble"] = old_quality["ensemble"]
+        # The rebuild recomputes the scorecard and (EVAL-14) the threshold-ladder audit;
+        # carry only fills the keys the rebuild did not produce (FU-1), so a stale
+        # stored ladder never overrides the recomputed one.
+        quality = rebuild_binary_quality(retained, contract, old_quality)
         forecast_obj["binary_quality"] = carry_binary_quality(old_quality, quality, retained)
         # Always rebuild/remove both comparison copies. This repairs a stale
         # partial backfill even after the offending circular binary was already
@@ -640,10 +675,16 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
     if isinstance(forecast_obj, dict):
         binary_block = render_binary_forecasts_block(
             forecast_obj, language=primary_language)
+        # FU-5: window-ended labels are judged at the report's own completion time, never
+        # the replay day; when that time is unknown only the stamps saved with the report
+        # count, so replaying the same artifacts always writes the same bytes.
+        completed_at = _report_completed_at(_read_json(report_dir / "meta.json"))
         market_block = render_market_comparison_block(
             forecast_obj,
             markets=artifacts.get("prediction_markets") or [],
             lang=primary_language,
+            now=completed_at,
+            restamp=completed_at is not None,
         )
         if market_block:
             binary_block = binary_block + "\n\n" + market_block

@@ -58,6 +58,7 @@ import math
 import os
 import random
 import re
+import sys
 import tempfile
 import threading
 import time
@@ -1441,7 +1442,7 @@ def _normalize_tool_calls(message: Any) -> list[dict]:
         if isinstance(args, str):
             try:
                 args = json.loads(args)
-            except ValueError:
+            except (ValueError, RecursionError):  # FU-12: deep nesting is unparseable too
                 args = None
         if isinstance(args, Mapping):
             entry["args"] = dict(args)
@@ -2088,6 +2089,10 @@ _MAX_TRUNCATION_REPAIRS = 16
 _NONFINITE_JSON_MSG = "non-finite constant"
 # The JSON retry note's reason for a reply rejected for its non-finite numbers.
 _NONFINITE_JSON_REASON = "NaN or Infinity is not a JSON number"
+# FU-12: the reason for a reply nested deeper than the decoder can follow.
+_DEEP_JSON_REASON = "JSON is nested too deeply to parse"
+# FU-12: the reason for a reply whose integer literal is past Python's int-string limit.
+_LONG_INT_JSON_REASON = "a number has more digits than JSON parsing allows"
 
 
 def _reject_nonfinite_constant(name: str) -> Any:
@@ -2262,6 +2267,8 @@ def _drop_malformed_element(text: str, start: int, decoder: json.JSONDecoder) ->
         return None
     except json.JSONDecodeError as exc:
         error_at = min(exc.pos, len(text) - 1)
+    except ValueError:  # FU-12: an integer past the int-string digit limit; no position to cut at
+        return None
     floor = max(start, error_at - _ELEMENT_SCAN_CHARS)
     starts = [index for index in range(error_at, floor, -1)
               if text[index] in "{[" and _previous_char(text, index) in ("[", ",")]
@@ -2333,7 +2340,19 @@ def parse_json_object(text: str | None, required_keys: Sequence[str] = ()) -> di
 
 def _parse_json_object(text: str | None, required_keys: Sequence[str],
                        decoder: json.JSONDecoder) -> dict | None:
-    """parse_json_object with an explicit decoder (_FINITE_DECODER or _DECODER)."""
+    """parse_json_object with an explicit decoder (_FINITE_DECODER or _DECODER).
+
+    FU-12: a reply nested deeper than the decoder's recursion limit is unparseable as a
+    whole (``None``): the RecursionError is caught once here, not per ``{`` position,
+    so a hostile reply costs one failed decode instead of a scan of every position."""
+    try:
+        return _find_json_object(text, required_keys, decoder)
+    except RecursionError:
+        return None
+
+
+def _find_json_object(text: str | None, required_keys: Sequence[str],
+                      decoder: json.JSONDecoder) -> dict | None:
     if not text:
         return None
     text = str(text)
@@ -2383,8 +2402,11 @@ def _describe_json_failure(text: str, required_keys: Sequence[str], truncated: b
     # are the whole reason, however the reply's nested dicts look.
     if strict_numbers and _parse_json_object(text, required_keys, _DECODER) is not None:
         return _NONFINITE_JSON_REASON
-    candidates = [value for _, value in _iter_json_candidates(text, _DECODER)
-                  if isinstance(value, dict)]
+    try:
+        candidates = [value for _, value in _iter_json_candidates(text, _DECODER)
+                      if isinstance(value, dict)]
+    except RecursionError:
+        return _DEEP_JSON_REASON
     if candidates and required_keys:
         best = max(candidates, key=lambda c: sum(1 for k in required_keys if k in c))
         missing = [k for k in required_keys if k not in best]
@@ -2395,7 +2417,16 @@ def _describe_json_failure(text: str, required_keys: Sequence[str], truncated: b
             return reason
     if truncated:
         return "reply was truncated before the JSON object closed"
+    if _has_overlong_integer(text):
+        return _LONG_INT_JSON_REASON
     return "no JSON object found"
+
+
+def _has_overlong_integer(text: str) -> bool:
+    """True when ``text`` holds a digit run longer than the int-string limit
+    (``sys.get_int_max_str_digits``; 0 = unlimited), which json cannot decode."""
+    limit = getattr(sys, "get_int_max_str_digits", lambda: 0)()  # Python 3.11+
+    return bool(limit) and re.search(r"\d{%d}" % (limit + 1), text) is not None
 
 
 # ===========================================================================
@@ -4291,7 +4322,7 @@ def _json_object(text: str) -> dict | None:
         return None
     try:
         value = json.loads(stripped)
-    except ValueError:
+    except (ValueError, RecursionError):  # FU-12: page text may nest past the decoder's limit
         return None
     return value if isinstance(value, dict) else None
 

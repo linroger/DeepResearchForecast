@@ -75,6 +75,9 @@ from ..services.research_progress import (
     aggregate_parallel_progress,
 )
 from ..services import backbone_sensitivity, run_shape
+from ..services.sim_prior_echo import (
+    VERDICT_PRIOR_ECHO, VERDICT_PRIOR_LEADER_HERD, prior_echo_diagnostics,
+)
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import RunnerStatus, SimulationRunner
 from ..services.text_processor import TextProcessor
@@ -10439,6 +10442,15 @@ class PipelineOrchestrator:
         except Exception as exc:  # noqa: BLE001 — 出处是观测增益，绝不阻断报告
             logger.debug("[%s] run_provenance 跳过: %s", state.pipeline_id, exc)
 
+    @staticmethod
+    def _derive_extra_seeds(base_seed: int, n_seeds: int) -> list[tuple[int, int]]:
+        """SIM-4 (C30): the extra ensemble members' (index, seed) pairs, members 2..n_seeds.
+
+        ``(base_seed or 0) + k * 7919``: distinct and deterministic even for base 0 (7919 is
+        prime). The primary run keeps its own SIM_SEED; seeding it differently is an owner
+        decision, so it is not done here."""
+        return [(k, (base_seed or 0) + k * 7919) for k in range(2, n_seeds + 1)]
+
     def _maybe_run_seed_ensemble(self, state: "PipelineState", project: Any, graph_id: Optional[str],
                                  actors: Any, research: dict, report_md: str) -> None:
         """NEXTSTEPS P0-3: 同问多种子集成。
@@ -10486,7 +10498,7 @@ class PipelineOrchestrator:
         max_rounds = int(_mr) if _mr else None
         handoff_dir = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
         # 派生互异种子（base=0 时也确定性互异）；每个种子跑一次独立 (prepare→run→report)。
-        seed_jobs = [(k, (base_seed or 0) + k * 7919) for k in range(2, n_seeds + 1)]
+        seed_jobs = self._derive_extra_seeds(base_seed, n_seeds)
         cancel_ev0 = type(self)._cancel_events.get(state.pipeline_id)
         if cancel_ev0 is not None and cancel_ev0.is_set():
             raise PipelineCancelled("多种子集成期间被取消")
@@ -13328,6 +13340,11 @@ class PipelineOrchestrator:
             "fallback_share": validation.get("fallback_share"),
             "decision_validation_measured_rounds": validation.get("measured_rounds"),
         }
+        # SIM-4（SIM_PRIOR_ECHO_DIAGNOSTIC，默认开）：零 LLM 的先验回声诊断——终局份额是否只是
+        # 种子先验的复述、承诺是否扎堆先验领先情景。纯观测：只写摘要、只告警，不进
+        # _assess_run_health，不动任何概率（通道本就 diagnostic_only）。
+        if getattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", True) and isinstance(traj, dict):
+            summary["prior_echo"] = prior_echo_diagnostics(traj)
         state.options["decision_channel_summary"] = summary
         try:
             PipelineManager.save(state)
@@ -13358,6 +13375,19 @@ class PipelineOrchestrator:
                 "任何依据（REPORT_WORLDSTATE_HIDE_INVALID 开时报告隐藏份额/图表/对比表）",
                 state.pipeline_id, validity_norm, summary["validity_reasons"],
                 summary["forecast_effect"])
+        # 回声＝终局≈先验，可断言「没有提供信息」；扎堆＝终局已离开先验（TV≥echo_tv），只能
+        # 审慎地说「可能只是在复述先验」（与报告提示行同口径）。
+        _echo = summary.get("prior_echo") or {}
+        _echo_finding = {
+            VERDICT_PRIOR_ECHO: "终局分布与种子先验几乎一致，推演没有在研究先验之外提供信息，不得作为独立佐证",
+            VERDICT_PRIOR_LEADER_HERD: "承诺扎堆先验领先情景，推演可能只是在复述先验，不构成独立佐证",
+        }.get(_echo.get("verdict"))
+        if _echo_finding:
+            logger.warning(
+                "[%s] 决策通道先验回声诊断=%s（tv_to_prior=%s，先验领先=%s，领先承诺占比=%s；%s）——%s",
+                state.pipeline_id, _echo.get("verdict"), _echo.get("tv_to_prior"),
+                _echo.get("prior_leader"), _echo.get("prior_leader_commit_rate"),
+                _echo.get("policy_version"), _echo_finding)
 
     # -- 内部：研究 as_of 锚校验 (R2-RES-7) -------------------------------
 

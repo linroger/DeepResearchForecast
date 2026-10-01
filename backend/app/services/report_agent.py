@@ -1125,6 +1125,21 @@ _SIGNAL_PACK_UNKNOWN_HEALTH_NOTE = (
 )
 
 
+def _prior_echo_caveat(trajectory: Any) -> str:
+    """SIM-4: the world-state block's qualitative caveat for a prior-echo or
+    prior-leader-herd trajectory (sim_prior_echo.prior_echo_diagnostics), else ""."""
+    from .sim_prior_echo import (
+        VERDICT_PRIOR_ECHO, VERDICT_PRIOR_LEADER_HERD, prior_echo_diagnostics,
+    )
+    diag = prior_echo_diagnostics(trajectory if isinstance(trajectory, dict) else {})
+    if diag["verdict"] == VERDICT_PRIOR_ECHO:
+        return "对照诊断：终局分布与种子先验几乎一致——决策通道没有在研究先验之外提供信息，不得作为独立佐证。"
+    if diag["verdict"] == VERDICT_PRIOR_LEADER_HERD:
+        return (f"对照诊断：承诺绝大多数集中于先验领先情景「{diag['prior_leader']}」——推演可能只是在复述先验，"
+                "不构成独立佐证。")
+    return ""
+
+
 REACT_CONTAMINATED_RETRY_MSG = (
     "【格式错误】你上一条输出不是合格的章节正文（疑似系统提示泄漏、工具调用残留或采访超时提示）。"
     '请立即以 "Final Answer:" 开头，只输出本章节的中文正文：用研究材料中的可验证事实与 [S#]，'
@@ -1417,7 +1432,8 @@ def _mc_comparisons_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, An
     已算好的确定性负载），缺失时从 binary_forecasts[].market_anchor 现场推导（同字段口径）。
 
     统一为渲染用 schema：{forecast_id, statement, model_probability, market_id, market_question,
-    market_implied_yes_prob, divergence, exceeds_10pp, rationale_cites_market, url}。
+    market_implied_yes_prob, divergence, exceeds_10pp, rationale_cites_market, url, endDate}
+    （endDate 与抽取器负载同口径，供 FU-5 的截止日标注）。
     纯函数、无副作用；无可对照数据 → []。"""
     mc = forecast.get("market_comparison")
     if isinstance(mc, dict) and isinstance(mc.get("comparisons"), list):
@@ -1448,6 +1464,7 @@ def _mc_comparisons_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, An
             "exceeds_10pp": (abs(dv) > 0.10) if dv is not None else False,
             "rationale_cites_market": None,  # 无对照负载时无法判定，留空（渲染按未知处理）
             "url": anchor.get("url"),
+            "endDate": anchor.get("endDate"),
         })
     return out
 
@@ -1491,7 +1508,9 @@ def _mc_influences_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, Any
 def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                                    markets: Optional[List[Dict[str, Any]]] = None,
                                    lang: str = "en", *,
-                                   disclose_anchoring: bool = False) -> str:
+                                   disclose_anchoring: bool = False,
+                                   now: Optional[datetime] = None,
+                                   restamp: bool = True) -> str:
     """PM-2：渲染确定性「Market Cross-Check」块——预测 vs 市场隐含概率对照 + 未匹配市场清单。
 
     纯函数（无 LLM/无网络）：
@@ -1511,7 +1530,12 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
     独立于市场的估计的度量。缺省 False → 输出逐字节不变。
 
     REPORT-12：影响条目带确定性市场混合记录（blend）时，条目后追加代入数值的算式
-    （见 _mc_blend_work）；无 blend 的条目逐字节不变。"""
+    （见 _mc_blend_work）；无 blend 的条目逐字节不变。
+
+    FU-5（PREDICTION_MARKETS_END_DATE_GATE 开时）：已过截止日、待结算的市场在对照行与未匹配
+    条目末尾标注。``now`` 钉住盖章时点（离线回放传报告自身的完成时刻，输出与回放当天无关）；
+    省略 = market_clock_now()，即实时最终化路径。``restamp=False`` → 不按任何时钟盖新章，只认
+    行上已保存的 window_ended 章（回放不知报告完成时刻时用，绝不退回墙钟）。"""
     if not isinstance(forecast, dict):
         return ""
     comps = _mc_comparisons_from_forecast(forecast)
@@ -1543,9 +1567,36 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             caption += (" Forecasts were drafted with these market prices in view, so Δ is "
                         "measured after anchoring, not against a market-independent estimate.")
         lines = ["### Market Cross-Check", "", f"_{caption}_", ""]
+    # FU-5（TIME-3 遗留）：PREDICTION_MARKETS_END_DATE_GATE 开时按 now（缺省
+    # market_clock_now()）盖 window_ended 章（浅拷贝，调用方的负载与快照不变）。已过截止日、
+    # 待结算的市场在对照行的「市场」单元格末尾、未匹配条目末尾标注，不再被当作实时对照。对照行
+    # 也要判定：抽取期（exclude_window_ended）只保证锚点在抽取那一刻未过期，本块在其后才渲染，
+    # 其间市场可能已过截止日。restamp=False 时不盖新章，只认已保存的章。未过期的行与旗标关时
+    # 的输出逐字节不变。
+    from ..utils.prediction_markets import (
+        end_date_gate_settings, market_clock_now, row_market_end, stamp_window_ended,
+        window_ended_label,
+    )
+    gate, grace = end_date_gate_settings()
+    stamping = gate and restamp
+    clock_now = (now if now is not None else market_clock_now()) if stamping else None
     if comps:
         comps_sorted = sorted(
             comps, key=lambda c: -(abs(_mc_float(c.get("divergence")) or 0.0)))
+        # 对照行无 endDate 时回退到快照中同 market_id 的行（含研究期已盖的 window_ended 章）；
+        # 不盖新章时对照行自身的 endDate 无从判定，快照行已保存的章即是最好的证据。
+        ended_snapshot: Dict[str, Dict[str, Any]] = {}
+        if gate:
+            matched_snapshot = [
+                m for m in snapshot if str(m.get("market_id") or "").strip() in anchored_ids]
+            if stamping:
+                comps_sorted, _ = stamp_window_ended(
+                    comps_sorted, now=clock_now, grace_hours=grace)
+                matched_snapshot, _ = stamp_window_ended(
+                    matched_snapshot, now=clock_now, grace_hours=grace)
+            for m in matched_snapshot:
+                if m.get("window_ended") is True:
+                    ended_snapshot.setdefault(str(m.get("market_id")).strip(), m)
         if zh:
             headers = ["#", "预测", "预测 P", "市场 P(yes)", "Δ（pp）", ">10pp 判定", "市场"]
         else:
@@ -1575,6 +1626,18 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             q = _mc_cell(str(c.get("market_question") or "")[:80])
             url = str(c.get("url") or "").strip()
             market_cell = f"[{q}]({_mc_cell(url)})" if (q and url) else (q or "—")
+            if gate:
+                ended = window_ended_label(c, zh)
+                if not ended and (not stamping or row_market_end(c) is None):
+                    ended = window_ended_label(
+                        ended_snapshot.get(str(c.get("market_id") or "").strip(), {}), zh)
+                if ended and not q:
+                    # 无问题文本时以 market_id 代替「—」占位符（不渲染成「— — window ended …」）；
+                    # 连 market_id 也没有 → 单元格只留标注本身。
+                    market_cell = _mc_cell(c.get("market_id") or "")
+                    if not market_cell:
+                        ended = ended.removeprefix(" — ")
+                market_cell += ended
             lines.append("| " + " | ".join(
                 [fid, stmt, mp_s, ip_s, dv_s, verdict, market_cell]) + " |")
     # LOOP-017 P0：市场实际移动过概率的记录——即使锚点其后被对账移除，影响溯源也必须
@@ -1624,6 +1687,8 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                                  "superseded; not rolled back)")
             lines.append(item)
     if unmatched:
+        if stamping:
+            unmatched, _ = stamp_window_ended(unmatched, now=clock_now, grace_hours=grace)
         lines.append("")
         if zh:
             lines.append("**未匹配市场（快照中未被任何预测锚定，可补充对照）：**")
@@ -1636,10 +1701,11 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             q = _mc_cell(str(m.get("question") or "")[:120])
             url = str(m.get("url") or "").strip()
             label = f"[{q}]({_mc_cell(url)})" if (q and url) else (q or _mc_cell(m.get("market_id") or ""))
+            ended = window_ended_label(m, zh) if gate else ""
             if zh:
-                lines.append(f"- {label} — 隐含 P(yes) {ip_s}")
+                lines.append(f"- {label} — 隐含 P(yes) {ip_s}{ended}")
             else:
-                lines.append(f"- {label} — implied P(yes) {ip_s}")
+                lines.append(f"- {label} — implied P(yes) {ip_s}{ended}")
     return "\n".join(lines)
 
 
@@ -2447,34 +2513,119 @@ class ReportAgent:
         except Exception as exc:  # noqa: BLE001 — 影子工件，失败不影响报告
             logger.warning(f"写 figure_provenance.json 失败（忽略）: {exc}")
 
+    # FU-9: contested-table slots reserved for TIME-4 quantitative reconcile rows, and the
+    # why_they_differ marker reconcile_quantitative writes on a probable unit-scale error.
+    _CONTESTED_QUANT_SLOTS = 3
+    _UNIT_SCALE_MARK = "probable unit-scale error"
+
+    def _contested_row_line(self, r: Any) -> Optional[str]:
+        """W9-8: contested.json 单条论断 → 块内一行；无论断或无可用立场返回 None（跳过）。"""
+        if not isinstance(r, dict) or not r.get("claim"):
+            return None
+        segs = []
+        for p in (r.get("positions") or [])[:3]:
+            if not isinstance(p, dict) or not p.get("stance"):
+                continue
+            src = "；".join(str(s) for s in (p.get("sources") or [])[:2])
+            tier = str(p.get("tier") or "").strip()
+            tag = f"（{tier}{'，' if tier and src else ''}{src}）" if (tier or src) else ""
+            segs.append(f"{self._md_cell(p['stance'], 160)}{tag}")
+        if not segs:
+            return None
+        return f"- **{self._md_cell(r['claim'], 120)}** — " + " ⇄ ".join(segs)
+
     def _build_contested_table_block(self, max_claims: int = 15) -> str:
         """W9-8: 争议性关键论断块（contested.json 全量，上限 15 条）。
 
         注入命中风险/不确定性关键词的章节提示词——报告必须正面处理证据分歧而非
-        单边引用。无数据返回空串（注入自动跳过）。"""
+        单边引用。无数据返回空串（注入自动跳过）。FU-9：上限截掉 TIME-4 数值对账行时
+        （RESEARCH_QUANT_RECONCILE 开启）见 _contested_quant_slots；未截断时逐字节不变。"""
         rows = self.contested if isinstance(getattr(self, "contested", None), list) else None
         if not rows:
             return ""
-        lines = ["## 争议性关键论断（证据分歧——本章须正面呈现两侧立场与依据，不得单边引用）"]
-        rendered = 0
-        for r in rows:
-            if not isinstance(r, dict) or not r.get("claim"):
+        # The plain cut: the first max_claims renderable rows (at least one), in order; the
+        # rows after it are never rendered here.
+        head: List[Tuple[Dict[str, Any], str]] = []
+        rest: List[Any] = []
+        for i, r in enumerate(rows):
+            line = self._contested_row_line(r)
+            if line is None:
                 continue
-            segs = []
-            for p in (r.get("positions") or [])[:3]:
-                if not isinstance(p, dict) or not p.get("stance"):
-                    continue
-                src = "；".join(str(s) for s in (p.get("sources") or [])[:2])
-                tier = str(p.get("tier") or "").strip()
-                tag = f"（{tier}{'，' if tier and src else ''}{src}）" if (tier or src) else ""
-                segs.append(f"{self._md_cell(p['stance'], 160)}{tag}")
-            if not segs:
-                continue
-            lines.append(f"- **{self._md_cell(r['claim'], 120)}** — " + " ⇄ ".join(segs))
-            rendered += 1
-            if rendered >= max_claims:
+            head.append((r, line))
+            if len(head) >= max_claims:
+                rest = rows[i + 1:]
                 break
-        return "\n".join(lines) if rendered else ""
+        if not head:
+            return ""
+        lines = ["## 争议性关键论断（证据分歧——本章须正面呈现两侧立场与依据，不得单边引用）"]
+        if rest and getattr(Config, "RESEARCH_QUANT_RECONCILE", True):
+            lines += self._contested_quant_slots(head, rest)
+        else:
+            lines += [line for _, line in head]
+        return "\n".join(lines)
+
+    def _contested_quant_slots(self, head: List[Tuple[Dict[str, Any], str]],
+                               rest: List[Any]) -> List[str]:
+        """FU-9 (TIME-4 open issue): the plain cut's rows with slots kept for quant rows.
+
+        Every engine appends its quantitative disagreements (origin quant_reconcile) after
+        the model's claims, and only v3 caps them and puts probable unit-scale errors first,
+        so the plain first-N cut drops them all.  A multi-track run's merged handoff joins the
+        tracks' contested.json files (pipeline_orchestrator.merge_list_dedup), so there the
+        quant rows sit after each track's claims, interleaved with the next track's.  When the
+        plain cut drops at least one renderable quant_reconcile row, the quant rows get
+        max(min(_CONTESTED_QUANT_SLOTS, N), quant rows inside the plain cut) of the N slots
+        (at most all of them), chosen by priority wherever they sit: probable unit-scale
+        errors first, stable, so each kind keeps contested.json order.  A plain quant row
+        inside the cut therefore never keeps its slot while a unit-scale error past it is
+        dropped.  The plain cut's other rows (the model's claims) fill the remaining slots in
+        order.  The kept rows keep contested.json order, except that the positions held by
+        kept quant rows take those rows in priority order (unit-scale errors first; v3's
+        order already is), and a closing note counts the quant rows still cut.  Otherwise the
+        plain cut is returned unchanged.  Only quant_reconcile rows of ``rest`` are rendered,
+        and a malformed one is skipped (the plain cut never rendered it)."""
+        def unit_scale(r: Dict[str, Any]) -> bool:
+            return self._UNIT_SCALE_MARK in str(r.get("why_they_differ") or "")
+
+        tail: List[Tuple[Dict[str, Any], str]] = []
+        for r in rest:
+            if not isinstance(r, dict) or r.get("origin") != "quant_reconcile":
+                continue
+            try:
+                line = self._contested_row_line(r)
+            except Exception:  # noqa: BLE001 — a malformed row past the cap is skipped, as before
+                continue
+            if line is not None:
+                tail.append((r, line))
+        if not tail:
+            return [line for _, line in head]
+        cap = len(head)
+        rendered = head + tail  # contested.json order
+        quant = [i for i, (r, _) in enumerate(rendered) if r.get("origin") == "quant_reconcile"]
+        quant.sort(key=lambda i: not unit_scale(rendered[i][0]))
+        quant_positions = set(quant)
+        # The quant rows' share never falls below what the plain cut already shows; tail is
+        # not empty, so there are more quant rows than that and the slice fills the share.
+        in_cut = sum(1 for i in quant if i < cap)
+        keep = set(quant[:max(min(self._CONTESTED_QUANT_SLOTS, cap), in_cut)])
+        # The plain cut's other rows, in order, fill the remaining slots (there are enough:
+        # cap - in_cut of them).
+        keep.update([i for i in range(cap) if i not in quant_positions][:cap - len(keep)])
+        # Kept rows in contested.json order; the positions held by quant rows take the kept
+        # quant rows in priority order (unit-scale errors first).
+        kept_quant_by_priority = iter([i for i in quant if i in keep])
+        lines = []
+        for i in sorted(keep):
+            row = next(kept_quant_by_priority) if i in quant_positions else i
+            lines.append(rendered[row][1])
+        cut = [rendered[i][0] for i in quant if i not in keep]
+        if cut:
+            n_unit = sum(1 for r in cut if unit_scale(r))
+            lines.append(f"（另有 {len(cut)} 条数值对账分歧超出上限未列出"
+                         + (f"，其中 {n_unit} 条疑似量纲错误" if n_unit else "") + "）")
+            logger.info(f"争议性论断块：数值对账分歧保留 {len(quant) - len(cut)} 条、"
+                        f"超出上限未列 {len(cut)} 条（疑似量纲错误 {n_unit} 条）")
+        return lines
 
     def _build_chronology_block(self, max_events: int = 25) -> str:
         """W9-8: 紧凑时间线块（timeline.json 取最近 max_events 条、按时间升序渲染）。
@@ -3063,6 +3214,13 @@ class ReportAgent:
                              f"（截至 {(data or {}).get('horizon_date') or ''}）")
         else:
             lines.append("稳定性诊断：已趋稳" if ca else "稳定性诊断：尚未趋稳（应降低信心）")
+        # SIM-4（SIM_PRIOR_ECHO_DIAGNOSTIC，默认开）：先验回声 / 领先扎堆时，在份额行之后、注释行
+        # 之前加一行不含机制数字的定性提示（forecast_extractor 的份额解析只读份额行，不受影响）；
+        # 其余裁定不加任何行，输出逐字节不变。
+        if getattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", True):
+            echo_line = _prior_echo_caveat(data)
+            if echo_line:
+                lines.append(echo_line)
         lines.append(note_line)
         return "\n".join(lines)
 
@@ -4294,6 +4452,10 @@ class ReportAgent:
                 _ebf_guard_kwargs: Dict[str, Any] = (
                     {"numeric_guard_mode": _ng_mode}
                     if _ng_mode == _numeric_guards.MODE_SHADOW else {})
+                # FU-7：市场被扣下（回测钉，或钉查找失败时失败关闭，见 _markets_withheld_status）
+                # 时弹出模型自报的市场锚点（实时运行不传，调用逐字节不变）。
+                if self._markets_withheld_status() is not None:
+                    _ebf_guard_kwargs["withhold_market_anchors"] = True
                 # B2: 需求书解析出的 binary_min_count 参与生效——取 spec 与 Config 的较大者
                 # （需求书写明「15+ binary forecasts」时不被 Config 默认静默压低）。
                 _bres = _ebf(
@@ -4354,6 +4516,19 @@ class ReportAgent:
                     for _ext_issue in _ext_bq.get("issues") or []:
                         if _ext_issue not in _ext_base and _ext_issue not in _q_issues:
                             _q_issues.append(_ext_issue)
+                    # EVAL-14（FORECAST_BINARY_STRUCTURED_TARGET，默认关）：同目标阈值阶梯单调性审计，
+                    # 在 reconcile 定稿后的概率上做；只告警（不进 issues、不碰发布门与终审政策版本）。
+                    # 增强项：审计异常只记日志，不写键、不影响定稿（degrade-safe）。
+                    if getattr(Config, "FORECAST_BINARY_STRUCTURED_TARGET", False):
+                        try:
+                            from .binary_targets import threshold_ladder_audit as _ladder_audit
+                            _ladder = _ladder_audit(forecast["binary_forecasts"])
+                            _quality["threshold_ladder"] = _ladder
+                            if _ladder["violation_count"]:
+                                logger.warning(f"二元预测阈值阶梯不单调："
+                                               f"{_ladder['violation_count']} 处（仅告警）")
+                        except Exception as _lae:  # noqa: BLE001 — 只告警的增强审计
+                            logger.warning(f"二元预测阈值阶梯审计失败（忽略，不影响产物）: {_lae!r}")
                     forecast["binary_quality"] = _quality
                     # RQ-6：校验二元预测结算年份与真实判定期一致——目标年份集合（需求书 +
                     # 日历 horizon_date.year）与二元结算年份集合非空且无交集时，把
@@ -4443,12 +4618,19 @@ class ReportAgent:
         # REPORT-11：概率政策标记与概率形状遥测——置于二元块（含对账重算记分卡）之后，此后不再有步骤
         # 移动情景 / 二元概率。政策标记与形状旗标无关（形状关时开了护栏的运行仍可识别）；形状纯观测，
         # 任何门都不读，随下方 forecast.json 落盘（终审指纹覆盖它），发布提交时抄入账本行
-        # objective_signals。护栏关时不写 forecast_policy；形状关时不写 probability_shape（forecast.json
-        # 回到旧形态）。probability_shape 从不抛出（纯函数，失败返回空块）。
-        if getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False):
+        # objective_signals。护栏（与 EVAL-14 结构化 target）都关时不写 forecast_policy；形状关时不写
+        # probability_shape（forecast.json 回到旧形态）。probability_shape 从不抛出（纯函数，失败返回空块）。
+        # EVAL-14：结构化 target 开启时二元抽取提示词多一段 STRUCTURED TARGET 规则（可能改变起草），
+        # 同样记入 forecast_policy（护栏键照实写出，账本 shape_summary 按它分组不受影响）；两旗标都关
+        # → 不写（forecast.json 不变）。
+        _guard_on = bool(getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False))
+        _target_on = bool(getattr(Config, "FORECAST_BINARY_STRUCTURED_TARGET", False))
+        if _guard_on or _target_on:
             _fq0 = forecast.get("quality")
             _fq = dict(_fq0) if isinstance(_fq0, dict) else {}
-            _fq["forecast_policy"] = {"binary_symmetric_guard": True}
+            _fq["forecast_policy"] = {"binary_symmetric_guard": _guard_on}
+            if _target_on:
+                _fq["forecast_policy"]["binary_structured_target"] = True
             forecast["quality"] = _fq
         if getattr(Config, "FORECAST_PROBABILITY_SHAPE", True):
             _fq0 = forecast.get("quality")

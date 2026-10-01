@@ -11,6 +11,8 @@ from scripts.backfill_report_visuals import (
     _WITHHELD_ISSUE_RE,
     _ensemble_issue,
     _provenance_issue,
+    _report_completed_at,
+    _restore_from_backup,
     backfill_one,
     carry_binary_quality,
     drop_irreparable_language_lines,
@@ -740,3 +742,155 @@ def test_replay_of_a_report1_era_forecast_json_keeps_the_withheld_disclosure(tmp
         "proposition_consistency", "needs_review_count", "needs_review_reasons"}
     assert "only 4 binaries (< 10)" in stored["issues"]
     assert quality["issues"] == [_binary_withheld_issue(2)] + rebuilt["issues"]
+
+
+def test_replay_recomputes_the_threshold_ladder_and_keeps_the_extractor_keys(
+        tmp_path, monkeypatch):
+    """End to end through backfill_one (EVAL-14 + FU-1): the stored ladder audit flagged
+    F1 against F2; F1 is dropped as a circular market forecast, so the replay recomputes
+    the ladder over F2 and F4 (now monotone) instead of carrying the stale stored audit,
+    while the extractor-only keys FU-1 carries survive."""
+    from app.services import binary_targets as bt
+
+    def rung(rid, comparator, threshold, p):
+        statement = f"US data-centre grid demand {comparator} {threshold} GW at end-2030"
+        criteria = f"YES if EIA reports demand {comparator} {threshold} GW for 2030-12-31."
+        target, errors = bt.validate_binary_target(
+            {"metric": "US data-centre grid demand", "unit": "GW", "comparator": comparator,
+             "threshold": threshold, "statistic": "value_on", "target_date": "2030-12-31",
+             "resolution_source": "EIA Electric Power Monthly"},
+            statement=statement, criteria=criteria)
+        assert errors == []
+        return {"id": rid, "statement": statement, "resolution_criteria": criteria,
+                "probability": p, "theme": "grid", "criteria_sharp": True, "target": target}
+
+    stored = [rung("F1", ">=", 170, 0.12), rung("F2", ">", 230, 0.57),
+              {"id": "F3", "statement": "Congress passes a permitting reform by 2027",
+               "resolution_criteria": "YES if signed into law by 2027-12-31.",
+               "probability": 0.35, "theme": "policy", "criteria_sharp": True},
+              rung("F4", ">=", 100, 0.80)]
+    stored[0].update(_CIRCULAR)
+    old = _binary_quality(stored, min_count=10)
+    old.update(proposition_consistency={"status": "ok"},
+               world_state_outcome={"scenario_shares": {"A": 0.6, "B": 0.4}},
+               threshold_ladder=bt.threshold_ladder_audit(stored))
+    assert old["threshold_ladder"]["violation_count"] >= 1
+    pipeline_id, report_id, report_dir = _replay_harness(
+        tmp_path, monkeypatch, "ladder",
+        {"binary_forecasts": stored, "binary_quality": old, "scenarios": []})
+
+    backfill_one(pipeline_id, report_id, apply=True)
+
+    forecast = json.loads((report_dir / "forecast.json").read_text(encoding="utf-8"))
+    retained = forecast["binary_forecasts"]
+    quality = forecast["binary_quality"]
+    assert [row["id"] for row in retained] == ["F2", "F3", "F4"]
+    assert quality["threshold_ladder"] == bt.threshold_ladder_audit(retained)
+    assert quality["threshold_ladder"]["groups_checked"] == 1
+    assert quality["threshold_ladder"]["violation_count"] == 0
+    assert quality["world_state_outcome"] == old["world_state_outcome"]
+    assert quality["count"] == 3
+
+
+# ------------------------------- FU-5: the replayed cross-check never reads the replay day
+
+_FU5_ANCHOR = {"market_id": "m-a", "question": "Will A by July?", "implied_yes_prob": 0.04,
+               "url": "https://polymarket.com/event/a", "endDate": "2026-07-31"}
+_FU5_SNAPSHOT = [
+    dict(_FU5_ANCHOR, end_date="2026-07-31", volume=900),
+    {"market_id": "m-b", "question": "Will B by July?", "implied_yes_prob": 0.03, "volume": 800,
+     "end_date": "2026-07-31"},
+    {"market_id": "m-c", "question": "Will C by June?", "implied_yes_prob": 0.02, "volume": 700,
+     "end_date": "2026-06-15", "window_ended": True,
+     "window_ended_at": "2026-06-15T23:59:59.999999+00:00"},
+    {"market_id": "m-d", "question": "Will D by 2027?", "implied_yes_prob": 0.4, "volume": 600,
+     "end_date": "2027-12-31"},
+]
+
+
+def _fu5_binaries():
+    """Three binaries; F2 carries a complete, byte-bound anchor to market m-a (the contract
+    reconciliation keeps it), whose window ends 2026-07-31."""
+    rows = _binaries(3)
+    row = rows[1]
+    row["proposition_id"] = "grid-storage-11gw-2030"
+    contract = row["statement"] + "\n" + row["resolution_criteria"]
+    row["market_anchor"] = dict(
+        _FU5_ANCHOR, resolution_equivalence="exact", match_confidence=0.9,
+        forecast_proposition_id=row["proposition_id"],
+        forecast_contract_sha256=hashlib.sha256(contract.encode("utf-8")).hexdigest(),
+        market_question_sha256=hashlib.sha256(
+            _FU5_ANCHOR["question"].encode("utf-8")).hexdigest(),
+        match_method="bounded-semantic-equivalence-review")
+    return rows
+
+
+_FU5_ROW_A = ("| F2 | Grid storage installs exceed 11 GW in 2030 | 25% | 4% | +21pt | ⚠ explain | "
+              "[Will A by July?](https://polymarket.com/event/a)")
+_FU5_LABEL_JULY = " — window ended 2026-07-31, awaiting settlement"
+
+
+@pytest.mark.parametrize("completed_at, ended_at_completion", [
+    ("2026-06-30T10:00:00+00:00", False),
+    ("2026-08-15T10:00:00+00:00", True),
+    (None, False),
+    ("not-a-timestamp", False),
+])
+def test_replay_judges_window_ended_markets_at_the_report_completion_time(
+        tmp_path, monkeypatch, completed_at, ended_at_completion):
+    """FU-5 review round 2: the backfill re-renders the Market Cross-Check at the report's
+    own completion time (meta.json completed_at), so replaying the same artifacts on two
+    days after the markets' end date writes byte-identical reports. Markets that ended
+    after the report completed stay unlabelled; without a usable completed_at only the
+    stamps saved with the report (the research snapshot's m-c) label a row."""
+    from datetime import datetime, timezone
+
+    from app.utils import prediction_markets as pm
+
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GATE", True, raising=False)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GRACE_HOURS", 0.0, raising=False)
+    pipeline_id, report_id, report_dir = _replay_harness(
+        tmp_path, monkeypatch, "fu5", {"binary_forecasts": _fu5_binaries(), "scenarios": []})
+    meta = {"report_id": report_id}
+    if completed_at is not None:
+        meta["completed_at"] = completed_at
+    (report_dir / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    handoff = tmp_path / "fu5" / "pipelines" / pipeline_id / "handoff"
+    (handoff / "prediction_markets.json").write_text(json.dumps(_FU5_SNAPSHOT), encoding="utf-8")
+
+    def _replay(clock):
+        monkeypatch.setattr(pm, "market_clock_now", lambda: clock)
+        backup = Path(backfill_one(pipeline_id, report_id, apply=True)["backup"])
+        replayed = (report_dir / "full_report.md").read_text(encoding="utf-8")
+        _restore_from_backup(report_dir, backup)  # the next replay reads the same artifacts
+        backup.rename(report_dir / f"replay-{clock.year}")
+        return replayed
+
+    first = _replay(datetime(2026, 8, 1, tzinfo=timezone.utc))
+    later = _replay(datetime(2100, 1, 1, tzinfo=timezone.utc))
+    assert later == first
+    lines = first.split("\n")
+    july = _FU5_LABEL_JULY if ended_at_completion else ""
+    assert _FU5_ROW_A + july + " |" in lines
+    assert "- Will B by July? — implied P(yes) 3%" + july in lines
+    assert ("- Will C by June? — implied P(yes) 2% — window ended 2026-06-15, awaiting settlement"
+            in lines)
+    assert "- Will D by 2027? — implied P(yes) 40%" in lines
+    assert first.count("awaiting settlement") == (3 if ended_at_completion else 1)
+
+
+def test_report_completed_at_reads_meta_as_generate_report_writes_it():
+    """completed_at in UTC: a naive stamp is local time (datetime.now().isoformat()), an
+    aware one is converted; anything unusable → None (the replay then keeps saved stamps)."""
+    from datetime import datetime, timezone
+
+    naive = "2026-08-15T10:00:00"
+    assert _report_completed_at({"completed_at": naive}) == datetime.fromisoformat(
+        naive).astimezone(timezone.utc)
+    assert _report_completed_at({"completed_at": " 2026-08-15T10:00:00+08:00 "}) == datetime(
+        2026, 8, 15, 2, tzinfo=timezone.utc)
+    assert _report_completed_at({"completed_at": "2026-08-15T10:00:00Z"}) == datetime(
+        2026, 8, 15, 10, tzinfo=timezone.utc)
+    for meta in ({"completed_at": "not-a-timestamp"}, {"completed_at": ""},
+                 {"completed_at": None}, {"completed_at": 1786000000}, {}, None, []):
+        assert _report_completed_at(meta) is None
