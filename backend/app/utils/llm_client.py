@@ -553,6 +553,13 @@ def _json_strict_numbers() -> bool:
     return bool(getattr(Config, "LLM_JSON_STRICT_NUMBERS", True))
 
 
+# FU-12: what decoding untrusted model text can raise. json.JSONDecodeError is a ValueError;
+# a plain ValueError is an integer literal past Python's int-string digit limit (4300 by
+# default), and RecursionError is nesting deeper than the decoder's recursion limit. All
+# three mean "this reply does not parse", never a crash.
+_JSON_PARSE_ERRORS = (ValueError, RecursionError)
+
+
 def _loads_finite(text: str) -> Any:
     """``json.loads`` that rejects NaN, Infinity, -Infinity and overflowing floats (INFRA-4)."""
     return json.loads(text, parse_constant=reject_nonfinite_constant,
@@ -1711,7 +1718,7 @@ class LLMClient:
             args_error: Optional[str] = None
             try:
                 args = json.loads(raw_args) if raw_args else {}
-            except (json.JSONDecodeError, TypeError) as exc:
+            except (*_JSON_PARSE_ERRORS, TypeError) as exc:
                 args = {}
                 args_error = f"{type(exc).__name__}: {exc}"
             if args_error is None and not isinstance(args, dict):
@@ -1773,16 +1780,19 @@ class LLMClient:
 
         try:
             return loads(cleaned), False, False
-        except json.JSONDecodeError:
+        except _JSON_PARSE_ERRORS:
             pass
 
         # 提取首个 JSON 对象（应对模型在 JSON 前后加说明文字）
-        match = re.search(r'\{[\s\S]*\}', cleaned)
-        if match:
+        # FU-12: the span from the first '{' to the last '}' -- what re.search(r'\{[\s\S]*\}')
+        # matched, found in linear time (the regex was quadratic on many '{' and no '}').
+        first, last = cleaned.find('{'), cleaned.rfind('}')
+        if 0 <= first < last:
+            span = cleaned[first:last + 1]
             try:
-                return loads(match.group()), False, False
-            except json.JSONDecodeError:
-                cleaned = match.group()
+                return loads(span), False, False
+            except _JSON_PARSE_ERRORS:
+                cleaned = span
         else:
             # 没有闭合的 '}'：截断式输出，从首个 '{' 起修复
             brace = cleaned.find('{')
@@ -1831,7 +1841,7 @@ class LLMClient:
             for depth, opener in enumerate(stack))
         try:
             return loads(repaired), repaired != cleaned, partial_item
-        except json.JSONDecodeError:
+        except _JSON_PARSE_ERRORS:
             return unparsed, False, False
 
     # ------------------------------------------------------------------
