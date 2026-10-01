@@ -444,7 +444,10 @@ def _restore_from_backup(report_dir: Path, backup: Path) -> None:
 
 
 # FU-1 (EVAL-10 open issue): the scorecard lines _binary_quality writes, which the
-# backfill rebuilds from the retained rows; every other stored issue line is carried.
+# backfill rebuilds from the retained rows. The withheld line is rebuilt from
+# needs_review_count, the provenance line from the recounted downgrades and the ensemble
+# line from the binary ids it names that are still retained; every other stored issue
+# line is carried in its stored order.
 _SCORE_ISSUE_RES = tuple(re.compile(pattern) for pattern in (
     r"only \d+ binaries \(< \d+\)",
     r"probability spread too low \(stdev -?[0-9.]+\) — hedging",
@@ -454,13 +457,24 @@ _SCORE_ISSUE_RES = tuple(re.compile(pattern) for pattern in (
     r"all forecasts share a single theme — no thematic spread",
 ))
 _WITHHELD_ISSUE_RE = re.compile(r"\d+ binary probabilities unreadable — withheld, not clamped")
-_PROVENANCE_ISSUE_RE = re.compile(r"(\d+) forecast\(s\) claimed a simulation signal that was never injected")
+_PROVENANCE_ISSUE_RE = re.compile(
+    r"\d+ forecast\(s\) claimed a simulation signal that was never injected into the prompt "
+    r"— source downgraded to research-prior \(see source_claimed\)")
+# Groups: the spread threshold as written, then the comma-separated binary ids.
+_ENSEMBLE_ISSUE_RE = re.compile(
+    r"\d+ forecast\(s\) show cross-model disagreement \(spread > ([^\s)]+)\): (.+)")
 
 
 def _provenance_issue(count: int) -> str:
     """The extractor's provenance-downgrade issue line (forecast_extractor wording)."""
     return (f"{count} forecast(s) claimed a simulation signal that was never "
             "injected into the prompt — source downgraded to research-prior (see source_claimed)")
+
+
+def _ensemble_issue(ids: List[str], spread_threshold: str) -> str:
+    """The extractor's cross-model disagreement issue line (forecast_extractor wording)."""
+    return (f"{len(ids)} forecast(s) show cross-model disagreement "
+            f"(spread > {spread_threshold}): {', '.join(ids)}")
 
 
 def carry_binary_quality(old_quality: Dict[str, Any], quality: Dict[str, Any],
@@ -476,8 +490,10 @@ def carry_binary_quality(old_quality: Dict[str, Any], quality: Dict[str, Any],
     then the stored lines that are not scorecard lines in their stored order, the
     provenance line restated with the recounted number (dropped at zero; written after
     the scorecard lines, where the extractor puts it, when a non-zero count has no
-    stored line).  Only a list of stored issue lines is read.  Mutates and returns
-    ``quality``."""
+    stored line), the ensemble line restated without the ids of rows that are no
+    longer retained (dropped when none remains; the ``ensemble`` block itself, which
+    the Part-1 footnote reads, stays as stored).  Only a list of stored issue lines is
+    read.  Mutates and returns ``quality``."""
     for key, value in old_quality.items():
         if key not in ("issues", "ensemble") and key not in quality:
             quality[key] = value
@@ -485,6 +501,7 @@ def carry_binary_quality(old_quality: Dict[str, Any], quality: Dict[str, Any],
     if "provenance_downgrades" in old_quality:
         downgrades = sum(1 for row in retained if "source_claimed" in row)
         quality["provenance_downgrades"] = downgrades
+    retained_ids = {str(row.get("id") or "").strip() for row in retained}
     issues = quality.setdefault("issues", [])
     if quality.get("needs_review_count"):
         issues.insert(0, _binary_withheld_issue(quality["needs_review_count"]))
@@ -494,11 +511,17 @@ def carry_binary_quality(old_quality: Dict[str, Any], quality: Dict[str, Any],
     for line in stored_issues if isinstance(stored_issues, list) else []:
         if not isinstance(line, str):
             continue
-        if _PROVENANCE_ISSUE_RE.match(line) and downgrades is not None:
+        disagreement = _ENSEMBLE_ISSUE_RE.fullmatch(line)
+        if _PROVENANCE_ISSUE_RE.fullmatch(line) and downgrades is not None:
             provenance_stored = True
             line = _provenance_issue(downgrades) if downgrades else ""
         elif _WITHHELD_ISSUE_RE.fullmatch(line) or any(r.fullmatch(line) for r in _SCORE_ISSUE_RES):
             continue
+        elif disagreement:
+            named = disagreement.group(2).split(", ")
+            kept = [bid for bid in named if bid in retained_ids]
+            if kept != named:
+                line = _ensemble_issue(kept, disagreement.group(1)) if kept else ""
         if line and line not in issues:
             issues.append(line)
     if downgrades and not provenance_stored:
