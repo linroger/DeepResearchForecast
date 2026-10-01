@@ -988,6 +988,12 @@ class Config:
     # forecast.quality.forecast_policy（与形状遥测旗标无关）与准入钉 safety_policy_v1。默认关是安全的：
     # 二元抽取提示词逐字节不变。
     FORECAST_BINARY_SYMMETRIC_GUARD = os.environ.get('FORECAST_BINARY_SYMMETRIC_GUARD', 'false').strip().lower() == 'true'
+    # EVAL-14（P14）：数值阈值型二元的结构化 target——二元抽取提示词追加 STRUCTURED TARGET 规则，
+    # 模型给出的 target 经 binary_targets.validate_binary_target 校验后存 row['target']（不合格存
+    # target_rejected 及原因），报告在定稿概率上做同目标阈值阶梯单调性审计
+    # （binary_quality.threshold_ladder，只告警，不影响发布门与终审政策版本）。默认关：二元抽取
+    # 提示词、max_tokens 与 forecast.json 逐字节不变（开启会改变提示词，从而可能改变起草）。
+    FORECAST_BINARY_STRUCTURED_TARGET = os.environ.get('FORECAST_BINARY_STRUCTURED_TARGET', 'false').strip().lower() == 'true'
     # REPORT-11 概率形状遥测（默认开）：确定性计算情景形状（峰值 max_probability、归一化熵、距均匀分布的
     # TV 距离，叙事前 / 成稿后批判成功时另算批判前后差值）与二元预测形状（0.40-0.60 中间带 / 0.45-0.55
     # 近半 / ≤0.05 或 ≥0.95 极端占比、十分位直方图、市场重述与分区对账向 / 远离 0.5 的移动计数），记入

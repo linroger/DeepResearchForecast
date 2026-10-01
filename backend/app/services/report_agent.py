@@ -4129,6 +4129,14 @@ class ReportAgent:
                     for _ext_issue in _ext_bq.get("issues") or []:
                         if _ext_issue not in _ext_base and _ext_issue not in _q_issues:
                             _q_issues.append(_ext_issue)
+                    # EVAL-14（FORECAST_BINARY_STRUCTURED_TARGET，默认关）：同目标阈值阶梯单调性审计，
+                    # 在 reconcile 定稿后的概率上做；只告警（不进 issues、不碰发布门与终审政策版本）。
+                    if getattr(Config, "FORECAST_BINARY_STRUCTURED_TARGET", False):
+                        from .binary_targets import threshold_ladder_audit as _ladder_audit
+                        _quality["threshold_ladder"] = _ladder_audit(forecast["binary_forecasts"])
+                        if _quality["threshold_ladder"]["violation_count"]:
+                            logger.warning(f"二元预测阈值阶梯不单调："
+                                           f"{_quality['threshold_ladder']['violation_count']} 处（仅告警）")
                     forecast["binary_quality"] = _quality
                     # RQ-6：校验二元预测结算年份与真实判定期一致——目标年份集合（需求书 +
                     # 日历 horizon_date.year）与二元结算年份集合非空且无交集时，把

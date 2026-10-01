@@ -374,8 +374,15 @@ _CHINESE_RANGE_RE = re.compile(
 )
 _COMPARATOR_RANGE_RE = re.compile(
     rf"^\s*{_RANGE_METRIC}\s+(?:(?:is|will\s+be|must\s+be|remains?|reaches?)\s+)?"
-    rf"(?P<operator>>=|<=|>|<|at\s+least|at\s+most|more\s+than|"
-    rf"less\s+than|above|below|exceeds?|under)\s+"
+    rf"(?P<operator>>=|<=|>|<|at\s+least|at\s+most|"
+    # EVAL-14 (RESEARCH-15 item c): negated comparators first, so the lazy metric never
+    # swallows "does not" / "no" and reads the bare comparator the wrong way round.
+    rf"(?:does|do|will|would|must|should|can)\s+not\s+exceed|(?:doesn't|won't|don't)\s+exceed|"
+    rf"not\s+exceed(?:ing)?|no\s+more\s+than|not\s+more\s+than|"
+    rf"no\s+higher\s+than|not\s+higher\s+than|not\s+above|"
+    rf"no\s+less\s+than|not\s+less\s+than|no\s+fewer\s+than|no\s+lower\s+than|"
+    rf"not\s+lower\s+than|not\s+below|not\s+under|"
+    rf"more\s+than|less\s+than|above|below|exceeds?|under)\s+"
     rf"{_range_value_pattern('bound')}",
     re.I,
 )
@@ -626,11 +633,20 @@ def _extract_comparable_numeric_range(criteria: Any) -> Optional[Dict[str, Any]]
                 lower_ops = {
                     ">", ">=", "at least", "more than", "above", "exceed",
                     "exceeds", "高于", "超过", "不低于", "至少",
+                    # EVAL-14: negated upper bounds read as lower bounds.
+                    "no less than", "not less than", "no fewer than", "no lower than",
+                    "not lower than", "not below", "not under",
                 }
                 upper_ops = {
                     "<", "<=", "at most", "less than", "below", "under",
                     "低于", "少于", "不超过", "至多",
+                    # EVAL-14: negated lower bounds read as upper bounds.
+                    "no more than", "not more than", "no higher than", "not higher than",
+                    "not above", "not exceed", "not exceeding",
                 }
+                if re.fullmatch(r"(?:does|do|will|would|must|should|can) not exceed|"
+                                r"(?:doesn't|won't|don't) exceed", operator):
+                    operator = "not exceed"
                 if operator in lower_ops:
                     low, high = bound[0], math.inf
                 elif operator in upper_ops:
@@ -1422,6 +1438,23 @@ _BINARY_LATEST_ACTUAL_RULE = (
     "ACTUAL (never a forecast, estimate or target) value of that same metric stated in the dossier, "
     "copied exactly; use null when the dossier has none."
 )
+# EVAL-14（FORECAST_BINARY_STRUCTURED_TARGET，默认关）：数值阈值型二元顺带给出结构化 target，供
+# binary_targets 校验 / 同目标阈值阶梯审计 / 单值结算。追加在市场规则（及 TIME-5 规则）之后；关 →
+# 提示词逐字节不变。
+_BINARY_TARGET_RULE = (
+    "\nSTRUCTURED TARGET: For each forecast that resolves on a numeric threshold of one metric, also "
+    "include \"target\": {\"metric\": <the metric, <=120 chars>, \"unit\": <its unit, e.g. GW, %, pp, "
+    "bp, USD billion>, \"comparator\": \">\"|\">=\"|\"<\"|\"<=\"|\"==\", \"threshold\": <number in that "
+    "unit>, \"statistic\": \"value_on\"|\"period_value\"|\"max_over_window\"|\"min_over_window\"|"
+    "\"mean_over_window\"|\"sum_over_window\", \"target_date\": \"YYYY-MM-DD\", \"window_start\": "
+    "\"YYYY-MM-DD\" (window statistics only, else null), \"resolution_source\": <who publishes the "
+    "number>} matching resolution_criteria exactly; wording such as \"at any point\" or \"ever\" "
+    "needs max_over_window or min_over_window. OMIT target for forecasts that do not resolve on one "
+    "numeric threshold."
+)
+# EVAL-14：结构化 target 每条约 60 个输出 token，开启时按每条 64 token 放宽（关 → 不变）。
+_BINARY_TARGET_TOKENS_PER_ROW = 64
+
 # 二元 _draw 的输出上限。shadow 的 latest_actual 对象实测每条约 50 个输出 token（cl100k），真实二元行
 # 每条约 290-480 token：沿用 4096 会让 10-12 条的首轮回复被截断（INFRA-2 补括号修复丢尾行 → 行数不足
 # 触发补抽，已发布的二元集合随之改变）。shadow 时按每条 64 token、至少 10 条放宽；off → 4096 不变。
@@ -1430,13 +1463,15 @@ _BINARY_LATEST_ACTUAL_TOKENS_PER_ROW = 64
 _BINARY_LATEST_ACTUAL_MIN_ROWS = 10
 
 
-def _binary_draw_max_tokens(rows: int, latest_actual: bool) -> int:
+def _binary_draw_max_tokens(rows: int, latest_actual: bool, structured_target: bool = False) -> int:
     """TIME-5：二元 _draw 的 max_tokens——off 为 4096；shadow 为 4096 + 64 × max(rows, 10)
-    （rows = 本轮索取条数 + 目标命题数）。"""
-    if not latest_actual:
-        return _BINARY_DRAW_MAX_TOKENS
-    return (_BINARY_DRAW_MAX_TOKENS
-            + _BINARY_LATEST_ACTUAL_TOKENS_PER_ROW * max(int(rows), _BINARY_LATEST_ACTUAL_MIN_ROWS))
+    （rows = 本轮索取条数 + 目标命题数）。EVAL-14：结构化 target 开启时再加 64 × max(rows, 10)。"""
+    tokens = _BINARY_DRAW_MAX_TOKENS
+    if latest_actual:
+        tokens += _BINARY_LATEST_ACTUAL_TOKENS_PER_ROW * max(int(rows), _BINARY_LATEST_ACTUAL_MIN_ROWS)
+    if structured_target:
+        tokens += _BINARY_TARGET_TOKENS_PER_ROW * max(int(rows), _BINARY_LATEST_ACTUAL_MIN_ROWS)
+    return tokens
 
 # ------------------------------------------------- source 溯源确定性校验（编造溯源修复）
 # 取证（report_9147b3f6a0a9 6/12、report_c83f21765b96 9/20、report_1b70ace5c9e8 8/13）：模型把
@@ -1921,7 +1956,8 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
                         allowed_themes: Optional[List[str]] = None,
                         market_lookup: Optional[Dict[str, float]] = None,
                         review_sink: Optional[list] = None,
-                        keep_latest_actual: bool = False) -> List[Dict[str, Any]]:
+                        keep_latest_actual: bool = False,
+                        keep_target: bool = False) -> List[Dict[str, Any]]:
     """Clamp/round each probability INDEPENDENTLY (no sum-normalization), dedup by
     statement, attach an objective-criteria quality flag. Drops rows missing a
     statement or a numeric probability.
@@ -1938,7 +1974,10 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
     {statement, raw, reason} 到 ``review_sink``（若给出），绝不钳制。
     TIME-5 ``keep_latest_actual``（仅 NUMERIC_GUARD_MODE=shadow 的抽取为真）：保留模型给出的
     latest_actual 对象，只留 {value, unit, as_of, source_ref} 四个字符串字段（各截 80 字）；
-    非对象 / 无 value → 不加字段。缺省 False → 行逐字节不变。"""
+    非对象 / 无 value → 不加字段。缺省 False → 行逐字节不变。
+    EVAL-14 ``keep_target``（仅 FORECAST_BINARY_STRUCTURED_TARGET 的抽取为真）：模型给出的 target 经
+    binary_targets.validate_binary_target 校验——合格 → row['target']（规范化对象），不合格 →
+    row['target_rejected']（错误列表）；模型未给 → 不加字段。缺省 False → 行逐字节不变。"""
     strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
     out: List[Dict[str, Any]] = []
     seen: set = set()
@@ -2087,6 +2126,14 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
             latest_actual = sanitize_latest_actual(it.get("latest_actual"))
             if latest_actual is not None:
                 row["latest_actual"] = latest_actual
+        if keep_target and it.get("target") is not None:
+            from .binary_targets import validate_binary_target
+            clean_target, target_errors = validate_binary_target(
+                it.get("target"), statement=stmt, criteria=rc)
+            if clean_target is not None:
+                row["target"] = clean_target
+            else:
+                row["target_rejected"] = target_errors
         out.append(row)
     return out
 
@@ -3333,6 +3380,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     """
     target_rows = _clean_target_propositions(target_propositions)
     latest_actual_rule = str(numeric_guard_mode or "").strip().lower() == "shadow"
+    structured_target = bool(_cfg("FORECAST_BINARY_STRUCTURED_TARGET", False))
     market_aware = (bool(_cfg("PREDICTION_MARKETS_ENABLED", True))
                     and bool((market_pack or "").strip()))
     content = (report_markdown or "")
@@ -3463,6 +3511,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
             user += _BINARY_MARKET_RULE
         if latest_actual_rule:
             user += _BINARY_LATEST_ACTUAL_RULE
+        if structured_target:
+            user += _BINARY_TARGET_RULE
         if exclude:
             user += "\n\nDo NOT repeat these already-captured forecasts (produce NEW, distinct ones):\n" + \
                 "\n".join(f"- {s}" for s in exclude[:30])
@@ -3496,7 +3546,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         raw = _llm.chat_json(messages=[{"role": "user", "content": user}],
                              temperature=0.25,
                              max_tokens=_binary_draw_max_tokens(instr_min + len(targets or ()),
-                                                                latest_actual_rule))
+                                                                latest_actual_rule, structured_target))
         items = raw.get("binary_forecasts") if isinstance(raw, dict) else None
         if _drop_truncated_reply(_llm):
             # INFRA-3: the cap cut this reply; a forecast it cut mid-way is dropped.
@@ -3509,7 +3559,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         return _normalize_binaries(items or [], allowed_themes=themes,
                                    market_lookup=market_lookup or None,
                                    review_sink=review_to,
-                                   keep_latest_actual=latest_actual_rule)
+                                   keep_latest_actual=latest_actual_rule,
+                                   keep_target=structured_target)
 
     def _merge(base: List[Dict[str, Any]], extra: List[Dict[str, Any]]) -> None:
         seen = {_binary_key(b["statement"]) for b in base}
