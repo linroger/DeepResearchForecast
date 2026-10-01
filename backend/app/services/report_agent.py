@@ -5459,14 +5459,24 @@ class ReportAgent:
             for match in cls._SEMANTIC_NUMBER_RE.finditer(str(text or ""))
         }
 
-    @staticmethod
-    def _derived_support_spans(source: Dict[str, Any]) -> List[str]:
+    # RESEARCH-8: the calculation a derived_supports statement ends with
+    # (" [calculated: <expr>; a=…, b=…]", possibly cut short with no closing
+    # bracket), from its first opener on.
+    _DERIVED_CALCULATION_RE = re.compile(r"\s*\[calculated:.*\Z", re.S)
+
+    @classmethod
+    def _derived_support_spans(cls, source: Dict[str, Any]) -> List[str]:
         """RESEARCH-8: the calculated statements of v3 DERIVED findings a
-        source carries (``derived_supports``, written only by flag-on research)."""
+        source carries (``derived_supports``, written only by flag-on
+        research), each without its trailing calculation: the formula's
+        literals (100, 1) and the operands are no evidence of their own (the
+        operands are page figures the other spans carry), so only the finding
+        text, which states the result, can support a claim."""
         derived = source.get("derived_supports")
         if not isinstance(derived, list):
             return []
-        return [str(value).strip() for value in derived if str(value).strip()]
+        spans = (cls._DERIVED_CALCULATION_RE.sub("", str(value)).strip() for value in derived)
+        return [span for span in spans if span]
 
     @staticmethod
     def _citation_evidence_spans(
@@ -5474,8 +5484,9 @@ class ReportAgent:
     ) -> List[str]:
         """Return only persisted evidence-bearing source fields.
 
-        RESEARCH-8: ``derived_supports`` (:meth:`_derived_support_spans`) join
-        after ``supports`` unless ``include_derived`` is false;
+        RESEARCH-8: ``derived_supports`` (:meth:`_derived_support_spans`,
+        without their calculation) join after ``supports`` unless
+        ``include_derived`` is false;
         :meth:`_semantic_citation_support` weighs them apart, so they can only
         add support to a claim, never remove it.
         """

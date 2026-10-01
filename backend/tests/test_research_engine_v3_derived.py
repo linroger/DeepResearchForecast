@@ -95,9 +95,10 @@ def _sha(text: str) -> str:
 
 def assert_recomputable(fact: dict, rows, pages) -> None:
     """The invariant of a DERIVED fact: a single-source derivation, shown and
-    fetched, whose every operand value, exactly as the formula uses it, is on
-    that page, whose formula recomputes to the recorded result, and whose
-    every number but the stated result is on that page too."""
+    fetched, whose every operand value, exactly as the formula uses it, and
+    every period year are on that page, whose formula recomputes to the
+    recorded result, which one number states as the finding writes it, and
+    whose every other number is on that page too."""
     derivation = fact["derivation"]
     sid = derivation["sid"]
     assert fact["tag"] == "DERIVED" and sid in fact["sids"] and rows[sid]["fetched"]
@@ -106,6 +107,7 @@ def assert_recomputable(fact: dict, rows, pages) -> None:
     for name, operand in derivation["operands"].items():
         if operand["sid"] is None:
             values[name] = dn.period_value(operand["value"])
+            assert {f"={year}" for year in dn.period_years(operand["value"])} <= page, operand
             continue
         assert operand["sid"] == sid
         reading = lr._operand_reading(operand["value"], page)
@@ -113,13 +115,12 @@ def assert_recomputable(fact: dict, rows, pages) -> None:
         values[name] = reading[0]
     result = dn.evaluate(derivation["expr"], values)
     assert dn.format_exact(result) == derivation["result"]
-    text = fact["text"]
     data_values = [operand["value"] for operand in derivation["operands"].values() if operand["sid"] is not None]
-    ratio = frozenset() if lr._result_is_percent(derivation["expr"], data_values) else lr.fact_percent_tokens(text)
-    numbers, scaled = lr.fact_number_tokens(text), lr.fact_number_values(text)
-    assert any(lr._states_result(token, result, ratio, scaled) for token in numbers)
-    for token in lr._numbers_off_page(text, numbers, page):
-        assert lr._states_result(token, result, ratio, scaled), (token, text)
+    percent = lr._result_is_percent(derivation["expr"], data_values)
+    numbers = [number for number in lr._number_occurrences(fact["text"]) if number.checkable]
+    stating = [number for number in numbers if lr._states_result(number, result, percent)]
+    assert stating, fact["text"]
+    assert not lr._numbers_off_page([number for number in numbers if number not in stating], page), fact["text"]
 
 
 # ================================================================== postprocess
@@ -203,6 +204,9 @@ FAILURE_CASES = [
     ("Capacity per plant about 7.4 GW [S12] (DERIVED: c/n; c=37 GW [S12], n=5 [S12])", "operand_not_on_page"),
     ("Capacity grew about 185% [S12] (DERIVED: (a-b)/b*100; a=37 GW in 2024 [S12], b=13 GW [S12])",
      "operand_not_on_page"),
+    # Both years of a period are on the page too: the page's figures run from 2019 to 2024.
+    ("Capacity grew about 9.1% a year [S12] (DERIVED: ((a/b)**(1/n)-1)*100; a=37 GW [S12], b=13 GW [S12], "
+     "n=years(2019,2031))", "operand_not_on_page"),
     # A source the agent was not shown (its marker is stripped), or saw only in search results.
     ("Capacity grew about 185% [S12] (DERIVED: (a-b)/b*100; a=37 GW [S99], b=13 GW [S12])", "unshown_source"),
     ("Capacity grew about 185% [S14] (DERIVED: (a-b)/b*100; a=37 GW [S14], b=13 GW [S14])", "unshown_source"),
@@ -222,6 +226,19 @@ FAILURE_CASES = [
     ("Capacity grew about 1.8% [S12] (DERIVED: (a-b)/b; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
     ("Capacity is about 2.8% of its 2019 level [S12] (DERIVED: a/b; a=37 GW [S12], b=13 GW [S12])",
      "result_mismatch"),
+    # The result is stated as the finding writes it: a percentage never with a unit or a
+    # scale word, a ratio at the full value of a scaled number, a minus sign never ignored.
+    ("Investment reached about $185 billion [S12] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])",
+     "result_mismatch"),
+    ("Capacity reached about 185 GW [S12] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
+    ("Capacity reached 2.85 trillion [S12] (DERIVED: a/b; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
+    ("The gap is about 0.024 thousand GW [S12] (DERIVED: (a-b)/1000; a=37 GW [S12], b=13 GW [S12])",
+     "result_mismatch"),
+    ("Capacity changed by -185% [S12] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
+    # A ratio or product of percentages is no percentage-point figure: 68% / 42% is "162%".
+    ("Renewables share is about 1.6% higher in ratio terms [S15] (DERIVED: a/b; a=68% [S15], b=42% [S15])",
+     "result_mismatch"),
+    ("Combined about 2856% [S15] (DERIVED: a*b; a=68% [S15], b=42% [S15])", "result_mismatch"),
     ("Capacity grew strongly to 37 GW [S12] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])",
      "no_result_token"),
 ]
@@ -229,9 +246,28 @@ FAILURE_CASES = [
 
 @pytest.mark.parametrize("line, code", FAILURE_CASES)
 def test_every_failed_check_is_unverified_with_its_derivation_error(line, code):
-    fact = only(line)
+    fact = only(line, rows=ROWS_WITH_SHARES)
     assert fact["tag"] == "UNVERIFIED" and fact["derivation_error"] == code and "derivation" not in fact
     assert "DERIVED" not in fact["text"]
+
+
+def test_each_number_is_read_where_it_is_written():
+    """The per-occurrence reading the result and page checks use: the same
+    digits as a percentage, a scaled currency figure and a power figure stay
+    three numbers, and a minus sign or dash right before one (through a
+    currency sign) signs it."""
+    text = "Up 185% to $185 billion and 185 GW; -185%, −$5 billion, CNY -8.3 billion, 2.85 trillion, 12 500 MW"
+    read = [(n.token, n.full, n.percent, sorted(n.units), n.signed, n.scaled)
+            for n in lr._number_occurrences(text)]
+    assert read == [("185", "=185", True, [], False, False),
+                    ("185", "=185000000000", False, ["currency"], False, True),
+                    ("185", "=185", False, ["power"], False, False),
+                    ("185", "=185", True, [], True, False),
+                    ("5", "=5000000000", False, ["currency"], True, True),
+                    ("8.3", "=8300000000", False, ["currency"], True, True),
+                    ("2.85", "=2850000000000", False, [], False, True),
+                    ("12500", "=12500", False, ["power"], False, False)]
+    assert [n.checkable for n in lr._number_occurrences("5 GW, 37 GW, 2.5 GW")] == [False, True, True]
 
 
 # A clause must not launder figures: every number but the result is on the
@@ -250,6 +286,11 @@ def test_a_clause_never_carries_an_unchecked_figure_into_a_derived_fact():
     other = only("Capacity grew about 185% [S12] while renewables supplied 68% of demand [S15] "
                  "(DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])", rows=ROWS_WITH_SHARES)
     assert other["tag"] == "UNVERIFIED" and other["missing_numbers"] == ["68"]
+    # The digits of the result elsewhere in the finding are checked at the value written there.
+    same_digits = "Capacity grew about 185% and investment hit $185 billion [S12]"
+    fact = only(f"{same_digits} (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])")
+    assert fact["tag"] == "UNVERIFIED" and fact["missing_numbers"] == ["185"]
+    assert only(f"{same_digits} (VERIFIED)")["missing_numbers"] == ["185"]
     # A figure the finding writes at another scale or in another unit than its page does
     # (a VERIFIED finding accepts the same digits at another scale; a DERIVED one never).
     for line in ("Capacity grew from 13 billion to 37 billion, about 185% [S12] "
@@ -264,7 +305,9 @@ def test_a_clause_never_carries_an_unchecked_figure_into_a_derived_fact():
 
 
 def test_a_laundered_figure_never_reaches_derived_supports_or_report_support():
-    facts = post(LAUNDERING, FINDING)
+    facts = post(LAUNDERING, FINDING,
+                 "Storage investment reached about $185 billion in 2024 [S12] "
+                 "(DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])")
     engine = types.SimpleNamespace(records={"K1": _record(facts)})
     engine._derived_facts = functools.partial(lr._Engine._derived_facts, engine)
     supports = lr._Engine._derived_supports(engine)
@@ -272,7 +315,9 @@ def test_a_laundered_figure_never_reaches_derived_supports_or_report_support():
     source = {"title": "Capacity statistics", "supports": [],
               "excerpt": "Installed capacity reached 37 GW in 2024, up from 13 GW in 2019.",
               "derived_supports": supports[12]}
-    assert ReportAgent._semantic_citation_support("Electricity prices fell 42% across the region [S1].", source) is False
+    for line in ("Electricity prices fell 42% across the region [S1].",
+                 "Storage investment reached about $185 billion in 2024 [S1]."):
+        assert ReportAgent._semantic_citation_support(line, source) is False, line
 
 
 def test_prose_in_lower_case_is_no_derivation_clause():
@@ -297,13 +342,16 @@ PARITY_LINES = [
     'capacity rose 2.5 GW" (DERIVED: a; a=13 GW [S12])',
     'Capacity grew about 123% [S12] (VERIFIED) EVIDENCE: "capacity reached 37 GW" (DERIVED: (a-b)/b*100; a=37 [S12], '
     'b=13 [S12])',
+    # Only a derivation clause before the evidence clause: audit reads the bullet whole, as off does.
+    '[S99] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12]) EVIDENCE: "Installed capacity reached 37 GW in 2024, '
+    'up from 13 GW in 2019" (VERIFIED)',
 ]
 RULE_KEYS = ("tag", "derivation", "derivation_error", "missing_numbers", "verification", "verified_numbers")
 
 
 def test_audit_keeps_the_tag_evidence_off_gives_a_derivation_bullet():
     lines = [*PARITY_LINES, *CORPUS, LAUNDERING, *(line for line, _ in FAILURE_CASES)]
-    off, audit = post(*lines), post(*lines, mode="audit")
+    off, audit = post(*lines, rows=ROWS_WITH_SHARES), post(*lines, mode="audit", rows=ROWS_WITH_SHARES)
     assert len(off) == len(audit) == len(lines)
     for line, plain, audited in zip(lines, off, audit, strict=True):
         assert {key: plain.get(key) for key in RULE_KEYS} == {key: audited.get(key) for key in RULE_KEYS}, line
@@ -318,13 +366,14 @@ def test_audit_keeps_the_tag_evidence_off_gives_a_derivation_bullet():
 
 # Every clause form of this section, pinned flag off by FLAG_OFF_SHA256: the
 # _flag_off_snapshot of linear_research.py at 30ab072 (feat/finharness-transplants,
-# the base of wp/RESEARCH-8), the engine before this package.
+# the base of wp/RESEARCH-8), the engine before this package; the base merged
+# later (9b65135) gives the same snapshot.
 PINNED_LINES = [*CORPUS, *(line for line, _ in FAILURE_CASES), LAUNDERING, *PARITY_LINES,
                 "Revenue (derived: from licensing) reached 37 GW [S12] (VERIFIED)",
                 "Capacity grew about 185% [S12] while renewables supplied 68% of demand [S15] "
                 "(DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])",
                 "The gap is about 26 percentage points [S15] (DERIVED: a-b; a=68% [S15], b=42% [S15])"]
-FLAG_OFF_SHA256 = "2f55e24aecbacf446a34dd758f320112e1315e73d67970c1f6f88c275747a0e8"
+FLAG_OFF_SHA256 = "605c7cefcc055ce8a6e92ded9ee970250d0f872b0d71465be654c21e7191e096"
 
 
 def test_the_clause_replaces_the_tag_the_agent_wrote():
@@ -348,13 +397,18 @@ def test_the_derivation_forms_the_engine_reads():
         # A ratio written as a percentage, and a figure at a stated scale.
         "Capacity is about 285% of its 2019 level [S12] (DERIVED: a/b; a=37 GW [S12], b=13 GW [S12])": "2.84615384615",
         "Storage added about 2,500 MW [S12] (DERIVED: a*1000; a=2.5 GW [S12])": "2500",
-        "The gap is about 0.024 thousand GW [S12] (DERIVED: (a-b)/1000; a=37 GW [S12], b=13 GW [S12])": "0.024",
+        "The gap is about 0.024 thousand GW [S12] (DERIVED: a-b; a=37 GW [S12], b=13 GW [S12])": "24",
         # Clause in the middle, marker after it, an unclosed clause.
         "Capacity grew about 185% (DERIVED: (a-b)/b*100; a=37 [S12], b=13 [S12]) [S12]": "184.615384615",
         "Capacity grew about 185% [S12] (DERIVED: (a-b)/b*100; a=37 [S12], b=13 [S12]": "184.615384615",
         # A ratio as a percentage, and percentage-point arithmetic over two page percentages.
         "Capacity grew about 185% [S12] (DERIVED: (a-b)/b; a=37 GW [S12], b=13 GW [S12])": "1.84615384615",
         "The gap is about 26 percentage points [S15] (DERIVED: a-b; a=68% [S15], b=42% [S15])": "26",
+        "The gap is about 26 pp [S15] (DERIVED: abs(b-a); a=68% [S15], b=42% [S15])": "26",
+        # A ratio of percentages is a ratio, and a decline written with its minus sign.
+        "Renewables supplied about 162% of their 2019 share [S15] (DERIVED: a/b; a=68% [S15], b=42% [S15])":
+            "1.61904761905",
+        "Capacity changed by -64.9% [S12] (DERIVED: (b-a)/a*100; a=37 GW [S12], b=13 GW [S12])": "-64.8648648649",
     }
     for line, result in cases.items():
         fact = only(line, rows=ROWS_WITH_SHARES)
@@ -398,10 +452,10 @@ def test_no_derived_fact_exists_without_a_recomputable_single_source_derivation(
     lines = [*CORPUS, *(line for line, _ in FAILURE_CASES)]
     derived = 0
     for mode in ("off", "audit", "enforce"):
-        for fact in post(*lines, mode=mode):
+        for fact in post(*lines, mode=mode, rows=ROWS_WITH_SHARES):
             if fact["tag"] == "DERIVED":
                 derived += 1
-                assert_recomputable(fact, ROWS, PAGES)
+                assert_recomputable(fact, ROWS_WITH_SHARES, PAGES)
             else:
                 assert "derivation" not in fact or fact.get("verification") == "evidence_not_on_page"
     assert derived >= 3
@@ -497,6 +551,23 @@ def test_the_digest_shows_the_calculation_of_a_derived_fact():
     walled = lr.pit_wall_record(record, lambda sid: sid != 12, per_claim=True)[0]
     assert "(DERIVED)" in lr._kiq_digest_block(walled, 12000, "English")[0]
     assert "[S12]" not in lr._kiq_digest_block(walled, 12000, "English")[0]
+
+
+def test_the_evidence_header_counts_derived_facts_apart_from_verified_ones():
+    """RESEARCH-10's evidence line (RESEARCH_EVIDENCE_HEADERS) counts DERIVED
+    findings under their own tag, never toward the VERIFIED thresholds."""
+    facts = post(FINDING, "Installed capacity reached 37 GW in 2024 [S12] (VERIFIED)",
+                 "Capacity grew about 123% [S12] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])")
+    profile = lr.evidence_profile(_record(facts), ROWS.get)
+    assert (profile["verified"], profile["unverified"], profile["derived"]) == (1, 1, 1)
+    assert profile["sufficiency"] == "thin" and profile["reason"].startswith("fewer than 2 VERIFIED findings")
+    line = lr.evidence_header_line(profile)
+    assert line.startswith("Evidence (engine count): 3 sourced findings (1 VERIFIED, 0 REPORTED, 1 UNVERIFIED, "
+                           "1 DERIVED) from 1 sources")
+    block = lr._kiq_digest_block(_record(facts), 12000, "English", ledger_get=ROWS.get, headers=True)[0]
+    assert block.splitlines()[1] == line
+    # Flag off: no fact is DERIVED, so the line is the pinned format.
+    assert "derived" not in lr.evidence_profile(_record(post(FINDING, derivations=False)), ROWS.get)
 
 
 def test_fallback_sections_publish_derived_facts_but_never_unverified_ones():
@@ -598,6 +669,19 @@ def test_derived_quant_match_keeps_the_sign_and_one_percentage_scale():
               "operands": {"a": {"value": "68%", "sid": 1}, "b": {"value": "42%", "sid": 1}}}
     assert lr.derived_quant_match({"value": "26", "unit": "percentage points"}, [points]) is points
     assert lr.derived_quant_match({"value": "2600", "unit": "%"}, [points]) is None
+    # A percentage result is never stated with a unit class or a scale word.
+    growth = {"sid": 1, "expr": "(a-b)/b*100", "result": "184.615384615",
+              "operands": {"a": {"value": "37 GW", "sid": 1}, "b": {"value": "13 GW", "sid": 1}}}
+    assert lr.derived_quant_match({"value": "185", "unit": "%"}, [growth]) is growth
+    assert lr.derived_quant_match({"value": "185", "unit": ""}, [growth]) is growth
+    for row in ({"value": "185", "unit": "billion USD"}, {"value": "185", "unit": "GW"},
+                {"value": "-185", "unit": "%"}, {"value": "$185", "unit": ""}):
+        assert lr.derived_quant_match(row, [growth]) is None, row
+    # A ratio of percentages is a ratio: x 100 as a percentage.
+    share_ratio = {"sid": 1, "expr": "a/b", "result": "1.61904761905",
+                   "operands": {"a": {"value": "68%", "sid": 1}, "b": {"value": "42%", "sid": 1}}}
+    assert lr.derived_quant_match({"value": "162", "unit": "%"}, [share_ratio]) is share_ratio
+    assert lr.derived_quant_match({"value": "1.6", "unit": "%"}, [share_ratio]) is None
 
 
 def test_derived_quant_match_reads_one_number_at_its_precision_and_scale():
@@ -619,12 +703,31 @@ def test_report_citation_spans_read_derived_supports_after_supports():
     assert legacy == ["Capacity statistics", "Installed capacity reached 37 GW in 2024",
                       "Installed capacity reached 37 GW in 2024.", "Up from 13 GW in 2019."]
     statement = "Capacity grew about 185% [calculated: (a-b)/b*100; a=37 GW, b=13 GW]"
-    with_derived = dict(source, derived_supports=[statement, " "])
-    assert ReportAgent._citation_evidence_spans(with_derived) == [*legacy[:2], statement, *legacy[2:]]
+    with_derived = dict(source, derived_supports=[statement, " ", "[calculated: a/b; a=37 GW, b=13 GW]"])
+    # Each statement joins without its calculation, whose formula literals are no evidence.
+    assert ReportAgent._citation_evidence_spans(with_derived) == [*legacy[:2], "Capacity grew about 185%", *legacy[2:]]
     line = "Capacity grew about 185% between 2019 and 2024 [S1]."
     assert ReportAgent._semantic_citation_support(line, source) is not True
     assert ReportAgent._semantic_citation_support(line, with_derived) is True
     assert ReportAgent._citation_evidence_spans(with_derived, include_derived=False) == legacy
+
+
+def test_the_formula_of_a_derived_statement_never_supports_a_claim():
+    """The literals of a calculation (100 in "*100", 1 in "**(1/n)-1") never
+    keep an unrelated claim's citation, even when the statement is cut short."""
+    source = {"title": "Capacity statistics", "supports": [],
+              "excerpt": "Installed capacity reached 37 GW in 2024, up from 13 GW in 2019."}
+    growth = "Installed capacity grew about 185% [calculated: (a-b)/b*100; a=37 GW, b=13 GW]"
+    cagr = "Installed capacity grew about 23.3% a year [calculated: ((a/b)**(1/n)-1)*100; a=37 GW, b=13 GW, n=5]"
+    cases = [("Installed capacity will need 100 new plants by 2030 [S1].", [growth]),
+             ("Installed capacity rose to 1 TW of annual growth [S1].", [cagr]),
+             ("Installed capacity rose to 1 TW of annual growth [S1].", [cagr[:-12]])]
+    for line, derived in cases:
+        assert ReportAgent._semantic_citation_support(line, source) is False, line
+        assert ReportAgent._semantic_citation_support(line, dict(source, derived_supports=derived)) is False, line
+    # The finding text, which states the result, still supports its own claim.
+    claim = "Installed capacity grew about 185% from 2019 to 2024 [S1]."
+    assert ReportAgent._semantic_citation_support(claim, dict(source, derived_supports=[growth])) is True
 
 
 def test_derived_supports_only_ever_add_report_support():

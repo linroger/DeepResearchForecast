@@ -235,6 +235,14 @@ def test_scales_to_percent_finds_a_multiplication_by_the_literal_100():
         assert not dn.scales_to_percent(expr), expr
 
 
+def test_is_additive_reads_sums_and_differences_only():
+    for expr in ("a-b", "a+b-c", "100-a", "-a", "abs(a-b)", "max(a,b)-c", "min(a, b)", "a"):
+        assert dn.is_additive(expr), expr
+    for expr in ("a/b", "a*b", "(a-b)/b*100", "a**2", "sqrt(a)-b", "ln(a)", "abs(a/b)", "a-b*1", "", "a +* b",
+                 None, "a" * 400, "a.b - c", "f(a)"):
+        assert not dn.is_additive(expr), expr
+
+
 def test_format_exact_has_twelve_significant_digits_and_no_exponent():
     assert dn.format_exact(Decimal(24) / Decimal(13) * 100) == "184.615384615"
     assert dn.format_exact(Decimal("1.2e12")) == "1200000000000"
@@ -256,6 +264,10 @@ def test_parse_derivation_reads_the_formula_operands_sources_and_period():
                         ("n", "years(2019,2024)", None, dn.KIND_PERIOD)]
     assert dn.period_value("years(2019,2024)") == Decimal(5)
     assert dn.period_value("years( 2019 , 2024 )") == Decimal(5)
+    assert dn.period_years("years( 2019 , 2024 )") == (2019, 2024)
+    for raw in ("years(2024,2019)", "years(1850,2024)", "2019-2024", None):
+        with pytest.raises(dn.CalcError):
+            dn.period_years(raw)
 
 
 def test_the_clause_opener_is_upper_case_derived_or_the_chinese_form():

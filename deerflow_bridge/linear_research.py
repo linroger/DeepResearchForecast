@@ -4024,45 +4024,100 @@ def _operand_reading(value: str, available: frozenset[str] | None) -> tuple[Deci
     return (Decimal(full[1:]), token, percent) if _value_on_page(token, full, percent, units, available) else None
 
 
-def _numbers_off_page(text: str, tokens: Sequence[str], available: frozenset[str]) -> list[str]:
-    """The number ``tokens`` of a finding ``text`` that are not on a page
-    (``available``) at every full value the finding writes them with
+# A minus sign or dash right before a finding's number, through a currency
+# sign ("-185%", "−$5 billion", "CNY -8.3 billion"): the finding writes it as
+# negative, so it states a negative result only.  A range's upper bound
+# ("180-185%") reads as signed too, which fails closed.
+_SIGNED_LEAD_RE = re.compile(r"[-−–—‐‑][^\S\n]*(?:[A-Za-z]{0,2}\$|[€£¥₹₩])?[^\S\n]*\Z")
+_SIGNED_LEAD_CHARS = 16  # how far before a number its sign is looked for
+
+
+@dataclass(frozen=True)
+class _NumberOccurrence:
+    """One number of a finding as it is written there (:func:`_number_occurrences`)."""
+
+    token: str               # its canonical digits: "185", "2.85"
+    full: str                # "=" + its full value: "=2850000000000" for "2.85 trillion"
+    percent: bool            # written as a percentage: "185%", "26 percentage points"
+    units: frozenset[str]    # its unit classes (:data:`_UNIT_WORDS`): {"power"} for "185 GW"
+    signed: bool             # a minus sign or dash right before it (:data:`_SIGNED_LEAD_RE`)
+
+    @property
+    def scaled(self) -> bool:
+        """Written with a scale word: "$185 billion", "1.2万亿"."""
+        return self.full != "=" + self.token
+
+    @property
+    def checkable(self) -> bool:
+        """A number the number rules read (:func:`fact_number_tokens`: >= 2 digits or a decimal)."""
+        return sum(ch.isdigit() for ch in self.token) >= 2 or "." in self.token
+
+
+def _number_occurrences(text: str) -> list[_NumberOccurrence]:
+    """Every number of a finding ``text`` in order (dates and year ranges out,
+    grouped digits joined: :func:`_number_values_at`), each read where it is
+    written: unlike the per-token :func:`fact_percent_tokens`,
+    :func:`fact_unit_tokens` and :func:`fact_number_values`, the "185" of
+    "185%" and the "185" of "$185 billion" stay two numbers."""
+    value = _join_digit_groups(_number_text(text, strip_dates=True))
+    percents = {match.start(1) for match in _PERCENT_NUMBER_RE.finditer(value)}
+    units: dict[int, set[str]] = {}
+    for unit, pattern in _UNIT_SUFFIX_RES.items():
+        for match in pattern.finditer(value):
+            units.setdefault(match.start(1), set()).add(unit)
+    for match in _UNIT_PREFIX_RE.finditer(value):
+        units.setdefault(match.start(1), set()).add("currency")
+    return [_NumberOccurrence(token, full, offset in percents, frozenset(units.get(offset, ())),
+                              _SIGNED_LEAD_RE.search(value, max(0, offset - _SIGNED_LEAD_CHARS), offset) is not None)
+            for offset, token, full in _number_values_at(value)]
+
+
+def _numbers_off_page(numbers: Iterable[_NumberOccurrence], available: frozenset[str]) -> list[str]:
+    """The tokens of the ``numbers`` (:func:`_number_occurrences`) that are not
+    on a page (``available``) at the value each is written with
     (:func:`_value_on_page`): stricter than a VERIFIED finding's
     :func:`_missing_numbers`, which accepts the same digits at another scale."""
-    values, percents, units = fact_number_values(text), fact_percent_tokens(text), fact_unit_tokens(text)
-    return [token for token in tokens
-            if not all(_value_on_page(token, full, token in percents, units.get(token, frozenset()), available)
-                       for full in values.get(token) or {"=" + token})]
+    return list(dict.fromkeys(number.token for number in numbers
+                              if not _value_on_page(number.token, number.full, number.percent, number.units,
+                                                    available)))
 
 
 def _result_is_percent(expr: str, data_values: Sequence[str]) -> bool:
     """Whether a derivation's result is a percentage as it is: its formula
-    multiplies by the literal 100 (:func:`derived_numbers.scales_to_percent`)
-    or every data operand value is a percentage (percentage-point arithmetic).
-    Otherwise the result is a ratio, which a percentage states x 100."""
-    return dn.scales_to_percent(expr) or (bool(data_values)
+    multiplies by the literal 100 (:func:`derived_numbers.scales_to_percent`),
+    or every data operand value is a percentage and the formula only adds and
+    subtracts them (:func:`derived_numbers.is_additive`: percentage points).
+    Otherwise the result is a ratio, which a percentage states x 100; so is a
+    ratio or product of percentages (68% / 42% is "162%", never "1.6%")."""
+    return dn.scales_to_percent(expr) or (bool(data_values) and dn.is_additive(expr)
                                           and all(fact_percent_tokens(value) for value in data_values))
 
 
-def _states_result(token: str, result: Decimal, ratio_percents: frozenset[str],
-                   values: Mapping[str, frozenset[str]]) -> bool:
-    """Whether a finding's number ``token`` states a derivation ``result``
-    (:func:`derived_numbers.token_matches`; a token of ``ratio_percents``,
-    a percentage of a result that is a ratio, is compared with result x 100
-    only, any other token with the result as it is), as written or at the
-    scale the finding writes it with (``values``, :func:`fact_number_values`:
-    "$1.2 trillion" states 1200000000000)."""
-    percent = token in ratio_percents
-    if dn.token_matches(token, result, percent):
-        return True
-    stated = Decimal(token)
-    for full in values.get(token, ()):
-        value = Decimal(full[1:])
-        shift = value.adjusted() - stated.adjusted()
-        if (shift and not stated.is_zero() and stated.scaleb(shift) == value
-                and dn.token_matches(token, result.scaleb(-shift), percent)):
-            return True
-    return False
+def _states_result(number: _NumberOccurrence, result: Decimal, result_percent: bool) -> bool:
+    """Whether one number of a finding, as it is written there
+    (:func:`_number_occurrences`), states a derivation ``result`` at its
+    display precision (:func:`derived_numbers.token_matches`).  One reading:
+
+    * its sign is the result's: a number with a minus sign or dash right
+      before it states a negative result only, any other a non-negative one;
+    * a result that is a percentage already (``result_percent``,
+      :func:`_result_is_percent`) is stated by a percentage or a bare number,
+      never by one written with a unit class or a scale word ("$185 billion"
+      and "185 GW" state no 184.6%);
+    * a ratio is stated by a percentage at result x 100 only, and by any
+      other number at its full value only ("2.85 trillion" is
+      2850000000000, never 2.85)."""
+    result = -result if number.signed else result
+    if result_percent:
+        return not number.scaled and not number.units and dn.token_matches(number.token, result)
+    if number.percent:
+        return not number.scaled and dn.token_matches(number.token, result, percent=True)
+    if not number.scaled:
+        return dn.token_matches(number.token, result)
+    stated, value = Decimal(number.token), Decimal(number.full[1:])
+    shift = value.adjusted() - stated.adjusted()
+    return (not stated.is_zero() and stated.scaleb(shift) == value
+            and dn.token_matches(number.token, result.scaleb(-shift)))
 
 
 def _derived_rules(text: str, cited: Sequence[int], clause: str,
@@ -4085,15 +4140,19 @@ def _derived_rules(text: str, cited: Sequence[int], clause: str,
       cross_source;
     * every data operand's value, exactly as the formula uses it, is on that
       source's page (:func:`_operand_reading`: one checkable, unsigned
-      number at its full value) — else operand_not_on_page;
+      number at its full value), and so are both years of a period operand
+      ``years(Y1,Y2)`` — else operand_not_on_page;
     * the formula evaluates over those values (``years(Y1,Y2)`` is Y2 - Y1)
       — else eval_error;
-    * one of the finding's :func:`fact_number_tokens` that is no operand's
-      states the result (:func:`_states_result`, read as a percentage or a
-      ratio by :func:`_result_is_percent`) — else no_result_token when the
-      finding has no such number, result_mismatch when none states it;
-    * every other number of the finding (operands' numbers included) is on
-      the derivation source's page at the value the finding writes it with
+    * one of the finding's checkable numbers (:func:`fact_number_tokens`)
+      whose token is no operand's states the result as it is written there
+      (:func:`_states_result`: its sign, unit and scale word count; read as
+      a percentage or a ratio by :func:`_result_is_percent`) — else
+      no_result_token when the finding has no such number, result_mismatch
+      when none states it;
+    * every other occurrence of a number in the finding (operands' numbers
+      and other occurrences of the stating digits included) is on the
+      derivation source's page at the value the finding writes it with
       (:func:`_numbers_off_page`), so a clause never carries an unchecked
       figure into a DERIVED fact — else result_mismatch with
       ``missing_numbers``."""
@@ -4121,6 +4180,10 @@ def _derived_rules(text: str, cited: Sequence[int], clause: str,
             values[name], token, _ = reading
             operand_tokens.add(token)
         else:
+            # parse_derivation read the period already, so period_years cannot raise.
+            first, last = dn.period_years(value)
+            if available is None or f"={first}" not in available or f"={last}" not in available:
+                return rejected("operand_not_on_page")
             operand_tokens.update(fact_number_tokens(value))
     try:
         values.update((name, dn.period_value(value)) for name, value, _, kind in operands
@@ -4128,17 +4191,16 @@ def _derived_rules(text: str, cited: Sequence[int], clause: str,
         result = dn.evaluate(expr, values)
     except dn.CalcError:
         return rejected("eval_error")
-    numbers = fact_number_tokens(text)
-    candidates = [token for token in numbers if token not in operand_tokens]
+    numbers = [number for number in _number_occurrences(text) if number.checkable]
+    candidates = [index for index, number in enumerate(numbers) if number.token not in operand_tokens]
     if not candidates:
         return rejected("no_result_token")
     data_values = [value for _, value, _, kind in operands if kind == dn.KIND_DATA]
-    ratio_percents = frozenset() if _result_is_percent(expr, data_values) else fact_percent_tokens(text)
-    full_values = fact_number_values(text)
-    stating = [token for token in candidates if _states_result(token, result, ratio_percents, full_values)]
+    result_percent = _result_is_percent(expr, data_values)
+    stating = {index for index in candidates if _states_result(numbers[index], result, result_percent)}
     if not stating:
         return rejected("result_mismatch")
-    missing = _numbers_off_page(text, [token for token in numbers if token not in stating], available)
+    missing = _numbers_off_page((number for index, number in enumerate(numbers) if index not in stating), available)
     if missing:
         return {**rejected("result_mismatch"), "missing_numbers": missing}
     return {"tag": DERIVED_TAG, "derivation": {
@@ -4207,7 +4269,8 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
     (:func:`_claimed_tag`); its last EVIDENCE clause is split off
     (:func:`_split_evidence_clause`; the fact text excludes it and gets the
     markers only the clause carried; a label that leaves no finding before it
-    splits nothing).  Enforce applies the rules above to the claimed tag and
+    splits nothing, nor, with ``derivations``, one that leaves only a
+    derivation clause).  Enforce applies the rules above to the claimed tag and
     the fact text; audit changes no tag: the tag, verification,
     verified_numbers and missing_numbers are what off makes of the whole
     bullet.  :func:`_apply_evidence` locates the
@@ -4247,7 +4310,10 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
             body, clause = _split_evidence_clause(bullet)
             if clause is not None:
                 finding = _split_tag(body)[0]
-                if len(_finding_before_clause(_collapse(strip_unknown_citations(finding, known)[0]))) < 3:
+                # With derivations on, a derivation clause is no finding of its own: a bullet that
+                # is only that clause and an evidence clause is read whole, as evidence off reads it.
+                measured = _split_derivation_clause(finding)[0] if derivations else finding
+                if len(_finding_before_clause(_collapse(strip_unknown_citations(measured, known)[0]))) < 3:
                     body, clause = bullet, None
                 else:
                     if evidence_mode == EVIDENCE_AUDIT:
@@ -11133,19 +11199,17 @@ def verify_quant_row(row: Mapping[str, Any], page_numbers: frozenset[str] | None
 def derived_quant_match(row: Mapping[str, Any],
                         derivations: Iterable[Mapping[str, Any]]) -> Mapping[str, Any] | None:
     """The first of ``derivations`` (DERIVED facts' ``derivation``, RESEARCH-8)
-    whose result a quantitative row's value states: the value has exactly
-    one checkable number (:func:`fact_number_tokens` of ``"{value} {unit}"``,
-    no exponent notation) and it states the result as a finding's number
-    would (:func:`_states_result`: display precision, scale words, a
-    percentage of a ratio x 100 only, :func:`_result_is_percent`), with the
-    result's sign: a negative result needs a value that opens with a minus
-    sign (:data:`_NEGATIVE_LEAD_RE`).  None when no derivation matches."""
+    whose result a quantitative row's value states: ``"{value} {unit}"`` has
+    exactly one checkable number (:func:`_number_occurrences`, no exponent
+    notation) and it states the result as a finding's number would
+    (:func:`_states_result`: display precision, the result's sign, a
+    percentage result never with a unit class or scale word, a ratio's
+    percentage x 100 only and any other number at its full value;
+    :func:`_result_is_percent`).  None when no derivation matches."""
     text = _quant_number_text(row)
-    tokens = fact_number_tokens(text)
-    if len(tokens) != 1 or _EXPONENT_RE.search(text):
+    numbers = [number for number in _number_occurrences(text) if number.checkable]
+    if len(numbers) != 1 or _EXPONENT_RE.search(text):
         return None
-    percents, values = fact_percent_tokens(text), fact_number_values(text)
-    negative = _NEGATIVE_LEAD_RE.match(text) is not None
     for derivation in derivations:
         try:
             result = Decimal(str(derivation.get("result")))
@@ -11156,8 +11220,7 @@ def derived_quant_match(row: Mapping[str, Any],
         operands = derivation.get("operands")
         data_values = [str(item.get("value")) for item in (operands.values() if isinstance(operands, dict) else ())
                        if isinstance(item, dict) and item.get("sid") is not None]
-        ratio_percents = frozenset() if _result_is_percent(str(derivation.get("expr") or ""), data_values) else percents
-        if _states_result(tokens[0], -result if negative else result, ratio_percents, values):
+        if _states_result(numbers[0], result, _result_is_percent(str(derivation.get("expr") or ""), data_values)):
             return derivation
     return None
 

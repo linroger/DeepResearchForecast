@@ -12,7 +12,8 @@ and no agent tool is involved.  This module is the pure, stdlib-only part:
 
 * :func:`parse_derivation` reads a clause (also the Chinese form
   ``（推算：…）``) into its formula and named operands; ``years(Y1,Y2)`` is a
-  whole-year period, the only operand that needs no source;
+  whole-year period, the only operand that cites no source (the engine
+  still looks for both years on the derivation's page);
 * :func:`evaluate` computes a formula over Decimal operands with a hardened
   AST whitelist: only the literals 0, 1, 100 and 1000 (every other number must
   be a named operand, so it can be checked on its page), names of the operand
@@ -24,8 +25,9 @@ and no agent tool is involved.  This module is the pure, stdlib-only part:
 * :func:`token_matches` tells whether a number a finding states is the result
   at its own display precision (one reading: the result as it is, or a ratio
   as a percentage; :func:`scales_to_percent` tells whether a formula yields
-  a percentage already); :func:`format_exact` writes a result with 12
-  significant digits and no exponent notation.
+  a percentage already, :func:`is_additive` whether it only adds and
+  subtracts, so percentages give percentage points); :func:`format_exact`
+  writes a result with 12 significant digits and no exponent notation.
 
 Every failure is a :class:`CalcError`.  Idea credit: FinanceHarness's
 AST-whitelisted calculator (no licence); only the whitelist idea is used, the
@@ -50,8 +52,10 @@ __all__ = [
     "CalcError",
     "evaluate",
     "format_exact",
+    "is_additive",
     "parse_derivation",
     "period_value",
+    "period_years",
     "scales_to_percent",
     "token_matches",
 ]
@@ -65,7 +69,7 @@ MAX_OPERANDS = 8
 ALLOWED_LITERALS = frozenset({0, 1, 100, 1000})
 FORMAT_DIGITS = 12
 KIND_DATA = "data"      # a value read from a source page
-KIND_PERIOD = "period"  # years(Y1,Y2): a whole-year difference, sourced by nothing
+KIND_PERIOD = "period"  # years(Y1,Y2): a whole-year difference that cites no source
 FIRST_YEAR, LAST_YEAR = 1900, 2100
 
 # A derivation clause opener: "(DERIVED:" as the prompt writes it (upper case
@@ -210,14 +214,20 @@ def _node(node: ast.AST, operands: Mapping[str, Decimal]) -> Decimal:
     return result
 
 
-def period_value(raw: str) -> Decimal:
-    """``years(Y1,Y2)`` → Y2 - Y1, whole years (1900 <= Y1 < Y2 <= 2100)."""
+def period_years(raw: str) -> tuple[int, int]:
+    """``years(Y1,Y2)`` → ``(Y1, Y2)``, whole years (1900 <= Y1 < Y2 <= 2100)."""
     match = _YEARS_RE.fullmatch(" ".join(str(raw or "").split()))
     if match is None:
         raise CalcError(f"period {raw!r} is not years(Y1,Y2)")
     first, last = int(match.group(1)), int(match.group(2))
     if not FIRST_YEAR <= first < last <= LAST_YEAR:
         raise CalcError(f"period {raw!r} needs {FIRST_YEAR} <= Y1 < Y2 <= {LAST_YEAR}")
+    return first, last
+
+
+def period_value(raw: str) -> Decimal:
+    """``years(Y1,Y2)`` → Y2 - Y1 (:func:`period_years`)."""
+    first, last = period_years(raw)
     return Decimal(last - first)
 
 
@@ -317,6 +327,40 @@ def scales_to_percent(expr: str) -> bool:
         return False
     return any(isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mult)
                and any(_is_hundred(side) for side in (node.left, node.right)) for node in ast.walk(tree))
+
+
+# Calls that keep their arguments' unit: abs, min and max of percentages are percentages.
+_UNIT_KEEPING_CALLS = frozenset({"abs", "min", "max"})
+# The other nodes an additive formula may hold (ast.walk yields operators and contexts too).
+_ADDITIVE_NODES = (ast.Expression, ast.Name, ast.Constant, ast.Load, ast.Add, ast.Sub, ast.USub)
+
+
+def is_additive(expr: str) -> bool:
+    """Whether formula ``expr`` only adds and subtracts its terms ("a-b",
+    "100-a", "abs(a-b)", "max(a,b)-c"): names and literals combined by
+    ``+``, ``-`` and unary minus, and no call but abs, min and max, which
+    keep their arguments' unit.  Over percentages such a formula gives
+    percentage points; a product, quotient or power gives a ratio or a
+    product.  Never raises: an unreadable formula is not additive."""
+    if not isinstance(expr, str) or len(expr) > MAX_EXPR_CHARS:
+        return False
+    try:
+        tree = ast.parse(expr.strip(), mode="eval")
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.BinOp):
+            additive = isinstance(node.op, (ast.Add, ast.Sub))
+        elif isinstance(node, ast.UnaryOp):
+            additive = isinstance(node.op, ast.USub)
+        elif isinstance(node, ast.Call):
+            additive = (isinstance(node.func, ast.Name) and node.func.id in _UNIT_KEEPING_CALLS
+                        and not node.keywords)
+        else:
+            additive = isinstance(node, _ADDITIVE_NODES)
+        if not additive:
+            return False
+    return True
 
 
 def _is_hundred(node: ast.AST) -> bool:
