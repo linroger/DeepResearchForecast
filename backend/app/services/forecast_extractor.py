@@ -397,12 +397,18 @@ _CHINESE_COMPARATOR_RANGE_RE = re.compile(
     re.I,
 )
 # EVAL-14 (RESEARCH-15 item c): a metric that swallowed a negation ("Revenue will not be"
-# above X, "Revenue never" exceeds X, 失业率不会 超过 X, 营收未 超过 X) would read the bare
-# comparator or interval after it the wrong way round, so such a clause is not parsed.
-# ("isn't" / "won't be" never reach here: the metric excludes apostrophes.)
+# above X, "Revenue never" exceeds X, "YES unless revenue" exceeds X, 失业率不会 超过 X,
+# 营收未曾 超过 X) would read the bare comparator or interval after it the wrong way round,
+# so such a clause is not parsed.  English negations are words (apostrophe-less
+# contractions included: "isn't" / "won't be" never reach here, the metric excludes
+# apostrophes); a Chinese one is positional: a negation character among the metric's last
+# three characters (未曾 / 无法 / 不可能 / 不至于), so 南非通胀率, 不良贷款率 and 非农就业
+# stay readable while 失业率并 + 不超过 still reads its own negated comparator.
 _RANGE_METRIC_NEGATION_RE = re.compile(
-    r"(?<![\w-])(?:not|no|never|cannot|neither|nor|(?:fail(?:s|ed|ing)?|unable)\s+to)(?![\w-])"
-    r"|(?:[不未没無无非]|不[会能得应再曾]|没有)$|不会|未能",
+    r"(?<![\w-])(?:not|no|never|cannot|neither|nor|unless|except|unlikely|hardly"
+    r"|doesnt|dont|didnt|isnt|arent|wasnt|werent|wont|cant|shouldnt|wouldnt|couldnt"
+    r"|(?:fail(?:s|ed|ing)?|unable)\s+to)(?![\w-])"
+    r"|[不未没沒無无非莫勿][\u4e00-\u9fff]{0,2}$|不会|未能|无法|没能|不太可能|不大可能",
     re.I,
 )
 # EVAL-14: comparators that include their bound (">=" / "<=" readings); the rest are strict.
@@ -602,7 +608,11 @@ def _range_value(match: "re.Match[str]", prefix: str) -> Optional[tuple[float, s
 
 def _extract_comparable_numeric_range(criteria: Any) -> Optional[Dict[str, Any]]:
     """Extract one explicit metric interval; ambiguous compound criteria are skipped."""
-    text = str(criteria or "").replace("–", "-").replace("—", "-")
+    # EVAL-14: horizontal whitespace runs collapse to one space first (newlines stay: they
+    # split clauses).  The patterns read any run as a single separator, and adjacent \s*
+    # backtrack super-linearly on a long run, so this keeps every caller (the binary target
+    # cross-check and the flag-independent scenario audit) linear.
+    text = re.sub(r"[^\S\n]+", " ", str(criteria or "").replace("–", "-").replace("—", "-"))
     clauses = [
         clause.strip()
         for clause in re.split(r"(?<!\d)[.;](?!\d)|\n+", text)

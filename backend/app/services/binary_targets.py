@@ -81,9 +81,6 @@ _FLOAT_EPS = 1e-9
 # Base-unit values this close are the same number: threshold * scale carries float noise
 # (2.3 * 1e8 == 229999999.99999997), which must never flip a boundary resolution.
 _BASE_UNIT_REL_TOL = 1e-12
-# Horizontal whitespace runs collapse before the criteria regex runs: the extractor's
-# patterns backtrack super-linearly on long runs (newlines stay: they split clauses).
-_HORIZONTAL_SPACE_RUN_RE = re.compile(r"[^\S\n]+")
 # Magnitude words for ladder labels, so "1 trillion USD" never reads as "1 USD".
 _SCALE_LABELS = {1e3: "thousand", 1e6: "million", 1e9: "billion", 1e12: "trillion"}
 _ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -487,8 +484,8 @@ def validate_binary_target(target: Any, *, statement: Any = "",
     if tolerance is not None:
         clean["resolution_tolerance"] = tolerance
 
-    parsed = _extractor()._extract_comparable_numeric_range(
-        _HORIZONTAL_SPACE_RUN_RE.sub(" ", criteria_text))
+    # The parser collapses horizontal whitespace runs itself, which keeps it linear.
+    parsed = _extractor()._extract_comparable_numeric_range(criteria_text)
     disagreement = _criteria_disagreement(clean, parsed) if parsed else CRITERIA_UNPARSED
     if disagreement in (CRITERIA_UNPARSED, CRITERIA_BOUND_ONLY):
         clean["criteria_check"] = disagreement

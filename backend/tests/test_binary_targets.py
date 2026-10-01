@@ -89,17 +89,25 @@ def test_window_start_is_ignored_for_non_window_statistics():
 
 def test_long_whitespace_runs_in_criteria_stay_fast():
     started = time.perf_counter()
-    clean, errors = _valid(criteria="失业率" + " " * 5000 + "abc")
+    clean, errors = _valid(criteria="失业率" + " " * 5000 + "1%")
     assert errors == [] and clean["criteria_check"] == "criteria_unparsed"
     # collapsing the runs keeps a readable clause readable
     clean, errors = bt.validate_binary_target(
         dict(GOOD, metric="revenue", unit="USD billion", threshold=100), statement="",
         criteria="Revenue   exceeds \t $100 billion")
     assert errors == [] and clean["criteria_check"] == "consistent"
-    started_parser = time.perf_counter()
-    assert _extract_comparable_numeric_range("失业率" + " " * 400 + "abc") is None
-    assert time.perf_counter() - started_parser < 2.0
-    assert time.perf_counter() - started < 4.0
+    assert time.perf_counter() - started < 2.0
+    # The parser itself collapses the runs, so the uncollapsed scenario-audit path is
+    # linear too: digit-terminated runs reach every pattern's value slot.
+    started = time.perf_counter()
+    assert _extract_comparable_numeric_range("失业率" + " " * 5000 + "1%") is None
+    parsed = _extract_comparable_numeric_range("失业率" + " \t" * 2500 + "1%至2%")
+    assert parsed is not None and (parsed["low"], parsed["high"]) == (1.0, 2.0)
+    parsed = _extract_comparable_numeric_range("失业率" + " " * 5000 + "超过5%")
+    assert parsed is not None and (parsed["metric"], parsed["low"]) == ("失业率", 5.0)
+    parsed = _extract_comparable_numeric_range("Revenue" + " " * 5000 + "exceeds $100 billion")
+    assert parsed is not None and (parsed["metric"], parsed["low"]) == ("revenue", 100.0)
+    assert time.perf_counter() - started < 2.0
 
 
 def test_canonical_unit_never_crosses_rate_units():
@@ -182,15 +190,49 @@ def test_negated_comparators_read_the_right_way_round(criteria, low, high, inclu
     "Revenue does not fall below $100 billion",
     "Revenue does not go below $100 billion",
     "Revenue is not between $1 billion and $2 billion",
+    "Resolves YES unless unemployment rate exceeds 5%",
+    "Resolves YES except if revenue exceeds $100 billion",
+    "Revenue doesnt exceed $100 billion",
+    "Revenue wont exceed $100 billion",
+    "Revenue is unlikely to exceed $100 billion",
+    "Revenue hardly exceeds $100 billion",
     "失业率不会超过5%",
     "失业率未超过5%",
     "失业率没有超过5%",
     "失业率未能超过5%",
     "失业率不在4%至5%之间",
+    # a negation character among the metric's last three characters, whatever follows it
+    "失业率未曾超过5%",
+    "失业率无法超过5%",
+    "失业率没能超过5%",
+    "失业率不可能超过5%",
+    "失业率不可超过5%",
+    "失业率不宜超过5%",
+    "失业率不必超过5%",
+    "失业率未必超过5%",
+    "失业率不至于超过5%",
+    "失业率不太可能超过5%",
+    "截至2030年，失业率未曾超过5%",
 ])
 def test_negation_swallowed_by_the_metric_is_never_parsed(criteria):
     """A negation the metric swallowed would flip the bare comparator after it."""
     assert _extract_comparable_numeric_range(criteria) is None
+
+
+@pytest.mark.parametrize("criteria,metric,low,high", [
+    ("南非通胀率超过5%", "南非通胀率", 5.0, math.inf),
+    ("不良贷款率超过5%", "不良贷款率", 5.0, math.inf),
+    ("非农就业增速超过5%", "非农就业增速", 5.0, math.inf),
+    ("无人机出货量超过500 units", "无人机出货量", 500.0, math.inf),
+    ("Non-farm payrolls exceed 200 thousand", "non-farm payrolls", 200.0, math.inf),
+    # the negation sits in the comparator the parser reads, not in the metric
+    ("失业率并不超过5%", "失业率并", -math.inf, 5.0),
+    ("失业率绝不超过5%", "失业率绝", -math.inf, 5.0),
+    ("失业率从不超过5%", "失业率从", -math.inf, 5.0),
+])
+def test_negation_characters_inside_a_metric_stay_readable(criteria, metric, low, high):
+    parsed = _extract_comparable_numeric_range(criteria)
+    assert parsed is not None and (parsed["metric"], parsed["low"], parsed["high"]) == (metric, low, high)
 
 
 def test_negated_criteria_never_stamp_an_inverted_target_consistent():
@@ -207,6 +249,14 @@ def test_negated_criteria_never_stamp_an_inverted_target_consistent():
     clean, errors = bt.validate_binary_target(
         dict(target, comparator="<="), statement="营收封顶", criteria="营收不高于$100 billion")
     assert errors == [] and clean["criteria_check"] == "consistent"
+    # 未曾 ("never") swallowed by the metric: the inverted target is unverifiable, never
+    # "consistent", and the right-way-round one is never rejected as a mismatch.
+    rate = dict(GOOD, metric="失业率", unit="%", threshold=5)
+    for comparator in (">", "<="):
+        clean, errors = bt.validate_binary_target(
+            dict(rate, comparator=comparator), statement="失业率封顶",
+            criteria="截至2030年，失业率未曾超过5%")
+        assert errors == [] and clean["criteria_check"] == "criteria_unparsed", comparator
 
 
 def test_strict_vs_inclusive_comparator_is_consistent_bound_only():
