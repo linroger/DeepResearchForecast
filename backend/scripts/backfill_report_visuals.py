@@ -25,6 +25,7 @@ from app.services.report_agent import (
 )
 from app.services.forecast_extractor import (
     _binary_quality,
+    _binary_withheld_issue,
     _is_circular_market_forecast,
     build_market_comparison,
     reconcile_forecast_contract,
@@ -442,6 +443,60 @@ def _restore_from_backup(report_dir: Path, backup: Path) -> None:
         shutil.copytree(backup / "charts", charts, symlinks=True)
 
 
+# FU-1 (EVAL-10 open issue): the scorecard lines _binary_quality writes, which the
+# backfill rebuilds from the retained rows; every other stored issue line is carried.
+_SCORE_ISSUE_RES = tuple(re.compile(pattern) for pattern in (
+    r"only \d+ binaries \(< \d+\)",
+    r"probability spread too low \(stdev -?[0-9.]+\) — hedging",
+    r"\d+/\d+ forecasts in 0\.40-0\.60 — under-committed",
+    r"fewer than 3 high-conviction calls \(p>=0\.70 or <=0\.30\)",
+    r"only \d+/\d+ have objective metric\+number\+date criteria",
+    r"all forecasts share a single theme — no thematic spread",
+))
+_WITHHELD_ISSUE_RE = re.compile(r"\d+ binary probabilities unreadable — withheld, not clamped")
+_PROVENANCE_ISSUE_RE = re.compile(r"(\d+) forecast\(s\) claimed a simulation signal that was never injected")
+
+
+def _provenance_issue(count: int) -> str:
+    """The extractor's provenance-downgrade issue line (forecast_extractor wording)."""
+    return (f"{count} forecast(s) claimed a simulation signal that was never "
+            "injected into the prompt — source downgraded to research-prior (see source_claimed)")
+
+
+def carry_binary_quality(old_quality: Dict[str, Any], quality: Dict[str, Any],
+                         retained: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """``quality`` (the scorecard rebuilt from ``retained``) completed from the stored
+    ``old_quality`` (FU-1): every key the rebuild does not produce is kept as stored
+    (ensemble, world_state_outcome, needs_review_*, market_window_ended_excluded and the
+    other extractor-only keys do not depend on which published rows remain), except
+    ``provenance_downgrades``, which is recounted from the retained rows (rows the
+    extractor downgraded carry ``source_claimed``).  Issue lines: the withheld line
+    first (as the extractor and ReportAgent order it), the rebuilt scorecard lines,
+    then the stored lines that are not scorecard lines in their stored order, the
+    provenance line restated with the recounted number (dropped at zero).  Mutates and
+    returns ``quality``."""
+    for key, value in old_quality.items():
+        if key != "issues" and key not in quality:
+            quality[key] = value
+    downgrades: Optional[int] = None
+    if "provenance_downgrades" in old_quality:
+        downgrades = sum(1 for row in retained if "source_claimed" in row)
+        quality["provenance_downgrades"] = downgrades
+    issues = quality.setdefault("issues", [])
+    if quality.get("needs_review_count"):
+        issues.insert(0, _binary_withheld_issue(quality["needs_review_count"]))
+    for line in old_quality.get("issues") or []:
+        if not isinstance(line, str):
+            continue
+        if _PROVENANCE_ISSUE_RE.match(line) and downgrades is not None:
+            line = _provenance_issue(downgrades) if downgrades else ""
+        elif _WITHHELD_ISSUE_RE.fullmatch(line) or any(r.fullmatch(line) for r in _SCORE_ISSUE_RES):
+            continue
+        if line and line not in issues:
+            issues.append(line)
+    return quality
+
+
 def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict[str, Any]:
     if not _PIPELINE_ID_RE.fullmatch(pipeline_id) or not _REPORT_ID_RE.fullmatch(report_id):
         raise ValueError("invalid pipeline/report id")
@@ -493,7 +548,7 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
         quality["proposition_consistency"] = contract
         if isinstance(old_quality.get("ensemble"), dict):
             quality["ensemble"] = old_quality["ensemble"]
-        forecast_obj["binary_quality"] = quality
+        forecast_obj["binary_quality"] = carry_binary_quality(old_quality, quality, retained)
         # Always rebuild/remove both comparison copies. This repairs a stale
         # partial backfill even after the offending circular binary was already
         # removed by an earlier attempt.

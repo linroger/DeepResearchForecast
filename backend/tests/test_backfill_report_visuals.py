@@ -6,6 +6,7 @@ import pytest
 
 from scripts.backfill_report_visuals import (
     backfill_one,
+    carry_binary_quality,
     drop_irreparable_language_lines,
     ensure_baseline_scenario_label,
     localized_manifest,
@@ -14,6 +15,7 @@ from scripts.backfill_report_visuals import (
     synchronize_market_comparison,
 )
 from app.config import Config
+from app.services.forecast_extractor import _binary_quality
 from app.services.report_agent import ReportAgent, ReportManager
 from app.services.report_visualizer import ReportVisualizer
 
@@ -376,3 +378,80 @@ def test_backfill_failure_restores_entire_pre_replay_bundle(tmp_path, monkeypatc
     assert len(backups) == 1
     failure = json.loads((backups[0] / "replay_failure.json").read_text(encoding="utf-8"))
     assert failure["restored"] is True and failure["error"] == "quality gate failed"
+
+
+# --------------------------------------------- FU-1: binary_quality keys survive a re-run
+
+def _binaries(n, *, downgraded=()):
+    rows = []
+    for i in range(n):
+        row = {"id": f"F{i + 1}", "probability": 0.2 + 0.05 * i, "theme": "grid", "criteria_sharp": True}
+        if i in downgraded:
+            row["source"], row["source_claimed"] = "research-prior", "world-state outcome shares"
+        rows.append(row)
+    return rows
+
+
+PROVENANCE_2 = ("2 forecast(s) claimed a simulation signal that was never injected into the prompt "
+                "— source downgraded to research-prior (see source_claimed)")
+ENSEMBLE_LINE = "1 forecast(s) show cross-model disagreement (spread > 0.15): F2"
+
+
+def _eval10_quality(binaries):
+    """A binary_quality as ReportAgent writes it after EVAL-10: the rebuilt scorecard,
+    then the extractor-only keys and lines (withheld line first)."""
+    quality = _binary_quality(binaries, min_count=10)
+    quality["proposition_consistency"] = {"status": "ok"}
+    quality.update({
+        "ensemble": {"enabled_models": ["glm"], "low_agreement": ["F2"]},
+        "world_state_outcome": {"scenario_shares": {"A": 0.6, "B": 0.4}},
+        "needs_review_count": 2, "needs_review_reasons": {"unreadable": 2},
+        "needs_review_secondary_count": 1, "market_window_ended_excluded": 1,
+        "provenance_downgrades": 2, "llm_truncation_market_trimmed": {"divergence": 1},
+    })
+    quality["issues"] = (["2 binary probabilities unreadable — withheld, not clamped"]
+                         + quality["issues"] + [PROVENANCE_2, ENSEMBLE_LINE])
+    return quality
+
+
+def test_backfill_keeps_eval10_binary_quality_keys_and_recounts_provenance():
+    stored = _binaries(4, downgraded=(0, 3))
+    old = _eval10_quality(stored)
+    retained = stored[:3]            # F4 (downgraded) dropped as a circular market forecast
+    rebuilt = _binary_quality(retained, min_count=10)
+    quality = carry_binary_quality(
+        old, dict(json.loads(json.dumps(rebuilt)), proposition_consistency={"status": "ok"}), retained)
+    for key in ("ensemble", "world_state_outcome", "needs_review_count", "needs_review_reasons",
+                "needs_review_secondary_count", "market_window_ended_excluded",
+                "llm_truncation_market_trimmed"):
+        assert quality[key] == old[key], key
+    assert quality["count"] == 3 and quality["provenance_downgrades"] == 1
+    assert quality["issues"] == (
+        ["2 binary probabilities unreadable — withheld, not clamped"] + rebuilt["issues"]
+        + [PROVENANCE_2.replace("2 forecast(s)", "1 forecast(s)"), ENSEMBLE_LINE])
+
+
+def test_backfill_drops_the_provenance_line_when_no_downgraded_row_remains():
+    stored = _binaries(4, downgraded=(3,))
+    old = _eval10_quality(stored)
+    old["provenance_downgrades"] = 1
+    old["issues"] = [line.replace("2 forecast(s) claimed", "1 forecast(s) claimed") for line in old["issues"]]
+    quality = carry_binary_quality(old, _binary_quality(stored[:3], min_count=10), stored[:3])
+    assert quality["provenance_downgrades"] == 0
+    assert not any("claimed a simulation signal" in line for line in quality["issues"])
+    assert ENSEMBLE_LINE in quality["issues"]
+
+
+def test_backfill_of_a_pre_eval10_binary_quality_is_unchanged():
+    """A stored block holding only what the rebuild writes (plus proposition_consistency
+    and ensemble, which the backfill already kept) gives exactly the old result."""
+    stored = _binaries(12)
+    old = _binary_quality(stored, min_count=10)
+    old["proposition_consistency"] = {"status": "stale"}
+    old["issues"] = list(old["issues"]) + ["only 9 binaries (< 10)"]   # a stale scorecard line
+    retained = stored[:9]
+    expected = _binary_quality(retained, min_count=10)
+    expected["proposition_consistency"] = {"status": "fresh"}
+    got = carry_binary_quality(old, json.loads(json.dumps(expected)), retained)
+    assert json.dumps(got, sort_keys=True) == json.dumps(expected, sort_keys=True)
+
