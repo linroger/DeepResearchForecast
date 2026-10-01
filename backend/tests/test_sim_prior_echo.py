@@ -117,6 +117,11 @@ def test_missing_or_degenerate_input_is_unavailable(doc, reason):
     ("final", {"A": True, "B": 0.0}, "malformed_final_shares"),
     ("final", {"A": 0.0, "B": 0.0}, "malformed_final_shares"),
     ("final", {1: 0.5, "1": 0.5}, "malformed_final_shares"),
+    ("final", {"A": 60, "B": 40}, "malformed_final_shares"),            # percent scale
+    ("final", {"A": 0.3, "B": 0.2}, "malformed_final_shares"),          # not normalised
+    ("final", {"A": 1e308, "B": 1e308}, "malformed_final_shares"),      # the sum overflows
+    ("prior", {"A": 60, "B": 40}, "malformed_prior"),
+    ("prior", {"A": 0.3, "B": 0.2}, "malformed_prior"),
 ])
 def test_missing_or_malformed_shares_are_unavailable_not_a_verdict(where, shares, reason):
     # Otherwise a valid, divergent 3-round run: one bad share must not be dropped and
@@ -129,6 +134,29 @@ def test_missing_or_malformed_shares_are_unavailable_not_a_verdict(where, shares
         doc["outcome"]["shares"] = shares
     out = spe.prior_echo_diagnostics(doc)
     assert (out["verdict"], out["reasons"], out["tv_to_prior"]) == ("unavailable", [reason], None)
+
+
+def test_shares_rounded_like_worldstate_still_read():
+    # WorldState normalises and rounds to 6 places: a sum a few 1e-6 off 1 is a distribution.
+    doc = _traj({"A": 0.333333, "B": 0.333333, "C": 0.333333}, decisions=_decisions("B"),
+                prior={"A": 0.5, "B": 0.250001, "C": 0.250001})
+    out = spe.prior_echo_diagnostics(doc)
+    # TV = 0.5 * (0.166667 + 2 * 0.083332) = 0.1666655
+    assert out["verdict"] == "divergent" and out["tv_to_prior"] == pytest.approx(0.1666655, abs=1e-6)
+
+
+def test_an_overflowing_commitment_mass_is_unavailable_not_nan():
+    huge = [{"agent_id": i, "scenario": s, "magnitude": 1.0, "confidence": 1.0, "round": 1,
+             "outcome_power": 1e308} for i, s in enumerate(("A", "B", "A"))]
+    out = spe.prior_echo_diagnostics(_traj({"A": 0.8, "B": 0.2}, decisions=huge))
+    assert (out["verdict"], out["reasons"]) == ("unavailable", ["non_finite_statistic"])
+    assert out["prior_leader_commit_rate"] is None and out["tv_to_prior"] is None
+    json.dumps(out, allow_nan=False)  # the summary stays strict JSON
+
+
+def test_valid_round_statuses_match_worldstate():
+    from app.services import worldstate
+    assert spe._VALID_ROUND_STATUSES == worldstate.VALID_ROUND_STATUSES
 
 
 def test_a_malformed_policy_is_unavailable_never_raised():
@@ -174,6 +202,8 @@ def test_an_internal_error_is_unavailable_never_raised():
 def test_policy_is_frozen_and_the_module_is_pure():
     assert dict(spe.SIM_CONTROL_POLICY_V1) == {
         "version": "drf-sim-control/v1", "echo_tv": 0.05, "leader_commit_rate": 0.9, "min_valid_rounds": 3}
+    with pytest.raises(TypeError):
+        spe.SIM_CONTROL_POLICY_V1["echo_tv"] = 0.5  # read-only: a test cannot move a threshold
     # Load the module file on its own (the app.services package __init__ imports other
     # services): the module itself must pull in no camel, oasis or app module.
     path = spe.__file__

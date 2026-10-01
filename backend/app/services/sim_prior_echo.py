@@ -20,15 +20,16 @@ never raising.
 from __future__ import annotations
 
 import math
+from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional
 
-# Frozen: changing a threshold means bumping the version (CONVERGENCE_POLICY_V1 pattern).
-SIM_CONTROL_POLICY_V1: Mapping[str, Any] = {
+# Frozen (read-only): changing a threshold means bumping the version.
+SIM_CONTROL_POLICY_V1: Mapping[str, Any] = MappingProxyType({
     "version": "drf-sim-control/v1",
     "echo_tv": 0.05,              # total-variation distance below which final == prior
     "leader_commit_rate": 0.9,    # share of commitment mass on the prior leader = herd
     "min_valid_rounds": 3,        # fewer committed/abstained rounds → inconclusive
-}
+})
 
 VERDICT_UNAVAILABLE = "unavailable"
 VERDICT_INCONCLUSIVE = "inconclusive"
@@ -36,8 +37,12 @@ VERDICT_PRIOR_ECHO = "prior_echo"
 VERDICT_PRIOR_LEADER_HERD = "prior_leader_herd"
 VERDICT_DIVERGENT = "divergent"
 
+# worldstate.VALID_ROUND_STATUSES (not imported: this module stays stdlib-only; a test pins parity).
 _VALID_ROUND_STATUSES = frozenset({"committed", "abstained"})
 _TIE_EPS = 1e-9
+# Both producers write WorldState-normalised shares rounded to 6 places, so a real
+# distribution sums to 1 within a few 1e-6; anything further off is not a distribution.
+_SHARE_SUM_TOL = 1e-3
 
 
 def _number(value: Any) -> Optional[float]:
@@ -60,10 +65,12 @@ def _shares(raw: Any) -> Optional[Dict[str, float]]:
 
     Well-formed means a non-empty mapping whose every value is a finite number >= 0
     as :func:`_number` reads it (a numeric string counts, a bool does not), whose keys
-    stay distinct as strings, and whose shares sum to more than 0. One bad value
-    rejects the whole mapping: dropping it would leave a distribution the producer
-    never wrote, and a TV distance computed on it would be made up, so the caller
-    reports ``unavailable`` instead (fail closed).
+    stay distinct as strings, and whose shares sum to 1 within ``_SHARE_SUM_TOL``. One
+    bad value rejects the whole mapping: dropping it would leave a distribution the
+    producer never wrote, and a TV distance computed on it would be made up, so the
+    caller reports ``unavailable`` instead (fail closed). A percent-scale or
+    unnormalised mapping is rejected the same way: rescaling it would guess what the
+    producer meant.
     """
     if not isinstance(raw, Mapping) or not raw:
         return None
@@ -74,7 +81,7 @@ def _shares(raw: Any) -> Optional[Dict[str, float]]:
         if number is None or number < 0 or key in out:
             return None
         out[key] = number
-    return out if sum(out.values()) > 0 else None
+    return out if abs(sum(out.values()) - 1.0) <= _SHARE_SUM_TOL else None
 
 
 def _shares_problem(raw: Any, missing: str, malformed: str) -> str:
@@ -133,6 +140,8 @@ def _leader_commit_rate(decisions: Any, leader: Optional[str]) -> Optional[float
         total += mass
         if str(decision.get("scenario") or "") == leader:
             on_leader += mass
+    if not math.isfinite(total):
+        return math.nan  # finite outcome_power values whose mass overflows: no rate
     if total <= 0:
         return None
     return round(on_leader / total, 6)
@@ -145,8 +154,9 @@ def prior_echo_diagnostics(traj: Dict[str, Any],
     Returns ``{policy_version, verdict, reasons, tv_to_prior, prior_leader,
     prior_leader_commit_rate, valid_rounds, uniform_prior}``. Verdicts, first match:
     ``unavailable`` (a policy that is not a mapping; no row-0 prior or no final shares,
-    or either one malformed: empty, a value that is not a finite number >= 0, or a zero
-    sum; fewer than 2 scenarios);
+    or either one malformed: empty, a value that is not a finite number >= 0, or a sum
+    that is not 1; fewer than 2 scenarios; a statistic that is not finite, reason
+    ``non_finite_statistic``);
     ``inconclusive`` (a non-valid top-level ``validity``: reason ``trajectory_not_valid``;
     fewer than ``min_valid_rounds`` valid rounds: ``too_few_valid_rounds``);
     ``prior_echo`` (total-variation distance final vs prior < ``echo_tv``);
@@ -193,6 +203,8 @@ def _diagnose(traj: Any, policy: Mapping[str, Any]) -> Dict[str, Any]:
     tv = round(0.5 * sum(abs(final.get(s, 0.0) - prior.get(s, 0.0)) for s in scenarios), 6)
     valid_rounds = _valid_rounds(traj, rows)
     rate = _leader_commit_rate(traj.get("decisions"), leader)
+    if not math.isfinite(tv) or (rate is not None and not math.isfinite(rate)):
+        return _result(policy, VERDICT_UNAVAILABLE, ["non_finite_statistic"])
     fields = {"tv_to_prior": tv, "prior_leader": leader, "prior_leader_commit_rate": rate,
               "valid_rounds": valid_rounds, "uniform_prior": uniform_prior}
 
