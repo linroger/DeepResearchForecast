@@ -290,6 +290,23 @@ def test_run_summary_simulated_hours_defaults_minutes_60(sim_env):
     assert summary["simulated_hours"] == 3.0    # 3 × 60 / 60
 
 
+def test_run_summary_list_shaped_config_keeps_defaults(sim_env):
+    """A simulation_config.json that is a JSON list (not an object) is read as absent:
+    the summary is still written with the 60-minute default (it raised AttributeError)."""
+    sim_id = "sim_list_config"
+    _write_actions(sim_env / sim_id, "twitter", [
+        {"round": 1, "timestamp": "2026-07-02T00:01:00", "agent_id": 5,
+         "agent_name": "O", "action_type": "CREATE_POST", "action_args": {"content": "p"}},
+    ])
+    _write_run_state(sim_env / sim_id, current_round=2, total_rounds=4)
+    with open(os.path.join(str(sim_env / sim_id), "simulation_config.json"), "w", encoding="utf-8") as f:
+        json.dump([{"time_config": {"minutes_per_round": 30}}], f)
+    summary = SimulationRunner.write_run_summary(sim_id)
+    assert summary is not None
+    assert summary["simulated_hours"] == 2.0    # 2 × 60 / 60
+    assert "schedule_audit" not in summary
+
+
 # ---------------------------------------------------------------- ITEM 20 (2) ratio detector
 def test_run_summary_flags_organic_ratio_collapse(sim_env, monkeypatch):
     """ITEM20(2): 连续 ≥K 轮 posts>0 而 comments+likes==0 → organic_ratio_warnings。"""

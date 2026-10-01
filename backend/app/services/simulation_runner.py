@@ -2223,14 +2223,15 @@ class SimulationRunner:
             if os.path.exists(_cfgp):
                 with open(_cfgp, encoding="utf-8") as _cf:
                     _sc = json.load(_cf)
+                # A config that is not a JSON object (e.g. a list) keeps the defaults.
                 if isinstance(_sc, dict):
                     _sim_cfg = _sc
-                _mpr = (_sc.get("time_config") or {}).get("minutes_per_round", 60)
-                _minutes_per_round = float(_mpr) if _mpr else 60.0
-                _tc_block = _sc.get("temporal_config")
-                if isinstance(_tc_block, dict) and _tc_block.get("mode") == "calendar":
-                    _temporal_cfg = _tc_block
-        except (OSError, ValueError, TypeError):
+                    _mpr = (_sc.get("time_config") or {}).get("minutes_per_round", 60)
+                    _minutes_per_round = float(_mpr) if _mpr else 60.0
+                    _tc_block = _sc.get("temporal_config")
+                    if isinstance(_tc_block, dict) and _tc_block.get("mode") == "calendar":
+                        _temporal_cfg = _tc_block
+        except (OSError, ValueError, TypeError, AttributeError):
             _minutes_per_round = 60.0
             _temporal_cfg = {}
         try:

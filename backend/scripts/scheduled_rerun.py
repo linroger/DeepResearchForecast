@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -447,10 +448,15 @@ def forecast_diff(
                 key = _norm_name(s.get("name"))
                 if not key:
                     continue
+                # A null / unparseable / non-finite probability (a needs_review forecast) is
+                # unscoreable: it is never read as 0.0, which would report a fabricated shift.
+                raw_p = s.get("probability")
                 try:
-                    p = float(s.get("probability") or 0.0)
-                except (TypeError, ValueError):
-                    p = 0.0
+                    p: Optional[float] = float(raw_p) if raw_p not in (None, "") else None
+                except (TypeError, ValueError, OverflowError):
+                    p = None
+                if p is not None and not math.isfinite(p):
+                    p = None
                 m[key] = {"name": s.get("name"), "probability": p}
         return m
 
@@ -460,9 +466,16 @@ def forecast_diff(
     scenario_changes: list[dict[str, Any]] = []
     new_scenarios: list[str] = []
     dropped_scenarios: list[str] = []
+    unscoreable_scenarios: list[str] = []
     max_delta = 0.0
 
     for key, cur in curr_m.items():
+        if cur["probability"] is None or (key in prev_m and prev_m[key]["probability"] is None):
+            # No delta without two probabilities; a new name still counts as a new scenario.
+            unscoreable_scenarios.append(str(cur["name"]))
+            if key not in prev_m:
+                new_scenarios.append(str(cur["name"]))
+            continue
         if key in prev_m:
             delta = round(cur["probability"] - prev_m[key]["probability"], 4)
             adelta = abs(delta)
@@ -480,7 +493,8 @@ def forecast_diff(
     for key, pv in prev_m.items():
         if key not in curr_m:
             dropped_scenarios.append(str(pv["name"]))
-            max_delta = max(max_delta, pv["probability"])
+            if pv["probability"] is not None:
+                max_delta = max(max_delta, pv["probability"])
 
     # 角色 / 联盟集合差（best-effort；缺省即空）
     prev_actor_names = _actor_names(prev_actors)
@@ -513,9 +527,11 @@ def forecast_diff(
         parts.append("新主导角色：" + "、".join(new_actors[:3]))
     if new_coalitions:
         parts.append("新联盟：" + "、".join(new_coalitions[:3]))
+    if unscoreable_scenarios:
+        parts.append("概率待复核、未比较：" + "、".join(unscoreable_scenarios[:3]))
     summary = "；".join(parts) if parts else "无实质性漂移"
 
-    return {
+    result = {
         "drift": drift,
         "threshold": round(float(threshold), 4),
         "max_prob_delta": round(max_delta, 4),
@@ -528,6 +544,9 @@ def forecast_diff(
         "summary": summary,
         "schema_version": 1,
     }
+    if unscoreable_scenarios:  # only when present: an all-scoreable diff is unchanged
+        result["unscoreable_scenarios"] = unscoreable_scenarios
+    return result
 
 
 def diff_pipelines(prev_pipeline_id: str, curr_pipeline_id: str) -> dict[str, Any]:

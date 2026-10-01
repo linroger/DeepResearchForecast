@@ -585,6 +585,9 @@ def test_binary_resolution_date_moved_with_monitor_alias():
     assert fl.binary_resolution_date({"resolution_criteria": "by 2026-11-03"}) == "2026-11-03"
     assert fl.binary_resolution_date({"horizon_year": 2027}) == "2027-12-31"
     assert fl.binary_resolution_date({}) is None
+    # A non-finite horizon_year names no year (it raised OverflowError at commit time).
+    for bad in ("inf", "-inf", float("inf"), "nan"):
+        assert fl.binary_resolution_date({"horizon_year": bad}) is None
 
 
 def test_validate_as_of_contract():

@@ -470,6 +470,18 @@ def test_result_fields_think_stripping_tool_calls_and_truncation():
     ]
 
 
+@pytest.mark.parametrize("raw, clean", [
+    # U+0130 lower-cases to two characters; an index taken from text.lower() cut into the answer.
+    ("İ reasoning</think>answer", "answer"),
+    ("İstanbul İzmir reasoning</think>answer", "answer"),
+    ("İ<think>x</think>y</THINK>answer", "answer"),
+    ("r1</think>r2</Think>final<think>cut", "final"),
+    ("plain İ text", "plain İ text"),
+])
+def test_strip_think_orphan_closer_after_non_ascii_text(raw, clean):
+    assert rg._strip_think(raw) == clean
+
+
 def test_invoke_rejects_caller_bugs_without_calling_the_model():
     model = FakeModel([ai()])
     gw, _ = gateway(model)

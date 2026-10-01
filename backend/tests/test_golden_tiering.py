@@ -893,3 +893,12 @@ def test_golden_tier_source_per_provenance(tmp_path):
     h = json.loads(out.read_text(encoding="utf-8"))["headline"]
     assert h["status"] == "ok" and h["prospective_tier_sources"] == {"pipeline_dir": 2}
     assert "provenance_notes" not in h
+
+
+def test_preflight_range_for_the_lead_tolerance_matches_the_runtime_check():
+    """config_audit names an out-of-range GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS before
+    golden_eval runs; its bound must be the one _check_tolerance enforces."""
+    from app.config_audit import RANGE_RULES
+    rule = RANGE_RULES["GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS"]
+    assert (rule.low, rule.low_inclusive, rule.high, rule.high_inclusive) == (
+        0, True, ge.MAX_LEAD_TOLERANCE_DAYS, True)

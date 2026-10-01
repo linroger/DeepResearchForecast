@@ -960,7 +960,7 @@ def binary_resolution_date(binary: Dict[str, Any]) -> Optional[str]:
     hy = binary.get("horizon_year")
     try:
         y = int(float(hy)) if hy not in (None, "") else None
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):  # OverflowError: horizon_year 'inf'
         y = None
     if y and 2000 <= y <= 2100:
         return f"{y}-12-31"
