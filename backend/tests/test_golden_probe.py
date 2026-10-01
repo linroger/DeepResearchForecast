@@ -227,6 +227,19 @@ def test_markers_match_whole_normalized_tokens():
     assert gp.contains_marker("on the 5th of June", ["5 june"]) == "5 june"
     assert gp.contains_marker("5ᵗʰ June 2024", ["5 june"]) == "5 june"       # NFKC superscript
     assert gp.contains_marker("on June 15th", ["june 5"]) is None
+    # review round 5: never inside a digit group or a decimal comma; a comma and a space split
+    assert gp.contains_marker("Republicans won by 53,000 votes", ["53"]) is None
+    assert gp.contains_marker("9,411,000 ballots", ["411"]) is None
+    assert gp.contains_marker('{"p_yes": "0,53"}', ["53"]) is None
+    assert gp.contains_marker("won 53, lost 47", ["53"]) == "53"
+    assert gp.contains_marker("won 53, lost 47", ["47"]) == "47"
+    # an ISO date-time holds its date; the spaces around a dash between digits close up
+    assert gp.normalize("2024-06-05T00:00:00Z") == "2024-06-05 00-00-00z"
+    assert gp.contains_marker("resolved 2024-06-05T00:00:00Z", ["2024-06-05"]) == "2024-06-05"
+    assert gp.contains_marker("Spain beat England 2 - 1", ["2-1"]) == "2-1"
+    assert gp.contains_marker("Spain beat England 2 –  1", ["2-1"]) == "2-1"     # en dash, two spaces
+    assert gp.contains_marker("Spain beat England 12 - 1", ["2-1"]) is None
+    assert gp.contains_marker("Spain beat England 2 - 10", ["2-1"]) is None
 
 
 def test_exact_dates_are_spelled_month_first_day_first_and_iso():
@@ -243,6 +256,7 @@ def test_exact_dates_are_spelled_month_first_day_first_and_iso():
             assert {f"{day} {month}", resolved.isoformat()} <= set(markers), q["id"]
             assert gp.contains_marker(f"on {day} {month.title()} {resolved.year}", markers), q["id"]
             assert gp.contains_marker(f"date: {resolved.isoformat()}", markers), q["id"]
+            assert gp.contains_marker(f"at {resolved.isoformat()}T23:59:00Z", markers), q["id"]
     assert rows == 8
 
 
@@ -524,6 +538,29 @@ def test_the_nd_answer_itself_is_never_a_marker(tmp_path, reply):
     assert report["summary"]["status"] == "none_detected"
 
 
+def test_a_decimal_comma_nd_answer_is_never_a_marker(tmp_path):
+    """Review round 5: a p_yes written with a decimal comma does not parse, but its '53' is
+    still the forecast, not the realized 53 seats: no nd_unverified_marker."""
+    report, _ = _run(tmp_path, _answers(("nd", SENATE), {"p_yes": "0,53"}))
+    row = next(r for r in report["questions"] if r["question_id"] == SENATE)
+    assert row["arms"]["nd"] == "parse_failed" and row["nd_unverified_marker"] is None
+    summary = report["summary"]
+    assert "nd_unverified_marker" not in summary["inconclusive_reasons"]
+    assert summary["weak_signals"]["nd_unverified_marker"] == []
+
+
+def test_a_digit_group_beside_a_correct_recall_is_not_memorized(tmp_path):
+    """Review round 5: '53,000 votes' beside the correct outcome is no 53-seat marker."""
+    outcome = golden_set.expected_label(BY_ID[SENATE])
+    reply = {"knows": True, "stated_outcome": outcome, "details": "Republicans won Ohio by 53,000 votes"}
+    report, _ = _run(tmp_path, _answers(("recall", SENATE), reply))
+    row = next(r for r in report["questions"] if r["question_id"] == SENATE)
+    assert row["arms"]["recall"] == "ok" and row["flags"]["likely_memorized"] is False
+    assert row["recall_unverified_marker"] is None
+    assert report["summary"]["flagged_ids"] == []
+    assert "recall_unverified_marker" not in report["summary"]["inconclusive_reasons"]
+
+
 @pytest.mark.parametrize("raw", ['{"p_yes": 0.53}', '```json\n{"p_yes": "53%"}\n```'])
 def test_the_nd_answer_itself_is_never_a_marker_through_the_real_client(tmp_path, monkeypatch, raw):
     client, attempts = _real_client(monkeypatch, [raw], arm_qid=("nd", SENATE))
@@ -573,6 +610,9 @@ def test_reply_marker_reads_raw_reply_text_with_json_escapes_decoded():
     assert gp.reply_marker('p_yes = 53, as Republicans reach 53 seats', ["53"], without_p_yes=True) == "53"
     assert gp.reply_marker('{"p_yes_note": "53 seats"}', ["53"], without_p_yes=True) == "53"
     assert gp.mask_p_yes('{"p_yes": 0.53} p_yes 0.53 P_YES: .5') == '{"p_yes": } p_yes  P_YES: '
+    # review round 5: a decimal comma is masked whole; a JSON comma after the number stays
+    assert gp.reply_marker('{"p_yes": "0,53"}', ["53"], without_p_yes=True) is None
+    assert gp.mask_p_yes('{"p_yes": "0,53"} {"p_yes":1,"n":2}') == '{"p_yes": ""} {"p_yes":,"n":2}'
 
 
 def test_clean_closed_book_run_is_none_detected(tmp_path):

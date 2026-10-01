@@ -22,8 +22,10 @@ were unknowable at as_of and follow neither from the question nor from the promp
 row with a ``marker_rationale``. A row without such a detail (a hold at an unchanged
 rate) carries no markers and ``recall_uninformative: true``: it is reported as not
 recall-checkable instead of being given a weak marker. Markers are matched normalized
-(NFKC, casefold, dashes unified, a colon between digits read as a dash, ordinal suffixes
-dropped) as whole tokens, never inside a decimal ('53' is not in '0.53' nor '53.5%').
+(NFKC, casefold, dashes unified, an ISO date-time's 'T' read as a space, the spaces around
+a dash between digits closed up, a colon between digits read as a dash, ordinal suffixes
+dropped) as whole tokens, never inside a decimal or digit group ('53' is not in '0.53',
+'53.5%', '0,53' nor '53,000').
 Fail closed: a marker anywhere else in what an arm got back (every attempt, the repair
 turn's and a reply chat_json rejected included, every field, whatever the arm status; on
 the nd arm, a closed-book forecast, everything but the reply's own p_yes number) is the
@@ -134,13 +136,20 @@ _JSON_MISS_PREFIX = "LLM返回的JSON格式无效"
 
 _DASHES = dict.fromkeys(map(ord, "‐‑‒–—―−﹘﹣－"), "-")
 _WS_RE = re.compile(r"\s+")
-# A colon between digits reads as a dash (a 2:1 score is 2-1); an ordinal suffix, with an
-# 'of' after it, is dropped ('5th of june' reads '5 june', 'june 5th' reads 'june 5').
+# The 'T' of an ISO date-time reads as a space ('2024-06-05t00:00z' holds '2024-06-05').
+_ISO_T_RE = re.compile(r"(?<=[0-9]{4}-[0-9]{2}-[0-9]{2})t(?=[0-9])")
+# The spaces around a dash between digits close up (a '2 - 1' score is 2-1); a colon
+# between digits reads as a dash (a 2:1 score is 2-1); an ordinal suffix, with an 'of'
+# after it, is dropped ('5th of june' reads '5 june', 'june 5th' reads 'june 5').
+_SPACED_DASH_RE = re.compile(r"(?<=[0-9]) - (?=[0-9])")
 _DIGIT_COLON_RE = re.compile(r"(?<=[0-9]):(?=[0-9])")
 _ORDINAL_RE = re.compile(r"(?<=[0-9])(?:st|nd|rd|th)\b(?: of\b)?")
 # The nd arm's own answer: a p_yes key and the number after it ({"p_yes": 0.53}, "53%",
-# 'p_yes = 53'). The separator class holds no digit, sign or dot, so the match is linear.
-_P_YES_VALUE_RE = re.compile(r"(p_yes[\s\"'\\:=]*)[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)", re.I)
+# 'p_yes = 53', a decimal comma "0,53"). The separator class holds no digit, sign, dot or
+# comma, so the match is linear; a comma counts only with a digit after it (a JSON comma
+# after the number stays).
+_P_YES_VALUE_RE = re.compile(r"(p_yes[\s\"'\\:=]*)[-+]?(?:[0-9]+(?:\.[0-9]*|,[0-9]+)?|[.,][0-9]+)",
+                             re.I)
 # A JSON string escape in a raw reply text: \uXXXX or a backslash and one character.
 _JSON_ESCAPE_RE = re.compile(r"\\(u[0-9a-fA-F]{4}|.)", re.S)
 _JSON_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f"}
@@ -157,19 +166,22 @@ class BudgetExhausted(RuntimeError):
 
 # ------------------------------------------------------------------ text
 def normalize(text: Any) -> str:
-    """NFKC, casefold, unified dashes, collapsed whitespace, a colon between digits read as
-    a dash and ordinal suffixes dropped (marker matching)."""
+    """NFKC, casefold, unified dashes, an ISO date-time's 'T' read as a space, collapsed
+    whitespace, the spaces around a dash between digits closed up, a colon between digits
+    read as a dash and ordinal suffixes dropped (marker matching)."""
     folded = unicodedata.normalize("NFKC", str(text or "")).casefold().translate(_DASHES)
-    folded = _WS_RE.sub(" ", folded)
+    folded = _SPACED_DASH_RE.sub("-", _WS_RE.sub(" ", _ISO_T_RE.sub(" ", folded)))
     return _ORDINAL_RE.sub("", _DIGIT_COLON_RE.sub("-", folded)).strip()
 
 
 def _marker_re(marker: str) -> "re.Pattern[str]":
     """A marker as a whole token: not glued to a letter or digit on either side, nor to a
-    decimal part ('.' and a digit), so '53' never matches inside '2053', '0.53' or '53.5%'
-    and '4-1' never inside '14-12'. Each guard is fixed-width: the match stays linear."""
-    return re.compile(r"(?<![0-9a-z])(?<![0-9]\.)" + re.escape(normalize(marker))
-                      + r"(?![0-9a-z])(?!\.[0-9])")
+    decimal part or digit group ('.' or ',' and a digit), so '53' never matches inside
+    '2053', '0.53', '53.5%', '0,53' or '53,000' and '4-1' never inside '14-12'; 'won 53,
+    lost 47' still holds 53 (a comma list without a space, '53,47', reads as one number).
+    Each guard is fixed-width: the match stays linear."""
+    return re.compile(r"(?<![0-9a-z])(?<![0-9][.,])" + re.escape(normalize(marker))
+                      + r"(?![0-9a-z])(?![.,][0-9])")
 
 
 def contains_marker(text: Any, markers: Sequence[str]) -> Optional[str]:
