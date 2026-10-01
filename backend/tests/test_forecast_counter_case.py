@@ -81,12 +81,15 @@ def test_claim_walls():
         {"text": "The share should be 35% by then", "sources": ["S1"]},             # percent
         {"text": "Adoption should rise by 35 percent", "sources": ["S1"]},          # percent words
         {"text": "提升百分之三十", "sources": ["S1"]},                                 # 百分之
+        {"text": "A thirty percent chance is too low", "sources": ["S1"]},          # no digit
+        {"text": "七成概率会继续增长", "sources": ["S1"]},                              # tenths
+        {"text": "Only one in three buyers can charge at home", "sources": ["S1"]},  # odds
         {"text": "Sales reached 42 million units", "sources": ["S1"]},              # 42 not in packet
         {"text": "A 0.35 chance looks too low", "sources": ["S1"]},                 # decimal not in packet
         {"text": "Pack prices are not falling as claimed", "sources": ["S2"]},      # all False
         {"text": "Mixed support stays undecided", "sources": ["S2", "S3"]},         # False + None
     ])
-    assert dropped == Counter({"unknown_source": 3, "uncited": 1, "unverified_number": 5,
+    assert dropped == Counter({"unknown_source": 3, "uncited": 1, "unverified_number": 8,
                                "source_mismatch": 1, fc.TAG_DROP_KEY: 1})
     # The contradicted S2 is removed; the undecided S3 keeps the claim as unverifiable.
     assert [(c["id"], c["verdict"], c["sources"]) for c in kept] == [
