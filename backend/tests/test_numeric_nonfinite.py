@@ -33,6 +33,7 @@ from app.utils.atomic import write_json_atomic
 from app.utils.numeric import NonFiniteJSONError
 from scripts import backfill_report_visuals as bf
 from tests.test_research_gateway import FakeModel, ai, gateway, msgs, rg
+from tests.test_json_parse_never_raises import default_int_digit_limit
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _KNOBS = ("LLM_JSON_STRICT_NUMBERS", "LLM_ERROR_CLASSIFY_STATUS_FIRST", "ARTIFACT_STRICT_JSON",
@@ -262,6 +263,35 @@ def test_plain_invalid_json_keeps_the_generic_reason(monkeypatch, minimax_client
     assert client.chat_json(_json_msgs("garbage")) == {"ok": 1}
     assert transport.calls[1]["messages"][-1]["content"] \
         == lc._JSON_REPAIR_NOTE.format(reason=lc._JSON_MISS_INVALID)
+
+
+# ------------------------------------------------------------------ FU-12 hostile replies
+# Past the int-string digit limit / the decoder's recursion limit: the reply takes the
+# repair turn instead of raising (see test_json_parse_never_raises.py).
+_FU12_HOSTILE = {"huge_int": '{"p": ' + "9" * 5000 + "}",
+                 "deep_array": '{"p": ' + "[" * 100_000 + "]" * 100_000 + "}"}
+
+
+@pytest.mark.parametrize("name", ["huge_int", "deep_array"])
+def test_chat_json_takes_the_repair_turn_on_a_hostile_reply(monkeypatch, minimax_client, name):
+    monkeypatch.setattr(Config, "LLM_JSON_STRICT_NUMBERS", True, raising=False)
+    client, transport = minimax_client
+    transport.responses = [_resp(_FU12_HOSTILE[name]), _resp('{"p": 0.4}')]
+    with default_int_digit_limit():
+        assert client.chat_json(_json_msgs(f"fu12-{name}")) == {"p": 0.4}
+    assert len(transport.calls) == 2
+    assert transport.calls[1]["messages"][-1]["content"] \
+        == lc._JSON_REPAIR_NOTE.format(reason=lc._JSON_MISS_INVALID)
+
+
+def test_chat_json_fails_closed_with_a_value_error_on_repeated_hostile_replies(monkeypatch,
+                                                                                minimax_client):
+    monkeypatch.setattr(Config, "LLM_JSON_STRICT_NUMBERS", True, raising=False)
+    client, transport = minimax_client
+    transport.responses = [_resp(_FU12_HOSTILE["deep_array"])]
+    with pytest.raises(ValueError):
+        client.chat_json(_json_msgs("fu12-stubborn"))
+    assert len(transport.calls) == 2
 
 
 # ------------------------------------------------------------------ research gateway

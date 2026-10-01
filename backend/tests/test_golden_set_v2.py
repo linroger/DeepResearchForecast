@@ -680,6 +680,8 @@ def test_v1_score_report_byte_identical_to_pre_eval9(tmp_path, monkeypatch):
                                                       bootstrap=0)) == 0
     report = json.loads(out.read_text(encoding="utf-8"))
     assert "exclusions" not in report
+    # EVAL-12's additive contamination block (no --probe-report) is not part of the pre-EVAL-9 bytes.
+    assert report.pop("contamination") == {"status": "unprobed"}
     report["forecast_path"], report["golden_path"] = "<forecast>", "<golden>"
     canon = json.dumps(report, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     assert hashlib.sha256(canon.encode("utf-8")).hexdigest() == PRE_EVAL9_V1_REPORT_SHA256

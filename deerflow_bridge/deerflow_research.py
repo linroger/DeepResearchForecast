@@ -15539,6 +15539,33 @@ def _load_tool_market_candidates(out_dir: Path, *, max_bytes: int = 4_000_000) -
     return [by_id[mid] for mid in order if mid in by_id]
 
 
+def _pm_price_time_enabled() -> bool:
+    """FU-11: MARKET_ANCHOR_PRICE_TIME (EVAL-6's knob, forwarded by the parent; default on)."""
+    return _env_flag("MARKET_ANCHOR_PRICE_TIME", True)
+
+
+def _pm_stamp_observed(rows: list, observed_at: str | None) -> list:
+    """FU-11: copies of the dict rows, each with ``observed_at`` = when its price was fetched.
+
+    ``observed_at`` None stamps a row with its own ``captured_at`` (an agent-tool row: the
+    time its tool call fetched the price), else the given time (the snapshot fetch that
+    priced the row; taken when the fetch returned, so it is late by at most the fetch's
+    own duration). A row without a usable time is copied unstamped. The snapshot's
+    top-level ``as_of`` is written later, after relevance scoring, so it only bounds
+    these times from above."""
+    out = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            out.append(row)
+            continue
+        row2 = dict(row)
+        stamp = observed_at if observed_at is not None else str(row2.get("captured_at") or "").strip()
+        if stamp:
+            row2["observed_at"] = stamp
+        out.append(row2)
+    return out
+
+
 def _merge_market_rows(primary: list[dict], secondary: list[dict]) -> list[dict]:
     """Merge market rows by ID; primary rows win fields, order is deterministic."""
     order: list[str] = []
@@ -15709,6 +15736,13 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
                                      max_total=max_total, min_volume=min_volume,
                                      max_per_event=max_per_event,
                                      diagnostics=refresh_diagnostics) if queries else []
+    # FU-11 (EVAL-6 open issue): every row records when ITS price was fetched: the refresh
+    # time on re-priced rows (the refresh wins the merge's mutable fields, observed_at
+    # included), the tool call's captured_at on tool-only rows. Knob off → rows unchanged.
+    price_time = _pm_price_time_enabled()
+    if price_time:
+        refreshed_markets = _pm_stamp_observed(refreshed_markets, _utcnow())
+        tool_candidates = _pm_stamp_observed(tool_candidates, None)
     initial_all_transport_failed = bool(
         queries
         and refresh_diagnostics.get("attempted_query_count", 0) > 0
@@ -15779,6 +15813,8 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
                                  max_total=max_total, min_volume=min_volume,
                                  max_per_event=max_per_event,
                                  diagnostics=_stage_diagnostics)
+            if price_time:
+                _cand = _pm_stamp_observed(_cand, _utcnow())
             for _key in (
                 "attempted_query_count", "successful_query_count", "transport_failure_count"
             ):
@@ -17013,6 +17049,12 @@ def main() -> int:
                        if key not in _SALVAGE_VOLATILE_META_KEYS},
                     **meta, "research_engine": "v3",
                     "salvage": {"mode": "extract_only", "engine": "legacy", "started_at": started_at}}
+            data_tools = meta.get("data_tools")
+            if isinstance(data_tools, dict):
+                # TIME-13: its quant-row counts describe the v3 quantitative.json the legacy
+                # extraction rewrites; the tool binding and call counts stay true.
+                meta["data_tools"] = {key: value for key, value in data_tools.items()
+                                      if not key.startswith("quant_rows_")}
             # verified_facts.json goes with its meta counts (above): it indexes the
             # v3 quantitative.json rows the legacy extraction rewrites, and the
             # parent SHA-manifests whatever the handoff holds.

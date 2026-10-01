@@ -280,7 +280,9 @@ PHASE_TIME_SHARE: Mapping[str, float] = {
 ENGLISH = "English"
 CHINESE = "Chinese"
 
-AGENT_TOOLS = rg.AGENT_TOOLS_SCHEMA  # the one tools object bound on every agent call
+# The one tools object bound on every agent call; an engine with official-data
+# tools (TIME-13) binds one list of its own instead (_Engine.agent_tools).
+AGENT_TOOLS = rg.AGENT_TOOLS_SCHEMA
 
 PRIME_TASK = "CACHE WARM-UP: Reply with OK only; do not call tools."
 STOP_TEXT = ("STOP: you have enough — write your final notes now in the required format; "
@@ -325,6 +327,29 @@ _RETRYABLE_FALLBACKS = frozenset({"deadline", "budget", "unstructured_notes", "n
 # What a search or fetch of a run that is being stopped (SIGINT/SIGTERM)
 # answers instead of calling the backend.
 CANCELLED_TOOL_TEXT = "CANCELLED: the run is stopping; write your notes from what you have."
+# TIME-13 official-data tools (RESEARCH_DATA_TOOLS: a comma list of these vendors,
+# or "all"; research_gateway.DATA_TOOL_VENDORS names each one's tool).  A vendor
+# is bound only with its credential, and without one nothing below is reached.
+DATA_VENDORS: tuple[str, ...] = ("fred", "sec_edgar")
+# In the work dir: the as-of cutoff and FRED vintage every data call of the run is
+# pinned to, fixed by the first call and read back on resume (plan.json untouched).
+DATA_PINS_FILENAME = "data_pins.json"
+# quantitative.json opens with at most this many deterministic rows, the cited data
+# sources' structured values (DATA_QUANT_ROWS_MAX; always within MAX_QUANT_ROWS).
+DEFAULT_DATA_QUANT_ROWS = 12
+# A data row's sources.json supports: its vendor sentences (data_tools.SUPPORTS_MAX).
+DATA_SUPPORTS_MAX = 40
+# meta.data_tools.quant_rows_rejected lists at most this many dropped model rows.
+DATA_QUANT_REJECTED_MAX = 20
+# The form data_tools accepts a FRED API key in (its _FRED_KEY_RE): any other key
+# makes every FRED call unavailable, so such a key never binds macro_series.
+_FRED_API_KEY_RE = re.compile(r"[a-z0-9]{32}")
+# The KIQ task's description of each bound data tool (a data-kind KIQ only).
+_KIQ_DATA_TOOL_TEXT: Mapping[str, str] = {
+    "macro_series": "macro_series(series) returns an official FRED series as published on the run's vintage date",
+    "company_filings": ("company_filings(company, freq) returns a US SEC filer's statements as filed on or before "
+                        "the as-of date"),
+}
 
 
 # ===========================================================================
@@ -555,7 +580,7 @@ Emphasis: $emphasis
 Starting points (search results already registered for you; fetch the most authoritative ones directly by URL):
 $seeds
 Budget for this investigation: at most $max_searches web_search calls, $max_fetches web_fetch calls and $max_steps tool rounds. Use fewer when the evidence is already sufficient.
-Tools: web_search(query) returns results tagged [S<n>] with their URLs; web_fetch(url, focus) returns the passages of one page that are relevant to focus, tagged with the page's [S<n>]; web_fetch also accepts a marker such as S12 in place of the URL.
+Tools: web_search(query) returns results tagged [S<n>] with their URLs; web_fetch(url, focus) returns the passages of one page that are relevant to focus, tagged with the page's [S<n>]; web_fetch also accepts a marker such as S12 in place of the URL.$data_tools
 When you are done, reply WITHOUT calling tools, with your notes in exactly this format (keep the four headings in English exactly as written; write the bullet text in $language):
 ## Findings
 - <fact: number + unit + as-of date + context> [S<n>] (VERIFIED|REPORTED)
@@ -852,17 +877,18 @@ _DEPTH_PRESETS: Mapping[str, Mapping[str, Any]] = {
               "max_searches_total": 30, "max_fetches_total": 24, "gap_rounds": 0, "followups_per_round": 0,
               "sections_min": 6, "sections_max": 8, "target_units": 3000, "critique": False,
               "budget_units": 1_200_000.0, "time_budget_s": 1200.0, "workers": 4, "digest_cap": 30_000,
-              "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS},
+              "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS, "data_calls_per_kiq": 2, "max_data_calls_total": 12},
     "standard": {"max_kiqs": 7, "agent_max_steps": 7, "searches_per_kiq": 4, "fetches_per_kiq": 4,
                  "max_searches_total": 70, "max_fetches_total": 50, "gap_rounds": 1, "followups_per_round": 3,
                  "sections_min": 8, "sections_max": 12, "target_units": 6000, "critique": False,
                  "budget_units": 2_500_000.0, "time_budget_s": 2700.0, "workers": 4, "digest_cap": 60_000,
-                 "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS},
+                 "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS, "data_calls_per_kiq": 3,
+                 "max_data_calls_total": 30},
     "deep": {"max_kiqs": 10, "agent_max_steps": 9, "searches_per_kiq": 5, "fetches_per_kiq": 6,
              "max_searches_total": 140, "max_fetches_total": 110, "gap_rounds": 2, "followups_per_round": 4,
              "sections_min": 11, "sections_max": 16, "target_units": 11000, "critique": True,
              "budget_units": 5_000_000.0, "time_budget_s": 5400.0, "workers": 4, "digest_cap": 90_000,
-             "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS},
+             "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS, "data_calls_per_kiq": 4, "max_data_calls_total": 60},
 }
 
 # (minimum, maximum) accepted for each knob; out-of-range values are clamped.
@@ -873,6 +899,7 @@ _KNOB_BOUNDS: Mapping[str, tuple[float, float]] = {
     "sections_max": (3, 24), "target_units": (500, 60_000), "critique": (0, 1),
     "budget_units": (0, 1e10), "time_budget_s": (60, 7 * 86400), "workers": (1, 16),
     "digest_cap": (5000, 400_000), "max_tokens_extract": (1024, 128_000),
+    "data_calls_per_kiq": (0, 20), "max_data_calls_total": (0, 500),
 }
 
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
@@ -901,6 +928,10 @@ class Preset:
     workers: int
     digest_cap: int
     max_tokens_extract: int
+    # TIME-13: official-data tool calls per KIQ agent and per run (bound only
+    # when RESEARCH_DATA_TOOLS enables a tool; meta's v3_preset leaves them out).
+    data_calls_per_kiq: int
+    max_data_calls_total: int
     notes: tuple[str, ...] = ()
 
 
@@ -6198,16 +6229,22 @@ _MARKER_URL_RE = re.compile(r"^\s*+\[?\s*+S(\d++)\s*+\]?\s*+$", re.I)
 _ROW_HEADER_RE = re.compile(r"^\[S(\d+)\] .* \((?:tier \d+|tier unknown)\)(?: — .*)?$")
 
 
+# Tools whose answer is one source's page headed by its row header: a fetch and
+# an official-data call (TIME-13: an S1 row with its stored page).
+_FETCH_SHAPED_TOOLS = frozenset({"web_fetch", *rg.DATA_TOOL_NAMES})
+
+
 def tool_output_sids(name: str, output: str) -> tuple[int | None, list[int]]:
     """``(fetched sid, sids shown)`` of one tool result, from its row headers only.
 
-    A fetch shows exactly the source of its first line; a search shows the
-    sources of its column-0 row lines (URL and snippet lines are indented).
+    A fetch (or an official-data call, TIME-13) shows exactly the source of its
+    first line; a search shows the sources of its column-0 row lines (URL and
+    snippet lines are indented).
     Nothing inside an untrusted block or a snippet counts: a page that lists
     "[S1] …" in its own references must not make ledger row 1 "shown".
     """
     lines = str(output or "").splitlines()
-    if name == "web_fetch":
+    if name in _FETCH_SHAPED_TOOLS:
         match = _ROW_HEADER_RE.match(lines[0]) if lines else None
         return (int(match.group(1)), [int(match.group(1))]) if match else (None, [])
     sids: list[int] = []
@@ -6282,8 +6319,9 @@ class KiqAgent:
     """One KIQ investigation: an append-only tool loop with hard stops.
 
     Messages are ``[ENGINE_CORE][RUN BRIEF][KIQ TASK]`` followed only by
-    appended AI/tool messages; :data:`AGENT_TOOLS` is bound on every call
-    including the forced final one.  Stops: the model answers with notes, the
+    appended AI/tool messages; the engine's one tools list (:data:`AGENT_TOOLS`,
+    or with official-data tools its ``agent_tools``, TIME-13) is bound on every
+    call including the forced final one.  Stops: the model answers with notes, the
     step budget, two steps without a new source or page (novelty), the
     deadline coming within ``grace`` seconds (so the notes call still has time),
     the budget reserve or the context cap — each then forces the notes.  A
@@ -6330,6 +6368,10 @@ class KiqAgent:
         self.unknown_tool_calls = 0
         self.tool_exceptions = 0
         self._counts_lock = threading.Lock()
+        # TIME-13: the tools list bound on every call and the official-data tools
+        # it adds (none, and AGENT_TOOLS itself, unless the engine binds them).
+        self.agent_tools = getattr(engine, "agent_tools", AGENT_TOOLS)
+        self.data_tool_names: tuple[str, ...] = tuple(getattr(engine, "data_tool_names", ()) or ())
         _, self._human, _, self._tool = rg._msg_classes()
 
     # ------------------------------------------------------------------ run
@@ -6430,7 +6472,7 @@ class KiqAgent:
         researches again."""
         gateway = self.engine.gateway
         try:
-            result = gateway.invoke(messages, kind="agent", label=label, tools=AGENT_TOOLS,
+            result = gateway.invoke(messages, kind="agent", label=label, tools=self.agent_tools,
                                     deadline=self.deadline)
         except rg.EmptyResponse as exc:
             if getattr(exc, "truncated", False):
@@ -6445,7 +6487,7 @@ class KiqAgent:
         self.engine.log("stage", f"v3: {label} reply hit its output cap; asking once more with a "
                                  f"{wider}-token cap")
         try:
-            again = gateway.invoke(messages, kind="agent", label=f"{label}:wide", tools=AGENT_TOOLS,
+            again = gateway.invoke(messages, kind="agent", label=f"{label}:wide", tools=self.agent_tools,
                                    deadline=self.deadline, max_tokens=wider)
         except _PROVIDER_ERRORS:
             raise
@@ -6467,7 +6509,7 @@ class KiqAgent:
         if wider <= base or self.deadline.remaining() < TRUNCATION_RETRY_MIN_SECONDS:
             return None
         output_weight = float(gateway.profile.cost_weights.get("output", 1.0))
-        cost = self.engine.units(rg.estimate_tokens(messages, AGENT_TOOLS)) + wider * output_weight
+        cost = self.engine.units(rg.estimate_tokens(messages, self.agent_tools)) + wider * output_weight
         return wider if gateway.can_spend(cost, keep_reserve=True) else None
 
     def _notes(self, result: rg.GatewayResult) -> str | None:
@@ -6488,7 +6530,7 @@ class KiqAgent:
     def _pressure(self, messages: list) -> str | None:
         if self.deadline.expired() or self.deadline.remaining() <= self.grace:
             return "deadline"
-        estimate = rg.estimate_tokens(messages, AGENT_TOOLS)
+        estimate = rg.estimate_tokens(messages, self.agent_tools)
         if estimate > AGENT_CONTEXT_TOKEN_CAP:
             return "context_cap"
         if not self.engine.gateway.can_spend(self.engine.units(estimate), keep_reserve=True):
@@ -6522,11 +6564,13 @@ class KiqAgent:
     # ---------------------------------------------------------------- tools
     def _execute(self, calls: Sequence[Mapping[str, Any]]) -> tuple[list, bool]:
         """Answer every call of one turn, in order; at most
-        :data:`MAX_TOOL_CALLS_PER_STEP` web_search/web_fetch calls run, the
-        others are answered "skipped" so the conversation stays valid.  A call
-        repeating an earlier one of the turn (the same search, or the same page
-        — any alias of its URL or its marker — with the same or a near-same
-        focus) is answered with :data:`DUPLICATE_CALL_TEXT` instead of running."""
+        :data:`MAX_TOOL_CALLS_PER_STEP` web_search/web_fetch calls (and calls of
+        the bound official-data tools, TIME-13) run, the others are answered
+        "skipped" so the conversation stays valid.  A call repeating an earlier
+        one of the turn (the same search, the same page — any alias of its URL
+        or its marker — with the same or a near-same focus, or the same data
+        request) is answered with :data:`DUPLICATE_CALL_TEXT` instead of
+        running."""
         outputs: list[str] = [""] * len(calls)
         read_terms: list[frozenset[str] | None] = [None] * len(calls)
         runnable: list[int] = []
@@ -6534,7 +6578,7 @@ class KiqAgent:
         slots = 0
         for index, call in enumerate(calls):
             name = call.get("name")
-            if call.get("error") or name not in ("web_search", "web_fetch"):
+            if call.get("error") or name not in ("web_search", "web_fetch", *self.data_tool_names):
                 runnable.append(index)  # answered with a short error by _call_tool
                 continue
             slots += 1
@@ -6598,10 +6642,21 @@ class KiqAgent:
     def _repeats_in_step(self, call: Mapping[str, Any], terms: frozenset[str] | None,
                          queued: dict[tuple[str, str], list[frozenset[str]]]) -> bool:
         """True when an earlier call of this step (recorded in ``queued``)
-        already runs the same search, or reads the same page — any alias of
-        its URL, or its ``S<n>`` marker — with the same or a near-same focus
-        (:func:`_repeats_read`); otherwise ``call`` is recorded."""
+        already runs the same search, reads the same page — any alias of its
+        URL, or its ``S<n>`` marker — with the same or a near-same focus
+        (:func:`_repeats_read`), or makes the same official-data request (its
+        normalized arguments, TIME-13); otherwise ``call`` is recorded.  A
+        malformed data request is never a repeat (it is answered as invalid)."""
         args = call.get("args") or {}
+        if call.get("name") in self.data_tool_names:
+            normalized, _ = rg.normalize_data_args(call.get("name"), args)
+            if normalized is None:
+                return False
+            key = ("data", rg._data_key(str(call.get("name")), normalized))
+            if key in queued:
+                return True
+            queued[key] = []
+            return False
         if call.get("name") == "web_search":
             query = args.get("query")
             if not isinstance(query, str):
@@ -6677,8 +6732,14 @@ class KiqAgent:
                 focus = args.get("focus")
                 return tools.fetch(url, focus=focus if isinstance(focus, str) else "",
                                    agent_id=self.kiq.id, kiq_text=self.kiq.question)
+            if name in self.data_tool_names:
+                # TIME-13: the tools validate the arguments; a malformed call is counted as such.
+                text = str(tools.data(name, args, agent_id=self.kiq.id))
+                if text.startswith("INVALID_TOOL_CALL"):
+                    self._count_call("invalid_tool_calls")
+                return text
             self._count_call("unknown_tool_calls")
-            return "UNKNOWN_TOOL: only web_search and web_fetch are available."
+            return unknown_tool_text(self.data_tool_names)
         except Exception as exc:  # noqa: BLE001 — a tool failure is text for the model
             self._count_call("tool_exceptions")
             return f"TOOL_ERROR({type(exc).__name__}): try another source."
@@ -6861,12 +6922,38 @@ class _Engine:
         self.pinned_as_of: str | None = raw_as_of or None
         # A pin before today is a hindcast: point-in-time rule in the briefs, labelled pages.
         self.hindcast = _hindcast_as_of(env) is not None
+        # TIME-13 RESEARCH_DATA_TOOLS (default empty = off): the official-data tools of
+        # the vendors that have their credential are bound on every agent call (one
+        # tools list per run, _bind_data_tools) with call budgets of their own, data
+        # KIQ tasks say how to use them, and their cited results reach sources.json and
+        # head quantitative.json.  Off (or nothing available), every path is unchanged.
+        self.data_tools_requested = bool(str((env or {}).get("RESEARCH_DATA_TOOLS", "") or "").strip())
+        self.data_vendors, self.data_disabled, self._data_unknown = data_tools_availability(env)
+        if self.data_vendors and min(self.preset.data_calls_per_kiq, self.preset.max_data_calls_total) <= 0:
+            self.data_disabled.update(dict.fromkeys(self.data_vendors, "no_call_budget"))
+            self.data_vendors = ()
+        self.data_tool_names: tuple[str, ...] = ()
+        self.agent_tools: list[dict] = AGENT_TOOLS
+        quant_rows = _parse_knob((env or {}).get("DATA_QUANT_ROWS_MAX", ""), DEFAULT_DATA_QUANT_ROWS)
+        self.data_quant_rows_max = (DEFAULT_DATA_QUANT_ROWS if quant_rows is None
+                                    else max(0, min(MAX_QUANT_ROWS, quant_rows)))
+        # The vintage pin (data_pins.json) once fixed, and the quantitative.json rows
+        # finalize added from data sources and dropped against them.
+        self._data_lock = threading.Lock()
+        self._data_pins: dict | None = None
+        self._data_quant_added = 0
+        self._data_quant_trimmed = 0
+        self._data_quant_rejected: list[dict] = []
+        self._data_quant_rejected_total = 0
         identity = {"question_sha256": _sha256(" ".join(self.question.split())),
                     "depth": self.preset.depth, "model": self.model_name,
                     "language": self.language, "engine_version": ENGINE_VERSION}
         if self.pinned_as_of:
             # Only pinned runs carry it, so a live run's work dir is never archived.
             identity["as_of"] = self.pinned_as_of
+        if self.data_vendors:
+            # Only runs with data tools carry it: their prompts and tools differ.
+            identity["data_tools"] = sorted(self.data_vendors)
         # INFRA-8 RECORD_MODEL_PROVENANCE (default on): the concrete model id the --model
         # stanza resolves to joins the identity only when resolvable, so a resume under an
         # edited stanza cannot reuse this work dir (see _identity_matches).
@@ -6894,6 +6981,9 @@ class _Engine:
         # off): located quotes join sources.json supports (_source_rows).
         self.evidence_supports = (self.evidence_mode != EVIDENCE_OFF
                                   and _env_flag(self.env, "RESEARCH_EVIDENCE_SUPPORTS", False))
+        # Data units only when a data tool can be bound (the planner and seeder never call one).
+        data_limits = ({"max_data_total": self.preset.max_data_calls_total,
+                        "max_data_per_agent": self.preset.data_calls_per_kiq} if self.data_vendors else {})
         self.limits = rg.ToolLimits(
             max_searches_total=self.preset.max_searches_total,
             max_fetches_total=self.preset.max_fetches_total,
@@ -6903,8 +6993,10 @@ class _Engine:
                 "planner": (SCOUT_QUERIES_MAX, 0),
                 "seeder": (SEED_QUERIES_PER_KIQ * (self.preset.max_kiqs + self.preset.gap_rounds
                                                    * self.preset.followups_per_round), 0),
-            })
+            }, **data_limits)
         self.tools = tools_factory(self.ledger, self.work / "pages", bridge, reporter, self.limits)
+        if self.data_tools_requested:
+            self._bind_data_tools()
         # RESEARCH_FETCH_SHELL_DETECTION (default on, an honesty check): reader
         # shells, unavailable pages, bot walls and paywall teasers are failed
         # fetches at the tool layer and never published as fetched sources.
@@ -7012,6 +7104,8 @@ class _Engine:
         self._search_failures = 0
         self.tools.search = self._watch_tool(self.tools.search, "search")
         self.tools.fetch = self._watch_tool(self.tools.fetch, "fetch")
+        if self.data_tool_names:
+            self.tools.data = self._watch_tool(self.tools.data, "data")
         # The run deadline runs on the gateway's clock (its backoff and latency
         # clock), wrapped by _clock so that a stopped run has no time left.
         self._gateway_clock = getattr(self.gateway, "_clock", time.monotonic)
@@ -7052,10 +7146,102 @@ class _Engine:
         sets a flag, so a signal handler may call it."""
         self.cancelled = True
 
+    def _bind_data_tools(self) -> None:
+        """Bind the official-data tools RESEARCH_DATA_TOOLS enables (TIME-13):
+        one tools list for the run (``agent_tools``, the gateway binds it once by
+        identity) and the context the tools' data functions read
+        (``tools.data_context``).  A tools object that cannot answer data calls
+        (no ``data`` method, or no data function: its stats carry no ``data``
+        counters) binds nothing (``tools_unavailable``).  Every requested tool
+        left unbound is logged with why."""
+        if self._data_unknown:
+            self.log("warn", f"v3: RESEARCH_DATA_TOOLS names no known vendor in {', '.join(self._data_unknown)} "
+                             f"(known: {', '.join(DATA_VENDORS)}, all); ignored")
+        if self.data_vendors:
+            try:
+                stats = self.tools.stats()
+            except Exception:  # noqa: BLE001 — a tools object without stats cannot answer data calls
+                stats = {}
+            if not (callable(getattr(self.tools, "data", None)) and isinstance(stats, Mapping)
+                    and isinstance(stats.get("data"), Mapping)):
+                self.data_disabled.update(dict.fromkeys(self.data_vendors, "tools_unavailable"))
+                self.data_vendors = ()
+        for vendor, reason in sorted(self.data_disabled.items()):
+            self.log("warn", f"v3: official-data tool {rg.DATA_TOOL_VENDORS[vendor]} ({vendor}) not bound: {reason}")
+        if not self.data_vendors:
+            return
+        self.data_tool_names = tuple(rg.DATA_TOOL_VENDORS[vendor] for vendor in self.data_vendors)
+        self.agent_tools = rg.data_tool_schema_list(self.data_vendors)
+        self.tools.data_context = self._data_context
+        self.log("stage", f"official-data tools bound: {', '.join(self.data_tool_names)} (at most "
+                          f"{self.preset.data_calls_per_kiq} calls per KIQ, {self.preset.max_data_calls_total} "
+                          "per run)")
+
+    def _data_context(self) -> dict | None:
+        """What every official-data call is pinned to (TIME-13): ``as_of``, the
+        cutoff (the plan's as-of; in a gated hindcast that excludes same-day
+        sources the day before it, so every data row is dated strictly before
+        the as-of TIME-9's citation re-check reads), ``pit`` (the FRED vintage,
+        fixed once per run, :meth:`_data_pin_record`) and ``language`` (the
+        run's: vendor sentences in the report's language).  None before a plan
+        exists or when no pin can be fixed; the call then answers unavailable.
+        Never raises."""
+        try:
+            pins = self._data_pin_record(create=True)
+        except Exception as exc:  # noqa: BLE001 — a data call never breaks an agent
+            self.log("warn", f"v3: official-data vintage not pinned ({type(exc).__name__}: {exc})")
+            return None
+        if pins is None:
+            return None
+        return {"as_of": _dt.date.fromisoformat(pins["cutoff"]), "pit": _dt.date.fromisoformat(pins["pit"]),
+                "language": self.language}
+
+    def _data_pin_record(self, *, create: bool) -> dict | None:
+        """The run's official-data pin ``{as_of, cutoff, same_day, pit}``
+        (TIME-13): the one data_pins.json in the work dir holds for this plan's
+        as-of and the gates' same-day policy (so a resumed attempt keeps the
+        vintage of the first, even across FRED's midnight), else, with
+        ``create``, a new one (``pit`` = data_tools.fred_pit(cutoff)) written
+        atomically there.  None without a plan, or when nothing is pinned yet
+        and ``create`` is false."""
+        plan = self.plan
+        as_of = _parse_iso_date(plan.as_of) if plan is not None else None
+        if as_of is None:
+            return None
+        with self._data_lock:
+            if self._data_pins is not None:
+                return self._data_pins
+            same_day = self.pit.same_day if self.pit is not None else None
+            cutoff = as_of - _dt.timedelta(days=1) if same_day == "exclude" else as_of
+            expected = {"as_of": as_of.isoformat(), "cutoff": cutoff.isoformat(), "same_day": same_day}
+            path = self.work / DATA_PINS_FILENAME
+            stored = _read_json(path)
+            if (isinstance(stored, dict) and {key: stored.get(key) for key in expected} == expected
+                    and _canonical_date(stored.get("pit")) and stored["pit"] <= expected["cutoff"]):
+                self._data_pins = {**expected, "pit": stored["pit"]}
+                return self._data_pins
+            if not create:
+                return None
+            if stored is not None:
+                self.log("warn", f"v3: {DATA_PINS_FILENAME} holds another as-of or an invalid vintage; "
+                                 "pinning the vintage again")
+            pit = importlib.import_module("data_tools").fred_pit(cutoff)
+            if pit is None:
+                return None
+            record = {**expected, "pit": pit.isoformat()}
+            try:
+                self.write_json(path, record)
+            except OSError as exc:
+                self.log("warn", f"v3: {DATA_PINS_FILENAME} not written ({exc}); a resumed attempt pins the "
+                                 "vintage again")
+            self._data_pins = record
+            self.log("stage", f"official-data vintage pinned to {record['pit']} (as of {record['cutoff']})")
+            return record
+
     def _watch_tool(self, tool: Callable[..., str], kind: str) -> Callable[..., str]:
-        """``tool`` (a ResearchTools search/fetch) answering
-        :data:`CANCELLED_TOOL_TEXT` once the run is stopped; failed searches
-        are counted for the degradation events."""
+        """``tool`` (a ResearchTools search/fetch, or the data call of bound
+        official-data tools) answering :data:`CANCELLED_TOOL_TEXT` once the run
+        is stopped; failed searches are counted for the degradation events."""
         @functools.wraps(tool)
         def watched(*args: Any, **kwargs: Any) -> str:
             if self.cancelled:
@@ -7145,7 +7331,7 @@ class _Engine:
             return {}
         shells: dict[int, str] = {}
         for row in self.ledger.rows():
-            if not row.get("fetched"):
+            if not row.get("fetched") or row.get("via") == "data":  # a vendor record (TIME-13), never a shell
                 continue
             text = page_text(row["sid"])
             reason = rg._extraction_failure_reason(text) if text else None
@@ -7683,7 +7869,7 @@ class _Engine:
         abort = threading.Event()
         if len(kiqs) >= 2:
             self.gateway.prime(rg.build_messages(ENGINE_CORE, [self.brief], PRIME_TASK), kind="agent",
-                               label="gather:prime", tools=AGENT_TOOLS, deadline=deadline)
+                               label="gather:prime", tools=self.agent_tools, deadline=deadline)
         grace = self._final_notes_grace(deadline)
         jobs = [(lambda kiq=kiq: self._gather_job(kiq, self._kiq_task(kiq, seeds[kiq.id]),
                                                    [row["sid"] for row in seeds[kiq.id]], abort, deadline,
@@ -7881,13 +8067,18 @@ class _Engine:
         # Seed rows are web text inside the (trusted) task message: delimited
         # and filtered like every other untrusted block.
         seeds = rg.delimit_untrusted(LABEL_SEEDS, "\n".join(lines)) if lines else ""
+        # TIME-13: only a data KIQ's task names the official-data tools (every agent has
+        # them bound); without them the slot is empty and the task is the template exactly.
+        data_tools = getattr(self, "data_tool_names", ())  # engines built without __init__ have none
         task = _render(
             _T_KIQ_TASK, kiq_id=kiq.id, question=kiq.question,
             why=kiq.why or "Background evidence for the report.",
             emphasis=_KIND_EMPHASIS.get(kiq.kind, _KIND_EMPHASIS["general"]),
             seeds=seeds or "(no seed results; start with web_search)",
             max_searches=self.preset.searches_per_kiq, max_fetches=self.preset.fetches_per_kiq,
-            max_steps=self.preset.agent_max_steps, language=self.language)
+            max_steps=self.preset.agent_max_steps, language=self.language,
+            data_tools=(kiq_data_guidance(data_tools, self.preset.data_calls_per_kiq)
+                        if data_tools and kiq.kind == "data" else ""))
         addenda = self._kiq_task_addenda()
         return task + ("\n" + "\n".join(addenda) if addenda else "")
 
@@ -9151,7 +9342,9 @@ class _Engine:
         fetched = bool(row.get("fetched"))
         text = self.tools.page_text(sid) if fetched else None
         if fetched:
-            shell = rg._extraction_failure_reason(text) if (self.shell_detection and text) else None
+            # An official-data row's page (TIME-13) is the vendor's record, never a web extraction shell.
+            shell = (rg._extraction_failure_reason(text)
+                     if (self.shell_detection and text and row.get("via") != "data") else None)
         else:
             shell = self.stored_shells.get(sid)
         return fetched and shell is None, text, shell
@@ -9179,7 +9372,13 @@ class _Engine:
         when present, ``modified_at`` / ``modified_source`` /
         ``date_rejected``; an undated row keeps ``date`` None and no other
         date key.  In a gated hindcast (TIME-9) every row also carries the
-        ledger's ``pit_status``."""
+        ledger's ``pit_status``.
+
+        An official-data row (TIME-13, ``via`` ``data``) is dated by its vendor
+        (the FRED vintage or the latest filing served), its ``supports`` are
+        the vendor's own sentences (at most DATA_SUPPORTS_MAX, first; no quote
+        or evidence window joins them) and its ``data`` block names the vendor,
+        the series or filer and the vintage or filing date."""
         rows: list[dict] = []
         demoted = 0
         quotes = self._evidence_support_quotes() if self.evidence_supports else {}
@@ -9197,6 +9396,9 @@ class _Engine:
             }
             if self.source_dates:
                 entry.update(_source_date_fields(row))
+            data = row.get("data") if row.get("via") == "data" and isinstance(row.get("data"), Mapping) else None
+            if data is not None and data.get("date"):
+                entry["date"] = data["date"]
             if self.pit is not None:
                 # TIME-9: the gates' verdict (None: a source seen only in search rows).
                 entry["pit_status"] = row.get("pit_status")
@@ -9209,7 +9411,12 @@ class _Engine:
                 if text:
                     entry["excerpt"] = _collapse(text, EXCERPT_CHARS)
             entry["supports"] = []
-            if shell is None and quotes.get(sid):
+            if data is not None:
+                supports = data.get("supports")
+                _merge_supports(entry, (supports if isinstance(supports, list) else [])[:DATA_SUPPORTS_MAX],
+                                DATA_SUPPORTS_MAX)
+                entry["data"] = data_source_block(data, row["url"])
+            elif shell is None and quotes.get(sid):
                 _merge_supports(entry, quotes[sid], EVIDENCE_QUOTES_PER_SOURCE)
             if derived is not None:
                 entry["derived_supports"] = list(derived.get(sid, ())) if shell is None else []
@@ -9430,7 +9637,13 @@ class _Engine:
         With RESEARCH_QUANT_RECONCILE (default on) :meth:`_quant_sanity` adds
         the reconciled numeric disagreements to contested.json (actors.json
         keeps the extracted claims, as in the legacy engine) and its warnings
-        to meta; it never changes a quant row."""
+        to meta; it never changes a quant row.
+
+        With official-data tools bound (TIME-13) the cited data sources'
+        structured values head the quant rows (:meth:`_with_data_quant_rows`)
+        before any enrichment, typing or verification, and after
+        verification the model rows a data source's page contradicts are
+        dropped (:meth:`_drop_data_contradictions`)."""
         plan = self.plan
         verify = _env_flag(self.env, "RESEARCH_VERIFIED_FACTS", True)
         if getattr(self.args, "no_actors", False):
@@ -9452,6 +9665,9 @@ class _Engine:
                 report_body)
         else:
             quant = normalize_quant(facts_raw.get("quantitative_facts"), sources, keep_ref=verify)
+        if self.data_tool_names:
+            # TIME-13: before every enrichment, typing and verification step, like a model row.
+            quant = self._with_data_quant_rows(quant, sources)
         contested = normalize_contested(facts_raw.get("contested_claims"), sources)
         actors_raw = actors_raw or {}
         as_of = str(actors_raw.get("as_of_date") or "")
@@ -9491,12 +9707,17 @@ class _Engine:
         ref_date = _parse_iso_date(plan.as_of) or _dt.datetime.now(_dt.timezone.utc).date()
         stale_days = _positive_int(self.env.get("RESEARCH_STALE_DAYS"), DEFAULT_STALE_DAYS)
         typing = _env_flag(self.env, "RESEARCH_QUANT_TYPING", False)
+        # TIME-13: model rows an official-data page contradicts are dropped right after verification.
+        drop = (functools.partial(self._drop_data_contradictions, verify=verify) if self.data_tool_names else None)
         if verify or typing:
             # Typing tests dates against the day after the plan's as-of: plan.as_of
             # is the UTC date fixed at plan time, and a run that crosses UTC midnight
             # can cite a source published the next day (no target date, no
             # future-dated actual).
-            self._quant_provenance(quant, ref_date + _dt.timedelta(days=1), verify=verify, typing=typing)
+            self._quant_provenance(quant, ref_date + _dt.timedelta(days=1), verify=verify, typing=typing,
+                                   drop=drop)
+        elif drop is not None:
+            drop(quant)
         if self.pit is not None:
             self._count_parametric_suspects(timeline, quant, typing=typing)
         # After typing (the claimed-actual test reads its epistemic_class).  The
@@ -9564,6 +9785,68 @@ class _Engine:
             counts["verified_facts"] = dict(evidence["payload"]["counts"])
             counts["_evidence"] = evidence
         return counts
+
+    def _with_data_quant_rows(self, quant: list[dict], sources: Sequence[Mapping[str, Any]]) -> list[dict]:
+        """``quant`` headed by the structured values of the cited official-data
+        sources (TIME-13, :func:`data_quant_row`), in citation order and each
+        source's fact order, at most DATA_QUANT_ROWS_MAX; the model rows are
+        trimmed from the end so the whole stays within MAX_QUANT_ROWS (logged
+        and counted in ``meta.data_tools.quant_rows_trimmed``).  The
+        facts are the ledger row's (the vendor's record), never the model's."""
+        rows: list[dict] = []
+        for position, entry in enumerate(sources, 1):
+            if len(rows) >= self.data_quant_rows_max:
+                break
+            if not isinstance(entry.get("data"), Mapping):
+                continue
+            ledger_row = self.ledger.find(entry.get("url")) or {}
+            data = ledger_row.get("data") if ledger_row.get("via") == "data" else None
+            facts = data.get("facts") if isinstance(data, Mapping) else None
+            for fact in facts if isinstance(facts, list) else []:
+                row = data_quant_row(fact, entry, position)
+                if row is not None and len(rows) < self.data_quant_rows_max:
+                    rows.append(row)
+        kept = quant[:MAX_QUANT_ROWS - len(rows)]
+        self._data_quant_added = len(rows)
+        self._data_quant_trimmed = len(quant) - len(kept)
+        if rows:
+            self.log("ok", f"v3: {len(rows)} quantitative row(s) copied from cited official-data sources")
+        if self._data_quant_trimmed:
+            self.log("warn", f"v3: {self._data_quant_trimmed} model quantitative row(s) trimmed from the end to keep "
+                             f"{MAX_QUANT_ROWS} rows")
+        return rows + kept
+
+    def _drop_data_contradictions(self, quant: list[dict], *, verify: bool) -> None:
+        """Remove from ``quant``, in place, the model rows citing an
+        official-data source whose number is not on that source's page
+        (TIME-13): RESEARCH-4's ``verification`` ``unverified``
+        (RESEARCH_VERIFIED_FACTS), else the same check
+        (:func:`verify_quant_row`) without stamping anything.  A
+        deterministic row, a row without a checkable number and a row whose
+        data page is unavailable are kept.  The dropped rows are listed (at
+        most DATA_QUANT_REJECTED_MAX) in ``meta.data_tools.quant_rows_rejected``
+        and counted in ``quant_rows_rejected_total``."""
+        kept: list[dict] = []
+        dropped: list[dict] = []
+        for row in quant:
+            source = self.ledger.find(row.get("source_url")) if row.get("source_url") else None
+            if is_data_quant_row(row) or source is None or source.get("via") != "data":
+                kept.append(row)
+                continue
+            if verify:
+                contradicted = row.get("verification") == "unverified"
+            else:
+                pages = self.page_numbers(source["sid"]) if source.get("fetched") else None
+                contradicted = pages is not None and verify_quant_row(row, pages, "")[1] == "none"
+            (dropped if contradicted else kept).append(row)
+        quant[:] = kept
+        self._data_quant_rejected_total = len(dropped)
+        self._data_quant_rejected = [
+            {key: row.get(key) for key in ("metric", "value", "unit", "source_ref", "source_url")}
+            for row in dropped[:DATA_QUANT_REJECTED_MAX]]
+        if dropped:
+            self.log("warn", f"v3: dropped {len(dropped)} quantitative row(s) whose number is not on the "
+                             "official-data source they cite")
 
     def _quant_sanity(self, quant: Sequence[Mapping[str, Any]], as_of: _dt.date) -> list[dict]:
         """The legacy engine's quantitative sanity checks (RESEARCH_QUANT_RECONCILE).
@@ -9710,7 +9993,8 @@ class _Engine:
             self.log("warn", f"v3: {flagged} quantitative row(s) dated after their source's latest date "
                              "(as_of_after_source)")
 
-    def _quant_provenance(self, quant: list[dict], as_of: _dt.date, *, verify: bool, typing: bool) -> None:
+    def _quant_provenance(self, quant: list[dict], as_of: _dt.date, *, verify: bool, typing: bool,
+                          drop: Callable[[list[dict]], None] | None = None) -> None:
         """Page verification (RESEARCH_VERIFIED_FACTS) and reported/projected
         typing (RESEARCH_QUANT_TYPING) of the quant rows, in place, summarised
         in ``meta.quant_provenance`` with only the enabled parts: ``rows``;
@@ -9728,7 +10012,11 @@ class _Engine:
         ``:typing``) and left out of the summary, stamps no row (each part
         computes every row's keys before it stamps any; a row without
         ``verification`` counts as unchecked, never as verified), and the
-        other parts and the run go on."""
+        other parts and the run go on.
+
+        ``drop`` (TIME-13, official-data tools bound) removes rows from
+        ``quant`` in place right after verification, so derivation, typing
+        and the summary describe only the rows quantitative.json keeps."""
         def part(name: str, step: Callable[[], None]) -> bool:
             try:
                 step()
@@ -9739,8 +10027,12 @@ class _Engine:
                 return False
             return True
 
+        verified = verify and part("verify", lambda: self._verify_quant_rows(quant))
+        if drop is not None:
+            # TIME-13: the rows an official-data page contradicts leave before typing and the summary.
+            drop(quant)
         summary: dict[str, Any] = {"rows": len(quant)}
-        if verify and part("verify", lambda: self._verify_quant_rows(quant)):
+        if verified:
             labels = Counter(row.get("verification", "unchecked") for row in quant)
             checked = len(quant) - labels["unchecked"]
             summary["verification_hist"] = dict(sorted(labels.items()))
@@ -9979,6 +10271,10 @@ class _Engine:
         for position in sorted(candidates):
             scratch = {"supports": list(sources[position - 1].get("supports") or [])}
             _merge_supports(scratch, (), EVIDENCE_WINDOWS_PER_SOURCE)   # the row's own spans, as merged
+            if sources[position - 1].get("data"):
+                # TIME-13: an official-data row's supports are its vendor sentences; no window joins them.
+                published[position] = frozenset(scratch["supports"])
+                continue
             kept, left_out = select_source_windows(candidates[position], scratch["supports"],
                                                    EVIDENCE_WINDOWS_PER_SOURCE)
             added = _merge_supports(scratch, kept, EVIDENCE_WINDOWS_PER_SOURCE)
@@ -10112,8 +10408,10 @@ class _Engine:
         deterministic notes, with evidence headers (RESEARCH_EVIDENCE_HEADERS)
         at least half of the researched KIQs with insufficient evidence
         (:func:`evidence_profile`), a gap review a failure ended early, failed
-        searches, a page fetch failure rate of 50% or more and, with evidence
-        quotes enforced, KIQs whose evidence check failed (their findings kept
+        searches, a page fetch failure rate of 50% or more, with official-data
+        tools (TIME-13) a data-call failure rate of 50% or more over at least
+        two calls and, with evidence quotes enforced, KIQs whose evidence
+        check failed (their findings kept
         their tags unchecked) and a located-quote share of the findings tagged
         VERIFIED below EVIDENCE_MIN_LOCATED_SHARE."""
         events: list[str] = []
@@ -10169,6 +10467,12 @@ class _Engine:
         if self.source_taxonomy:
             events.extend(_source_health_events(tools, _bridge_provider_events("search_tools"),
                                                 _bridge_provider_events("cached_fetch")))
+        if self.data_tool_names:
+            # TIME-13: official-data calls that failed (never counted as fetch failures above).
+            data = self.tools.stats().get("data") or {}
+            calls, failed = int(data.get("data_calls") or 0), int(data.get("data_failures") or 0)
+            if calls >= 2 and 2 * failed >= calls:
+                events.append(f"official-data tool failure rate >= 50%: {failed} of {calls} data calls failed")
         if self.evidence_mode == EVIDENCE_ENFORCE:
             records = list(self.records.values())
             check_failed = sum(1 for record in records if record.get("evidence_error"))
@@ -10214,6 +10518,29 @@ class _Engine:
         return events
 
     # ============================================================ telemetry
+    def _data_tools_meta(self) -> dict:
+        """meta.data_tools (TIME-13, RESEARCH_DATA_TOOLS set): the bound
+        vendors, the requested ones left unbound with why, the run's vintage
+        pin (None until a data call fixed one), this attempt's data calls,
+        answers from run memory, invalid requests and failures, and the
+        quantitative rows finalize copied from data sources, trimmed to make
+        room for them and dropped against them (listed up to
+        DATA_QUANT_REJECTED_MAX, with their total)."""
+        counts = self.meta.get("tools", {}).get("data") if isinstance(self.meta.get("tools"), Mapping) else None
+        counts = counts if isinstance(counts, Mapping) else {}
+        try:
+            pins = self._data_pin_record(create=False)
+        except Exception:  # noqa: BLE001 — telemetry never fails the run
+            pins = None
+        return {"enabled": list(self.data_vendors), "disabled": dict(sorted(self.data_disabled.items())),
+                "pit": pins["pit"] if pins else None,
+                **{name: int(counts.get(key) or 0) for name, key in (
+                    ("calls", "data_calls"), ("cached", "cached_data"), ("invalid", "data_invalid"),
+                    ("failures", "data_failures"))},
+                "quant_rows_added": self._data_quant_added, "quant_rows_trimmed": self._data_quant_trimmed,
+                "quant_rows_rejected": list(self._data_quant_rejected),
+                "quant_rows_rejected_total": self._data_quant_rejected_total}
+
     def attach_telemetry(self) -> None:
         """Usage, tools, phase and KIQ summaries into meta (called on every exit)."""
         ledger = self.gateway.ledger.to_dict()
@@ -10228,6 +10555,8 @@ class _Engine:
             self.meta["model_resolution"] = {"model": self.model_name or None, "model_id": self.model_id,
                                              "models": ledger.get("models") or {}}
         self.meta["tools"] = self.tools.stats()
+        if self.data_tools_requested:
+            self.meta["data_tools"] = self._data_tools_meta()
         if self.pit is not None:
             # This attempt's final gate counts (a resumed audit's run scope needs them).
             self._pit_closed = True
@@ -10558,6 +10887,60 @@ def normalize_quant(value: Any, sources: Sequence[Mapping[str, Any]], *, keep_re
         if len(rows) >= MAX_QUANT_ROWS:
             break
     return list(zip(rows, items, strict=True)) if with_items else rows
+
+
+def data_source_block(data: Mapping[str, Any], url: str) -> dict:
+    """The ``data`` block of an official-data source in sources.json (TIME-13):
+    its vendor, the series and vintage (FRED) or the filer's CIK and latest
+    filing served (SEC EDGAR), and its URL; from the ledger row's ``data``."""
+    vendor = data.get("vendor")
+    keys = ("series_id", "vintage") if vendor == "fred" else ("cik", "filed")
+    return {"vendor": vendor, **{key: data.get(key) for key in keys}, "url": url}
+
+
+# A deterministic row's provenance: these keys of its data_tools fact, when set.
+_DATA_FACT_PROVENANCE_KEYS = ("series_id", "vintage", "cik", "tag", "form", "filed", "accn", "observation_date",
+                              "period_start", "period", "base_date", "basis")
+
+
+def data_quant_row(fact: Any, source: Mapping[str, Any], position: int) -> dict | None:
+    """The quantitative.json row of one structured value of a cited
+    official-data source (TIME-13; ``fact`` is one of its data_tools facts,
+    ``source`` its sources.json row at ``position``): the value and unit
+    copied exactly, ``as_of_date`` the vintage (FRED) or filing date (SEC
+    EDGAR), ``period_end`` the observation or period end, the filer named in
+    the metric, ``value_type`` actual, tier S1 and ``provenance`` (``kind``
+    ``structured`` for a vendor value, ``derived`` for a DRF computation, with
+    the vendor and the fact's identity).  None for a fact without a metric or
+    a value, or without one of those two provenance labels (an unlabelled
+    value is never published as the vendor's)."""
+    if not isinstance(fact, Mapping) or fact.get("provenance_kind") not in ("structured", "derived"):
+        return None
+    metric, value = _collapse(fact.get("metric"), 200), _collapse(fact.get("value"), 80)
+    if not metric or not value:
+        return None
+    company = _collapse(fact.get("company"), 120)
+    row: dict[str, Any] = {"metric": _collapse(f"{company}: {metric}", 200) if company else metric, "value": value}
+    for key, text in (("series", fact.get("series_id")), ("unit", fact.get("unit")),
+                      ("as_of_date", fact.get("vintage") or fact.get("filed")),
+                      ("period_end", fact.get("observation_date")), ("definition", fact.get("tag")),
+                      ("source", source.get("title"))):
+        text = _collapse(text, 200 if key == "source" else 400)
+        if text:
+            row[key] = text
+    data = source.get("data") if isinstance(source.get("data"), Mapping) else {}
+    row.update(value_type="actual", source_ref=f"S{position}", source_url=source.get("url"), tier="S1",
+               provenance={"kind": fact["provenance_kind"], "vendor": data.get("vendor"),
+                           **{key: fact[key] for key in _DATA_FACT_PROVENANCE_KEYS
+                              if fact.get(key) not in (None, "")}})
+    return row
+
+
+def is_data_quant_row(row: Mapping[str, Any]) -> bool:
+    """Whether a quantitative row is one :func:`data_quant_row` built (model
+    rows never carry ``provenance``)."""
+    provenance = row.get("provenance")
+    return isinstance(provenance, Mapping) and provenance.get("kind") in ("structured", "derived")
 
 
 # RESEARCH_FORECASTER_ATTRIBUTION (attribute_forecast_row): the keys only a
@@ -11446,6 +11829,100 @@ def _pit_policy(env: Mapping[str, Any] | None) -> rg.PitPolicy | None:
                         overfetch=max(1, min(rg.PIT_OVERFETCH_MAX, overfetch)) if overfetch is not None else 1)
 
 
+def data_tools_availability(env: Mapping[str, Any] | None) -> tuple[tuple[str, ...], dict[str, str], tuple[str, ...]]:
+    """``(enabled, disabled, unknown)`` of RESEARCH_DATA_TOOLS (TIME-13): the
+    requested vendors (a comma list of DATA_VENDORS names, or ``all``) that have
+    their credential, in DATA_VENDORS order; the requested ones that do not,
+    with why (``no_api_key``: FRED_API_KEY is empty; ``invalid_api_key``: it
+    is not the 32 lower-case letters or digits FRED issues, which data_tools
+    would never send; ``no_user_agent``: SEC_EDGAR_USER_AGENT names no contact
+    address, so SEC would refuse it);
+    and the names that are no vendor.  Empty or unset: nothing is requested."""
+    env = env or {}
+    requested: list[str] = []
+    unknown: list[str] = []
+    for token in str(env.get("RESEARCH_DATA_TOOLS", "") or "").strip().lower().split(","):
+        token = token.strip()
+        for name in (DATA_VENDORS if token == "all" else (token,) if token else ()):
+            if name in DATA_VENDORS:
+                if name not in requested:
+                    requested.append(name)
+            elif (shown := _collapse(name, 40)) not in unknown:
+                unknown.append(shown)
+    disabled: dict[str, str] = {}
+    fred_key = str(env.get("FRED_API_KEY", "") or "").strip()
+    if "fred" in requested and not _FRED_API_KEY_RE.fullmatch(fred_key):
+        disabled["fred"] = "invalid_api_key" if fred_key else "no_api_key"
+    if "sec_edgar" in requested and "@" not in str(env.get("SEC_EDGAR_USER_AGENT", "") or ""):
+        disabled["sec_edgar"] = "no_user_agent"
+    enabled = tuple(vendor for vendor in DATA_VENDORS if vendor in requested and vendor not in disabled)
+    return enabled, disabled, tuple(unknown)
+
+
+def kiq_data_guidance(tools: Sequence[str], calls: int) -> str:
+    """The sentence a data-kind KIQ task gains for the bound official-data
+    ``tools`` (TIME-13), ``calls`` being the KIQ's data-call allowance; ""
+    without a tool, so the task is then the template exactly."""
+    named = [_KIQ_DATA_TOOL_TEXT[tool] for tool in rg.DATA_TOOL_NAMES if tool in tools]
+    if not named:
+        return ""
+    return (f" Official data: {'; '.join(named)}. At most {calls} call{'' if calls == 1 else 's'}. Copy their "
+            "figures exactly, with the period and the result's [S<n>].")
+
+
+def unknown_tool_text(data_tools: Sequence[str]) -> str:
+    """What an agent's call of a tool it does not have answers: the web tools,
+    plus the bound official-data tools (TIME-13) when there are any."""
+    names = ["web_search", "web_fetch", *data_tools]
+    return f"UNKNOWN_TOOL: only {', '.join(names[:-1])} and {names[-1]} are available."
+
+
+def official_data_fns(env: Mapping[str, Any], enabled: Sequence[str],
+                      context: Callable[[], Mapping[str, Any] | None]) -> dict[str, Callable[..., Any]]:
+    """The data functions of the ``enabled`` vendors (TIME-13), by tool name,
+    for ResearchTools(data_fns=...).  Each call reads ``context()`` (the
+    engine's :meth:`_Engine._data_context`: the as-of cutoff, the run's FRED
+    vintage and the language, fixed only once a plan exists) and asks
+    data_tools with the credential ``env`` holds; without a context it answers
+    ``unavailable`` without any request.  ``{}`` when data_tools cannot be
+    imported (no tool is then bound)."""
+    try:
+        data_tools = importlib.import_module("data_tools")
+    except Exception:  # noqa: BLE001 — a missing vendor module binds no tool
+        return {}
+
+    def unpinned(source: str) -> Any:
+        detail = "the run's as-of date and vintage are not fixed yet"
+        return data_tools.DataResult(status=data_tools.STATUS_UNAVAILABLE, key="", url="", title="",
+                                     model_text=f"{source}: {detail}", page_text="", supports=(), date=None,
+                                     provenance={}, facts=(), detail=detail)
+
+    fns: dict[str, Callable[..., Any]] = {}
+    if "fred" in enabled:
+        key = str(env.get("FRED_API_KEY", "") or "").strip()
+
+        def macro_series(series: str) -> Any:
+            pinned = context()
+            if not pinned:
+                return unpinned("FRED")
+            return data_tools.fred_series(series, as_of=pinned["as_of"], pit=pinned["pit"], key=key,
+                                          language=pinned["language"])
+
+        fns["macro_series"] = macro_series
+    if "sec_edgar" in enabled:
+        agent = str(env.get("SEC_EDGAR_USER_AGENT", "") or "").strip()
+
+        def company_filings(company: str, freq: str = "annual") -> Any:
+            pinned = context()
+            if not pinned:
+                return unpinned(data_tools.EDGAR_SOURCE)
+            return data_tools.edgar_statements(company, as_of=pinned["as_of"], freq=freq, user_agent=agent,
+                                               language=pinned["language"])
+
+        fns["company_filings"] = company_filings
+    return fns
+
+
 def _pit_starvation_detail(pit: Any) -> str:
     """The point-in-time part of an ``evidence_unavailable`` detail (TIME-8):
     what the gates of a gated hindcast kept out (withheld pages are neither
@@ -11477,12 +11954,25 @@ def _default_tools_factory(ledger: rg.SourceLedger, pages_dir: Path, bridge: Any
     A hindcast (RESEARCH_AS_OF before today) labels every fetched page as live
     (``vintage_as_of``); a gated one (RESEARCH_PIT_GATES, TIME-8) also gets the
     point-in-time gates (``pit``), which record source dates whatever
-    RESEARCH_SOURCE_DATES says."""
+    RESEARCH_SOURCE_DATES says.  With RESEARCH_DATA_TOOLS (TIME-13) the
+    official-data functions of the vendors that have their credential
+    (:func:`official_data_fns`) read the context the engine sets as
+    ``tools.data_context`` after construction."""
     pit = _pit_policy(os.environ)
-    return rg.ResearchTools(ledger, pages_dir, bridge=bridge, plog=plog, limits=limits,
-                            source_dates=_env_flag(os.environ, "RESEARCH_SOURCE_DATES", False) or pit is not None,
-                            date_text_fallback=_env_flag(os.environ, "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", True),
-                            vintage_as_of=_hindcast_as_of(os.environ), pit=pit)
+    enabled = data_tools_availability(os.environ)[0]
+    tools: rg.ResearchTools | None = None
+
+    def data_context() -> Mapping[str, Any] | None:
+        # Set by the engine once it is built (the plan does not exist yet here).
+        getter = getattr(tools, "data_context", None)
+        return getter() if callable(getter) else None
+
+    data_fns = official_data_fns(os.environ, enabled, data_context) if enabled else None
+    tools = rg.ResearchTools(ledger, pages_dir, bridge=bridge, plog=plog, limits=limits,
+                             source_dates=_env_flag(os.environ, "RESEARCH_SOURCE_DATES", False) or pit is not None,
+                             date_text_fallback=_env_flag(os.environ, "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", True),
+                             vintage_as_of=_hindcast_as_of(os.environ), pit=pit, data_fns=data_fns or None)
+    return tools
 
 
 # ===========================================================================

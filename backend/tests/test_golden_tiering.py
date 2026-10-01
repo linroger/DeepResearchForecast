@@ -696,6 +696,8 @@ def test_gate_disabled_legacy_keys(tmp_path, monkeypatch):
     report = json.loads(out.read_text(encoding="utf-8"))
     assert not {"headline", "characterization", "metrics_scope"} & set(report)
     assert not any("tier" in r for r in report["matched"])
+    # EVAL-12's additive contamination block (no --probe-report) is not part of the pre-EVAL-8 bytes.
+    assert report.pop("contamination") == {"status": "unprobed"}
     report["forecast_path"], report["golden_path"] = "<forecast>", "<golden>"
     canon = json.dumps(report, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     assert hashlib.sha256(canon.encode("utf-8")).hexdigest() == PRE_EVAL8_REPORT_SHA256

@@ -649,6 +649,27 @@ class Config:
     # 块的头尾切片字符预算（forecast_extractor.slice_head_tail；≤0 视为默认 16000，回填同规则）。
     EVAL_BUNDLE_CAPTURE = os.environ.get('EVAL_BUNDLE_CAPTURE', 'false').strip().lower() == 'true'
     EVAL_DOSSIER_CHARS = int(os.environ.get('EVAL_DOSSIER_CHARS', '16000') or '16000')
+    # EVAL-20（P07 第 2 部分）：scripts/value_add_eval.py 在冻结评估包上做无标签的块移动研究
+    # （floor / floor_sc / R / R+Q/G/S/M / FULL / FULL_AA，按服务模型给 moves/inert/inconclusive 判定，
+    # 以 A/A 重复臂为噪声底）。只是证据，绝不自动改任何默认值；输出只落在评估账本 value_add/<study_id>/。
+    # VALUE_ADD_EVAL_ENABLED 关 = run 子命令不发任何调用（plan/score 不调用模型）；EVAL_STUDY_MAX_CALLS
+    # 为计划调用数上限（超出须 --max-calls）。注意：计分判定每块至少需 value_add_stats.MIN_CLUSTERS=16
+    # 个评估包；默认设计每包每模型 66 次调用（2 目标 ×（8 个单次臂 + floor_sc 的 K=3）× 3 重复），
+    # 单模型计分研究至少 1056 次，故默认上限 600 只够特征刻画（单模型 ≤9 包），计分研究须显式
+    # --max-calls；任何块都达不到 16 包（或重复 <3）的研究 run 默认拒绝，须 --allow-characterization
+    # 才花这笔钱。
+    # EVAL_ARM_REPLICATES 每臂重复次数（<3 只算特征刻画）；EVAL_TARGETS_PER_BUNDLE 每个评估包取的目标数；
+    # EVAL_PROBE_FIDELITY_MAX 为探针保真度门槛（R+M 与去市场影响前概率的平均绝对差超出则全部判定只作
+    # 参考）；EVAL_INERT_MARGIN 为 inert 判定的 CI 上界；EVAL_BOOTSTRAP_RESAMPLES 为聚类自助重采样次数。
+    # 这三个评分参数与自助种子在 run 时预注册进 study.json，score 时取值与注册值不同则记为 override，
+    # 且该次判定全部只作参考。
+    VALUE_ADD_EVAL_ENABLED = os.environ.get('VALUE_ADD_EVAL_ENABLED', 'false').strip().lower() == 'true'
+    EVAL_ARM_REPLICATES = int(os.environ.get('EVAL_ARM_REPLICATES', '3') or '3')
+    EVAL_STUDY_MAX_CALLS = int(os.environ.get('EVAL_STUDY_MAX_CALLS', '600') or '600')
+    EVAL_TARGETS_PER_BUNDLE = int(os.environ.get('EVAL_TARGETS_PER_BUNDLE', '2') or '2')
+    EVAL_PROBE_FIDELITY_MAX = float(os.environ.get('EVAL_PROBE_FIDELITY_MAX', '0.10') or '0.10')
+    EVAL_INERT_MARGIN = float(os.environ.get('EVAL_INERT_MARGIN', '0.02') or '0.02')
+    EVAL_BOOTSTRAP_RESAMPLES = int(os.environ.get('EVAL_BOOTSTRAP_RESAMPLES', '2000') or '2000')
     # EVAL-18: slim per-pipeline cost card. On: the _run finally block writes
     # <pipeline_dir>/cost_card.json (drf-cost-card/v1: per-stage calls/tokens/wall first, USD
     # secondary, completeness reasons), and the report stage pins the run's config fingerprint
@@ -741,6 +762,13 @@ class Config:
     # refuses a value it cannot read (the import audit's default 7) instead of scoring with it.
     GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS = int(
         os.environ.get('GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS', '7') or '7')
+    # EVAL-12：黄金集污染探针（scripts/golden_probe.py）——闭卷无档案预测 + 结局回忆两臂，回忆说对
+    # 结局且细节含策展泄漏标记的题判为 likely_memorized。会产生付费调用，故默认关（CLI 另可 --live
+    # 显式放行）；GOLDEN_PROBE_MAX_CALLS 为单次探针的硬上限（修复回合也计数，超限 → 退出码 4）；
+    # GOLDEN_PROBE_CONFIDENT_P 是弱信号 nd_confident_correct 的置信阈值（实现侧概率 ≥ 此值）。
+    GOLDEN_PROBE_ENABLED = os.environ.get('GOLDEN_PROBE_ENABLED', 'false').strip().lower() == 'true'
+    GOLDEN_PROBE_MAX_CALLS = int(os.environ.get('GOLDEN_PROBE_MAX_CALLS', '120') or '120')
+    GOLDEN_PROBE_CONFIDENT_P = float(os.environ.get('GOLDEN_PROBE_CONFIDENT_P', '0.85') or '0.85')
     # EVAL-13: under an evaluation run whose pin carries a target proposition, a target the binary
     # extraction did not produce verbatim gets exactly one bounded repair draw that asks only for
     # that statement; the row is kept only on a normalized match, never fabricated. Default on is
@@ -1217,9 +1245,12 @@ class Config:
     # 再次重报价失败时保留，因为留下的价仍是那次报价），研究 handoff 快照行 / 报告期现抓行记
     # snapshot_as_of（快照 as_of / 现抓时刻，只是取价时刻的上界：研究快照 as_of 在落盘时才取，
     # 其中智能体工具检索到的行可能更早就已报价）；_build_market_anchor 据此给锚点写 price_time +
-    # price_time_basis（requote|snapshot，时刻未知则两键都不写）。basis=requote 时锚点的
-    # price_at_research 实为报告期重报价（历史字段名）。纯溯源字段，不动任何概率、锚定决策或
-    # 发布闸门，因此默认开；false → 市场行与 forecast.json 锚点逐字节复现旧形状。
+    # price_time_basis（requote|observed|snapshot，时刻未知则两键都不写）。basis=requote 时锚点的
+    # price_at_research 实为报告期重报价（历史字段名）。FU-11：编排器把本旗标下发给研究子进程，
+    # 研究桥给每行记 observed_at（该行价格的抓取时刻：确定性刷新行=刷新时刻，仅工具检索行=
+    # 工具调用的 captured_at），锚点优先用它（basis=observed），快照 as_of 只作兜底上界。
+    # 纯溯源字段，不动任何概率、锚定决策或发布闸门，因此默认开；false → 市场行与
+    # forecast.json 锚点逐字节复现旧形状。
     MARKET_ANCHOR_PRICE_TIME = os.environ.get('MARKET_ANCHOR_PRICE_TIME', 'true').strip().lower() == 'true'
     # 10pp 规则：锚定后 |model_p − market_p|>0.10 且理由未提及市场的预测，做一次有界重述，
     # 须在理由中引用市场或有依据地保留分歧（绝不静默移动概率）。默认开；关闭=不重述。
@@ -2029,6 +2060,51 @@ class Config:
     # Forwarded to the v3 child.
     RESEARCH_SOURCE_DATE_TEXT_FALLBACK = os.environ.get(
         'RESEARCH_SOURCE_DATE_TEXT_FALLBACK', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    # TIME-13 official-data tools of the v3 research agents (deerflow_bridge/data_tools.py):
+    # a comma list of fred (macro_series: FRED/ALFRED series as published on the run's
+    # vintage date), sec_edgar (company_filings: a US SEC filer's statements as filed on
+    # or before the as-of date) or all.  A tool is bound only with its credential:
+    # FRED_API_KEY for fred, an SEC_EDGAR_USER_AGENT naming a contact address for
+    # sec_edgar.  Default empty: no tool is bound and the agents' tools object, prompts,
+    # sources.json, quantitative.json and meta are byte-identical to before.  Forwarded to
+    # the v3 child.
+    RESEARCH_DATA_TOOLS = os.environ.get('RESEARCH_DATA_TOOLS', '').strip().lower()
+    # TIME-13: the FRED API key (a secret: never forwarded explicitly, the research child
+    # inherits it from the environment; data_tools keeps it out of every result, cache file
+    # and log line).  Empty: macro_series is never bound.
+    FRED_API_KEY = os.environ.get('FRED_API_KEY', '').strip()
+    # TIME-13: the User-Agent SEC requires ('Name contact@domain'; inherited by the research
+    # child like the key).  Without an '@' company_filings is never bound.
+    SEC_EDGAR_USER_AGENT = os.environ.get('SEC_EDGAR_USER_AGENT', '').strip()
+    # TIME-13: at most this many deterministic rows (the structured values of the cited
+    # official-data sources, copied exactly) head quantitative.json, within its 60-row cap.
+    # Only read when data tools are bound, so the default changes nothing by itself; 0 adds
+    # none.  Forwarded to the v3 child.
+    try:
+        DATA_QUANT_ROWS_MAX = max(0, int(os.environ.get('DATA_QUANT_ROWS_MAX', '12') or '12'))
+    except ValueError:
+        DATA_QUANT_ROWS_MAX = 12
+    # TIME-10/11 vendor knobs (read by data_tools on every call, clamped there; empty =
+    # the module default), declared here so the parent forwards its own values to the v3
+    # child instead of whatever the child's environment holds.  They only matter once
+    # RESEARCH_DATA_TOOLS binds a tool.
+    try:
+        DATA_FRED_WINDOW_YEARS = int(os.environ.get('DATA_FRED_WINDOW_YEARS', '10') or '10')
+    except ValueError:
+        DATA_FRED_WINDOW_YEARS = 10
+    DATA_TOOLS_CACHE_DIR = os.environ.get('DATA_TOOLS_CACHE_DIR', '').strip()
+    try:
+        DATA_FRED_CACHE_TTL_H = float(os.environ.get('DATA_FRED_CACHE_TTL_H', '6') or '6')
+    except ValueError:
+        DATA_FRED_CACHE_TTL_H = 6.0
+    try:
+        DATA_EDGAR_CACHE_TTL_H = float(os.environ.get('DATA_EDGAR_CACHE_TTL_H', '24') or '24')
+    except ValueError:
+        DATA_EDGAR_CACHE_TTL_H = 24.0
+    try:
+        DATA_TOOL_TIMEOUT_S = float(os.environ.get('DATA_TOOL_TIMEOUT_S', '20') or '20')
+    except ValueError:
+        DATA_TOOL_TIMEOUT_S = 20.0
     # PAR-2：编排器级「多角度并行研究轨」。>1 时研究阶段并行跑 K 个 DeerFlowResearchRunner
     # 子进程，每个带角度特化前缀（轨1=基线证据扫描，即原始 brief 逐字；轨2=基率/参照类/历史
     # 类比；轨3=行为者激励+反面证伪+市场定价），各写入 handoff/track_<k>/，随后确定性合并回
@@ -2302,9 +2378,11 @@ class Config:
     # while it awaits UMA resolution. With the gate on, such a market never anchors a binary
     # forecast and never seeds SIM priors (world brief / persona hints); it still appears in
     # the market pack and research section, labelled "window ended ... awaiting settlement",
-    # because its price remains evidence. Default on (honesty fix); false restores the exact
-    # pre-gate prompts, anchors, snapshot and market-pack bytes. The research child receives
-    # both knobs from Config.
+    # because its price remains evidence. FU-5: the report's Market Cross-Check block applies
+    # the same label to such markets, both in the unmatched-markets list and on matched
+    # comparison rows whose window ended by the time the report is rendered. Default on
+    # (honesty fix); false restores the exact pre-gate prompts, anchors, snapshot, market-pack
+    # and Market Cross-Check bytes. The research child receives both knobs from Config.
     PREDICTION_MARKETS_END_DATE_GATE = os.environ.get('PREDICTION_MARKETS_END_DATE_GATE', 'true').strip().lower() == 'true'
     # Hours after endDate before a market counts as ended (absorbs Gamma endDate quirks on
     # extended events); clamped to [0, 168] where it is used. 0 = strictly after endDate.
