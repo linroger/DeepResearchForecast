@@ -399,13 +399,16 @@ def test_finalize_under_pin_labels_forecast_and_uses_as_of_year(env, market_call
     assert horizon_calls == [{"horizon_date": None, "now_year": 2024}]
     # No market reached the extraction, and no Polymarket call was made.
     assert extract_calls[0]["markets"] is None and extract_calls[0]["market_pack"] is None
+    # FU-7: the extraction is told to drop any market anchor the model volunteers.
+    assert extract_calls[0]["withhold_market_anchors"] is True
     assert forecast["quality"]["prompt_slot_states"]["market"] == WITHHELD.to_dict()
     assert market_calls == []
 
 
 def test_finalize_without_pin_is_unchanged(env, market_calls, monkeypatch):
     _finalize_env(monkeypatch)
-    monkeypatch.setattr(fe, "extract_binary_forecasts", _fake_extract([]))
+    live_calls = []
+    monkeypatch.setattr(fe, "extract_binary_forecasts", _fake_extract(live_calls))
     horizon_calls = _horizon_spy(monkeypatch)
     _save_pipeline("pipe_live", "sim_1")
     for report_id in ("r_live", "r_ref"):
@@ -415,6 +418,7 @@ def test_finalize_without_pin_is_unchanged(env, market_calls, monkeypatch):
     assert "hindcast" not in forecast
     assert horizon_calls == [{"horizon_date": None}]      # no now_year: today's year as before
     assert "client" in market_calls                        # the live market path still runs
+    assert "withhold_market_anchors" not in live_calls[0]  # FU-7: live call unchanged
     # Byte-identical to the same agent with the hindcast machinery bypassed entirely.
     monkeypatch.setattr(ReportAgent, "_hindcast_pin", lambda self: None)
     _bare_agent()._finalize_structured_forecast("r_ref", MARKDOWN)
@@ -586,3 +590,38 @@ def test_report_stage_passes_the_pin_and_run_json_records_it(monkeypatch, tmp_pa
     else:
         assert "hindcast" not in report_kwargs
         assert "as_of_enforcement" not in resolved
+
+
+# ------------------------------------------------- FU-7: volunteered anchors under a pin
+_VOLUNTEERED = {"binary_forecasts": [
+    {"id": "F1", "statement": "The ECB cuts its deposit rate in June 2024.", "probability": 0.7,
+     "resolution_criteria": "ECB press release on 2024-06-06", "theme": "rates", "horizon_year": 2024,
+     "adjustment_rationale": "guidance", "market_anchor": {"market_id": "pm-ecb", "implied_yes_prob": 0.8}},
+    {"id": "F2", "statement": "Euro-area HICP is below 2.5% in May 2024.", "probability": 0.4,
+     "resolution_criteria": "Eurostat flash estimate", "theme": "inflation", "horizon_year": 2024,
+     "adjustment_rationale": "base rate"},
+]}
+
+
+def _extract_volunteered(monkeypatch, **kwargs):
+    from tests.conftest import FakeLLMClient
+    monkeypatch.setattr(Config, "FORECAST_BINARY_CONTRARIAN", False, raising=False)
+    monkeypatch.setattr(Config, "FORECAST_ENSEMBLE_MODELS", "", raising=False)
+    return fe.extract_binary_forecasts("dossier", FakeLLMClient(json_responses=[_VOLUNTEERED]),
+                                       min_count=2, language="English", **kwargs)
+
+
+def test_pinned_extraction_drops_model_volunteered_market_anchors(monkeypatch):
+    """FU-7 (TIME-6 open issue): markets are withheld for a whole hindcast, so an anchor on
+    a binary is the model's own (possibly post-as-of) knowledge; it is dropped and counted."""
+    live = _extract_volunteered(monkeypatch)
+    assert live["binary_forecasts"][0]["market_anchor"]["market_id"] == "pm-ecb"
+    assert "hindcast_market_anchor_dropped" not in live["binary_quality"]
+    pinned = _extract_volunteered(monkeypatch, withhold_market_anchors=True)
+    assert all("market_anchor" not in b for b in pinned["binary_forecasts"])
+    assert pinned["binary_quality"]["hindcast_market_anchor_dropped"] == 1
+    assert "market_comparison" not in pinned
+    # Everything else is the live extraction's.
+    strip = [{k: v for k, v in b.items() if k != "market_anchor"} for b in live["binary_forecasts"]]
+    assert pinned["binary_forecasts"] == strip
+

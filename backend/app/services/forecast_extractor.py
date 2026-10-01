@@ -3288,6 +3288,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              target_propositions: Optional[List[Dict[str, Any]]] = None,
                              context_pack: Optional[str] = None,
                              numeric_guard_mode: Optional[str] = None,
+                             withhold_market_anchors: bool = False,
                              ) -> Dict[str, Any]:
     """Extract/derive >=min_count INDEPENDENT binary forecasts from the dossier.
 
@@ -3330,6 +3331,10 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     （_binary_draw_max_tokens，免得多出的字段截断回复），_normalize_binaries 保留净化后的
     latest_actual（供 utils.numeric_guards 影子检查）；该规则会改变起草（二元与概率可能与 off
     不同）。None / 'off' → 提示词、max_tokens 与行逐字节不变。
+    FU-7 ``withhold_market_anchors``（ReportAgent 在回测钉下传 True）：回测全程扣下市场数据，
+    此时二元上的 market_anchor 只能是模型凭自身（可能晚于 as_of 的）知识自报的——全部弹出、
+    不做确定性锚定，条数记 binary_quality.hindcast_market_anchor_dropped（仅 >0 时写）。
+    False（实时运行）→ 行为逐字节不变。
     """
     target_rows = _clean_target_propositions(target_propositions)
     latest_actual_rule = str(numeric_guard_mode or "").strip().lower() == "shadow"
@@ -3586,12 +3591,22 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                 _dropped += 1
         if _dropped:
             logger.info("二元预测锚定：弹出 %d 条指向已过截止日市场的模型自报锚点", _dropped)
+    # FU-7（TIME-6 遗留）：回测钉下市场全程扣下，模型自报的锚点是参数化知识（可能晚于 as_of），
+    # 一律弹出且不做确定性锚定（失败关闭）。
+    hindcast_anchors_dropped = 0
+    if withhold_market_anchors:
+        for b in binaries:
+            if b.pop("market_anchor", None) is not None:
+                hindcast_anchors_dropped += 1
+        if hindcast_anchors_dropped:
+            logger.warning("回测钉：弹出 %d 条模型自报的市场锚点（回测扣下市场数据）",
+                           hindcast_anchors_dropped)
     # PM-2：确定性市场锚定 + 10pp 分歧有界重述 + 对照负载。任何失败 → 保留无锚点结果
     # （_normalize_binaries 已回填的模型自愿锚点仍在），即今日行为（degrade-safe）。
     market_comparison: Optional[Dict[str, Any]] = None
     # INFRA-3: truncated replies of the market passes, by pass (see _count_truncation).
     market_truncation: Dict[str, int] = {}
-    if binaries and (anchor_markets or []):
+    if binaries and (anchor_markets or []) and not withhold_market_anchors:
         try:
             anchor_binaries_to_markets(binaries, anchor_markets, llm, language=language,
                                        now=anchor_now, truncation_counts=market_truncation)
@@ -3636,6 +3651,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         _bq_prov["provenance_downgrades"] = provenance_downgrades
         if window_ended_rows:
             _bq_prov["market_window_ended_excluded"] = len(window_ended_rows)
+        if hindcast_anchors_dropped:
+            _bq_prov["hindcast_market_anchor_dropped"] = hindcast_anchors_dropped
         if market_table_stripped:
             _bq_prov["market_table_stripped"] = market_table_stripped
         if market_table_strip_skipped:
