@@ -58,8 +58,10 @@ The contract of :func:`edgar_statements` (SEC EDGAR XBRL company facts):
   filing reported: the latest filing on or before ``as_of`` wins, so an
   amendment or a recast counts from its own filing date.  A fact whose period
   ends after its own filing date (a context-date typo) is skipped too, so no
-  served period ends after ``as_of``.  A post-condition re-checks every served
-  value and fails closed (``unavailable``).
+  served period ends after ``as_of``, and so is a balance dated after the
+  period its own filing reports (a liquidity or debt note's later "as of"
+  date is no statement period).  A post-condition re-checks every served value
+  and fails closed (``unavailable``).
 * Never derived.  A quarter is a 60-115 day span and a fiscal year a 300-400
   day span reported by an annual-report form; no fourth quarter is computed
   from the annual total and no year-to-date figure is split, so quarterly
@@ -68,11 +70,12 @@ The contract of :func:`edgar_statements` (SEC EDGAR XBRL company facts):
   never summed across tags, and each period keeps its own unit.  A table row
   whose values were filed under more than one tag marks the cells of the other
   tags and names every tag, so no change of concept is hidden.
-* Identity.  A CIK is used as given and named by the filer's name in
-  companyfacts; a ticker is resolved through SEC's current ticker map, which
-  the result says when ``as_of`` is in the past.  The
-  User-Agent SEC requires (a name and a contact address) is sent with every
-  request and never written into a result, cache file or log line.
+* Identity.  A CIK is used as given; a ticker is resolved through SEC's
+  current ticker map, which the result says when ``as_of`` is in the past.
+  Either is named by the filer's name in companyfacts, so a filer other than
+  the one meant shows.  The User-Agent SEC requires (a name and a contact
+  address) is sent with every request and never written into a result, cache
+  file or log line.
 * Cache.  The ticker map and each company's companyfacts (reduced to the tags
   the statement lines use, which the entry records: an entry reduced to another
   tag set is a miss; each tag's units kept in the filer's order, so a hit
@@ -1111,6 +1114,7 @@ EDGAR_UNTAGGED = "not tagged by this filer"
 EDGAR_TICKER_NOTE = "Ticker resolved via today's SEC ticker map."
 EDGAR_CASH_FLOW_NOTE = "cash-flow statements are filed year-to-date; quarterly cash-flow values are not derived"
 EDGAR_UA_REJECTED = "sec_user_agent_rejected"
+_EDGAR_RATE_LIMIT_PAGE = "request rate threshold"  # in SEC's 403 page for an address over 10 requests a second
 EDGAR_NO_US_GAAP = "us-gaap facts absent (IFRS filers not supported in v1)"
 _EDGAR_THROTTLE = _Throttle(0.2)  # SEC's fair-access limit is 10 requests per second
 _NO_VALUE = "—"
@@ -1254,18 +1258,38 @@ def _unit_rows(tag_rows: Sequence[tuple[str, Any]]) -> Iterator[tuple[str, str, 
                 yield tag, unit, rows
 
 
+def _report_period_ends(facts: Mapping[str, Sequence[Sequence[Any]]], as_of: _dt.date) -> dict[str, _dt.date]:
+    """{accession: the end of the period that filing reports} over every tag and unit of ``facts``
+    (as :func:`_needed_facts` keeps them): the latest end of a well-formed duration of at least a
+    quarter (:data:`SPAN_QUARTER`'s lower bound) filed on or before ``as_of``.  A shorter duration (a
+    subsequent-events note's month to date) does not move a period end, and an accession reporting
+    no such duration has none."""
+    ends: dict[str, _dt.date] = {}
+    for tag, unit, rows in _unit_rows([(tag, dict(pairs)) for tag, pairs in facts.items()]):
+        for row in rows:
+            fact = _parse_fact(row, tag, unit)
+            if (fact is not None and fact.filed <= as_of and fact.span_days is not None
+                    and fact.span_days >= SPAN_QUARTER[0]):
+                ends[fact.accn] = max(fact.end, ends.get(fact.accn, fact.end))
+    return ends
+
+
 def _as_filed(tag_rows: Sequence[tuple[str, Any]], as_of: _dt.date, span: tuple[int, int],
-              annual_forms: tuple[str, ...] = EDGAR_ANNUAL_FORMS) -> dict[_dt.date, _FiledValue]:
+              annual_forms: tuple[str, ...] = EDGAR_ANNUAL_FORMS, *,
+              report_ends: Mapping[str, _dt.date] = MappingProxyType({})) -> dict[_dt.date, _FiledValue]:
     """{period end: value} of one statement line as it stood on ``as_of``, oldest first.
 
     ``tag_rows`` is ``(tag, {unit: [companyfacts rows]})`` in priority order.  A fact counts only
     when its dates parse and it was filed on or before ``as_of``; a duration (a fact with a start)
-    must span ``span`` days (inclusive) while an instant passes.  The first (tag, unit) pair serving
-    a period end owns it: values are never summed across tags or units, a later pair cannot claim
-    the period, and each period keeps its own unit.  With ``annual_forms`` (a fiscal-year reading) a
-    period end must be reported by one of those forms, but its value is the latest filing of any
-    form on or before ``as_of`` (ties: the later accession), so an amendment or an 8-K/6-K recast
-    counts from its own filing date.  Nothing is derived: no fourth quarter, no year-to-date split.
+    must span ``span`` days (inclusive) while an instant passes unless it is dated after the period
+    its own filing reports (``report_ends``, :func:`_report_period_ends`): a liquidity, going-concern
+    or debt note tags a balance "as of" a later date too, and that date is no statement period.  The
+    first (tag, unit) pair serving a period end owns it: values are never summed across tags or
+    units, a later pair cannot claim the period, and each period keeps its own unit.  With
+    ``annual_forms`` (a fiscal-year reading) a period end must be reported by one of those forms, but
+    its value is the latest filing of any form on or before ``as_of`` (ties: the later accession), so
+    an amendment or an 8-K/6-K recast counts from its own filing date.  Nothing is derived: no fourth
+    quarter, no year-to-date split.
     """
     low, high = span
     served: dict[_dt.date, _FiledValue] = {}
@@ -1276,7 +1300,10 @@ def _as_filed(tag_rows: Sequence[tuple[str, Any]], as_of: _dt.date, span: tuple[
             fact = _parse_fact(row, tag, unit)
             if fact is None or fact.filed > as_of or fact.end in served:
                 continue
-            if fact.span_days is not None and not low <= fact.span_days <= high:
+            if fact.span_days is None:
+                if fact.end > report_ends.get(fact.accn, fact.end):
+                    continue
+            elif not low <= fact.span_days <= high:
                 continue
             if not annual_forms or fact.form in annual_forms:
                 covered.add(fact.end)
@@ -1344,10 +1371,15 @@ def _edgar_get(transport: Transport, url: str, *, agent: str, timeout: float) ->
 
 def _edgar_http_failure(code: int, payload: Any, text: str, *, document: str) -> Optional[tuple[str, str]]:
     """``(status, detail)`` of an SEC answer that is not a JSON object with HTTP 200, else None.  SEC
-    refuses a request whose User-Agent names no contact with 403; anything else (a 429 or 5xx
-    throttle, a transport failure) is ``unavailable`` too."""
+    refuses a request whose User-Agent names no contact with 403, and with 403 too an address over
+    its request rate (several DRF processes together can be; its page says so, and the detail then
+    says to retry rather than to change a valid User-Agent); anything else (a 429 or 5xx throttle, a
+    transport failure) is ``unavailable`` too."""
     if code == 200 and isinstance(payload, Mapping):
         return None
+    if code == 403 and _EDGAR_RATE_LIMIT_PAGE in text.lower():
+        return STATUS_UNAVAILABLE, (f"SEC EDGAR answered HTTP 403 for {document} with its rate-limit page (Request "
+                                    "Rate Threshold Exceeded): retry later")
     if code == 403:
         return STATUS_UNAVAILABLE, EDGAR_UA_REJECTED
     if code == 0:
@@ -1482,6 +1514,7 @@ def _edgar_sections(facts: Mapping[str, Sequence[Sequence[Any]]], as_of: _dt.dat
     fiscal-year table, or a quarterly table of the income and balance lines plus a fiscal-year table
     of the cash-flow lines (filed year to date: only a first quarter would pass the quarter span, and
     no later quarter is derived)."""
+    report_ends = _report_period_ends(facts, as_of)
 
     def section(lines: Sequence[EdgarLine], annual: bool) -> _Section:
         rows = []
@@ -1489,7 +1522,7 @@ def _edgar_sections(facts: Mapping[str, Sequence[Sequence[Any]]], as_of: _dt.dat
             # dict() of the [unit, rows] pairs keeps the filer's unit order.
             tag_rows = [(tag, dict(facts[tag])) for tag in line.tags if tag in facts]
             served = _as_filed(tag_rows, as_of, SPAN_ANNUAL if annual else SPAN_QUARTER,
-                               EDGAR_ANNUAL_FORMS if annual else ())
+                               EDGAR_ANNUAL_FORMS if annual else (), report_ends=report_ends)
             rows.append((line, _tagged_by(tag_rows, as_of), served))
         return _Section(annual, EDGAR_ANNUAL_PERIODS if annual else EDGAR_QUARTERLY_PERIODS, tuple(rows))
 
@@ -1718,7 +1751,9 @@ def _render_edgar(sections: Sequence[_Section], *, who: str, cik: str, as_of: _d
                 "value": format(fact.val, "f"), "unit": fact.unit,
                 "text": _edgar_value_text(fact.val, fact.unit, ENGLISH), "observation_date": fact.end.isoformat(),
                 "period_start": fact.start.isoformat() if fact.start else None,
-                "period": "fiscal year" if section.annual else "quarter", "tag": f"us-gaap:{fact.tag}",
+                # A balance is a value at the period's end, as its sentence says ("at FY end ...").
+                "period": ("fiscal year" if section.annual else "quarter") + (" end" if fact.start is None else ""),
+                "tag": f"us-gaap:{fact.tag}",
                 "form": fact.form, "filed": fact.filed.isoformat(), "accn": fact.accn, "url": url,
                 "value_type": "actual", "provenance_kind": "structured",
             })
@@ -1799,12 +1834,13 @@ def _edgar_statements(company: Any, *, as_of: Any, freq: Any, user_agent: Any, l
     if isinstance(snapshot, tuple):
         logger.debug("data_tools: SEC EDGAR CIK %s -> %s", cik, snapshot[0])
         return _failure(*snapshot, key=key, url=url, provenance=provenance, source=EDGAR_SOURCE)
-    # A CIK is used as given, so the filer's name is what lets the reader notice a number that names
-    # another company than meant (a non-US exchange code, say).
+    # The filer's name is what lets the reader notice a filer other than the one meant: a CIK is used
+    # as given (a non-US exchange code, say), and a ticker resolves through today's map (reassigned
+    # since a past as_of, it names today's holder).
     name = snapshot["entity_name"]
     provenance["entity_name"] = name
     if kind == "ticker":
-        who = f"{value} (CIK {cik})"
+        who = f"{value} (CIK {cik}, {name})" if name else f"{value} (CIK {cik})"
     else:
         who = f"CIK {cik} ({name})" if name else f"CIK {cik}"
     if not snapshot["us_gaap_present"]:

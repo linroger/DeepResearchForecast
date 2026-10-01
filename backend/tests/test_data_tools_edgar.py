@@ -45,6 +45,10 @@ ACCN = {"2008-11-05": "0001193125-08-224958", "2010-01-25": "0001193125-10-01208
         "2024-11-01": "0000320193-24-000123", "2025-02-07": "0001018724-25-000004",
         "2025-02-10": "0001045810-25-000023", "2025-05-02": "0001018724-25-000036",
         "2026-01-29": "0000320193-26-000006"}
+# The head of the page SEC serves an address over its request rate (HTTP 403).
+RATE_LIMIT_PAGE = ('<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" '
+                   '"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">\n<html xmlns="http://www.w3.org/1999/xhtml">'
+                   "\n<head>\n<title>SEC.gov | Request Rate Threshold Exceeded</title>")
 LINE_RE = re.compile(r"^(?P<who>.+?): (?P<label>.+?) \(us-gaap:(?P<tag>\w+)\), (?P<period>.+?), (?P<form>[0-9A-Z/-]+) "
                      r"filed (?P<filed>\d{4}-\d{2}-\d{2}) \(accession (?P<accn>\d{10}-\d{2}-\d{6})\): (?P<value>.+)\.$")
 
@@ -361,6 +365,65 @@ def test_a_period_ending_after_its_own_filing_is_never_served():
         assert row(result, "Gross profit") == [dtools.EDGAR_UNTAGGED] * 2  # its only fact is malformed
 
 
+@pytest.mark.parametrize("freq", ["annual", "quarterly"])
+def test_a_balance_dated_after_the_period_its_filing_reports_is_not_a_column(freq):
+    """A 10-K's liquidity, going-concern or debt note tags cash "as of" a date after the fiscal year,
+    without a dimension, and companyfacts carries that fact: it is no fiscal-year (or quarter) end."""
+    transport = with_facts({
+        "RevenueFromContractWithCustomerExcludingAssessedTax": {"units": {"USD": [
+            _fact("2024-09-28", 391_035_000_000, "2024-11-01", start="2023-09-30"),
+            _fact("2023-09-30", 383_285_000_000, "2024-11-01", start="2022-09-25")]}},
+        "CashAndCashEquivalentsAtCarryingValue": {"units": {"USD": [
+            _fact("2024-09-28", 29_943_000_000, "2024-11-01"), _fact("2023-09-30", 29_965_000_000, "2024-11-01"),
+            _fact("2024-10-25", 31_000_000_000, "2024-11-01")]}}})
+    result = call(transport, company="320193", as_of=dt.date(2024, 11, 15), freq=freq)
+    assert result.status == dtools.STATUS_OK
+    assert columns(result) == ["2024-09-28", "2023-09-30"] and row(result, "Cash") == ["29,943", "29,965"]
+    assert "2024-10-25" not in result.model_text + result.page_text and "31,000" not in result.model_text
+    assert not any("FY end 2024-10-25" in text or "quarter end 2024-10-25" in text for text in result.supports)
+    [cash] = [fact for fact in result.facts if fact["metric"] == "Cash"]
+    assert (cash["observation_date"], cash["value"]) == ("2024-09-28", "29943000000")
+    assert cash["period"] == ("fiscal year end" if freq == "annual" else "quarter end")
+
+
+def test_one_note_date_per_annual_report_never_displaces_a_fiscal_year(monkeypatch):
+    """With a note's later balance date in every 10-K, the columns are still the five fiscal years
+    (and six quarters), each with the statement's values."""
+    monkeypatch.setattr(dtools, "MODEL_TEXT_MAX_CHARS", 4000)  # the periods are under test, not the cap
+    transport = _filer()
+    transport.facts[1]["facts"]["us-gaap"]["CashAndCashEquivalentsAtCarryingValue"] = {"units": {"USD": [
+        _fact(day, 20_000_000_000 + year, f"{year}-11-04", accn=f"0000999999-{year % 100:02d}-000100")
+        for year in range(2019, 2026) for day in (f"{year}-09-30", f"{year}-11-01")]}}
+    annual = call(transport, company="999999", as_of=dt.date(2026, 1, 1))
+    assert columns(annual) == ["2025-09-30", "2024-09-30", "2023-09-30", "2022-09-30", "2021-09-30"]
+    assert dtools._NO_VALUE not in row(annual, "Revenue") and row(annual, "Cash")[0] == "20,000.002025"
+    quarterly = call(transport, company="999999", as_of=dt.date(2026, 1, 1), freq="quarterly")
+    assert columns(quarterly) == ["2025-09-30", "2025-06-30", "2025-03-31", "2024-12-31", "2024-09-30", "2024-06-30"]
+    for result in (annual, quarterly):
+        assert "-11-01" not in result.model_text + result.page_text
+
+
+def test_a_filings_period_end_is_its_latest_duration_of_a_quarter_or_more():
+    """A subsequent-events note's month to date does not move the period end; a filing reporting
+    only balances (TradingAgents' Apple 2008 fixture) has none, so its balances all count."""
+    k_accn, q_accn = ACCN["2024-11-01"], "0000320193-24-000090"
+    facts = {"NetIncomeLoss": [["USD", [
+        _fact("2024-09-28", 1, "2024-11-01", start="2023-09-30"),
+        _fact("2024-10-25", 2, "2024-11-01", start="2024-09-29"),
+        _fact("2024-06-29", 3, "2024-08-02", form="10-Q", start="2024-03-31", accn=q_accn),
+        _fact("2025-06-28", 4, "2025-08-01", form="10-Q", start="2025-03-30", accn="0000320193-25-000070"),
+        _fact("2024-09-28", 5, "2024-11-01", start="2023-09-30", accn="not an accession")]]],
+        "Assets": [["USD", [_fact("2024-10-25", 6, "2024-11-01"), _fact("2008-09-27", 7, "2008-11-05")]]]}
+    as_of = dt.date(2025, 1, 1)
+    ends = dtools._report_period_ends(facts, as_of)
+    assert ends == {k_accn: dt.date(2024, 9, 28), q_accn: dt.date(2024, 6, 29)}  # the 2025 10-Q is after as_of
+    rows = usd_rows([("Assets", [_fact("2024-09-28", 8, "2024-11-01"), _fact("2024-10-25", 9, "2024-11-01"),
+                                 _fact("2008-09-27", 10, "2008-11-05")])])
+    served = dtools._as_filed(rows, as_of, dtools.SPAN_ANNUAL, report_ends=ends)
+    assert {end: fact.val for end, fact in served.items()} == {dt.date(2008, 9, 27): 10, dt.date(2024, 9, 28): 8}
+    assert dt.date(2024, 10, 25) in dtools._as_filed(rows, as_of, dtools.SPAN_ANNUAL)  # without the filings' ends
+
+
 def test_the_latest_filing_wins_ties_to_the_later_accession():
     first = _fact("2024-09-28", 1_000_000, "2024-11-01", start="2023-09-30", accn="0000320193-24-000123")
     second = dict(first, val=2_000_000, accn="0000320193-24-000124")
@@ -372,8 +435,8 @@ def test_the_latest_filing_wins_ties_to_the_later_accession():
 def test_an_injected_fact_filed_after_as_of_fails_closed(monkeypatch, caplog):
     real = dtools._as_filed
 
-    def leaky(tag_rows, as_of, span, annual_forms=dtools.EDGAR_ANNUAL_FORMS):
-        served = real(tag_rows, as_of, span, annual_forms)
+    def leaky(tag_rows, as_of, span, annual_forms=dtools.EDGAR_ANNUAL_FORMS, **kwargs):
+        served = real(tag_rows, as_of, span, annual_forms, **kwargs)
         if tag_rows and tag_rows[0][0] == "Assets":
             served[dt.date(2024, 9, 28)] = dtools._FiledValue(
                 val=Decimal(1), unit="USD", tag="Assets", form="10-K", filed=as_of + dt.timedelta(days=1),
@@ -390,8 +453,8 @@ def test_an_injected_fact_filed_after_as_of_fails_closed(monkeypatch, caplog):
 def test_a_served_value_without_its_filing_identity_fails_closed(monkeypatch):
     real = dtools._as_filed
 
-    def anonymous(tag_rows, as_of, span, annual_forms=dtools.EDGAR_ANNUAL_FORMS):
-        served = real(tag_rows, as_of, span, annual_forms)
+    def anonymous(tag_rows, as_of, span, annual_forms=dtools.EDGAR_ANNUAL_FORMS, **kwargs):
+        served = real(tag_rows, as_of, span, annual_forms, **kwargs)
         return {end: dtools._FiledValue(**{**fact.__dict__, "accn": ""}) for end, fact in served.items()}
 
     monkeypatch.setattr(dtools, "_as_filed", anonymous)
@@ -402,8 +465,8 @@ def test_an_injected_period_ending_after_its_filing_fails_closed(monkeypatch):
     """Filed by as_of, but of a period that had not ended: the post-condition refuses it too."""
     real = dtools._as_filed
 
-    def future_period(tag_rows, as_of, span, annual_forms=dtools.EDGAR_ANNUAL_FORMS):
-        served = real(tag_rows, as_of, span, annual_forms)
+    def future_period(tag_rows, as_of, span, annual_forms=dtools.EDGAR_ANNUAL_FORMS, **kwargs):
+        served = real(tag_rows, as_of, span, annual_forms, **kwargs)
         if tag_rows and tag_rows[0][0] == "Assets":
             served[dt.date(2204, 9, 28)] = dtools._FiledValue(
                 val=Decimal(1), unit="USD", tag="Assets", form="10-K", filed=dt.date(2024, 11, 1),
@@ -419,6 +482,10 @@ def test_an_injected_period_ending_after_its_filing_fails_closed(monkeypatch):
 @pytest.mark.parametrize("answer, status, detail", [
     ((404, None, "Not Found"), dtools.STATUS_NO_XBRL_FACTS, "SEC EDGAR holds no XBRL company facts for CIK 0000320193"),
     ((403, None, "Undeclared Automated Tool"), dtools.STATUS_UNAVAILABLE, "sec_user_agent_rejected"),
+    # SEC answers an address over 10 requests a second with 403 too: the User-Agent is not at fault.
+    ((403, None, RATE_LIMIT_PAGE), dtools.STATUS_UNAVAILABLE,
+     "SEC EDGAR answered HTTP 403 for companyfacts with its rate-limit page (Request Rate Threshold Exceeded): "
+     "retry later"),
     ((429, None, ""), dtools.STATUS_UNAVAILABLE, "SEC EDGAR answered HTTP 429 for companyfacts"),
     ((503, None, ""), dtools.STATUS_UNAVAILABLE, "SEC EDGAR answered HTTP 503 for companyfacts"),
     ((500, None, ""), dtools.STATUS_UNAVAILABLE, "SEC EDGAR answered HTTP 500 for companyfacts"),
@@ -444,6 +511,8 @@ def test_companyfacts_status_mapping(answer, status, detail, tmp_path):
 
 @pytest.mark.parametrize("answer, detail", [
     ((403, None, ""), "sec_user_agent_rejected"),
+    ((403, None, RATE_LIMIT_PAGE.upper()), "SEC EDGAR answered HTTP 403 for the ticker map with its rate-limit page "
+                                           "(Request Rate Threshold Exceeded): retry later"),
     ((404, None, ""), "SEC EDGAR answered HTTP 404 for the ticker map"),
     ((503, None, ""), "SEC EDGAR answered HTTP 503 for the ticker map"),
     ((200, {"0": {"ticker": "AAPL"}}, ""), "SEC EDGAR answered the ticker map without a usable entry"),
@@ -680,12 +749,19 @@ def test_a_cut_name_reads_back_from_the_cache_as_written(tmp_path):
 
 
 def test_a_ticker_names_its_basis_and_a_past_as_of_says_the_map_is_todays():
+    """Today's map can name another filer than the ticker's holder at a past as_of: the filer's name
+    is shown wherever the CIK is, so the agent sees whose statements these are."""
     past = call(company="aapl", as_of=dt.date(2024, 11, 15))
     assert past.provenance["identity_basis"] == "sec_current_ticker_map" and past.provenance["company"] == "AAPL"
     assert "Ticker resolved via today's SEC ticker map." in past.model_text.splitlines()
-    assert sentences(past)[0]["who"] == "AAPL (CIK 0000320193)"
+    who = "AAPL (CIK 0000320193, Apple Inc.)"
+    assert past.model_text.splitlines()[0] == f"SEC EDGAR as-filed statements: {who}, annual, us-gaap XBRL company facts"
+    assert {match["who"] for match in sentences(past)} == {who} and {fact["company"] for fact in past.facts} == {who}
     today = call(company="AAPL", as_of=NOW.date())
     assert today.status == dtools.STATUS_OK and dtools.EDGAR_TICKER_NOTE not in today.model_text
+    unnamed = call(FakeSEC(facts=(200, {key: value for key, value in FACTS.items() if key != "entityName"}, "")))
+    assert unnamed.status == dtools.STATUS_OK and {match["who"] for match in sentences(unnamed)} == {"AAPL (CIK 0000320193)"}
+    assert unnamed.model_text.splitlines()[0].startswith("SEC EDGAR as-filed statements: AAPL (CIK 0000320193), annual")
 
 
 def test_a_share_class_ticker_resolves_with_a_dot_or_a_hyphen():
@@ -869,15 +945,15 @@ def test_the_marks_follow_the_shown_columns_and_suffice_for_every_line():
 
 def test_the_spec_sentence_and_the_structured_facts():
     result = call(as_of=dt.date(2024, 11, 15))
-    assert ("AAPL (CIK 0000320193): Revenue (us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax), FY ending "
-            "2024-09-28, 10-K filed 2024-11-01 (accession 0000320193-24-000123): 391,035 million USD "
+    assert ("AAPL (CIK 0000320193, Apple Inc.): Revenue (us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax), "
+            "FY ending 2024-09-28, 10-K filed 2024-11-01 (accession 0000320193-24-000123): 391,035 million USD "
             "(391.0 billion USD).") in result.page_text.splitlines()
     assert "USD millions; facts filed on or before 2024-11-15, at the values filed then" in result.model_text
     assert result.url == ("https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000320193&type=10-K"
                           "&dateb=20241115")
     assert call(as_of=dt.date(2024, 11, 15), freq="quarterly").url.endswith("&type=10-Q&dateb=20241115")
     assert result.key == "edgar:0000320193:annual@2024-11-15" and result.date == "2024-11-01"
-    assert result.title == "AAPL (CIK 0000320193) annual statements as filed on or before 2024-11-15, SEC EDGAR"
+    assert result.title == "AAPL (CIK 0000320193, Apple Inc.) annual statements as filed on or before 2024-11-15, SEC EDGAR"
     assert result.provenance == {"vendor": "sec_edgar", "company": "AAPL", "identity_basis": "sec_current_ticker_map",
                                  "freq": "annual", "as_of": "2024-11-15", "cik": "0000320193",
                                  "entity_name": "Apple Inc.", "taxonomy": "us-gaap",
@@ -885,13 +961,16 @@ def test_the_spec_sentence_and_the_structured_facts():
     by_metric = {fact["metric"]: fact for fact in result.facts}
     assert set(by_metric) == {"Revenue", "Diluted EPS", "Total assets", "Total liabilities"}  # one per served line
     assert by_metric["Revenue"] == {
-        "source": "SEC EDGAR", "cik": "0000320193", "company": "AAPL (CIK 0000320193)", "metric": "Revenue",
+        "source": "SEC EDGAR", "cik": "0000320193", "company": "AAPL (CIK 0000320193, Apple Inc.)", "metric": "Revenue",
         "value": "391035000000", "unit": "USD", "text": "391,035 million USD (391.0 billion USD)",
         "observation_date": "2024-09-28", "period_start": "2023-09-30", "period": "fiscal year",
         "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax", "form": "10-K", "filed": "2024-11-01",
         "accn": "0000320193-24-000123", "url": result.url, "value_type": "actual", "provenance_kind": "structured"}
     assert by_metric["Total assets"]["observation_date"] == "2024-09-28"  # the latest period of the line
     assert by_metric["Total assets"]["period_start"] is None
+    assert by_metric["Total assets"]["period"] == "fiscal year end"  # a balance, as its sentence says ("at FY end")
+    quarterly = {fact["metric"]: fact for fact in call(as_of=dt.date(2024, 11, 15), freq="quarterly").facts}
+    assert quarterly["Total assets"]["period"] == "quarter end"
 
 
 def test_a_billion_figure_verifies_through_the_page_number_parser():
@@ -906,8 +985,8 @@ def test_a_billion_figure_verifies_through_the_page_number_parser():
 def test_supports_follow_the_run_language():
     result = call(as_of=dt.date(2024, 11, 15), language=dtools.CHINESE)
     assert result.page_text.splitlines()[0] == (
-        "AAPL (CIK 0000320193)：营业收入（us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax），截至 2024-09-28 的财年，"
-        "10-K 于 2024-11-01 提交（申报编号 0000320193-24-000123）：391,035百万美元（3,910.4亿美元）。")
+        "AAPL (CIK 0000320193, Apple Inc.)：营业收入（us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax），"
+        "截至 2024-09-28 的财年，10-K 于 2024-11-01 提交（申报编号 0000320193-24-000123）：391,035百万美元（3,910.4亿美元）。")
     assert "6.08 美元/股" in result.page_text and "364,980百万美元（3,649.8亿美元）" in result.page_text
     assert "2024-09-28 财年末" in result.page_text
     available = lr.page_number_set(result.page_text)
@@ -946,7 +1025,7 @@ def _widest_filer():
     """Every line at the widest cell a well-formed fact can make (18 digits in a 40-character unit) in
     every column of six fiscal years and quarters (a fourth quarter tagged as filed, so no quarter
     column has a gap), the long-term debt row under its noted tag, the latest filing under the longest
-    form (a recast of each fiscal year) and a CIK named at the name's full length."""
+    form (a recast of each fiscal year) and the longest ticker naming a CIK at the name's full length."""
     unit, value, form = "X" * 40, -999_999_999_999_999_999, "ABCDEFGHIJKLMNOPQRST"
     us_gaap = {}
     for line in dtools.EDGAR_LINES_US_GAAP:
@@ -965,17 +1044,27 @@ def _widest_filer():
                 rows.append(_fact(f"{year}-12-31", value, recast_filed, form=form, start=f"{year}-10-01",
                                   accn=accn + "3"))
         us_gaap[tag] = {"units": {unit: rows}}
-    return FakeSEC(facts=(200, {"cik": 1, "entityName": "W" * 80, "facts": {"us-gaap": us_gaap}}, ""))
+    return FakeSEC(facts=(200, {"cik": 1, "entityName": "W" * 80, "facts": {"us-gaap": us_gaap}}, ""),
+                   tickers=(200, {"0": {"cik_str": 1, "ticker": "ABCDEFGHIJ"}}, ""))
 
 
 @pytest.mark.parametrize("freq", ["annual", "quarterly"])
-def test_the_widest_well_formed_statement_fits_without_a_cut(freq):
+def test_the_widest_well_formed_statement_fits_without_a_cut(freq, tmp_path):
     """The cap drops whole periods down to one column, and one column of the widest cells fits: the
-    agent's text is never cut mid-table, so its legend and latest-filing lines always arrive."""
-    as_of = dt.date(2026, 9, 30)  # on the fetch day: the header carries the as-fetched clause too
-    result = call(_widest_filer(), company="1", as_of=as_of, freq=freq,
-                  now=dt.datetime(2026, 9, 30, 12, 0, tzinfo=UTC))
-    assert result.status == dtools.STATUS_OK and "SEC data as fetched 2026-09-30T12:00:00Z" in result.model_text
+    agent's text is never cut mid-table, so its legend and latest-filing lines always arrive.  The
+    widest header too: a ten-character ticker named at the name's full length, resolved for a past
+    as_of (the ticker note) from a snapshot SEC answered that day (the as-fetched clause)."""
+    transport, cache = _widest_filer(), dtools._DiskCache(str(tmp_path / "cache"), 86400)
+    as_of = dt.date(2026, 9, 29)
+    call(transport, company="ABCDEFGHIJ", as_of=as_of, freq=freq, cache=cache,
+         now=dt.datetime(2026, 9, 29, 23, 0, tzinfo=UTC))
+    result = call(transport, company="ABCDEFGHIJ", as_of=as_of, freq=freq, cache=cache)  # NOW: the next UTC day
+    assert len(transport.urls("companyfacts")) == 1 and result.status == dtools.STATUS_OK
+    assert result.model_text.splitlines()[:3] == [
+        f"SEC EDGAR as-filed statements: ABCDEFGHIJ (CIK 0000000001, {'W' * 80}), {freq}, us-gaap XBRL company facts",
+        "USD millions; facts filed on or before 2026-09-29, at the values filed then; SEC data as fetched "
+        "2026-09-29T23:00:00Z (a filing made after that is not included)",
+        dtools.EDGAR_TICKER_NOTE]
     tables = sum(text.startswith("| Line |") for text in result.model_text.splitlines())
     assert tables == (2 if freq == "quarterly" else 1)
     assert all(len(columns(result, table)) == 1 for table in range(tables))  # cut down to one column ...
@@ -1013,7 +1102,8 @@ def test_a_section_with_no_period_names_each_line():
     assert "Operating cash flow: not tagged by this filer" in result.model_text.splitlines()
     transport = with_facts({"Assets": FACTS["facts"]["us-gaap"]["Assets"],
                             "NetCashProvidedByUsedInOperatingActivities": {"units": {"USD": [
-                                _fact("2024-06-29", 1_000_000, "2024-11-01", start="2024-03-31", form="10-Q")]}}})
+                                _fact("2024-06-29", 1_000_000, "2024-11-01", start="2024-03-31", form="10-Q",
+                                      accn="0000320193-24-000090")]}}})
     tagged = call(transport, as_of=dt.date(2024, 11, 15), freq="quarterly")
     assert "Operating cash flow: no value filed on or before 2024-11-15" in tagged.model_text.splitlines()
 
