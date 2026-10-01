@@ -399,13 +399,10 @@ def _published_mode_on() -> bool:
     return bool(getattr(Config, "REPORT_FORECAST_LEDGER", True)) and commit_mode() == "published"
 
 
-def _ledger_step(agent: Any, report_id: str, *, report_status: Any, error: Optional[str],
-                 publication_status_fn: Callable[[str], Dict[str, Any]],
-                 load_forecast_fn: Callable[[str], Optional[Dict[str, Any]]],
-                 final_audit_path_fn: Optional[Callable[[str], str]],
-                 now: Optional[datetime]) -> Dict[str, Any]:
-    if not _published_mode_on():
-        return {"status": "disabled"}
+def _report_context(agent: Any) -> Dict[str, Any]:
+    """The ledger context of one report agent, enriched as every post-publication step
+    must see it: ``agent.ledger_context`` plus its simulation id, the owning pipeline's
+    identity when there is no orchestrator context, and the evaluation re-class."""
     raw_context = getattr(agent, "ledger_context", None)
     context = dict(raw_context) if isinstance(raw_context, Mapping) else {}
     context.setdefault("simulation_id", getattr(agent, "simulation_id", None))
@@ -416,7 +413,17 @@ def _ledger_step(agent: Any, report_id: str, *, report_status: Any, error: Optio
         # ensemble member's class and seed.
         for key, value in _owner_identity(context.get("simulation_id")).items():
             context.setdefault(key, value)
-    context = apply_evaluation_context(context, _agent_evaluation_context(agent))
+    return apply_evaluation_context(context, _agent_evaluation_context(agent))
+
+
+def _ledger_step(agent: Any, report_id: str, *, report_status: Any, error: Optional[str],
+                 publication_status_fn: Callable[[str], Dict[str, Any]],
+                 load_forecast_fn: Callable[[str], Optional[Dict[str, Any]]],
+                 final_audit_path_fn: Optional[Callable[[str], str]],
+                 now: Optional[datetime]) -> Dict[str, Any]:
+    if not _published_mode_on():
+        return {"status": "disabled"}
+    context = _report_context(agent)
     return commit_report(
         report_id=report_id,
         report_status=report_status,
@@ -469,7 +476,9 @@ def _eval_bundle_step(agent: Any, report_id: str, *,
                       now: Optional[datetime]) -> Optional[Dict[str, Any]]:
     """EVAL-19 (EVAL_BUNDLE_CAPTURE, default off): freeze the evaluation bundle of a
     publishable report next to it (``eval_bundle.capture_from_agent``) after the ledger
-    commit. Best effort: never changes the report, its status or its artifacts; returns
+    commit. The bundle sees the same enriched context as the ledger row it will be scored
+    against (:func:`_report_context`: owning pipeline, validated as-of anchor, record
+    class). Best effort: never changes the report, its status or its artifacts; returns
     the manifest, or None when off, unpublishable or failed."""
     if not getattr(Config, "EVAL_BUNDLE_CAPTURE", False):
         return None
@@ -478,9 +487,11 @@ def _eval_bundle_step(agent: Any, report_id: str, *,
             return None
         from . import eval_bundle
         from .report_agent import ReportManager
+        context = _report_context(agent)
+        context["record_class"] = _record_class(context, getattr(agent, "scenario_label", ""))
         manifest = eval_bundle.capture_from_agent(
             agent, report_id, report_dir=ReportManager._get_report_folder(report_id),
-            forecast=load_forecast_fn(report_id), now=now)
+            forecast=load_forecast_fn(report_id), now=now, context=context)
         logger.info(f"[eval-bundle] {report_id}: bundle {manifest['bundle_sha256'][:12]} written")
         return manifest
     except Exception as exc:  # noqa: BLE001 — capture must never break a report

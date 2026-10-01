@@ -919,7 +919,8 @@ def _window_ended_label(m: Dict[str, Any], zh: bool) -> str:
             else " — window ended, awaiting settlement")
 
 
-def render_markets_block(markets: List[Dict[str, Any]], lang: str = "en") -> str:
+def render_markets_block(markets: List[Dict[str, Any]], lang: str = "en", *,
+                         now: Optional[datetime] = None) -> str:
     """把市场快照渲染为确定性的 markdown 表（无 LLM；空列表 → ""，注入自动跳过）。
 
     若任一行经过重报价（有 price_at_research 且现价与之不同）→ 追加一列 Δ 展示
@@ -928,13 +929,16 @@ def render_markets_block(markets: List[Dict[str, Any]], lang: str = "en") -> str
     （浅拷贝，调用方不变）；已盖章的行在问题单元格后追加「window ended YYYY-MM-DD, awaiting
     settlement」——行仍保留（其价格仍是证据），未盖章的输出逐字节不变。旗标关 → 不盖章也
     不标注（即便输入行带研究期的 window_ended 章），与旧渲染逐字节一致。
+    ``now`` 把盖章时点钉在给定时刻（EVAL-19 回填按快照时刻渲染，与回填当天无关）；
+    省略 = market_clock_now()，与旧渲染逐字节一致。
     """
     rows = [m for m in (markets or []) if isinstance(m, dict)]
     if not rows:
         return ""
     gate, grace = end_date_gate_settings()
     if gate:
-        rows, _ = stamp_window_ended(rows, now=market_clock_now(), grace_hours=grace)
+        rows, _ = stamp_window_ended(rows, now=now if now is not None else market_clock_now(),
+                                     grace_hours=grace)
     zh = str(lang or "").lower().startswith("zh")
     show_delta = any(_requote_move(m) for m in rows)  # 有价格移动才加 Δ 列
     title = "### Prediction Market Signals (Polymarket)"

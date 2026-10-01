@@ -1,15 +1,21 @@
 """EVAL-19: backfill and verify frozen evaluation bundles (app/services/eval_bundle.py).
 
-    python backend/scripts/eval_bundle.py backfill --pipeline PID
-    python backend/scripts/eval_bundle.py backfill --all-recent N
+    python backend/scripts/eval_bundle.py backfill --pipeline PID [--force [--replace-in-pipeline]]
+    python backend/scripts/eval_bundle.py backfill --all-recent N [--force [--replace-in-pipeline]]
     python backend/scripts/eval_bundle.py verify <bundle_dir>
 
 backfill rebuilds a published report's bundle from its stored handoff (no LLM, no
-network): brief / forecast_inputs / quant from actors.json, dossier from
-research_report.md, market from prediction_markets.json rendered as the research
-table (block note ``backfill_research_snapshot``: the exact report-time market pack
-is not persisted), sim and graph ``unavailable:not_persisted``. Only publishable
-reports are bundled; an existing bundle is kept unless --force.
+network; manifest ``capture: backfill``): brief / forecast_inputs / quant from
+actors.json, dossier from research_report.md, market from prediction_markets.json
+rendered as the research table at the snapshot time (block note
+``backfill_research_snapshot``: the exact report-time market pack is not persisted), sim
+and graph ``unavailable:not_persisted``, targets from the audit-sealed forecast only
+(``ReportManager.load_structured_forecast``; none when unsealed). as_of is resolved as
+the ledger commit resolved it (``ledger_commit.resolve_as_of`` at the report's
+completion time). Only publishable reports are bundled. An existing bundle is kept
+unless --force; a bundle captured in the pipeline (higher fidelity) is replaced only
+with --force --replace-in-pipeline. One pipeline's failure is reported as an ``error``
+row and never aborts the others; the exit code is 1 when any row errored, else 0.
 
 verify re-hashes a bundle: exit 0 when intact, 4 on any integrity failure.
 """
@@ -20,13 +26,14 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.config import Config  # noqa: E402
 from app.services import eval_bundle  # noqa: E402
 
+EXIT_BACKFILL_ERROR = 1
 EXIT_INTEGRITY = 4
 
 
@@ -46,11 +53,26 @@ def _read_text(path: str) -> Optional[str]:
         return None
 
 
-def backfill_pipeline(pipeline_id: str, *, force: bool = False) -> Dict[str, Any]:
+def _report_completed_at(report_id: str) -> Optional[datetime]:
+    """When the report completed (meta.json ``completed_at``; a naive stamp is local
+    time, as generate_report writes it), in UTC; None when unknown."""
+    from app.services.report_agent import ReportManager
+    meta = _read_json(ReportManager._get_report_path(report_id))
+    stamp = meta.get("completed_at") if isinstance(meta, dict) else None
+    if not isinstance(stamp, str) or not stamp.strip():
+        return None
+    try:
+        return datetime.fromisoformat(stamp.strip()).astimezone(timezone.utc)
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
+def backfill_pipeline(pipeline_id: str, *, force: bool = False,
+                      replace_in_pipeline: bool = False) -> Dict[str, Any]:
     """Bundle one pipeline's published report from its handoff; returns a result row."""
+    from app.services.ledger_commit import resolve_as_of
     from app.services.pipeline_orchestrator import PipelineManager, validated_as_of_from_options
     from app.services.report_agent import ReportManager
-    from app.utils.prediction_markets import render_markets_block
 
     state = PipelineManager.load(pipeline_id)
     if not isinstance(state, dict):
@@ -62,36 +84,46 @@ def backfill_pipeline(pipeline_id: str, *, force: bool = False) -> Dict[str, Any
         return {"pipeline": pipeline_id, "report": report_id, "status": "skipped", "reason": "not_publishable"}
     report_dir = ReportManager._get_report_folder(report_id)
     target_dir = eval_bundle.bundle_dir_for(report_dir)
-    if os.path.exists(os.path.join(target_dir, eval_bundle.MANIFEST_NAME)) and not force:
-        return {"pipeline": pipeline_id, "report": report_id, "status": "skipped", "reason": "bundle_exists"}
+    manifest_path = os.path.join(target_dir, eval_bundle.MANIFEST_NAME)
+    if os.path.exists(manifest_path):
+        if not force:
+            return {"pipeline": pipeline_id, "report": report_id, "status": "skipped", "reason": "bundle_exists"}
+        existing = _read_json(manifest_path)
+        if (isinstance(existing, dict) and existing.get("capture") == eval_bundle.CAPTURE_IN_PIPELINE
+                and not replace_in_pipeline):
+            return {"pipeline": pipeline_id, "report": report_id, "status": "skipped",
+                    "reason": "in_pipeline_bundle_exists"}
     handoff = state.get("handoff_dir") or PipelineManager.handoff_dir(pipeline_id)
     actors = _read_json(os.path.join(handoff, "actors.json"))
     built = eval_bundle.research_blocks(
-        actors, _read_text(os.path.join(handoff, "research_report.md")),
-        int(getattr(Config, "EVAL_DOSSIER_CHARS", eval_bundle.DEFAULT_DOSSIER_CHARS)))
-    snapshot = _read_json(os.path.join(handoff, "prediction_markets.json"))
-    markets = snapshot.get("markets") if isinstance(snapshot, dict) else snapshot
-    rows = [m for m in (markets or []) if isinstance(m, dict)] if isinstance(markets, list) else []
-    market_text = render_markets_block(rows) if rows else ""
-    built["market"] = ((market_text, eval_bundle.STATUS_OK) if market_text.strip()
-                       else (None, eval_bundle.unavailable("no_research_snapshot")))
+        actors, _read_text(os.path.join(handoff, "research_report.md")), eval_bundle.dossier_chars())
+    options = state.get("options") if isinstance(state.get("options"), dict) else {}
+    as_of, as_of_source = resolve_as_of({"as_of_date": validated_as_of_from_options(options)}, actors,
+                                        _report_completed_at(report_id))
+    built["market"] = eval_bundle.research_market_block(
+        _read_json(os.path.join(handoff, "prediction_markets.json")),
+        fallback_as_of=as_of if as_of_source != "commit_date" else None)
     built["sim"] = (None, eval_bundle.unavailable("not_persisted"))
     built["graph"] = (None, eval_bundle.unavailable("not_persisted"))
-    options = state.get("options") if isinstance(state.get("options"), dict) else {}
-    as_of = validated_as_of_from_options(options) or (actors.get("as_of_date") if isinstance(actors, dict) else None)
+    forecast = ReportManager.load_structured_forecast(report_id)
     meta = {
+        "capture": eval_bundle.CAPTURE_BACKFILL,
         "ids": {"pipeline": pipeline_id, "report": report_id, "simulation": state.get("simulation_id"),
                 "graph": state.get("graph_id")},
         "as_of": as_of,
+        "as_of_source": as_of_source,
         "central_question": state.get("prompt"),
-        "upstream_models": eval_bundle._upstream_models(pipeline_id),
-        "publication": eval_bundle._publication(report_dir),
+        "upstream_models": eval_bundle.upstream_models(pipeline_id),
+        # The pipeline's own report; its record class and seed are not persisted with it.
+        "run": {"record_class": None, "run_kind": "pipeline", "seed": None},
+        "publication": eval_bundle.publication_hashes(report_dir, forecast_sealed=isinstance(forecast, dict)),
     }
     manifest = eval_bundle.write_bundle(
         target_dir, blocks={n: built[n][0] for n in eval_bundle.BLOCK_NAMES},
         statuses={n: built[n][1] for n in eval_bundle.BLOCK_NAMES},
-        targets=eval_bundle.select_targets(_read_json(os.path.join(report_dir, "forecast.json"))),
-        meta=meta, notes={"market": "backfill_research_snapshot"} if market_text.strip() else None)
+        targets=eval_bundle.select_targets(forecast), meta=meta,
+        notes=({"market": "backfill_research_snapshot"}
+               if built["market"][1] == eval_bundle.STATUS_OK else None))
     return {"pipeline": pipeline_id, "report": report_id, "status": "written", "bundle_dir": target_dir,
             "bundle_sha256": manifest["bundle_sha256"]}
 
@@ -103,9 +135,16 @@ def cmd_backfill(args: argparse.Namespace) -> int:
     else:
         ids = [str(e.get("pipeline_id")) for e in PipelineManager.list_pipelines()
                if e.get("pipeline_id")][:max(0, int(args.all_recent))]
-    results = [backfill_pipeline(pid, force=args.force) for pid in ids]
+    results: List[Dict[str, Any]] = []
+    for pid in ids:
+        try:
+            results.append(backfill_pipeline(pid, force=args.force,
+                                             replace_in_pipeline=args.replace_in_pipeline))
+        except Exception as exc:  # noqa: BLE001 — one pipeline never aborts the batch
+            results.append({"pipeline": pid, "status": "error",
+                            "reason": f"{type(exc).__name__}: {exc}"[:300]})
     print(json.dumps({"results": results}, ensure_ascii=False, indent=2))
-    return 0
+    return EXIT_BACKFILL_ERROR if any(r.get("status") == "error" for r in results) else 0
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
@@ -126,7 +165,9 @@ def build_parser() -> argparse.ArgumentParser:
     who = b.add_mutually_exclusive_group(required=True)
     who.add_argument("--pipeline", default=None, help="one pipeline id")
     who.add_argument("--all-recent", type=int, default=None, metavar="N", help="the N newest pipelines")
-    b.add_argument("--force", action="store_true", help="rewrite an existing bundle")
+    b.add_argument("--force", action="store_true", help="rewrite an existing backfilled bundle")
+    b.add_argument("--replace-in-pipeline", action="store_true",
+                   help="with --force, also replace a bundle captured in the pipeline")
     b.set_defaults(func=cmd_backfill)
     v = sub.add_parser("verify", help=f"re-hash a bundle (exit {EXIT_INTEGRITY} on any mismatch)")
     v.add_argument("bundle_dir")

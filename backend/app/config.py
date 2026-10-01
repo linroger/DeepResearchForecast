@@ -615,7 +615,7 @@ class Config:
     # （brief / forecast_inputs / dossier / quant / graph / sim / market 七个输入块的逐字节副本 +
     # manifest：逐块 sha256、研究目标、上游模型与发布指纹），供 EVAL-20 的块移动研究复用同一输入。
     # 纯旁路：不改报告字节、发布状态与账本；默认关（不写任何文件）。EVAL_DOSSIER_CHARS 为 dossier
-    # 块的头尾切片字符预算（forecast_extractor.slice_head_tail）。
+    # 块的头尾切片字符预算（forecast_extractor.slice_head_tail；≤0 视为默认 16000，回填同规则）。
     EVAL_BUNDLE_CAPTURE = os.environ.get('EVAL_BUNDLE_CAPTURE', 'false').strip().lower() == 'true'
     EVAL_DOSSIER_CHARS = int(os.environ.get('EVAL_DOSSIER_CHARS', '16000') or '16000')
     # EVAL-18: slim per-pipeline cost card. On: the _run finally block writes
