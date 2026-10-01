@@ -13,9 +13,14 @@ Offline: FakeLLMClient-based router; no network, no real LLM.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+import logging
 import os
+import re
+import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -30,6 +35,7 @@ from app.services.hindcast_policy import HINDCAST_POLICY_VERSION
 from app.services.report_agent import ReportAgent, ReportManager
 from tests.conftest import FakeLLMClient
 
+_BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TODAY = datetime.now(timezone.utc).date()
 AS_OF = TODAY - timedelta(days=10)
 
@@ -66,6 +72,18 @@ BINARY_REPLY = {"binary_forecasts": [{
     "id": "F1", "statement": "The ruling is upheld by the end of 2027", "probability": 0.3,
     "resolution_criteria": "Court record shows the ruling upheld by 2027-12-31",
     "theme": "t1", "horizon_year": 2027}]}
+
+# FU-4: page-verified research rows (REPORT-8) and the source list that resolves their [S#].
+VERIFIED_SOURCES = [{"title": "Survey", "url": "https://survey.example/annual-survey", "tier": "S1"}]
+UNLABELLED_TABLE_HEADER = "关键量化指标"
+
+
+def _labelled_rows(count=1):
+    return [{"metric": "Approval rate" + (f", region {i:02d}" if i else ""), "value": str(61 + i),
+             "unit": "%", "as_of_date": _day(-3), "value_type": "actual", "tier": "S1",
+             "source": "Survey", "source_ref": "S1",
+             "source_url": "https://survey.example/annual-survey",
+             "verification": "verified", "verified": True} for i in range(count)]
 
 
 class _RouterLLM(FakeLLMClient):
@@ -118,6 +136,22 @@ def _agent(llm):
     for key, value in defaults.items():
         setattr(a, key, value)
     return a
+
+
+def _constructed_labelled(llm, **over):
+    """A ReportAgent built by its real constructor (FU-4: __init__ decides whether REPORT-8's
+    verified-figures block exists before the spine pack is assembled)."""
+    kwargs = {
+        "graph_id": "g1", "simulation_id": "sim_fu4",
+        "simulation_requirement": "Will the ruling be upheld?", "llm_client": llm,
+        "zep_tools": object(), "situation_brief": "Situation brief.",
+        "actors": {"as_of_date": AS_OF.isoformat(),
+                   "situation_brief": {"current_situation": "The ruling is under review."}},
+        "sources": list(VERIFIED_SOURCES), "research_report": DOSSIER,
+        "quantitative": _labelled_rows(), "timeline_events": list(TIMELINE),
+    }
+    kwargs.update(over)
+    return ReportAgent(**kwargs)
 
 
 @pytest.fixture
@@ -335,6 +369,162 @@ def test_spine_situation_falls_back_to_the_legacy_brief_without_its_timeline(rep
     assert provenance["situation_source"] == "none"
 
 
+def test_spine_pack_uses_the_verified_figures_block_when_the_report_has_one(report_env, monkeypatch):
+    """FU-4 (REPORT-8 open issue): the spine pack gets REPORT-8's labelled verified-figures
+    block (the block Part 2 gets) instead of the unlabelled key-metrics table."""
+    monkeypatch.setattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True, raising=False)
+    agent = _agent(_RouterLLM())
+    baseline, provenance = agent._context_pack_result("spine")
+    assert "| Approval rate | 61 |" in baseline.text and "key_metrics_source" not in provenance
+    verified = "## Verified figures\n| Metric | Value |\n|---|---|\n| Approval rate (verified) | 61% [S1] |"
+    agent._verified_figures = {"rendered": verified}
+    packed, provenance = agent._context_pack_result("spine")
+    assert "Approval rate (verified)" in packed.text and "| Approval rate | 61 |" not in packed.text
+    assert provenance["key_metrics_source"] == "verified_figures"
+    # No rendered block, a failed build (None) or the knob off: the table, byte-identical.
+    for state in ({"rendered": ""}, None):
+        agent._verified_figures = state
+        again, provenance = agent._context_pack_result("spine")
+        assert again.text == baseline.text and "key_metrics_source" not in provenance
+    agent._verified_figures = {"rendered": verified}
+    monkeypatch.setattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", False, raising=False)
+    off, provenance = agent._context_pack_result("spine")
+    assert off.text == baseline.text and "key_metrics_source" not in provenance
+
+
+def test_constructed_report_puts_its_verified_block_in_the_spine_prompt(report_env, monkeypatch):
+    """FU-4 call order: ReportAgent.__init__ builds REPORT-8's block (in
+    _build_background_block) before _derive_and_pin_forecast_spine assembles the spine pack, so
+    the sidecar, the pack and the spine prompt carry the very text Part 2 injects, and no
+    unlabelled table."""
+    _flags(monkeypatch)
+    monkeypatch.setattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True, raising=False)
+    monkeypatch.setattr(Config, "RESEARCH_FORECAST_INPUTS", True, raising=False)
+    llm = _RouterLLM()
+    agent = _constructed_labelled(llm)
+    rendered = agent._verified_figures["rendered"]
+    assert rendered and rendered in agent._background_block
+    os.makedirs(_folder(report_env, "report_fu4"), exist_ok=True)
+    agent._derive_and_pin_forecast_spine("report_fu4")
+
+    sidecar = _read(report_env, "report_fu4", "context_pack_spine.json")
+    assert sidecar["applied"] is True and sidecar["key_metrics_source"] == "verified_figures"
+    assert rendered in sidecar["text"] and UNLABELLED_TABLE_HEADER not in sidecar["text"]
+    assert agent._verified_figures["rendered"] == rendered  # Part 2's input is untouched
+    spine_prompt, = _spine_prompts(llm)
+    assert rendered in spine_prompt and UNLABELLED_TABLE_HEADER not in spine_prompt
+
+
+@pytest.mark.parametrize("init_skips", ["research_forecast_inputs_off", "no_situation_brief"])
+def test_spine_pack_builds_the_verified_block_when_init_did_not(report_env, monkeypatch, init_skips):
+    """FU-4: __init__ reaches REPORT-8's builder only through _build_background_block, which needs
+    a situation brief and RESEARCH_FORECAST_INPUTS. Without it, labelled rows still give the spine
+    pack the verified block (built by the same builder, the same text), and the agent is left as it
+    was: no cached block, so Part 2 and the background block are unchanged."""
+    monkeypatch.setattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True, raising=False)
+    monkeypatch.setattr(Config, "RESEARCH_FORECAST_INPUTS",
+                        init_skips != "research_forecast_inputs_off", raising=False)
+    brief = "" if init_skips == "no_situation_brief" else "Situation brief."
+    agent = _constructed_labelled(_RouterLLM(), situation_brief=brief)
+    assert not hasattr(agent, "_verified_figures")
+    background = agent._background_block
+    reference = _constructed_labelled(_RouterLLM(), situation_brief=brief)
+    expected = reference._build_verified_figures_block()
+    assert expected
+
+    os.makedirs(_folder(report_env, "report_lazy"), exist_ok=True)
+    text = agent._forecast_context_pack("report_lazy", "spine")
+    sidecar = _read(report_env, "report_lazy", "context_pack_spine.json")
+    assert sidecar["applied"] is True and sidecar["key_metrics_source"] == "verified_figures"
+    assert expected in text and UNLABELLED_TABLE_HEADER not in text
+    assert not hasattr(agent, "_verified_figures") and agent._background_block == background
+    assert expected not in background
+
+
+@contextlib.contextmanager
+def _report_agent_warnings():
+    """WARNING+ messages of the report agent's logger (mirofish.* does not propagate, so caplog
+    misses them): a temporary handler on the real logger."""
+    messages = []
+    handler = logging.Handler(level=logging.WARNING)
+    handler.emit = lambda record: messages.append(record.getMessage())
+    log = logging.getLogger("mirofish.report_agent")
+    log.addHandler(handler)
+    try:
+        yield messages
+    finally:
+        log.removeHandler(handler)
+
+
+def _key_metrics_cut_warnings(messages):
+    return [message for message in messages if "已核验指标块" in message and "key_metrics" in message]
+
+
+def test_a_verified_block_over_its_key_metrics_share_is_cut_visibly(report_env, monkeypatch):
+    """FU-4 spec 3: REPORT-8 lets the verified block reach REPORT_VERIFIED_FACTS_MAX_CHARS
+    (6000) while the spine's key_metrics slot gets 20% of FORECAST_CONTEXT_PACK_SPINE_BUDGET
+    plus leftover. A block over its slot keeps its header, its rule and its leading rows and ends
+    with the truncation marker, the sidecar telemetry records the cut, and a warning gives the
+    sizes: never a silent cut. A block that fits is packed whole, without the warning."""
+    monkeypatch.setattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True, raising=False)
+    monkeypatch.setattr(Config, "RESEARCH_FORECAST_INPUTS", True, raising=False)
+    # At the default budget this dossier leaves the slot enough leftover for all 40 listed rows;
+    # 5000 gives it about 2000 chars, so the cut falls inside the table.
+    monkeypatch.setattr(Config, "FORECAST_CONTEXT_PACK_SPINE_BUDGET", 5000, raising=False)
+    agent = _constructed_labelled(_RouterLLM(), quantitative=_labelled_rows(60))
+    rendered = agent._verified_figures["rendered"]
+    header, rule = rendered.split("\n")[:2]
+    assert header.startswith("## Verified-on-page figures") and rule.startswith("Verified only")
+    os.makedirs(_folder(report_env, "report_cut"), exist_ok=True)
+    with _report_agent_warnings() as warnings:
+        text = agent._forecast_context_pack("report_cut", "spine")
+
+    sidecar = _read(report_env, "report_cut", "context_pack_spine.json")
+    stream = sidecar["telemetry"]["streams"]["key_metrics"]
+    assert sidecar["applied"] is True and sidecar["key_metrics_source"] == "verified_figures"
+    assert stream["truncated"] is True and stream["raw_chars"] > stream["allocated_chars"]
+    assert len(rendered) > stream["kept_chars"] > len(header) + len(rule)
+    assert text == sidecar["text"] and text.endswith(cp.TRUNC_MARKER)
+    packed = text[text.index(header):]                     # the key-metrics slot comes last
+    kept = packed[:-len(cp.TRUNC_MARKER)]
+    assert rendered.startswith(kept) and f"{header}\n{rule}" in kept and "| Approval rate |" in kept
+    assert "| Approval rate, region 39 |" in rendered and "region 39" not in kept
+    assert UNLABELLED_TABLE_HEADER not in text
+    warning, = _key_metrics_cut_warnings(warnings)
+    assert f"{stream['raw_chars']} 字" in warning and f"保留 {stream['kept_chars']} 字" in warning
+
+    monkeypatch.setattr(Config, "FORECAST_CONTEXT_PACK_SPINE_BUDGET", 14000, raising=False)
+    whole = _constructed_labelled(_RouterLLM())
+    os.makedirs(_folder(report_env, "report_whole"), exist_ok=True)
+    with _report_agent_warnings() as warnings:
+        text = whole._forecast_context_pack("report_whole", "spine")
+    stream = _read(report_env, "report_whole", "context_pack_spine.json")["telemetry"]["streams"]
+    assert stream["key_metrics"]["truncated"] is False
+    assert text.endswith(whole._verified_figures["rendered"]) and not _key_metrics_cut_warnings(warnings)
+
+
+def test_a_verified_block_left_out_of_its_slot_is_logged(report_env, monkeypatch):
+    """FU-4 spec 3: a key_metrics slot too small for any of the verified block (the packer keeps
+    no partial under 80 chars) drops it whole; that is logged too, not only a cut."""
+    agent = _agent(_RouterLLM())
+    stream = {"raw_chars": 2400, "allocated_chars": 60, "kept_chars": 0,
+              "sections_kept": 0, "sections_dropped": 1, "truncated": False}
+    result = cp.PackResult("Dossier excerpt.", cp.STATUS_OK, {"streams": {"key_metrics": stream}},
+                           "in", "out")
+    provenance = {"as_of_source": "actors", "key_metrics_source": "verified_figures"}
+    monkeypatch.setattr(agent, "_context_pack_result", lambda kind, **_: (result, dict(provenance)))
+    os.makedirs(_folder(report_env, "report_drop"), exist_ok=True)
+    with _report_agent_warnings() as warnings:
+        assert agent._forecast_context_pack("report_drop", "spine") == "Dossier excerpt."
+    warning, = _key_metrics_cut_warnings(warnings)
+    assert "2400 字" in warning and "保留 0 字" in warning and "整块未收录" in warning
+    # The unlabelled table's own cut predates FU-4 and stays unlogged.
+    provenance.pop("key_metrics_source")
+    with _report_agent_warnings() as warnings:
+        agent._forecast_context_pack("report_drop", "spine")
+    assert not _key_metrics_cut_warnings(warnings)
+
+
 def test_invalid_as_of_falls_back_with_a_recorded_digest(report_env, monkeypatch):
     _flags(monkeypatch)
     agent = _agent(_RouterLLM())
@@ -521,17 +711,21 @@ def test_chronology_split_separates_past_and_scheduled_rows(report_env, monkeypa
 
 
 # ----------------------------------------------------------------------- replay script
-def _write_handoff(root):
+def _write_handoff(root, *, dossier=DOSSIER, labelled=False):
+    """A stored handoff under ``root``/pipe_test; ``labelled`` writes page-verified
+    quantitative rows (REPORT-8) and the sources.json that resolves their [S#]."""
     handoff = root / "pipe_test" / "handoff"
     handoff.mkdir(parents=True)
-    (handoff / "research_report.md").write_text(DOSSIER, encoding="utf-8")
+    (handoff / "research_report.md").write_text(dossier, encoding="utf-8")
     actors = {"as_of_date": AS_OF.isoformat(),
               "situation_brief": {"current_situation": "The ruling is under review."}}
     (handoff / "actors.json").write_text(json.dumps(actors), encoding="utf-8")
     (handoff / "timeline.json").write_text(json.dumps(TIMELINE), encoding="utf-8")
-    (handoff / "quantitative.json").write_text(json.dumps(
-        [{"metric": "Approval rate", "value": "61", "as_of_date": _day(-3), "tier": "S1"}]),
-        encoding="utf-8")
+    quantitative = (_labelled_rows() if labelled else
+                    [{"metric": "Approval rate", "value": "61", "as_of_date": _day(-3), "tier": "S1"}])
+    (handoff / "quantitative.json").write_text(json.dumps(quantitative), encoding="utf-8")
+    if labelled:
+        (handoff / "sources.json").write_text(json.dumps(VERIFIED_SOURCES), encoding="utf-8")
     return handoff
 
 
@@ -570,6 +764,128 @@ def test_replay_script_emits_metrics_with_zero_llm_calls(tmp_path, monkeypatch, 
 
     assert replay.main(["--handoff", str(tmp_path / "missing"), "--json"]) == 1
     assert json.loads(capsys.readouterr().out)["errors"][0]["handoff"].endswith("missing")
+
+
+ZH_DOSSIER = "\n\n".join([
+    "# 预测档案",
+    "## 执行摘要\n\n" + "该裁决在年底前维持的前景总体偏稳。\n" * 40,
+    "## 背景\n\n" + "背景分析：监管机构的临时裁决仍在复核之中。\n" * 200,
+])
+
+
+@pytest.mark.parametrize("language", ["English", "Chinese"])
+def test_replay_packs_the_verified_block_a_report_packs(report_env, monkeypatch, language):
+    """FU-4: a handoff with page-verified rows gives the replayed spine pack exactly the pack a
+    live report builds from the same inputs: REPORT-8's verified block with its [S#] resolved
+    from sources.json, in the language ReportAgent.__init__ resolves from the pipeline prompt,
+    the dossier and the brief (a Chinese run gets the Chinese block)."""
+    import scripts.context_pack_replay as replay
+    from app.utils import actors as actors_utils
+
+    monkeypatch.delenv("REPORT_OUTPUT_LANGUAGE", raising=False)
+    monkeypatch.setattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True, raising=False)
+    monkeypatch.setattr(Config, "RESEARCH_FORECAST_INPUTS", True, raising=False)
+    zh = language == "Chinese"
+    handoff = _write_handoff(report_env / "runs", dossier=ZH_DOSSIER if zh else DOSSIER,
+                             labelled=True)
+    prompt = "该裁决会在年底前维持吗？" if zh else "Will the ruling be upheld?"
+    (handoff.parent / "pipeline_state.json").write_text(
+        json.dumps({"prompt": prompt, "options": {}}), encoding="utf-8")
+    loaded = replay.load_handoff(str(handoff))
+    assert loaded["prompt"] == prompt
+    replayed = replay._agent(loaded)
+    live = _constructed_labelled(
+        _RouterLLM(), simulation_requirement=prompt,
+        situation_brief=actors_utils.situation_brief(loaded["actors"]),
+        actors=loaded["actors"], sources=loaded["sources"],
+        research_report=loaded["research_report"],
+        quantitative=loaded["quantitative"], timeline_events=loaded["timeline"])
+    assert live.output_language == replayed.output_language == language
+    rendered = live._verified_figures["rendered"]
+    assert rendered.startswith("## 已核验指标" if zh else "## Verified-on-page figures")
+    assert "[S1]" in rendered
+
+    now = datetime.now(timezone.utc)
+    live_pack, live_provenance = live._context_pack_result("spine", now=now)
+    replay_pack, replay_provenance = replayed._context_pack_result("spine", now=now)
+    assert replay_pack.ok and replay_pack.text == live_pack.text
+    assert replay_provenance == live_provenance
+    assert replay_provenance["key_metrics_source"] == "verified_figures"
+    assert rendered in replay_pack.text and UNLABELLED_TABLE_HEADER not in replay_pack.text
+    # Without labelled rows the replay packs the key-metrics table, as before.
+    plain = replay._agent(replay.load_handoff(str(_write_handoff(report_env / "plain"))))
+    plain_pack, provenance = plain._context_pack_result("spine", now=now)
+    assert "key_metrics_source" not in provenance and UNLABELLED_TABLE_HEADER in plain_pack.text
+
+
+# A child process imports app/utils/logger.py outside conftest's log quarantine, so its file
+# handlers would append to backend/logs/mirofish.log (run forensics). This bootstrap quarantines
+# the child the same way, then runs the replay script with the remaining arguments: LOG_DIR
+# (read by every logger set up later) points at argv[1], and the mirofish file handlers the
+# app package opened on import give way to one handler on argv[1]/mirofish.log.
+_QUARANTINED_REPLAY = """
+import logging, os, runpy, sys
+log_dir = sys.argv.pop(1)
+os.makedirs(log_dir, exist_ok=True)
+import app.utils.logger as app_logger
+app_logger.LOG_DIR = log_dir
+sink = logging.FileHandler(os.path.join(log_dir, 'mirofish.log'), encoding='utf-8')
+for name in [n for n in logging.Logger.manager.loggerDict if n.split('.')[0] == 'mirofish']:
+    log = logging.getLogger(name)
+    for handler in [h for h in log.handlers if getattr(h, 'baseFilename', None)]:
+        log.removeHandler(handler)
+        handler.close()
+        if sink not in log.handlers:
+            log.addHandler(sink)
+runpy.run_path(os.path.join('scripts', 'context_pack_replay.py'), run_name='__main__')
+"""
+
+
+def _log_sizes(folder):
+    """The size of each file in ``folder`` (none when the folder does not exist)."""
+    if not os.path.isdir(folder):
+        return {}
+    return {name: os.path.getsize(os.path.join(folder, name)) for name in os.listdir(folder)
+            if os.path.isfile(os.path.join(folder, name))}
+
+
+def _log_text_since(folder, sizes):
+    """What the files in ``folder`` gained since ``sizes`` was taken (all of a rotated file)."""
+    gained = []
+    for name, size in _log_sizes(folder).items():
+        start = sizes.get(name, 0)
+        with open(os.path.join(folder, name), "rb") as handle:
+            handle.seek(start if size >= start else 0)
+            gained.append(handle.read().decode("utf-8", "replace"))
+    return "".join(gained)
+
+
+def test_replay_json_stays_parseable_when_the_verified_block_logs(tmp_path):
+    """FU-4: REPORT-8's builder logs an INFO line through report_agent's console handler, which
+    app/utils/logger.py binds to stdout; the replay sends it to stderr, so ``--json`` prints one
+    parseable document. Run in a child process, where that handler holds the real stdout, with
+    its log files quarantined under tmp_path as conftest quarantines this process's: the line
+    never reaches backend/logs."""
+    handoff = _write_handoff(tmp_path, labelled=True)
+    sink, backend_logs = tmp_path / "logs", os.path.join(_BACKEND, "logs")
+    env = {key: value for key, value in os.environ.items() if key != "REPORT_OUTPUT_LANGUAGE"}
+    env.update(DRF_TEST_PROCESS="1", REPORT_VERIFIED_FACTS_BLOCK="true")
+    before = _log_sizes(backend_logs)
+    proc = subprocess.run(
+        [sys.executable, "-c", _QUARANTINED_REPLAY, str(sink),
+         "--handoff", str(handoff), "--json"],
+        cwd=_BACKEND, env=env, capture_output=True, text=True, timeout=120)
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    row, = payload["handoffs"]
+    assert payload["errors"] == []
+    assert row["provenance"]["spine"]["key_metrics_source"] == "verified_figures"
+    assert "已核验指标块" in proc.stderr and "已核验指标块" not in proc.stdout
+    # The builder's line names its block's sha256: it is in the quarantine's log file and not
+    # in what backend/logs gained meanwhile (a live run logging there never has this block).
+    sha = re.search(r"已核验指标块：.*sha256 ([0-9a-f]{12})", proc.stderr).group(1)
+    assert sha in (sink / "mirofish.log").read_text(encoding="utf-8")
+    assert sha not in _log_text_since(backend_logs, before)
 
 
 def test_replay_defaults_to_each_handoffs_as_of_day(tmp_path, capsys):
