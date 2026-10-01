@@ -44,8 +44,9 @@ EVAL-3（影子可观测面）：``run`` 与 ``summary`` 的持续校准一律�
 Running score 标注 Brier 口径（情景 multi-class sum, 0-2；二元 binary, 0-1）；未经闸门的
 market_brier 行标明 ungated / not calibration，免被误读为校准数。
 
-EVAL-5 (FORECAST_SKILL_SCORING, default on; read-only): ``run`` and ``summary`` add
-``market_skill`` (``backtest.market_skill_report``, schema market-skill/v1): each folded binary
+EVAL-5 (FORECAST_SKILL_SCORING, default on; read-only): the run_monitor result (each ``run``)
+and the ``summary`` payload add ``market_skill`` (``backtest.market_skill_report``, schema
+market-skill/v1; the ``run`` CLI's per-report rows do not carry it): each folded binary
 settlement (``fold_binary_items`` + ``admissible``, never raw event lines) is joined at read
 time with the anchor its forecast saw (``enrich_market_rows``) and scored against that market
 price, in an exact-equivalence headline stratum, a proxy stratum and an all_produced stratum;
@@ -154,8 +155,14 @@ def skill_min_n() -> int:
 
 
 def divergence_min_confidence() -> float:
-    """The confidence floor of the 10pp revision rule, read as enforce_market_divergence
-    reads it (a non-finite value falls back to its 0.6 default)."""
+    """The confidence floor of the 10pp revision rule (FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE).
+
+    Read like enforce_market_divergence reads it for every finite value, and an unparseable
+    or NaN one falls back to 0.6 on both sides. They part only on ±inf, which the environment
+    cannot set (config_audit.sanitize_numeric_env drops a non-finite value before Config
+    reads it), so only a value assigned to Config directly: enforce compares against it as
+    is (+inf: no candidate, -inf: every candidate), while here it also falls back to 0.6,
+    because market_skill_report takes a finite floor only and the monitor must not raise."""
     floor = _cfg_float("FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE", 0.6)
     return floor if math.isfinite(floor) else 0.6
 
@@ -961,7 +968,8 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
                 threshold: Optional[float] = None,
                 write_report: bool = True,
                 publishable_fn: Any = None,
-                target_meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                target_meta: Optional[Dict[str, Any]] = None,
+                skill_reads: Optional[MarketSkillReads] = None) -> Dict[str, Any]:
     """对一份报告跑一次解析监测。返回结果摘要 dict（供 CLI 打印/聚合）。
 
     可注入 forecast / report_folder / client / ledger_dir / as_of，全离线可测。
@@ -981,7 +989,11 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     False（非生产 primary 目标，或盘上二元预测不是 primary 预登记的那份）时结算照算照报、
     事件一律 not_production_primary，但一条也不入账（settlement.not_recorded）。
     terminal 事件照常入账，但不计入 resolved_count / newly_recorded_count /
-    resolution_records，单列在 terminal_count / newly_terminal_count 与 settlement 里。"""
+    resolution_records，单列在 terminal_count / newly_terminal_count 与 settlement 里。
+
+    EVAL-5（FORECAST_SKILL_SCORING）：结果与 md 另含账本范围的 market_skill
+    （market_skill_summary：admissible 以 processed_at 为时钟；本报告的预测与结算所用原点
+    直接传入）；``skill_reads``（MarketSkillReads）让一批 run 共享逐报告读取。"""
     processed_at = normalize_processed_at(as_of or _utcnow_iso())
     as_of_day = processed_at[:10]
     if report_folder is None:
@@ -1099,9 +1111,14 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     # EVAL-5：市场相对技能（只读；FORECAST_SKILL_SCORING 关 → 结果与 md 均与此前逐字节一致）。
     market_skill: Optional[Dict[str, Any]] = None
     if skill_scoring_enabled():
+        # 结算事件写入时用的预测原点（_market_event 同式：as_of 优先，否则 created_at）。
+        meta = target_meta or {}
+        origin = meta.get("as_of") if meta.get("as_of") not in (None, "") else meta.get("created_at")
         market_skill = _market_skill_or_error(
             ledger_dir=ledger_dir, as_of_day=as_of_day, publishable_fn=publishable_fn,
-            forecasts={str(report_id).strip(): forecast})
+            forecasts={str(report_id).strip(): forecast},
+            origins={str(report_id).strip(): origin},
+            now=parse_stamp_strict(processed_at, allow_date=False), reads=skill_reads)
 
     md = render_monitor_md(
         report_id=report_id, as_of=as_of_day, movers=movers,
@@ -1321,8 +1338,86 @@ def _sealed_forecast_or_none(report_id: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _report_meta_origin(report_id: str) -> Optional[str]:
+    """The forecast origin ``target_meta_for`` gives a report without ledger rows (pre-EVAL-1),
+    which is what its settlements were written with: meta.json's ``created_at`` in UTC (no
+    as-of date); None when it cannot be read."""
+    try:
+        folder = _report_folder(report_id)
+    except Exception as e:  # noqa: BLE001 — 不可定位的报告 → 无原点（eligibility_window 读全部日期）
+        logger.warning(f"定位报告目录失败（无预测原点）: {report_id}: {e}")
+        return None
+    meta = _read_json(os.path.join(folder, "meta.json"))
+    return _local_stamp_to_utc(meta.get("created_at") if isinstance(meta, dict) else None)
+
+
+class MarketSkillReads:
+    """The per-report reads behind ``market_skill_summary``, each made once per report.
+
+    ``run --all-recent N`` scores the whole ledger after each of its N reports, so every
+    monitor_report.md counts the settlements appended before it: the fold over
+    resolutions.jsonl is cheap and is redone each time, but the reads it joins (the sealed
+    forecast.json, the publishable-at-issue proof, meta.json's creation stamp and the
+    report-fallback target) do not change while a batch runs (run_monitor appends settlement
+    events only), so ``_cmd_run`` shares one instance across the batch. One instance serves
+    calls with the same ``publishable_fn``; a report whose forecast a call supplies itself
+    (run_monitor's own) never goes through it."""
+
+    def __init__(self) -> None:
+        self._forecasts: Dict[str, Optional[Dict[str, Any]]] = {}
+        self._proofs: Dict[str, bool] = {}
+        self._origins: Dict[str, Optional[str]] = {}
+        self._report_binaries: Dict[str, List[Dict[str, Any]]] = {}
+
+    def sealed_forecast(self, report_id: str) -> Optional[Dict[str, Any]]:
+        if report_id not in self._forecasts:
+            self._forecasts[report_id] = _sealed_forecast_or_none(report_id)
+        return self._forecasts[report_id]
+
+    def proves_publishable(self, report_id: str, publishable_fn: Any) -> bool:
+        if report_id not in self._proofs:
+            self._proofs[report_id] = _proves_publishable_at_issue(report_id, publishable_fn)
+        return self._proofs[report_id]
+
+    def report_origin(self, report_id: str) -> Optional[str]:
+        if report_id not in self._origins:
+            self._origins[report_id] = _report_meta_origin(report_id)
+        return self._origins[report_id]
+
+    def report_binaries(self, report_id: str, *, ledger_dir: Optional[str],
+                        publishable_fn: Any) -> List[Dict[str, Any]]:
+        """``_report_fallback_binaries``, and [] for a report owned by an evaluation run
+        (``_is_evaluation_report``, the check ``run --all-recent`` excludes it by): the
+        monitor never settles such a report, so its binaries never leave the count."""
+        if report_id not in self._report_binaries:
+            binaries = _report_fallback_binaries(
+                report_id, ledger_dir=ledger_dir,
+                publishable_fn=lambda rid: self.proves_publishable(rid, publishable_fn),
+                load_forecast_fn=self.sealed_forecast)
+            if binaries and _is_evaluation_report(report_id, _EVALUATION_OWNER_MEMO):
+                binaries = []
+            self._report_binaries[report_id] = binaries
+        return self._report_binaries[report_id]
+
+
+def _report_fallback_binaries(report_id: str, *, ledger_dir: Optional[str],
+                              publishable_fn: Callable[[str], Any],
+                              load_forecast_fn: Callable[[str], Any]) -> List[Dict[str, Any]]:
+    """The binaries of a report the monitor settles against the report itself (no production
+    primary commit row: ``forecast_resolution.load_manual_target``'s report fallback, the
+    same gates ``target_meta_for`` and run_monitor apply: no non-production ledger row,
+    publishable at issue, a sealed forecast without an evaluation stamp); [] otherwise."""
+    target, _reason = _settlement.load_manual_target(
+        report_id, ledger_dir=ledger_dir, publishable_fn=publishable_fn,
+        load_forecast_fn=load_forecast_fn)
+    if not isinstance(target, dict) or target.get("source") != _settlement.TARGET_SOURCE_REPORT:
+        return []
+    return [b for b in target.get("binary_forecasts") or [] if isinstance(b, dict)]
+
+
 def market_target_lookup(entries: Optional[List[Dict[str, Any]]], *,
-                         forecasts: Optional[Dict[str, Any]] = None
+                         forecasts: Optional[Dict[str, Any]] = None,
+                         read_forecast: Optional[Callable[[str], Any]] = None
                          ) -> Callable[[str, str], Optional[Dict[str, Any]]]:
     """``lookup(report_id, forecast_id)`` → the binary forecast a settlement is scored against.
 
@@ -1330,9 +1425,9 @@ def market_target_lookup(entries: Optional[List[Dict[str, Any]]], *,
     pre-registered (None when the row lacks it or two rows register it); its forecast.json
     binary, which also carries ``adjustment_rationale``, stands in only when it is byte for
     byte that registration. A report without one (pre-EVAL-1) falls back to the audit-sealed
-    forecast.json (``load_structured_forecast(allow_stale_policy=True)``). ``forecasts``
-    ({report_id: forecast}) replaces that read, e.g. run_monitor's own forecast. Each
-    report's forecast is read once, and only for the items looked up."""
+    forecast.json (``read_forecast``, default ``load_structured_forecast(allow_stale_policy=
+    True)``). ``forecasts`` ({report_id: forecast}) replaces that read, e.g. run_monitor's
+    own forecast. Each report's forecast is read once, and only for the items looked up."""
     registered: Dict[Tuple[str, str], Optional[Dict[str, Any]]] = {}
     committed: Set[str] = set()
     for row in entries or []:
@@ -1344,12 +1439,13 @@ def market_target_lookup(entries: Optional[List[Dict[str, Any]]], *,
             key = (report_id, forecast_id)
             registered[key] = None if key in registered else binary
     overrides = dict(forecasts or {})
+    read = read_forecast if read_forecast is not None else _sealed_forecast_or_none
     sealed: Dict[str, Dict[str, Optional[Dict[str, Any]]]] = {}
 
     def lookup(report_id: str, forecast_id: str) -> Optional[Dict[str, Any]]:
         rid, fid = str(report_id or "").strip(), str(forecast_id or "").strip()
         if rid not in sealed:
-            forecast = overrides[rid] if rid in overrides else _sealed_forecast_or_none(rid)
+            forecast = overrides[rid] if rid in overrides else read(rid)
             sealed[rid] = _binary_index((forecast or {}).get("binary_forecasts")
                                         if isinstance(forecast, dict) else None)
         full = sealed[rid].get(fid)
@@ -1375,33 +1471,38 @@ def _proves_publishable_at_issue(report_id: str, publishable_fn: Any) -> bool:
 
 
 def _skill_gate_reason(item: Dict[str, Any], binary: Optional[Dict[str, Any]],
-                       origin: Any) -> Optional[str]:
+                       origin: Any, now: Optional[datetime] = None) -> Optional[str]:
     """The row's ``gate_reason`` (see ``backtest.market_skill_report``) from a folded item.
 
-    ``admissible`` (EVAL-3, the one point-in-time gate) decides: admitted and settled → None.
-    The writer's equivalence reasons (``backtest.PROXY_GATE_REASONS``) demote to proxy only
-    when nothing else stands in the way: the item must be admitted with that reason lifted,
-    and, since the writer stops at its first failing check, the ``market_eligibility``
-    checks after the equivalence one (the market end date against the binary's deadline,
-    from the forecast ``origin``) must pass with the floor at ``near``; otherwise the reason
-    that then fails (``not_prospective``, ``end_date_mismatch``, ``unverifiable_stamp`` ...)
-    is returned. Every other reason (``conflict``, ``ambiguous_settlement``,
-    ``unresolvable_after_grace``, ``not_prospective``, ...) is returned as is. A market
-    settlement for another market than the anchor's is ``market_mismatch``."""
+    ``admissible`` (EVAL-3, the one point-in-time gate, at ``now``: default the current
+    time) decides whether the outcome may be scored. The writer's equivalence reasons
+    (``backtest.PROXY_GATE_REASONS``) only demote to proxy, and only when the item is
+    admitted with that reason lifted; otherwise the reason that then fails
+    (``not_prospective``, ``unverifiable_stamp`` ...) is returned. Every other reason
+    (``conflict``, ``ambiguous_settlement``, ``unresolvable_after_grace``, ...) is returned
+    as is, a non-settled item is ``not_settled`` and a market settlement for another market
+    than the anchor's is ``market_mismatch``.
+
+    The outcome label and the price it is scored against are separate facts: an admitted
+    outcome (a manual attestation, or a market event the writer stopped checking at the
+    equivalence step) says nothing about whether the anchor's market prices this binary's
+    proposition. So the anchor whose price becomes ``market_p`` must pass
+    ``forecast_resolution.market_eligibility`` with the floor at ``near`` (completeness,
+    the anchor-integrity binding, and the market end date against the binary's deadline
+    from the forecast ``origin`` the writer used), whatever labelled the item; the reason
+    it fails with is returned (``anchor_incomplete``, ``binding_invalid``,
+    ``end_date_mismatch`` ...). A headline row still needs an ``exact`` anchor
+    (``backtest._skill_bucket``), so this keeps every scored row on the binary's own
+    proposition and window, and a proxy row on a ``near`` one."""
     anchor = binary.get("market_anchor") if isinstance(binary, dict) else None
     anchor_market_id = str(anchor.get("market_id") or "").strip() if isinstance(anchor, dict) else ""
-    ok, reason = _settlement.admissible(item)
+    ok, reason = _settlement.admissible(item, now=now)
     gate: Optional[str] = None
     if not ok and reason in _backtest.PROXY_GATE_REASONS:
         lifted_ok, lifted_reason = _settlement.admissible(
-            dict(item, scoring_eligible=True, ineligible_reason=None))
+            dict(item, scoring_eligible=True, ineligible_reason=None), now=now)
         if not lifted_ok:
             return lifted_reason
-        if isinstance(binary, dict):
-            eligible, eligibility_reason = _settlement.market_eligibility(
-                binary, anchor, "near", origin=origin)
-            if not eligible:
-                return eligibility_reason
         gate = reason
     elif not ok:
         return reason or "not_scoring_eligible"
@@ -1410,24 +1511,30 @@ def _skill_gate_reason(item: Dict[str, Any], binary: Optional[Dict[str, Any]],
     if (item.get("source_kind") == _settlement.SOURCE_KIND_MARKET and anchor_market_id
             and str(item.get("market_id") or "").strip() != anchor_market_id):
         return "market_mismatch"
+    if isinstance(binary, dict):
+        eligible, eligibility_reason = _settlement.market_eligibility(
+            binary, anchor, "near", origin=origin)
+        if not eligible:
+            return eligibility_reason
     return gate
 
 
 def _market_skill_row(key: Tuple[str, str], item: Dict[str, Any],
                       binary: Optional[Dict[str, Any]], publishable: bool,
-                      origin: Any = None) -> Dict[str, Any]:
-    """One folded item + its target binary → a ``backtest.market_skill_report`` row."""
+                      origin: Any = None, now: Optional[datetime] = None) -> Dict[str, Any]:
+    """One folded item + its target binary → a ``backtest.market_skill_report`` row.
+    ``market_p`` is derived exactly as the settlement writer stamps ``market_p_at_research``
+    (``forecast_resolution._market_price_at_research``: a finite price_at_research, else a
+    finite implied_yes_prob)."""
     anchor = binary.get("market_anchor") if isinstance(binary, dict) else None
     anchor = anchor if isinstance(anchor, dict) else {}
     market_id = str(anchor.get("market_id") or "").strip()
     if isinstance(binary, dict) and not market_id:
         gate: Optional[str] = "no_market_anchor"
     else:
-        gate = _skill_gate_reason(item, binary, origin)
+        gate = _skill_gate_reason(item, binary, origin, now)
     outcome = str(item.get("outcome") or "").strip().upper()
-    market_p = _coerce_float(anchor.get("price_at_research"))
-    if market_p is None:
-        market_p = _coerce_float(anchor.get("implied_yes_prob"))
+    market_p = _settlement._market_price_at_research(anchor)
     basis: Optional[str] = None
     if all(isinstance(anchor.get(k), str) and anchor[k].strip() for k in _PRICE_TIME_KEYS):
         basis = anchor["price_time_basis"]
@@ -1457,6 +1564,12 @@ def _market_skill_row(key: Tuple[str, str], item: Dict[str, Any],
     }
 
 
+def _primary_report_ids(targets: Optional[List[Dict[str, Any]]]) -> Set[str]:
+    """Report ids with a production primary commit row (EVAL-1) in ``targets``."""
+    return {str(row.get("report_id") or "").strip() for row in targets or []
+            if _is_production_primary(row)} - {""}
+
+
 def _registered_origins(targets: Optional[List[Dict[str, Any]]]
                         ) -> Dict[Tuple[str, str], Any]:
     """``{(report_id, binary id): forecast origin}`` over the production primary commit rows
@@ -1479,7 +1592,9 @@ def _registered_origins(targets: Optional[List[Dict[str, Any]]]
 def enrich_market_rows(resolution_rows: Optional[List[Dict[str, Any]]], *,
                        target_lookup: Callable[[str, str], Optional[Dict[str, Any]]],
                        publishable_fn: Any = None,
-                       targets: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+                       targets: Optional[List[Dict[str, Any]]] = None,
+                       origin_fn: Optional[Callable[[str], Any]] = None,
+                       now: Optional[datetime] = None) -> List[Dict[str, Any]]:
     """``backtest.market_skill_report`` rows from the settlement events, one per folded item.
 
     Pure apart from the injected callables: the scored set is
@@ -1488,16 +1603,21 @@ def enrich_market_rows(resolution_rows: Optional[List[Dict[str, Any]]], *,
     eligible events a ``conflict``; legacy rows proven only against ``targets``), never the
     raw event lines, so each item counts once. ``target_lookup(report_id, forecast_id)``
     (see ``market_target_lookup``) gives the binary whose anchor supplies ``market_p``
-    (price_at_research, else implied_yes_prob), ``equivalence``, ``match_confidence`` and
-    ``price_time_basis``; ``prior_probability`` comes from a ``market_influence`` stamp of
-    that anchor's market that was not rolled back, ``rationale_cites_market`` from
-    ``forecast_extractor._rationale_cites_market`` (None without a rationale). A binary
-    without a market anchor is ``no_market_anchor``; a proxy demotion is re-checked against
-    the market end date from the forecast origin its commit row in ``targets`` registers
-    (``_skill_gate_reason``). ``publishable_at_issue`` is the item's events'
-    ``report_publishable_at_issue`` stamps (EVAL-2: all must be True), else a strict
-    ``publishable_fn(report_id)`` proof, once per report. Rows are sorted by key; neither
-    the inputs nor resolutions.jsonl are ever modified.
+    (price_at_research, else implied_yes_prob, as the writer derives it), ``equivalence``,
+    ``match_confidence`` and ``price_time_basis``; ``prior_probability`` comes from a
+    ``market_influence`` stamp of that anchor's market that was not rolled back,
+    ``rationale_cites_market`` from ``forecast_extractor._rationale_cites_market`` (None
+    without a rationale). A binary without a market anchor is ``no_market_anchor``; every
+    other item is gated by ``_skill_gate_reason``: ``admissible`` at ``now`` (default the
+    current time) for the outcome, and ``market_eligibility`` at the ``near`` floor for the
+    anchor, from the forecast origin the writer used: the one its production primary
+    commit row in ``targets`` registers, else, for a report without such a row
+    (pre-EVAL-1), ``origin_fn(report_id)`` (meta.json's creation stamp, as
+    ``target_meta_for`` reads it; without ``origin_fn`` every date the binary names counts).
+    ``publishable_at_issue`` is the item's events' ``report_publishable_at_issue`` stamps
+    (EVAL-2: all must be True), else a strict ``publishable_fn(report_id)`` proof, once per
+    report. Rows are sorted by key; neither the inputs nor resolutions.jsonl are ever
+    modified.
     """
     events = [row for row in resolution_rows or [] if isinstance(row, dict)]
     stamps: Dict[Tuple[str, str], List[Any]] = {}
@@ -1508,6 +1628,8 @@ def enrich_market_rows(resolution_rows: Optional[List[Dict[str, Any]]], *,
             stamps.setdefault(key, []).append(event["report_publishable_at_issue"])
     items = _settlement.fold_binary_items(events, targets)
     origins = _registered_origins(targets)
+    committed = _primary_report_ids(targets)
+    report_origins: Dict[str, Any] = {}
     proofs: Dict[str, bool] = {}
     rows: List[Dict[str, Any]] = []
     for key in sorted(items):
@@ -1517,26 +1639,43 @@ def enrich_market_rows(resolution_rows: Optional[List[Dict[str, Any]]], *,
             if key[0] not in proofs:
                 proofs[key[0]] = _proves_publishable_at_issue(key[0], publishable_fn)
             publishable = proofs[key[0]]
+        if key[0] in committed or origin_fn is None:
+            origin = origins.get(key)
+        else:
+            if key[0] not in report_origins:
+                report_origins[key[0]] = origin_fn(key[0])
+            origin = report_origins[key[0]]
         binary = target_lookup(key[0], key[1])
         rows.append(_market_skill_row(key, items[key], binary if isinstance(binary, dict)
-                                      else None, publishable, origins.get(key)))
+                                      else None, publishable, origin, now))
     return rows
 
 
 def expired_unresolved_count(entries: Optional[List[Dict[str, Any]]],
-                             settled_keys: Set[Tuple[str, str]], as_of_day: str) -> int:
-    """Market-anchored binaries of production primary commit rows whose resolution date has
-    passed (``detect_needs_manual`` with ``has_anchor``) and that hold no settlement fact of
-    any kind yet (``settled_keys``: the folded items). They sit outside every stratum until
-    their market settles or their grace terminal is written, so they are counted, not dropped."""
+                             settled_keys: Set[Tuple[str, str]], as_of_day: str, *,
+                             report_binaries: Optional[Dict[str, Any]] = None) -> int:
+    """Market-anchored binaries whose resolution date has passed (``detect_needs_manual``
+    with ``has_anchor``) and that hold no settlement fact of any kind yet (``settled_keys``:
+    the folded items). They sit outside every stratum until their market settles or their
+    grace terminal is written, so they are counted, not dropped. The binaries are those of
+    the production primary commit rows in ``entries`` plus ``report_binaries``
+    ({report_id: binaries}) of reports without such a row (pre-EVAL-1), which the monitor
+    settles against the report itself; a report with a commit row is read from that row
+    only, and each (report_id, binary id) counts once."""
+    committed = _primary_report_ids(entries)
+    sources: List[Tuple[str, Any]] = [
+        (str(row.get("report_id") or "").strip(), row.get("binary_forecasts"))
+        for row in entries or [] if _is_production_primary(row)]
+    sources += [(str(report_id or "").strip(), binaries)
+                for report_id, binaries in sorted((report_binaries or {}).items())
+                if str(report_id or "").strip() not in committed]
     seen: Set[Tuple[str, str]] = set()
     count = 0
-    for row in entries or []:
-        report_id = str(row.get("report_id") or "").strip() if _is_production_primary(row) else ""
+    for report_id, binaries in sources:
         if not report_id:
             continue
         open_binaries: List[Dict[str, Any]] = []
-        for forecast_id, binary in _binary_index(row.get("binary_forecasts")).items():
+        for forecast_id, binary in _binary_index(binaries).items():
             key = (report_id, forecast_id)
             if binary is not None and key not in settled_keys and key not in seen:
                 seen.add(key)
@@ -1548,21 +1687,62 @@ def expired_unresolved_count(entries: Optional[List[Dict[str, Any]]],
 
 def market_skill_summary(ledger_dir: Optional[str] = None, *, as_of_day: Optional[str] = None,
                          publishable_fn: Any = None,
-                         forecasts: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """``market_skill`` of ``run`` / ``summary``: ``backtest.market_skill_report`` over the
-    ledger's folded binary settlements (``enrich_market_rows``), at FORECAST_SKILL_MIN_N and
-    the 10pp rule's FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE, plus ``expired_unresolved``
-    as of ``as_of_day`` (default today, UTC). Reads resolutions.jsonl and ledger.jsonl only."""
-    day = as_of_day or _today()
+                         forecasts: Optional[Dict[str, Any]] = None,
+                         origins: Optional[Dict[str, Any]] = None,
+                         now: Optional[datetime] = None,
+                         reads: Optional[MarketSkillReads] = None) -> Dict[str, Any]:
+    """``market_skill`` of the run_monitor result / monitor_report.md and of ``summary``:
+    ``backtest.market_skill_report`` over the ledger's folded binary settlements
+    (``enrich_market_rows``), at FORECAST_SKILL_MIN_N and the 10pp rule's
+    FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE, plus ``expired_unresolved`` as of
+    ``as_of_day`` (default the UTC day of ``now``).
+
+    ``now`` (offset-aware; default the current time) is the point-in-time clock of the
+    ``admissible`` gate: run_monitor passes its processed_at, so a backdated run scores only
+    what was known by then. ``forecasts`` ({report_id: forecast}) and ``origins``
+    ({report_id: forecast origin}) are run_monitor's own forecast and the origin it settled
+    with; any other report without a production primary commit row (pre-EVAL-1) is read
+    from its sealed forecast.json and meta.json, and counts in ``expired_unresolved`` when
+    the monitor settles it against the report itself (``_report_fallback_binaries``).
+    ``reads`` (default a fresh ``MarketSkillReads``) memoizes those per-report reads.
+    Reads resolutions.jsonl, ledger.jsonl and report files only; never writes."""
+    reads = reads if reads is not None else MarketSkillReads()
+    overrides = {str(rid).strip(): forecast for rid, forecast in (forecasts or {}).items()}
+    given_origins = {str(rid).strip(): origin for rid, origin in (origins or {}).items()}
+    day = as_of_day or (now.astimezone(timezone.utc).date().isoformat() if now else _today())
     events = _ledger.read_market_resolutions(ledger_dir)
     entries = _ledger.read_ledger(ledger_dir)
-    rows = enrich_market_rows(events, targets=entries, publishable_fn=publishable_fn,
-                              target_lookup=market_target_lookup(entries, forecasts=forecasts))
+
+    def proves_publishable(report_id: str) -> bool:
+        return reads.proves_publishable(report_id, publishable_fn)
+
+    def origin_of(report_id: str) -> Any:
+        if report_id in given_origins:
+            return given_origins[report_id]
+        return reads.report_origin(report_id)
+
+    rows = enrich_market_rows(
+        events, targets=entries, publishable_fn=proves_publishable, origin_fn=origin_of,
+        now=now, target_lookup=market_target_lookup(entries, forecasts=overrides,
+                                                     read_forecast=reads.sealed_forecast))
     report = _backtest.market_skill_report(rows, min_n=skill_min_n(),
                                            min_match_confidence=divergence_min_confidence())
+    committed = _primary_report_ids(entries)
+    legacy_ids = {str(row.get("report_id") or "").strip()
+                  for row in events + entries if isinstance(row, dict)}
+    report_binaries: Dict[str, List[Dict[str, Any]]] = {}
+    for report_id in sorted((legacy_ids | set(overrides)) - committed - {""}):
+        if report_id in overrides:
+            report_binaries[report_id] = _report_fallback_binaries(
+                report_id, ledger_dir=ledger_dir, publishable_fn=proves_publishable,
+                load_forecast_fn=lambda _rid, forecast=overrides[report_id]: forecast)
+        else:
+            report_binaries[report_id] = reads.report_binaries(
+                report_id, ledger_dir=ledger_dir, publishable_fn=publishable_fn)
     report["as_of"] = day
     report["expired_unresolved"] = expired_unresolved_count(
-        entries, {(row["report_id"], row["forecast_id"]) for row in rows}, day)
+        entries, {(row["report_id"], row["forecast_id"]) for row in rows}, day,
+        report_binaries=report_binaries)
     return report
 
 
@@ -1651,9 +1831,11 @@ def _cmd_run(args: argparse.Namespace) -> int:
         return 2
 
     results: List[Dict[str, Any]] = []
+    # EVAL-5：一批报告共享逐报告读取（封印预测 / 发布证明 / meta 原点），每份报告只读一次。
+    skill_reads = MarketSkillReads()
     for rid in report_ids:
         try:
-            res = run_monitor(rid, dry_run=dry)
+            res = run_monitor(rid, dry_run=dry, skill_reads=skill_reads)
         except Exception as e:  # noqa: BLE001 — 单份失败不应中断整批
             logger.error(f"监测报告 {rid} 失败（跳过）: {e}", exc_info=True)
             results.append({"report_id": rid, "error": str(e)})

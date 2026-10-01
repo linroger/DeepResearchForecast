@@ -384,6 +384,65 @@ def test_proxy_demotion_rechecks_the_market_end_date():
         "gate_reason"] == "equivalence_near"
 
 
+def test_an_admitted_attestation_still_needs_an_eligible_anchor():
+    """Review round 1: the outcome label and the price it is scored against are separate facts,
+    so a manual attestation (or one beside an ineligible market event) never scores against an
+    anchor whose market ends after the deadline or whose binding no longer holds."""
+    late = _binary("F1", end_date="2026-12-31T12:00:00Z")
+    market_late = _event("F1", eligible=False, reason="end_date_mismatch")
+    assert _enrich([market_late], late)["F1"]["gate_reason"] == "end_date_mismatch"
+    for events in ([_manual("F1", "YES")], [market_late, _manual("F1", "YES")]):
+        rows = _enrich(events, late)
+        assert rows["F1"]["gate_reason"] == "end_date_mismatch"
+        assert _strata(bt.market_skill_report(list(rows.values())))["headline"]["n_scored"] == 0
+    rebound = _binary("F1")
+    rebound["statement"] = "A different proposition entirely by 2026-06-30."
+    assert _enrich([_manual("F1", "NO")], rebound)["F1"]["gate_reason"] == "binding_invalid"
+    near_late = _binary("F2", market_id="m-2", equivalence="near", end_date="2026-12-31T12:00:00Z")
+    rows = _enrich([_manual("F2", "YES")], near_late)
+    assert rows["F2"]["gate_reason"] == "end_date_mismatch"
+    assert _strata(bt.market_skill_report(list(rows.values())))["proxy"]["n_scored"] == 0
+    # an eligible exact anchor with an attestation still scores in the headline
+    rows = _enrich([_manual("F1", "YES")], _binary("F1"))
+    assert rows["F1"]["gate_reason"] is None
+
+
+def test_report_without_commit_row_uses_its_meta_origin():
+    """Review round 1: a pre-EVAL-1 report's proxy end-date recheck uses the origin the writer
+    used (meta.json created_at through origin_fn), not every date the binary names."""
+    near = _binary("F1", equivalence="near")
+    event = [_event("F1", eligible=False, reason="equivalence_near")]
+    by_origin = {}
+    for origin in ("2026-05-01", "2026-07-15"):
+        by_origin[origin] = {row["forecast_id"]: row for row in mon.enrich_market_rows(
+            event, target_lookup=_lookup(near), origin_fn=lambda rid, o=origin: o)}
+    assert by_origin["2026-05-01"]["F1"]["gate_reason"] == "equivalence_near"
+    assert by_origin["2026-07-15"]["F1"]["gate_reason"] == "end_date_unverifiable"
+    calls = []
+    mon.enrich_market_rows(event, target_lookup=_lookup(near), targets=[_commit_row("r1", [near])],
+                           origin_fn=lambda rid: calls.append(rid))
+    assert calls == []          # a committed report keeps its registered origin
+
+
+def test_market_p_is_derived_as_the_writer_derives_it():
+    binary = _binary("F1")
+    binary["market_anchor"]["price_at_research"] = float("inf")
+    row = _enrich([_event("F1")], binary)["F1"]
+    assert row["market_p"] == fr._market_price_at_research(binary["market_anchor"])
+    assert row["market_p"] == binary["market_anchor"]["implied_yes_prob"]
+
+
+def test_admission_uses_the_monitor_clock():
+    from datetime import datetime, timezone
+
+    before = datetime(2026, 7, 1, tzinfo=timezone.utc)
+    after = datetime(2026, 9, 29, tzinfo=timezone.utc)
+    rows = {when: {r["forecast_id"]: r for r in mon.enrich_market_rows(
+        [_event("F1")], target_lookup=_lookup(_binary("F1")), now=when)} for when in (before, after)}
+    assert rows[before]["F1"]["gate_reason"] == "known_after_now"
+    assert rows[after]["F1"]["gate_reason"] is None
+
+
 def test_retracted_superseded_and_unanchored_attestations():
     binaries = [_binary("F1"), _binary("F2", market_id="m-2"),
                 {"id": "F3", "statement": "Unanchored by 2026-06-30.", "probability": 0.5}]
@@ -579,6 +638,20 @@ def test_expired_unresolved_counts_anchored_items_without_any_fact():
     assert mon.expired_unresolved_count([], set(), "2026-09-29") == 0
 
 
+def test_expired_unresolved_counts_reports_without_a_commit_row():
+    """Review round 1: the monitor settles pre-EVAL-1 reports against the report itself, so
+    their anchored, past-deadline, unsettled binaries count too (once per key)."""
+    past = _binary("F1")
+    assert mon.expired_unresolved_count([], set(), "2026-09-29",
+                                        report_binaries={"r-legacy": [past]}) == 1
+    assert mon.expired_unresolved_count([], {("r-legacy", "F1")}, "2026-09-29",
+                                        report_binaries={"r-legacy": [past]}) == 0
+    # a report with a commit row is read from that row only
+    entries = [_commit_row("r1", [past])]
+    assert mon.expired_unresolved_count(entries, set(), "2026-09-29",
+                                        report_binaries={"r1": [past, _binary("F9", market_id="m-9")]}) == 1
+
+
 # ─────────────────────────────── monitor surface ─────────────────────────────
 class _Client:
     def __init__(self, resolutions):
@@ -641,6 +714,29 @@ def test_monitor_section_flagged(tmp_path, monkeypatch):
               "needs_manual": [], "calibration": {}, "market_brier": {}, "anchored_count": 0,
               "degraded": False}
     assert mon.render_monitor_md(**kwargs, market_skill=None) == mon.render_monitor_md(**kwargs)
+
+
+def test_monitor_counts_an_expired_binary_of_a_report_without_commit_row(tmp_path):
+    forecast = {"binary_forecasts": [_binary("F1", probability=0.30)]}
+    res = mon.run_monitor("r-legacy", forecast=forecast, report_folder=str(tmp_path / "rep"),
+                          client=_Client({}), ledger_dir=str(tmp_path / "led"), as_of=PROCESSED,
+                          publishable_fn=lambda rid: True,
+                          target_meta={"as_of": None, "created_at": "2026-05-02T08:00:00+00:00",
+                                       "commit_id": None, "production_primary": None})
+    assert [(n["forecast_id"], n["has_anchor"]) for n in res["needs_manual"]] == [("F1", True)]
+    assert res["market_skill"]["expired_unresolved"] == 1
+    assert "Expired unresolved (anchored, past resolution date, no settlement yet): **1**" in \
+        res["monitor_report_md"]
+
+
+def test_batch_reads_each_report_once(monkeypatch):
+    reads, calls = mon.MarketSkillReads(), []
+    monkeypatch.setattr(mon, "_sealed_forecast_or_none", lambda rid: calls.append(rid) or None)
+    monkeypatch.setattr(mon, "_report_meta_origin", lambda rid: calls.append(("origin", rid)) or None)
+    for _ in range(3):
+        reads.sealed_forecast("r1")
+        reads.report_origin("r1")
+    assert calls == ["r1", ("origin", "r1")]
 
 
 def test_market_skill_failure_degrades_safely(tmp_path, monkeypatch, capsys):

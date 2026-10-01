@@ -447,10 +447,11 @@ class Config:
     # past their grace period need no network and are always settled; rows with nothing
     # actionable (every binary recorded, or unanchored and still inside grace) never count.
     RESOLUTION_SETTLE_MAX_TARGETS = int(os.environ.get('RESOLUTION_SETTLE_MAX_TARGETS', '200') or '200')
-    # EVAL-5 market-relative skill (read only by scripts/resolution_monitor.py): `run` and
-    # `summary` add market_skill (backtest.market_skill_report: Brier skill vs the anchor price
-    # each settled binary saw, divergence hit rate vs a market-implied null) and
-    # monitor_report.md gains '## Skill vs the market it saw'. Safe on by default: it only
+    # EVAL-5 market-relative skill (read only by scripts/resolution_monitor.py): the
+    # run_monitor result of each `run` and the `summary` payload add market_skill
+    # (backtest.market_skill_report: Brier skill vs the anchor price each settled binary saw,
+    # divergence hit rate vs a market-implied null) and monitor_report.md gains '## Skill vs
+    # the market it saw' (the `run` CLI's per-report rows do not carry it). Safe on by default: it only
     # reads resolutions.jsonl / ledger.jsonl and sealed forecast.json files (never writes
     # them), is deterministic with no LLM or network call, changes no report or forecast,
     # and is inert unless the monitor runs; false = the monitor's output is byte-identical
