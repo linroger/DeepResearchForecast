@@ -489,9 +489,12 @@ def test_the_digest_shows_the_calculation_of_a_derived_fact():
         dropped_order += [line for line in full if line not in kept and line not in dropped_order]
     tags = ("UNVERIFIED", "REPORTED", "DERIVED", "VERIFIED")
     assert [next(tag for tag in tags if f"({tag}" in line) for line in dropped_order] == list(tags)
-    # A hindcast's citation wall that strips the derivation's marker leaves a bare tag.
-    walled = lr.pit_wall_record(_record([dict(facts[0], text="Capacity grew about 185% [S12][S3]")]),
-                                lambda sid: sid != 12)[0]
+    # The digest's citation wall (FU-2) leaves the line out whole; the per-claim
+    # wall of the published records strips the derivation's marker, leaving a bare tag.
+    record = _record([dict(facts[0], text="Capacity grew about 185% [S12][S3]")])
+    assert "185%" not in lr._kiq_digest_block(lr.pit_wall_record(record, lambda sid: sid != 12)[0],
+                                              12000, "English")[0]
+    walled = lr.pit_wall_record(record, lambda sid: sid != 12, per_claim=True)[0]
     assert "(DERIVED)" in lr._kiq_digest_block(walled, 12000, "English")[0]
     assert "[S12]" not in lr._kiq_digest_block(walled, 12000, "English")[0]
 

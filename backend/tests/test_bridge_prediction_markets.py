@@ -444,7 +444,24 @@ def test_orchestrator_market_merge_applies_the_partial_transport_rule():
     assert merge_market_snapshots([track(2, 0, 2), track(1, 0, 1)])["status"]["empty_reason"] == "transport_failure"
     assert merge_market_snapshots([track(2, 2, 0)])["status"]["empty_reason"] == "no_equivalent_market"
     timeout_only = merge_market_snapshots([track(2, 0, 0, inflight_timeout_count=2)])["status"]
-    assert timeout_only["empty_reason"] == "no_equivalent_market" and timeout_only["state"] == "inflight_timeout"
+    # FU-6: an all-timed-out merge no longer pairs its state with 'no_equivalent_market'.
+    assert timeout_only["empty_reason"] == "inflight_timeout" and timeout_only["state"] == "inflight_timeout"
+    # Timeouts beside a transport failure or an exhausted deadline keep the partial
+    # label they had before FU-6 (the empty_reason still records the failure).
+    for mixed_infra in (track(2, 0, 1, inflight_timeout_count=1),
+                        track(2, 0, 0, inflight_timeout_count=1, deadline_exhausted=1)):
+        status = merge_market_snapshots([mixed_infra])["status"]
+        assert status["state"] == "inflight_timeout"
+        assert status["empty_reason"] == "partial_transport_failure"
+    # FU-6: a track whose queries timed out next to an empty answered one leaves coverage
+    # unknown (it read as verified_empty / 'no equivalent market').
+    mixed = merge_market_snapshots([track(2, 0, 0, inflight_timeout_count=2), track(2, 2, 0)])["status"]
+    assert mixed["empty_reason"] == "partial_transport_failure"
+    assert mixed["state"] == "partial_transport_failure"
+    # With a candidate found the timeout changes nothing (relevance decides).
+    found = merge_market_snapshots([track(2, 0, 0, inflight_timeout_count=2),
+                                    track(2, 2, 0, candidate_count=3)])["status"]
+    assert found["empty_reason"] == "all_candidates_irrelevant"
     irrelevant = merge_market_snapshots([{"markets": [], "status": {
         "query_count": 3, "successful_query_count": 2, "transport_failure_count": 1, "candidate_count": 4}}])
     assert irrelevant["status"]["empty_reason"] == "all_candidates_irrelevant"
