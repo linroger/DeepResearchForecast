@@ -446,6 +446,13 @@ def test_orchestrator_market_merge_applies_the_partial_transport_rule():
     timeout_only = merge_market_snapshots([track(2, 0, 0, inflight_timeout_count=2)])["status"]
     # FU-6: an all-timed-out merge no longer pairs its state with 'no_equivalent_market'.
     assert timeout_only["empty_reason"] == "inflight_timeout" and timeout_only["state"] == "inflight_timeout"
+    # Timeouts beside a transport failure or an exhausted deadline keep the partial
+    # label they had before FU-6 (the empty_reason still records the failure).
+    for mixed_infra in (track(2, 0, 1, inflight_timeout_count=1),
+                        track(2, 0, 0, inflight_timeout_count=1, deadline_exhausted=1)):
+        status = merge_market_snapshots([mixed_infra])["status"]
+        assert status["state"] == "inflight_timeout"
+        assert status["empty_reason"] == "partial_transport_failure"
     # FU-6: a track whose queries timed out next to an empty answered one leaves coverage
     # unknown (it read as verified_empty / 'no equivalent market').
     mixed = merge_market_snapshots([track(2, 0, 0, inflight_timeout_count=2), track(2, 2, 0)])["status"]

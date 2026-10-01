@@ -403,3 +403,47 @@ def test_non_transient_status_is_not_retried_or_delayed(monkeypatch):
     gets, sleeps = _scripted_http(monkeypatch, module, [_Resp(404, {"Retry-After": "3"})])
     assert module._http_get("/public-search", {"q": "x"}) is None
     assert len(gets) == 1 and sleeps == []
+
+
+def test_timed_out_request_is_never_a_verified_empty_search(monkeypatch):
+    """FU-6: a query whose request timed out never finished, so the agent is never
+    told 'no equivalent market'.  requests.Timeout is retried once and then counts
+    as a transport failure; a completed empty search stays verified_empty."""
+    import requests
+
+    module = _load_module()
+    sent: list[str] = []
+    main = threading.current_thread()
+    real_sleep = time.sleep
+
+    def fake_get(url, params=None, timeout=None, headers=None):
+        query = str((params or {}).get("q") or "")
+        sent.append(query)
+        if query.startswith("slow"):
+            raise requests.Timeout(f"read timed out: {query}")
+        return _Resp(200, payload={"events": []})
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.setattr(module.time, "sleep",
+                        lambda s: None if threading.current_thread() is main else real_sleep(s))
+    module._reset_market_query_cache()
+
+    timed_out = json.loads(module.prediction_market_search_impl("slow a"))
+    assert sent == ["slow a", "slow a"]                  # one retry, then degrade
+    assert timed_out["status"]["state"] == "transport_failure"
+    assert timed_out["status"]["empty_reason"] == "transport_failure"
+    assert timed_out["status"]["successful_query_count"] == 0
+    assert timed_out["status"]["transport_failure_count"] == 1
+    assert "no absence conclusion" in timed_out["note"]
+    assert "No active, liquid markets matched" not in timed_out["note"]
+
+    partial = json.loads(module.prediction_market_search_impl("slow a, empty b"))
+    assert partial["status"]["state"] == "partial_transport_failure"
+    assert partial["status"]["empty_reason"] == "partial_transport_failure"
+    assert "incomplete" in partial["note"]
+    assert "No active, liquid markets matched" not in partial["note"]
+
+    completed = json.loads(module.prediction_market_search_impl("empty c"))
+    assert completed["status"]["state"] == "verified_empty"
+    assert completed["status"]["empty_reason"] == "no_equivalent_market"
+    assert "No active, liquid markets matched" in completed["note"]
