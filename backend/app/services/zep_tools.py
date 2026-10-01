@@ -34,6 +34,18 @@ from ..utils.dates import parse_as_of
 logger = get_logger('mirofish.zep_tools')
 
 
+def _interview_feedback_allowed(simulation_id: Optional[str]) -> bool:
+    """FU-8: the run's pinned SIM_INTERVIEW_GRAPH_FEEDBACK (pipeline_orchestrator.
+    interview_graph_feedback_for_simulation); imported lazily (the orchestrator imports
+    this module). An import failure fails closed."""
+    try:
+        from .pipeline_orchestrator import interview_graph_feedback_for_simulation
+    except Exception as exc:  # noqa: BLE001 — fail closed: no graph write without the pin
+        logger.warning(f"安全政策钉不可读，采访事实不写入图谱（失败关闭）: {exc}")
+        return False
+    return interview_graph_feedback_for_simulation(simulation_id)
+
+
 def compact_graph_query(text: str, max_chars: int = 350) -> str:
     """RPT-8/XRUN-5: 把整段需求书压成可用于图谱检索的紧凑查询（确定性，无 LLM）。
 
@@ -2169,14 +2181,16 @@ class ZepToolsService:
             # 让最丰富的收尾反思可被后续检索；key-free 走本地 shim。best-effort，失败不影响采访结果。
             # Foglamp WP1 (1A, I-11)：采访是模拟产物，默认不得写入观察图（门默认 false）；
             # 采访全文仍完整保留在 result.interviews（run 产物）。
+            # FU-8：门由该模拟所属管线钉住的安全政策决定（无钉 → 环境值；查找失败 → 不写）。
             if (graph_id and result.interviews
-                    and getattr(Config, "SIM_INTERVIEW_GRAPH_FEEDBACK", False)):
+                    and _interview_feedback_allowed(simulation_id)):
                 try:
                     from .zep_graph_memory_updater import ZepGraphMemoryUpdater
                     _updater = ZepGraphMemoryUpdater(graph_id)
                     _written = 0
                     for itv in result.interviews:
-                        if _updater.write_interview_fact(itv.agent_name, itv.response):
+                        if _updater.write_interview_fact(itv.agent_name, itv.response,
+                                                         feedback_allowed=True):
                             _written += 1
                     logger.info(f"采访事实已写入图谱 {graph_id}: {_written}/{len(result.interviews)} 条")
                     # I-6-1: 采访写入了新事实，使该图谱的检索/洞察缓存失效，避免后续返回陈旧检索结果。

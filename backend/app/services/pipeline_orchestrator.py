@@ -7666,6 +7666,34 @@ def hindcast_pin_for_simulation(simulation_id: Optional[str]) -> Optional[dict[s
     return pin
 
 
+def interview_graph_feedback_for_simulation(simulation_id: Optional[str]) -> bool:
+    """FU-8 (INFRA-9 open issue): whether interview answers of ``simulation_id`` may be
+    written to the observation graph.
+
+    The pinned ``safety_policy_v1['sim_interview_graph_feedback']`` of the pipeline that
+    ran the simulation decides (same owner scan as :func:`hindcast_pin_for_simulation`),
+    so a run, and a fork that inherited its pin, keeps the semantics it was admitted
+    with after a config change. Without a pin, or without the key (a legacy run), the
+    ambient ``Config.SIM_INTERVIEW_GRAPH_FEEDBACK`` decides, as before. A lookup that
+    raises fails closed (False, logged): interview text is a simulation artifact and is
+    never written to the graph because the pin could not be read.
+    """
+    ambient = bool(getattr(Config, "SIM_INTERVIEW_GRAPH_FEEDBACK", False))
+    if not simulation_id:
+        return ambient
+    try:
+        owner = _ledger_owner_of_simulation(str(simulation_id))
+    except Exception as exc:  # noqa: BLE001 — fail closed: no graph write without the pin
+        logger.warning("[%s] 安全政策钉查找失败，采访事实不写入图谱（失败关闭）: %s", simulation_id, exc)
+        return False
+    if owner is None:
+        return ambient
+    options = owner[1].get("options") if isinstance(owner[1], dict) else None
+    policy = options.get("safety_policy_v1") if isinstance(options, dict) else None
+    pinned = policy.get("sim_interview_graph_feedback") if isinstance(policy, dict) else None
+    return ambient if pinned is None else bool(pinned)
+
+
 def preflight_pipeline(mode: str = "full", model: Optional[str] = None) -> list[str]:
     """启动管线前的快速体检：把会在几十分钟后才暴露的配置错误提前到 POST /run 时。
 
