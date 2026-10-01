@@ -3492,6 +3492,15 @@ class ReportAgent:
         if not result.ok:
             logger.warning(f"证据包 {kind} 未启用（{result.status}），回退旧提示词")
             return None
+        # FU-4：已核验指标块（REPORT_VERIFIED_FACTS_MAX_CHARS，默认 6000 字）可能超出骨架证据包的
+        # key_metrics 配额（预算 20% 加余量）。截断已记入遥测并以 …[truncated] 标出，此处再告警，不静默。
+        if provenance.get("key_metrics_source") == "verified_figures":
+            stream = (result.telemetry.get("streams") or {}).get("key_metrics") or {}
+            if stream.get("truncated") or stream.get("sections_dropped"):
+                logger.warning(
+                    f"证据包 {kind}：已核验指标块 {stream.get('raw_chars')} 字超出 key_metrics 配额 "
+                    f"{stream.get('allocated_chars')} 字，保留 {stream.get('kept_chars')} 字"
+                    f"（{'末尾截断' if stream.get('truncated') else '整块未收录'}）")
         logger.info(f"证据包 {kind}: {len(result.text)} 字（as_of 来源 {provenance['as_of_source']}）")
         return result.text
 
