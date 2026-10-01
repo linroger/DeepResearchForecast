@@ -2428,9 +2428,10 @@ class ReportAgent:
     def _verified_figures_check(self, md: str) -> Optional[Dict[str, Any]]:
         """REPORT-9（REPORT_VERIFIED_FIGURES_CHECK，默认开，只检测）：正文数字对照 REPORT-8 的已核验指标块
         （verified_facts.check_verified_figures），结果另附 block_sha256。块行 = rows + projections；
-        states_unverified 的对照行取研究 quantitative 中 verification 为 unverified / snippet_only / none 的
-        行；市场行取 self._prediction_markets；来源支撑检查用 _semantic_citation_support。旗标关、块为空
-        （旧引擎 / 复用研究 / 未核验）或任何异常 → None（调用方什么都不写）。从不改任何状态。"""
+        states_unverified 的对照行取研究 quantitative 中 quant_typing.is_unverified 的行（verification 为
+        unverified / snippet_only / none）；市场行取 self._prediction_markets；来源支撑检查用 _semantic_citation_support。旗标关、块为空
+        （旧引擎 / 复用研究 / 未核验）或任何异常 → None：不记录计数（终审据此去掉草稿期的
+        quality.verified_figures，_write_figure_provenance 据此删除旧 sidecar）。本方法从不改任何状态。"""
         if not getattr(Config, "REPORT_VERIFIED_FIGURES_CHECK", True):
             return None
         block = getattr(self, "_verified_figures", None)
@@ -2438,6 +2439,7 @@ class ReportAgent:
             return None
         try:
             from . import verified_facts as _vf
+            from ..utils.quant_typing import is_unverified
             try:
                 rel_tol = float(getattr(Config, "REPORT_VERIFIED_FIGURE_REL_TOL", _vf.DEFAULT_REL_TOL))
             except (TypeError, ValueError):
@@ -2452,8 +2454,7 @@ class ReportAgent:
 
             quantitative = getattr(self, "quantitative", None)
             excluded = [row for row in (quantitative if isinstance(quantitative, list) else [])
-                        if isinstance(row, dict)
-                        and str(row.get("verification") or "").strip().lower() in _vf.UNVERIFIED_LABELS]
+                        if isinstance(row, dict) and is_unverified(row)]
             result = _vf.check_verified_figures(
                 md, list(block.get("rows") or []) + list(block.get("projections") or []),
                 excluded_rows=excluded, market_rows=getattr(self, "_prediction_markets", None) or [],
@@ -2472,46 +2473,78 @@ class ReportAgent:
 
     def _write_figure_provenance(self, report_id: str, report: "Report") -> None:
         """REPORT-9：终审之后（主报告已定型）写 reports/<id>/figure_provenance.json——已核验指标块
-        每一行的来源（[S#] / URL）与正文里引用它的行，比对出的来源分歧，以及市场行的报价时间戳
-        （EVAL-6 的 quoted_at / snapshot_as_of）。影子工件：不登记阶段清单，从不改成稿，失败只告警。"""
-        check = self._verified_figures_check(getattr(report, "markdown_content", None) or "")
-        if check is None:
+        每一行的来源（[S#] 记号 / 来源标题 / URL）与正文里引用它的行、比对计数与样例（供人工复核
+        冲突精度）、比对出的来源分歧，以及市场行的报价时间戳（EVAL-6 的 quoted_at / snapshot_as_of
+        与 market_price_time 推出的 price_time / price_time_basis）；markdown_sha256 标明所描述的
+        成稿字节。本次未比对（旗标关 / 块为空 / 比对失败）→ 删除上一轮留下的旧文件，绝不让它描述
+        别的字节。影子工件：不登记阶段清单，从不改成稿，失败只告警（并删除旧文件）。"""
+        try:
+            path = os.path.join(ReportManager._get_report_folder(report_id), "figure_provenance.json")
+        except Exception as exc:  # noqa: BLE001 — 影子工件，失败不影响报告
+            logger.warning(f"figure_provenance.json 路径不可用（忽略）: {exc}")
             return
         try:
-            block = self._verified_figures
-            block_rows = list(block.get("rows") or []) + list(block.get("projections") or [])
-            index = self._citation_index_or_fallback()
-            rows = []
-            for row_index, row in enumerate(block_rows):
-                tag = row.get("tag")
-                source = index.get(tag) if tag else None
-                rows.append({
-                    "row_index": row_index, "metric": row.get("metric"), "value": row.get("value"),
-                    "unit": row.get("unit"), "as_of": row.get("when"),
-                    "source_ref": tag or row.get("source"),
-                    "source_url": (str(source.get("url") or "").strip() or None)
-                    if isinstance(source, dict) else None,
-                    "verification": "verified",
-                    "used_in": check["matched_rows"].get(row_index, []),
-                })
-            markets = [
-                {key: market.get(key) for key in
-                 ("market_id", "implied_yes_prob", "quoted_at", "price_at_research", "snapshot_as_of")}
-                for market in (getattr(self, "_prediction_markets", None) or []) if isinstance(market, dict)
-            ]
-            payload = {
-                "schema": "drf.figure_provenance/v1",
-                "block_sha256": check["block_sha256"],
-                "rows": rows,
-                "source_discrepancies": check["source_discrepancies"],
-                "market_rows": markets,
-                "unmatched_numeric_claims": check["counts"]["unmatched"],
-            }
-            write_json_atomic(
-                os.path.join(ReportManager._get_report_folder(report_id), "figure_provenance.json"),
-                payload, allow_nan=False)
+            md = getattr(report, "markdown_content", None) or ""
+            check = self._verified_figures_check(md)
+            if check is not None:
+                write_json_atomic(path, self._figure_provenance_payload(md, check), allow_nan=False)
+                return
         except Exception as exc:  # noqa: BLE001 — 影子工件，失败不影响报告
             logger.warning(f"写 figure_provenance.json 失败（忽略）: {exc}")
+        # 本次未比对或写入失败：上一轮的旧文件描述的是别的字节，删除。
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError as exc:
+            logger.warning(f"删除旧 figure_provenance.json 失败（忽略）: {exc}")
+
+    def _figure_provenance_payload(self, md: str, check: Dict[str, Any]) -> Dict[str, Any]:
+        """REPORT-9：figure_provenance.json 的内容（drf.figure_provenance/v1，见 _write_figure_provenance）。"""
+        from ..utils.prediction_markets import market_price_time, price_time_enabled
+        block = self._verified_figures
+        block_rows = list(block.get("rows") or []) + list(block.get("projections") or [])
+        index = self._citation_index_or_fallback()
+        rows = []
+        for row_index, row in enumerate(block_rows):
+            tag = row.get("tag") or None
+            source = index.get(tag) if tag else None
+            indexed_url = source.get("url") if isinstance(source, dict) else None
+            rows.append({
+                "row_index": row_index, "metric": row.get("metric"), "value": row.get("value"),
+                "unit": row.get("unit"), "as_of": row.get("when"),
+                # The date or period the value is about (the year the check compares).
+                "period": row.get("period"),
+                "source_ref": tag,
+                "source_title": row.get("source_title"),
+                # The research row's own page, else the page its [S#] resolves to.
+                "source_url": row.get("source_url")
+                or (indexed_url.strip() if isinstance(indexed_url, str) else "") or None,
+                "verification": "verified",
+                # used_in lists at most MATCHED_LINES_PER_ROW lines; used_in_count is every use.
+                "used_in": check["matched_rows"].get(row_index, []),
+                "used_in_count": check["matched_counts"].get(row_index, 0),
+            })
+        markets = []
+        for market in getattr(self, "_prediction_markets", None) or []:
+            if not isinstance(market, dict):
+                continue
+            entry = {key: market.get(key) for key in
+                     ("market_id", "implied_yes_prob", "quoted_at", "price_at_research", "snapshot_as_of")}
+            # The anchor's own price time (EVAL-6): none when MARKET_ANCHOR_PRICE_TIME is off.
+            price_time = market_price_time(market) if price_time_enabled() else None
+            entry["price_time"], entry["price_time_basis"] = price_time or (None, None)
+            markets.append(entry)
+        return {
+            "schema": "drf.figure_provenance/v1",
+            "block_sha256": check["block_sha256"],
+            "markdown_sha256": hashlib.sha256(md.encode("utf-8")).hexdigest(),
+            "rows": rows,
+            "source_discrepancies": check["source_discrepancies"],
+            "market_rows": markets,
+            "unmatched_numeric_claims": check["counts"]["unmatched"],
+            "counts": dict(check["counts"]),
+            "examples": check["examples"],
+        }
 
     # FU-9: contested-table slots reserved for TIME-4 quantitative reconcile rows, and the
     # why_they_differ marker reconcile_quantitative writes on a probable unit-scale error.
@@ -4370,11 +4403,17 @@ class ReportAgent:
         except Exception:  # noqa: BLE001
             pass
         # REPORT-9：正文数字对照已核验指标块（只检测；块为空 / 旗标关时不加键，绝不进发布门）。
-        _vf_check = self._verified_figures_check(report_markdown)
-        if _vf_check is not None:
-            forecast.setdefault("quality", {})["verified_figures"] = self._verified_figures_summary(_vf_check)
-            if _vf_check["counts"]["conflict"]:
-                logger.warning(f"已核验数字比对：{_vf_check['counts']['conflict']} 处正文数字与已核验指标不符")
+        try:
+            _vf_check = self._verified_figures_check(report_markdown)
+            if _vf_check is not None:
+                _vf_summary = self._verified_figures_summary(_vf_check)
+                _vf_quality = forecast.setdefault("quality", {})
+                if isinstance(_vf_quality, dict):
+                    _vf_quality["verified_figures"] = _vf_summary
+                if _vf_summary["counts"]["conflict"]:
+                    logger.warning(f"已核验数字比对：{_vf_summary['counts']['conflict']} 处正文数字与已核验指标不符")
+        except Exception as _vf_err:  # noqa: BLE001 — 只检测的旁路，失败不影响 forecast.json
+            logger.warning(f"已核验数字比对记录失败（忽略）: {_vf_err}")
         # QUALITY-OPT A1: emit >=N INDEPENDENT binary (yes/no) forecasts — the brief's headline
         # deliverable — ALONGSIDE the scenario spine. The research dossier usually already holds a
         # compliant F1..Fn table; we extract it (preserving its probabilities) and top up to the
@@ -10514,10 +10553,14 @@ class ReportAgent:
         if logic_number_audit is not None:
             audit["logic_number"] = logic_number_audit
         # REPORT-9: read-only figure check on the final bytes; never read by
-        # _final_audit_integrity_issues or the publish gate.
-        verified_figures_check = self._verified_figures_check(md)
-        if verified_figures_check is not None:
-            audit["verified_figures"] = self._verified_figures_summary(verified_figures_check)
+        # _final_audit_integrity_issues or the publish gate, and a failure records
+        # nothing rather than failing the audit.
+        try:
+            verified_figures_check = self._verified_figures_check(md)
+            if verified_figures_check is not None:
+                audit["verified_figures"] = self._verified_figures_summary(verified_figures_check)
+        except Exception as exc:  # noqa: BLE001 — detection-only telemetry
+            logger.warning(f"Verified-figure check of the final report failed (ignored): {exc}")
         # RESEARCH-9: what the publish stabilizer stripped / added before this
         # audit (telemetry: neither the integrity issues nor the gate read it).
         pre_audit_repairs = self._pre_audit_repairs(report_id, body_marker_audit)
@@ -10545,6 +10588,10 @@ class ReportAgent:
             if "verified_figures" in audit:
                 # REPORT-9: the final bytes' figure check replaces the draft's.
                 quality["verified_figures"] = dict(audit["verified_figures"])
+            else:
+                # Not measured on these bytes (knob off, no block, a failed check):
+                # the draft's or an earlier audit's counts must not survive re-sealed.
+                quality.pop("verified_figures", None)
             if pre_audit_repairs is not None:
                 # Before serialization, so forecast_sha256 seals it.
                 quality["citation_finalization"] = pre_audit_repairs
@@ -14112,7 +14159,7 @@ class ReportAgent:
             # rewrites Markdown; it only persists final_audit.json + forecast fields.
             if getattr(Config, "REPORT_FINAL_READ_ONLY_AUDIT", True):
                 self._enforce_final_publish_audit(report_id, report)
-            # REPORT-9：主报告已定型，写影子工件 figure_provenance.json（块为空 / 旗标关时不写）。
+            # REPORT-9：主报告已定型，写影子工件 figure_provenance.json（块为空 / 旗标关时不写，并删除旧文件）。
             self._write_figure_provenance(report_id, report)
 
             # BILINGUAL：在所有最终化/可视化/纯度处理之后（成稿已定型），自动生成另一语种版本
