@@ -146,11 +146,46 @@ def test_probabilities_in_words_are_unverified_numbers():
         "销量增长八九不离十",
         "增长概率不足一半",
         "增长的可能性超过一半",
+        # Round-3 review probes: count nouns in N in M, digit fractions, "probable / likelier
+        # than not", odds against, 胜率 next to a half, N-M开 splits.
+        "Upside has one chance in three.",
+        "Upside has two chances in five.",
+        "Upside has one chance out of three.",
+        "Nine times out of ten demand recovers.",
+        "Demand recovers one time in four.",
+        "Growth is more probable than not.",
+        "Growth is likelier than not.",
+        "Growth is two-to-one against.",
+        "Upside has a 1/3 chance.",
+        "Only 1/3 of buyers charge at home.",
+        "增长的胜率不到一半",
+        "增长是三七开的可能",
+        "增长与否是四六开",
+        "每三辆新车中就有一辆是电动车",
+        "十次有九次会增长",
+        # The rule: a chance word and any quantity in one sentence (digits that are not a
+        # date, number words, fractions, counts, Chinese ratios and multiples).
+        "Growth is three times as likely.",
+        "The probability, about a third, is too low.",
+        "Analysts put the likelihood of growth at 0.4.",
+        "Growth has zero chance.",
+        "Growth is a 1999 in 2000 chance.",
+        "The odds are 2000 to 1.",
+        "胜算只有三比一",
+        "增长的概率为零",
+        "增长的可能性提高了一倍",
+        # Odds values in words.
+        "The odds are long.",
+        "The chances are even.",
+        "The odds are stacked against growth.",
     ]
-    kept, dropped = _claims([{"text": t, "sources": ["S1"]} for t in texts])
+    known = set().union(*(fc.discriminative_numbers(t, NUMBERS) for t in texts))
+    kept, dropped = _claims([{"text": t, "sources": ["S1"]} for t in texts], numbers=known)
     assert kept == [] and dropped == Counter({"unverified_number": len(texts)})
-    # Ordinary words that contain 成 or "in", ranges, ordinals and magnitudes are not
-    # proportions or odds.
+    for text in texts:                         # the proportion wall, not the number wall
+        assert fc._states_proportion(text), text
+    # Ordinary words that contain 成 or "in", ranges, ordinals, magnitudes, dates and
+    # direction-only chance words are not proportions or odds.
     allowed = [
         "电池成本持续下降，成员国政策一成不变",
         "One in the region expanded capacity in 2024",
@@ -164,9 +199,31 @@ def test_probabilities_in_words_are_unverified_numbers():
         "全省统一成形工艺",
         "单一成像技术已经成熟",
         "四成都市场",
+        # Round-3 review probes: direction-only odds, a rate over a span of time, a year
+        # followed by a city.
+        "The odds of a recession are rising",
+        "The chances are slim that prices fall",
+        "Sales rose by 25 in 12 months",
+        "2025成都车展",
+        "The odds against growth are rising",
+        "The odds on a recession are lengthening",
+        "Chances of a recession in 2026 are rising",
+        "The odds of a Q3 rate cut are rising",
+        "The chances are even lower now",
+        "The new data are at odds with the 2023 survey of 1,200 buyers",
+        "Sales shot up to 17 million units in 2024",
+        "One of the likely drivers is cheaper batteries",
+        "Sales of zero-emission vehicles are likely to rise",
+        "Sales reached 17 million units in 2024. Further growth is likely",
+        "Sales rose from 12 to 15 against forecasts",
+        "Charging is available 24/7 at most stations",
+        "每100公里有15个充电桩",
+        "这是导致需求进一步回落的可能性之一",
+        "2026年3月1日起补贴退坡，提高了需求回落的可能性",
     ]
     for text in allowed:                       # one call each: a side keeps at most three claims
-        kept, dropped = _claims([{"text": text, "sources": ["S1"]}])
+        kept, dropped = _claims([{"text": text, "sources": ["S1"]}],
+                                numbers=fc.discriminative_numbers(text, NUMBERS))
         assert [c["text"] for c in kept] == [text] and not dropped, text
     # Tenths proportions next to those word tails still count.
     tenths = ["七成都来自中国", "四成年轻人选择电动车", "占据七成份额", "七成批发商看好",
@@ -175,17 +232,39 @@ def test_probabilities_in_words_are_unverified_numbers():
     assert kept == [] and dropped == Counter({"unverified_number": len(tenths)})
 
 
-def test_worded_odds_never_reach_part2_with_the_report_support_check():
-    """The review probe: a supported evidence sentence with a hyphenated worded probability
-    appended is rejected, so it can never become the strongest Part-2 claim."""
-    claim = ("Global electric car sales reached 17 million units in 2024, led by China, so a "
-             "one-in-three chance is too low.")
+@pytest.mark.parametrize("probability", [
+    "a one-in-three chance", "one chance in three", "nine times out of ten",
+    "more probable than not", "likelier than not", "two-to-one against", "a 1/3 chance"])
+def test_worded_odds_never_reach_part2_with_the_report_support_check(probability):
+    """The review probes: a supported evidence sentence with a worded probability appended is
+    rejected, so it can never become the strongest Part-2 claim."""
+    support = ReportAgent._semantic_citation_support
+    evidence = "Global electric car sales reached 17 million units in 2024, led by China"
+    claim = f"{evidence}, so {probability} is too low."
+    kept, _ = _claims([{"text": evidence + ".", "sources": ["S1"]}], tags=REAL_TAGS,
+                      support=support)
+    assert [c["verdict"] for c in kept] == ["valid"]       # the evidence alone is supported
     kept, dropped = _claims([{"text": claim, "sources": ["S1"]}], tags=REAL_TAGS,
-                            support=ReportAgent._semantic_citation_support)
+                            support=support)
     assert kept == [] and dropped == Counter({"unverified_number": 1})
     result = {"status": "complete", "targets": [{"target_id": "T1", "scenario": "Upside path",
                                                  "claims": {"higher": kept, "lower": []}}]}
     assert fc.render_counter_case_block(result, "English") == ""
+
+
+def test_worded_odds_are_rejected_when_support_is_undecidable():
+    """The review probe: an English claim citing a Chinese source is undecidable (kept as
+    unverifiable when clean), so the wall alone keeps its digit-fraction probability out."""
+    support = ReportAgent._semantic_citation_support
+    tags = {"S1": {"title": "全球电动车展望", "url": "https://iea.example/ev-zh",
+                   "supports": ["2024年全球电动车销量达到1700万辆，中国领跑。"]}}
+    clean = "Global electric car sales reached 17 million units in 2024, led by China."
+    claim = clean[:-1] + ", so a 1/3 chance is too low."
+    assert support(claim, tags["S1"]) is None
+    kept, dropped = _claims([{"text": clean, "sources": ["S1"]}], tags=tags, support=support)
+    assert [c["verdict"] for c in kept] == ["unverifiable"] and not dropped
+    kept, dropped = _claims([{"text": claim, "sources": ["S1"]}], tags=tags, support=support)
+    assert kept == [] and dropped == Counter({"unverified_number": 1})
 
 
 def test_non_canonical_markers_are_checked_or_rejected():
@@ -253,6 +332,45 @@ def test_claim_caps():
     # Malformed and empty items are counted, never kept.
     kept, dropped = _claims([42, {"text": "  "}, None])
     assert kept == [] and dropped == Counter({"malformed": 2, "empty": 1})
+
+
+def test_cuts_never_publish_a_different_number():
+    """The review probe: a number straddling the 400-character cut never becomes another
+    number ('175 million' is not published as '17'); a number left at the end of a cut, which
+    may have lost its scale ('175' of '175 million', '1.75' of '1.75亿'), is dropped too."""
+    lead = ("Global electric car sales reached 17 million units in 2024, led by China."
+            + " Charging networks keep expanding across every major market." * 5)
+    straddling = lead + " the total fleet reaches 175 million cumulative units."
+    at_the_cut = lead + " the fleet stands near 175 million cumulative units."
+    assert straddling.index("175") == fc.MAX_CLAIM_CHARS - 2       # the cut falls inside it
+    assert at_the_cut.index("175") + 3 == fc.MAX_CLAIM_CHARS - 1   # it ends right at the cut
+    kept, dropped = _claims([{"text": straddling, "sources": ["S1"]},
+                             {"text": at_the_cut, "sources": ["S1"]}], numbers=("17", "175"))
+    assert not dropped
+    assert kept[0]["text"].endswith("the total fleet reaches…")
+    assert kept[1]["text"].endswith("the fleet stands near…")
+    for claim in kept:
+        assert len(claim["text"]) <= fc.MAX_CLAIM_CHARS
+        assert fc.discriminative_numbers(claim["text"], NUMBERS) == {"17"}
+    # Chinese: a scale attached to the number, and a decimal straddling the cut.
+    scale = "累计" * 195 + "预计将达到1.75亿辆。"
+    decimal = "累计" * 197 + "已达到1.75亿辆。"
+    assert scale.index("亿") == decimal.index(".") + 1 == fc.MAX_CLAIM_CHARS - 1
+    assert fc._cap(scale, fc.MAX_CLAIM_CHARS).endswith("预计将达到…")
+    assert fc._cap(decimal, fc.MAX_CLAIM_CHARS).endswith("已达到…")
+    # Trigger fields (300 characters): a threshold whose number straddles the cut keeps no
+    # partial number, so without a date it no longer has a numeric threshold.
+    threshold = "sales climb " * 24 + "far above 25 million units"
+    assert threshold.index("25") == fc.MAX_TRIGGER_FIELD_CHARS - 2
+    assert fc.validate_triggers([_trigger(threshold_or_event=threshold)], REAL_TAGS) == []
+    [kept_trigger] = fc.validate_triggers([_trigger(threshold_or_event=threshold,
+                                                    by="2027-06-30")], REAL_TAGS)
+    assert kept_trigger["threshold_or_event"].endswith("far above…")
+    # Words are never split either, and nothing whole left means nothing published.
+    text = "Sales keep growing across every major market " * 20
+    words = fc._cap(text, fc.MAX_CLAIM_CHARS)
+    assert words.endswith("every major…") and text.startswith(words[:-1])
+    assert fc._cap("x" * 500, fc.MAX_CLAIM_CHARS) == ""
 
 
 def test_claim_walls_with_the_report_support_check():
@@ -546,6 +664,26 @@ def test_triggers_dated_before_as_of_lose_the_date():
     # Without an as-of every real date stands.
     assert [t["by"] for t in fc.validate_triggers(triggers, REAL_TAGS)] == [
         "2026-08-31", "2026-09-01", "2025-01-01"]
+
+
+def test_triggers_that_state_a_probability_are_dropped():
+    """A trigger is published as one row, so its signal and threshold are read together: a
+    chance word and a quantity there state a probability and drop the trigger. A chance word
+    without a quantity is direction only."""
+    kept = fc.validate_triggers([
+        _trigger(signal="Fed rate-cut probability", threshold_or_event="above 50%"),
+        _trigger(signal="Rate-cut odds", threshold_or_event="above 1 in 3"),
+        _trigger(threshold_or_event="one chance in three of topping 25 million"),
+        _trigger(signal="Market-implied probability of a 2027 recession",
+                 threshold_or_event="above 0.4"),
+        _trigger(signal="全球电动车销量增长的概率", threshold_or_event="超过2500万辆"),
+        _trigger(),
+        _trigger(signal="Odds of a rate cut", threshold_or_event="a policy shift",
+                 by="2027-06-30"),
+    ], REAL_TAGS)
+    assert [(t["signal"], t["threshold_or_event"]) for t in kept] == [
+        ("Global electric car sales", "above 25 million"),
+        ("Odds of a rate cut", "a policy shift")]
 
 
 # ---------------------------------------------------------------- failure
