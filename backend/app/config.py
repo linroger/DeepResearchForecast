@@ -618,6 +618,21 @@ class Config:
     # 块的头尾切片字符预算（forecast_extractor.slice_head_tail；≤0 视为默认 16000，回填同规则）。
     EVAL_BUNDLE_CAPTURE = os.environ.get('EVAL_BUNDLE_CAPTURE', 'false').strip().lower() == 'true'
     EVAL_DOSSIER_CHARS = int(os.environ.get('EVAL_DOSSIER_CHARS', '16000') or '16000')
+    # EVAL-20（P07 第 2 部分）：scripts/value_add_eval.py 在冻结评估包上做无标签的块移动研究
+    # （floor / floor_sc / R / R+Q/G/S/M / FULL / FULL_AA，按服务模型给 moves/inert/inconclusive 判定，
+    # 以 A/A 重复臂为噪声底）。只是证据，绝不自动改任何默认值；输出只落在评估账本 value_add/<study_id>/。
+    # VALUE_ADD_EVAL_ENABLED 关 = run 子命令不发任何调用（plan/score 不调用模型）；EVAL_STUDY_MAX_CALLS
+    # 为计划调用数上限（超出须 --max-calls）；EVAL_ARM_REPLICATES 每臂重复次数（<3 只算特征刻画）；
+    # EVAL_TARGETS_PER_BUNDLE 每个评估包取的目标数；EVAL_PROBE_FIDELITY_MAX 为探针保真度门槛（R+M 与
+    # 去市场影响前概率的平均绝对差超出则全部判定只作参考）；EVAL_INERT_MARGIN 为 inert 判定的 CI 上界；
+    # EVAL_BOOTSTRAP_RESAMPLES 为聚类自助重采样次数。
+    VALUE_ADD_EVAL_ENABLED = os.environ.get('VALUE_ADD_EVAL_ENABLED', 'false').strip().lower() == 'true'
+    EVAL_ARM_REPLICATES = int(os.environ.get('EVAL_ARM_REPLICATES', '3') or '3')
+    EVAL_STUDY_MAX_CALLS = int(os.environ.get('EVAL_STUDY_MAX_CALLS', '600') or '600')
+    EVAL_TARGETS_PER_BUNDLE = int(os.environ.get('EVAL_TARGETS_PER_BUNDLE', '2') or '2')
+    EVAL_PROBE_FIDELITY_MAX = float(os.environ.get('EVAL_PROBE_FIDELITY_MAX', '0.10') or '0.10')
+    EVAL_INERT_MARGIN = float(os.environ.get('EVAL_INERT_MARGIN', '0.02') or '0.02')
+    EVAL_BOOTSTRAP_RESAMPLES = int(os.environ.get('EVAL_BOOTSTRAP_RESAMPLES', '2000') or '2000')
     # EVAL-18: slim per-pipeline cost card. On: the _run finally block writes
     # <pipeline_dir>/cost_card.json (drf-cost-card/v1: per-stage calls/tokens/wall first, USD
     # secondary, completeness reasons), and the report stage pins the run's config fingerprint
