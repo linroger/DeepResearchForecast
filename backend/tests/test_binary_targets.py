@@ -671,3 +671,29 @@ def test_knob_defaults_off_and_is_documented():
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     assert "# FORECAST_BINARY_STRUCTURED_TARGET=false" in open(os.path.join(root, ".env.example"),
                                                                  encoding="utf-8").read()
+
+
+def test_config_hash_tells_structured_target_runs_apart_and_keeps_flag_off_bytes():
+    """The knob changes the binary prompt and max_tokens, so on and off runs never share a
+    config_hash; it is recorded only when on, so a flag-off fingerprint is exactly the one
+    a config without the knob (before EVAL-14) produced."""
+    from types import SimpleNamespace
+
+    from app.utils import cost_accounting as ca
+
+    knobs = {"FORECAST_ENSEMBLE_MODELS": "", "FORECAST_MARKET_ANCHORING": True,
+             "PREDICTION_MARKETS_ENABLED": True}
+    options = {"safety_policy_v1": {"n_forecast_seeds": 1}, "max_rounds": 9}
+
+    def fingerprint(**extra):
+        return ca.config_fingerprint(options, None, config=SimpleNamespace(**knobs, **extra))
+
+    before = fingerprint()
+    off = fingerprint(FORECAST_BINARY_STRUCTURED_TARGET=False)
+    on = fingerprint(FORECAST_BINARY_STRUCTURED_TARGET=True)
+    assert off == before and ca.config_hash(off) == ca.config_hash(before)
+    assert set(off["forecast"]) == {"ensemble_models", "market_anchoring",
+                                    "prediction_markets_enabled"}
+    assert on["forecast"] == dict(off["forecast"], binary_structured_target=True)
+    assert ca.config_hash(on) != ca.config_hash(off)
+    assert "binary_structured_target" not in ca.config_fingerprint(options, None)["forecast"]
