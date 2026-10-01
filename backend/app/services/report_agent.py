@@ -4053,6 +4053,18 @@ class ReportAgent:
                                f"{_nc.get('scenario_prob_mismatches', [])[:3]}")
         except Exception:  # noqa: BLE001
             pass
+        # REPORT-3：别名感知概率槽观测（REPORT_LOGIC_NUMBER_GATE != off；off 时不加键）。此处是成稿
+        # 草稿（正文修复在其后）：修复改写成稿时以修复后字节上的观测（含修复记录）替换本值，终审再以
+        # 最终字节上的 logic_number 覆盖；只记录，不进发布门。
+        try:
+            _ln_observation = self._logic_number_observation(report_markdown, forecast)
+            if _ln_observation is not None:
+                forecast.setdefault("quality", {})["logic_number"] = _ln_observation
+                if _ln_observation.get("fixable"):
+                    logger.warning(f"概率槽观测：{_ln_observation['fixable']} 处别名概率槽与骨架不符"
+                                   f"（未解决 {_ln_observation['unresolved']} 处）")
+        except Exception as _ln_err:  # noqa: BLE001 — 观测性记录，绝不影响 forecast.json
+            logger.warning(f"记录概率槽观测失败（忽略）: {_ln_err}")
         # QUALITY-OPT S12: flag implausible headline growth stats (>100% YoY) that anchor reports.
         try:
             _sp = self._audit_stat_plausibility(report_markdown)
@@ -6287,6 +6299,18 @@ class ReportAgent:
             if near:
                 pv = min(near, key=lambda x: abs(x - p))
                 issues.append(f"scenario '{name[:28]}': prose {pv}% vs forecast.json {p}%")
+        # REPORT-3：仅 REPORT_LOGIC_NUMBER_GATE=numeric 时并入别名槽不符（同一格式、去重），经既有
+        # S11 硬路径阻止发布；observe/off 输出不变。检测异常时失败即关闭（记一条不符）。
+        if self._logic_number_gate() == "numeric":
+            try:
+                from .logic_number import s11_mismatches
+                for message in s11_mismatches(md, forecast.get("scenarios") or [],
+                                              reference="forecast.json"):
+                    if message not in issues:
+                        issues.append(message)
+            except Exception as _ln_err:  # noqa: BLE001 — 硬规则检测失败 → fail closed
+                logger.warning(f"别名概率槽 S11 检测失败（按不符处理）: {_ln_err}")
+                issues.append(f"logic-number alias audit failed: {type(_ln_err).__name__}")
         return {"scenario_prob_mismatches": issues[:8], "mismatch_count": len(issues)}
 
     def _lang_override(self) -> str:
@@ -6750,7 +6774,9 @@ class ReportAgent:
         lang = getattr(self, "output_language", None) or "English"
         spine = self._forecast_spine if isinstance(getattr(self, "_forecast_spine", None),
                                                    dict) else None
-        cleaned, lint_rep = _rl.lint_report(md, lang, mode="final", spine=spine)
+        cleaned, lint_rep = _rl.lint_report(
+            md, lang, mode="final", spine=spine,
+            alias_aware_s11=self._logic_number_gate() == "numeric")
         if lint_rep.get("changed") and cleaned.strip():
             report.markdown_content = cleaned
             try:
@@ -6783,6 +6809,181 @@ class ReportAgent:
             f"{lint_rep.get('dangling_attributions')}｜重复句 "
             f"{lint_rep.get('duplicate_sentences_removed')}｜泄漏残留 {lint_rep.get('leakage_flags')}"
         )
+
+    @staticmethod
+    def _logic_number_repair_enabled() -> bool:
+        """REPORT-3：零 token 槽位修复是否运行（REPORT_LOGIC_NUMBER_REPAIR 与 REPORT_NARRATIVE_SYNC 皆开）。"""
+        return bool(getattr(Config, "REPORT_LOGIC_NUMBER_REPAIR", False)
+                    and getattr(Config, "REPORT_NARRATIVE_SYNC", True))
+
+    @staticmethod
+    def _logic_number_gate() -> str:
+        """REPORT-3：生效的 REPORT_LOGIC_NUMBER_GATE（off / observe / numeric；未知值按 observe 并告警）。
+
+        每份报告（默认 observe）都会走到这里：审计模块导入失败绝不能让稳定器或终审抛出，故退回
+        原始取值（off / numeric 照用，其余按 observe）并告警；numeric 分支自身仍失败即关闭。"""
+        raw = getattr(Config, "REPORT_LOGIC_NUMBER_GATE", "observe")
+        try:
+            from .logic_number import resolve_gate
+        except Exception as exc:  # noqa: BLE001 — 只读观测的门值解析不得阻断发布
+            logger.warning(f"logic_number 模块导入失败，按原始取值解析 REPORT_LOGIC_NUMBER_GATE: {exc}")
+            value = str(raw or "").strip().lower()
+            return value if value in ("off", "numeric") else "observe"
+        return resolve_gate(raw)
+
+    def _spine_scenario_rows(self) -> List[Dict[str, Any]]:
+        """REPORT-3：当前预测骨架（成稿后即最终 forecast）的情景行；无骨架/无情景时为空列表。"""
+        spine = getattr(self, "_forecast_spine", None)
+        rows = spine.get("scenarios") if isinstance(spine, dict) else None
+        return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+    def _repair_outline_summary_numbers(self, outline: "ReportOutline") -> None:
+        """REPORT-3：把大纲摘要里与骨架不符的别名概率槽（「基准情景（40%）」对 A=0.35）确定性改成
+        骨架值（零 token）。调用方在 report.outline / self._outline_summary 赋值与 save_outline 之前
+        调用，故大纲、meta、引用溯源豁免文本与成稿摘要 blockquote 始终逐字节一致。改写记入
+        self._logic_number_summary_repair，由 _repair_logic_number 并入修复记录；失败仅告警。"""
+        try:
+            from . import logic_number as _ln
+            summary = getattr(outline, "summary", None)
+            findings = _ln.find_probability_slots(summary, self._spine_scenario_rows())
+            new_summary, applied = _ln.substitute_probability_slots(summary, findings)
+            if applied:
+                outline.summary = new_summary
+                self._logic_number_summary_repair = [
+                    {"where": "outline_summary", **row} for row in applied]
+                logger.info(f"大纲摘要概率槽已同步骨架: {applied}")
+        except Exception as _ln_err:  # noqa: BLE001 — 确定性修复为增强，失败保留原摘要
+            logger.warning(f"大纲摘要概率槽同步失败（忽略，保留原文）: {_ln_err}")
+
+    @staticmethod
+    def _resync_summary_blockquote(report: "Report", md: str, scenarios: List[Dict[str, Any]]
+                                   ) -> Tuple[str, Optional[str], List[Dict[str, str]]]:
+        """REPORT-3：成稿阶段的摘要补同步（只计算，不改任何状态）。规划时骨架尚无情景（成稿后
+        抽取的旧路径）或其后概率又被移动时，摘要仍可能与最终情景不符；仅当成稿里恰有一处整行块
+        等于 "> {outline.summary}"（摘要含换行时为多行：首行带 "> "，其后是 blockquote 的惰性续行）
+        时才改写该块，并返回改写后的摘要供调用方与 report.outline.summary / self._outline_summary
+        一并提交（四者保持逐字节一致）。找不到唯一的那一块则不改。
+        返回 (成稿, 新摘要或 None, 改写记录)。"""
+        from . import logic_number as _ln
+        summary = getattr(getattr(report, "outline", None), "summary", None)
+        new_summary, applied = _ln.substitute_probability_slots(
+            summary, _ln.find_probability_slots(summary, scenarios))
+        if not applied:
+            return md, None, []
+        block = f"> {summary}"
+        hits: List[int] = []
+        position = md.find(block)
+        while position >= 0 and len(hits) < 2:
+            end = position + len(block)
+            if (position == 0 or md[position - 1] == "\n") and (end == len(md) or md[end] == "\n"):
+                hits.append(position)
+            position = md.find(block, position + 1)
+        if len(hits) != 1:
+            return md, None, []
+        synced = md[:hits[0]] + f"> {new_summary}" + md[hits[0] + len(block):]
+        return synced, new_summary, [{"where": "outline_summary", **row} for row in applied]
+
+    def _repair_logic_number(self, report_id: str, report: "Report") -> None:
+        """REPORT-3：稳定器之前的确定性别名概率槽修复（零 token）。
+
+        对成稿（跳过摘要 blockquote——它只与大纲摘要一并改写，见 _repair_outline_summary_numbers /
+        _resync_summary_blockquote，单独改写会破坏与 self._outline_summary 的一致）做
+        logic_number.audit_markdown，把 fixable 槽位的数字换成骨架值；区间/数量/合计/市场/引语/
+        条件/历史守卫命中的 unresolved 槽位只计数、绝不改写。全部算完后一次提交：
+        report.markdown_content 与 full_report.md（放在语言纯度之后、编辑 lint 与
+        _stabilize_publish_markdown 之前，稳定器与终审的 SHA 指纹因此覆盖修复后的字节），摘要补同步时
+        连同 outline.summary / self._outline_summary / outline.json；成稿有改写时再刷新 forecast.json
+        的 quality.logic_number（_refresh_logic_number_quality）。结果记
+        self._logic_number_repair = {applied（截断明细）, applied_count / summary_count / body_count
+        （未截断总数）, unresolved}。REPORT_LOGIC_NUMBER_REPAIR（默认关）或 REPORT_NARRATIVE_SYNC 关、
+        或骨架无情景时不做任何事（成稿逐字节不变）；任何失败仅告警。"""
+        if not self._logic_number_repair_enabled():
+            return
+        scenarios = self._spine_scenario_rows()
+        if not scenarios:
+            return
+        try:
+            from . import logic_number as _ln
+            md = report.markdown_content or ""
+            synced_md, new_summary, summary_rows = self._resync_summary_blockquote(
+                report, md, scenarios)
+            audit = _ln.audit_markdown(synced_md, scenarios, skip_summary_blockquote=True,
+                                       max_findings=None)
+            new_md, applied = _ln.substitute_probability_slots(synced_md, audit["findings"])
+            applied_rows = list(getattr(self, "_logic_number_summary_repair", None) or [])
+            applied_rows += summary_rows + [{"where": "body", **row} for row in applied]
+        except Exception as _ln_err:  # noqa: BLE001 — 确定性修复为增强，失败保留原文
+            logger.warning(f"概率槽修复失败（忽略，保留原文）: {_ln_err}")
+            return
+        # applied 只留前 LOGIC_NUMBER_FINDINGS_CAP 条明细；*_count 为未截断的总数（摘要 + 正文）。
+        self._logic_number_repair = {
+            "applied": applied_rows[:_ln.LOGIC_NUMBER_FINDINGS_CAP],
+            "applied_count": len(applied_rows),
+            "summary_count": len(applied_rows) - len(applied),
+            "body_count": len(applied),
+            "unresolved": audit["unresolved"],
+        }
+        if new_summary is not None:
+            report.outline.summary = new_summary
+            self._outline_summary = new_summary
+        if new_md != md:
+            report.markdown_content = new_md
+            try:
+                folder = ReportManager._get_report_folder(report_id)
+                write_text_atomic(os.path.join(folder, "full_report.md"), new_md)
+                if new_summary is not None:
+                    ReportManager.save_outline(report_id, report.outline)
+            except Exception as _we:  # noqa: BLE001
+                logger.warning(f"重写 full_report.md / outline.json（概率槽修复）失败（忽略）: {_we}")
+        if new_md != md or applied_rows:
+            # 仅规划时摘要被修复、正文无需改写时，草稿观测里也还没有修复记录，同样刷新。
+            self._refresh_logic_number_quality(report_id, new_md)
+        logger.info(f"概率槽修复: {report_id} 正文改写 {len(applied)} 处｜摘要改写 "
+                    f"{len(summary_rows)} 处｜未解决 {audit['unresolved']} 处")
+
+    def _refresh_logic_number_quality(self, report_id: str, md: str) -> None:
+        """REPORT-3：修复改写了成稿后，把 forecast.json（及内存骨架）的 quality.logic_number 换成
+        修复后字节上的观测（含修复记录）。_finalize_structured_forecast 记下的是修复前草稿上的观测，
+        REPORT_FINAL_READ_ONLY_AUDIT 关闭时没有终审再覆盖它，留着就会描述一份从未发布的文本。
+        gate=off、无 forecast.json 或无情景时不动；读-改-写，失败仅告警（只关乎可观测性）。"""
+        try:
+            fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
+            if not os.path.exists(fpath):
+                return
+            with open(fpath, "r", encoding="utf-8") as f:
+                fc = json.load(f)
+            if not isinstance(fc, dict):
+                return
+            observation = self._logic_number_observation(md, fc)
+            if observation is None:
+                return
+            fc.setdefault("quality", {})["logic_number"] = observation
+            write_text_atomic(fpath, json.dumps(fc, ensure_ascii=False, indent=2))
+            if isinstance(getattr(self, "_forecast_spine", None), dict):
+                self._forecast_spine.setdefault("quality", {})["logic_number"] = observation
+        except Exception as _fe:  # noqa: BLE001 — 观测性记录，绝不影响成稿
+            logger.warning(f"概率槽修复后刷新 forecast.json quality.logic_number 失败（忽略）: {_fe}")
+
+    def _logic_number_observation(self, md: str,
+                                  forecast: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """REPORT-3：只读别名概率槽观测（REPORT_LOGIC_NUMBER_GATE != off）——含摘要 blockquote 的
+        logic_number.audit_markdown，再附上本次运行的修复记录（有则附）。从不进 hard_issues / 发布门。
+        gate=off 或无情景时返回 None（调用方不写字段）；失败仅告警并返回 None。"""
+        if self._logic_number_gate() == "off":
+            return None
+        scenarios = forecast.get("scenarios") if isinstance(forecast, dict) else None
+        if not isinstance(scenarios, list) or not scenarios:
+            return None
+        try:
+            from . import logic_number as _ln
+            observation = _ln.audit_markdown(md or "", scenarios)
+            repair = getattr(self, "_logic_number_repair", None)
+            if repair is not None:
+                observation["repair"] = repair
+            return observation
+        except Exception as _ln_err:  # noqa: BLE001 — 观测性记录，绝不影响产物
+            logger.warning(f"概率槽观测失败（忽略）: {_ln_err}")
+            return None
 
     def _projection_attribution_audit(self, md: str) -> Optional[Dict[str, Any]]:
         """RESEARCH-5：已报告 vs 预期的归因观测（report_lint.check_projection_attribution）——
@@ -9393,6 +9594,8 @@ class ReportAgent:
             if isinstance(getattr(self, "_forecast_spine", None), dict)
             else None
         )
+        # REPORT-3: numeric gate only adds alias mismatches to the detection report.
+        alias_aware = self._logic_number_gate() == "numeric"
         folder = ReportManager._get_report_folder(report_id)
         totals: Dict[str, Any] = {
             "passes": 0,
@@ -9450,6 +9653,7 @@ class ReportAgent:
                 lang,
                 mode="final",
                 spine=spine,
+                alias_aware_s11=alias_aware,
             )
             if not cleaned.strip():
                 raise RuntimeError(
@@ -9482,6 +9686,7 @@ class ReportAgent:
                 lang,
                 mode="final",
                 spine=spine,
+                alias_aware_s11=alias_aware,
             )
             unsupported = int(semantic.get("unsupported", 0) or 0)
             totals["semantic_unsupported"] = unsupported
@@ -9529,8 +9734,10 @@ class ReportAgent:
         ):
             try:
                 _current = report.markdown_content or ""
-                _once, _ = _rl.lint_report(_current, lang, mode="final", spine=spine)
-                _twice, _info2 = _rl.lint_report(_once, lang, mode="final", spine=spine)
+                _once, _ = _rl.lint_report(_current, lang, mode="final", spine=spine,
+                                           alias_aware_s11=alias_aware)
+                _twice, _info2 = _rl.lint_report(_once, lang, mode="final", spine=spine,
+                                                 alias_aware_s11=alias_aware)
                 if _once == _twice and _once.strip() and not _info2.get("changed"):
                     report.markdown_content = _once
                     write_text_atomic(
@@ -9928,6 +10135,7 @@ class ReportAgent:
             lang,
             mode="final",
             spine=forecast if isinstance(forecast, dict) else None,
+            alias_aware_s11=self._logic_number_gate() == "numeric",
         )
 
         audit: Dict[str, Any] = {
@@ -9968,6 +10176,11 @@ class ReportAgent:
         projection_audit = self._projection_attribution_audit(md)
         if projection_audit is not None:
             audit["projection_attribution"] = projection_audit
+        # REPORT-3: observe-only alias probability-slot audit of the final body (plus the
+        # run's repair record); _final_audit_integrity_issues never reads it.
+        logic_number_audit = self._logic_number_observation(body, forecast)
+        if logic_number_audit is not None:
+            audit["logic_number"] = logic_number_audit
         # RESEARCH-9: what the publish stabilizer stripped / added before this
         # audit (telemetry: neither the integrity issues nor the gate read it).
         pre_audit_repairs = self._pre_audit_repairs(report_id, body_marker_audit)
@@ -9986,6 +10199,12 @@ class ReportAgent:
             quality["quote_provenance"] = quote_audit
             quality["numeric_consistency"] = numeric_audit
             quality["implausible_stats"] = stat_audit
+            # REPORT-3: the final-bytes alias-slot observation (with this run's repair record)
+            # replaces the draft one _finalize_structured_forecast took before the repair.
+            if logic_number_audit is not None:
+                quality["logic_number"] = logic_number_audit
+            else:
+                quality.pop("logic_number", None)
             if pre_audit_repairs is not None:
                 # Before serialization, so forecast_sha256 seals it.
                 quality["citation_finalization"] = pre_audit_repairs
@@ -13216,6 +13435,13 @@ class ReportAgent:
                 forecast_spine_block=self._forecast_spine_block,
                 require_forecast_structure=_spine_ready,
             )
+            # REPORT-3：摘要 blockquote 由 outline.summary 组装，引用溯源审计只豁免
+            # self._outline_summary——在二者赋值与 save_outline 之前把摘要里的过期别名概率槽改成
+            # 骨架值，大纲 / meta / 豁免文本 / 成稿 blockquote 因此逐字节一致（零 token）。
+            self._logic_number_summary_repair = []
+            self._logic_number_repair = None
+            if _spine_ready and self._logic_number_repair_enabled():
+                self._repair_outline_summary_numbers(outline)
             report.outline = outline
             # RPT-5: 供引用溯源审计豁免系统注入的摘要 blockquote（"> {outline.summary}"）。
             self._outline_summary = outline.summary or ""
@@ -13506,6 +13732,11 @@ class ReportAgent:
                         self._apply_language_purity(report_id, report)
                     except Exception as _lp_err:  # noqa: BLE001
                         logger.warning(f"语言纯度扫描失败（忽略，保留原文）: {_lp_err}")
+
+            # REPORT-3：确定性别名概率槽修复——所有注入与语言纯度之后、编辑 lint 与发布稳定器之前
+            # （SHA 指纹覆盖修复后的字节）。REPORT_LOGIC_NUMBER_REPAIR / REPORT_NARRATIVE_SYNC 关或
+            # 骨架无情景时不动成稿；失败仅告警。
+            self._repair_logic_number(report_id, report)
 
             # WAVE9：确定性编辑纪律 lint——所有修复/注入/纯度处理之后、双语翻译之前跑一遍
             # report_lint.lint_report（引用残留/边转储/旧模拟标签/孤悬归因行/重复句…），
