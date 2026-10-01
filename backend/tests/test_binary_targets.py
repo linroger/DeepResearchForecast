@@ -129,6 +129,13 @@ def test_canonical_unit_never_crosses_rate_units():
     for unit in ("2020 USD", "billion 2020 USD", "USD 100", "USD 0 million"):
         assert bt.canonical_unit(unit) is None, unit
     assert bt.canonical_unit("3D printers") == ("3D printers", 1.0)
+    # "ppt" may be percentage points or parts per trillion; a second magnitude never
+    # multiplies the first; a scientific-notation number is no unit word and no magnitude.
+    for unit in ("ppt", "ppts", "USD billion billion", "billion 亿美元", "million M units",
+                 "USD 1e9", "1E9 USD", "USD 10^9", "1.5e3 units"):
+        assert bt.canonical_unit(unit) is None, unit
+    assert _valid({"unit": "ppt"}) == (None, ["unit_invalid"])
+    assert bt.canonical_unit("deaths per 1e5 people") == ("deaths per 1e5 people", 1.0)
     # A denominator's numbers and magnitudes stay in the label: they divide, never scale.
     assert bt.canonical_unit("deaths per million") == ("deaths per million", 1.0)
     assert bt.canonical_unit("deaths per 100,000 people") == ("deaths per 100,000 people", 1.0)
@@ -172,6 +179,11 @@ def test_path_dependent_requires_window_stat():
                            statement="Bitcoin trades above $100,000 at any point in 2024",
                            criteria="任何时候 BTC 价格")
     assert errors == [] and clean["statistic"] == "max_over_window"
+    # "ever" inside a hyphenated compound is no path-dependent wording
+    clean, errors = _valid(statement="Ever-growing data-centre demand exceeds 230 GW on 2030-12-31")
+    assert errors == [] and clean["statistic"] == "value_on"
+    clean, errors = _valid(statement="Grid demand ever exceeds 230 GW in 2030")
+    assert clean is None and "path_dependent_requires_window_extreme" in errors
 
 
 @pytest.mark.parametrize("comparator,statistic,statement,criteria,ok", [
@@ -191,6 +203,25 @@ def test_path_dependent_requires_window_stat():
     (">=", "min_over_window", "比特币2024年任何时候都不低于10万美元", "", True),
     ("<=", "max_over_window", "Bitcoin stays capped in 2024",
      "Resolves NO if BTC trades above $100,000 at any point in 2024.", True),
+    # the negation may sit in a neighbouring comma clause of the same sentence
+    ("<=", "max_over_window", "Bitcoin does not, at any point in 2024, trade above $100,000", "",
+     True),
+    ("<=", "max_over_window", "Bitcoin stays capped in 2024",
+     "Resolves NO if, at any point in 2024, BTC trades above $100,000", True),
+    ("<=", "max_over_window", "In 2024, at any point, Bitcoin never trades above $100,000", "",
+     True),
+    # an inverted verdict reverses the event too
+    ("<=", "max_over_window", "Bitcoin stays capped in 2024",
+     "Resolves negatively if BTC trades above $100,000 at any point in 2024.", True),
+    ("<=", "max_over_window", "Bitcoin stays capped in 2024",
+     "Fails if, at any point in 2024, BTC trades above $100,000.", True),
+    # a closing complement negates nothing, and a plain comma clause is still read
+    (">", "min_over_window", "Bitcoin tops $100k in 2024",
+     "YES if BTC trades above $100,000 at any point in 2024, otherwise it resolves NO.", False),
+    (">", "min_over_window", "Bitcoin tops $100k in 2024",
+     "Resolves YES if BTC trades above $100,000 at any point in 2024, and NO if not.", False),
+    (">", "min_over_window", "比特币2024年任何时候高于10万美元则为是，否则为否", "", False),
+    (">", "min_over_window", "In 2024, at any point, Bitcoin trades above $100,000", "", False),
 ])
 def test_path_dependent_statistic_is_on_the_comparator_side(comparator, statistic, statement,
                                                              criteria, ok):
@@ -265,6 +296,15 @@ def test_negated_comparators_read_the_right_way_round(criteria, low, high, inclu
     "失业率不至于超过5%",
     "失业率不太可能超过5%",
     "截至2030年，失业率未曾超过5%",
+    # an inverted verdict before the condition: YES needs the complement
+    "Resolves negatively if revenue exceeds $100 billion",
+    "Resolves false if revenue exceeds $100 billion",
+    "Resolves as N if revenue exceeds $100 billion",
+    "Resolves to 0 if revenue exceeds $100 billion",
+    "Resolves in the negative if revenue exceeds $100 billion",
+    "Fails if revenue exceeds $100 billion",
+    "Also falsified if global EV share by 2032 falls below 55%",
+    "This resolves negatively for revenue above $100 billion",
 ])
 def test_negation_swallowed_by_the_metric_is_never_parsed(criteria):
     """A negation the metric swallowed would flip the bare comparator after it."""
@@ -281,6 +321,10 @@ def test_negation_swallowed_by_the_metric_is_never_parsed(criteria):
     ("失业率并不超过5%", "失业率并", -math.inf, 5.0),
     ("失业率绝不超过5%", "失业率绝", -math.inf, 5.0),
     ("失业率从不超过5%", "失业率从", -math.inf, 5.0),
+    # a YES verdict reads, and a NO word outside a verdict is part of the metric
+    ("Resolves YES if revenue exceeds $100 billion", "resolves yes if revenue", 100.0, math.inf),
+    ("Verified if revenue exceeds $100 billion", "verified if revenue", 100.0, math.inf),
+    ("False positive rate exceeds 5%", "false positive rate", 5.0, math.inf),
 ])
 def test_negation_characters_inside_a_metric_stay_readable(criteria, metric, low, high):
     parsed = _extract_comparable_numeric_range(criteria)
@@ -303,12 +347,35 @@ def test_negated_criteria_never_stamp_an_inverted_target_consistent():
     assert errors == [] and clean["criteria_check"] == "consistent"
     # 未曾 ("never") swallowed by the metric: the inverted target is unverifiable, never
     # "consistent", and the right-way-round one is never rejected as a mismatch.
+    # an inverted verdict ("Fails if") is unverifiable too, never "consistent"
+    for comparator in (">", "<="):
+        clean, errors = bt.validate_binary_target(
+            dict(target, comparator=comparator), statement="Revenue stays capped",
+            criteria="Fails if revenue exceeds $100 billion")
+        assert errors == [] and clean["criteria_check"] == "criteria_unparsed", comparator
     rate = dict(GOOD, metric="失业率", unit="%", threshold=5)
     for comparator in (">", "<="):
         clean, errors = bt.validate_binary_target(
             dict(rate, comparator=comparator), statement="失业率封顶",
             criteria="截至2030年，失业率未曾超过5%")
         assert errors == [] and clean["criteria_check"] == "criteria_unparsed", comparator
+
+
+@pytest.mark.parametrize("unit,threshold,criteria,check", [
+    ("GW", 230, "Output exceeds 230 tons", "criteria_unparsed"),
+    ("barrels", 230, "Output exceeds 230 tonnes", "criteria_unparsed"),
+    ("units", 230, "Seats exceed 230 seats", "criteria_unparsed"),
+    ("tonnes", 230, "Output exceeds 230 tons", "criteria_unparsed"),     # short ton != tonne
+    ("Seat", 230, "Seats exceed 230 seats", "consistent"),               # singular = plural
+    ("million units", 5, "Shipments exceed 5 million", "consistent"),    # a count = units
+    ("tons", 230, "Output exceeds 230 tons", "consistent"),
+])
+def test_plain_units_must_agree_to_be_consistent(unit, threshold, criteria, check):
+    """Neither a currency nor a rate: different labels are not comparable, so the clause is
+    unverifiable, never a positive "consistent"."""
+    clean, errors = bt.validate_binary_target(
+        dict(GOOD, metric="output", unit=unit, threshold=threshold), statement="", criteria=criteria)
+    assert errors == [] and clean["criteria_check"] == check
 
 
 def test_strict_vs_inclusive_comparator_is_consistent_bound_only():
@@ -347,6 +414,12 @@ def test_scenario_audit_reads_negated_partitions_flag_independently(monkeypatch)
     assert overlap[0]["overlap"] == [100.0, 120.0]
     # a negation the metric swallowed is skipped, never read as a second lower bound
     assert not overlaps(audit("Revenue will not be above $120 billion"))
+    # so is an inverted verdict ("Fails if" holds only below the bound)
+    assert not overlaps(audit("Fails if revenue exceeds $120 billion"))
+    # Horizontal whitespace runs (a tab, U+3000) read as one space: such a clause now parses.
+    for gap in ("\t", "\u3000", " \t "):
+        parsed = _extract_comparable_numeric_range(f"Data{gap}centre demand exceeds $100 billion")
+        assert parsed is not None and parsed["metric"] == "data centre demand", repr(gap)
 
 
 # ------------------------------------------------------------------ ladder audit
@@ -381,6 +454,20 @@ def test_ladder_audit_violation_and_clean():
     other_date = _rung(2, ">", 230, 0.9, target_date="2031-12-31")
     assert bt.threshold_ladder_audit([_rung(1, ">=", 170, 0.1), other_date])["groups_checked"] == 0
     assert bt.threshold_ladder_audit([{"id": "F1", "probability": 0.4}, "junk"])["groups_checked"] == 0
+
+
+def test_short_metric_codes_join_a_ladder():
+    """A short code the extractor's label normaliser blanks (M2) still links its rungs, so a
+    non-monotone M2 pair is never a silent miss; a generic label stays unlinkable."""
+    rows = [_rung(1, ">", 300, 0.2, metric="M2", unit="CNY trillion"),
+            _rung(2, ">", 350, 0.7, metric="M2", unit="CNY trillion")]
+    audit = bt.threshold_ladder_audit(rows)
+    assert audit["groups_checked"] == 1 and audit["violation_count"] == 1
+    assert audit["violations"][0]["group"]["metric"] == "m2"
+    assert bt.target_group_key(dict(rows[0]["target"], metric=" m2 ")) == bt.target_group_key(
+        rows[0]["target"])
+    for generic in ("value", "Metric", "2030", "-"):
+        assert bt.target_group_key(dict(rows[0]["target"], metric=generic)) is None, generic
 
 
 def test_ladder_label_keeps_the_magnitude():

@@ -51,7 +51,7 @@ def test_ape_disabled_for_rate_units():
                  "bps", "basis points", "% of GDP", "pp YoY", "百分点", "基点"):
         assert qs.ape50(4.5, 4.0, unit) is None, unit
     # a unit that cannot be read is not known to be a level
-    for unit in (None, "", "% billion", 42):
+    for unit in (None, "", "% billion", 42, "ppt"):
         assert qs.ape50(4.5, 4.0, unit) is None, unit
     assert qs.ape50(1.0, 0.0, "GW") is None
 

@@ -411,6 +411,21 @@ _RANGE_METRIC_NEGATION_RE = re.compile(
     r"|[不未没沒無无非莫勿][\u4e00-\u9fff]{0,2}$|不会|未能|无法|没能|不太可能|不大可能",
     re.I,
 )
+# EVAL-14: an outcome stated before the condition inverts the clause as surely as a negation
+# ("Fails if revenue exceeds X", "Resolves negatively if ...", "Also falsified if ..." resolve
+# YES only on the complement).  The verdict is the text before the first conditional word: it
+# may name no NO outcome, and a resolution verb there must name YES ("Resolves YES if" reads;
+# "Resolves as N if" / "Resolves to 0 if" do not).  Without a conditional a resolution verb
+# still needs YES ("This resolves negatively for revenue above X").
+_RANGE_CONDITIONAL_RE = re.compile(
+    r"(?<![\w-])(?:if|when|whenever|once|should|provided|in\s+case)(?![\w-])", re.I)
+_RANGE_NO_VERDICT_RE = re.compile(
+    r"(?<![\w-])(?:no|n|0|false|falsified|negative(?:ly)?|fail(?:s|ed|ure)?|loses?|lost|wrong"
+    r"|incorrect|refuted|disproved|invalid(?:ated)?|rejected|void)(?![\w-])", re.I)
+_RANGE_RESOLUTION_VERB_RE = re.compile(
+    r"(?<![\w-])(?:resolv(?:e|es|ed|ing)|settl(?:e|es|ed|ing))(?![\w-])", re.I)
+_RANGE_YES_VERDICT_RE = re.compile(
+    r"(?<![\w-])(?:yes|y|true|positive(?:ly)?|affirmative(?:ly)?|1)(?![\w-])", re.I)
 # EVAL-14: comparators that include their bound (">=" / "<=" readings); the rest are strict.
 _INCLUSIVE_RANGE_OPS = frozenset({
     ">=", "<=", "at least", "at most", "no less than", "not less than", "no fewer than",
@@ -419,6 +434,17 @@ _INCLUSIVE_RANGE_OPS = frozenset({
     "not exceeding", "不低于", "至少", "不少于", "不小于", "不超过", "至多", "不高于", "不大于",
     "不多于",
 })
+
+
+def _range_verdict_inverted(text: str) -> bool:
+    """Whether ``text`` states a NO outcome for the condition after it (see
+    :data:`_RANGE_NO_VERDICT_RE`)."""
+    conditional = _RANGE_CONDITIONAL_RE.search(text)
+    verdict = text[:conditional.start()] if conditional else text
+    if conditional and _RANGE_NO_VERDICT_RE.search(verdict):
+        return True
+    return bool(_RANGE_RESOLUTION_VERB_RE.search(verdict)
+                and not _RANGE_YES_VERDICT_RE.search(verdict))
 
 
 def _normalise_metric_label(value: str) -> str:
@@ -637,7 +663,9 @@ def _extract_comparable_numeric_range(criteria: Any) -> Optional[Dict[str, Any]]
             if not match:
                 continue
             metric = _normalise_metric_label(match.group("metric"))
-            if not metric or _RANGE_METRIC_NEGATION_RE.search(match.group("metric").strip()):
+            raw_metric = match.group("metric").strip()
+            if (not metric or _RANGE_METRIC_NEGATION_RE.search(raw_metric)
+                    or _range_verdict_inverted(raw_metric)):
                 break
             trailing = match_clause[match.end():]
             if not _supported_range_trailing(trailing):

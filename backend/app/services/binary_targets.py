@@ -14,7 +14,7 @@ optional ``target`` object, and this module checks it deterministically:
   never a mismatch; a clause it reads that disagrees is the error
   ``criteria_mismatch``.  Path-dependent wording ("at any point", "ever",
   "intraday", 任何时候) needs a max/min window statistic, and the one on the
-  comparator's side (max for > / >=, min for < / <=) when a clause reads it
+  comparator's side (max for > / >=, min for < / <=) when a sentence states it
   un-negated.
 * :func:`threshold_ladder_audit` checks that the binaries resolving on the same
   target (metric, unit, statistic, target date, window start) form a monotone
@@ -86,18 +86,33 @@ _BASE_UNIT_REL_TOL = 1e-12
 # Magnitude words for ladder labels, so "1 trillion USD" never reads as "1 USD".
 _SCALE_LABELS = {1e3: "thousand", 1e6: "million", 1e9: "billion", 1e12: "trillion"}
 _ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+# A short metric code (M2, R0, US M2) and the named-metric test it fails in the extractor.
+_SHORT_METRIC_CODE_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]*[a-z\u4e00-\u9fff][a-z0-9\u4e00-\u9fff]*"
+                                   r"(?:[ ./-][a-z0-9\u4e00-\u9fff]+)*")
+_NAMED_METRIC_RE = re.compile(r"[a-z]{3}|[\u4e00-\u9fff]{2}")
 _NUMERIC_TEXT_RE = re.compile(r"[-+]?\d+(?:\.\d+)?")
-_PATH_DEPENDENT_RE = re.compile(r"\bat\s+any\s+(?:point|time)\b|\bever\b|\bintraday\b|任何时候", re.I)
+# "ever" is a word of its own, never part of a compound ("ever-growing demand").
+_PATH_DEPENDENT_RE = re.compile(r"\bat\s+any\s+(?:point|time)\b|(?<![\w-])ever(?![\w-])|\bintraday\b"
+                                r"|任何时候", re.I)
 # Path-dependent wording names an "ever above / ever below" event, which only the window
 # extreme on the same side represents: max > X is "at some point above X", while min > X
 # is "always above X" (another event).
 _PATH_EXTREME_FOR_COMPARATOR = {">": "max_over_window", ">=": "max_over_window",
                                 "<": "min_over_window", "<=": "min_over_window"}
-# Clauses for the direction check; a decimal or thousands separator (between two digits)
-# never splits one.
-_CLAUSE_SPLIT_RE = re.compile(r"(?<!\d)[.,;!?]|[.,;!?](?!\d)|[。，；！？\n]")
-# A negated or inverted clause ("does not at any point exceed", "Resolves NO if ... ever",
-# 任何时候都不低于) reverses the event, so its direction is not read.
+# Sentences for the direction check (a decimal point between two digits never splits one).
+# Commas do not split: a negation in a neighbouring comma clause scopes over the path wording
+# ("does not, at any point in 2024, trade above", "Resolves NO if, at any point, ...").
+_SENTENCE_SPLIT_RE = re.compile(r"(?<!\d)[.;!?]|[.;!?](?!\d)|[。；！？\n]")
+# A closing complement ("..., NO otherwise", "otherwise it resolves NO", "else NO", "NO if
+# not", 否则为否) only restates the other outcome: it negates nothing before it.
+_COMPLEMENT_TAIL_RE = re.compile(
+    r"[,，]?\s*(?:(?:and|or)\s+)?(?:"
+    r"(?:(?:it|this)\s+)?(?:resolves?\s+)?(?:as\s+|to\s+)?(?:no|false)\s+(?:otherwise|if\s+not)"
+    r"|(?:otherwise|else)\s*,?\s*(?:(?:it|this)\s+)?(?:resolves?\s+)?(?:as\s+|to\s+)?(?:no|false)"
+    r"|否则(?:为|是|判定为|判为|即为)?(?:否|no|false))\s*$", re.I)
+# A negated or inverted sentence ("does not at any point exceed", "Resolves NO if ... ever",
+# 任何时候都不低于; an inverted verdict such as "Resolves negatively if" is read by the
+# extractor's verdict check) reverses the event, so its direction is not read.
 _CLAUSE_NEGATION_RE = re.compile(
     r"(?<![\w-])(?:not|no|never|none|neither|nor|cannot|unless|except|without|unable"
     r"|fail(?:s|ed|ing)?|doesnt|dont|didnt|isnt|arent|wasnt|werent|wont|cant)(?![\w-])"
@@ -115,8 +130,9 @@ _RATE_UNIT_RES: Tuple[Tuple[re.Pattern, str], ...] = (
      "%"),
 )
 # Any rate token left inside a currency/count unit makes the unit malformed.
+# "ppt" is unreadable too: percentage points, parts per trillion or parts per thousand.
 _RATE_TOKEN_RE = re.compile(
-    r"%|百分点|百分比|基点|\b(?:percent(?:age)?|per[ \-]?cent|pct|pp|pps|bps?"
+    r"%|百分点|百分比|基点|\b(?:percent(?:age)?|per[ \-]?cent|pct|pp|pps|ppts?|bps?"
     r"|percentage[ \-]?points?|basis[ \-]?points?)\b", re.I)
 _CURRENCY_SYMBOL_RE = re.compile(r"u\.?s\.?\$|hk\$|nt\$|a\$|c\$|s\$|\$|€|£|¥|₹|₩", re.I)
 # Keyed by the casefolded symbol without dots ("U.S.$" -> "us$").
@@ -149,6 +165,9 @@ _AMBIGUOUS_MAGNITUDES = frozenset({"k", "m", "mm", "b", "t", "tn"})
 _COUNT_NOUN_UNITS = frozenset({"unit", "units"})
 # A number in a unit ("RMB 100 million"), possibly glued to its magnitude ("100M", "100亿元").
 _UNIT_NUMBER_RE = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
+# A number in scientific or power notation ("1e9", "10^9"): no word of a unit, and never a
+# magnitude (only a number before a magnitude word scales).
+_SCIENTIFIC_NUMBER_RE = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)[eE][-+]?\d+|\d+(?:\^|\*\*)[-+]?\d+")
 _GLUED_MAGNITUDE_RE = re.compile(r"(\d+(?:,\d{3})*(?:\.\d+)?)([A-Za-z]+|[一-鿿]+)")
 _CJK_CURRENCY_SUFFIXES = (("人民币", "CNY"), ("美元", "USD"), ("欧元", "EUR"), ("英镑", "GBP"),
                           ("日元", "JPY"), ("港元", "HKD"), ("港币", "HKD"), ("元", "CNY"))
@@ -219,9 +238,11 @@ def canonical_unit(unit: Any) -> Optional[Tuple[str, float]]:
     words (``'GW'``, ``'million units'`` -> ``('units', 1e6)``); a bare magnitude is
     a count (``'million'`` -> ``('count', 1e6)``).  A number multiplies the magnitude
     after it (``'RMB 100 million'`` -> ``('CNY', 1e8)``); any other number (``'2020
-    USD'``) is unreadable.  Numbers and magnitudes right after ``/`` or ``per`` belong
-    to the denominator and stay in the label (``'deaths per million'`` -> ``('deaths
-    per million', 1.0)``: they divide, they never scale).  K / M / B / T, mm and tn are
+    USD'``, ``'USD 1e9'``) and a second magnitude (``'USD billion billion'``) are
+    unreadable, and so is ``ppt`` (percentage points or parts per trillion).  Numbers
+    and magnitudes right after ``/`` or ``per`` belong to the denominator and stay in
+    the label (``'deaths per million'`` -> ``('deaths per million', 1.0)``: they
+    divide, they never scale).  K / M / B / T, mm and tn are
     magnitudes only next to a currency or a count of units; alone (``'t'`` tonnes,
     ``'m'`` metres) they are unreadable.
     """
@@ -248,6 +269,7 @@ def canonical_unit(unit: Any) -> Optional[Tuple[str, float]]:
     text = re.sub(r"\s*/\s*", " / ", text)
     words = _unit_words(text)
     scale = 1.0
+    magnitudes = 0
     residue: List[str] = []
     ambiguous_magnitude = after_denominator = False
     for index, word in enumerate(words):
@@ -256,10 +278,13 @@ def canonical_unit(unit: Any) -> Optional[Tuple[str, float]]:
             after_denominator = True
             residue.append(word)
             continue
-        if after_denominator and (_UNIT_NUMBER_RE.fullmatch(word) or _magnitude(word) is not None):
+        if after_denominator and (_UNIT_NUMBER_RE.fullmatch(word) or _magnitude(word) is not None
+                                  or _SCIENTIFIC_NUMBER_RE.fullmatch(word)):
             residue.append(word)
             continue
         after_denominator = False
+        if _SCIENTIFIC_NUMBER_RE.fullmatch(word):
+            return None
         if _UNIT_NUMBER_RE.fullmatch(word):
             number = float(word.replace(",", ""))
             if (not math.isfinite(number) or number <= 0 or index + 1 == len(words)
@@ -267,6 +292,7 @@ def canonical_unit(unit: Any) -> Optional[Tuple[str, float]]:
                 return None
             scale *= number
         elif folded in _WORD_SCALE:
+            magnitudes += 1
             scale *= _WORD_SCALE[folded]
             ambiguous_magnitude = ambiguous_magnitude or folded in _AMBIGUOUS_MAGNITUDES
         elif folded in _WORD_CURRENCY:
@@ -275,11 +301,15 @@ def canonical_unit(unit: Any) -> Optional[Tuple[str, float]]:
             code, factor, rest = _fold_cjk(word)
             if code:
                 currencies.append(code)
-            scale *= factor
+            if factor != 1.0:
+                magnitudes += 1
+                scale *= factor
             if rest:
                 residue.append(rest)
         else:
             residue.append(word)
+        if magnitudes > 1:
+            return None  # "USD billion billion": one magnitude per unit, never a product
     if len(set(currencies)) > 1 or not math.isfinite(scale):
         return None
     label = _residue_label(residue)
@@ -421,6 +451,18 @@ def _extractor():
 
 
 # ── criteria cross-check ─────────────────────────────────────────────────────
+def _plain_unit_key(unit: str) -> Tuple[str, ...]:
+    """A plain (non-currency, non-rate) canonical unit for comparison: casefolded, each word
+    singular (``seats`` = ``Seat``), a bare count equal to units (``count`` = ``units``).
+    ``tons`` and ``tonnes`` stay apart: a US ton is a short ton (907.2 kg)."""
+    words = []
+    for word in unit.casefold().split():
+        if len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
+            word = word[:-1]
+        words.append("unit" if word == "count" else word)
+    return tuple(words)
+
+
 def _criteria_disagreement(clean: Mapping[str, Any], parsed: Mapping[str, Any]) -> Optional[str]:
     """Why the criteria interval ``parsed`` disagrees with the target, or None when they
     agree.  Returns ``CRITERIA_UNPARSED`` when the parsed unit cannot be read, and
@@ -440,6 +482,11 @@ def _criteria_disagreement(clean: Mapping[str, Any], parsed: Mapping[str, Any]) 
         if (currency is None) != (parsed_currency is None) or (
                 currency and parsed_currency and not _currencies_agree(currency, parsed_currency)):
             return f"unit {unit} vs criteria {parsed_name}"
+        if currency is None and _plain_unit_key(unit) != _plain_unit_key(parsed_name):
+            # Two different plain units ("GW" against "tons", "units" against "seats") may be
+            # synonyms ("vehicles" / "units") or not: the numbers are not comparable, so the
+            # clause is unverifiable, never "consistent".
+            return CRITERIA_UNPARSED
     target_value = float(clean["threshold"]) * float(clean["scale"])
     low, high = float(parsed["low"]), float(parsed["high"])
     comparator = clean["comparator"]
@@ -459,6 +506,22 @@ def _criteria_disagreement(clean: Mapping[str, Any], parsed: Mapping[str, Any]) 
             and inclusive != (comparator in (">=", "<="))):
         return CRITERIA_BOUND_ONLY
     return None
+
+
+# ── path-dependent wording ───────────────────────────────────────────────────
+def _path_wording_reads_plainly(text: str) -> bool:
+    """Whether some sentence of ``text`` carries path-dependent wording with no negation or
+    inverted verdict anywhere in it (a closing complement such as "NO otherwise" aside):
+    only such a sentence states the "at some point" event whose direction is checked."""
+    # Horizontal whitespace runs collapse first, which keeps the tail pattern linear.
+    for sentence in _SENTENCE_SPLIT_RE.split(re.sub(r"[^\S\n]+", " ", text)):
+        if not _PATH_DEPENDENT_RE.search(sentence):
+            continue
+        sentence = _COMPLEMENT_TAIL_RE.sub("", sentence)
+        if not (_CLAUSE_NEGATION_RE.search(sentence)
+                or _extractor()._range_verdict_inverted(sentence)):
+            return True
+    return False
 
 
 # ── validation ───────────────────────────────────────────────────────────────
@@ -535,9 +598,8 @@ def validate_binary_target(target: Any, *, statement: Any = "",
         expected = _PATH_EXTREME_FOR_COMPARATOR.get(comparator)
         if statistic not in EXTREME_WINDOW_STATISTICS:
             errors.append("path_dependent_requires_window_extreme")
-        elif expected and statistic != expected and any(
-                _PATH_DEPENDENT_RE.search(clause) and not _CLAUSE_NEGATION_RE.search(clause)
-                for clause in _CLAUSE_SPLIT_RE.split(f"{statement_text}\n{criteria_text}")):
+        elif expected and statistic != expected and _path_wording_reads_plainly(
+                f"{statement_text}\n{criteria_text}"):
             errors.append(f"path_dependent_statistic_direction: {comparator} needs {expected}")
 
     if errors:
@@ -571,6 +633,19 @@ def validate_binary_target(target: Any, *, statement: Any = "",
 
 
 # ── same-target threshold ladders ────────────────────────────────────────────
+def _metric_link_label(metric: Any) -> str:
+    """The label that links targets on one metric: the extractor's metric label, or, for a
+    short code it blanks for want of a three-letter word (``M2``, ``R0``, ``US M2``), the
+    code's own casefolded text.  A generic label (``value``, ``metric``) stays unlinkable."""
+    label = _extractor()._normalise_metric_label(metric)
+    if label or not isinstance(metric, str):
+        return label
+    text = _normalized_text(metric).casefold().strip(" ,;:-")
+    if _SHORT_METRIC_CODE_RE.fullmatch(text) and not _NAMED_METRIC_RE.search(text):
+        return text
+    return ""
+
+
 def target_group_key(target: Any) -> Optional[Tuple[str, str, str, str, Optional[str]]]:
     """``(metric label, unit, statistic, target_date, window_start)`` that links the
     binaries resolving on the same number, or None when the target cannot be linked.
@@ -578,7 +653,7 @@ def target_group_key(target: Any) -> Optional[Tuple[str, str, str, str, Optional
     window start counts only for a window statistic."""
     if not isinstance(target, Mapping):
         return None
-    metric = _extractor()._normalise_metric_label(target.get("metric"))
+    metric = _metric_link_label(target.get("metric"))
     unit = target.get("unit")
     statistic = target.get("statistic")
     target_date = _strict_date(target.get("target_date"))
