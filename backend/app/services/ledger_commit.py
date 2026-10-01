@@ -458,7 +458,34 @@ def run_post_publication(agent: Any, report_id: str, *, report_status: Any,
         receipt = {"status": "error", "commit_id": None, "target_key": None,
                    "record_class": None, "reasons": [f"{type(exc).__name__}: {exc}"[:300]]}
     receipt["report_id"] = report_id
+    _eval_bundle_step(agent, report_id, publication_status_fn=publication_status_fn,
+                      load_forecast_fn=load_forecast_fn, now=now)
     return receipt
+
+
+def _eval_bundle_step(agent: Any, report_id: str, *,
+                      publication_status_fn: Callable[[str], Dict[str, Any]],
+                      load_forecast_fn: Callable[[str], Optional[Dict[str, Any]]],
+                      now: Optional[datetime]) -> Optional[Dict[str, Any]]:
+    """EVAL-19 (EVAL_BUNDLE_CAPTURE, default off): freeze the evaluation bundle of a
+    publishable report next to it (``eval_bundle.capture_from_agent``) after the ledger
+    commit. Best effort: never changes the report, its status or its artifacts; returns
+    the manifest, or None when off, unpublishable or failed."""
+    if not getattr(Config, "EVAL_BUNDLE_CAPTURE", False):
+        return None
+    try:
+        if not (publication_status_fn(report_id) or {}).get("publishable"):
+            return None
+        from . import eval_bundle
+        from .report_agent import ReportManager
+        manifest = eval_bundle.capture_from_agent(
+            agent, report_id, report_dir=ReportManager._get_report_folder(report_id),
+            forecast=load_forecast_fn(report_id), now=now)
+        logger.info(f"[eval-bundle] {report_id}: bundle {manifest['bundle_sha256'][:12]} written")
+        return manifest
+    except Exception as exc:  # noqa: BLE001 — capture must never break a report
+        logger.warning(f"[eval-bundle] capture failed for {report_id} (ignored): {exc}")
+        return None
 
 
 def recommit_reused_report(report_id: str, *, report_status: Any, question: Optional[str],
