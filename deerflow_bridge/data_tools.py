@@ -1258,38 +1258,66 @@ def _unit_rows(tag_rows: Sequence[tuple[str, Any]]) -> Iterator[tuple[str, str, 
                 yield tag, unit, rows
 
 
-def _report_period_ends(facts: Mapping[str, Sequence[Sequence[Any]]], as_of: _dt.date) -> dict[str, _dt.date]:
-    """{accession: the end of the period that filing reports} over every tag and unit of ``facts``
-    (as :func:`_needed_facts` keeps them): the latest end of a well-formed duration of at least a
+@dataclass(frozen=True)
+class _FilingPeriod:
+    """The period one filing reports (:func:`_filing_periods`): its ``end`` and the ``boundaries``
+    its statements date a balance at."""
+
+    end: _dt.date
+    boundaries: frozenset[_dt.date]
+
+
+def _filing_periods(facts: Mapping[str, Sequence[Sequence[Any]]], as_of: _dt.date) -> dict[str, _FilingPeriod]:
+    """{accession: the period that filing reports} over every tag and unit of ``facts`` (as
+    :func:`_needed_facts` keeps them), read from the filing's well-formed durations of at least a
     quarter (:data:`SPAN_QUARTER`'s lower bound) filed on or before ``as_of``.  A shorter duration (a
-    subsequent-events note's month to date) does not move a period end, and an accession reporting
-    no such duration has none."""
-    ends: dict[str, _dt.date] = {}
+    subsequent-events note's month to date) says nothing, and an accession reporting no such
+    duration (a balance-only filing, as TradingAgents' Apple 2008 fixture) has no period.
+
+    The period ends where the latest fiscal-year duration (:data:`SPAN_ANNUAL`) of an annual report
+    (:data:`EDGAR_ANNUAL_FORMS`) ends, and in any other filing, or an annual report without one,
+    where its latest duration ends: a 10-K filed late can tag "the two months ended" after the year in
+    a subsequent-events note, a quarter by its span, and that stub never moves the year's end (so a
+    fiscal-year change reported on a 10-K rather than a 10-KT serves its transition period only once
+    a later filing presents it).  Its boundaries are the dates its statements date a balance at: each
+    duration's end, and the day before each duration's start (XBRL dates a start by its first day),
+    where the comparative and opening balances stand."""
+    durations: dict[str, list[_FiledValue]] = {}
     for tag, unit, rows in _unit_rows([(tag, dict(pairs)) for tag, pairs in facts.items()]):
         for row in rows:
             fact = _parse_fact(row, tag, unit)
-            if (fact is not None and fact.filed <= as_of and fact.span_days is not None
-                    and fact.span_days >= SPAN_QUARTER[0]):
-                ends[fact.accn] = max(fact.end, ends.get(fact.accn, fact.end))
-    return ends
+            if (fact is not None and fact.start is not None and fact.span_days is not None
+                    and fact.filed <= as_of and fact.span_days >= SPAN_QUARTER[0]):
+                durations.setdefault(fact.accn, []).append(fact)
+    periods: dict[str, _FilingPeriod] = {}
+    for accn, reported in durations.items():
+        years = [fact.end for fact in reported
+                 if fact.form in EDGAR_ANNUAL_FORMS and SPAN_ANNUAL[0] <= fact.span_days <= SPAN_ANNUAL[1]]
+        boundaries = {day for fact in reported for day in (fact.end, fact.start - _dt.timedelta(days=1))}
+        periods[accn] = _FilingPeriod(end=max(years or [fact.end for fact in reported]),
+                                      boundaries=frozenset(boundaries))
+    return periods
 
 
 def _as_filed(tag_rows: Sequence[tuple[str, Any]], as_of: _dt.date, span: tuple[int, int],
               annual_forms: tuple[str, ...] = EDGAR_ANNUAL_FORMS, *,
-              report_ends: Mapping[str, _dt.date] = MappingProxyType({})) -> dict[_dt.date, _FiledValue]:
+              periods: Mapping[str, _FilingPeriod] = MappingProxyType({})) -> dict[_dt.date, _FiledValue]:
     """{period end: value} of one statement line as it stood on ``as_of``, oldest first.
 
     ``tag_rows`` is ``(tag, {unit: [companyfacts rows]})`` in priority order.  A fact counts only
     when its dates parse and it was filed on or before ``as_of``; a duration (a fact with a start)
-    must span ``span`` days (inclusive) while an instant passes unless it is dated after the period
-    its own filing reports (``report_ends``, :func:`_report_period_ends`): a liquidity, going-concern
-    or debt note tags a balance "as of" a later date too, and that date is no statement period.  The
-    first (tag, unit) pair serving a period end owns it: values are never summed across tags or
-    units, a later pair cannot claim the period, and each period keeps its own unit.  With
-    ``annual_forms`` (a fiscal-year reading) a period end must be reported by one of those forms, but
-    its value is the latest filing of any form on or before ``as_of`` (ties: the later accession), so
-    an amendment or an 8-K/6-K recast counts from its own filing date.  Nothing is derived: no fourth
-    quarter, no year-to-date split.
+    must span ``span`` days (inclusive).  A fact of a filing that reports a period (``periods``,
+    :func:`_filing_periods`) must end on or before that period's end, and an instant must stand on one
+    of its boundaries: a liquidity, going-concern or debt note tags a balance "as of" a later date, or
+    at an issuance date inside the year, and that date is no statement period.  The first (tag, unit)
+    pair serving a period end owns it: values are never summed across tags or units, a later pair
+    cannot claim the period, and each period keeps its own unit.  With ``annual_forms`` (a fiscal-year
+    reading) a period end must be reported by one of those forms, but its value is the latest filing
+    of any form on or before ``as_of``, so an amendment or an 8-K/6-K recast counts from its own
+    filing date.  Of two filed the same day an amendment (a form ending "/A") wins, then the later
+    accession; the first ten digits of an accession name its submitter (the filer or a filing agent),
+    so across submitters that order is deterministic, not chronological.  Nothing is derived: no
+    fourth quarter, no year-to-date split.
     """
     low, high = span
     served: dict[_dt.date, _FiledValue] = {}
@@ -1300,18 +1328,25 @@ def _as_filed(tag_rows: Sequence[tuple[str, Any]], as_of: _dt.date, span: tuple[
             fact = _parse_fact(row, tag, unit)
             if fact is None or fact.filed > as_of or fact.end in served:
                 continue
-            if fact.span_days is None:
-                if fact.end > report_ends.get(fact.accn, fact.end):
-                    continue
-            elif not low <= fact.span_days <= high:
+            period = periods.get(fact.accn)
+            if period is not None and (fact.end > period.end
+                                       or (fact.span_days is None and fact.end not in period.boundaries)):
+                continue
+            if fact.span_days is not None and not low <= fact.span_days <= high:
                 continue
             if not annual_forms or fact.form in annual_forms:
                 covered.add(fact.end)
             seen = latest.get(fact.end)
-            if seen is None or (fact.filed, fact.accn) >= (seen.filed, seen.accn):
+            if seen is None or _filing_order(fact) >= _filing_order(seen):
                 latest[fact.end] = fact
         served.update((end, fact) for end, fact in latest.items() if end in covered)
     return dict(sorted(served.items()))
+
+
+def _filing_order(fact: _FiledValue) -> tuple[_dt.date, bool, str]:
+    """The key :func:`_as_filed` keeps a period's latest filing by: filing date, then an amendment
+    over the filing it amends, then the accession."""
+    return fact.filed, fact.form.endswith("/A"), fact.accn
 
 
 def _tagged_by(tag_rows: Sequence[tuple[str, Any]], as_of: _dt.date) -> bool:
@@ -1333,8 +1368,10 @@ def _cik_text(value: Any) -> Optional[str]:
 
 def _edgar_identity(company: Any) -> Optional[tuple[str, str]]:
     """``("cik", CIK)`` for 1-10 digits, ``("ticker", TICKER)`` for a ticker (upper-cased; letters,
-    digits, "." and "-", at most 10), else None."""
-    if not isinstance(company, str):
+    digits, "." and "-", at most 10), else None.  Only ASCII input is read: upper-casing turns some
+    other characters into ASCII letters ("ﬀ" into "FF", "straße" into "STRASSE"), another filer's
+    ticker."""
+    if not isinstance(company, str) or not company.isascii():
         return None
     text = company.strip()
     if _CIK_INPUT_RE.fullmatch(text):
@@ -1391,10 +1428,12 @@ def _edgar_http_failure(code: int, payload: Any, text: str, *, document: str) ->
 
 def _parse_ticker_map(payload: Mapping[str, Any]) -> dict[str, str]:
     """{TICKER: CIK} from SEC's company_tickers.json (``{"0": {"cik_str": 320193, "ticker": "AAPL",
-    ...}, ...}``); malformed entries are skipped and the first entry of a ticker wins."""
+    ...}, ...}``); malformed entries (a ticker that is not ASCII among them, as in
+    :func:`_edgar_identity`) are skipped and the first entry of a ticker wins."""
     tickers: dict[str, str] = {}
     for entry in payload.values():
-        if not isinstance(entry, Mapping) or not isinstance(entry.get("ticker"), str):
+        if (not isinstance(entry, Mapping) or not isinstance(entry.get("ticker"), str)
+                or not entry["ticker"].isascii()):
             continue
         ticker, cik = entry["ticker"].strip().upper(), _cik_text(entry.get("cik_str"))
         if cik and _TICKER_RE.fullmatch(ticker):
@@ -1514,7 +1553,7 @@ def _edgar_sections(facts: Mapping[str, Sequence[Sequence[Any]]], as_of: _dt.dat
     fiscal-year table, or a quarterly table of the income and balance lines plus a fiscal-year table
     of the cash-flow lines (filed year to date: only a first quarter would pass the quarter span, and
     no later quarter is derived)."""
-    report_ends = _report_period_ends(facts, as_of)
+    periods = _filing_periods(facts, as_of)
 
     def section(lines: Sequence[EdgarLine], annual: bool) -> _Section:
         rows = []
@@ -1522,7 +1561,7 @@ def _edgar_sections(facts: Mapping[str, Sequence[Sequence[Any]]], as_of: _dt.dat
             # dict() of the [unit, rows] pairs keeps the filer's unit order.
             tag_rows = [(tag, dict(facts[tag])) for tag in line.tags if tag in facts]
             served = _as_filed(tag_rows, as_of, SPAN_ANNUAL if annual else SPAN_QUARTER,
-                               EDGAR_ANNUAL_FORMS if annual else (), report_ends=report_ends)
+                               EDGAR_ANNUAL_FORMS if annual else (), periods=periods)
             rows.append((line, _tagged_by(tag_rows, as_of), served))
         return _Section(annual, EDGAR_ANNUAL_PERIODS if annual else EDGAR_QUARTERLY_PERIODS, tuple(rows))
 

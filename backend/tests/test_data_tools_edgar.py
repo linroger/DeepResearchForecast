@@ -403,25 +403,90 @@ def test_one_note_date_per_annual_report_never_displaces_a_fiscal_year(monkeypat
         assert "-11-01" not in result.model_text + result.page_text
 
 
-def test_a_filings_period_end_is_its_latest_duration_of_a_quarter_or_more():
-    """A subsequent-events note's month to date does not move the period end; a filing reporting
-    only balances (TradingAgents' Apple 2008 fixture) has none, so its balances all count."""
-    k_accn, q_accn = ACCN["2024-11-01"], "0000320193-24-000090"
+@pytest.mark.parametrize("freq", ["annual", "quarterly"])
+def test_a_balance_dated_inside_the_period_its_filing_reports_is_not_a_column(freq):
+    """A debt note tags a balance at an issuance date inside the year, without a dimension: that date
+    is no boundary of the 10-K's periods, so it is no fiscal-year (or quarter) column."""
+    transport = with_facts({
+        "RevenueFromContractWithCustomerExcludingAssessedTax": {"units": {"USD": [
+            _fact("2024-09-28", 391_035_000_000, "2024-11-01", start="2023-10-01"),
+            _fact("2023-09-30", 383_285_000_000, "2024-11-01", start="2022-09-25")]}},
+        "LongTermDebt": {"units": {"USD": [
+            _fact("2024-09-28", 96_700_000_000, "2024-11-01"), _fact("2023-09-30", 106_000_000_000, "2024-11-01"),
+            _fact("2024-05-10", 4_500_000_000, "2024-11-01")]}}})
+    result = call(transport, company="320193", as_of=dt.date(2024, 11, 15), freq=freq)
+    assert result.status == dtools.STATUS_OK
+    assert columns(result) == ["2024-09-28", "2023-09-30"] and row(result, "Long-term debt") == ["96,700", "106,000"]
+    assert "2024-05-10" not in result.model_text + result.page_text and "4,500" not in result.model_text
+    assert not any("2024-05-10" in text for text in result.supports)
+    assert {fact["observation_date"] for fact in result.facts} == {"2024-09-28"}
+
+
+@pytest.mark.parametrize("freq", ["annual", "quarterly"])
+def test_a_stub_after_the_year_in_an_annual_report_moves_no_period_end(freq):
+    """A 10-K filed late tags "the two months ended" 2024-11-30 in a subsequent-events note, a quarter
+    by its span, with a balance on that date: the fiscal year still ends 2024-09-28, so neither the
+    stub nor the balance is a column."""
+    k_accn = "0000320193-24-000140"
+    transport = with_facts({
+        "Revenues": {"units": {"USD": [
+            _fact("2024-06-29", 85_777_000_000, "2024-08-02", form="10-Q", start="2024-03-31",
+                  accn="0000320193-24-000090"),
+            _fact("2024-09-28", 391_035_000_000, "2024-12-20", start="2023-10-01", accn=k_accn),
+            _fact("2023-09-30", 383_285_000_000, "2024-12-20", start="2022-09-25", accn=k_accn),
+            _fact("2024-11-30", 70_000_000_000, "2024-12-20", start="2024-09-29", accn=k_accn)]}},
+        "CashAndCashEquivalentsAtCarryingValue": {"units": {"USD": [
+            _fact("2024-09-28", 29_943_000_000, "2024-12-20", accn=k_accn),
+            _fact("2024-11-30", 31_000_000_000, "2024-12-20", accn=k_accn)]}}})
+    result = call(transport, company="320193", as_of=dt.date(2025, 1, 15), freq=freq)
+    assert result.status == dtools.STATUS_OK
+    if freq == "annual":
+        assert columns(result) == ["2024-09-28", "2023-09-30"] and row(result, "Revenue") == ["391,035", "383,285"]
+    else:
+        assert columns(result) == ["2024-09-28", "2024-06-29"] and row(result, "Revenue") == ["—", "85,777"]
+    assert row(result, "Cash")[0] == "29,943"
+    assert "2024-11-30" not in result.model_text + result.page_text and "70,000" not in result.model_text
+    assert "31,000" not in result.model_text and not any("2024-11-30" in text for text in result.supports)
+    assert "2024-11-30" not in {fact["observation_date"] for fact in result.facts}
+
+
+def test_a_filings_period_and_its_balance_dates_come_from_its_durations_of_a_quarter_or_more():
+    """An annual report's period ends with its latest fiscal year, any other filing's (or an annual
+    report's without one) with its latest duration; a subsequent-events note's month to date says
+    nothing.  The boundaries are each duration's end and the day before its start.  A filing
+    reporting only balances (TradingAgents' Apple 2008 fixture) has no period, so its balances all
+    count."""
+    k_accn, q_accn, first_accn = ACCN["2024-11-01"], "0000320193-24-000090", "0001234567-24-000001"
     facts = {"NetIncomeLoss": [["USD", [
-        _fact("2024-09-28", 1, "2024-11-01", start="2023-09-30"),
-        _fact("2024-10-25", 2, "2024-11-01", start="2024-09-29"),
+        _fact("2024-09-28", 1, "2024-11-01", start="2023-10-01"),
+        _fact("2023-09-30", 1, "2024-11-01", start="2022-09-25"),
+        _fact("2024-10-25", 2, "2024-11-01", start="2024-09-29"),  # 26 days: no period end
         _fact("2024-06-29", 3, "2024-08-02", form="10-Q", start="2024-03-31", accn=q_accn),
-        _fact("2025-06-28", 4, "2025-08-01", form="10-Q", start="2025-03-30", accn="0000320193-25-000070"),
-        _fact("2024-09-28", 5, "2024-11-01", start="2023-09-30", accn="not an accession")]]],
-        "Assets": [["USD", [_fact("2024-10-25", 6, "2024-11-01"), _fact("2008-09-27", 7, "2008-11-05")]]]}
-    as_of = dt.date(2025, 1, 1)
-    ends = dtools._report_period_ends(facts, as_of)
-    assert ends == {k_accn: dt.date(2024, 9, 28), q_accn: dt.date(2024, 6, 29)}  # the 2025 10-Q is after as_of
-    rows = usd_rows([("Assets", [_fact("2024-09-28", 8, "2024-11-01"), _fact("2024-10-25", 9, "2024-11-01"),
-                                 _fact("2008-09-27", 10, "2008-11-05")])])
-    served = dtools._as_filed(rows, as_of, dtools.SPAN_ANNUAL, report_ends=ends)
-    assert {end: fact.val for end, fact in served.items()} == {dt.date(2008, 9, 27): 10, dt.date(2024, 9, 28): 8}
-    assert dt.date(2024, 10, 25) in dtools._as_filed(rows, as_of, dtools.SPAN_ANNUAL)  # without the filings' ends
+        _fact("2024-06-29", 3, "2024-08-02", form="10-Q", start="2023-10-01", accn=q_accn),
+        _fact("2024-12-31", 4, "2025-03-28", start="2024-06-15", accn=first_accn),  # a first fiscal year
+        _fact("2025-06-28", 5, "2025-08-01", form="10-Q", start="2025-03-30", accn="0000320193-25-000070"),
+        _fact("2024-09-28", 6, "2024-11-01", start="2023-10-01", accn="not an accession")]]],
+        "Assets": [["USD", [_fact("2024-10-25", 7, "2024-11-01"), _fact("2008-09-27", 8, "2008-11-05")]]]}
+    as_of = dt.date(2025, 4, 1)
+    periods = dtools._filing_periods(facts, as_of)
+    day = dt.date
+    assert periods == {  # the 2025 10-Q was filed after as_of
+        k_accn: dtools._FilingPeriod(day(2024, 9, 28), frozenset({day(2024, 9, 28), day(2023, 9, 30), day(2022, 9, 24)})),
+        q_accn: dtools._FilingPeriod(day(2024, 6, 29), frozenset({day(2024, 6, 29), day(2024, 3, 30), day(2023, 9, 30)})),
+        first_accn: dtools._FilingPeriod(day(2024, 12, 31), frozenset({day(2024, 12, 31), day(2024, 6, 14)}))}
+    rows = usd_rows([("Assets", [
+        _fact("2024-09-28", 10, "2024-11-01"), _fact("2024-10-25", 11, "2024-11-01"),
+        _fact("2024-05-10", 12, "2024-11-01"), _fact("2008-09-27", 13, "2008-11-05"),
+        _fact("2024-06-29", 14, "2024-08-02", form="10-Q", accn=q_accn),
+        _fact("2023-09-30", 15, "2024-08-02", form="10-Q", accn=q_accn),  # the comparative: the year's start - 1
+        _fact("2024-05-03", 16, "2024-08-02", form="10-Q", accn=q_accn)])])
+    annual = dtools._as_filed(rows, as_of, dtools.SPAN_ANNUAL, periods=periods)
+    assert {end: fact.val for end, fact in annual.items()} == {day(2008, 9, 27): 13, day(2024, 9, 28): 10}
+    quarterly = dtools._as_filed(rows, as_of, dtools.SPAN_QUARTER, (), periods=periods)
+    assert {end: fact.val for end, fact in quarterly.items()} == {
+        day(2008, 9, 27): 13, day(2023, 9, 30): 15, day(2024, 6, 29): 14, day(2024, 9, 28): 10}
+    unfiltered = dtools._as_filed(rows, as_of, dtools.SPAN_QUARTER, ())  # without the filings' periods
+    assert {day(2024, 10, 25), day(2024, 5, 10), day(2024, 5, 3)} <= set(unfiltered)
 
 
 def test_the_latest_filing_wins_ties_to_the_later_accession():
@@ -430,6 +495,16 @@ def test_the_latest_filing_wins_ties_to_the_later_accession():
     for order in ([first, second], [second, first]):
         served = dtools._as_filed(usd_rows([("Revenues", order)]), dt.date(2025, 1, 1), dtools.SPAN_ANNUAL)
         assert served[dt.date(2024, 9, 28)].accn == "0000320193-24-000124"
+
+
+def test_a_same_day_amendment_wins_whoever_submitted_either_filing():
+    """An accession starts with its submitter's CIK (here a filing agent's for the original and the
+    filer's own for the amendment), so the accession order alone would keep the original."""
+    original = _fact("2024-09-28", 1_000_000, "2024-11-01", start="2023-10-01", accn="0001193125-24-000200")
+    amendment = dict(original, val=2_000_000, form="10-K/A", accn="0000320193-24-000124")
+    for order in ([original, amendment], [amendment, original]):
+        served = dtools._as_filed(usd_rows([("Revenues", order)]), dt.date(2025, 1, 1), dtools.SPAN_ANNUAL)
+        assert (served[dt.date(2024, 9, 28)].form, served[dt.date(2024, 9, 28)].val) == ("10-K/A", 2_000_000)
 
 
 def test_an_injected_fact_filed_after_as_of_fails_closed(monkeypatch, caplog):
@@ -696,7 +771,8 @@ def test_every_request_carries_the_user_agent():
 
 
 @pytest.mark.parametrize("company", ["Apple Inc", "", "   ", "ABCDEFGHIJK", "0", "00000", "12345678901", "AAPL?x=1",
-                                     "ＡＡＰＬ", 320193, None, ["AAPL"]])
+                                     "ＡＡＰＬ", "\ufb00", "\ufb01t", "stra\u00dfe", "appl\u0131", 320193, None,
+                                     ["AAPL"]])
 def test_input_that_is_neither_a_cik_nor_a_ticker_is_invalid_with_zero_calls(company):
     transport = FakeSEC()
     result = call(transport, company=company)
@@ -762,6 +838,17 @@ def test_a_ticker_names_its_basis_and_a_past_as_of_says_the_map_is_todays():
     unnamed = call(FakeSEC(facts=(200, {key: value for key, value in FACTS.items() if key != "entityName"}, "")))
     assert unnamed.status == dtools.STATUS_OK and {match["who"] for match in sentences(unnamed)} == {"AAPL (CIK 0000320193)"}
     assert unnamed.model_text.splitlines()[0].startswith("SEC EDGAR as-filed statements: AAPL (CIK 0000320193), annual")
+
+
+def test_a_ticker_map_entry_that_is_not_ascii_names_no_ticker():
+    """Upper-cased, "\ufb00" would read as FF: the map's own first FF entry would go to its filer."""
+    tickers = dtools._parse_ticker_map({"0": {"cik_str": 1, "ticker": "\ufb00"}, "1": {"cik_str": 2, "ticker": "FF"},
+                                        "2": {"cik_str": 3, "ticker": "stra\u00dfe"}})
+    assert tickers == {"FF": "0000000002"}
+    transport = FakeSEC(tickers=(200, {"0": {"cik_str": 320193, "ticker": "\ufb00"}}, ""))
+    result = call(transport, company="FF")
+    assert (result.status, result.detail) == (dtools.STATUS_UNAVAILABLE,
+                                              "SEC EDGAR answered the ticker map without a usable entry")
 
 
 def test_a_share_class_ticker_resolves_with_a_dot_or_a_hyphen():
