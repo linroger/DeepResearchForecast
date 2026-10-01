@@ -401,6 +401,98 @@ def test_backfill_failure_restores_entire_pre_replay_bundle(tmp_path, monkeypatc
     assert failure["restored"] is True and failure["error"] == "quality gate failed"
 
 
+def test_backfill_reaudit_keeps_measuring_the_verified_figures(tmp_path, monkeypatch):
+    """REPORT-9: the re-audit rebuilds the verified-figures block from the handoff and
+    reads the markets at the prices the previous figure_provenance.json recorded, so the
+    replay re-measures the run instead of deleting its shadow record."""
+    pipelines = tmp_path / "pipelines"
+    reports = tmp_path / "reports"
+    pipeline_id, report_id = "pipe_shadow_replay", "report_shadow_replay"
+    handoff = pipelines / pipeline_id / "handoff"
+    report_dir = reports / report_id
+    handoff.mkdir(parents=True)
+    report_dir.mkdir(parents=True)
+    (pipelines / pipeline_id / "pipeline_state.json").write_text(json.dumps({
+        "report_id": report_id, "simulation_id": "sim_shadow_replay", "handoff_dir": str(handoff),
+    }), encoding="utf-8")
+    source = {"title": "Energy agency annual review", "url": "https://agency.example/review", "tier": "S1",
+              "content": "The data-centre electricity share was 24.6% in 2025."}
+    (handoff / "sources.json").write_text(json.dumps([source]), encoding="utf-8")
+    (handoff / "actors.json").write_text(json.dumps({"as_of_date": "2026-06-30"}), encoding="utf-8")
+    (handoff / "quantitative.json").write_text(json.dumps([{
+        "metric": "Data-centre electricity share", "value": "24.6", "unit": "%", "as_of_date": "2025-12-31",
+        "value_type": "actual", "tier": "S1", "source": "Energy agency annual review", "source_ref": "S1",
+        "source_url": "https://agency.example/review", "verification": "verified"}]), encoding="utf-8")
+    question = "Will the data-centre electricity share exceed 30% in 2026?"
+    (handoff / "prediction_markets.json").write_text(json.dumps({"markets": [
+        {"market_id": "m1", "question": question, "implied_yes_prob": 0.30},
+        {"market_id": "m2", "question": "A market the report never had?", "implied_yes_prob": 0.5}]}),
+        encoding="utf-8")
+    md = ("# Forecast\n\n## Outcome\n\nThe data-centre electricity share was 24.6% in 2025 [S1].\n\n"
+          "Polymarket prices a 45% chance the data-centre electricity share exceeds 30% in 2026.\n")
+    (report_dir / "full_report.md").write_text(md, encoding="utf-8")
+    (report_dir / "meta.json").write_text(json.dumps({"report_id": report_id}), encoding="utf-8")
+    # The live run re-quoted m1 at 45% (research price 30%); the handoff only knows 30%.
+    (report_dir / "figure_provenance.json").write_text(json.dumps({
+        "schema": "drf.figure_provenance/v1", "block_sha256": "old", "market_rows": [{
+            "market_id": "m1", "implied_yes_prob": 0.45, "quoted_at": "2026-06-29T10:00:00+00:00",
+            "price_at_research": 0.30, "snapshot_as_of": "2026-06-29T09:00:00+00:00"}]}), encoding="utf-8")
+
+    for name, value in (("REPORT_VERIFIED_FIGURES_CHECK", True), ("REPORT_VERIFIED_FACTS_BLOCK", True),
+                        ("MARKET_ANCHOR_PRICE_TIME", False)):
+        monkeypatch.setattr(Config, name, value, raising=False)
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(pipelines), raising=False)
+    monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(reports))
+    monkeypatch.setattr(ReportVisualizer, "build_all", lambda self, *args: [])
+    monkeypatch.setattr(ReportAgent, "_repair_quote_grounding", lambda self, md: (md, 0))
+    monkeypatch.setattr(ReportAgent, "_stabilize_publish_markdown",
+                        lambda self, rid, report: {"stable": True, "lint": {"changed": False}})
+    measured = []
+
+    def _primary_audit(self, rid, report):
+        measured.append(self._verified_figures_check(report.markdown_content))
+        sha = hashlib.sha256(report.markdown_content.encode("utf-8")).hexdigest()
+        return {"hard_passed": True, "markdown_sha256": sha, "publish_gate": {"passed": True}}
+
+    def _export_pdf(cls, rid, force=False, lang=None):
+        path = Path(cls._get_report_pdf_path(rid))
+        path.write_bytes(b"%PDF-1.4 primary")
+        return str(path)
+
+    monkeypatch.setattr(ReportAgent, "_enforce_final_publish_audit", _primary_audit)
+    monkeypatch.setattr(ReportManager, "export_pdf", classmethod(_export_pdf))
+
+    backfill_one(pipeline_id, report_id, apply=True)
+
+    (check,) = measured
+    # The level matches its block row; the quoted price agrees with the recorded re-quote.
+    assert check["counts"]["matched"] == 1 and check["counts"]["market_conflict"] == 0
+    final_md = (report_dir / "full_report.md").read_text(encoding="utf-8")
+    provenance = json.loads((report_dir / "figure_provenance.json").read_text(encoding="utf-8"))
+    assert provenance["markdown_sha256"] == hashlib.sha256(final_md.encode("utf-8")).hexdigest()
+    assert provenance["block_sha256"] == check["block_sha256"] != "old"
+    (row,) = provenance["rows"]
+    assert (row["source_ref"], row["used_in_count"]) == ("S1", 1) and "24.6%" in row["used_in"][0]["excerpt"]
+    assert provenance["market_rows"] == [{
+        "market_id": "m1", "implied_yes_prob": 0.45, "quoted_at": "2026-06-29T10:00:00+00:00",
+        "price_at_research": 0.30, "snapshot_as_of": "2026-06-29T09:00:00+00:00", "price_time": None,
+        "price_time_basis": None}]
+
+
+def test_recorded_market_rows_need_a_previous_record():
+    from scripts.backfill_report_visuals import _recorded_market_rows
+
+    snapshot = [{"market_id": "m1", "question": "Q?", "implied_yes_prob": 0.3}, "junk"]
+    # Without a previous record the report-time prices are unknown: no market is compared.
+    for previous in (None, {}, {"market_rows": "junk"}, {"market_rows": [{"market_id": ""}]}):
+        assert _recorded_market_rows(snapshot, previous) == []
+    previous = {"market_rows": [{"market_id": "m1", "implied_yes_prob": 0.45, "price_at_research": 0.3}]}
+    assert _recorded_market_rows({"markets": snapshot}, previous) == [{
+        "market_id": "m1", "question": "Q?", "implied_yes_prob": 0.45, "price_at_research": 0.3,
+        "quoted_at": None, "snapshot_as_of": None}]
+    assert _recorded_market_rows("junk", previous) == []
+
+
 # --------------------------------------------- FU-1: binary_quality keys survive a re-run
 
 def _binaries(n, *, downgraded=()):
