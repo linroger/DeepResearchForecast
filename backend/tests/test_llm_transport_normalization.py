@@ -21,6 +21,7 @@ from app.config import Config
 from app.services.pipeline_orchestrator import _classify_provider_outage
 from app.utils import llm_client as lc
 from app.utils import telemetry as tel
+from tests.test_json_parse_never_raises import default_int_digit_limit
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _OUTAGE_WORDS = ("quota", "rate limit", "rate_limit", "unauthorized", "401", "429", "usage limit")
@@ -672,6 +673,23 @@ def test_chat_with_tools_reports_malformed_arguments_instead_of_hiding_them():
     assert out["content"] == ""
     meta = client.last_call_meta()
     assert meta["finish_reason"] == "tool_calls" and meta["usage"]["prompt_tokens"] == 30
+
+
+def test_tool_call_arguments_past_the_parser_limits_are_reported_not_raised():
+    # FU-12: an oversized integer or too-deep nesting is an arguments_error, never a raise.
+    huge = '{"query": ' + "9" * 5000 + "}"
+    deep = '{"query": ' + "[" * 100_000 + "]" * 100_000 + "}"
+    calls = [_tool_call(huge), _tool_call(deep, "call_2"), _tool_call('{"query": "ok"}', "call_3")]
+    client = _client(_Script(_resp(content="", finish="tool_calls", model="MiniMax-M3",
+                                   tool_calls=calls, usage=_usage(30, 6))))
+    with default_int_digit_limit():
+        out = client.chat_with_tools([{"role": "user", "content": "q"}], tools_schema=[])
+    big, nested, good = out["tool_calls"]
+    assert big["arguments"] == {} and big["raw_arguments"] == huge
+    assert big["arguments_error"].startswith("ValueError: ")
+    assert nested["arguments"] == {} and nested["raw_arguments"] == deep
+    assert nested["arguments_error"].startswith("RecursionError: ")
+    assert good["arguments"] == {"query": "ok"} and good["arguments_error"] is None
 
 
 def test_chat_with_tools_guards_empty_choices():
