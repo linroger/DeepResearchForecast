@@ -399,13 +399,10 @@ def _published_mode_on() -> bool:
     return bool(getattr(Config, "REPORT_FORECAST_LEDGER", True)) and commit_mode() == "published"
 
 
-def _ledger_step(agent: Any, report_id: str, *, report_status: Any, error: Optional[str],
-                 publication_status_fn: Callable[[str], Dict[str, Any]],
-                 load_forecast_fn: Callable[[str], Optional[Dict[str, Any]]],
-                 final_audit_path_fn: Optional[Callable[[str], str]],
-                 now: Optional[datetime]) -> Dict[str, Any]:
-    if not _published_mode_on():
-        return {"status": "disabled"}
+def _report_context(agent: Any) -> Dict[str, Any]:
+    """The ledger context of one report agent, enriched as every post-publication step
+    must see it: ``agent.ledger_context`` plus its simulation id, the owning pipeline's
+    identity when there is no orchestrator context, and the evaluation re-class."""
     raw_context = getattr(agent, "ledger_context", None)
     context = dict(raw_context) if isinstance(raw_context, Mapping) else {}
     context.setdefault("simulation_id", getattr(agent, "simulation_id", None))
@@ -416,7 +413,18 @@ def _ledger_step(agent: Any, report_id: str, *, report_status: Any, error: Optio
         # ensemble member's class and seed.
         for key, value in _owner_identity(context.get("simulation_id")).items():
             context.setdefault(key, value)
-    context = apply_evaluation_context(context, _agent_evaluation_context(agent))
+    return apply_evaluation_context(context, _agent_evaluation_context(agent))
+
+
+def _ledger_step(agent: Any, report_id: str, *, context_fn: Callable[[], Dict[str, Any]],
+                 report_status: Any, error: Optional[str],
+                 publication_status_fn: Callable[[str], Dict[str, Any]],
+                 load_forecast_fn: Callable[[str], Optional[Dict[str, Any]]],
+                 final_audit_path_fn: Optional[Callable[[str], str]],
+                 now: Optional[datetime]) -> Dict[str, Any]:
+    if not _published_mode_on():
+        return {"status": "disabled"}
+    context = context_fn()
     return commit_report(
         report_id=report_id,
         report_status=report_status,
@@ -447,9 +455,18 @@ def run_post_publication(agent: Any, report_id: str, *, report_status: Any,
     its ``report_id`` and is ``{'status': 'disabled', 'report_id': ...}`` unless
     REPORT_FORECAST_LEDGER is on and the commit mode is 'published'.
     """
+    shared: Dict[str, Dict[str, Any]] = {}
+
+    def report_context() -> Dict[str, Any]:
+        # Built once, on first use, and shared by every step: the eval bundle is keyed on
+        # the very context its ledger row was committed with (one owner lookup, not two).
+        if "context" not in shared:
+            shared["context"] = _report_context(agent)
+        return shared["context"]
+
     try:
         receipt = _ledger_step(
-            agent, report_id, report_status=report_status, error=error,
+            agent, report_id, context_fn=report_context, report_status=report_status, error=error,
             publication_status_fn=publication_status_fn,
             load_forecast_fn=load_forecast_fn, final_audit_path_fn=final_audit_path_fn,
             now=now)
@@ -458,7 +475,45 @@ def run_post_publication(agent: Any, report_id: str, *, report_status: Any,
         receipt = {"status": "error", "commit_id": None, "target_key": None,
                    "record_class": None, "reasons": [f"{type(exc).__name__}: {exc}"[:300]]}
     receipt["report_id"] = report_id
+    _eval_bundle_step(agent, report_id, context_fn=report_context, report_status=report_status,
+                      publication_status_fn=publication_status_fn,
+                      load_forecast_fn=load_forecast_fn, now=now)
     return receipt
+
+
+def _eval_bundle_step(agent: Any, report_id: str, *, context_fn: Callable[[], Dict[str, Any]],
+                      report_status: Any,
+                      publication_status_fn: Callable[[str], Dict[str, Any]],
+                      load_forecast_fn: Callable[[str], Optional[Dict[str, Any]]],
+                      now: Optional[datetime]) -> Optional[Dict[str, Any]]:
+    """EVAL-19 (EVAL_BUNDLE_CAPTURE, default off): freeze the evaluation bundle of a
+    completed, publishable report next to it (``eval_bundle.capture_from_agent``) after
+    the ledger commit, gated exactly as :func:`commit_report` gates a scored row (a failed
+    report is never bundled, even when its meta.json still reads publishable). The bundle
+    sees the context the ledger row was committed with (``context_fn``,
+    :func:`_report_context`: owning pipeline, validated as-of anchor, record class). Best
+    effort: never changes the report, its status or its artifacts; returns the manifest,
+    or None when off, failed, unpublishable or the capture failed."""
+    if not getattr(Config, "EVAL_BUNDLE_CAPTURE", False):
+        return None
+    try:
+        if _status_value(report_status) != "completed":
+            return None
+        publication = publication_status_fn(report_id)
+        if not isinstance(publication, Mapping) or publication.get("publishable") is not True:
+            return None
+        from . import eval_bundle
+        from .report_agent import ReportManager
+        context = dict(context_fn())
+        context["record_class"] = _record_class(context, getattr(agent, "scenario_label", ""))
+        manifest = eval_bundle.capture_from_agent(
+            agent, report_id, report_dir=ReportManager._get_report_folder(report_id),
+            forecast=load_forecast_fn(report_id), now=now, context=context)
+        logger.info(f"[eval-bundle] {report_id}: bundle {manifest['bundle_sha256'][:12]} written")
+        return manifest
+    except Exception as exc:  # noqa: BLE001 — capture must never break a report
+        logger.warning(f"[eval-bundle] capture failed for {report_id} (ignored): {exc}")
+        return None
 
 
 def recommit_reused_report(report_id: str, *, report_status: Any, question: Optional[str],
