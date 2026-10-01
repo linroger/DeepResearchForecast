@@ -94,6 +94,26 @@ def _meta_errors(qid, **row):
     return [e for e in gp.validate_meta(bad, QUESTIONS) if e.startswith(qid + ":")]
 
 
+@pytest.mark.parametrize("row,code", [
+    # review round 3: a rewording replaces the golden text in both prompts, so it passes the
+    # EVAL-9 structural leak lint too, not only the marker check
+    ({"probe_resolution_criteria": "YES if the Conservatives win a plurality of seats. They finished second."},
+     "extra_sentence in resolution_criteria"),
+    ({"probe_question": "Will the Conservative Party win the most seats (it did not)?"},
+     "unreviewed_parenthetical in question"),
+    ({"probe_question": "Will the Conservative Party win the most seats in July 2024"},
+     "question_not_ending_with_question_mark in question"),
+    ({"probe_resolution_criteria": "The Conservatives win a plurality of seats."}, "criteria_not_yes_if"),
+    ({"probe_question": "  "}, "probe_question must be a non-blank string"),
+    ({"probe_resolution_criteria": 5}, "probe_resolution_criteria must be a non-blank string"),
+])
+def test_probe_rewordings_pass_the_golden_leak_lint(row, code):
+    errors = _meta_errors("uk-ge-2024-tory", **row)
+    assert any(code in e for e in errors), errors
+    # the same lint is what the shipped rewording passes
+    assert _meta_errors("openai-gpt4o-2024") == []
+
+
 def test_meta_needs_rationale_and_never_an_invented_marker():
     assert all(META[q["id"]]["marker_rationale"].strip() for q in QUESTIONS)
     uninformative = sorted(qid for qid, row in META.items() if row.get("recall_uninformative"))
@@ -209,9 +229,26 @@ def test_parser_never_defaults(reply, expected):
 def test_recall_parser_is_strict_and_keeps_all_details():
     assert gp.parse_recall({"knows": True, "stated_outcome": "yes", "details": " x\n" * 100}) == {
         "knows": True, "stated_outcome": "YES", "details": " ".join(["x"] * 100)}
-    assert gp.parse_recall({"knows": "maybe", "stated_outcome": "YES"}) is None
     assert gp.parse_recall({"knows": False, "stated_outcome": "PROBABLY"}) is None
+    assert gp.parse_recall({"knows": True, "stated_outcome": "Yes - Labour won"}) is None
+    assert gp.parse_recall({"knows": True}) is None
     assert gp.parse_recall("UNKNOWN") is None
+
+
+@pytest.mark.parametrize("reply,knows,stated", [
+    # review round 3: ``knows`` only feeds the weak recall_claimed, so it never rejects a reply
+    ({"knows": "yes", "stated_outcome": "YES"}, True, "YES"),
+    ({"knows": "No", "stated_outcome": "UNKNOWN"}, False, "UNKNOWN"),
+    ({"knows": "maybe", "stated_outcome": "YES"}, None, "YES"),
+    ({"knows": 1, "stated_outcome": "NO"}, None, "NO"),
+    ({"stated_outcome": "NO"}, None, "NO"),
+    ({"knows": True, "stated_outcome": " YES. "}, True, "YES"),
+    ({"knows": False, "stated_outcome": "unknown!"}, False, "UNKNOWN"),
+])
+def test_recall_parser_reads_knows_loosely(reply, knows, stated):
+    assert gp.parse_recall(reply) == {"knows": knows, "stated_outcome": stated, "details": ""}
+    flags = gp.question_flags(BY_ID["uk-ge-2024-labour"], ["411"], None, gp.parse_recall(reply), 0.85)
+    assert flags["recall_claimed"] is (knows is True or stated != "UNKNOWN")
 
 
 def test_marker_after_the_word_limit_still_flags():
@@ -240,6 +277,7 @@ def test_refusal_through_the_real_client_is_parse_failed(tmp_path, monkeypatch, 
     assert report["cost"]["calls"] == 4 and len(sent) == 4          # the repair attempt counts per arm
     arm = json.load(open(tmp_path / "arms" / "uk-ge-2024-labour" / "nd.json"))
     assert arm["status"] == "parse_failed" and arm["raw_excerpt"] == "I cannot forecast this."
+    assert arm["reply_text"] == "I cannot forecast this.\nI cannot forecast this."   # both attempts kept
     assert client.chat is refuse and "chat_json" not in vars(client)   # metering undone
 
 
@@ -277,6 +315,137 @@ def test_memorized_answers_flag_the_set(tmp_path):
     report, _ = _run(tmp_path, remembers)
     assert report["summary"]["status"] == "flagged"
     assert report["summary"]["flagged_ids"] == ["uk-ge-2024-labour"]
+    # review round 3: the weak list holds correct claims without a marker; the flagged row is not one
+    assert report["summary"]["weak_signals"]["recall_claimed"] == ["uk-ge-2024-labour"]
+    assert report["summary"]["weak_signals"]["recall_claimed_correct"] == []
+    assert report["summary"]["weak_signals"]["recall_unverified_marker"] == []
+    assert report["summary"]["inconclusive_reasons"] == []
+
+
+LABOUR = "uk-ge-2024-labour"
+
+
+def _labour_recall(reply):
+    """Honest everywhere, except the uk-ge-2024-labour recall arm, which returns ``reply``."""
+    def answer(arm, qid):
+        return reply if (arm == "recall" and qid == LABOUR) else _honest(arm, qid)
+    return answer
+
+
+@pytest.mark.parametrize("reply", [
+    {"knows": "yes", "stated_outcome": "YES", "details": "Labour won 411 seats"},
+    {"stated_outcome": "YES", "details": "Labour won 411 seats"},
+    {"knows": True, "stated_outcome": "YES.", "details": "Labour won 411 seats"},
+])
+def test_off_schema_knows_or_outcome_still_flags(tmp_path, reply):
+    """Review round 3: a correct outcome with a marker in its details is not lost over a
+    ``knows`` given as a string or left out, or an outcome written 'YES.'."""
+    report, _ = _run(tmp_path, _labour_recall(reply))
+    row = next(r for r in report["questions"] if r["question_id"] == LABOUR)
+    assert row["arms"]["recall"] == "ok" and row["flags"]["likely_memorized"] is True
+    assert row["recall_unverified_marker"] is None
+    assert report["summary"]["status"] == "flagged" and report["summary"]["flagged_ids"] == [LABOUR]
+
+
+@pytest.mark.parametrize("reply,arm_status", [
+    # unparseable: the outcome is not a bare YES/NO/UNKNOWN, or the reply is no object
+    ({"knows": True, "stated_outcome": "Yes - Labour won", "details": "Labour won 411 seats"}, "parse_failed"),
+    ("Labour won 411 seats, so the answer is YES.", "parse_failed"),
+    ({"answer": ["YES", "Labour won 411 seats"]}, "parse_failed"),
+    # parsed, but the marker is outside details or beside a wrong or UNKNOWN outcome
+    ({"knows": True, "stated_outcome": "YES", "details": "A landslide.", "seats": 411}, "ok"),
+    ({"knows": True, "stated_outcome": "NO", "details": "Labour won 411 seats"}, "ok"),
+    ({"knows": False, "stated_outcome": "UNKNOWN", "details": "Perhaps 411 seats"}, "ok"),
+])
+def test_marker_in_any_recall_reply_is_never_clean(tmp_path, reply, arm_status):
+    """Review round 3 (fail closed): a recall reply that names a curated marker but is not a
+    parsed correct outcome with the marker in its details is not flagged, but the set is
+    never none_detected, and the row says which marker it named."""
+    report, _ = _run(tmp_path, _labour_recall(reply))
+    row = next(r for r in report["questions"] if r["question_id"] == LABOUR)
+    assert row["arms"]["recall"] == arm_status and row["flags"]["likely_memorized"] is False
+    assert row["recall_unverified_marker"] == "411"
+    summary = report["summary"]
+    assert summary["status"] == "inconclusive" and summary["flagged_ids"] == []
+    assert summary["inconclusive_reasons"] == ["recall_unverified_marker"]
+    assert summary["weak_signals"]["recall_unverified_marker"] == [LABOUR]
+    arm = json.load(open(tmp_path / "probe" / "arms" / LABOUR / "recall.json"))
+    assert arm["status"] == arm_status and "411" in arm["reply_text"]
+
+
+def _real_client(monkeypatch, recall_replies, repair_turn=True):
+    """An LLMClient whose chat() answers honestly, except the uk-ge-2024-labour recall arm:
+    its n-th attempt returns (or raises) ``recall_replies[n]``."""
+    from app.utils.llm_client import LLMClient
+    monkeypatch.setattr(Config, "LLM_JSON_REPAIR_TURN", repair_turn, raising=False)
+    client = LLMClient(provider="deepseek", api_key="x", pinned=True, use_cache=False)
+    attempts = []
+
+    def chat(*args, **kwargs):
+        user = kwargs["messages"][1]["content"]
+        qid = next(q["id"] for q in QUESTIONS if gp.probe_view(q, META[q["id"]])["question"] in user)
+        arm = "recall" if user.startswith("What happened") else "nd"
+        if (arm, qid) != ("recall", LABOUR):
+            return json.dumps(_honest(arm, qid))
+        attempts.append(kwargs["messages"])
+        reply = recall_replies[len(attempts) - 1]
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+    client.chat = chat
+    return client, attempts
+
+
+PROSE = "Labour won the July 2024 election in a landslide with 411 seats, so the answer is YES."
+
+
+@pytest.mark.parametrize("repair_turn,replies,arm_status", [
+    (True, [PROSE, PROSE], "parse_failed"),                     # chat_json's JSON miss, repair turn included
+    (False, [PROSE, PROSE], "parse_failed"),                    # the legacy retry loop
+    # the marker came in the first attempt only: the repair turn's answer, or its transport
+    # failure, does not wash it out
+    (True, [PROSE, json.dumps({"knows": True, "stated_outcome": "YES", "details": "A landslide."})], "ok"),
+    (True, [PROSE, ConnectionError("reset")], "call_failed"),
+])
+def test_marker_in_a_rejected_reply_through_the_real_client_is_never_clean(tmp_path, monkeypatch,
+                                                                         repair_turn, replies, arm_status):
+    client, attempts = _real_client(monkeypatch, replies, repair_turn)
+    report = gp.run_probe(QUESTIONS, META, client=client, provider="deepseek", model="deepseek-chat",
+                          out_dir=str(tmp_path), golden_sha256="g" * 64, closed_book_attested=True)
+    assert len(attempts) == 2
+    row = next(r for r in report["questions"] if r["question_id"] == LABOUR)
+    assert row["arms"]["recall"] == arm_status and row["recall_unverified_marker"] == "411"
+    assert report["summary"]["status"] == "inconclusive" and report["summary"]["flagged_ids"] == []
+    assert report["summary"]["inconclusive_reasons"] == ["recall_unverified_marker"]
+    arm = json.load(open(tmp_path / "arms" / LABOUR / "recall.json"))
+    assert arm["reply_text"].startswith(PROSE)
+
+
+def test_unverified_marker_is_rechecked_against_the_current_meta_on_reuse(tmp_path):
+    """The arm artifact keeps the whole reply text, so a marker curated after the first run is
+    found in a reused reply (zero calls) just as in a fresh one."""
+    reply = {"knows": False, "stated_outcome": "UNKNOWN", "details": "", "aside": "a majority of 174"}
+    first, _ = _run(tmp_path, _labour_recall(reply))
+    assert first["summary"]["status"] == "none_detected"
+    meta = json.loads(json.dumps(META))
+    meta[LABOUR]["leak_markers"].append("174")
+    client = ScriptedClient(_labour_recall(reply))
+    second = gp.run_probe(QUESTIONS, meta, client=client, provider="deepseek", model="scripted-1",
+                          out_dir=str(tmp_path / "probe"), golden_sha256="g" * 64, max_calls=200,
+                          confident_p=0.85, closed_book_attested=True)
+    assert client.calls == [] and second["cost"]["reused_arms"] == 2 * len(QUESTIONS)
+    row = next(r for r in second["questions"] if r["question_id"] == LABOUR)
+    assert row["recall_unverified_marker"] == "174"
+    assert second["summary"]["inconclusive_reasons"] == ["recall_unverified_marker"]
+
+
+def test_reply_marker_reads_raw_reply_text_with_json_escapes_decoded():
+    raw = '{"details": "Labour won\\n411 seats"}'          # a raw reply: backslash, n, 411
+    assert gp.contains_marker(raw, ["411"]) is None          # 'n411' is no whole token as it is
+    assert gp.reply_marker(raw, ["411"]) == "411"
+    assert gp.reply_marker('"score": "2\\u20130"', ["2-0"]) == "2-0"
+    assert gp.reply_marker("Planned for 2053.", ["53"]) is None
+    assert gp.reply_marker(None, ["53"]) is None
 
 
 def test_clean_closed_book_run_is_none_detected(tmp_path):
@@ -565,6 +734,7 @@ def test_resume_never_reuses_a_prompt_that_now_leaks(tmp_path, capsys):
     ("nd", "arm", "recall"),
     ("recall", "value", {"knows": False, "stated_outcome": "unknown", "details": ""}),
     ("recall", "value", {"knows": False, "details": ""}),
+    ("recall", "reply_text", None),                    # the marker check could not be redone
 ])
 def test_resume_rechecks_schema_and_value(tmp_path, arm, field, stored):
     _run(tmp_path)
