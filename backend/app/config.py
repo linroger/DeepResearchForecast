@@ -1735,6 +1735,29 @@ class Config:
     # the v3 child.
     RESEARCH_FORECASTER_ATTRIBUTION = os.environ.get(
         'RESEARCH_FORECASTER_ATTRIBUTION', 'false').strip().lower() == 'true'
+    # RESEARCH-10 v3 evidence headers: each KIQ block of the writers' evidence digest opens
+    # with the engine's count of its evidence (sourced findings by tag, cited sources
+    # fetched vs snippet-only, distinct domains; counted before lines are dropped for
+    # length) and a sufficiency label (insufficient: deterministic fallback notes, < 3
+    # sourced findings or no fetched source; thin: < 2 VERIFIED, < 2 fetched or < 2
+    # domains; else adequate); a legend opens the digest, the gap review's coverage matrix
+    # gains fetched/domains/sufficiency, the section rules gain one thin-evidence line,
+    # meta.kiqs gains evidence/sufficiency and a degradation event fires when at least
+    # half of the researched KIQs are insufficient.  Zero model calls.  Default false: it
+    # changes the writers' cached prefix and section task, and the DRF-original thresholds
+    # must first be validated on stored kiq/*.json; off = digest, coverage matrix, section
+    # task and meta byte-identical.  Forwarded to the v3 child.
+    RESEARCH_EVIDENCE_HEADERS = os.environ.get('RESEARCH_EVIDENCE_HEADERS', 'false').strip().lower() == 'true'
+    # RESEARCH-10 fair deterministic truncation (v3): the plan's scout digest shares its
+    # 6,000 chars max-min fairly between the scout queries (each keeps at least an equal
+    # share), cut only between search results and noting "(k results omitted for
+    # length)", where the head-cut of the joined digest silently lost the last queries;
+    # an over-cap digest block drops, among lines of equal priority, the one sharing the
+    # fewest terms with the KIQ question first (not simply the last).  Zero model calls.
+    # Default false: it changes the plan prompt and the writers' digest; off =
+    # byte-identical.  Forwarded to the v3 child.
+    RESEARCH_TRUNCATION_FAIRNESS = os.environ.get(
+        'RESEARCH_TRUNCATION_FAIRNESS', 'false').strip().lower() == 'true'
     # RESEARCH-1：抓取层抽取空壳检测（诚实性检查，故默认开 = fail closed）。开启时 reader 空壳
     # （"Markdown Content: undefined"）、"page unavailable" 页、bot wall 与短付费墙预告不再算成功
     # 读取：不进 72h 源缓存、触发 provider 回退、v3 工具层返回 FETCH_FAILED(<reason>) 且绝不标记

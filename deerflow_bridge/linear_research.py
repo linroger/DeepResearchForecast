@@ -617,6 +617,11 @@ _KIQ_ABSENCE_RULE = ("Absence: an empty or failed search is not evidence that so
                      "says so, and cite it; otherwise record it under Open questions.")
 _SECTION_ABSENCE_RULE = ("- Never state that something did not happen, was not reported or does not exist unless "
                          "a cited source says so; otherwise say the sources reviewed do not establish it.")
+# The line RESEARCH_EVIDENCE_HEADERS appends to the section rules (last of
+# ``_Engine._section_rule_addenda``): the digest's evidence lines label each KIQ.
+_SECTION_THIN_EVIDENCE_RULE = ("- Where a primary KIQ's evidence line says thin or insufficient, state the conclusions "
+                               "that depend on it with explicit uncertainty; never copy evidence lines, counts or "
+                               "labels into the text.")
 
 _PROMPT_TEMPLATES: Mapping[str, string.Template] = {
     "pre_brief": _T_PRE_BRIEF,
@@ -4355,8 +4360,137 @@ def _is_sourced(fact: Any) -> bool:
     return isinstance(fact, dict) and bool(_CITE_RE.search(str(fact.get("text") or "")))
 
 
-def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str) -> tuple[str, int]:
-    """One KIQ's digest block within ``cap`` chars; never cuts a line."""
+# RESEARCH_EVIDENCE_HEADERS (RESEARCH-10, default off): each KIQ block of the
+# digest opens with the engine's count of its evidence and a sufficiency label
+# (evidence_profile), so a writer can tell a well-sourced KIQ from one resting
+# on two snippets even when the block lists only a sample of its lines.  The
+# count-header idea follows TradingAgents' deterministic count summaries of
+# screened evidence (no code is copied); the thresholds below are DRF-original
+# and not yet validated on stored kiq/*.json runs: validate them before the
+# knob's default flips.
+SUFFICIENCY_MIN_FINDINGS = 3   # fewer sourced findings: insufficient
+SUFFICIENCY_MIN_VERIFIED = 2   # fewer VERIFIED findings: thin
+SUFFICIENCY_MIN_FETCHED = 2    # no fetched source: insufficient; fewer: thin
+SUFFICIENCY_MIN_DOMAINS = 2    # fewer distinct source domains: thin
+SUFFICIENCY_LABELS = ("insufficient", "thin", "adequate")
+# The evidence-count tags; any other tag counts as REPORTED, the tag the
+# digest groups an untagged finding under.  DERIVED is shown only when present.
+_PROFILE_TAGS = ("VERIFIED", "REPORTED", "UNVERIFIED", "DERIVED")
+# The digest's opening paragraph with the headers on.
+EVIDENCE_HEADER_LEGEND = ("Each KIQ block opens with an engine count of its evidence and a sufficiency label; "
+                          "the listed lines may be a sample.")
+
+
+def evidence_profile(record: Mapping[str, Any], ledger_get: Callable[[int], Mapping[str, Any] | None], *,
+                     admissible: Callable[[int], bool] | None = None) -> dict[str, Any]:
+    """The engine's count of one KIQ record's evidence and its sufficiency.
+
+    Counts its sourced findings by tag (``derived`` only when present), the
+    distinct sources they cite (``fetched`` by their ledger rows, the rest
+    ``snippet_only``), the distinct domains of those rows, its conflicts and
+    open questions, and its ``fallback`` (``stats.fallback``: the agent's
+    notes were deterministic).  With ``admissible`` (a gated hindcast's
+    citation wall, TIME-9) the record is first walled like the digest walls it
+    (:func:`pit_wall_record`), so only admissible sources are counted.
+
+    ``sufficiency`` is ``insufficient`` with fallback notes, fewer than
+    SUFFICIENCY_MIN_FINDINGS sourced findings or no fetched source; ``thin``
+    with fewer than SUFFICIENCY_MIN_VERIFIED VERIFIED findings,
+    SUFFICIENCY_MIN_FETCHED fetched sources or SUFFICIENCY_MIN_DOMAINS
+    domains; else ``adequate``.  ``reason`` names every rule of that level
+    the record fails.  Pure and total over any JSON-shaped record."""
+    if admissible is not None:
+        record = pit_wall_record(record, admissible)[0]
+    facts = record.get("facts")
+    facts = [fact for fact in facts if _is_sourced(fact)] if isinstance(facts, list) else []
+    tags = dict.fromkeys(_PROFILE_TAGS, 0)
+    sids: set[int] = set()
+    for fact in facts:
+        tag = str(fact.get("tag") or "")
+        tags[tag if tag in tags else "REPORTED"] += 1
+        sids.update(int(n) for n in _CITE_RE.findall(str(fact.get("text") or "")))
+    fetched = 0
+    domains: set[str] = set()
+    for sid in sids:
+        row = ledger_get(sid)
+        if not isinstance(row, Mapping):
+            continue
+        fetched += bool(row.get("fetched"))
+        domain = str(row.get("domain") or "").strip().casefold()
+        if domain:
+            domains.add(domain)
+    stats = record.get("stats")
+    fallback = (stats.get("fallback") if isinstance(stats, Mapping) else None) or None
+    profile: dict[str, Any] = {"sourced_findings": len(facts), "verified": tags["VERIFIED"],
+                               "reported": tags["REPORTED"], "unverified": tags["UNVERIFIED"]}
+    if tags["DERIVED"]:
+        profile["derived"] = tags["DERIVED"]
+
+    def count(key: str) -> int:
+        value = record.get(key)
+        return len(value) if isinstance(value, list) else 0
+
+    profile.update(sources=len(sids), fetched=fetched, snippet_only=len(sids) - fetched, domains=len(domains),
+                   conflicts=count("conflicts"), open_questions=count("open_questions"),
+                   fallback=str(fallback) if fallback else None)
+    insufficient = []
+    if profile["fallback"]:
+        insufficient.append(f"deterministic fallback notes: {profile['fallback']}")
+    if profile["sourced_findings"] < SUFFICIENCY_MIN_FINDINGS:
+        insufficient.append(f"fewer than {SUFFICIENCY_MIN_FINDINGS} sourced findings")
+    if not fetched:
+        insufficient.append("no fetched source")
+    thin = []
+    if profile["verified"] < SUFFICIENCY_MIN_VERIFIED:
+        thin.append(f"fewer than {SUFFICIENCY_MIN_VERIFIED} VERIFIED findings")
+    if fetched < SUFFICIENCY_MIN_FETCHED:
+        thin.append(f"fewer than {SUFFICIENCY_MIN_FETCHED} fetched sources")
+    if len(domains) < SUFFICIENCY_MIN_DOMAINS:
+        thin.append(f"fewer than {SUFFICIENCY_MIN_DOMAINS} domains")
+    if insufficient:
+        profile.update(sufficiency="insufficient", reason=", ".join(insufficient))
+    elif thin:
+        profile.update(sufficiency="thin", reason=", ".join(thin))
+    else:
+        profile.update(sufficiency="adequate",
+                       reason=(f"at least {SUFFICIENCY_MIN_FINDINGS} sourced findings, {SUFFICIENCY_MIN_VERIFIED} "
+                               f"VERIFIED, {SUFFICIENCY_MIN_FETCHED} fetched sources and {SUFFICIENCY_MIN_DOMAINS} "
+                               "domains"))
+    return profile
+
+
+def evidence_header_line(profile: Mapping[str, Any], omitted: int = 0) -> str:
+    """The evidence line of a KIQ digest block (its second line): the counts of
+    :func:`evidence_profile` and, when ``omitted`` lines were dropped for
+    length, how many.  It carries no [S<n>] marker, so the SOURCE INDEX is
+    the same with or without it."""
+    tags = (f"{profile['verified']} VERIFIED, {profile['reported']} REPORTED, "
+            f"{profile['unverified']} UNVERIFIED")
+    if profile.get("derived"):
+        tags += f", {profile['derived']} DERIVED"
+    line = (f"Evidence (engine count): {profile['sourced_findings']} sourced findings ({tags}) from "
+            f"{profile['sources']} sources ({profile['fetched']} fetched, {profile['snippet_only']} snippet-only; "
+            f"{profile['domains']} domains); sufficiency: {profile['sufficiency']} ({profile['reason']})")
+    if omitted:
+        line += f"; {omitted} lines omitted for length"
+    return line
+
+
+def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str, *,
+                      ledger_get: Callable[[int], Mapping[str, Any] | None] | None = None,
+                      headers: bool = False, relevance_drop: bool = False,
+                      admissible: Callable[[int], bool] | None = None) -> tuple[str, int]:
+    """One KIQ's digest block within ``cap`` chars; never cuts a line.
+
+    With ``headers`` (RESEARCH_EVIDENCE_HEADERS; needs ``ledger_get``) the
+    block's second line is :func:`evidence_header_line` of the record's
+    :func:`evidence_profile` (``admissible`` passed on), counted before any
+    line is dropped; the line itself counts against ``cap``.  With
+    ``relevance_drop`` (RESEARCH_TRUNCATION_FAIRNESS) the line dropped first
+    among lines of equal priority is the one sharing the fewest query terms
+    with the KIQ question (then the later one); without it, the later one."""
+    if headers and ledger_get is None:
+        raise ValueError("evidence headers need the source ledger (ledger_get)")
     header = f"### {record.get('id')} — {_collapse(record.get('question'))}"
     facts = sorted((f for f in record.get("facts") or [] if _is_sourced(f)),
                    key=lambda f: _TAG_ORDER.get(str(f.get("tag")), 3))
@@ -4367,19 +4501,35 @@ def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str) -> tup
     entries += [("open", f"- {q}") for q in record.get("open_questions") or []]
     kept = list(range(len(entries)))
     dropped = 0
+    profile = evidence_profile(record, ledger_get, admissible=admissible) if headers else None
+    if relevance_drop:
+        question_terms = set(rg.query_terms(str(record.get("question") or "")))
+        overlap = [len(set(rg.query_terms(line)) & question_terms) for _, line in entries]
+
+        def victim_key(i: int) -> tuple[int, ...]:
+            return _LINE_PRIORITY.get(entries[i][0], 3), overlap[i], -i
+    else:
+        def victim_key(i: int) -> tuple[int, ...]:
+            return _LINE_PRIORITY.get(entries[i][0], 3), -i
 
     def size(indexes: list[int]) -> int:
-        return len(header) + 60 + sum(len(entries[i][1]) + 1 for i in indexes)
+        total = len(header) + 60 + sum(len(entries[i][1]) + 1 for i in indexes)
+        if profile is not None:
+            total += len(evidence_header_line(profile, len(entries) - len(indexes))) + 1
+        return total
 
     while kept and size(kept) > cap:
-        victim = min(kept, key=lambda i: (_LINE_PRIORITY.get(entries[i][0], 3), -i))
+        victim = min(kept, key=victim_key)
         kept.remove(victim)
         dropped += 1
     groups = {"facts": [], "conflict": [], "open": []}
     for i in kept:
         group, line = entries[i]
         groups["facts" if group in _TAG_ORDER else group].append(line)
-    lines = [header, "Findings:"]
+    lines = [header]
+    if profile is not None:
+        lines.append(evidence_header_line(profile, dropped))
+    lines.append("Findings:")
     lines += groups["facts"] or [f"- {_text(language, 'no_findings')}"]
     if groups["conflict"]:
         lines += ["Conflicts:"] + groups["conflict"]
@@ -4390,7 +4540,8 @@ def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str) -> tup
 
 def build_digest(records: Sequence[Mapping[str, Any]], ledger_get: Callable[[int], Mapping[str, Any] | None],
                  digest_cap: int, language: str, *, dates: bool = False,
-                 admissible: Callable[[int], bool] | None = None) -> tuple[str, int]:
+                 admissible: Callable[[int], bool] | None = None, evidence_headers: bool = False,
+                 relevance_drop: bool = False) -> tuple[str, int]:
     """Digest + SOURCE INDEX of every source the digest cites (ledger order).
 
     KIQs in natural order (K1 < K2 < K10, then follow-ups); each block gets
@@ -4400,7 +4551,11 @@ def build_digest(records: Sequence[Mapping[str, Any]], ledger_get: Callable[[int
     With ``admissible`` (a gated hindcast's citation wall, TIME-9) each record
     is first walled (:func:`pit_wall_record`: failing markers stripped, a line
     whose every marker failed left out) and the SOURCE INDEX lists only
-    admissible sources.
+    admissible sources.  With ``evidence_headers`` (RESEARCH_EVIDENCE_HEADERS)
+    each block's second line is its evidence count (counting only admissible
+    sources when walled) and EVIDENCE_HEADER_LEGEND opens the digest; with
+    ``relevance_drop`` (RESEARCH_TRUNCATION_FAIRNESS) equal-priority lines are
+    dropped least KIQ-relevant first (:func:`_kiq_digest_block`).
     Returns ``(text, dropped_line_count)``; the count is of lines the caps dropped.
     """
     if admissible is not None:
@@ -4411,10 +4566,14 @@ def build_digest(records: Sequence[Mapping[str, Any]], ledger_get: Callable[[int
     blocks: list[str] = []
     dropped = 0
     for record in ordered:
-        block, lost = _kiq_digest_block(record, per_kiq, language)
+        block, lost = _kiq_digest_block(record, per_kiq, language, ledger_get=ledger_get,
+                                        headers=evidence_headers, relevance_drop=relevance_drop,
+                                        admissible=admissible)
         blocks.append(block)
         dropped += lost
     digest = "\n\n".join(blocks) if blocks else f"- {_text(language, 'no_findings')}"
+    if evidence_headers and blocks:
+        digest = f"{EVIDENCE_HEADER_LEGEND}\n\n{digest}"
     cited = sorted({int(n) for n in _CITE_RE.findall(digest)})
     if admissible is not None:
         cited = [sid for sid in cited if admissible(sid)]
@@ -4429,6 +4588,75 @@ def build_digest(records: Sequence[Mapping[str, Any]], ledger_get: Callable[[int
                                f"({rg.tier_label(row.get('tier'))}, {kind})")
     index = "\n".join(index_lines) or "(no sources were cited)"
     return f"EVIDENCE DIGEST\n\n{digest}\n\nSOURCE INDEX\n{index}", dropped
+
+
+# A search result in a scout part starts at its "[S<n>] title — domain" row
+# header line; the lines before the first one are the query line and any tool
+# note (a cached-result note, an empty or failed search).
+_SCOUT_RESULT_RE = re.compile(r"^\[S\d+\]")
+
+
+def _fit_scout_part(part: str, allowance: int) -> str:
+    """One scout part within ``allowance`` chars, cut only between results.
+
+    Its head (the lines before the first result) is always kept.  Whole
+    results are then taken in rank order, each one only if it still fits
+    together with the closing "(k results omitted for length)" note, so one
+    oversized result is left out without taking the shorter results after
+    it along."""
+    if len(part) <= allowance:
+        return part
+    head: list[str] = []
+    results: list[list[str]] = []
+    for line in part.split("\n"):
+        if _SCOUT_RESULT_RE.match(line):
+            results.append([line])
+        elif results:
+            results[-1].append(line)
+        else:
+            head.append(line)
+
+    def render(kept: list[str], omitted: int) -> str:
+        pieces = (["\n".join(head)] if head else []) + kept
+        if omitted:
+            pieces.append(f"({omitted} results omitted for length)")
+        return "\n".join(pieces)
+
+    kept: list[str] = []
+    omitted = len(results)
+    for result in results:
+        text = "\n".join(result)
+        if len(render(kept + [text], omitted - 1)) <= allowance:
+            kept.append(text)
+            omitted -= 1
+    return render(kept, omitted)
+
+
+def fair_scout_digest(parts: Sequence[str], limit: int) -> str:
+    """The scout digest with RESEARCH_TRUNCATION_FAIRNESS: no scout query
+    vanishes silently, as the head-cut of the joined digest let the last ones.
+
+    The ``limit`` chars the blank lines between the parts leave are shared
+    max-min fairly: a part within an equal share of what is left keeps all of
+    it, and the rest split the remainder equally, so every part gets at
+    least ``(limit - separators) // n`` chars and a digest within ``limit``
+    is unchanged.  A part over its allowance is cut between results
+    (:func:`_fit_scout_part`), its head always kept."""
+    parts = list(parts)
+    budget = limit - 2 * max(0, len(parts) - 1)
+    allowance: dict[int, int] = {}
+    pending = list(range(len(parts)))
+    while pending:
+        share = max(0, budget) // len(pending)
+        fits = [i for i in pending if len(parts[i]) <= share]
+        if not fits:
+            allowance.update(dict.fromkeys(pending, share))
+            break
+        for i in fits:
+            allowance[i] = len(parts[i])
+            budget -= len(parts[i])
+        pending = [i for i in pending if i not in allowance]
+    return "\n\n".join(_fit_scout_part(part, allowance[i]) for i, part in enumerate(parts))
 
 
 # ===========================================================================
@@ -6184,6 +6412,14 @@ class _Engine:
         # projected rows for their forecaster, stated range and forecaster count,
         # which _write_structured checks against the report (attribute_forecast_row).
         self.forecaster_attribution = _env_flag(self.env, "RESEARCH_FORECASTER_ATTRIBUTION", False)
+        # RESEARCH_EVIDENCE_HEADERS (default off): each digest block opens with the
+        # engine's evidence count and sufficiency label (evidence_profile), which the
+        # gap review's coverage matrix, a section rule, meta.kiqs and the research
+        # events also read.  RESEARCH_TRUNCATION_FAIRNESS (default off): the scout
+        # digest shares its chars fairly between the queries (fair_scout_digest) and an
+        # over-cap digest block drops its least KIQ-relevant equal-priority line first.
+        self.evidence_headers = _env_flag(self.env, "RESEARCH_EVIDENCE_HEADERS", False)
+        self.truncation_fairness = _env_flag(self.env, "RESEARCH_TRUNCATION_FAIRNESS", False)
         # Fetched rows whose stored page is a shell, published as cited (_source_rows).
         self.shell_sources_demoted = 0
         # sid -> reason for the shells a resumed work dir stored as fetched pages
@@ -6687,7 +6923,12 @@ class _Engine:
                 self.log("warn", "v3: the plan's question spec fails its integrity check; it is not used")
 
     def _scout(self, queries: Sequence[str]) -> str:
-        """Concurrent scout searches (planner budget) → digest of <= 6,000 chars."""
+        """Concurrent scout searches (planner budget) → digest of <= 6,000 chars.
+
+        Off RESEARCH_TRUNCATION_FAIRNESS the joined digest is cut at its last
+        line within the cap, which can silently lose the last queries; on,
+        every query keeps a fair share cut between results
+        (:func:`fair_scout_digest`)."""
         queries = list(queries)[:SCOUT_QUERIES_MAX]
         jobs = [(lambda q=q: self.tools.search(q, agent_id="planner")) for q in queries]
         results = self.gateway.fan_out(jobs, warm_first=False, workers=self.preset.workers)
@@ -6695,6 +6936,8 @@ class _Engine:
         for query, result in zip(queries, results, strict=True):
             text = result if isinstance(result, str) else f"(search failed: {type(result).__name__})"
             parts.append(f"Query: {query}\n{text}")
+        if self.truncation_fairness:
+            return fair_scout_digest(parts, SCOUT_DIGEST_CHARS) or "(no scout results)"
         digest = "\n\n".join(parts)
         if len(digest) > SCOUT_DIGEST_CHARS:
             digest = digest[:SCOUT_DIGEST_CHARS].rsplit("\n", 1)[0]
@@ -7215,10 +7458,26 @@ class _Engine:
             verified = sum(1 for f in facts if f.get("tag") == "VERIFIED")
             open_q = " | ".join(_collapse(q, 120) for q in (record.get("open_questions") or [])[:3])
             leads = " | ".join(_collapse(q, 120) for q in (record.get("discovered") or [])[:3])
-            lines.append(f"- {kiq.id} ({_collapse(kiq.question, 120)}): facts={len(facts)} "
-                         f"verified={verified} sources={len(record.get('sources') or [])}; "
+            counts = f"facts={len(facts)} verified={verified} sources={len(record.get('sources') or [])}"
+            if self.evidence_headers:
+                profile = self._evidence_profile(record)
+                counts += (f" fetched={profile['fetched']} domains={profile['domains']} "
+                           f"sufficiency={profile['sufficiency']}")
+            lines.append(f"- {kiq.id} ({_collapse(kiq.question, 120)}): {counts}; "
                          f"open: {open_q or 'none'}; leads: {leads or 'none'}")
         return "\n".join(lines)
+
+    def _evidence_profile(self, record: Mapping[str, Any]) -> dict[str, Any]:
+        """:func:`evidence_profile` of one KIQ record against the source ledger;
+        in a gated hindcast (TIME-9) only its admissible sources count, as in
+        the digest's evidence line."""
+        admissible = self._pit_admissible if self.pit is not None else None
+        return evidence_profile(record, self.ledger.get, admissible=admissible)
+
+    def _evidence_profiles(self) -> dict[str, dict[str, Any]]:
+        """``{kiq id: evidence profile}`` of every researched KIQ, in natural order."""
+        return {kid: self._evidence_profile(self.records[kid])
+                for kid in sorted(self.records, key=_natural_key)}
 
 
     # =========================================================== synthesize
@@ -7232,9 +7491,13 @@ class _Engine:
         raw = _read_text(path)
         if not raw:
             records = [self.records[k.id] for k in self.kiqs if k.id in self.records]
+            # The RESEARCH-10 knobs join the call only when on: off, it is the call before them.
+            knobs = {key: True for key, on in (("evidence_headers", self.evidence_headers),
+                                               ("relevance_drop", self.truncation_fairness)) if on}
             raw, dropped = build_digest(records, self.ledger.get, self.preset.digest_cap, self.language,
                                         dates=self.source_dates,
-                                        admissible=self._pit_admissible if self.pit is not None else None)
+                                        admissible=self._pit_admissible if self.pit is not None else None,
+                                        **knobs)
             self.meta["digest_dropped_lines"] = dropped
             if dropped:
                 self.log("warn", f"v3: evidence digest dropped {dropped} lower-priority lines to fit its caps")
@@ -7393,6 +7656,8 @@ class _Engine:
         addenda: list[str] = []
         if getattr(self, "absence_discipline", False):  # engines built without __init__ lack the knob
             addenda.append(_SECTION_ABSENCE_RULE)
+        if getattr(self, "evidence_headers", False):
+            addenda.append(_SECTION_THIN_EVIDENCE_RULE)
         return addenda
 
     def clean_body(self, body: str, section: OutlineSection) -> str:
@@ -9166,7 +9431,9 @@ class _Engine:
         model outage, content-filter refusals of every model call, a question
         spec the model never delivered or that fails its integrity check
         (RESEARCH_QUESTION_SPEC), KIQs never researched or ended in
-        deterministic notes, a gap review a failure ended early, failed
+        deterministic notes, with evidence headers (RESEARCH_EVIDENCE_HEADERS)
+        at least half of the researched KIQs with insufficient evidence
+        (:func:`evidence_profile`), a gap review a failure ended early, failed
         searches, a page fetch failure rate of 50% or more and, with evidence
         quotes enforced, KIQs whose evidence check failed (their findings kept
         their tags unchecked) and a located-quote share of the findings tagged
@@ -9206,6 +9473,12 @@ class _Engine:
         if stubbed:
             events.append(f"{len(stubbed)} of {len(self.records)} KIQ investigations ended in deterministic "
                           f"notes: {', '.join(stubbed)}")
+        if self.evidence_headers:
+            insufficient = [f"{kid} ({profile['reason']})" for kid, profile in self._evidence_profiles().items()
+                            if profile["sufficiency"] == "insufficient"]
+            if insufficient and 2 * len(insufficient) >= len(self.records):
+                events.append(f"{len(insufficient)} of {len(self.records)} researched KIQs have insufficient "
+                              f"evidence: {'; '.join(insufficient)}")
         gap = self.state.phase("gap")
         detail = str(gap.get("detail") or "")
         if gap.get("status") == "partial" or detail.startswith("stopped:"):
@@ -9309,6 +9582,13 @@ class _Engine:
             "facts": sum(len(r.get("facts") or []) for r in records),
             "verified": sum(1 for r in records for f in r.get("facts") or [] if f.get("tag") == "VERIFIED"),
         }
+        if self.evidence_headers:
+            # The profiles behind the digest's evidence lines, recounted from the records.
+            profiles = self._evidence_profiles()
+            self.meta["kiqs"]["evidence"] = profiles
+            self.meta["kiqs"]["sufficiency"] = {
+                label: sum(1 for profile in profiles.values() if profile["sufficiency"] == label)
+                for label in SUFFICIENCY_LABELS}
         if self.evidence_mode != EVIDENCE_OFF:
             self.meta["evidence"] = evidence_summary(records, self.evidence_mode)
         if self.absence_discipline:
