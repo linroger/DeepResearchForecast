@@ -5,9 +5,11 @@ from pathlib import Path
 import pytest
 
 from scripts.backfill_report_visuals import (
+    _ENSEMBLE_ISSUE_RE,
     _PROVENANCE_ISSUE_RE,
     _SCORE_ISSUE_RES,
     _WITHHELD_ISSUE_RE,
+    _ensemble_issue,
     _provenance_issue,
     backfill_one,
     carry_binary_quality,
@@ -548,7 +550,9 @@ def test_carried_line_templates_match_the_extractor_wording():
     for line, pattern in zip(lines, _SCORE_ISSUE_RES, strict=True):
         assert pattern.fullmatch(line), line
     assert _WITHHELD_ISSUE_RE.fullmatch(_binary_withheld_issue(3))
-    assert _PROVENANCE_ISSUE_RE.match(_provenance_issue(7)).group(1) == "7"
+    assert _PROVENANCE_ISSUE_RE.fullmatch(_provenance_issue(7))
+    assert _ENSEMBLE_ISSUE_RE.fullmatch(_ensemble_issue(["F2", "F5"], "0.15")).groups() == (
+        "0.15", "F2, F5")
 
     # The provenance line as the extractor itself writes it: F1 names a simulation
     # signal that was never injected and is downgraded to research-prior.
@@ -567,6 +571,58 @@ def test_carried_line_templates_match_the_extractor_wording():
     assert _provenance_issue(1) in quality["issues"]
     for line in quality["issues"]:
         assert line == _provenance_issue(1) or any(r.fullmatch(line) for r in _SCORE_ISSUE_RES), line
+
+
+def test_ensemble_line_template_matches_the_extractor_wording(monkeypatch):
+    """Drift guard: the cross-model disagreement line as the extractor writes it when
+    two binaries disagree across models (ITEM 12 ensemble, arithmetic-mean pooling)."""
+    monkeypatch.setattr(Config, "FORECAST_ENSEMBLE_MODELS", "modelb", raising=False)
+    monkeypatch.setattr(Config, "ENSEMBLE_EXTREMIZE_A", None, raising=False)
+    monkeypatch.setattr(Config, "FORECAST_ENSEMBLE_SPREAD_THRESHOLD", 0.15, raising=False)
+    monkeypatch.setattr(Config, "FORECAST_BINARY_CONTRARIAN", False, raising=False)
+    monkeypatch.setattr(Config, "FORECAST_SIM_SENSITIVITY", False, raising=False)
+
+    def _reply(p1, p2):
+        return {"binary_forecasts": [
+            {"id": f"F{i}", "statement": f"Metric {i} exceeds 10% by 2027", "probability": p,
+             "resolution_criteria": f"metric {i} > 10% by 2027 per BLS", "theme": f"t{i}",
+             "horizon_year": 2027}
+            for i, p in enumerate((p1, p2), 1)]}
+
+    secondary = FakeLLMClient(provider="modelb", json_responses=[_reply(0.6, 0.3)])
+    out = extract_binary_forecasts(
+        "dossier", FakeLLMClient(provider="primary", json_responses=[_reply(0.2, 0.8)]),
+        min_count=2, language="English",
+        ensemble_client_factory=lambda name: {"modelb": secondary}.get(name))
+    quality = out["binary_quality"]
+    assert quality["ensemble"]["low_agreement"] == ["F1", "F2"]
+    lines = [line for line in quality["issues"] if _ENSEMBLE_ISSUE_RE.fullmatch(line)]
+    assert lines == [_ensemble_issue(["F1", "F2"], str(quality["ensemble"]["spread_threshold"]))]
+
+
+def test_backfill_drops_the_ensemble_line_when_no_named_row_remains():
+    stored = _binaries(4)
+    old = _eval10_quality(stored)
+    old["ensemble"]["low_agreement"] = ["F4"]
+    old["issues"] = [_ensemble_issue(["F4"], "0.15") if line == ENSEMBLE_LINE else line
+                     for line in old["issues"]]
+    quality = carry_binary_quality(old, _binary_quality(stored[:3], min_count=10), stored[:3])
+    assert not any(_ENSEMBLE_ISSUE_RE.fullmatch(line) for line in quality["issues"])
+    assert "ensemble" not in quality
+
+
+def test_backfill_carries_a_line_that_only_begins_like_the_provenance_line():
+    """The provenance line is recognised by the extractor's whole wording, so another
+    stored line that shares its opening words is carried, not rewritten or dropped."""
+    stored = _binaries(4, downgraded=(0, 3))
+    old = _eval10_quality(stored)
+    lookalike = "2 forecast(s) claimed a simulation signal that was never injected, per the audit"
+    old["issues"].append(lookalike)
+    rebuilt = _binary_quality(stored[:3], min_count=10)
+    quality = carry_binary_quality(old, json.loads(json.dumps(rebuilt)), stored[:3])
+    assert quality["issues"] == (
+        [_binary_withheld_issue(2)] + rebuilt["issues"]
+        + [_provenance_issue(1), ENSEMBLE_LINE, lookalike])
 
 
 def test_replay_of_an_eval10_forecast_json_keeps_its_keys_and_recounts_the_dropped_row(
@@ -626,3 +682,61 @@ def test_replay_of_a_pre_eval10_forecast_json_writes_the_same_bytes(tmp_path, mo
     assert _replay("pre_fu1") == current
     replayed = json.loads(current)["binary_quality"]
     assert replayed["count"] == 3 and ("ensemble" in replayed) == (ensemble is not None)
+
+
+def test_replay_restates_the_ensemble_line_without_the_dropped_row(tmp_path, monkeypatch):
+    """End to end: the dropped circular F4 was one of the two binaries the ensemble line
+    named, so the line is rebuilt in the extractor's wording for F2 alone; the stored
+    ensemble block (which the spec keeps as stored) is unchanged."""
+    stored = _binaries(4, downgraded=(0, 3))
+    stored[3].update(_CIRCULAR)
+    old = _eval10_quality(stored)
+    old["ensemble"] = {"enabled_models": ["glm"], "low_agreement": ["F2", "F4"],
+                       "spread_threshold": 0.15}
+    two_named = "2 forecast(s) show cross-model disagreement (spread > 0.15): F2, F4"
+    old["issues"] = [two_named if line == ENSEMBLE_LINE else line for line in old["issues"]]
+    pipeline_id, report_id, report_dir = _replay_harness(
+        tmp_path, monkeypatch, "ensemble",
+        {"binary_forecasts": stored, "binary_quality": old, "scenarios": []})
+
+    backfill_one(pipeline_id, report_id, apply=True)
+
+    forecast = json.loads((report_dir / "forecast.json").read_text(encoding="utf-8"))
+    retained = forecast["binary_forecasts"]
+    quality = forecast["binary_quality"]
+    assert [row["id"] for row in retained] == ["F1", "F2", "F3"]
+    assert quality["ensemble"] == old["ensemble"]
+    assert quality["issues"] == (
+        [_binary_withheld_issue(2)] + _binary_quality(retained, min_count=10)["issues"]
+        + [_provenance_issue(1), ENSEMBLE_LINE])
+
+
+def test_replay_of_a_report1_era_forecast_json_keeps_the_withheld_disclosure(tmp_path, monkeypatch):
+    """A forecast.json finalized after REPORT-1 but before EVAL-10 holds the rebuild's
+    keys, proposition_consistency, ReportAgent's needs_review_* keys and the withheld
+    line first, with no provenance_downgrades. The pre-FU-1 replay dropped needs_review_*
+    and the withheld line; FU-1 deliberately keeps them (the disclosure ReportAgent wrote
+    at finalization), keeps the withheld line first and adds nothing else."""
+    rows = _binaries(4)
+    rows[3].update(_CIRCULAR)
+    stored = _binary_quality(rows, min_count=10)
+    stored.update(proposition_consistency={"status": "stale"},
+                  needs_review_count=2, needs_review_reasons={"unreadable": 2})
+    stored["issues"] = [_binary_withheld_issue(2)] + stored["issues"]
+    pipeline_id, report_id, report_dir = _replay_harness(
+        tmp_path, monkeypatch, "report1",
+        {"binary_forecasts": rows, "binary_quality": stored, "scenarios": []})
+
+    backfill_one(pipeline_id, report_id, apply=True)
+
+    forecast = json.loads((report_dir / "forecast.json").read_text(encoding="utf-8"))
+    retained = forecast["binary_forecasts"]
+    quality = forecast["binary_quality"]
+    rebuilt = _binary_quality(retained, min_count=10)
+    assert [row["id"] for row in retained] == ["F1", "F2", "F3"]
+    assert quality["needs_review_count"] == 2
+    assert quality["needs_review_reasons"] == {"unreadable": 2}
+    assert set(quality) == set(rebuilt) | {
+        "proposition_consistency", "needs_review_count", "needs_review_reasons"}
+    assert "only 4 binaries (< 10)" in stored["issues"]
+    assert quality["issues"] == [_binary_withheld_issue(2)] + rebuilt["issues"]
