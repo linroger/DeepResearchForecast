@@ -6031,9 +6031,9 @@ class KiqAgent:
         investigation as ``notes_truncated``, which a resumed attempt
         researches again."""
         gateway = self.engine.gateway
+        tools = getattr(self, "agent_tools", AGENT_TOOLS)  # stand-ins built without __init__ bind AGENT_TOOLS
         try:
-            result = gateway.invoke(messages, kind="agent", label=label, tools=self.agent_tools,
-                                    deadline=self.deadline)
+            result = gateway.invoke(messages, kind="agent", label=label, tools=tools, deadline=self.deadline)
         except rg.EmptyResponse as exc:
             if getattr(exc, "truncated", False):
                 raise _NotesCut(str(exc)) from exc
@@ -6047,7 +6047,7 @@ class KiqAgent:
         self.engine.log("stage", f"v3: {label} reply hit its output cap; asking once more with a "
                                  f"{wider}-token cap")
         try:
-            again = gateway.invoke(messages, kind="agent", label=f"{label}:wide", tools=self.agent_tools,
+            again = gateway.invoke(messages, kind="agent", label=f"{label}:wide", tools=tools,
                                    deadline=self.deadline, max_tokens=wider)
         except _PROVIDER_ERRORS:
             raise
