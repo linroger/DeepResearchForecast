@@ -17,6 +17,14 @@ nothing and reuses the existing rule owners instead of copying their rules:
   ``PipelineOrchestrator._assess_run_health`` flag (parity is pinned by
   ``tests/test_stage_scorecard.py``).
 
+EVAL-16 adds the tool-call contracts (each must be 0): research
+``invalid_tool_calls`` / ``unknown_tool_calls`` summed by the v3 engine into
+``meta.kiqs`` (not applicable to other engines), and report
+``unknown_tool_calls``, the ``tool_unknown`` rows of the report's
+``agent_log.jsonl`` (not instrumented for a report written before INFRA-5 logged
+them).  :data:`RATE_METRICS` names the rates the offline cross-run aggregate
+(``scripts/stage_scorecard.py aggregate``) pools.
+
 The scorecard is observability, never a gate: it cannot change a pipeline's
 ``status`` or ``pipeline_health``, and it is written beside the pipeline state
 (``<pipeline_dir>/stage_scorecard.json``), never into the report folder.
@@ -116,6 +124,15 @@ _MARKET_LABEL_STATES = {
 _HONESTY_BOOLEAN_GATES = ("REPORT_PUBLISH_GATE", "REPORT_FINAL_READ_ONLY_AUDIT",
                           "PIPELINE_HEALTH_GATE")
 PROCESS_CONFIG = "process_config"
+
+# EVAL-16: the report agent_log.jsonl action counted by report.unknown_tool_calls,
+# and the actions whose rows show that INFRA-5 wrote the log (see _tool_unknown_rows).
+_TOOL_UNKNOWN = "tool_unknown"
+_TOOL_LOG_MARKER_ACTIONS = frozenset({_TOOL_UNKNOWN, "tool_rejected"})
+# A complete action field of an agent_log row (ReportLogger writes it after
+# timestamp, elapsed_seconds and report_id), and the start of every row.
+_ACTION_FIELD_RE = re.compile(r'"action":\s*"[^"\\]*"')
+_LOG_ROW_START = '{"timestamp"'
 
 _WORKDIR_RE = re.compile(r"\A[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}\Z")
 _ABSENT = object()
@@ -280,6 +297,50 @@ def _research_metrics(paths: Mapping[str, Any], digests: dict) -> dict:
 
     metrics["actor_count"] = _actor_count(paths, meta_status, meta, digests)
     metrics["market_state"] = _market_state(paths, digests)
+    metrics.update(_kiq_tool_call_counts(meta_status, meta))
+    return metrics
+
+
+def _kiq_tool_call_counts(meta_status: str, meta: Optional[dict]) -> dict:
+    """EVAL-16: invalid_tool_calls / unknown_tool_calls of the v3 KIQ agents (meta.kiqs).
+
+    Only the v3 engine's KIQ agents answer tool calls with INVALID_TOOL_CALL /
+    UNKNOWN_TOOL, so the counts are not applicable to a meta that names another
+    engine (or names none and has no ``kiqs`` block, the pre-v3 engines).  A v3
+    meta without them (a run before EVAL-16) is not_instrumented, never a pass.
+
+    ``kiqs.tool_counters_missing`` counts the KIQ records a resumed run kept
+    from before the counters (each adds 0 to the sums): a zero sum is then
+    not_instrumented, and a positive one is measured as a lower bound.
+    """
+    metrics: dict[str, dict] = {}
+    for name in ("invalid_tool_calls", "unknown_tool_calls"):
+        src = f"handoff/meta.json:kiqs.{name}"
+        err, kiqs = _field(meta, meta_status, "kiqs", src)
+        engine = meta.get("research_engine") if meta_status == MEASURED else None
+        if meta_status == MEASURED and engine != "v3" and (engine is not None or "kiqs" not in meta):
+            metrics[name] = _unavailable(NOT_APPLICABLE, src,
+                                         "not a v3 run: the research engine has no KIQ agents")
+        elif err is not None:
+            metrics[name] = err
+        elif not isinstance(kiqs, dict):
+            metrics[name] = _unavailable(UNREADABLE, src, "kiqs is not an object")
+        elif name not in kiqs:
+            metrics[name] = _unavailable(NOT_INSTRUMENTED, src, f"kiqs has no '{name}' field")
+        else:
+            count = _as_count(kiqs[name])
+            missing = _as_count(kiqs.get("tool_counters_missing", 0))
+            if count is None:
+                metrics[name] = _unavailable(UNREADABLE, src, f"{name} is not a count")
+            elif missing is None:
+                metrics[name] = _unavailable(UNREADABLE, src, "tool_counters_missing is not a count")
+            elif missing and not count:
+                metrics[name] = _unavailable(
+                    NOT_INSTRUMENTED, src,
+                    f"{missing} KIQ record(s) predate the counters: a zero sum is not evidence")
+            else:
+                metrics[name] = _metric(count, source=src, detail=(
+                    f"a lower bound: {missing} KIQ record(s) predate the counters" if missing else None))
     return metrics
 
 
@@ -593,7 +654,125 @@ def _report_metrics(paths: Mapping[str, Any], thresholds: Mapping[str, float],
             UNREADABLE, src, "anchored_count is not a count")
         comparison = anchored
     metrics["market_anchor_count"] = err or _metric(comparison, source=src)
+    metrics["unknown_tool_calls"] = _tool_unknown_rows(paths, digests)
     return metrics
+
+
+def _tool_unknown_rows(paths: Mapping[str, Any], digests: dict) -> dict:
+    """EVAL-16: the ``action == "tool_unknown"`` rows of the report's agent_log.jsonl.
+
+    ReportAgent writes one such row whenever the report model names a tool that
+    does not exist (ReAct, native and ``_execute_tool`` dispatch paths); only
+    those rows count, never the ordinary ``tool_call`` rows.  The log is
+    append-only, so every attempt that wrote to this report counts (a resumed
+    report keeps the sections of earlier attempts).
+
+    A zero is evidence only for a report whose log INFRA-5 wrote: the commit
+    that added the tool_unknown rows also added the ``tool_rejected`` rows and
+    the ``tool_dispatch`` counters of the report telemetry totals (telemetry.json
+    and the report_complete row; LLM_TELEMETRY_ENABLED and REPORT_TELEMETRY are
+    on by default).  Without one of these markers (a report written before
+    INFRA-5, with report telemetry off, or stopped before it completed without
+    a single rejected call) the count is not_instrumented, never a vacuous pass.
+
+    Those totals also count the unknown calls of one attempt
+    (``tool_dispatch.rejected_unknown``), each of which wrote one row.  ReportAgent
+    swallows a failed log write, so a row can be lost: the count is never below
+    the largest such total, and a total that is not a count is unreadable.
+
+    ReportLogger writes each row whole under a lock, so a line that is not a
+    JSON object is a torn write (a killed process, possibly with a resumed
+    attempt's row appended to it; bytes that are not UTF-8 are replaced).  Such
+    a line may hide a tool_unknown row when it names one or when a row in it was
+    cut before its action field was complete (it could have been any row): it
+    then makes the count unreadable, which fails the contract.  A torn row of
+    another action (a long llm_response cut mid-write) is skipped and counted
+    in the detail.
+    """
+    src = "report/agent_log.jsonl:action=tool_unknown"
+    path = paths.get("agent_log")
+    if not isinstance(path, str) or not os.path.exists(path):
+        return _unavailable(ARTIFACT_MISSING, src)
+    count = skipped = hiding = 0
+    instrumented = False
+    dispatch_totals: list[dict] = []  # the telemetry totals that carry tool_dispatch
+    try:
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except (ValueError, RecursionError):
+                    row = None
+                if not isinstance(row, dict):
+                    if _may_hide_tool_unknown(line):
+                        hiding += 1
+                    else:
+                        skipped += 1
+                    continue
+                # ReportLogger writes a string; any other action (a hand-edited
+                # row) is no marker and never fails the other report metrics.
+                action = row.get("action")
+                action = action if isinstance(action, str) else None
+                if action == _TOOL_UNKNOWN:
+                    count += 1
+                instrumented = instrumented or action in _TOOL_LOG_MARKER_ACTIONS
+                details = row.get("details")
+                if action == "report_complete" and isinstance(details, dict) and _has_tool_dispatch(
+                        details.get("telemetry_totals")):
+                    dispatch_totals.append(details["telemetry_totals"])
+    except OSError:
+        return _unavailable(UNREADABLE, src)
+    digests["agent_log"] = _sha256(path)
+    telemetry_status, telemetry = _read_json_object(paths.get("report_telemetry"))
+    if telemetry_status == MEASURED:
+        digests["report_telemetry"] = _sha256(paths.get("report_telemetry"))
+        if _has_tool_dispatch(telemetry.get("totals")):
+            dispatch_totals.append(telemetry["totals"])
+    instrumented = instrumented or bool(dispatch_totals)
+    if hiding:
+        return _unavailable(UNREADABLE, src,
+                            f"{hiding} line(s) that are not JSON objects may hide a {_TOOL_UNKNOWN} row")
+    if not instrumented:
+        return _unavailable(NOT_INSTRUMENTED, src,
+                            "no INFRA-5 marker (tool_unknown / tool_rejected row or telemetry "
+                            "totals.tool_dispatch): written before tool_unknown logging, with "
+                            "report telemetry off or before the report completed")
+    reported = [totals["tool_dispatch"].get("rejected_unknown", 0) for totals in dispatch_totals]
+    if any(_as_count(value) is None for value in reported):
+        return _unavailable(UNREADABLE, src,
+                            "telemetry totals.tool_dispatch.rejected_unknown is not a count")
+    notes = [f"{skipped} torn row(s) of other actions skipped"] if skipped else []
+    telemetry_count = max(reported, default=0)
+    if telemetry_count > count:
+        notes.append(f"telemetry totals.tool_dispatch.rejected_unknown counts {telemetry_count} "
+                     f"unknown call(s) but the log holds {count} {_TOOL_UNKNOWN} row(s): rows "
+                     "were lost, the telemetry count is used")
+        count = telemetry_count
+    return _metric(count, source=src, detail="; ".join(notes) or None)
+
+
+def _may_hide_tool_unknown(line: str) -> bool:
+    """True when an agent_log line that is not a JSON object may be a torn tool_unknown row.
+
+    It may when it names tool_unknown, or when one of the rows it holds has no
+    complete action field.  Every row starts with ``{"timestamp"``, which a JSON
+    string value can only hold with escaped quotes, so splitting there separates
+    the torn row(s) from the rows a resumed attempt appended to them; a text
+    before the first row start (none in a log ReportLogger wrote) is judged too.
+    """
+    if _TOOL_UNKNOWN in line:
+        return True
+    head, *rows = line.split(_LOG_ROW_START)
+    if head:
+        rows.append(head)
+    return any(_ACTION_FIELD_RE.search(row) is None for row in rows)
+
+
+def _has_tool_dispatch(totals: Any) -> bool:
+    """True when report telemetry ``totals`` carry INFRA-5's ``tool_dispatch`` counters."""
+    return isinstance(totals, dict) and isinstance(totals.get("tool_dispatch"), dict)
 
 
 def _scenario_metrics(forecast: Optional[dict], status: str,
@@ -706,6 +885,8 @@ _CHECKS: dict[str, tuple[tuple[str, Predicate], ...]] = {
         ("plan_fallback", _is_zero),
         ("synthesis_fallback_sections", _is_zero),
         ("market_state", _market_ok),
+        ("invalid_tool_calls", _is_zero),
+        ("unknown_tool_calls", _is_zero),
     ),
     "ontology": (
         ("stage_status", _stage_completed),
@@ -735,7 +916,24 @@ _CHECKS: dict[str, tuple[tuple[str, Predicate], ...]] = {
         ("probability_sum_ok", _is_true),
         ("has_residual_scenario", _is_true),
         ("citation_coverage", lambda r, t: r["value"] >= t["citation_coverage_min"]),
+        ("unknown_tool_calls", _is_zero),
     ),
+}
+
+# EVAL-16: the rate metrics (num/den records) per stage, with the direction that
+# is better; the cross-run aggregate (scripts/stage_scorecard.py aggregate) pools
+# them.  Every other metric is a count, flag or state.
+HIGHER_IS_BETTER = "higher"
+LOWER_IS_BETTER = "lower"
+RATE_METRICS: dict[str, dict[str, str]] = {
+    "research": {"kiq_completion": HIGHER_IS_BETTER, "kiq_fallback_rate": LOWER_IS_BETTER,
+                 "verified_share": HIGHER_IS_BETTER,
+                 "number_verification_pass_rate": HIGHER_IS_BETTER,
+                 "tool_failure_rate": LOWER_IS_BETTER},
+    "graph": {"core_actor_coverage": HIGHER_IS_BETTER},
+    "run": {"organic_share": HIGHER_IS_BETTER, "organic_round_coverage": HIGHER_IS_BETTER},
+    "report": {"citation_coverage": HIGHER_IS_BETTER,
+               "semantic_citation_unverifiable_ratio": LOWER_IS_BETTER},
 }
 
 
@@ -1025,6 +1223,9 @@ def resolve_inputs(pipeline_id: str, state: Optional[Mapping[str, Any]] = None) 
                 ReportManager._get_report_folder(pipeline_state.report_id), "forecast.json")
             paths["final_audit"] = ReportManager._get_report_final_audit_path(
                 pipeline_state.report_id)
+            paths["agent_log"] = ReportManager._get_agent_log_path(pipeline_state.report_id)
+            paths["report_telemetry"] = os.path.join(
+                ReportManager._get_report_folder(pipeline_state.report_id), "telemetry.json")
         except ValueError:  # an unsafe report id resolves to "artifact missing"
             pass
     return {

@@ -75,6 +75,9 @@ from ..services.research_progress import (
     aggregate_parallel_progress,
 )
 from ..services import backbone_sensitivity, run_shape
+from ..services.sim_prior_echo import (
+    VERDICT_PRIOR_ECHO, VERDICT_PRIOR_LEADER_HERD, prior_echo_diagnostics,
+)
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import RunnerStatus, SimulationRunner
 from ..services.text_processor import TextProcessor
@@ -437,6 +440,12 @@ def _classify_provider_outage(exc: Any) -> Optional[str]:
     （llm_client._is_deterministic_auth_error）、连接/传输失败、以及 llm_client 的
     双通道快失败（主提供方熔断冷却 + 回退不可用）。内容审查（422）、JSON 解析、
     预算护栏（BudgetExceeded）、取消信号等都不是「提供方中断」——既不计数也不清零。
+
+    INFRA-4（LLM_ERROR_CLASSIFY_STATUS_FIRST，默认开）：异常先按类型/HTTP 状态判定
+    （RateLimitError/429 → quota，AuthenticationError/401/403 → auth；422/400 定论为非中断，
+    不再看文本），无状态时其次是熔断快失败文本，最后按文本「配额先于认证」判定（MiniMax 2056 /
+    GLM 1113 用量上限消息可能带认证样措辞）；纯文本输入只走文本判定。关闭时为旧顺序：
+    认证文本 → 熔断 → 配额文本。
     """
     if isinstance(exc, (PipelineCancelled, ProviderOutageHalt)):
         return None
@@ -451,23 +460,38 @@ def _classify_provider_outage(exc: Any) -> Optional[str]:
         return None
     if text.startswith(_PROVIDER_OUTAGE_FAST_FAIL_PREFIX):
         return None  # 本熔断器自己的快失败信号，不得自我喂养
-    _is_quota = _is_auth = None
+    _is_quota = _is_auth = _status_first = _status_kind = _text_kind = None
     try:
         from ..utils.llm_client import (
+            _classify_status_first as _status_first,
             _is_deterministic_auth_error as _is_auth,
             _is_quota,
+            _llm_error_status_kind as _status_kind,
+            _llm_error_text_kind as _text_kind,
         )
     except Exception:  # noqa: BLE001 — 帮手不可导入时退化为本地指纹
         pass
-    if _is_auth is not None and _is_auth(exc):
-        return "auth"
     # llm_client 双通道中断快失败（消息含 '422/429 熔断冷却' → _is_quota 也会命中，
     # 但显式归类更可读）。
     low = text.casefold()
-    if "熔断冷却" in text or "circuit-breaker" in low or "回退提供方不可用" in text:
-        return "circuit_breaker"
-    if _is_quota is not None and _is_quota(exc):
-        return "quota"
+    circuit_breaker = ("熔断冷却" in text or "circuit-breaker" in low
+                       or "回退提供方不可用" in text)
+    if _status_first is not None and _status_first():
+        kind = _status_kind(exc) if isinstance(exc, BaseException) else None
+        if kind is not None:  # 状态定论：429/401/403 计中断，422/400 不计
+            return kind if kind in ("quota", "auth") else None
+        if circuit_breaker:
+            return "circuit_breaker"
+        kind = _text_kind(exc)
+        if kind in ("quota", "auth"):
+            return kind
+    else:
+        if _is_auth is not None and _is_auth(exc):
+            return "auth"
+        if circuit_breaker:
+            return "circuit_breaker"
+        if _is_quota is not None and _is_quota(exc):
+            return "quota"
     if isinstance(exc, BaseException):
         tname = type(exc).__name__.casefold()
         if "connection" in tname or "timeout" in tname:
@@ -2335,6 +2359,7 @@ RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_EVIDENCE_QUOTES", "str"),
     ("RESEARCH_EVIDENCE_SUPPORTS", "bool"),
     ("RESEARCH_FORECASTER_ATTRIBUTION", "bool"),
+    ("RESEARCH_JSON_STRICT_NUMBERS", "bool"),
     ("RESEARCH_QUANT_TYPING", "bool"),
     ("RESEARCH_QUESTION_SPEC", "bool"),
     ("RESEARCH_SOURCE_DATES", "bool"),
@@ -7686,6 +7711,92 @@ def hindcast_pin_for_simulation(simulation_id: Optional[str]) -> Optional[dict[s
     return pin
 
 
+def pinned_interview_graph_feedback(options: Any) -> Optional[bool]:
+    """FU-8: the ``sim_interview_graph_feedback`` a run's ``safety_policy_v1`` pins, or None.
+
+    None when ``options`` carries no pin, or a pin without the key (a run pinned before
+    the key existed): the ambient Config then decides. Only a real bool counts. A pin
+    that is not a dict, or a value that is not a bool (a hand-edited or damaged state,
+    where ``bool('false')`` would be True), reads False with a warning: interview text
+    is a simulation artifact and is never written to the graph because the pin could
+    not be read.
+    """
+    policy = options.get("safety_policy_v1") if isinstance(options, dict) else None
+    if policy is None:
+        return None
+    if not isinstance(policy, dict):
+        logger.warning("safety_policy_v1 不是对象（%s），采访事实不写入图谱（失败关闭）",
+                       type(policy).__name__)
+        return False
+    value = policy.get("sim_interview_graph_feedback")
+    if value is None or isinstance(value, bool):
+        return value
+    logger.warning("safety_policy_v1.sim_interview_graph_feedback=%r 不是布尔值，"
+                   "采访事实不写入图谱（失败关闭）", value)
+    return False
+
+
+def interview_graph_feedback_for_simulation(simulation_id: Optional[str]) -> bool:
+    """FU-8 (INFRA-9 open issue): whether interview answers of ``simulation_id`` may be
+    written to the observation graph.
+
+    The fallback for reports that were not handed a pinned value: ``/api/report``
+    regenerate and chat, and orchestrator reports of an unpinned run. An orchestrator
+    report of a pinned run gets the value through the ``interview_graph_feedback``
+    ReportAgent kwarg (``PipelineOrchestrator._interview_feedback_agent_kwargs``),
+    because a seed-ensemble member's simulation has no persisted owner while its report
+    runs. Here the pinned value (:func:`pinned_interview_graph_feedback`) of the pipeline
+    that ran the simulation decides, found by the same owner scan as
+    :func:`hindcast_pin_for_simulation`: newest pipeline first, and a shared-simulation
+    batch child without a pinned value defers to the pipeline it borrowed the simulation
+    from, provided that pipeline still names the same simulation. So a run, and a fork
+    that inherited its pin, keeps the semantics it was admitted with after a config
+    change. Without a pinned value anywhere on that chain (legacy runs, unpinned forks,
+    unowned simulations, an origin pipeline that was deleted) the ambient
+    ``Config.SIM_INTERVIEW_GRAPH_FEEDBACK`` decides, as before. Fails closed (False,
+    logged) when the scan raises or a named origin pipeline's state file exists but
+    cannot be read (corrupt, or written by a newer schema).
+    """
+    ambient = bool(getattr(Config, "SIM_INTERVIEW_GRAPH_FEEDBACK", False))
+    if not simulation_id:
+        return ambient
+    simulation_id = str(simulation_id)
+    try:
+        owner = _ledger_owner_of_simulation(simulation_id)
+        if owner is None:
+            return ambient
+        pipeline_id, data, _is_member, _seed = owner
+        pinned = pinned_interview_graph_feedback(data.get("options"))
+        seen = {pipeline_id}
+        while pinned is None and len(seen) <= _SHARED_SIMULATION_MAX_HOPS:
+            if data.get("simulation_id") != simulation_id:
+                break  # a seed-ensemble member's simulation is its own pipeline's, never borrowed
+            options = data.get("options") if isinstance(data.get("options"), dict) else {}
+            origin_id = options.get("shared_simulation_from")
+            if not isinstance(origin_id, str) or not origin_id or origin_id in seen:
+                break
+            seen.add(origin_id)
+            try:
+                origin_path = PipelineManager.state_path(origin_id)
+            except ValueError:
+                break  # a malformed id names no pipeline (PipelineManager.load: not found)
+            if not os.path.exists(origin_path):
+                break  # the origin was deleted: it has no pin left to honour
+            origin = PipelineManager.load(origin_id)
+            if not isinstance(origin, dict) or PipelineManager.is_incompatible(origin) is not None:
+                logger.warning("[%s] 共享模拟来源管线 %s 的状态文件不可读，采访事实不写入图谱（失败关闭）",
+                               simulation_id, origin_id)
+                return False
+            if origin.get("simulation_id") != simulation_id:
+                break
+            pinned = pinned_interview_graph_feedback(origin.get("options"))
+            data = origin
+    except Exception as exc:  # noqa: BLE001 — fail closed: no graph write without the pin
+        logger.warning("[%s] 安全政策钉查找失败，采访事实不写入图谱（失败关闭）: %s", simulation_id, exc)
+        return False
+    return ambient if pinned is None else pinned
+
+
 def preflight_pipeline(mode: str = "full", model: Optional[str] = None) -> list[str]:
     """启动管线前的快速体检：把会在几十分钟后才暴露的配置错误提前到 POST /run 时。
 
@@ -10321,6 +10432,15 @@ class PipelineOrchestrator:
         except Exception as exc:  # noqa: BLE001 — 出处是观测增益，绝不阻断报告
             logger.debug("[%s] run_provenance 跳过: %s", state.pipeline_id, exc)
 
+    @staticmethod
+    def _derive_extra_seeds(base_seed: int, n_seeds: int) -> list[tuple[int, int]]:
+        """SIM-4 (C30): the extra ensemble members' (index, seed) pairs, members 2..n_seeds.
+
+        ``(base_seed or 0) + k * 7919``: distinct and deterministic even for base 0 (7919 is
+        prime). The primary run keeps its own SIM_SEED; seeding it differently is an owner
+        decision, so it is not done here."""
+        return [(k, (base_seed or 0) + k * 7919) for k in range(2, n_seeds + 1)]
+
     def _maybe_run_seed_ensemble(self, state: "PipelineState", project: Any, graph_id: Optional[str],
                                  actors: Any, research: dict, report_md: str) -> None:
         """NEXTSTEPS P0-3: 同问多种子集成。
@@ -10368,7 +10488,7 @@ class PipelineOrchestrator:
         max_rounds = int(_mr) if _mr else None
         handoff_dir = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
         # 派生互异种子（base=0 时也确定性互异）；每个种子跑一次独立 (prepare→run→report)。
-        seed_jobs = [(k, (base_seed or 0) + k * 7919) for k in range(2, n_seeds + 1)]
+        seed_jobs = self._derive_extra_seeds(base_seed, n_seeds)
         cancel_ev0 = type(self)._cancel_events.get(state.pipeline_id)
         if cancel_ev0 is not None and cancel_ev0.is_set():
             raise PipelineCancelled("多种子集成期间被取消")
@@ -10631,6 +10751,24 @@ class PipelineOrchestrator:
         """TIME-6: ``{'hindcast': pin}`` for a pinned hindcast run's ReportAgent, else {}."""
         pin = hindcast_policy(state.options)
         return {"hindcast": pin} if pin is not None else {}
+
+    @staticmethod
+    def _interview_feedback_agent_kwargs(state: "PipelineState") -> dict[str, Any]:
+        """FU-8: ``{'interview_graph_feedback': pinned}`` for a run with a pinned value, else {}.
+
+        The run's pinned ``sim_interview_graph_feedback`` (only a real bool counts, see
+        :func:`pinned_interview_graph_feedback`) goes to the main and seed ReportAgents
+        directly: a seed's simulation is recorded only in the in-memory
+        ``ensemble_member_simulations`` map while its report runs, so the by-simulation
+        lookup would find no owner and read the ambient value. Without a pinned value the
+        kwarg is left out, as ``_hindcast_agent_kwargs`` does, and the report falls back to
+        :func:`interview_graph_feedback_for_simulation`, the lookup ``/api/report``
+        regenerate and chat use: an unpinned shared-simulation child then follows the base
+        whose simulation it interviews on both paths, and every other unpinned run (no
+        owner, or the run itself) reads the ambient Config as before.
+        """
+        pinned = pinned_interview_graph_feedback(state.options)
+        return {"interview_graph_feedback": pinned} if pinned is not None else {}
 
     def _record_research_audit(self, state: "PipelineState", handoff_dir: str) -> None:
         """TIME-9: stamp the gated research's audit into the hindcast pin before any report reads it.
@@ -10998,6 +11136,9 @@ class PipelineOrchestrator:
         # TIME-6：回测运行的种子报告同样扣下市场——钉随构造参数直接交给报告，不依赖报告侧
         # 按模拟 id 的所属管线查找（种子模拟不是任何管线自己的 simulation_id）。
         _agent_kwargs.update(self._hindcast_agent_kwargs(state))
+        # FU-8：采访事实写图的门同理——有钉值时随构造参数交给报告（种子模拟的所属管线在报告期间
+        # 尚未落盘，ensemble_member_simulations 只在内存）；无钉值不加参数，报告按模拟 id 查找。
+        _agent_kwargs.update(self._interview_feedback_agent_kwargs(state))
         # W9-5：把主跑情景脊柱钉给种子报告（scenario_spine 参数由报告链工作流并行落地；
         # 尚未支持时 TypeError → 回退旧签名，落地顺序无关）。
         try:
@@ -13189,6 +13330,11 @@ class PipelineOrchestrator:
             "fallback_share": validation.get("fallback_share"),
             "decision_validation_measured_rounds": validation.get("measured_rounds"),
         }
+        # SIM-4（SIM_PRIOR_ECHO_DIAGNOSTIC，默认开）：零 LLM 的先验回声诊断——终局份额是否只是
+        # 种子先验的复述、承诺是否扎堆先验领先情景。纯观测：只写摘要、只告警，不进
+        # _assess_run_health，不动任何概率（通道本就 diagnostic_only）。
+        if getattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", True) and isinstance(traj, dict):
+            summary["prior_echo"] = prior_echo_diagnostics(traj)
         state.options["decision_channel_summary"] = summary
         try:
             PipelineManager.save(state)
@@ -13219,6 +13365,19 @@ class PipelineOrchestrator:
                 "任何依据（REPORT_WORLDSTATE_HIDE_INVALID 开时报告隐藏份额/图表/对比表）",
                 state.pipeline_id, validity_norm, summary["validity_reasons"],
                 summary["forecast_effect"])
+        # 回声＝终局≈先验，可断言「没有提供信息」；扎堆＝终局已离开先验（TV≥echo_tv），只能
+        # 审慎地说「可能只是在复述先验」（与报告提示行同口径）。
+        _echo = summary.get("prior_echo") or {}
+        _echo_finding = {
+            VERDICT_PRIOR_ECHO: "终局分布与种子先验几乎一致，推演没有在研究先验之外提供信息，不得作为独立佐证",
+            VERDICT_PRIOR_LEADER_HERD: "承诺扎堆先验领先情景，推演可能只是在复述先验，不构成独立佐证",
+        }.get(_echo.get("verdict"))
+        if _echo_finding:
+            logger.warning(
+                "[%s] 决策通道先验回声诊断=%s（tv_to_prior=%s，先验领先=%s，领先承诺占比=%s；%s）——%s",
+                state.pipeline_id, _echo.get("verdict"), _echo.get("tv_to_prior"),
+                _echo.get("prior_leader"), _echo.get("prior_leader_commit_rate"),
+                _echo.get("policy_version"), _echo_finding)
 
     # -- 内部：研究 as_of 锚校验 (R2-RES-7) -------------------------------
 
@@ -15931,6 +16090,9 @@ class PipelineOrchestrator:
                 # TIME-6：回测运行把钉交给报告（不读/不重报价/不现抓预测市场，盖 hindcast 章）；
                 # 实时运行不加该参数，构造调用逐字节不变。
                 _ra_kwargs.update(self._hindcast_agent_kwargs(state))
+                # FU-8：采访事实写图的门有钉值时交给报告；无钉值不加参数，报告与 API 重生成/对话
+                # 同走按模拟 id 的查找（共享模拟子管线跟随 base 的钉），两条路径结论一致。
+                _ra_kwargs.update(self._interview_feedback_agent_kwargs(state))
                 # W9-8: 研究昂贵产物直通报告链——quantitative(339 行)/contested(29 条)/
                 # timeline(101 事件)/graph_priors(_structural) 此前落盘后零下游读者。
                 # 构造参数由报告链工作流并行落地（None 默认）；尚未支持时 TypeError →

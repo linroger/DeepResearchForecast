@@ -798,8 +798,14 @@ def dedup_duplicate_sentences(md: str, min_chars: int = 60) -> Tuple[str, int]:
     return "\n".join(lines), removed
 
 
-def check_scenario_probabilities(md: str, spine: Optional[Dict[str, Any]]) -> List[str]:
-    """情景概率交叉核对（spine 为唯一真值源）：正文中情景名附近的百分比须与骨架一致（±1pt）。"""
+def check_scenario_probabilities(md: str, spine: Optional[Dict[str, Any]],
+                                 alias_aware: bool = False) -> List[str]:
+    """情景概率交叉核对（spine 为唯一真值源）：正文中情景名附近的百分比须与骨架一致（±1pt）。
+
+    REPORT-3：alias_aware=True（REPORT_LOGIC_NUMBER_GATE=numeric）时再并入别名槽不符
+    （logic_number.s11_mismatches，「基准情景（40%）」对 A=0.35），同一格式、去重后同受 8 条上限；
+    检测异常时失败即关闭（记一条 "logic-number alias audit failed: <类型>"，与
+    ReportAgent._audit_numeric_consistency 一致）。默认 False 时输出逐字节不变。只检测不改写。"""
     if not isinstance(spine, dict):
         return []
     issues: List[str] = []
@@ -828,6 +834,15 @@ def check_scenario_probabilities(md: str, spine: Optional[Dict[str, Any]]) -> Li
         if near:
             pv = min(near, key=lambda x: abs(x - p))
             issues.append(f"scenario '{name[:28]}': prose {pv}% vs spine {p}%")
+    if alias_aware:
+        try:
+            from .logic_number import s11_mismatches  # 惰性：仅 numeric 需要，模块级不引入服务层依赖
+
+            for message in s11_mismatches(text, spine.get("scenarios") or [], reference="spine"):
+                if message not in issues:
+                    issues.append(message)
+        except Exception as exc:  # noqa: BLE001 — 硬规则检测失败 → fail closed（记为一条不符）
+            issues.append(f"logic-number alias audit failed: {type(exc).__name__}")
     return issues[:8]
 
 
@@ -1870,7 +1885,8 @@ def check_projection_attribution(md: str, quant_rows: Any, *, as_of: Any = None,
 # ──────────────────────────────────────────────────────────────
 
 def lint_report(md: str, lang: str, mode: str = "final",
-                spine: Optional[Dict[str, Any]] = None) -> Tuple[str, Dict[str, Any]]:
+                spine: Optional[Dict[str, Any]] = None, *,
+                alias_aware_s11: bool = False) -> Tuple[str, Dict[str, Any]]:
     """确定性编辑纪律 lint + 修复。纯函数（无状态、无 LLM、无 IO）。
 
     Args:
@@ -1879,6 +1895,8 @@ def lint_report(md: str, lang: str, mode: str = "final",
         mode: "final"（成稿）| "research"（研究档案——额外剥离 pass 叙述括注）。
         spine: 可选预测骨架 dict（{"scenarios": [{name, probability}...]}）——传入时做
             情景概率交叉核对（只记数不改写）。
+        alias_aware_s11: REPORT-3——情景概率核对并入别名槽不符（REPORT_LOGIC_NUMBER_GATE=
+            numeric）；只影响 scenario_prob_mismatches，改写结果与 changed 不变。
 
     research 模式的引用不变量：研究档案的 [S#] 已由 bridge 定稿（按位置索引 sources.json，
     References = 被引集合），lint 绝不删除或凭空生成引用——(S1) 分级标签不当引用规整、
@@ -1963,7 +1981,8 @@ def lint_report(md: str, lang: str, mode: str = "final",
     # 检测类（不改写）
     rep["language_contamination"] = detect_language_contamination(text, lang)
     rep["table_cell_truncations"] = detect_table_cell_truncation(text)
-    rep["scenario_prob_mismatches"] = check_scenario_probabilities(text, spine)
+    rep["scenario_prob_mismatches"] = check_scenario_probabilities(
+        text, spine, alias_aware=alias_aware_s11)
     rep["leakage_flags"] = len(leakage_hits(text))
     rep["outcome_focus_ok"] = rep["leakage_flags"] == 0
     rep["changed"] = text != (md or "")
