@@ -495,3 +495,255 @@ def test_a_gated_hindcast_pins_every_data_call_before_the_as_of(tmp_path, monkey
         cutoff, cutoff, "admitted" if same_day == "exclude" else "same_day")
     assert json.loads((engine.work / lr.DATA_PINS_FILENAME).read_text(encoding="utf-8")) == {
         "as_of": "2024-06-03", "cutoff": cutoff, "same_day": same_day, "pit": cutoff}
+
+
+# =============================================================== whole runs
+
+class CountingModel(v3.ScriptedModel):
+    """A ScriptedModel recording every tools object it is bound with."""
+
+    def __init__(self, responder):
+        super().__init__(responder)
+        self._state["binds"] = []
+
+    @property
+    def binds(self) -> list:
+        return self._state["binds"]
+
+    def bind_tools(self, tools):
+        with self._state["lock"]:
+            self._state["binds"].append(tools)
+        return super().bind_tools(tools)
+
+
+_DATA_HOSTS = r"(alfred\.stlouisfed\.org|(?:www\.)?sec\.gov)"
+
+
+class DataWorld(v3.World):
+    """K1 (the plan's data KIQ) calls both data tools, then writes a finding copying the CPI value,
+    one altering it and one copying Apple's revenue; the writers also cite the data sources in
+    their SOURCE INDEX; the fact extraction adds two model rows citing the CPI source, one with a
+    number its page does not state."""
+
+    def __init__(self, out_dir: Path, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.out_dir = out_dir
+
+    def agent(self, call):
+        messages = call["messages"]
+        kid = re.search(r"Investigate (\S+):", messages[2][1]).group(1)
+        if kid != "K1":
+            return super().agent(call)
+        results = [content for kind, content in messages if kind == "tool"]
+        if not results and not messages[-1][1].startswith("STOP"):
+            return v3.ai(tool_calls=[{"name": "macro_series", "args": {"series": "cpi"}, "id": "K1-d1"},
+                                     {"name": "company_filings", "args": {"company": "AAPL"}, "id": "K1-d2"}])
+        sids = {}
+        for text in results:
+            match = re.match(rf"\[S(\d+)\] .* — {_DATA_HOSTS} \(tier 1\).* — official data$", text.split("\n", 1)[0])
+            if match:
+                sids["fred" if "alfred" in match.group(2) else "sec"] = int(match.group(1))
+        cpi, sec = sids["fred"], sids["sec"]
+        return v3.ai("\n".join([
+            "## Findings",
+            f"- The US Consumer Price Index (CPIAUCSL) stood at 323.5 [S{cpi}] (VERIFIED)",
+            f"- The US Consumer Price Index (CPIAUCSL) stood at 329.7 [S{cpi}] (VERIFIED)",
+            f"- Apple Inc. reported revenue of 416,161 million USD [S{sec}] (VERIFIED)",
+            "## Conflicts", "## Open questions", "- Whether prices keep rising", "## Discovered"]))
+
+    def writer(self, call):
+        reply = super().writer(call)
+        index = call["messages"][2][1].split("SOURCE INDEX", 1)[-1]
+        sids = re.findall(rf"^\[S(\d+)\] .* — {_DATA_HOSTS} \(", index, re.M)
+        if not sids:
+            return reply
+        extra = ("\n\nOfficial statistics put the consumer price index at 323.5 and Apple Inc. revenue at 416,161 "
+                 "million USD " + "".join(f"[S{sid}]" for sid, _host in sids) + ".")
+        return v3.ai(re.sub(r"(\n\n## |\Z)", lambda m: extra + m.group(1), reply.content, count=1), out=1500)
+
+    def facts(self, call):
+        reply = json.loads(super().facts(call).content)
+        sources = json.loads((self.out_dir / "sources.json").read_text(encoding="utf-8"))
+        cpi = next(position for position, row in enumerate(sources, 1) if "alfred" in row["url"])
+        reply["quantitative_facts"] += [
+            {"metric": "Consumer price index", "value": "329.7", "unit": "index", "value_type": "actual",
+             "source_ref": f"S{cpi}"},
+            {"metric": "Consumer price index", "value": "323.5", "unit": "index", "value_type": "actual",
+             "source_ref": f"S{cpi}"}]
+        return v3.ai(json.dumps(reply))
+
+
+def run_engine(tmp_path, bridge, monkeypatch, world_factory, *, name="out", search_fn=v3.fake_search):
+    """One v3 run on offline search/fetch, with tools built as _default_tools_factory builds them:
+    the real data functions (official_data_fns) reading the engine's context."""
+    monkeypatch.setenv("RESEARCH_LINEAR_WORKERS", "1")
+    out = tmp_path / name
+    out.mkdir(parents=True, exist_ok=True)
+    model = CountingModel(world_factory(out))
+    plog = v3.FakePlog()
+    meta = {"status": "running", "question": QUESTION, "research_engine": "v3"}
+
+    def write_meta():
+        (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+
+    def gateway_factory(args, plog_arg, bridge_arg, preset):
+        return rg.ModelGateway(model, plog_arg, max_concurrency=preset.workers, budget_units=preset.budget_units,
+                               reserve_share=lr.RESERVE_SHARE, sleep=lambda seconds: None)
+
+    def tools_factory(ledger, pages_dir, bridge_arg, plog_arg, limits):
+        holder = {}
+        enabled = lr.data_tools_availability(os.environ)[0]
+        fns = (lr.official_data_fns(os.environ, enabled, lambda: holder["tools"].data_context())
+               if enabled else None)
+        pit = lr._pit_policy(os.environ)
+        holder["tools"] = rg.ResearchTools(
+            ledger, pages_dir, search_fn=search_fn, fetch_fn=v3.page_text, bridge=bridge_arg, plog=plog_arg,
+            limits=limits, source_dates=pit is not None, vintage_as_of=lr._hindcast_as_of(os.environ), pit=pit,
+            data_fns=fns)
+        return holder["tools"]
+
+    rc = lr.run(QUESTION, out, v3.make_args(), meta, plog, write_meta, bridge=bridge,
+                gateway_factory=gateway_factory, tools_factory=tools_factory)
+    return rc, meta, plog, model, out
+
+
+@pytest.fixture
+def vendors(monkeypatch):
+    """data_tools' two lookups, recorded: FRED answers at the pinned vintage, SEC EDGAR a filing 30 days before as_of."""
+    calls: dict[str, list] = {"fred": [], "edgar": []}
+
+    def fred_series(series, *, as_of, pit, key, language="English", **kwargs):
+        calls["fred"].append({"series": series, "as_of": as_of, "pit": pit, "key": key, "language": language})
+        return fred_result({"cpi": "CPIAUCSL"}.get(series, series.upper()), vintage=pit.isoformat())
+
+    def edgar_statements(company, *, as_of, freq, user_agent, language="English", **kwargs):
+        calls["edgar"].append({"company": company, "as_of": as_of, "freq": freq, "user_agent": user_agent,
+                               "language": language})
+        return edgar_result(filed=(as_of - dt.timedelta(days=30)).isoformat())
+
+    monkeypatch.setattr(dtools, "fred_series", fred_series)
+    monkeypatch.setattr(dtools, "edgar_statements", edgar_statements)
+    return calls
+
+
+def _read(path: Path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _agent_tasks(model) -> dict[str, str]:
+    return {re.search(r"Investigate (\S+):", call["messages"][2][1]).group(1): call["messages"][2][1]
+            for call in model.calls if v3.role_of(call) == "agent"}
+
+
+def test_flag_off_run_artifacts_do_not_depend_on_an_unbound_request(tmp_path, bridge, monkeypatch):
+    """RESEARCH_DATA_TOOLS unset: one AGENT_TOOLS binding, no data counters or meta.data_tools.  A
+    request no credential can serve binds nothing either: sources.json, quantitative.json,
+    meta['tools'] and the KIQ tasks are byte-identical to the unset run."""
+    rc_off, meta_off, _, model_off, out_off = run_engine(tmp_path, bridge, monkeypatch, lambda out: v3.World(),
+                                                         name="off")
+    monkeypatch.setenv("RESEARCH_DATA_TOOLS", "all")
+    rc_req, meta_req, plog_req, model_req, out_req = run_engine(tmp_path, bridge, monkeypatch,
+                                                                lambda out: v3.World(), name="requested")
+    assert rc_off == rc_req == 0
+    for name in ("sources.json", "quantitative.json"):
+        assert (out_off / name).read_bytes() == (out_req / name).read_bytes(), name
+    assert meta_off["tools"] == meta_req["tools"] and "data" not in meta_off["tools"]
+    assert "data_tools" not in meta_off
+    assert meta_req["data_tools"] == {"enabled": [], "disabled": {"fred": "no_api_key", "sec_edgar": "no_user_agent"},
+                                      "pit": None, "calls": 0, "cached": 0, "invalid": 0, "failures": 0,
+                                      "quant_rows_added": 0, "quant_rows_rejected": []}
+    for model in (model_off, model_req):
+        assert model.binds and all(tools is rg.AGENT_TOOLS_SCHEMA for tools in model.binds)
+        assert all(call["tools"] is rg.AGENT_TOOLS_SCHEMA for call in model.calls if v3.role_of(call) == "agent")
+    assert _agent_tasks(model_off) == _agent_tasks(model_req)
+    assert not any("Official data" in task for task in _agent_tasks(model_off).values())
+    assert not (out_off / lr.WORK_DIRNAME / lr.DATA_PINS_FILENAME).exists()
+    assert "data_tools" not in _read(out_req / lr.WORK_DIRNAME / lr.STATE_FILENAME)["identity"]
+    assert "official-data tool macro_series (fred) not bound: no_api_key" in plog_req.text()
+
+
+def test_flag_on_run_cites_verifies_and_publishes_the_data(tmp_path, bridge, monkeypatch, vendors):
+    for name, value in ALL_ON.items():
+        monkeypatch.setenv(name, value)
+    rc, meta, plog, model, out = run_engine(tmp_path, bridge, monkeypatch, DataWorld)
+    assert rc == 0, plog.text()
+    as_of = dt.date.fromisoformat(meta["as_of_date"])
+    pit = dtools.fred_pit(as_of)
+    # One tools list, bound once, on every agent call; only the data KIQ's task names the tools.
+    assert len(model.binds) == 1
+    assert [tool["function"]["name"] for tool in model.binds[0]] == [
+        "web_search", "web_fetch", "macro_series", "company_filings"]
+    assert all(call["tools"] is model.binds[0] for call in model.calls if v3.role_of(call) == "agent")
+    tasks = _agent_tasks(model)
+    assert "Official data: macro_series(series)" in tasks["K1"]
+    assert not any("Official data" in task for kid, task in tasks.items() if kid != "K1")
+    assert _read(out / lr.WORK_DIRNAME / lr.STATE_FILENAME)["identity"]["data_tools"] == ["fred", "sec_edgar"]
+    # The data calls are pinned to the plan's as-of, the run's vintage and its language.
+    assert vendors["fred"] == [{"series": "cpi", "as_of": as_of, "pit": pit, "key": KEY, "language": "English"}]
+    assert vendors["edgar"] == [{"company": "AAPL", "as_of": as_of, "freq": "annual", "user_agent": UA,
+                                 "language": "English"}]
+    assert _read(out / lr.WORK_DIRNAME / lr.DATA_PINS_FILENAME) == {
+        "as_of": as_of.isoformat(), "cutoff": as_of.isoformat(), "same_day": None, "pit": pit.isoformat()}
+    # A copied value stays VERIFIED; an altered one is not on the vendor's page.
+    facts = {fact["text"]: fact["tag"] for fact in _read(out / lr.WORK_DIRNAME / "kiq" / "K1.json")["facts"]}
+    assert [tag for text, tag in facts.items() if "323.5" in text] == ["VERIFIED"]
+    assert [tag for text, tag in facts.items() if "329.7" in text] == ["UNVERIFIED"]
+    assert [tag for text, tag in facts.items() if "416,161" in text] == ["VERIFIED"]
+    # sources.json: S1, dated on or before the as-of, the vendor sentences first, a data block.
+    sources = _read(out / "sources.json")
+    data_rows = [(position, row) for position, row in enumerate(sources, 1) if "data" in row]
+    assert [row["data"]["vendor"] for _, row in data_rows] == ["fred", "sec_edgar"]
+    for _position, row in data_rows:
+        assert (row["tier"], row["source_origin"]) == ("S1", "fetched")
+        assert dt.date.fromisoformat(row["date"]) <= as_of and row["supports"]
+        assert row["data"]["url"] == row["url"]
+    fred_row, sec_row = data_rows[0][1], data_rows[1][1]
+    assert fred_row["supports"] == list(fred_result(vintage=pit.isoformat()).supports)
+    assert fred_row["data"] == {"vendor": "fred", "series_id": "CPIAUCSL", "vintage": pit.isoformat(),
+                                "url": fred_row["url"]}
+    assert sec_row["data"] == {"vendor": "sec_edgar", "cik": "0000320193", "filed": sec_row["date"],
+                               "url": sec_row["url"]}
+    # quantitative.json opens with the deterministic rows (citation order), verified like model rows.
+    quant = _read(out / "quantitative.json")
+    head = quant[:3]
+    assert [lr.is_data_quant_row(row) for row in quant] == [True] * 3 + [False] * (len(quant) - 3)
+    assert [(row["metric"], row["value"], row["source_ref"]) for row in head] == [
+        ("Consumer Price Index", "323.5", f"S{data_rows[0][0]}"),
+        ("Consumer Price Index, year-on-year change", "2.95", f"S{data_rows[0][0]}"),
+        ("AAPL (CIK 0000320193, Apple Inc.): Revenue", "416161000000", f"S{data_rows[1][0]}")]
+    assert all(row["tier"] == "S1" and row["value_type"] == "actual" and row["verification"] == "verified"
+               for row in head)
+    assert [row["provenance"]["kind"] for row in head] == ["structured", "derived", "structured"]
+    assert head[0]["provenance"] == {"kind": "structured", "vendor": "fred", "series_id": "CPIAUCSL",
+                                     "vintage": pit.isoformat(), "observation_date": "2026-08-01"}
+    assert (head[0]["as_of_date"], head[0]["period_end"]) == (pit.isoformat(), "2026-08-01")
+    # The model row contradicting the CPI page is dropped and listed; the one copying it stays.
+    model_cpi = [row["value"] for row in quant[3:] if row["metric"] == "Consumer price index"]
+    assert model_cpi == ["323.5"]
+    assert meta["data_tools"] == {
+        "enabled": ["fred", "sec_edgar"], "disabled": {}, "pit": pit.isoformat(), "calls": 2, "cached": 0,
+        "invalid": 0, "failures": 0, "quant_rows_added": 3,
+        "quant_rows_rejected": [{"metric": "Consumer price index", "value": "329.7", "unit": "index",
+                                 "source_ref": f"S{data_rows[0][0]}", "source_url": fred_row["url"]}]}
+    assert meta["tools"]["data"]["data_calls"] == 2
+    assert not any("official-data" in event for event in meta.get("degradation_events") or [])
+    # TIME-1: the graph anchor stays the plan's as-of whatever the data rows' dates.
+    from app.services.pipeline_orchestrator import PipelineOrchestrator
+
+    anchor, note = PipelineOrchestrator._validate_as_of_date(_read(out / "actors.json"), sources)
+    assert (anchor.date(), note) == (as_of, None)
+
+
+def test_quant_rows_cap_and_the_off_switch_of_the_contradiction_check(tmp_path, bridge, monkeypatch, vendors):
+    """DATA_QUANT_ROWS_MAX caps the deterministic rows; with RESEARCH_VERIFIED_FACTS off the
+    contradicted model row is still dropped (the same page check), and no row is stamped."""
+    for name, value in {**ALL_ON, "DATA_QUANT_ROWS_MAX": "1", "RESEARCH_VERIFIED_FACTS": "false"}.items():
+        monkeypatch.setenv(name, value)
+    rc, meta, plog, _, out = run_engine(tmp_path, bridge, monkeypatch, DataWorld)
+    assert rc == 0, plog.text()
+    quant = _read(out / "quantitative.json")
+    assert [lr.is_data_quant_row(row) for row in quant[:2]] == [True, False]
+    assert not any("verification" in row for row in quant)
+    assert [row["value"] for row in quant if row["metric"] == "Consumer price index"] == ["323.5"]
+    assert meta["data_tools"]["quant_rows_added"] == 1
+    assert [row["value"] for row in meta["data_tools"]["quant_rows_rejected"]] == ["329.7"]
