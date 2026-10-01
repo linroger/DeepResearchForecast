@@ -80,6 +80,8 @@ RANGE_RULES: dict[str, Range] = {
     "GRAPH_MAX_SKIPPED_RATIO": _UNIT_INTERVAL,
     "FORECAST_ENSEMBLE_SPREAD_THRESHOLD": _UNIT_INTERVAL,
     "FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE": _UNIT_INTERVAL,
+    # A weight above 1 would overshoot the market price (the reader clamps it to [0, 1]).
+    "FORECAST_MARKET_BLEND_WEIGHT_MAX": _UNIT_INTERVAL,
     "SIM_DECISION_INERTIA": _UNIT_INTERVAL,
     "ENSEMBLE_EXTREMIZE_A": Range(0.0, False, None, False),
     "REPORT_MAX_CITATIONS_PER_SOURCE": Range(1, True, None, False),
@@ -100,6 +102,8 @@ RANGE_RULES: dict[str, Range] = {
     "EVAL_TARGETS_PER_BUNDLE": Range(1, True, None, False),
     "EVAL_STUDY_MAX_CALLS": Range(1, True, None, False),
     "EVAL_BOOTSTRAP_RESAMPLES": Range(1, True, None, False),
+    # A relative difference; the reader falls back to 0.02 outside [0, 1].
+    "REPORT_VERIFIED_FIGURE_REL_TOL": _UNIT_INTERVAL,
 }
 
 # Accepted values (compared after .strip().lower(), as Config reads them).

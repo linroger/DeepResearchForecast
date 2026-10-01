@@ -292,7 +292,9 @@ def test_check_is_deterministic_and_pure():
 
 
 def test_lint_report_is_unchanged_by_the_feature():
-    assert list(inspect.signature(rl.lint_report).parameters) == ["md", "lang", "mode", "spine"]
+    # REPORT-3 added only the keyword-only alias_aware_s11 detection flag (default off).
+    assert list(inspect.signature(rl.lint_report).parameters) == [
+        "md", "lang", "mode", "spine", "alias_aware_s11"]
     md = f"# Outlook\n\n{AS_FACT_EN}\n\n{AS_PROJECTION_EN}\n"
     cleaned, report = rl.lint_report(md, "English", mode="final")
     assert cleaned == md
