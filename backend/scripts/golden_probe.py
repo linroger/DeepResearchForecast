@@ -21,18 +21,22 @@ details (the whole reply field, whatever its length) contain one of the row's cu
 were unknowable at as_of and follow neither from the question nor from the prompt, each
 row with a ``marker_rationale``. A row without such a detail (a hold at an unchanged
 rate) carries no markers and ``recall_uninformative: true``: it is reported as not
-recall-checkable instead of being given a weak marker. Fail closed: a marker anywhere
-else in what the recall arm got back (every attempt, the repair turn's and a reply
-chat_json rejected included, every field, whatever the arm status) is the row's
-``recall_unverified_marker``: the outcome it rests on is unverified, so the row is not
-flagged, but the set is never ``none_detected``. ``nd_confident_correct`` (p on the
-realized side >= GOLDEN_PROBE_CONFIDENT_P) and ``recall_claimed`` are weak signals only.
-The set is ``flagged`` when any question is likely memorized; ``none_detected`` only when
-both arms reach coverage >= 0.8, at least 0.8 of the probed rows are recall-checkable,
-the nd probabilities are not collapsed (``eval_stats.dispersion``), no recall reply
-carries an unverified marker, the recall claims are not left unverified (fewer than 0.8
-of the probed rows claim the correct outcome without a marker, and not every NO row
-does: such claims cannot be told from memory, so they never rest on a clean verdict;
+recall-checkable instead of being given a weak marker. Markers are matched normalized
+(NFKC, casefold, dashes unified, a colon between digits read as a dash, ordinal suffixes
+dropped) as whole tokens, never inside a decimal ('53' is not in '0.53' nor '53.5%').
+Fail closed: a marker anywhere else in what an arm got back (every attempt, the repair
+turn's and a reply chat_json rejected included, every field, whatever the arm status; on
+the nd arm, a closed-book forecast, everything but the reply's own p_yes number) is the
+row's ``nd_unverified_marker`` / ``recall_unverified_marker``: no correct recalled outcome
+rests on it, so the row is not flagged, but the set is never ``none_detected``.
+``nd_confident_correct`` (p on the realized side >= GOLDEN_PROBE_CONFIDENT_P) and
+``recall_claimed`` are weak signals only. The set is ``flagged`` when any question is
+likely memorized; ``none_detected`` only when both arms reach coverage >= 0.8, at least
+0.8 of the probed rows are recall-checkable, the nd probabilities are not collapsed
+(``eval_stats.dispersion``), no arm's reply carries an unverified marker, the recall
+claims are not left unverified (fewer than 0.8 of the probed rows claim the correct
+outcome without a marker, and not every NO row does: such claims cannot be told from
+memory, so they never rest on a clean verdict;
 ``weak_signals.recall_claimed_correct`` lists them, the likely memorized rows being in
 ``flagged_ids``) and the run was closed-book (an OpenAI-compatible provider: CLI
 providers are agentic, so they are stamped ``closed_book_attested: false``, run but never
@@ -46,10 +50,11 @@ default: a refusal, garbage or an out-of-range value is ``parse_failed`` ('85%' 
 0.85; a stated_outcome 'YES.' as YES; a ``knows`` that is missing or unreadable is kept as
 None, since it only feeds recall_claimed), including a reply that LLMClient.chat_json
 rejects as non-JSON after its repair turn (a transport error stays ``call_failed``).
-Every arm artifact keeps the model's whole reply text (``reply_text``, uncut; the
-``raw_excerpt`` is cut at RAW_EXCERPT_MAX). The backbone model is recorded as the
-transport requests it (``model_provenance.effective_model_label``: a CLI provider not
-given a model it accepts runs its account default, ``cli-default``). Calls are capped at
+Every arm artifact keeps the model's whole reply text (``reply_text``, uncut, read by the
+unverified-marker check of both arms; the ``raw_excerpt`` is cut at RAW_EXCERPT_MAX).
+The backbone model is recorded as the transport requests it
+(``model_provenance.effective_model_label``: a CLI provider not given a model it accepts
+runs its account default, ``cli-default``). Calls are capped at
 GOLDEN_PROBE_MAX_CALLS (each chat attempt counts, the repair turn included); once the
 cap is reached the remaining arms are ``skipped_budget``, the status is inconclusive and
 the CLI exits 4. Nothing is written to any ledger: artifacts go under
@@ -129,6 +134,13 @@ _JSON_MISS_PREFIX = "LLM返回的JSON格式无效"
 
 _DASHES = dict.fromkeys(map(ord, "‐‑‒–—―−﹘﹣－"), "-")
 _WS_RE = re.compile(r"\s+")
+# A colon between digits reads as a dash (a 2:1 score is 2-1); an ordinal suffix, with an
+# 'of' after it, is dropped ('5th of june' reads '5 june', 'june 5th' reads 'june 5').
+_DIGIT_COLON_RE = re.compile(r"(?<=[0-9]):(?=[0-9])")
+_ORDINAL_RE = re.compile(r"(?<=[0-9])(?:st|nd|rd|th)\b(?: of\b)?")
+# The nd arm's own answer: a p_yes key and the number after it ({"p_yes": 0.53}, "53%",
+# 'p_yes = 53'). The separator class holds no digit, sign or dot, so the match is linear.
+_P_YES_VALUE_RE = re.compile(r"(p_yes[\s\"'\\:=]*)[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)", re.I)
 # A JSON string escape in a raw reply text: \uXXXX or a backslash and one character.
 _JSON_ESCAPE_RE = re.compile(r"\\(u[0-9a-fA-F]{4}|.)", re.S)
 _JSON_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f"}
@@ -145,15 +157,19 @@ class BudgetExhausted(RuntimeError):
 
 # ------------------------------------------------------------------ text
 def normalize(text: Any) -> str:
-    """NFKC, casefold, unified dashes and collapsed whitespace (marker matching)."""
+    """NFKC, casefold, unified dashes, collapsed whitespace, a colon between digits read as
+    a dash and ordinal suffixes dropped (marker matching)."""
     folded = unicodedata.normalize("NFKC", str(text or "")).casefold().translate(_DASHES)
-    return _WS_RE.sub(" ", folded).strip()
+    folded = _WS_RE.sub(" ", folded)
+    return _ORDINAL_RE.sub("", _DIGIT_COLON_RE.sub("-", folded)).strip()
 
 
 def _marker_re(marker: str) -> "re.Pattern[str]":
-    """A marker as a whole token: not glued to a letter or digit on either side, so
-    '53' never matches inside '2053' and '4-1' never inside '14-12'."""
-    return re.compile(r"(?<![0-9a-z])" + re.escape(normalize(marker)) + r"(?![0-9a-z])")
+    """A marker as a whole token: not glued to a letter or digit on either side, nor to a
+    decimal part ('.' and a digit), so '53' never matches inside '2053', '0.53' or '53.5%'
+    and '4-1' never inside '14-12'. Each guard is fixed-width: the match stays linear."""
+    return re.compile(r"(?<![0-9a-z])(?<![0-9]\.)" + re.escape(normalize(marker))
+                      + r"(?![0-9a-z])(?!\.[0-9])")
 
 
 def contains_marker(text: Any, markers: Sequence[str]) -> Optional[str]:
@@ -185,10 +201,20 @@ def _reply_text(reply: Any) -> str:
     return "" if reply is None else str(reply)
 
 
-def reply_marker(text: Any, markers: Sequence[str]) -> Optional[str]:
-    """The first marker in a stored reply text, read as it is and with JSON escapes decoded."""
+def mask_p_yes(text: str) -> str:
+    """``text`` with the number after each p_yes key removed (the key itself is kept)."""
+    return _P_YES_VALUE_RE.sub(r"\1", text)
+
+
+def reply_marker(text: Any, markers: Sequence[str], *, without_p_yes: bool = False) -> Optional[str]:
+    """The first marker in a stored reply text, read as it is and with JSON escapes decoded;
+    ``without_p_yes`` masks the nd arm's own answer first (a p_yes of '53%' is no 53 seats)."""
     raw = str(text or "")
-    return contains_marker(raw, markers) or contains_marker(_unescape_json(raw), markers)
+    for variant in (raw, _unescape_json(raw)):
+        hit = contains_marker(mask_p_yes(variant) if without_p_yes else variant, markers)
+        if hit is not None:
+            return hit
+    return None
 
 
 # ------------------------------------------------------------------ meta
@@ -397,16 +423,18 @@ def question_flags(q: Dict[str, Any], markers: Sequence[str], nd: Optional[float
     }
 
 
-def unverified_marker(recall_doc: Optional[Dict[str, Any]], markers: Sequence[str],
-                      likely_memorized: bool) -> Optional[str]:
-    """Fail closed: a marker in the recall arm's whole reply text (``reply_text``: every
-    attempt and field, whatever the arm status) that likely_memorized did not already count:
-    an off-schema reply, a reply chat_json rejected, a marker outside ``details`` or beside a
-    wrong or UNKNOWN outcome. Such a row is not flagged (its outcome is unverified), but it
-    keeps the set from ``none_detected``."""
-    if recall_doc is None or likely_memorized:
+def unverified_marker(arm: str, doc: Optional[Dict[str, Any]], markers: Sequence[str],
+                      likely_memorized: bool = False) -> Optional[str]:
+    """Fail closed: a marker in an arm's whole reply text (``reply_text``: every attempt and
+    field, whatever the arm status) that likely_memorized did not already count. On the
+    recall arm: an off-schema reply, a reply chat_json rejected, a marker outside ``details``
+    or beside a wrong or UNKNOWN outcome. On the nd arm: any realized detail a closed-book
+    forecast states, in an extra key or in prose, with the reply's own p_yes number masked.
+    Such a row is not flagged (no correct recalled outcome rests on it), but it keeps the set
+    from ``none_detected``."""
+    if doc is None or (arm == ARM_RECALL and likely_memorized):
         return None
-    return reply_marker(recall_doc.get("reply_text"), markers)
+    return reply_marker(doc.get("reply_text"), markers, without_p_yes=arm == ARM_ND)
 
 
 # ------------------------------------------------------------------ budget
@@ -586,8 +614,9 @@ def run_probe(questions: Sequence[Dict[str, Any]], meta: Dict[str, Dict[str, Any
             rows.append({"question_id": q["id"], "label": label,
                          "arms": {arm: doc["status"] for arm, doc in results.items()},
                          "nd_p_yes": nd, "recall": recall, "recall_checkable": recall_checkable(meta_row),
-                         "recall_unverified_marker": unverified_marker(results.get(ARM_RECALL), markers,
-                                                                       flags["likely_memorized"]),
+                         "nd_unverified_marker": unverified_marker(ARM_ND, results.get(ARM_ND), markers),
+                         "recall_unverified_marker": unverified_marker(ARM_RECALL, results.get(ARM_RECALL),
+                                                                       markers, flags["likely_memorized"]),
                          "flags": flags})
     report = {
         "schema": REPORT_SCHEMA,
@@ -644,11 +673,13 @@ def summarize(rows: Sequence[Dict[str, Any]], arms: Sequence[str], *, closed_boo
         reasons.append("not_closed_book_attested")
     if budget_exhausted:
         reasons.append("budget_exhausted")
-    unverified = sorted(r["question_id"] for r in probed if r.get("recall_unverified_marker"))
-    if unverified:
-        # Fail closed: the backbone named a detail unknowable at as_of, but not as a parsed
-        # correct outcome with the marker in its details, so the row is not flagged.
-        reasons.append("recall_unverified_marker")
+    unverified = {arm: sorted(r["question_id"] for r in probed if r.get(f"{arm}_unverified_marker"))
+                  for arm in ARMS}
+    for arm in ARMS:
+        if unverified[arm]:
+            # Fail closed: the backbone named a detail unknowable at as_of, but not as a parsed
+            # correct recalled outcome with the marker in its details, so the row is not flagged.
+            reasons.append(f"{arm}_unverified_marker")
     # Correct claims without a marker (a likely memorized row is in flagged_ids instead).
     claimed_correct = sorted(r["question_id"] for r in probed if r["flags"]["recall_claimed"]
                              and not r["flags"]["likely_memorized"]
@@ -662,7 +693,8 @@ def summarize(rows: Sequence[Dict[str, Any]], arms: Sequence[str], *, closed_boo
             reasons.append("recall_claims_unverified")
     weak = {"nd_confident_correct": sorted(r["question_id"] for r in probed if r["flags"]["nd_confident_correct"]),
             "recall_claimed": sorted(r["question_id"] for r in probed if r["flags"]["recall_claimed"]),
-            "recall_claimed_correct": claimed_correct, "recall_unverified_marker": unverified}
+            "recall_claimed_correct": claimed_correct, "nd_unverified_marker": unverified[ARM_ND],
+            "recall_unverified_marker": unverified[ARM_RECALL]}
     if flagged:
         status = SET_FLAGGED
     elif not reasons:

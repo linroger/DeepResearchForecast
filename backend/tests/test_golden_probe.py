@@ -143,6 +143,8 @@ def test_meta_needs_rationale_and_never_an_invented_marker():
     ("btc-spot-etf-2024", "YES", "The SEC approved spot bitcoin ETFs on January 10, 2024, the ARK deadline."),
     ("trump-ny-conviction-2024", "YES", "Trump was convicted on 34 felony counts of falsifying records."),
     ("spacex-starship-catch-2024", "YES", "SpaceX caught the Super Heavy booster on Flight 5."),
+    # review round 4: the Democrats held 47 seats of their own at as_of (51 with independents)
+    ("us-senate-2024-dem-hold", "NO", "Democrats held 47 seats and four independents caucused with them."),
 ])
 def test_as_of_knowledge_is_never_a_marker(qid, outcome, details):
     recall = {"knows": True, "stated_outcome": outcome, "details": details}
@@ -163,6 +165,16 @@ def test_as_of_knowledge_is_never_a_marker(qid, outcome, details):
     ("oscars-2024-oppenheimer", "Oppenheimer won seven Academy Awards, Best Picture among them."),
     ("oscars-2024-oppenheimer", "It took seven total Oscars."),
     ("oscars-2024-oppenheimer", "Oppenheimer led the night with seven wins."),
+    # day-first and ISO dates, colon scores and the final's opponent (review round 4)
+    ("nvidia-3t-2024", "Nvidia first closed above $3 trillion on 5 June 2024."),
+    ("nvidia-3t-2024", "It crossed the mark on 2024-06-05."),
+    ("trump-ny-conviction-2024", "The jury convicted him on the 30th of May."),
+    ("apple-iphone16-2024", "Apple unveiled the iPhone 16 on 9 Sept. 2024."),
+    ("btc-100k-2024", "Bitcoin passed $100k on Dec 5th."),
+    ("ucl-2024-real-madrid", "Real Madrid won the final 2:0."),
+    ("sb-lviii-2024-chiefs", "The Chiefs won 25:22."),
+    ("euro-2024-spain", "Spain won the final 2:1."),
+    ("euro-2024-spain", "Spain beat England in Berlin."),
 ])
 def test_realized_details_unknowable_at_as_of_still_flag(qid, details):
     recall = {"knows": True, "stated_outcome": "YES", "details": details}
@@ -201,6 +213,37 @@ def test_markers_match_whole_normalized_tokens():
     assert gp.contains_marker("Final score 2–0 to Madrid", ["2-0"]) == "2-0"   # en dash
     assert gp.contains_marker("Score 12-0", ["2-0"]) is None
     assert gp.contains_marker("THE  Half   Point cut", ["half point"]) == "half point"
+    # review round 4: never inside a decimal on either side, still at a sentence end
+    assert gp.contains_marker('{"p_yes": 0.53}', ["53"]) is None
+    assert gp.contains_marker("won 53.5% of the vote", ["53"]) is None
+    assert gp.contains_marker("Republicans won 53.", ["53"]) == "53"
+    assert gp.contains_marker("cut to 4.75%-5.00%", ["4.75"]) == "4.75"
+    assert gp.contains_marker("cut to 14.75%", ["4.75"]) is None
+    # a colon between digits reads as a dash, but a clock time is no score
+    assert gp.contains_marker("Spain beat England 2:1", ["2-1"]) == "2-1"
+    assert gp.contains_marker("kick-off at 2:10 pm", ["2-1"]) is None
+    # an ordinal suffix (and an 'of' after it) is dropped
+    assert gp.contains_marker("on June 5th, 2024", ["june 5"]) == "june 5"
+    assert gp.contains_marker("on the 5th of June", ["5 june"]) == "5 june"
+    assert gp.contains_marker("5ᵗʰ June 2024", ["5 june"]) == "5 june"       # NFKC superscript
+    assert gp.contains_marker("on June 15th", ["june 5"]) is None
+
+
+def test_exact_dates_are_spelled_month_first_day_first_and_iso():
+    """Review round 4: every row whose markers state its resolution date month-first also
+    carries the day-first and ISO forms, so '5 June 2024' and '2024-06-05' match too."""
+    from datetime import date
+    rows = 0
+    for q in QUESTIONS:
+        resolved = date.fromisoformat(q["resolution_date"])
+        month, day = resolved.strftime("%B").lower(), resolved.day
+        markers = META[q["id"]]["leak_markers"]
+        if f"{month} {day}" in markers:
+            rows += 1
+            assert {f"{day} {month}", resolved.isoformat()} <= set(markers), q["id"]
+            assert gp.contains_marker(f"on {day} {month.title()} {resolved.year}", markers), q["id"]
+            assert gp.contains_marker(f"date: {resolved.isoformat()}", markers), q["id"]
+    assert rows == 8
 
 
 def test_leak_guard_blocks_with_zero_calls(tmp_path):
@@ -319,6 +362,7 @@ def test_memorized_answers_flag_the_set(tmp_path):
     assert report["summary"]["weak_signals"]["recall_claimed"] == ["uk-ge-2024-labour"]
     assert report["summary"]["weak_signals"]["recall_claimed_correct"] == []
     assert report["summary"]["weak_signals"]["recall_unverified_marker"] == []
+    assert report["summary"]["weak_signals"]["nd_unverified_marker"] == []
     assert report["summary"]["inconclusive_reasons"] == []
 
 
@@ -373,9 +417,9 @@ def test_marker_in_any_recall_reply_is_never_clean(tmp_path, reply, arm_status):
     assert arm["status"] == arm_status and "411" in arm["reply_text"]
 
 
-def _real_client(monkeypatch, recall_replies, repair_turn=True):
-    """An LLMClient whose chat() answers honestly, except the uk-ge-2024-labour recall arm:
-    its n-th attempt returns (or raises) ``recall_replies[n]``."""
+def _real_client(monkeypatch, replies, repair_turn=True, arm_qid=("recall", LABOUR)):
+    """An LLMClient whose chat() answers honestly, except one (arm, question) pair, by default
+    the uk-ge-2024-labour recall arm: its n-th attempt returns (or raises) ``replies[n]``."""
     from app.utils.llm_client import LLMClient
     monkeypatch.setattr(Config, "LLM_JSON_REPAIR_TURN", repair_turn, raising=False)
     client = LLMClient(provider="deepseek", api_key="x", pinned=True, use_cache=False)
@@ -385,10 +429,10 @@ def _real_client(monkeypatch, recall_replies, repair_turn=True):
         user = kwargs["messages"][1]["content"]
         qid = next(q["id"] for q in QUESTIONS if gp.probe_view(q, META[q["id"]])["question"] in user)
         arm = "recall" if user.startswith("What happened") else "nd"
-        if (arm, qid) != ("recall", LABOUR):
+        if (arm, qid) != arm_qid:
             return json.dumps(_honest(arm, qid))
         attempts.append(kwargs["messages"])
-        reply = recall_replies[len(attempts) - 1]
+        reply = replies[len(attempts) - 1]
         if isinstance(reply, Exception):
             raise reply
         return reply
@@ -421,22 +465,98 @@ def test_marker_in_a_rejected_reply_through_the_real_client_is_never_clean(tmp_p
     assert arm["reply_text"].startswith(PROSE)
 
 
-def test_unverified_marker_is_rechecked_against_the_current_meta_on_reuse(tmp_path):
+def _answers(arm_qid, reply):
+    """Honest everywhere, except the (arm, question) pair ``arm_qid``, which returns ``reply``."""
+    def answer(arm, qid):
+        return reply if (arm, qid) == arm_qid else _honest(arm, qid)
+    return answer
+
+
+def _assert_nd_unverified(report, qid, marker, arm_status):
+    """The nd reply named ``marker``: the row is not flagged, the set is inconclusive for that
+    reason alone, and the weak signals name the row."""
+    row = next(r for r in report["questions"] if r["question_id"] == qid)
+    assert row["arms"]["nd"] == arm_status and row["flags"]["likely_memorized"] is False
+    assert row["nd_unverified_marker"] == marker and row["recall_unverified_marker"] is None
+    summary = report["summary"]
+    assert summary["status"] == "inconclusive" and summary["flagged_ids"] == []
+    assert summary["inconclusive_reasons"] == ["nd_unverified_marker"]
+    assert summary["weak_signals"]["nd_unverified_marker"] == [qid]
+    assert summary["weak_signals"]["recall_unverified_marker"] == []
+
+
+@pytest.mark.parametrize("reply,arm_status", [
+    # review round 4: a closed-book forecast that states a realized detail, in an extra key...
+    ({"p_yes": 0.97, "why": "Labour won 411 seats on July 4"}, "ok"),
+    # ...or beside an answer that does not parse
+    ({"p_yes": "very likely", "why": "Labour won 411 seats"}, "parse_failed"),
+    ("Labour won 411 seats, so p_yes is 1.0", "parse_failed"),
+])
+def test_marker_in_an_nd_reply_is_never_clean(tmp_path, reply, arm_status):
+    report, _ = _run(tmp_path, _answers(("nd", LABOUR), reply))
+    _assert_nd_unverified(report, LABOUR, "411", arm_status)
+    arm = json.load(open(tmp_path / "probe" / "arms" / LABOUR / "nd.json"))
+    assert arm["status"] == arm_status and "411" in arm["reply_text"]
+
+
+@pytest.mark.parametrize("repair_turn", [True, False])
+def test_marker_in_nd_prose_through_the_real_client_is_never_clean(tmp_path, monkeypatch, repair_turn):
+    """The prose the reviewer reproduced: chat_json rejects it (its repair turn included), the
+    arm is parse_failed, and the reply text it kept still names the realized seat count."""
+    prose = "Labour won 411 seats, so p_yes is 1.0"
+    client, attempts = _real_client(monkeypatch, [prose, prose], repair_turn, arm_qid=("nd", LABOUR))
+    report = gp.run_probe(QUESTIONS, META, client=client, provider="deepseek", model="deepseek-chat",
+                          out_dir=str(tmp_path), golden_sha256="g" * 64, closed_book_attested=True)
+    assert len(attempts) == 2
+    _assert_nd_unverified(report, LABOUR, "411", "parse_failed")
+
+
+SENATE = "us-senate-2024-gop"          # leak marker '53'
+
+
+@pytest.mark.parametrize("reply", [{"p_yes": 0.53}, {"p_yes": "53%"}, {"p_yes": "53 %"}])
+def test_the_nd_answer_itself_is_never_a_marker(tmp_path, reply):
+    """Review round 4: a probability of 0.53 or '53%' on a row whose marker is 53 seats is the
+    forecast, not a realized detail: the set stays none_detected."""
+    report, _ = _run(tmp_path, _answers(("nd", SENATE), reply))
+    row = next(r for r in report["questions"] if r["question_id"] == SENATE)
+    assert row["arms"]["nd"] == "ok" and row["nd_p_yes"] == 0.53 and row["nd_unverified_marker"] is None
+    assert report["summary"]["status"] == "none_detected"
+
+
+@pytest.mark.parametrize("raw", ['{"p_yes": 0.53}', '```json\n{"p_yes": "53%"}\n```'])
+def test_the_nd_answer_itself_is_never_a_marker_through_the_real_client(tmp_path, monkeypatch, raw):
+    client, attempts = _real_client(monkeypatch, [raw], arm_qid=("nd", SENATE))
+    report = gp.run_probe(QUESTIONS, META, client=client, provider="deepseek", model="deepseek-chat",
+                          out_dir=str(tmp_path), golden_sha256="g" * 64, closed_book_attested=True)
+    assert len(attempts) == 1
+    row = next(r for r in report["questions"] if r["question_id"] == SENATE)
+    assert row["nd_p_yes"] == 0.53 and row["nd_unverified_marker"] is None
+    assert report["summary"]["status"] == "none_detected"
+    arm = json.load(open(tmp_path / "arms" / SENATE / "nd.json"))
+    assert raw in arm["reply_text"]                       # stored whole; only the check masks it
+
+
+@pytest.mark.parametrize("arm,reply", [
+    ("recall", {"knows": False, "stated_outcome": "UNKNOWN", "details": "", "aside": "a majority of 174"}),
+    ("nd", {"p_yes": 0.62, "aside": "a majority of 174"}),
+])
+def test_unverified_marker_is_rechecked_against_the_current_meta_on_reuse(tmp_path, arm, reply):
     """The arm artifact keeps the whole reply text, so a marker curated after the first run is
-    found in a reused reply (zero calls) just as in a fresh one."""
-    reply = {"knows": False, "stated_outcome": "UNKNOWN", "details": "", "aside": "a majority of 174"}
-    first, _ = _run(tmp_path, _labour_recall(reply))
+    found in a reused reply (zero calls) just as in a fresh one, on either arm."""
+    first, _ = _run(tmp_path, _answers((arm, LABOUR), reply))
     assert first["summary"]["status"] == "none_detected"
     meta = json.loads(json.dumps(META))
     meta[LABOUR]["leak_markers"].append("174")
-    client = ScriptedClient(_labour_recall(reply))
+    client = ScriptedClient(_answers((arm, LABOUR), reply))
     second = gp.run_probe(QUESTIONS, meta, client=client, provider="deepseek", model="scripted-1",
                           out_dir=str(tmp_path / "probe"), golden_sha256="g" * 64, max_calls=200,
                           confident_p=0.85, closed_book_attested=True)
     assert client.calls == [] and second["cost"]["reused_arms"] == 2 * len(QUESTIONS)
     row = next(r for r in second["questions"] if r["question_id"] == LABOUR)
-    assert row["recall_unverified_marker"] == "174"
-    assert second["summary"]["inconclusive_reasons"] == ["recall_unverified_marker"]
+    assert row[f"{arm}_unverified_marker"] == "174"
+    assert second["summary"]["inconclusive_reasons"] == [f"{arm}_unverified_marker"]
+    assert second["summary"]["flagged_ids"] == []
 
 
 def test_reply_marker_reads_raw_reply_text_with_json_escapes_decoded():
@@ -446,6 +566,13 @@ def test_reply_marker_reads_raw_reply_text_with_json_escapes_decoded():
     assert gp.reply_marker('"score": "2\\u20130"', ["2-0"]) == "2-0"
     assert gp.reply_marker("Planned for 2053.", ["53"]) is None
     assert gp.reply_marker(None, ["53"]) is None
+    # only the nd check masks the number after a p_yes key, raw or JSON-escaped
+    assert gp.reply_marker('{"p_yes": "53%"}', ["53"]) == "53"
+    assert gp.reply_marker('{"p_yes": "53%"}', ["53"], without_p_yes=True) is None
+    assert gp.reply_marker('"{\\"p_yes\\": \\"53%\\"}"', ["53"], without_p_yes=True) is None
+    assert gp.reply_marker('p_yes = 53, as Republicans reach 53 seats', ["53"], without_p_yes=True) == "53"
+    assert gp.reply_marker('{"p_yes_note": "53 seats"}', ["53"], without_p_yes=True) == "53"
+    assert gp.mask_p_yes('{"p_yes": 0.53} p_yes 0.53 P_YES: .5') == '{"p_yes": } p_yes  P_YES: '
 
 
 def test_clean_closed_book_run_is_none_detected(tmp_path):
