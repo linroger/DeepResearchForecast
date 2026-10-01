@@ -274,14 +274,23 @@ def _is_deterministic_invalid_request_error(exc: Exception) -> bool:
 
 # INFRA-4: quota wording of the status-first classifier: _is_quota's phrases plus balance
 # exhaustion, and 429 and the provider usage-cap codes MiniMax 2056 (Token Plan cap) and GLM 1113
-# (account in arrears) as whole numbers only (not inside a longer number or after a decimal
-# point): _is_quota's bare '429' substring also matches "duration_ms":1429 or a cost of 0.04291
-# inside a Claude CLI auth envelope. re.ASCII keeps a code right after CJK text ('错误码429')
-# whole. With the classifier on, the usage-cap codes are also kept out of failure messages
-# (_status_safe), so no max_tokens value or model id reads as one.
+# (account in arrears) only where an error code is reported: after code / status / error /
+# base_resp / 错误码 / 状态码 (within 24 non-digit characters, not glued to an identifier such
+# as "-2056-" or "req_20561"), or as "HTTP 429" / "HTTP429". _is_quota's bare '429' substring
+# also matches "duration_ms":1429 or a cost of 0.04291 inside a Claude CLI auth envelope, so the
+# envelope's numeric telemetry fields are blanked first (_ENVELOPE_TELEMETRY_RE): with a null
+# api_error_status, '"api_error_status":null,"duration_ms":2056' would otherwise read as a code.
+# re.ASCII keeps a code right after CJK text ('错误码429') whole. With the classifier on, the
+# usage-cap codes are also kept out of failure messages (_status_safe), so no max_tokens value or
+# model id reads as one.
 _QUOTA_TEXT_MARKERS = ("rate_limit", "rate limit", "quota", "usage limit", "insufficient balance")
 _USAGE_CAP_CODES = ("1113", "2056")
-_QUOTA_CODE_RE = re.compile(r"(?<!\.)\b(?:429|2056|1113)\b", re.ASCII)
+_QUOTA_CODE_RE = re.compile(
+    r"\bhttp[ \t/]*429(?!\d)"
+    r"|(?:\b(?:code|status|error|base_resp)|错误码|错误代码|状态码)[^\n\d]{0,24}?(?<![\w.-])(?:429|2056|1113)(?!\d)",
+    re.ASCII)
+_ENVELOPE_TELEMETRY_RE = re.compile(
+    r"[\"']?(?:duration_ms|duration_api_ms|total_cost_usd|num_turns|[a-z_]*tokens)[\"']?\s*:\s*[-+.\deE]+")
 # The HTTP status a Claude CLI result envelope reports for a failed API call (JSON or dict repr).
 _ENVELOPE_STATUS_RE = re.compile(r"api_error_status[\"']?\s*:\s*(\d{3})\b")
 
@@ -302,9 +311,11 @@ def _exc_status_code(exc: Any) -> Optional[int]:
 
 
 def _quota_text_error(exc: Any) -> bool:
-    """Quota wording: _QUOTA_TEXT_MARKERS, or 429 / 2056 / 1113 as a whole number."""
+    """Quota wording: _QUOTA_TEXT_MARKERS, or 429 / 2056 / 1113 reported as an error code."""
     text = str(exc or "").lower()
-    return any(marker in text for marker in _QUOTA_TEXT_MARKERS) or bool(_QUOTA_CODE_RE.search(text))
+    if any(marker in text for marker in _QUOTA_TEXT_MARKERS):
+        return True
+    return bool(_QUOTA_CODE_RE.search(_ENVELOPE_TELEMETRY_RE.sub("", text)))
 
 
 def _llm_error_status_kind(exc: Any) -> Optional[str]:

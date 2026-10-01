@@ -691,6 +691,24 @@ def test_status_first_reads_status_codes_as_whole_numbers(monkeypatch):
         _StatusExc("Error code: 400 - prompt is 2056 tokens over the limit", 400)) == "invalid_request"
 
 
+def test_quota_codes_need_an_error_code_context(monkeypatch):
+    """Review round 2: telemetry numbers and identifier segments never read as quota codes;
+    the providers' real code shapes still do."""
+    monkeypatch.setattr(Config, "LLM_ERROR_CLASSIFY_STATUS_FIRST", True, raising=False)
+    null_status = RuntimeError('Claude CLI failed (rc=1): {"is_error":true,"api_error_status":null,'
+                               '"duration_ms":2056,"num_turns":1,"total_cost_usd":0.1113,'
+                               '"result":"Failed to authenticate. API Error: 401"}')
+    assert lc._classify_llm_error(null_status) == "auth"
+    assert lc._classify_llm_error(RuntimeError(
+        "Authentication error: invalid key for project abcd-2056-ef01")) != "quota"
+    assert lc._classify_llm_error(RuntimeError("timeout after 2056 ms")) is None
+    for quota in ("HTTP429 Too Many Requests", "HTTP 429", "http/429",
+                  '{"base_resp":{"status_code":2056,"status_msg":"token plan cap reached"}}',
+                  '{"error":{"code":"1113","message":"余额不足或无可用资源包,请充值。"}}',
+                  "Error code: 429 - please slow down", "状态码 2056"):
+        assert lc._classify_llm_error(RuntimeError(quota)) == "quota", quota
+
+
 def test_usage_cap_codes_reach_failure_messages_with_the_flag_off(monkeypatch):
     monkeypatch.setattr(Config, "LLM_ERROR_CLASSIFY_STATUS_FIRST", False, raising=False)
     assert "max_tokens=2056," in str(lc._completion_failure("minimax", "length", "length", None, 2056))
