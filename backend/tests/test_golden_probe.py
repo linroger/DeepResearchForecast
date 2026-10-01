@@ -135,10 +135,44 @@ def test_as_of_knowledge_is_never_a_marker(qid, outcome, details):
     ("nvidia-3t-2024", "Nvidia closed above $3 trillion on June 5."),
     ("fed-2024-09-cut", "The Fed opened with a half-point cut."),
     ("ucl-2024-real-madrid", "Real Madrid beat Dortmund at Wembley."),
+    # the common wordings of a realized size or count (review round 2)
+    ("fed-2024-09-cut", "The FOMC cut by half a percentage point."),
+    ("fed-2024-09-cut", "A 50-basis-point cut opened the easing cycle."),
+    ("fed-2024-09-cut", "Rates were lowered 0.5 percentage points."),
+    ("fed-2024-09-cut", "A half-percentage-point reduction."),
+    ("oscars-2024-oppenheimer", "Oppenheimer won seven Academy Awards, Best Picture among them."),
+    ("oscars-2024-oppenheimer", "It took seven total Oscars."),
+    ("oscars-2024-oppenheimer", "Oppenheimer led the night with seven wins."),
 ])
 def test_realized_details_unknowable_at_as_of_still_flag(qid, details):
     recall = {"knows": True, "stated_outcome": "YES", "details": details}
     assert gp.question_flags(BY_ID[qid], META[qid]["leak_markers"], None, recall, 0.85)["likely_memorized"] is True
+
+
+def test_recall_window_end_is_a_coarse_month_end():
+    """Review round 2: the window still covers resolution_date + 31 days, but it ends on a
+    month end, so an exact-date marker equal to the resolution date (8 rows) cannot be
+    computed back from the prompt."""
+    from datetime import date, timedelta
+    date_rows = 0
+    for q in QUESTIONS:
+        floor = date.fromisoformat(q["resolution_date"]) + timedelta(days=gp.RECALL_WINDOW_DAYS)
+        end = date.fromisoformat(gp._recall_until(q))
+        assert floor <= end < floor + timedelta(days=31) and (end + timedelta(days=1)).day == 1, q["id"]
+        # any resolution day whose window lands in the same month renders the same prompt
+        for shift in (-1, 1):
+            moved = dict(q, resolution_date=(date.fromisoformat(q["resolution_date"])
+                                             + timedelta(days=shift)).isoformat())
+            if (floor + timedelta(days=shift)).month == floor.month:
+                assert gp.build_messages("recall", moved, META[q["id"]]) == \
+                    gp.build_messages("recall", q, META[q["id"]]), q["id"]
+        resolved = date.fromisoformat(q["resolution_date"])
+        spelled = f"{resolved.strftime('%B').lower()} {resolved.day}"
+        date_rows += spelled in META[q["id"]]["leak_markers"]
+    assert date_rows == 8
+    assert gp._recall_until({"as_of_date": "2024-01-15"}) == "2025-01-31"
+    assert gp._recall_until({"resolution_date": "2024-01-31"}) == "2024-03-31"
+    assert gp._recall_until({}) == "the present"
 
 
 def test_markers_match_whole_normalized_tokens():
@@ -369,6 +403,37 @@ def test_uninformative_rows_are_reported_not_recall_checkable(tmp_path):
     assert report["summary"]["arms"]["recall"]["checkable_share"] == 0.6
     assert report["summary"]["status"] == "inconclusive"
     assert report["summary"]["inconclusive_reasons"] == ["recall_checkable_below_0.8"]
+
+
+def test_unverified_recall_claims_are_never_clean(tmp_path):
+    """Review round 2: correct claims without a marker never flag, but a backbone that claims
+    nearly every outcome, or every NO, is not reported none_detected either."""
+    def claims(only):
+        def answer(arm, qid):
+            if arm == "recall" and only(qid):
+                return {"knows": True, "stated_outcome": golden_set.expected_label(BY_ID[qid]), "details": "I recall it."}
+            return _honest(arm, qid)
+        return answer
+    no_ids = sorted(q["id"] for q in QUESTIONS if golden_set.expected_label(q) == "NO")
+    for name, only in (("all", lambda qid: True), ("every_no", lambda qid: qid in no_ids)):
+        report, _ = _run(tmp_path / name, claims(only))
+        summary = report["summary"]
+        assert summary["status"] == "inconclusive" and summary["flagged_ids"] == []
+        assert summary["inconclusive_reasons"] == ["recall_claims_unverified"]
+        assert set(no_ids) <= set(summary["weak_signals"]["recall_claimed_correct"])
+    # a few correct claims stay a weak signal only
+    few = {"us-pres-2024-trump", "uk-ge-2024-labour", no_ids[0]}
+    report, _ = _run(tmp_path / "few", claims(lambda qid: qid in few))
+    assert report["summary"]["status"] == "none_detected"
+    assert report["summary"]["weak_signals"]["recall_claimed_correct"] == sorted(few)
+    # wrong claims are not "correct": a backbone confidently wrong about every NO is not this case
+    def wrong(arm, qid):
+        if arm == "recall" and qid in no_ids:
+            return {"knows": True, "stated_outcome": "YES", "details": ""}
+        return _honest(arm, qid)
+    report, _ = _run(tmp_path / "wrong", wrong)
+    assert report["summary"]["status"] == "none_detected"
+    assert report["summary"]["weak_signals"]["recall_claimed_correct"] == []
 
 
 def test_low_coverage_is_inconclusive(tmp_path):

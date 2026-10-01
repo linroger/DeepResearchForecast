@@ -8,10 +8,12 @@ score is trusted:
   (``golden_set.forecaster_view``; a curated ``probe_question`` /
   ``probe_resolution_criteria`` replaces a hindsight-framed wording) and "forecast as of
   {as_of_date} using only information available then", JSON ``{p_yes}``;
-- ``recall``: "what happened with <question> between {as_of_date} and
-  {resolution_date + 31 days}? if you do not know, answer UNKNOWN", JSON ``{knows,
-  stated_outcome, details}``. The window end discloses roughly when the question
-  resolved, never how; that is why a bare correct answer is only a weak signal.
+- ``recall``: "what happened with <question> between {as_of_date} and {window end}? if
+  you do not know, answer UNKNOWN", JSON ``{knows, stated_outcome, details}``. The window
+  end is the last day of the month that contains resolution_date + 31 days: it covers
+  that window but discloses only roughly when the question resolved, never the day (a
+  resolution date can be a leak marker) nor how; that is why a bare correct answer is
+  only a weak signal.
 
 A question is ``likely_memorized`` when the recall arm states the correct outcome AND its
 details (the whole reply field, whatever its length) contain one of the row's curated
@@ -23,10 +25,13 @@ recall-checkable instead of being given a weak marker. ``nd_confident_correct`` 
 the realized side >= GOLDEN_PROBE_CONFIDENT_P) and ``recall_claimed`` are weak signals
 only. The set is ``flagged`` when any question is likely memorized; ``none_detected``
 only when both arms reach coverage >= 0.8, at least 0.8 of the probed rows are
-recall-checkable, the nd probabilities are not collapsed (``eval_stats.dispersion``) and
-the run was closed-book (an OpenAI-compatible provider: CLI providers are agentic, so
-they are stamped ``closed_book_attested: false``, run but never certified); otherwise
-``inconclusive`` with reasons.
+recall-checkable, the nd probabilities are not collapsed (``eval_stats.dispersion``), the
+recall claims are not left unverified (fewer than 0.8 of the probed rows claim the
+correct outcome without a marker, and not every NO row does: such claims cannot be told
+from memory, so they never rest on a clean verdict) and the run was closed-book (an
+OpenAI-compatible provider: CLI providers are agentic, so they are stamped
+``closed_book_attested: false``, run but never certified); otherwise ``inconclusive``
+with reasons.
 
 Prompts are built from forecaster_view and the probe meta only; ``assert_answer_free``
 blocks any rendered prompt containing a leak marker (arm status
@@ -219,13 +224,21 @@ def validate_meta(meta: Dict[str, Dict[str, Any]], questions: Sequence[Dict[str,
 
 
 # ------------------------------------------------------------------ prompts
+def _month_end(day: date) -> date:
+    return (day.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+
+
 def _recall_until(q: Dict[str, Any]) -> str:
-    """resolution_date + RECALL_WINDOW_DAYS (ISO day); as_of_date + 1 year without one."""
+    """The recall window end (ISO day): the last day of the month that contains
+    resolution_date + RECALL_WINDOW_DAYS (as_of_date + 1 year without one). It still covers
+    resolution_date + 31 days, but the resolution day, which some leak markers state,
+    cannot be computed back from it."""
     for key, extra in (("resolution_date", RECALL_WINDOW_DAYS), ("as_of_date", 365)):
         try:
-            return (date.fromisoformat(str(q.get(key))[:10]) + timedelta(days=extra)).isoformat()
+            end = date.fromisoformat(str(q.get(key))[:10]) + timedelta(days=extra)
         except (TypeError, ValueError):
             continue
+        return _month_end(end).isoformat()
     return "the present"
 
 
@@ -550,8 +563,18 @@ def summarize(rows: Sequence[Dict[str, Any]], arms: Sequence[str], *, closed_boo
         reasons.append("not_closed_book_attested")
     if budget_exhausted:
         reasons.append("budget_exhausted")
+    claimed_correct = sorted(r["question_id"] for r in probed if r["flags"]["recall_claimed"]
+                             and r["recall"]["stated_outcome"] == r["label"])
+    if ARM_RECALL in arms and probed:
+        no_ids = {r["question_id"] for r in probed if r["label"] == golden_set.LABEL_NO}
+        if (len(claimed_correct) / len(probed) >= COVERAGE_MIN
+                or (no_ids and no_ids <= set(claimed_correct))):
+            # A correct outcome without a marker is no proof of memory (most rows are YES),
+            # but nearly every outcome, or every NO, claimed correctly is no clean result.
+            reasons.append("recall_claims_unverified")
     weak = {"nd_confident_correct": sorted(r["question_id"] for r in probed if r["flags"]["nd_confident_correct"]),
-            "recall_claimed": sorted(r["question_id"] for r in probed if r["flags"]["recall_claimed"])}
+            "recall_claimed": sorted(r["question_id"] for r in probed if r["flags"]["recall_claimed"]),
+            "recall_claimed_correct": claimed_correct}
     if flagged:
         status = SET_FLAGGED
     elif not reasons:

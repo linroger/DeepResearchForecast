@@ -1,7 +1,7 @@
 {
   "_meta": {
     "schema": "drf.golden_probe_meta.v1",
-    "description": "EVAL-12 contamination probes: per golden id, leak_markers are realized details that were unknowable at the row's as_of_date and follow neither from the question nor from the probe prompt (the recall window included): exact seat counts, vote shares, scores, a surprise rate-cut size or dissent, dates fixed after as_of. A recall answer that states the correct outcome AND one of them counts as likely memorized. Facts public at as_of (a target range already set, an alliance already formed, the number of charges, the next flight in sequence, a statutory deadline), the standard 25bp step from the as-of range, players of the team the question names and a month inside the recall window are never markers. A row without such a detail has an empty list and recall_uninformative: true, and is reported as not recall-checkable instead of carrying a weak marker. marker_rationale states, per row, why each marker was unknowable at as_of (or why the row has none). probe_question (and, where the criteria name the answer, probe_resolution_criteria) reword hindsight-framed rows outcome-free. Markers are matched normalized (NFKC, casefold, dashes unified, whitespace collapsed) and only as whole tokens; none may occur in the row's forecaster-visible text (golden_probe.validate_meta)."
+    "description": "EVAL-12 contamination probes: per golden id, leak_markers are realized details that were unknowable at the row's as_of_date and follow neither from the question nor from the probe prompt (the recall window included): exact seat counts, vote shares, scores, a surprise rate-cut size or dissent, dates fixed after as_of. A recall answer that states the correct outcome AND one of them counts as likely memorized. Facts public at as_of (a target range already set, an alliance already formed, the number of charges, the next flight in sequence, a statutory deadline), the standard 25bp step from the as-of range, players of the team the question names and a month inside the recall window are never markers. A row without such a detail has an empty list and recall_uninformative: true, and is reported as not recall-checkable instead of carrying a weak marker. marker_rationale states, per row, why each marker was unknowable at as_of (or why the row has none). probe_question (and, where the criteria name the answer, probe_resolution_criteria) reword hindsight-framed rows outcome-free. The recall window ends on the last day of the month that contains resolution_date + 31 days, so a marker that states the resolution date cannot be computed back from it. Markers are matched normalized (NFKC, casefold, dashes unified, whitespace collapsed) and only as whole tokens; none may occur in the row's forecaster-visible text nor in either arm's rendered prompt (golden_probe.validate_meta)."
   },
   "us-pres-2024-trump": {
     "leak_markers": [
@@ -85,9 +85,17 @@
       "50bps",
       "half point",
       "half-point",
-      "4.75"
+      "4.75",
+      "50 bp",
+      "50 bps",
+      "50-basis-point",
+      "half a percentage point",
+      "half-percentage-point",
+      "half percentage point",
+      "0.5 percentage",
+      "0.50 percentage"
     ],
-    "marker_rationale": "The cut was 50bp, to 4.75%-5.00% from the as-of range 5.25%-5.50%; its size was undecided at as_of 2024-09-01, and 4.75 follows only from the 50bp size, not from the standard 25bp step."
+    "marker_rationale": "The cut was 50bp (half a percentage point), to 4.75%-5.00% from the as-of range 5.25%-5.50%; its size was undecided at as_of 2024-09-01, and 4.75 follows only from the 50bp size, not from the standard 25bp step. The markers spell that size in its common wordings; '0.5 percentage' stops before 'point' so that the singular and the plural both match."
   },
   "fed-2024-11-cut": {
     "leak_markers": [],
@@ -138,7 +146,7 @@
     "leak_markers": [
       "june 5"
     ],
-    "marker_rationale": "Nvidia first closed above $3T on 2024-06-05, unknown at as_of 2024-01-01. The month alone is not a marker: the recall window shown in the prompt ends 2024-07-06, so 'June 2024' is guessable from the prompt."
+    "marker_rationale": "Nvidia first closed above $3T on 2024-06-05, unknown at as_of 2024-01-01. The month alone is not a marker: the recall window shown in the prompt ends 2024-07-31, so 'June 2024' is guessable from the prompt."
   },
   "spacex-starship-catch-2024": {
     "leak_markers": [
@@ -216,8 +224,13 @@
       "seven oscars",
       "7 oscars",
       "seven awards",
-      "7 awards"
+      "7 awards",
+      "seven academy awards",
+      "7 academy awards",
+      "seven total oscars",
+      "seven wins",
+      "7 wins"
     ],
-    "marker_rationale": "Oppenheimer won seven Oscars at the 2024-03-10 ceremony; its 13 nominations were public at as_of 2024-02-01, the number of wins was not."
+    "marker_rationale": "Oppenheimer won seven Oscars at the 2024-03-10 ceremony; its 13 nominations were public at as_of 2024-02-01, the number of wins was not. The markers spell that count in its common wordings (seven Oscars, seven Academy Awards, seven wins)."
   }
 }
