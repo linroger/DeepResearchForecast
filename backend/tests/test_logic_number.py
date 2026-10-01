@@ -27,6 +27,7 @@ def _rows(*pairs):
 FFE1_ROWS = _rows(("A：基准扩张（管道打折后稳步兑现）", 0.35), ("B：电力受限", 0.30),
                   ("C：财务紧缩", 0.20), ("D：超预期上行", 0.05), ("E：其它/混合路径", 0.10))
 EN_ROWS = _rows(("A: Base case", 0.45), ("B: Bull case", 0.20), ("C: Bear case", 0.35))
+GROWTH_ROWS = _rows(("A：高增长", 0.40), ("B：温和放缓", 0.35), ("C：Recession", 0.25))
 FFE1_SUMMARY = (
     "基准情景（40%）下2030年全球IT装机容量达190–210 GW，但电力硬约束（30%）与融资紧缩（20%）"
     "构成合计50%的下行尾部。"
@@ -397,12 +398,71 @@ def test_scenario_word_may_follow_an_alias():
     # A size word right after the slot.
     ("a bear case (25%) drawdown", EN_ROWS, "quantity"),
     ("Our bear case (25%) drawdown is shallow.", EN_ROWS, "quantity"),
+    # Review round 4: a name part glued inside an ordinary phrase names a rate or a share.
+    ("经济温和放缓（2%）", GROWTH_ROWS, "glued_alias"),
+    ("收入保持高增长（30%）", GROWTH_ROWS, "glued_alias"),
+    ("AI服务器出货高增长（25%）", GROWTH_ROWS, "glued_alias"),
+    ("US Recession (4%) unemployment rate", GROWTH_ROWS, "glued_alias"),
+    ("北美数据中心电力受限（40%）的比例仍在上升", FFE1_ROWS, "glued_alias"),
+    # ... and after "N%的概率" an alias that modifies another noun gives that event's odds.
+    ("我们给出F5约55%：有55%的概率实现基准扩张路径下的3万亿美元资本开支", FFE1_ROWS, "modifier"),
+    ("有60%的可能性出现电力受限导致的项目延误", FFE1_ROWS, "modifier"),
+    ("我们认为有80%的概率出现财务紧缩信号", FFE1_ROWS, "modifier"),
+    # More conditional openers.
+    ("如电力受限，财务紧缩（60%）", FFE1_ROWS, "conditional"),
+    ("要是电力受限，财务紧缩（60%）", FFE1_ROWS, "conditional"),
+    ("只要电力受限，财务紧缩（60%）", FFE1_ROWS, "conditional"),
+    ("除非电力受限，财务紧缩（60%）", FFE1_ROWS, "conditional"),
+    ("B情景成立的话，财务紧缩（60%）", FFE1_ROWS, "conditional"),
+    ("在电力受限背景下，财务紧缩（60%）", FFE1_ROWS, "conditional"),
+    ("在电力受限环境中，财务紧缩（60%）", FFE1_ROWS, "conditional"),
+    ("在电力受限之下，财务紧缩（60%）", FFE1_ROWS, "conditional"),
+    ("When the bull case fails, the bear case (60%) dominates.", EN_ROWS, "conditional"),
+    ("Once power binds, the bear case (60%) dominates.", EN_ROWS, "conditional"),
+    ("Unless the base case holds, the bear case (60%) dominates.", EN_ROWS, "conditional"),
+    ("Should the base case fail, the bear case (60%) dominates.", EN_ROWS, "conditional"),
+    ("Under the base case, the bear case (60%) dominates.", EN_ROWS, "conditional"),
+    # More revision phrasings.
+    ("基准情景（40%）被红队下调", FFE1_ROWS, "history"),
+    ("基准情景（40%）经红队批判后下调", FFE1_ROWS, "history"),
+    ("基准情景（40%）最终定为35%", FFE1_ROWS, "history"),
+    ("The base case (40%) became 45%.", EN_ROWS, "history"),
+    ("The base case (40%) is now 45%.", EN_ROWS, "history"),
+    ("The base case (40%) now stands at 45%.", EN_ROWS, "history"),
+    # An organisation through an attribution verb or its report; the sell side.
+    ("麦肯锡预测基准情景（60%）", FFE1_ROWS, "attributed"),
+    ("麦肯锡报告中基准情景（60%）", FFE1_ROWS, "attributed"),
+    ("Street base case (60%)", EN_ROWS, "attributed"),
 ])
 def test_guarded_contexts_are_reported_not_rewritten(text, rows, guard):
     findings = LN.find_probability_slots(text, rows)
     assert [(f["status"], f["guard"]) for f in findings] == [("unresolved", guard)], text
     assert "replacement" not in findings[0]
     assert LN.substitute_probability_slots(text, findings) == (text, [])
+
+
+def test_round4_guards_leave_the_scenario_slots_fixable():
+    """The round-4 guards keep the slots that do name a scenario: a closed number-first
+    sentence, a modal "should", 如下 / 例如, "at once", a label line and Main Street."""
+    for text, rows in (("我们认为有40%的概率走向基准扩张路径。", FFE1_ROWS),
+                       ("Investors should weigh the base case (40%) first.", EN_ROWS),
+                       ("如下表所示，基准情景（40%）仍是主路径。", FFE1_ROWS),
+                       ("例如基准情景（40%）仍是主路径。", FFE1_ROWS),
+                       ("**Recession** scenario (30%)", GROWTH_ROWS),
+                       ("- 温和放缓（30%）：需求降温", GROWTH_ROWS),
+                       ("Main Street base case (40%)", EN_ROWS),
+                       ("At once the base case (40%) firmed.", EN_ROWS),
+                       ("The base case (40%) is now our central path.", EN_ROWS)):
+        assert [f["status"] for f in LN.find_probability_slots(text, rows)] == ["fixable"], text
+
+
+def test_a_binary_forecast_sentence_is_left_byte_identical():
+    """Review round 4: F5's own probability, written next to a scenario name it modifies,
+    is never rewritten into the scenario's value."""
+    md = "## 判别指标\n\n我们给出F5约55%：有55%的概率实现基准扩张路径下的3万亿美元资本开支。\n"
+    audit = LN.audit_markdown(md, FFE1_ROWS)
+    assert audit["fixable"] == 0
+    assert LN.substitute_probability_slots(md, audit["findings"]) == (md, [])
 
 
 def test_history_cues_stay_in_their_place():

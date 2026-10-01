@@ -33,18 +33,23 @@ to 45%" a level), so before a bracket, colon or "at" slot it counts only when it
 free (after punctuation, a preposition or a determiner), and then names a scenario only
 with a signal: a probability word in the slot, a scenario word right after the alias or
 the slot, or a label position ("- 上行（10%）：…").  A free weak alias without one is
-``unresolved`` (guard ``weak_alias``).  After "N%的概率" a weak alias counts only with a
-scenario word right after it ("有40%的概率走向基准路径"; "油价有40%的概率上行" is a price
-move).
+``unresolved`` (guard ``weak_alias``).  A name part glued inside an ordinary phrase
+("经济温和放缓（2%）", "北美数据中心电力受限（40%）的比例", "US Recession (4%) unemployment")
+needs the same signal, else it is ``unresolved`` (guard ``glued_alias``).  After
+"N%的概率" a weak alias counts only with a scenario word right after it ("有40%的概率走向
+基准路径"; "油价有40%的概率上行" is a price move), and any alias only when the sentence
+closes or the scenario comes true right after it: one that modifies another noun ("有55%
+的概率实现基准扩张路径下的3万亿美元资本开支") is ``unresolved`` (guard ``modifier``).
 
 A slot whose number differs from the scenario's probability by more than ``tol_pt``
-points is a finding.  An unsignalled weak alias, REPORT-2's range, quantity, sum and
-market guards (``narrative_sync``), a size word right after the slot ("bear case (35%)
-drawdown"), an inline quotation, a conditional opener ("若进入B情景，则有40%的概率…",
-"电力受限情景下，…", "当电力受限时，…"), a history context ("此前…", "2025年…",
-"…已下调至35%", "…→ 35%", "trimmed the bull case (35%) to 30%") and an outside owner of
-the scenario ("McKinsey's base case (60%)", "中金的基准情景（50%）") make it
-``unresolved``: it is reported, never rewritten.  Everything else is ``fixable``, and
+points is a finding.  An unsignalled weak or glued alias, a modifier alias, REPORT-2's
+range, quantity, sum and market guards (``narrative_sync``), a size word right after the
+slot ("bear case (35%) drawdown"), an inline quotation, a conditional opener
+("若进入B情景，则有40%的概率…", "电力受限情景下，…", "当电力受限时，…"), a history
+context ("此前…", "2025年…", "…已下调至35%", "…→ 35%", "trimmed the bull case (35%) to
+30%") and an outside owner of the scenario ("McKinsey's base case (60%)", "中金的基准情景
+（50%）", "Street base case (60%)") make it ``unresolved``: it is reported, never
+rewritten.  Everything else is ``fixable``, and
 ``substitute_probability_slots`` rewrites exactly the number, keeping its format ("40%" →
 "35%", "0.40" → "0.35", "约40%" → "约35%").  The guards decide only whether a rewrite is
 safe: the 'numeric' gate's S11 strings (``s11_mismatches``) carry every finding, fixable
@@ -158,10 +163,13 @@ _ROLE_COMPARATIVE_RE = re.compile(
 # two-character CJK name parts.  Before a bracket, colon or "at" slot one is read only
 # when it stands free — after punctuation, the line start, a CJK preposition /
 # conjunction or an English determiner — and even then names a scenario only with a
-# signal (``_weak_alias_signalled``): "from the baseline (18%) to 45%", "the upside (12%)
+# signal (``_alias_signalled``): "from the baseline (18%) to 45%", "the upside (12%)
 # to our price target", "油价方面，上行（10%）空间有限" and "相对基准（40%）的偏离" stand free
 # but name a level, a price move or a benchmark.  After "N%的概率" a weak alias counts
 # only with a scenario word right after it (_SCENARIO_WORD_RE).
+# Any other name part (the full name, its core or head) is read wherever it stands, but
+# glued inside an ordinary phrase it names a growth rate or a share ("收入保持高增长
+# （30%）", "北美数据中心电力受限（40%）的比例"), so there it needs the same signal.
 _WEAK_ROLE_ALIASES = frozenset({"基准", "上行", "下行", "兜底", "维持现状",
                                 "baseline", "upside", "downside"})
 _FREE_CJK_LEADS = frozenset("在与和及或、即为是按以对")
@@ -207,8 +215,8 @@ _ALIAS_TAILS: Tuple[Tuple[str, Pattern[str]], ...] = (
         + r"[ \t]++at[ \t]++" + _HEDGE + _PERCENT + _WS + r"probability(?![A-Za-z])",
         re.I)),
 )
-# Signals that a free weak alias names a scenario (_weak_alias_signalled): a probability
-# word in its slot, a scenario word right after the alias (the tail's ``scen``) or right
+# Signals that a free weak alias or a glued name part names a scenario (_alias_signalled):
+# a probability word in its slot, a scenario word right after the alias (the tail's ``scen``) or right
 # after the slot ("上行（10%）情形下"), or a label position — the alias opens its line (after
 # indentation and an optional quote, heading, list or table marker and emphasis) and a
 # colon, a table bar or the line end closes the slot ("- 上行（10%）：需求超预期",
@@ -230,6 +238,15 @@ _EMPHASIS_RE = re.compile(_EMPHASIS)
 # it ("有40%的概率走向基准路径"): "油价有40%的概率上行" is a price move, "有70%的概率维持现状"
 # a rent that stays put, "有40%的概率维持基准水平" a level.
 _SCENARIO_WORD_RE = re.compile(_EMPHASIS + _WS + _SCENARIO_WORD)
+# After the alias of a number-first slot (and an optional scenario word) the sentence
+# closes, the line ends or the scenario comes true ("仅10%概率超预期上行。", "有40%的概率走向
+# 基准路径", "…基准扩张兑现").  Anything else makes the alias a modifier of another noun, so
+# the number is that event's probability ("有55%的概率实现基准扩张路径下的3万亿美元资本开支",
+# "有60%的可能性出现电力受限导致的项目延误", "有80%的概率出现财务紧缩信号").
+_NUMBER_FIRST_END_RE = re.compile(
+    _EMPHASIS + _WS + r"(?:的?" + _SCENARIO_WORD + _EMPHASIS + _WS + r")?"
+    r"(?:[，,。.；;：:！？!?、）)】」』”’|]|$|成真|发生|兑现|成立|实现)",
+    re.M)
 
 # ------------------------------------------------------------------ guards
 # Besides an unsignalled weak alias (``weak_alias``) and REPORT-2's range, quantity, sum
@@ -282,21 +299,35 @@ _QUOTE_RE = re.compile(
     r"“[^“”\n]{0,300}”|「[^「」\n]{0,300}」|『[^『』\n]{0,300}』|‘[^‘’\n]{0,300}’"
     r"|\"[^\"\n]{0,300}\"")
 _CONDITIONAL_LOOKBACK_CHARS = 60
-_SENTENCE_STOP_RE = re.compile(r"[。；;！？!?\n]|(?<![0-9])\.(?![0-9])")
+# A period ends a sentence unless it is a decimal point; after a figure only when a
+# capital follows ("… expires on 24 July 2026. The base case (55%) …").
+_SENTENCE_STOP_RE = re.compile(r"[。；;！？!?\n]|(?<![0-9])\.(?![0-9])|(?<=[0-9])\.(?=[ \t]++[A-Z])")
 _CONDITION_NOUN = r"(?:情景|场景|路径|情形|情况|条件|假设|前提)"
+# The head of a clause: the text start, or a clause or sentence mark right before (a space
+# may follow it).
+_CLAUSE_HEAD = r"[,，;；:：.。!?！？(（\n]"
+_NOT_CLAUSE_HEAD = r"[^,，;；:：.。!?！？(（\n]"
 # 同时 ("meanwhile") and 最后 / 然后 / 随后 / 前后 / 今后 / 背后 / 稍后 open no condition; 当前 /
 # 当今 / 当下 / 当年 / 当地 / 当然 / 当中 / 当时 / 当期 / 当月 / 当日 / 当季 and 相当 / 应当 / 适当 /
-# 正当 / 恰当 / 妥当 / 充当 / 担当 are no "当…时".
+# 正当 / 恰当 / 妥当 / 充当 / 担当 are no "当…时"; 例如 / 比如 / 正如 / 如下 / 如今 / 如何 … and
+# 主要是 / 需要是 … are no 如 / 要是; "should" opens a condition only at the head of a clause
+# ("Should the base case fail, …"; "Investors should weigh …" is a modal), "once" not in
+# "at once" / "once again".
 # The group ``ahead`` holds the openers whose condition follows them (若 …, "if …"), the
-# group ``clause`` those that close a clause after their condition (…时，, …情景下).
+# group ``clause`` those that close a clause after their condition (…时，, …情景下, …的话，).
 _CONDITIONAL_RE = re.compile(
-    r"(?P<ahead>若(?!干)|如果|假如|倘若|一旦|假设|假定|条件于"
+    r"(?P<ahead>若(?!干)|如果|假如|倘若|一旦|假设|假定|条件于|只要|除非"
+    r"|(?<![例比诸譬正犹恰一不何宛有自诚])如(?![果下何此今同期实上前图表是约意愿数所第本附])"
+    r"|(?<![主重需必还就也想总])要是"
     r"|(?<![A-Za-z])(?:if|given|assuming|conditional[ \t]+(?:on|upon)|provided[ \t]+that"
-    r"|in[ \t]+the[ \t]+event)(?![A-Za-z]))"
+    r"|in[ \t]+the[ \t]+event|when|unless|under|(?<!at[ \t])once(?![ \t]+(?:again|more)))"
+    r"(?![A-Za-z])"
+    r"|(?:(?<!" + _NOT_CLAUSE_HEAD + r")|(?<=" + _CLAUSE_HEAD + r"[ \t]))should(?![A-Za-z]))"
     r"|以[^，,。；;！？!?\n]{1,16}?为条件"
     r"|(?<![相应适正恰妥充担])当(?![前今下年地然中时期月日季])[^，,。；;！？!?\n]{0,24}?时"
-    r"|(?P<clause>(?:(?<!同)时|(?<![最然随前今背稍])后)[，,]"
-    r"|(?:在[^，,。；;！？!?\n]{0,24}?)?" + _CONDITION_NOUN + r"之?[下中里时])",
+    r"|(?P<clause>(?:(?<!同)时|(?<![最然随前今背稍])后|的话)[，,]"
+    r"|(?:在[^，,。；;！？!?\n]{0,24}?)?" + _CONDITION_NOUN + r"之?[下中里时]"
+    r"|(?:在[^，,。；;！？!?\n]{0,24}?)?(?:背景|环境|形势)之?[下中]|在[^，,。；;！？!?\n]{1,24}?之下)",
     re.I,
 )
 # Between an ``ahead`` opener and an alias-first slot, only an occurrence verb or a
@@ -328,12 +359,15 @@ _HISTORY_AFTER_RE = re.compile(
     r"→|->|=>|⇒"
     r"|(?:较|相比|相较于?|对比)" + _WS
     + r"(?:上一?版|前一?版|旧版|此前|之前|先前|上一?期|上一?季度?|上次|上一轮|去年|上年|上月)"
-    r"|(?:已经?|被|后|随后|再)?" + _WS
-    + r"(?:下调|上调|调降|调升|下修|上修|降至|升至|降为|升为|调整|修正)"
+    r"|(?:(?:被|经(?![济营]))[^，,。；;！？!?\n]{0,8}?|(?:已经?|后|随后|再)" + _WS + r")?"
+    r"(?:下调|上调|调降|调升|下修|上修|降至|升至|降为|升为|调整|修正)"
     r"|(?:(?:was|were|is|are|(?:has|have|had)[ \t]++been)[ \t]++)?"
     r"(?:revised|cut|lowered|raised|trimmed|reduced|increased|moved)(?![A-Za-z])"
     r"|(?:down|up)[ \t]++from(?![A-Za-z])"
-    r"|(?:(?:down|up|back)[ \t]++)?(?:to(?![A-Za-z])|至|到)" + _WS
+    r"|(?:(?:(?:down|up|back)[ \t]++)?(?:to(?![A-Za-z])|至|到)"
+    r"|(?:最终|最后|随后|后来|此后|现已|已经?|现|则|再|又)?" + _WS
+    + r"(?:定为|改为|变为|调为|降到|升到|回落至|下降至|上升至)"
+    r"|(?:became|becomes|is[ \t]++now|(?:now[ \t]++)?stands[ \t]++at)(?![A-Za-z]))" + _WS
     + r"[0-9]{1,3}(?:\.[0-9]++)?" + _WS + r"[%％])",
     re.I,
 )
@@ -377,15 +411,22 @@ _CJK_OWN_OWNER_RE = re.compile(
 _DATE_RUN_RE = re.compile(
     r"[0-9]{2,4}年(?:代|初|中|底|末|内)?(?:[0-9]{1,2}月(?:份|初|中|底|末)?)?|[0-9]{1,2}月(?:份)?"
     r"|Q[1-4]|H[12]|[0-9]+")
-# An organisation glued to a CJK alias: a CJK name with an organisation suffix, or a
-# research house, consultancy or agency the market guard's list does not name.
+# An organisation glued to a CJK alias, optionally through an attribution verb or "its
+# report" ("麦肯锡预测基准情景", "麦肯锡报告中基准情景"): a CJK name with an organisation
+# suffix, or a research house, consultancy or agency the market guard's list does not name.
+_ATTRIBUTION_SUFFIX = r"(?:预测|预计|认为|估计|指出|给出|表示|称|的?(?:报告|研究|模型|测算)[中里])?"
 _GLUED_ORGANISATION_RE = re.compile(
     r"(?:研究院|研究所|研究中心|研究会|银行|证券|资本|基金|集团|公司|咨询|智库|协会|学会|商会|委员会|政府"
     r"|央行|能源署|能源局|统计局|发改委|交易所|事务所|大学|实验室|机构"
     r"|麦肯锡|贝恩|波士顿咨询|德勤|普华永道|安永|毕马威|埃森哲|罗兰贝格|高德纳|伍德麦肯兹|睿咨得|标普"
     r"|穆迪|惠誉|晨星|麦格理|瑞信|巴克莱|美银|贝莱德|桥水|中金|中信|华泰|国泰君安|海通|广发|申万|国网"
-    r"|中电联|美联储|欧央行)$")
-_GLUED_LATIN_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z][A-Za-z&.'’-]*[A-Za-z]$")
+    r"|中电联|美联储|欧央行)" + _ATTRIBUTION_SUFFIX + r"$")
+_GLUED_LATIN_RE = re.compile(
+    r"(?<![A-Za-z0-9])[A-Za-z][A-Za-z&.'’-]*[A-Za-z]" + _ATTRIBUTION_SUFFIX + r"$")
+# The sell side glued to an English alias ("Street base case (60%)", "the sell-side bull
+# case"): its forecast, not the report's.  Kept here rather than in narrative_sync's market
+# words, whose case-blind sentence-wide veto would also fire on "Main Street".
+_GLUED_STREET_RE = re.compile(r"(?<![A-Za-z])(?<!Main )(?:Street|[Ss]ell-side|[Bb]uy-side)$")
 # A size word right after an alias-first slot: "a bear case (35%) drawdown" sizes a
 # drawdown, it gives no probability (REPORT-2's quantity guard reads only the token end).
 _QUANTITY_AFTER_SLOT_RE = re.compile(
@@ -415,6 +456,7 @@ class _AliasTable(NamedTuple):
     regex: Optional[Pattern[str]]
     group_index: Dict[str, int]          # regex group name -> scenario index
     weak_groups: FrozenSet[str]          # groups of weak aliases (see _WEAK_ROLE_ALIASES)
+    name_groups: FrozenSet[str]          # groups of the other name parts (full name, core, head)
     alias_to_index: Dict[str, int]       # alias as spelt -> scenario index
     ambiguous: int                       # distinct aliases dropped as ambiguous
 
@@ -493,20 +535,22 @@ def _enumerator_aliases(label: str) -> List[Tuple[str, str]]:
     ]
 
 
-def _name_aliases(name: str) -> List[Tuple[str, str]]:
-    """``(alias, pattern)`` pairs a text may use for the scenario called ``name``: the
-    enumerator aliases, then the full name, the core and its head when distinctive."""
-    aliases: List[Tuple[str, str]] = []
+def _name_aliases(name: str) -> List[Tuple[str, str, bool]]:
+    """``(alias, pattern, name_part)`` triples a text may use for the scenario called
+    ``name``: the enumerator aliases, then the full name, the core and its head when
+    distinctive (``name_part`` True)."""
+    aliases: List[Tuple[str, str, bool]] = []
     core = name
     enumerated = _ENUMERATOR_RE.match(name)
     if enumerated:
         core = enumerated.group("core").strip()
-        aliases += _enumerator_aliases(enumerated.group("label"))
+        aliases += [(alias, pattern, False)
+                    for alias, pattern in _enumerator_aliases(enumerated.group("label"))]
     head_end = _HEAD_END_RE.search(core)
     head = core[:head_end.start()].strip() if head_end else core
     for part in dict.fromkeys((name, core, head)):
         if part and _distinctive(part):
-            aliases.append((part, _name_pattern(part)))
+            aliases.append((part, _name_pattern(part), True))
     return aliases
 
 
@@ -540,9 +584,13 @@ def _alias_table(names: Tuple[str, ...]) -> _AliasTable:
     with one named group per alias so a match tells its scenario.
     """
     entries: List[Tuple[str, str, int]] = []
+    name_parts: Set[Tuple[str, str]] = set()
     for index, name in enumerate(names):
         if name:
-            entries += [(alias, pattern, index) for alias, pattern in _name_aliases(name)]
+            for alias, pattern, name_part in _name_aliases(name):
+                entries.append((alias, pattern, index))
+                if name_part:
+                    name_parts.add((alias, pattern))
     untagged: Set[str] = set()
     for role_aliases, keyword in _ROLE_ALIASES:
         holders = [index for index, name in enumerate(names) if name and _holds_role(name, keyword)]
@@ -561,21 +609,24 @@ def _alias_table(names: Tuple[str, ...]) -> _AliasTable:
         if len(owners[_alias_key(alias)]) == 1:
             kept.setdefault((alias, pattern), index)
     if not kept:
-        return _AliasTable(None, {}, frozenset(), {}, ambiguous)
+        return _AliasTable(None, {}, frozenset(), frozenset(), {}, ambiguous)
 
     ordered = sorted(kept.items(), key=lambda item: (-len(item[0][0]), item[0]))
     group_index: Dict[str, int] = {}
     weak_groups: Set[str] = set()
+    name_groups: Set[str] = set()
     parts: List[str] = []
     for number, ((alias, pattern), index) in enumerate(ordered):
         group = f"a{number}"
         group_index[group] = index
         if _weak(alias):
             weak_groups.add(group)
+        elif (alias, pattern) in name_parts:
+            name_groups.add(group)
         parts.append(f"(?P<{group}>{pattern})")
     alias_to_index = {alias: index for (alias, _pattern), index in ordered}
     return _AliasTable(re.compile("|".join(parts)), group_index, frozenset(weak_groups),
-                       alias_to_index, ambiguous)
+                       frozenset(name_groups), alias_to_index, ambiguous)
 
 
 def _weak(alias: str) -> bool:
@@ -611,9 +662,9 @@ def _label_position(text: str, alias: "re.Match[str]", slot_end: int) -> bool:
             and _LABEL_END_RE.match(text, slot_end) is not None)
 
 
-def _weak_alias_signalled(text: str, alias: "re.Match[str]", tail: "re.Match[str]") -> bool:
-    """A free weak alias names a scenario: a probability word in its slot, a scenario word
-    right after the alias or the slot, or a label position."""
+def _alias_signalled(text: str, alias: "re.Match[str]", tail: "re.Match[str]") -> bool:
+    """A free weak alias or a glued name part names a scenario: a probability word in its
+    slot, a scenario word right after the alias or the slot, or a label position."""
     return bool(tail.group("scen") or _PROBABILITY_WORD_RE.search(tail.group(0))
                 or _SCENARIO_WORD_RE.match(text, tail.end())
                 or _label_position(text, alias, tail.end()))
@@ -681,7 +732,7 @@ class _Slot(NamedTuple):
     form: str               # "percent" | "decimal"
     token_end: int          # end of the guarded token (after the percent sign)
     alias_first: bool       # the alias comes before the number
-    unsignalled: bool       # a free weak alias without a scenario signal (never rewritten)
+    alias_guard: Optional[str]  # weak_alias / glued_alias / modifier: never rewritten
 
 
 class _Slots(NamedTuple):
@@ -700,12 +751,12 @@ def _collect_slots(text: str, table: _AliasTable) -> _Slots:
     alias_starts: Set[int] = set()
 
     def record(number: "re.Match[str]", alias: "re.Match[str]", form: str,
-               unsignalled: bool = False) -> None:
+               alias_guard: Optional[str]) -> None:
         span = number.span("num")
         token_end = number.end("sym") if form == "percent" else number.end("num")
         slot = _Slot(table.group_index[alias.lastgroup], alias.group(0),
                      min(alias.start(), span[0]), max(alias.end(), number.end()), form, token_end,
-                     alias.start() < span[0], unsignalled)
+                     alias.start() < span[0], alias_guard)
         alias_starts.add(alias.start())
         previous = slots.get(span)
         if previous is None:
@@ -715,12 +766,19 @@ def _collect_slots(text: str, table: _AliasTable) -> _Slots:
 
     for alias in table.regex.finditer(text):
         weak = alias.lastgroup in table.weak_groups
-        if weak and not _stands_free(text, alias.start()):
-            continue
+        # The guard a missing scenario signal sets: a weak alias is read only where it
+        # stands free and always needs one, a name part only when glued inside a phrase.
+        unsignalled: Optional[str] = None
+        if weak or alias.lastgroup in table.name_groups:
+            free = _stands_free(text, alias.start())
+            if weak and not free:
+                continue
+            unsignalled = "weak_alias" if weak else None if free else "glued_alias"
         for form, tail_re in _ALIAS_TAILS:
             tail = tail_re.match(text, alias.end())
             if tail:
-                record(tail, alias, form, weak and not _weak_alias_signalled(text, alias, tail))
+                signalled = unsignalled is None or _alias_signalled(text, alias, tail)
+                record(tail, alias, form, None if signalled else unsignalled)
                 break
     for number in _NUMBER_FIRST_RE.finditer(text):
         position = number.end()
@@ -729,7 +787,8 @@ def _collect_slots(text: str, table: _AliasTable) -> _Slots:
             alias = table.regex.match(text, _EMPHASIS_RE.match(text, start).end())
             if alias and (alias.lastgroup not in table.weak_groups
                           or _SCENARIO_WORD_RE.match(text, alias.end())):
-                record(number, alias, "percent")
+                closed = _NUMBER_FIRST_END_RE.match(text, alias.end())
+                record(number, alias, "percent", None if closed else "modifier")
                 break
     for span in conflicted:
         del slots[span]
@@ -794,7 +853,7 @@ def _attributed(text: str, slot: _Slot) -> bool:
         run = _OWNER_RUN_RE.search(before, 0, len(before) - 1)
         return bool(run) and _foreign_owner(run.group(0), before[:run.start()])
     if not _CJK_CHAR_RE.match(slot.alias):
-        return False
+        return _GLUED_STREET_RE.search(before) is not None
     if _GLUED_ORGANISATION_RE.search(before):
         return True
     latin = _GLUED_LATIN_RE.search(before)
@@ -837,8 +896,8 @@ class _Guards:
 
     def guard(self, start: int, slot: _Slot, name: str) -> Optional[str]:
         text = self._text
-        if slot.unsignalled:
-            return "weak_alias"
+        if slot.alias_guard:
+            return slot.alias_guard
         if range_guarded(text, start, slot.token_end):
             return "range"
         if (quantity_guarded(text, start, slot.token_end, (name,))

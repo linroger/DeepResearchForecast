@@ -80,6 +80,9 @@ def reports_dir(monkeypatch, tmp_path):
     monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path / "reports"), raising=False)
     monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"), raising=False)
     monkeypatch.setattr(Config, "REPORT_NARRATIVE_SYNC", True, raising=False)
+    # The repair is default off (REPORT_LOGIC_NUMBER_REPAIR); these tests exercise it on,
+    # test_repair_is_off_by_default pins the default.
+    monkeypatch.setattr(Config, "REPORT_LOGIC_NUMBER_REPAIR", True, raising=False)
     monkeypatch.setattr(Config, "REPORT_LOGIC_NUMBER_GATE", "observe", raising=False)
     monkeypatch.setattr(Config, "REPORT_FORECAST_LEDGER", False, raising=False)
     return tmp_path / "reports"
@@ -617,5 +620,55 @@ def test_lint_alias_s11_fails_closed(monkeypatch):
 def test_config_default_and_env_example():
     assert Config.REPORT_LOGIC_NUMBER_GATE == "observe"
     assert ReportAgent._logic_number_gate() == "observe"
+    assert Config.REPORT_LOGIC_NUMBER_REPAIR is False
+    assert ReportAgent._logic_number_repair_enabled() is False
     env_example = os.path.join(os.path.dirname(__file__), "..", "..", ".env.example")
     assert "# REPORT_LOGIC_NUMBER_GATE=observe" in _read(env_example)
+    assert "# REPORT_LOGIC_NUMBER_REPAIR=false" in _read(env_example)
+
+
+def test_repair_is_off_by_default(report_env, monkeypatch):
+    """Orchestrator decision after review round 4: the zero-token rewrite is opt-in.  With
+    REPORT_LOGIC_NUMBER_REPAIR off (its default) and REPORT_NARRATIVE_SYNC on, neither the
+    outline summary nor the prose is rewritten; the read-only audit still finds the stale
+    slots, the evidence for turning the repair on."""
+    from app.services import logic_number as LN
+    monkeypatch.setattr(Config, "REPORT_LOGIC_NUMBER_REPAIR", False, raising=False)
+    a = _generating_agent()
+    report = a.generate_report(report_id="r_off")
+    assert report.status == ReportStatus.COMPLETED
+    assert report.outline.summary == STALE_SUMMARY == a._outline_summary
+    assert _blockquote(report.markdown_content) == f"> {STALE_SUMMARY}"
+    assert "在基准扩张（40%）路径下" in report.markdown_content
+    assert a._logic_number_repair is None
+    assert LN.audit_markdown(report.markdown_content, FFE1_ROWS)["fixable"] > 0
+
+    md = _draft()
+    folder = _prepare(report_env, "r_off_unit", md)
+    b = _agent(_logic_number_summary_repair=[])
+    unit = SimpleNamespace(markdown_content=md)
+    b._repair_logic_number("r_off_unit", unit)
+    assert unit.markdown_content == md and _read(folder / "full_report.md") == md
+    assert getattr(b, "_logic_number_repair", None) is None
+
+
+def test_summary_only_repair_refreshes_the_observation(reports_dir):
+    """Review round 4: a plan-time summary repair with a body that needs no rewrite still
+    replaces the draft observation, so forecast.json records the repair without the final
+    audit."""
+    clean = _draft().replace(f"> {STALE_SUMMARY}", f"> {FIXED_SUMMARY}").replace(
+        "在基准扩张（40%）路径下装机稳步兑现，仅10%概率超预期上行。",
+        "在基准扩张（35%）路径下装机稳步兑现，仅5%概率超预期上行。")
+    folder = _prepare(reports_dir, "r_summary_only", clean)
+    forecast = _spine()
+    draft = {"findings": [], "count": 0, "fixable": 0, "unresolved": 0, "skipped": {}}
+    forecast["quality"] = {"logic_number": draft}
+    (folder / "forecast.json").write_text(json.dumps(forecast, ensure_ascii=False), encoding="utf-8")
+    summary_rows = [{"where": "outline_summary", "alias": "基准情景", "claimed": 40, "expected_pct": 35}]
+    a = _agent(_logic_number_summary_repair=summary_rows)
+    report = SimpleNamespace(markdown_content=clean)
+    a._repair_logic_number("r_summary_only", report)
+    assert report.markdown_content == clean
+    saved = json.loads((folder / "forecast.json").read_text(encoding="utf-8"))
+    assert saved["quality"]["logic_number"]["repair"]["summary_count"] == 1
+    assert saved["quality"]["logic_number"]["repair"]["body_count"] == 0

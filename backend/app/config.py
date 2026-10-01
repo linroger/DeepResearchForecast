@@ -1067,9 +1067,15 @@ class Config:
     # 能否改写；检测异常记为不符，失败即关闭）并入 S11（_audit_numeric_consistency 与
     # report_lint.check_scenario_probabilities），经既有硬路径阻止发布。numeric 改变一条硬发布规则，
     # 因此必须同时提升 REPORT_FINAL_AUDIT_POLICY_VERSION 并提供重放工具——属 owner 决策，本 WP 不提升。
-    # 未知值按 observe 处理并告警。确定性修复（大纲摘要同步 + 稳定器之前的正文槽位替换）只受
-    # REPORT_NARRATIVE_SYNC 控制。默认 observe 是安全的：只读观测，任何硬规则与发布结果不变。
+    # 未知值按 observe 处理并告警。确定性修复（大纲摘要同步 + 稳定器之前的正文槽位替换）另由
+    # REPORT_LOGIC_NUMBER_REPAIR 控制。默认 observe 是安全的：只读观测，任何硬规则与发布结果不变。
     REPORT_LOGIC_NUMBER_GATE = os.environ.get('REPORT_LOGIC_NUMBER_GATE', 'observe').strip().lower()
+    # REPORT-3 零 token 槽位修复（大纲摘要同步 + 稳定器之前的正文别名概率槽改成骨架值），还需
+    # REPORT_NARRATIVE_SYNC 开。默认关（编排决策，评审第 4 轮后）：每轮评审都找到新的语境——修复把
+    # 并非该情景概率的百分数（增长率、份额、另一事件的概率，如「有55%的概率实现基准扩张路径下的…」）
+    # 改成情景值，确定性的正文改写绝不能默认编造数字。只读审计（REPORT_LOGIC_NUMBER_GATE=observe）
+    # 照常记录 fixable / unresolved，作为开启前的证据；关 = 成稿、大纲与 forecast.json 不被改写。
+    REPORT_LOGIC_NUMBER_REPAIR = os.environ.get('REPORT_LOGIC_NUMBER_REPAIR', 'false').strip().lower() == 'true'
     # REPORT-4 报告阶段提示词的类型化缺失标记（utils/absence.py）：章节质检无骨架时去掉概率一致性
     # 规则、缺失的信号包/市场表写成「本次未启用 / 检索为空 / 不可用」标记而非「（无）」、并行撰写的
     # 大纲意图不再冒充前序章节摘要；骨架提示词首句只列实际注入的输入并要求无研究基率时写明基率出处；

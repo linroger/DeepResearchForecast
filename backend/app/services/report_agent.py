@@ -6741,6 +6741,12 @@ class ReportAgent:
         )
 
     @staticmethod
+    def _logic_number_repair_enabled() -> bool:
+        """REPORT-3：零 token 槽位修复是否运行（REPORT_LOGIC_NUMBER_REPAIR 与 REPORT_NARRATIVE_SYNC 皆开）。"""
+        return bool(getattr(Config, "REPORT_LOGIC_NUMBER_REPAIR", False)
+                    and getattr(Config, "REPORT_NARRATIVE_SYNC", True))
+
+    @staticmethod
     def _logic_number_gate() -> str:
         """REPORT-3：生效的 REPORT_LOGIC_NUMBER_GATE（off / observe / numeric；未知值按 observe 并告警）。"""
         from .logic_number import resolve_gate
@@ -6810,9 +6816,9 @@ class ReportAgent:
         连同 outline.summary / self._outline_summary / outline.json；成稿有改写时再刷新 forecast.json
         的 quality.logic_number（_refresh_logic_number_quality）。结果记
         self._logic_number_repair = {applied（截断明细）, applied_count / summary_count / body_count
-        （未截断总数）, unresolved}。REPORT_NARRATIVE_SYNC 关或骨架无情景时不做任何事（成稿逐字节不变）；
-        任何失败仅告警。"""
-        if not getattr(Config, "REPORT_NARRATIVE_SYNC", True):
+        （未截断总数）, unresolved}。REPORT_LOGIC_NUMBER_REPAIR（默认关）或 REPORT_NARRATIVE_SYNC 关、
+        或骨架无情景时不做任何事（成稿逐字节不变）；任何失败仅告警。"""
+        if not self._logic_number_repair_enabled():
             return
         scenarios = self._spine_scenario_rows()
         if not scenarios:
@@ -6850,6 +6856,8 @@ class ReportAgent:
                     ReportManager.save_outline(report_id, report.outline)
             except Exception as _we:  # noqa: BLE001
                 logger.warning(f"重写 full_report.md / outline.json（概率槽修复）失败（忽略）: {_we}")
+        if new_md != md or applied_rows:
+            # 仅规划时摘要被修复、正文无需改写时，草稿观测里也还没有修复记录，同样刷新。
             self._refresh_logic_number_quality(report_id, new_md)
         logger.info(f"概率槽修复: {report_id} 正文改写 {len(applied)} 处｜摘要改写 "
                     f"{len(summary_rows)} 处｜未解决 {audit['unresolved']} 处")
@@ -13351,7 +13359,7 @@ class ReportAgent:
             # 骨架值，大纲 / meta / 豁免文本 / 成稿 blockquote 因此逐字节一致（零 token）。
             self._logic_number_summary_repair = []
             self._logic_number_repair = None
-            if _spine_ready and getattr(Config, "REPORT_NARRATIVE_SYNC", True):
+            if _spine_ready and self._logic_number_repair_enabled():
                 self._repair_outline_summary_numbers(outline)
             report.outline = outline
             # RPT-5: 供引用溯源审计豁免系统注入的摘要 blockquote（"> {outline.summary}"）。
@@ -13645,7 +13653,8 @@ class ReportAgent:
                         logger.warning(f"语言纯度扫描失败（忽略，保留原文）: {_lp_err}")
 
             # REPORT-3：确定性别名概率槽修复——所有注入与语言纯度之后、编辑 lint 与发布稳定器之前
-            # （SHA 指纹覆盖修复后的字节）。REPORT_NARRATIVE_SYNC 关或骨架无情景时不动成稿；失败仅告警。
+            # （SHA 指纹覆盖修复后的字节）。REPORT_LOGIC_NUMBER_REPAIR / REPORT_NARRATIVE_SYNC 关或
+            # 骨架无情景时不动成稿；失败仅告警。
             self._repair_logic_number(report_id, report)
 
             # WAVE9：确定性编辑纪律 lint——所有修复/注入/纯度处理之后、双语翻译之前跑一遍
