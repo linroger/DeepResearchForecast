@@ -57,6 +57,12 @@ def test_commitments_on_the_prior_leader_are_a_herd():
     assert out["prior_leader_commit_rate"] == 1.0 and out["verdict"] == "prior_leader_herd"
 
 
+def test_an_echo_outranks_a_herd():
+    out = spe.prior_echo_diagnostics(_traj(PRIOR, decisions=_decisions("A")))
+    assert out["prior_leader_commit_rate"] == 1.0 and out["tv_to_prior"] == 0.0
+    assert (out["verdict"], out["reasons"]) == ("prior_echo", ["final_equals_prior"])
+
+
 def test_sustained_commitments_to_a_non_leader_are_divergent():
     decisions = _decisions("B", 8) + _decisions("A", 2)
     out = spe.prior_echo_diagnostics(_traj({"A": 0.35, "B": 0.65}, decisions=decisions))
@@ -98,6 +104,41 @@ def test_legacy_rows_count_distinct_decision_rounds():
 def test_missing_or_degenerate_input_is_unavailable(doc, reason):
     out = spe.prior_echo_diagnostics(doc)
     assert (out["verdict"], out["reasons"]) == ("unavailable", [reason])
+
+
+@pytest.mark.parametrize("where,shares,reason", [
+    ("prior", None, "no_prior"),
+    ("prior", {}, "no_prior"),
+    ("prior", {"A": "lots", "B": 0.4}, "malformed_prior"),
+    ("prior", ["A", "B"], "malformed_prior"),
+    ("final", {}, "no_final_shares"),
+    ("final", {"A": float("nan"), "B": 0.4}, "malformed_final_shares"),
+    ("final", {"A": -0.2, "B": 1.2}, "malformed_final_shares"),
+    ("final", {"A": True, "B": 0.0}, "malformed_final_shares"),
+    ("final", {"A": 0.0, "B": 0.0}, "malformed_final_shares"),
+    ("final", {1: 0.5, "1": 0.5}, "malformed_final_shares"),
+])
+def test_missing_or_malformed_shares_are_unavailable_not_a_verdict(where, shares, reason):
+    # Otherwise a valid, divergent 3-round run: one bad share must not be dropped and
+    # leave a distribution (and a TV distance) the producer never wrote.
+    doc = _traj({"A": 0.8, "B": 0.2}, decisions=_decisions("B"))
+    assert spe.prior_echo_diagnostics(doc)["verdict"] == "divergent"
+    if where == "prior":
+        doc["trajectory"][0]["shares"] = shares
+    else:
+        doc["outcome"]["shares"] = shares
+    out = spe.prior_echo_diagnostics(doc)
+    assert (out["verdict"], out["reasons"], out["tv_to_prior"]) == ("unavailable", [reason], None)
+
+
+def test_a_malformed_policy_is_unavailable_never_raised():
+    doc = _traj(PRIOR)
+    out = spe.prior_echo_diagnostics(doc, None)
+    assert (out["verdict"], out["reasons"], out["policy_version"]) == (
+        "unavailable", ["malformed_policy"], None)
+    out = spe.prior_echo_diagnostics(doc, {"version": "drf-sim-control/test"})
+    assert (out["verdict"], out["reasons"], out["policy_version"]) == (
+        "unavailable", ["diagnostics_error:KeyError"], "drf-sim-control/test")
 
 
 def test_non_finite_commitments_are_skipped_and_output_is_deterministic():
@@ -182,6 +223,23 @@ def test_world_state_block_names_the_herd_leader(sim_root, monkeypatch):
     assert "对照诊断：承诺绝大多数集中于先验领先情景「A」" in block
 
 
+def test_herd_caveat_carries_no_mechanism_number(sim_root, monkeypatch):
+    # A scenario name may itself hold digits (a year, a level); those are the name, not a
+    # mechanism number. Outside the quoted name the line is number-free.
+    leader = "2030年前达峰 50%"
+    doc = _traj({leader: 0.8, "B": 0.2}, decisions=_decisions(leader), prior={leader: 0.6, "B": 0.4})
+    monkeypatch.setattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", True, raising=False)
+    block = _block(sim_root, doc, sim_id="sim_herd")
+    line = [ln for ln in block.split("\n") if ln.startswith("对照诊断")]
+    assert len(line) == 1 and f"「{leader}」" in line[0]
+    assert not re.search(r"\d", line[0].replace(f"「{leader}」", ""))
+    assert block.split("\n")[-2] == line[0]                  # right before the closing note
+    monkeypatch.setattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", False, raising=False)
+    off = _block(sim_root, doc, sim_id="sim_herd")
+    assert world_state_outcome_from_signal_pack(block) == world_state_outcome_from_signal_pack(off)
+    assert block.replace(line[0] + "\n", "") == off
+
+
 def test_world_state_block_is_unchanged_for_other_verdicts(sim_root, monkeypatch):
     for doc in (_traj({"A": 0.35, "B": 0.65}, decisions=_decisions("B")),     # divergent
                 _traj(PRIOR, statuses=("committed",)),                       # inconclusive
@@ -193,22 +251,37 @@ def test_world_state_block_is_unchanged_for_other_verdicts(sim_root, monkeypatch
 
 
 # ------------------------------------------------------------------ orchestrator
-def test_decision_channel_summary_records_the_verdict_and_warns(sim_root, monkeypatch):
-    sim = sim_root / "sim_log"
+def _write_sim(sim_root, sim_id, doc):
+    sim = sim_root / sim_id
     sim.mkdir()
     (sim / "simulation_config.json").write_text(
         json.dumps({"world_state_seed": {"scenarios": ["A", "B"]}}), encoding="utf-8")
-    (sim / "world_state_trajectory.json").write_text(json.dumps(_traj(PRIOR)), encoding="utf-8")
+    (sim / "world_state_trajectory.json").write_text(json.dumps(doc), encoding="utf-8")
+
+
+@pytest.mark.parametrize("doc,verdict,finding", [
+    (_traj(PRIOR), "prior_echo", "推演没有在研究先验之外提供信息"),
+    (_traj({"A": 0.8, "B": 0.2}, decisions=_decisions("A")), "prior_leader_herd",
+     "推演可能只是在复述先验"),
+])
+def test_decision_channel_summary_records_the_verdict_and_warns(sim_root, monkeypatch, doc, verdict,
+                                                                 finding):
+    _write_sim(sim_root, "sim_log", doc)
     monkeypatch.setattr(po.PipelineManager, "save", classmethod(lambda cls, state: None))
     warnings = []
     monkeypatch.setattr(po.logger, "warning", lambda msg, *a, **k: warnings.append(msg % a))
     monkeypatch.setattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", True, raising=False)
     state = po.PipelineState(pipeline_id="pipe_echo", prompt="q")
+    before = set(state.options)
     orch = po.PipelineOrchestrator.__new__(po.PipelineOrchestrator)
     orch._log_decision_channel_outcome(state, "sim_log")
+    assert set(state.options) - before == {"decision_channel_summary"}
     echo = state.options["decision_channel_summary"]["prior_echo"]
-    assert echo["verdict"] == "prior_echo" and echo["policy_version"] == "drf-sim-control/v1"
-    assert any("先验回声诊断=prior_echo" in w for w in warnings)
+    assert echo["verdict"] == verdict and echo["policy_version"] == "drf-sim-control/v1"
+    echo_warnings = [w for w in warnings if f"先验回声诊断={verdict}" in w]
+    assert len(echo_warnings) == 1 and finding in echo_warnings[0]
+    if verdict == "prior_leader_herd":     # the final moved off the prior: no flat "no information"
+        assert "没有在研究先验之外提供信息" not in echo_warnings[0]
     # knob off: not computed, no warning
     warnings.clear()
     monkeypatch.setattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", False, raising=False)
@@ -216,6 +289,30 @@ def test_decision_channel_summary_records_the_verdict_and_warns(sim_root, monkey
     orch._log_decision_channel_outcome(state, "sim_log")
     assert "prior_echo" not in state.options["decision_channel_summary"]
     assert not any("先验回声" in w for w in warnings)
+
+
+def test_prior_echo_verdict_leaves_run_health_unchanged(sim_root, monkeypatch):
+    _write_sim(sim_root, "sim_health", _traj(PRIOR))
+    monkeypatch.setattr(po.PipelineManager, "save", classmethod(lambda cls, state: None))
+    monkeypatch.setattr(po.PipelineOrchestrator, "_assess_report_health",
+                        lambda self, report_id: ("ok", [], {}))
+    monkeypatch.setattr(po.PipelineOrchestrator, "_sim_dir", staticmethod(lambda sim_id: str(sim_root / sim_id)))
+    monkeypatch.setattr(po.SimulationRunner, "RUN_STATE_DIR", str(sim_root))
+    monkeypatch.setattr(Config, "PIPELINE_HEALTH_GATE", True, raising=False)
+    orch = po.PipelineOrchestrator.__new__(po.PipelineOrchestrator)
+    results = {}
+    for knob in (True, False):
+        monkeypatch.setattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", knob, raising=False)
+        state = po.PipelineState(pipeline_id=f"pipe_health_{knob}", prompt="q",
+                                 simulation_id="sim_health", report_id="report_health")
+        state.stages["run"] = po.StageState(name="run")
+        orch._log_decision_channel_outcome(state, "sim_health")
+        orch._enforce_pipeline_health(state)
+        results[knob] = (state.options["pipeline_health"], state.stages["run"].error,
+                         "prior_echo" in state.options["decision_channel_summary"])
+    assert results[True][2] is True and results[False][2] is False
+    assert results[True][:2] == results[False][:2]
+    assert results[True][0]["status"] == "ok" and results[True][1] is None
 
 
 def test_knob_defaults_on_and_is_documented():

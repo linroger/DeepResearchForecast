@@ -56,20 +56,36 @@ def _clamp01(value: float) -> float:
 
 
 def _shares(raw: Any) -> Optional[Dict[str, float]]:
-    """A shares mapping as {scenario: finite share >= 0}; None when it is not a mapping."""
-    if not isinstance(raw, Mapping):
+    """A well-formed shares mapping as {scenario: share}, else None.
+
+    Well-formed means a non-empty mapping whose every value is a finite number >= 0
+    as :func:`_number` reads it (a numeric string counts, a bool does not), whose keys
+    stay distinct as strings, and whose shares sum to more than 0. One bad value
+    rejects the whole mapping: dropping it would leave a distribution the producer
+    never wrote, and a TV distance computed on it would be made up, so the caller
+    reports ``unavailable`` instead (fail closed).
+    """
+    if not isinstance(raw, Mapping) or not raw:
         return None
     out: Dict[str, float] = {}
     for name, value in raw.items():
         number = _number(value)
-        if number is not None and number >= 0:
-            out[str(name)] = number
-    return out
+        key = str(name)
+        if number is None or number < 0 or key in out:
+            return None
+        out[key] = number
+    return out if sum(out.values()) > 0 else None
 
 
-def _result(policy: Mapping[str, Any], verdict: str, reasons: List[str], **fields: Any) -> Dict[str, Any]:
+def _shares_problem(raw: Any, missing: str, malformed: str) -> str:
+    """The ``unavailable`` reason for shares that :func:`_shares` rejected: ``missing``
+    when there are none (absent, None or an empty mapping), else ``malformed``."""
+    return missing if raw is None or (isinstance(raw, Mapping) and not raw) else malformed
+
+
+def _result(policy: Any, verdict: str, reasons: List[str], **fields: Any) -> Dict[str, Any]:
     out: Dict[str, Any] = {
-        "policy_version": policy.get("version"),
+        "policy_version": policy.get("version") if isinstance(policy, Mapping) else None,
         "verdict": verdict,
         "reasons": reasons,
         "tv_to_prior": None,
@@ -128,7 +144,9 @@ def prior_echo_diagnostics(traj: Dict[str, Any],
 
     Returns ``{policy_version, verdict, reasons, tv_to_prior, prior_leader,
     prior_leader_commit_rate, valid_rounds, uniform_prior}``. Verdicts, first match:
-    ``unavailable`` (no row-0 prior, no final shares or fewer than 2 scenarios);
+    ``unavailable`` (a policy that is not a mapping; no row-0 prior or no final shares,
+    or either one malformed: empty, a value that is not a finite number >= 0, or a zero
+    sum; fewer than 2 scenarios);
     ``inconclusive`` (a non-valid top-level ``validity``: reason ``trajectory_not_valid``;
     fewer than ``min_valid_rounds`` valid rounds: ``too_few_valid_rounds``);
     ``prior_echo`` (total-variation distance final vs prior < ``echo_tv``);
@@ -139,6 +157,8 @@ def prior_echo_diagnostics(traj: Dict[str, Any],
     reason ``diagnostics_error:<ExceptionClass>``.
     """
     try:
+        if not isinstance(policy, Mapping):
+            return _result(None, VERDICT_UNAVAILABLE, ["malformed_policy"])
         return _diagnose(traj, policy)
     except Exception as exc:  # noqa: BLE001 — a diagnostic never breaks the run
         return _result(policy, VERDICT_UNAVAILABLE, [f"diagnostics_error:{type(exc).__name__}"])
@@ -150,12 +170,16 @@ def _diagnose(traj: Any, policy: Mapping[str, Any]) -> Dict[str, Any]:
     rows = [row for row in (traj.get("trajectory") or []) if isinstance(row, Mapping)]
     row0 = next((row for row in rows if _number(row.get("round")) == 0), None)
     outcome = traj.get("outcome") if isinstance(traj.get("outcome"), Mapping) else {}
-    prior = _shares(row0.get("shares")) if row0 is not None else None
-    final = _shares(outcome.get("shares"))
-    if row0 is None or prior is None:
+    if row0 is None:
         return _result(policy, VERDICT_UNAVAILABLE, ["no_prior"])
+    prior = _shares(row0.get("shares"))
+    if prior is None:
+        return _result(policy, VERDICT_UNAVAILABLE,
+                       [_shares_problem(row0.get("shares"), "no_prior", "malformed_prior")])
+    final = _shares(outcome.get("shares"))
     if final is None:
-        return _result(policy, VERDICT_UNAVAILABLE, ["no_final_shares"])
+        return _result(policy, VERDICT_UNAVAILABLE,
+                       [_shares_problem(outcome.get("shares"), "no_final_shares", "malformed_final_shares")])
     scenarios = sorted(set(prior) | set(final))
     if len(scenarios) < 2:
         return _result(policy, VERDICT_UNAVAILABLE, ["fewer_than_two_scenarios"])

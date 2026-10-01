@@ -75,7 +75,9 @@ from ..services.research_progress import (
     aggregate_parallel_progress,
 )
 from ..services import backbone_sensitivity, run_shape
-from ..services.sim_prior_echo import prior_echo_diagnostics
+from ..services.sim_prior_echo import (
+    VERDICT_PRIOR_ECHO, VERDICT_PRIOR_LEADER_HERD, prior_echo_diagnostics,
+)
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import RunnerStatus, SimulationRunner
 from ..services.text_processor import TextProcessor
@@ -13120,14 +13122,19 @@ class PipelineOrchestrator:
                 "任何依据（REPORT_WORLDSTATE_HIDE_INVALID 开时报告隐藏份额/图表/对比表）",
                 state.pipeline_id, validity_norm, summary["validity_reasons"],
                 summary["forecast_effect"])
+        # 回声＝终局≈先验，可断言「没有提供信息」；扎堆＝终局已离开先验（TV≥echo_tv），只能
+        # 审慎地说「可能只是在复述先验」（与报告提示行同口径）。
         _echo = summary.get("prior_echo") or {}
-        if _echo.get("verdict") in ("prior_echo", "prior_leader_herd"):
+        _echo_finding = {
+            VERDICT_PRIOR_ECHO: "终局分布与种子先验几乎一致，推演没有在研究先验之外提供信息，不得作为独立佐证",
+            VERDICT_PRIOR_LEADER_HERD: "承诺扎堆先验领先情景，推演可能只是在复述先验，不构成独立佐证",
+        }.get(_echo.get("verdict"))
+        if _echo_finding:
             logger.warning(
-                "[%s] 决策通道先验回声诊断=%s（tv_to_prior=%s，先验领先=%s，领先承诺占比=%s；%s）"
-                "——推演没有在研究先验之外提供信息，不得作为独立佐证",
+                "[%s] 决策通道先验回声诊断=%s（tv_to_prior=%s，先验领先=%s，领先承诺占比=%s；%s）——%s",
                 state.pipeline_id, _echo.get("verdict"), _echo.get("tv_to_prior"),
                 _echo.get("prior_leader"), _echo.get("prior_leader_commit_rate"),
-                _echo.get("policy_version"))
+                _echo.get("policy_version"), _echo_finding)
 
     # -- 内部：研究 as_of 锚校验 (R2-RES-7) -------------------------------
 

@@ -1107,21 +1107,6 @@ _SIGNAL_PACK_HEALTH_SKIPS: Dict[str, Tuple[str, ...]] = {
     "hollow": ("simulation_outcomes", "coalition_map", "scenario_diff"),
     "errored": ("world_state", "simulation_outcomes", "coalition_map", "scenario_diff"),
 }
-def _prior_echo_caveat(trajectory: Any) -> str:
-    """SIM-4: the world-state block's qualitative caveat for a prior-echo or
-    prior-leader-herd trajectory (sim_prior_echo.prior_echo_diagnostics), else ""."""
-    from .sim_prior_echo import (
-        VERDICT_PRIOR_ECHO, VERDICT_PRIOR_LEADER_HERD, prior_echo_diagnostics,
-    )
-    diag = prior_echo_diagnostics(trajectory if isinstance(trajectory, dict) else {})
-    if diag["verdict"] == VERDICT_PRIOR_ECHO:
-        return "对照诊断：终局分布与种子先验几乎一致——决策通道没有在研究先验之外提供信息，不得作为独立佐证。"
-    if diag["verdict"] == VERDICT_PRIOR_LEADER_HERD:
-        return (f"对照诊断：承诺绝大多数集中于先验领先情景「{diag['prior_leader']}」——推演可能只是在复述先验，"
-                "不构成独立佐证。")
-    return ""
-
-
 _SIGNAL_PACK_NO_BEHAVIOUR_NOTE = (
     "⚠️ 本次模拟未产出可用的行为数据（simulation_health={health}）——这不是「行为者无反应」的发现；"
     "正文不得引用任何基于模拟行为量或派系聚类的推演结论。"
@@ -1137,6 +1122,21 @@ _SIGNAL_PACK_UNKNOWN_HEALTH_NOTE = (
     "⚠️ 模拟运行状态：{health}（未识别的健康状态，运行是否完整未经确认）——以下诊断材料的可靠性"
     "未经核验，引用须更加审慎。"
 )
+
+
+def _prior_echo_caveat(trajectory: Any) -> str:
+    """SIM-4: the world-state block's qualitative caveat for a prior-echo or
+    prior-leader-herd trajectory (sim_prior_echo.prior_echo_diagnostics), else ""."""
+    from .sim_prior_echo import (
+        VERDICT_PRIOR_ECHO, VERDICT_PRIOR_LEADER_HERD, prior_echo_diagnostics,
+    )
+    diag = prior_echo_diagnostics(trajectory if isinstance(trajectory, dict) else {})
+    if diag["verdict"] == VERDICT_PRIOR_ECHO:
+        return "对照诊断：终局分布与种子先验几乎一致——决策通道没有在研究先验之外提供信息，不得作为独立佐证。"
+    if diag["verdict"] == VERDICT_PRIOR_LEADER_HERD:
+        return (f"对照诊断：承诺绝大多数集中于先验领先情景「{diag['prior_leader']}」——推演可能只是在复述先验，"
+                "不构成独立佐证。")
+    return ""
 
 
 REACT_CONTAMINATED_RETRY_MSG = (
