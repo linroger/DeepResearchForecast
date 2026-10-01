@@ -447,6 +447,18 @@ class Config:
     # past their grace period need no network and are always settled; rows with nothing
     # actionable (every binary recorded, or unanchored and still inside grace) never count.
     RESOLUTION_SETTLE_MAX_TARGETS = int(os.environ.get('RESOLUTION_SETTLE_MAX_TARGETS', '200') or '200')
+    # EVAL-5 market-relative skill (read only by scripts/resolution_monitor.py): `run` and
+    # `summary` add market_skill (backtest.market_skill_report: Brier skill vs the anchor price
+    # each settled binary saw, divergence hit rate vs a market-implied null) and
+    # monitor_report.md gains '## Skill vs the market it saw'. Safe on by default: it only
+    # reads resolutions.jsonl / ledger.jsonl and sealed forecast.json files (never writes
+    # them), is deterministic with no LLM or network call, changes no report or forecast,
+    # and is inert unless the monitor runs; false = the monitor's output is byte-identical
+    # to before.
+    FORECAST_SKILL_SCORING = os.environ.get('FORECAST_SKILL_SCORING', 'true').strip().lower() == 'true'
+    # Scored rows a market-skill stratum needs before it stops being flagged insufficient_data
+    # ('indicative' in the monitor report); it flags thin strata and never suppresses them.
+    FORECAST_SKILL_MIN_N = int(os.environ.get('FORECAST_SKILL_MIN_N', '10') or '10')
     # NEXTSTEPS P3-8：把已实现关系按价投影一个「到预测时点的轨迹」（allied→likely_persists /
     # adversarial→persists_or_escalates / transactional→contingent），喂进报告信号包帮助情景分叉
     # 分析（contingent 纽带=支点）。**模型先验非证据**，块内显式标注。默认关（保守，避免被当成证据）。

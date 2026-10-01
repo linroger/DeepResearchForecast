@@ -44,6 +44,14 @@ EVAL-3（影子可观测面）：``run`` 与 ``summary`` 的持续校准一律�
 Running score 标注 Brier 口径（情景 multi-class sum, 0-2；二元 binary, 0-1）；未经闸门的
 market_brier 行标明 ungated / not calibration，免被误读为校准数。
 
+EVAL-5 (FORECAST_SKILL_SCORING, default on; read-only): ``run`` and ``summary`` add
+``market_skill`` (``backtest.market_skill_report``, schema market-skill/v1): each folded binary
+settlement (``fold_binary_items`` + ``admissible``, never raw event lines) is joined at read
+time with the anchor its forecast saw (``enrich_market_rows``) and scored against that market
+price, in an exact-equivalence headline stratum, a proxy stratum and an all_produced stratum;
+monitor_report.md gains '## Skill vs the market it saw'. resolutions.jsonl is never written
+by this path; flag off → the monitor's output is byte-identical to before.
+
 设计与 scripts/scheduled_rerun.py 同构：脚本自撑 sys.path、Config 旋钮经 getattr 读取
 （本文件不拥有 config.py）、全链路 degrade-safe——任何网络失败只产出**部分**报告，
 绝不抛异常、绝不改动任何在线管线语义。``--dry-run`` 全程不写盘（纯观测）。
@@ -53,18 +61,19 @@ market_brier 行标明 ungated / not calibration，免被误读为校准数。
     python scripts/resolution_monitor.py run <report_id|pipeline_id> [--dry-run]
     python scripts/resolution_monitor.py run --all-recent [N] [--dry-run]   # 最近 N 份报告（缺省 N=RESOLUTION_MONITOR_RECENT_N）
     python scripts/resolution_monitor.py settle [--dry-run]                 # EVAL-2：扫描账本 primary commit 行并追加结算事件
-    python scripts/resolution_monitor.py summary                            # 只打印账本里的持续 Brier / 校准（无网络）
+    python scripts/resolution_monitor.py summary                            # 只打印账本里的持续 Brier / 校准 / market_skill（无网络）
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 # ── 让脚本无论从哪个 cwd 调用都能 import 到 backend 的 app 包（与 scheduled_rerun.py 一致）──
 _BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -72,6 +81,8 @@ if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
 from app.config import Config  # noqa: E402
+from app.services import backtest as _backtest  # noqa: E402
+from app.services import forecast_extractor as _extractor  # noqa: E402
 from app.services import forecast_ledger as _ledger  # noqa: E402
 from app.services import forecast_resolution as _settlement  # noqa: E402
 from app.utils.logger import get_logger  # noqa: E402
@@ -131,6 +142,22 @@ def pending_grace_days() -> int:
 
 def settle_max_targets() -> int:
     return max(1, _cfg_int("RESOLUTION_SETTLE_MAX_TARGETS", 200))
+
+
+def skill_scoring_enabled() -> bool:
+    """EVAL-5: add market_skill to ``run`` / ``summary`` and its monitor_report.md section."""
+    return bool(getattr(Config, "FORECAST_SKILL_SCORING", True))
+
+
+def skill_min_n() -> int:
+    return max(1, _cfg_int("FORECAST_SKILL_MIN_N", 10))
+
+
+def divergence_min_confidence() -> float:
+    """The confidence floor of the 10pp revision rule, read as enforce_market_divergence
+    reads it (a non-finite value falls back to its 0.6 default)."""
+    floor = _cfg_float("FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE", 0.6)
+    return floor if math.isfinite(floor) else 0.6
 
 
 # ---------------------------------------------------------------------------
@@ -521,6 +548,74 @@ def _render_settlement(settlement: Dict[str, Any],
     return lines
 
 
+def _num(v: Any) -> str:
+    return f"{v:.4f}" if isinstance(v, (int, float)) and not isinstance(v, bool) else "—"
+
+
+def _interval(ci: Any, fmt: Callable[[Any], str]) -> str:
+    return f"{fmt(ci[0])}–{fmt(ci[1])}" if isinstance(ci, list) and len(ci) == 2 else "—"
+
+
+def _render_market_skill(skill: Dict[str, Any]) -> List[str]:
+    """EVAL-5 「## Skill vs the market it saw」段：分层计数、未计分原因、模型 vs 市场 Brier、
+    技能、Δ 置信区间、命中率 vs 市场隐含零假设、无边际计数、expired_unresolved；
+    insufficient_data 的层标 indicative。"""
+    lines = ["", "## Skill vs the market it saw", ""]
+    if skill.get("error"):
+        lines.append(f"_Market skill unavailable this run: {_cell(skill['error'])}._")
+        return lines
+    strata = skill.get("strata") or {}
+    lines += [
+        "| Stratum | Scored (reports) | Model Brier | Market Brier | Skill vs market | "
+        "Δ Brier market − model (95% CI) | Edge hit rate (95% CI) vs market null | "
+        "Edge / no edge / low conf. / unknown | Price time basis |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    for name in _backtest.SKILL_STRATA:
+        st = strata.get(name) or {}
+        div = st.get("divergence") or {}
+        edge = div.get("edge") or {}
+        basis = st.get("price_time_basis") or {}
+        label = f"{name} (indicative)" if st.get("insufficient_data") else name
+        lines.append("| " + " | ".join([
+            label,
+            f"{st.get('n_scored', 0)} ({st.get('n_reports', 0)})",
+            _num(st.get("mean_brier_model")),
+            _num(st.get("mean_brier_market")),
+            _num(st.get("brier_skill_vs_market")),
+            f"{_num(st.get('mean_brier_delta'))} ({_interval(st.get('brier_delta_ci95'), _num)})",
+            f"{_pct(edge.get('hit_rate'))} ({_interval(edge.get('hit_rate_ci95'), _pct)}) "
+            f"vs {_pct(edge.get('null_hit_rate'))}",
+            f"{edge.get('n', 0)} / {div.get('n_no_edge_claimed', 0)} / "
+            f"{div.get('n_ineligible_low_confidence', 0)} / {div.get('n_eligibility_unknown', 0)}",
+            ", ".join(f"{key} {basis.get(key, 0)}"
+                      for key in _backtest.PRICE_TIME_BASES + ("none",)),
+        ]) + " |")
+    headline_div = (strata.get("headline") or {}).get("divergence") or {}
+    lines += [
+        "",
+        f"- Unscored by reason: {_reason_counts(skill.get('unscored'))}",
+        "- Expired unresolved (anchored, past resolution date, no settlement yet): "
+        f"**{skill.get('expired_unresolved', '—')}**",
+        "- Headline edges revised toward the market / retained divergence: "
+        f"**{(headline_div.get('revised_toward_market') or {}).get('n', 0)}** / "
+        f"**{(headline_div.get('retained_divergence') or {}).get('n', 0)}**",
+        f"- Proxy reasons: {_reason_counts((strata.get('proxy') or {}).get('proxy_reasons'))}; "
+        "rows of reports not publishable at issue in all_produced: "
+        f"**{(strata.get('all_produced') or {}).get('n_withheld', 0)}**",
+        "- headline = settled, point-in-time admissible, exact-equivalence anchor with a dated "
+        "price; proxy = near/loose equivalence or an undated price, never pooled with it; "
+        "all_produced = headline criteria plus reports withheld at issue, never a headline; "
+        f"indicative = fewer than {skill.get('min_n', '—')} scored rows. An edge is "
+        f"|model − market| > {_pct(skill.get('divergence_deadband'))} at match confidence ≥ "
+        f"{skill.get('min_match_confidence', '—')} (the revision rule).",
+        "- The market price is the anchor price the forecast saw (a report-time requote when its "
+        "basis is 'requote'), so this measures the published market-aware forecast, not "
+        "information independent of the market.",
+    ]
+    return lines
+
+
 def render_monitor_md(*, report_id: str, as_of: str,
                       movers: List[Dict[str, Any]],
                       resolution_records: List[Dict[str, Any]],
@@ -531,14 +626,17 @@ def render_monitor_md(*, report_id: str, as_of: str,
                       degraded: bool,
                       settlement: Optional[Dict[str, Any]] = None,
                       settlement_events: Optional[List[Dict[str, Any]]] = None,
-                      binary_calibration: Optional[Dict[str, Any]] = None) -> str:
+                      binary_calibration: Optional[Dict[str, Any]] = None,
+                      market_skill: Optional[Dict[str, Any]] = None) -> str:
     """把一次监测结果渲染成确定性 markdown（无 LLM）。空信号也产出可读骨架。
 
     EVAL-2：传入 ``settlement``（结算计数）时追加「## Settlement」段；缺省 None → 输出不变。
     EVAL-3：Running score 标注 Brier 口径（情景 = multi-class sum, 0-2；二元 = binary, 0-1），
     未经闸门的 market_brier 行标明 ungated / not calibration；
     ``calibration`` 带 ``excluded`` 时列出按原因的排除计数；传入 ``binary_calibration``
-    （forecast_ledger.binary_calibration_summary）时追加结算折叠后的二元校准行。"""
+    （forecast_ledger.binary_calibration_summary）时追加结算折叠后的二元校准行。
+    EVAL-5：传入 ``market_skill``（market_skill_summary）时在 Running score 之后追加
+    「## Skill vs the market it saw」段；缺省 None → 输出逐字节不变。"""
     lines: List[str] = [
         f"# Resolution Monitor — {report_id}",
         "",
@@ -579,6 +677,8 @@ def render_monitor_md(*, report_id: str, as_of: str,
             "- Binary forecasts excluded from calibration: "
             f"{_reason_counts(binary_calibration.get('excluded'))}",
         ]
+    if market_skill is not None:
+        lines += _render_market_skill(market_skill)
 
     # ── 本次新判定 ──
     lines += ["", "## Newly resolved markets", ""]
@@ -996,6 +1096,12 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     calibration = _ledger.calibration_summary(ledger_dir, fold_settlements=True)
     binary_calibration = _ledger.binary_calibration_summary(ledger_dir)
     market_brier = _ledger.market_brier_summary(ledger_dir)
+    # EVAL-5：市场相对技能（只读；FORECAST_SKILL_SCORING 关 → 结果与 md 均与此前逐字节一致）。
+    market_skill: Optional[Dict[str, Any]] = None
+    if skill_scoring_enabled():
+        market_skill = _market_skill_or_error(
+            ledger_dir=ledger_dir, as_of_day=as_of_day, publishable_fn=publishable_fn,
+            forecasts={str(report_id).strip(): forecast})
 
     md = render_monitor_md(
         report_id=report_id, as_of=as_of_day, movers=movers,
@@ -1004,7 +1110,7 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
         anchored_count=len(anchored), degraded=degraded,
         settlement=settlement_summary,
         settlement_events=settlement["events"] + settlement["terminal"],
-        binary_calibration=binary_calibration)
+        binary_calibration=binary_calibration, market_skill=market_skill)
 
     report_path: Optional[str] = None
     if not dry_run and write_report:
@@ -1016,7 +1122,7 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
             logger.warning(f"落 monitor_report.md 失败（忽略）: {e}")
             report_path = None
 
-    return {
+    result = {
         "report_id": report_id,
         "as_of": as_of_day,
         "processed_at": processed_at,
@@ -1038,6 +1144,9 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
         "monitor_report_path": report_path,
         "monitor_report_md": md,
     }
+    if market_skill is not None:
+        result["market_skill"] = market_skill
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -1179,6 +1288,294 @@ def settle_ledger(*, client: Any = None, ledger_dir: Optional[str] = None,
 
 
 # ---------------------------------------------------------------------------
+# EVAL-5：市场相对技能（只读：结算折叠 + 读时联结锚点，绝不写 resolutions.jsonl）
+# ---------------------------------------------------------------------------
+
+
+def _binary_index(binaries: Any) -> Dict[str, Optional[Dict[str, Any]]]:
+    """``{binary id: binary}``; an id two binaries share maps to None (it names neither)."""
+    index: Dict[str, Optional[Dict[str, Any]]] = {}
+    for binary in binaries if isinstance(binaries, list) else []:
+        forecast_id = str(binary.get("id") or "").strip() if isinstance(binary, dict) else ""
+        if forecast_id:
+            index[forecast_id] = None if forecast_id in index else binary
+    return index
+
+
+def _registered_as(binary: Dict[str, Any], registered: Dict[str, Any]) -> bool:
+    """Is ``binary`` (from forecast.json) exactly the one a commit row pre-registered
+    (``forecast_ledger.compact_binary``, compared after a JSON round trip as stored)?"""
+    try:
+        compact = json.loads(json.dumps(_ledger.compact_binary(binary), ensure_ascii=False,
+                                        allow_nan=False))
+    except (TypeError, ValueError):
+        return False
+    return compact == registered
+
+
+def _sealed_forecast_or_none(report_id: str) -> Optional[Dict[str, Any]]:
+    try:
+        return _load_sealed_forecast(report_id)
+    except Exception as e:  # noqa: BLE001 — 读不到封印的 forecast.json → 无全量二元预测
+        logger.warning(f"读取封印的 forecast.json 失败（按缺失处理）: {report_id}: {e}")
+        return None
+
+
+def market_target_lookup(entries: Optional[List[Dict[str, Any]]], *,
+                         forecasts: Optional[Dict[str, Any]] = None
+                         ) -> Callable[[str, str], Optional[Dict[str, Any]]]:
+    """``lookup(report_id, forecast_id)`` → the binary forecast a settlement is scored against.
+
+    A report with a production primary commit row (EVAL-1) is judged by the binary that row
+    pre-registered (None when the row lacks it or two rows register it); its forecast.json
+    binary, which also carries ``adjustment_rationale``, stands in only when it is byte for
+    byte that registration. A report without one (pre-EVAL-1) falls back to the audit-sealed
+    forecast.json (``load_structured_forecast(allow_stale_policy=True)``). ``forecasts``
+    ({report_id: forecast}) replaces that read, e.g. run_monitor's own forecast. Each
+    report's forecast is read once, and only for the items looked up."""
+    registered: Dict[Tuple[str, str], Optional[Dict[str, Any]]] = {}
+    committed: Set[str] = set()
+    for row in entries or []:
+        report_id = str(row.get("report_id") or "").strip() if _is_production_primary(row) else ""
+        if not report_id:
+            continue
+        committed.add(report_id)
+        for forecast_id, binary in _binary_index(row.get("binary_forecasts")).items():
+            key = (report_id, forecast_id)
+            registered[key] = None if key in registered else binary
+    overrides = dict(forecasts or {})
+    sealed: Dict[str, Dict[str, Optional[Dict[str, Any]]]] = {}
+
+    def lookup(report_id: str, forecast_id: str) -> Optional[Dict[str, Any]]:
+        rid, fid = str(report_id or "").strip(), str(forecast_id or "").strip()
+        if rid not in sealed:
+            forecast = overrides[rid] if rid in overrides else _sealed_forecast_or_none(rid)
+            sealed[rid] = _binary_index((forecast or {}).get("binary_forecasts")
+                                        if isinstance(forecast, dict) else None)
+        full = sealed[rid].get(fid)
+        if rid not in committed:
+            return full
+        binary = registered.get((rid, fid))
+        if binary is not None and full is not None and _registered_as(full, binary):
+            return full
+        return binary
+
+    return lookup
+
+
+def _proves_publishable_at_issue(report_id: str, publishable_fn: Any) -> bool:
+    """``publishable_fn(report_id)`` (default ReportManager.publishable_at_issue) as a strict
+    proof (``forecast_resolution.proves_publishable``); an error proves nothing (fail closed)."""
+    fn = publishable_fn if publishable_fn is not None else _publishable_at_issue
+    try:
+        return _settlement.proves_publishable(fn(report_id))
+    except Exception as e:  # noqa: BLE001 — 无法证明发布时可发布 → withheld
+        logger.warning(f"发布状态校验失败（按 withheld 处理）: {report_id}: {e}")
+        return False
+
+
+def _skill_gate_reason(item: Dict[str, Any], binary: Optional[Dict[str, Any]],
+                       origin: Any) -> Optional[str]:
+    """The row's ``gate_reason`` (see ``backtest.market_skill_report``) from a folded item.
+
+    ``admissible`` (EVAL-3, the one point-in-time gate) decides: admitted and settled → None.
+    The writer's equivalence reasons (``backtest.PROXY_GATE_REASONS``) demote to proxy only
+    when nothing else stands in the way: the item must be admitted with that reason lifted,
+    and, since the writer stops at its first failing check, the ``market_eligibility``
+    checks after the equivalence one (the market end date against the binary's deadline,
+    from the forecast ``origin``) must pass with the floor at ``near``; otherwise the reason
+    that then fails (``not_prospective``, ``end_date_mismatch``, ``unverifiable_stamp`` ...)
+    is returned. Every other reason (``conflict``, ``ambiguous_settlement``,
+    ``unresolvable_after_grace``, ``not_prospective``, ...) is returned as is. A market
+    settlement for another market than the anchor's is ``market_mismatch``."""
+    anchor = binary.get("market_anchor") if isinstance(binary, dict) else None
+    anchor_market_id = str(anchor.get("market_id") or "").strip() if isinstance(anchor, dict) else ""
+    ok, reason = _settlement.admissible(item)
+    gate: Optional[str] = None
+    if not ok and reason in _backtest.PROXY_GATE_REASONS:
+        lifted_ok, lifted_reason = _settlement.admissible(
+            dict(item, scoring_eligible=True, ineligible_reason=None))
+        if not lifted_ok:
+            return lifted_reason
+        if isinstance(binary, dict):
+            eligible, eligibility_reason = _settlement.market_eligibility(
+                binary, anchor, "near", origin=origin)
+            if not eligible:
+                return eligibility_reason
+        gate = reason
+    elif not ok:
+        return reason or "not_scoring_eligible"
+    if item.get("resolution_status") != "settled":
+        return "not_settled"
+    if (item.get("source_kind") == _settlement.SOURCE_KIND_MARKET and anchor_market_id
+            and str(item.get("market_id") or "").strip() != anchor_market_id):
+        return "market_mismatch"
+    return gate
+
+
+def _market_skill_row(key: Tuple[str, str], item: Dict[str, Any],
+                      binary: Optional[Dict[str, Any]], publishable: bool,
+                      origin: Any = None) -> Dict[str, Any]:
+    """One folded item + its target binary → a ``backtest.market_skill_report`` row."""
+    anchor = binary.get("market_anchor") if isinstance(binary, dict) else None
+    anchor = anchor if isinstance(anchor, dict) else {}
+    market_id = str(anchor.get("market_id") or "").strip()
+    if isinstance(binary, dict) and not market_id:
+        gate: Optional[str] = "no_market_anchor"
+    else:
+        gate = _skill_gate_reason(item, binary, origin)
+    outcome = str(item.get("outcome") or "").strip().upper()
+    market_p = _coerce_float(anchor.get("price_at_research"))
+    if market_p is None:
+        market_p = _coerce_float(anchor.get("implied_yes_prob"))
+    basis: Optional[str] = None
+    if all(isinstance(anchor.get(k), str) and anchor[k].strip() for k in _PRICE_TIME_KEYS):
+        basis = anchor["price_time_basis"]
+    influence = binary.get("market_influence") if isinstance(binary, dict) else None
+    prior: Optional[float] = None
+    if (isinstance(influence, dict) and market_id
+            and str(influence.get("market_id") or "").strip() == market_id
+            and influence.get("probability_restored") is not True):
+        prior = _coerce_float(influence.get("prior_probability"))
+    cites: Optional[bool] = None
+    if isinstance(binary, dict) and "adjustment_rationale" in binary:
+        cites = _extractor._rationale_cites_market(binary.get("adjustment_rationale"), anchor)
+    equivalence = str(anchor.get("resolution_equivalence") or "").strip().lower()
+    return {
+        "report_id": key[0],
+        "forecast_id": key[1],
+        "y": {"YES": 1, "NO": 0}.get(outcome),
+        "model_p": item.get("model_p"),
+        "market_p": market_p,
+        "equivalence": equivalence or None,
+        "match_confidence": _coerce_float(anchor.get("match_confidence")),
+        "publishable_at_issue": publishable,
+        "rationale_cites_market": cites,
+        "prior_probability": prior,
+        "price_time_basis": basis,
+        "gate_reason": gate,
+    }
+
+
+def _registered_origins(targets: Optional[List[Dict[str, Any]]]
+                        ) -> Dict[Tuple[str, str], Any]:
+    """``{(report_id, binary id): forecast origin}`` over the production primary commit rows
+    of ``targets``: the as-of date, else the creation stamp, as the settlement writer reads
+    them; a binary two rows register maps to None (``eligibility_window`` then reads every
+    date the binary names)."""
+    origins: Dict[Tuple[str, str], Any] = {}
+    for row in targets or []:
+        report_id = str(row.get("report_id") or "").strip() if _is_production_primary(row) else ""
+        if not report_id:
+            continue
+        as_of = row.get("as_of_date")
+        origin = as_of if as_of not in (None, "") else row.get("created_at")
+        for forecast_id in _binary_index(row.get("binary_forecasts")):
+            key = (report_id, forecast_id)
+            origins[key] = None if key in origins else origin
+    return origins
+
+
+def enrich_market_rows(resolution_rows: Optional[List[Dict[str, Any]]], *,
+                       target_lookup: Callable[[str, str], Optional[Dict[str, Any]]],
+                       publishable_fn: Any = None,
+                       targets: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    """``backtest.market_skill_report`` rows from the settlement events, one per folded item.
+
+    Pure apart from the injected callables: the scored set is
+    ``forecast_resolution.fold_binary_items(resolution_rows, targets)`` (EVAL-3/4: one item
+    per (report_id, forecast_id); superseded and retracted attestations removed; disagreeing
+    eligible events a ``conflict``; legacy rows proven only against ``targets``), never the
+    raw event lines, so each item counts once. ``target_lookup(report_id, forecast_id)``
+    (see ``market_target_lookup``) gives the binary whose anchor supplies ``market_p``
+    (price_at_research, else implied_yes_prob), ``equivalence``, ``match_confidence`` and
+    ``price_time_basis``; ``prior_probability`` comes from a ``market_influence`` stamp of
+    that anchor's market that was not rolled back, ``rationale_cites_market`` from
+    ``forecast_extractor._rationale_cites_market`` (None without a rationale). A binary
+    without a market anchor is ``no_market_anchor``; a proxy demotion is re-checked against
+    the market end date from the forecast origin its commit row in ``targets`` registers
+    (``_skill_gate_reason``). ``publishable_at_issue`` is the item's events'
+    ``report_publishable_at_issue`` stamps (EVAL-2: all must be True), else a strict
+    ``publishable_fn(report_id)`` proof, once per report. Rows are sorted by key; neither
+    the inputs nor resolutions.jsonl are ever modified.
+    """
+    events = [row for row in resolution_rows or [] if isinstance(row, dict)]
+    stamps: Dict[Tuple[str, str], List[Any]] = {}
+    for event in events:
+        if "report_publishable_at_issue" in event:
+            key = (str(event.get("report_id") or "").strip(),
+                   str(event.get("forecast_id") or "").strip())
+            stamps.setdefault(key, []).append(event["report_publishable_at_issue"])
+    items = _settlement.fold_binary_items(events, targets)
+    origins = _registered_origins(targets)
+    proofs: Dict[str, bool] = {}
+    rows: List[Dict[str, Any]] = []
+    for key in sorted(items):
+        if key in stamps:
+            publishable = all(stamp is True for stamp in stamps[key])
+        else:
+            if key[0] not in proofs:
+                proofs[key[0]] = _proves_publishable_at_issue(key[0], publishable_fn)
+            publishable = proofs[key[0]]
+        binary = target_lookup(key[0], key[1])
+        rows.append(_market_skill_row(key, items[key], binary if isinstance(binary, dict)
+                                      else None, publishable, origins.get(key)))
+    return rows
+
+
+def expired_unresolved_count(entries: Optional[List[Dict[str, Any]]],
+                             settled_keys: Set[Tuple[str, str]], as_of_day: str) -> int:
+    """Market-anchored binaries of production primary commit rows whose resolution date has
+    passed (``detect_needs_manual`` with ``has_anchor``) and that hold no settlement fact of
+    any kind yet (``settled_keys``: the folded items). They sit outside every stratum until
+    their market settles or their grace terminal is written, so they are counted, not dropped."""
+    seen: Set[Tuple[str, str]] = set()
+    count = 0
+    for row in entries or []:
+        report_id = str(row.get("report_id") or "").strip() if _is_production_primary(row) else ""
+        if not report_id:
+            continue
+        open_binaries: List[Dict[str, Any]] = []
+        for forecast_id, binary in _binary_index(row.get("binary_forecasts")).items():
+            key = (report_id, forecast_id)
+            if binary is not None and key not in settled_keys and key not in seen:
+                seen.add(key)
+                open_binaries.append(binary)
+        count += sum(1 for need in detect_needs_manual(open_binaries, set(), as_of_day)
+                     if need.get("has_anchor"))
+    return count
+
+
+def market_skill_summary(ledger_dir: Optional[str] = None, *, as_of_day: Optional[str] = None,
+                         publishable_fn: Any = None,
+                         forecasts: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """``market_skill`` of ``run`` / ``summary``: ``backtest.market_skill_report`` over the
+    ledger's folded binary settlements (``enrich_market_rows``), at FORECAST_SKILL_MIN_N and
+    the 10pp rule's FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE, plus ``expired_unresolved``
+    as of ``as_of_day`` (default today, UTC). Reads resolutions.jsonl and ledger.jsonl only."""
+    day = as_of_day or _today()
+    events = _ledger.read_market_resolutions(ledger_dir)
+    entries = _ledger.read_ledger(ledger_dir)
+    rows = enrich_market_rows(events, targets=entries, publishable_fn=publishable_fn,
+                              target_lookup=market_target_lookup(entries, forecasts=forecasts))
+    report = _backtest.market_skill_report(rows, min_n=skill_min_n(),
+                                           min_match_confidence=divergence_min_confidence())
+    report["as_of"] = day
+    report["expired_unresolved"] = expired_unresolved_count(
+        entries, {(row["report_id"], row["forecast_id"]) for row in rows}, day)
+    return report
+
+
+def _market_skill_or_error(**kwargs: Any) -> Dict[str, Any]:
+    """``market_skill_summary`` that never raises: an enhancement must not break the monitor."""
+    try:
+        return market_skill_summary(**kwargs)
+    except Exception as e:  # noqa: BLE001 — 技能评分失败只记日志，不影响监测
+        logger.warning(f"市场相对技能评分失败（跳过）: {e}")
+        return {"schema": _backtest.MARKET_SKILL_SCHEMA, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
 # 命令行入口
 # ---------------------------------------------------------------------------
 
@@ -1227,7 +1624,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ss = sub.add_parser("settle", help="EVAL-2：扫描账本生产 primary commit 行，追加结算事件（resolutions.jsonl）")
     ss.add_argument("--dry-run", action="store_true", help="只计算结算计数，不写账本")
 
-    sub.add_parser("summary", help="打印账本里的持续 Brier / 校准（无网络）")
+    sub.add_parser("summary", help="打印账本里的持续 Brier / 校准（无网络；EVAL-5 另含 market_skill）")
 
     return p
 
@@ -1287,11 +1684,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         _print_json(settle_ledger(dry_run=bool(args.dry_run)))
         return 0
     if args.cmd == "summary":
-        _print_json({
+        payload: Dict[str, Any] = {
             "market_brier": _ledger.market_brier_summary(),
             "scenario_calibration": _ledger.calibration_summary(fold_settlements=True),
             "binary_calibration": _ledger.binary_calibration_summary(),
-        })
+        }
+        if skill_scoring_enabled():
+            payload["market_skill"] = _market_skill_or_error()
+        _print_json(payload)
         return 0
     return 2  # 不可达（subparser required）
 
