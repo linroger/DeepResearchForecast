@@ -596,6 +596,15 @@ class Config:
     REPORT_VERIFIED_FACTS_BLOCK = os.environ.get('REPORT_VERIFIED_FACTS_BLOCK', 'true').strip().lower() == 'true'
     REPORT_VERIFIED_FACTS_MAX_ROWS = int(os.environ.get('REPORT_VERIFIED_FACTS_MAX_ROWS', '40') or '40')  # 已核验指标块行数上限（超限先丢预期、再丢陈旧、再丢最旧）
     REPORT_VERIFIED_FACTS_MAX_CHARS = int(os.environ.get('REPORT_VERIFIED_FACTS_MAX_CHARS', '6000') or '6000')  # 已核验指标块字符上限（表头与规则段不截断）；Part 2 注入同一块，故也是 Part 2 注入的上限
+    # REPORT-9（C11 第 2 阶段，只检测）：报告正文的数字与 REPORT-8「已核验指标」块逐一比对
+    # （verified_facts.check_verified_figures：matched / conflict / ambiguous / states_unverified /
+    # market_conflict / unmatched），计数记入 forecast.quality.verified_figures 与 final_audit.json 的
+    # verified_figures，终审之后写 reports/<id>/figure_provenance.json（每条已核验数字的来源与引用行）。
+    # 默认开且安全：从不改成稿字节、从不加硬性或认识论问题、不提升 REPORT_FINAL_AUDIT_POLICY_VERSION；
+    # 已核验指标块为空（旧引擎 / 复用研究 / 未核验）时不写任何字段或文件。REL_TOL 为判为冲突所需的
+    # 最小相对差（低于它视为同一数字）。
+    REPORT_VERIFIED_FIGURES_CHECK = os.environ.get('REPORT_VERIFIED_FIGURES_CHECK', 'true').strip().lower() == 'true'
+    REPORT_VERIFIED_FIGURE_REL_TOL = float(os.environ.get('REPORT_VERIFIED_FIGURE_REL_TOL', '0.02') or '0.02')
     # W9-8：KG 结构先验进报告——因果骨架的 chokepoint 支点优先取 graph_priors_structural.json 的
     # 结构咽喉/介数中心度（研究显著度回退）；关系名册每个 actor 附「结构影响力（KG 中心度）」行
     # （按 actors 别名组折叠去重）。关闭=纯显著度选点、不加中心度行（行为与历史一致）。

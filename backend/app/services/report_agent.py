@@ -2322,6 +2322,94 @@ class ReportAgent:
             f"超限未列 {result['omitted']} 条、未收录 {result['excluded']}（sha256 {result['sha256'][:12]}）")
         return result["rendered"]
 
+    def _verified_figures_check(self, md: str) -> Optional[Dict[str, Any]]:
+        """REPORT-9（REPORT_VERIFIED_FIGURES_CHECK，默认开，只检测）：正文数字对照 REPORT-8 的已核验指标块
+        （verified_facts.check_verified_figures），结果另附 block_sha256。块行 = rows + projections；
+        states_unverified 的对照行取研究 quantitative 中 verification 为 unverified / snippet_only / none 的
+        行；市场行取 self._prediction_markets；来源支撑检查用 _semantic_citation_support。旗标关、块为空
+        （旧引擎 / 复用研究 / 未核验）或任何异常 → None（调用方什么都不写）。从不改任何状态。"""
+        if not getattr(Config, "REPORT_VERIFIED_FIGURES_CHECK", True):
+            return None
+        block = getattr(self, "_verified_figures", None)
+        if not isinstance(block, dict) or not block.get("rendered"):
+            return None
+        try:
+            from . import verified_facts as _vf
+            try:
+                rel_tol = float(getattr(Config, "REPORT_VERIFIED_FIGURE_REL_TOL", _vf.DEFAULT_REL_TOL))
+            except (TypeError, ValueError):
+                rel_tol = _vf.DEFAULT_REL_TOL
+            if not 0.0 <= rel_tol <= 1.0:  # also NaN
+                rel_tol = _vf.DEFAULT_REL_TOL
+            index = self._citation_index_or_fallback()
+
+            def support(unit: str, tag: str) -> Optional[bool]:
+                source = index.get(tag)
+                return self._semantic_citation_support(unit, source) if isinstance(source, dict) else None
+
+            quantitative = getattr(self, "quantitative", None)
+            excluded = [row for row in (quantitative if isinstance(quantitative, list) else [])
+                        if isinstance(row, dict)
+                        and str(row.get("verification") or "").strip().lower() in _vf.UNVERIFIED_LABELS]
+            result = _vf.check_verified_figures(
+                md, list(block.get("rows") or []) + list(block.get("projections") or []),
+                excluded_rows=excluded, market_rows=getattr(self, "_prediction_markets", None) or [],
+                rel_tol=rel_tol, support_fn=support)
+        except Exception as exc:  # noqa: BLE001 — 只检测的旁路，失败不留任何字段
+            logger.warning(f"已核验数字比对失败（忽略）: {exc}")
+            return None
+        result["block_sha256"] = block.get("sha256") or ""
+        return result
+
+    @staticmethod
+    def _verified_figures_summary(check: Dict[str, Any]) -> Dict[str, Any]:
+        """REPORT-9：forecast.quality / final_audit.json 里记录的比对摘要（计数 + 块指纹）。"""
+        return {"counts": dict(check["counts"]), "block_sha256": check["block_sha256"],
+                "source_discrepancies": len(check["source_discrepancies"])}
+
+    def _write_figure_provenance(self, report_id: str, report: "Report") -> None:
+        """REPORT-9：终审之后（主报告已定型）写 reports/<id>/figure_provenance.json——已核验指标块
+        每一行的来源（[S#] / URL）与正文里引用它的行，比对出的来源分歧，以及市场行的报价时间戳
+        （EVAL-6 的 quoted_at / snapshot_as_of）。影子工件：不登记阶段清单，从不改成稿，失败只告警。"""
+        check = self._verified_figures_check(getattr(report, "markdown_content", None) or "")
+        if check is None:
+            return
+        try:
+            block = self._verified_figures
+            block_rows = list(block.get("rows") or []) + list(block.get("projections") or [])
+            index = self._citation_index_or_fallback()
+            rows = []
+            for row_index, row in enumerate(block_rows):
+                tag = row.get("tag")
+                source = index.get(tag) if tag else None
+                rows.append({
+                    "row_index": row_index, "metric": row.get("metric"), "value": row.get("value"),
+                    "unit": row.get("unit"), "as_of": row.get("when"),
+                    "source_ref": tag or row.get("source"),
+                    "source_url": (str(source.get("url") or "").strip() or None)
+                    if isinstance(source, dict) else None,
+                    "verification": "verified",
+                    "used_in": check["matched_rows"].get(row_index, []),
+                })
+            markets = [
+                {key: market.get(key) for key in
+                 ("market_id", "implied_yes_prob", "quoted_at", "price_at_research", "snapshot_as_of")}
+                for market in (getattr(self, "_prediction_markets", None) or []) if isinstance(market, dict)
+            ]
+            payload = {
+                "schema": "drf.figure_provenance/v1",
+                "block_sha256": check["block_sha256"],
+                "rows": rows,
+                "source_discrepancies": check["source_discrepancies"],
+                "market_rows": markets,
+                "unmatched_numeric_claims": check["counts"]["unmatched"],
+            }
+            write_json_atomic(
+                os.path.join(ReportManager._get_report_folder(report_id), "figure_provenance.json"),
+                payload, allow_nan=False)
+        except Exception as exc:  # noqa: BLE001 — 影子工件，失败不影响报告
+            logger.warning(f"写 figure_provenance.json 失败（忽略）: {exc}")
+
     def _build_contested_table_block(self, max_claims: int = 15) -> str:
         """W9-8: 争议性关键论断块（contested.json 全量，上限 15 条）。
 
@@ -4074,6 +4162,12 @@ class ReportAgent:
                                f"{_sp.get('implausible_stats', [])[:3]}")
         except Exception:  # noqa: BLE001
             pass
+        # REPORT-9：正文数字对照已核验指标块（只检测；块为空 / 旗标关时不加键，绝不进发布门）。
+        _vf_check = self._verified_figures_check(report_markdown)
+        if _vf_check is not None:
+            forecast.setdefault("quality", {})["verified_figures"] = self._verified_figures_summary(_vf_check)
+            if _vf_check["counts"]["conflict"]:
+                logger.warning(f"已核验数字比对：{_vf_check['counts']['conflict']} 处正文数字与已核验指标不符")
         # QUALITY-OPT A1: emit >=N INDEPENDENT binary (yes/no) forecasts — the brief's headline
         # deliverable — ALONGSIDE the scenario spine. The research dossier usually already holds a
         # compliant F1..Fn table; we extract it (preserving its probabilities) and top up to the
@@ -10181,6 +10275,11 @@ class ReportAgent:
         logic_number_audit = self._logic_number_observation(body, forecast)
         if logic_number_audit is not None:
             audit["logic_number"] = logic_number_audit
+        # REPORT-9: read-only figure check on the final bytes; never read by
+        # _final_audit_integrity_issues or the publish gate.
+        verified_figures_check = self._verified_figures_check(md)
+        if verified_figures_check is not None:
+            audit["verified_figures"] = self._verified_figures_summary(verified_figures_check)
         # RESEARCH-9: what the publish stabilizer stripped / added before this
         # audit (telemetry: neither the integrity issues nor the gate read it).
         pre_audit_repairs = self._pre_audit_repairs(report_id, body_marker_audit)
@@ -10205,6 +10304,9 @@ class ReportAgent:
                 quality["logic_number"] = logic_number_audit
             else:
                 quality.pop("logic_number", None)
+            if "verified_figures" in audit:
+                # REPORT-9: the final bytes' figure check replaces the draft's.
+                quality["verified_figures"] = dict(audit["verified_figures"])
             if pre_audit_repairs is not None:
                 # Before serialization, so forecast_sha256 seals it.
                 quality["citation_finalization"] = pre_audit_repairs
@@ -13772,6 +13874,8 @@ class ReportAgent:
             # rewrites Markdown; it only persists final_audit.json + forecast fields.
             if getattr(Config, "REPORT_FINAL_READ_ONLY_AUDIT", True):
                 self._enforce_final_publish_audit(report_id, report)
+            # REPORT-9：主报告已定型，写影子工件 figure_provenance.json（块为空 / 旗标关时不写）。
+            self._write_figure_provenance(report_id, report)
 
             # BILINGUAL：在所有最终化/可视化/纯度处理之后（成稿已定型），自动生成另一语种版本
             # （英⇄中）。逐 H2 章节并发翻译，落 full_report.{en|zh}.md 并把 translations 条目写入
