@@ -6879,7 +6879,7 @@ class _Engine:
             return {}
         shells: dict[int, str] = {}
         for row in self.ledger.rows():
-            if not row.get("fetched"):
+            if not row.get("fetched") or row.get("via") == "data":  # a vendor record (TIME-13), never a shell
                 continue
             text = page_text(row["sid"])
             reason = rg._extraction_failure_reason(text) if text else None
@@ -8871,7 +8871,9 @@ class _Engine:
         fetched = bool(row.get("fetched"))
         text = self.tools.page_text(sid) if fetched else None
         if fetched:
-            shell = rg._extraction_failure_reason(text) if (self.shell_detection and text) else None
+            # An official-data row's page (TIME-13) is the vendor's record, never a web extraction shell.
+            shell = (rg._extraction_failure_reason(text)
+                     if (self.shell_detection and text and row.get("via") != "data") else None)
         else:
             shell = self.stored_shells.get(sid)
         return fetched and shell is None, text, shell
@@ -8895,7 +8897,13 @@ class _Engine:
         when present, ``modified_at`` / ``modified_source`` /
         ``date_rejected``; an undated row keeps ``date`` None and no other
         date key.  In a gated hindcast (TIME-9) every row also carries the
-        ledger's ``pit_status``."""
+        ledger's ``pit_status``.
+
+        An official-data row (TIME-13, ``via`` ``data``) is dated by its vendor
+        (the FRED vintage or the latest filing served), its ``supports`` are
+        the vendor's own sentences (at most DATA_SUPPORTS_MAX, first; no quote
+        or evidence window joins them) and its ``data`` block names the vendor,
+        the series or filer and the vintage or filing date."""
         rows: list[dict] = []
         demoted = 0
         quotes = self._evidence_support_quotes() if self.evidence_supports else {}
@@ -8912,6 +8920,9 @@ class _Engine:
             }
             if self.source_dates:
                 entry.update(_source_date_fields(row))
+            data = row.get("data") if row.get("via") == "data" and isinstance(row.get("data"), Mapping) else None
+            if data is not None and data.get("date"):
+                entry["date"] = data["date"]
             if self.pit is not None:
                 # TIME-9: the gates' verdict (None: a source seen only in search rows).
                 entry["pit_status"] = row.get("pit_status")
@@ -8924,7 +8935,12 @@ class _Engine:
                 if text:
                     entry["excerpt"] = _collapse(text, EXCERPT_CHARS)
             entry["supports"] = []
-            if shell is None and quotes.get(sid):
+            if data is not None:
+                supports = data.get("supports")
+                _merge_supports(entry, (supports if isinstance(supports, list) else [])[:DATA_SUPPORTS_MAX],
+                                DATA_SUPPORTS_MAX)
+                entry["data"] = data_source_block(data, row["url"])
+            elif shell is None and quotes.get(sid):
                 _merge_supports(entry, quotes[sid], EVIDENCE_QUOTES_PER_SOURCE)
             entry["independent"] = None
             rows.append(entry)
@@ -9111,7 +9127,13 @@ class _Engine:
         With RESEARCH_QUANT_RECONCILE (default on) :meth:`_quant_sanity` adds
         the reconciled numeric disagreements to contested.json (actors.json
         keeps the extracted claims, as in the legacy engine) and its warnings
-        to meta; it never changes a quant row."""
+        to meta; it never changes a quant row.
+
+        With official-data tools bound (TIME-13) the cited data sources'
+        structured values head the quant rows (:meth:`_with_data_quant_rows`)
+        before any enrichment, typing or verification, and after
+        verification the model rows a data source's page contradicts are
+        dropped (:meth:`_drop_data_contradictions`)."""
         plan = self.plan
         verify = _env_flag(self.env, "RESEARCH_VERIFIED_FACTS", True)
         if getattr(self.args, "no_actors", False):
@@ -9133,6 +9155,9 @@ class _Engine:
                 report_body)
         else:
             quant = normalize_quant(facts_raw.get("quantitative_facts"), sources, keep_ref=verify)
+        if self.data_tool_names:
+            # TIME-13: before every enrichment, typing and verification step, like a model row.
+            quant = self._with_data_quant_rows(quant, sources)
         contested = normalize_contested(facts_raw.get("contested_claims"), sources)
         actors_raw = actors_raw or {}
         as_of = str(actors_raw.get("as_of_date") or "")
@@ -9178,6 +9203,8 @@ class _Engine:
             # can cite a source published the next day (no target date, no
             # future-dated actual).
             self._quant_provenance(quant, ref_date + _dt.timedelta(days=1), verify=verify, typing=typing)
+        if self.data_tool_names:
+            quant = self._drop_data_contradictions(quant, verify=verify)
         if self.pit is not None:
             self._count_parametric_suspects(timeline, quant, typing=typing)
         # After typing (the claimed-actual test reads its epistemic_class).  The
@@ -9245,6 +9272,59 @@ class _Engine:
             counts["verified_facts"] = dict(evidence["payload"]["counts"])
             counts["_evidence"] = evidence
         return counts
+
+    def _with_data_quant_rows(self, quant: list[dict], sources: Sequence[Mapping[str, Any]]) -> list[dict]:
+        """``quant`` headed by the structured values of the cited official-data
+        sources (TIME-13, :func:`data_quant_row`), in citation order and each
+        source's fact order, at most DATA_QUANT_ROWS_MAX; the model rows are
+        trimmed from the end so the whole stays within MAX_QUANT_ROWS.  The
+        facts are the ledger row's (the vendor's record), never the model's."""
+        rows: list[dict] = []
+        for position, entry in enumerate(sources, 1):
+            if len(rows) >= self.data_quant_rows_max:
+                break
+            if not isinstance(entry.get("data"), Mapping):
+                continue
+            ledger_row = self.ledger.find(entry.get("url")) or {}
+            data = ledger_row.get("data") if ledger_row.get("via") == "data" else None
+            facts = data.get("facts") if isinstance(data, Mapping) else None
+            for fact in facts if isinstance(facts, list) else []:
+                row = data_quant_row(fact, entry, position)
+                if row is not None and len(rows) < self.data_quant_rows_max:
+                    rows.append(row)
+        self._data_quant_added = len(rows)
+        if rows:
+            self.log("ok", f"v3: {len(rows)} quantitative row(s) copied from cited official-data sources")
+        return rows + quant[:MAX_QUANT_ROWS - len(rows)]
+
+    def _drop_data_contradictions(self, quant: list[dict], *, verify: bool) -> list[dict]:
+        """``quant`` without the model rows citing an official-data source
+        whose number is not on that source's page (TIME-13): RESEARCH-4's
+        ``verification`` ``unverified`` (RESEARCH_VERIFIED_FACTS), else the
+        same check (:func:`verify_quant_row`) without stamping anything.  A
+        deterministic row, a row without a checkable number and a row whose
+        data page is unavailable are kept.  The dropped rows are listed (at
+        most DATA_QUANT_REJECTED_MAX) in ``meta.data_tools.quant_rows_rejected``."""
+        kept: list[dict] = []
+        dropped: list[dict] = []
+        for row in quant:
+            source = self.ledger.find(row.get("source_url")) if row.get("source_url") else None
+            if is_data_quant_row(row) or source is None or source.get("via") != "data":
+                kept.append(row)
+                continue
+            if verify:
+                contradicted = row.get("verification") == "unverified"
+            else:
+                pages = self.page_numbers(source["sid"]) if source.get("fetched") else None
+                contradicted = pages is not None and verify_quant_row(row, pages, "")[1] == "none"
+            (dropped if contradicted else kept).append(row)
+        if dropped:
+            self._data_quant_rejected = [
+                {key: row.get(key) for key in ("metric", "value", "unit", "source_ref", "source_url")}
+                for row in dropped[:DATA_QUANT_REJECTED_MAX]]
+            self.log("warn", f"v3: dropped {len(dropped)} quantitative row(s) whose number is not on the "
+                             "official-data source they cite")
+        return kept
 
     def _quant_sanity(self, quant: Sequence[Mapping[str, Any]], as_of: _dt.date) -> list[dict]:
         """The legacy engine's quantitative sanity checks (RESEARCH_QUANT_RECONCILE).
@@ -9633,6 +9713,10 @@ class _Engine:
         for position in sorted(candidates):
             scratch = {"supports": list(sources[position - 1].get("supports") or [])}
             _merge_supports(scratch, (), EVIDENCE_WINDOWS_PER_SOURCE)   # the row's own spans, as merged
+            if sources[position - 1].get("data"):
+                # TIME-13: an official-data row's supports are its vendor sentences; no window joins them.
+                published[position] = frozenset(scratch["supports"])
+                continue
             kept, left_out = select_source_windows(candidates[position], scratch["supports"],
                                                    EVIDENCE_WINDOWS_PER_SOURCE)
             added = _merge_supports(scratch, kept, EVIDENCE_WINDOWS_PER_SOURCE)
@@ -9766,8 +9850,10 @@ class _Engine:
         deterministic notes, with evidence headers (RESEARCH_EVIDENCE_HEADERS)
         at least half of the researched KIQs with insufficient evidence
         (:func:`evidence_profile`), a gap review a failure ended early, failed
-        searches, a page fetch failure rate of 50% or more and, with evidence
-        quotes enforced, KIQs whose evidence check failed (their findings kept
+        searches, a page fetch failure rate of 50% or more, with official-data
+        tools (TIME-13) a data-call failure rate of 50% or more over at least
+        two calls and, with evidence quotes enforced, KIQs whose evidence
+        check failed (their findings kept
         their tags unchecked) and a located-quote share of the findings tagged
         VERIFIED below EVIDENCE_MIN_LOCATED_SHARE."""
         events: list[str] = []
@@ -9823,6 +9909,12 @@ class _Engine:
         if self.source_taxonomy:
             events.extend(_source_health_events(tools, _bridge_provider_events("search_tools"),
                                                 _bridge_provider_events("cached_fetch")))
+        if getattr(self, "data_tool_names", ()):
+            # TIME-13: official-data calls that failed (never counted as fetch failures above).
+            data = self.tools.stats().get("data") or {}
+            calls, failed = int(data.get("data_calls") or 0), int(data.get("data_failures") or 0)
+            if calls >= 2 and 2 * failed >= calls:
+                events.append(f"official-data tool failure rate >= 50%: {failed} of {calls} data calls failed")
         if self.evidence_mode == EVIDENCE_ENFORCE:
             records = list(self.records.values())
             check_failed = sum(1 for record in records if record.get("evidence_error"))
@@ -9868,6 +9960,26 @@ class _Engine:
         return events
 
     # ============================================================ telemetry
+    def _data_tools_meta(self) -> dict:
+        """meta.data_tools (TIME-13, RESEARCH_DATA_TOOLS set): the bound
+        vendors, the requested ones left unbound with why, the run's vintage
+        pin (None until a data call fixed one), this attempt's data calls,
+        answers from run memory, invalid requests and failures, and the
+        quantitative rows finalize copied from data sources and dropped
+        against them."""
+        counts = self.meta.get("tools", {}).get("data") if isinstance(self.meta.get("tools"), Mapping) else None
+        counts = counts if isinstance(counts, Mapping) else {}
+        try:
+            pins = self._data_pin_record(create=False)
+        except Exception:  # noqa: BLE001 — telemetry never fails the run
+            pins = None
+        return {"enabled": list(self.data_vendors), "disabled": dict(sorted(self.data_disabled.items())),
+                "pit": pins["pit"] if pins else None,
+                **{name: int(counts.get(key) or 0) for name, key in (
+                    ("calls", "data_calls"), ("cached", "cached_data"), ("invalid", "data_invalid"),
+                    ("failures", "data_failures"))},
+                "quant_rows_added": self._data_quant_added, "quant_rows_rejected": list(self._data_quant_rejected)}
+
     def attach_telemetry(self) -> None:
         """Usage, tools, phase and KIQ summaries into meta (called on every exit)."""
         ledger = self.gateway.ledger.to_dict()
@@ -9882,6 +9994,8 @@ class _Engine:
             self.meta["model_resolution"] = {"model": self.model_name or None, "model_id": self.model_id,
                                              "models": ledger.get("models") or {}}
         self.meta["tools"] = self.tools.stats()
+        if getattr(self, "data_tools_requested", False):
+            self.meta["data_tools"] = self._data_tools_meta()
         if self.pit is not None:
             # This attempt's final gate counts (a resumed audit's run scope needs them).
             self._pit_closed = True
@@ -10208,6 +10322,61 @@ def normalize_quant(value: Any, sources: Sequence[Mapping[str, Any]], *, keep_re
         if len(rows) >= MAX_QUANT_ROWS:
             break
     return list(zip(rows, items, strict=True)) if with_items else rows
+
+
+def data_source_block(data: Mapping[str, Any], url: str) -> dict:
+    """The ``data`` block of an official-data source in sources.json (TIME-13):
+    its vendor, the series and vintage (FRED) or the filer's CIK and latest
+    filing served (SEC EDGAR), and its URL; from the ledger row's ``data``."""
+    vendor = data.get("vendor")
+    keys = ("series_id", "vintage") if vendor == "fred" else ("cik", "filed")
+    return {"vendor": vendor, **{key: data.get(key) for key in keys}, "url": url}
+
+
+# A deterministic row's provenance: these keys of its data_tools fact, when set.
+_DATA_FACT_PROVENANCE_KEYS = ("series_id", "vintage", "cik", "tag", "form", "filed", "accn", "observation_date",
+                              "period_start", "period", "base_date", "basis")
+
+
+def data_quant_row(fact: Any, source: Mapping[str, Any], position: int) -> dict | None:
+    """The quantitative.json row of one structured value of a cited
+    official-data source (TIME-13; ``fact`` is one of its data_tools facts,
+    ``source`` its sources.json row at ``position``): the value and unit
+    copied exactly, ``as_of_date`` the vintage (FRED) or filing date (SEC
+    EDGAR), ``period_end`` the observation or period end, the filer named in
+    the metric, ``value_type`` actual, tier S1 and ``provenance`` (``kind``
+    ``structured`` for a vendor value, ``derived`` for a DRF computation, with
+    the vendor and the fact's identity).  None for a fact without a metric or
+    a value."""
+    if not isinstance(fact, Mapping):
+        return None
+    metric, value = _collapse(fact.get("metric"), 200), _collapse(fact.get("value"), 80)
+    if not metric or not value:
+        return None
+    company = _collapse(fact.get("company"), 120)
+    row: dict[str, Any] = {"metric": _collapse(f"{company}: {metric}", 200) if company else metric, "value": value}
+    for key, text in (("series", fact.get("series_id")), ("unit", fact.get("unit")),
+                      ("as_of_date", fact.get("vintage") or fact.get("filed")),
+                      ("period_end", fact.get("observation_date")), ("definition", fact.get("tag")),
+                      ("source", source.get("title"))):
+        text = _collapse(text, 200 if key == "source" else 400)
+        if text:
+            row[key] = text
+    data = source.get("data") if isinstance(source.get("data"), Mapping) else {}
+    kind = fact.get("provenance_kind")
+    row.update(value_type="actual", source_ref=f"S{position}", source_url=source.get("url"), tier="S1",
+               provenance={"kind": kind if kind in ("structured", "derived") else "structured",
+                           "vendor": data.get("vendor"),
+                           **{key: fact[key] for key in _DATA_FACT_PROVENANCE_KEYS
+                              if fact.get(key) not in (None, "")}})
+    return row
+
+
+def is_data_quant_row(row: Mapping[str, Any]) -> bool:
+    """Whether a quantitative row is one :func:`data_quant_row` built (model
+    rows never carry ``provenance``)."""
+    provenance = row.get("provenance")
+    return isinstance(provenance, Mapping) and provenance.get("kind") in ("structured", "derived")
 
 
 # RESEARCH_FORECASTER_ATTRIBUTION (attribute_forecast_row): the keys only a
