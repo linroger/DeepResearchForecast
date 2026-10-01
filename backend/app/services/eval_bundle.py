@@ -9,7 +9,8 @@ module freezes them next to the report, after publication:
   ``blocks/<name>.txt``  one file per available block (BLOCK_NAMES), nothing else
   ``manifest.json``      ``drf-eval-bundle/v1``: capture (in_pipeline | backfill), ids,
                          created_at, as_of + as_of_source (ledger_commit.resolve_as_of,
-                         the rule the ledger row of the same report used),
+                         the rule the ledger row of the same report used; a backfill
+                         that cannot date that commit records None / 'unknown'),
                          central_question, upstream_models (run.json ``resolved``), run
                          {record_class, run_kind, seed}, publication {markdown_sha256,
                          forecast_sha256 (sealed forecast only)}, per-block {sha256,
@@ -68,7 +69,10 @@ RENDERED_MARKET_ROWS = 20
 # run_summary.json simulation_health values whose behaviour data is not usable (REPORT-5).
 UNUSABLE_SIM_HEALTH = frozenset({"hollow", "errored", "truncated"})
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-_ID_NUMBER_RE = re.compile(r"^(.*?)(\d+)$")
+_ASCII_DIGITS = "0123456789"
+# Block note of a sim block the capture built itself: the report had no cached signal pack
+# (REPORT_SIGNAL_PACK off, or its build failed or was empty), so the report never saw it.
+NOTE_BUILT_AT_CAPTURE = "built_at_capture"
 
 
 class BundleIntegrityError(ValueError):
@@ -312,13 +316,16 @@ def _exact_anchor(row: Mapping[str, Any]) -> bool:
             and str(anchor.get("resolution_equivalence") or "").strip().lower() == "exact")
 
 
-def _target_sort_key(row: Mapping[str, Any]) -> Tuple[bool, str, int, str]:
-    """'exact'-anchored first, then natural id order (F2 before F10), then the raw id."""
+def _target_sort_key(row: Mapping[str, Any]) -> Tuple[bool, str, int, str, str]:
+    """'exact'-anchored first, then natural id order (F2 before F10), then the raw id.
+
+    The trailing ASCII digit run is split off without a regex and compared as a number by
+    (length, digits) with leading zeros stripped: linear in the id's length and no int(),
+    so no id length can slow the sort or raise."""
     raw = str(row.get("id")).strip()
-    match = _ID_NUMBER_RE.match(raw)
-    if match:
-        return (not _exact_anchor(row), match.group(1), int(match.group(2)), raw)
-    return (not _exact_anchor(row), raw, -1, raw)
+    head = raw.rstrip(_ASCII_DIGITS)
+    number = raw[len(head):].lstrip("0")
+    return (not _exact_anchor(row), head, len(number), number, raw)
 
 
 def select_targets(forecast: Any, k: int = DEFAULT_TARGETS) -> List[Dict[str, Any]]:
@@ -350,16 +357,17 @@ def select_targets(forecast: Any, k: int = DEFAULT_TARGETS) -> List[Dict[str, An
 
 
 # ------------------------------------------------------------------ blocks
-def _block(builder: Callable[[], Any], reason: str) -> Tuple[Optional[str], str]:
-    """Run one deterministic block builder; an empty result or an error is unavailable.
-    Text that cannot be written as UTF-8 (a lone surrogate decoded from a JSON escape) is
-    an error of this block alone, never of the whole bundle."""
+def _block(name: str, builder: Callable[[], Any], reason: str) -> Tuple[Optional[str], str]:
+    """Run the deterministic builder of block ``name``; an empty result is
+    ``unavailable:<reason>``, an error ``unavailable:error:<Type>`` (logged with the block
+    name). Text that cannot be written as UTF-8 (a lone surrogate decoded from a JSON
+    escape) is an error of this block alone, never of the whole bundle."""
     try:
         text = builder()
         if isinstance(text, str):
             text.encode("utf-8")
     except Exception as exc:  # noqa: BLE001 — one block never breaks the bundle
-        logger.warning(f"eval bundle: block {reason} failed ({type(exc).__name__}: {exc})")
+        logger.warning(f"eval bundle: block {name} failed ({type(exc).__name__}: {exc})")
         return None, unavailable(f"error:{type(exc).__name__}")
     if not isinstance(text, str) or not text.strip():
         return None, unavailable(reason)
@@ -375,22 +383,30 @@ def research_blocks(actors: Any, research_report: Any, dossier_budget: int
     actors_ok = isinstance(actors, dict) and bool(actors)
     report = research_report if isinstance(research_report, str) else ""
     return {
-        "brief": _block(lambda: actor_utils.situation_brief(actors), "no_actors")
+        "brief": _block("brief", lambda: actor_utils.situation_brief(actors), "no_actors")
         if actors_ok else (None, unavailable("no_actors")),
-        "forecast_inputs": _block(lambda: actor_utils.forecast_inputs_block(actors), "no_forecast_inputs")
+        "forecast_inputs": _block("forecast_inputs", lambda: actor_utils.forecast_inputs_block(actors),
+                                  "no_forecast_inputs")
         if actors_ok else (None, unavailable("no_actors")),
-        "quant": _block(lambda: actor_utils.quantitative_facts_block(actors), "no_quantitative_facts")
+        "quant": _block("quant", lambda: actor_utils.quantitative_facts_block(actors), "no_quantitative_facts")
         if actors_ok else (None, unavailable("no_actors")),
-        "dossier": _block(lambda: slice_head_tail(report, int(dossier_budget)), "no_research_report")
+        "dossier": _block("dossier", lambda: slice_head_tail(report, int(dossier_budget)), "no_research_report")
         if report.strip() else (None, unavailable("no_research_report")),
     }
 
 
-def research_market_block(snapshot: Any, *, fallback_as_of: Optional[str] = None
-                          ) -> Tuple[Optional[str], str]:
+def market_table_lang(output_language: Any) -> str:
+    """The market table language of a report written in ``output_language``, picked as
+    report_agent._render_market_pack picks it: 'en' for English (the default), else 'zh'."""
+    return "en" if str(output_language or "English").lower().startswith("en") else "zh"
+
+
+def research_market_block(snapshot: Any, *, fallback_as_of: Optional[str] = None,
+                          lang: str = "en") -> Tuple[Optional[str], str]:
     """Backfill market block: the research snapshot (handoff prediction_markets.json) as
     the report loader reads it (the first PREDICTION_MARKETS_MAX rows stamped with the
-    snapshot's as_of, the first RENDERED_MARKET_ROWS rendered). The TIME-3 end-date gate
+    snapshot's as_of, the first RENDERED_MARKET_ROWS rendered in the report's table
+    language ``lang``, see :func:`market_table_lang`). The TIME-3 end-date gate
     is evaluated at the snapshot time, never at the wall clock, so a re-backfill renders
     the same bytes: the payload's ``as_of``, else the end of the ``fallback_as_of`` day
     (both parsed by prediction_markets.parse_market_end). No usable time →
@@ -410,7 +426,7 @@ def research_market_block(snapshot: Any, *, fallback_as_of: Optional[str] = None
     except (TypeError, ValueError):
         max_rows = 20
     rows = stamp_snapshot_as_of(rows[:max_rows], snapshot_as_of)
-    return _block(lambda: render_markets_block(rows[:RENDERED_MARKET_ROWS], now=pinned),
+    return _block("market", lambda: render_markets_block(rows[:RENDERED_MARKET_ROWS], lang=lang, now=pinned),
                   "no_research_snapshot")
 
 
@@ -441,7 +457,7 @@ def graph_block(zep: Any, graph_id: str, question: str, as_of: str) -> Tuple[Opt
     def _facts() -> str:
         lines = (" ".join(str(fact).split()) for fact in (getattr(result, "facts", None) or []))
         return "\n".join(line for line in lines if line)
-    return _block(_facts, "no_graph_facts")
+    return _block("graph", _facts, "no_graph_facts")
 
 
 def upstream_models(pipeline_id: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -468,8 +484,10 @@ def capture_from_agent(agent: Any, report_id: str, *, report_dir: str, forecast:
     ``context`` is the report's enriched ledger context (``ledger_commit``; default the
     agent's raw ``ledger_context``). ``as_of`` is resolved exactly as the ledger row's
     (``ledger_commit.resolve_as_of``); the graph block is queried at that date only when
-    it is a validated or strict actors date, never at the commit-date fallback.
-    ``forecast`` is the sealed forecast (None when not sealed: no targets)."""
+    it is a validated or strict actors date, never at the commit-date fallback. Without a
+    cached ``_signal_pack`` the sim block is built here by ``_build_signal_pack`` (what
+    legacy_prompt would feed) and carries the note ``built_at_capture``: the report itself
+    never saw it. ``forecast`` is the sealed forecast (None when not sealed: no targets)."""
     from .ledger_commit import resolve_as_of
     moment = now or datetime.now(timezone.utc)
     if context is None:
@@ -478,8 +496,9 @@ def capture_from_agent(agent: Any, report_id: str, *, report_dir: str, forecast:
     actors = getattr(agent, "actors", None)
     built = research_blocks(actors, getattr(agent, "research_report", None), dossier_chars())
 
-    built["market"] = _block(lambda: getattr(agent, "_market_pack", None), "no_market_pack")
+    built["market"] = _block("market", lambda: getattr(agent, "_market_pack", None), "no_market_pack")
 
+    notes: Dict[str, str] = {}
     health = None
     health_fn = getattr(agent, "_run_summary_health", None)
     if callable(health_fn):
@@ -493,9 +512,11 @@ def capture_from_agent(agent: Any, report_id: str, *, report_dir: str, forecast:
         pack = getattr(agent, "_signal_pack", None)
         build_pack = getattr(agent, "_build_signal_pack", None)
         if not (isinstance(pack, str) and pack.strip()) and callable(build_pack):
-            built["sim"] = _block(build_pack, "no_signal_pack")     # what legacy_prompt would feed
+            built["sim"] = _block("sim", build_pack, "no_signal_pack")     # what legacy_prompt would feed
+            if built["sim"][1] == STATUS_OK:
+                notes["sim"] = NOTE_BUILT_AT_CAPTURE
         else:
-            built["sim"] = _block(lambda: pack, "no_signal_pack")
+            built["sim"] = _block("sim", lambda: pack, "no_signal_pack")
 
     as_of, as_of_source = resolve_as_of(context, actors, moment)
     question = getattr(agent, "simulation_requirement", None)
@@ -527,4 +548,4 @@ def capture_from_agent(agent: Any, report_id: str, *, report_dir: str, forecast:
     return write_bundle(bundle_dir_for(report_dir),
                         blocks={name: built[name][0] for name in BLOCK_NAMES},
                         statuses={name: built[name][1] for name in BLOCK_NAMES},
-                        targets=select_targets(forecast), meta=meta)
+                        targets=select_targets(forecast), meta=meta, notes=notes)

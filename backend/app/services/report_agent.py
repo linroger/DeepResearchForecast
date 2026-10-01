@@ -2447,34 +2447,119 @@ class ReportAgent:
         except Exception as exc:  # noqa: BLE001 — 影子工件，失败不影响报告
             logger.warning(f"写 figure_provenance.json 失败（忽略）: {exc}")
 
+    # FU-9: contested-table slots reserved for TIME-4 quantitative reconcile rows, and the
+    # why_they_differ marker reconcile_quantitative writes on a probable unit-scale error.
+    _CONTESTED_QUANT_SLOTS = 3
+    _UNIT_SCALE_MARK = "probable unit-scale error"
+
+    def _contested_row_line(self, r: Any) -> Optional[str]:
+        """W9-8: contested.json 单条论断 → 块内一行；无论断或无可用立场返回 None（跳过）。"""
+        if not isinstance(r, dict) or not r.get("claim"):
+            return None
+        segs = []
+        for p in (r.get("positions") or [])[:3]:
+            if not isinstance(p, dict) or not p.get("stance"):
+                continue
+            src = "；".join(str(s) for s in (p.get("sources") or [])[:2])
+            tier = str(p.get("tier") or "").strip()
+            tag = f"（{tier}{'，' if tier and src else ''}{src}）" if (tier or src) else ""
+            segs.append(f"{self._md_cell(p['stance'], 160)}{tag}")
+        if not segs:
+            return None
+        return f"- **{self._md_cell(r['claim'], 120)}** — " + " ⇄ ".join(segs)
+
     def _build_contested_table_block(self, max_claims: int = 15) -> str:
         """W9-8: 争议性关键论断块（contested.json 全量，上限 15 条）。
 
         注入命中风险/不确定性关键词的章节提示词——报告必须正面处理证据分歧而非
-        单边引用。无数据返回空串（注入自动跳过）。"""
+        单边引用。无数据返回空串（注入自动跳过）。FU-9：上限截掉 TIME-4 数值对账行时
+        （RESEARCH_QUANT_RECONCILE 开启）见 _contested_quant_slots；未截断时逐字节不变。"""
         rows = self.contested if isinstance(getattr(self, "contested", None), list) else None
         if not rows:
             return ""
-        lines = ["## 争议性关键论断（证据分歧——本章须正面呈现两侧立场与依据，不得单边引用）"]
-        rendered = 0
-        for r in rows:
-            if not isinstance(r, dict) or not r.get("claim"):
+        # The plain cut: the first max_claims renderable rows (at least one), in order; the
+        # rows after it are never rendered here.
+        head: List[Tuple[Dict[str, Any], str]] = []
+        rest: List[Any] = []
+        for i, r in enumerate(rows):
+            line = self._contested_row_line(r)
+            if line is None:
                 continue
-            segs = []
-            for p in (r.get("positions") or [])[:3]:
-                if not isinstance(p, dict) or not p.get("stance"):
-                    continue
-                src = "；".join(str(s) for s in (p.get("sources") or [])[:2])
-                tier = str(p.get("tier") or "").strip()
-                tag = f"（{tier}{'，' if tier and src else ''}{src}）" if (tier or src) else ""
-                segs.append(f"{self._md_cell(p['stance'], 160)}{tag}")
-            if not segs:
-                continue
-            lines.append(f"- **{self._md_cell(r['claim'], 120)}** — " + " ⇄ ".join(segs))
-            rendered += 1
-            if rendered >= max_claims:
+            head.append((r, line))
+            if len(head) >= max_claims:
+                rest = rows[i + 1:]
                 break
-        return "\n".join(lines) if rendered else ""
+        if not head:
+            return ""
+        lines = ["## 争议性关键论断（证据分歧——本章须正面呈现两侧立场与依据，不得单边引用）"]
+        if rest and getattr(Config, "RESEARCH_QUANT_RECONCILE", True):
+            lines += self._contested_quant_slots(head, rest)
+        else:
+            lines += [line for _, line in head]
+        return "\n".join(lines)
+
+    def _contested_quant_slots(self, head: List[Tuple[Dict[str, Any], str]],
+                               rest: List[Any]) -> List[str]:
+        """FU-9 (TIME-4 open issue): the plain cut's rows with slots kept for quant rows.
+
+        Every engine appends its quantitative disagreements (origin quant_reconcile) after
+        the model's claims, and only v3 caps them and puts probable unit-scale errors first,
+        so the plain first-N cut drops them all.  A multi-track run's merged handoff joins the
+        tracks' contested.json files (pipeline_orchestrator.merge_list_dedup), so there the
+        quant rows sit after each track's claims, interleaved with the next track's.  When the
+        plain cut drops at least one renderable quant_reconcile row, the quant rows get
+        max(min(_CONTESTED_QUANT_SLOTS, N), quant rows inside the plain cut) of the N slots
+        (at most all of them), chosen by priority wherever they sit: probable unit-scale
+        errors first, stable, so each kind keeps contested.json order.  A plain quant row
+        inside the cut therefore never keeps its slot while a unit-scale error past it is
+        dropped.  The plain cut's other rows (the model's claims) fill the remaining slots in
+        order.  The kept rows keep contested.json order, except that the positions held by
+        kept quant rows take those rows in priority order (unit-scale errors first; v3's
+        order already is), and a closing note counts the quant rows still cut.  Otherwise the
+        plain cut is returned unchanged.  Only quant_reconcile rows of ``rest`` are rendered,
+        and a malformed one is skipped (the plain cut never rendered it)."""
+        def unit_scale(r: Dict[str, Any]) -> bool:
+            return self._UNIT_SCALE_MARK in str(r.get("why_they_differ") or "")
+
+        tail: List[Tuple[Dict[str, Any], str]] = []
+        for r in rest:
+            if not isinstance(r, dict) or r.get("origin") != "quant_reconcile":
+                continue
+            try:
+                line = self._contested_row_line(r)
+            except Exception:  # noqa: BLE001 — a malformed row past the cap is skipped, as before
+                continue
+            if line is not None:
+                tail.append((r, line))
+        if not tail:
+            return [line for _, line in head]
+        cap = len(head)
+        rendered = head + tail  # contested.json order
+        quant = [i for i, (r, _) in enumerate(rendered) if r.get("origin") == "quant_reconcile"]
+        quant.sort(key=lambda i: not unit_scale(rendered[i][0]))
+        quant_positions = set(quant)
+        # The quant rows' share never falls below what the plain cut already shows; tail is
+        # not empty, so there are more quant rows than that and the slice fills the share.
+        in_cut = sum(1 for i in quant if i < cap)
+        keep = set(quant[:max(min(self._CONTESTED_QUANT_SLOTS, cap), in_cut)])
+        # The plain cut's other rows, in order, fill the remaining slots (there are enough:
+        # cap - in_cut of them).
+        keep.update([i for i in range(cap) if i not in quant_positions][:cap - len(keep)])
+        # Kept rows in contested.json order; the positions held by quant rows take the kept
+        # quant rows in priority order (unit-scale errors first).
+        kept_quant_by_priority = iter([i for i in quant if i in keep])
+        lines = []
+        for i in sorted(keep):
+            row = next(kept_quant_by_priority) if i in quant_positions else i
+            lines.append(rendered[row][1])
+        cut = [rendered[i][0] for i in quant if i not in keep]
+        if cut:
+            n_unit = sum(1 for r in cut if unit_scale(r))
+            lines.append(f"（另有 {len(cut)} 条数值对账分歧超出上限未列出"
+                         + (f"，其中 {n_unit} 条疑似量纲错误" if n_unit else "") + "）")
+            logger.info(f"争议性论断块：数值对账分歧保留 {len(quant) - len(cut)} 条、"
+                        f"超出上限未列 {len(cut)} 条（疑似量纲错误 {n_unit} 条）")
+        return lines
 
     def _build_chronology_block(self, max_events: int = 25) -> str:
         """W9-8: 紧凑时间线块（timeline.json 取最近 max_events 条、按时间升序渲染）。

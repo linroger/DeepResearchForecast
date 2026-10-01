@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import shutil
+import time
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -292,6 +293,43 @@ def test_capture_failure_never_breaks_the_report(report_dir, monkeypatch):
     monkeypatch.setattr(eb, "capture_from_agent", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")))
     receipt = _post_publication(_agent())
     assert receipt["report_id"] == "r1"
+
+
+def test_capture_reads_the_real_report_agent_contract(report_dir, pipelines, tmp_path, monkeypatch):
+    """capture_from_agent reads the agent through getattr, so a renamed ReportAgent
+    attribute would silently turn its block 'unavailable' while the SimpleNamespace tests
+    stay green. A ReportAgent built through __init__ (fake LLM, fake graph tools) pins
+    every name the capture reads, and with the caches generate_report fills every block
+    is 'ok'; the real _run_summary_health still gates the sim block."""
+    from app.services.report_agent import ReportAgent
+    from app.services.simulation_runner import SimulationRunner
+    from tests.conftest import FakeLLMClient
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path / "sims"), raising=False)
+    _write_pipeline(pipelines)
+    zep = _Zep()
+    agent = ReportAgent(graph_id="g1", simulation_id="sim1", simulation_requirement=QUESTION,
+                        llm_client=FakeLLMClient(), zep_tools=zep, actors=ACTORS,
+                        research_report="# Dossier\n\n" + "Body text. " * 50)
+    for name in ("actors", "research_report", "_market_pack", "_signal_pack", "ledger_context",
+                 "simulation_requirement", "graph_id", "simulation_id", "zep_tools"):
+        assert name in vars(agent), name
+    for name in ("_build_signal_pack", "_run_summary_health"):
+        assert callable(getattr(ReportAgent, name, None)), name
+    assert agent._run_summary_health() == (None, False)
+    agent._market_pack = "| # | market |\n| 1 | Will X? |"              # cached by generate_report
+    agent._signal_pack = "【内部情景推演】 signals"
+    agent.ledger_context = {"pipeline_id": PID, "as_of_date": "2026-06-30", "run_kind": "pipeline"}
+    manifest = eb.capture_from_agent(agent, "r1", report_dir=report_dir, forecast=FORECAST, now=NOW)
+    assert {name: meta["status"] for name, meta in manifest["blocks"].items()} \
+        == dict.fromkeys(eb.BLOCK_NAMES, "ok")
+    assert manifest["ids"] == {"pipeline": PID, "report": "r1", "simulation": "sim1", "graph": "g1"}
+    assert manifest["central_question"] == QUESTION and zep.calls == [("g1", QUESTION, "2026-06-30", 20)]
+    run_dir = tmp_path / "sims" / "sim1"
+    run_dir.mkdir(parents=True)
+    (run_dir / "run_summary.json").write_text(json.dumps({"simulation_health": "Hollow"}), encoding="utf-8")
+    manifest = eb.capture_from_agent(agent, "r1", report_dir=report_dir, forecast=FORECAST, now=NOW)
+    assert manifest["blocks"]["sim"]["status"] == "unavailable:hollow"
+    eb.load_bundle(eb.bundle_dir_for(report_dir))
 
 
 # ------------------------------------------------------------------ manifest
@@ -618,14 +656,20 @@ def test_graph_facts_are_one_per_line(report_dir):
 
 def test_sim_block_falls_back_to_the_built_signal_pack(report_dir):
     """No cached _signal_pack: the block is what _build_signal_pack (legacy_prompt's
-    source) returns; a builder that raises or returns nothing is unavailable."""
+    source) returns, noted 'built_at_capture' (the report never saw it); a builder that
+    raises or returns nothing is unavailable."""
     agent = _agent(_signal_pack="", _build_signal_pack=lambda: "built signals")
     manifest = eb.capture_from_agent(agent, "r1", report_dir=report_dir, forecast=FORECAST)
     assert eb.load_bundle(eb.bundle_dir_for(report_dir))[1]["sim"] == "built signals"
-    assert manifest["blocks"]["sim"]["sha256"] == hashlib.sha256(b"built signals").hexdigest()
+    assert manifest["blocks"]["sim"] == {"sha256": hashlib.sha256(b"built signals").hexdigest(),
+                                         "chars": len("built signals"), "status": "ok",
+                                         "note": eb.NOTE_BUILT_AT_CAPTURE}
+    assert eb.NOTE_BUILT_AT_CAPTURE == "built_at_capture"
+    assert all("note" not in meta for name, meta in manifest["blocks"].items() if name != "sim")
     agent = _agent(_signal_pack="cached", _build_signal_pack=lambda: "built signals")
-    eb.capture_from_agent(agent, "r1", report_dir=report_dir, forecast=FORECAST)
+    manifest = eb.capture_from_agent(agent, "r1", report_dir=report_dir, forecast=FORECAST)
     assert eb.load_bundle(eb.bundle_dir_for(report_dir))[1]["sim"] == "cached"
+    assert "note" not in manifest["blocks"]["sim"]                  # the pack the report injected
 
     def _boom():
         raise RuntimeError("no simulation data")
@@ -639,9 +683,12 @@ def test_sim_block_falls_back_to_the_built_signal_pack(report_dir):
     assert manifest["blocks"]["sim"]["status"] == "unavailable:no_signal_pack"
 
 
-def test_unencodable_block_text_is_unavailable_alone(report_dir):
+def test_unencodable_block_text_is_unavailable_alone(report_dir, monkeypatch):
     """A lone surrogate (decoded from a JSON escape) cannot be written as UTF-8: only that
-    block is unavailable, the other blocks are still frozen and the bundle verifies."""
+    block is unavailable, the other blocks are still frozen and the bundle verifies. The
+    warning names the failed block, never its unavailable reason."""
+    warnings = []
+    monkeypatch.setattr(eb.logger, "warning", lambda message, *a, **k: warnings.append(message))
     agent = _agent(research_report="dossier \ud800 text", _market_pack="market \udc80",
                    _signal_pack="", _build_signal_pack=lambda: "sim \ud83d",
                    zep_tools=_Zep(facts=["fact \ud800"]))
@@ -649,6 +696,10 @@ def test_unencodable_block_text_is_unavailable_alone(report_dir):
     statuses = {name: meta["status"] for name, meta in manifest["blocks"].items()}
     for name in ("dossier", "market", "sim", "graph"):
         assert statuses[name] == "unavailable:error:UnicodeEncodeError", name
+    assert sorted(w.split(" failed ")[0] for w in warnings) == [
+        f"eval bundle: block {name}" for name in ("dossier", "graph", "market", "sim")]
+    assert all("(UnicodeEncodeError: " in w for w in warnings)
+    assert "note" not in manifest["blocks"]["sim"]                 # a failed build carries no note
     assert statuses["brief"] == statuses["quant"] == statuses["forecast_inputs"] == "ok"
     _manifest, texts = eb.load_bundle(eb.bundle_dir_for(report_dir))
     assert texts["dossier"] is None and texts["brief"]
@@ -679,15 +730,35 @@ def test_select_targets_natural_id_order_and_case_insensitive_exact():
     assert [t["target_id"] for t in eb.select_targets({"binary_forecasts": rows}, 3)] == ["F13", "F1", "F2"]
     assert [t["target_id"] for t in eb.select_targets({"binary_forecasts": [
         {"id": "F10"}, {"id": "F2"}, {"id": "Q"}, {"id": "F1"}]})] == ["F1", "F2", "F10", "Q"]
+    assert [t["target_id"] for t in eb.select_targets({"binary_forecasts": [
+        {"id": "F10"}, {"id": "F010"}, {"id": "F"}, {"id": "F0"}, {"id": "F00"}]})] \
+        == ["F", "F0", "F00", "F010", "F10"]
+
+
+def test_select_targets_sort_key_is_linear_and_never_raises():
+    """A trailing digit run past int()'s 4300-digit limit, or a long digit run followed by a
+    non-digit (quadratic for a backtracking regex), sorts like any other id: no error, and
+    no id length slows the sort."""
+    huge, long_head = "F" + "1" * 5000, "9" * 50000 + "x"
+    rows = [{"id": huge}, {"id": "F10"}, {"id": long_head}, {"id": "F2"}]
+    started = time.perf_counter()
+    targets = eb.select_targets({"binary_forecasts": rows})
+    assert time.perf_counter() - started < 2.0
+    assert [t["target_id"] for t in targets] == [long_head, "F2", "F10", huge]
 
 
 # ------------------------------------------------------------------ backfill
+# Long enough that the report's output language sniff (prompt + dossier + the situation
+# brief, whose labels are Chinese) resolves to English, as for a real English dossier.
+EN_DOSSIER = "# Dossier\n\n" + "Body. Grid demand keeps rising. " * 60
+
+
 def _handoff(pipelines, pid=PID, *, markets_payload=None):
     """A stored handoff at the pipeline's own path (under PIPELINE_DATA_DIR)."""
     handoff = pipelines / pid / "handoff"
     handoff.mkdir(parents=True)
     (handoff / "actors.json").write_text(json.dumps(ACTORS), encoding="utf-8")
-    (handoff / "research_report.md").write_text("# Dossier\n\nBody.", encoding="utf-8")
+    (handoff / "research_report.md").write_text(EN_DOSSIER, encoding="utf-8")
     payload = markets_payload if markets_payload is not None else {
         "as_of": "2026-06-30T12:00:00Z",
         "markets": [{"market_id": "m1", "question": "Will X?", "implied_yes_prob": 0.4, "volume": 1000}]}
@@ -695,9 +766,9 @@ def _handoff(pipelines, pid=PID, *, markets_payload=None):
     return handoff
 
 
-def _backfill_pipeline(pipelines, handoff, pid=PID, report_id="r1", **state):
+def _backfill_pipeline(pipelines, handoff, pid=PID, report_id="r1", prompt=QUESTION, **state):
     return _write_pipeline(pipelines, pid, report_id=report_id, handoff_dir=str(handoff), simulation_id="sim1",
-                           graph_id="g1", prompt=QUESTION, **state)
+                           graph_id="g1", prompt=prompt, **state)
 
 
 def _run_cli(capsys, *argv):
@@ -848,6 +919,76 @@ def test_research_market_block_snapshot_time_fallbacks(monkeypatch):
     assert eb.research_market_block({"markets": []}, fallback_as_of="2026-06-30") \
         == (None, "unavailable:no_research_snapshot")
     assert eb.research_market_block(None) == (None, "unavailable:no_research_snapshot")
+    assert "| # | 市场问题 |" in eb.research_market_block({"markets": rows}, fallback_as_of="2026-06-30",
+                                                         lang="zh")[0]
+
+
+ZH_QUESTION = "2030 年美国数据中心电力需求会超过 230 GW 吗？"
+ZH_DOSSIER = "# 研究卷宗\n\n" + "数据中心电力需求持续上升，电网扩容滞后。" * 20
+
+
+@pytest.mark.parametrize("prompt, dossier, forced, zh", [
+    (QUESTION, EN_DOSSIER, None, False),
+    (ZH_QUESTION, ZH_DOSSIER, None, True),
+    (QUESTION, EN_DOSSIER, "Chinese", True),                    # REPORT_OUTPUT_LANGUAGE override
+], ids=["english", "chinese", "forced_chinese"])
+def test_backfill_market_table_in_the_reports_language(report_dir, pipelines, monkeypatch, capsys,
+                                                       prompt, dossier, forced, zh):
+    """report_agent._render_market_pack renders the market table in the report's output
+    language (a zh table for a Chinese report). The backfill renders the research snapshot
+    in that language too, resolved from the inputs the orchestrator built the agent with."""
+    if forced:
+        monkeypatch.setenv("REPORT_OUTPUT_LANGUAGE", forced)
+    else:
+        monkeypatch.delenv("REPORT_OUTPUT_LANGUAGE", raising=False)
+    handoff = _handoff(pipelines)
+    (handoff / "research_report.md").write_text(dossier, encoding="utf-8")
+    _backfill_pipeline(pipelines, handoff, prompt=prompt)
+    _seal("r1")
+    code, out = _run_cli(capsys, "backfill", "--pipeline", PID)
+    assert code == 0 and out["results"][0]["status"] == "written"
+    manifest, texts = eb.load_bundle(eb.bundle_dir_for(report_dir))
+    assert manifest["blocks"]["market"]["note"] == "backfill_research_snapshot"
+    assert ("| # | 市场问题 |" in texts["market"]) is zh
+    assert ("| # | Market question |" in texts["market"]) is not zh
+    assert eb.market_table_lang("Chinese") == "zh" and eb.market_table_lang(None) == "en"
+    # the language the orchestrator's report agent resolves from the same inputs
+    from app.services.report_agent import ReportAgent
+    from app.utils.actors import situation_brief
+    from tests.conftest import FakeLLMClient
+    agent = ReportAgent(graph_id="g1", simulation_id="sim1", simulation_requirement=prompt,
+                        situation_brief=situation_brief(ACTORS), actors=ACTORS, research_report=dossier,
+                        llm_client=FakeLLMClient(), zep_tools=object())
+    assert (eb.market_table_lang(agent.output_language) == "zh") is zh
+
+
+@pytest.mark.parametrize("completed_at, expected", [
+    (None, (None, "unknown")),
+    ("not a date", (None, "unknown")),
+    ("2026-09-30T10:00:00+00:00", ("2026-09-30", "commit_date")),
+])
+def test_backfill_never_stamps_its_own_day_as_the_commit_date(report_dir, pipelines, capsys,
+                                                               completed_at, expected):
+    """No validated anchor and no strict actors date: the ledger keyed the report on its
+    commit date. The backfill takes it from meta.json completed_at, and records an unknown
+    as-of when that is missing or unparsable, never the day the backfill runs."""
+    handoff = _handoff(pipelines)
+    (handoff / "actors.json").write_text(json.dumps(dict(ACTORS, as_of_date="June 2026")), encoding="utf-8")
+    _backfill_pipeline(pipelines, handoff)
+    _seal("r1")
+    meta_path = os.path.join(report_dir, "meta.json")
+    with open(meta_path, encoding="utf-8") as f:
+        meta = json.load(f)
+    meta.pop("completed_at")
+    if completed_at is not None:
+        meta["completed_at"] = completed_at
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f)
+    code, out = _run_cli(capsys, "backfill", "--pipeline", PID)
+    assert code == 0 and out["results"][0]["status"] == "written"
+    manifest, _texts = eb.load_bundle(eb.bundle_dir_for(report_dir))
+    assert (manifest["as_of"], manifest["as_of_source"]) == expected
+    assert manifest["blocks"]["market"]["status"] == "ok"            # pinned to the snapshot's own as_of
 
 
 def test_render_markets_block_default_clock_unchanged(monkeypatch):

@@ -73,7 +73,8 @@ def _healthy_audit(coverage=0.9, hard_passed=True):
 V3_META = {
     "research_engine": "v3", "v3_workdir": "v3",
     "kiqs": {"planned": 2, "followups": 0, "completed": 2, "fallback": 0, "facts": 7,
-             "verified": 3},
+             "verified": 3, "invalid_tool_calls": 0, "unknown_tool_calls": 0,
+             "tool_exceptions": 0},
     "tools": {"searches": 10, "cached_searches": 2, "fetches": 6, "cached_fetches": 2, "failures": 1},
     "research_qa": {"passed": True, "failures": []},
     "plan_fallback": [], "synthesis_fallback_sections": [], "actors_count": 12,
@@ -139,6 +140,13 @@ def _make_pipeline(pid="pipe_eval15fixture", *, mode="full", status="completed",
     _write(os.path.join(report_dir, "forecast.json"), forecast or _healthy_forecast())
     _write(os.path.join(report_dir, "final_audit.json"), audit or _healthy_audit())
     _write(os.path.join(report_dir, "full_report.md"), "# Report\n")
+    _write(os.path.join(report_dir, "agent_log.jsonl"), "".join(
+        json.dumps({"action": action, "stage": "generating", "details": {}}) + "\n"
+        for action in ("report_start", "tool_call", "tool_result")))
+    # INFRA-5's tool_dispatch counters mark a log that writes tool_unknown rows (EVAL-16).
+    _write(os.path.join(report_dir, "telemetry.json"), {"totals": {
+        "tool_calls": 1, "tool_dispatch": {"dispatched": 1, "rejected_parse": 0, "rejected_params": 0,
+                                           "rejected_unknown": 0, "repaired": 0}}})
     _write(po.PipelineManager.manifest_path(pid), {
         "repo_git_sha": "abc123",
         "resolved": {"research": {"model": "glm", "depth": "deep"},
@@ -170,7 +178,8 @@ def test_healthy_fixture_passes_every_stage_and_envelope_shape(roots):
                                     "research": {"model": "glm"}}
     assert set(card["artifacts"]) == {
         "research_meta", "research_kiq_facts", "prediction_markets", "ontology", "graph_prune",
-        "actor_cast", "run_summary", "forecast", "final_audit", "run_manifest"}
+        "actor_cast", "run_summary", "forecast", "final_audit", "agent_log", "report_telemetry",
+        "run_manifest"}
     assert all(re.fullmatch(r"[0-9a-f]{64}", digest) for digest in card["artifacts"].values())
     record = _metric(card, "run", "organic_share")
     assert set(record) >= {"value", "num", "den", "status", "source"}
