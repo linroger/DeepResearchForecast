@@ -21,8 +21,9 @@ EVAL-16 adds the tool-call contracts (each must be 0): research
 ``invalid_tool_calls`` / ``unknown_tool_calls`` summed by the v3 engine into
 ``meta.kiqs`` (not applicable to other engines), and report
 ``unknown_tool_calls``, the ``tool_unknown`` rows of the report's
-``agent_log.jsonl``.  :data:`RATE_METRICS` names the rates the offline
-cross-run aggregate (``scripts/stage_scorecard.py aggregate``) pools.
+``agent_log.jsonl`` (not instrumented for a report written before INFRA-5 logged
+them).  :data:`RATE_METRICS` names the rates the offline cross-run aggregate
+(``scripts/stage_scorecard.py aggregate``) pools.
 
 The scorecard is observability, never a gate: it cannot change a pipeline's
 ``status`` or ``pipeline_health``, and it is written beside the pipeline state
@@ -122,6 +123,15 @@ _MARKET_LABEL_STATES = {
 _HONESTY_BOOLEAN_GATES = ("REPORT_PUBLISH_GATE", "REPORT_FINAL_READ_ONLY_AUDIT",
                           "PIPELINE_HEALTH_GATE")
 PROCESS_CONFIG = "process_config"
+
+# EVAL-16: the report agent_log.jsonl action counted by report.unknown_tool_calls,
+# and the actions whose rows show that INFRA-5 wrote the log (see _tool_unknown_rows).
+_TOOL_UNKNOWN = "tool_unknown"
+_TOOL_LOG_MARKER_ACTIONS = frozenset({_TOOL_UNKNOWN, "tool_rejected"})
+# A complete action field of an agent_log row (ReportLogger writes it after
+# timestamp, elapsed_seconds and report_id), and the start of every row.
+_ACTION_FIELD_RE = re.compile(r'"action":\s*"[^"\\]*"')
+_LOG_ROW_START = '{"timestamp"'
 
 _WORKDIR_RE = re.compile(r"\A[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}\Z")
 _ABSENT = object()
@@ -640,16 +650,33 @@ def _tool_unknown_rows(paths: Mapping[str, Any], digests: dict) -> dict:
     does not exist (ReAct, native and ``_execute_tool`` dispatch paths); only
     those rows count, never the ordinary ``tool_call`` rows.  The log is
     append-only, so every attempt that wrote to this report counts (a resumed
-    report keeps the sections of earlier attempts).  A non-empty line that is
-    not a JSON object could hide a row, so it makes the count unreadable.
+    report keeps the sections of earlier attempts).
+
+    A zero is evidence only for a report whose log INFRA-5 wrote: the commit
+    that added the tool_unknown rows also added the ``tool_rejected`` rows and
+    the ``tool_dispatch`` counters of the report telemetry totals (telemetry.json
+    and the report_complete row; LLM_TELEMETRY_ENABLED and REPORT_TELEMETRY are
+    on by default).  Without one of these markers (a report written before
+    INFRA-5, with report telemetry off, or stopped before it completed without
+    a single rejected call) the count is not_instrumented, never a vacuous pass.
+
+    ReportLogger writes each row whole under a lock, so a line that is not a
+    JSON object is a torn write (a killed process, possibly with a resumed
+    attempt's row appended to it; bytes that are not UTF-8 are replaced).  Such
+    a line may hide a tool_unknown row when it names one or when a row in it was
+    cut before its action field was complete (it could have been any row): it
+    then makes the count unreadable, which fails the contract.  A torn row of
+    another action (a long llm_response cut mid-write) is skipped and counted
+    in the detail.
     """
     src = "report/agent_log.jsonl:action=tool_unknown"
     path = paths.get("agent_log")
     if not isinstance(path, str) or not os.path.exists(path):
         return _unavailable(ARTIFACT_MISSING, src)
-    count = malformed = 0
+    count = skipped = hiding = 0
+    instrumented = False
     try:
-        with open(path, encoding="utf-8") as handle:
+        with open(path, encoding="utf-8", errors="replace") as handle:
             for line in handle:
                 if not line.strip():
                     continue
@@ -658,15 +685,57 @@ def _tool_unknown_rows(paths: Mapping[str, Any], digests: dict) -> dict:
                 except (ValueError, RecursionError):
                     row = None
                 if not isinstance(row, dict):
-                    malformed += 1
-                elif row.get("action") == "tool_unknown":
+                    if _may_hide_tool_unknown(line):
+                        hiding += 1
+                    else:
+                        skipped += 1
+                    continue
+                action = row.get("action")
+                if action == _TOOL_UNKNOWN:
                     count += 1
-    except (OSError, UnicodeDecodeError):
+                details = row.get("details")
+                instrumented = instrumented or action in _TOOL_LOG_MARKER_ACTIONS or (
+                    action == "report_complete" and isinstance(details, dict)
+                    and _has_tool_dispatch(details.get("telemetry_totals")))
+    except OSError:
         return _unavailable(UNREADABLE, src)
     digests["agent_log"] = _sha256(path)
-    if malformed:
-        return _unavailable(UNREADABLE, src, f"{malformed} line(s) are not JSON objects")
-    return _metric(count, source=src)
+    telemetry_status, telemetry = _read_json_object(paths.get("report_telemetry"))
+    if telemetry_status == MEASURED:
+        digests["report_telemetry"] = _sha256(paths.get("report_telemetry"))
+        instrumented = instrumented or _has_tool_dispatch(telemetry.get("totals"))
+    if hiding:
+        return _unavailable(UNREADABLE, src,
+                            f"{hiding} line(s) that are not JSON objects may hide a {_TOOL_UNKNOWN} row")
+    if not instrumented:
+        return _unavailable(NOT_INSTRUMENTED, src,
+                            "no INFRA-5 marker (tool_unknown / tool_rejected row or telemetry "
+                            "totals.tool_dispatch): written before tool_unknown logging, with "
+                            "report telemetry off or before the report completed")
+    detail = f"{skipped} torn row(s) of other actions skipped" if skipped else None
+    return _metric(count, source=src, detail=detail)
+
+
+def _may_hide_tool_unknown(line: str) -> bool:
+    """True when an agent_log line that is not a JSON object may be a torn tool_unknown row.
+
+    It may when it names tool_unknown, or when one of the rows it holds has no
+    complete action field.  Every row starts with ``{"timestamp"``, which a JSON
+    string value can only hold with escaped quotes, so splitting there separates
+    the torn row(s) from the rows a resumed attempt appended to them; a text
+    before the first row start (none in a log ReportLogger wrote) is judged too.
+    """
+    if _TOOL_UNKNOWN in line:
+        return True
+    head, *rows = line.split(_LOG_ROW_START)
+    if head:
+        rows.append(head)
+    return any(_ACTION_FIELD_RE.search(row) is None for row in rows)
+
+
+def _has_tool_dispatch(totals: Any) -> bool:
+    """True when report telemetry ``totals`` carry INFRA-5's ``tool_dispatch`` counters."""
+    return isinstance(totals, dict) and isinstance(totals.get("tool_dispatch"), dict)
 
 
 def _scenario_metrics(forecast: Optional[dict], status: str,
@@ -1118,6 +1187,8 @@ def resolve_inputs(pipeline_id: str, state: Optional[Mapping[str, Any]] = None) 
             paths["final_audit"] = ReportManager._get_report_final_audit_path(
                 pipeline_state.report_id)
             paths["agent_log"] = ReportManager._get_agent_log_path(pipeline_state.report_id)
+            paths["report_telemetry"] = os.path.join(
+                ReportManager._get_report_folder(pipeline_state.report_id), "telemetry.json")
         except ValueError:  # an unsafe report id resolves to "artifact missing"
             pass
     return {

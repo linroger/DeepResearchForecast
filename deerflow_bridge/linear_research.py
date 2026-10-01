@@ -273,7 +273,10 @@ STORED_READS_EXHAUSTED_TEXT = ("READ_BUDGET_EXHAUSTED: stop re-reading stored pa
                                "from what you have.")
 # EVAL-16: per-agent counts of the calls KiqAgent._call_tool answered with an
 # INVALID_TOOL_CALL, UNKNOWN_TOOL or TOOL_ERROR string (the strings the model
-# sees are unchanged); each KIQ record's stats and meta.kiqs carry them.
+# sees are unchanged); each KIQ record's stats and meta.kiqs carry them.  Like
+# the other meta.kiqs sums they describe the KIQ records kept: an attempt that
+# leaves no record (a provider failure before any page was read, a cancelled
+# run) or whose record a resumed run rewrote is not counted.
 TOOL_CALL_COUNTERS = ("invalid_tool_calls", "unknown_tool_calls", "tool_exceptions")
 LABEL_EVIDENCE = "research evidence"
 LABEL_SCOUT = "scout search results"

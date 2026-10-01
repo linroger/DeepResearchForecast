@@ -37,30 +37,46 @@ The scorecard is never a gate: failed contracts do not change the exit code of
 EVAL-16 cross-run aggregate:
     python scripts/stage_scorecard.py aggregate [--since YYYY-MM-DD] [-o]
 
-Re-projects every terminal pipeline in memory with the current scorecard
-(sidecars are neither read nor written, so runs scored before a contract
-existed and runs without a sidecar are scored alike) and groups the runs by
-their run.json ``repo_git_sha`` and resolved per-stage provider/model (the
-scorecard's ``identity.backbone``).  ``--since`` keeps runs created on or after
-that UTC date.  Groups are ordered by their first run's ``created_at`` (a run
-without one sorts as the oldest); the last group is the latest.  Per group and
-stage it reports the runs, the contract pass rate (passed over passed + failed,
-with the unevaluable runs beside it) and, for every rate in
-``RATE_METRICS``, the pooled num/den with its Wilson interval
-(``eval_stats.wilson_interval``) and the per-run median/min/max: the run, not
-the fact or the claim, is the unit of analysis.  A regression is flagged only
-when at least ``MIN_REGRESSION_RUNS`` runs of a group feed the measure and its
-Wilson interval lies entirely on the worse side of the previous group's point
-estimate (upper bound below it; lower bound above it for a lower-is-better
-rate).  ``-o`` / ``--write`` also writes the aggregate to
+Re-projects every completed or failed pipeline in memory with the current
+scorecard (sidecars are neither read nor written, so runs scored before a
+contract existed and runs without a sidecar are scored alike).  A cancelled
+pipeline was stopped by its user, not by the code: it is listed under
+``skipped`` and never scored.  ``--since`` keeps runs created on or after that
+UTC date.
+
+Runs are grouped by their run.json ``repo_git_sha`` and resolved per-stage
+provider/model (the scorecard's ``identity.backbone``).  run.json stamps a
+stage's model only once the stage ran, so a run that stopped early has a
+partial backbone: it joins the group of its sha whose backbone agrees on every
+stage it stamped (listed under ``partial_backbone_runs``), and a run that
+agrees with several such groups cannot be attributed to one and keeps a group
+of its own partial backbone (``ambiguous_backbone``).  Groups are ordered by
+their newest run (a run without ``created_at`` sorts as the oldest), so the
+last group holds the newest run.  Per group and stage it reports the runs, the
+contract pass rate (passed over passed + failed, with the unevaluable runs
+beside it) and, for every rate in ``RATE_METRICS``, the pooled num/den with its
+Wilson interval (``eval_stats.wilson_interval``) and the per-run
+median/min/max: the run, not the fact or the claim, is the unit of analysis.
+
+A group is compared with the most recent earlier group of the same backbone at
+another code sha (``compared_to``; a group without an earlier one, a known sha
+or a known backbone is never compared, so a change of model alone is not a
+regression).  A regression is flagged only when at least
+``MIN_REGRESSION_RUNS`` runs of a group feed the measure and its Wilson
+interval lies entirely on the worse side of the compared group's point estimate
+(upper bound below it; lower bound above it for a lower-is-better rate).  ``-o`` /
+``--write`` also writes the aggregate to
 ``<PIPELINE_DATA_DIR>/_stage_scorecard_aggregate.json``.
 
-Aggregate exit codes, judged on the latest group (first match wins): 1 a run
+Aggregate exit codes judge the current code, every group of the newest run's
+``repo_git_sha`` whatever its backbone (``current``; first match wins): 1 a run
 has a failed contract, 2 drift only (a regression flag), 3 inconclusive (more
 than 20% of the scored stage verdicts are unevaluable, no run at all, or a
-pipeline could not be scored), 0 clean; 4 the aggregate could not be written.
-A malformed command line (such as an invalid ``--since`` date) is rejected by
-argparse before any scoring: usage on stderr, nothing on stdout, exit 2.
+pipeline could not be scored), 0 clean.  When ``-o`` cannot write, the verdict
+is printed and the write error goes to stderr: a clean verdict then exits 4,
+any other keeps its code.  Exit 2 is the drift verdict, so an aggregate command
+line that argparse rejects (such as an invalid ``--since`` date) exits 64
+(EX_USAGE) instead: usage on stderr, nothing on stdout.
 """
 
 from __future__ import annotations
@@ -95,6 +111,9 @@ MAX_UNEVALUABLE_SHARE = 0.2
 # 0.9999999999999999): a bound must clear the previous value by more than this.
 _BOUND_TOLERANCE = 1e-9
 EXIT_CLEAN, EXIT_CONTRACT_FAILURES, EXIT_DRIFT, EXIT_INCONCLUSIVE, EXIT_WRITE_FAILED = range(5)
+# argparse exits 2 on a usage error, which is the aggregate's drift verdict: an
+# aggregate command line argparse rejects exits EX_USAGE (sysexits.h) instead.
+EXIT_AGGREGATE_USAGE = 64
 _VERDICTS = {EXIT_CLEAN: "clean", EXIT_CONTRACT_FAILURES: "contract_failures",
              EXIT_DRIFT: "drift", EXIT_INCONCLUSIVE: "inconclusive"}
 _OLDEST = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
@@ -275,7 +294,11 @@ def _collect_runs(since: Optional[dt.date]) -> tuple[list[dict], list[dict], lis
     runs: list[dict] = []
     for pipeline_id in ids:
         try:
-            created = _created_at((PipelineManager.load(pipeline_id) or {}).get("created_at"))
+            state = PipelineManager.load(pipeline_id) or {}
+            if state.get("status") == "cancelled":  # the user's decision, not the code's outcome
+                skipped.append({"pipeline_id": pipeline_id, "reason": "cancelled"})
+                continue
+            created = _created_at(state.get("created_at"))
             if since is not None and (created is None or created.date() < since):
                 skipped.append({"pipeline_id": pipeline_id, "reason": (
                     "created before --since" if created else "no parseable created_at")})
@@ -288,18 +311,46 @@ def _collect_runs(since: Optional[dt.date]) -> tuple[list[dict], list[dict], lis
     return runs, skipped, errors
 
 
+def _run_order(run: dict) -> tuple[dt.datetime, str]:
+    return run["created_at"] or _OLDEST, run["pipeline_id"]
+
+
+def _run_identity(run: dict) -> tuple[Optional[str], dict]:
+    """(repo_git_sha, backbone) of a run; the backbone is {} when run.json names no model."""
+    identity = _identity(run["card"])
+    sha, backbone = identity.get("repo_git_sha"), identity.get("backbone")
+    return (sha if isinstance(sha, str) and sha else None,
+            backbone if isinstance(backbone, dict) else {})
+
+
 def _group_runs(runs: Iterable[dict]) -> list[dict]:
-    """Runs grouped by (repo_git_sha, backbone), oldest first; groups in first-run order."""
-    groups: dict[str, dict] = {}
-    for run in sorted(runs, key=lambda run: (run["created_at"] or _OLDEST, run["pipeline_id"])):
-        identity = _identity(run["card"])
-        sha, backbone = identity.get("repo_git_sha"), identity.get("backbone")
-        sha = sha if isinstance(sha, str) and sha else None
-        backbone = backbone if isinstance(backbone, dict) and backbone else None
-        key = json.dumps({"repo_git_sha": sha, "backbone": backbone}, sort_keys=True)
-        group = groups.setdefault(key, {"repo_git_sha": sha, "backbone": backbone, "runs": []})
+    """Runs grouped by code sha and backbone, oldest first; the groups ordered by their newest run.
+
+    A stage's model is stamped only once the stage ran, so runs are placed
+    fullest backbone first and a run joins the group of its sha whose backbone
+    agrees on every stage it stamped.  A run that agrees with no group opens one;
+    a run that agrees with several keeps a group of its own partial backbone
+    (``ambiguous_backbone``), since the stages that tell them apart never ran.
+    """
+    groups: list[dict] = []
+    for run in sorted(runs, key=lambda run: (-len(_run_identity(run)[1]), _run_order(run))):
+        sha, backbone = _run_identity(run)
+        matches = [group for group in groups if group["repo_git_sha"] == sha
+                   and all(group["backbone"].get(stage) == block for stage, block in backbone.items())]
+        exact = [group for group in matches if group["backbone"] == backbone]
+        if exact or len(matches) == 1:
+            group = (exact or matches)[0]
+        else:
+            group = {"repo_git_sha": sha, "backbone": backbone,
+                     "ambiguous_backbone": len(matches) > 1, "runs": [], "partial": []}
+            groups.append(group)
         group["runs"].append(run)
-    return list(groups.values())
+        if backbone != group["backbone"]:
+            group["partial"].append(run["pipeline_id"])
+    for group in groups:
+        group["runs"].sort(key=_run_order)
+        group["partial"].sort()
+    return sorted(groups, key=lambda group: _run_order(group["runs"][-1]))
 
 
 def _scored_stages(run: dict) -> Iterable[tuple[str, dict, dict]]:
@@ -359,40 +410,65 @@ def _stage_summary(runs: list[dict], stage: str) -> dict:
     }
 
 
+def _unevaluable_share(stage_summaries: Iterable[dict]) -> Optional[float]:
+    """The unevaluable share of the scored stage verdicts of stage summaries (None without any)."""
+    stage_summaries = list(stage_summaries)
+    verdicts = sum(stage["runs"] for stage in stage_summaries)
+    unevaluable = sum(stage["contract"]["unevaluable"] for stage in stage_summaries)
+    return unevaluable / verdicts if verdicts else None
+
+
 def _summarize_group(group: dict, index: int) -> dict:
     runs = group["runs"]
     stages = {stage: _stage_summary(runs, stage) for stage in scorecard.STAGES}
     failures = [{"pipeline_id": run["pipeline_id"], "stage": stage, "failed": list(check.get("failed") or [])}
                 for run in runs for stage, _block, check in _scored_stages(run)
                 if check.get("passed") is False]
-    verdicts = sum(summary["runs"] for summary in stages.values())
-    unevaluable = sum(summary["contract"]["unevaluable"] for summary in stages.values())
     created = [run["created_at"] for run in runs if run["created_at"] is not None]
     return {
         "group": index,
         "repo_git_sha": group["repo_git_sha"],
-        "backbone": group["backbone"],
+        "backbone": group["backbone"] or None,
+        "ambiguous_backbone": group["ambiguous_backbone"],
         "runs": len(runs),
         "pipelines": [run["pipeline_id"] for run in runs],
+        "partial_backbone_runs": group["partial"],
         "first_created_at": min(created).isoformat() if created else None,
         "last_created_at": max(created).isoformat() if created else None,
         "stages": stages,
         "contract_failures": failures,
-        "unevaluable_share": unevaluable / verdicts if verdicts else None,
+        "unevaluable_share": _unevaluable_share(stages.values()),
         "compared_to": None,
         "regressions": [],
     }
 
 
-def _regressions(group: dict, previous: dict) -> list[dict]:
-    """Measures whose Wilson interval lies wholly on the worse side of the previous group's value.
+def _baseline(groups: list[dict], index: int) -> Optional[int]:
+    """The most recent earlier group of the same backbone at another code sha, or None.
+
+    A regression is a change of code under the same models, so a group is never
+    compared across backbones, nor without a known sha and backbone to match on.
+    """
+    group = groups[index]
+    if group["repo_git_sha"] is None or not group["backbone"]:
+        return None
+    for earlier in range(index - 1, -1, -1):
+        candidate = groups[earlier]
+        if (candidate["backbone"] == group["backbone"] and candidate["repo_git_sha"] is not None
+                and candidate["repo_git_sha"] != group["repo_git_sha"]):
+            return earlier
+    return None
+
+
+def _regressions(group: dict, baseline: dict) -> list[dict]:
+    """Measures whose Wilson interval lies wholly on the worse side of the baseline group's value.
 
     Only a measure fed by at least MIN_REGRESSION_RUNS runs of ``group`` is judged.
     """
     flags: list[dict] = []
     for stage in scorecard.STAGES:
         contract = group["stages"][stage]["contract"]
-        before = previous["stages"][stage]["contract"]["pass_rate"]
+        before = baseline["stages"][stage]["contract"]["pass_rate"]
         if (contract["evaluable_runs"] >= MIN_REGRESSION_RUNS and before is not None
                 and contract["wilson"][1] < before - _BOUND_TOLERANCE):
             flags.append({"stage": stage, "measure": "contract_pass_rate",
@@ -401,7 +477,7 @@ def _regressions(group: dict, previous: dict) -> list[dict]:
                           "runs": contract["evaluable_runs"]})
         for name, rate in group["stages"][stage]["rates"].items():
             pooled = rate["pooled"]
-            before = (previous["stages"][stage]["rates"][name]["pooled"] or {}).get("value")
+            before = (baseline["stages"][stage]["rates"][name]["pooled"] or {}).get("value")
             if pooled is None or before is None or pooled["runs"] < MIN_REGRESSION_RUNS:
                 continue
             low, high = pooled["wilson"]
@@ -413,15 +489,25 @@ def _regressions(group: dict, previous: dict) -> list[dict]:
     return flags
 
 
-def _aggregate_exit_code(latest: Optional[dict], errors: list[dict]) -> int:
-    """The latest group's verdict: contract failures > drift > inconclusive > clean."""
-    if latest is None:
+def _current_groups(groups: list[dict]) -> list[int]:
+    """The groups of the newest run's code sha, every backbone (the newest run is in the last group)."""
+    if not groups:
+        return []
+    sha = groups[-1]["repo_git_sha"]
+    return [index for index, group in enumerate(groups) if group["repo_git_sha"] == sha]
+
+
+def _aggregate_exit_code(current: list[dict], share: Optional[float], errors: list[dict]) -> int:
+    """The current code's verdict: contract failures > drift > inconclusive > clean.
+
+    ``share`` is the unevaluable share of the current groups' scored stage verdicts.
+    """
+    if not current:
         return EXIT_INCONCLUSIVE
-    if latest["contract_failures"]:
+    if any(group["contract_failures"] for group in current):
         return EXIT_CONTRACT_FAILURES
-    if latest["regressions"]:
+    if any(group["regressions"] for group in current):
         return EXIT_DRIFT
-    share = latest["unevaluable_share"]
     if share is None or share > MAX_UNEVALUABLE_SHARE or errors:
         return EXIT_INCONCLUSIVE
     return EXIT_CLEAN
@@ -445,14 +531,16 @@ def aggregate(runs: list[dict], *, since: Optional[dt.date] = None,
     with ``card`` a ``stage-scorecard/v1`` envelope.  Pure: no disk access.
     """
     errors = sorted(errors, key=lambda row: row["pipeline_id"])
-    groups: list[dict] = []
-    for index, group in enumerate(_group_runs(runs)):
-        summary = _summarize_group(group, index)
-        if groups:
-            summary["compared_to"] = index - 1
-            summary["regressions"] = _regressions(summary, groups[-1])
-        groups.append(summary)
-    exit_code = _aggregate_exit_code(groups[-1] if groups else None, errors)
+    groups = [_summarize_group(group, index) for index, group in enumerate(_group_runs(runs))]
+    for index, summary in enumerate(groups):
+        baseline = _baseline(groups, index)
+        if baseline is not None:
+            summary["compared_to"] = baseline
+            summary["regressions"] = _regressions(summary, groups[baseline])
+    current = _current_groups(groups)
+    current_groups = [groups[index] for index in current]
+    share = _unevaluable_share(stage for group in current_groups for stage in group["stages"].values())
+    exit_code = _aggregate_exit_code(current_groups, share, errors)
     return {
         "schema_version": AGGREGATE_SCHEMA_VERSION,
         "since": since.isoformat() if since else None,
@@ -461,6 +549,9 @@ def aggregate(runs: list[dict], *, since: Optional[dt.date] = None,
         "count": len(runs),
         "groups": _rounded(groups),
         "latest_group": len(groups) - 1 if groups else None,
+        "current": {"repo_git_sha": groups[-1]["repo_git_sha"] if groups else None,
+                    "groups": current,
+                    "unevaluable_share": _rounded(share)},
         "verdict": _VERDICTS[exit_code],
         "exit_code": exit_code,
         "skipped": sorted(skipped, key=lambda row: row["pipeline_id"]),
@@ -482,7 +573,8 @@ def _cmd_aggregate(args: argparse.Namespace) -> int:
         except Exception as exc:  # noqa: BLE001 — the printed aggregate is still the result
             print(output)
             print(f"cannot write {aggregate_path()}: {_error_text(exc)}", file=sys.stderr)
-            return EXIT_WRITE_FAILED
+            # A failed write never hides a verdict that is not clean.
+            return EXIT_WRITE_FAILED if result["exit_code"] == EXIT_CLEAN else result["exit_code"]
         print(f"wrote {aggregate_path()}", file=sys.stderr)
     print(output)
     return result["exit_code"]
@@ -512,7 +604,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    args = _build_parser().parse_args(argv)
+    argv = sys.argv[1:] if argv is None else list(argv)
+    try:
+        args = _build_parser().parse_args(argv)
+    except SystemExit as exc:
+        if exc.code == 2 and argv[:1] == ["aggregate"]:
+            raise SystemExit(EXIT_AGGREGATE_USAGE) from None
+        raise
     if args.cmd == "score":
         return _cmd_score(args)
     if args.cmd == "aggregate":
