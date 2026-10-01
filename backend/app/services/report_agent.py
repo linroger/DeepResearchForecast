@@ -25,6 +25,7 @@ from enum import Enum
 
 from ..config import Config
 from ..utils import absence as _absence
+from ..utils import numeric as _numeric
 from ..utils import numeric_guards as _numeric_guards
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient, llm_call_timeout
@@ -1338,6 +1339,42 @@ def _citation_display_title(source: Dict[str, Any], tag: str = "") -> str:
         except Exception:  # noqa: BLE001 — display fallback only
             pass
     return title or domain or tag
+
+
+def _nonfinite_nulled_artifact(obj: Any, *, record_quality: bool) -> Tuple[Any, List[str]]:
+    """INFRA-4：(副本, 路径)——NaN/±Infinity 叶子置 None（非有限的浮点键名改为 json 默认写出的
+    字符串），不改入参；record_quality=True 且确有叶子被置 null 时把路径并入副本的
+    quality.nonfinite_nulled。副本按 allow_nan=False 必能序列化（非有限数层面）。"""
+    cleaned, paths = _numeric.null_nonfinite(obj)
+    if record_quality and paths and isinstance(cleaned, dict):
+        quality = cleaned.get("quality")
+        if quality is None:
+            quality = cleaned["quality"] = {}
+        if isinstance(quality, dict):
+            prior = quality.get("nonfinite_nulled")
+            merged = [p for p in prior if isinstance(p, str)] if isinstance(prior, list) else []
+            merged.extend(p for p in paths if p not in merged)
+            quality["nonfinite_nulled"] = merged
+    return cleaned, paths
+
+
+def _forecast_artifact_json(obj: Any, artifact: str, *,
+                            record_quality: bool = False) -> Tuple[str, Any]:
+    """INFRA-4（ARTIFACT_STRICT_JSON，默认开）：把预测工件序列化为标准 JSON，返回 (text, written)。
+
+    关闭：json.dumps 原样（NaN/Infinity 照写）。开启：有限数内容逐字节同旧输出；含 NaN/±Infinity
+    时改写副本（_nonfinite_nulled_artifact，不改入参），按严格 JSON 序列化成功后记一条 error（列出
+    JSON 路径）——绝不写出 NaN。written 即 text 所序列化的对象，调用方留用它，使内存副本与落盘一致。
+    """
+    if not getattr(Config, "ARTIFACT_STRICT_JSON", True):
+        return json.dumps(obj, ensure_ascii=False, indent=2), obj
+    try:
+        return _numeric.dumps_strict(obj, ensure_ascii=False, indent=2), obj
+    except _numeric.NonFiniteJSONError as exc:
+        cleaned, paths = _nonfinite_nulled_artifact(obj, record_quality=record_quality)
+        text = _numeric.dumps_strict(cleaned, ensure_ascii=False, indent=2)
+        logger.error(f"{artifact}: {exc}；已改写为标准 JSON 后落盘（{len(paths)} 处非有限数置 null）")
+        return text, cleaned
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -3773,6 +3810,17 @@ class ReportAgent:
                         )
                 except Exception as _ce:  # noqa: BLE001 — 批判失败沿用未批判骨架
                     logger.warning(f"骨架前置自校准失败（忽略）: {_ce}")
+            # INFRA-4（ARTIFACT_STRICT_JSON，默认开）：含 NaN/Infinity 的骨架不钉进章节提示词、
+            # 不早落 forecast.json，回退成稿后抽取（与骨架未产出情景的回退同路径）。
+            _spine_nonfinite = (_numeric.find_nonfinite(spine)
+                                if getattr(Config, "ARTIFACT_STRICT_JSON", True) else [])
+            if _spine_nonfinite:
+                self._forecast_spine = None
+                self._forecast_spine_block = ""
+                self._mark_spine_pack_published(False)
+                logger.warning(f"预测骨架含非有限数 {_spine_nonfinite[:10]}，不钉骨架、不早落 "
+                               f"forecast.json（回退为成稿后抽取）")
+                return
             self._forecast_spine = spine
             self._forecast_spine_block = _fe.render_forecast_spine_block(spine)
             self._mark_spine_pack_published(True)
@@ -3797,7 +3845,8 @@ class ReportAgent:
                 _early_provenance = self._model_provenance_block()
                 if _early_provenance is not None:
                     _early = dict(_early, model_provenance=_early_provenance)
-                write_text_atomic(fpath, json.dumps(_early, ensure_ascii=False, indent=2))
+                write_text_atomic(fpath, _forecast_artifact_json(
+                    _early, "forecast.json（骨架版）", record_quality=True)[0])
             except Exception as _pe:  # noqa: BLE001 — 早落失败不影响主流程
                 logger.warning(f"预测骨架早落 forecast.json 失败（忽略）: {_pe}")
             logger.info(
@@ -4331,8 +4380,10 @@ class ReportAgent:
                             _mcpath = os.path.join(
                                 ReportManager._get_report_folder(report_id),
                                 "market_comparison.json")
+                            # INFRA-4：非有限叶子置 null 后写出；内嵌副本由下方 forecast.json
+                            # 落盘记入 quality.nonfinite_nulled（$.market_comparison…）。
                             write_text_atomic(
-                                _mcpath, json.dumps(_mc, ensure_ascii=False, indent=2))
+                                _mcpath, _forecast_artifact_json(_mc, "market_comparison.json")[0])
                         except Exception as _mce:  # noqa: BLE001 — 落盘失败不影响主流程
                             logger.warning(f"落 market_comparison.json 失败（忽略）: {_mce}")
                     # XRUN-1(c): 与同图谱、不同模拟的上一份报告比对概率向量——
@@ -4540,7 +4591,11 @@ class ReportAgent:
             except Exception as _cde:  # noqa: BLE001 — 影子诊断，绝不影响产物
                 logger.warning(f"跨来源预测离散度诊断失败（忽略）: {_cde}")
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
-        write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
+        # INFRA-4（ARTIFACT_STRICT_JSON）：绝不写出 NaN/Infinity——置 null 并记 quality.nonfinite_nulled，
+        # 其后的内存副本与账本追加都用落盘的这一份。
+        _forecast_text, forecast = _forecast_artifact_json(forecast, "forecast.json",
+                                                           record_quality=True)
+        write_text_atomic(fpath, _forecast_text)
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
         # P2-4: 追加进校准账本（loop-closer；resolution 经 /api/v1/resolve 或 forecast_tools backtest）。
         # EVAL-1: 仅 FORECAST_LEDGER_COMMIT_MODE=legacy 在此（终审之前）追加；默认 published 模式
@@ -6889,7 +6944,8 @@ class ReportAgent:
                     fc.setdefault("quality", {})["lint"] = lint_rep
                     if projection is not None:
                         fc["quality"]["projection_attribution"] = projection
-                    write_text_atomic(fpath, json.dumps(fc, ensure_ascii=False, indent=2))
+                    write_text_atomic(fpath, _forecast_artifact_json(
+                        fc, "forecast.json", record_quality=True)[0])
                     if isinstance(getattr(self, "_forecast_spine", None), dict):
                         self._forecast_spine.setdefault("quality", {})["lint"] = lint_rep
                         if projection is not None:
