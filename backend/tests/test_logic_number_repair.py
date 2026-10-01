@@ -617,6 +617,21 @@ def test_lint_alias_s11_fails_closed(monkeypatch):
         "scenario_prob_mismatches"] == [failure]
 
 
+def test_gate_resolution_survives_a_broken_audit_module(monkeypatch):
+    """Review round 5: the gate is resolved on every report (default observe), so an import
+    failure of logic_number must not make the stabilizer or the final audit raise."""
+    import sys
+    import app.services as services
+    monkeypatch.setitem(sys.modules, "app.services.logic_number", None)   # every import now fails
+    monkeypatch.delattr(services, "logic_number", raising=False)
+    for raw, expected in (("observe", "observe"), ("off", "off"), ("numeric", "numeric"),
+                          ("bogus", "observe"), ("", "observe")):
+        monkeypatch.setattr(Config, "REPORT_LOGIC_NUMBER_GATE", raw, raising=False)
+        assert ReportAgent._logic_number_gate() == expected
+    monkeypatch.setattr(Config, "REPORT_LOGIC_NUMBER_GATE", "observe", raising=False)
+    assert _agent()._logic_number_observation("# R\n\n基准情景（40%）\n", _spine()) is None
+
+
 def test_config_default_and_env_example():
     assert Config.REPORT_LOGIC_NUMBER_GATE == "observe"
     assert ReportAgent._logic_number_gate() == "observe"

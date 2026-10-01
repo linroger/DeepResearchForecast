@@ -6748,9 +6748,18 @@ class ReportAgent:
 
     @staticmethod
     def _logic_number_gate() -> str:
-        """REPORT-3：生效的 REPORT_LOGIC_NUMBER_GATE（off / observe / numeric；未知值按 observe 并告警）。"""
-        from .logic_number import resolve_gate
-        return resolve_gate(getattr(Config, "REPORT_LOGIC_NUMBER_GATE", "observe"))
+        """REPORT-3：生效的 REPORT_LOGIC_NUMBER_GATE（off / observe / numeric；未知值按 observe 并告警）。
+
+        每份报告（默认 observe）都会走到这里：审计模块导入失败绝不能让稳定器或终审抛出，故退回
+        原始取值（off / numeric 照用，其余按 observe）并告警；numeric 分支自身仍失败即关闭。"""
+        raw = getattr(Config, "REPORT_LOGIC_NUMBER_GATE", "observe")
+        try:
+            from .logic_number import resolve_gate
+        except Exception as exc:  # noqa: BLE001 — 只读观测的门值解析不得阻断发布
+            logger.warning(f"logic_number 模块导入失败，按原始取值解析 REPORT_LOGIC_NUMBER_GATE: {exc}")
+            value = str(raw or "").strip().lower()
+            return value if value in ("off", "numeric") else "observe"
+        return resolve_gate(raw)
 
     def _spine_scenario_rows(self) -> List[Dict[str, Any]]:
         """REPORT-3：当前预测骨架（成稿后即最终 forecast）的情景行；无骨架/无情景时为空列表。"""
