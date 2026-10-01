@@ -665,7 +665,9 @@ def test_build_digest_wall_strips_and_drops_markers():
     assert dropped == 0
     assert "- Capacity reached 176 GW [S1] (VERIFIED)" in text
     assert "250 GW" not in text and "Sources differ" not in text
-    assert "- Scope differs [S1] and" in text and "Grid timelines?" in text
+    # FU-2: the digest walls with the strict rule, so a line with a claim only the
+    # withheld S2 backs ("and [S2]") is left out rather than shown with S1 alone.
+    assert "Scope differs" not in text and "Grid timelines?" in text
     assert text.split("SOURCE INDEX\n", 1)[1] == "[S1] Survey — a.example (" + rg.tier_label("S2") + ", fetched)"
     assert record["facts"][0]["text"] == "Capacity reached 176 GW [S1][S2]"   # the record is unchanged
     # Everything admissible: byte-identical to the digest without the wall.
@@ -673,6 +675,32 @@ def test_build_digest_wall_strips_and_drops_markers():
         lr.build_digest([record], ledger.get, 20000, "English")
     walled, lines, markers = lr.pit_wall_record(record, lambda sid: sid == 1)
     assert (lines, markers) == (2, 2) and walled["open_questions"] == ["Grid timelines?"]
+    walled, lines, markers = lr.pit_wall_record(record, lambda sid: sid == 1, strict=True)
+    assert (lines, markers) == (3, 1) and walled["conflicts"] == []
+
+
+def test_digest_never_shows_a_withheld_claim_beside_an_admissible_marker():
+    """FU-2 (TIME-9 open issue): with S2 withheld, the interleaved line would reach the
+    writers as "... [S1], while a brief projects 250 GW" under the old digest rule, and a
+    writer restating that sub-claim with [S1] would publish it looking properly cited."""
+    ledger = {1: {"sid": 1, "title": "Survey", "domain": "a.example", "tier": "S2", "fetched": True},
+              2: {"sid": 2, "title": "Brief", "domain": "b.example", "tier": "S3", "fetched": False},
+              3: {"sid": 3, "title": "Census", "domain": "c.example", "tier": "S1", "fetched": True}}
+    record = {"id": "K1", "facts": [
+        {"text": "Capacity reached 176 GW [S1], while a brief projects 250 GW [S2]", "tag": "REPORTED",
+         "sids": [1, 2]},
+        {"text": "Demand grew 12% [S3][S2]", "tag": "VERIFIED", "sids": [2, 3]},
+        {"text": "Imports fell 5% [S3]", "tag": "VERIFIED", "sids": [3]}]}
+    text, _ = lr.build_digest([record], ledger.get, 20000, "English", admissible=lambda sid: sid != 2)
+    assert "250 GW" not in text and "176 GW" not in text
+    assert "- Demand grew 12% [S3] (VERIFIED)" in text and "- Imports fell 5% [S3] (VERIFIED)" in text
+    assert "[S2]" not in text
+    # The wall counters count with the same rule the digest used.
+    engine = types.SimpleNamespace(
+        _pit_admissible=lambda sid: sid != 2, records={"K1": record},
+        kiqs=[types.SimpleNamespace(id="K1")], _evidence_sids=lambda: [1, 2, 3])
+    assert lr._Engine._pit_wall_counts(engine) == {
+        "sids_withheld": 1, "digest_lines_dropped": 1, "digest_markers_stripped": 1}
 
 
 def _walled_fallback_engine(records, admissible):
@@ -718,10 +746,11 @@ def test_citation_clusters_group_the_markers_of_one_claim():
 
 
 def test_published_findings_keep_no_claim_only_an_inadmissible_source_backs():
-    """The digest (writer input) strips a failing marker wherever it stands, as the spec
-    says; the deterministic sections publish a finding only when each of its claims keeps
-    an admissible source, so a sub-claim only a withheld source backs is never published
-    uncited next to an admissible marker."""
+    """Without ``strict`` the wall strips a failing marker wherever it stands (TIME-9's
+    original digest rule); with it (the deterministic sections and, since FU-2, the
+    digest) a finding is kept only when each of its claims keeps an admissible source,
+    so a sub-claim only a withheld source backs is never shown uncited next to an
+    admissible marker."""
     interleaved = {"text": "Capacity reached 176 GW [S1], while a brief projects 250 GW [S2]", "tag": "REPORTED",
                    "sids": [1, 2]}
     leading = {"text": "A brief projects 250 GW [S2]; capacity reached 176 GW [S1]", "tag": "REPORTED",

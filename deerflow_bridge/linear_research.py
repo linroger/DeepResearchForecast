@@ -4398,14 +4398,18 @@ def build_digest(records: Sequence[Mapping[str, Any]], ledger_get: Callable[[int
     lowest-priority lines first.  With ``dates`` (RESEARCH_SOURCE_DATES) a
     dated source's index entry ends ``, published X`` inside its parentheses.
     With ``admissible`` (a gated hindcast's citation wall, TIME-9) each record
-    is first walled (:func:`pit_wall_record`: failing markers stripped, a line
-    whose every marker failed left out) and the SOURCE INDEX lists only
-    admissible sources.
+    is first walled with the strict rule the deterministic sections use
+    (:func:`pit_wall_record` with ``strict``, FU-2): a line is left out when
+    any of its claims is cited only by inadmissible sources, so a writer never
+    sees a withheld source's claim stripped of its marker beside an
+    admissible one ("176 GW [S1], while a brief projects 250 GW [S2]" with S2
+    withheld); a failing marker next to an admissible one in the same claim
+    is stripped.  The SOURCE INDEX lists only admissible sources.
     Returns ``(text, dropped_line_count)``; the count is of lines the caps dropped.
     """
     if admissible is not None:
         admissible = _memoized_sid_check(admissible)
-        records = [pit_wall_record(record, admissible)[0] for record in records]
+        records = [pit_wall_record(record, admissible, strict=True)[0] for record in records]
     ordered = sorted(records, key=lambda r: _natural_key(str(r.get("id"))))
     per_kiq = int(min(12000, max(3000, digest_cap / max(1, len(ordered)))))
     blocks: list[str] = []
@@ -8206,11 +8210,13 @@ class _Engine:
         """What the citation wall kept out of the report (TIME-9): the
         evidence's sources that are not admissible (``sids_withheld``), and the
         evidence digest's lines left out and markers stripped
-        (:func:`pit_wall_record` over the records the digest is built from)."""
+        (:func:`pit_wall_record` with the digest's strict rule over the
+        records the digest is built from, so the counts match what the
+        writers saw)."""
         admissible = _memoized_sid_check(self._pit_admissible)
         lines = markers = 0
         for record in (self.records[k.id] for k in self.kiqs if k.id in self.records):
-            _, dropped, stripped = pit_wall_record(record, admissible)
+            _, dropped, stripped = pit_wall_record(record, admissible, strict=True)
             lines += dropped
             markers += stripped
         withheld = sum(1 for sid in self._evidence_sids() if not admissible(sid))
