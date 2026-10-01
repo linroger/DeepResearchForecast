@@ -132,8 +132,10 @@ SIM_METER_MARKERS_OPTION = "sim_llm_telemetry_recorded_by_sim"
 SIM_METER_LEGACY_MARKER_OPTION = "sim_llm_telemetry_recorded"
 
 # SIM-7: a scenario overlay may declare a human-authored, whole-run outcome power per actor
-# in [0, SCENARIO_OUTCOME_POWER_MAX]; each applied value is labelled with this basis.
+# in [0, SCENARIO_OUTCOME_POWER_MAX], stored rounded to SCENARIO_OUTCOME_POWER_DECIMALS
+# places; each applied value is labelled with this basis.
 SCENARIO_OUTCOME_POWER_MAX = 10.0
+SCENARIO_OUTCOME_POWER_DECIMALS = 6
 SCENARIO_OUTCOME_POWER_BASIS = "scenario_overlay"
 
 ACTOR_INTELLIGENCE_SCHEMA_VERSION = "actor-intelligence/v1"
@@ -8447,6 +8449,80 @@ def seed_scenario_pin(primary_fc: Any) -> Optional[list]:
         return None
 
 
+def _apply_outcome_power_overrides(agents: list[dict[str, Any]], overrides: Any) -> None:
+    """SIM-7: apply an overlay's ``outcome_power_overrides`` to ``agents`` in place.
+
+    Every entry is validated on its own and a bad one is skipped with a warning (fail
+    closed per entry, never a PREPARE crash). The result never depends on the key order
+    of ``overrides``, so the EVAL-1 ``scenario_key`` (a sorted-key fingerprint of the
+    overlay) names exactly one effective config:
+
+    * a name reaches every agent whose ``entity_name`` normalizes to the same key, so
+      duplicate graph nodes of one actor all lose (or gain) authority together; a
+      warning names the agent count;
+    * spellings of one name that declare different powers (after rounding) are all
+      skipped; spellings that agree apply once;
+    * a positive power that rounds to 0 is skipped, because the stored 0 would read as
+      "loses all authority", which the author did not declare.
+
+    An absent or empty value changes nothing; a non-dict one is ignored with a warning.
+    """
+    if not overrides:
+        return
+    if not isinstance(overrides, dict):
+        logger.warning("outcome_power_overrides ignored: expected {name: power}, got %s",
+                       type(overrides).__name__)
+        return
+    agents_by_key: dict[str, list[dict[str, Any]]] = {}
+    for agent in agents:
+        entity_name = agent.get("entity_name")
+        key = normalize_name(entity_name) if entity_name else ""
+        if key:  # a name that normalizes to "" (punctuation only) is never matchable
+            agents_by_key.setdefault(key, []).append(agent)
+
+    resolution = 10.0 ** -SCENARIO_OUTCOME_POWER_DECIMALS
+    declared: dict[str, list[tuple[str, float]]] = {}  # normalized key → [(spelling, power)]
+    for name, value in overrides.items():
+        key = normalize_name(str(name))
+        if key not in agents_by_key:
+            logger.warning("outcome_power_overrides: no agent named %r", name)
+            continue
+        try:
+            # A JSON bool is not a power level (float(True) would read it as 1.0); an
+            # oversized JSON integer raises OverflowError instead of becoming inf.
+            p = float("nan") if isinstance(value, bool) else float(value)
+        except (TypeError, ValueError, OverflowError):
+            p = float("nan")
+        if not (math.isfinite(p) and 0.0 <= p <= SCENARIO_OUTCOME_POWER_MAX):
+            logger.warning("outcome_power_overrides: skipped %r for %r (need a finite number "
+                           "in [0, %g])", value, name, SCENARIO_OUTCOME_POWER_MAX)
+            continue
+        power = round(p, SCENARIO_OUTCOME_POWER_DECIMALS) or 0.0  # `or 0.0` folds -0.0 into 0.0
+        if p > 0.0 and power == 0.0:
+            logger.warning("outcome_power_overrides: skipped %r for %r (positive, but it rounds "
+                           "to 0 at %d decimals and a stored 0 means no authority; declare 0 or "
+                           "at least %g)", value, name, SCENARIO_OUTCOME_POWER_DECIMALS,
+                           resolution)
+            continue
+        declared.setdefault(key, []).append((str(name), power))
+
+    for key, entries in declared.items():
+        spellings = sorted(spelling for spelling, _ in entries)
+        powers = sorted({power for _, power in entries})
+        if len(powers) > 1:
+            logger.warning("outcome_power_overrides: %s name the same actor with different "
+                           "powers %s; all of them skipped", spellings, powers)
+            continue
+        targets = agents_by_key[key]
+        if len(targets) > 1:
+            logger.warning("outcome_power_overrides: %s reaches %d agents with the same "
+                           "normalized name; each gets power %g",
+                           spellings, len(targets), powers[0])
+        for agent in targets:
+            agent["outcome_power"] = powers[0]
+            agent["outcome_power_basis"] = SCENARIO_OUTCOME_POWER_BASIS
+
+
 # ---------------------------------------------------------------------------
 # 编排器
 # ---------------------------------------------------------------------------
@@ -9500,13 +9576,15 @@ class PipelineOrchestrator:
         whole-run outcome power — the counterfactual lever ("what if the regulator loses
         authority") that influence_overrides cannot express, because visibility never becomes
         power (I-15). A valid entry sets ``outcome_power`` (rounded to 6 places) and
-        ``outcome_power_basis="scenario_overlay"`` on the matched agent; the decision channel
-        (both producers) reads it through ``_outcome_power_map`` and its decisions rows carry
-        it. 0 keeps the actor in the roster with zero outcome weight. Entries that name no
-        agent, are not a number (bools included), are non-finite or fall outside [0, 10] are
-        skipped with a warning; a non-dict value is ignored with a warning. Assignment is
-        idempotent, so the corrupt-RUN reapply stays stable; an overlay without the key leaves
-        the config untouched.
+        ``outcome_power_basis="scenario_overlay"`` on every agent whose name normalizes to the
+        entry's; the decision channel (both producers) reads it through ``_outcome_power_map``
+        and its decisions rows carry it. 0 keeps the actor in the roster with zero outcome
+        weight. Entries that name no agent, are not a number (bools included), are non-finite,
+        fall outside [0, 10] or are positive but round to 0 are skipped with a warning; spellings
+        of one name that declare different powers are all skipped, so the result never depends
+        on key order; a non-dict value is ignored with a warning. Assignment is idempotent, so
+        the corrupt-RUN reapply stays stable; an overlay without the key leaves the config
+        untouched. See ``_apply_outcome_power_overrides``.
         """
         from ..utils.actors import normalize_name
         agents = config.get("agent_configs") or []
@@ -9526,36 +9604,8 @@ class PipelineOrchestrator:
             if a is not None:
                 a["stance"] = str(stance)
 
-        # SIM-7: human-authored outcome power. Every entry is validated on its own and a bad
-        # one is skipped with a warning (fail closed per entry, never a PREPARE crash).
-        pw = (overlay or {}).get("outcome_power_overrides") or {}
-        if not isinstance(pw, dict):
-            logger.warning("outcome_power_overrides ignored: expected {name: power}, got %s",
-                           type(pw).__name__)
-            pw = {}
-        power_names: dict[str, Any] = {}
-        for name, value in pw.items():
-            key = normalize_name(str(name))
-            a = by_name.get(key) if key else None
-            if a is None:
-                logger.warning("outcome_power_overrides: no agent named %r", name)
-                continue
-            try:
-                # A JSON bool is not a power level (float(True) would read it as 1.0); an
-                # oversized JSON integer raises OverflowError instead of becoming inf.
-                p = float("nan") if isinstance(value, bool) else float(value)
-            except (TypeError, ValueError, OverflowError):
-                p = float("nan")
-            if not (math.isfinite(p) and 0.0 <= p <= SCENARIO_OUTCOME_POWER_MAX):
-                logger.warning("outcome_power_overrides: skipped %r for %r (need a finite number "
-                               "in [0, %g])", value, name, SCENARIO_OUTCOME_POWER_MAX)
-                continue
-            if key in power_names:
-                logger.warning("outcome_power_overrides: %r and %r name the same agent; "
-                               "the later value %r wins", power_names[key], name, value)
-            power_names[key] = name
-            a["outcome_power"] = round(p, 6) or 0.0  # `or 0.0` folds -0.0 into 0.0
-            a["outcome_power_basis"] = SCENARIO_OUTCOME_POWER_BASIS
+        # SIM-7: human-authored outcome power (validation and resolution rules in the helper).
+        _apply_outcome_power_overrides(agents, (overlay or {}).get("outcome_power_overrides"))
 
         injected = (overlay or {}).get("injected_events") or []
         if injected:

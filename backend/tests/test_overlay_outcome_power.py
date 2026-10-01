@@ -4,11 +4,14 @@
 lever a what-if fork lacked: a declared, whole-run outcome power per actor in
 [0, 10], labelled ``outcome_power_basis="scenario_overlay"``. Pins the
 normalize_name matching, the per-entry fail-closed validation (skip + warning,
-never a PREPARE crash), idempotent reapplication, the I-15 wall (visibility via
-influence_overrides never becomes power), the unchanged no-key path, and the
-pickup by both decision-channel producers: the post-hoc ``run_decision_channel``
-replay and the in-band calendar evolver (``_InbandWorldEvolution``), whose
-decisions rows carry the override. Offline and deterministic (FakeLLMClient).
+never a PREPARE crash), the key-order-independent resolution of duplicate agent
+names and conflicting spellings, idempotent reapplication, the I-15 wall
+(visibility via influence_overrides never becomes power), the unchanged no-key
+path, the PREPARE call site (overlay applied, then the one reseal binds the
+bytes RUN admits), and the pickup by both decision-channel producers: the
+post-hoc ``run_decision_channel`` replay and the in-band calendar evolver
+(``_InbandWorldEvolution``), whose decisions rows carry the override. Offline
+and deterministic (FakeLLMClient).
 """
 
 import copy
@@ -183,13 +186,111 @@ def test_one_bad_entry_does_not_block_the_valid_ones(log):
     assert len(log.warnings) == 2
 
 
-def test_two_spellings_of_one_actor_warn_and_the_later_wins(log):
+@pytest.mark.parametrize("value", [4e-7, 1e-9, "0.0000004"])
+def test_positive_power_that_rounds_to_zero_is_skipped(value, log):
+    """A declared positive power is never silently stored as 0 ("loses all authority")."""
+    config = _config()
+    before = copy.deepcopy(config)
+
+    _apply(config, {"outcome_power_overrides": {"Policy actor": value}})
+
+    assert config == before
+    assert len(log.warnings) == 1
+    assert "outcome_power_overrides: skipped" in log.warnings[0]
+    assert "rounds to 0 at 6 decimals" in log.warnings[0]
+
+
+@pytest.mark.parametrize("value", [5.000001e-7, 6e-7, 1e-6])
+def test_positive_power_that_rounds_up_to_the_resolution_is_kept(value, log):
     config = _config()
 
-    _apply(config, {"outcome_power_overrides": {"Policy actor": 0.2, "POLICY ACTOR": 3}})
+    _apply(config, {"outcome_power_overrides": {"Policy actor": value}})
 
-    assert config["agent_configs"][0]["outcome_power"] == 3.0
-    assert len(log.warnings) == 1 and "name the same agent" in log.warnings[0]
+    assert config["agent_configs"][0]["outcome_power"] == 1e-6
+    assert config["agent_configs"][0]["outcome_power_basis"] == "scenario_overlay"
+    assert log.warnings == []
+
+
+def _duplicate_name_config():
+    config = _config()
+    config["agent_configs"] = [
+        {"agent_id": 1, "entity_name": "Federal Reserve", "influence_weight": 2.0},
+        {"agent_id": 2, "entity_name": "federal reserve", "influence_weight": 1.0},
+        {"agent_id": 3, "entity_name": "Market Maker", "influence_weight": 1.0},
+    ]
+    return config
+
+
+def test_a_name_reaches_every_agent_with_that_normalized_name(log):
+    """Duplicate graph nodes of one actor (legacy / no-cast paths) all lose authority
+    together, with a warning, instead of only the last node in the name map."""
+    config = _duplicate_name_config()
+
+    _apply(config, {"outcome_power_overrides": {"Federal Reserve": 0.0}})
+
+    fed_1, fed_2, market = config["agent_configs"]
+    for agent in (fed_1, fed_2):
+        assert agent["outcome_power"] == 0.0
+        assert agent["outcome_power_basis"] == "scenario_overlay"
+    assert "outcome_power" not in market
+    assert dc._outcome_power_map(config["agent_configs"]) == {1: 0.0, 2: 0.0}
+    assert log.warnings == [
+        "outcome_power_overrides: ['Federal Reserve'] reaches 2 agents with the same "
+        "normalized name; each gets power 0"]
+
+
+@pytest.mark.parametrize("overrides", [
+    {"Policy actor": 0.0, "POLICY ACTOR": 5, "Market Maker": 4.0},
+    {"Market Maker": 4.0, "POLICY ACTOR": 5, "Policy actor": 0.0},
+])
+def test_spellings_that_disagree_are_all_skipped_whatever_the_key_order(overrides, log):
+    config = _config()
+
+    _apply(config, {"outcome_power_overrides": overrides})
+
+    policy, market = config["agent_configs"]
+    assert "outcome_power" not in policy and "outcome_power_basis" not in policy
+    assert market["outcome_power"] == 4.0  # an unrelated valid entry still applies
+    assert log.warnings == [
+        "outcome_power_overrides: ['POLICY ACTOR', 'Policy actor'] name the same actor "
+        "with different powers [0.0, 5.0]; all of them skipped"]
+
+
+def test_spellings_that_agree_after_rounding_apply_once(log):
+    config = _config()
+
+    _apply(config, {"outcome_power_overrides": {"Policy actor": 0.2, "POLICY ACTOR": 0.2000001}})
+
+    assert config["agent_configs"][0]["outcome_power"] == 0.2
+    assert log.warnings == []
+
+
+def test_key_order_never_changes_the_config_behind_one_scenario_key(log):
+    """EVAL-1 fingerprints the overlay with sorted keys, so two key orders of one overlay
+    share a scenario_key; they must therefore produce the same effective config."""
+    forward = {"Regulator": 0, "regulator": 5, "Federal Reserve": 0.5, "Market Maker": 3}
+    reverse = dict(reversed(list(forward.items())))
+    assert list(forward) != list(reverse)
+
+    def _run(overrides):
+        config = _duplicate_name_config()
+        config["agent_configs"].append({"agent_id": 4, "entity_name": "Regulator"})
+        overlay = {"outcome_power_overrides": overrides}
+        _apply(config, overlay)
+        identity = _po._scenario_ledger_identity(
+            {"scenario_label": "regulator weakened", "scenario_overlay": overlay})
+        return config, identity["scenario_key"]
+
+    config_forward, key_forward = _run(forward)
+    config_reverse, key_reverse = _run(reverse)
+
+    assert key_forward == key_reverse
+    # byte-identical as the PREPARE call site writes it, not just deep-equal
+    assert (json.dumps(config_forward, ensure_ascii=False, indent=2)
+            == json.dumps(config_reverse, ensure_ascii=False, indent=2))
+    assert dc._outcome_power_map(config_forward["agent_configs"]) == {1: 0.5, 2: 0.5, 3: 3.0}
+    regulator = config_forward["agent_configs"][3]
+    assert "outcome_power" not in regulator and "outcome_power_basis" not in regulator
 
 
 # ─────────────────────────────────────────── reapply and independence
@@ -286,14 +387,20 @@ def test_post_hoc_replay_zero_power_actor_has_no_outcome_weight(log):
     assert res["round_accounting"]["valid_transitions"] == len(_ROUNDS)
 
 
-def test_inband_evolver_reads_the_override_into_decisions_rows(tmp_path, monkeypatch, log):
-    """The in-band calendar producer (default path) consumes the same explicit power and
-    writes it to decisions.jsonl, so the override is auditable per row."""
+def _run_parallel_simulation():
+    """The RUN child module, imported the way the simulation scripts' tests do."""
     scripts = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                            "scripts")
     if scripts not in sys.path:
         sys.path.insert(0, scripts)
     import run_parallel_simulation as rps
+    return rps
+
+
+def test_inband_evolver_reads_the_override_into_decisions_rows(tmp_path, monkeypatch, log):
+    """The in-band calendar producer (default path) consumes the same explicit power and
+    writes it to decisions.jsonl, so the override is auditable per row."""
+    rps = _run_parallel_simulation()
 
     period = {"round": 0, "period_start": "2026-10-01", "period_end": "2026-12-31",
               "label": "2026-Q4"}
@@ -335,3 +442,43 @@ def test_inband_evolver_reads_the_override_into_decisions_rows(tmp_path, monkeyp
     assert all("weight" not in r for r in rows)  # audit rows strip the step weight
     assert traj["outcome"]["shares"] == traj_1["outcome"]["shares"]
     assert traj["round_accounting"]["valid_transitions"] == 1
+
+
+# ───────────────────────────────────────────────── PREPARE call site
+def test_prepare_call_site_seals_the_overridden_config_for_run(monkeypatch, tmp_path):
+    """The real _run state machine (every service faked, PREPARE rebuilt): the call site
+    applies the overlay to simulation_config.json, the later world-state seed rewrite keeps
+    it, and the one reseal binds the final bytes, so the config RUN admits carries it."""
+    from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
+
+    real_apply = _po.PipelineOrchestrator.apply_scenario_overlay_to_config
+
+    def apply_on_cast(config, overlay):
+        # The harness's fake PREPARE writes no cast: seed the agents the generator would,
+        # then run the real overlay application on them.
+        config.setdefault("agent_configs", _config()["agent_configs"])
+        return real_apply(config, overlay)
+
+    monkeypatch.setattr(_po.PipelineOrchestrator, "apply_scenario_overlay_to_config",
+                        staticmethod(apply_on_cast))
+    overlay = {"outcome_power_overrides": {"POLICY ACTOR": 0.2, "Market Maker": 0}}
+    result = _exercise_prepare_run_resume(
+        monkeypatch, tmp_path, rebuild_prepare=True,
+        extra_options={"scenario_overlay": copy.deepcopy(overlay)})
+
+    assert result.state.status == "completed", result.state.error
+    assert result.manager_calls == {"create": 1, "prepare": 1, "reseal": 1, "validate": 0}
+    assert result.start_calls == [result.new_id]
+    sim_dir = result.simulation_root / result.new_id
+    config_path = sim_dir / "simulation_config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    policy, market = config["agent_configs"]
+    assert (policy["outcome_power"], policy["outcome_power_basis"]) == (0.2, "scenario_overlay")
+    assert (market["outcome_power"], market["outcome_power_basis"]) == (0.0, "scenario_overlay")
+    assert config["world_state_seed"]["horizon_date"] == "2035-12-31"  # written after apply
+    sealed = json.loads((sim_dir / "state.json").read_text(encoding="utf-8"))
+    assert sealed["simulation_config_sha256"] == _po._sha256_file(str(config_path))
+    child_manifest = _run_parallel_simulation().validate_direct_child_config_seal(
+        str(config_path), sealed["simulation_config_manifest_sha256"])
+    assert child_manifest["manifest_sha256"] == sealed["simulation_config_manifest_sha256"]
+    assert dc._outcome_power_map(config["agent_configs"]) == {1: 0.2, 2: 0.0}
