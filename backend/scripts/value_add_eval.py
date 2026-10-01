@@ -1,7 +1,8 @@
 """EVAL-20 (P07 part 2/2): label-free block-movement study over frozen evaluation bundles.
 
-    python backend/scripts/value_add_eval.py plan  --bundle DIR [--bundle DIR ...] --model P:M [...]
+    python backend/scripts/value_add_eval.py plan  --bundle DIR [...] | --bundles-root DIR  --model P:M [...]
     python backend/scripts/value_add_eval.py run   (same inputs) [--live] [--max-calls N] [--allow-unpinned]
+                                                   [--allow-characterization]
     python backend/scripts/value_add_eval.py score --study-id ID
 
 Each target of each bundle (EVAL-19, re-hashed on load) is re-asked under the arms
@@ -14,20 +15,25 @@ the bundle marks unavailable is skipped with the reason, never substituted.
 app/services/value_add_stats scores how far each block moves the forecast beyond the
 A/A noise floor; nothing is applied or promoted.
 
-plan prints the exact call count and the clusters (bundles) each model gets per block,
+An undated bundle found through --bundles-root (no as_of: the probe could not state the
+date) is left out and listed; one given with --bundle is refused. plan prints the exact
+call count, the clusters (bundles) each model gets per block and the bundles left out,
 and makes no call. run needs VALUE_ADD_EVAL_ENABLED or --live, refuses a plan over
-EVAL_STUDY_MAX_CALLS unless --max-calls covers it, refuses a CLI model the CLI would not
+EVAL_STUDY_MAX_CALLS unless --max-calls covers it, refuses a study no block of which can
+get a scored verdict (every block under value_add_stats.MIN_CLUSTERS bundles, or fewer
+than 3 replicates) unless --allow-characterization, refuses a CLI model the CLI would not
 be given (it would run the account default) unless --allow-unpinned, disables the LLM
 cache and keeps the LLM meter on (this process only), pre-registers study.json before the
 first call (the sha of every probe prompt, the model each --model spec resolves to, the
 bootstrap seed and the scoring parameters EVAL_INERT_MARGIN / EVAL_PROBE_FIDELITY_MAX /
 EVAL_BOOTSTRAP_RESAMPLES / MIN_CLUSTERS), stamps its sha on every row, stops when the run
 budget (LLM_RUN_BUDGET_*) is spent, writes each attempt's meter record even when SIGTERM
-or SIGHUP ends it, and resumes ok rows with the same prompt hash of attempts the meter
-vouches for (the cells of an attempt killed before its record are asked again); a resume
-whose registration would differ (another resolved model, other scoring knobs) is refused
-before any call. score refuses an edited study.json and scores only
-rows of the registered design with the registered seed. It marks the study invalid
+or SIGHUP ends it (a signal already ignored, such as nohup's SIGHUP, stays ignored), and
+resumes ok rows with the same prompt hash of attempts the meter vouches for (the cells of
+an attempt killed before its record are asked again); a resume whose registration would
+differ (another resolved model, other scoring knobs) is refused before any call. score
+refuses an edited study.json and scores only rows of the registered design with the
+registered seed. It marks the study invalid
 (exit 4) when any elicitation was served from a cache, the meter cannot vouch for a scored
 row, or a model changed identity mid-study; a model characterization-only when any of its
 registered elicitations has no ok row (every model when replicates are below 3), and a
@@ -87,6 +93,11 @@ EXIT_INVALID = 4
 STATUS_OK = "ok"
 STATUS_PARSE_FAILED = "parse_failed"
 STATUS_CALL_FAILED_PREFIX = "call_failed:"
+# An as_of that is no date: EVAL-19's backfill records as_of None (as_of_source 'unknown')
+# when the ledger commit cannot be dated; the literal is treated as undated too.
+AS_OF_UNKNOWN = "unknown"
+# Why a bundle found through --bundles-root is left out of the study.
+EXCLUDED_NO_AS_OF = "no_as_of"
 # One safe path component, so a study never writes outside evaluation_ledger_dir()/value_add/.
 STUDY_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
 # Why score marks the whole study invalid (exit 4).
@@ -97,6 +108,8 @@ INVALID_IDENTITY_DRIFT = "model_identity_drift"
 # Why verdicts are characterization-only: for every model, or for one model.
 CHAR_REPLICATES = "replicates_below_min"
 CHAR_INCOMPLETE = "incomplete"
+# Why run refuses a study without --allow-characterization (with CHAR_REPLICATES).
+CHAR_TOO_FEW_CLUSTERS = "every_block_below_min_clusters"
 # Why a model's verdicts are advisory (on top of value_add_stats' own reasons).
 ADVISORY_SCORING_OVERRIDE = "scoring_not_preregistered"
 ADVISORY_SERVED_MODEL_DRIFT = "served_model_drift"
@@ -124,8 +137,10 @@ def checked_study_id(study_id: Any) -> str:
     return text
 
 
-def _bundle_dirs(args: argparse.Namespace) -> List[str]:
-    dirs = list(args.bundle or [])
+def _bundle_dirs(args: argparse.Namespace) -> List[Tuple[str, bool]]:
+    """``(bundle dir, given explicitly)``: every --bundle, then every <report>/eval_bundle
+    under --bundles-root."""
+    dirs = [(path, True) for path in args.bundle or []]
     root = getattr(args, "bundles_root", None)
     if root:
         if not os.path.isdir(root):
@@ -133,8 +148,14 @@ def _bundle_dirs(args: argparse.Namespace) -> List[str]:
         for report in sorted(os.listdir(root)):
             candidate = os.path.join(root, report, eval_bundle.BUNDLE_DIRNAME)
             if os.path.exists(os.path.join(candidate, eval_bundle.MANIFEST_NAME)):
-                dirs.append(candidate)
+                dirs.append((candidate, False))
     return dirs
+
+
+def undated(as_of: Any) -> bool:
+    """True when a bundle's as_of cannot be stated in the probe ('Today is ...'): None or
+    empty, or 'unknown'."""
+    return not as_of or str(as_of).strip().lower() == AS_OF_UNKNOWN
 
 
 def _positive_int(value: Any, name: str) -> int:
@@ -168,12 +189,16 @@ def arm_blocks(arm: str, statuses: Dict[str, str]) -> Tuple[Optional[Tuple[str, 
     return tuple(b for b in BLOCK_ORDER if b in chosen), None
 
 
-def build_study(args: argparse.Namespace) -> Dict[str, Any]:
-    """The pre-registered study: arms, models, replicates, bootstrap seed, scoring parameters
-    and per bundle its target ids, pre-market probabilities and the sha of every probe prompt
-    (every bundle re-hashed: a tampered one aborts). The same bundle given twice is kept once;
-    two bundles of one report, a bundle without as_of, no bundle, no target at all, a count
-    below 1, a scoring knob out of range and a path-like --study-id are refused."""
+def build_study(args: argparse.Namespace) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    """``(study, excluded)``. The study is what run pre-registers: arms, models, replicates,
+    bootstrap seed, scoring parameters and per bundle its target ids, pre-market
+    probabilities and the sha of every probe prompt (every bundle re-hashed: a tampered one
+    aborts). The same bundle given twice is kept once. An undated bundle found through
+    --bundles-root (an EVAL-19 backfill whose ledger commit could not be dated) is left out
+    and listed in ``excluded`` ({bundle_dir, report, reason}) rather than refusing every
+    other bundle; it is not registered, since it is no part of the design. Refused: an
+    undated bundle given with --bundle, two bundles of one report, no dated bundle, no
+    target at all, a count below 1, a scoring knob out of range and a path-like --study-id."""
     study_id = getattr(args, "study_id", None)
     if study_id is not None:
         study_id = checked_study_id(study_id)
@@ -184,23 +209,27 @@ def build_study(args: argparse.Namespace) -> Dict[str, Any]:
                                else args.targets_per_bundle,
                                "targets per bundle (--targets-per-bundle / EVAL_TARGETS_PER_BUNDLE)")
     bundles: List[Dict[str, Any]] = []
+    excluded: List[Dict[str, Any]] = []
     seen_sha: Dict[str, str] = {}
     seen_report: Dict[str, str] = {}
-    for path in _bundle_dirs(args):
+    for path, explicit in _bundle_dirs(args):
         manifest, texts = eval_bundle.load_bundle(path)
         sha = manifest["bundle_sha256"]
         if sha in seen_sha:
             continue
-        seen_sha[sha] = path
         report = (manifest.get("ids") or {}).get("report")
+        as_of = manifest.get("as_of")
+        if undated(as_of):
+            if explicit:
+                raise StudyRefused(f"bundle {path} has no as_of; the probe cannot state the date")
+            excluded.append({"bundle_dir": os.path.abspath(path), "report": report, "reason": EXCLUDED_NO_AS_OF})
+            continue
+        seen_sha[sha] = path
         if report is not None:
             if report in seen_report:
                 raise StudyRefused(f"bundles {seen_report[report]} and {path} are both of report {report}; "
                                    "a study takes one bundle per report")
             seen_report[report] = path
-        as_of = manifest.get("as_of")
-        if not as_of:
-            raise StudyRefused(f"bundle {path} has no as_of; the probe cannot state the date")
         statuses = {name: meta.get("status") for name, meta in manifest["blocks"].items()}
         targets = (manifest.get("targets") or [])[:per_bundle]
         prompts: Dict[str, Dict[str, str]] = {}
@@ -221,6 +250,8 @@ def build_study(args: argparse.Namespace) -> Dict[str, Any]:
             "prompt_sha256": prompts,
         })
     if not bundles:
+        if excluded:
+            raise StudyRefused(f"every bundle found has no as_of ({_excluded_text(excluded)})")
         raise StudyRefused("no evaluation bundle given (--bundle / --bundles-root)")
     if not any(bundle["targets"] for bundle in bundles):
         raise StudyRefused("the bundles hold no target to ask")
@@ -240,7 +271,11 @@ def build_study(args: argparse.Namespace) -> Dict[str, Any]:
     # study.json and is refused before any call instead of silently starting a new paid study.
     study["study_id"] = study_id or "va_" + canonical_json_sha256(study)[:12]
     study["scoring"] = scoring
-    return study
+    return study, excluded
+
+
+def _excluded_text(excluded: Sequence[Mapping[str, Any]]) -> str:
+    return ", ".join(f"{entry['bundle_dir']} ({entry['reason']})" for entry in excluded)
 
 
 def planned_calls(study: Dict[str, Any]) -> Dict[str, Any]:
@@ -273,6 +308,20 @@ def planned_clusters(study: Mapping[str, Any]) -> Dict[str, int]:
 
 def _below_min_clusters(clusters: Mapping[str, int]) -> List[str]:
     return [block for block, count in clusters.items() if count < vas.MIN_CLUSTERS]
+
+
+def characterization_by_design(study: Mapping[str, Any], clusters: Mapping[str, int]) -> List[str]:
+    """Why no block of any model can get a scored verdict whatever the replies (every one
+    would be characterization only): replicates below MIN_REPLICATES, or every block under
+    value_add_stats.MIN_CLUSTERS clusters (``clusters`` is planned_clusters; every model gets
+    the same bundles). [] when some block can be scored. run refuses such a study unless
+    --allow-characterization is given, so its calls are never spent by accident."""
+    reasons = []
+    if int(study["replicates"]) < MIN_REPLICATES:
+        reasons.append(CHAR_REPLICATES)
+    if all(count < vas.MIN_CLUSTERS for count in clusters.values()):
+        reasons.append(CHAR_TOO_FEW_CLUSTERS)
+    return reasons
 
 
 def skipped_by_block(skipped_arms: Sequence[Mapping[str, Any]]) -> Dict[str, Dict[str, Any]]:
@@ -436,14 +485,15 @@ def _read_rows(path: str) -> List[Dict[str, Any]]:
 
 # ------------------------------------------------------------------ commands
 def cmd_plan(args: argparse.Namespace) -> int:
-    study = build_study(args)
+    study, excluded = build_study(args)
     plan = planned_calls(study)
     clusters = planned_clusters(study)
     print(json.dumps({"study_id": study["study_id"], "planned_calls": plan["calls"],
                       "max_calls": int(Config.EVAL_STUDY_MAX_CALLS), "seed": study["seed"],
                       "scoring": study["scoring"], "clusters_per_model": dict.fromkeys(study["models"], clusters),
                       "blocks_below_min_clusters": _below_min_clusters(clusters),
-                      "skipped_arms": plan["skipped_arms"]},
+                      "characterization_only_by_design": characterization_by_design(study, clusters),
+                      "excluded_bundles": excluded, "skipped_arms": plan["skipped_arms"]},
                      ensure_ascii=False, indent=2))
     return 0
 
@@ -453,14 +503,27 @@ def cmd_run(args: argparse.Namespace, *, client_factory: Callable[[str], Any] = 
         print("value_add_eval: the study makes paid model calls; set VALUE_ADD_EVAL_ENABLED=true or pass "
               "--live. No call was made.", file=sys.stderr)
         return EXIT_REFUSED
-    study = build_study(args)
+    study, excluded = build_study(args)
+    if excluded:
+        print(f"value_add_eval: {len(excluded)} bundles under --bundles-root are left out of the study: "
+              f"{_excluded_text(excluded)}", file=sys.stderr)
     plan = planned_calls(study)
     cap = int(Config.EVAL_STUDY_MAX_CALLS) if args.max_calls is None else int(args.max_calls)
     if plan["calls"] > cap:
         print(f"value_add_eval: the plan needs {plan['calls']} calls, over the cap {cap}; pass --max-calls "
               f"{plan['calls']} to allow it.", file=sys.stderr)
         return EXIT_REFUSED
-    below = _below_min_clusters(planned_clusters(study))
+    clusters = planned_clusters(study)
+    by_design = characterization_by_design(study, clusters)
+    if by_design and not args.allow_characterization:
+        why = {CHAR_REPLICATES: f"{study['replicates']} replicates, under the minimum {MIN_REPLICATES}",
+               CHAR_TOO_FEW_CLUSTERS: f"every block gets fewer than {vas.MIN_CLUSTERS} clusters (bundles with every "
+                                      f"arm available) per model, at most {max(clusters.values())}"}
+        print(f"value_add_eval: no verdict of this study can be scored ({'; '.join(why[r] for r in by_design)}), "
+              "so every one would be characterization only; pass --allow-characterization to spend the "
+              f"{plan['calls']} calls anyway. No call was made.", file=sys.stderr)
+        return EXIT_REFUSED
+    below = _below_min_clusters(clusters)
     if below:
         print(f"value_add_eval: blocks {', '.join(below)} get fewer than {vas.MIN_CLUSTERS} clusters (bundles) per "
               "model; their verdicts will be characterization only and their evidence labels withheld",
@@ -550,9 +613,12 @@ def cmd_run(args: argparse.Namespace, *, client_factory: Callable[[str], Any] = 
 def _exit_on_termination() -> Iterator[None]:
     """SIGTERM and SIGHUP (a kill, a closed terminal, a dropped SSH session) raise SystemExit
     while the block runs, so cmd_run's finally block still writes the attempt's meter record;
-    the previous handlers are restored afterwards. Outside the main thread no handler can be
-    installed and the block runs as is. SIGKILL cannot be caught: an attempt killed that way
-    leaves no record, and the next run asks its cells again (see _elicit)."""
+    the previous handlers are restored afterwards. A signal already ignored stays ignored
+    (nohup ignores SIGHUP so the run outlives the terminal; an ignored signal cannot end the
+    run, so the record is safe). A handler not installed from Python (getsignal() is None)
+    is left in place, since it could not be restored. Outside the main thread no handler can
+    be installed and the block runs as is. SIGKILL cannot be caught: an attempt killed that
+    way leaves no record, and the next run asks its cells again (see _elicit)."""
     def terminate(signum: int, _frame: Any) -> None:
         raise SystemExit(128 + signum)
 
@@ -560,8 +626,13 @@ def _exit_on_termination() -> Iterator[None]:
     try:
         for name in ("SIGTERM", "SIGHUP"):
             number = getattr(signal, name, None)
-            if number is not None:
-                previous[number] = signal.signal(number, terminate)
+            if number is None:
+                continue
+            current = signal.getsignal(number)
+            if current is None or current == signal.SIG_IGN:
+                continue
+            signal.signal(number, terminate)
+            previous[number] = current
     except ValueError:   # not the main thread
         pass
     try:
@@ -975,6 +1046,9 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--live", action="store_true")
             p.add_argument("--max-calls", type=int, default=None)
             p.add_argument("--allow-unpinned", action="store_true")
+            p.add_argument("--allow-characterization", action="store_true",
+                           help="run a study no block of which can get a scored verdict (too few bundles "
+                                "or replicates)")
         p.set_defaults(func=func)
     s = sub.add_parser("score")
     s.add_argument("--study-id", required=True)

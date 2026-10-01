@@ -653,11 +653,16 @@ class Config:
     # （floor / floor_sc / R / R+Q/G/S/M / FULL / FULL_AA，按服务模型给 moves/inert/inconclusive 判定，
     # 以 A/A 重复臂为噪声底）。只是证据，绝不自动改任何默认值；输出只落在评估账本 value_add/<study_id>/。
     # VALUE_ADD_EVAL_ENABLED 关 = run 子命令不发任何调用（plan/score 不调用模型）；EVAL_STUDY_MAX_CALLS
-    # 为计划调用数上限（超出须 --max-calls）；EVAL_ARM_REPLICATES 每臂重复次数（<3 只算特征刻画）；
-    # EVAL_TARGETS_PER_BUNDLE 每个评估包取的目标数；EVAL_PROBE_FIDELITY_MAX 为探针保真度门槛（R+M 与
-    # 去市场影响前概率的平均绝对差超出则全部判定只作参考）；EVAL_INERT_MARGIN 为 inert 判定的 CI 上界；
-    # EVAL_BOOTSTRAP_RESAMPLES 为聚类自助重采样次数。这三个评分参数与自助种子在 run 时预注册进 study.json，
-    # score 时取值与注册值不同则记为 override，且该次判定全部只作参考。
+    # 为计划调用数上限（超出须 --max-calls）。注意：计分判定每块至少需 value_add_stats.MIN_CLUSTERS=16
+    # 个评估包；默认设计每包每模型 66 次调用（2 目标 ×（8 个单次臂 + floor_sc 的 K=3）× 3 重复），
+    # 单模型计分研究至少 1056 次，故默认上限 600 只够特征刻画（单模型 ≤9 包），计分研究须显式
+    # --max-calls；任何块都达不到 16 包（或重复 <3）的研究 run 默认拒绝，须 --allow-characterization
+    # 才花这笔钱。
+    # EVAL_ARM_REPLICATES 每臂重复次数（<3 只算特征刻画）；EVAL_TARGETS_PER_BUNDLE 每个评估包取的目标数；
+    # EVAL_PROBE_FIDELITY_MAX 为探针保真度门槛（R+M 与去市场影响前概率的平均绝对差超出则全部判定只作
+    # 参考）；EVAL_INERT_MARGIN 为 inert 判定的 CI 上界；EVAL_BOOTSTRAP_RESAMPLES 为聚类自助重采样次数。
+    # 这三个评分参数与自助种子在 run 时预注册进 study.json，score 时取值与注册值不同则记为 override，
+    # 且该次判定全部只作参考。
     VALUE_ADD_EVAL_ENABLED = os.environ.get('VALUE_ADD_EVAL_ENABLED', 'false').strip().lower() == 'true'
     EVAL_ARM_REPLICATES = int(os.environ.get('EVAL_ARM_REPLICATES', '3') or '3')
     EVAL_STUDY_MAX_CALLS = int(os.environ.get('EVAL_STUDY_MAX_CALLS', '600') or '600')

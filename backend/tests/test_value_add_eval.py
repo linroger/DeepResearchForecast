@@ -167,9 +167,25 @@ def _args(cmd, bundles, *extra, models=("fake:x",)):
     return vae.build_parser().parse_args(argv + list(extra))
 
 
-def _run(bundles, out, factory, *extra, models=("fake:x",)):
+def _run(bundles, out, factory, *extra, models=("fake:x",), characterization=True):
+    """cmd_run --live. ``characterization`` adds --allow-characterization: a fixture of fewer
+    than MIN_CLUSTERS reports is characterization only by design, and run refuses it without
+    the flag (test_run_refuses_a_characterization_only_study); the scored fixtures pass False."""
+    flags = ["--live", "--allow-characterization"] if characterization else ["--live"]
     with _ledger(out):
-        return vae.cmd_run(_args("run", bundles, "--live", *extra, models=models), client_factory=factory)
+        return vae.cmd_run(_args("run", bundles, *flags, *extra, models=models), client_factory=factory)
+
+
+@contextlib.contextmanager
+def _handler(signum, handler):
+    """Run with ``handler`` installed for ``signum`` whatever started pytest (nohup ignores
+    SIGHUP); the original is restored afterwards."""
+    original = signal.getsignal(signum)
+    signal.signal(signum, handler)
+    try:
+        yield
+    finally:
+        signal.signal(signum, signal.SIG_DFL if original is None else original)
 
 
 def _score(out, study_id):
@@ -242,6 +258,8 @@ def test_plan_counts_and_zero_calls(tmp_path, monkeypatch, capsys):
     # the clusters (bundles) each model gets per block, and which blocks that leaves under the minimum
     assert printed["clusters_per_model"] == {spec: {"Q": 1, "G": 1, "S": 1, "M": 1} for spec in ("fake:x", "fake:y")}
     assert printed["blocks_below_min_clusters"] == ["Q", "G", "S", "M"]
+    assert printed["characterization_only_by_design"] == [vae.CHAR_TOO_FEW_CLUSTERS]
+    assert printed["excluded_bundles"] == []
     assert not out.exists()
 
     # the same bundle given twice (directly and through --bundles-root) is planned once
@@ -321,6 +339,48 @@ def test_study_inputs_validated(tmp_path, monkeypatch, capsys):
     assert not os.path.exists(_path(out, study_id, "scores.json"))
 
 
+def test_undated_bundle_under_bundles_root_is_left_out(tmp_path, capsys):
+    """An undated bundle found through --bundles-root (an EVAL-19 backfill whose ledger
+    commit could not be dated) is left out and listed by plan and run, and the dated bundles
+    form the study; given with --bundle it is still refused."""
+    root = tmp_path / "reports"
+    dated = [_bundle(root, f"r{i}") for i in range(2)]
+    no_date = _bundle(root, "r_none", as_of=None)
+    unknown = _bundle(root, "r_unknown", as_of="unknown")
+    out = tmp_path / "out"
+    assert _main(out, ["plan", "--bundles-root", str(root), "--model", "fake:x"]) == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["excluded_bundles"] == [
+        {"bundle_dir": os.path.abspath(no_date), "report": "r_none", "reason": vae.EXCLUDED_NO_AS_OF},
+        {"bundle_dir": os.path.abspath(unknown), "report": "r_unknown", "reason": vae.EXCLUDED_NO_AS_OF}]
+    assert printed["planned_calls"] == 2 * CALLS_PER_BUNDLE
+    # the same study as the dated bundles given alone
+    assert _main(out, ["plan", "--bundle", dated[0], "--bundle", dated[1], "--model", "fake:x"]) == 0
+    alone = json.loads(capsys.readouterr().out)
+    assert alone["study_id"] == printed["study_id"] and alone["excluded_bundles"] == []
+    for path in (no_date, unknown):
+        assert _main(out, ["plan", "--bundle", path, "--bundles-root", str(root), "--model", "fake:x"]) \
+            == vae.EXIT_REFUSED
+        assert "has no as_of; the probe cannot state the date" in capsys.readouterr().err
+    assert not out.exists()
+
+    assert _run([], out, Factory(), "--bundles-root", str(root)) == 0
+    err = capsys.readouterr().err
+    assert "2 bundles under --bundles-root are left out of the study" in err
+    assert f"{os.path.abspath(no_date)} (no_as_of)" in err and f"{os.path.abspath(unknown)} (no_as_of)" in err
+    study_id = _study_id(out)
+    study = _load(out, study_id, "study.json")
+    assert study_id == printed["study_id"] and [b["report"] for b in study["bundles"]] == ["r0", "r1"]
+    assert "excluded_bundles" not in study
+    assert {r["cluster_id"] for r in _rows(out, study_id)} == {"r0", "r1"}
+
+    # nothing dated under the root: refused, naming what was left out
+    lone = tmp_path / "lone"
+    _bundle(lone, "r_none", as_of=None)
+    assert _main(out, ["plan", "--bundles-root", str(lone), "--model", "fake:x"]) == vae.EXIT_REFUSED
+    assert "every bundle found has no as_of" in capsys.readouterr().err
+
+
 # ------------------------------------------------------------------ run guards
 def test_opt_in_guard_and_max_calls_refusal(tmp_path, monkeypatch, capsys):
     bundle = _bundle(tmp_path / "b", "r1")
@@ -346,8 +406,50 @@ def test_opt_in_guard_and_max_calls_refusal(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(Config, "EVAL_STUDY_MAX_CALLS", 600)
     enabled = tmp_path / "enabled"
     with _ledger(enabled):
-        assert vae.cmd_run(_args("run", [bundle]), client_factory=Factory()) == 0
+        assert vae.cmd_run(_args("run", [bundle], "--allow-characterization"), client_factory=Factory()) == 0
     assert len(_rows(enabled, _study_id(enabled))) == 2 * 9 * 3
+
+
+def test_run_refuses_a_characterization_only_study(tmp_path, capsys):
+    """A study no block of which can get a scored verdict (every block under MIN_CLUSTERS
+    reports, or fewer than MIN_REPLICATES replicates) is refused before any client is built
+    unless --allow-characterization is given, and plan says so beforehand. A study with one
+    block short of the minimum still has scorable blocks and is not refused (only warned)."""
+    bundle = _bundle(tmp_path / "b", "r1")
+    out = tmp_path / "out"
+    factory = Factory()
+    assert _run([bundle], out, factory, characterization=False) == vae.EXIT_REFUSED
+    err = capsys.readouterr().err
+    assert f"every block gets fewer than {vas.MIN_CLUSTERS} clusters" in err and "at most 1" in err
+    assert "pass --allow-characterization to spend the 66 calls anyway. No call was made." in err
+    assert factory.clients == {} and not out.exists()
+    # with the flag the calls are spent, and the blocks are still named as characterization only
+    assert _run([bundle], out, factory) == 0
+    assert factory.calls() == 66 and "blocks Q, G, S, M get fewer than" in capsys.readouterr().err
+
+    # enough reports, too few replicates
+    bundles = [_bundle(tmp_path / "s", f"r{i}") for i in range(SCORED_BUNDLES)]
+    few = tmp_path / "few"
+    factory = Factory()
+    assert _run(bundles, few, factory, "--replicates", "2", "--max-calls", "5000", characterization=False) \
+        == vae.EXIT_REFUSED
+    assert "(2 replicates, under the minimum 3)" in capsys.readouterr().err
+    assert factory.clients == {} and not few.exists()
+    with _ledger(few):
+        assert vae.main(["plan", *sum((["--bundle", b] for b in bundles), []), "--model", "fake:x",
+                         "--replicates", "2"]) == 0
+    assert json.loads(capsys.readouterr().out)["characterization_only_by_design"] == [vae.CHAR_REPLICATES]
+    study, _ = vae.build_study(_args("plan", [bundle], "--replicates", "2"))
+    assert vae.characterization_by_design(study, vae.planned_clusters(study)) == [vae.CHAR_REPLICATES,
+                                                                                 vae.CHAR_TOO_FEW_CLUSTERS]
+
+    # one report without its graph block: G is one cluster short, Q / S / M can be scored
+    short = bundles[:-1] + [_bundle(tmp_path / "g", "r_nograph", unavailable=("graph",))]
+    study, _ = vae.build_study(_args("plan", short))
+    clusters = vae.planned_clusters(study)
+    assert clusters == {"Q": SCORED_BUNDLES, "G": SCORED_BUNDLES - 1, "S": SCORED_BUNDLES, "M": SCORED_BUNDLES}
+    assert vae.characterization_by_design(study, clusters) == []
+    assert not few.exists()
 
 
 UNPINNED_SPECS = ["claude-cli:opus-4.5", "claude-cli:Claude-Opus-4", "claude-cli:sonnet-4", "claude-cli:Sonnet",
@@ -365,7 +467,7 @@ def test_cli_model_the_cli_drops_is_unpinned(spec, monkeypatch):
     assert vae.model_identity(client) == (f"{provider}:cli-default", True)
 
 
-def test_cli_unpinned_model_refused(tmp_path, monkeypatch):
+def test_cli_unpinned_model_refused(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(Config, "LLM_PROVIDER", "claude-cli")
     monkeypatch.setattr(Config, "LLM_MODEL_NAME", "gpt-4o-mini")
     bundle = _bundle(tmp_path / "b", "r1")
@@ -373,7 +475,9 @@ def test_cli_unpinned_model_refused(tmp_path, monkeypatch):
     for spec in ("claude-cli:opus-4.5", "codex-cli:anything", ":gpt-4o-mini"):
         out = tmp_path / ("real_" + spec.replace(":", "_"))
         with _ledger(out):
-            assert vae.cmd_run(_args("run", [bundle], "--live", models=(spec,))) == vae.EXIT_REFUSED
+            assert vae.cmd_run(_args("run", [bundle], "--live", "--allow-characterization", models=(spec,))) \
+                == vae.EXIT_REFUSED
+        assert "would run the account default" in capsys.readouterr().err
         assert not out.exists()
     for spec, key in (("claude-cli:sonnet", "claude-cli:sonnet"), (":opus", "claude-cli:opus"),
                       ("claude-cli:claude-opus-4-5", "claude-cli:claude-opus-4-5")):
@@ -381,8 +485,9 @@ def test_cli_unpinned_model_refused(tmp_path, monkeypatch):
     # two specs that resolve to one served model are refused
     twins = tmp_path / "twins"
     with _ledger(twins):
-        assert vae.cmd_run(_args("run", [bundle], "--live", models=("claude-cli:sonnet", ":sonnet"))) \
-            == vae.EXIT_REFUSED
+        assert vae.cmd_run(_args("run", [bundle], "--live", "--allow-characterization",
+                                 models=("claude-cli:sonnet", ":sonnet"))) == vae.EXIT_REFUSED
+    assert "both resolve to claude-cli:sonnet" in capsys.readouterr().err
     assert not twins.exists()
 
     out = tmp_path / "out"
@@ -455,7 +560,8 @@ def test_build_client_pinned_cache_free(monkeypatch):
 def test_aa_fixture_inert_or_inconclusive_ci_contains_zero(tmp_path, capsys):
     bundles = [_bundle(tmp_path / "b", f"r{i}") for i in range(SCORED_BUNDLES)]
     out = tmp_path / "out"
-    assert _run(bundles, out, Factory(), "--max-calls", str(SCORED_BUNDLES * CALLS_PER_BUNDLE)) == 0
+    assert _run(bundles, out, Factory(), "--max-calls", str(SCORED_BUNDLES * CALLS_PER_BUNDLE),
+                characterization=False) == 0
     assert "characterization only" not in capsys.readouterr().err      # every block has enough clusters
     study_id = _study_id(out)
     assert _score(out, study_id) == 0
@@ -498,7 +604,7 @@ def test_injected_market_movement_moves_only_for_model_x(tmp_path):
     out = tmp_path / "out"
     factory = Factory(**{"fake:x": {"market_shift": 0.15, "seed": 1}, "fake:y": {"seed": 3}})
     assert _run(bundles, out, factory, "--max-calls", str(2 * SCORED_BUNDLES * CALLS_PER_BUNDLE),
-                models=("fake:x", "fake:y")) == 0
+                models=("fake:x", "fake:y"), characterization=False) == 0
     study_id = _study_id(out)
     assert _score(out, study_id) == 0
     models = _scores(out, study_id)["models"]
@@ -652,9 +758,8 @@ def test_killed_attempt_is_asked_again_and_the_study_recovers(tmp_path, capsys):
 @pytest.mark.parametrize("signame", ["SIGTERM", "SIGHUP"])
 def test_termination_signal_still_writes_the_meter_record(tmp_path, signame):
     """SIGTERM / SIGHUP during a run raise SystemExit, so the attempt's meter record is still
-    written and its rows stay vouched for; the previous handler is restored afterwards."""
+    written and its rows stay vouched for; the previous (default) handler is restored afterwards."""
     signum = getattr(signal, signame)
-    previous = signal.getsignal(signum)
     bundle = _bundle(tmp_path / "b", "r1")
     out = tmp_path / "out"
 
@@ -662,14 +767,15 @@ def test_termination_signal_still_writes_the_meter_record(tmp_path, signame):
         def chat(self, messages, **kwargs):
             if self.calls == 4:
                 # cmd_run's handler is in place (otherwise the signal would end this test process)
-                assert signal.getsignal(signum) not in (previous, signal.SIG_DFL, signal.SIG_IGN)
+                assert signal.getsignal(signum) not in (signal.SIG_DFL, signal.SIG_IGN)
                 os.kill(os.getpid(), signum)
             return super().chat(messages, **kwargs)
 
-    with pytest.raises(SystemExit) as raised:
-        _run([bundle], out, Terminated)
+    with _handler(signum, signal.SIG_DFL):
+        with pytest.raises(SystemExit) as raised:
+            _run([bundle], out, Terminated)
+        assert signal.getsignal(signum) == signal.SIG_DFL
     assert raised.value.code == 128 + signum
-    assert signal.getsignal(signum) == previous
     assert get_run_context() == (None, None)
     study_id = _study_id(out)
     (meter,) = _meters(out, study_id)
@@ -681,6 +787,48 @@ def test_termination_signal_still_writes_the_meter_record(tmp_path, signame):
     assert _run([bundle], out, resume) == 0
     assert resume.calls() == 66 - 3
     assert _score(out, study_id) == 0 and _scores(out, study_id)["valid"] is True
+
+
+def test_ignored_signal_stays_ignored_and_a_foreign_handler_is_left_alone(tmp_path, monkeypatch):
+    """nohup starts the run with SIGHUP ignored: it stays ignored, so a closed terminal does
+    not stop a paid study, and the run finishes with every row written and vouched for. A
+    handler not installed from Python (getsignal() is None) is never replaced, so there is
+    nothing to restore and a finished run cannot end in a TypeError."""
+    bundle = _bundle(tmp_path / "b", "r1")
+    sent = []
+
+    class Hangup(FakeClient):
+        def chat(self, messages, **kwargs):
+            if self.calls == 4:
+                assert signal.getsignal(signal.SIGHUP) == signal.SIG_IGN      # not overridden
+                assert signal.getsignal(signal.SIGTERM) != signal.SIG_DFL     # SIGTERM still caught
+                os.kill(os.getpid(), signal.SIGHUP)
+                sent.append(signal.SIGHUP)
+            return super().chat(messages, **kwargs)
+
+    out = tmp_path / "nohup"
+    with _handler(signal.SIGHUP, signal.SIG_IGN), _handler(signal.SIGTERM, signal.SIG_DFL):
+        assert _run([bundle], out, Hangup) == 0
+        assert signal.getsignal(signal.SIGHUP) == signal.SIG_IGN
+        assert signal.getsignal(signal.SIGTERM) == signal.SIG_DFL
+    assert sent == [signal.SIGHUP]
+    study_id = _study_id(out)
+    assert len(_rows(out, study_id)) == 2 * 9 * 3
+    (meter,) = _meters(out, study_id)
+    assert meter["calls_made"] == meter["meter_calls"] == 66
+    assert _score(out, study_id) == 0 and _scores(out, study_id)["valid"] is True
+
+    real_getsignal, real_signal, installed = signal.getsignal, signal.signal, []
+    foreign = tmp_path / "foreign"
+    with _handler(signal.SIGHUP, signal.SIG_DFL), _handler(signal.SIGTERM, signal.SIG_DFL):
+        with monkeypatch.context() as m:
+            m.setattr(signal, "getsignal", lambda n: None if n == signal.SIGHUP else real_getsignal(n))
+            m.setattr(signal, "signal", lambda n, h: installed.append((n, h)) or real_signal(n, h))
+            assert _run([bundle], foreign, Factory()) == 0
+        assert signal.getsignal(signal.SIGTERM) == signal.SIG_DFL
+    # SIGTERM installed and restored; SIGHUP never touched
+    assert [n for n, _ in installed] == [signal.SIGTERM, signal.SIGTERM] and installed[1][1] == signal.SIG_DFL
+    assert len(_meters(foreign, _study_id(foreign))) == 1
 
 
 def test_budget_exceeded_stops_the_run(tmp_path, capsys):
@@ -776,14 +924,15 @@ def test_unavailable_block_arm_skipped_with_reason(tmp_path, capsys):
     assert "- Block G skipped: 2 targets (unavailable:graph)" in _report(out, study_id)
 
     no_research = _bundle(tmp_path / "c", "r2", unavailable=("dossier",))
-    study = vae.build_study(_args("plan", [no_research]))
+    study, excluded = vae.build_study(_args("plan", [no_research]))
+    assert excluded == []
     plan = vae.planned_calls(study)
     assert {s["arm"] for s in plan["skipped_arms"]} == {"R", "R+Q", "R+G", "R+S", "R+M", "FULL", "FULL_AA"}
     assert {s["reason"] for s in plan["skipped_arms"]} == {"unavailable:dossier"}
     assert vae.skipped_by_block(plan["skipped_arms"]) == {
         block: {"targets": 2, "reasons": ["unavailable:dossier"]} for block in vas.BLOCKS}
     assert vae.planned_clusters(study) == dict.fromkeys(vas.BLOCKS, 0)
-    assert vae.planned_clusters(vae.build_study(_args("plan", [bundle, no_research]))) == {
+    assert vae.planned_clusters(vae.build_study(_args("plan", [bundle, no_research]))[0]) == {
         "Q": 1, "G": 0, "S": 1, "M": 1}
 
     assert vae.parse_probability({"probability": "not a number"}) is None
@@ -875,7 +1024,7 @@ def test_probe_fidelity_unmeasured_fails_closed(tmp_path):
     bundles = [_bundle(tmp_path / "b", f"r{i}", unavailable=("market",), pre_market=(0.9, 0.1))
                for i in range(SCORED_BUNDLES)]
     out = tmp_path / "out"
-    assert _run(bundles, out, Factory(**{"fake:x": {"seed": 8}}), "--max-calls", "2000") == 0
+    assert _run(bundles, out, Factory(**{"fake:x": {"seed": 8}}), "--max-calls", "2000", characterization=False) == 0
     study_id = _study_id(out)
     assert _score(out, study_id) == 0
     scores = _scores(out, study_id)
@@ -902,7 +1051,7 @@ def test_incomplete_model_is_characterization_only(tmp_path):
     models = ("fake:x", "fake:y")
     cap = str(2 * SCORED_BUNDLES * CALLS_PER_BUNDLE)
     factory = Factory(**{"fake:x": {"fail_every": 3}, "fake:y": {"seed": 3}})
-    assert _run(bundles, out, factory, "--max-calls", cap, models=models) == 0
+    assert _run(bundles, out, factory, "--max-calls", cap, models=models, characterization=False) == 0
     study_id = _study_id(out)
     rows = _rows(out, study_id)
     x_rows = [r for r in rows if r["model_key_spec"] == "fake:x"]
@@ -931,7 +1080,7 @@ def test_incomplete_model_is_characterization_only(tmp_path):
 
     # resume asks only fake:x's missing cells, after which no model is incomplete
     resume = Factory()
-    assert _run(bundles, out, resume, "--max-calls", cap, models=models) == 0
+    assert _run(bundles, out, resume, "--max-calls", cap, models=models, characterization=False) == 0
     assert resume.clients["fake:y"].calls == 0
     assert resume.calls() == sum(3 if r["arm"] == vas.ARM_FLOOR_SC else 1 for r in x_rows if r["status"] != "ok")
     assert _score(out, study_id) == 0
@@ -1203,7 +1352,8 @@ def test_outputs_only_under_evaluation_ledger(tmp_path, monkeypatch):
     before = {os.path.join(d, f) for d, _, files in os.walk(str(tmp_path)) for f in files}
     argv = ["--bundle", bundle, "--model", "fake:x"]
     assert vae.main(["plan", *argv]) == 0
-    assert vae.cmd_run(vae.build_parser().parse_args(["run", *argv, "--live"]), client_factory=Factory()) == 0
+    assert vae.cmd_run(vae.build_parser().parse_args(["run", *argv, "--live", "--allow-characterization"]),
+                       client_factory=Factory()) == 0
     study_root = os.path.join(evaluation_ledger_dir(), "value_add")
     (study_id,) = os.listdir(study_root)
     assert vae.main(["score", "--study-id", study_id]) == 0
@@ -1221,6 +1371,15 @@ def test_shipped_defaults_are_safe():
     assert config_module.CONFIG_KNOBS["VALUE_ADD_EVAL_ENABLED"]["kind"] == "bool"
     env_example = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".env.example")
     with open(env_example, encoding="utf-8") as f:
-        documented = {line.split("#", 2)[1].split()[0] for line in f if line.startswith("# EVAL_")
-                      or line.startswith("# VALUE_ADD_EVAL_ENABLED")}
+        lines = [line for line in f if line.startswith("# EVAL_") or line.startswith("# VALUE_ADD_EVAL_ENABLED")]
+    documented = {line.split("#", 2)[1].split()[0] for line in lines}
     assert {f"{name}={default}" for name, default in KNOB_DEFAULTS.items()} <= documented
+    # the default cap cannot pay for a scored study, and the cap's documentation says so
+    floor = vas.MIN_CLUSTERS * CALLS_PER_BUNDLE
+    assert floor == 1056 > int(KNOB_DEFAULTS["EVAL_STUDY_MAX_CALLS"])
+    (cap_line,) = [line for line in lines if line.startswith("# EVAL_STUDY_MAX_CALLS=")]
+    with open(config_module.__file__, encoding="utf-8") as f:
+        config_source = f.read()
+    for text in (cap_line, config_source):
+        assert f"MIN_CLUSTERS={vas.MIN_CLUSTERS}" in text and f"{floor} 次" in text
+        assert "--allow-characterization" in text
