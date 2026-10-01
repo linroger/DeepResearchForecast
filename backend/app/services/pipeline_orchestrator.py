@@ -7254,7 +7254,10 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
     elif (status_totals["inflight_timeout_count"] > 0
           and status_totals["successful_query_count"] == 0):
         evidence_state = "inflight_timeout"
-    elif status_totals["transport_failure_count"] > 0 or deadline_exhausted:
+    elif (status_totals["transport_failure_count"] > 0 or deadline_exhausted
+          or status_totals["inflight_timeout_count"] > 0):
+        # FU-6: a timed-out (unanswered) query leaves coverage unknown, like an
+        # exhausted deadline: never a verified empty search.
         evidence_state = "partial_transport_failure"
     else:
         evidence_state = "verified_empty"
@@ -7272,12 +7275,16 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
         "attempted_query_count": status_totals["query_count"],
         # A failed or unanswered query with no candidate means coverage is unknown:
         # never the generic 'no_equivalent_market' (the bridge collector's rule, RESEARCH-3).
+        # FU-6: an all-timed-out merge carries its own label too (it used to store
+        # state 'inflight_timeout' beside empty_reason 'no_equivalent_market').
         "empty_reason": None if selected else (
             "all_candidates_irrelevant" if candidate_count else (
                 "transport_failure" if all_network_attempts_failed else (
-                    "partial_transport_failure"
-                    if status_totals["transport_failure_count"] > 0 or deadline_exhausted
-                    else "no_equivalent_market"
+                    "inflight_timeout" if evidence_state == "inflight_timeout" else (
+                        "partial_transport_failure"
+                        if evidence_state == "partial_transport_failure"
+                        else "no_equivalent_market"
+                    )
                 )
             )
         ),
