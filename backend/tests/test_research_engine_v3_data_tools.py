@@ -814,3 +814,14 @@ def test_a_data_failure_rate_of_half_or_more_is_a_research_event(tmp_path, answe
         engine.tools.data("macro_series", {"series": series}, agent_id="K1")
     events = [event for event in engine._research_events() if event.startswith("official-data")]
     assert events == (["official-data tool failure rate >= 50%: 2 of 2 data calls failed"] if expected else [])
+
+
+def test_empty_forwarded_vendor_knobs_read_as_unset(monkeypatch):
+    """The parent forwards Config's values, an unset cache directory as ''; data_tools reads an
+    empty value as its default (never the child's working directory)."""
+    for name in ("DATA_TOOLS_CACHE_DIR", "DATA_FRED_CACHE_TTL_H", "DATA_EDGAR_CACHE_TTL_H", "DATA_TOOL_TIMEOUT_S",
+                 "DATA_FRED_WINDOW_YEARS"):
+        monkeypatch.setenv(name, "")
+    assert dtools._cache_root() == os.path.join(os.path.dirname(dtools.__file__), ".cache", "data_cache")
+    assert (dtools._open_vintage_ttl_s(), dtools._edgar_ttl_s(), dtools._timeout_s(), dtools._window_years(None)) == (
+        6 * 3600.0, 24 * 3600.0, 20.0, 10)
