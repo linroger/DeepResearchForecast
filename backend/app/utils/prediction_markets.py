@@ -207,8 +207,9 @@ def _clamp_grace_hours(value: Any) -> float:
     return max(0.0, min(_END_DATE_GRACE_MAX_HOURS, hours))
 
 
-def _row_market_end(row: Any) -> Optional[datetime]:
-    """Parsed end of a normalized market row (``end_date``, then raw ``endDate``)."""
+def row_market_end(row: Any) -> Optional[datetime]:
+    """Parsed end of a normalized market row (``end_date``, then raw ``endDate``).
+    Public: the report's Market Cross-Check (FU-5) reads market ends through it too."""
     if not isinstance(row, dict):
         return None
     return parse_market_end(row.get("end_date") or row.get("endDate"))
@@ -219,7 +220,7 @@ def market_window_ended(row: Any, *, now: datetime, grace_hours: float = 0.0) ->
 
     Missing or unparseable end dates are tolerated (False): the gate only removes markets
     it can prove are past their resolution window. Never raises."""
-    end = _row_market_end(row)
+    end = row_market_end(row)
     if end is None or not isinstance(now, datetime):
         return False
     try:
@@ -245,7 +246,7 @@ def stamp_window_ended(rows: Any, *, now: datetime,
         if not isinstance(m, dict):
             continue
         m2 = dict(m)
-        end = _row_market_end(m2)
+        end = row_market_end(m2)
         if end is not None and market_window_ended(m2, now=now, grace_hours=grace_hours):
             m2["window_ended"] = True
             m2["window_ended_at"] = end.isoformat()
@@ -285,7 +286,10 @@ def drop_window_ended_rows(rows: Any) -> Tuple[List[Any], int]:
 # EVAL-6 (MARKET_ANCHOR_PRICE_TIME): when a row's implied_yes_prob was observed. A requote
 # stamps ``quoted_at``; a research or report-time snapshot row carries ``snapshot_as_of``,
 # which dates the price by the snapshot's as_of: an upper bound on when it was observed.
+# FU-11: research rows also carry the bridge's ``observed_at`` (when that row's price was
+# fetched), which the snapshot's as_of bounds from above.
 PRICE_TIME_BASIS_REQUOTE = "requote"
+PRICE_TIME_BASIS_OBSERVED = "observed"
 PRICE_TIME_BASIS_SNAPSHOT = "snapshot"
 
 
@@ -320,14 +324,18 @@ def market_price_time(row: Any) -> Optional[Tuple[str, str]]:
 
     ``quoted_at`` (stamped by requote_markets on a fresh price and kept through a later
     failed requote, whose retained price is still that quote) → basis 'requote'; otherwise
-    ``snapshot_as_of`` (the research snapshot's as_of or the report-time fetch time) →
-    basis 'snapshot'. A 'snapshot' time is an upper bound on when the price was observed,
-    not the exact moment: the research bridge takes its as_of when it writes the snapshot,
-    after merging agent-tool rows that may have been priced hours earlier, and rows carry
-    no per-row observation time yet. Only a zone-aware ISO date-time counts
-    (parse_stamp_strict, no bare dates) and it is returned exactly as stored. A row whose
-    quoted_at is present but unusable is unknown, never 'snapshot': its price came from a
-    requote, so the snapshot time would misdate it. Never raises."""
+    ``observed_at`` (FU-11: the research bridge's per-row fetch time of the price the row
+    carries; written when MARKET_ANCHOR_PRICE_TIME was on in the research child) → basis
+    'observed'; otherwise ``snapshot_as_of`` (the research snapshot's as_of or the
+    report-time fetch time) → basis 'snapshot'. A 'snapshot' time is an upper bound on when
+    the price was observed, not the exact moment: the research bridge takes its as_of when
+    it writes the snapshot, after merging agent-tool rows that may have been priced hours
+    earlier. Only a zone-aware ISO date-time counts (parse_stamp_strict, no bare dates) and
+    it is returned exactly as stored. A row whose quoted_at is present but unusable is
+    unknown, never 'snapshot': its price came from a later requote, so the earlier snapshot
+    time would misdate it. An unusable observed_at is skipped instead: that price was
+    fetched before the snapshot was written, so the snapshot's upper bound still holds.
+    Never raises."""
     if not isinstance(row, dict):
         return None
     quoted_at = row.get("quoted_at")
@@ -335,6 +343,9 @@ def market_price_time(row: Any) -> Optional[Tuple[str, str]]:
         if parse_stamp_strict(quoted_at, allow_date=False) is None:
             return None
         return quoted_at, PRICE_TIME_BASIS_REQUOTE
+    observed_at = row.get("observed_at")
+    if parse_stamp_strict(observed_at, allow_date=False) is not None:
+        return observed_at, PRICE_TIME_BASIS_OBSERVED
     snapshot_as_of = row.get("snapshot_as_of")
     if parse_stamp_strict(snapshot_as_of, allow_date=False) is None:
         return None
@@ -923,12 +934,13 @@ def _requote_move(m: Dict[str, Any]) -> Optional[str]:
     return f"{r * 100:.0f}%→{c * 100:.0f}%"
 
 
-def _window_ended_label(m: Dict[str, Any], zh: bool) -> str:
+def window_ended_label(m: Dict[str, Any], zh: bool) -> str:
     """TIME-3: suffix for a row stamped ``window_ended`` (its endDate passed, awaiting
-    settlement); unstamped rows → "" so their cells stay byte-identical."""
+    settlement); unstamped rows → "" so their cells stay byte-identical. Public: the
+    report's Market Cross-Check (FU-5) labels its rows with the same strings."""
     if m.get("window_ended") is not True:
         return ""
-    end = parse_market_end(m.get("window_ended_at")) or _row_market_end(m)
+    end = parse_market_end(m.get("window_ended_at")) or row_market_end(m)
     day = end.date().isoformat() if end is not None else ""
     if zh:
         return f" — 已过截止日 {day}，待结算" if day else " — 已过截止日，待结算"
@@ -987,7 +999,7 @@ def render_markets_block(markets: List[Dict[str, Any]], lang: str = "en", *,
         if url:  # 有事件 URL → 市场问题渲染为可点链接（读者可核对实时价格/规则）
             q_cell = f"[{q_cell}]({_esc_cell(url)})"
         cells = [str(i), f"{q_cell} ({_esc_cell(m.get('market_id') or '')})"
-                 + (_window_ended_label(m, zh) if gate else ""),
+                 + (window_ended_label(m, zh) if gate else ""),
                  _esc_cell(m.get("exchange") or "—"), pct]
         if show_delta:
             cells.append(_requote_move(m) or "—")  # 未移动/无锚点的行留占位符

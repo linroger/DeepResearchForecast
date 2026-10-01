@@ -741,7 +741,7 @@ def test_r3_agent_retry_counts_from_the_cap_sent_and_never_widens_an_aborted_rep
 
     agent = types.SimpleNamespace(engine=types.SimpleNamespace(gateway=types.SimpleNamespace(invoke=invoke),
                                                                log=lambda kind, message: None),
-                                  deadline=None, _wider_cap=wider_cap)
+                                  deadline=None, _wider_cap=wider_cap, agent_tools=lr.AGENT_TOOLS)
     result = lr.KiqAgent._ask(agent, ["m"], "K1:s2")
     assert seen == expected_caps and sent == sent_caps
     assert result is first if len(sent_caps) == 1 else result.finish_reason == "stop"

@@ -147,7 +147,8 @@ def test_ok_result_registers_a_fetched_s1_data_row_citable_like_a_fetched_page(t
     assert head == f"[S1] {CPI_TITLE} — alfred.stlouisfed.org (tier 1) — official data"
     assert lr._ROW_HEADER_RE.match(head)
     assert lr.tool_output_sids("web_fetch", text) == (1, [1])
-    assert lr.tool_output_sids("macro_series", text) == (None, [1])
+    # TIME-13: an official-data answer is fetch-shaped (its row is fetched, not only shown).
+    assert lr.tool_output_sids("macro_series", text) == (1, [1])
     assert body.startswith(f"{rg.UNTRUSTED_BEGIN} — official data\n") and body.endswith(
         f"{rg.UNTRUSTED_END} — official data")
     assert "Latest: 323.5 (2026-08-01)" in body
