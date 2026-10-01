@@ -1111,6 +1111,12 @@ _SIGNAL_PACK_NO_BEHAVIOUR_NOTE = (
     "⚠️ 本次模拟未产出可用的行为数据（simulation_health={health}）——这不是「行为者无反应」的发现；"
     "正文不得引用任何基于模拟行为量或派系聚类的推演结论。"
 )
+# FU-3：情景报告的基线模拟非健康（_SIGNAL_PACK_HEALTH_SKIPS 里的状态）时，基线的每个消费方
+# （信号包的情景差异块、对比表、scenario_diff 工具、大纲的差异预取）改给这一行，不给基线数据。
+_BASELINE_NO_BEHAVIOUR_NOTE = (
+    "⚠️ 基线模拟未产出可用的行为数据（simulation_health={health}）——本报告不做基线与情景的行为对比；"
+    "正文不得引用任何基线 vs 情景的行为差值。"
+)
 # 部分 / 降级完成的运行：块全部保留，包头后附审慎提示。
 _SIGNAL_PACK_PARTIAL_HEALTHS = ("truncated", "llm_degraded")
 _SIGNAL_PACK_PARTIAL_NOTE = (
@@ -2742,7 +2748,15 @@ class ReportAgent:
             except Exception as e:  # noqa: BLE001
                 logger.warning(f"信号包 causal_spine 计算失败（忽略）: {e}")
         # 3) 反事实差异（仅情景报告有基线时）——RQ-4：截断到 ~2400 字
-        if self.base_simulation_id and "scenario_diff" not in _skip:
+        # FU-3：基线模拟非健康时不给差异，给基线说明行，并在健康裁定里记 baseline_health。
+        _base_health, _base_skip = (self._behaviour_skips(self.base_simulation_id)
+                                    if self.base_simulation_id else (None, ()))
+        if self.base_simulation_id and "scenario_diff" not in _skip and "scenario_diff" in _base_skip:
+            parts.append(_BASELINE_NO_BEHAVIOUR_NOTE.format(health=_base_health))
+            if isinstance(getattr(self, "_signal_pack_health", None), dict):
+                self._signal_pack_health["baseline_health"] = _base_health
+                self._signal_pack_health["suppressed"].append("scenario_diff")
+        elif self.base_simulation_id and "scenario_diff" not in _skip:
             try:
                 diff = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
                 if diff and not diff.strip().startswith("（"):
@@ -2777,8 +2791,19 @@ class ReportAgent:
             header += "\n\n" + _SIGNAL_PACK_UNKNOWN_HEALTH_NOTE.format(health=_health[:40])
         return header + "\n\n" + "\n\n".join(parts)
 
-    def _run_summary_health(self) -> Tuple[Optional[str], bool]:
+    def _behaviour_skips(self, simulation_id: Optional[str] = None
+                         ) -> Tuple[Optional[str], Tuple[str, ...]]:
+        """FU-3：``simulation_id``（缺省本报告的模拟）的 (health, 须跳过的行为块)，规则同 REPORT-5
+        信号包（_SIGNAL_PACK_HEALTH_SKIPS）。门关 / 无 summary / ok / 部分完成 / 未识别 → 无跳过。
+        供大纲预取、ReACT 工具与基线消费方复用同一裁定。"""
+        if not getattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", True):
+            return None, ()
+        health, _unreadable = self._run_summary_health(simulation_id)
+        return health, _SIGNAL_PACK_HEALTH_SKIPS.get(health or "", ())
+
+    def _run_summary_health(self, simulation_id: Optional[str] = None) -> Tuple[Optional[str], bool]:
         """REPORT-5：读本模拟 run_summary.json 的 simulation_health（小写），返回 (health, unreadable)。
+        FU-3：``simulation_id`` 给出时读该模拟（情景报告的基线），缺省读本报告的模拟。
 
         路径与编排器模拟健康门相同（SimulationRunner.RUN_STATE_DIR/<simulation_id>/run_summary.json，
         经 contained_child 校验 id）。
@@ -2790,7 +2815,8 @@ class ReportAgent:
             from .simulation_runner import SimulationRunner
             path = os.path.join(
                 contained_child(SimulationRunner.RUN_STATE_DIR,
-                                getattr(self, "simulation_id", None), "simulation"),
+                                getattr(self, "simulation_id", None)
+                                if simulation_id is None else simulation_id, "simulation"),
                 "run_summary.json")
         except Exception as e:  # noqa: BLE001 — 非法 / 缺失 id：没有可读的 summary
             logger.debug(f"信号包健康门无法定位 run_summary.json（按无 summary 处理）: {e}")
@@ -10687,6 +10713,13 @@ class ReportAgent:
         """
         if not self.base_simulation_id:
             return None
+        # FU-3：任一侧模拟按 REPORT-5 规则不可用世界态（errored）→ 无可比份额。
+        for _sid in (self.base_simulation_id, self.simulation_id):
+            _health, _skip = self._behaviour_skips(_sid)
+            if "world_state" in _skip:
+                logger.info("情景对比表跳过：%s 的 simulation_health=%s（REPORT_SIGNAL_PACK_HEALTH_GATE）",
+                            _sid, _health)
+                return None
         hide_invalid = bool(getattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", True))
 
         def _shares(simulation_id: str) -> Dict[str, float]:
@@ -11003,12 +11036,19 @@ class ReportAgent:
                 return result.to_text()
             
             elif tool_name == "simulation_outcomes":
+                # FU-3：非健康运行（REPORT-5 规则）不给种子回声数据，给同一说明行。
+                _health, _skip = self._behaviour_skips()
+                if "simulation_outcomes" in _skip:
+                    return _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
                 top_n = parameters.get("top_n", 15)
                 if isinstance(top_n, str):
                     top_n = int(top_n) if top_n.isdigit() else 15
                 return self.zep_tools.simulation_outcomes(self.simulation_id, top_n=top_n)
 
             elif tool_name == "coalition_map":
+                _health, _skip = self._behaviour_skips()
+                if "coalition_map" in _skip:
+                    return _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
                 return self.zep_tools.coalition_map(self.graph_id, self.simulation_id)
 
             elif tool_name == "faction_brief":  # EXECPLAN2 I-1-2
@@ -11031,6 +11071,12 @@ class ReportAgent:
                 # T4.7: 反事实对比 base vs 当前情景模拟
                 if not self.base_simulation_id:
                     return "（本报告非情景对比报告，无基线模拟可对比）"
+                _health, _skip = self._behaviour_skips()
+                if "scenario_diff" in _skip:
+                    return _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
+                _base_health, _base_skip = self._behaviour_skips(self.base_simulation_id)
+                if "scenario_diff" in _base_skip:
+                    return _BASELINE_NO_BEHAVIOUR_NOTE.format(health=_base_health)
                 return self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
 
             # ========== 向后兼容的旧工具（内部重定向到新工具） ==========
@@ -11550,9 +11596,14 @@ class ReportAgent:
                 sweeps.append("【图谱深挖摘要】\n" + forge_text[:6000])  # RQ-4: 3000→6000
         except Exception as e:
             logger.warning(f"plan_outline insight_forge 扫描失败（忽略）: {e}")
+        # FU-3：非健康运行（REPORT-5 规则）不把种子回声数据给大纲，只给同一说明行。
+        _health, _skip = self._behaviour_skips()
         try:
-            outcomes = self.zep_tools.simulation_outcomes(self.simulation_id, top_n=10)
-            if outcomes:
+            outcomes = ("" if "simulation_outcomes" in _skip
+                        else self.zep_tools.simulation_outcomes(self.simulation_id, top_n=10))
+            if "simulation_outcomes" in _skip:
+                sweeps.append(_SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health))
+            elif outcomes:
                 # WAVE9：包成内部方法学材料——它只用于判断哪些行为者/议题值得设章深挖，
                 # 绝不能催生「Agent 行为分析」型章节（940-actor 章节即此前的泄漏产物）。
                 sweeps.append(
@@ -11568,16 +11619,29 @@ class ReportAgent:
 
         # T4.7: 情景对比报告 —— 强制大纲包含「情景对比 / 反事实」章节，并预取 scenario_diff 摘要
         if self.base_simulation_id:
-            try:
-                diff_text = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
-                if diff_text:
-                    user_prompt += "\n\n【基线 vs 情景 结构化对比（必须据此撰写对比章节）】\n" + diff_text[:2500]
-            except Exception as e:
-                logger.warning(f"plan_outline scenario_diff 扫描失败（忽略）: {e}")
-            user_prompt += (
-                "\n\n**强制要求**：本报告为情景（What-If）预测，大纲必须包含一节标题含"
-                "「情景对比」或「反事实」的章节，对比基线与本情景的关键差异（引用上面对比数据中的具体差值）。"
-            )
+            _base_health, _base_skip = self._behaviour_skips(self.base_simulation_id)
+            if "scenario_diff" in _skip or "scenario_diff" in _base_skip:
+                # FU-3：任一侧模拟非健康 → 不预取差异；对比章节只说明为何不做行为对比。
+                user_prompt += "\n\n" + (
+                    _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
+                    if "scenario_diff" in _skip
+                    else _BASELINE_NO_BEHAVIOUR_NOTE.format(health=_base_health))
+                user_prompt += (
+                    "\n\n**强制要求**：本报告为情景（What-If）预测，大纲必须包含一节标题含"
+                    "「情景对比」或「反事实」的章节，说明基线与本情景之间没有可用的行为对比数据，"
+                    "只依据研究材料讨论两者的差异。"
+                )
+            else:
+                try:
+                    diff_text = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
+                    if diff_text:
+                        user_prompt += "\n\n【基线 vs 情景 结构化对比（必须据此撰写对比章节）】\n" + diff_text[:2500]
+                except Exception as e:
+                    logger.warning(f"plan_outline scenario_diff 扫描失败（忽略）: {e}")
+                user_prompt += (
+                    "\n\n**强制要求**：本报告为情景（What-If）预测，大纲必须包含一节标题含"
+                    "「情景对比」或「反事实」的章节，对比基线与本情景的关键差异（引用上面对比数据中的具体差值）。"
+                )
 
         # R2-DETAIL-2: 把先于大纲推导出的预测骨架钉入提示词，并（在有骨架时）强制大纲围绕预测组织。
         # forecast_spine_block 为空 / require_forecast_structure 为 False 时本段为 no-op（提示词与历史一致）。

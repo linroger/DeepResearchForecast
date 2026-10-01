@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import re
+from pathlib import Path
 
 import pytest
 
@@ -455,3 +456,136 @@ def test_knob_defaults_on_and_is_documented():
         os.path.abspath(cfgmod.__file__)))), ".env.example")
     with open(env_example, encoding="utf-8") as fh:
         assert re.search(r"^# REPORT_SIGNAL_PACK_HEALTH_GATE=true\s+# REPORT-5", fh.read(), re.M)
+
+
+# ─────────────── FU-3: tools, outline and what-if baselines (REPORT-5 follow-up) ───────────────
+_BASE_NOTE = ("⚠️ 基线模拟未产出可用的行为数据（simulation_health={health}）——本报告不做基线与情景的"
+              "行为对比；正文不得引用任何基线 vs 情景的行为差值。")
+
+
+def _write_summary(root, simulation_id, health):
+    sim_dir = root / simulation_id
+    sim_dir.mkdir(exist_ok=True)
+    (sim_dir / "run_summary.json").write_text(json.dumps(
+        {"simulation_id": simulation_id, "simulation_health": health}), encoding="utf-8")
+
+
+def test_hollow_baseline_never_reaches_the_signal_pack(run_state):
+    run_state("ok")
+    _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, "hollow")
+    agent = _agent()
+    pack = agent._build_signal_pack()
+    assert pack == _pack(_WORLD_STATE, _TIERS, _COALITIONS, _SPINE, _BASE_NOTE.format(health="hollow"))
+    assert "scenario_diff" not in agent.zep_tools.calls
+    assert agent._signal_pack_health == {"health": "ok", "suppressed": ["scenario_diff"],
+                                         "baseline_health": "hollow"}
+
+
+def test_healthy_or_unknown_baseline_keeps_the_legacy_pack(run_state, monkeypatch):
+    run_state("ok")
+    for base_health in ("ok", "truncated", None):
+        if base_health:
+            _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, base_health)
+        agent = _agent()
+        assert agent._build_signal_pack() == _LEGACY_FULL
+        assert "baseline_health" not in agent._signal_pack_health
+    _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, "errored")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    assert _agent()._build_signal_pack() == _LEGACY_FULL
+
+
+def _tool_agent():
+    agent = _agent()
+    agent.simulation_requirement = "q"
+    return agent
+
+
+@pytest.mark.parametrize("tool", ["simulation_outcomes", "coalition_map", "scenario_diff"])
+def test_tools_return_the_no_behaviour_line_on_an_unusable_run(run_state, tool):
+    run_state("hollow")
+    agent = _tool_agent()
+    assert agent._execute_tool(tool, {}) == _NO_BEHAVIOUR.format(health="hollow")
+    assert agent.zep_tools.calls == []
+
+
+def test_tools_unchanged_on_a_healthy_run_and_scenario_diff_checks_the_baseline(run_state, monkeypatch):
+    run_state("ok")
+    agent = _tool_agent()
+    assert agent._execute_tool("simulation_outcomes", {}) == _OUTCOMES
+    assert agent._execute_tool("coalition_map", {}) == _COALITIONS
+    assert agent._execute_tool("scenario_diff", {}) == _DIFF
+    _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, "errored")
+    assert agent._execute_tool("scenario_diff", {}) == _BASE_NOTE.format(health="errored")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    assert agent._execute_tool("scenario_diff", {}) == _DIFF
+    run_state("hollow")
+    assert agent._execute_tool("simulation_outcomes", {}) == _OUTCOMES   # knob off: legacy
+
+
+class _OutlineLLM:
+    def __init__(self):
+        self.user_prompt = None
+
+    def chat_json(self, messages=None, temperature=0.3, **kw):
+        self.user_prompt = messages[-1]["content"]
+        return {"title": "T", "summary": "S",
+                "sections": [{"title": f"章节{i}", "description": ""} for i in range(5)]}
+
+
+class _OutlineZep(_StubZep):
+    def get_simulation_context(self, graph_id=None, simulation_requirement=None, **kw):
+        return {"graph_statistics": {}, "total_entities": 0, "related_facts": []}
+
+    def insight_forge(self, **kw):
+        raise RuntimeError("no forge in test")
+
+
+def _outline_prompt(base=BASE_SIM_ID):
+    agent = _agent(base=base)
+    agent.simulation_requirement = "q"
+    agent.actors = None
+    agent.sources = []
+    agent._background_block = agent._sources_index = agent._forecast_spine_block = ""
+    agent._signal_pack = ""
+    agent.zep_tools = _OutlineZep()
+    agent.llm = _OutlineLLM()
+    agent.plan_outline()
+    return agent.llm.user_prompt, agent.zep_tools.calls
+
+
+def test_outline_gets_no_seed_echo_data_from_an_unusable_run(run_state):
+    run_state("hollow")
+    prompt, calls = _outline_prompt()
+    assert _NO_BEHAVIOUR.format(health="hollow") in prompt
+    assert "Orion Foundry" not in prompt and _DIFF not in prompt
+    assert "引用上面对比数据中的具体差值" not in prompt and "没有可用的行为对比数据" in prompt
+    assert calls == []
+
+
+def test_outline_unchanged_for_a_healthy_run_and_gated_on_the_baseline(run_state):
+    run_state("ok")
+    prompt, calls = _outline_prompt()
+    assert "Orion Foundry" in prompt and _DIFF in prompt
+    assert "引用上面对比数据中的具体差值" in prompt and "基线模拟未产出" not in prompt
+    assert calls == ["simulation_outcomes", "scenario_diff"]
+    _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, "hollow")
+    prompt, calls = _outline_prompt()
+    assert "Orion Foundry" in prompt and _DIFF not in prompt
+    assert _BASE_NOTE.format(health="hollow") in prompt and calls == ["simulation_outcomes"]
+
+
+def test_comparison_table_needs_a_usable_world_state_on_both_sides(run_state, monkeypatch, tmp_path):
+    run_state("ok")
+    data = tmp_path / "sims"
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(data), raising=False)
+    for sid in (SIM_ID, BASE_SIM_ID):
+        (data / sid).mkdir(parents=True)
+        (data / sid / "world_state_trajectory.json").write_text(json.dumps(
+            {"outcome": {"shares": {"A": 0.6, "B": 0.4}}, "validity": "valid"}), encoding="utf-8")
+    agent = _agent()
+    agent.scenario_label = "what-if"
+    assert agent._scenario_diff_structured() is not None
+    _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, "errored")
+    assert agent._scenario_diff_structured() is None
+    _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, "hollow")   # keeps world state
+    assert agent._scenario_diff_structured() is not None
