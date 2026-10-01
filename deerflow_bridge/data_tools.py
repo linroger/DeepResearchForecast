@@ -68,15 +68,19 @@ The contract of :func:`edgar_statements` (SEC EDGAR XBRL company facts):
   never summed across tags, and each period keeps its own unit.  A table row
   whose values were filed under more than one tag marks the cells of the other
   tags and names every tag, so no change of concept is hidden.
-* Identity.  A CIK is used as given; a ticker is resolved through SEC's current
-  ticker map, which the result says when ``as_of`` is in the past.  The
+* Identity.  A CIK is used as given and named by the filer's name in
+  companyfacts; a ticker is resolved through SEC's current ticker map, which
+  the result says when ``as_of`` is in the past.  The
   User-Agent SEC requires (a name and a contact address) is sent with every
   request and never written into a result, cache file or log line.
 * Cache.  The ticker map and each company's companyfacts (reduced to the tags
   the statement lines use, which the entry records: an entry reduced to another
-  tag set is a miss) are cached for DATA_EDGAR_CACHE_TTL_H hours whatever
-  ``as_of`` is: facts filed after ``as_of`` are dropped when the statement is
-  read, so one fetch serves every date.
+  tag set is a miss; each tag's units kept in the filer's order, so a hit
+  serves what the fetch did) are cached for DATA_EDGAR_CACHE_TTL_H hours
+  whatever ``as_of`` is: facts filed after ``as_of`` are dropped when the
+  statement is read, so one fetch serves every date.  When ``as_of`` is not
+  before the day SEC answered, the text says when that was: a later filing is
+  not in the snapshot.
 
 Environment knobs, read on every call: DATA_TOOLS_CACHE_DIR (default
 ``<module dir>/.cache/data_cache``), DATA_FRED_CACHE_TTL_H (6),
@@ -1159,9 +1163,13 @@ _XBRL_UNIT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9/_.-]{0,39}")
 _CURRENCY_UNIT_RE = re.compile(r"[A-Z]{3}")
 _PER_SHARE_UNIT_RE = re.compile(r"([A-Z]{3})/shares")
 _USER_AGENT_MAX_CHARS = 200
-# A statement value at or beyond this magnitude is malformed, not a figure (the largest filers
-# report about 10**13 in their currency): the fact is skipped like any other malformed fact.
+# A statement value at or beyond this magnitude, or with more decimal places than this, is malformed,
+# not a figure (the largest filers report about 10**13 in their currency, per-share values two to four
+# decimals): the fact is skipped like any other malformed fact.  Both bounds keep every table cell
+# short, so a one-column table always fits MODEL_TEXT_MAX_CHARS (a test pins the widest case).
 _EDGAR_VALUE_LIMIT = Decimal(10) ** 18
+_EDGAR_MAX_DECIMALS = 6
+_ENTITY_NAME_CHARS = 80  # companyfacts' entityName, kept to name a CIK's filer
 _BILLION = Decimal(10) ** 9
 _YI = Decimal(10) ** 8  # 亿
 _TENTHS = Decimal("0.1")
@@ -1198,13 +1206,16 @@ def _iso_day(value: Any) -> Optional[_dt.date]:
 
 def _fact_value(value: Any) -> Optional[Decimal]:
     """A fact's number exactly (a float by its shortest repr), or None when it is not a finite JSON
-    number below :data:`_EDGAR_VALUE_LIMIT`."""
+    number below :data:`_EDGAR_VALUE_LIMIT` with at most :data:`_EDGAR_MAX_DECIMALS` decimal places
+    (``1e-200`` would print as a 200-digit cell)."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     if isinstance(value, float) and not math.isfinite(value):
         return None
     number = Decimal(value) if isinstance(value, int) else Decimal(repr(value))
-    return number if abs(number) < _EDGAR_VALUE_LIMIT else None
+    if abs(number) >= _EDGAR_VALUE_LIMIT or number.normalize(_ARITHMETIC).as_tuple().exponent < -_EDGAR_MAX_DECIMALS:
+        return None
+    return number
 
 
 def _parse_fact(row: Any, tag: str, unit: str) -> Optional[_FiledValue]:
@@ -1382,35 +1393,54 @@ def _ticker_map(*, transport: Transport, cache: _DiskCache, agent: str,
     return tickers
 
 
-def _needed_facts(us_gaap: Mapping[str, Any]) -> dict[str, dict[str, list[dict]]]:
-    """{tag: {unit: [rows]}} of the tags the statement lines use, each row reduced to the fields
-    :func:`_parse_fact` reads (validated there, when a statement is read)."""
-    kept: dict[str, dict[str, list[dict]]] = {}
+def _needed_facts(us_gaap: Mapping[str, Any]) -> dict[str, list[list]]:
+    """{tag: [[unit, [rows]], ...]} of the tags the statement lines use, units in the filer's order
+    and each row reduced to the fields :func:`_parse_fact` reads (validated there, when a statement
+    is read).  A tag's units are pairs, not an object: the cache writes JSON with sorted keys, so an
+    object of units would come back in alphabetical order and a cache hit could hand a period to
+    another unit than the fetch did (the first unit serving a period owns it, :func:`_as_filed`)."""
+    kept: dict[str, list[list]] = {}
     for tag in _EDGAR_TAGS:
         entry = us_gaap.get(tag)
         units = entry.get("units") if isinstance(entry, Mapping) else None
         if not isinstance(units, Mapping):
             continue
-        kept[tag] = {unit: [{name: row[name] for name in _FACT_FIELDS if name in row}
-                            for row in rows if isinstance(row, Mapping)]
-                     for unit, rows in units.items() if isinstance(unit, str) and isinstance(rows, list)}
+        kept[tag] = [[unit, [{name: row[name] for name in _FACT_FIELDS if name in row}
+                             for row in rows if isinstance(row, Mapping)]]
+                     for unit, rows in units.items() if isinstance(unit, str) and isinstance(rows, list)]
     return kept
+
+
+def _unit_pairs(facts: Any) -> bool:
+    """Whether ``facts`` has the shape :func:`_needed_facts` writes (an entry written before units
+    were kept in order holds an object per tag)."""
+    return isinstance(facts, Mapping) and all(
+        isinstance(pairs, list) and all(isinstance(pair, list) and len(pair) == 2 and isinstance(pair[0], str)
+                                        and isinstance(pair[1], list) for pair in pairs)
+        for pairs in facts.values())
+
+
+def _entity_name(value: Any) -> str:
+    """companyfacts' ``entityName`` as one bounded line ("" when it is not a string).  Idempotent, so
+    a cached name reads back as written (a cut can end in a space, which is dropped)."""
+    return _clip(value, _ENTITY_NAME_CHARS).rstrip() if isinstance(value, str) else ""
 
 
 def _company_facts(cik: str, *, transport: Transport, cache: _DiskCache, agent: str, timeout: float,
                    fetched_at: str) -> dict | tuple[str, str]:
-    """The company's filing history (``us_gaap_present``, ``facts`` as :func:`_needed_facts` keeps
-    them and ``fetched_at``, when SEC answered), cached for DATA_EDGAR_CACHE_TTL_H hours whatever the
-    as-of date, or the ``(status, detail)`` of the failure.  A 404 is ``no_xbrl_facts``; an answer
-    without a facts object, or of another CIK, establishes nothing and is ``unavailable``.  The
-    snapshot records the tags and fact fields it was reduced to: one reduced to another set (an
-    earlier :data:`EDGAR_LINES_US_GAAP`) is a miss, so a line or fallback tag added since is never
-    read as untagged."""
+    """The company's filing history (``entity_name``, ``us_gaap_present``, ``facts`` as
+    :func:`_needed_facts` keeps them and ``fetched_at``, when SEC answered), cached for
+    DATA_EDGAR_CACHE_TTL_H hours whatever the as-of date, or the ``(status, detail)`` of the failure.
+    A 404 is ``no_xbrl_facts``; an answer without a facts object, or of another CIK, establishes
+    nothing and is ``unavailable``.  The snapshot records the tags and fact fields it was reduced to:
+    one reduced to another set (an earlier :data:`EDGAR_LINES_US_GAAP`) is a miss, so a line or
+    fallback tag added since is never read as untagged, and so is one of another shape."""
     cache_key = f"edgar|companyfacts|{cik}"
     stored = cache.get(cache_key, max_age_s=_edgar_ttl_s())
     if (isinstance(stored, Mapping) and stored.get("kind") == "companyfacts" and stored.get("cik") == cik
             and stored.get("tags") == list(_EDGAR_TAGS) and stored.get("fields") == list(_FACT_FIELDS)
-            and isinstance(stored.get("us_gaap_present"), bool) and isinstance(stored.get("facts"), Mapping)
+            and _entity_name(stored.get("entity_name")) == stored.get("entity_name")
+            and isinstance(stored.get("us_gaap_present"), bool) and _unit_pairs(stored.get("facts"))
             and isinstance(stored.get("fetched_at"), str) and _UTC_STAMP_RE.fullmatch(stored["fetched_at"])):
         return dict(stored)
     code, payload, text = _edgar_get(transport, EDGAR_FACTS_URL.format(cik=cik), agent=agent, timeout=timeout)
@@ -1428,7 +1458,8 @@ def _company_facts(cik: str, *, transport: Transport, cache: _DiskCache, agent: 
     if us_gaap is not None and not isinstance(us_gaap, Mapping):
         return STATUS_UNAVAILABLE, "SEC EDGAR answered with us-gaap facts that are not an object"
     snapshot = {"status": STATUS_OK, "vendor": "sec_edgar", "kind": "companyfacts", "cik": cik,
-                "tags": list(_EDGAR_TAGS), "fields": list(_FACT_FIELDS), "us_gaap_present": bool(us_gaap),
+                "tags": list(_EDGAR_TAGS), "fields": list(_FACT_FIELDS),
+                "entity_name": _entity_name(payload.get("entityName")), "us_gaap_present": bool(us_gaap),
                 "facts": _needed_facts(us_gaap or {}), "fetched_at": fetched_at}
     cache.put(cache_key, snapshot, _edgar_ttl_s())
     return snapshot
@@ -1445,15 +1476,18 @@ class _Section:
     lines: tuple[tuple[EdgarLine, bool, Mapping[_dt.date, _FiledValue]], ...]
 
 
-def _edgar_sections(facts: Mapping[str, Any], as_of: _dt.date, *, quarterly: bool) -> list[_Section]:
-    """The statement as it stood on ``as_of``: one fiscal-year table, or a quarterly table of the
-    income and balance lines plus a fiscal-year table of the cash-flow lines (filed year to date: only
-    a first quarter would pass the quarter span, and no later quarter is derived)."""
+def _edgar_sections(facts: Mapping[str, Sequence[Sequence[Any]]], as_of: _dt.date, *,
+                    quarterly: bool) -> list[_Section]:
+    """The statement as it stood on ``as_of`` (``facts`` as :func:`_needed_facts` keeps them): one
+    fiscal-year table, or a quarterly table of the income and balance lines plus a fiscal-year table
+    of the cash-flow lines (filed year to date: only a first quarter would pass the quarter span, and
+    no later quarter is derived)."""
 
     def section(lines: Sequence[EdgarLine], annual: bool) -> _Section:
         rows = []
         for line in lines:
-            tag_rows = [(tag, facts[tag]) for tag in line.tags if tag in facts]
+            # dict() of the [unit, rows] pairs keeps the filer's unit order.
+            tag_rows = [(tag, dict(facts[tag])) for tag in line.tags if tag in facts]
             served = _as_filed(tag_rows, as_of, SPAN_ANNUAL if annual else SPAN_QUARTER,
                                EDGAR_ANNUAL_FORMS if annual else ())
             rows.append((line, _tagged_by(tag_rows, as_of), served))
@@ -1604,11 +1638,14 @@ def _edgar_table(section: _Section, columns: Sequence[_dt.date], as_of: _dt.date
 
 def _edgar_model_text(sections: Sequence[_Section], columns: Sequence[Sequence[_dt.date]], *, who: str,
                       as_of: _dt.date, quarterly: bool, ticker_note: bool, latest: _FiledValue,
-                      omitted: bool) -> str:
+                      omitted: bool, open_fetch: Optional[str]) -> str:
+    """The agent's text; ``open_fetch`` is the ``fetched_at`` of a snapshot that may predate a filing
+    made on or before ``as_of`` (None when every such filing was in when SEC answered)."""
     day = as_of.isoformat()
+    fetch_note = f"; SEC data as fetched {open_fetch} (a filing made after that is not included)" if open_fetch else ""
     lines = [f"SEC EDGAR as-filed statements: {who}, {'quarterly' if quarterly else 'annual'}, us-gaap XBRL "
              "company facts",
-             f"USD millions; facts filed on or before {day}, at the values filed then"]
+             f"USD millions; facts filed on or before {day}, at the values filed then{fetch_note}"]
     if ticker_note:
         lines.append(EDGAR_TICKER_NOTE)
     for section, section_columns in zip(sections, columns):
@@ -1648,7 +1685,8 @@ def _shown_values(sections: Sequence[_Section],
 
 
 def _render_edgar(sections: Sequence[_Section], *, who: str, cik: str, as_of: _dt.date, freq: str, key: str,
-                  url: str, ticker_note: bool, language: str, provenance: Mapping[str, Any]) -> DataResult:
+                  url: str, ticker_note: bool, open_fetch: Optional[str], language: str,
+                  provenance: Mapping[str, Any]) -> DataResult:
     """The deterministic table, sentences and facts of an as-filed statement.  The table shows the
     most recent periods of each section; while it is over :data:`MODEL_TEXT_MAX_CHARS` the oldest
     shown period of every section is dropped, and the page holds exactly the values shown."""
@@ -1662,7 +1700,8 @@ def _render_edgar(sections: Sequence[_Section], *, who: str, cik: str, as_of: _d
         shown_values = _shown_values(sections, columns)
         latest = max((fact for _, _, fact in shown_values), key=lambda fact: (fact.filed, fact.accn))
         model_text = _edgar_model_text(sections, columns, who=who, as_of=as_of, quarterly=quarterly,
-                                       ticker_note=ticker_note, latest=latest, omitted=omitted)
+                                       ticker_note=ticker_note, latest=latest, omitted=omitted,
+                                       open_fetch=open_fetch)
         if len(model_text) <= MODEL_TEXT_MAX_CHARS or all(len(shown) <= 1 for shown in columns):
             break
         cut += 1
@@ -1749,10 +1788,8 @@ def _edgar_statements(company: Any, *, as_of: Any, freq: Any, user_agent: Any, l
             return _failure(STATUS_NOT_A_FILER, (
                 f"{value} is not in SEC's current ticker map: not a US SEC filer, or a ticker SEC no longer lists "
                 "(pass the company's CIK)"), provenance=provenance, source=EDGAR_SOURCE)
-        who = f"{value} (CIK {cik})"
     else:
         cik = value
-        who = f"CIK {cik}"
     provenance["cik"] = cik
     key = f"edgar:{cik}:{mode}@{as_of_day.isoformat()}"
     url = (f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}"
@@ -1762,6 +1799,14 @@ def _edgar_statements(company: Any, *, as_of: Any, freq: Any, user_agent: Any, l
     if isinstance(snapshot, tuple):
         logger.debug("data_tools: SEC EDGAR CIK %s -> %s", cik, snapshot[0])
         return _failure(*snapshot, key=key, url=url, provenance=provenance, source=EDGAR_SOURCE)
+    # A CIK is used as given, so the filer's name is what lets the reader notice a number that names
+    # another company than meant (a non-US exchange code, say).
+    name = snapshot["entity_name"]
+    provenance["entity_name"] = name
+    if kind == "ticker":
+        who = f"{value} (CIK {cik})"
+    else:
+        who = f"CIK {cik} ({name})" if name else f"CIK {cik}"
     if not snapshot["us_gaap_present"]:
         return _failure(STATUS_NO_XBRL_FACTS, EDGAR_NO_US_GAAP, key=key, url=url, provenance=provenance,
                         source=EDGAR_SOURCE)
@@ -1779,7 +1824,12 @@ def _edgar_statements(company: Any, *, as_of: Any, freq: Any, user_agent: Any, l
                                           f"{as_of_day.isoformat()}", key=key, url=url, provenance=provenance,
                         source=EDGAR_SOURCE)
     provenance.update(taxonomy="us-gaap", fetched_at=snapshot["fetched_at"])
+    # EDGAR dates a statement filing accepted after 17:30 ET the next business day, so a snapshot
+    # fetched on a later UTC day than as_of held every filing dated up to as_of; one fetched on or
+    # before as_of (a live run's 24-hour cache) may not, and the text says when SEC answered.
+    fetched_day = _iso_day(snapshot["fetched_at"][:10])
+    open_fetch = snapshot["fetched_at"] if fetched_day is None or as_of_day >= fetched_day else None
     logger.debug("data_tools: SEC EDGAR CIK %s %s as of %s -> ok", cik, mode, as_of_day.isoformat())
     return _render_edgar(sections, who=who, cik=cik, as_of=as_of_day, freq=mode, key=key, url=url,
-                         ticker_note=kind == "ticker" and as_of_day < instant.date(), language=language,
-                         provenance=provenance)
+                         ticker_note=kind == "ticker" and as_of_day < instant.date(), open_fetch=open_fetch,
+                         language=language, provenance=provenance)

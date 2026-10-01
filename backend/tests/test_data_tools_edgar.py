@@ -276,6 +276,28 @@ def test_a_tag_with_a_second_unit_records_the_unit_of_each_period():
         "391,035 million USD (391.0 billion USD)", "1,000 million EUR (1.0 billion EUR)"]
 
 
+@pytest.mark.parametrize("units", [("USD", "CNY"), ("CNY", "USD")])
+def test_a_cache_hit_serves_the_unit_the_fetch_served(units, tmp_path):
+    """A 20-F filer under US GAAP tags a USD convenience translation next to its reporting currency.
+    The cache writes JSON with sorted keys: kept as an object, the units would come back in
+    alphabetical order and a hit would hand the period to another unit than the fetch did."""
+    values = {"USD": 130_350_000_000, "CNY": 941_168_000_000}
+    revenues = {unit: [_fact("2024-03-31", values[unit], "2024-05-23", form="20-F", start="2023-04-01",
+                             accn="0001104659-24-000001")] for unit in units}
+    transport = with_facts({"Revenues": {"units": revenues}}, cik=1577552)
+    cache = dtools._DiskCache(str(tmp_path / "cache"), 3600)
+    miss = call(transport, company="1577552", as_of=dt.date(2024, 6, 1), cache=cache)
+    hit = call(transport, company="1577552", as_of=dt.date(2024, 6, 1), cache=cache)
+    assert len(transport.urls("companyfacts")) == 1 and miss.status == dtools.STATUS_OK
+    assert (hit.model_text, hit.page_text, hit.supports, hit.facts) == (
+        miss.model_text, miss.page_text, miss.supports, miss.facts)
+    [revenue] = [fact for fact in hit.facts if fact["metric"] == "Revenue"]
+    assert revenue["unit"] == units[0]  # the filer's first unit owns the period, fetched or cached
+    assert row(hit, "Revenue") == (["130,350"] if units[0] == "USD" else ["941,168 million CNY"])
+    stored = json.loads(Path(cache.path("edgar|companyfacts|0001577552")).read_text(encoding="utf-8"))
+    assert [unit for unit, _ in stored["payload"]["facts"]["Revenues"]] == list(units)
+
+
 @pytest.mark.parametrize("filed, served_at", [
     ("2024-11-01", dt.date(2024, 11, 1)),
     (" 2024-11-01 ", dt.date(2024, 11, 1)),  # as a string it sorts before "2024-10-15"
@@ -300,13 +322,23 @@ def test_a_non_canonical_filed_date_is_parsed_or_skipped_never_string_compared(f
 def test_malformed_facts_are_skipped():
     good = _fact("2024-09-28", 391_035_000_000, "2024-11-01", start="2023-09-30")
     bad = [dict(good, val="391035000000"), dict(good, val=True), dict(good, val=float("nan")),
-           dict(good, val=10 ** 18), dict(good, accn="320193-24-123"), {k: v for k, v in good.items() if k != "accn"},
+           dict(good, val=10 ** 18), dict(good, val=1e-200), dict(good, val=0.1234567),
+           dict(good, accn="320193-24-123"), {k: v for k, v in good.items() if k != "accn"},
            dict(good, form=""), dict(good, start="2025-01-01"), dict(good, start="not a date"), dict(good, end=None),
            "not a fact"]
     assert dtools._as_filed(usd_rows([("Revenues", bad)]), dt.date(2030, 1, 1), dtools.SPAN_ANNUAL) == {}
     assert not dtools._tagged_by(usd_rows([("Revenues", bad)]), dt.date(2030, 1, 1))
     assert list(dtools._as_filed(usd_rows([("Revenues", [*bad, good])]), dt.date(2030, 1, 1),
                                  dtools.SPAN_ANNUAL)) == [dt.date(2024, 9, 28)]
+
+
+def test_a_value_is_bounded_in_magnitude_and_decimal_places():
+    """A number with a 200-digit fixed-point rendering is malformed, not a figure."""
+    for value, number in ((6.08, "6.08"), (0.000001, "0.000001"), (-2.123456, "-2.123456"), (1e17, "1E+17"),
+                          (10 ** 18 - 1, "999999999999999999"), (0, "0"), (0.0, "0.0")):
+        assert dtools._fact_value(value) == Decimal(number), value
+    for value in (1e-200, 1.5e-7, 0.1234567, -2.0000001, 10 ** 18, -1e18):
+        assert dtools._fact_value(value) is None, value
 
 
 def test_a_period_ending_after_its_own_filing_is_never_served():
@@ -470,11 +502,12 @@ def test_the_default_cache_lives_in_DATA_TOOLS_CACHE_DIR_and_never_holds_the_use
     files = sorted((tmp_path / "default_cache").glob("*.json"))
     assert len(files) == 2
     for path in files:
-        text = path.read_text(encoding="utf-8")
-        assert "research-desk@example.com" not in text and "entityName" not in text
+        assert "research-desk@example.com" not in path.read_text(encoding="utf-8")
     stored = [json.loads(path.read_text(encoding="utf-8"))["payload"] for path in files]
     facts = next(payload for payload in stored if payload["kind"] == "companyfacts")
-    assert set(facts["facts"]) <= set(dtools._EDGAR_TAGS)
+    assert set(facts["facts"]) <= set(dtools._EDGAR_TAGS) and facts["entity_name"] == "Apple Inc."
+    assert facts["facts"]["Assets"] == [["USD", [{key: value for key, value in fact.items() if key in dtools._FACT_FIELDS}
+                                                  for fact in FACTS["facts"]["us-gaap"]["Assets"]["units"]["USD"]]]]
     assert "research-desk@example.com" not in repr(result)
 
 
@@ -510,7 +543,7 @@ def test_a_lowered_ttl_shortens_entries_already_cached(tmp_path, monkeypatch):
 
 def _stored_companyfacts(**changes):
     payload = {"status": "ok", "kind": "companyfacts", "cik": "0000320193", "tags": list(dtools._EDGAR_TAGS),
-               "fields": list(dtools._FACT_FIELDS), "us_gaap_present": True, "facts": {},
+               "fields": list(dtools._FACT_FIELDS), "entity_name": "", "us_gaap_present": True, "facts": {},
                "fetched_at": "2026-09-30T17:00:00Z", **changes}
     return json.dumps({"stored_at": 0, "ttl_s": 3600,
                        "payload": {key: value for key, value in payload.items() if value is not None}})
@@ -523,6 +556,11 @@ def _stored_companyfacts(**changes):
     _stored_companyfacts(tags=None, fields=None),  # written before entries recorded their reduction
     _stored_companyfacts(tags=["Assets"]),
     _stored_companyfacts(fields=["end", "val", "filed", "form", "accn"]),
+    _stored_companyfacts(facts={"Assets": {"USD": []}}),  # written before units were kept in the filer's order
+    _stored_companyfacts(facts={"Assets": [["USD"]]}),
+    _stored_companyfacts(facts={"Assets": [["USD", {}]]}),
+    _stored_companyfacts(entity_name=None),  # written before entries named the filer
+    _stored_companyfacts(entity_name="Apple\nInc."),
 ])
 def test_a_corrupt_or_foreign_cache_entry_is_a_miss(stored, tmp_path):
     cache = dtools._DiskCache(str(tmp_path / "cache"), 3600, clock=lambda: 5.0)
@@ -540,6 +578,12 @@ def test_a_well_formed_cache_entry_is_a_hit(tmp_path):
     Path(cache.path("edgar|companyfacts|0000320193")).write_text(_stored_companyfacts(), encoding="utf-8")
     transport = FakeSEC()
     assert call(transport, company="320193", cache=cache).status == dtools.STATUS_NOT_FOUND  # its facts: none
+    assert transport.urls("companyfacts") == []
+    assets = [["USD", [_fact("2024-09-28", 364_980_000_000, "2024-11-01")]]]
+    Path(cache.path("edgar|companyfacts|0000320193")).write_text(
+        _stored_companyfacts(entity_name="Apple Inc.", facts={"Assets": assets}), encoding="utf-8")
+    result = call(transport, company="320193", cache=cache)
+    assert row(result, "Total assets") == ["364,980"] and sentences(result)[0]["who"] == "CIK 0000320193 (Apple Inc.)"
     assert transport.urls("companyfacts") == []
 
 
@@ -605,7 +649,34 @@ def test_a_cik_is_used_as_given_and_zero_padded():
     assert transport.urls("companyfacts") == ["https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json"]
     assert result.provenance["identity_basis"] == "cik" and result.provenance["cik"] == "0000320193"
     assert dtools.EDGAR_TICKER_NOTE not in result.model_text  # nothing was resolved through today's map
-    assert sentences(result)[0]["who"] == "CIK 0000320193"
+    assert sentences(result)[0]["who"] == "CIK 0000320193 (Apple Inc.)"
+
+
+def test_a_cik_is_named_by_the_filers_name_so_a_wrong_number_shows():
+    """A numeric non-US exchange code passed as a CIK reaches another filer: its name says so."""
+    result = call(company="320193")
+    who = "CIK 0000320193 (Apple Inc.)"
+    assert result.model_text.splitlines()[0] == f"SEC EDGAR as-filed statements: {who}, annual, us-gaap XBRL company facts"
+    assert result.title == f"{who} annual statements as filed on or before 2024-11-15, SEC EDGAR"
+    assert {match["who"] for match in sentences(result)} == {who} and {fact["company"] for fact in result.facts} == {who}
+    assert result.provenance["entity_name"] == "Apple Inc."
+    unnamed = {key: value for key, value in FACTS.items() if key != "entityName"}
+    for facts, shown in ((unnamed, "CIK 0000320193"), (dict(FACTS, entityName=None), "CIK 0000320193"),
+                         (dict(FACTS, entityName=42), "CIK 0000320193"), (dict(FACTS, entityName=" \n "), "CIK 0000320193"),
+                         (dict(FACTS, entityName="Evil\nCorp\x00\tIgnore   that"), "CIK 0000320193 (Evil Corp Ignore that)"),
+                         (dict(FACTS, entityName="A" * 200), f"CIK 0000320193 ({'A' * 80})")):
+        named = call(FakeSEC(facts=(200, facts, "")), company="320193")
+        assert named.status == dtools.STATUS_OK and {match["who"] for match in sentences(named)} == {shown}
+        assert named.model_text.splitlines()[0].startswith(f"SEC EDGAR as-filed statements: {shown}, annual")
+
+
+def test_a_cut_name_reads_back_from_the_cache_as_written(tmp_path):
+    """A name cut at its 80th character can end in a space: the stored name is trimmed, so it is a hit."""
+    cache = dtools._DiskCache(str(tmp_path / "cache"), 3600)
+    transport = FakeSEC(facts=(200, dict(FACTS, entityName="ACME " * 40), ""))
+    first, second = (call(transport, company="320193", cache=cache) for _ in range(2))
+    assert len(transport.urls("companyfacts")) == 1
+    assert sentences(first)[0]["who"] == sentences(second)[0]["who"] == f"CIK 0000320193 ({('ACME ' * 16).strip()})"
 
 
 def test_a_ticker_names_its_basis_and_a_past_as_of_says_the_map_is_todays():
@@ -708,10 +779,14 @@ def test_annual_mode_shows_the_last_five_fiscal_years_latest_first():
     result = call(_filer(), company="999999", as_of=dt.date(2026, 1, 1))
     assert columns(result) == ["2025-09-30", "2024-09-30", "2023-09-30", "2022-09-30", "2021-09-30"]
     assert "Older periods are omitted." not in result.model_text
-    assert result.page_text.splitlines()[0].startswith("CIK 0000999999: Revenue (us-gaap:Revenues), FY ending 2025-09-30")
+    assert result.page_text.splitlines()[0].startswith(
+        "CIK 0000999999 (Test Filer): Revenue (us-gaap:Revenues), FY ending 2025-09-30")
 
 
-def test_quarterly_mode_never_derives_a_fourth_quarter_or_a_cash_flow_quarter():
+def test_quarterly_mode_never_derives_a_fourth_quarter_or_a_cash_flow_quarter(monkeypatch):
+    # The periods served are under test here, not the cap (test_model_text_is_capped_dropping_the_oldest_
+    # periods_first): this filer's seven untagged rows put its six quarters just over MODEL_TEXT_MAX_CHARS.
+    monkeypatch.setattr(dtools, "MODEL_TEXT_MAX_CHARS", 4000)
     result = call(_filer(), company="999999", as_of=dt.date(2026, 1, 1), freq="quarterly")
     assert columns(result) == ["2025-09-30", "2025-06-30", "2025-03-31", "2024-12-31", "2024-09-30", "2024-06-30"]
     revenue = row(result, "Revenue")
@@ -804,7 +879,8 @@ def test_the_spec_sentence_and_the_structured_facts():
     assert result.key == "edgar:0000320193:annual@2024-11-15" and result.date == "2024-11-01"
     assert result.title == "AAPL (CIK 0000320193) annual statements as filed on or before 2024-11-15, SEC EDGAR"
     assert result.provenance == {"vendor": "sec_edgar", "company": "AAPL", "identity_basis": "sec_current_ticker_map",
-                                 "freq": "annual", "as_of": "2024-11-15", "cik": "0000320193", "taxonomy": "us-gaap",
+                                 "freq": "annual", "as_of": "2024-11-15", "cik": "0000320193",
+                                 "entity_name": "Apple Inc.", "taxonomy": "us-gaap",
                                  "fetched_at": "2026-09-30T17:00:00Z", "filed": "2024-11-01"}
     by_metric = {fact["metric"]: fact for fact in result.facts}
     assert set(by_metric) == {"Revenue", "Diluted EPS", "Total assets", "Total liabilities"}  # one per served line
@@ -850,7 +926,9 @@ def test_supports_start_with_the_latest_period_of_every_line():
 
 
 def test_model_text_is_capped_dropping_the_oldest_periods_first(monkeypatch):
+    monkeypatch.setattr(dtools, "MODEL_TEXT_MAX_CHARS", 4000)
     full = call(_filer(), company="999999", as_of=dt.date(2026, 1, 1), freq="quarterly")
+    assert len(columns(full)) == 6 and "Older periods are omitted." not in full.model_text
     monkeypatch.setattr(dtools, "MODEL_TEXT_MAX_CHARS", 2000)
     capped = call(_filer(), company="999999", as_of=dt.date(2026, 1, 1), freq="quarterly")
     assert len(full.model_text) > 2000 >= len(capped.model_text)
@@ -862,6 +940,72 @@ def test_model_text_is_capped_dropping_the_oldest_periods_first(monkeypatch):
     # The page holds exactly the values shown.
     assert {match["period"][-10:] for match in sentences(capped)} <= set(shown) | set(shown_cash)
     assert len(capped.supports) < len(full.supports)
+
+
+def _widest_filer():
+    """Every line at the widest cell a well-formed fact can make (18 digits in a 40-character unit) in
+    every column of six fiscal years and quarters (a fourth quarter tagged as filed, so no quarter
+    column has a gap), the long-term debt row under its noted tag, the latest filing under the longest
+    form (a recast of each fiscal year) and a CIK named at the name's full length."""
+    unit, value, form = "X" * 40, -999_999_999_999_999_999, "ABCDEFGHIJKLMNOPQRST"
+    us_gaap = {}
+    for line in dtools.EDGAR_LINES_US_GAAP:
+        tag = "LongTermDebt" if line.label == "Long-term debt" else line.tags[0]
+        instant = line.statement == "balance"
+        rows = []
+        for year in range(2020, 2026):
+            accn = f"0000000001-{year % 100:02d}-00000"  # + the filing's number in the year
+            k_filed, recast_filed, q_filed = f"{year + 1}-02-01", f"{year + 1}-02-02", f"{year}-08-01"
+            fiscal_year = None if instant else f"{year}-01-01"
+            rows += [_fact(f"{year}-12-31", value, k_filed, start=fiscal_year, accn=accn + "1"),
+                     _fact(f"{year}-12-31", value, recast_filed, form=form, start=fiscal_year, accn=accn + "3"),
+                     _fact(f"{year}-06-30", value, q_filed, form=form, start=None if instant else f"{year}-04-01",
+                           accn=accn + "2")]
+            if not instant:
+                rows.append(_fact(f"{year}-12-31", value, recast_filed, form=form, start=f"{year}-10-01",
+                                  accn=accn + "3"))
+        us_gaap[tag] = {"units": {unit: rows}}
+    return FakeSEC(facts=(200, {"cik": 1, "entityName": "W" * 80, "facts": {"us-gaap": us_gaap}}, ""))
+
+
+@pytest.mark.parametrize("freq", ["annual", "quarterly"])
+def test_the_widest_well_formed_statement_fits_without_a_cut(freq):
+    """The cap drops whole periods down to one column, and one column of the widest cells fits: the
+    agent's text is never cut mid-table, so its legend and latest-filing lines always arrive."""
+    as_of = dt.date(2026, 9, 30)  # on the fetch day: the header carries the as-fetched clause too
+    result = call(_widest_filer(), company="1", as_of=as_of, freq=freq,
+                  now=dt.datetime(2026, 9, 30, 12, 0, tzinfo=UTC))
+    assert result.status == dtools.STATUS_OK and "SEC data as fetched 2026-09-30T12:00:00Z" in result.model_text
+    tables = sum(text.startswith("| Line |") for text in result.model_text.splitlines())
+    assert tables == (2 if freq == "quarterly" else 1)
+    assert all(len(columns(result, table)) == 1 for table in range(tables))  # cut down to one column ...
+    assert len(result.model_text) <= dtools.MODEL_TEXT_MAX_CHARS  # ... which fits whole
+    assert result.model_text.splitlines()[-2] == ("Latest filing served: ABCDEFGHIJKLMNOPQRST filed 2026-02-02 "
+                                                  "(accession 0000000001-25-000003).")
+    assert result.model_text.endswith("Older periods are omitted.")
+    widest = f"-999,999,999,999,999,999 {'X' * 40}"
+    assert {line.label: row(result, line.label) for line in dtools.EDGAR_LINES_US_GAAP} == {
+        line.label: [widest] for line in dtools.EDGAR_LINES_US_GAAP}  # every cell of the column at its widest
+    assert "Long-term debt: us-gaap:LongTermDebt (includes the current portion)." in result.model_text.splitlines()
+
+
+def test_a_snapshot_that_may_predate_a_filing_says_when_sec_answered(tmp_path):
+    """A live run's as_of is today: a cached snapshot fetched earlier cannot hold a filing made since."""
+    header = "USD millions; facts filed on or before {day}, at the values filed then"
+    fresh = call(company="320193", as_of=NOW.date())
+    assert (header.format(day="2026-09-30") + "; SEC data as fetched 2026-09-30T17:00:00Z (a filing made after "
+            "that is not included)") in fresh.model_text.splitlines()
+    cache = dtools._DiskCache(str(tmp_path / "cache"), 3600)
+    transport = FakeSEC()
+    evening = dt.datetime(2026, 9, 29, 23, 0, tzinfo=UTC)
+    first = call(transport, company="320193", as_of=dt.date(2026, 9, 29), cache=cache, now=evening)
+    assert "SEC data as fetched 2026-09-29T23:00:00Z" in first.model_text
+    for day, shown in ((dt.date(2026, 9, 30), True), (dt.date(2026, 9, 28), False), (dt.date(2024, 11, 15), False)):
+        result = call(transport, company="320193", as_of=day, cache=cache, now=NOW)  # served from the cache
+        assert ("SEC data as fetched 2026-09-29T23:00:00Z" in result.model_text) is shown, day
+        assert header.format(day=day.isoformat()) in result.model_text.splitlines()[1]
+        assert result.provenance["fetched_at"] == "2026-09-29T23:00:00Z"
+    assert len(transport.urls("companyfacts")) == 1
 
 
 def test_a_section_with_no_period_names_each_line():
