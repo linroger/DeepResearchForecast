@@ -3923,36 +3923,88 @@ def _clause_tail_derivation(clause: str) -> tuple[str, str | None]:
     return (f"{clause[:tail]} {rest}", derivation) if derivation is not None else (clause, None)
 
 
-def _operand_tokens(value: str) -> list[str]:
-    """The numbers of a derivation operand's value its page must show: its
-    :func:`fact_number_tokens` (>= 2 digits or a decimal) and every number it
-    writes as a percentage or in a unit class (:func:`fact_unit_tokens`)."""
-    tokens = fact_number_tokens(value)
-    written = set(fact_percent_tokens(value)) | set(fact_unit_tokens(value))
-    return tokens + sorted(written - set(tokens))
+# A minus sign or dash before an operand's number: page numbers are unsigned
+# (page_number_set), so a sign written into an operand is never on its page.
+_OPERAND_MINUS_RE = re.compile(r"[-−–—‐‑]")
 
 
-def _operand_decimal(value: str) -> Decimal | None:
-    """A derivation operand's first number at full scale
-    (:func:`_number_values_at`: "1.2 trillion" → 1200000000000), negative
-    when the value opens with a minus sign (:data:`_NEGATIVE_LEAD_RE`, as a
-    quant row's value does); None when the value has no number."""
+def _value_on_page(token: str, full: str, percent: bool, units: Iterable[str],
+                   available: frozenset[str] | set[str]) -> bool:
+    """Whether a number written as ``token`` with the full value ``full``
+    (``"=" + value``, :func:`_number_values_at`) is on a page (``available``,
+    :func:`page_number_set`) at that value, not merely as the same digits: a
+    percentage (``percent``) as a page percentage and never scaled, a figure
+    written with a unit (``units``) as a page number of one of those unit
+    classes at the same full value, any other number as a page number of the
+    same full value ("37 billion" is no page "37 GW")."""
+    if percent:
+        return full == "=" + token and "%" + token in available
+    if units:
+        return any(f"{unit}:{full}" in available for unit in units)
+    return full in available
+
+
+def _operand_reading(value: str, available: frozenset[str] | None) -> tuple[Decimal, str, bool] | None:
+    """A derivation operand's value exactly as the evaluator uses it, ``(value,
+    number token, written as a percentage)``, when its page (``available``,
+    :func:`page_number_set`) shows that value; None otherwise (fail closed).
+
+    The value must hold exactly one number (:func:`_number_values_at`, dates
+    and year ranges out: "5 plants out of 13 GW" is no operand), with no minus
+    sign or dash before it (:data:`_OPERAND_MINUS_RE`), whose token is
+    checkable (>= 2 digits, a decimal, a percentage or a unit-class figure:
+    a bare "5" is not) and whose FULL value is on the page, not merely its
+    digits: a percentage as a page percentage (and never scaled), a figure
+    written with a unit as a page number of that unit class at the same full
+    value, any other number as a page number of the same full value.  Scale
+    words count: "37 billion" needs 37000000000 on the page, a page "37 GW"
+    is not it.  The Decimal is that full value ("1.2 trillion" →
+    1200000000000)."""
+    if available is None:
+        return None
     text = _join_digit_groups(_number_text(value, strip_dates=True))
     found = _number_values_at(text)
-    if not found:
+    if len(found) != 1:
         return None
-    number = Decimal(found[0][2][1:])
-    return -number if _NEGATIVE_LEAD_RE.match(text) else number
+    offset, token, full = found[0]
+    if _OPERAND_MINUS_RE.search(text[:offset]):
+        return None
+    percent = token in fact_percent_tokens(value)
+    units = fact_unit_tokens(value).get(token, frozenset())
+    if not (sum(ch.isdigit() for ch in token) >= 2 or "." in token or percent or units):
+        return None
+    return (Decimal(full[1:]), token, percent) if _value_on_page(token, full, percent, units, available) else None
 
 
-def _states_result(token: str, result: Decimal, percents: frozenset[str],
+def _numbers_off_page(text: str, tokens: Sequence[str], available: frozenset[str]) -> list[str]:
+    """The number ``tokens`` of a finding ``text`` that are not on a page
+    (``available``) at every full value the finding writes them with
+    (:func:`_value_on_page`): stricter than a VERIFIED finding's
+    :func:`_missing_numbers`, which accepts the same digits at another scale."""
+    values, percents, units = fact_number_values(text), fact_percent_tokens(text), fact_unit_tokens(text)
+    return [token for token in tokens
+            if not all(_value_on_page(token, full, token in percents, units.get(token, frozenset()), available)
+                       for full in values.get(token) or {"=" + token})]
+
+
+def _result_is_percent(expr: str, data_values: Sequence[str]) -> bool:
+    """Whether a derivation's result is a percentage as it is: its formula
+    multiplies by the literal 100 (:func:`derived_numbers.scales_to_percent`)
+    or every data operand value is a percentage (percentage-point arithmetic).
+    Otherwise the result is a ratio, which a percentage states x 100."""
+    return dn.scales_to_percent(expr) or (bool(data_values)
+                                          and all(fact_percent_tokens(value) for value in data_values))
+
+
+def _states_result(token: str, result: Decimal, ratio_percents: frozenset[str],
                    values: Mapping[str, frozenset[str]]) -> bool:
     """Whether a finding's number ``token`` states a derivation ``result``
-    (:func:`derived_numbers.token_matches`, as a ratio too when the token is a
-    percentage, ``percents``), as written or at the scale the finding writes it
-    with (``values``, :func:`fact_number_values`: "$1.2 trillion" states
-    1200000000000)."""
-    percent = token in percents
+    (:func:`derived_numbers.token_matches`; a token of ``ratio_percents``,
+    a percentage of a result that is a ratio, is compared with result x 100
+    only, any other token with the result as it is), as written or at the
+    scale the finding writes it with (``values``, :func:`fact_number_values`:
+    "$1.2 trillion" states 1200000000000)."""
+    percent = token in ratio_percents
     if dn.token_matches(token, result, percent):
         return True
     stated = Decimal(token)
@@ -3983,16 +4035,20 @@ def _derived_rules(text: str, cited: Sequence[int], clause: str,
       unshown_source;
     * they all cite one source and the finding cites it too — else
       cross_source;
-    * every data operand states a number (>= 2 digits, a decimal, a
-      percentage or a unit-class figure: :func:`_operand_tokens`) and every
-      such number is on that source's page, read as a finding's numbers are
-      (:func:`_number_on_pages`) — else operand_not_on_page;
-    * the formula evaluates over the operands' full-scale values
-      (:func:`_operand_decimal`; ``years(Y1,Y2)`` is Y2 - Y1) — else
-      eval_error;
+    * every data operand's value, exactly as the formula uses it, is on that
+      source's page (:func:`_operand_reading`: one checkable, unsigned
+      number at its full value) — else operand_not_on_page;
+    * the formula evaluates over those values (``years(Y1,Y2)`` is Y2 - Y1)
+      — else eval_error;
     * one of the finding's :func:`fact_number_tokens` that is no operand's
-      states the result (:func:`_states_result`) — else no_result_token when
-      the finding has no such number, result_mismatch when none states it."""
+      states the result (:func:`_states_result`, read as a percentage or a
+      ratio by :func:`_result_is_percent`) — else no_result_token when the
+      finding has no such number, result_mismatch when none states it;
+    * every other number of the finding (operands' numbers included) is on
+      the derivation source's page at the value the finding writes it with
+      (:func:`_numbers_off_page`), so a clause never carries an unchecked
+      figure into a DERIVED fact — else result_mismatch with
+      ``missing_numbers``."""
     def rejected(code: str) -> dict:
         return {"tag": "UNVERIFIED", "derivation_error": code}
 
@@ -4011,12 +4067,11 @@ def _derived_rules(text: str, cited: Sequence[int], clause: str,
     operand_tokens: set[str] = set()
     for name, value, _, kind in operands:
         if kind == dn.KIND_DATA:
-            tokens = _operand_tokens(value)
-            number = _operand_decimal(value)
-            if not tokens or number is None or available is None or _missing_numbers(value, tokens, available):
+            reading = _operand_reading(value, available)
+            if reading is None:
                 return rejected("operand_not_on_page")
-            operand_tokens.update(tokens)
-            values[name] = number
+            values[name], token, _ = reading
+            operand_tokens.add(token)
         else:
             operand_tokens.update(fact_number_tokens(value))
     try:
@@ -4025,16 +4080,41 @@ def _derived_rules(text: str, cited: Sequence[int], clause: str,
         result = dn.evaluate(expr, values)
     except dn.CalcError:
         return rejected("eval_error")
-    candidates = [token for token in fact_number_tokens(text) if token not in operand_tokens]
+    numbers = fact_number_tokens(text)
+    candidates = [token for token in numbers if token not in operand_tokens]
     if not candidates:
         return rejected("no_result_token")
-    percents, full_values = fact_percent_tokens(text), fact_number_values(text)
-    if not any(_states_result(token, result, percents, full_values) for token in candidates):
+    data_values = [value for _, value, _, kind in operands if kind == dn.KIND_DATA]
+    ratio_percents = frozenset() if _result_is_percent(expr, data_values) else fact_percent_tokens(text)
+    full_values = fact_number_values(text)
+    stating = [token for token in candidates if _states_result(token, result, ratio_percents, full_values)]
+    if not stating:
         return rejected("result_mismatch")
+    missing = _numbers_off_page(text, [token for token in numbers if token not in stating], available)
+    if missing:
+        return {**rejected("result_mismatch"), "missing_numbers": missing}
     return {"tag": DERIVED_TAG, "derivation": {
         "expr": expr,
         "operands": {name: {"value": value, "sid": operand_sid} for name, value, operand_sid, _ in operands},
         "result": dn.format_exact(result), "sid": sid}}
+
+
+def _off_reading_rules(whole: str, tag: str, known: Callable[[int], bool],
+                       ledger_get: Callable[[int], Mapping[str, Any] | None],
+                       page_numbers: Callable[[int], frozenset[str] | None]) -> dict:
+    """What evidence-off postprocessing with derivations on makes of a
+    bullet's ``whole`` text (its tag ``tag`` split off): the derivation rules
+    on the text without its LAST derivation clause (the clause's sources
+    when the rest cites none), else the VERIFIED rules on the whole text.
+    Audit gives a fact exactly these keys, so it changes no tag."""
+    finding, derivation = _split_derivation_clause(whole)
+    finding, sids = strip_unknown_citations(finding, known)
+    finding = _collapse(finding)
+    if derivation is None:
+        return _verified_rules(tag, finding, sids, ledger_get, page_numbers)
+    if not sids:
+        sids = strip_unknown_citations(derivation, known)[1]
+    return _derived_rules(finding, sids, derivation, ledger_get, page_numbers)
 
 
 def derived_summary(records: Iterable[Mapping[str, Any]]) -> dict:
@@ -4095,7 +4175,9 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
     cites the clause's sources, and the clause replaces the tag the agent
     wrote (``claimed_tag`` DERIVED): :func:`_derived_rules` makes the fact
     DERIVED with its ``derivation`` or UNVERIFIED with a
-    ``derivation_error``, never VERIFIED.
+    ``derivation_error``, never VERIFIED.  Audit still changes no tag: a
+    fact whose evidence clause was split off gets what off makes of the
+    whole bullet (:func:`_off_reading_rules`).
     Returns ``(cleaned_notes_markdown, parts)`` with facts, unsourced
     findings, conflicts, open questions and discovered leads.
     """
@@ -4112,7 +4194,7 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
     unsourced: list[str] = []
     for bullet in sections["findings"]:
         text, tag = _split_tag(bullet)
-        claimed, clause, off_reading = tag, None, None
+        claimed, clause, off_reading, off_rules = tag, None, None, None
         if evidence:
             body, clause = _split_evidence_clause(bullet)
             if clause is not None:
@@ -4123,6 +4205,8 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
                     if evidence_mode == EVIDENCE_AUDIT:
                         off_text, off_sids = strip_unknown_citations(text, known)
                         off_reading = (_collapse(off_text), off_sids)
+                        if derivations:
+                            off_rules = _off_reading_rules(text, tag, known, ledger_get, page_numbers)
                     text = finding
             claimed = _claimed_tag(bullet, body, clause)
             if evidence_mode == EVIDENCE_ENFORCE:
@@ -4157,16 +4241,21 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
             continue
         fact: dict[str, Any] = {"kiq": kiq_id, "text": text, "sids": sids, "tag": tag,
                                 "verified_numbers": None}
-        if derivation is not None:
-            fact.update(_derived_rules(text, cited, derivation, ledger_get, page_numbers))
+        derived = (_derived_rules(text, cited, derivation, ledger_get, page_numbers) if derivation is not None
+                   else None)
+        # Audit weighs the whole bullet as off does (``off_reading`` / ``off_rules``,
+        # set when a clause was split off; derivation clause and all with
+        # derivations on), so it changes no tag.
+        if off_rules is not None:
+            fact.update(off_rules)
+        elif derived is not None:
+            fact.update(derived)
         else:
-            # Audit weighs the whole bullet as off does (``off_reading``, set when
-            # a clause was split off), so it changes no tag.
             fact.update(_verified_rules(tag, *(off_reading or (text, sids)), ledger_get, page_numbers))
         if checker is not None:
             enforced = fact["tag"]
-            if evidence_mode == EVIDENCE_AUDIT and derivation is None:
-                enforced = _verified_rules(claimed, text, sids, ledger_get, page_numbers)["tag"]
+            if evidence_mode == EVIDENCE_AUDIT:
+                enforced = (derived or _verified_rules(claimed, text, sids, ledger_get, page_numbers))["tag"]
             _apply_evidence(fact, claimed, clause, evidence_mode, checker, enforced)
         facts.append(fact)
 
@@ -4590,16 +4679,44 @@ def _derivation_operands(derivation: Mapping[str, Any]) -> str:
                      if isinstance(item, dict))
 
 
-def _derived_label(fact: Mapping[str, Any]) -> str:
-    """A DERIVED fact's digest tag: ``DERIVED from [S12]: (a-b)/b*100; a=37
-    GW, b=13 GW``, or bare ``DERIVED`` when its derivation is unreadable or
-    the fact text no longer cites the derivation's source (a hindcast's
-    citation wall stripped the marker: :func:`pit_wall_record`)."""
+def _cited_derivation_sid(fact: Mapping[str, Any]) -> int | None:
+    """A DERIVED fact's derivation source while the fact text cites it; None
+    when its derivation is unreadable or the text no longer cites that source
+    (a hindcast's citation wall stripped the marker: :func:`pit_wall_record`)."""
     derivation = fact.get("derivation")
     sid = derivation.get("sid") if isinstance(derivation, dict) else None
-    if not isinstance(sid, int) or f"[S{sid}]" not in str(fact.get("text") or ""):
+    return sid if isinstance(sid, int) and f"[S{sid}]" in str(fact.get("text") or "") else None
+
+
+def _derived_label(fact: Mapping[str, Any]) -> str:
+    """A DERIVED fact's digest tag: ``DERIVED from [S12]: (a-b)/b*100; a=37
+    GW, b=13 GW``, or bare ``DERIVED`` without a cited derivation source
+    (:func:`_cited_derivation_sid`)."""
+    sid = _cited_derivation_sid(fact)
+    if sid is None:
         return DERIVED_TAG
+    derivation = fact["derivation"]
     return f"{DERIVED_TAG} from [S{sid}]: {derivation.get('expr')}; {_derivation_operands(derivation)}"
+
+
+# What a fallback bullet appends to a DERIVED fact (RESEARCH-8), so it reads as a
+# calculation and never as a reported value: with its cited derivation source,
+# and without one (the marker a citation wall stripped is never brought back).
+_DERIVED_QUALIFIERS: Mapping[str, tuple[str, str]] = {
+    ENGLISH: (" (calculated from [S{sid}])", " (calculated)"),
+    CHINESE: ("（根据[S{sid}]推算）", "（推算）"),
+}
+
+
+def _derived_qualifier(fact: Mapping[str, Any], language: str) -> str:
+    """``" (calculated from [S12])"`` (``"（根据[S12]推算）"`` in Chinese) for a
+    DERIVED fact, ``" (calculated)"`` without a cited derivation source
+    (:func:`_cited_derivation_sid`), ``""`` for any other fact."""
+    if fact.get("tag") != DERIVED_TAG:
+        return ""
+    sid = _cited_derivation_sid(fact)
+    cited, bare = _DERIVED_QUALIFIERS[_lang_key(language)]
+    return bare if sid is None else cited.format(sid=sid)
 
 
 def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str) -> tuple[str, int]:
@@ -6206,7 +6323,8 @@ def fallback_section_bodies(sections: Sequence[OutlineSection], records: Mapping
     section holding fewer findings, then VERIFIED before REPORTED (DERIVED,
     RESEARCH-8, between them), then outline and evidence order.  UNVERIFIED
     findings (figures not found on their cited page) are never published: a
-    plain bullet would state them as fact.  A
+    plain bullet would state them as fact.  A DERIVED finding's bullet says
+    it is a calculation (:func:`_derived_qualifier`).  A
     section left without a finding gets the no-evidence line (``""`` with
     ``empty_when_none``).
     """
@@ -6251,7 +6369,8 @@ def fallback_section_bodies(sections: Sequence[OutlineSection], records: Mapping
     bodies: dict[int, str] = {}
     for section in sections:
         keys = sorted(chosen[section.index], key=lambda key: (catalogue[key][2], catalogue[key][0]))
-        lines = [f"- {catalogue[key][1].get('text')}" for key in keys]
+        lines = [f"- {catalogue[key][1].get('text')}{_derived_qualifier(catalogue[key][1], language)}"
+                 for key in keys]
         bodies[section.index] = "\n".join(lines) or ("" if empty_when_none
                                                      else f"- {_text(language, 'no_evidence')}")
     return bodies
@@ -10583,18 +10702,27 @@ def derived_quant_match(row: Mapping[str, Any],
     one checkable number (:func:`fact_number_tokens` of ``"{value} {unit}"``,
     no exponent notation) and it states the result as a finding's number
     would (:func:`_states_result`: display precision, scale words, a
-    percentage as a ratio too).  None when no derivation matches."""
+    percentage of a ratio x 100 only, :func:`_result_is_percent`), with the
+    result's sign: a negative result needs a value that opens with a minus
+    sign (:data:`_NEGATIVE_LEAD_RE`).  None when no derivation matches."""
     text = _quant_number_text(row)
     tokens = fact_number_tokens(text)
     if len(tokens) != 1 or _EXPONENT_RE.search(text):
         return None
     percents, values = fact_percent_tokens(text), fact_number_values(text)
+    negative = _NEGATIVE_LEAD_RE.match(text) is not None
     for derivation in derivations:
         try:
             result = Decimal(str(derivation.get("result")))
         except InvalidOperation:
             continue
-        if result.is_finite() and _states_result(tokens[0], result, percents, values):
+        if not result.is_finite():
+            continue
+        operands = derivation.get("operands")
+        data_values = [str(item.get("value")) for item in (operands.values() if isinstance(operands, dict) else ())
+                       if isinstance(item, dict) and item.get("sid") is not None]
+        ratio_percents = frozenset() if _result_is_percent(str(derivation.get("expr") or ""), data_values) else percents
+        if _states_result(tokens[0], -result if negative else result, ratio_percents, values):
             return derivation
     return None
 

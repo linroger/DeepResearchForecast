@@ -197,14 +197,42 @@ def test_token_matches_uses_the_stated_display_precision():
     assert not dn.token_matches("184.7", Decimal("184.615"))
     assert dn.token_matches("185", Decimal("185.5"))          # the half-unit bound is inclusive
     assert not dn.token_matches("185", Decimal("185.51"))
-    assert dn.token_matches("12", Decimal("-12.2"))           # "fell 12%": a stated magnitude
-    assert dn.token_matches("185", Decimal("1.846"), percent=True)
     assert not dn.token_matches("185", Decimal("1.846"))
     for token in ("", "abc", "-5", "1.2.3", "NaN", "Infinity"):
         assert not dn.token_matches(token, Decimal(5))
     assert not dn.token_matches("5", Decimal("Infinity"))
     assert not dn.token_matches("5", 5)
     assert not dn.token_matches("1" + "0" * 2000, Decimal(5))             # never raises on a huge token
+
+
+def test_token_matches_keeps_the_result_sign():
+    """An unsigned token states only a non-negative result: "grew 65%" is no
+    (b-a)/a*100 = -64.9, a decline is written in its own direction."""
+    assert not dn.token_matches("12", Decimal("-12.2"))
+    assert not dn.token_matches("65", Decimal("-64.8648648649"))
+    assert not dn.token_matches("0.00", Decimal("-0.001"))
+    assert not dn.token_matches("185", Decimal("-1.846"), percent=True)
+    assert dn.token_matches("12", Decimal("12.2"))
+    assert dn.token_matches("0", Decimal("0.4"))
+
+
+def test_token_matches_reads_a_percentage_at_one_scale_only():
+    # percent: the result is a ratio, compared x 100 only.
+    assert dn.token_matches("185", Decimal("1.846"), percent=True)
+    assert not dn.token_matches("1.8", Decimal("1.846"), percent=True)
+    assert not dn.token_matches("2.8", Decimal("2.846"), percent=True)
+    assert not dn.token_matches("185", Decimal("184.6"), percent=True)
+    # Otherwise the result as it is.
+    assert dn.token_matches("185", Decimal("184.6"))
+    assert dn.token_matches("1.8", Decimal("1.846"))
+
+
+def test_scales_to_percent_finds_a_multiplication_by_the_literal_100():
+    for expr in ("(a-b)/b*100", "100*(a-b)/b", "((a/b)**(1/n)-1)*100", "a/b*100 - 100", "a * 100.0"):
+        assert dn.scales_to_percent(expr), expr
+    for expr in ("(a-b)/b", "a/b", "a*1000", "a/100", "(a-b)/(b/100)", "a+100", "", "a +* b", None, "a" * 400,
+                 "(a-b)/b*hundred"):
+        assert not dn.scales_to_percent(expr), expr
 
 
 def test_format_exact_has_twelve_significant_digits_and_no_exponent():
@@ -228,6 +256,14 @@ def test_parse_derivation_reads_the_formula_operands_sources_and_period():
                         ("n", "years(2019,2024)", None, dn.KIND_PERIOD)]
     assert dn.period_value("years(2019,2024)") == Decimal(5)
     assert dn.period_value("years( 2019 , 2024 )") == Decimal(5)
+
+
+def test_the_clause_opener_is_upper_case_derived_or_the_chinese_form():
+    for text in ("(DERIVED: a; a=37 [S1])", "（DERIVED：a; a=37 [S1])", "(DERIVED : a", "（推算：a；a=37）"):
+        assert dn.CLAUSE_OPEN_RE.search(text), text
+    # Prose is no clause.
+    for text in ("Revenue (derived: from licensing) rose", "(Derived: a; a=37 [S1])", "(derivedly: a"):
+        assert dn.CLAUSE_OPEN_RE.search(text) is None, text
 
 
 def test_parse_derivation_accepts_the_chinese_clause():

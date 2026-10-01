@@ -22,7 +22,9 @@ and no agent tool is involved.  This module is the pure, stdlib-only part:
   keep it fast on any input, and every intermediate value must be finite
   (``exp(ln(0))`` fails rather than yielding 0);
 * :func:`token_matches` tells whether a number a finding states is the result
-  at its own display precision; :func:`format_exact` writes a result with 12
+  at its own display precision (one reading: the result as it is, or a ratio
+  as a percentage; :func:`scales_to_percent` tells whether a formula yields
+  a percentage already); :func:`format_exact` writes a result with 12
   significant digits and no exponent notation.
 
 Every failure is a :class:`CalcError`.  Idea credit: FinanceHarness's
@@ -50,6 +52,7 @@ __all__ = [
     "format_exact",
     "parse_derivation",
     "period_value",
+    "scales_to_percent",
     "token_matches",
 ]
 
@@ -65,9 +68,11 @@ KIND_DATA = "data"      # a value read from a source page
 KIND_PERIOD = "period"  # years(Y1,Y2): a whole-year difference, sourced by nothing
 FIRST_YEAR, LAST_YEAR = 1900, 2100
 
-# A derivation clause opener: "(DERIVED:" or the Chinese "（推算：" (either
-# bracket and colon width).  linear_research finds the LAST one in a finding.
-CLAUSE_OPEN_RE = re.compile(r"[(（]\s?(?:DERIVED|推算)\s?[:：]", re.I)
+# A derivation clause opener: "(DERIVED:" as the prompt writes it (upper case
+# only, so prose such as "(derived: from licensing)" is no clause) or the
+# Chinese "（推算：" (either bracket and colon width).  linear_research finds
+# the LAST one in a finding.
+CLAUSE_OPEN_RE = re.compile(r"[(（]\s?(?:DERIVED|推算)\s?[:：]")
 _OPERAND_NAME = r"[a-z][a-z0-9_]{0,15}"
 # Where an operand starts: the start of the operand list or a separator ("、"
 # too), then "name=".  A value runs up to the next start, so a value may hold
@@ -278,22 +283,44 @@ def _decimals(token: str) -> int:
 def token_matches(stated_token: str, result: Decimal, percent: bool = False) -> bool:
     """Whether a stated number token (unsigned, as a finding writes it:
     "185", "184.6") is ``result`` at the token's display precision:
-    |t - |r|| <= 0.5 x 10^-decimals(t).  A token states a magnitude, so a
-    negative result matches its absolute value ("fell 12%").  With
-    ``percent`` (the token is written as a percentage) a ratio result also
-    matches at x100 ((a-b)/b = 1.846 is "185%").  Never raises: anything
-    unreadable is no match."""
+    |t - r| <= 0.5 x 10^-decimals(t).  The result keeps its sign, and an
+    unsigned token states only a non-negative one: a decline is written in
+    its own direction ("(b-a)/b*100" for "fell 12%"), never certified from
+    "(a-b)/b*100".  One reading per call: with ``percent`` the result is a
+    ratio the token states as a percentage and the token is compared with
+    result x 100 only ((a-b)/b = 1.846 is "185%", never "1.8%"); without it,
+    with the result as it is.  Never raises: anything unreadable is no
+    match."""
     token = str(stated_token).strip()
     try:
         with localcontext(Context(prec=28)):
             stated = Decimal(token)
             if not stated.is_finite() or stated < 0 or not isinstance(result, Decimal) or not result.is_finite():
                 return False
-            tolerance = Decimal(5).scaleb(-_decimals(token) - 1)
-            readings = [abs(result), abs(result) * 100] if percent else [abs(result)]
-            return any(abs(stated - reading) <= tolerance for reading in readings)
+            reading = result * 100 if percent else result
+            if reading < 0:
+                return False
+            return abs(stated - reading) <= Decimal(5).scaleb(-_decimals(token) - 1)
     except (ArithmeticError, ValueError):
         return False
+
+
+def scales_to_percent(expr: str) -> bool:
+    """Whether formula ``expr`` multiplies by the literal 100 ("(a-b)/b*100",
+    "100*a/b"): its result is a percentage already, never a ratio to read
+    x 100.  Never raises: an unreadable formula does not."""
+    if not isinstance(expr, str) or len(expr) > MAX_EXPR_CHARS:
+        return False
+    try:
+        tree = ast.parse(expr.strip(), mode="eval")
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return False
+    return any(isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mult)
+               and any(_is_hundred(side) for side in (node.left, node.right)) for node in ast.walk(tree))
+
+
+def _is_hundred(node: ast.AST) -> bool:
+    return isinstance(node, ast.Constant) and type(node.value) in (int, float) and node.value == 100
 
 
 def format_exact(value: Decimal) -> str:
