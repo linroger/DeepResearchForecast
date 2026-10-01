@@ -261,7 +261,9 @@ PHASE_TIME_SHARE: Mapping[str, float] = {
 ENGLISH = "English"
 CHINESE = "Chinese"
 
-AGENT_TOOLS = rg.AGENT_TOOLS_SCHEMA  # the one tools object bound on every agent call
+# The one tools object bound on every agent call; an engine with official-data
+# tools (TIME-13) binds one list of its own instead (_Engine.agent_tools).
+AGENT_TOOLS = rg.AGENT_TOOLS_SCHEMA
 
 PRIME_TASK = "CACHE WARM-UP: Reply with OK only; do not call tools."
 STOP_TEXT = ("STOP: you have enough — write your final notes now in the required format; "
@@ -306,6 +308,26 @@ _RETRYABLE_FALLBACKS = frozenset({"deadline", "budget", "unstructured_notes", "n
 # What a search or fetch of a run that is being stopped (SIGINT/SIGTERM)
 # answers instead of calling the backend.
 CANCELLED_TOOL_TEXT = "CANCELLED: the run is stopping; write your notes from what you have."
+# TIME-13 official-data tools (RESEARCH_DATA_TOOLS: a comma list of these vendors,
+# or "all"; research_gateway.DATA_TOOL_VENDORS names each one's tool).  A vendor
+# is bound only with its credential, and without one nothing below is reached.
+DATA_VENDORS: tuple[str, ...] = ("fred", "sec_edgar")
+# In the work dir: the as-of cutoff and FRED vintage every data call of the run is
+# pinned to, fixed by the first call and read back on resume (plan.json untouched).
+DATA_PINS_FILENAME = "data_pins.json"
+# quantitative.json opens with at most this many deterministic rows, the cited data
+# sources' structured values (DATA_QUANT_ROWS_MAX; always within MAX_QUANT_ROWS).
+DEFAULT_DATA_QUANT_ROWS = 12
+# A data row's sources.json supports: its vendor sentences (data_tools.SUPPORTS_MAX).
+DATA_SUPPORTS_MAX = 40
+# meta.data_tools.quant_rows_rejected lists at most this many dropped model rows.
+DATA_QUANT_REJECTED_MAX = 20
+# The KIQ task's description of each bound data tool (a data-kind KIQ only).
+_KIQ_DATA_TOOL_TEXT: Mapping[str, str] = {
+    "macro_series": "macro_series(series) returns an official FRED series as published on the run's vintage date",
+    "company_filings": ("company_filings(company, freq) returns a US SEC filer's statements as filed on or before "
+                        "the as-of date"),
+}
 
 
 # ===========================================================================
@@ -536,7 +558,7 @@ Emphasis: $emphasis
 Starting points (search results already registered for you; fetch the most authoritative ones directly by URL):
 $seeds
 Budget for this investigation: at most $max_searches web_search calls, $max_fetches web_fetch calls and $max_steps tool rounds. Use fewer when the evidence is already sufficient.
-Tools: web_search(query) returns results tagged [S<n>] with their URLs; web_fetch(url, focus) returns the passages of one page that are relevant to focus, tagged with the page's [S<n>]; web_fetch also accepts a marker such as S12 in place of the URL.
+Tools: web_search(query) returns results tagged [S<n>] with their URLs; web_fetch(url, focus) returns the passages of one page that are relevant to focus, tagged with the page's [S<n>]; web_fetch also accepts a marker such as S12 in place of the URL.$data_tools
 When you are done, reply WITHOUT calling tools, with your notes in exactly this format (keep the four headings in English exactly as written; write the bullet text in $language):
 ## Findings
 - <fact: number + unit + as-of date + context> [S<n>] (VERIFIED|REPORTED)
@@ -5767,16 +5789,22 @@ _MARKER_URL_RE = re.compile(r"^\s*+\[?\s*+S(\d++)\s*+\]?\s*+$", re.I)
 _ROW_HEADER_RE = re.compile(r"^\[S(\d+)\] .* \((?:tier \d+|tier unknown)\)(?: — .*)?$")
 
 
+# Tools whose answer is one source's page headed by its row header: a fetch and
+# an official-data call (TIME-13: an S1 row with its stored page).
+_FETCH_SHAPED_TOOLS = frozenset({"web_fetch", *rg.DATA_TOOL_NAMES})
+
+
 def tool_output_sids(name: str, output: str) -> tuple[int | None, list[int]]:
     """``(fetched sid, sids shown)`` of one tool result, from its row headers only.
 
-    A fetch shows exactly the source of its first line; a search shows the
-    sources of its column-0 row lines (URL and snippet lines are indented).
+    A fetch (or an official-data call, TIME-13) shows exactly the source of its
+    first line; a search shows the sources of its column-0 row lines (URL and
+    snippet lines are indented).
     Nothing inside an untrusted block or a snippet counts: a page that lists
     "[S1] …" in its own references must not make ledger row 1 "shown".
     """
     lines = str(output or "").splitlines()
-    if name == "web_fetch":
+    if name in _FETCH_SHAPED_TOOLS:
         match = _ROW_HEADER_RE.match(lines[0]) if lines else None
         return (int(match.group(1)), [int(match.group(1))]) if match else (None, [])
     sids: list[int] = []
@@ -5851,8 +5879,9 @@ class KiqAgent:
     """One KIQ investigation: an append-only tool loop with hard stops.
 
     Messages are ``[ENGINE_CORE][RUN BRIEF][KIQ TASK]`` followed only by
-    appended AI/tool messages; :data:`AGENT_TOOLS` is bound on every call
-    including the forced final one.  Stops: the model answers with notes, the
+    appended AI/tool messages; the engine's one tools list (:data:`AGENT_TOOLS`,
+    or with official-data tools its ``agent_tools``, TIME-13) is bound on every
+    call including the forced final one.  Stops: the model answers with notes, the
     step budget, two steps without a new source or page (novelty), the
     deadline coming within ``grace`` seconds (so the notes call still has time),
     the budget reserve or the context cap — each then forces the notes.  A
@@ -5899,6 +5928,10 @@ class KiqAgent:
         self.unknown_tool_calls = 0
         self.tool_exceptions = 0
         self._counts_lock = threading.Lock()
+        # TIME-13: the tools list bound on every call and the official-data tools
+        # it adds (none, and AGENT_TOOLS itself, unless the engine binds them).
+        self.agent_tools = getattr(engine, "agent_tools", AGENT_TOOLS)
+        self.data_tool_names: tuple[str, ...] = tuple(getattr(engine, "data_tool_names", ()) or ())
         _, self._human, _, self._tool = rg._msg_classes()
 
     # ------------------------------------------------------------------ run
@@ -5999,7 +6032,7 @@ class KiqAgent:
         researches again."""
         gateway = self.engine.gateway
         try:
-            result = gateway.invoke(messages, kind="agent", label=label, tools=AGENT_TOOLS,
+            result = gateway.invoke(messages, kind="agent", label=label, tools=self.agent_tools,
                                     deadline=self.deadline)
         except rg.EmptyResponse as exc:
             if getattr(exc, "truncated", False):
@@ -6014,7 +6047,7 @@ class KiqAgent:
         self.engine.log("stage", f"v3: {label} reply hit its output cap; asking once more with a "
                                  f"{wider}-token cap")
         try:
-            again = gateway.invoke(messages, kind="agent", label=f"{label}:wide", tools=AGENT_TOOLS,
+            again = gateway.invoke(messages, kind="agent", label=f"{label}:wide", tools=self.agent_tools,
                                    deadline=self.deadline, max_tokens=wider)
         except _PROVIDER_ERRORS:
             raise
@@ -6036,7 +6069,7 @@ class KiqAgent:
         if wider <= base or self.deadline.remaining() < TRUNCATION_RETRY_MIN_SECONDS:
             return None
         output_weight = float(gateway.profile.cost_weights.get("output", 1.0))
-        cost = self.engine.units(rg.estimate_tokens(messages, AGENT_TOOLS)) + wider * output_weight
+        cost = self.engine.units(rg.estimate_tokens(messages, self.agent_tools)) + wider * output_weight
         return wider if gateway.can_spend(cost, keep_reserve=True) else None
 
     def _notes(self, result: rg.GatewayResult) -> str | None:
@@ -6057,7 +6090,7 @@ class KiqAgent:
     def _pressure(self, messages: list) -> str | None:
         if self.deadline.expired() or self.deadline.remaining() <= self.grace:
             return "deadline"
-        estimate = rg.estimate_tokens(messages, AGENT_TOOLS)
+        estimate = rg.estimate_tokens(messages, self.agent_tools)
         if estimate > AGENT_CONTEXT_TOKEN_CAP:
             return "context_cap"
         if not self.engine.gateway.can_spend(self.engine.units(estimate), keep_reserve=True):
@@ -6091,11 +6124,13 @@ class KiqAgent:
     # ---------------------------------------------------------------- tools
     def _execute(self, calls: Sequence[Mapping[str, Any]]) -> tuple[list, bool]:
         """Answer every call of one turn, in order; at most
-        :data:`MAX_TOOL_CALLS_PER_STEP` web_search/web_fetch calls run, the
-        others are answered "skipped" so the conversation stays valid.  A call
-        repeating an earlier one of the turn (the same search, or the same page
-        — any alias of its URL or its marker — with the same or a near-same
-        focus) is answered with :data:`DUPLICATE_CALL_TEXT` instead of running."""
+        :data:`MAX_TOOL_CALLS_PER_STEP` web_search/web_fetch calls (and calls of
+        the bound official-data tools, TIME-13) run, the others are answered
+        "skipped" so the conversation stays valid.  A call repeating an earlier
+        one of the turn (the same search, the same page — any alias of its URL
+        or its marker — with the same or a near-same focus, or the same data
+        request) is answered with :data:`DUPLICATE_CALL_TEXT` instead of
+        running."""
         outputs: list[str] = [""] * len(calls)
         read_terms: list[frozenset[str] | None] = [None] * len(calls)
         runnable: list[int] = []
@@ -6103,7 +6138,7 @@ class KiqAgent:
         slots = 0
         for index, call in enumerate(calls):
             name = call.get("name")
-            if call.get("error") or name not in ("web_search", "web_fetch"):
+            if call.get("error") or name not in ("web_search", "web_fetch", *self.data_tool_names):
                 runnable.append(index)  # answered with a short error by _call_tool
                 continue
             slots += 1
@@ -6167,10 +6202,21 @@ class KiqAgent:
     def _repeats_in_step(self, call: Mapping[str, Any], terms: frozenset[str] | None,
                          queued: dict[tuple[str, str], list[frozenset[str]]]) -> bool:
         """True when an earlier call of this step (recorded in ``queued``)
-        already runs the same search, or reads the same page — any alias of
-        its URL, or its ``S<n>`` marker — with the same or a near-same focus
-        (:func:`_repeats_read`); otherwise ``call`` is recorded."""
+        already runs the same search, reads the same page — any alias of its
+        URL, or its ``S<n>`` marker — with the same or a near-same focus
+        (:func:`_repeats_read`), or makes the same official-data request (its
+        normalized arguments, TIME-13); otherwise ``call`` is recorded.  A
+        malformed data request is never a repeat (it is answered as invalid)."""
         args = call.get("args") or {}
+        if call.get("name") in self.data_tool_names:
+            normalized, _ = rg.normalize_data_args(call.get("name"), args)
+            if normalized is None:
+                return False
+            key = ("data", rg._data_key(str(call.get("name")), normalized))
+            if key in queued:
+                return True
+            queued[key] = []
+            return False
         if call.get("name") == "web_search":
             query = args.get("query")
             if not isinstance(query, str):
@@ -6246,8 +6292,14 @@ class KiqAgent:
                 focus = args.get("focus")
                 return tools.fetch(url, focus=focus if isinstance(focus, str) else "",
                                    agent_id=self.kiq.id, kiq_text=self.kiq.question)
+            if name in self.data_tool_names:
+                # TIME-13: the tools validate the arguments; a malformed call is counted as such.
+                text = str(tools.data(name, args, agent_id=self.kiq.id))
+                if text.startswith("INVALID_TOOL_CALL"):
+                    self._count_call("invalid_tool_calls")
+                return text
             self._count_call("unknown_tool_calls")
-            return "UNKNOWN_TOOL: only web_search and web_fetch are available."
+            return unknown_tool_text(self.data_tool_names)
         except Exception as exc:  # noqa: BLE001 — a tool failure is text for the model
             self._count_call("tool_exceptions")
             return f"TOOL_ERROR({type(exc).__name__}): try another source."
@@ -6427,12 +6479,36 @@ class _Engine:
         self.pinned_as_of: str | None = raw_as_of or None
         # A pin before today is a hindcast: point-in-time rule in the briefs, labelled pages.
         self.hindcast = _hindcast_as_of(env) is not None
+        # TIME-13 RESEARCH_DATA_TOOLS (default empty = off): the official-data tools of
+        # the vendors that have their credential are bound on every agent call (one
+        # tools list per run, _bind_data_tools) with call budgets of their own, data
+        # KIQ tasks say how to use them, and their cited results reach sources.json and
+        # head quantitative.json.  Off (or nothing available), every path is unchanged.
+        self.data_tools_requested = bool(str((env or {}).get("RESEARCH_DATA_TOOLS", "") or "").strip())
+        self.data_vendors, self.data_disabled, self._data_unknown = data_tools_availability(env)
+        if self.data_vendors and min(self.preset.data_calls_per_kiq, self.preset.max_data_calls_total) <= 0:
+            self.data_disabled.update(dict.fromkeys(self.data_vendors, "no_call_budget"))
+            self.data_vendors = ()
+        self.data_tool_names: tuple[str, ...] = ()
+        self.agent_tools: list[dict] = AGENT_TOOLS
+        quant_rows = _parse_knob((env or {}).get("DATA_QUANT_ROWS_MAX", ""), DEFAULT_DATA_QUANT_ROWS)
+        self.data_quant_rows_max = (DEFAULT_DATA_QUANT_ROWS if quant_rows is None
+                                    else max(0, min(MAX_QUANT_ROWS, quant_rows)))
+        # The vintage pin (data_pins.json) once fixed, and the quantitative.json rows
+        # finalize added from data sources and dropped against them.
+        self._data_lock = threading.Lock()
+        self._data_pins: dict | None = None
+        self._data_quant_added = 0
+        self._data_quant_rejected: list[dict] = []
         identity = {"question_sha256": _sha256(" ".join(self.question.split())),
                     "depth": self.preset.depth, "model": self.model_name,
                     "language": self.language, "engine_version": ENGINE_VERSION}
         if self.pinned_as_of:
             # Only pinned runs carry it, so a live run's work dir is never archived.
             identity["as_of"] = self.pinned_as_of
+        if self.data_vendors:
+            # Only runs with data tools carry it: their prompts and tools differ.
+            identity["data_tools"] = sorted(self.data_vendors)
         # INFRA-8 RECORD_MODEL_PROVENANCE (default on): the concrete model id the --model
         # stanza resolves to joins the identity only when resolvable, so a resume under an
         # edited stanza cannot reuse this work dir (see _identity_matches).
@@ -6460,6 +6536,9 @@ class _Engine:
         # off): located quotes join sources.json supports (_source_rows).
         self.evidence_supports = (self.evidence_mode != EVIDENCE_OFF
                                   and _env_flag(self.env, "RESEARCH_EVIDENCE_SUPPORTS", False))
+        # Data units only when a data tool can be bound (the planner and seeder never call one).
+        data_limits = ({"max_data_total": self.preset.max_data_calls_total,
+                        "max_data_per_agent": self.preset.data_calls_per_kiq} if self.data_vendors else {})
         self.limits = rg.ToolLimits(
             max_searches_total=self.preset.max_searches_total,
             max_fetches_total=self.preset.max_fetches_total,
@@ -6469,8 +6548,10 @@ class _Engine:
                 "planner": (SCOUT_QUERIES_MAX, 0),
                 "seeder": (SEED_QUERIES_PER_KIQ * (self.preset.max_kiqs + self.preset.gap_rounds
                                                    * self.preset.followups_per_round), 0),
-            })
+            }, **data_limits)
         self.tools = tools_factory(self.ledger, self.work / "pages", bridge, reporter, self.limits)
+        if self.data_tools_requested:
+            self._bind_data_tools()
         # RESEARCH_FETCH_SHELL_DETECTION (default on, an honesty check): reader
         # shells, unavailable pages, bot walls and paywall teasers are failed
         # fetches at the tool layer and never published as fetched sources.
@@ -6571,6 +6652,8 @@ class _Engine:
         self._search_failures = 0
         self.tools.search = self._watch_tool(self.tools.search, "search")
         self.tools.fetch = self._watch_tool(self.tools.fetch, "fetch")
+        if self.data_tool_names:
+            self.tools.data = self._watch_tool(self.tools.data, "data")
         # The run deadline runs on the gateway's clock (its backoff and latency
         # clock), wrapped by _clock so that a stopped run has no time left.
         self._gateway_clock = getattr(self.gateway, "_clock", time.monotonic)
@@ -6611,10 +6694,102 @@ class _Engine:
         sets a flag, so a signal handler may call it."""
         self.cancelled = True
 
+    def _bind_data_tools(self) -> None:
+        """Bind the official-data tools RESEARCH_DATA_TOOLS enables (TIME-13):
+        one tools list for the run (``agent_tools``, the gateway binds it once by
+        identity) and the context the tools' data functions read
+        (``tools.data_context``).  A tools object that cannot answer data calls
+        (no ``data`` method, or no data function: its stats carry no ``data``
+        counters) binds nothing (``tools_unavailable``).  Every requested tool
+        left unbound is logged with why."""
+        if self._data_unknown:
+            self.log("warn", f"v3: RESEARCH_DATA_TOOLS names no known vendor in {', '.join(self._data_unknown)} "
+                             f"(known: {', '.join(DATA_VENDORS)}, all); ignored")
+        if self.data_vendors:
+            try:
+                stats = self.tools.stats()
+            except Exception:  # noqa: BLE001 — a tools object without stats cannot answer data calls
+                stats = {}
+            if not (callable(getattr(self.tools, "data", None)) and isinstance(stats, Mapping)
+                    and isinstance(stats.get("data"), Mapping)):
+                self.data_disabled.update(dict.fromkeys(self.data_vendors, "tools_unavailable"))
+                self.data_vendors = ()
+        for vendor, reason in sorted(self.data_disabled.items()):
+            self.log("warn", f"v3: official-data tool {rg.DATA_TOOL_VENDORS[vendor]} ({vendor}) not bound: {reason}")
+        if not self.data_vendors:
+            return
+        self.data_tool_names = tuple(rg.DATA_TOOL_VENDORS[vendor] for vendor in self.data_vendors)
+        self.agent_tools = rg.data_tool_schema_list(self.data_vendors)
+        self.tools.data_context = self._data_context
+        self.log("stage", f"official-data tools bound: {', '.join(self.data_tool_names)} (at most "
+                          f"{self.preset.data_calls_per_kiq} calls per KIQ, {self.preset.max_data_calls_total} "
+                          "per run)")
+
+    def _data_context(self) -> dict | None:
+        """What every official-data call is pinned to (TIME-13): ``as_of``, the
+        cutoff (the plan's as-of; in a gated hindcast that excludes same-day
+        sources the day before it, so every data row is dated strictly before
+        the as-of TIME-9's citation re-check reads), ``pit`` (the FRED vintage,
+        fixed once per run, :meth:`_data_pin_record`) and ``language`` (the
+        run's: vendor sentences in the report's language).  None before a plan
+        exists or when no pin can be fixed; the call then answers unavailable.
+        Never raises."""
+        try:
+            pins = self._data_pin_record(create=True)
+        except Exception as exc:  # noqa: BLE001 — a data call never breaks an agent
+            self.log("warn", f"v3: official-data vintage not pinned ({type(exc).__name__}: {exc})")
+            return None
+        if pins is None:
+            return None
+        return {"as_of": _dt.date.fromisoformat(pins["cutoff"]), "pit": _dt.date.fromisoformat(pins["pit"]),
+                "language": self.language}
+
+    def _data_pin_record(self, *, create: bool) -> dict | None:
+        """The run's official-data pin ``{as_of, cutoff, same_day, pit}``
+        (TIME-13): the one data_pins.json in the work dir holds for this plan's
+        as-of and the gates' same-day policy (so a resumed attempt keeps the
+        vintage of the first, even across FRED's midnight), else, with
+        ``create``, a new one (``pit`` = data_tools.fred_pit(cutoff)) written
+        atomically there.  None without a plan, or when nothing is pinned yet
+        and ``create`` is false."""
+        plan = self.plan
+        as_of = _parse_iso_date(plan.as_of) if plan is not None else None
+        if as_of is None:
+            return None
+        with self._data_lock:
+            if self._data_pins is not None:
+                return self._data_pins
+            same_day = self.pit.same_day if self.pit is not None else None
+            cutoff = as_of - _dt.timedelta(days=1) if same_day == "exclude" else as_of
+            expected = {"as_of": as_of.isoformat(), "cutoff": cutoff.isoformat(), "same_day": same_day}
+            path = self.work / DATA_PINS_FILENAME
+            stored = _read_json(path)
+            if (isinstance(stored, dict) and {key: stored.get(key) for key in expected} == expected
+                    and _canonical_date(stored.get("pit")) and stored["pit"] <= expected["cutoff"]):
+                self._data_pins = {**expected, "pit": stored["pit"]}
+                return self._data_pins
+            if not create:
+                return None
+            if stored is not None:
+                self.log("warn", f"v3: {DATA_PINS_FILENAME} holds another as-of or an invalid vintage; "
+                                 "pinning the vintage again")
+            pit = importlib.import_module("data_tools").fred_pit(cutoff)
+            if pit is None:
+                return None
+            record = {**expected, "pit": pit.isoformat()}
+            try:
+                self.write_json(path, record)
+            except OSError as exc:
+                self.log("warn", f"v3: {DATA_PINS_FILENAME} not written ({exc}); a resumed attempt pins the "
+                                 "vintage again")
+            self._data_pins = record
+            self.log("stage", f"official-data vintage pinned to {record['pit']} (as of {record['cutoff']})")
+            return record
+
     def _watch_tool(self, tool: Callable[..., str], kind: str) -> Callable[..., str]:
-        """``tool`` (a ResearchTools search/fetch) answering
-        :data:`CANCELLED_TOOL_TEXT` once the run is stopped; failed searches
-        are counted for the degradation events."""
+        """``tool`` (a ResearchTools search/fetch, or the data call of bound
+        official-data tools) answering :data:`CANCELLED_TOOL_TEXT` once the run
+        is stopped; failed searches are counted for the degradation events."""
         @functools.wraps(tool)
         def watched(*args: Any, **kwargs: Any) -> str:
             if self.cancelled:
@@ -7233,7 +7408,7 @@ class _Engine:
         abort = threading.Event()
         if len(kiqs) >= 2:
             self.gateway.prime(rg.build_messages(ENGINE_CORE, [self.brief], PRIME_TASK), kind="agent",
-                               label="gather:prime", tools=AGENT_TOOLS, deadline=deadline)
+                               label="gather:prime", tools=self.agent_tools, deadline=deadline)
         grace = self._final_notes_grace(deadline)
         jobs = [(lambda kiq=kiq: self._gather_job(kiq, self._kiq_task(kiq, seeds[kiq.id]),
                                                    [row["sid"] for row in seeds[kiq.id]], abort, deadline,
@@ -7425,13 +7600,18 @@ class _Engine:
         # Seed rows are web text inside the (trusted) task message: delimited
         # and filtered like every other untrusted block.
         seeds = rg.delimit_untrusted(LABEL_SEEDS, "\n".join(lines)) if lines else ""
+        # TIME-13: only a data KIQ's task names the official-data tools (every agent has
+        # them bound); without them the slot is empty and the task is the template exactly.
+        data_tools = getattr(self, "data_tool_names", ())  # engines built without __init__ have none
         task = _render(
             _T_KIQ_TASK, kiq_id=kiq.id, question=kiq.question,
             why=kiq.why or "Background evidence for the report.",
             emphasis=_KIND_EMPHASIS.get(kiq.kind, _KIND_EMPHASIS["general"]),
             seeds=seeds or "(no seed results; start with web_search)",
             max_searches=self.preset.searches_per_kiq, max_fetches=self.preset.fetches_per_kiq,
-            max_steps=self.preset.agent_max_steps, language=self.language)
+            max_steps=self.preset.agent_max_steps, language=self.language,
+            data_tools=(kiq_data_guidance(data_tools, self.preset.data_calls_per_kiq)
+                        if data_tools and kiq.kind == "data" else ""))
         addenda = self._kiq_task_addenda()
         return task + ("\n" + "\n".join(addenda) if addenda else "")
 
@@ -10887,6 +11067,97 @@ def _pit_policy(env: Mapping[str, Any] | None) -> rg.PitPolicy | None:
                         overfetch=max(1, min(rg.PIT_OVERFETCH_MAX, overfetch)) if overfetch is not None else 1)
 
 
+def data_tools_availability(env: Mapping[str, Any] | None) -> tuple[tuple[str, ...], dict[str, str], tuple[str, ...]]:
+    """``(enabled, disabled, unknown)`` of RESEARCH_DATA_TOOLS (TIME-13): the
+    requested vendors (a comma list of DATA_VENDORS names, or ``all``) that have
+    their credential, in DATA_VENDORS order; the requested ones that do not,
+    with why (``no_api_key``: FRED_API_KEY is empty; ``no_user_agent``:
+    SEC_EDGAR_USER_AGENT names no contact address, so SEC would refuse it);
+    and the names that are no vendor.  Empty or unset: nothing is requested."""
+    env = env or {}
+    requested: list[str] = []
+    unknown: list[str] = []
+    for token in str(env.get("RESEARCH_DATA_TOOLS", "") or "").strip().lower().split(","):
+        token = token.strip()
+        for name in (DATA_VENDORS if token == "all" else (token,) if token else ()):
+            if name in DATA_VENDORS:
+                if name not in requested:
+                    requested.append(name)
+            elif (shown := _collapse(name, 40)) not in unknown:
+                unknown.append(shown)
+    disabled: dict[str, str] = {}
+    if "fred" in requested and not str(env.get("FRED_API_KEY", "") or "").strip():
+        disabled["fred"] = "no_api_key"
+    if "sec_edgar" in requested and "@" not in str(env.get("SEC_EDGAR_USER_AGENT", "") or ""):
+        disabled["sec_edgar"] = "no_user_agent"
+    enabled = tuple(vendor for vendor in DATA_VENDORS if vendor in requested and vendor not in disabled)
+    return enabled, disabled, tuple(unknown)
+
+
+def kiq_data_guidance(tools: Sequence[str], calls: int) -> str:
+    """The sentence a data-kind KIQ task gains for the bound official-data
+    ``tools`` (TIME-13), ``calls`` being the KIQ's data-call allowance; ""
+    without a tool, so the task is then the template exactly."""
+    named = [_KIQ_DATA_TOOL_TEXT[tool] for tool in rg.DATA_TOOL_NAMES if tool in tools]
+    if not named:
+        return ""
+    return (f" Official data: {'; '.join(named)}. At most {calls} call{'' if calls == 1 else 's'}. Copy their "
+            "figures exactly, with the period and the result's [S<n>].")
+
+
+def unknown_tool_text(data_tools: Sequence[str]) -> str:
+    """What an agent's call of a tool it does not have answers: the web tools,
+    plus the bound official-data tools (TIME-13) when there are any."""
+    names = ["web_search", "web_fetch", *data_tools]
+    return f"UNKNOWN_TOOL: only {', '.join(names[:-1])} and {names[-1]} are available."
+
+
+def official_data_fns(env: Mapping[str, Any], enabled: Sequence[str],
+                      context: Callable[[], Mapping[str, Any] | None]) -> dict[str, Callable[..., Any]]:
+    """The data functions of the ``enabled`` vendors (TIME-13), by tool name,
+    for ResearchTools(data_fns=...).  Each call reads ``context()`` (the
+    engine's :meth:`_Engine._data_context`: the as-of cutoff, the run's FRED
+    vintage and the language, fixed only once a plan exists) and asks
+    data_tools with the credential ``env`` holds; without a context it answers
+    ``unavailable`` without any request.  ``{}`` when data_tools cannot be
+    imported (no tool is then bound)."""
+    try:
+        data_tools = importlib.import_module("data_tools")
+    except Exception:  # noqa: BLE001 — a missing vendor module binds no tool
+        return {}
+
+    def unpinned(source: str) -> Any:
+        detail = "the run's as-of date and vintage are not fixed yet"
+        return data_tools.DataResult(status=data_tools.STATUS_UNAVAILABLE, key="", url="", title="",
+                                     model_text=f"{source}: {detail}", page_text="", supports=(), date=None,
+                                     provenance={}, facts=(), detail=detail)
+
+    fns: dict[str, Callable[..., Any]] = {}
+    if "fred" in enabled:
+        key = str(env.get("FRED_API_KEY", "") or "").strip()
+
+        def macro_series(series: str) -> Any:
+            pinned = context()
+            if not pinned:
+                return unpinned("FRED")
+            return data_tools.fred_series(series, as_of=pinned["as_of"], pit=pinned["pit"], key=key,
+                                          language=pinned["language"])
+
+        fns["macro_series"] = macro_series
+    if "sec_edgar" in enabled:
+        agent = str(env.get("SEC_EDGAR_USER_AGENT", "") or "").strip()
+
+        def company_filings(company: str, freq: str = "annual") -> Any:
+            pinned = context()
+            if not pinned:
+                return unpinned(data_tools.EDGAR_SOURCE)
+            return data_tools.edgar_statements(company, as_of=pinned["as_of"], freq=freq, user_agent=agent,
+                                               language=pinned["language"])
+
+        fns["company_filings"] = company_filings
+    return fns
+
+
 def _pit_starvation_detail(pit: Any) -> str:
     """The point-in-time part of an ``evidence_unavailable`` detail (TIME-8):
     what the gates of a gated hindcast kept out (withheld pages are neither
@@ -10918,12 +11189,25 @@ def _default_tools_factory(ledger: rg.SourceLedger, pages_dir: Path, bridge: Any
     A hindcast (RESEARCH_AS_OF before today) labels every fetched page as live
     (``vintage_as_of``); a gated one (RESEARCH_PIT_GATES, TIME-8) also gets the
     point-in-time gates (``pit``), which record source dates whatever
-    RESEARCH_SOURCE_DATES says."""
+    RESEARCH_SOURCE_DATES says.  With RESEARCH_DATA_TOOLS (TIME-13) the
+    official-data functions of the vendors that have their credential
+    (:func:`official_data_fns`) read the context the engine sets as
+    ``tools.data_context`` after construction."""
     pit = _pit_policy(os.environ)
-    return rg.ResearchTools(ledger, pages_dir, bridge=bridge, plog=plog, limits=limits,
-                            source_dates=_env_flag(os.environ, "RESEARCH_SOURCE_DATES", False) or pit is not None,
-                            date_text_fallback=_env_flag(os.environ, "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", True),
-                            vintage_as_of=_hindcast_as_of(os.environ), pit=pit)
+    enabled = data_tools_availability(os.environ)[0]
+    tools: rg.ResearchTools | None = None
+
+    def data_context() -> Mapping[str, Any] | None:
+        # Set by the engine once it is built (the plan does not exist yet here).
+        getter = getattr(tools, "data_context", None)
+        return getter() if callable(getter) else None
+
+    data_fns = official_data_fns(os.environ, enabled, data_context) if enabled else None
+    tools = rg.ResearchTools(ledger, pages_dir, bridge=bridge, plog=plog, limits=limits,
+                             source_dates=_env_flag(os.environ, "RESEARCH_SOURCE_DATES", False) or pit is not None,
+                             date_text_fallback=_env_flag(os.environ, "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", True),
+                             vintage_as_of=_hindcast_as_of(os.environ), pit=pit, data_fns=data_fns or None)
+    return tools
 
 
 # ===========================================================================
