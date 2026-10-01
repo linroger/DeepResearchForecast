@@ -144,6 +144,22 @@ class Config:
     # 重放它。默认开是安全的：只影响被截断的回复，完整回复逐字节不变。false 恢复旧行为（截断内容
     # 照常采纳、不标注）。
     LLM_JSON_TRUNCATION_FAIL_CLOSED = os.environ.get('LLM_JSON_TRUNCATION_FAIL_CLOSED', 'true').strip().lower() == 'true'
+    # INFRA-4：LLM JSON 严格数值（默认开）。_parse_json_response_ex 把 NaN / Infinity / -Infinity 与
+    # 溢出的浮点字面量（1e999）当作非法 JSON（它们不是 RFC 8259 JSON，Python json 却默认接受），
+    # chat_json 于是走修复轮重问一次（原因点名 NaN/Infinity），而不是把 NaN 概率带进骨架与产物。
+    # 默认开是安全的：只含有限数的回复解析结果逐字节不变。false 恢复旧的宽松解析。
+    LLM_JSON_STRICT_NUMBERS = os.environ.get('LLM_JSON_STRICT_NUMBERS', 'true').strip().lower() == 'true'
+    # INFRA-4：LLM 错误分类先看状态（默认开）。_classify_llm_error 先按异常类型 / HTTP 状态判定
+    # （RateLimitError/429 → 配额，AuthenticationError/401/403 → 认证，422 → 内容审查，400 → 非法请求；
+    # Claude CLI 信封的 api_error_status 亦算状态），其次按文本「配额先于认证」（_is_quota 的措辞 +
+    # insufficient balance；429 / 2056 / 1113 只按整数匹配，不再误中 duration_ms:1429 之类），最后才是
+    # 确定性非法请求。chat() 重试环、chat()/chat_with_tools 的 429 熔断计数、_is_deterministic_auth_error
+    # 与编排器 _classify_provider_outage 都读它：带认证样措辞的 MiniMax 2056 用量上限消息不再被判成
+    # 确定性认证失败（跳过重试、回退进 900s 冷却）。开启时 2056 / 1113 也和状态码一样不进失败消息
+    # （max_tokens / 模型名）。默认开是安全的：只改变同时命中配额与认证文本、或带状态码的异常的归类。
+    # false 恢复旧顺序（认证文本 → 配额文本）。
+    LLM_ERROR_CLASSIFY_STATUS_FIRST = os.environ.get(
+        'LLM_ERROR_CLASSIFY_STATUS_FIRST', 'true').strip().lower() == 'true'
     # 每个 run 的 token / 成本上限（0=不限）。超限后下一次 LLM 调用抛 BudgetExceeded，止血式中止。
     LLM_RUN_BUDGET_TOKENS = int(os.environ.get('LLM_RUN_BUDGET_TOKENS', '0') or '0')
     LLM_RUN_BUDGET_USD = float(os.environ.get('LLM_RUN_BUDGET_USD', '0') or '0')
@@ -384,6 +400,12 @@ class Config:
     # 双语（随成稿语言，另按 meta.translations[] 生成 exec_brief.<lang>.md）。PDF 复用 pandoc 引擎选择/
     # PyMuPDF 回退但去 --toc 收紧边距做单页。默认开；关闭=三端点 404（degrade-safe）。
     REPORT_EXEC_BRIEF = os.environ.get('REPORT_EXEC_BRIEF', 'True').strip().lower() == 'true'
+    # INFRA-4：预测工件严格 JSON（默认开）。forecast.json（骨架早落版 / 成稿版 / lint 回写 /
+    # scripts/backfill_report_visuals.py 回填）与 market_comparison.json 按 allow_nan=False 序列化：
+    # 含 NaN/±Infinity 的骨架不钉、不早落（回退成稿后抽取）；成稿工件里的非有限叶子记 error 后置 null，
+    # 路径记入 forecast.quality.nonfinite_nulled。浏览器 JSON.parse 拒绝 NaN，默认开是安全的：
+    # 有限数内容逐字节不变。false 恢复旧的照写 NaN。
+    ARTIFACT_STRICT_JSON = os.environ.get('ARTIFACT_STRICT_JSON', 'true').strip().lower() == 'true'
     # NEXTSTEPS P2-4：把每份 forecast.json 追加进校准账本（horizon/resolution date 为键），已解析
     # 预测的历史 Brier/ECE surfacing 进新预测 confidence_rationale——让信心由 track record 赚得而非
     # 自评。默认开（仅 jsonl 追加/读取，无 LLM）；初期无已解析样本时对信心无影响（degrade-safe）。
@@ -596,6 +618,15 @@ class Config:
     REPORT_VERIFIED_FACTS_BLOCK = os.environ.get('REPORT_VERIFIED_FACTS_BLOCK', 'true').strip().lower() == 'true'
     REPORT_VERIFIED_FACTS_MAX_ROWS = int(os.environ.get('REPORT_VERIFIED_FACTS_MAX_ROWS', '40') or '40')  # 已核验指标块行数上限（超限先丢预期、再丢陈旧、再丢最旧）
     REPORT_VERIFIED_FACTS_MAX_CHARS = int(os.environ.get('REPORT_VERIFIED_FACTS_MAX_CHARS', '6000') or '6000')  # 已核验指标块字符上限（表头与规则段不截断）；Part 2 注入同一块，故也是 Part 2 注入的上限
+    # REPORT-9（C11 第 2 阶段，只检测）：报告正文的数字与 REPORT-8「已核验指标」块逐一比对
+    # （verified_facts.check_verified_figures：matched / conflict / ambiguous / states_unverified /
+    # market_conflict / unmatched），计数记入 forecast.quality.verified_figures 与 final_audit.json 的
+    # verified_figures，终审之后写 reports/<id>/figure_provenance.json（每条已核验数字的来源与引用行）。
+    # 默认开且安全：从不改成稿字节、从不加硬性或认识论问题、不提升 REPORT_FINAL_AUDIT_POLICY_VERSION；
+    # 已核验指标块为空（旧引擎 / 复用研究 / 未核验）时不写任何字段或文件。REL_TOL 为判为冲突所需的
+    # 最小相对差（低于它视为同一数字）。
+    REPORT_VERIFIED_FIGURES_CHECK = os.environ.get('REPORT_VERIFIED_FIGURES_CHECK', 'true').strip().lower() == 'true'
+    REPORT_VERIFIED_FIGURE_REL_TOL = float(os.environ.get('REPORT_VERIFIED_FIGURE_REL_TOL', '0.02') or '0.02')
     # W9-8：KG 结构先验进报告——因果骨架的 chokepoint 支点优先取 graph_priors_structural.json 的
     # 结构咽喉/介数中心度（研究显著度回退）；关系名册每个 actor 附「结构影响力（KG 中心度）」行
     # （按 actors 别名组折叠去重）。关闭=纯显著度选点、不加中心度行（行为与历史一致）。
@@ -611,6 +642,13 @@ class Config:
     # 的观测侧车先例）：只读投影、独立 try/except，绝不改 status/pipeline_health、绝不写报告目录。
     # 关闭 = 不写文件、不加 options 键。孤儿/旧跑用 scripts/stage_scorecard.py score 回填。
     STAGE_SCORECARD_ENABLED = os.environ.get('STAGE_SCORECARD_ENABLED', 'true').strip().lower() == 'true'
+    # EVAL-19（P07 第 1 部分）：可发布报告在账本提交之后冻结评估包 reports/<id>/eval_bundle/
+    # （brief / forecast_inputs / dossier / quant / graph / sim / market 七个输入块的逐字节副本 +
+    # manifest：逐块 sha256、研究目标、上游模型与发布指纹），供 EVAL-20 的块移动研究复用同一输入。
+    # 纯旁路：不改报告字节、发布状态与账本；默认关（不写任何文件）。EVAL_DOSSIER_CHARS 为 dossier
+    # 块的头尾切片字符预算（forecast_extractor.slice_head_tail；≤0 视为默认 16000，回填同规则）。
+    EVAL_BUNDLE_CAPTURE = os.environ.get('EVAL_BUNDLE_CAPTURE', 'false').strip().lower() == 'true'
+    EVAL_DOSSIER_CHARS = int(os.environ.get('EVAL_DOSSIER_CHARS', '16000') or '16000')
     # EVAL-18: slim per-pipeline cost card. On: the _run finally block writes
     # <pipeline_dir>/cost_card.json (drf-cost-card/v1: per-stage calls/tokens/wall first, USD
     # secondary, completeness reasons), and the report stage pins the run's config fingerprint
@@ -1059,6 +1097,23 @@ class Config:
     # forecast.quality.narrative_sync。默认开是安全的：零 token、纯确定性、只改叙事文本，从不改概率；
     # 设 false 逐字节复现旧 forecast.json。
     REPORT_NARRATIVE_SYNC = os.environ.get('REPORT_NARRATIVE_SYNC', 'true').strip().lower() == 'true'
+    # REPORT-3（P08 stage 1b）别名感知概率槽审计（services/logic_number.py，零 token）：S11 只锚定完整
+    # 情景名的首次出现，report_ffe1ea6bf50d 摘要 blockquote 的「基准情景（40%）」（A=0.35）因此过了终审。
+    # 严格槽位（别名（N%）/ 别名：N% 概率 / N% 的概率 别名 …）+ REPORT-2 的区间/数量/合计守卫找出与骨架
+    # 不符的数字。off = 不审计；observe（默认）= 只记 forecast.quality.logic_number 与 final_audit.json 的
+    # logic_number，不进 hard_issues / 发布门；numeric = 把别名槽不符（可修复与未解决的全部——守卫只决定
+    # 能否改写；检测异常记为不符，失败即关闭）并入 S11（_audit_numeric_consistency 与
+    # report_lint.check_scenario_probabilities），经既有硬路径阻止发布。numeric 改变一条硬发布规则，
+    # 因此必须同时提升 REPORT_FINAL_AUDIT_POLICY_VERSION 并提供重放工具——属 owner 决策，本 WP 不提升。
+    # 未知值按 observe 处理并告警。确定性修复（大纲摘要同步 + 稳定器之前的正文槽位替换）另由
+    # REPORT_LOGIC_NUMBER_REPAIR 控制。默认 observe 是安全的：只读观测，任何硬规则与发布结果不变。
+    REPORT_LOGIC_NUMBER_GATE = os.environ.get('REPORT_LOGIC_NUMBER_GATE', 'observe').strip().lower()
+    # REPORT-3 零 token 槽位修复（大纲摘要同步 + 稳定器之前的正文别名概率槽改成骨架值），还需
+    # REPORT_NARRATIVE_SYNC 开。默认关（编排决策，评审第 4 轮后）：每轮评审都找到新的语境——修复把
+    # 并非该情景概率的百分数（增长率、份额、另一事件的概率，如「有55%的概率实现基准扩张路径下的…」）
+    # 改成情景值，确定性的正文改写绝不能默认编造数字。只读审计（REPORT_LOGIC_NUMBER_GATE=observe）
+    # 照常记录 fixable / unresolved，作为开启前的证据；关 = 成稿、大纲与 forecast.json 不被改写。
+    REPORT_LOGIC_NUMBER_REPAIR = os.environ.get('REPORT_LOGIC_NUMBER_REPAIR', 'false').strip().lower() == 'true'
     # REPORT-4 报告阶段提示词的类型化缺失标记（utils/absence.py）：章节质检无骨架时去掉概率一致性
     # 规则、缺失的信号包/市场表写成「本次未启用 / 检索为空 / 不可用」标记而非「（无）」、并行撰写的
     # 大纲意图不再冒充前序章节摘要；骨架提示词首句只列实际注入的输入并要求无研究基率时写明基率出处；
@@ -1162,6 +1217,20 @@ class Config:
     # 对账弹出锚点、修订概率却永久保留）。默认 0.6——高于锚点完整性下限
     # （_market_anchor_complete 的 0.5）：影响概率的门槛必须严于仅作展示的门槛。
     FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE = float(os.environ.get('FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE', '0.6') or '0.6')
+    # REPORT-12 (deterministic market blend): the 10pp divergence restatement asks the model
+    # only for a bounded market_weight w (plus a market-citing rationale, all or none) and code
+    # computes the revised probability (1-w)*p + w*m from DRF's own snapshot price m, stamps the
+    # formula in market_influence.blend and shows it in the Market Cross-Check.  Default off: it
+    # changes how published probabilities move, so it is promoted only through an outcome-blind
+    # (WP14) decision; off -> the legacy free-probability restatement, byte-identical.
+    FORECAST_MARKET_BLEND_ARITHMETIC = os.environ.get('FORECAST_MARKET_BLEND_ARITHMETIC', 'false').strip().lower() == 'true'
+    # REPORT-12: the largest market_weight accepted (a larger one rejects the whole revision).
+    # Default 0.8: markets are calibration anchors, not truth, so a blend never fully adopts the
+    # market price.  Read only while FORECAST_MARKET_BLEND_ARITHMETIC is on; clamped to [0, 1]
+    # so a blend always stays on the segment between the forecast and the market price, then
+    # floored to two decimals (the 0.01 grid the model's weight is rounded to), so the cap the
+    # prompt states is exactly the cap that is enforced.
+    FORECAST_MARKET_BLEND_WEIGHT_MAX = float(os.environ.get('FORECAST_MARKET_BLEND_WEIGHT_MAX', '0.8') or '0.8')
     # REPORT-10（信息墙）：注入实时市场包时，二元抽取的 dossier 视图删掉研究桥追加的机器市场表
     # （"## Prediction Market Signals" H2 节，研究期价格、可能过时），市场价只经实时市场包一个
     # 入口进入 _draw，且不再占用 head+tail 的尾部预算。默认关：删除会改变二元提示词进而可能
@@ -1735,6 +1804,29 @@ class Config:
     # the v3 child.
     RESEARCH_FORECASTER_ATTRIBUTION = os.environ.get(
         'RESEARCH_FORECASTER_ATTRIBUTION', 'false').strip().lower() == 'true'
+    # RESEARCH-10 v3 evidence headers: each KIQ block of the writers' evidence digest opens
+    # with the engine's count of its evidence (sourced findings by tag, cited sources
+    # fetched vs snippet-only, distinct domains; counted before lines are dropped for
+    # length) and a sufficiency label (insufficient: deterministic fallback notes, < 3
+    # sourced findings or no fetched source; thin: < 2 VERIFIED, < 2 fetched or < 2
+    # domains; else adequate); a legend opens the digest, the gap review's coverage matrix
+    # gains fetched/domains/sufficiency, the section rules gain one thin-evidence line,
+    # meta.kiqs gains evidence/sufficiency and a degradation event fires when at least
+    # half of the researched KIQs are insufficient.  Zero model calls.  Default false: it
+    # changes the writers' cached prefix and section task, and the DRF-original thresholds
+    # must first be validated on stored kiq/*.json; off = digest, coverage matrix, section
+    # task and meta byte-identical.  Forwarded to the v3 child.
+    RESEARCH_EVIDENCE_HEADERS = os.environ.get('RESEARCH_EVIDENCE_HEADERS', 'false').strip().lower() == 'true'
+    # RESEARCH-10 fair deterministic truncation (v3): the plan's scout digest shares its
+    # 6,000 chars max-min fairly between the scout queries (each keeps at least an equal
+    # share), cut only between search results and noting "(k results omitted for
+    # length)", where the head-cut of the joined digest silently lost the last queries;
+    # an over-cap digest block drops, among lines of equal priority, the one sharing the
+    # fewest terms with the KIQ question first (not simply the last).  Zero model calls.
+    # Default false: it changes the plan prompt and the writers' digest; off =
+    # byte-identical.  Forwarded to the v3 child.
+    RESEARCH_TRUNCATION_FAIRNESS = os.environ.get(
+        'RESEARCH_TRUNCATION_FAIRNESS', 'false').strip().lower() == 'true'
     # RESEARCH-1：抓取层抽取空壳检测（诚实性检查，故默认开 = fail closed）。开启时 reader 空壳
     # （"Markdown Content: undefined"）、"page unavailable" 页、bot wall 与短付费墙预告不再算成功
     # 读取：不进 72h 源缓存、触发 provider 回退、v3 工具层返回 FETCH_FAILED(<reason>) 且绝不标记
@@ -1825,7 +1917,11 @@ class Config:
     # TIME-4 restores them in v3 and the extract-only salvage.  Parsed like the bridge
     # (blank = true, else 1/true/yes/on), so the default keeps the legacy engine as it
     # was; false = v3 and extract-only artifacts and meta byte-identical to before.
-    # Forwarded to every research child.
+    # Forwarded to every research child.  The report agent reads it too (FU-9): when its
+    # contested-claims block (at most 15 claims) would cut quant_reconcile rows, up to 3
+    # slots (more when the plain cut already shows more) go to them, probable unit-scale
+    # errors first, and a note counts those still cut; nothing changes when nothing is
+    # cut, and false = the plain first-15 cut.
     RESEARCH_QUANT_RECONCILE = (os.environ.get('RESEARCH_QUANT_RECONCILE', 'true').strip().lower()
                                 or 'true') in ('1', 'true', 'yes', 'on')
     # RESEARCH-11 v3 forecast inputs: the facts extraction also asks for the drivers
@@ -1845,6 +1941,15 @@ class Config:
     # either way; off = no key.  Forwarded to the v3 child.
     RESEARCH_V3_CITATION_STATS = os.environ.get(
         'RESEARCH_V3_CITATION_STATS', 'true').strip().lower() == 'true'
+    # INFRA-4: v3 research-gateway JSON parsing (parse_json_object) rejects NaN, Infinity,
+    # -Infinity and overflowing float literals (1e999): a model reply carrying one is unparseable
+    # (a dict nested inside it is not taken for the reply either), so the gateway's JSON retry
+    # asks again (naming the non-finite number) instead of handing a NaN to the plan, facts and
+    # handoff artifacts.  Control characters stay tolerated.  Default true is safe: replies with
+    # finite numbers parse byte-identically; false = the previous permissive decoder.  The bridge
+    # reads it from its env; the parent forwards it to the v3 child.
+    RESEARCH_JSON_STRICT_NUMBERS = os.environ.get(
+        'RESEARCH_JSON_STRICT_NUMBERS', 'true').strip().lower() == 'true'
     # RESEARCH-7: verbatim evidence-span contract for v3 findings (off | audit | enforce).
     # Not off: the KIQ task asks each finding for an EVIDENCE: "<verbatim passage>" clause,
     # the source ledger keeps every distinct search snippet of a row, and each quote is

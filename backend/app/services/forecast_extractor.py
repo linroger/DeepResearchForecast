@@ -19,6 +19,7 @@ import math
 import re
 import unicodedata
 from datetime import datetime, timezone
+from decimal import ROUND_FLOOR, Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils.numeric_guards import sanitize_latest_actual
@@ -2206,6 +2207,26 @@ _MARKET_DIVERGENCE_INSTRUCTIONS = (
     "\"adjustment_rationale\": \"...must mention the market and its implied probability...\"} , ... ] }"
 )
 
+# REPORT-12（FORECAST_MARKET_BLEND_ARITHMETIC，默认关）：同一 10pp 重述，但模型只给判断输入——
+# 有界的 market_weight + 引用市场的理由（二者全有或全无），修订概率由代码按 (1-w)·p + w·m
+# 计算（m 恒为我们的快照价），见 _apply_market_blend。思路来自 FinanceHarness「模型选输入、
+# 代码做算术」（措辞重写，未复制任何代码）。{weight_max} 在调用时填入 FORECAST_MARKET_BLEND_WEIGHT_MAX
+# （_market_blend_weight_max，0.01 网格）。
+_MARKET_BLEND_INSTRUCTIONS = (
+    "You are reconciling forecasts against live prediction-market prices. Each item below is a "
+    "binary forecast whose probability diverges from a matched market's implied probability by "
+    "MORE than 10 percentage points, and whose rationale does NOT yet address that market. For "
+    "EACH item decide deliberately how much weight the market deserves. market_weight is the "
+    "fraction of the gap to the market price you close: 0 keeps your probability (then explain "
+    "what the market is missing); the maximum is {weight_max}. In EVERY case rewrite "
+    "adjustment_rationale to explicitly cite the market and its implied probability and to "
+    "justify the weight you chose. Markets are calibration anchors, not ground truth. Do NOT "
+    "output a probability — code computes it from your weight.\n"
+    "Return JSON ONLY: {{\"revisions\": [ {{\"id\": \"F1\", \"market_weight\": 0.0-{weight_max}, "
+    "\"adjustment_rationale\": \"...must cite the market and its implied probability...\"}} , ... ] }}"
+)
+_MARKET_BLEND_FORMULA = "(1-w)*p + w*m"
+
 # TIME-3（PREDICTION_MARKETS_END_DATE_GATE）：给匹配器今天的日期，截止日与预测日期不一致的
 # 市场至多判 near——已过截止日的市场已在调用方剔除，此行约束剩余市场的时间窗对齐。
 _MARKET_MATCH_TODAY_RULE = (
@@ -2388,7 +2409,8 @@ def anchor_binaries_to_markets(binaries: List[Dict[str, Any]], markets: Optional
 
 
 def _stamp_market_influence(binary: Dict[str, Any], anchor: Dict[str, Any], *,
-                            prior_p: float, revised_p: float) -> None:
+                            prior_p: float, revised_p: float,
+                            blend: Optional[Dict[str, Any]] = None) -> None:
     """LOOP-017 P0：把「市场把概率从 prior 移到 revised」盖成耐久的 market_influence 印章。
 
     与 market_anchor **分离**存放：对账（reconcile_forecast_contract）可依据命题/完整性
@@ -2396,7 +2418,11 @@ def _stamp_market_influence(binary: Dict[str, Any], anchor: Dict[str, Any], *,
     build_market_comparison ``influences`` 审计面的数据源。重复重述时保留最初的
     prior_probability（分歧重述之前的值；起草时已参考市场价格，并非独立于市场的估计），
     只滚动 revised/修订时市场价。任何后续 pass 都不得弹出此键（取证事故：锚点被弹出后，
-    修订概率永久保留而市场溯源全部消失）。"""
+    修订概率永久保留而市场溯源全部消失）。
+
+    REPORT-12：``blend``（仅确定性市场混合传入）原样记为 record['blend']——本次修订的
+    {weight, prior, market, computed, formula}，其 prior 是本次混合前的概率；缺省 None →
+    印章形状逐字节不变。"""
     market_id = str(anchor.get("market_id") or "").strip()
     record: Dict[str, Any] = {
         "market_id": market_id,
@@ -2413,7 +2439,75 @@ def _stamp_market_influence(binary: Dict[str, Any], anchor: Dict[str, Any], *,
             and _coerce_float(existing.get("prior_probability")) is not None):
         record["prior_probability"] = round(
             float(_coerce_float(existing["prior_probability"])), 4)
+    if blend is not None:
+        record["blend"] = dict(blend)
     binary["market_influence"] = record
+
+
+def _market_blend_weight_max() -> float:
+    """REPORT-12：FORECAST_MARKET_BLEND_WEIGHT_MAX 钳到 [0, 1]（非法/非有限 → 0.8），
+    保证混合结果始终落在预测概率与市场价之间的线段上；再向下取整到 0.01 网格（绝不放宽
+    设定的上限）——与量化后的权重同一网格，且提示词里以 :g 写出的上限就是验收比较的上限
+    （0.123456789 → 0.12，而非提示 0.123457、验收却拒收 0.123457）。"""
+    w_max = _coerce_float(_cfg("FORECAST_MARKET_BLEND_WEIGHT_MAX", 0.8))
+    if w_max is None or not math.isfinite(w_max):
+        return 0.8
+    w_max = max(0.0, min(1.0, w_max))
+    return float(Decimal(repr(w_max)).quantize(Decimal("0.01"), rounding=ROUND_FLOOR))
+
+
+def _apply_market_blend(binary: Dict[str, Any], anchor: Dict[str, Any], raw_weight: Any,
+                        rationale: str, *, weight_max: float) -> bool:
+    """REPORT-12：把一条「market_weight + 引用市场的理由」重述确定性地落到 binary 上（就地）。
+
+    调用方已确认 ``rationale`` 引用了市场；本函数只接受二者齐全的一组（全有或全无）：
+    权重经 parse_probability_field 解析（0.4 / '40%' 可读；缺失、bool、区间、>1 不可读），
+    量化到 0.01 网格（理由算式与 Market Cross-Check 都以两位小数印出权重，印出的就是参与计算
+    并记入 blend 的那个数），且模型给出的原值与量化值都须 <= ``weight_max``（调用方传入的
+    _market_blend_weight_max 已在同一网格上），否则整条重述作废（理由/概率/印章都不动），
+    返回 False。
+
+    w == 0（含量化后为 0 的 < 0.005）→ 仅改理由的「保留分歧」（不盖章）。否则 p（现概率）与
+    m（锚点上的快照价 implied_yes_prob，绝不取模型转录值）须是 [0, 1] 内的数（否则同样整条
+    作废），p2 = round(clamp((1-w)·p + w·m, 0.02, 0.98), 2)；钳位改变了结果（p2 不等于未钳位
+    算式的两位小数）或 p2 不在 p 与 m 之间的线段上（舍入出界）→ 整条作废，因此发布的 p2 总能由
+    记录的 formula 原样复算：写回概率、重算锚点 divergence、理由末尾追加确定性算式；概率确实
+    移动时盖 market_influence 印章并附 blend 记录（四舍五入后未动 → 与旧路径一致不盖章）。"""
+    parsed_w = parse_probability_field(raw_weight)
+    if parsed_w.status != PROB_OK or parsed_w.value is None:
+        return False
+    stated_w = float(parsed_w.value)
+    w = round(stated_w, 2)
+    if max(stated_w, w) > weight_max:
+        return False
+    if w == 0.0:
+        binary["adjustment_rationale"] = rationale
+        return True
+    p = _coerce_float(binary.get("probability"))
+    m = _coerce_float(anchor.get("implied_yes_prob"))
+    if p is None or m is None or not (0.0 <= p <= 1.0) or not (0.0 <= m <= 1.0):
+        return False
+    raw_p2 = (1.0 - w) * p + w * m
+    p2 = round(min(0.98, max(0.02, raw_p2)), 2)
+    if p2 != round(raw_p2, 2):
+        # [0.02, 0.98] 钳位改变了结果（上限调到 0.8 以上时 w·m 越界，或 p 本身在发布区间外）→
+        # 印出的算式 (1-w)·p + w·m 复算不出 p2，这是一条假算术：整条作废（fail closed）。
+        return False
+    if not (min(p, m) - 1e-9 <= p2 <= max(p, m) + 1e-9):
+        # 两位小数舍入把结果推出 p..m 线段（非网格的 p 配小 w → 背离市场；非网格的 m 配近 1
+        # 的 w → 越过市场，仅当上限调高到 0.8 以上时可能）→ 这一权重无法表示为合法混合，
+        # 整条作废（fail closed），绝不发布一个不在线段上的「市场驱动」修订。
+        return False
+    binary["probability"] = p2
+    anchor["divergence"] = round(p2 - m, 4)
+    binary["adjustment_rationale"] = (
+        rationale + f" [blend: (1-{w:.2f})x{p:.2f} + {w:.2f}x{m:.2f} = {p2:.2f}]")
+    if abs(p - p2) > 1e-9:
+        _stamp_market_influence(binary, anchor, prior_p=p, revised_p=p2, blend={
+            "weight": w, "prior": p, "market": m, "computed": p2,
+            "formula": _MARKET_BLEND_FORMULA,
+        })
+    return True
 
 
 def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
@@ -2433,9 +2527,16 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
     INFRA-3（LLM_JSON_TRUNCATION_FAIL_CLOSED）：重述回复被 max_tokens 截断时丢弃被截在半途的那条
     重述（见 _trim_cut_item）——它多半停在理由半途，而截断前已完整的概率与引用市场的理由足以通过
     下方检查。计数记在 ``truncation_counts['market_divergence']``（给出时；丢弃条数记
-    market_divergence_items_dropped）。"""
+    market_divergence_items_dropped）。
+
+    REPORT-12（FORECAST_MARKET_BLEND_ARITHMETIC，默认关）：候选选择不变；提示词换成
+    _MARKET_BLEND_INSTRUCTIONS，模型只给 market_weight（<= FORECAST_MARKET_BLEND_WEIGHT_MAX）
+    + 引用市场的理由，修订概率由代码按 (1-w)·p + w·m 计算（m 取锚点快照价），回复里的任何
+    probability / 市场价转录一律忽略（见 _apply_market_blend）。关 → 提示词与旧的自由概率
+    重述逐字节不变。"""
     if not _cfg("FORECAST_MARKET_DIVERGENCE_REVISION", True):
         return 0
+    blend_mode = bool(_cfg("FORECAST_MARKET_BLEND_ARITHMETIC", False))
     min_conf = _coerce_float(_cfg("FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE", 0.6))
     if min_conf is None:
         min_conf = 0.6
@@ -2466,7 +2567,10 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
             f"    your probability: {b.get('probability')}; market implied YES: {ip}; "
             f"market question: {str(anchor.get('question') or '')[:160]}\n"
             f"    current rationale: {str(b.get('adjustment_rationale') or '')[:200]}")
-    user = (_MARKET_DIVERGENCE_INSTRUCTIONS + f"\n\nWrite all text in {language}."
+    weight_max = _market_blend_weight_max() if blend_mode else 0.0
+    instructions = (_MARKET_BLEND_INSTRUCTIONS.format(weight_max=f"{weight_max:g}")
+                    if blend_mode else _MARKET_DIVERGENCE_INSTRUCTIONS)
+    user = (instructions + f"\n\nWrite all text in {language}."
             + "\n\n[Divergent forecasts]\n" + "\n".join(items))
     try:
         raw = llm.chat_json(messages=[{"role": "user", "content": user}],
@@ -2485,6 +2589,7 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
     by_id = {str(b.get("id")): b for b in candidates}
     strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
     revised = 0
+    blended: set[str] = set()
     for r in revs:
         if not isinstance(r, dict):
             continue
@@ -2497,6 +2602,17 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
         new_rat = str(r.get("adjustment_rationale") or "").strip()
         if not new_rat or not _rationale_cites_market(new_rat, anchor):
             continue  # 重述未引用市场 → 拒绝（绝不静默移动概率）
+        if blend_mode:
+            # REPORT-12：权重 + 理由全有或全无，概率由代码计算（见 _apply_market_blend）。
+            # 每条预测至多采纳一条重述——同 id 的第二条会在已混合的概率上再混合一次，
+            # 累计权重越过 FORECAST_MARKET_BLEND_WEIGHT_MAX。
+            if str(b.get("id")) in blended:
+                continue
+            if _apply_market_blend(b, anchor, r.get("market_weight"), new_rat,
+                                   weight_max=weight_max):
+                blended.add(str(b.get("id")))
+                revised += 1
+            continue
         if strict:
             # REPORT-1：先解析重述概率再动理由——不可读（30、'30-40%'）→ 整条重述作废
             # （理由/概率/印章均不动，绝不钳成 0.98）；缺失 → 仅改理由的「保留分歧」。
@@ -2570,7 +2686,7 @@ def build_market_comparison(binaries: List[Dict[str, Any]]) -> Dict[str, Any]:
         inf = b.get("market_influence")
         if not isinstance(inf, dict) or not str(inf.get("market_id") or "").strip():
             continue
-        influences.append({
+        row: Dict[str, Any] = {
             "forecast_id": b.get("id"),
             "statement": b.get("statement"),
             "market_id": inf.get("market_id"),
@@ -2583,7 +2699,11 @@ def build_market_comparison(binaries: List[Dict[str, Any]]) -> Dict[str, Any]:
             "resolution_equivalence": inf.get("resolution_equivalence"),
             "anchor_removed": bool(inf.get("anchor_removed", False)),
             "probability_restored": bool(inf.get("probability_restored", False)),
-        })
+        }
+        # REPORT-12：确定性市场混合的算式记录随行透传（无 blend 时行形状不变）。
+        if isinstance(inf.get("blend"), dict):
+            row["blend"] = dict(inf["blend"])
+        influences.append(row)
     out: Dict[str, Any] = {"anchored_count": len(comps), "comparisons": comps}
     if influences:
         out["influences"] = influences
