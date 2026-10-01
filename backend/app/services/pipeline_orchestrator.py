@@ -1673,12 +1673,13 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 # evidence_spans.py verbatim evidence-span matching), plus source_dates.py (the
 # source publication-date parser cached_fetch and research_gateway import) and
 # data_tools.py (TIME-10 official-data vendor tools: FRED/ALFRED vintage-pinned
-# macro series).
+# macro series) and derived_numbers.py (RESEARCH-8 derivation evaluator, which
+# linear_research imports).
 # setup.sh deploys the same set; test_deerflow_bridge_sync_guard pins the parity.
 _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
     "research_budget.py", "linear_research.py", "research_gateway.py", "evidence_spans.py",
-    "source_dates.py", "data_tools.py",
+    "source_dates.py", "data_tools.py", "derived_numbers.py",
 )
 
 
@@ -1848,8 +1849,9 @@ def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
         # setup.sh copies them, but a bridge-only edit (no ./setup.sh rerun) would
         # otherwise drift exactly like deerflow_research.py did; mirror that guard here.
         # Engine v3 is imported by bare name the same way: linear_research.py (the
-        # phases), research_gateway.py (LLM gateway + research tools) and
-        # evidence_spans.py (evidence-quote matching) must all sit next to the
+        # phases), research_gateway.py (LLM gateway + research tools),
+        # evidence_spans.py (evidence-quote matching) and derived_numbers.py
+        # (derivation evaluator) must all sit next to the
         # deployed script or the v3 dispatch raises ImportError; source_dates.py
         # (source publication dates) sits there for cached_fetch/research_gateway.
         for _tool_mod in _DEPLOYED_BRIDGE_MODULES:
@@ -2324,6 +2326,7 @@ RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
     ("RECORD_MODEL_PROVENANCE", "bool"),
     ("RESEARCH_ABSENCE_DISCIPLINE", "bool"),
     ("RESEARCH_AS_OF_PIN", "bool"),
+    ("RESEARCH_DERIVED_FINDINGS", "bool"),
     ("RESEARCH_EVIDENCE_QUOTES", "str"),
     ("RESEARCH_EVIDENCE_SUPPORTS", "bool"),
     ("RESEARCH_FORECASTER_ATTRIBUTION", "bool"),

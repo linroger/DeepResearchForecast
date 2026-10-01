@@ -5122,7 +5122,12 @@ class ReportAgent:
 
     @staticmethod
     def _citation_evidence_spans(source: Dict[str, Any]) -> List[str]:
-        """Return only persisted evidence-bearing source fields."""
+        """Return only persisted evidence-bearing source fields.
+
+        RESEARCH-8: ``derived_supports`` (calculated statements of v3 DERIVED
+        findings, written only by flag-on research) join after ``supports``;
+        they can only add support to a claim, never remove it.
+        """
         spans: List[str] = []
         title = str(source.get("title") or "").strip()
         if title:
@@ -5134,6 +5139,11 @@ class ReportAgent:
             )
         elif isinstance(supports, str) and supports.strip():
             spans.append(supports.strip())
+        derived = source.get("derived_supports")
+        if isinstance(derived, list):
+            spans.extend(
+                str(value).strip() for value in derived if str(value).strip()
+            )
         for key in (
             "excerpt", "snippet", "quote", "summary", "description", "content", "text"
         ):
