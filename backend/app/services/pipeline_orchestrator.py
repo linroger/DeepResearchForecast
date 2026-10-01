@@ -7263,7 +7263,10 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
     elif (status_totals["inflight_timeout_count"] > 0
           and status_totals["successful_query_count"] == 0):
         evidence_state = "inflight_timeout"
-    elif status_totals["transport_failure_count"] > 0 or deadline_exhausted:
+    elif (status_totals["transport_failure_count"] > 0 or deadline_exhausted
+          or status_totals["inflight_timeout_count"] > 0):
+        # FU-6: a timed-out (unanswered) query leaves coverage unknown, like an
+        # exhausted deadline: never a verified empty search.
         evidence_state = "partial_transport_failure"
     else:
         evidence_state = "verified_empty"
@@ -7281,12 +7284,20 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
         "attempted_query_count": status_totals["query_count"],
         # A failed or unanswered query with no candidate means coverage is unknown:
         # never the generic 'no_equivalent_market' (the bridge collector's rule, RESEARCH-3).
+        # FU-6: with no transport failure and no exhausted deadline, an in-flight
+        # timeout is unanswered too: 'inflight_timeout' when no query succeeded (it
+        # used to sit beside state 'inflight_timeout' as 'no_equivalent_market'),
+        # 'partial_transport_failure' next to an answered empty query.
         "empty_reason": None if selected else (
             "all_candidates_irrelevant" if candidate_count else (
                 "transport_failure" if all_network_attempts_failed else (
                     "partial_transport_failure"
                     if status_totals["transport_failure_count"] > 0 or deadline_exhausted
-                    else "no_equivalent_market"
+                    else (
+                        "no_equivalent_market" if status_totals["inflight_timeout_count"] == 0
+                        else "inflight_timeout" if status_totals["successful_query_count"] == 0
+                        else "partial_transport_failure"
+                    )
                 )
             )
         ),

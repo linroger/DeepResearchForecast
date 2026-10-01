@@ -99,8 +99,9 @@ STAGE_NOT_APPLICABLE = "not_applicable"
 
 # prediction_markets.json status.state / status.empty_reason → market_state.  An
 # infrastructure label in either field wins; otherwise the specific status.state
-# is mapped before the generic empty_reason (merge_market_snapshots stores
-# state 'inflight_timeout' beside empty_reason 'no_equivalent_market').
+# is mapped before the generic empty_reason (merge_market_snapshots stored
+# state 'inflight_timeout' beside empty_reason 'no_equivalent_market' before FU-6,
+# and older or tool-shaped payloads may still carry that pair).
 _MARKET_INFRA_REASONS = frozenset({
     "transport_failure", "partial_transport_failure", "inflight_timeout"})
 _MARKET_LABEL_STATES = {

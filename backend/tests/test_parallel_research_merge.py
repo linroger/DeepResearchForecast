@@ -354,7 +354,9 @@ def test_market_snapshot_merge_exposes_inflight_timeout_without_calling_it_outag
         },
     }])
 
-    assert merged["status"]["empty_reason"] == "no_equivalent_market"
+    # FU-6: the empty_reason names the timeout too (it was the generic
+    # 'no_equivalent_market'); still not an outage ('transport_failure').
+    assert merged["status"]["empty_reason"] == "inflight_timeout"
     assert merged["status"]["state"] == "inflight_timeout"
     assert merged["status"]["inflight_timeout_count"] == 2
     assert merged["status"]["empty_reason_counts"] == {"inflight_timeout": 1}
