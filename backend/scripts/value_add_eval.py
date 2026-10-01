@@ -15,12 +15,16 @@ app/services/value_add_stats scores how far each block moves the forecast beyond
 A/A noise floor; nothing is applied or promoted.
 
 plan prints the exact call count and makes no call. run needs VALUE_ADD_EVAL_ENABLED or
---live, refuses a plan over EVAL_STUDY_MAX_CALLS unless --max-calls covers it, disables
-the LLM cache, pre-registers study.json before the first call (its sha is stamped on
-every row) and resumes ok rows with the same prompt hash. score refuses an edited
-study.json and marks the study invalid when any elicitation was served from a cache.
-Outputs only under evaluation_ledger_dir()/value_add/<study_id>/: study.json,
-elicitations.jsonl, run_meter.jsonl, scores.json, report.md.
+--live, refuses a plan over EVAL_STUDY_MAX_CALLS unless --max-calls covers it, refuses a
+CLI model the CLI would not be given (it would run the account default) unless
+--allow-unpinned, disables the LLM cache, pre-registers study.json (with the sha of every
+probe prompt) before the first call, stamps its sha on every row and resumes ok rows with
+the same prompt hash. score refuses an edited study.json, scores only rows of the
+registered design, marks the study invalid (exit 4) when any elicitation was served from a
+cache or a model changed identity mid-study, and characterization-only when replicates are
+below 3 or any registered elicitation has no ok row. Outputs only under
+evaluation_ledger_dir()/value_add/<study_id>/: study.json, elicitations.jsonl,
+run_meter.jsonl, scores.json, report.md.
 """
 
 from __future__ import annotations
@@ -30,10 +34,9 @@ import fcntl
 import hashlib
 import json
 import os
-import re
 import sys
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -41,6 +44,7 @@ from app.config import Config  # noqa: E402
 from app.services import eval_bundle, value_add_stats as vas  # noqa: E402
 from app.utils.atomic import write_json_atomic, write_text_atomic  # noqa: E402
 from app.utils.canonical_json import canonical_json_sha256  # noqa: E402
+from app.utils.model_provenance import CLI_DEFAULT_LABEL, effective_model_label  # noqa: E402
 
 STUDY_SCHEMA = "drf.value_add_study.v1"
 SCORES_SCHEMA = "drf.value_add_scores.v1"
@@ -57,11 +61,19 @@ FLOOR_SC_K = 3
 TEMPERATURE = 0.25
 FLOOR_SC_TEMPERATURE = 0.7
 MAX_TOKENS = 1024
+JSON_RESPONSE_FORMAT = {"type": "json_object"}
 P_MIN, P_MAX = 0.01, 0.99
 MIN_REPLICATES = 3
 EXIT_REFUSED = 2
 EXIT_STUDY_MISMATCH = 3
-_PINNED_CLI_MODEL_RE = re.compile(r"^(?:claude|opus|sonnet|haiku)", re.I)
+EXIT_INVALID = 4
+STATUS_OK = "ok"
+STATUS_PARSE_FAILED = "parse_failed"
+STATUS_CALL_FAILED_PREFIX = "call_failed:"
+
+
+class StudyRefused(Exception):
+    """The inputs cannot form a valid study (nothing is asked or written)."""
 
 
 # ------------------------------------------------------------------ study plan
@@ -81,6 +93,16 @@ def _bundle_dirs(args: argparse.Namespace) -> List[str]:
             if os.path.exists(os.path.join(candidate, eval_bundle.MANIFEST_NAME)):
                 dirs.append(candidate)
     return dirs
+
+
+def _positive_int(value: Any, name: str) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise StudyRefused(f"{name} must be an integer >= 1, got {value!r}") from None
+    if number < 1:
+        raise StudyRefused(f"{name} must be >= 1, got {number}")
+    return number
 
 
 def arm_blocks(arm: str, statuses: Dict[str, str]) -> Tuple[Optional[Tuple[str, ...]], Optional[str]]:
@@ -105,23 +127,54 @@ def arm_blocks(arm: str, statuses: Dict[str, str]) -> Tuple[Optional[Tuple[str, 
 
 
 def build_study(args: argparse.Namespace) -> Dict[str, Any]:
-    """The pre-registered study: arms, models, replicates, bundles with their target ids
-    and pre-market probabilities (every bundle re-hashed: a tampered one aborts)."""
-    replicates = int(getattr(args, "replicates", None) or getattr(Config, "EVAL_ARM_REPLICATES", 3))
-    per_bundle = int(getattr(args, "targets_per_bundle", None) or getattr(Config, "EVAL_TARGETS_PER_BUNDLE", 2))
-    bundles = []
+    """The pre-registered study: arms, models, replicates, and per bundle its target ids,
+    pre-market probabilities and the sha of every probe prompt (every bundle re-hashed: a
+    tampered one aborts). The same bundle given twice is kept once; two bundles of one
+    report, a bundle without as_of, no bundle and a count below 1 are refused."""
+    replicates = _positive_int(Config.EVAL_ARM_REPLICATES if getattr(args, "replicates", None) is None
+                               else args.replicates, "replicates (--replicates / EVAL_ARM_REPLICATES)")
+    per_bundle = _positive_int(Config.EVAL_TARGETS_PER_BUNDLE if getattr(args, "targets_per_bundle", None) is None
+                               else args.targets_per_bundle,
+                               "targets per bundle (--targets-per-bundle / EVAL_TARGETS_PER_BUNDLE)")
+    bundles: List[Dict[str, Any]] = []
+    seen_sha: Dict[str, str] = {}
+    seen_report: Dict[str, str] = {}
     for path in _bundle_dirs(args):
-        manifest = eval_bundle.load_bundle(path)[0]
+        manifest, texts = eval_bundle.load_bundle(path)
+        sha = manifest["bundle_sha256"]
+        if sha in seen_sha:
+            continue
+        seen_sha[sha] = path
+        report = (manifest.get("ids") or {}).get("report")
+        if report is not None:
+            if report in seen_report:
+                raise StudyRefused(f"bundles {seen_report[report]} and {path} are both of report {report}; "
+                                   "a study takes one bundle per report")
+            seen_report[report] = path
+        as_of = manifest.get("as_of")
+        if not as_of:
+            raise StudyRefused(f"bundle {path} has no as_of; the probe cannot state the date")
+        statuses = {name: meta.get("status") for name, meta in manifest["blocks"].items()}
         targets = (manifest.get("targets") or [])[:per_bundle]
+        prompts: Dict[str, Dict[str, str]] = {}
+        for target in targets:
+            for arm in ARMS:
+                blocks, _reason = arm_blocks(arm, statuses)
+                if blocks is not None:
+                    prompts.setdefault(target["target_id"], {})[arm] = prompt_sha256(
+                        build_messages(target, as_of, texts, blocks))
         bundles.append({
             "bundle_dir": os.path.abspath(path),
-            "bundle_sha256": manifest["bundle_sha256"],
-            "report": (manifest.get("ids") or {}).get("report"),
-            "as_of": manifest.get("as_of"),
-            "statuses": {name: meta.get("status") for name, meta in manifest["blocks"].items()},
+            "bundle_sha256": sha,
+            "report": report,
+            "as_of": as_of,
+            "statuses": statuses,
             "targets": [t["target_id"] for t in targets],
             "pre_market": {t["target_id"]: t.get("pre_market_probability") for t in targets},
+            "prompt_sha256": prompts,
         })
+    if not bundles:
+        raise StudyRefused("no evaluation bundle given (--bundle / --bundles-root)")
     study = {
         "schema": STUDY_SCHEMA,
         "prompt_version": PROMPT_VERSION,
@@ -157,7 +210,7 @@ def study_sha(study: Dict[str, Any]) -> str:
 
 
 # ------------------------------------------------------------------ prompt and parse
-def build_messages(target: Dict[str, Any], as_of: Any, texts: Dict[str, Optional[str]],
+def build_messages(target: Dict[str, Any], as_of: Any, texts: Mapping[str, Optional[str]],
                    blocks: Sequence[str]) -> List[Dict[str, str]]:
     """The canonical probe: question first, then the arm's blocks in canonical order."""
     parts = [f"Question: {target.get('statement')}",
@@ -170,6 +223,19 @@ def build_messages(target: Dict[str, Any], as_of: Any, texts: Dict[str, Optional
     system = (f"You are a careful forecaster. Today is {as_of}. Use only the material given and "
               "information available on that date.")
     return [{"role": "system", "content": system}, {"role": "user", "content": "\n\n".join(parts)}]
+
+
+def prompt_sha256(messages: Sequence[Mapping[str, str]]) -> str:
+    return hashlib.sha256(json.dumps(list(messages), ensure_ascii=False, sort_keys=True)
+                          .encode("utf-8")).hexdigest()
+
+
+def parse_reply(text: Any) -> Optional[Dict[str, Any]]:
+    """The reply's JSON object (LLMClient's own extraction: code fences, surrounding prose,
+    a cut-off tail), or None."""
+    from app.utils.llm_client import LLMClient
+    value = LLMClient._parse_json_response(text if isinstance(text, str) else "")
+    return value if isinstance(value, dict) else None
 
 
 def parse_probability(reply: Any) -> Optional[float]:
@@ -192,13 +258,22 @@ def parse_probability(reply: Any) -> Optional[float]:
 
 
 # ------------------------------------------------------------------ clients
+def _default_provider() -> str:
+    return str(Config.LLM_PROVIDER or "claude-cli").strip().lower()
+
+
+def split_model_spec(model_spec: str) -> Tuple[str, str]:
+    """``provider:model`` → (provider, model); an empty provider is the configured LLM_PROVIDER."""
+    provider, _, model = str(model_spec).partition(":")
+    return provider.strip().lower() or _default_provider(), model.strip()
+
+
 def build_client(model_spec: str) -> Any:
     """``provider:model`` → a pinned, cache-free client (critic amendment: keywords only;
     the default provider keeps its configured key and endpoint)."""
     from app.utils.llm_client import LLMClient
-    provider, _, model = str(model_spec).partition(":")
-    provider = provider.strip().lower()
-    if not provider or provider == str(Config.LLM_PROVIDER or "").strip().lower():
+    provider, model = split_model_spec(model_spec)
+    if provider == _default_provider():
         return LLMClient(model=model or None, pinned=True, use_cache=False)
     from app.services.forecast_extractor import _build_ensemble_client
     client = _build_ensemble_client(provider)
@@ -209,24 +284,22 @@ def build_client(model_spec: str) -> Any:
     return client
 
 
-def _is_cli_provider(provider: str) -> bool:
-    meta = (getattr(Config, "PROVIDER_META", {}) or {}).get(provider) or {}
-    return bool(meta) and not meta.get("openai_compat")
+def model_identity(client: Any) -> Tuple[str, bool]:
+    """``(provider:requested model, unpinned)`` of a built client. The model is what the
+    transport actually requests (model_provenance.effective_model_label): a CLI client whose
+    model the CLI is not given (codex-cli always; claude-cli unless the name passes
+    claude_cli_model_arg) runs the account default, so it is keyed 'cli-default' and unpinned,
+    never under the name it was configured with."""
+    from app.utils.llm_client import CLI_PROVIDERS
+    provider = str(getattr(client, "provider", "") or "").strip().lower()
+    label = effective_model_label(provider, getattr(client, "model", None))
+    return f"{provider}:{label}", provider in CLI_PROVIDERS and label == CLI_DEFAULT_LABEL
 
 
-def _cached(client: Any) -> bool:
+def _call_meta(client: Any) -> Dict[str, Any]:
     meta_fn = getattr(client, "last_call_meta", None)
     meta = meta_fn() if callable(meta_fn) else None
-    return isinstance(meta, dict) and meta.get("served_by") == "cache"
-
-
-def _usage(client: Any) -> Tuple[Optional[int], Optional[int]]:
-    meta_fn = getattr(client, "last_call_meta", None)
-    meta = meta_fn() if callable(meta_fn) else None
-    usage = meta.get("usage") if isinstance(meta, dict) else None
-    if not isinstance(usage, dict):
-        return None, None
-    return usage.get("prompt_tokens"), usage.get("completion_tokens")
+    return meta if isinstance(meta, dict) else {}
 
 
 # ------------------------------------------------------------------ files
@@ -264,48 +337,46 @@ def _read_rows(path: str) -> List[Dict[str, Any]]:
 # ------------------------------------------------------------------ commands
 def cmd_plan(args: argparse.Namespace) -> int:
     study = build_study(args)
-    if not study["bundles"]:
-        print("value_add_eval: no evaluation bundle given (--bundle / --bundles-root)", file=sys.stderr)
-        return EXIT_REFUSED
     plan = planned_calls(study)
     print(json.dumps({"study_id": study["study_id"], "planned_calls": plan["calls"],
-                      "max_calls": int(getattr(Config, "EVAL_STUDY_MAX_CALLS", 600)),
+                      "max_calls": int(Config.EVAL_STUDY_MAX_CALLS),
                       "skipped_arms": plan["skipped_arms"]}, ensure_ascii=False, indent=2))
     return 0
 
 
 def cmd_run(args: argparse.Namespace, *, client_factory: Callable[[str], Any] = build_client) -> int:
-    if not (getattr(Config, "VALUE_ADD_EVAL_ENABLED", False) or args.live):
+    if not (Config.VALUE_ADD_EVAL_ENABLED or args.live):
         print("value_add_eval: the study makes paid model calls; set VALUE_ADD_EVAL_ENABLED=true or pass "
-              "--live. No call was made.")
-        return 0
-    study = build_study(args)
-    if not study["bundles"]:
-        print("value_add_eval: no evaluation bundle given (--bundle / --bundles-root)", file=sys.stderr)
+              "--live. No call was made.", file=sys.stderr)
         return EXIT_REFUSED
+    study = build_study(args)
     plan = planned_calls(study)
-    cap = int(getattr(Config, "EVAL_STUDY_MAX_CALLS", 600))
-    if args.max_calls is not None:
-        cap = int(args.max_calls)
+    cap = int(Config.EVAL_STUDY_MAX_CALLS) if args.max_calls is None else int(args.max_calls)
     if plan["calls"] > cap:
         print(f"value_add_eval: the plan needs {plan['calls']} calls, over the cap {cap}; pass --max-calls "
               f"{plan['calls']} to allow it.", file=sys.stderr)
         return EXIT_REFUSED
     clients: Dict[str, Any] = {}
-    unpinned: Dict[str, bool] = {}
+    identities: Dict[str, Tuple[str, bool]] = {}
     for spec in study["models"]:
-        provider, _, model = spec.partition(":")
-        is_unpinned = _is_cli_provider(provider.strip().lower()) and not _PINNED_CLI_MODEL_RE.match(model.strip())
-        if is_unpinned and not args.allow_unpinned:
-            print(f"value_add_eval: {spec}: a CLI provider needs an explicit claude/opus/sonnet/haiku model "
-                  "(or --allow-unpinned)", file=sys.stderr)
-            return EXIT_REFUSED
         try:
-            clients[spec] = client_factory(spec)
+            client = client_factory(spec)
         except ValueError as exc:   # unknown provider / no API key for it
             print(f"value_add_eval: {spec}: {exc}", file=sys.stderr)
             return EXIT_REFUSED
-        unpinned[spec] = is_unpinned
+        model_key, unpinned = model_identity(client)
+        if unpinned and not args.allow_unpinned:
+            print(f"value_add_eval: {spec}: the CLI would not be given this model and would run the account "
+                  "default; name a claude*/opus/sonnet/haiku model for claude-cli (codex-cli is never "
+                  "pinned) or pass --allow-unpinned", file=sys.stderr)
+            return EXIT_REFUSED
+        twin = next((other for other, (key, _) in identities.items() if key == model_key), None)
+        if twin is not None:
+            print(f"value_add_eval: {twin} and {spec} both resolve to {model_key}; pass it once",
+                  file=sys.stderr)
+            return EXIT_REFUSED
+        clients[spec] = client
+        identities[spec] = (model_key, unpinned)
 
     Config.LLM_CACHE_ENABLED = False
     from app.utils.telemetry import LLMMeter, set_run_context
@@ -317,7 +388,8 @@ def cmd_run(args: argparse.Namespace, *, client_factory: Callable[[str], Any] = 
         with open(study_path, encoding="utf-8") as f:
             existing = json.load(f)
         if study_sha(existing) != study_sha(study):
-            print("value_add_eval: study.json differs from this plan; use a new --study-id", file=sys.stderr)
+            print("value_add_eval: study.json differs from this plan (inputs, probe prompt or edited file); "
+                  "use a new --study-id", file=sys.stderr)
             return EXIT_STUDY_MISMATCH
         study = existing
     else:
@@ -325,7 +397,7 @@ def cmd_run(args: argparse.Namespace, *, client_factory: Callable[[str], Any] = 
         write_json_atomic(study_path, study)
     made = [0]
     try:
-        code = _elicit(study, clients, unpinned, cap, os.path.join(out_dir, "elicitations.jsonl"), made)
+        code = _elicit(study, clients, identities, cap, os.path.join(out_dir, "elicitations.jsonl"), made)
     finally:
         # Every run, finished or not, records what the meter saw: score invalidates the study on
         # any call the meter counted as cached, even one whose row was never written.
@@ -338,14 +410,17 @@ def cmd_run(args: argparse.Namespace, *, client_factory: Callable[[str], Any] = 
     return code
 
 
-def _elicit(study: Dict[str, Any], clients: Dict[str, Any], unpinned: Dict[str, bool], cap: int,
+def _elicit(study: Dict[str, Any], clients: Dict[str, Any], identities: Dict[str, Tuple[str, bool]], cap: int,
             rows_path: str, made: List[int]) -> int:
     """Ask every (bundle, target, available arm, model, replicate) not already answered ok
-    under this study's sha; one row per replicate (floor_sc pools its K samples)."""
+    under this study's sha; one row per replicate (floor_sc pools its K samples, and is ok
+    only when every sample parsed). One chat() call per sample and no JSON repair turn, so
+    the cap counts one call per sample (chat()'s own transient-error retries aside) and
+    every p answers the registered prompt."""
     sha = study_sha(study)
     done = {(r.get("model_key_spec"), r.get("bundle_sha256"), r.get("target_id"), r.get("arm"),
              r.get("replicate"), r.get("prompt_sha256"))
-            for r in _read_rows(rows_path) if r.get("status") == "ok" and r.get("study_sha") == sha}
+            for r in _read_rows(rows_path) if r.get("status") == STATUS_OK and r.get("study_sha") == sha}
     for bundle in study["bundles"]:
         manifest, texts = eval_bundle.load_bundle(bundle["bundle_dir"])
         if manifest["bundle_sha256"] != bundle["bundle_sha256"]:
@@ -360,110 +435,207 @@ def _elicit(study: Dict[str, Any], clients: Dict[str, Any], unpinned: Dict[str, 
                 if blocks is None:
                     continue
                 messages = build_messages(target, bundle["as_of"], texts, blocks)
-                prompt_sha = hashlib.sha256(json.dumps(messages, ensure_ascii=False, sort_keys=True)
-                                            .encode("utf-8")).hexdigest()
+                prompt_sha = prompt_sha256(messages)
                 for spec in study["models"]:
                     client = clients[spec]
+                    model_key, unpinned = identities[spec]
                     for replicate in range(study["replicates"]):
                         if (spec, bundle["bundle_sha256"], target_id, arm, replicate, prompt_sha) in done:
                             continue
                         samples = study["floor_sc_k"] if arm == vas.ARM_FLOOR_SC else 1
                         temperature = FLOOR_SC_TEMPERATURE if arm == vas.ARM_FLOOR_SC else TEMPERATURE
-                        ps, raw, cached, tokens_in, tokens_out, failed = [], [], False, 0, 0, None
+                        ps, raw, served = [], [], set()
+                        cached, tokens_in, tokens_out, failed = False, 0, 0, None
                         for _ in range(samples):
                             if made[0] >= cap:
                                 print("value_add_eval: call cap reached; resume to continue", file=sys.stderr)
                                 return EXIT_REFUSED
                             made[0] += 1
                             try:
-                                reply = client.chat_json(messages, temperature=temperature, max_tokens=MAX_TOKENS,
-                                                         label=f"value_add:{arm}")
+                                text = client.chat(messages, temperature=temperature, max_tokens=MAX_TOKENS,
+                                                   response_format=dict(JSON_RESPONSE_FORMAT))
                             except Exception as exc:  # noqa: BLE001 — recorded as a failed call
-                                failed = f"call_failed:{type(exc).__name__}"
+                                failed = f"{STATUS_CALL_FAILED_PREFIX}{type(exc).__name__}"
                                 break
-                            cached = cached or _cached(client)
-                            t_in, t_out = _usage(client)
-                            tokens_in += t_in or 0
-                            tokens_out += t_out or 0
-                            raw.append(json.dumps(reply, ensure_ascii=False, sort_keys=True))
-                            p = parse_probability(reply)
+                            meta = _call_meta(client)
+                            cached = cached or meta.get("served_by") == "cache"
+                            usage = meta.get("usage") if isinstance(meta.get("usage"), dict) else {}
+                            tokens_in += usage.get("prompt_tokens") or 0
+                            tokens_out += usage.get("completion_tokens") or 0
+                            if meta.get("served_model"):
+                                served.add(str(meta["served_model"]))
+                            raw.append(text if isinstance(text, str) else "")
+                            p = parse_probability(parse_reply(text))
                             if p is not None:
                                 ps.append(p)
-                        status = failed or ("ok" if ps else "parse_failed")
+                        status = failed or (STATUS_OK if len(ps) == samples else STATUS_PARSE_FAILED)
                         row = {
                             "study_sha": sha, "bundle_sha256": bundle["bundle_sha256"], "target_id": target_id,
                             "cluster_id": bundle["report"] or bundle["bundle_sha256"],
-                            "model_key": f"{getattr(client, 'provider', spec.partition(':')[0])}:"
-                                         f"{getattr(client, 'model', spec.partition(':')[2])}",
-                            "model_key_spec": spec, "arm": arm, "replicate": replicate,
-                            "p": round(sum(ps) / len(ps), 6) if ps and status == "ok" else None,
+                            "model_key": model_key, "model_key_spec": spec, "served_models": sorted(served),
+                            "arm": arm, "replicate": replicate,
+                            "p": round(sum(ps) / len(ps), 6) if status == STATUS_OK else None,
                             "raw_sha256": hashlib.sha256("\n".join(raw).encode("utf-8")).hexdigest(),
                             "prompt_sha256": prompt_sha, "tokens_in": tokens_in, "tokens_out": tokens_out,
                             "cached": bool(cached), "status": status,
                         }
-                        if unpinned[spec]:
+                        if unpinned:
                             row["model_unpinned"] = True
                         _append_row(rows_path, row)
     return 0
 
 
+def select_rows(study: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """The rows score uses and how much of the registered design they cover.
+
+    Kept: ok rows of a registered (model spec, bundle, target, arm, replicate) cell whose
+    prompt hash is the registered one; when a cell was answered twice the later row wins.
+    Per model spec: expected cells, ok cells, missing cells, failed and parse-failed attempts
+    (a later resume may have answered the cell), ok rows under another prompt
+    (stale_prompt) and the model keys the kept rows carry: more than one means the served
+    model changed mid-study (identity drift)."""
+    replicates = int(study.get("replicates") or 0)
+    registered: Dict[Tuple[Any, Any, Any], str] = {}
+    for bundle in study.get("bundles") or []:
+        for target_id, arms in (bundle.get("prompt_sha256") or {}).items():
+            for arm, sha in arms.items():
+                registered[(bundle["bundle_sha256"], target_id, arm)] = sha
+    counts = {spec: {"expected": len(registered) * replicates, "ok": 0, "missing": 0, "call_failed": 0,
+                     "parse_failed": 0, "stale_prompt": 0, "model_keys": set()}
+              for spec in study.get("models") or []}
+    kept: Dict[Tuple[Any, ...], Mapping[str, Any]] = {}
+    for row in rows:
+        spec = row.get("model_key_spec")
+        if spec not in counts:
+            continue
+        status = str(row.get("status") or "")
+        if status.startswith(STATUS_CALL_FAILED_PREFIX):
+            counts[spec]["call_failed"] += 1
+            continue
+        if status == STATUS_PARSE_FAILED:
+            counts[spec]["parse_failed"] += 1
+            continue
+        cell = (row.get("bundle_sha256"), row.get("target_id"), row.get("arm"))
+        replicate = row.get("replicate")
+        if (status != STATUS_OK or cell not in registered or isinstance(replicate, bool)
+                or not isinstance(replicate, int) or not 0 <= replicate < replicates):
+            continue
+        if row.get("prompt_sha256") != registered[cell]:
+            counts[spec]["stale_prompt"] += 1
+            continue
+        kept[(spec, *cell, replicate)] = row
+    for key, row in kept.items():
+        counts[key[0]]["ok"] += 1
+        counts[key[0]]["model_keys"].add(str(row.get("model_key")))
+    drift = []
+    for spec, entry in counts.items():
+        entry["missing"] = entry["expected"] - entry["ok"]
+        entry["model_keys"] = sorted(entry["model_keys"])
+        if len(entry["model_keys"]) > 1:
+            drift.append(spec)
+    return {"rows": list(kept.values()), "completeness": counts,
+            "complete": all(entry["missing"] == 0 for entry in counts.values()), "identity_drift": drift}
+
+
+def _score_knobs() -> Tuple[int, float, float]:
+    """(resamples, inert margin, fidelity max) from Config; StudyRefused when out of range."""
+    resamples = _positive_int(Config.EVAL_BOOTSTRAP_RESAMPLES, "EVAL_BOOTSTRAP_RESAMPLES")
+    margins = {"EVAL_INERT_MARGIN": float(Config.EVAL_INERT_MARGIN),
+               "EVAL_PROBE_FIDELITY_MAX": float(Config.EVAL_PROBE_FIDELITY_MAX)}
+    for name, value in margins.items():
+        if not 0.0 <= value <= 1.0:
+            raise StudyRefused(f"{name} must be within [0, 1], got {value}")
+    return resamples, margins["EVAL_INERT_MARGIN"], margins["EVAL_PROBE_FIDELITY_MAX"]
+
+
 def cmd_score(args: argparse.Namespace) -> int:
+    resamples, inert_margin, fidelity_max = _score_knobs()
     out_dir = _study_dir(args, args.study_id)
-    with open(os.path.join(out_dir, "study.json"), encoding="utf-8") as f:
-        study = json.load(f)
+    try:
+        with open(os.path.join(out_dir, "study.json"), encoding="utf-8") as f:
+            study = json.load(f)
+    except (OSError, ValueError) as exc:
+        print(f"value_add_eval: no readable study.json for study {args.study_id} under {out_dir} ({exc})",
+              file=sys.stderr)
+        return EXIT_REFUSED
     sha = study_sha(study)
     rows = _read_rows(os.path.join(out_dir, "elicitations.jsonl"))
     if any(r.get("study_sha") != sha for r in rows):
         print("value_add_eval: study.json was edited after elicitation (its sha no longer matches the "
               "rows); refusing to score.", file=sys.stderr)
         return EXIT_STUDY_MISMATCH
+    selection = select_rows(study, rows)
     reasons: List[str] = []
     if any(r.get("cached") for r in rows):
         reasons.append("cached_elicitation")
     if any(int(m.get("meter_cached_calls") or 0) > 0
            for m in _read_rows(os.path.join(out_dir, "run_meter.jsonl"))):
         reasons.append("meter_reported_cached_calls")
+    if selection["identity_drift"]:
+        reasons.append("model_identity_drift")
+    characterization: List[str] = []
+    if int(study.get("replicates") or 0) < MIN_REPLICATES:
+        characterization.append("replicates_below_min")
+    if not selection["complete"]:
+        characterization.append("incomplete")
     pre_market = {}
     for bundle in study["bundles"]:
         cluster = bundle["report"] or bundle["bundle_sha256"]
         for target_id, p in (bundle.get("pre_market") or {}).items():
             pre_market[(cluster, target_id)] = p
-    models = vas.score_study(
-        rows, pre_market=pre_market,
-        resamples=int(getattr(Config, "EVAL_BOOTSTRAP_RESAMPLES", 2000)),
-        inert_margin=float(getattr(Config, "EVAL_INERT_MARGIN", 0.02)),
-        fidelity_max=float(getattr(Config, "EVAL_PROBE_FIDELITY_MAX", 0.10)))
+    models = vas.score_study(selection["rows"], pre_market=pre_market, resamples=resamples,
+                             inert_margin=inert_margin, fidelity_max=fidelity_max,
+                             invalid=bool(reasons), characterization_only=bool(characterization))
     scores = {
         "schema": SCORES_SCHEMA, "study_id": study["study_id"], "study_sha": sha,
         "valid": not reasons, "invalid_reasons": reasons,
-        "characterization_only": int(study.get("replicates") or 0) < MIN_REPLICATES,
-        "rows": len(rows), "models": models,
+        "characterization_only": bool(characterization), "characterization_reasons": characterization,
+        "completeness": selection["completeness"],
+        "rows": len(rows), "rows_scored": len(selection["rows"]), "models": models,
         "note": "Movement, not accuracy: inert verdicts are evidence for an owner decision, never applied.",
     }
     write_json_atomic(os.path.join(out_dir, "scores.json"), scores)
     write_text_atomic(os.path.join(out_dir, "report.md"), render_report(scores))
-    print(json.dumps({"study_id": study["study_id"], "valid": scores["valid"],
-                      "invalid_reasons": reasons}, indent=2))
-    return 0
+    print(json.dumps({"study_id": study["study_id"], "valid": scores["valid"], "invalid_reasons": reasons,
+                      "characterization_only": scores["characterization_only"],
+                      "characterization_reasons": characterization}, indent=2))
+    return EXIT_INVALID if reasons else 0
 
 
 def render_report(scores: Dict[str, Any]) -> str:
     lines = [f"# Value-add study {scores['study_id']}", "",
              f"Valid: {scores['valid']}" + (f" ({', '.join(scores['invalid_reasons'])})"
                                              if scores["invalid_reasons"] else ""),
-             f"Characterization only: {scores['characterization_only']}", "", scores["note"], ""]
+             f"Characterization only: {scores['characterization_only']}"
+             + (f" ({', '.join(scores['characterization_reasons'])})" if scores["characterization_reasons"] else ""),
+             "", scores["note"], "", "## Completeness", "",
+             "| Model spec | expected | ok | missing | call_failed attempts | parse_failed attempts "
+             "| stale prompt | model keys |", "|---|---|---|---|---|---|---|---|"]
+    for spec, entry in scores["completeness"].items():
+        lines.append(f"| {spec} | {entry['expected']} | {entry['ok']} | {entry['missing']} | "
+                     f"{entry['call_failed']} | {entry['parse_failed']} | {entry['stale_prompt']} | "
+                     f"{', '.join(entry['model_keys'])} |")
+    lines.append("")
     for model, block in scores["models"].items():
         lines += [f"## {model}", "",
-                  f"Probe fidelity: {block['probe_fidelity']}"
-                  + (" (probe not representative: verdicts are advisory)" if block["probe_not_representative"]
-                     else ""),
-                  f"A/A: mean {block['aa']['mean_signed']}, CI {block['aa']['ci']}", "",
-                  "| Block | n targets | mean D | CI | p (Holm) | MDE | verdict |", "|---|---|---|---|---|---|---|"]
+                  f"Probe fidelity: {block['probe_fidelity']} ({block['probe_fidelity_status']})",
+                  f"Model unpinned: {block['model_unpinned']}",
+                  "Advisory: " + (", ".join(block["advisory_reasons"]) if block["advisory_reasons"] else "no"),
+                  f"A/A: mean {block['aa']['mean_signed']}, CI {block['aa']['ci']}"]
+        for floor_arm, stats in block["floor"].items():
+            lines.append(f"R vs {floor_arm} (descriptive): mean |dp| {stats['mean_abs_diff']}, CI {stats['ci']}, "
+                         f"n targets {stats['n_targets']}")
+        lines += ["", "| Block | n targets | mean D | CI | p (Holm) | MDE | verdict | would-be verdict |",
+                  "|---|---|---|---|---|---|---|---|"]
         for name, stats in block["blocks"].items():
+            verdict_text = stats["verdict"] + (" (advisory)" if stats.get("advisory") else "")
             lines.append(f"| {name} | {stats['n_targets']} | {stats['mean_d']} | {stats['ci']} | "
-                         f"{stats['p_holm']} | {stats['mde']} | {stats['verdict']} |")
+                         f"{stats['p_holm']} | {stats['mde']} | {verdict_text} | "
+                         f"{stats.get('would_be_verdict', '')} |")
         if block["evidence"]:
             lines += ["", "Evidence: " + ", ".join(block["evidence"])]
+        if block["withheld_evidence"]:
+            lines += ["", "Withheld (not evidence): " + ", ".join(block["withheld_evidence"])]
         lines.append("")
     return "\n".join(lines)
 
@@ -496,6 +668,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
+    except StudyRefused as exc:
+        print(f"value_add_eval: {exc}; nothing was asked or written.", file=sys.stderr)
+        return EXIT_REFUSED
     except eval_bundle.BundleIntegrityError as exc:
         print(f"value_add_eval: bundle integrity check failed ({exc}); nothing was scored or asked.",
               file=sys.stderr)

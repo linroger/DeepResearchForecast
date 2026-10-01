@@ -19,7 +19,14 @@ MDE = (1.96 + 0.84) * sd(cluster means of D) / sqrt(n_clusters).
 
 Movement is not accuracy: no label is used, and an ``inert`` verdict is evidence
 for an owner decision (``sim_signal_inert_for_model`` / ``graph_block_inert_for_model``),
-never applied automatically. Pure (no I/O).
+never applied automatically.
+
+Fail closed: a model's verdicts are advisory and its evidence labels are withheld
+(``withheld_evidence``, never ``evidence``) when the probe's fidelity is over
+EVAL_PROBE_FIDELITY_MAX or cannot be measured (no target has both R+M and a
+pre-market probability), when the model was unpinned, or when the study is invalid
+(verdict ``invalid``) or characterization-only (verdict ``characterization_only``);
+the computed verdict is then kept as ``would_be_verdict``. Pure (no I/O).
 """
 
 from __future__ import annotations
@@ -47,10 +54,27 @@ VERDICT_MOVES = "moves"
 VERDICT_INERT = "inert"
 VERDICT_INCONCLUSIVE = "inconclusive"
 VERDICT_UNAVAILABLE = "unavailable"
+VERDICT_INVALID = "invalid"
+VERDICT_CHARACTERIZATION = "characterization_only"
+
+FIDELITY_OK = "ok"
+FIDELITY_NOT_REPRESENTATIVE = "not_representative"
+FIDELITY_UNMEASURED = "unmeasured"
+
+# Why a model's verdicts are advisory and its evidence labels withheld.
+REASON_STUDY_INVALID = "study_invalid"
+REASON_CHARACTERIZATION = "characterization_only"
+REASON_PROBE_NOT_REPRESENTATIVE = "probe_not_representative"
+REASON_PROBE_FIDELITY_UNMEASURED = "probe_fidelity_unmeasured"
+REASON_MODEL_UNPINNED = "model_unpinned"
 
 
 def arm_means(rows: Iterable[Mapping[str, Any]]) -> Dict[Tuple[str, str, str], Dict[str, float]]:
-    """``{(model_key, cluster_id, target_id): {arm: mean p over ok replicates}}``."""
+    """``{(model_key, cluster_id, target_id): {arm: mean p over ok replicates}}``.
+
+    The caller passes one row per registered (model, bundle, target, arm, replicate) cell
+    under the registered prompt (value_add_eval.select_rows), and a study holds one bundle
+    per report, so (cluster_id, target_id) names a single bundle's target."""
     sums: Dict[Tuple[str, str, str], Dict[str, List[float]]] = {}
     for row in rows:
         if row.get("status") != "ok" or not isinstance(row.get("p"), (int, float)):
@@ -83,7 +107,7 @@ def holm(p_values: Mapping[str, Optional[float]]) -> Dict[str, Optional[float]]:
     """Holm step-down adjusted p-values (None stays None and is not counted)."""
     present = sorted(((p, name) for name, p in p_values.items() if p is not None), key=lambda x: (x[0], x[1]))
     m = len(present)
-    adjusted: Dict[str, Optional[float]] = {name: None for name in p_values}
+    adjusted: Dict[str, Optional[float]] = dict.fromkeys(p_values)
     running = 0.0
     for rank, (p, name) in enumerate(present):
         running = max(running, min(1.0, (m - rank) * p))
@@ -146,7 +170,7 @@ def verdict(holm_p: Optional[float], ci: Optional[Sequence[float]], inert_margin
 def probe_fidelity(means: Mapping[Tuple[str, str, str], Mapping[str, float]], model_key: str,
                    pre_market: Mapping[Tuple[str, str], Any]) -> Optional[float]:
     """Mean |mean p(R+M) - pre_market_probability| over the model's targets that have both
-    (how closely the canonical probe reproduces the production forecast)."""
+    (how closely the canonical probe reproduces the production forecast); None when none has."""
     gaps = []
     for (model, cluster, target), arms in means.items():
         reference = pre_market.get((cluster, target))
@@ -155,9 +179,38 @@ def probe_fidelity(means: Mapping[Tuple[str, str, str], Mapping[str, float]], mo
     return eval_stats.round4(sum(gaps) / len(gaps)) if gaps else None
 
 
+def fidelity_status(fidelity: Optional[float], fidelity_max: float) -> str:
+    """'unmeasured' (no target to measure on), 'not_representative' (over the gate) or 'ok'."""
+    if fidelity is None:
+        return FIDELITY_UNMEASURED
+    return FIDELITY_NOT_REPRESENTATIVE if fidelity > fidelity_max else FIDELITY_OK
+
+
+def floor_movement(means: Mapping[Tuple[str, str, str], Mapping[str, float]], model_key: str, *,
+                   resamples: int, seed: int = BOOTSTRAP_SEED) -> Dict[str, Any]:
+    """Descriptive only (no verdict, no evidence): how far the research arm R sits from the
+    closed-book floor and the compute-matched floor_sc, as the mean over targets of
+    |mean p(R) - mean p(floor arm)| with its cluster CI. Being an absolute difference of
+    noisy means, it is biased upward by replicate noise (compare the A/A floor)."""
+    out: Dict[str, Any] = {}
+    for floor_arm in (ARM_FLOOR, ARM_FLOOR_SC):
+        rows = [{"cluster": cluster, "id": f"{cluster}:{target}", "d": abs(arms[ARM_R] - arms[floor_arm])}
+                for (model, cluster, target), arms in sorted(means.items())
+                if model == model_key and ARM_R in arms and floor_arm in arms]
+        stats = block_stats(rows, resamples=resamples, seed=seed)
+        out[floor_arm] = {"n_targets": stats["n_targets"], "mean_abs_diff": stats["mean_d"], "ci": stats["ci"]}
+    return out
+
+
 def score_study(rows: Sequence[Mapping[str, Any]], *, pre_market: Mapping[Tuple[str, str], Any],
-                resamples: int, inert_margin: float, fidelity_max: float) -> Dict[str, Any]:
-    """Per-model block verdicts, A/A check, probe fidelity and evidence labels."""
+                resamples: int, inert_margin: float, fidelity_max: float, invalid: bool = False,
+                characterization_only: bool = False) -> Dict[str, Any]:
+    """Per-model block verdicts, A/A check, floor movement, probe fidelity and evidence labels.
+
+    ``invalid`` / ``characterization_only`` are the study-level gates: every verdict becomes
+    'invalid' / 'characterization_only' (the computed one kept as ``would_be_verdict``). Any
+    advisory reason (those gates, probe fidelity not ok, an unpinned model) marks every block
+    ``advisory`` and moves the evidence labels to ``withheld_evidence``."""
     means = arm_means(rows)
     models = sorted({key[0] for key in means})
     out: Dict[str, Any] = {}
@@ -166,20 +219,42 @@ def score_study(rows: Sequence[Mapping[str, Any]], *, pre_market: Mapping[Tuple[
                   for block in BLOCKS}
         adjusted = holm({block: stats["p_one_sided"] for block, stats in blocks.items()})
         fidelity = probe_fidelity(means, model, pre_market)
-        advisory = fidelity is not None and fidelity > fidelity_max
-        evidence: List[str] = []
+        status = fidelity_status(fidelity, fidelity_max)
+        unpinned = any(row.get("model_unpinned") for row in rows if str(row.get("model_key")) == model)
+        reasons: List[str] = []
+        if invalid:
+            reasons.append(REASON_STUDY_INVALID)
+        if characterization_only:
+            reasons.append(REASON_CHARACTERIZATION)
+        if status == FIDELITY_UNMEASURED:
+            reasons.append(REASON_PROBE_FIDELITY_UNMEASURED)
+        elif status == FIDELITY_NOT_REPRESENTATIVE:
+            reasons.append(REASON_PROBE_NOT_REPRESENTATIVE)
+        if unpinned:
+            reasons.append(REASON_MODEL_UNPINNED)
+        labels: List[str] = []
         for block, stats in blocks.items():
             stats["p_holm"] = eval_stats.round4(adjusted[block]) if adjusted[block] is not None else None
-            stats["verdict"] = verdict(adjusted[block], stats["ci"], inert_margin)
-            if advisory:
+            computed = verdict(adjusted[block], stats["ci"], inert_margin)
+            if invalid or characterization_only:
+                stats["verdict"] = VERDICT_INVALID if invalid else VERDICT_CHARACTERIZATION
+                stats["would_be_verdict"] = computed
+            else:
+                stats["verdict"] = computed
+            if reasons:
                 stats["advisory"] = True
-            if stats["verdict"] == VERDICT_INERT and block in EVIDENCE_LABELS:
-                evidence.append(EVIDENCE_LABELS[block])
+            if computed == VERDICT_INERT and block in EVIDENCE_LABELS:
+                labels.append(EVIDENCE_LABELS[block])
         out[model] = {
             "blocks": blocks,
             "aa": aa_stats(means, model, resamples=resamples),
+            "floor": floor_movement(means, model, resamples=resamples),
             "probe_fidelity": fidelity,
-            "probe_not_representative": advisory,
-            "evidence": evidence,
+            "probe_fidelity_status": status,
+            "probe_not_representative": status != FIDELITY_OK,
+            "model_unpinned": unpinned,
+            "advisory_reasons": reasons,
+            "evidence": [] if reasons else labels,
+            "withheld_evidence": labels if reasons else [],
         }
     return out
