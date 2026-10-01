@@ -24,9 +24,12 @@ never applied automatically.
 Fail closed: a model's verdicts are advisory and its evidence labels are withheld
 (``withheld_evidence``, never ``evidence``) when the probe's fidelity is over
 EVAL_PROBE_FIDELITY_MAX or cannot be measured (no target has both R+M and a
-pre-market probability), when the model was unpinned, or when the study is invalid
-(verdict ``invalid``) or characterization-only (verdict ``characterization_only``);
-the computed verdict is then kept as ``would_be_verdict``. Pure (no I/O).
+pre-market probability), when the model was unpinned, when its A/A check fails (the
+FULL vs FULL_AA CI excludes 0, so the noise floor itself is suspect), when the caller
+passes another reason (a scoring parameter that differs from the pre-registered one,
+a served-model change), or when the study is invalid (verdict ``invalid``) or
+characterization-only for that model (verdict ``characterization_only``); the computed
+verdict is then kept as ``would_be_verdict``. Pure (no I/O).
 """
 
 from __future__ import annotations
@@ -67,6 +70,7 @@ REASON_CHARACTERIZATION = "characterization_only"
 REASON_PROBE_NOT_REPRESENTATIVE = "probe_not_representative"
 REASON_PROBE_FIDELITY_UNMEASURED = "probe_fidelity_unmeasured"
 REASON_MODEL_UNPINNED = "model_unpinned"
+REASON_AA_FLOOR_NOT_NULL = "aa_floor_not_null"
 
 
 def arm_means(rows: Iterable[Mapping[str, Any]]) -> Dict[Tuple[str, str, str], Dict[str, float]]:
@@ -203,40 +207,58 @@ def floor_movement(means: Mapping[Tuple[str, str, str], Mapping[str, float]], mo
 
 
 def score_study(rows: Sequence[Mapping[str, Any]], *, pre_market: Mapping[Tuple[str, str], Any],
-                resamples: int, inert_margin: float, fidelity_max: float, invalid: bool = False,
-                characterization_only: bool = False) -> Dict[str, Any]:
+                resamples: int, inert_margin: float, fidelity_max: float, seed: int = BOOTSTRAP_SEED,
+                invalid: bool = False, characterization_only: bool = False,
+                model_characterization: Optional[Mapping[str, Sequence[str]]] = None,
+                advisory: Sequence[str] = (), model_advisory: Optional[Mapping[str, Sequence[str]]] = None,
+                sampling_params_ignored: Iterable[str] = ()) -> Dict[str, Any]:
     """Per-model block verdicts, A/A check, floor movement, probe fidelity and evidence labels.
 
+    ``seed`` is the study's registered bootstrap seed (every CI of every model uses it).
     ``invalid`` / ``characterization_only`` are the study-level gates: every verdict becomes
-    'invalid' / 'characterization_only' (the computed one kept as ``would_be_verdict``). Any
-    advisory reason (those gates, probe fidelity not ok, an unpinned model) marks every block
-    ``advisory`` and moves the evidence labels to ``withheld_evidence``."""
+    'invalid' / 'characterization_only' (the computed one kept as ``would_be_verdict``);
+    ``model_characterization`` ({model_key: reasons}, e.g. 'incomplete') applies the second
+    gate to one model only. ``advisory`` (every model) and ``model_advisory`` ({model_key:
+    reasons}) add caller-side reasons. Any advisory reason (those, the gates, probe fidelity
+    not ok, an unpinned model, a failed A/A check) marks every block ``advisory`` and moves the
+    evidence labels to ``withheld_evidence``. ``sampling_params_ignored`` names the model keys
+    whose transport ignores temperature and max_tokens (the CLIs): informational only, the
+    A/A floor is sampled the same way as every other arm."""
     means = arm_means(rows)
     models = sorted({key[0] for key in means})
+    ignored = set(sampling_params_ignored)
     out: Dict[str, Any] = {}
     for model in models:
-        blocks = {block: block_stats(movement_rows(means, model, block), resamples=resamples)
+        blocks = {block: block_stats(movement_rows(means, model, block), resamples=resamples, seed=seed)
                   for block in BLOCKS}
         adjusted = holm({block: stats["p_one_sided"] for block, stats in blocks.items()})
         fidelity = probe_fidelity(means, model, pre_market)
         status = fidelity_status(fidelity, fidelity_max)
         unpinned = any(row.get("model_unpinned") for row in rows if str(row.get("model_key")) == model)
+        aa = aa_stats(means, model, resamples=resamples, seed=seed)
+        characterization = [REASON_CHARACTERIZATION] if characterization_only else []
+        characterization += [r for r in (model_characterization or {}).get(model, ()) if r not in characterization]
         reasons: List[str] = []
         if invalid:
             reasons.append(REASON_STUDY_INVALID)
-        if characterization_only:
+        if characterization:
             reasons.append(REASON_CHARACTERIZATION)
+        for reason in (*advisory, *(model_advisory or {}).get(model, ())):
+            if reason not in reasons:
+                reasons.append(reason)
         if status == FIDELITY_UNMEASURED:
             reasons.append(REASON_PROBE_FIDELITY_UNMEASURED)
         elif status == FIDELITY_NOT_REPRESENTATIVE:
             reasons.append(REASON_PROBE_NOT_REPRESENTATIVE)
         if unpinned:
             reasons.append(REASON_MODEL_UNPINNED)
+        if aa["ci_contains_zero"] is False:
+            reasons.append(REASON_AA_FLOOR_NOT_NULL)
         labels: List[str] = []
         for block, stats in blocks.items():
             stats["p_holm"] = eval_stats.round4(adjusted[block]) if adjusted[block] is not None else None
             computed = verdict(adjusted[block], stats["ci"], inert_margin)
-            if invalid or characterization_only:
+            if invalid or characterization:
                 stats["verdict"] = VERDICT_INVALID if invalid else VERDICT_CHARACTERIZATION
                 stats["would_be_verdict"] = computed
             else:
@@ -247,12 +269,14 @@ def score_study(rows: Sequence[Mapping[str, Any]], *, pre_market: Mapping[Tuple[
                 labels.append(EVIDENCE_LABELS[block])
         out[model] = {
             "blocks": blocks,
-            "aa": aa_stats(means, model, resamples=resamples),
-            "floor": floor_movement(means, model, resamples=resamples),
+            "aa": aa,
+            "floor": floor_movement(means, model, resamples=resamples, seed=seed),
             "probe_fidelity": fidelity,
             "probe_fidelity_status": status,
             "probe_not_representative": status != FIDELITY_OK,
             "model_unpinned": unpinned,
+            "sampling_params_ignored": model in ignored,
+            "characterization_reasons": characterization,
             "advisory_reasons": reasons,
             "evidence": [] if reasons else labels,
             "withheld_evidence": labels if reasons else [],

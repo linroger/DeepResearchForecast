@@ -17,14 +17,21 @@ A/A noise floor; nothing is applied or promoted.
 plan prints the exact call count and makes no call. run needs VALUE_ADD_EVAL_ENABLED or
 --live, refuses a plan over EVAL_STUDY_MAX_CALLS unless --max-calls covers it, refuses a
 CLI model the CLI would not be given (it would run the account default) unless
---allow-unpinned, disables the LLM cache, pre-registers study.json (with the sha of every
-probe prompt) before the first call, stamps its sha on every row and resumes ok rows with
-the same prompt hash. score refuses an edited study.json, scores only rows of the
-registered design, marks the study invalid (exit 4) when any elicitation was served from a
-cache or a model changed identity mid-study, and characterization-only when replicates are
-below 3 or any registered elicitation has no ok row. Outputs only under
-evaluation_ledger_dir()/value_add/<study_id>/: study.json, elicitations.jsonl,
-run_meter.jsonl, scores.json, report.md.
+--allow-unpinned, disables the LLM cache and keeps the LLM meter on (this process only),
+pre-registers study.json before the first call (the sha of every probe prompt, the model
+each --model spec resolves to, the bootstrap seed and the scoring parameters
+EVAL_INERT_MARGIN / EVAL_PROBE_FIDELITY_MAX / EVAL_BOOTSTRAP_RESAMPLES), stamps its sha on
+every row, stops when the run budget (LLM_RUN_BUDGET_*) is spent and resumes ok rows with
+the same prompt hash; a resume whose registration would differ (another resolved model,
+other scoring knobs) is refused before any call. score refuses an edited study.json and
+scores only rows of the registered design with the registered seed. It marks the study
+invalid (exit 4) when any elicitation was served from a cache, the meter cannot vouch for
+every answered call, or a model changed identity mid-study; a model characterization-only
+when any of its registered elicitations has no ok row (every model when replicates are
+below 3); and a model's verdicts advisory when a scoring knob differs from its registered
+value (recorded as an override) or the provider reported more than one served model.
+Outputs only under evaluation_ledger_dir()/value_add/<study_id>/ (the id is one safe path
+component): study.json, elicitations.jsonl, run_meter.jsonl, scores.json, report.md.
 """
 
 from __future__ import annotations
@@ -34,7 +41,9 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import sys
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -44,7 +53,7 @@ from app.config import Config  # noqa: E402
 from app.services import eval_bundle, value_add_stats as vas  # noqa: E402
 from app.utils.atomic import write_json_atomic, write_text_atomic  # noqa: E402
 from app.utils.canonical_json import canonical_json_sha256  # noqa: E402
-from app.utils.model_provenance import CLI_DEFAULT_LABEL, effective_model_label  # noqa: E402
+from app.utils.model_provenance import CLI_DEFAULT_LABEL, MAX_SERVED_IDS, effective_model_label  # noqa: E402
 
 STUDY_SCHEMA = "drf.value_add_study.v1"
 SCORES_SCHEMA = "drf.value_add_scores.v1"
@@ -70,6 +79,19 @@ EXIT_INVALID = 4
 STATUS_OK = "ok"
 STATUS_PARSE_FAILED = "parse_failed"
 STATUS_CALL_FAILED_PREFIX = "call_failed:"
+# One safe path component, so a study never writes outside evaluation_ledger_dir()/value_add/.
+STUDY_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
+# Why score marks the whole study invalid (exit 4).
+INVALID_CACHED = "cached_elicitation"
+INVALID_METER_CACHED = "meter_reported_cached_calls"
+INVALID_METER_UNAVAILABLE = "meter_unavailable"
+INVALID_IDENTITY_DRIFT = "model_identity_drift"
+# Why verdicts are characterization-only: for every model, or for one model.
+CHAR_REPLICATES = "replicates_below_min"
+CHAR_INCOMPLETE = "incomplete"
+# Why a model's verdicts are advisory (on top of value_add_stats' own reasons).
+ADVISORY_SCORING_OVERRIDE = "scoring_not_preregistered"
+ADVISORY_SERVED_MODEL_DRIFT = "served_model_drift"
 
 
 class StudyRefused(Exception):
@@ -77,17 +99,29 @@ class StudyRefused(Exception):
 
 
 # ------------------------------------------------------------------ study plan
-def _out_root(args: argparse.Namespace) -> str:
-    if getattr(args, "out_root", None):
-        return args.out_root
+def _out_root() -> str:
+    """evaluation_ledger_dir()/value_add: the only directory a study writes under."""
     from app.services.forecast_ledger import evaluation_ledger_dir
     return os.path.join(evaluation_ledger_dir(), "value_add")
+
+
+def checked_study_id(study_id: Any) -> str:
+    """``study_id`` when it is one safe path component (1-64 letters, digits, '_', '.' or '-',
+    starting with a letter or digit); StudyRefused otherwise, since an absolute or '..' id
+    would put the outputs outside evaluation_ledger_dir()/value_add/."""
+    text = str(study_id)
+    if not STUDY_ID_PATTERN.fullmatch(text):
+        raise StudyRefused(f"--study-id must be 1-64 letters, digits, '_', '.' or '-' starting with a letter "
+                           f"or digit, got {study_id!r}")
+    return text
 
 
 def _bundle_dirs(args: argparse.Namespace) -> List[str]:
     dirs = list(args.bundle or [])
     root = getattr(args, "bundles_root", None)
     if root:
+        if not os.path.isdir(root):
+            raise StudyRefused(f"--bundles-root {root} is not a directory")
         for report in sorted(os.listdir(root)):
             candidate = os.path.join(root, report, eval_bundle.BUNDLE_DIRNAME)
             if os.path.exists(os.path.join(candidate, eval_bundle.MANIFEST_NAME)):
@@ -127,10 +161,15 @@ def arm_blocks(arm: str, statuses: Dict[str, str]) -> Tuple[Optional[Tuple[str, 
 
 
 def build_study(args: argparse.Namespace) -> Dict[str, Any]:
-    """The pre-registered study: arms, models, replicates, and per bundle its target ids,
-    pre-market probabilities and the sha of every probe prompt (every bundle re-hashed: a
-    tampered one aborts). The same bundle given twice is kept once; two bundles of one
-    report, a bundle without as_of, no bundle and a count below 1 are refused."""
+    """The pre-registered study: arms, models, replicates, bootstrap seed, scoring parameters
+    and per bundle its target ids, pre-market probabilities and the sha of every probe prompt
+    (every bundle re-hashed: a tampered one aborts). The same bundle given twice is kept once;
+    two bundles of one report, a bundle without as_of, no bundle, no target at all, a count
+    below 1, a scoring knob out of range and a path-like --study-id are refused."""
+    study_id = getattr(args, "study_id", None)
+    if study_id is not None:
+        study_id = checked_study_id(study_id)
+    scoring = _score_knobs()
     replicates = _positive_int(Config.EVAL_ARM_REPLICATES if getattr(args, "replicates", None) is None
                                else args.replicates, "replicates (--replicates / EVAL_ARM_REPLICATES)")
     per_bundle = _positive_int(Config.EVAL_TARGETS_PER_BUNDLE if getattr(args, "targets_per_bundle", None) is None
@@ -175,6 +214,8 @@ def build_study(args: argparse.Namespace) -> Dict[str, Any]:
         })
     if not bundles:
         raise StudyRefused("no evaluation bundle given (--bundle / --bundles-root)")
+    if not any(bundle["targets"] for bundle in bundles):
+        raise StudyRefused("the bundles hold no target to ask")
     study = {
         "schema": STUDY_SCHEMA,
         "prompt_version": PROMPT_VERSION,
@@ -185,7 +226,12 @@ def build_study(args: argparse.Namespace) -> Dict[str, Any]:
         "seed": vas.BOOTSTRAP_SEED,
         "bundles": bundles,
     }
-    study["study_id"] = getattr(args, "study_id", None) or "va_" + canonical_json_sha256(study)[:12]
+    # The auto id covers the elicitation design only. The scoring parameters here (and the
+    # resolved model keys cmd_run adds) are registered in study.json and so in its sha, but not
+    # in the id: a resume under changed knobs or a changed model environment meets the existing
+    # study.json and is refused before any call instead of silently starting a new paid study.
+    study["study_id"] = study_id or "va_" + canonical_json_sha256(study)[:12]
+    study["scoring"] = scoring
     return study
 
 
@@ -284,6 +330,13 @@ def build_client(model_spec: str) -> Any:
     return client
 
 
+def sampling_params_ignored(model_key: str) -> bool:
+    """True for a CLI transport (claude-cli, codex-cli): it ignores temperature and max_tokens,
+    so neither the probe's 0.25 / 1024 nor floor_sc's 0.7 is applied to its calls."""
+    from app.utils.llm_client import CLI_PROVIDERS
+    return str(model_key).partition(":")[0] in CLI_PROVIDERS
+
+
 def model_identity(client: Any) -> Tuple[str, bool]:
     """``(provider:requested model, unpinned)`` of a built client. The model is what the
     transport actually requests (model_provenance.effective_model_label): a CLI client whose
@@ -303,8 +356,8 @@ def _call_meta(client: Any) -> Dict[str, Any]:
 
 
 # ------------------------------------------------------------------ files
-def _study_dir(args: argparse.Namespace, study_id: str) -> str:
-    return os.path.join(_out_root(args), study_id)
+def _study_dir(study_id: str) -> str:
+    return os.path.join(_out_root(), study_id)
 
 
 def _append_row(path: str, row: Dict[str, Any]) -> None:
@@ -339,8 +392,9 @@ def cmd_plan(args: argparse.Namespace) -> int:
     study = build_study(args)
     plan = planned_calls(study)
     print(json.dumps({"study_id": study["study_id"], "planned_calls": plan["calls"],
-                      "max_calls": int(Config.EVAL_STUDY_MAX_CALLS),
-                      "skipped_arms": plan["skipped_arms"]}, ensure_ascii=False, indent=2))
+                      "max_calls": int(Config.EVAL_STUDY_MAX_CALLS), "seed": study["seed"],
+                      "scoring": study["scoring"], "skipped_arms": plan["skipped_arms"]},
+                     ensure_ascii=False, indent=2))
     return 0
 
 
@@ -377,46 +431,78 @@ def cmd_run(args: argparse.Namespace, *, client_factory: Callable[[str], Any] = 
             return EXIT_REFUSED
         clients[spec] = client
         identities[spec] = (model_key, unpinned)
+    # Registered with the study: what each spec resolved to in this environment. A resume that
+    # resolves a spec to another model (LLM_PROVIDER / LLM_MODEL_NAME changed) is refused below.
+    study["model_keys"] = {spec: {"model_key": key, "unpinned": unpinned,
+                                  "sampling_params_ignored": sampling_params_ignored(key)}
+                           for spec, (key, unpinned) in identities.items()}
 
     Config.LLM_CACHE_ENABLED = False
+    # The meter is the second witness that no call was served from a cache (score checks that
+    # it saw every answered call), so it is on for this process whatever LLM_TELEMETRY_ENABLED says.
+    Config.LLM_TELEMETRY_ENABLED = True
     from app.utils.telemetry import LLMMeter, set_run_context
     run_id = "valueadd__" + study["study_id"]
-    set_run_context(run_id, "eval")
-    out_dir = _study_dir(args, study["study_id"])
+    out_dir = _study_dir(study["study_id"])
     study_path = os.path.join(out_dir, "study.json")
     if os.path.exists(study_path):
-        with open(study_path, encoding="utf-8") as f:
-            existing = json.load(f)
-        if study_sha(existing) != study_sha(study):
-            print("value_add_eval: study.json differs from this plan (inputs, probe prompt or edited file); "
-                  "use a new --study-id", file=sys.stderr)
+        try:
+            with open(study_path, encoding="utf-8") as f:
+                existing = json.load(f)
+        except (OSError, ValueError) as exc:
+            print(f"value_add_eval: the registered {study_path} is unreadable ({exc}); use a new --study-id",
+                  file=sys.stderr)
+            return EXIT_STUDY_MISMATCH
+        if not isinstance(existing, dict) or study_sha(existing) != study_sha(study):
+            differing = _differing_keys(existing, study) if isinstance(existing, dict) else ["the whole file"]
+            print(f"value_add_eval: study.json differs from this plan in {', '.join(differing)} (inputs, probe "
+                  "prompt, resolved model, scoring knobs or an edited file); restore them or use a new --study-id",
+                  file=sys.stderr)
             return EXIT_STUDY_MISMATCH
         study = existing
     else:
         study["created_at"] = datetime.now(timezone.utc).isoformat()
         write_json_atomic(study_path, study)
-    made = [0]
+    attempt = uuid.uuid4().hex
+    counters = {"made": 0, "answered": 0}
+    LLMMeter.reset(run_id)   # this attempt's meter record counts this attempt's calls only
+    set_run_context(run_id, "eval")
     try:
-        code = _elicit(study, clients, identities, cap, os.path.join(out_dir, "elicitations.jsonl"), made)
+        code = _elicit(study, clients, identities, cap, os.path.join(out_dir, "elicitations.jsonl"),
+                       counters, attempt)
     finally:
-        # Every run, finished or not, records what the meter saw: score invalidates the study on
-        # any call the meter counted as cached, even one whose row was never written.
-        meter = LLMMeter.snapshot(run_id)
+        # Every attempt, finished or not, records what the meter saw: score invalidates the study
+        # on any call the meter counted as cached, even one whose row was never written, and on
+        # any attempt the meter cannot vouch for.
+        total = (LLMMeter.snapshot(run_id) or {}).get("total") or {}
         _append_row(os.path.join(out_dir, "run_meter.jsonl"),
-                    {"run_id": run_id, "at": datetime.now(timezone.utc).isoformat(), "calls_made": made[0],
-                     "meter_cached_calls": int(((meter or {}).get("total") or {}).get("cached") or 0)})
+                    {"run_id": run_id, "attempt": attempt, "at": datetime.now(timezone.utc).isoformat(),
+                     "calls_made": counters["made"], "calls_answered": counters["answered"],
+                     "meter_calls": int(total.get("calls") or 0),
+                     "meter_cached_calls": int(total.get("cached") or 0),
+                     "telemetry_enabled": bool(Config.LLM_TELEMETRY_ENABLED)})
+        set_run_context(None)
     if code == 0:
-        print(json.dumps({"study_id": study["study_id"], "calls_made": made[0], "out_dir": out_dir}, indent=2))
+        print(json.dumps({"study_id": study["study_id"], "calls_made": counters["made"], "out_dir": out_dir},
+                         indent=2))
     return code
 
 
+def _differing_keys(registered: Mapping[str, Any], planned: Mapping[str, Any]) -> List[str]:
+    """Top-level study.json keys whose registered value differs from this plan's."""
+    keys = (set(registered) | set(planned)) - {"created_at"}
+    return sorted(key for key in keys if registered.get(key) != planned.get(key))
+
+
 def _elicit(study: Dict[str, Any], clients: Dict[str, Any], identities: Dict[str, Tuple[str, bool]], cap: int,
-            rows_path: str, made: List[int]) -> int:
+            rows_path: str, counters: Dict[str, int], attempt: str) -> int:
     """Ask every (bundle, target, available arm, model, replicate) not already answered ok
     under this study's sha; one row per replicate (floor_sc pools its K samples, and is ok
-    only when every sample parsed). One chat() call per sample and no JSON repair turn, so
-    the cap counts one call per sample (chat()'s own transient-error retries aside) and
-    every p answers the registered prompt."""
+    only when every sample parsed), stamped with this run ``attempt``. One chat() call per
+    sample and no JSON repair turn, so the cap counts one call per sample (chat()'s own
+    transient-error retries aside) and every p answers the registered prompt. A spent run
+    budget (BudgetExceeded, raised after the call that crossed it) stops the attempt."""
+    from app.utils.telemetry import BudgetExceeded
     sha = study_sha(study)
     done = {(r.get("model_key_spec"), r.get("bundle_sha256"), r.get("target_id"), r.get("arm"),
              r.get("replicate"), r.get("prompt_sha256"))
@@ -447,16 +533,22 @@ def _elicit(study: Dict[str, Any], clients: Dict[str, Any], identities: Dict[str
                         ps, raw, served = [], [], set()
                         cached, tokens_in, tokens_out, failed = False, 0, 0, None
                         for _ in range(samples):
-                            if made[0] >= cap:
+                            if counters["made"] >= cap:
                                 print("value_add_eval: call cap reached; resume to continue", file=sys.stderr)
                                 return EXIT_REFUSED
-                            made[0] += 1
+                            counters["made"] += 1
                             try:
                                 text = client.chat(messages, temperature=temperature, max_tokens=MAX_TOKENS,
                                                    response_format=dict(JSON_RESPONSE_FORMAT))
+                            except BudgetExceeded as exc:
+                                print(f"value_add_eval: the run budget is spent ({exc}); stopped before the next "
+                                      "call. Raise LLM_RUN_BUDGET_TOKENS / LLM_RUN_BUDGET_USD and resume to "
+                                      "continue", file=sys.stderr)
+                                return EXIT_REFUSED
                             except Exception as exc:  # noqa: BLE001 — recorded as a failed call
                                 failed = f"{STATUS_CALL_FAILED_PREFIX}{type(exc).__name__}"
                                 break
+                            counters["answered"] += 1
                             meta = _call_meta(client)
                             cached = cached or meta.get("served_by") == "cache"
                             usage = meta.get("usage") if isinstance(meta.get("usage"), dict) else {}
@@ -470,8 +562,8 @@ def _elicit(study: Dict[str, Any], clients: Dict[str, Any], identities: Dict[str
                                 ps.append(p)
                         status = failed or (STATUS_OK if len(ps) == samples else STATUS_PARSE_FAILED)
                         row = {
-                            "study_sha": sha, "bundle_sha256": bundle["bundle_sha256"], "target_id": target_id,
-                            "cluster_id": bundle["report"] or bundle["bundle_sha256"],
+                            "study_sha": sha, "attempt": attempt, "bundle_sha256": bundle["bundle_sha256"],
+                            "target_id": target_id, "cluster_id": bundle["report"] or bundle["bundle_sha256"],
                             "model_key": model_key, "model_key_spec": spec, "served_models": sorted(served),
                             "arm": arm, "replicate": replicate,
                             "p": round(sum(ps) / len(ps), 6) if status == STATUS_OK else None,
@@ -481,8 +573,19 @@ def _elicit(study: Dict[str, Any], clients: Dict[str, Any], identities: Dict[str
                         }
                         if unpinned:
                             row["model_unpinned"] = True
+                        if sampling_params_ignored(model_key):
+                            row["sampling_params_ignored"] = True
                         _append_row(rows_path, row)
     return 0
+
+
+def _registered_model_keys(study: Mapping[str, Any]) -> Dict[str, str]:
+    """``{model spec: model key}`` as the study registered them at run ({} when it did not)."""
+    registered = study.get("model_keys")
+    if not isinstance(registered, dict):
+        return {}
+    return {spec: str(entry["model_key"]) for spec, entry in registered.items()
+            if isinstance(entry, dict) and entry.get("model_key")}
 
 
 def select_rows(study: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
@@ -492,8 +595,12 @@ def select_rows(study: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> 
     prompt hash is the registered one; when a cell was answered twice the later row wins.
     Per model spec: expected cells, ok cells, missing cells, failed and parse-failed attempts
     (a later resume may have answered the cell), ok rows under another prompt
-    (stale_prompt) and the model keys the kept rows carry: more than one means the served
-    model changed mid-study (identity drift)."""
+    (stale_prompt), the model keys the kept rows carry and the model ids the provider
+    reported serving them (rows that report none are left out; at most MAX_SERVED_IDS are
+    listed, served_model_count counts them all). identity_drift lists the specs whose kept
+    rows carry more than one model key or another key than the registered one (the model
+    changed mid-study); served_model_drift those whose rows report more than one served model
+    (an alias such as 'sonnet' or 'gpt-4o' moved to a new snapshot, pooling two models)."""
     replicates = int(study.get("replicates") or 0)
     registered: Dict[Tuple[Any, Any, Any], str] = {}
     for bundle in study.get("bundles") or []:
@@ -501,7 +608,7 @@ def select_rows(study: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> 
             for arm, sha in arms.items():
                 registered[(bundle["bundle_sha256"], target_id, arm)] = sha
     counts = {spec: {"expected": len(registered) * replicates, "ok": 0, "missing": 0, "call_failed": 0,
-                     "parse_failed": 0, "stale_prompt": 0, "model_keys": set()}
+                     "parse_failed": 0, "stale_prompt": 0, "model_keys": set(), "served_models": set()}
               for spec in study.get("models") or []}
     kept: Dict[Tuple[Any, ...], Mapping[str, Any]] = {}
     for row in rows:
@@ -525,37 +632,84 @@ def select_rows(study: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> 
             continue
         kept[(spec, *cell, replicate)] = row
     for key, row in kept.items():
-        counts[key[0]]["ok"] += 1
-        counts[key[0]]["model_keys"].add(str(row.get("model_key")))
-    drift = []
+        entry = counts[key[0]]
+        entry["ok"] += 1
+        entry["model_keys"].add(str(row.get("model_key")))
+        served = row.get("served_models")
+        if isinstance(served, list):
+            entry["served_models"].update(s for s in served if isinstance(s, str) and s)
+    registered_keys = _registered_model_keys(study)
+    drift, served_drift = [], []
     for spec, entry in counts.items():
         entry["missing"] = entry["expected"] - entry["ok"]
-        entry["model_keys"] = sorted(entry["model_keys"])
-        if len(entry["model_keys"]) > 1:
+        expected_key = registered_keys.get(spec)
+        if len(entry["model_keys"]) > 1 or (expected_key and entry["model_keys"]
+                                            and entry["model_keys"] != {expected_key}):
             drift.append(spec)
+        entry["model_keys"] = sorted(entry["model_keys"])
+        served_ids = sorted(entry["served_models"])
+        entry["served_models"] = served_ids[:MAX_SERVED_IDS]
+        entry["served_model_count"] = len(served_ids)
+        if len(served_ids) > 1:
+            served_drift.append(spec)
     return {"rows": list(kept.values()), "completeness": counts,
-            "complete": all(entry["missing"] == 0 for entry in counts.values()), "identity_drift": drift}
+            "complete": all(entry["missing"] == 0 for entry in counts.values()), "identity_drift": drift,
+            "served_model_drift": served_drift}
 
 
-def _score_knobs() -> Tuple[int, float, float]:
-    """(resamples, inert margin, fidelity max) from Config; StudyRefused when out of range."""
+def _score_knobs() -> Dict[str, Any]:
+    """The scoring parameters from Config: ``{alpha, inert_margin, fidelity_max, resamples}``
+    (alpha is value_add_stats.ALPHA, a code constant); StudyRefused when a knob is out of range."""
     resamples = _positive_int(Config.EVAL_BOOTSTRAP_RESAMPLES, "EVAL_BOOTSTRAP_RESAMPLES")
     margins = {"EVAL_INERT_MARGIN": float(Config.EVAL_INERT_MARGIN),
                "EVAL_PROBE_FIDELITY_MAX": float(Config.EVAL_PROBE_FIDELITY_MAX)}
     for name, value in margins.items():
         if not 0.0 <= value <= 1.0:
             raise StudyRefused(f"{name} must be within [0, 1], got {value}")
-    return resamples, margins["EVAL_INERT_MARGIN"], margins["EVAL_PROBE_FIDELITY_MAX"]
+    return {"alpha": vas.ALPHA, "inert_margin": margins["EVAL_INERT_MARGIN"],
+            "fidelity_max": margins["EVAL_PROBE_FIDELITY_MAX"], "resamples": resamples}
+
+
+def scoring_parameters(study: Mapping[str, Any]) -> Dict[str, Any]:
+    """What score uses: the current scoring knobs (validated) and the study's registered
+    bootstrap seed, with ``overrides`` ({name: {registered, used}}) for every parameter that
+    differs from the study's pre-registration or that it did not register; ``preregistered``
+    is True only when there is none. StudyRefused when the study registers no integer seed."""
+    used = _score_knobs()
+    seed = study.get("seed")
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise StudyRefused(f"study.json registers no integer bootstrap seed (got {seed!r})")
+    registered = study.get("scoring") if isinstance(study.get("scoring"), dict) else {}
+    overrides = {name: {"registered": registered.get(name), "used": value}
+                 for name, value in used.items() if registered.get(name) != value}
+    return {**used, "seed": seed, "preregistered": not overrides, "overrides": overrides}
+
+
+def meter_unavailable(rows: Sequence[Mapping[str, Any]], meters: Sequence[Mapping[str, Any]]) -> bool:
+    """True when the LLM meter cannot vouch for every answered call: an attempt recorded with
+    the meter off, a meter that counted fewer calls than the attempt answered (or a record
+    without those counts), or elicitation rows of an attempt that left no meter record (a run
+    killed before its finally block)."""
+    metered = set()
+    for meter in meters:
+        calls, answered = meter.get("meter_calls"), meter.get("calls_answered")
+        if (meter.get("telemetry_enabled") is not True or not isinstance(calls, int)
+                or not isinstance(answered, int) or calls < answered):
+            return True
+        metered.add(meter.get("attempt"))
+    return any(row.get("attempt") not in metered for row in rows)
 
 
 def cmd_score(args: argparse.Namespace) -> int:
-    resamples, inert_margin, fidelity_max = _score_knobs()
-    out_dir = _study_dir(args, args.study_id)
+    study_id = checked_study_id(args.study_id)
+    out_dir = _study_dir(study_id)
     try:
         with open(os.path.join(out_dir, "study.json"), encoding="utf-8") as f:
             study = json.load(f)
+        if not isinstance(study, dict):
+            raise ValueError("not a JSON object")
     except (OSError, ValueError) as exc:
-        print(f"value_add_eval: no readable study.json for study {args.study_id} under {out_dir} ({exc})",
+        print(f"value_add_eval: no readable study.json for study {study_id} under {out_dir} ({exc})",
               file=sys.stderr)
         return EXIT_REFUSED
     sha = study_sha(study)
@@ -564,42 +718,69 @@ def cmd_score(args: argparse.Namespace) -> int:
         print("value_add_eval: study.json was edited after elicitation (its sha no longer matches the "
               "rows); refusing to score.", file=sys.stderr)
         return EXIT_STUDY_MISMATCH
+    scoring = scoring_parameters(study)
     selection = select_rows(study, rows)
+    meters = _read_rows(os.path.join(out_dir, "run_meter.jsonl"))
     reasons: List[str] = []
     if any(r.get("cached") for r in rows):
-        reasons.append("cached_elicitation")
-    if any(int(m.get("meter_cached_calls") or 0) > 0
-           for m in _read_rows(os.path.join(out_dir, "run_meter.jsonl"))):
-        reasons.append("meter_reported_cached_calls")
+        reasons.append(INVALID_CACHED)
+    if any(int(m.get("meter_cached_calls") or 0) > 0 for m in meters):
+        reasons.append(INVALID_METER_CACHED)
+    if meter_unavailable(rows, meters):
+        reasons.append(INVALID_METER_UNAVAILABLE)
     if selection["identity_drift"]:
-        reasons.append("model_identity_drift")
-    characterization: List[str] = []
-    if int(study.get("replicates") or 0) < MIN_REPLICATES:
-        characterization.append("replicates_below_min")
-    if not selection["complete"]:
-        characterization.append("incomplete")
+        reasons.append(INVALID_IDENTITY_DRIFT)
+    characterization = [CHAR_REPLICATES] if int(study.get("replicates") or 0) < MIN_REPLICATES else []
+    registered_keys = _registered_model_keys(study)
+
+    def keys_of(spec: str) -> List[str]:
+        entry = selection["completeness"][spec]
+        return sorted(set(entry["model_keys"]) | ({registered_keys[spec]} if spec in registered_keys else set()))
+
+    incomplete = [spec for spec, entry in selection["completeness"].items() if entry["missing"] > 0]
+    model_characterization = {key: [CHAR_INCOMPLETE] for spec in incomplete for key in keys_of(spec)}
+    model_advisory = {key: [ADVISORY_SERVED_MODEL_DRIFT]
+                      for spec in selection["served_model_drift"] for key in keys_of(spec)}
     pre_market = {}
-    for bundle in study["bundles"]:
+    for bundle in study.get("bundles") or []:
         cluster = bundle["report"] or bundle["bundle_sha256"]
         for target_id, p in (bundle.get("pre_market") or {}).items():
             pre_market[(cluster, target_id)] = p
-    models = vas.score_study(selection["rows"], pre_market=pre_market, resamples=resamples,
-                             inert_margin=inert_margin, fidelity_max=fidelity_max,
-                             invalid=bool(reasons), characterization_only=bool(characterization))
+    model_keys = {str(row.get("model_key")) for row in selection["rows"]}
+    models = vas.score_study(selection["rows"], pre_market=pre_market, resamples=scoring["resamples"],
+                             inert_margin=scoring["inert_margin"], fidelity_max=scoring["fidelity_max"],
+                             seed=scoring["seed"], invalid=bool(reasons),
+                             characterization_only=bool(characterization),
+                             model_characterization=model_characterization,
+                             advisory=[] if scoring["preregistered"] else [ADVISORY_SCORING_OVERRIDE],
+                             model_advisory=model_advisory,
+                             sampling_params_ignored={key for key in model_keys if sampling_params_ignored(key)})
     scores = {
-        "schema": SCORES_SCHEMA, "study_id": study["study_id"], "study_sha": sha,
+        "schema": SCORES_SCHEMA, "study_id": study.get("study_id"), "study_sha": sha,
         "valid": not reasons, "invalid_reasons": reasons,
         "characterization_only": bool(characterization), "characterization_reasons": characterization,
-        "completeness": selection["completeness"],
+        "incomplete_models": incomplete, "served_model_drift": selection["served_model_drift"],
+        "scoring": scoring, "completeness": selection["completeness"],
         "rows": len(rows), "rows_scored": len(selection["rows"]), "models": models,
         "note": "Movement, not accuracy: inert verdicts are evidence for an owner decision, never applied.",
     }
     write_json_atomic(os.path.join(out_dir, "scores.json"), scores)
     write_text_atomic(os.path.join(out_dir, "report.md"), render_report(scores))
-    print(json.dumps({"study_id": study["study_id"], "valid": scores["valid"], "invalid_reasons": reasons,
+    print(json.dumps({"study_id": scores["study_id"], "valid": scores["valid"], "invalid_reasons": reasons,
                       "characterization_only": scores["characterization_only"],
-                      "characterization_reasons": characterization}, indent=2))
+                      "characterization_reasons": characterization, "incomplete_models": incomplete,
+                      "scoring_preregistered": scoring["preregistered"]}, indent=2))
     return EXIT_INVALID if reasons else 0
+
+
+def _scoring_line(scoring: Mapping[str, Any]) -> str:
+    text = (f"Scoring: alpha {scoring['alpha']}, inert margin {scoring['inert_margin']}, probe-fidelity max "
+            f"{scoring['fidelity_max']}, bootstrap resamples {scoring['resamples']}, seed {scoring['seed']}")
+    if scoring["preregistered"]:
+        return text + " (as pre-registered)"
+    changed = "; ".join(f"{name} registered {entry['registered']}, used {entry['used']}"
+                        for name, entry in scoring["overrides"].items())
+    return text + f" (NOT as pre-registered: {changed}; every verdict is advisory)"
 
 
 def render_report(scores: Dict[str, Any]) -> str:
@@ -608,20 +789,30 @@ def render_report(scores: Dict[str, Any]) -> str:
                                              if scores["invalid_reasons"] else ""),
              f"Characterization only: {scores['characterization_only']}"
              + (f" ({', '.join(scores['characterization_reasons'])})" if scores["characterization_reasons"] else ""),
+             "Incomplete models (characterization only): " + (", ".join(scores["incomplete_models"]) or "none"),
+             _scoring_line(scores["scoring"]),
              "", scores["note"], "", "## Completeness", "",
              "| Model spec | expected | ok | missing | call_failed attempts | parse_failed attempts "
-             "| stale prompt | model keys |", "|---|---|---|---|---|---|---|---|"]
+             "| stale prompt | model keys | served models |", "|---|---|---|---|---|---|---|---|---|"]
     for spec, entry in scores["completeness"].items():
+        served = ", ".join(entry["served_models"])
+        if entry["served_model_count"] > len(entry["served_models"]):
+            served += f" (+{entry['served_model_count'] - len(entry['served_models'])} more)"
         lines.append(f"| {spec} | {entry['expected']} | {entry['ok']} | {entry['missing']} | "
                      f"{entry['call_failed']} | {entry['parse_failed']} | {entry['stale_prompt']} | "
-                     f"{', '.join(entry['model_keys'])} |")
+                     f"{', '.join(entry['model_keys'])} | {served} |")
     lines.append("")
     for model, block in scores["models"].items():
         lines += [f"## {model}", "",
                   f"Probe fidelity: {block['probe_fidelity']} ({block['probe_fidelity_status']})",
                   f"Model unpinned: {block['model_unpinned']}",
+                  f"Sampling parameters ignored by the transport: {block['sampling_params_ignored']}"
+                  + (" (a CLI: temperature and max_tokens are not applied, so floor_sc is not "
+                     "temperature-matched)" if block["sampling_params_ignored"] else ""),
+                  "Characterization only: " + (", ".join(block["characterization_reasons"]) or "no"),
                   "Advisory: " + (", ".join(block["advisory_reasons"]) if block["advisory_reasons"] else "no"),
-                  f"A/A: mean {block['aa']['mean_signed']}, CI {block['aa']['ci']}"]
+                  f"A/A: mean {block['aa']['mean_signed']}, CI {block['aa']['ci']}, "
+                  f"CI contains 0: {block['aa']['ci_contains_zero']}"]
         for floor_arm, stats in block["floor"].items():
             lines.append(f"R vs {floor_arm} (descriptive): mean |dp| {stats['mean_abs_diff']}, CI {stats['ci']}, "
                          f"n targets {stats['n_targets']}")
@@ -651,7 +842,6 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--replicates", type=int, default=None)
         p.add_argument("--targets-per-bundle", type=int, default=None)
         p.add_argument("--study-id", default=None)
-        p.add_argument("--out-root", default=None)
         if name == "run":
             p.add_argument("--live", action="store_true")
             p.add_argument("--max-calls", type=int, default=None)
@@ -659,7 +849,6 @@ def build_parser() -> argparse.ArgumentParser:
         p.set_defaults(func=func)
     s = sub.add_parser("score")
     s.add_argument("--study-id", required=True)
-    s.add_argument("--out-root", default=None)
     s.set_defaults(func=cmd_score)
     return parser
 

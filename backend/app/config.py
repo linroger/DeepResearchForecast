@@ -625,7 +625,8 @@ class Config:
     # 为计划调用数上限（超出须 --max-calls）；EVAL_ARM_REPLICATES 每臂重复次数（<3 只算特征刻画）；
     # EVAL_TARGETS_PER_BUNDLE 每个评估包取的目标数；EVAL_PROBE_FIDELITY_MAX 为探针保真度门槛（R+M 与
     # 去市场影响前概率的平均绝对差超出则全部判定只作参考）；EVAL_INERT_MARGIN 为 inert 判定的 CI 上界；
-    # EVAL_BOOTSTRAP_RESAMPLES 为聚类自助重采样次数。
+    # EVAL_BOOTSTRAP_RESAMPLES 为聚类自助重采样次数。这三个评分参数与自助种子在 run 时预注册进 study.json，
+    # score 时取值与注册值不同则记为 override，且该次判定全部只作参考。
     VALUE_ADD_EVAL_ENABLED = os.environ.get('VALUE_ADD_EVAL_ENABLED', 'false').strip().lower() == 'true'
     EVAL_ARM_REPLICATES = int(os.environ.get('EVAL_ARM_REPLICATES', '3') or '3')
     EVAL_STUDY_MAX_CALLS = int(os.environ.get('EVAL_STUDY_MAX_CALLS', '600') or '600')
