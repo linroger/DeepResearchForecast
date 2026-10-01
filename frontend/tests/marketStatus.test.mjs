@@ -7,7 +7,8 @@ test('a failed, partial or timed-out lookup is incomplete (empty_reason or merge
   assert.equal(marketLookupIncomplete({ empty_reason: 'transport_failure' }), true)
   assert.equal(marketLookupIncomplete({ empty_reason: 'partial_transport_failure' }), true)
   assert.equal(marketLookupIncomplete({ empty_reason: 'inflight_timeout' }), true)
-  // The multi-track merge stores state 'inflight_timeout' beside empty_reason 'no_equivalent_market'.
+  // Legacy pair: before FU-6 the multi-track merge could store state 'inflight_timeout' beside
+  // empty_reason 'no_equivalent_market'; it must still read as incomplete.
   assert.equal(marketLookupIncomplete({ state: 'inflight_timeout', empty_reason: 'no_equivalent_market' }), true)
   assert.equal(marketLookupIncomplete({ state: 'partial_transport_failure' }), true)
   assert.equal(marketLookupIncomplete({ empty_reason: ' Partial_Transport_Failure ' }), true)

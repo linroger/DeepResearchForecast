@@ -93,15 +93,23 @@ def write_json_atomic(
 
     *fsync* is forwarded to :func:`write_text_atomic`; pass ``fsync=False`` at
     high-frequency status/progress sites only. (ATOMIC-1)
+
+    ``allow_nan=False`` refuses NaN / +/-Infinity with a
+    :class:`~app.utils.numeric.NonFiniteJSONError` (a ``ValueError``) naming the
+    offending JSON paths and *path*; nothing is written. (INFRA-4)
     """
-    write_text_atomic(
-        path,
-        json.dumps(
+    try:
+        text = json.dumps(
             obj,
             ensure_ascii=ensure_ascii,
             indent=indent,
             default=str,
             allow_nan=allow_nan,
-        ),
-        fsync=fsync,
-    )
+        )
+    except ValueError as exc:
+        if allow_nan:
+            raise
+        # Lazy: this leaf helper is imported by subprocess scripts; keep its import cheap.
+        from .numeric import raise_nonfinite
+        raise_nonfinite(obj, exc, artifact=path)
+    write_text_atomic(path, text, fsync=fsync)
