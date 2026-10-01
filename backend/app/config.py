@@ -2044,6 +2044,51 @@ class Config:
     # Forwarded to the v3 child.
     RESEARCH_SOURCE_DATE_TEXT_FALLBACK = os.environ.get(
         'RESEARCH_SOURCE_DATE_TEXT_FALLBACK', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    # TIME-13 official-data tools of the v3 research agents (deerflow_bridge/data_tools.py):
+    # a comma list of fred (macro_series: FRED/ALFRED series as published on the run's
+    # vintage date), sec_edgar (company_filings: a US SEC filer's statements as filed on
+    # or before the as-of date) or all.  A tool is bound only with its credential:
+    # FRED_API_KEY for fred, an SEC_EDGAR_USER_AGENT naming a contact address for
+    # sec_edgar.  Default empty: no tool is bound and the agents' tools object, prompts,
+    # sources.json, quantitative.json and meta are byte-identical to before.  Forwarded to
+    # the v3 child.
+    RESEARCH_DATA_TOOLS = os.environ.get('RESEARCH_DATA_TOOLS', '').strip().lower()
+    # TIME-13: the FRED API key (a secret: never forwarded explicitly, the research child
+    # inherits it from the environment; data_tools keeps it out of every result, cache file
+    # and log line).  Empty: macro_series is never bound.
+    FRED_API_KEY = os.environ.get('FRED_API_KEY', '').strip()
+    # TIME-13: the User-Agent SEC requires ('Name contact@domain'; inherited by the research
+    # child like the key).  Without an '@' company_filings is never bound.
+    SEC_EDGAR_USER_AGENT = os.environ.get('SEC_EDGAR_USER_AGENT', '').strip()
+    # TIME-13: at most this many deterministic rows (the structured values of the cited
+    # official-data sources, copied exactly) head quantitative.json, within its 60-row cap.
+    # Only read when data tools are bound, so the default changes nothing by itself; 0 adds
+    # none.  Forwarded to the v3 child.
+    try:
+        DATA_QUANT_ROWS_MAX = max(0, int(os.environ.get('DATA_QUANT_ROWS_MAX', '12') or '12'))
+    except ValueError:
+        DATA_QUANT_ROWS_MAX = 12
+    # TIME-10/11 vendor knobs (read by data_tools on every call, clamped there; empty =
+    # the module default), declared here so the parent forwards its own values to the v3
+    # child instead of whatever the child's environment holds.  They only matter once
+    # RESEARCH_DATA_TOOLS binds a tool.
+    try:
+        DATA_FRED_WINDOW_YEARS = int(os.environ.get('DATA_FRED_WINDOW_YEARS', '10') or '10')
+    except ValueError:
+        DATA_FRED_WINDOW_YEARS = 10
+    DATA_TOOLS_CACHE_DIR = os.environ.get('DATA_TOOLS_CACHE_DIR', '').strip()
+    try:
+        DATA_FRED_CACHE_TTL_H = float(os.environ.get('DATA_FRED_CACHE_TTL_H', '6') or '6')
+    except ValueError:
+        DATA_FRED_CACHE_TTL_H = 6.0
+    try:
+        DATA_EDGAR_CACHE_TTL_H = float(os.environ.get('DATA_EDGAR_CACHE_TTL_H', '24') or '24')
+    except ValueError:
+        DATA_EDGAR_CACHE_TTL_H = 24.0
+    try:
+        DATA_TOOL_TIMEOUT_S = float(os.environ.get('DATA_TOOL_TIMEOUT_S', '20') or '20')
+    except ValueError:
+        DATA_TOOL_TIMEOUT_S = 20.0
     # PAR-2：编排器级「多角度并行研究轨」。>1 时研究阶段并行跑 K 个 DeerFlowResearchRunner
     # 子进程，每个带角度特化前缀（轨1=基线证据扫描，即原始 brief 逐字；轨2=基率/参照类/历史
     # 类比；轨3=行为者激励+反面证伪+市场定价），各写入 handoff/track_<k>/，随后确定性合并回

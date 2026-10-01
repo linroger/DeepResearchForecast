@@ -2343,6 +2343,9 @@ def _synthesis_provider_unavailable(error: Any) -> bool:
 # child.  A work package that forwards a Config knob adds exactly one entry,
 # keeping each table alphabetical; every name must exist on Config and be
 # documented in .env.example (test_orchestrator_research_wiring checks both).
+# Credentials are never registered (no value of theirs is written by the
+# parent): the official-data tools' FRED_API_KEY and SEC_EDGAR_USER_AGENT
+# (TIME-13) reach the child with the inherited environment.
 RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
     ("MARKET_ANCHOR_PRICE_TIME", "bool"),
     ("PREDICTION_MARKETS_END_DATE_GATE", "bool"),
@@ -2353,9 +2356,16 @@ RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_SOURCE_TAXONOMY", "bool"),
 )
 RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
+    ("DATA_EDGAR_CACHE_TTL_H", "float"),
+    ("DATA_FRED_CACHE_TTL_H", "float"),
+    ("DATA_FRED_WINDOW_YEARS", "int"),
+    ("DATA_QUANT_ROWS_MAX", "int"),
+    ("DATA_TOOLS_CACHE_DIR", "str"),
+    ("DATA_TOOL_TIMEOUT_S", "float"),
     ("RECORD_MODEL_PROVENANCE", "bool"),
     ("RESEARCH_ABSENCE_DISCIPLINE", "bool"),
     ("RESEARCH_AS_OF_PIN", "bool"),
+    ("RESEARCH_DATA_TOOLS", "str"),
     ("RESEARCH_EVIDENCE_HEADERS", "bool"),
     ("RESEARCH_EVIDENCE_QUOTES", "str"),
     ("RESEARCH_EVIDENCE_SUPPORTS", "bool"),

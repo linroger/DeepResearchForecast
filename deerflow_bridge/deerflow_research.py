@@ -17049,6 +17049,12 @@ def main() -> int:
                        if key not in _SALVAGE_VOLATILE_META_KEYS},
                     **meta, "research_engine": "v3",
                     "salvage": {"mode": "extract_only", "engine": "legacy", "started_at": started_at}}
+            data_tools = meta.get("data_tools")
+            if isinstance(data_tools, dict):
+                # TIME-13: its quant-row counts describe the v3 quantitative.json the legacy
+                # extraction rewrites; the tool binding and call counts stay true.
+                meta["data_tools"] = {key: value for key, value in data_tools.items()
+                                      if not key.startswith("quant_rows_")}
             # verified_facts.json goes with its meta counts (above): it indexes the
             # v3 quantitative.json rows the legacy extraction rewrites, and the
             # parent SHA-manifests whatever the handoff holds.
