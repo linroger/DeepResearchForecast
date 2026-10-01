@@ -3019,3 +3019,103 @@ def test_pit_config_defaults_and_env_example():
     for line in ("# PIT_GATES=true ", "# PIT_SAME_DAY_POLICY=exclude ", "# PIT_UNDATED_POLICY=drop ",
                  "# PIT_PROVIDER_DATE_BOUNDS=true ", "# PIT_SEARCH_OVERFETCH=1 "):
         assert line in env_example, line
+
+
+# ── TIME-13: the official-data tool knobs reach a v3 child from Config; credentials are inherited ──
+
+_DATA_TOOL_KNOBS = {"DATA_EDGAR_CACHE_TTL_H": "float", "DATA_FRED_CACHE_TTL_H": "float",
+                    "DATA_FRED_WINDOW_YEARS": "int", "DATA_QUANT_ROWS_MAX": "int", "DATA_TOOLS_CACHE_DIR": "str",
+                    "DATA_TOOL_TIMEOUT_S": "float", "RESEARCH_DATA_TOOLS": "str"}
+
+
+def test_runner_forwards_the_data_tool_knobs_from_config_to_v3_only(monkeypatch, tmp_path):
+    """TIME-13: Config decides RESEARCH_DATA_TOOLS and the six DATA_* knobs of a v3 child, never
+    ambient env.  FRED_API_KEY and SEC_EDGAR_USER_AGENT are never written by the parent: the
+    child inherits them with the environment (no Config value of theirs is copied)."""
+    registered = dict(_po.RESEARCH_CHILD_V3_KNOBS)
+    assert {name: registered.get(name) for name in _DATA_TOOL_KNOBS} == _DATA_TOOL_KNOBS
+    assert not {"FRED_API_KEY", "SEC_EDGAR_USER_AGENT"} & {name for name, _ in _registry_entries()}
+    for name in ("default", "flipped", "legacy"):
+        (tmp_path / name).mkdir()
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "v3", raising=False)
+    for name in (*_DATA_TOOL_KNOBS, "FRED_API_KEY", "SEC_EDGAR_USER_AGENT"):
+        monkeypatch.delenv(name, raising=False)
+    # The hermetic Config defaults: no tool, data_tools' own vendor defaults, no credential.
+    assert (_po.Config.RESEARCH_DATA_TOOLS, _po.Config.DATA_QUANT_ROWS_MAX, _po.Config.DATA_FRED_WINDOW_YEARS,
+            _po.Config.DATA_TOOLS_CACHE_DIR, _po.Config.DATA_FRED_CACHE_TTL_H, _po.Config.DATA_EDGAR_CACHE_TTL_H,
+            _po.Config.DATA_TOOL_TIMEOUT_S, _po.Config.FRED_API_KEY, _po.Config.SEC_EDGAR_USER_AGENT) == (
+        "", 12, 10, "", 6.0, 24.0, 20.0, "", "")
+    child = _launch_capturing_child(monkeypatch, tmp_path / "default", timeout=900)
+    assert {name: child["env"][name] for name in _DATA_TOOL_KNOBS} == {
+        "DATA_EDGAR_CACHE_TTL_H": "24.0", "DATA_FRED_CACHE_TTL_H": "6.0", "DATA_FRED_WINDOW_YEARS": "10",
+        "DATA_QUANT_ROWS_MAX": "12", "DATA_TOOLS_CACHE_DIR": "", "DATA_TOOL_TIMEOUT_S": "20.0",
+        "RESEARCH_DATA_TOOLS": ""}
+    assert "FRED_API_KEY" not in child["env"] and "SEC_EDGAR_USER_AGENT" not in child["env"]
+
+    configured = {"RESEARCH_DATA_TOOLS": "fred,sec_edgar", "DATA_QUANT_ROWS_MAX": 5, "DATA_FRED_WINDOW_YEARS": 3,
+                  "DATA_TOOLS_CACHE_DIR": str(tmp_path / "data_cache"), "DATA_FRED_CACHE_TTL_H": 1.5,
+                  "DATA_EDGAR_CACHE_TTL_H": 2.0, "DATA_TOOL_TIMEOUT_S": 9.0}
+    for name, value in configured.items():
+        monkeypatch.setattr(_po.Config, name, value)
+        monkeypatch.setenv(name, "ambient")
+    monkeypatch.setattr(_po.Config, "FRED_API_KEY", "config-value-is-never-copied")
+    monkeypatch.setenv("FRED_API_KEY", "inherited-key")
+    monkeypatch.setenv("SEC_EDGAR_USER_AGENT", "DRF desk@example.com")
+    child = _launch_capturing_child(monkeypatch, tmp_path / "flipped", timeout=900)
+    assert {name: child["env"][name] for name in _DATA_TOOL_KNOBS} == {
+        "RESEARCH_DATA_TOOLS": "fred,sec_edgar", "DATA_QUANT_ROWS_MAX": "5", "DATA_FRED_WINDOW_YEARS": "3",
+        "DATA_TOOLS_CACHE_DIR": str(tmp_path / "data_cache"), "DATA_FRED_CACHE_TTL_H": "1.5",
+        "DATA_EDGAR_CACHE_TTL_H": "2.0", "DATA_TOOL_TIMEOUT_S": "9.0"}
+    assert (child["env"]["FRED_API_KEY"], child["env"]["SEC_EDGAR_USER_AGENT"]) == (
+        "inherited-key", "DRF desk@example.com")
+
+    for name in _DATA_TOOL_KNOBS:
+        monkeypatch.delenv(name)
+    monkeypatch.setattr(_po.Config, "RESEARCH_ENGINE", "legacy", raising=False)
+    child = _launch_capturing_child(monkeypatch, tmp_path / "legacy", timeout=900)
+    assert not any(name in child["env"] for name in _DATA_TOOL_KNOBS)
+
+
+_DATA_TOOL_CONFIG_CHILD = r"""
+import importlib, json, os, sys
+import dotenv
+dotenv.load_dotenv = lambda *a, **k: False  # the repo .env must not decide
+import app.config as config_module
+names = ("RESEARCH_DATA_TOOLS", "DATA_QUANT_ROWS_MAX", "DATA_FRED_WINDOW_YEARS", "DATA_TOOLS_CACHE_DIR",
+         "DATA_FRED_CACHE_TTL_H", "DATA_EDGAR_CACHE_TTL_H", "DATA_TOOL_TIMEOUT_S", "FRED_API_KEY",
+         "SEC_EDGAR_USER_AGENT")
+out = []
+for case in json.loads(sys.argv[1]):
+    for name in names:
+        if case.get(name) is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = case[name]
+    config = importlib.reload(config_module).Config
+    out.append([getattr(config, name) for name in names])
+print("<<<JSON>>>" + json.dumps(out))
+"""
+
+
+def test_data_tool_config_parsing():
+    """The TIME-13 knobs' Config parse (a clean child process: app.config loads the repo .env at
+    import): blank or unparseable numbers keep their defaults, text knobs are stripped."""
+    import subprocess
+    import sys
+
+    cases = [
+        ({}, ["", 12, 10, "", 6.0, 24.0, 20.0, "", ""]),
+        ({"RESEARCH_DATA_TOOLS": " Fred, SEC_EDGAR ", "DATA_QUANT_ROWS_MAX": "-3", "DATA_FRED_WINDOW_YEARS": "5",
+          "DATA_TOOLS_CACHE_DIR": " /tmp/x ", "DATA_FRED_CACHE_TTL_H": "0.5", "DATA_EDGAR_CACHE_TTL_H": "48",
+          "DATA_TOOL_TIMEOUT_S": "7", "FRED_API_KEY": " k ", "SEC_EDGAR_USER_AGENT": " DRF a@b.c "},
+         ["fred, sec_edgar", 0, 5, "/tmp/x", 0.5, 48.0, 7.0, "k", "DRF a@b.c"]),
+        ({"DATA_QUANT_ROWS_MAX": "lots", "DATA_FRED_WINDOW_YEARS": "", "DATA_FRED_CACHE_TTL_H": "soon",
+          "DATA_EDGAR_CACHE_TTL_H": "", "DATA_TOOL_TIMEOUT_S": "x"},
+         ["", 12, 10, "", 6.0, 24.0, 20.0, "", ""]),
+    ]
+    backend = Path(__file__).resolve().parents[1]
+    proc = subprocess.run([sys.executable, "-c", _DATA_TOOL_CONFIG_CHILD, json.dumps([case for case, _ in cases])],
+                          cwd=str(backend), capture_output=True, text=True, timeout=120)
+    assert proc.returncode == 0, proc.stderr
+    line = [ln for ln in proc.stdout.splitlines() if ln.startswith("<<<JSON>>>")][-1]
+    assert json.loads(line[len("<<<JSON>>>"):]) == [expected for _, expected in cases]

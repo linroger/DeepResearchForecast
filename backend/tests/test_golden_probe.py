@@ -1,0 +1,955 @@
+"""EVAL-12 (P03): golden-set contamination probes (backend/scripts/golden_probe.py).
+
+Offline: a scripted client stands in for the backbone; no network, no ledger write.
+"""
+
+import json
+import os
+import sys
+from types import SimpleNamespace
+
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
+
+import golden_eval as ge  # noqa: E402
+import golden_probe as gp  # noqa: E402
+
+from app.config import Config  # noqa: E402
+from app.services import golden_set  # noqa: E402
+
+_, QUESTIONS = ge.load_golden_file(ge.GOLDEN_PATH)
+META = gp.load_meta(gp.META_PATH)
+BY_ID = {q["id"]: q for q in QUESTIONS}
+
+
+class ScriptedClient:
+    """chat_json answers from ``answer(arm, question_id)``; records every call."""
+
+    def __init__(self, answer):
+        self.answer = answer
+        self.calls = []
+        self.model = "scripted-1"
+
+    def chat_json(self, messages, temperature=0.3, max_tokens=4096, tier=None, *, label=None,
+                  allow_non_dict=False):
+        arm = (label or "").split(":")[-1]
+        user = messages[-1]["content"]
+        qid = next(q["id"] for q in QUESTIONS
+                   if gp.probe_view(q, META.get(q["id"]))["question"] in user)
+        self.calls.append((arm, qid, temperature, max_tokens))
+        return self.answer(arm, qid)
+
+
+def _honest(arm, qid):
+    """A model that forecasts 0.6/0.3 by outcome and does not remember anything."""
+    yes = golden_set.expected_label(BY_ID[qid]) == "YES"
+    if arm == "nd":
+        return {"p_yes": 0.62 if yes else 0.31}
+    return {"knows": False, "stated_outcome": "UNKNOWN", "details": ""}
+
+
+def _run(tmp_path, answer=_honest, *, arms=gp.ARMS, max_calls=200, closed_book=True, questions=QUESTIONS):
+    client = ScriptedClient(answer)
+    report = gp.run_probe(questions, META, client=client, provider="deepseek", model="scripted-1",
+                          out_dir=str(tmp_path / "probe"), golden_sha256="g" * 64, arms=arms,
+                          max_calls=max_calls, confident_p=0.85, closed_book_attested=closed_book)
+    return report, client
+
+
+# ------------------------------------------------------------------ prompts and meta
+@pytest.mark.parametrize("arm", gp.ARMS)
+def test_prompts_never_contain_markers_or_resolution_note(arm):
+    for q in QUESTIONS:
+        messages = gp.build_messages(arm, q, META[q["id"]])
+        rendered = "\n".join(m["content"] for m in messages)
+        assert gp.contains_marker(rendered, META[q["id"]]["leak_markers"]) is None, q["id"]
+        gp.assert_answer_free(messages, META[q["id"]]["leak_markers"])
+        note = str(q.get("resolution_note") or "").strip()
+        if note:
+            assert note not in rendered, q["id"]
+        assert "resolved_outcome" not in rendered and "resolution_note" not in rendered
+
+
+def test_meta_file_wellformed():
+    assert gp.validate_meta(META, QUESTIONS) == []
+    assert set(META) == set(BY_ID)
+    for q in QUESTIONS:
+        if q.get("hindsight_framed"):
+            assert META[q["id"]].get("probe_question")
+    # a marker that the question itself shows is refused
+    bad = json.loads(json.dumps(META))
+    bad["us-senate-2024-gop"]["leak_markers"] = ["51"]
+    assert any("us-senate-2024-gop" in e for e in gp.validate_meta(bad, QUESTIONS))
+    bad = json.loads(json.dumps(META))
+    del bad["openai-gpt4o-2024"]["probe_question"]
+    assert any("hindsight" in e for e in gp.validate_meta(bad, QUESTIONS))
+
+
+def _meta_errors(qid, **row):
+    bad = json.loads(json.dumps(META))
+    bad[qid].update(row)
+    for key in [k for k, v in row.items() if v is None]:
+        del bad[qid][key]
+    return [e for e in gp.validate_meta(bad, QUESTIONS) if e.startswith(qid + ":")]
+
+
+@pytest.mark.parametrize("row,code", [
+    # review round 3: a rewording replaces the golden text in both prompts, so it passes the
+    # EVAL-9 structural leak lint too, not only the marker check
+    ({"probe_resolution_criteria": "YES if the Conservatives win a plurality of seats. They finished second."},
+     "extra_sentence in resolution_criteria"),
+    ({"probe_question": "Will the Conservative Party win the most seats (it did not)?"},
+     "unreviewed_parenthetical in question"),
+    ({"probe_question": "Will the Conservative Party win the most seats in July 2024"},
+     "question_not_ending_with_question_mark in question"),
+    ({"probe_resolution_criteria": "The Conservatives win a plurality of seats."}, "criteria_not_yes_if"),
+    ({"probe_question": "  "}, "probe_question must be a non-blank string"),
+    ({"probe_resolution_criteria": 5}, "probe_resolution_criteria must be a non-blank string"),
+])
+def test_probe_rewordings_pass_the_golden_leak_lint(row, code):
+    errors = _meta_errors("uk-ge-2024-tory", **row)
+    assert any(code in e for e in errors), errors
+    # the same lint is what the shipped rewording passes
+    assert _meta_errors("openai-gpt4o-2024") == []
+
+
+def test_meta_needs_rationale_and_never_an_invented_marker():
+    assert all(META[q["id"]]["marker_rationale"].strip() for q in QUESTIONS)
+    uninformative = sorted(qid for qid, row in META.items() if row.get("recall_uninformative"))
+    assert uninformative == ["btc-spot-etf-2024", "fed-2024-11-cut", "fed-2025-01-cut"]
+    assert all(META[qid]["leak_markers"] == [] for qid in uninformative)
+    # an empty list needs the explicit flag; the flag forbids markers; the rationale is required
+    assert any("recall_uninformative: true" in e for e in _meta_errors("fed-2024-11-cut", recall_uninformative=None))
+    assert any("carries no leak_markers" in e for e in _meta_errors("us-senate-2024-gop", recall_uninformative=True))
+    assert any("true or false" in e for e in _meta_errors("fed-2024-11-cut", recall_uninformative="yes"))
+    assert any("marker_rationale" in e for e in _meta_errors("us-senate-2024-gop", marker_rationale=" "))
+    assert any("marker_rationale" in e for e in _meta_errors("us-senate-2024-gop", marker_rationale=None))
+    assert any("non-blank" in e for e in _meta_errors("us-senate-2024-gop", leak_markers=["53", " "]))
+
+
+@pytest.mark.parametrize("qid,outcome,details", [
+    # facts public at as_of, the standard 25bp step, players of the named team, a month the
+    # recall window gives away: a model that remembers nothing can say all of these
+    ("fed-2025-01-cut", "NO", "The FOMC held the target range at 4.25%-4.50%."),
+    ("fed-2024-11-cut", "YES", "The Fed cut by 25 basis points to 4.50%-4.75%."),
+    ("fed-2024-12-cut", "YES", "The Fed cut by 25bp to 4.25%-4.50%."),
+    ("fr-legis-2024-rn-majority", "NO", "The New Popular Front came first and RN fell short of a majority."),
+    ("ucl-2024-real-madrid", "YES", "Real Madrid won the final; Carvajal and Vinicius starred."),
+    ("sb-lviii-2024-chiefs", "YES", "Mahomes and Hardman led the Chiefs past the 49ers."),
+    ("mlb-2024-dodgers", "YES", "Freddie Freeman and Shohei Ohtani led the Dodgers to the title."),
+    ("euro-2024-spain", "YES", "Oyarzabal and Yamal helped Spain lift the trophy."),
+    ("nvidia-3t-2024", "YES", "Nvidia crossed $3 trillion in June 2024."),
+    ("btc-spot-etf-2024", "YES", "The SEC approved spot bitcoin ETFs on January 10, 2024, the ARK deadline."),
+    ("trump-ny-conviction-2024", "YES", "Trump was convicted on 34 felony counts of falsifying records."),
+    ("spacex-starship-catch-2024", "YES", "SpaceX caught the Super Heavy booster on Flight 5."),
+    # review round 4: the Democrats held 47 seats of their own at as_of (51 with independents)
+    ("us-senate-2024-dem-hold", "NO", "Democrats held 47 seats and four independents caucused with them."),
+])
+def test_as_of_knowledge_is_never_a_marker(qid, outcome, details):
+    recall = {"knows": True, "stated_outcome": outcome, "details": details}
+    flags = gp.question_flags(BY_ID[qid], META[qid]["leak_markers"], None, recall, 0.85)
+    assert flags["likely_memorized"] is False and flags["recall_claimed"] is True
+
+
+@pytest.mark.parametrize("qid,details", [
+    ("fed-2024-12-cut", "Cut 25bp; Cleveland's Beth Hammack dissented."),
+    ("nvidia-3t-2024", "Nvidia closed above $3 trillion on June 5."),
+    ("fed-2024-09-cut", "The Fed opened with a half-point cut."),
+    ("ucl-2024-real-madrid", "Real Madrid beat Dortmund at Wembley."),
+    # the common wordings of a realized size or count (review round 2)
+    ("fed-2024-09-cut", "The FOMC cut by half a percentage point."),
+    ("fed-2024-09-cut", "A 50-basis-point cut opened the easing cycle."),
+    ("fed-2024-09-cut", "Rates were lowered 0.5 percentage points."),
+    ("fed-2024-09-cut", "A half-percentage-point reduction."),
+    ("oscars-2024-oppenheimer", "Oppenheimer won seven Academy Awards, Best Picture among them."),
+    ("oscars-2024-oppenheimer", "It took seven total Oscars."),
+    ("oscars-2024-oppenheimer", "Oppenheimer led the night with seven wins."),
+    # day-first and ISO dates, colon scores and the final's opponent (review round 4)
+    ("nvidia-3t-2024", "Nvidia first closed above $3 trillion on 5 June 2024."),
+    ("nvidia-3t-2024", "It crossed the mark on 2024-06-05."),
+    ("trump-ny-conviction-2024", "The jury convicted him on the 30th of May."),
+    ("apple-iphone16-2024", "Apple unveiled the iPhone 16 on 9 Sept. 2024."),
+    ("btc-100k-2024", "Bitcoin passed $100k on Dec 5th."),
+    ("ucl-2024-real-madrid", "Real Madrid won the final 2:0."),
+    ("sb-lviii-2024-chiefs", "The Chiefs won 25:22."),
+    ("euro-2024-spain", "Spain won the final 2:1."),
+    ("euro-2024-spain", "Spain beat England in Berlin."),
+])
+def test_realized_details_unknowable_at_as_of_still_flag(qid, details):
+    recall = {"knows": True, "stated_outcome": "YES", "details": details}
+    assert gp.question_flags(BY_ID[qid], META[qid]["leak_markers"], None, recall, 0.85)["likely_memorized"] is True
+
+
+def test_recall_window_end_is_a_coarse_month_end():
+    """Review round 2: the window still covers resolution_date + 31 days, but it ends on a
+    month end, so an exact-date marker equal to the resolution date (8 rows) cannot be
+    computed back from the prompt."""
+    from datetime import date, timedelta
+    date_rows = 0
+    for q in QUESTIONS:
+        floor = date.fromisoformat(q["resolution_date"]) + timedelta(days=gp.RECALL_WINDOW_DAYS)
+        end = date.fromisoformat(gp._recall_until(q))
+        assert floor <= end < floor + timedelta(days=31) and (end + timedelta(days=1)).day == 1, q["id"]
+        # any resolution day whose window lands in the same month renders the same prompt
+        for shift in (-1, 1):
+            moved = dict(q, resolution_date=(date.fromisoformat(q["resolution_date"])
+                                             + timedelta(days=shift)).isoformat())
+            if (floor + timedelta(days=shift)).month == floor.month:
+                assert gp.build_messages("recall", moved, META[q["id"]]) == \
+                    gp.build_messages("recall", q, META[q["id"]]), q["id"]
+        resolved = date.fromisoformat(q["resolution_date"])
+        spelled = f"{resolved.strftime('%B').lower()} {resolved.day}"
+        date_rows += spelled in META[q["id"]]["leak_markers"]
+    assert date_rows == 8
+    assert gp._recall_until({"as_of_date": "2024-01-15"}) == "2025-01-31"
+    assert gp._recall_until({"resolution_date": "2024-01-31"}) == "2024-03-31"
+    assert gp._recall_until({}) == "the present"
+
+
+def test_markers_match_whole_normalized_tokens():
+    assert gp.contains_marker("Republicans won 53 seats.", ["53"]) == "53"
+    assert gp.contains_marker("Planned for 2053.", ["53"]) is None
+    assert gp.contains_marker("Final score 2–0 to Madrid", ["2-0"]) == "2-0"   # en dash
+    assert gp.contains_marker("Score 12-0", ["2-0"]) is None
+    assert gp.contains_marker("THE  Half   Point cut", ["half point"]) == "half point"
+    # review round 4: never inside a decimal on either side, still at a sentence end
+    assert gp.contains_marker('{"p_yes": 0.53}', ["53"]) is None
+    assert gp.contains_marker("won 53.5% of the vote", ["53"]) is None
+    assert gp.contains_marker("Republicans won 53.", ["53"]) == "53"
+    assert gp.contains_marker("cut to 4.75%-5.00%", ["4.75"]) == "4.75"
+    assert gp.contains_marker("cut to 14.75%", ["4.75"]) is None
+    # a colon between digits reads as a dash, but a clock time is no score
+    assert gp.contains_marker("Spain beat England 2:1", ["2-1"]) == "2-1"
+    assert gp.contains_marker("kick-off at 2:10 pm", ["2-1"]) is None
+    # an ordinal suffix (and an 'of' after it) is dropped
+    assert gp.contains_marker("on June 5th, 2024", ["june 5"]) == "june 5"
+    assert gp.contains_marker("on the 5th of June", ["5 june"]) == "5 june"
+    assert gp.contains_marker("5ᵗʰ June 2024", ["5 june"]) == "5 june"       # NFKC superscript
+    assert gp.contains_marker("on June 15th", ["june 5"]) is None
+    # review round 5: never inside a digit group or a decimal comma; a comma and a space split
+    assert gp.contains_marker("Republicans won by 53,000 votes", ["53"]) is None
+    assert gp.contains_marker("9,411,000 ballots", ["411"]) is None
+    assert gp.contains_marker('{"p_yes": "0,53"}', ["53"]) is None
+    assert gp.contains_marker("won 53, lost 47", ["53"]) == "53"
+    assert gp.contains_marker("won 53, lost 47", ["47"]) == "47"
+    # an ISO date-time holds its date; the spaces around a dash between digits close up
+    assert gp.normalize("2024-06-05T00:00:00Z") == "2024-06-05 00-00-00z"
+    assert gp.contains_marker("resolved 2024-06-05T00:00:00Z", ["2024-06-05"]) == "2024-06-05"
+    assert gp.contains_marker("Spain beat England 2 - 1", ["2-1"]) == "2-1"
+    assert gp.contains_marker("Spain beat England 2 –  1", ["2-1"]) == "2-1"     # en dash, two spaces
+    assert gp.contains_marker("Spain beat England 12 - 1", ["2-1"]) is None
+    assert gp.contains_marker("Spain beat England 2 - 10", ["2-1"]) is None
+
+
+def test_exact_dates_are_spelled_month_first_day_first_and_iso():
+    """Review round 4: every row whose markers state its resolution date month-first also
+    carries the day-first and ISO forms, so '5 June 2024' and '2024-06-05' match too."""
+    from datetime import date
+    rows = 0
+    for q in QUESTIONS:
+        resolved = date.fromisoformat(q["resolution_date"])
+        month, day = resolved.strftime("%B").lower(), resolved.day
+        markers = META[q["id"]]["leak_markers"]
+        if f"{month} {day}" in markers:
+            rows += 1
+            assert {f"{day} {month}", resolved.isoformat()} <= set(markers), q["id"]
+            assert gp.contains_marker(f"on {day} {month.title()} {resolved.year}", markers), q["id"]
+            assert gp.contains_marker(f"date: {resolved.isoformat()}", markers), q["id"]
+            assert gp.contains_marker(f"at {resolved.isoformat()}T23:59:00Z", markers), q["id"]
+    assert rows == 8
+
+
+def test_leak_guard_blocks_with_zero_calls(tmp_path):
+    meta = json.loads(json.dumps(META))
+    q = BY_ID["us-senate-2024-gop"]
+    meta[q["id"]]["leak_markers"] = ["Senate"]          # shown by the question itself
+    client = ScriptedClient(_honest)
+    report = gp.run_probe([q], meta, client=client, provider="deepseek", model="m",
+                          out_dir=str(tmp_path), golden_sha256="g" * 64, closed_book_attested=True)
+    assert client.calls == []
+    assert report["questions"][0]["arms"] == {"nd": "prompt_leak_blocked", "recall": "prompt_leak_blocked"}
+    assert report["summary"]["status"] == "inconclusive"
+    assert "nd_prompt_leak_blocked" in report["summary"]["inconclusive_reasons"]
+
+
+# ------------------------------------------------------------------ parsers
+@pytest.mark.parametrize("reply,expected", [
+    ({"p_yes": 0.7}, 0.7), ({"p_yes": "85%"}, 0.85), ({"p_yes": "0.2"}, 0.2), ({"p_yes": 0}, 0.0),
+    ({"p_yes": 1.2}, None), ({"p_yes": 85}, None), ({"p_yes": True}, None), ({"p_yes": "n/a"}, None),
+    ({"p_yes": None}, None), ({}, None), ("I cannot forecast this", None), ({"p_yes": float("nan")}, None),
+])
+def test_parser_never_defaults(reply, expected):
+    assert gp.parse_nd(reply) == expected
+
+
+def test_recall_parser_is_strict_and_keeps_all_details():
+    assert gp.parse_recall({"knows": True, "stated_outcome": "yes", "details": " x\n" * 100}) == {
+        "knows": True, "stated_outcome": "YES", "details": " ".join(["x"] * 100)}
+    assert gp.parse_recall({"knows": False, "stated_outcome": "PROBABLY"}) is None
+    assert gp.parse_recall({"knows": True, "stated_outcome": "Yes - Labour won"}) is None
+    assert gp.parse_recall({"knows": True}) is None
+    assert gp.parse_recall("UNKNOWN") is None
+
+
+@pytest.mark.parametrize("reply,knows,stated", [
+    # review round 3: ``knows`` only feeds the weak recall_claimed, so it never rejects a reply
+    ({"knows": "yes", "stated_outcome": "YES"}, True, "YES"),
+    ({"knows": "No", "stated_outcome": "UNKNOWN"}, False, "UNKNOWN"),
+    ({"knows": "maybe", "stated_outcome": "YES"}, None, "YES"),
+    ({"knows": 1, "stated_outcome": "NO"}, None, "NO"),
+    ({"stated_outcome": "NO"}, None, "NO"),
+    ({"knows": True, "stated_outcome": " YES. "}, True, "YES"),
+    ({"knows": False, "stated_outcome": "unknown!"}, False, "UNKNOWN"),
+])
+def test_recall_parser_reads_knows_loosely(reply, knows, stated):
+    assert gp.parse_recall(reply) == {"knows": knows, "stated_outcome": stated, "details": ""}
+    flags = gp.question_flags(BY_ID["uk-ge-2024-labour"], ["411"], None, gp.parse_recall(reply), 0.85)
+    assert flags["recall_claimed"] is (knows is True or stated != "UNKNOWN")
+
+
+def test_marker_after_the_word_limit_still_flags():
+    q = BY_ID["uk-ge-2024-labour"]
+    details = " ".join(["filler"] * gp.DETAILS_MAX_WORDS) + " Labour won 411 seats"
+    recall = gp.parse_recall({"knows": True, "stated_outcome": "YES", "details": details})
+    assert recall["details"] == details
+    assert gp.question_flags(q, META[q["id"]]["leak_markers"], None, recall, 0.85)["likely_memorized"] is True
+
+
+@pytest.mark.parametrize("repair_turn", [True, False])
+def test_refusal_through_the_real_client_is_parse_failed(tmp_path, monkeypatch, repair_turn):
+    from app.utils.llm_client import LLMClient
+    monkeypatch.setattr(Config, "LLM_JSON_REPAIR_TURN", repair_turn, raising=False)
+    client = LLMClient(provider="deepseek", api_key="x", pinned=True, use_cache=False)
+    sent = []
+
+    def refuse(*args, **kwargs):
+        sent.append(kwargs.get("messages"))
+        return "I cannot forecast this."
+    client.chat = refuse
+    report = gp.run_probe([BY_ID["uk-ge-2024-labour"]], META, client=client, provider="deepseek",
+                          model="deepseek-chat", out_dir=str(tmp_path), golden_sha256="g" * 64,
+                          closed_book_attested=True)
+    assert report["questions"][0]["arms"] == {"nd": "parse_failed", "recall": "parse_failed"}
+    assert report["cost"]["calls"] == 4 and len(sent) == 4          # the repair attempt counts per arm
+    arm = json.load(open(tmp_path / "arms" / "uk-ge-2024-labour" / "nd.json"))
+    assert arm["status"] == "parse_failed" and arm["raw_excerpt"] == "I cannot forecast this."
+    assert arm["reply_text"] == "I cannot forecast this.\nI cannot forecast this."   # both attempts kept
+    assert client.chat is refuse and "chat_json" not in vars(client)   # metering undone
+
+
+def test_transport_errors_stay_call_failed(tmp_path):
+    def boom(arm, qid):
+        raise (ConnectionError("reset") if arm == "nd" else ValueError("LLM_FALLBACK_REASONING_EFFORT must be"))
+    report, _ = _run(tmp_path, boom, questions=[BY_ID["uk-ge-2024-labour"]])
+    assert report["questions"][0]["arms"] == {"nd": "call_failed", "recall": "call_failed"}
+    arm = json.load(open(tmp_path / "probe" / "arms" / "uk-ge-2024-labour" / "nd.json"))
+    assert arm["raw_excerpt"] == "ConnectionError: reset"
+
+
+# ------------------------------------------------------------------ flags and verdicts
+def test_recall_hit_requires_marker():
+    q = BY_ID["us-senate-2024-gop"]
+    markers = META[q["id"]]["leak_markers"]
+    bare = gp.question_flags(q, markers, None, {"knows": True, "stated_outcome": "YES", "details": "they won"},
+                             0.85)
+    assert bare["likely_memorized"] is False and bare["recall_claimed"] is True
+    hit = gp.question_flags(q, markers, None,
+                            {"knows": True, "stated_outcome": "YES", "details": "Republicans won 53 seats"}, 0.85)
+    assert hit["likely_memorized"] is True
+    wrong = gp.question_flags(q, markers, None,
+                              {"knows": True, "stated_outcome": "NO", "details": "they had 53 seats"}, 0.85)
+    assert wrong["likely_memorized"] is False
+    assert gp.question_flags(q, markers, 0.9, None, 0.85)["nd_confident_correct"] is True
+    assert gp.question_flags(BY_ID["uk-ge-2024-tory"], [], 0.1, None, 0.85)["nd_confident_correct"] is True
+
+
+def test_memorized_answers_flag_the_set(tmp_path):
+    def remembers(arm, qid):
+        if arm == "recall" and qid == "uk-ge-2024-labour":
+            return {"knows": True, "stated_outcome": "YES", "details": "Labour won 411 seats in a landslide"}
+        return _honest(arm, qid)
+    report, _ = _run(tmp_path, remembers)
+    assert report["summary"]["status"] == "flagged"
+    assert report["summary"]["flagged_ids"] == ["uk-ge-2024-labour"]
+    # review round 3: the weak list holds correct claims without a marker; the flagged row is not one
+    assert report["summary"]["weak_signals"]["recall_claimed"] == ["uk-ge-2024-labour"]
+    assert report["summary"]["weak_signals"]["recall_claimed_correct"] == []
+    assert report["summary"]["weak_signals"]["recall_unverified_marker"] == []
+    assert report["summary"]["weak_signals"]["nd_unverified_marker"] == []
+    assert report["summary"]["inconclusive_reasons"] == []
+
+
+LABOUR = "uk-ge-2024-labour"
+
+
+def _labour_recall(reply):
+    """Honest everywhere, except the uk-ge-2024-labour recall arm, which returns ``reply``."""
+    def answer(arm, qid):
+        return reply if (arm == "recall" and qid == LABOUR) else _honest(arm, qid)
+    return answer
+
+
+@pytest.mark.parametrize("reply", [
+    {"knows": "yes", "stated_outcome": "YES", "details": "Labour won 411 seats"},
+    {"stated_outcome": "YES", "details": "Labour won 411 seats"},
+    {"knows": True, "stated_outcome": "YES.", "details": "Labour won 411 seats"},
+])
+def test_off_schema_knows_or_outcome_still_flags(tmp_path, reply):
+    """Review round 3: a correct outcome with a marker in its details is not lost over a
+    ``knows`` given as a string or left out, or an outcome written 'YES.'."""
+    report, _ = _run(tmp_path, _labour_recall(reply))
+    row = next(r for r in report["questions"] if r["question_id"] == LABOUR)
+    assert row["arms"]["recall"] == "ok" and row["flags"]["likely_memorized"] is True
+    assert row["recall_unverified_marker"] is None
+    assert report["summary"]["status"] == "flagged" and report["summary"]["flagged_ids"] == [LABOUR]
+
+
+@pytest.mark.parametrize("reply,arm_status", [
+    # unparseable: the outcome is not a bare YES/NO/UNKNOWN, or the reply is no object
+    ({"knows": True, "stated_outcome": "Yes - Labour won", "details": "Labour won 411 seats"}, "parse_failed"),
+    ("Labour won 411 seats, so the answer is YES.", "parse_failed"),
+    ({"answer": ["YES", "Labour won 411 seats"]}, "parse_failed"),
+    # parsed, but the marker is outside details or beside a wrong or UNKNOWN outcome
+    ({"knows": True, "stated_outcome": "YES", "details": "A landslide.", "seats": 411}, "ok"),
+    ({"knows": True, "stated_outcome": "NO", "details": "Labour won 411 seats"}, "ok"),
+    ({"knows": False, "stated_outcome": "UNKNOWN", "details": "Perhaps 411 seats"}, "ok"),
+])
+def test_marker_in_any_recall_reply_is_never_clean(tmp_path, reply, arm_status):
+    """Review round 3 (fail closed): a recall reply that names a curated marker but is not a
+    parsed correct outcome with the marker in its details is not flagged, but the set is
+    never none_detected, and the row says which marker it named."""
+    report, _ = _run(tmp_path, _labour_recall(reply))
+    row = next(r for r in report["questions"] if r["question_id"] == LABOUR)
+    assert row["arms"]["recall"] == arm_status and row["flags"]["likely_memorized"] is False
+    assert row["recall_unverified_marker"] == "411"
+    summary = report["summary"]
+    assert summary["status"] == "inconclusive" and summary["flagged_ids"] == []
+    assert summary["inconclusive_reasons"] == ["recall_unverified_marker"]
+    assert summary["weak_signals"]["recall_unverified_marker"] == [LABOUR]
+    arm = json.load(open(tmp_path / "probe" / "arms" / LABOUR / "recall.json"))
+    assert arm["status"] == arm_status and "411" in arm["reply_text"]
+
+
+def _real_client(monkeypatch, replies, repair_turn=True, arm_qid=("recall", LABOUR)):
+    """An LLMClient whose chat() answers honestly, except one (arm, question) pair, by default
+    the uk-ge-2024-labour recall arm: its n-th attempt returns (or raises) ``replies[n]``."""
+    from app.utils.llm_client import LLMClient
+    monkeypatch.setattr(Config, "LLM_JSON_REPAIR_TURN", repair_turn, raising=False)
+    client = LLMClient(provider="deepseek", api_key="x", pinned=True, use_cache=False)
+    attempts = []
+
+    def chat(*args, **kwargs):
+        user = kwargs["messages"][1]["content"]
+        qid = next(q["id"] for q in QUESTIONS if gp.probe_view(q, META[q["id"]])["question"] in user)
+        arm = "recall" if user.startswith("What happened") else "nd"
+        if (arm, qid) != arm_qid:
+            return json.dumps(_honest(arm, qid))
+        attempts.append(kwargs["messages"])
+        reply = replies[len(attempts) - 1]
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+    client.chat = chat
+    return client, attempts
+
+
+PROSE = "Labour won the July 2024 election in a landslide with 411 seats, so the answer is YES."
+
+
+@pytest.mark.parametrize("repair_turn,replies,arm_status", [
+    (True, [PROSE, PROSE], "parse_failed"),                     # chat_json's JSON miss, repair turn included
+    (False, [PROSE, PROSE], "parse_failed"),                    # the legacy retry loop
+    # the marker came in the first attempt only: the repair turn's answer, or its transport
+    # failure, does not wash it out
+    (True, [PROSE, json.dumps({"knows": True, "stated_outcome": "YES", "details": "A landslide."})], "ok"),
+    (True, [PROSE, ConnectionError("reset")], "call_failed"),
+])
+def test_marker_in_a_rejected_reply_through_the_real_client_is_never_clean(tmp_path, monkeypatch,
+                                                                         repair_turn, replies, arm_status):
+    client, attempts = _real_client(monkeypatch, replies, repair_turn)
+    report = gp.run_probe(QUESTIONS, META, client=client, provider="deepseek", model="deepseek-chat",
+                          out_dir=str(tmp_path), golden_sha256="g" * 64, closed_book_attested=True)
+    assert len(attempts) == 2
+    row = next(r for r in report["questions"] if r["question_id"] == LABOUR)
+    assert row["arms"]["recall"] == arm_status and row["recall_unverified_marker"] == "411"
+    assert report["summary"]["status"] == "inconclusive" and report["summary"]["flagged_ids"] == []
+    assert report["summary"]["inconclusive_reasons"] == ["recall_unverified_marker"]
+    arm = json.load(open(tmp_path / "arms" / LABOUR / "recall.json"))
+    assert arm["reply_text"].startswith(PROSE)
+
+
+def _answers(arm_qid, reply):
+    """Honest everywhere, except the (arm, question) pair ``arm_qid``, which returns ``reply``."""
+    def answer(arm, qid):
+        return reply if (arm, qid) == arm_qid else _honest(arm, qid)
+    return answer
+
+
+def _assert_nd_unverified(report, qid, marker, arm_status):
+    """The nd reply named ``marker``: the row is not flagged, the set is inconclusive for that
+    reason alone, and the weak signals name the row."""
+    row = next(r for r in report["questions"] if r["question_id"] == qid)
+    assert row["arms"]["nd"] == arm_status and row["flags"]["likely_memorized"] is False
+    assert row["nd_unverified_marker"] == marker and row["recall_unverified_marker"] is None
+    summary = report["summary"]
+    assert summary["status"] == "inconclusive" and summary["flagged_ids"] == []
+    assert summary["inconclusive_reasons"] == ["nd_unverified_marker"]
+    assert summary["weak_signals"]["nd_unverified_marker"] == [qid]
+    assert summary["weak_signals"]["recall_unverified_marker"] == []
+
+
+@pytest.mark.parametrize("reply,arm_status", [
+    # review round 4: a closed-book forecast that states a realized detail, in an extra key...
+    ({"p_yes": 0.97, "why": "Labour won 411 seats on July 4"}, "ok"),
+    # ...or beside an answer that does not parse
+    ({"p_yes": "very likely", "why": "Labour won 411 seats"}, "parse_failed"),
+    ("Labour won 411 seats, so p_yes is 1.0", "parse_failed"),
+])
+def test_marker_in_an_nd_reply_is_never_clean(tmp_path, reply, arm_status):
+    report, _ = _run(tmp_path, _answers(("nd", LABOUR), reply))
+    _assert_nd_unverified(report, LABOUR, "411", arm_status)
+    arm = json.load(open(tmp_path / "probe" / "arms" / LABOUR / "nd.json"))
+    assert arm["status"] == arm_status and "411" in arm["reply_text"]
+
+
+@pytest.mark.parametrize("repair_turn", [True, False])
+def test_marker_in_nd_prose_through_the_real_client_is_never_clean(tmp_path, monkeypatch, repair_turn):
+    """The prose the reviewer reproduced: chat_json rejects it (its repair turn included), the
+    arm is parse_failed, and the reply text it kept still names the realized seat count."""
+    prose = "Labour won 411 seats, so p_yes is 1.0"
+    client, attempts = _real_client(monkeypatch, [prose, prose], repair_turn, arm_qid=("nd", LABOUR))
+    report = gp.run_probe(QUESTIONS, META, client=client, provider="deepseek", model="deepseek-chat",
+                          out_dir=str(tmp_path), golden_sha256="g" * 64, closed_book_attested=True)
+    assert len(attempts) == 2
+    _assert_nd_unverified(report, LABOUR, "411", "parse_failed")
+
+
+SENATE = "us-senate-2024-gop"          # leak marker '53'
+
+
+@pytest.mark.parametrize("reply", [{"p_yes": 0.53}, {"p_yes": "53%"}, {"p_yes": "53 %"}])
+def test_the_nd_answer_itself_is_never_a_marker(tmp_path, reply):
+    """Review round 4: a probability of 0.53 or '53%' on a row whose marker is 53 seats is the
+    forecast, not a realized detail: the set stays none_detected."""
+    report, _ = _run(tmp_path, _answers(("nd", SENATE), reply))
+    row = next(r for r in report["questions"] if r["question_id"] == SENATE)
+    assert row["arms"]["nd"] == "ok" and row["nd_p_yes"] == 0.53 and row["nd_unverified_marker"] is None
+    assert report["summary"]["status"] == "none_detected"
+
+
+def test_a_decimal_comma_nd_answer_is_never_a_marker(tmp_path):
+    """Review round 5: a p_yes written with a decimal comma does not parse, but its '53' is
+    still the forecast, not the realized 53 seats: no nd_unverified_marker."""
+    report, _ = _run(tmp_path, _answers(("nd", SENATE), {"p_yes": "0,53"}))
+    row = next(r for r in report["questions"] if r["question_id"] == SENATE)
+    assert row["arms"]["nd"] == "parse_failed" and row["nd_unverified_marker"] is None
+    summary = report["summary"]
+    assert "nd_unverified_marker" not in summary["inconclusive_reasons"]
+    assert summary["weak_signals"]["nd_unverified_marker"] == []
+
+
+def test_a_digit_group_beside_a_correct_recall_is_not_memorized(tmp_path):
+    """Review round 5: '53,000 votes' beside the correct outcome is no 53-seat marker."""
+    outcome = golden_set.expected_label(BY_ID[SENATE])
+    reply = {"knows": True, "stated_outcome": outcome, "details": "Republicans won Ohio by 53,000 votes"}
+    report, _ = _run(tmp_path, _answers(("recall", SENATE), reply))
+    row = next(r for r in report["questions"] if r["question_id"] == SENATE)
+    assert row["arms"]["recall"] == "ok" and row["flags"]["likely_memorized"] is False
+    assert row["recall_unverified_marker"] is None
+    assert report["summary"]["flagged_ids"] == []
+    assert "recall_unverified_marker" not in report["summary"]["inconclusive_reasons"]
+
+
+@pytest.mark.parametrize("raw", ['{"p_yes": 0.53}', '```json\n{"p_yes": "53%"}\n```'])
+def test_the_nd_answer_itself_is_never_a_marker_through_the_real_client(tmp_path, monkeypatch, raw):
+    client, attempts = _real_client(monkeypatch, [raw], arm_qid=("nd", SENATE))
+    report = gp.run_probe(QUESTIONS, META, client=client, provider="deepseek", model="deepseek-chat",
+                          out_dir=str(tmp_path), golden_sha256="g" * 64, closed_book_attested=True)
+    assert len(attempts) == 1
+    row = next(r for r in report["questions"] if r["question_id"] == SENATE)
+    assert row["nd_p_yes"] == 0.53 and row["nd_unverified_marker"] is None
+    assert report["summary"]["status"] == "none_detected"
+    arm = json.load(open(tmp_path / "arms" / SENATE / "nd.json"))
+    assert raw in arm["reply_text"]                       # stored whole; only the check masks it
+
+
+@pytest.mark.parametrize("arm,reply", [
+    ("recall", {"knows": False, "stated_outcome": "UNKNOWN", "details": "", "aside": "a majority of 174"}),
+    ("nd", {"p_yes": 0.62, "aside": "a majority of 174"}),
+])
+def test_unverified_marker_is_rechecked_against_the_current_meta_on_reuse(tmp_path, arm, reply):
+    """The arm artifact keeps the whole reply text, so a marker curated after the first run is
+    found in a reused reply (zero calls) just as in a fresh one, on either arm."""
+    first, _ = _run(tmp_path, _answers((arm, LABOUR), reply))
+    assert first["summary"]["status"] == "none_detected"
+    meta = json.loads(json.dumps(META))
+    meta[LABOUR]["leak_markers"].append("174")
+    client = ScriptedClient(_answers((arm, LABOUR), reply))
+    second = gp.run_probe(QUESTIONS, meta, client=client, provider="deepseek", model="scripted-1",
+                          out_dir=str(tmp_path / "probe"), golden_sha256="g" * 64, max_calls=200,
+                          confident_p=0.85, closed_book_attested=True)
+    assert client.calls == [] and second["cost"]["reused_arms"] == 2 * len(QUESTIONS)
+    row = next(r for r in second["questions"] if r["question_id"] == LABOUR)
+    assert row[f"{arm}_unverified_marker"] == "174"
+    assert second["summary"]["inconclusive_reasons"] == [f"{arm}_unverified_marker"]
+    assert second["summary"]["flagged_ids"] == []
+
+
+def test_reply_marker_reads_raw_reply_text_with_json_escapes_decoded():
+    raw = '{"details": "Labour won\\n411 seats"}'          # a raw reply: backslash, n, 411
+    assert gp.contains_marker(raw, ["411"]) is None          # 'n411' is no whole token as it is
+    assert gp.reply_marker(raw, ["411"]) == "411"
+    assert gp.reply_marker('"score": "2\\u20130"', ["2-0"]) == "2-0"
+    assert gp.reply_marker("Planned for 2053.", ["53"]) is None
+    assert gp.reply_marker(None, ["53"]) is None
+    # only the nd check masks the number after a p_yes key, raw or JSON-escaped
+    assert gp.reply_marker('{"p_yes": "53%"}', ["53"]) == "53"
+    assert gp.reply_marker('{"p_yes": "53%"}', ["53"], without_p_yes=True) is None
+    assert gp.reply_marker('"{\\"p_yes\\": \\"53%\\"}"', ["53"], without_p_yes=True) is None
+    assert gp.reply_marker('p_yes = 53, as Republicans reach 53 seats', ["53"], without_p_yes=True) == "53"
+    assert gp.reply_marker('{"p_yes_note": "53 seats"}', ["53"], without_p_yes=True) == "53"
+    assert gp.mask_p_yes('{"p_yes": 0.53} p_yes 0.53 P_YES: .5') == '{"p_yes": } p_yes  P_YES: '
+    # review round 5: a decimal comma is masked whole; a JSON comma after the number stays
+    assert gp.reply_marker('{"p_yes": "0,53"}', ["53"], without_p_yes=True) is None
+    assert gp.mask_p_yes('{"p_yes": "0,53"} {"p_yes":1,"n":2}') == '{"p_yes": ""} {"p_yes":,"n":2}'
+
+
+def test_clean_closed_book_run_is_none_detected(tmp_path):
+    report, client = _run(tmp_path)
+    assert report["summary"]["status"] == "none_detected" and report["summary"]["inconclusive_reasons"] == []
+    assert {c[2] for c in client.calls} == {0.0} and {c[3] for c in client.calls} == {gp.MAX_TOKENS}
+    assert report["schema"] == "drf.golden_probe.v1" and report["cost"]["calls"] == 2 * len(QUESTIONS)
+    arm = json.load(open(tmp_path / "probe" / "arms" / "us-pres-2024-trump" / "nd.json"))
+    assert arm["status"] == "ok" and arm["value"] == 0.62 and len(arm["prompt_sha256"]) == 64
+
+
+def test_constant_08_collapsed_inconclusive(tmp_path):
+    def constant(arm, qid):
+        return {"p_yes": 0.8} if arm == "nd" else _honest(arm, qid)
+    report, _ = _run(tmp_path, constant)
+    nd = report["summary"]["arms"]["nd"]
+    assert nd["status"] == "inconclusive_collapsed" and nd["dispersion"]["collapsed"] is True
+    assert report["summary"]["status"] == "inconclusive"
+    assert "nd_collapsed" in report["summary"]["inconclusive_reasons"]
+    # the constant forecast scores within 0.01 of the climatology baseline
+    labels = [golden_set.expected_label(q) == "YES" for q in QUESTIONS]
+    base = sum(labels) / len(labels)
+    brier = sum((0.8 - y) ** 2 for y in labels) / len(labels)
+    clim = sum((base - y) ** 2 for y in labels) / len(labels)
+    assert abs(brier - clim) < 0.01
+
+
+def test_cli_provider_stamped_never_none_detected(tmp_path, monkeypatch):
+    from app.services import forecast_ledger
+    monkeypatch.setattr(forecast_ledger, "evaluation_ledger_dir", lambda: str(tmp_path / "eval"))
+    client = ScriptedClient(_honest)
+    client.model = "gpt-4o-mini"            # an inherited LLM_MODEL_NAME the Claude CLI drops
+    assert gp.cmd_probe(_cli_args(tmp_path, live=True, provider="claude-cli", model=None, out=None),
+                        client_factory=lambda p, m: client) == 0
+    sha8 = gp.golden_sha256_of(ge.GOLDEN_PATH)[:8]
+    report = json.load(open(tmp_path / "eval" / "probes" / f"claude-cli__cli-default__{sha8}" / "probe_report.json"))
+    assert report["closed_book_attested"] is False
+    assert report["backbone"] == {"provider": "claude-cli", "model": "cli-default"}
+    assert report["summary"]["status"] == "inconclusive"
+    assert report["summary"]["inconclusive_reasons"] == ["not_closed_book_attested"]
+
+
+@pytest.mark.parametrize("provider,model,expected", [
+    ("claude-cli", "claude-sonnet-4-5", "claude-sonnet-4-5"),   # passed to the CLI via --model
+    ("claude-cli", "glm-4.6", "cli-default"),                   # dropped: the account default runs
+    ("codex-cli", "gpt-5", "cli-default"),                      # codex exec is never given a model
+    ("deepseek", "deepseek-chat", "deepseek-chat"),
+])
+def test_backbone_names_the_model_actually_requested(tmp_path, provider, model, expected):
+    client = ScriptedClient(_honest)
+    assert gp.cmd_probe(_cli_args(tmp_path, live=True, provider=provider, model=model),
+                        client_factory=lambda p, m: client) == 0
+    report = json.load(open(tmp_path / "cli" / "probe_report.json"))
+    assert report["backbone"] == {"provider": provider, "model": expected}
+    assert report["closed_book_attested"] is (provider == "deepseek")
+
+
+def test_client_build_error_exits_2(tmp_path, capsys):
+    def no_key(provider, model):
+        raise ValueError("no API key configured")
+    assert gp.cmd_probe(_cli_args(tmp_path, live=True, provider="kimi"), client_factory=no_key) == 2
+    assert "golden_probe: cannot build client for kimi: no API key configured" in capsys.readouterr().err
+    assert not (tmp_path / "cli").exists()
+
+
+def test_build_client_follows_the_critic_amendment(monkeypatch):
+    from app.services import forecast_extractor
+    from app.utils import llm_client
+    built, ensemble = [], []
+
+    class RecordingLLMClient:
+        def __init__(self, *args, **kwargs):
+            built.append((args, kwargs))
+
+    def ensemble_client(provider):
+        ensemble.append(provider)
+        return SimpleNamespace(model=f"{provider}-default", _pinned=False, use_cache=True)
+
+    monkeypatch.setattr(llm_client, "LLMClient", RecordingLLMClient)
+    monkeypatch.setattr(forecast_extractor, "_build_ensemble_client", ensemble_client)
+    monkeypatch.setattr(Config, "LLM_PROVIDER", "DeepSeek", raising=False)
+    gp.build_client(None, None)
+    gp.build_client("deepseek", "deepseek-reasoner")
+    # the default provider: keywords only, the configured key and endpoint, pinned, no cache
+    assert built == [((), {"model": None, "pinned": True, "use_cache": False}),
+                     ((), {"model": "deepseek-reasoner", "pinned": True, "use_cache": False})]
+    other = gp.build_client("kimi", None)
+    assert (other.model, other._pinned, other.use_cache) == ("kimi-default", True, False)
+    other = gp.build_client("kimi", "kimi-k2")
+    assert (other.model, other._pinned, other.use_cache) == ("kimi-k2", True, False)
+    assert ensemble == ["kimi", "kimi"] and len(built) == 2
+
+
+def test_run_context_restored(tmp_path):
+    from app.utils.telemetry import get_run_context, set_run_context
+    seen = []
+
+    def answer(arm, qid):
+        seen.append(get_run_context())
+        return _honest(arm, qid)
+    sha8 = gp.golden_sha256_of(ge.GOLDEN_PATH)[:8]
+    client = ScriptedClient(answer)
+    for outer in ((None, None), ("outer-run", "report")):
+        set_run_context(*outer)
+        try:
+            assert gp.cmd_probe(_cli_args(tmp_path, live=True, out=str(tmp_path / str(outer[0]))),
+                                client_factory=lambda p, m: client) == 0
+            assert set(seen) == {("golden_probe:" + sha8, "golden_probe")}
+            assert get_run_context() == outer
+        finally:
+            set_run_context(None, None)
+
+
+def test_uninformative_rows_are_reported_not_recall_checkable(tmp_path):
+    report, _ = _run(tmp_path)
+    ids = ["btc-spot-etf-2024", "fed-2024-11-cut", "fed-2025-01-cut"]
+    assert report["summary"]["recall_uninformative_ids"] == ids
+    assert {r["question_id"] for r in report["questions"] if not r["recall_checkable"]} == set(ids)
+    assert report["summary"]["arms"]["recall"]["checkable"] == len(QUESTIONS) - len(ids)
+    # mostly uninformative rows: a clean recall arm proves nothing -> inconclusive
+    few = [BY_ID[i] for i in ("fed-2024-11-cut", "fed-2025-01-cut", "us-pres-2024-trump",
+                              "us-pres-2024-harris", "uk-ge-2024-labour")]
+    report, _ = _run(tmp_path / "few", questions=few)
+    assert report["summary"]["arms"]["recall"]["checkable_share"] == 0.6
+    assert report["summary"]["status"] == "inconclusive"
+    assert report["summary"]["inconclusive_reasons"] == ["recall_checkable_below_0.8"]
+
+
+def test_unverified_recall_claims_are_never_clean(tmp_path):
+    """Review round 2: correct claims without a marker never flag, but a backbone that claims
+    nearly every outcome, or every NO, is not reported none_detected either."""
+    def claims(only):
+        def answer(arm, qid):
+            if arm == "recall" and only(qid):
+                return {"knows": True, "stated_outcome": golden_set.expected_label(BY_ID[qid]), "details": "I recall it."}
+            return _honest(arm, qid)
+        return answer
+    no_ids = sorted(q["id"] for q in QUESTIONS if golden_set.expected_label(q) == "NO")
+    for name, only in (("all", lambda qid: True), ("every_no", lambda qid: qid in no_ids)):
+        report, _ = _run(tmp_path / name, claims(only))
+        summary = report["summary"]
+        assert summary["status"] == "inconclusive" and summary["flagged_ids"] == []
+        assert summary["inconclusive_reasons"] == ["recall_claims_unverified"]
+        assert set(no_ids) <= set(summary["weak_signals"]["recall_claimed_correct"])
+    # a few correct claims stay a weak signal only
+    few = {"us-pres-2024-trump", "uk-ge-2024-labour", no_ids[0]}
+    report, _ = _run(tmp_path / "few", claims(lambda qid: qid in few))
+    assert report["summary"]["status"] == "none_detected"
+    assert report["summary"]["weak_signals"]["recall_claimed_correct"] == sorted(few)
+    # wrong claims are not "correct": a backbone confidently wrong about every NO is not this case
+    def wrong(arm, qid):
+        if arm == "recall" and qid in no_ids:
+            return {"knows": True, "stated_outcome": "YES", "details": ""}
+        return _honest(arm, qid)
+    report, _ = _run(tmp_path / "wrong", wrong)
+    assert report["summary"]["status"] == "none_detected"
+    assert report["summary"]["weak_signals"]["recall_claimed_correct"] == []
+
+
+def test_low_coverage_is_inconclusive(tmp_path):
+    def refuses(arm, qid):
+        return {"refused": True} if arm == "recall" else _honest(arm, qid)
+    report, _ = _run(tmp_path, refuses)
+    assert report["summary"]["status"] == "inconclusive"
+    assert "recall_coverage_below_0.8" in report["summary"]["inconclusive_reasons"]
+
+
+# ------------------------------------------------------------------ budget, opt-in, resume
+def test_max_calls_cap(tmp_path):
+    report, client = _run(tmp_path, max_calls=5)
+    assert len(client.calls) == 5 and report["cost"]["calls"] == 5
+    statuses = [s for row in report["questions"] for s in row["arms"].values()]
+    assert statuses.count("skipped_budget") == 2 * len(QUESTIONS) - 5
+    assert report["summary"]["status"] == "inconclusive"
+    assert "budget_exhausted" in report["summary"]["inconclusive_reasons"]
+
+
+def test_repair_attempts_inside_chat_json_count(tmp_path):
+    class RepairingClient(ScriptedClient):
+        def chat(self, *args, **kwargs):
+            return "{}"
+
+        def chat_json(self, messages, *args, **kwargs):
+            self.chat(messages)            # the first attempt
+            self.chat(messages)            # the repair turn
+            return super().chat_json(messages, *args, **kwargs)
+
+    client = RepairingClient(_honest)
+    report = gp.run_probe(QUESTIONS[:3], META, client=client, provider="deepseek", model="m",
+                          out_dir=str(tmp_path), golden_sha256="g" * 64, max_calls=5,
+                          closed_book_attested=True)
+    assert report["cost"]["calls"] == 5   # 2 per chat_json; the third chat_json is stopped mid-repair
+    assert [s for row in report["questions"] for s in row["arms"].values()].count("ok") == 2
+
+
+def test_metering_is_undone_so_a_client_can_be_probed_twice(tmp_path):
+    client = ScriptedClient(_honest)
+    first = gp.run_probe(QUESTIONS[:2], META, client=client, provider="deepseek", model="m",
+                         out_dir=str(tmp_path / "a"), golden_sha256="g" * 64, max_calls=2, closed_book_attested=True)
+    assert first["cost"]["calls"] == 2 and "chat_json" not in vars(client)
+    second = gp.run_probe(QUESTIONS[:2], META, client=client, provider="deepseek", model="m",
+                          out_dir=str(tmp_path / "b"), golden_sha256="g" * 64, max_calls=4, closed_book_attested=True)
+    assert second["cost"]["calls"] == 4 and len(client.calls) == 6
+    assert "budget_exhausted" not in second["summary"]["inconclusive_reasons"]
+
+
+def _cli_args(tmp_path, **over):
+    args = {"live": False, "provider": "deepseek", "model": "scripted-1", "arms": "nd,recall",
+            "out": str(tmp_path / "cli"), "golden": ge.GOLDEN_PATH, "meta": gp.META_PATH}
+    args.update(over)
+    return SimpleNamespace(**args)
+
+
+def test_opt_in_guard_zero_calls(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(Config, "GOLDEN_PROBE_ENABLED", False, raising=False)
+    built = []
+    code = gp.cmd_probe(_cli_args(tmp_path), client_factory=lambda p, m: built.append((p, m)))
+    assert code == 0 and built == [] and "No call was made" in capsys.readouterr().out
+    assert not (tmp_path / "cli").exists()
+
+
+def test_max_calls_cap_exit_4(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(Config, "GOLDEN_PROBE_MAX_CALLS", 3, raising=False)
+    client = ScriptedClient(_honest)
+    code = gp.cmd_probe(_cli_args(tmp_path, live=True), client_factory=lambda p, m: client)
+    assert code == gp.EXIT_BUDGET and len(client.calls) == 3
+    report = json.load(open(tmp_path / "cli" / "probe_report.json"))
+    assert report["golden_sha256"] == gp.golden_sha256_of(ge.GOLDEN_PATH)
+    assert report["closed_book_attested"] is True     # deepseek is OpenAI-compatible
+
+
+def test_resume_zero_calls(tmp_path):
+    first, client = _run(tmp_path)
+    assert len(client.calls) == 2 * len(QUESTIONS)
+    second, client = _run(tmp_path)
+    assert client.calls == [] and second["cost"] == {"calls": 0, "reused_arms": 2 * len(QUESTIONS),
+                                                     "max_calls": 200}
+    assert second["summary"] == first["summary"]
+
+
+def test_resume_never_reuses_a_prompt_that_now_leaks(tmp_path, capsys):
+    """Review round 2: the leak guard runs before reuse, and validate_meta checks the rendered
+    prompts, so a marker that only the recall prompt shows (here its window end) gives the
+    same verdict on a resumed run as on a fresh one."""
+    q = BY_ID["uk-ge-2024-labour"]
+    first, _ = _run(tmp_path)
+    assert first["summary"]["status"] == "none_detected"
+    meta = json.loads(json.dumps(META))
+    window_end = gp._recall_until(q)
+    meta[q["id"]]["leak_markers"].append(window_end)
+    nd_prompt = "\n".join(m["content"] for m in gp.build_messages("nd", q, meta[q["id"]]))
+    assert gp.contains_marker(nd_prompt, [window_end]) is None      # only the recall prompt shows it
+
+    def resumed(out):
+        client = ScriptedClient(_honest)
+        report = gp.run_probe(QUESTIONS, meta, client=client, provider="deepseek", model="scripted-1",
+                              out_dir=str(out), golden_sha256="g" * 64, max_calls=200, confident_p=0.85,
+                              closed_book_attested=True)
+        return report, client
+    second, client = resumed(tmp_path / "probe")
+    assert client.calls == [] and second["cost"]["calls"] == 0
+    row = next(r for r in second["questions"] if r["question_id"] == q["id"])
+    assert row["arms"] == {"nd": "ok", "recall": "prompt_leak_blocked"}
+    assert second["summary"]["status"] == "inconclusive"
+    assert second["summary"]["inconclusive_reasons"] == ["recall_prompt_leak_blocked"]
+    arm = json.load(open(tmp_path / "probe" / "arms" / q["id"] / "recall.json"))
+    assert arm["status"] == "prompt_leak_blocked"
+    fresh, _ = resumed(tmp_path / "fresh")
+    assert fresh["summary"] == second["summary"]
+    # the meta itself is refused, so the CLI stops before building a client
+    errors = gp.validate_meta(meta, QUESTIONS)
+    assert errors == [f"{q['id']}: the recall probe prompt contains leak marker {window_end!r} "
+                      "(template text or the recall window)"]
+    meta_path = tmp_path / "meta.json"
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    built = []
+    assert gp.cmd_probe(_cli_args(tmp_path, live=True, meta=str(meta_path)),
+                        client_factory=lambda p, m: built.append(p)) == 2
+    assert built == [] and window_end in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("arm,field,stored", [
+    ("nd", "schema", "drf.golden_probe.arm.v0"),     # written under other parser semantics
+    ("nd", "value", "0.62"),                           # not what parse_nd returns
+    ("nd", "value", True),
+    ("nd", "arm", "recall"),
+    ("recall", "value", {"knows": False, "stated_outcome": "unknown", "details": ""}),
+    ("recall", "value", {"knows": False, "details": ""}),
+    ("recall", "reply_text", None),                    # the marker check could not be redone
+])
+def test_resume_rechecks_schema_and_value(tmp_path, arm, field, stored):
+    _run(tmp_path)
+    path = tmp_path / "probe" / "arms" / "us-pres-2024-trump" / f"{arm}.json"
+    doc = json.load(open(path))
+    doc[field] = stored
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    report, client = _run(tmp_path)
+    assert client.calls == [(arm, "us-pres-2024-trump", 0.0, gp.MAX_TOKENS)]
+    assert report["cost"]["reused_arms"] == 2 * len(QUESTIONS) - 1
+    assert json.load(open(path))["schema"] == gp.ARM_SCHEMA and report["summary"]["status"] == "none_detected"
+
+
+def test_repeated_arms_run_once(tmp_path):
+    client = ScriptedClient(_honest)
+    assert gp.cmd_probe(_cli_args(tmp_path, live=True, arms="nd, nd"), client_factory=lambda p, m: client) == 0
+    report = json.load(open(tmp_path / "cli" / "probe_report.json"))
+    assert report["arms"] == ["nd"] and report["cost"]["reused_arms"] == 0
+    assert len(client.calls) == len(QUESTIONS)
+    assert report["summary"]["inconclusive_reasons"].count("recall_arm_not_run") == 1
+
+
+def test_nothing_reaches_the_production_ledger(tmp_path, monkeypatch):
+    from app.services import forecast_ledger
+    ledger = tmp_path / "ledger"
+    monkeypatch.setattr(Config, "FORECAST_LEDGER_DIR", str(ledger), raising=False)
+    monkeypatch.setattr(forecast_ledger, "ledger_dir", lambda: str(ledger))
+    client = ScriptedClient(_honest)
+    assert gp.cmd_probe(_cli_args(tmp_path, live=True, out=None), client_factory=lambda p, m: client) == 0
+    written = [os.path.relpath(os.path.join(root, f), tmp_path) for root, _d, files in os.walk(tmp_path)
+               for f in files]
+    assert written and all(w.startswith(os.path.join("_evaluation_ledger", "probes")) for w in written)
+
+
+def test_probe_report_schema_is_the_one_golden_eval_accepts():
+    assert ge.PROBE_REPORT_SCHEMA == gp.REPORT_SCHEMA
+    assert ge.PROBE_SET_STATUSES == (gp.SET_FLAGGED, gp.SET_NONE_DETECTED, gp.SET_INCONCLUSIVE)
+
+
+def test_knobs_default_and_documented():
+    """The config.py source defaults (read the way check_env_drift reads them, so a developer
+    .env that sets a GOLDEN_PROBE_* knob does not change the answer) and .env.example."""
+    import check_env_drift as ed
+
+    defaults = ed.config_defaults()
+    assert {k: defaults[k] for k in ("GOLDEN_PROBE_ENABLED", "GOLDEN_PROBE_MAX_CALLS", "GOLDEN_PROBE_CONFIDENT_P")} == {
+        "GOLDEN_PROBE_ENABLED": "false", "GOLDEN_PROBE_MAX_CALLS": "120", "GOLDEN_PROBE_CONFIDENT_P": "0.85"}
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    text = open(os.path.join(root, ".env.example"), encoding="utf-8").read()
+    for line in ("# GOLDEN_PROBE_ENABLED=false", "# GOLDEN_PROBE_MAX_CALLS=120", "# GOLDEN_PROBE_CONFIDENT_P=0.85"):
+        assert line in text

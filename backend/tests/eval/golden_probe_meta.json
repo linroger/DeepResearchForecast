@@ -1,0 +1,268 @@
+{
+  "_meta": {
+    "schema": "drf.golden_probe_meta.v1",
+    "description": "EVAL-12 contamination probes: per golden id, leak_markers are realized details that were unknowable at the row's as_of_date and follow neither from the question nor from the probe prompt (the recall window included): exact seat counts, vote shares, scores, a surprise rate-cut size or dissent, dates fixed after as_of. A recall answer that states the correct outcome AND one of them counts as likely memorized. Facts public at as_of (a seat count held before the election, a target range already set, an alliance already formed, the number of charges, the next flight in sequence, a statutory deadline), the standard 25bp step from the as-of range, players of the team the question names and a month inside the recall window are never markers. A row without such a detail has an empty list and recall_uninformative: true, and is reported as not recall-checkable instead of carrying a weak marker. marker_rationale states, per row, why each marker was unknowable at as_of (or why the row has none). probe_question (and, where the criteria name the answer, probe_resolution_criteria) reword hindsight-framed rows outcome-free. The recall window ends on the last day of the month that contains resolution_date + 31 days, so a marker that states the resolution date cannot be computed back from it. An exact date is spelled month-first and day-first (the full month name and its common abbreviations) and in ISO form (YYYY-MM-DD). Markers are matched normalized (NFKC, casefold, dashes unified, whitespace collapsed, a colon between digits read as a dash so that a 2:1 score matches '2-1', ordinal suffixes dropped so that 'June 5th' and '5th of June' match 'june 5' and '5 june') and only as whole tokens, never inside a decimal ('53' matches neither '0.53' nor '53.5%'). A marker anywhere else in what an arm got back (the nd arm's reply included, its own p_yes number excluded) never flags the row but keeps the set from none_detected. None may occur in the row's forecaster-visible text nor in either arm's rendered prompt (golden_probe.validate_meta)."
+  },
+  "us-pres-2024-trump": {
+    "leak_markers": [
+      "312",
+      "226"
+    ],
+    "marker_rationale": "Final Electoral College tally 312-226, unknown at as_of 2024-11-01; the question names only the 270 threshold."
+  },
+  "us-pres-2024-harris": {
+    "leak_markers": [
+      "226",
+      "312"
+    ],
+    "marker_rationale": "Final Electoral College tally 312-226, unknown at as_of 2024-11-01; the question names only the 270 threshold."
+  },
+  "us-senate-2024-gop": {
+    "leak_markers": [
+      "53"
+    ],
+    "marker_rationale": "Republicans finished with 53 seats, unknown at as_of 2024-11-01 (they held 49); the question names only the 51-seat threshold."
+  },
+  "us-senate-2024-dem-hold": {
+    "leak_markers": [
+      "53"
+    ],
+    "marker_rationale": "Republicans finished with 53 seats, unknown at as_of 2024-11-01 (they held 49); the question names only the 50-seat threshold. The final Democratic caucus of 47 is not a marker: the Democrats held 47 seats of their own at as_of (51 with the four independents who caucused with them), so the bare number was public."
+  },
+  "uk-ge-2024-labour": {
+    "leak_markers": [
+      "411"
+    ],
+    "marker_rationale": "Labour won 411 seats on 2024-07-04; seat counts were unknown at as_of 2024-06-01."
+  },
+  "uk-ge-2024-tory": {
+    "leak_markers": [
+      "121",
+      "411"
+    ],
+    "marker_rationale": "Conservatives won 121 seats and Labour 411 on 2024-07-04; seat counts were unknown at as_of 2024-06-01."
+  },
+  "fr-legis-2024-rn-majority": {
+    "leak_markers": [
+      "182",
+      "143"
+    ],
+    "marker_rationale": "Second-round seat counts: New Popular Front 182, RN and allies 143, unknown at as_of 2024-06-20. The alliance's name is not a marker: the New Popular Front was formed on 2024-06-10, before as_of."
+  },
+  "mx-pres-2024-sheinbaum": {
+    "leak_markers": [
+      "59.75",
+      "59.8",
+      "27.45"
+    ],
+    "marker_rationale": "INE computed vote shares: Sheinbaum 59.75%, Galvez 27.45%, unknown at as_of 2024-05-01."
+  },
+  "id-pres-2024-prabowo": {
+    "leak_markers": [
+      "58.59",
+      "58.6"
+    ],
+    "marker_rationale": "Official KPU result: Prabowo 58.59%, unknown at as_of 2024-01-15; the criteria name only the 50% threshold."
+  },
+  "in-ge-2024-bjp-alone": {
+    "leak_markers": [
+      "240"
+    ],
+    "marker_rationale": "The BJP won 240 seats (counted 2024-06-04), unknown at as_of 2024-04-01; the question names only the 272 threshold."
+  },
+  "in-ge-2024-nda-majority": {
+    "leak_markers": [
+      "293",
+      "240"
+    ],
+    "marker_rationale": "The NDA won 293 seats and the BJP 240 (counted 2024-06-04), unknown at as_of 2024-04-01; the question names only the 272 threshold."
+  },
+  "fed-2024-09-cut": {
+    "leak_markers": [
+      "50 basis",
+      "50bp",
+      "50bps",
+      "half point",
+      "half-point",
+      "4.75",
+      "50 bp",
+      "50 bps",
+      "50-basis-point",
+      "half a percentage point",
+      "half-percentage-point",
+      "half percentage point",
+      "0.5 percentage",
+      "0.50 percentage"
+    ],
+    "marker_rationale": "The cut was 50bp (half a percentage point), to 4.75%-5.00% from the as-of range 5.25%-5.50%; its size was undecided at as_of 2024-09-01, and 4.75 follows only from the 50bp size, not from the standard 25bp step. The markers spell that size in its common wordings; '0.5 percentage' stops before 'point' so that the singular and the plural both match."
+  },
+  "fed-2024-11-cut": {
+    "leak_markers": [],
+    "recall_uninformative": true,
+    "marker_rationale": "A unanimous 25bp cut to 4.50%-4.75%: the new range is the as-of range 4.75%-5.00% minus the standard step, so a correct YES carries no realized detail that was unknowable at as_of 2024-11-01. The row is not recall-checkable."
+  },
+  "fed-2024-12-cut": {
+    "leak_markers": [
+      "hammack"
+    ],
+    "marker_rationale": "Cleveland Fed President Beth Hammack dissented in favour of a hold, unknowable at as_of 2024-12-01. The new range 4.25%-4.50% is not a marker: it is the as-of range 4.50%-4.75% minus the standard 25bp step."
+  },
+  "fed-2025-01-cut": {
+    "leak_markers": [],
+    "recall_uninformative": true,
+    "marker_rationale": "The FOMC held at 4.25%-4.50%, the range set on 2024-12-18 and public at as_of 2025-01-15; a hold leaves no realized detail that was unknowable at as_of. The row is not recall-checkable."
+  },
+  "apple-iphone16-2024": {
+    "leak_markers": [
+      "glowtime",
+      "september 9",
+      "sept 9",
+      "sept. 9",
+      "sep 9",
+      "sep. 9",
+      "9 september",
+      "9 sept",
+      "9 sep",
+      "2024-09-09"
+    ],
+    "marker_rationale": "Apple announced the 'It's Glowtime' event and its 2024-09-09 date on 2024-08-26, after as_of 2024-08-01; the question names only the month. The date is spelled month-first, day-first and ISO (September 9, 9 Sept, 2024-09-09)."
+  },
+  "openai-gpt4o-2024": {
+    "probe_question": "Will OpenAI publicly release a new flagship model succeeding GPT-4 Turbo in 2024?",
+    "probe_resolution_criteria": "YES if OpenAI announces and makes available, during 2024, a new flagship model that succeeds GPT-4 Turbo.",
+    "leak_markers": [
+      "gpt-4o",
+      "4o",
+      "omni",
+      "may 13",
+      "13 may",
+      "2024-05-13",
+      "spring update"
+    ],
+    "marker_rationale": "The golden question names GPT-4o, so the probe_question rewords it outcome-free. GPT-4o ('o' for omni) was unveiled at the 'Spring Update' event on 2024-05-13; the name, the event and the date were unknown at as_of 2024-04-01. The date is spelled month-first, day-first and ISO (May 13, 13 May, 2024-05-13)."
+  },
+  "apple-vision-pro-2024": {
+    "leak_markers": [
+      "february 2",
+      "feb 2",
+      "feb. 2",
+      "2 february",
+      "2 feb",
+      "2024-02-02"
+    ],
+    "marker_rationale": "Apple announced the 2024-02-02 US launch date on 2024-01-08, after as_of 2024-01-01; the question says only 'early 2024'. The date is spelled month-first, day-first and ISO (February 2, 2 Feb, 2024-02-02)."
+  },
+  "nvidia-3t-2024": {
+    "leak_markers": [
+      "june 5",
+      "jun 5",
+      "jun. 5",
+      "5 june",
+      "5 jun",
+      "2024-06-05"
+    ],
+    "marker_rationale": "Nvidia first closed above $3T on 2024-06-05, unknown at as_of 2024-01-01. The date is spelled month-first, day-first and ISO (June 5, 5 Jun, 2024-06-05). The month alone is not a marker: the recall window shown in the prompt ends 2024-07-31, so 'June 2024' is guessable from the prompt."
+  },
+  "spacex-starship-catch-2024": {
+    "leak_markers": [
+      "october 13",
+      "oct 13",
+      "oct. 13",
+      "13 october",
+      "13 oct",
+      "2024-10-13"
+    ],
+    "marker_rationale": "The first booster catch came on 2024-10-13, a launch date unknown at as_of 2024-09-01 (the flight was still awaiting its licence). The date is spelled month-first, day-first and ISO (October 13, 13 Oct, 2024-10-13). 'Flight 5' is not a marker: it was the next flight in sequence at as_of."
+  },
+  "btc-100k-2024": {
+    "leak_markers": [
+      "december 4",
+      "december 5",
+      "dec 4",
+      "dec 5",
+      "dec. 4",
+      "dec. 5",
+      "4 december",
+      "5 december",
+      "4 dec",
+      "5 dec",
+      "2024-12-04",
+      "2024-12-05"
+    ],
+    "marker_rationale": "Bitcoin first traded above $100,000 late on 2024-12-04 US time (2024-12-05 UTC), unknown at as_of 2024-01-01. The date is spelled month-first, day-first and ISO (December 4, 4 Dec, 2024-12-04, and the same for the 5th)."
+  },
+  "btc-spot-etf-2024": {
+    "leak_markers": [],
+    "recall_uninformative": true,
+    "marker_rationale": "The approval came on 2024-01-10, the final statutory deadline of the ARK 21Shares application, which was public at as_of 2024-01-01; no other realized detail that a recall answer would state was unknowable at as_of. The row is not recall-checkable."
+  },
+  "trump-ny-conviction-2024": {
+    "leak_markers": [
+      "may 30",
+      "30 may",
+      "2024-05-30"
+    ],
+    "marker_rationale": "The jury returned its verdict on 2024-05-30, unknown at as_of 2024-05-01 while the trial was under way. The date is spelled month-first, day-first and ISO (May 30, 30 May, 2024-05-30). The 34 counts are not a marker: the indictment's 34 felony counts were public since April 2023."
+  },
+  "ucl-2024-real-madrid": {
+    "leak_markers": [
+      "2-0",
+      "dortmund"
+    ],
+    "marker_rationale": "Real Madrid beat Borussia Dortmund 2-0 (2:0 reads the same); at as_of 2024-05-01 both semi-finals were undecided, so the opponent and the score were unknown. Real Madrid players (Carvajal scored) are not markers: they are the squad of the team the question names."
+  },
+  "sb-lviii-2024-chiefs": {
+    "leak_markers": [
+      "25-22",
+      "overtime"
+    ],
+    "marker_rationale": "The Chiefs beat the 49ers 25-22 (25:22 reads the same) in overtime; the score and the overtime were unknown at as_of 2024-02-01. The opponent was set at as_of and Chiefs players (Hardman caught the winning touchdown) are the squad of the team the question names, so neither is a marker."
+  },
+  "sb-lix-2025-eagles": {
+    "leak_markers": [
+      "40-22"
+    ],
+    "marker_rationale": "The Eagles beat the Chiefs 40-22 (40:22 reads the same); the matchup was set at as_of 2025-02-01, the score was not."
+  },
+  "mlb-2024-dodgers": {
+    "leak_markers": [
+      "4-1",
+      "yankees"
+    ],
+    "marker_rationale": "The Dodgers beat the Yankees 4-1 (4:1 reads the same); the postseason was only opening at as_of 2024-10-01, so the opponent and the series result were unknown. Dodgers players (Freeman was the series MVP) are not markers: they are the roster of the team the question names."
+  },
+  "euro-2024-spain": {
+    "leak_markers": [
+      "2-1",
+      "england"
+    ],
+    "marker_rationale": "Spain beat England 2-1 (2:1 reads the same) in the final; at as_of 2024-07-01 the round of 16 was still being played, before the quarter-finals, so the opponent and the score were unknown. Spain players (Oyarzabal scored the winner) are not markers: they are the squad of the team the question names."
+  },
+  "nba-2024-celtics": {
+    "leak_markers": [
+      "4-1",
+      "mavericks",
+      "june 17",
+      "jun 17",
+      "jun. 17",
+      "17 june",
+      "17 jun",
+      "2024-06-17"
+    ],
+    "marker_rationale": "The Celtics beat the Mavericks 4-1 (4:1 reads the same), clinching on 2024-06-17; at as_of 2024-05-01 the first round was still being played, so the opponent, the series result and the clinch date were unknown. The date is spelled month-first, day-first and ISO (June 17, 17 Jun, 2024-06-17)."
+  },
+  "oscars-2024-oppenheimer": {
+    "leak_markers": [
+      "seven oscars",
+      "7 oscars",
+      "seven awards",
+      "7 awards",
+      "seven academy awards",
+      "7 academy awards",
+      "seven total oscars",
+      "seven wins",
+      "7 wins"
+    ],
+    "marker_rationale": "Oppenheimer won seven Oscars at the 2024-03-10 ceremony; its 13 nominations were public at as_of 2024-02-01, the number of wins was not. The markers spell that count in its common wordings (seven Oscars, seven Academy Awards, seven wins)."
+  }
+}
