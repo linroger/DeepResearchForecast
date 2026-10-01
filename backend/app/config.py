@@ -1245,9 +1245,12 @@ class Config:
     # 再次重报价失败时保留，因为留下的价仍是那次报价），研究 handoff 快照行 / 报告期现抓行记
     # snapshot_as_of（快照 as_of / 现抓时刻，只是取价时刻的上界：研究快照 as_of 在落盘时才取，
     # 其中智能体工具检索到的行可能更早就已报价）；_build_market_anchor 据此给锚点写 price_time +
-    # price_time_basis（requote|snapshot，时刻未知则两键都不写）。basis=requote 时锚点的
-    # price_at_research 实为报告期重报价（历史字段名）。纯溯源字段，不动任何概率、锚定决策或
-    # 发布闸门，因此默认开；false → 市场行与 forecast.json 锚点逐字节复现旧形状。
+    # price_time_basis（requote|observed|snapshot，时刻未知则两键都不写）。basis=requote 时锚点的
+    # price_at_research 实为报告期重报价（历史字段名）。FU-11：编排器把本旗标下发给研究子进程，
+    # 研究桥给每行记 observed_at（该行价格的抓取时刻：确定性刷新行=刷新时刻，仅工具检索行=
+    # 工具调用的 captured_at），锚点优先用它（basis=observed），快照 as_of 只作兜底上界。
+    # 纯溯源字段，不动任何概率、锚定决策或发布闸门，因此默认开；false → 市场行与
+    # forecast.json 锚点逐字节复现旧形状。
     MARKET_ANCHOR_PRICE_TIME = os.environ.get('MARKET_ANCHOR_PRICE_TIME', 'true').strip().lower() == 'true'
     # 10pp 规则：锚定后 |model_p − market_p|>0.10 且理由未提及市场的预测，做一次有界重述，
     # 须在理由中引用市场或有依据地保留分歧（绝不静默移动概率）。默认开；关闭=不重述。

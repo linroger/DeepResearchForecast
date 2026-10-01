@@ -2344,6 +2344,7 @@ def _synthesis_provider_unavailable(error: Any) -> bool:
 # keeping each table alphabetical; every name must exist on Config and be
 # documented in .env.example (test_orchestrator_research_wiring checks both).
 RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
+    ("MARKET_ANCHOR_PRICE_TIME", "bool"),
     ("PREDICTION_MARKETS_END_DATE_GATE", "bool"),
     ("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", "float"),
     ("RESEARCH_EVIDENCE_GRADING", "bool"),
@@ -7243,6 +7244,9 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
             if existing is None or snap_as_of >= row_as_of.get(market_id, ""):
                 merged = dict(existing or {})
                 merged.update(row)
+                if "observed_at" not in row:
+                    # FU-11: an older track's fetch time never dates the fresher price.
+                    merged.pop("observed_at", None)
                 by_id[market_id] = merged
                 row_as_of[market_id] = snap_as_of
             by_id[market_id]["track_provenance"] = provenance
