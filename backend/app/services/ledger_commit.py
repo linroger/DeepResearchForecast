@@ -416,14 +416,15 @@ def _report_context(agent: Any) -> Dict[str, Any]:
     return apply_evaluation_context(context, _agent_evaluation_context(agent))
 
 
-def _ledger_step(agent: Any, report_id: str, *, report_status: Any, error: Optional[str],
+def _ledger_step(agent: Any, report_id: str, *, context_fn: Callable[[], Dict[str, Any]],
+                 report_status: Any, error: Optional[str],
                  publication_status_fn: Callable[[str], Dict[str, Any]],
                  load_forecast_fn: Callable[[str], Optional[Dict[str, Any]]],
                  final_audit_path_fn: Optional[Callable[[str], str]],
                  now: Optional[datetime]) -> Dict[str, Any]:
     if not _published_mode_on():
         return {"status": "disabled"}
-    context = _report_context(agent)
+    context = context_fn()
     return commit_report(
         report_id=report_id,
         report_status=report_status,
@@ -454,9 +455,18 @@ def run_post_publication(agent: Any, report_id: str, *, report_status: Any,
     its ``report_id`` and is ``{'status': 'disabled', 'report_id': ...}`` unless
     REPORT_FORECAST_LEDGER is on and the commit mode is 'published'.
     """
+    shared: Dict[str, Dict[str, Any]] = {}
+
+    def report_context() -> Dict[str, Any]:
+        # Built once, on first use, and shared by every step: the eval bundle is keyed on
+        # the very context its ledger row was committed with (one owner lookup, not two).
+        if "context" not in shared:
+            shared["context"] = _report_context(agent)
+        return shared["context"]
+
     try:
         receipt = _ledger_step(
-            agent, report_id, report_status=report_status, error=error,
+            agent, report_id, context_fn=report_context, report_status=report_status, error=error,
             publication_status_fn=publication_status_fn,
             load_forecast_fn=load_forecast_fn, final_audit_path_fn=final_audit_path_fn,
             now=now)
@@ -465,29 +475,36 @@ def run_post_publication(agent: Any, report_id: str, *, report_status: Any,
         receipt = {"status": "error", "commit_id": None, "target_key": None,
                    "record_class": None, "reasons": [f"{type(exc).__name__}: {exc}"[:300]]}
     receipt["report_id"] = report_id
-    _eval_bundle_step(agent, report_id, publication_status_fn=publication_status_fn,
+    _eval_bundle_step(agent, report_id, context_fn=report_context, report_status=report_status,
+                      publication_status_fn=publication_status_fn,
                       load_forecast_fn=load_forecast_fn, now=now)
     return receipt
 
 
-def _eval_bundle_step(agent: Any, report_id: str, *,
+def _eval_bundle_step(agent: Any, report_id: str, *, context_fn: Callable[[], Dict[str, Any]],
+                      report_status: Any,
                       publication_status_fn: Callable[[str], Dict[str, Any]],
                       load_forecast_fn: Callable[[str], Optional[Dict[str, Any]]],
                       now: Optional[datetime]) -> Optional[Dict[str, Any]]:
     """EVAL-19 (EVAL_BUNDLE_CAPTURE, default off): freeze the evaluation bundle of a
-    publishable report next to it (``eval_bundle.capture_from_agent``) after the ledger
-    commit. The bundle sees the same enriched context as the ledger row it will be scored
-    against (:func:`_report_context`: owning pipeline, validated as-of anchor, record
-    class). Best effort: never changes the report, its status or its artifacts; returns
-    the manifest, or None when off, unpublishable or failed."""
+    completed, publishable report next to it (``eval_bundle.capture_from_agent``) after
+    the ledger commit, gated exactly as :func:`commit_report` gates a scored row (a failed
+    report is never bundled, even when its meta.json still reads publishable). The bundle
+    sees the context the ledger row was committed with (``context_fn``,
+    :func:`_report_context`: owning pipeline, validated as-of anchor, record class). Best
+    effort: never changes the report, its status or its artifacts; returns the manifest,
+    or None when off, failed, unpublishable or the capture failed."""
     if not getattr(Config, "EVAL_BUNDLE_CAPTURE", False):
         return None
     try:
-        if not (publication_status_fn(report_id) or {}).get("publishable"):
+        if _status_value(report_status) != "completed":
+            return None
+        publication = publication_status_fn(report_id)
+        if not isinstance(publication, Mapping) or publication.get("publishable") is not True:
             return None
         from . import eval_bundle
         from .report_agent import ReportManager
-        context = _report_context(agent)
+        context = dict(context_fn())
         context["record_class"] = _record_class(context, getattr(agent, "scenario_label", ""))
         manifest = eval_bundle.capture_from_agent(
             agent, report_id, report_dir=ReportManager._get_report_folder(report_id),

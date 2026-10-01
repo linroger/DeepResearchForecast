@@ -25,8 +25,8 @@ memory (no LLM call); a block that cannot be built is recorded as
 ``unavailable:<reason>``, never invented.
 
 Capture runs from ``ledger_commit.run_post_publication`` (after the ledger commit)
-only under EVAL_BUNDLE_CAPTURE for a publishable report, and never touches the
-report's own artifacts. ``backend/scripts/eval_bundle.py`` backfills bundles from
+only under EVAL_BUNDLE_CAPTURE for a completed, publishable report, and never touches
+the report's own artifacts. ``backend/scripts/eval_bundle.py`` backfills bundles from
 stored handoffs and verifies them.
 """
 
@@ -36,6 +36,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -141,8 +142,9 @@ def write_bundle(bundle_dir: str, *, blocks: Mapping[str, Optional[str]],
     ``blocks[name]`` is the block text or None; ``statuses[name]`` its status ('ok', or
     'unavailable:<reason>' — a None text is never 'ok'). ``meta`` supplies capture
     (CAPTURE_MODES), ids, created_at, as_of, as_of_source, central_question,
-    upstream_models, run and publication. Any other file in ``blocks/`` (an earlier
-    capture's block that is now unavailable, an interrupted write's temp file) is removed,
+    upstream_models, run and publication. Any other entry in ``blocks/`` (an earlier
+    capture's block that is now unavailable, an interrupted write's temp file, a stray
+    directory or link, a file browser's metadata file) is removed without following links,
     so the directory holds exactly the bundle's own blocks. Raises ValueError for an
     unknown block, an invalid status or capture mode, or a manifest that is not strict
     JSON (NaN, unserialisable values)."""
@@ -189,12 +191,16 @@ def write_bundle(bundle_dir: str, *, blocks: Mapping[str, Optional[str]],
     manifest["bundle_sha256"] = bundle_sha256(manifest["blocks"], manifest["targets"])
     manifest["manifest_sha256"] = manifest_sha256(manifest)
     blocks_dir = os.path.join(bundle_dir, BLOCKS_DIRNAME)
-    if os.path.isdir(blocks_dir):
+    if os.path.islink(blocks_dir) or (os.path.lexists(blocks_dir) and not os.path.isdir(blocks_dir)):
+        os.remove(blocks_dir)          # a link or a file: never clean (or write into) anything elsewhere
+    elif os.path.isdir(blocks_dir):
         keep = {f"{name}.txt" for name in texts}
         for entry_name in os.listdir(blocks_dir):
             path = os.path.join(blocks_dir, entry_name)
-            if entry_name not in keep and os.path.isfile(path):
-                os.remove(path)
+            if os.path.isdir(path) and not os.path.islink(path):
+                shutil.rmtree(path)    # never a block, even under a block's name
+            elif entry_name not in keep or os.path.islink(path):
+                os.remove(path)        # links are unlinked, never followed
     for name, text in texts.items():
         write_text_atomic(_block_path(bundle_dir, name), text)
     write_json_atomic(os.path.join(bundle_dir, MANIFEST_NAME), manifest)
@@ -220,7 +226,10 @@ def _check_block_entry(name: str, entry: Any) -> None:
 
 
 def _check_block_dir(bundle_dir: str) -> None:
-    """``blocks/`` holds nothing but files named after BLOCK_NAMES (absent is fine)."""
+    """``blocks/`` holds nothing but files named after BLOCK_NAMES (absent is fine).
+    Strict on purpose: a metadata file a file browser drops there (macOS ``.DS_Store``)
+    fails verification too, until a re-capture or ``backfill --force`` rewrites the
+    directory; inspect bundles with ``verify`` or a shell, not a file browser."""
     blocks_dir = os.path.join(bundle_dir, BLOCKS_DIRNAME)
     try:
         entries = os.listdir(blocks_dir)
@@ -248,8 +257,8 @@ def load_bundle(bundle_dir: str) -> Tuple[Dict[str, Any], Dict[str, Optional[str
     try:
         with open(path, encoding="utf-8") as f:
             manifest = json.load(f)
-    except (OSError, ValueError) as exc:
-        raise BundleIntegrityError(f"manifest unreadable: {exc}") from exc
+    except (OSError, ValueError, RecursionError) as exc:     # RecursionError: absurd nesting
+        raise BundleIntegrityError(f"manifest unreadable: {type(exc).__name__}: {exc}") from exc
     if not isinstance(manifest, dict) or manifest.get("schema") != MANIFEST_SCHEMA:
         raise BundleIntegrityError("manifest is not a drf-eval-bundle/v1 manifest")
     block_meta = manifest.get("blocks")
@@ -263,8 +272,8 @@ def load_bundle(bundle_dir: str) -> Tuple[Dict[str, Any], Dict[str, Optional[str
     try:
         seal = manifest_sha256(manifest)
         expected_bundle = bundle_sha256(block_meta, targets)
-    except (TypeError, ValueError) as exc:
-        raise BundleIntegrityError(f"manifest is not canonical JSON: {exc}") from exc
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise BundleIntegrityError(f"manifest is not canonical JSON: {type(exc).__name__}: {exc}") from exc
     if manifest.get("manifest_sha256") != seal:
         raise BundleIntegrityError("manifest_sha256 mismatch")
     _check_block_dir(bundle_dir)
@@ -342,9 +351,13 @@ def select_targets(forecast: Any, k: int = DEFAULT_TARGETS) -> List[Dict[str, An
 
 # ------------------------------------------------------------------ blocks
 def _block(builder: Callable[[], Any], reason: str) -> Tuple[Optional[str], str]:
-    """Run one deterministic block builder; an empty result or an error is unavailable."""
+    """Run one deterministic block builder; an empty result or an error is unavailable.
+    Text that cannot be written as UTF-8 (a lone surrogate decoded from a JSON escape) is
+    an error of this block alone, never of the whole bundle."""
     try:
         text = builder()
+        if isinstance(text, str):
+            text.encode("utf-8")
     except Exception as exc:  # noqa: BLE001 — one block never breaks the bundle
         logger.warning(f"eval bundle: block {reason} failed ({type(exc).__name__}: {exc})")
         return None, unavailable(f"error:{type(exc).__name__}")
@@ -409,6 +422,28 @@ def publication_hashes(report_dir: str, *, forecast_sealed: bool) -> Dict[str, O
                                 if forecast_sealed else None)}
 
 
+def graph_block(zep: Any, graph_id: str, question: str, as_of: str) -> Tuple[Optional[str], str]:
+    """In-pipeline graph block: the facts true at ``as_of`` (``zep_tools.as_of_search``,
+    GRAPH_FACTS_LIMIT), one per line, each fact's internal whitespace collapsed so a line
+    is always exactly one fact. A degraded result is ``unavailable:degraded_search``:
+    after a search-backend failure zep_tools falls back to a keyword scan of the whole
+    graph that applies no as-of cut, so it can hold facts written after the as-of
+    (simulation memory, interview write-backs) and is never frozen as a report input. A
+    search error is ``unavailable:error:<Type>``; no facts is ``unavailable:no_graph_facts``."""
+    try:
+        result = zep.as_of_search(graph_id, question, as_of, limit=GRAPH_FACTS_LIMIT)
+    except Exception as exc:  # noqa: BLE001 — one block never breaks the bundle
+        logger.warning(f"eval bundle: graph search failed ({type(exc).__name__}: {exc})")
+        return None, unavailable(f"error:{type(exc).__name__}")
+    if bool(getattr(result, "degraded", False)):
+        return None, unavailable("degraded_search")
+
+    def _facts() -> str:
+        lines = (" ".join(str(fact).split()) for fact in (getattr(result, "facts", None) or []))
+        return "\n".join(line for line in lines if line)
+    return _block(_facts, "no_graph_facts")
+
+
 def upstream_models(pipeline_id: Optional[str]) -> Optional[Dict[str, Any]]:
     """run.json ``resolved`` of the owning pipeline, or None."""
     if not pipeline_id:
@@ -443,9 +478,7 @@ def capture_from_agent(agent: Any, report_id: str, *, report_dir: str, forecast:
     actors = getattr(agent, "actors", None)
     built = research_blocks(actors, getattr(agent, "research_report", None), dossier_chars())
 
-    market = getattr(agent, "_market_pack", None)
-    built["market"] = ((market, STATUS_OK) if isinstance(market, str) and market.strip()
-                       else (None, unavailable("no_market_pack")))
+    built["market"] = _block(lambda: getattr(agent, "_market_pack", None), "no_market_pack")
 
     health = None
     health_fn = getattr(agent, "_run_summary_health", None)
@@ -458,17 +491,16 @@ def capture_from_agent(agent: Any, report_id: str, *, report_dir: str, forecast:
         built["sim"] = (None, unavailable(health))
     else:
         pack = getattr(agent, "_signal_pack", None)
-        if not (isinstance(pack, str) and pack.strip()) and callable(getattr(agent, "_build_signal_pack", None)):
-            built["sim"] = _block(agent._build_signal_pack, "no_signal_pack")
+        build_pack = getattr(agent, "_build_signal_pack", None)
+        if not (isinstance(pack, str) and pack.strip()) and callable(build_pack):
+            built["sim"] = _block(build_pack, "no_signal_pack")     # what legacy_prompt would feed
         else:
-            built["sim"] = ((pack, STATUS_OK) if isinstance(pack, str) and pack.strip()
-                            else (None, unavailable("no_signal_pack")))
+            built["sim"] = _block(lambda: pack, "no_signal_pack")
 
     as_of, as_of_source = resolve_as_of(context, actors, moment)
     question = getattr(agent, "simulation_requirement", None)
     graph_id = getattr(agent, "graph_id", None)
     zep = getattr(agent, "zep_tools", None)
-    notes: Dict[str, str] = {}
     if not (graph_id and zep is not None and question):
         built["graph"] = (None, unavailable("no_graph_context"))
     elif as_of_source == "commit_date":
@@ -476,15 +508,7 @@ def capture_from_agent(agent: Any, report_id: str, *, report_dir: str, forecast:
         # research's point in time, so no graph facts are frozen (no look-ahead).
         built["graph"] = (None, unavailable("no_validated_as_of"))
     else:
-        degraded: List[bool] = []
-
-        def _graph() -> str:
-            result = zep.as_of_search(graph_id, str(question), as_of, limit=GRAPH_FACTS_LIMIT)
-            degraded.append(bool(getattr(result, "degraded", False)))
-            return "\n".join(str(fact) for fact in (getattr(result, "facts", None) or []))
-        built["graph"] = _block(_graph, "no_graph_facts")
-        if built["graph"][1] == STATUS_OK and any(degraded):
-            notes["graph"] = "degraded_search"   # keyword fallback after a semantic-search failure
+        built["graph"] = graph_block(zep, graph_id, str(question), as_of)
 
     pipeline_id = context.get("pipeline_id")
     meta = {
@@ -503,4 +527,4 @@ def capture_from_agent(agent: Any, report_id: str, *, report_dir: str, forecast:
     return write_bundle(bundle_dir_for(report_dir),
                         blocks={name: built[name][0] for name in BLOCK_NAMES},
                         statuses={name: built[name][1] for name in BLOCK_NAMES},
-                        targets=select_targets(forecast), meta=meta, notes=notes)
+                        targets=select_targets(forecast), meta=meta)

@@ -12,7 +12,10 @@ rendered as the research table at the snapshot time (block note
 and graph ``unavailable:not_persisted``, targets from the audit-sealed forecast only
 (``ReportManager.load_structured_forecast``; none when unsealed). as_of is resolved as
 the ledger commit resolved it (``ledger_commit.resolve_as_of`` at the report's
-completion time). Only publishable reports are bundled. An existing bundle is kept
+completion time), and run.record_class as the orchestrator keys the pipeline's own report
+(evaluation / conditional_scenario / production). The handoff is the state's
+containment-checked one (``PipelineManager.resolve_handoff_dir``: a what-if fork reads
+its base's). Only publishable reports are bundled. An existing bundle is kept
 unless --force; a bundle captured in the pipeline (higher fidelity) is replaced only
 with --force --replace-in-pipeline. One pipeline's failure is reported as an ``error``
 row and never aborts the others; the exit code is 1 when any row errored, else 0.
@@ -67,6 +70,21 @@ def _report_completed_at(report_id: str) -> Optional[datetime]:
         return None
 
 
+def _record_class(pipeline_id: str, state: Dict[str, Any], handoff: str) -> str:
+    """The ledger record class of a pipeline's own report, derived as the orchestrator
+    keys it (``PipelineOrchestrator._report_ledger_context``): the run's evaluation pin
+    (options, else its handoff marker; EVAL-13) re-classes it ``evaluation``, a what-if
+    fork is ``conditional_scenario``, anything else ``production``."""
+    from app.services.ledger_commit import _record_class as ledger_record_class
+    from app.services.ledger_commit import apply_evaluation_context
+    from app.services.pipeline_orchestrator import _evaluation_pin_of, _scenario_ledger_identity
+    options = state.get("options") if isinstance(state.get("options"), dict) else {}
+    context = apply_evaluation_context(
+        _scenario_ledger_identity(options),
+        _evaluation_pin_of(pipeline_id, {"options": options, "handoff_dir": handoff}))
+    return ledger_record_class(context, None)
+
+
 def backfill_pipeline(pipeline_id: str, *, force: bool = False,
                       replace_in_pipeline: bool = False) -> Dict[str, Any]:
     """Bundle one pipeline's published report from its handoff; returns a result row."""
@@ -93,7 +111,7 @@ def backfill_pipeline(pipeline_id: str, *, force: bool = False,
                 and not replace_in_pipeline):
             return {"pipeline": pipeline_id, "report": report_id, "status": "skipped",
                     "reason": "in_pipeline_bundle_exists"}
-    handoff = state.get("handoff_dir") or PipelineManager.handoff_dir(pipeline_id)
+    handoff = PipelineManager.resolve_handoff_dir(pipeline_id)
     actors = _read_json(os.path.join(handoff, "actors.json"))
     built = eval_bundle.research_blocks(
         actors, _read_text(os.path.join(handoff, "research_report.md")), eval_bundle.dossier_chars())
@@ -114,8 +132,9 @@ def backfill_pipeline(pipeline_id: str, *, force: bool = False,
         "as_of_source": as_of_source,
         "central_question": state.get("prompt"),
         "upstream_models": eval_bundle.upstream_models(pipeline_id),
-        # The pipeline's own report; its record class and seed are not persisted with it.
-        "run": {"record_class": None, "run_kind": "pipeline", "seed": None},
+        # The pipeline's own report; the simulation seed it ran with is not persisted.
+        "run": {"record_class": _record_class(pipeline_id, state, handoff), "run_kind": "pipeline",
+                "seed": None},
         "publication": eval_bundle.publication_hashes(report_dir, forecast_sealed=isinstance(forecast, dict)),
     }
     manifest = eval_bundle.write_bundle(

@@ -6,6 +6,7 @@ the pipeline store and the report store live under tmp_path."""
 import hashlib
 import json
 import os
+import shutil
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -46,13 +47,16 @@ MARKDOWN = "# Report\n\nGrid demand outlook.\n"
 
 
 class _Zep:
-    def __init__(self, facts=("EIA: demand 150 GW", "DOE: grid plan"), degraded=False):
+    def __init__(self, facts=("EIA: demand 150 GW", "DOE: grid plan"), degraded=False, error=None):
         self.calls = []
         self.facts = list(facts)
         self.degraded = degraded
+        self.error = error
 
     def as_of_search(self, graph_id, query, as_of, limit=20):
         self.calls.append((graph_id, query, as_of, limit))
+        if self.error is not None:
+            raise self.error
         return SimpleNamespace(facts=self.facts, degraded=self.degraded)
 
 
@@ -226,6 +230,63 @@ def test_unvalidated_as_of_never_reaches_the_graph(report_dir, pipelines, monkey
     assert agent.zep_tools.calls == []
 
 
+@pytest.mark.parametrize("status", ["failed", "", None])
+def test_failed_report_is_never_bundled(report_dir, monkeypatch, status):
+    """Gated like the ledger's scored row: a report that did not complete is never bundled,
+    even when publication_status still reads publishable (meta.json from an earlier save)."""
+    monkeypatch.setattr(Config, "EVAL_BUNDLE_CAPTURE", True, raising=False)
+    receipt = ledger_commit.run_post_publication(
+        _agent(), "r1", report_status=status, error="boom",
+        publication_status_fn=lambda rid: {"publishable": True},
+        load_forecast_fn=lambda rid: json.loads(json.dumps(FORECAST)), now=NOW)
+    assert receipt["status"] == "unpublished"
+    assert not os.path.exists(eb.bundle_dir_for(report_dir))
+
+
+@pytest.mark.parametrize("publication", [{"publishable": "yes"}, {"publishable": 1}, None, ["publishable"]])
+def test_only_a_true_publishable_flag_is_bundled(report_dir, monkeypatch, publication):
+    monkeypatch.setattr(Config, "EVAL_BUNDLE_CAPTURE", True, raising=False)
+    monkeypatch.setattr(Config, "REPORT_FORECAST_LEDGER", False, raising=False)
+    ledger_commit.run_post_publication(
+        _agent(), "r1", report_status="completed", error=None,
+        publication_status_fn=lambda rid: publication,
+        load_forecast_fn=lambda rid: json.loads(json.dumps(FORECAST)), now=NOW)
+    assert not os.path.exists(eb.bundle_dir_for(report_dir))
+
+
+@pytest.mark.parametrize("ledger_on, bundle_on, builds", [(True, True, 1), (False, True, 1),
+                                                          (True, False, 1), (False, False, 0)])
+def test_report_context_is_built_once_and_shared(report_dir, monkeypatch, ledger_on, bundle_on, builds):
+    """One owner lookup per report: the bundle reads the very context the ledger committed
+    with, and with both steps off none is built (flag-off behaviour unchanged)."""
+    monkeypatch.setattr(Config, "REPORT_FORECAST_LEDGER", ledger_on, raising=False)
+    monkeypatch.setattr(Config, "EVAL_BUNDLE_CAPTURE", bundle_on, raising=False)
+    built, seen = [], {}
+    real_context, real_commit, real_capture = (ledger_commit._report_context, ledger_commit.commit_report,
+                                               eb.capture_from_agent)
+
+    def _counting_context(agent):
+        built.append(agent)
+        return real_context(agent)
+
+    def _commit(**kwargs):
+        seen["ledger"] = kwargs["ledger_context"]
+        return real_commit(**kwargs)
+
+    def _capture(*args, **kwargs):
+        seen["bundle"] = kwargs["context"]
+        return real_capture(*args, **kwargs)
+    monkeypatch.setattr(ledger_commit, "_report_context", _counting_context)
+    monkeypatch.setattr(ledger_commit, "commit_report", _commit)
+    monkeypatch.setattr(eb, "capture_from_agent", _capture)
+    _post_publication(_agent(), now=NOW)
+    assert len(built) == builds
+    if ledger_on and bundle_on:
+        assert seen["bundle"] == dict(seen["ledger"], record_class="production")
+        assert "record_class" not in seen["ledger"]            # the bundle step works on a copy
+    assert os.path.exists(eb.bundle_dir_for(report_dir)) is bundle_on
+
+
 def test_capture_failure_never_breaks_the_report(report_dir, monkeypatch):
     monkeypatch.setattr(Config, "EVAL_BUNDLE_CAPTURE", True, raising=False)
     monkeypatch.setattr(eb, "capture_from_agent", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")))
@@ -392,6 +453,83 @@ def test_malformed_manifest_raises_integrity_error_only(report_dir, case, capsys
     assert cli.main(["verify", bundle]) == cli.EXIT_INTEGRITY
 
 
+def test_deeply_nested_manifest_raises_integrity_error_only(report_dir, capsys):
+    from scripts import eval_bundle as cli
+    eb.capture_from_agent(_agent(), "r1", report_dir=report_dir, forecast=FORECAST)
+    bundle = eb.bundle_dir_for(report_dir)
+    with open(os.path.join(bundle, eb.MANIFEST_NAME), "w", encoding="utf-8") as f:
+        f.write("[" * 200000 + "]" * 200000)
+    with pytest.raises(eb.BundleIntegrityError, match="manifest unreadable: RecursionError"):
+        eb.load_bundle(bundle)
+    assert cli.main(["verify", bundle]) == cli.EXIT_INTEGRITY
+    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1])["intact"] is False
+
+
+def _stray_dir(blocks):
+    os.makedirs(os.path.join(blocks, "junkdir", "nested"))
+    open(os.path.join(blocks, "junkdir", "nested", "x.txt"), "w").close()
+
+
+def _stray_ds_store(blocks):
+    open(os.path.join(blocks, ".DS_Store"), "wb").close()
+
+
+def _stray_symlinks(blocks):
+    outside = os.path.join(os.path.dirname(os.path.dirname(blocks)), "outside")
+    os.makedirs(outside, exist_ok=True)
+    open(os.path.join(outside, "keep.txt"), "w").close()
+    os.symlink(outside, os.path.join(blocks, "linkdir"))
+    os.symlink(os.path.join(outside, "keep.txt"), os.path.join(blocks, "linkfile"))
+
+
+@pytest.mark.parametrize("stray", [_stray_dir, _stray_ds_store, _stray_symlinks])
+def test_recapture_repairs_any_stray_entry_in_blocks(report_dir, stray):
+    """verify rejects anything in blocks/ the manifest does not own (directories and
+    file-browser metadata included); a re-capture removes it without following links."""
+    bundle = eb.bundle_dir_for(report_dir)
+    eb.capture_from_agent(_agent(), "r1", report_dir=report_dir, forecast=FORECAST)
+    stray(os.path.join(bundle, "blocks"))
+    with pytest.raises(eb.BundleIntegrityError, match="unexpected file"):
+        eb.load_bundle(bundle)
+    eb.capture_from_agent(_agent(), "r1", report_dir=report_dir, forecast=FORECAST)
+    eb.load_bundle(bundle)
+    assert sorted(os.listdir(os.path.join(bundle, "blocks"))) == sorted(f"{n}.txt" for n in eb.BLOCK_NAMES)
+    if stray is _stray_symlinks:
+        assert os.path.exists(os.path.join(report_dir, "outside", "keep.txt"))   # unlinked, not followed
+
+
+def test_recapture_repairs_a_directory_under_a_block_name_and_a_blocks_file(report_dir):
+    bundle = eb.bundle_dir_for(report_dir)
+    blocks = os.path.join(bundle, "blocks")
+    eb.capture_from_agent(_agent(), "r1", report_dir=report_dir, forecast=FORECAST)
+    os.remove(os.path.join(blocks, "brief.txt"))
+    os.makedirs(os.path.join(blocks, "brief.txt", "inner"))
+    with pytest.raises(eb.BundleIntegrityError, match="block brief missing"):
+        eb.load_bundle(bundle)
+    eb.capture_from_agent(_agent(), "r1", report_dir=report_dir, forecast=FORECAST)
+    assert eb.load_bundle(bundle)[1]["brief"]
+    shutil.rmtree(blocks)
+    with open(blocks, "w", encoding="utf-8") as f:            # blocks/ is a plain file
+        f.write("not a directory")
+    with pytest.raises(eb.BundleIntegrityError, match="unreadable"):
+        eb.load_bundle(bundle)
+    eb.capture_from_agent(_agent(), "r1", report_dir=report_dir, forecast=FORECAST)
+    assert os.path.isdir(blocks) and eb.load_bundle(bundle)[1]["brief"]
+
+
+def test_symlinked_blocks_dir_is_replaced_not_followed(report_dir, tmp_path):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "precious.txt").write_text("keep me", encoding="utf-8")
+    bundle = eb.bundle_dir_for(report_dir)
+    os.makedirs(bundle)
+    os.symlink(str(elsewhere), os.path.join(bundle, "blocks"))
+    eb.capture_from_agent(_agent(), "r1", report_dir=report_dir, forecast=FORECAST)
+    assert not os.path.islink(os.path.join(bundle, "blocks"))
+    assert sorted(os.listdir(elsewhere)) == ["precious.txt"]
+    eb.load_bundle(bundle)
+
+
 def test_write_bundle_rejects_invalid_input_before_writing(tmp_path):
     bundle = str(tmp_path / "bundle")
     meta = {"capture": "in_pipeline"}
@@ -435,15 +573,85 @@ def test_missing_inputs_degrade_per_block(report_dir):
     assert eb.upstream_models(None) is None
 
 
-def test_graph_block_question_unchanged_and_degraded_search_noted(report_dir):
+def _graph_file(report_dir):
+    return os.path.join(eb.bundle_dir_for(report_dir), "blocks", "graph.txt")
+
+
+def test_graph_block_question_unchanged_and_degraded_search_unavailable(report_dir):
+    """A degraded search is zep_tools' keyword fallback over the whole graph, with no
+    as-of cut: it is never frozen, and a re-capture drops the earlier capture's facts."""
+    eb.capture_from_agent(_agent(), "r1", report_dir=report_dir, forecast=FORECAST)
+    assert os.path.exists(_graph_file(report_dir))
     question = "Will grid demand exceed 230 GW " + "and stay there " * 40 + "by 2030?"
     zep = _Zep(degraded=True)
     manifest = eb.capture_from_agent(_agent(simulation_requirement=question, zep_tools=zep), "r1",
                                      report_dir=report_dir, forecast=FORECAST)
     assert len(question) > 350 and zep.calls == [("g1", question, "2026-06-30", 20)]
-    assert manifest["blocks"]["graph"]["status"] == "ok"
-    assert manifest["blocks"]["graph"]["note"] == "degraded_search"
+    assert manifest["blocks"]["graph"] == {"sha256": None, "chars": 0, "status": "unavailable:degraded_search"}
+    assert not os.path.exists(_graph_file(report_dir))
+    _manifest, texts = eb.load_bundle(eb.bundle_dir_for(report_dir))
+    assert texts["graph"] is None and texts["brief"]
+
+
+def test_graph_search_error_is_unavailable(report_dir):
+    zep = _Zep(error=RuntimeError("graph backend down"))
+    manifest = eb.capture_from_agent(_agent(zep_tools=zep), "r1", report_dir=report_dir, forecast=FORECAST)
+    assert zep.calls == [("g1", QUESTION, "2026-06-30", 20)]
+    assert manifest["blocks"]["graph"] == {"sha256": None, "chars": 0, "status": "unavailable:error:RuntimeError"}
+    assert not os.path.exists(_graph_file(report_dir))
+    assert manifest["blocks"]["brief"]["status"] == "ok"
     eb.load_bundle(eb.bundle_dir_for(report_dir))
+    # no facts at all is unavailable too, never an empty 'ok' block
+    manifest = eb.capture_from_agent(_agent(zep_tools=_Zep(facts=())), "r1", report_dir=report_dir,
+                                     forecast=FORECAST)
+    assert manifest["blocks"]["graph"]["status"] == "unavailable:no_graph_facts"
+
+
+def test_graph_facts_are_one_per_line(report_dir):
+    zep = _Zep(facts=["fact one\nwith  a\r\nbroken line", "   ", "\tfact two ", 3])
+    manifest = eb.capture_from_agent(_agent(zep_tools=zep), "r1", report_dir=report_dir, forecast=FORECAST)
+    _manifest, texts = eb.load_bundle(eb.bundle_dir_for(report_dir))
+    assert texts["graph"] == "fact one with a broken line\nfact two\n3"
+    assert texts["graph"].splitlines() == ["fact one with a broken line", "fact two", "3"]
+    assert manifest["blocks"]["graph"]["chars"] == len(texts["graph"])
+
+
+def test_sim_block_falls_back_to_the_built_signal_pack(report_dir):
+    """No cached _signal_pack: the block is what _build_signal_pack (legacy_prompt's
+    source) returns; a builder that raises or returns nothing is unavailable."""
+    agent = _agent(_signal_pack="", _build_signal_pack=lambda: "built signals")
+    manifest = eb.capture_from_agent(agent, "r1", report_dir=report_dir, forecast=FORECAST)
+    assert eb.load_bundle(eb.bundle_dir_for(report_dir))[1]["sim"] == "built signals"
+    assert manifest["blocks"]["sim"]["sha256"] == hashlib.sha256(b"built signals").hexdigest()
+    agent = _agent(_signal_pack="cached", _build_signal_pack=lambda: "built signals")
+    eb.capture_from_agent(agent, "r1", report_dir=report_dir, forecast=FORECAST)
+    assert eb.load_bundle(eb.bundle_dir_for(report_dir))[1]["sim"] == "cached"
+
+    def _boom():
+        raise RuntimeError("no simulation data")
+    for builder, status in ((_boom, "unavailable:error:RuntimeError"), (lambda: "  ", "unavailable:no_signal_pack")):
+        manifest = eb.capture_from_agent(_agent(_signal_pack=None, _build_signal_pack=builder), "r1",
+                                         report_dir=report_dir, forecast=FORECAST)
+        assert manifest["blocks"]["sim"] == {"sha256": None, "chars": 0, "status": status}
+        assert not os.path.exists(os.path.join(eb.bundle_dir_for(report_dir), "blocks", "sim.txt"))
+        eb.load_bundle(eb.bundle_dir_for(report_dir))
+    manifest = eb.capture_from_agent(_agent(_signal_pack=None), "r1", report_dir=report_dir, forecast=FORECAST)
+    assert manifest["blocks"]["sim"]["status"] == "unavailable:no_signal_pack"
+
+
+def test_unencodable_block_text_is_unavailable_alone(report_dir):
+    """A lone surrogate (decoded from a JSON escape) cannot be written as UTF-8: only that
+    block is unavailable, the other blocks are still frozen and the bundle verifies."""
+    agent = _agent(research_report="dossier \ud800 text", _market_pack="market \udc80",
+                   _signal_pack="", _build_signal_pack=lambda: "sim \ud83d",
+                   zep_tools=_Zep(facts=["fact \ud800"]))
+    manifest = eb.capture_from_agent(agent, "r1", report_dir=report_dir, forecast=FORECAST)
+    statuses = {name: meta["status"] for name, meta in manifest["blocks"].items()}
+    for name in ("dossier", "market", "sim", "graph"):
+        assert statuses[name] == "unavailable:error:UnicodeEncodeError", name
+    assert statuses["brief"] == statuses["quant"] == statuses["forecast_inputs"] == "ok"
+    _manifest, texts = eb.load_bundle(eb.bundle_dir_for(report_dir))
+    assert texts["dossier"] is None and texts["brief"]
 
 
 def test_dossier_budget_is_one_positive_value(monkeypatch):
@@ -474,9 +682,10 @@ def test_select_targets_natural_id_order_and_case_insensitive_exact():
 
 
 # ------------------------------------------------------------------ backfill
-def _handoff(tmp_path, *, markets_payload=None, name="handoff"):
-    handoff = tmp_path / name
-    handoff.mkdir()
+def _handoff(pipelines, pid=PID, *, markets_payload=None):
+    """A stored handoff at the pipeline's own path (under PIPELINE_DATA_DIR)."""
+    handoff = pipelines / pid / "handoff"
+    handoff.mkdir(parents=True)
     (handoff / "actors.json").write_text(json.dumps(ACTORS), encoding="utf-8")
     (handoff / "research_report.md").write_text("# Dossier\n\nBody.", encoding="utf-8")
     payload = markets_payload if markets_payload is not None else {
@@ -497,8 +706,8 @@ def _run_cli(capsys, *argv):
     return code, json.loads(capsys.readouterr().out)
 
 
-def test_backfill_from_fixture_handoff(report_dir, pipelines, tmp_path, capsys):
-    _backfill_pipeline(pipelines, _handoff(tmp_path))
+def test_backfill_from_fixture_handoff(report_dir, pipelines, capsys):
+    _backfill_pipeline(pipelines, _handoff(pipelines))
     _seal("r1")
     code, out = _run_cli(capsys, "backfill", "--pipeline", PID)
     assert code == 0 and out["results"][0]["status"] == "written"
@@ -509,7 +718,7 @@ def test_backfill_from_fixture_handoff(report_dir, pipelines, tmp_path, capsys):
     assert (manifest["as_of"], manifest["as_of_source"]) == ("2026-06-30", "actors")
     assert manifest["central_question"] == QUESTION and manifest["upstream_models"] == RESOLVED
     assert manifest["ids"] == {"pipeline": PID, "report": "r1", "simulation": "sim1", "graph": "g1"}
-    assert manifest["run"] == {"record_class": None, "run_kind": "pipeline", "seed": None}
+    assert manifest["run"] == {"record_class": "production", "run_kind": "pipeline", "seed": None}
     # the audit-sealed forecast supplies the targets and the publication hash
     assert [t["target_id"] for t in manifest["targets"]] == ["F2", "F1", "F3"]
     assert manifest["publication"]["forecast_sha256"] == _sha(os.path.join(report_dir, "forecast.json"))
@@ -522,13 +731,70 @@ def test_backfill_from_fixture_handoff(report_dir, pipelines, tmp_path, capsys):
     assert code == 0 and out["results"][0]["reason"] == "pipeline_not_found"
 
 
+def test_backfill_reads_only_a_contained_handoff(report_dir, pipelines, tmp_path, capsys):
+    """A state whose handoff_dir escapes PIPELINE_DATA_DIR is not followed: the backfill
+    reads the pipeline's own handoff (PipelineManager.resolve_handoff_dir), never the files
+    the edited state points at."""
+    outside = tmp_path / "outside_handoff"
+    outside.mkdir()
+    (outside / "actors.json").write_text(json.dumps(ACTORS), encoding="utf-8")
+    (outside / "research_report.md").write_text("# OUTSIDE dossier", encoding="utf-8")
+    _backfill_pipeline(pipelines, outside)
+    _seal("r1")
+    code, out = _run_cli(capsys, "backfill", "--pipeline", PID)
+    assert code == 0 and out["results"][0]["status"] == "written"
+    manifest, _texts = eb.load_bundle(eb.bundle_dir_for(report_dir))
+    statuses = {name: meta["status"] for name, meta in manifest["blocks"].items()}
+    assert statuses["brief"] == "unavailable:no_actors" and statuses["dossier"] == "unavailable:no_research_report"
+    _handoff(pipelines)                                      # the pipeline's own (static) handoff
+    code, out = _run_cli(capsys, "backfill", "--pipeline", PID, "--force")
+    assert code == 0 and out["results"][0]["status"] == "written"
+    _manifest, texts = eb.load_bundle(eb.bundle_dir_for(report_dir))
+    assert texts["brief"] and "OUTSIDE" not in texts["dossier"] and "Body." in texts["dossier"]
+
+
+def test_backfill_fork_reads_its_base_handoff_and_class(report_dir, pipelines, capsys):
+    """A what-if fork shares its base's handoff and validated anchor, and is recorded as the
+    ledger records it: a conditional scenario."""
+    base_handoff = _handoff(pipelines, "pipe_base")
+    _write_pipeline(pipelines, "pipe_base", options={"as_of_date_validated": "2026-06-15"})
+    _backfill_pipeline(pipelines, base_handoff, pid="pipe_fork",
+                       options={"scenario_label": "What if rates fall", "base_pipeline_id": "pipe_base"})
+    _seal("r1")
+    code, out = _run_cli(capsys, "backfill", "--pipeline", "pipe_fork")
+    assert code == 0 and out["results"][0]["status"] == "written"
+    manifest, texts = eb.load_bundle(eb.bundle_dir_for(report_dir))
+    assert manifest["run"]["record_class"] == "conditional_scenario"
+    assert (manifest["as_of"], manifest["as_of_source"]) == ("2026-06-15", "validated")
+    assert texts["brief"] and "Body." in texts["dossier"]
+
+
+@pytest.mark.parametrize("options, marker, expected", [
+    ({}, None, "production"),
+    ({"evaluation_run_v1": {"eval_run_id": "e1", "cell_id": "c1"}}, None, "evaluation"),
+    ({"evaluation_run_v1": "corrupted"}, None, "evaluation"),             # fails closed
+    ({}, {"pipeline_id": PID, "eval_run_id": "e1", "cell_id": "c1"}, "evaluation"),
+    ({}, {"pipeline_id": "pipe_other", "eval_run_id": "e1"}, "evaluation"),  # foreign marker
+])
+def test_backfill_records_the_ledger_record_class(report_dir, pipelines, capsys, options, marker, expected):
+    """An evaluation run's report is told apart from production exactly as the ledger tells
+    it (EVAL-13: the options pin, else the handoff marker)."""
+    handoff = _handoff(pipelines)
+    if marker is not None:
+        (handoff / "evaluation_run.json").write_text(json.dumps(marker), encoding="utf-8")
+    _backfill_pipeline(pipelines, handoff, options=options)
+    _seal("r1")
+    code, out = _run_cli(capsys, "backfill", "--pipeline", PID)
+    assert code == 0 and out["results"][0]["status"] == "written"
+    assert eb.load_bundle(eb.bundle_dir_for(report_dir))[0]["run"]["record_class"] == expected
+
+
 @pytest.mark.parametrize("forecast_state", ["unsealed", "tampered_after_audit"])
-def test_backfill_targets_only_from_the_sealed_forecast(report_dir, pipelines, tmp_path, monkeypatch, capsys,
-                                                       forecast_state):
+def test_backfill_targets_only_from_the_sealed_forecast(report_dir, pipelines, monkeypatch, capsys, forecast_state):
     """A legacy publishable report (publication_status does not check forecast.json) whose
     sidecar is unsealed or changed after the audit contributes no targets."""
     monkeypatch.setattr(ReportManager, "publication_status", classmethod(lambda cls, rid: {"publishable": True}))
-    _backfill_pipeline(pipelines, _handoff(tmp_path))
+    _backfill_pipeline(pipelines, _handoff(pipelines))
     if forecast_state == "tampered_after_audit":
         _seal("r1")
         tampered = dict(FORECAST, binary_forecasts=[dict(FORECAST["binary_forecasts"][0], probability=0.99)])
@@ -539,15 +805,14 @@ def test_backfill_targets_only_from_the_sealed_forecast(report_dir, pipelines, t
     assert manifest["targets"] == [] and manifest["publication"]["forecast_sha256"] is None
 
 
-def test_backfill_skips_unpublishable_reports(report_dir, pipelines, tmp_path, capsys):
-    _backfill_pipeline(pipelines, _handoff(tmp_path))        # no meta.json / audit: not publishable
+def test_backfill_skips_unpublishable_reports(report_dir, pipelines, capsys):
+    _backfill_pipeline(pipelines, _handoff(pipelines))        # no meta.json / audit: not publishable
     code, out = _run_cli(capsys, "backfill", "--pipeline", PID)
     assert code == 0 and out["results"][0]["reason"] == "not_publishable"
     assert not os.path.exists(eb.bundle_dir_for(report_dir))
 
 
-def test_backfill_market_block_is_pinned_to_the_snapshot_time(report_dir, pipelines, tmp_path, monkeypatch,
-                                                            capsys):
+def test_backfill_market_block_is_pinned_to_the_snapshot_time(report_dir, pipelines, monkeypatch, capsys):
     """The TIME-3 end-date gate is evaluated at the snapshot time, never at the backfill
     date: re-backfilling the same run gives the same bytes and the same bundle hash."""
     monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GATE", True, raising=False)
@@ -555,7 +820,7 @@ def test_backfill_market_block_is_pinned_to_the_snapshot_time(report_dir, pipeli
                 "end_date": "2026-08-31"},                                   # ends after the snapshot
                {"market_id": "m2", "question": "Did Y by May?", "implied_yes_prob": 0.1,
                 "end_date": "2026-05-31"}]                                   # ended before it
-    _backfill_pipeline(pipelines, _handoff(tmp_path, markets_payload={"as_of": "2026-06-30T12:00:00Z",
+    _backfill_pipeline(pipelines, _handoff(pipelines, markets_payload={"as_of": "2026-06-30T12:00:00Z",
                                                                       "markets": markets}))
     _seal("r1")
     rendered = []
@@ -594,8 +859,8 @@ def test_render_markets_block_default_clock_unchanged(monkeypatch):
     assert pm.render_markets_block(rows) != pm.render_markets_block(rows, now=datetime(2026, 7, 1, tzinfo=timezone.utc))
 
 
-def test_backfill_force_keeps_an_in_pipeline_bundle(report_dir, pipelines, tmp_path, capsys):
-    _backfill_pipeline(pipelines, _handoff(tmp_path))
+def test_backfill_force_keeps_an_in_pipeline_bundle(report_dir, pipelines, capsys):
+    _backfill_pipeline(pipelines, _handoff(pipelines))
     _seal("r1")
     eb.capture_from_agent(_agent(), "r1", report_dir=report_dir, forecast=FORECAST)
     code, out = _run_cli(capsys, "backfill", "--pipeline", PID, "--force")
@@ -615,9 +880,9 @@ def test_backfill_isolates_one_pipelines_failure(tmp_path, pipelines, monkeypatc
     _seal("r_nan")
     good_dir = _write_report("r_good")
     _seal("r_good")
-    _backfill_pipeline(pipelines, _handoff(tmp_path, name="h_nan"), pid="pipe_nan", report_id="r_nan",
+    _backfill_pipeline(pipelines, _handoff(pipelines, "pipe_nan"), pid="pipe_nan", report_id="r_nan",
                        created_at="2026-09-30T02:00:00")
-    _backfill_pipeline(pipelines, _handoff(tmp_path, name="h_good"), pid="pipe_good", report_id="r_good",
+    _backfill_pipeline(pipelines, _handoff(pipelines, "pipe_good"), pid="pipe_good", report_id="r_good",
                        created_at="2026-09-30T01:00:00")
     code, out = _run_cli(capsys, "backfill", "--all-recent", "2")
     rows = {row["pipeline"]: row for row in out["results"]}
