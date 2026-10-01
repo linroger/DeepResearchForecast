@@ -26,7 +26,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
 
 import pytest
 
@@ -477,7 +477,7 @@ def test_an_internal_error_never_raises(tmp_path, monkeypatch):
     def broken(*args, **kwargs):
         raise RuntimeError("ledger bug")
 
-    monkeypatch.setattr(ledger, "register", broken)
+    monkeypatch.setattr(ledger, "record_data", broken)
     assert tools.data("macro_series", {"series": "cpi"}, agent_id="K1") == rg.MSG_DATA_UNAVAILABLE
     assert tools.stats()["data"]["data_failures"] == 1
     assert_web_accounting_untouched(tools)
@@ -651,6 +651,183 @@ def test_an_ungated_search_sighting_leaves_a_dated_data_row_alone(tmp_path):
     assert ledger.get(1) == before and "date_rejected" not in ledger.get(1)
 
 
+class ByRequest:
+    """A data function answering each request (by its series) from a fixed map; records every call."""
+
+    def __init__(self, answers):
+        self.answers = answers
+        self.calls: list[dict] = []
+
+    def __call__(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.answers[kwargs["series"]]
+
+
+def test_a_second_request_resolving_to_a_recorded_url_with_another_page_is_refused(tmp_path):
+    """Review round 2: an alias and an id (or a re-fetched open vintage) can resolve to one URL; the
+    first record wins, so the figures of the first answer stay on its row's page."""
+    later = ok_result(page=CPI_PAGE.replace("323.5", "324.9"),
+                      provenance={"vendor": "fred", "series_id": "CPIAUCSL", "fetched_at": "2026-09-30T18:00:00Z"})
+    fn = ByRequest({"cpi": ok_result(), "CPIAUCSL": later})
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": fn})
+    first = tools.data("macro_series", {"series": "cpi"}, agent_id="K1")
+    assert first.startswith("[S1] ") and "Latest: 323.5" in first
+    recorded = ledger.rows()
+    expected = ("DATA_UNAVAILABLE(collision): the answer could not be recorded as a citable source; do not "
+                "estimate or fabricate the value.")
+    assert tools.data("macro_series", {"series": "CPIAUCSL"}, agent_id="K2") == expected
+    # The row, its page and its provenance are the first record's; the refused page was never stored.
+    assert ledger.rows() == recorded and recorded[0]["data"]["fetched_at"] == "2026-09-30T17:00:00Z"
+    assert sorted(path.name for path in (tmp_path / "pages").glob("*.txt")) == [Path(recorded[0]["page_path"]).name]
+    page_numbers = lr.page_number_set(tools.page_text(1))
+    assert "323.5" in page_numbers and "324.9" not in page_numbers
+    # Final, and the first request is still answered from run memory.
+    assert tools.data("macro_series", {"series": "CPIAUCSL"}, agent_id="K2").startswith(
+        "DATA_UNAVAILABLE(collision): this request already failed in this run;")
+    assert tools.data("macro_series", {"series": "cpi"}, agent_id="K3").startswith(first.split("\n", 1)[0] + "\n")
+    assert [call["series"] for call in fn.calls] == ["cpi", "CPIAUCSL"]
+    assert tools.stats()["data"]["data_failures"] == 1
+    assert_web_accounting_untouched(tools)
+
+
+def test_a_second_request_for_the_same_record_is_answered_from_its_row_unchanged(tmp_path):
+    same_page = ok_result(title="CPI (CPIAUCSL)", provenance={"vendor": "fred", "series_id": "CPIAUCSL",
+                                                               "fetched_at": "2026-09-30T18:00:00Z"})
+    fn = ByRequest({"cpi": ok_result(), "CPIAUCSL": same_page})
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": fn})
+    first = tools.data("macro_series", {"series": "cpi"}, agent_id="K1")
+    recorded = ledger.rows()
+    second = tools.data("macro_series", {"series": "CPIAUCSL"}, agent_id="K2")
+    # The same row and header (the first title), its provenance never replaced.
+    assert second.split("\n", 1)[0] == first.split("\n", 1)[0] == (
+        f"[S1] {CPI_TITLE} — alfred.stlouisfed.org (tier 1) — official data")
+    assert ledger.rows() == recorded and recorded[0]["data"]["fetched_at"] == "2026-09-30T17:00:00Z"
+    assert tools.stats()["data"] == {**data_stats(data_calls=2), "per_agent": {
+        "K1": data_stats(data_calls=1), "K2": data_stats(data_calls=1)}}
+
+
+def test_a_data_row_is_never_persisted_fetched_without_its_provenance_date_and_verdict(tmp_path, monkeypatch):
+    """Review round 2: the row, its page, provenance, date and verdict are one ledger update, so a
+    kill between writes cannot persist a fetched data row the citation wall would admit undated."""
+    result = pinned("2024-05-31")
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": DataFn(result)}, clock=lambda: NOW,
+                               pit=rg.PitPolicy(as_of=AS_OF, undated="flag"))
+    ledger.FLUSH_INTERVAL_S = 0  # every ledger update is written
+    persisted: list[list[dict]] = []
+    write = rg._atomic_write_text
+
+    def spy(path, text):
+        write(path, text)
+        if Path(path) == ledger.path:
+            persisted.append(json.loads(text))
+
+    monkeypatch.setattr(rg, "_atomic_write_text", spy)
+    assert tools.data("macro_series", {"series": "cpi"}, agent_id="K1").startswith("[S1] ")
+    assert len(persisted) == 1
+    (row,) = persisted[0]
+    assert (row["via"], row["fetched"], row["published"], row["pit_status"]) == (
+        "data", True, "2024-05-31", rg.PIT_ADMITTED)
+    assert row["data"]["vintage"] == "2024-05-31" and row == ledger.get(1)
+
+
+def test_ledger_record_data_records_once_and_never_adopts_or_replaces(tmp_path):
+    ledger = rg.SourceLedger(tmp_path / "sources.json")
+    page = {"content_sha256": "a" * 64, "chars": 12, "page_path": "pages/aaaaaaaaaaaaaaaa.txt"}
+    web = ledger.register("https://example.org/web", "Web", "a snippet", "search", "K0")
+    assert ledger.record_data("https://example.org/web", "Data", "K1", data={"v": 1}, **page) is None
+    assert ledger.rows() == [web]
+    assert ledger.record_data("not a url", "Data", "K1", data={"v": 1}, **page) is None
+    # A data row registered without its page is completed (its title filled in, its tier kept).
+    bare = ledger.register("https://example.org/series", "", "", "data", "K1", tier="S1")
+    row = ledger.record_data("https://example.org/series", "Series", "K2", data={"v": (1, 2)},
+                             published="2024-05", pit_status=rg.PIT_SAME_DAY, **page)
+    assert row == {**bare, "title": "Series", "fetched": True, **page, "data": {"v": [1, 2]},
+                   "published": "2024-05", "date_precision": "month", "date_source": rg.DATA_DATE_SOURCE,
+                   "date_rank": rg.DATA_DATE_RANK, "pit_status": rg.PIT_SAME_DAY}
+    # Recorded once: the same page returns the row unchanged, another page is refused.
+    assert ledger.record_data("https://example.org/series", "Other", "K3", data={"v": 9}, **page) == row
+    assert ledger.record_data("https://example.org/series", "Other", "K3", data={"v": 9},
+                              **{**page, "content_sha256": "b" * 64}) is None
+    created = ledger.record_data("https://example.org/new", "New", "K4", data={}, **page)
+    assert (created["via"], created["tier"], created["first_seen_by"], created["fetched"]) == ("data", "S1", "K4", True)
+    assert "published" not in created and "pit_status" not in created
+    # Invalid values raise before anything is written.
+    for bad in ({"published": "May 2024"}, {"pit_status": rg.PIT_LATE}):
+        with pytest.raises(ValueError):
+            ledger.record_data("https://example.org/bad", "Bad", "K5", data={}, **page, **bad)
+    with pytest.raises(TypeError):
+        ledger.record_data("https://example.org/bad", "Bad", "K5", data=["x"], **page)
+    assert ledger.find("https://example.org/bad") is None
+    assert [r["sid"] for r in ledger.rows()] == [web["sid"], row["sid"], created["sid"]]
+    ledger.flush()
+    assert rg.SourceLedger(tmp_path / "sources.json").rows() == ledger.rows()
+
+
+def test_a_short_data_page_survives_the_resumed_shell_sweep_and_its_facts_stay_verified(tmp_path):
+    """Review round 2: a resumed run un-marks stored extraction shells; the vendor's record is short
+    by nature (the classifier calls it a shell) yet stays fetched, verifiable and served."""
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": DataFn()})
+    tools.data("macro_series", {"series": "cpi"}, agent_id="K1")
+    data_row = ledger.get(1)
+    assert rg._extraction_failure_reason(tools.page_text(1)) is not None
+    # A web page an earlier attempt stored although it is a shell, for contrast.
+    shell_text = "Mirror of the CPI page: 323.5"
+    reason = rg._extraction_failure_reason(shell_text)
+    assert reason is not None
+    digest = hashlib.sha256(shell_text.encode("utf-8")).hexdigest()
+    (tmp_path / "pages" / f"{digest[:16]}.txt").write_text(shell_text, "utf-8")
+    web_sid = ledger.register("https://example.org/mirror", "Mirror", "", "fetch", "K1")["sid"]
+    ledger.mark_fetched(web_sid, content_sha256=digest, chars=len(shell_text), page_path=f"pages/{digest[:16]}.txt")
+
+    engine = SimpleNamespace(tools=tools, ledger=ledger, log=lambda level, message: None)
+    shells = lr._Engine._unmark_stored_shells(engine)
+    assert shells == {web_sid: reason} and ledger.get(web_sid)["fetched"] is False
+    assert ledger.get(1) == data_row and ledger.unmark_fetched(1) is None and ledger.get(1) == data_row
+    engine.stored_shells = shells
+    record = {"facts": [{"text": "CPI was 323.5 in August 2026.", "sids": [1], "tag": "VERIFIED",
+                         "verified_numbers": True},
+                        {"text": "The mirror says 323.5.", "sids": [web_sid], "tag": "VERIFIED",
+                         "verified_numbers": True}]}
+    lr._Engine._demote_shell_facts(engine, record)
+    assert [(fact["tag"], fact.get("verification")) for fact in record["facts"]] == [
+        ("VERIFIED", None), ("REPORTED", "no_fetched_source")]
+    assert tools.page_text(1) == CPI_PAGE.strip()
+    assert tools.fetch(CPI_URL, agent_id="K2").startswith(f"[S1] {CPI_TITLE} — alfred.stlouisfed.org (tier 1) — full page")
+    assert rg.SourceLedger(ledger.path).get(1) == data_row
+
+
+def test_web_fetch_of_a_data_row_follows_the_data_gate_not_a_row_less_late_record(tmp_path):
+    """Review round 2: a late search sighting recorded before the URL had a row (a row-less record)
+    dates the live page; the data gate admitted the stored vintage, so web_fetch serves it too."""
+    result = pinned("2024-05-31")
+
+    def search(query, n):
+        return json.dumps({"results": [{"title": "ALFRED CPI", "url": result.url, "content": "CPI vintages",
+                                        "published": "2025-02-01"}]})
+
+    live: list[str] = []
+    tools, ledger = make_tools(tmp_path, data_fns={"macro_series": DataFn(result)}, search_fn=search,
+                               fetch_fn=lambda url: live.append(url) or web_page(),
+                               pit=rg.PitPolicy(as_of=AS_OF), clock=lambda: NOW)
+    assert tools.search("cpi vintages", agent_id="K2").startswith("NO_IN_WINDOW_RESULTS: 1 result was dated")
+    assert len(ledger) == 0
+    assert json.loads((tmp_path / rg.PIT_WITHHELD_FILE).read_text("utf-8")) == [
+        {"url": result.url, "pit_status": rg.PIT_LATE}]
+    assert tools.data("macro_series", {"series": "cpi"}, agent_id="K1").startswith("[S1] ")
+    row = ledger.get(1)
+    assert row["pit_status"] == rg.PIT_ADMITTED and lr.pit_row_admissible(row, tools.pit)
+    for agent in ("K3", "K4"):
+        answer = tools.fetch(result.url, focus="CPI", agent_id=agent)
+        assert answer.startswith(f"[S1] {result.title} — alfred.stlouisfed.org (tier 1) — published 2024-05-31"
+                                 " — full page")
+    assert live == [] and ledger.get(1) == row
+    stats = tools.stats()
+    assert (stats["fetches"], stats["cached_fetches"], stats["failures"]) == (0, 2, 0)
+    assert stats["pit"]["fetch_prefetch_refused"] == 0 and stats["pit"]["fetch_withheld_repeat"] == 0
+    # A web URL with a row-less late record is still refused before any fetch.
+    assert tools.fetch("https://example.org/2025/02/report", agent_id="K3").startswith("OUT_OF_WINDOW")
+
+
 def test_ledger_register_tier_override_applies_only_when_creating(tmp_path):
     ledger = rg.SourceLedger(tmp_path / "sources.json")
     created = ledger.register("https://example.org/a", "A", "", "data", "K1", tier="S1")
@@ -692,11 +869,20 @@ def test_set_data_stores_plain_json_that_survives_a_reload(tmp_path):
 ])
 def test_a_gated_data_row_records_its_vintage_date_and_passes_the_citation_wall(tmp_path, day, same_day, undated,
                                                                                   status, counter):
-    fn = DataFn(pinned(day))
+    result = pinned(day)
+    fn = DataFn(result)
     tools, ledger = make_tools(tmp_path, data_fns={"macro_series": fn}, clock=lambda: NOW,
                                pit=rg.PitPolicy(as_of=AS_OF, same_day=same_day, undated=undated))
     text = tools.data("macro_series", {"series": "cpi"}, agent_id="K1")
     assert lr.tool_output_sids("web_fetch", text) == (1, [1])
+    # The agent reads the value under the same trusted labels a web_fetch of the row shows: its
+    # vintage date and, for a same-day admission, the same-day verdict.
+    labels = f" — published {day}" + (" — same-day" if status == rg.PIT_SAME_DAY else "")
+    head = f"[S1] {result.title} — alfred.stlouisfed.org (tier 1){labels} — official data"
+    assert text.split("\n", 1)[0] == head and lr._ROW_HEADER_RE.match(head)
+    assert tools.data("macro_series", {"series": "cpi"}, agent_id="K2").split("\n", 1)[0] == head
+    assert tools.fetch(result.url, agent_id="K2").startswith(
+        f"[S1] {result.title} — alfred.stlouisfed.org (tier 1){labels} — full page")
     row = ledger.get(1)
     assert (row["pit_status"], row["published"], row["date_precision"], row["date_source"]) == (
         status, day, "day", "official_data")
