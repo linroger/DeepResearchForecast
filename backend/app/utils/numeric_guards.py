@@ -886,11 +886,18 @@ def threshold_spans(text: Any) -> List[Tuple[int, int]]:
     offsets and reading order: the thresholds a sentence names, never a level it
     states.  [] for anything unreadable; never raises (REPORT-9 reads report prose
     with it)."""
+    return [(start, end) for start, end, _comparator in threshold_comparators(text)]
+
+
+def threshold_comparators(text: Any) -> List[Tuple[int, int, str]]:
+    """:func:`threshold_spans` with each figure's comparator: ``>``, ``>=``, ``<``,
+    ``<=`` or ``between`` (a negated event's inverted one: "does not exceed 30%" is
+    ``<=``).  [] for anything unreadable; never raises."""
     source = _readable(text)
     if source is None:
         return []
     try:
-        return sorted((pair["hit"]["start"], pair["hit"]["end"]) for pair in _pairs(source))
+        return sorted((pair["hit"]["start"], pair["hit"]["end"], pair["comparator"]) for pair in _pairs(source))
     except Exception:  # noqa: BLE001 — pure reader: never raises
         return []
 

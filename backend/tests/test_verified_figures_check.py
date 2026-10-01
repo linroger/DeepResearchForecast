@@ -19,7 +19,7 @@ from app.config_audit import RANGE_RULES
 from app.services import verified_facts as vf
 from app.services.forecast_extractor import BINARY_FORECAST_END_MARKER, BINARY_FORECAST_START_MARKER
 from app.services.report_agent import ReportAgent, ReportManager, ReportOutline, ReportSection, ReportStatus
-from app.utils.numeric_guards import scan_quantities, threshold_spans
+from app.utils.numeric_guards import scan_quantities, threshold_comparators, threshold_spans
 from tests.conftest import FakeLLMClient
 
 AS_OF = date(2026, 6, 30)
@@ -139,13 +139,90 @@ def test_probability_words_never_hide_a_level():
         assert _counts(f"# T\n\n{line}\n") == {"conflict": 1}, line
 
 
+def test_weight_and_confidence_words_that_name_the_metric_state_its_level():
+    weight = {"metric": "Technology sector index weight", "value": "31", "unit": "%", "when": "2025", "tag": "S1"}
+    rows = (SHARE, weight)
+    assert _counts("# T\n\nThe technology sector index weight was 31% in 2025.\n", rows=rows) == {"matched": 1}
+    assert _counts("# T\n\nThe technology sector index weight was 35% in 2025.\n", rows=rows) == {"conflict": 1}
+    assert _counts("# T\n\n| Metric | 2025 |\n|---|---|\n| Technology sector index weight | 31% |\n", rows=rows) \
+        == {"matched": 1}
+    zh_weight = {"metric": "科技板块指数权重", "value": "31", "unit": "%", "when": "2025", "tag": "S1"}
+    assert _counts("# T\n\n2025年科技板块指数权重为31%。\n", rows=[zh_weight]) == {"matched": 1}
+    # A confidence grade in a row label grades the figure: the level is still checked.
+    graded = "# T\n\n| Metric | 2025 |\n|---|---|\n| Data-centre electricity share (high confidence) | {v} |\n"
+    assert _counts(graded.format(v="24.6%"), rows=rows) == {"matched": 1}
+    assert _counts(graded.format(v="31%"), rows=rows) == {"conflict": 1}
+    # The word stays a probability when no candidate's metric names it, and a column headed
+    # by it is a probability column whatever its rows name.
+    for md in ("The data-centre electricity share scenario carries a 55% weight in 2025.",
+               "| Item | Confidence |\n|---|---|\n| Data-centre electricity share rises in 2025 | 70% |",
+               "| Scenario | Weight |\n|---|---|\n| Technology sector index weight rises in 2025 | 40% |"):
+        assert _counts(f"# T\n\n{md}\n", rows=rows) == {"threshold_or_probability": 1}, md
+
+
+@pytest.mark.parametrize("md", [
+    "The key threshold for the data-centre electricity share is 30% in 2025.",
+    "The data-centre electricity share trigger level of 30% in 2025 matters.",
+    "The 30% threshold for the data-centre electricity share was not crossed in 2025.",
+    "Trigger: the data-centre electricity share at 30% in 2025.",
+    "- **Signpost**: data-centre electricity share at 30% in 2025.",
+    "| Metric | Threshold |\n|---|---|\n| Data-centre electricity share (2025) | 30% |",
+    "| Item | 2025 |\n|---|---|\n| Trigger level for the data-centre electricity share | 30% |",
+])
+def test_threshold_nouns_and_labels_are_thresholds(md):
+    assert _counts(f"# T\n\n{md}\n") == {"threshold_or_probability": 1}
+
+
+def test_threshold_nouns_leave_the_level_beside_them():
+    assert _counts("# T\n\nThe data-centre electricity share was 31% in 2025; the threshold is 35%.\n") \
+        == {"conflict": 1, "threshold_or_probability": 1}
+    # A verb "triggers" and a word ending a label are no threshold nouns.
+    for line in ("AI demand triggers a data-centre electricity share of 31% in 2025.",
+                 "Shares: the data-centre electricity share was 31% in 2025."):
+        assert _counts(f"# T\n\n{line}\n") == {"conflict": 1}, line
+    zh_row = {"metric": "数据中心电力占比", "value": "24.6", "unit": "%", "when": "2025", "tag": "S1"}
+    for line in ("2025年数据中心电力占比的阈值为30%。", "阈值：2025年数据中心电力占比30%。", "2025年数据中心电力占比30%的阈值未被突破。",
+                 "| 指标 | 阈值 |\n|---|---|\n| 2025年数据中心电力占比 | 30% |"):
+        assert _counts(f"# T\n\n{line}\n", rows=[zh_row]) == {"threshold_or_probability": 1}, line
+
+
 def test_threshold_spans_marks_only_comparator_governed_figures():
     text = "The share was 24.6% and may exceed 30%, or reach 5% or more; it sits between 28% and 38%."
     spans = threshold_spans(text)
     assert [hit["raw"] for hit in scan_quantities(text) if any(lo <= hit["start"] < hi for lo, hi in spans)] \
         == ["30%", "5%", "28%", "38%"]
     for unreadable in (None, {"a": 1}, True, ""):
-        assert threshold_spans(unreadable) == []
+        assert threshold_spans(unreadable) == [] and threshold_comparators(unreadable) == []
+    # The same spans with their comparators (a negated event's inverted one).
+    assert [comparator for _start, _end, comparator in threshold_comparators(text)] == [">", ">=", "between"]
+    assert threshold_comparators("It does not exceed 30%.") == [(19, 22, "<=")]
+
+
+def test_bounded_rows_are_read_as_bounds():
+    """A verified value that is a bound (">3" trillion) states the figures on its side, and
+    no figure conflicts with it (nor, when its [S#] supports the claim, is a discrepancy)."""
+    bound = {"metric": "Global data centre capex forecast", "value": ">3", "unit": "USD trillion",
+             "when": "2030", "tag": "S1"}
+    line = "# T\n\nGlobal data centre capex forecast is ${v} trillion for 2030 [S1].\n"
+    for value, expected in (("3.5", "matched"), ("3", "matched"), ("1.2", "unmatched"), ("40", "unmatched")):
+        result = _check(line.format(v=value), rows=[bound], support_fn=lambda unit, tag: True)
+        assert {k: v for k, v in result["counts"].items() if v} == {expected: 1}, value
+        assert result["source_discrepancies"] == [], value
+    capacity = "# T\n\nThe data-centre electricity capacity share was {v} in 2025.\n"
+    for value, unit, inside, outside in (("<12", "%", "10%", "15%"), ("≥25", "%", "31%", "20%"),
+                                         ("at least 5", "GW", "6 GW", "4 GW"), ("超过30", "GW", "35 GW", "20 GW"),
+                                         ("5 or more", "GW", "6 GW", "4 GW"), ("20+", "GW", "25 GW", "12 GW"),
+                                         ("$153M+", "", "$160 million", "$100 million"),
+                                         ("up to 40", "GW", "35 GW", "50 GW")):
+        row = {"metric": "Data-centre electricity capacity share", "value": value, "unit": unit, "when": "2025"}
+        assert _counts(capacity.format(v=inside), rows=[row]) == {"matched": 1}, value
+        assert _counts(capacity.format(v=outside), rows=[row]) == {"unmatched": 1}, value
+    # "between 28% and 38%" is read as its first end only: the row states no figure.
+    between = {"metric": "Data-centre electricity capacity share", "value": "between 28% and 38%", "when": "2025"}
+    assert _counts(capacity.format(v="50%"), rows=[between]) == {"unmatched": 1}
+    # A plain value is still a point.
+    point = dict(between, value="30", unit="%")
+    assert _counts(capacity.format(v="35%"), rows=[point]) == {"conflict": 1}
 
 
 def test_source_discrepancies_need_the_cited_source_to_support_the_claim():
@@ -376,8 +453,15 @@ def test_far_candidates_labels_and_fiscal_years_add_no_noise():
     assert _counts("# T\n\nIn 2025 – 31% was the data-centre electricity share.\n") == {"conflict": 1}
 
 
-def test_bare_small_numbers_and_years_are_no_figures():
+@pytest.mark.parametrize("figure", ["~10⁻⁶", "10^-6", "3×10⁸", "10<sup>-6</sup>", "3.5×10⁸", "3x10^8",
+                                    "10^12", "10<sup>12</sup>"])
+def test_bare_small_numbers_years_and_scientific_notation_are_no_figures(figure):
     assert sum(_check("# T\n\nThree of the 3 scenarios start in 2025 and end in 2030.\n")["counts"].values()) == 0
+    # Neither the base, the mantissa nor the exponent of scientific notation is a figure.
+    qubits = {"metric": "Logical qubit error rate", "value": "48", "unit": "", "when": "2025"}
+    line = f"# T\n\nThe logical qubit error rate was {figure} in 2025.\n"
+    assert sum(_check(line, rows=[qubits])["counts"].values()) == 0
+    assert _counts("# T\n\nThe logical qubit error rate was 52 in 2025.\n", rows=[qubits]) == {"conflict": 1}
 
 
 @pytest.mark.parametrize("run", ["_" * 50_000, "*" * 50_000, "*_" * 25_000, "- " + "_" * 50_000])

@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import hashlib
+import math
 import re
 from typing import Any, Callable, Dict, Iterable, List, Mapping, NamedTuple, Optional, Sequence, Tuple
 
@@ -439,6 +440,43 @@ _PROBABILITY_LABEL_RE = re.compile(
     r"(?<![A-Za-z])(?:" + _PROBABILITY_WORDS + r"|yes[- ]price)(?![A-Za-z])"
     r"|(?<![A-Za-z])P\s*\(\s*yes\s*\)|" + _CJK_PROBABILITY_WORDS, re.I)
 _BARE_P_HEADER_RE = re.compile(r"[\s*_]*P[\s*_]*")
+# Probability words that also name metrics ("Technology sector index weight", "Consumer
+# confidence", "行业权重"): when an anchored candidate row's own metric names every such
+# word that made a figure a probability, the figure is that metric's level.
+_METRIC_PROBABILITY_WORDS = frozenset({"weight", "weighting", "confidence", "权重", "置信度", "置信水平"})
+_PROBABILITY_WORD_RE = re.compile(_PROBABILITY_WORDS + "|" + _CJK_PROBABILITY_WORDS, re.I)
+# A qualitative confidence grade in a table label ("Data-centre share (high confidence)",
+# "高置信度") grades the row's figures: it states no probability.
+_CONFIDENCE_GRADE_RE = re.compile(
+    r"(?<![A-Za-z])(?:(?:very|fairly)\s+)?(?:high|medium|moderate|low|limited)[- ]confidence(?![A-Za-z])"
+    r"|(?:高|中等?|低)置信度?|置信度(?:高|中等?|低)", re.I)
+# A threshold named by a noun rather than a comparator: right before the figure ("the key
+# threshold for the share is 30%", "trigger level of 30%", "阈值为30%"), right after it
+# ("the 30% threshold", "30%的阈值"), as the label that
+# leads its unit ("Trigger: … at 30%", "**Signpost**: …", "阈值：…") or as a table column
+# header or row label ("| Threshold |", "| Trigger level |", "| 阈值 |").  Like a
+# comparator's, such a figure states no level.
+_THRESHOLD_NOUNS = r"(?:thresholds?|trigger(?:s|\s+(?:levels?|points?))?|tripwires?|signposts?|cut-?offs?)"
+_THRESHOLD_NOUN_BEFORE_RE = re.compile(
+    r"(?<![A-Za-z])" + _THRESHOLD_NOUNS + r"(?:\s+(?:for|of|on)\s[^.;:,!?\n]{0,60}?)?\s*"
+    r"(?:(?<![A-Za-z])(?:is|are|was|were|of|at|sits\s+at|stands\s+at|set\s+at)|[:=：])\s*"
+    r"(?:(?:about|around|roughly|approximately|~|≈)\s*)?$"
+    r"|(?:阈值|触发值|触发点|触发水平|临界值|临界点)(?:为|是|设为|设在|在|约为|约)?\s*[:：]?\s*$", re.I)
+_THRESHOLD_NOUN_AFTER_RE = re.compile(
+    r"^\s*" + _THRESHOLD_NOUNS + r"(?![A-Za-z])|^\s*的?(?:阈值|触发值|触发点|临界值|临界点)", re.I)
+_THRESHOLD_WINDOW = 100
+_THRESHOLD_LEAD_RE = re.compile(
+    r"[\s>*_•·-]*+(?:\d+[.)]\s*)?[*_]*(?:(?:[A-Za-z][A-Za-z-]*\s+){0,2}" + _THRESHOLD_NOUNS
+    + r"|阈值|触发条件|触发值|触发点|临界值|临界点)[*_]*\s*[:：]", re.I)
+_THRESHOLD_LABEL_RE = re.compile(r"(?<![A-Za-z])" + _THRESHOLD_NOUNS + r"(?![A-Za-z])|阈值|触发|临界", re.I)
+# Scientific notation ("10⁻⁶", "10^-6", "10<sup>-6</sup>", "3.5×10⁸"): its base, its
+# mantissa and its exponent are no figures (the scanner reads e-notation, "1e-6", whole).
+_EXPONENT = r"(?:\^|<sup>|[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺])"
+_SCIENTIFIC_AFTER_RE = re.compile(r"\s*(?:" + _EXPONENT + r"|[×xX*·]\s*10\s*" + _EXPONENT + r")", re.I)
+_EXPONENT_BEFORE_RE = re.compile(r"(?:\^|<sup>)\s*$", re.I)
+# A block row whose value is "up to" a figure bounds it from above (numeric_guards reads the
+# other comparators; a trailing "+" bounds it from below: "20+", "$153M+").
+_UP_TO_BEFORE_RE = re.compile(r"(?<![A-Za-z])up\s+to\s*$", re.I)
 # No figures: a year span ("2025—26", "2025~26"), and a bare number (no unit mark) that is a
 # fiscal-year suffix ("in 2025/26," leaves "26"; "2025 – 26% of" is a figure) or a label
 # number ("Figure 12", "Section 301", "图12", "第12"; "代表30%" is a figure).
@@ -487,22 +525,53 @@ def _parsed_value(value: Any, unit: Any) -> Optional[Dict[str, Any]]:
             "cls": _CHECK_CLASS.get(quantity["unit_class"], "plain"), "currency": quantity.get("currency")}
 
 
+def _value_bound(value: Any) -> Optional[str]:
+    """How a row's value text bounds the figure :func:`_parsed_value` reads (its first
+    non-date figure): ``"lower"`` (">3", "≥25", "at least 5", "超过30", "5 or more",
+    "20+", "$153M+"), ``"upper"`` ("<12", "≤4", "up to 40", "至多5"), ``"between"``
+    ("between 28% and 38%") or None for a stated value."""
+    from ..utils.numeric_guards import scan_quantities, threshold_comparators
+    text = value if isinstance(value, str) else ""
+    first = next((hit for hit in scan_quantities(text) if not hit.get("date")), None)
+    if first is None:
+        return None
+    start, end = int(first["start"]), int(first["end"])
+    for lo, hi, comparator in threshold_comparators(text):
+        if lo <= start < hi:
+            return {">": "lower", ">=": "lower", "<": "upper", "<=": "upper"}.get(comparator, "between")
+    if text[end:].lstrip().startswith("+"):
+        return "lower"
+    return "upper" if _UP_TO_BEFORE_RE.search(text[:start]) else None
+
+
 def _figure_row(index: int, row: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
     """A block row (or an excluded research row) as the check reads it, or None when its
     value states no figure.  Its years are the metric's plus the period the value is about:
     a block row's unrendered ``period`` (its ``when`` is a reported row's publication
-    date), a research row's :func:`reference_period`, else ``when``."""
+    date), a research row's :func:`reference_period`, else ``when``.
+
+    A bounded value (:func:`_value_bound`) is a one-sided interval whose open end is
+    infinite (``bound`` True): ">3" trillion is [3e12, inf], so "$3.5 trillion" states it
+    and "$1.2 trillion" is no conflict with it.  A "between" value the reader kept one end
+    of (no range) states no figure."""
     metric = str(row.get("metric") or row.get("definition") or "").strip()
     if metric.startswith("⚠"):
         metric = metric[1:].strip()
     value = _parsed_value(row.get("value"), row.get("unit"))
     if not metric or value is None:
         return None
+    bound = _value_bound(row.get("value"))
+    if bound == "between" and value["lo"] == value["hi"]:
+        return None
+    if bound == "lower":
+        value["hi"] = math.inf
+    elif bound == "upper":
+        value["lo"] = -math.inf
     anchor_text = " ".join(str(row.get(key) or "") for key in ("series", "definition")) + " " + metric
     period = row.get("period") if "period" in row else reference_period(row)
     return dict(value, index=index, metric=metric, anchor=_anchor_tokens(anchor_text),
                 years=_years(metric, period or row.get("when")),
-                value_text=str(row.get("value") or ""))
+                value_text=str(row.get("value") or ""), bound=bound in ("lower", "upper"))
 
 
 def _unit_columns(cells: Sequence[str], units: Sequence[str]) -> List[Optional[int]]:
@@ -589,14 +658,32 @@ def _claim_units(md: str) -> Iterable[_Unit]:
                         column_header or None)
 
 
+def _metric_words(readings: Sequence[str]) -> Optional[frozenset]:
+    """The probability words of ``readings`` (the texts that made a figure a probability)
+    when every reading has one and each can name a metric (_METRIC_PROBABILITY_WORDS),
+    else None: such a figure is a probability whatever the rows name."""
+    words: set = set()
+    for reading in readings:
+        found = {word.casefold() for word in _PROBABILITY_WORD_RE.findall(reading)}
+        if not found or not found <= _METRIC_PROBABILITY_WORDS:
+            return None
+        words |= found
+    return frozenset(words) or None
+
+
 def _claim_figures(unit: str) -> List[Dict[str, Any]]:
     """The figures of a unit worth checking: no dates, bare years, year spans, fiscal-year
-    suffixes or label numbers ("Figure 12"), and a unit mark or at least two digits (a bare
-    "3 scenarios" is no figure).  ``threshold`` marks a figure a comparator governs
-    ("exceeds 30%"), ``probability`` one the unit states as a probability ("a 40% chance",
-    "概率为40%", "Scenario A: 55%")."""
+    suffixes, label numbers ("Figure 12") or parts of scientific notation ("10⁻⁶",
+    "3.5×10⁸"), and a unit mark or at least two digits (a bare "3 scenarios" is no
+    figure).  ``threshold`` marks a figure a comparator governs ("exceeds 30%") or a
+    threshold noun names ("the threshold is 30%", "the 30% threshold", "Trigger: … 30%"),
+    ``probability`` one
+    the unit states as a probability ("a 40% chance", "概率为40%", "Scenario A: 55%"), and
+    ``metric_words`` the words that alone made it one when each can also name a metric
+    ("index weight was 31%": {"weight"}; else None)."""
     from ..utils.numeric_guards import scan_quantities, threshold_spans
     thresholds = threshold_spans(unit)
+    lead = _THRESHOLD_LEAD_RE.match(unit)
     out = []
     for hit in scan_quantities(unit):
         if hit.get("date") or hit.get("year_like"):
@@ -605,10 +692,13 @@ def _claim_figures(unit: str) -> List[Dict[str, Any]]:
         token = _FIRST_NUMBER_RE.search(raw)
         if token is None or _YEAR_SPAN_RE.match(raw.strip()):
             continue
+        start, end = int(hit["start"]), int(hit["end"])
+        if _SCIENTIFIC_AFTER_RE.match(unit, start + token.end()) \
+                or _EXPONENT_BEFORE_RE.search(unit[max(0, start - _LABEL_WINDOW):start]):
+            continue
         digits = token.group(0).replace(",", "")
         if not hit.get("has_marks") and len(digits.replace(".", "")) < 2:
             continue
-        start, end = int(hit["start"]), int(hit["end"])
         before = unit[max(0, start - _LABEL_WINDOW):start]
         if not hit.get("has_marks") and (_LABEL_BEFORE_RE.search(before) or (
                 len(digits) == 2 and _YEAR_SUFFIX_BEFORE_RE.search(before))):
@@ -620,23 +710,45 @@ def _claim_figures(unit: str) -> List[Dict[str, Any]]:
         lo = float(hit["lo"])
         scale = abs(lo / stated) if stated else 1.0
         decimals = len(token.group(1) or "")
-        probability = bool(_PROBABILITY_AFTER_RE.search(unit[end:end + _PROBABILITY_WINDOW])
-                           or _PROBABILITY_BEFORE_RE.search(unit[max(0, start - _PROBABILITY_WINDOW):start])
-                           or _SCENARIO_SLOT_RE.search(unit[:start]))
+        readings = [match.group(0) for match in (
+            _PROBABILITY_AFTER_RE.search(unit[end:end + _PROBABILITY_WINDOW]),
+            _PROBABILITY_BEFORE_RE.search(unit[max(0, start - _PROBABILITY_WINDOW):start])) if match]
+        slot = _SCENARIO_SLOT_RE.search(unit[:start])
+        threshold = (any(lo_span <= start < hi_span for lo_span, hi_span in thresholds)
+                     or (lead is not None and start >= lead.end())
+                     or bool(_THRESHOLD_NOUN_BEFORE_RE.search(unit[max(0, start - _THRESHOLD_WINDOW):start]))
+                     or bool(_THRESHOLD_NOUN_AFTER_RE.search(unit[end:end + _THRESHOLD_WINDOW])))
         out.append({"lo": lo, "hi": float(hit["hi"]), "raw": raw,
                     "cls": _CHECK_CLASS.get(hit.get("unit_class"), "plain"),
                     "currency": hit.get("currency"),
                     "tol": 0.5 * (10 ** -decimals) * (scale or 1.0),
-                    "threshold": any(lo_span <= start < hi_span for lo_span, hi_span in thresholds),
-                    "probability": probability})
+                    "threshold": threshold,
+                    "probability": bool(readings or slot),
+                    "metric_words": None if slot else _metric_words(readings)})
     return out
 
 
 def _agrees(figure: Mapping[str, Any], lo: float, hi: float) -> bool:
     """The figure states the value [lo, hi] at its own precision (a range on either side
-    agrees when the intervals meet)."""
-    tol = figure["tol"] + 1e-9 * max(abs(lo), abs(hi), 1.0)
+    agrees when the intervals meet; a bound's infinite end meets anything on its side)."""
+    tol = figure["tol"] + 1e-9 * max([abs(end) for end in (lo, hi) if math.isfinite(end)] + [1.0])
     return figure["lo"] - tol <= hi and lo <= figure["hi"] + tol
+
+
+def _states(figure: Mapping[str, Any], row: Mapping[str, Any]) -> bool:
+    """The figure states the row's value (:func:`_agrees`); a bound only when the figure is
+    also :func:`_comparable` with it (ten times past ">3" is more likely another measure)."""
+    return _agrees(figure, row["lo"], row["hi"]) and (not row["bound"] or _comparable(figure, row))
+
+
+def _names_words(words: Optional[frozenset], rows: Sequence[Mapping[str, Any]]) -> bool:
+    """One of ``rows`` names every one of ``words`` in its metric, definition or series
+    (its anchor tokens): "Technology sector index weight" names "weight"."""
+    if not words:
+        return False
+    tokens = [_anchor_tokens(word) for word in words]
+    return any(all((latin or cjk) and latin <= row["anchor"][0] and cjk <= row["anchor"][1]
+                   for latin, cjk in tokens) for row in rows)
 
 
 def _candidates(figure: Mapping[str, Any], anchor: Tuple[frozenset, frozenset], years: frozenset,
@@ -655,10 +767,12 @@ def _candidates(figure: Mapping[str, Any], anchor: Tuple[frozenset, frozenset], 
 
 
 def _comparable(figure: Mapping[str, Any], row: Mapping[str, Any]) -> bool:
-    """The figure and the row (midpoints of a range) share a sign and their ratio is within
-    CONFLICT_RATIO: beyond it the two are more likely different measures than a
-    disagreement, so such a row neither conflicts nor makes the figure ambiguous."""
-    claim, value = (figure["lo"] + figure["hi"]) / 2, (row["lo"] + row["hi"]) / 2
+    """The figure and the row (midpoints of a range, a bound's finite end) share a sign and
+    their ratio is within CONFLICT_RATIO: beyond it the two are more likely different
+    measures than a disagreement, so such a row neither conflicts nor makes the figure
+    ambiguous."""
+    finite = [end for end in (row["lo"], row["hi"]) if math.isfinite(end)]
+    claim, value = (figure["lo"] + figure["hi"]) / 2, sum(finite) / len(finite) if finite else 0.0
     return bool(claim and value) and CONFLICT_RATIO[0] <= claim / value <= CONFLICT_RATIO[1]
 
 
@@ -713,11 +827,16 @@ def check_verified_figures(md: Any, block_rows: Any, *, excluded_rows: Any = (),
     order:
 
     * ``threshold_or_probability``: a figure a comparator governs ("exceeds 30%", "below
-      $100", numeric_guards.threshold_spans) or, outside a market reading, one stated as a
-      probability ("a 40% chance", "70% likely", "Scenario A: 55%", "the base case at
-      55%", "概率为40%", or any figure of a table column or row labelled Probability /
-      Weight / P(yes) / 概率, or of a column headed "P"): neither states a level of the
-      metric;
+      $100", numeric_guards.threshold_spans) or a threshold noun names ("the threshold is
+      30%", "Trigger: …", any figure of a table column or row labelled Threshold / Trigger /
+      阈值) or, outside a market reading, one stated as a probability ("a 40% chance", "70%
+      likely", "Scenario A: 55%", "the base case at 55%", "概率为40%", or any figure of a
+      table column or row labelled Probability / Weight / P(yes) / 概率 — a confidence
+      grade such as "(high confidence)" is no such label —, or of a column headed "P"):
+      neither states a level of the metric.  A weight or confidence word that an anchored
+      candidate row's own metric names ("the index weight was 31%" against "Technology
+      sector index weight"), in the unit or a table row's label, makes no probability (a
+      column headed by such a word always does);
     * a percentage in a market context (Polymarket, prediction market, 预测市场, 隐含概率,
       implied probability / odds / chance / price, in the unit or, for a table cell, its
       row, column header or row-label column header) is read against the markets, never
@@ -731,7 +850,8 @@ def check_verified_figures(md: Any, block_rows: Any, *, excluded_rows: Any = (),
     * ``ambiguous``: comparable candidates (:func:`_comparable`) with different values
       (never a conflict);
     * ``conflict``: exactly one comparable candidate value, a point on both sides, more
-      than ``rel_tol`` apart;
+      than ``rel_tol`` apart (a bounded row, ">3" trillion, is matched by a figure on its
+      side within 10x and conflicts with none);
     * ``states_unverified``: an uncited figure with no comparable candidate that equals an
       anchored ``excluded_rows`` row (research rows whose verification is unverified /
       snippet_only / none);
@@ -791,15 +911,25 @@ def check_verified_figures(md: Any, block_rows: Any, *, excluded_rows: Any = (),
         tags = _cited_tags(unit.text) or _cited_tags(unit.context)
         excerpt = unit.context.strip()[:EXCERPT_CHARS]
         in_market_context = bool(_MARKET_CONTEXT_RE.search(unit.market_text))
-        labelled_probability = bool(unit.label_text and _PROBABILITY_LABEL_RE.search(unit.label_text)) \
-            or bool(unit.column and _BARE_P_HEADER_RE.fullmatch(unit.column))
+        labelled_threshold = bool(unit.label_text and _THRESHOLD_LABEL_RE.search(unit.label_text))
+        label_readings = [match.group(0) for match in
+                          _PROBABILITY_LABEL_RE.finditer(_CONFIDENCE_GRADE_RE.sub(" ", unit.label_text))]
+        bare_p = bool(unit.column and _BARE_P_HEADER_RE.fullmatch(unit.column))
+        # A column headed by a probability word ("| Scenario | Weight |") is a probability
+        # column whatever its rows name: only a row label's word can name the metric.
+        header_probability = bool(unit.column and _PROBABILITY_LABEL_RE.search(
+            _CONFIDENCE_GRADE_RE.sub(" ", unit.column)))
+        label_words = None if bare_p or header_probability else _metric_words(label_readings)
         for figure in figures:
-            if figure["threshold"]:
+            if figure["threshold"] or labelled_threshold:
                 counts["threshold_or_probability"] += 1
                 continue
-            probability = figure["probability"] or labelled_probability
             candidates = _candidates(figure, anchor, unit.years, rows)
-            agreeing = [row for row in candidates if _agrees(figure, row["lo"], row["hi"])]
+            # A probability word an anchored candidate's metric names ("index weight") marks
+            # that metric's level, not a probability.
+            probability = (figure["probability"] and not _names_words(figure["metric_words"], candidates)) \
+                or ((bool(label_readings) or bare_p) and not _names_words(label_words, candidates))
+            agreeing = [row for row in candidates if _states(figure, row)]
             if in_market_context and figure["cls"] == "percent":
                 anchored = [m for m in markets if _anchored(anchor, m["anchor"])]
                 if any(_agrees(figure, price, price) for m in anchored for price in m["prices"]):
@@ -839,7 +969,7 @@ def check_verified_figures(md: Any, block_rows: Any, *, excluded_rows: Any = (),
                     continue
                 counts["unmatched"] += 1
                 continue
-            if not tags and any(_agrees(figure, row["lo"], row["hi"])
+            if not tags and any(_states(figure, row)
                                 for row in _candidates(figure, anchor, unit.years, excluded)):
                 counts["states_unverified"] += 1
                 example("states_unverified", unit, excerpt, figure, None, tags)
