@@ -6,7 +6,6 @@ Shadow: never changes markdown bytes, never adds a hard or epistemic issue.  Off
 from __future__ import annotations
 
 import hashlib
-import inspect
 import json
 import os
 from datetime import date
@@ -18,7 +17,7 @@ from app.config import Config
 from app.config_audit import RANGE_RULES
 from app.services import verified_facts as vf
 from app.services.forecast_extractor import BINARY_FORECAST_END_MARKER, BINARY_FORECAST_START_MARKER
-from app.services.report_agent import ReportAgent, ReportManager
+from app.services.report_agent import ReportAgent, ReportManager, ReportOutline, ReportSection, ReportStatus
 from app.utils.numeric_guards import scan_quantities, threshold_spans
 from tests.conftest import FakeLLMClient
 
@@ -80,7 +79,8 @@ def test_table_cells_take_their_row_or_column_year():
                  "| Data-centre electricity share | 24.6% | 31% |\n")
     result = _check(by_column)
     assert {k: v for k, v in result["counts"].items() if v} == {"matched": 1, "unmatched": 1}
-    assert result["matched_rows"] == {0: [{"line": 5, "excerpt": "24.6%"}]}
+    # A cell's excerpt is its whole row: the cell alone ("24.6%") names no metric.
+    assert result["matched_rows"] == {0: [{"line": 5, "excerpt": "| Data-centre electricity share | 24.6% | 31% |"}]}
     # A cell's own year beats its column's.
     assert _counts("# T\n\n| Metric | 2030E |\n|---|---|\n| Data-centre electricity share | 31% (2025) |\n") \
         == {"conflict": 1}
@@ -102,6 +102,40 @@ def test_thresholds_and_probabilities_are_counted_apart():
     # The level beside them is still checked.
     assert _counts("# T\n\nThe data-centre electricity share was 31% in 2025, with a 40% chance of exceeding "
                    "35% by 2030.\n") == {"conflict": 1, "threshold_or_probability": 2}
+
+
+@pytest.mark.parametrize("line", [
+    "We judge it 70% likely that the data-centre electricity share rises in 2025.",
+    "The data-centre electricity share is 70% likely to rise in 2025.",
+    "With 70% confidence, the data-centre electricity share rises in 2025.",
+    "We are 70% confident the data-centre electricity share rises in 2025.",
+    "The data-centre electricity share scenario carries a 55% weight in 2025.",
+    "Base case (data-centre electricity share rises in 2025): 55% probability.",
+    "Scenario A (the data-centre electricity share surges in 2025): 55%.",
+    "**Scenario B** (55%): the data-centre electricity share plateaus in 2025.",
+    "We put the data-centre electricity share surge scenario at 40% for 2025.",
+])
+def test_forecast_phrasings_are_probabilities(line):
+    assert _counts(f"# T\n\n{line}\n") == {"threshold_or_probability": 1}
+
+
+@pytest.mark.parametrize("line", [
+    "情景A（数据中心电力占比上升）：55%。",
+    "1. 情景B（2025年数据中心电力占比回落）：25%",
+    "数据中心电力占比在2025年上升，置信度70%。",
+    "2025年数据中心电力占比上升的可能性约70%。",
+])
+def test_chinese_forecast_phrasings_are_probabilities(line):
+    zh_row = {"metric": "数据中心电力占比", "value": "24.6", "unit": "%", "when": "2025", "tag": "S1"}
+    assert _counts(f"# T\n\n{line}\n", rows=[zh_row]) == {"threshold_or_probability": 1}
+
+
+def test_probability_words_never_hide_a_level():
+    # Words after the label, or "likely" without a clause, leave the figure a level.
+    for line in ("Scenario A: the data-centre electricity share reaches 31% in 2025.",
+                 "The data-centre electricity share was 31% in 2025, likely because of AI demand.",
+                 "The data-centre electricity share was 31% in 2025, with a heavy weighting to the US."):
+        assert _counts(f"# T\n\n{line}\n") == {"conflict": 1}, line
 
 
 def test_threshold_spans_marks_only_comparator_governed_figures():
@@ -211,6 +245,136 @@ def test_market_percentages_are_read_against_the_markets_only():
                    market_rows=[market]) == {"market_conflict": 1, "threshold_or_probability": 1}
 
 
+_MARKET_TABLE = ("# T\n\n| Polymarket market | Implied probability | At research |\n|---|---|---|\n"
+                 "| Will the data-centre electricity share exceed 30% in 2025? | {now}% | {then}% |\n")
+_SHARE_MARKET = {"market_id": "m3", "question": "Will the data-centre electricity share exceed 30% in 2025?",
+                 "implied_yes_prob": 0.45, "price_at_research": 0.40}
+
+
+def test_market_tables_are_read_against_the_markets_only():
+    # The market words sit in the header, the prices in their own cells: the cells that state
+    # the anchored market's prices are no conflict with the block's 24.6% (the 30% is a threshold).
+    same = _MARKET_TABLE.format(now=45, then=40)
+    assert _counts(same, market_rows=[_SHARE_MARKET]) == {"threshold_or_probability": 1, "unmatched": 2}
+    moved = _check(_MARKET_TABLE.format(now=60, then=40), market_rows=[_SHARE_MARKET])
+    assert {k: v for k, v in moved["counts"].items() if v} == {
+        "threshold_or_probability": 1, "market_conflict": 1, "unmatched": 1}
+    (example,) = moved["examples"]
+    # The excerpt is the whole row and the example names the column, for the manual review.
+    assert (example["kind"], example["figure"], example["column"]) == ("market_conflict", "60%",
+                                                                       "Implied probability")
+    assert example["excerpt"] == "| Will the data-centre electricity share exceed 30% in 2025? | 60% | 40% |"
+    # A market named only by its column header.
+    by_column = ("# T\n\n| Question | Polymarket price |\n|---|---|\n"
+                 "| Will the data-centre electricity share exceed 30% in 2025? | {p}% |\n")
+    assert _counts(by_column.format(p=45), market_rows=[_SHARE_MARKET]) \
+        == {"threshold_or_probability": 1, "unmatched": 1}
+    assert _counts(by_column.format(p=60), market_rows=[_SHARE_MARKET]) \
+        == {"threshold_or_probability": 1, "market_conflict": 1}
+
+
+def test_scenario_probability_tables_are_counted_apart():
+    table = ("# T\n\n## Scenario analysis\n\n| Scenario | Probability | Key driver |\n|---|---|---|\n"
+             "| A: Data-centre electricity share surges | 40% | AI build-out |\n"
+             "| B: Data-centre electricity share plateaus | 35% | Efficiency gains |\n"
+             "| C: Other / status quo | 25% | — |\n")
+    assert _counts(table) == {"threshold_or_probability": 3}
+    zh_row = {"metric": "数据中心电力占比", "value": "24.6", "unit": "%", "when": "2025", "tag": "S1"}
+    zh_table = "# T\n\n## 情景分析\n\n| 情景 | 概率 |\n|---|---|\n| 情景A：数据中心电力占比快速上升 | 40% |\n"
+    assert _counts(zh_table, rows=[zh_row]) == {"threshold_or_probability": 1}
+    # A row labelled as a probability, and a column headed by a bare "P".
+    assert _counts("# T\n\n| Item | 2025 |\n|---|---|\n| Probability the data-centre electricity share "
+                   "rises | 40% |\n") == {"threshold_or_probability": 1}
+    assert _counts("# T\n\n| Scenario | P |\n|---|---|\n| Data-centre electricity share surges | 40% |\n") \
+        == {"threshold_or_probability": 1}
+    # A "P" inside a label ("S&P", "p.a.") makes no probability: the level is still checked.
+    assert _counts("# T\n\n| Metric | Level (% p.a.) |\n|---|---|\n"
+                   "| S&P data-centre electricity share | 31% (2025) |\n") == {"conflict": 1}
+
+
+def test_reported_rows_are_read_by_the_period_they_describe():
+    """A reported row is dated by its source's publication (as_of_date 2026-01-01) but
+    describes 2025 (period_end): the check reads the period, the block still renders the date."""
+    row = {"metric": "Global humanoid robot shipments", "value": "13,317", "unit": "units",
+           "as_of_date": "2026-01-01", "period_end": "2025-12-31", "value_type": "actual", "tier": "S2",
+           "source": "Omdia", "source_ref": "S1", "verification": "verified"}
+
+    def block_for(*rows):
+        return vf.build_verified_figures_block(list(rows), tag_for=lambda r: r.get("source_ref"), lang="en",
+                                               as_of=AS_OF)
+
+    block = block_for(row)
+    (public,) = block["rows"]
+    assert (public["when"], public["period"]) == ("2026-01-01", "2025-12-31")
+    assert "2026-01-01" in block["rendered"] and "2025-12-31" not in block["rendered"]
+    rows = block["rows"] + block["projections"]
+    restated = vf.check_verified_figures(
+        "# T\n\nGlobal humanoid robot shipments reached 13,317 units in 2025 [S1].\n", rows)
+    assert restated["counts"]["matched"] == 1 and restated["matched_rows"] == {0: [{
+        "line": 3, "excerpt": "Global humanoid robot shipments reached 13,317 units in 2025 [S1]."}]}
+    forecast = "# T\n\nGlobal humanoid robot shipments are expected to reach 30,000 units in 2026.\n"
+    assert {k: v for k, v in vf.check_verified_figures(forecast, rows)["counts"].items() if v} == {"unmatched": 1}
+    # The metric's own year still counts; the publication year never does.
+    named = block_for(dict(row, metric="2025 global humanoid shipments"))
+    assert {k: v for k, v in vf.check_verified_figures(
+        forecast.replace("robot ", ""), named["rows"])["counts"].items() if v} == {"unmatched": 1}
+    # An excluded research row is read by its reference period too.
+    unverified = dict(row, verification="unverified", value="9,000")
+    stated = "# T\n\nGlobal humanoid robot shipments reached 9,000 units in {year}.\n"
+    assert _counts(stated.format(year=2025), rows=(), excluded_rows=[unverified]) == {"states_unverified": 1}
+    assert _counts(stated.format(year=2026), rows=(), excluded_rows=[unverified]) == {"unmatched": 1}
+
+
+def test_unrendered_fields_never_change_the_block_and_never_depend_on_input_order():
+    base = {"metric": "Data-centre electricity share", "value": "24.6", "unit": "%", "as_of_date": "2026-01-01",
+            "value_type": "actual", "tier": "S1", "source": "Energy agency", "source_ref": "S1",
+            "verification": "verified"}
+    annotated = dict(base, period_end="2025-12-31", definition="Share of national electricity use by data "
+                     "centres", series="IEA electricity tracker")
+
+    def block_for(*rows):
+        return vf.build_verified_figures_block(list(rows), tag_for=lambda r: r.get("source_ref"), lang="en",
+                                               as_of=AS_OF)
+
+    plain, rich = block_for(base), block_for(annotated)
+    assert (plain["rendered"], plain["sha256"]) == (rich["rendered"], rich["sha256"])
+    (row,) = rich["rows"]
+    assert (row["period"], row["definition"], row["series"]) == (
+        "2025-12-31", "Share of national electricity use by data centres", "IEA electricity tracker")
+    # Two rows with the same cells: the kept one is the same whichever comes first.
+    other = dict(annotated, period_end="2025-06-30", definition="Another definition")
+    assert block_for(annotated, other)["rows"] == block_for(other, annotated)["rows"]
+
+
+def test_definition_and_series_anchor_a_block_row():
+    row = {"metric": "Share", "value": "24.6", "unit": "%", "when": "2025", "tag": "S1"}
+    line = "# T\n\nThe data-centre electricity share was 31% in 2025.\n"
+    assert _counts(line, rows=[row]) == {"unmatched": 1}
+    assert _counts(line, rows=[dict(row, definition="Data-centre share of electricity use")]) == {"conflict": 1}
+    assert _counts(line, rows=[dict(row, series="Data-centre electricity tracker")]) == {"conflict": 1}
+
+
+def test_far_candidates_labels_and_fiscal_years_add_no_noise():
+    makers = {"metric": "Number of humanoid robot makers", "value": "20", "unit": "", "when": "2025", "tag": "S1"}
+    shipments = dict(makers, value="15,000")
+    # A candidate beyond the 10x ratio neither conflicts nor makes the figure ambiguous.
+    assert _counts("# T\n\nThe number of humanoid robot makers reached 18 in 2025.\n",
+                   rows=(makers, shipments)) == {"conflict": 1}
+    assert _counts("# T\n\nThe number of humanoid robot makers reached 21 in 2025.\n",
+                   rows=(makers, dict(makers, value="25"))) == {"ambiguous": 1}
+    # Label numbers, fiscal-year suffixes and year spans are no figures.
+    for line in ("The number of humanoid robot makers grew in 2025 (see Figure 12 and Section 301).",
+                 "The number of humanoid robot makers grew in 2025/26.",
+                 "The number of humanoid robot makers grew over 2025–26.",
+                 "如图12所示，2025年人形机器人厂商数量增长。"):
+        assert sum(_check(f"# T\n\n{line}\n", rows=(makers, shipments))["counts"].values()) == 0, line
+    assert _counts("# T\n\nThe data-centre electricity share was 31% in 2025/26.\n") == {"conflict": 1}
+    # A figure with a unit mark is never a label or a fiscal-year suffix.
+    zh_row = {"metric": "数据中心电力占比", "value": "24.6", "unit": "%", "when": "2025", "tag": "S1"}
+    assert _counts("# T\n\n2025年数据中心电力占比代表31%。\n", rows=[zh_row]) == {"conflict": 1}
+    assert _counts("# T\n\nIn 2025 – 31% was the data-centre electricity share.\n") == {"conflict": 1}
+
+
 def test_bare_small_numbers_and_years_are_no_figures():
     assert sum(_check("# T\n\nThree of the 3 scenarios start in 2025 and end in 2030.\n")["counts"].values()) == 0
 
@@ -221,6 +385,8 @@ def test_examples_and_matched_lines_are_capped():
     result = _check(md)
     assert result["counts"]["conflict"] == 30 and len(result["examples"]) == vf.CHECK_EXAMPLES_MAX
     assert len(result["matched_rows"][0]) == vf.MATCHED_LINES_PER_ROW
+    # The cap is visible: every use of the row is counted.
+    assert result["matched_counts"] == {0: 15}
 
 
 # ------------------------------------------------------------------ report agent (shadow)
@@ -333,6 +499,7 @@ def test_shadow_only(tmp_path, monkeypatch):
         0, "Data-centre electricity share", "24.6", "%", "S1", "Energy agency annual review",
         "https://agency.example/review", "verified")
     assert row["used_in"] == [{"line": 3, "excerpt": "The data-centre electricity share was 24.6% in 2025 [S1]."}]
+    assert (row["used_in_count"], row["as_of"], row["period"]) == (1, "2025-12-31", "2025-12-31")
     assert provenance["market_rows"] == [{"market_id": "m1", "implied_yes_prob": 0.2,
                                           "quoted_at": "2026-06-29T10:00:00+00:00", "price_at_research": 0.25,
                                           "snapshot_as_of": "2026-06-29T09:00:00+00:00",
@@ -456,11 +623,59 @@ def test_finalize_survives_a_failing_check(tmp_path, monkeypatch):
     assert forecast["scenarios"] and "verified_figures" not in forecast["quality"]
 
 
-def test_generate_writes_the_sidecar_between_the_final_audit_and_the_translation():
-    generate = inspect.getsource(ReportAgent.generate_report)
-    assert generate.index("self._enforce_final_publish_audit(report_id, report)") \
-        < generate.index("self._write_figure_provenance(report_id, report)") \
-        < generate.index("self._generate_bilingual_report(report_id, report)")
+@pytest.mark.parametrize("knob", [True, False])
+def test_generate_writes_the_sidecar_between_the_final_audit_and_the_translation(tmp_path, monkeypatch, knob):
+    """generate_report itself: the sidecar is absent when the final audit runs, present (and
+    describing the final bytes) when the translation starts, and never written with the knob off."""
+    for name, value in (("REPORT_SECTION_CONCURRENCY", 1), ("REPORT_SECTION_RETRY_MAX", 0),
+                        ("REPORT_STRUCTURED_FORECAST", False), ("REPORT_SIGNAL_PACK", False),
+                        ("LLM_TELEMETRY_ENABLED", False), ("REPORT_EDITORIAL_LINT", False),
+                        ("REPORT_CITATION_FINALIZER", False), ("REPORT_BILINGUAL", True),
+                        ("REPORT_FINAL_READ_ONLY_AUDIT", True), ("REPORT_FORECAST_LEDGER", False),
+                        ("REPORT_VERIFIED_FIGURES_CHECK", knob)):
+        monkeypatch.setattr(Config, name, value, raising=False)
+    monkeypatch.setattr(Config, "UPLOAD_FOLDER", str(tmp_path), raising=False)
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"), raising=False)
+    monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path / "reports"), raising=False)
+    agent = _agent()
+    for key, value in {
+        "graph_id": "g1", "simulation_id": "sim_1", "simulation_requirement": "Data-centre electricity share?",
+        "situation_brief": "", "actors": {"as_of_date": "2026-06-30"}, "scenario_label": "",
+        "base_simulation_id": None, "_background_block": "", "_sources_index": "", "_signal_pack": "",
+        "_forecast_spine_block": "", "_retrieval_query": None, "_outline_degraded": False,
+        "_section_tool_calls": 0, "report_logger": None, "console_logger": None, "tools": {},
+    }.items():
+        setattr(agent, key, value)
+    outline = ReportOutline(title="Forecast", summary="Summary", sections=[ReportSection(title="Analysis")])
+    agent.plan_outline = lambda progress_callback=None, forecast_spine_block="", \
+        require_forecast_structure=False: outline
+    body = "The data-centre electricity share was 24.6% in 2025 [S1]. " + "A long enough analytical body. " * 20
+    agent._generate_section = lambda section, outline, previous_sections, progress_callback=None, \
+        section_index=0: body
+    sidecar = tmp_path / "reports" / "r_generate" / "figure_provenance.json"
+    calls = []
+
+    def final_audit(report_id, report):
+        calls.append(("final_audit", sidecar.exists()))
+        return {}
+
+    def bilingual(report_id, report):
+        calls.append(("bilingual", sidecar.exists()))
+        if sidecar.exists():
+            provenance = json.loads(sidecar.read_text(encoding="utf-8"))
+            calls.append(("describes_final_bytes", provenance["markdown_sha256"] == hashlib.sha256(
+                report.markdown_content.encode("utf-8")).hexdigest()))
+            calls.append(("used_in_count", provenance["rows"][0]["used_in_count"]))
+
+    agent._enforce_final_publish_audit = final_audit
+    agent._generate_bilingual_report = bilingual
+    report = agent.generate_report(report_id="r_generate")
+    assert report.status == ReportStatus.COMPLETED
+    if knob:
+        assert calls == [("final_audit", False), ("bilingual", True), ("describes_final_bytes", True),
+                         ("used_in_count", 1)]
+    else:
+        assert calls == [("final_audit", False), ("bilingual", False)]
 
 
 def test_knob_defaults_range_and_documentation():

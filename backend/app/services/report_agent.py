@@ -2315,8 +2315,8 @@ class ReportAgent:
     def _verified_figures_check(self, md: str) -> Optional[Dict[str, Any]]:
         """REPORT-9（REPORT_VERIFIED_FIGURES_CHECK，默认开，只检测）：正文数字对照 REPORT-8 的已核验指标块
         （verified_facts.check_verified_figures），结果另附 block_sha256。块行 = rows + projections；
-        states_unverified 的对照行取研究 quantitative 中 verification 为 unverified / snippet_only / none 的
-        行；市场行取 self._prediction_markets；来源支撑检查用 _semantic_citation_support。旗标关、块为空
+        states_unverified 的对照行取研究 quantitative 中 quant_typing.is_unverified 的行（verification 为
+        unverified / snippet_only / none）；市场行取 self._prediction_markets；来源支撑检查用 _semantic_citation_support。旗标关、块为空
         （旧引擎 / 复用研究 / 未核验）或任何异常 → None：不记录计数（终审据此去掉草稿期的
         quality.verified_figures，_write_figure_provenance 据此删除旧 sidecar）。本方法从不改任何状态。"""
         if not getattr(Config, "REPORT_VERIFIED_FIGURES_CHECK", True):
@@ -2326,6 +2326,7 @@ class ReportAgent:
             return None
         try:
             from . import verified_facts as _vf
+            from ..utils.quant_typing import is_unverified
             try:
                 rel_tol = float(getattr(Config, "REPORT_VERIFIED_FIGURE_REL_TOL", _vf.DEFAULT_REL_TOL))
             except (TypeError, ValueError):
@@ -2340,8 +2341,7 @@ class ReportAgent:
 
             quantitative = getattr(self, "quantitative", None)
             excluded = [row for row in (quantitative if isinstance(quantitative, list) else [])
-                        if isinstance(row, dict)
-                        and str(row.get("verification") or "").strip().lower() in _vf.UNVERIFIED_LABELS]
+                        if isinstance(row, dict) and is_unverified(row)]
             result = _vf.check_verified_figures(
                 md, list(block.get("rows") or []) + list(block.get("projections") or []),
                 excluded_rows=excluded, market_rows=getattr(self, "_prediction_markets", None) or [],
@@ -2399,13 +2399,17 @@ class ReportAgent:
             rows.append({
                 "row_index": row_index, "metric": row.get("metric"), "value": row.get("value"),
                 "unit": row.get("unit"), "as_of": row.get("when"),
+                # The date or period the value is about (the year the check compares).
+                "period": row.get("period"),
                 "source_ref": tag,
                 "source_title": row.get("source_title"),
                 # The research row's own page, else the page its [S#] resolves to.
                 "source_url": row.get("source_url")
                 or (indexed_url.strip() if isinstance(indexed_url, str) else "") or None,
                 "verification": "verified",
+                # used_in lists at most MATCHED_LINES_PER_ROW lines; used_in_count is every use.
                 "used_in": check["matched_rows"].get(row_index, []),
+                "used_in_count": check["matched_counts"].get(row_index, 0),
             })
         markets = []
         for market in getattr(self, "_prediction_markets", None) or []:
