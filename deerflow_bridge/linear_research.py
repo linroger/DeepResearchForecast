@@ -4368,8 +4368,13 @@ def _is_sourced(fact: Any) -> bool:
 
 
 def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str) -> tuple[str, int]:
-    """One KIQ's digest block within ``cap`` chars; never cuts a line."""
-    header = f"### {record.get('id')} — {_collapse(record.get('question'))}"
+    """One KIQ's digest block within ``cap`` chars; never cuts a line.  The
+    header is the KIQ id and its question, or the id alone when the citation
+    wall withheld the question (``question_withheld``, :func:`pit_wall_record`)."""
+    if record.get("question_withheld"):
+        header = f"### {record.get('id')}"
+    else:
+        header = f"### {record.get('id')} — {_collapse(record.get('question'))}"
     facts = sorted((f for f in record.get("facts") or [] if _is_sourced(f)),
                    key=lambda f: _TAG_ORDER.get(str(f.get("tag")), 3))
     entries: list[tuple[str, str]] = []  # (group, line)
@@ -4414,8 +4419,10 @@ def build_digest(records: Sequence[Mapping[str, Any]], ledger_get: Callable[[int
     open question carrying any marker of an inadmissible source is left out
     whole, never shown with that marker stripped, so no writer sees a
     withheld source's claim beside or under an admissible marker ("176 GW,
-    while a brief projects 250 GW by 2030 [S1][S2]" with S2 withheld).  The
-    SOURCE INDEX lists only admissible sources.
+    while a brief projects 250 GW by 2030 [S1][S2]" with S2 withheld); a KIQ
+    question carrying one (a gap follow-up can quote an open question's
+    markers) leaves the block's header with the KIQ id alone.  The SOURCE
+    INDEX lists only admissible sources.
     Returns ``(text, dropped_line_count)``; the count is of lines the caps dropped.
     """
     if admissible is not None:
@@ -5020,19 +5027,29 @@ def _pit_wall_text(text: str, admissible: Callable[[int], bool], *,
 def pit_wall_record(record: Mapping[str, Any], admissible: Callable[[int], bool], *,
                     per_claim: bool = False) -> tuple[dict, int, int]:
     """A KIQ record behind a gated hindcast's citation wall (TIME-9), line
-    by line (each sourced finding, conflict and open question;
+    by line (the question, each sourced finding, conflict and open question;
     :func:`_pit_wall_text`).  By default, the rule of the evidence digest
     the writers read and of the audit's digest counters (FU-2), a line
     carrying any marker of an inadmissible source is left out whole, so no
     marker is ever stripped.  With ``per_claim``, the rule of the records
     the report's deterministic sections publish, a line is left out only
     when one of its claims would be left without an admissible source, and
-    loses its markers of inadmissible sources otherwise.
+    loses its markers of inadmissible sources otherwise.  A question left
+    out becomes ``""`` with ``question_withheld`` set (the digest header then
+    shows the KIQ id alone).
     Returns ``(a copy of the record, lines left out, markers removed from
     the lines kept)``; the record's other fields (``sids``, evidence) are
     unchanged, as is ``record`` itself."""
     out = dict(record)
     dropped = stripped = 0
+    if record.get("question"):
+        text, failed = _pit_wall_text(str(record["question"]), admissible, per_claim=per_claim)
+        if text is None:
+            out.update(question="", question_withheld=True)
+            dropped += 1
+        elif failed:
+            out["question"] = text
+            stripped += failed
     facts: list[Any] = []
     for fact in record.get("facts") or []:
         if not _is_sourced(fact):

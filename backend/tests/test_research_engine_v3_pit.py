@@ -738,6 +738,27 @@ def test_build_digest_wall_leaves_out_every_line_with_an_inadmissible_marker():
     assert (lines, markers) == (3, 1) and walled["facts"][0]["text"] == "Capacity reached 176 GW [S1]"
 
 
+def test_a_question_quoting_a_withheld_marker_is_withheld_too():
+    """FU-2: a gap follow-up's question can quote an open question with its markers; the digest
+    header then shows the KIQ id alone, so the writers never read the withheld source's claim
+    there.  A question left whole keeps the old header, also in a live run without one."""
+    ledger = {1: {"sid": 1, "title": "Survey", "domain": "a.example", "tier": "S2", "fetched": True},
+              2: {"sid": 2, "title": "Brief", "domain": "b.example", "tier": "S3", "fetched": False}}
+    record = {"id": "G1F1", "question": "Does the 250 GW brief projection hold [S2]?",
+              "facts": [{"text": "Imports fell 5% [S1]", "tag": "VERIFIED", "sids": [1]}]}
+    text, _ = lr.build_digest([record], ledger.get, 20000, "English", admissible=lambda sid: sid == 1)
+    assert "### G1F1\n" in text and "250 GW" not in text and "[S2]" not in text
+    walled, lines, markers = lr.pit_wall_record(record, lambda sid: sid == 1)
+    assert (walled["question"], walled["question_withheld"], lines, markers) == ("", True, 1, 0)
+    assert record["question"] == "Does the 250 GW brief projection hold [S2]?"   # the record is unchanged
+    # Admissible question: the header is unchanged; a record without a question keeps the old form.
+    kept = dict(record, question="Does capacity reach 200 GW [S1]?")
+    assert "### G1F1 — Does capacity reach 200 GW [S1]?" in lr.build_digest(
+        [kept], ledger.get, 20000, "English", admissible=lambda sid: sid == 1)[0]
+    bare = {"id": "K9", "facts": [{"text": "Imports fell 5% [S1]", "tag": "VERIFIED", "sids": [1]}]}
+    assert "### K9 — \n" in lr.build_digest([bare], ledger.get, 20000, "English")[0]
+
+
 def _wall_counts_engine(record, admissible, state):
     """The attributes :meth:`_Engine._pit_wall_counts` reads; ``state`` is state.json's data."""
     logs = []
