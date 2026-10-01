@@ -25,6 +25,7 @@ from app.services.report_agent import (
 )
 from app.services.forecast_extractor import (
     _binary_quality,
+    _binary_withheld_issue,
     _is_circular_market_forecast,
     build_market_comparison,
     reconcile_forecast_contract,
@@ -442,6 +443,92 @@ def _restore_from_backup(report_dir: Path, backup: Path) -> None:
         shutil.copytree(backup / "charts", charts, symlinks=True)
 
 
+# FU-1 (EVAL-10 open issue): the scorecard lines _binary_quality writes, which the
+# backfill rebuilds from the retained rows. The withheld line is rebuilt from
+# needs_review_count, the provenance line from the recounted downgrades and the ensemble
+# line from the binary ids it names that are still retained; every other stored issue
+# line is carried in its stored order.
+_SCORE_ISSUE_RES = tuple(re.compile(pattern) for pattern in (
+    r"only \d+ binaries \(< \d+\)",
+    r"probability spread too low \(stdev -?[0-9.]+\) — hedging",
+    r"\d+/\d+ forecasts in 0\.40-0\.60 — under-committed",
+    r"fewer than 3 high-conviction calls \(p>=0\.70 or <=0\.30\)",
+    r"only \d+/\d+ have objective metric\+number\+date criteria",
+    r"all forecasts share a single theme — no thematic spread",
+))
+_WITHHELD_ISSUE_RE = re.compile(r"\d+ binary probabilities unreadable — withheld, not clamped")
+_PROVENANCE_ISSUE_RE = re.compile(
+    r"\d+ forecast\(s\) claimed a simulation signal that was never injected into the prompt "
+    r"— source downgraded to research-prior \(see source_claimed\)")
+# Groups: the spread threshold as written, then the comma-separated binary ids.
+_ENSEMBLE_ISSUE_RE = re.compile(
+    r"\d+ forecast\(s\) show cross-model disagreement \(spread > ([^\s)]+)\): (.+)")
+
+
+def _provenance_issue(count: int) -> str:
+    """The extractor's provenance-downgrade issue line (forecast_extractor wording)."""
+    return (f"{count} forecast(s) claimed a simulation signal that was never "
+            "injected into the prompt — source downgraded to research-prior (see source_claimed)")
+
+
+def _ensemble_issue(ids: List[str], spread_threshold: str) -> str:
+    """The extractor's cross-model disagreement issue line (forecast_extractor wording)."""
+    return (f"{len(ids)} forecast(s) show cross-model disagreement "
+            f"(spread > {spread_threshold}): {', '.join(ids)}")
+
+
+def carry_binary_quality(old_quality: Dict[str, Any], quality: Dict[str, Any],
+                         retained: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """``quality`` (the scorecard rebuilt from ``retained``) completed from the stored
+    ``old_quality`` (FU-1): every key the rebuild does not produce is kept as stored
+    (world_state_outcome, needs_review_*, market_window_ended_excluded and the other
+    extractor-only keys do not depend on which published rows remain), except
+    ``ensemble``, which the caller keeps only when it is a dict (as before FU-1), and
+    ``provenance_downgrades``, which is recounted from the retained rows (rows the
+    extractor downgraded carry ``source_claimed``).  Issue lines: the withheld line
+    first (as the extractor and ReportAgent order it), the rebuilt scorecard lines,
+    then the stored lines that are not scorecard lines in their stored order, the
+    provenance line restated with the recounted number (dropped at zero; written after
+    the scorecard lines, where the extractor puts it, when a non-zero count has no
+    stored line), the ensemble line restated without the ids of rows that are no
+    longer retained (dropped when none remains; the ``ensemble`` block itself, which
+    the Part-1 footnote reads, stays as stored).  Only a list of stored issue lines is
+    read.  Mutates and returns ``quality``."""
+    for key, value in old_quality.items():
+        if key not in ("issues", "ensemble") and key not in quality:
+            quality[key] = value
+    downgrades: Optional[int] = None
+    if "provenance_downgrades" in old_quality:
+        downgrades = sum(1 for row in retained if "source_claimed" in row)
+        quality["provenance_downgrades"] = downgrades
+    retained_ids = {str(row.get("id") or "").strip() for row in retained}
+    issues = quality.setdefault("issues", [])
+    if quality.get("needs_review_count"):
+        issues.insert(0, _binary_withheld_issue(quality["needs_review_count"]))
+    scorecard_end = len(issues)
+    provenance_stored = False
+    stored_issues = old_quality.get("issues")
+    for line in stored_issues if isinstance(stored_issues, list) else []:
+        if not isinstance(line, str):
+            continue
+        disagreement = _ENSEMBLE_ISSUE_RE.fullmatch(line)
+        if _PROVENANCE_ISSUE_RE.fullmatch(line) and downgrades is not None:
+            provenance_stored = True
+            line = _provenance_issue(downgrades) if downgrades else ""
+        elif _WITHHELD_ISSUE_RE.fullmatch(line) or any(r.fullmatch(line) for r in _SCORE_ISSUE_RES):
+            continue
+        elif disagreement:
+            named = disagreement.group(2).split(", ")
+            kept = [bid for bid in named if bid in retained_ids]
+            if kept != named:
+                line = _ensemble_issue(kept, disagreement.group(1)) if kept else ""
+        if line and line not in issues:
+            issues.append(line)
+    if downgrades and not provenance_stored:
+        issues.insert(scorecard_end, _provenance_issue(downgrades))
+    return quality
+
+
 def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict[str, Any]:
     if not _PIPELINE_ID_RE.fullmatch(pipeline_id) or not _REPORT_ID_RE.fullmatch(report_id):
         raise ValueError("invalid pipeline/report id")
@@ -493,7 +580,7 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
         quality["proposition_consistency"] = contract
         if isinstance(old_quality.get("ensemble"), dict):
             quality["ensemble"] = old_quality["ensemble"]
-        forecast_obj["binary_quality"] = quality
+        forecast_obj["binary_quality"] = carry_binary_quality(old_quality, quality, retained)
         # Always rebuild/remove both comparison copies. This repairs a stale
         # partial backfill even after the offending circular binary was already
         # removed by an earlier attempt.

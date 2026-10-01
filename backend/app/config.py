@@ -605,6 +605,15 @@ class Config:
     # 开启后每份报告多一次强档调用（约 15-20k 输入 token），失败只记 status=failed、绝不阻断报告。
     REPORT_COUNTER_CASE = os.environ.get('REPORT_COUNTER_CASE', 'false').strip().lower() == 'true'
     REPORT_COUNTER_CASE_EVIDENCE_CHARS = int(os.environ.get('REPORT_COUNTER_CASE_EVIDENCE_CHARS', '12000') or '12000')  # 反证证据包中 dossier 引用段落的字符预算（来源索引另取前 6000 字）
+    # REPORT-9（C11 第 2 阶段，只检测）：报告正文的数字与 REPORT-8「已核验指标」块逐一比对
+    # （verified_facts.check_verified_figures：matched / conflict / ambiguous / states_unverified /
+    # market_conflict / unmatched），计数记入 forecast.quality.verified_figures 与 final_audit.json 的
+    # verified_figures，终审之后写 reports/<id>/figure_provenance.json（每条已核验数字的来源与引用行）。
+    # 默认开且安全：从不改成稿字节、从不加硬性或认识论问题、不提升 REPORT_FINAL_AUDIT_POLICY_VERSION；
+    # 已核验指标块为空（旧引擎 / 复用研究 / 未核验）时不写任何字段或文件。REL_TOL 为判为冲突所需的
+    # 最小相对差（低于它视为同一数字）。
+    REPORT_VERIFIED_FIGURES_CHECK = os.environ.get('REPORT_VERIFIED_FIGURES_CHECK', 'true').strip().lower() == 'true'
+    REPORT_VERIFIED_FIGURE_REL_TOL = float(os.environ.get('REPORT_VERIFIED_FIGURE_REL_TOL', '0.02') or '0.02')
     # W9-8：KG 结构先验进报告——因果骨架的 chokepoint 支点优先取 graph_priors_structural.json 的
     # 结构咽喉/介数中心度（研究显著度回退）；关系名册每个 actor 附「结构影响力（KG 中心度）」行
     # （按 actors 别名组折叠去重）。关闭=纯显著度选点、不加中心度行（行为与历史一致）。
@@ -1068,6 +1077,23 @@ class Config:
     # forecast.quality.narrative_sync。默认开是安全的：零 token、纯确定性、只改叙事文本，从不改概率；
     # 设 false 逐字节复现旧 forecast.json。
     REPORT_NARRATIVE_SYNC = os.environ.get('REPORT_NARRATIVE_SYNC', 'true').strip().lower() == 'true'
+    # REPORT-3（P08 stage 1b）别名感知概率槽审计（services/logic_number.py，零 token）：S11 只锚定完整
+    # 情景名的首次出现，report_ffe1ea6bf50d 摘要 blockquote 的「基准情景（40%）」（A=0.35）因此过了终审。
+    # 严格槽位（别名（N%）/ 别名：N% 概率 / N% 的概率 别名 …）+ REPORT-2 的区间/数量/合计守卫找出与骨架
+    # 不符的数字。off = 不审计；observe（默认）= 只记 forecast.quality.logic_number 与 final_audit.json 的
+    # logic_number，不进 hard_issues / 发布门；numeric = 把别名槽不符（可修复与未解决的全部——守卫只决定
+    # 能否改写；检测异常记为不符，失败即关闭）并入 S11（_audit_numeric_consistency 与
+    # report_lint.check_scenario_probabilities），经既有硬路径阻止发布。numeric 改变一条硬发布规则，
+    # 因此必须同时提升 REPORT_FINAL_AUDIT_POLICY_VERSION 并提供重放工具——属 owner 决策，本 WP 不提升。
+    # 未知值按 observe 处理并告警。确定性修复（大纲摘要同步 + 稳定器之前的正文槽位替换）另由
+    # REPORT_LOGIC_NUMBER_REPAIR 控制。默认 observe 是安全的：只读观测，任何硬规则与发布结果不变。
+    REPORT_LOGIC_NUMBER_GATE = os.environ.get('REPORT_LOGIC_NUMBER_GATE', 'observe').strip().lower()
+    # REPORT-3 零 token 槽位修复（大纲摘要同步 + 稳定器之前的正文别名概率槽改成骨架值），还需
+    # REPORT_NARRATIVE_SYNC 开。默认关（编排决策，评审第 4 轮后）：每轮评审都找到新的语境——修复把
+    # 并非该情景概率的百分数（增长率、份额、另一事件的概率，如「有55%的概率实现基准扩张路径下的…」）
+    # 改成情景值，确定性的正文改写绝不能默认编造数字。只读审计（REPORT_LOGIC_NUMBER_GATE=observe）
+    # 照常记录 fixable / unresolved，作为开启前的证据；关 = 成稿、大纲与 forecast.json 不被改写。
+    REPORT_LOGIC_NUMBER_REPAIR = os.environ.get('REPORT_LOGIC_NUMBER_REPAIR', 'false').strip().lower() == 'true'
     # REPORT-4 报告阶段提示词的类型化缺失标记（utils/absence.py）：章节质检无骨架时去掉概率一致性
     # 规则、缺失的信号包/市场表写成「本次未启用 / 检索为空 / 不可用」标记而非「（无）」、并行撰写的
     # 大纲意图不再冒充前序章节摘要；骨架提示词首句只列实际注入的输入并要求无研究基率时写明基率出处；
@@ -1758,6 +1784,29 @@ class Config:
     # the v3 child.
     RESEARCH_FORECASTER_ATTRIBUTION = os.environ.get(
         'RESEARCH_FORECASTER_ATTRIBUTION', 'false').strip().lower() == 'true'
+    # RESEARCH-10 v3 evidence headers: each KIQ block of the writers' evidence digest opens
+    # with the engine's count of its evidence (sourced findings by tag, cited sources
+    # fetched vs snippet-only, distinct domains; counted before lines are dropped for
+    # length) and a sufficiency label (insufficient: deterministic fallback notes, < 3
+    # sourced findings or no fetched source; thin: < 2 VERIFIED, < 2 fetched or < 2
+    # domains; else adequate); a legend opens the digest, the gap review's coverage matrix
+    # gains fetched/domains/sufficiency, the section rules gain one thin-evidence line,
+    # meta.kiqs gains evidence/sufficiency and a degradation event fires when at least
+    # half of the researched KIQs are insufficient.  Zero model calls.  Default false: it
+    # changes the writers' cached prefix and section task, and the DRF-original thresholds
+    # must first be validated on stored kiq/*.json; off = digest, coverage matrix, section
+    # task and meta byte-identical.  Forwarded to the v3 child.
+    RESEARCH_EVIDENCE_HEADERS = os.environ.get('RESEARCH_EVIDENCE_HEADERS', 'false').strip().lower() == 'true'
+    # RESEARCH-10 fair deterministic truncation (v3): the plan's scout digest shares its
+    # 6,000 chars max-min fairly between the scout queries (each keeps at least an equal
+    # share), cut only between search results and noting "(k results omitted for
+    # length)", where the head-cut of the joined digest silently lost the last queries;
+    # an over-cap digest block drops, among lines of equal priority, the one sharing the
+    # fewest terms with the KIQ question first (not simply the last).  Zero model calls.
+    # Default false: it changes the plan prompt and the writers' digest; off =
+    # byte-identical.  Forwarded to the v3 child.
+    RESEARCH_TRUNCATION_FAIRNESS = os.environ.get(
+        'RESEARCH_TRUNCATION_FAIRNESS', 'false').strip().lower() == 'true'
     # RESEARCH-1：抓取层抽取空壳检测（诚实性检查，故默认开 = fail closed）。开启时 reader 空壳
     # （"Markdown Content: undefined"）、"page unavailable" 页、bot wall 与短付费墙预告不再算成功
     # 读取：不进 72h 源缓存、触发 provider 回退、v3 工具层返回 FETCH_FAILED(<reason>) 且绝不标记
