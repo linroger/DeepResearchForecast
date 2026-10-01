@@ -117,6 +117,28 @@ def test_canonical_unit_never_crosses_rate_units():
     assert bt.canonical_unit("USD billion") == ("USD", 1e9) and bt.canonical_unit("$b") == ("USD", 1e9)
     assert bt.canonical_unit("亿美元") == ("USD", 1e8)
     assert bt.canonical_unit("% billion") is None and bt.canonical_unit("billion bps") is None
+    # A lone K / M / B / T (or mm, tn) is a unit of its own (tonnes, metres, kelvin): a
+    # magnitude only next to a currency or a count of units.
+    for unit in ("t", "T", "m", "K", "b", "mm", "tn", "m GW"):
+        assert bt.canonical_unit(unit) is None, unit
+    assert bt.canonical_unit("USD m") == ("USD", 1e6) and bt.canonical_unit("M units") == ("units", 1e6)
+    assert _valid({"unit": "t"}) == (None, ["unit_invalid"])
+    # A number multiplies the magnitude after it (glued or not); any other number is no unit.
+    assert bt.canonical_unit("RMB 100 million") == ("CNY", 1e8)
+    assert bt.canonical_unit("USD 100M") == ("USD", 1e8) and bt.canonical_unit("100亿元") == ("CNY", 1e10)
+    for unit in ("2020 USD", "billion 2020 USD", "USD 100", "USD 0 million"):
+        assert bt.canonical_unit(unit) is None, unit
+    assert bt.canonical_unit("3D printers") == ("3D printers", 1.0)
+    # A denominator's numbers and magnitudes stay in the label: they divide, never scale.
+    assert bt.canonical_unit("deaths per million") == ("deaths per million", 1.0)
+    assert bt.canonical_unit("deaths per 100,000 people") == ("deaths per 100,000 people", 1.0)
+    assert bt.canonical_unit("例/万人") == ("例/万人", 1.0)
+    assert bt.canonical_unit("USD million per year") == ("USD per year", 1e6)
+    # so a target in "RMB 100 million" resolves from the same base-unit number as one in 亿元
+    clean, errors = _valid({"unit": "RMB 100 million", "threshold": 5})
+    assert errors == [] and (clean["unit"], clean["scale"]) == ("CNY", 1e8)
+    assert bt.resolve_binary_by_target(clean, 6e8) == "YES"
+    assert bt.resolve_binary_by_target(dict(clean, unit="亿元", scale=1e8), 6e8) == "YES"
     # A rate is never scaled into another rate: a target in % does not match a criteria in pp.
     clean, errors = bt.validate_binary_target(
         dict(GOOD, metric="unemployment rate", unit="pp", comparator=">", threshold=5),
@@ -150,6 +172,36 @@ def test_path_dependent_requires_window_stat():
                            statement="Bitcoin trades above $100,000 at any point in 2024",
                            criteria="任何时候 BTC 价格")
     assert errors == [] and clean["statistic"] == "max_over_window"
+
+
+@pytest.mark.parametrize("comparator,statistic,statement,criteria,ok", [
+    # min > X is "always above X", not "above X at some point"
+    (">", "min_over_window", "Bitcoin trades above $100,000 at any point in 2024", "", False),
+    (">=", "min_over_window", "Bitcoin trades above $100,000 at any point in 2024", "", False),
+    ("<", "max_over_window", "Bitcoin falls below $100,000 at any point in 2024", "", False),
+    ("<", "min_over_window", "Bitcoin falls below $100,000 at any point in 2024", "", True),
+    (">", "min_over_window", "比特币2024年任何时候高于10万美元", "", False),
+    # the path-dependent clause may sit in the criteria
+    (">", "min_over_window", "Bitcoin tops $100k in 2024",
+     "YES if BTC trades above $100,000 at any point in 2024, NO otherwise.", False),
+    (">", "max_over_window", "Bitcoin tops $100k in 2024",
+     "YES if BTC trades above $100,000 at any point in 2024, NO otherwise.", True),
+    # a negated or inverted clause reverses the event, so its direction is not read
+    ("<=", "max_over_window", "Bitcoin does not trade above $100,000 at any point in 2024", "", True),
+    (">=", "min_over_window", "比特币2024年任何时候都不低于10万美元", "", True),
+    ("<=", "max_over_window", "Bitcoin stays capped in 2024",
+     "Resolves NO if BTC trades above $100,000 at any point in 2024.", True),
+])
+def test_path_dependent_statistic_is_on_the_comparator_side(comparator, statistic, statement,
+                                                             criteria, ok):
+    clean, errors = _valid({"comparator": comparator, "statistic": statistic,
+                            "window_start": "2024-01-01"}, statement=statement, criteria=criteria)
+    if ok:
+        assert errors == [] and clean["statistic"] == statistic
+    else:
+        expected = "max_over_window" if comparator in (">", ">=") else "min_over_window"
+        assert clean is None
+        assert errors == [f"path_dependent_statistic_direction: {comparator} needs {expected}"]
 
 
 # ------------------------------------------------------------------ criteria parser (RESEARCH-15 c)
@@ -317,6 +369,15 @@ def test_ladder_audit_violation_and_clean():
     assert mixed["violation_count"] == 1
     # within the 0.02 tolerance, different targets and single rungs are not violations
     assert bt.threshold_ladder_audit([_rung(1, ">=", 170, 0.50), _rung(2, ">", 230, 0.515)])["violation_count"] == 0
+    # One threshold in two magnitudes (2.3 * 1e8 == 229999999.99999997): the coherent pair
+    # P(Y >= K) = 0.60 >= P(Y > K) = 0.50 is clean, the reversed pricing is not.
+    coherent = bt.threshold_ladder_audit([_rung(1, ">", 2.3, 0.50, unit="亿元"),
+                                          _rung(2, ">=", 230, 0.60, unit="百万元")])
+    assert coherent == {"groups_checked": 1, "violation_count": 0, "violations": []}
+    reversed_ = bt.threshold_ladder_audit([_rung(1, ">", 2.3, 0.60, unit="亿元"),
+                                           _rung(2, ">=", 230, 0.50, unit="百万元")])
+    assert reversed_["violation_count"] == 1 and reversed_["violations"][0]["ids"] == ["F2", "F1"]
+    assert reversed_["violations"][0]["code"] == "ladder_non_monotone"
     other_date = _rung(2, ">", 230, 0.9, target_date="2031-12-31")
     assert bt.threshold_ladder_audit([_rung(1, ">=", 170, 0.1), other_date])["groups_checked"] == 0
     assert bt.threshold_ladder_audit([{"id": "F1", "probability": 0.4}, "junk"])["groups_checked"] == 0
@@ -329,6 +390,30 @@ def test_ladder_label_keeps_the_magnitude():
     assert audit["groups_checked"] == 1 and audit["violation_count"] == 1
     reason = audit["violations"][0]["reason"]
     assert "P(Y > 1 trillion USD) = 0.60" in reason and "P(Y > 800 billion USD) = 0.40" in reason
+
+
+def test_bound_only_target_is_ambiguous_exactly_at_the_threshold():
+    """A consistent_bound_only target differs from its criteria only in strictness, so the
+    two give opposite answers at the threshold itself, and only there."""
+    rate = dict(GOOD, metric="unemployment rate", unit="%", comparator="<", threshold=5)
+    target, errors = bt.validate_binary_target(rate, statement="",
+                                               criteria="Unemployment rate does not exceed 5%")
+    assert errors == [] and target["criteria_check"] == "consistent_bound_only"
+    assert bt.resolve_binary_by_target(target, 5.0) == "AMBIGUOUS"
+    assert bt.resolve_binary_by_target(target, 4.9) == "YES"
+    assert bt.resolve_binary_by_target(target, 5.1) == "NO"
+    revenue = dict(GOOD, metric="revenue", unit="USD billion", comparator=">", threshold=100)
+    target, errors = bt.validate_binary_target(revenue, statement="",
+                                               criteria="Revenue is at least $100 billion")
+    assert errors == [] and target["criteria_check"] == "consistent_bound_only"
+    assert bt.resolve_binary_by_target(target, 100e9) == "AMBIGUOUS"
+    assert bt.resolve_binary_by_target(target, 100, realized_scale=1e9) == "AMBIGUOUS"
+    assert bt.resolve_binary_by_target(target, 101, realized_scale=1e9) == "YES"
+    # a target that agrees with its criteria settles its boundary
+    target, errors = bt.validate_binary_target(dict(rate, comparator="<="), statement="",
+                                               criteria="Unemployment rate does not exceed 5%")
+    assert errors == [] and target["criteria_check"] == "consistent"
+    assert bt.resolve_binary_by_target(target, 5.0) == "YES"
 
 
 def test_resolve_binary_by_target_comparators_and_tolerance():

@@ -13,7 +13,9 @@ optional ``target`` object, and this module checks it deterministically:
   informational (``criteria_check = 'criteria_unparsed'``, i.e. unverifiable),
   never a mismatch; a clause it reads that disagrees is the error
   ``criteria_mismatch``.  Path-dependent wording ("at any point", "ever",
-  "intraday", 任何时候) needs a max/min window statistic.
+  "intraday", 任何时候) needs a max/min window statistic, and the one on the
+  comparator's side (max for > / >=, min for < / <=) when a clause reads it
+  un-negated.
 * :func:`threshold_ladder_audit` checks that the binaries resolving on the same
   target (metric, unit, statistic, target date, window start) form a monotone
   ladder: the probability that the value exceeds a higher threshold must not
@@ -86,6 +88,20 @@ _SCALE_LABELS = {1e3: "thousand", 1e6: "million", 1e9: "billion", 1e12: "trillio
 _ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _NUMERIC_TEXT_RE = re.compile(r"[-+]?\d+(?:\.\d+)?")
 _PATH_DEPENDENT_RE = re.compile(r"\bat\s+any\s+(?:point|time)\b|\bever\b|\bintraday\b|任何时候", re.I)
+# Path-dependent wording names an "ever above / ever below" event, which only the window
+# extreme on the same side represents: max > X is "at some point above X", while min > X
+# is "always above X" (another event).
+_PATH_EXTREME_FOR_COMPARATOR = {">": "max_over_window", ">=": "max_over_window",
+                                "<": "min_over_window", "<=": "min_over_window"}
+# Clauses for the direction check; a decimal or thousands separator (between two digits)
+# never splits one.
+_CLAUSE_SPLIT_RE = re.compile(r"(?<!\d)[.,;!?]|[.,;!?](?!\d)|[。，；！？\n]")
+# A negated or inverted clause ("does not at any point exceed", "Resolves NO if ... ever",
+# 任何时候都不低于) reverses the event, so its direction is not read.
+_CLAUSE_NEGATION_RE = re.compile(
+    r"(?<![\w-])(?:not|no|never|none|neither|nor|cannot|unless|except|without|unable"
+    r"|fail(?:s|ed|ing)?|doesnt|dont|didnt|isnt|arent|wasnt|werent|wont|cant)(?![\w-])"
+    r"|n['\u2019]t(?![\w-])|[不未没沒無无非莫勿否]", re.I)
 
 # ── units ────────────────────────────────────────────────────────────────────
 _NOT_LETTER = r"(?![A-Za-z])"
@@ -119,14 +135,21 @@ _AMBIGUOUS_CURRENCY = {"¥": frozenset({"JPY", "CNY"})}
 _CURRENCY_CODES = frozenset(_WORD_CURRENCY.values()) | frozenset(_AMBIGUOUS_CURRENCY)
 # A criteria unit that may or may not be a rate.
 _AMBIGUOUS_POINT_UNITS = frozenset({"point", "points"})
-# Standalone magnitude words.  Single letters follow _range_value's K/M/B/T reading
-# (so "t" is trillion and "m" is million, never tonnes or metres).
+# Standalone magnitude words.  Single letters follow _range_value's K/M/B/T reading.
 _WORD_SCALE = {
     "k": 1e3, "thousand": 1e3, "thousands": 1e3,
     "m": 1e6, "mn": 1e6, "mln": 1e6, "mm": 1e6, "million": 1e6, "millions": 1e6,
     "b": 1e9, "bn": 1e9, "bln": 1e9, "billion": 1e9, "billions": 1e9,
     "t": 1e12, "tn": 1e12, "trn": 1e12, "trillion": 1e12, "trillions": 1e12,
 }
+# Magnitudes that are also units of their own (t / tn tonnes, m metres, mm millimetres,
+# K kelvin, b bits): read as a magnitude only next to a currency ("$b", "USD m") or a
+# count of units ("M units"); anywhere else the unit is unreadable.
+_AMBIGUOUS_MAGNITUDES = frozenset({"k", "m", "mm", "b", "t", "tn"})
+_COUNT_NOUN_UNITS = frozenset({"unit", "units"})
+# A number in a unit ("RMB 100 million"), possibly glued to its magnitude ("100M", "100亿元").
+_UNIT_NUMBER_RE = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
+_GLUED_MAGNITUDE_RE = re.compile(r"(\d+(?:,\d{3})*(?:\.\d+)?)([A-Za-z]+|[一-鿿]+)")
 _CJK_CURRENCY_SUFFIXES = (("人民币", "CNY"), ("美元", "USD"), ("欧元", "EUR"), ("英镑", "GBP"),
                           ("日元", "JPY"), ("港元", "HKD"), ("港币", "HKD"), ("元", "CNY"))
 # 千 alone is not folded: 千瓦 / 千克 are units of their own.
@@ -163,6 +186,27 @@ def _residue_label(words: List[str]) -> str:
         for token in text.split(" ") if token)
 
 
+def _magnitude(word: str) -> Optional[float]:
+    """The factor of a magnitude word (``'million'``, ``'M'``, ``'亿元'``), else None."""
+    factor = _WORD_SCALE.get(word.casefold())
+    if factor is None and _CJK_RUN_RE.match(word):
+        factor = _fold_cjk(word)[1]
+    return factor if factor is not None and factor != 1.0 else None
+
+
+def _unit_words(text: str) -> List[str]:
+    """The words of a unit, a number glued to its magnitude split off (``'100M'`` ->
+    ``'100', 'M'``); a number glued to anything else (``'3D'``, ``'4G'``) stays a word."""
+    words: List[str] = []
+    for word in text.split():
+        glued = _GLUED_MAGNITUDE_RE.fullmatch(word)
+        if glued and _magnitude(glued.group(2)) is not None:
+            words.extend(glued.groups())
+        else:
+            words.append(word)
+    return words
+
+
 def canonical_unit(unit: Any) -> Optional[Tuple[str, float]]:
     """``(canonical unit, scale)`` of a unit string, or None when unreadable.
 
@@ -173,7 +217,13 @@ def canonical_unit(unit: Any) -> Optional[Tuple[str, float]]:
     ``'USD billion'``, ``'billion US dollars'`` -> ``('USD', 1e9)``; ``'亿美元'`` ->
     ``('USD', 1e8)``; ``'USD/bbl'`` -> ``('USD/bbl', 1.0)``.  Any other unit keeps its
     words (``'GW'``, ``'million units'`` -> ``('units', 1e6)``); a bare magnitude is
-    a count (``'million'`` -> ``('count', 1e6)``).
+    a count (``'million'`` -> ``('count', 1e6)``).  A number multiplies the magnitude
+    after it (``'RMB 100 million'`` -> ``('CNY', 1e8)``); any other number (``'2020
+    USD'``) is unreadable.  Numbers and magnitudes right after ``/`` or ``per`` belong
+    to the denominator and stay in the label (``'deaths per million'`` -> ``('deaths
+    per million', 1.0)``: they divide, they never scale).  K / M / B / T, mm and tn are
+    magnitudes only next to a currency or a count of units; alone (``'t'`` tonnes,
+    ``'m'`` metres) they are unreadable.
     """
     if not isinstance(unit, str):
         return None
@@ -196,12 +246,29 @@ def canonical_unit(unit: Any) -> Optional[Tuple[str, float]]:
     text = _CURRENCY_SYMBOL_RE.sub(" ", text)
     text = _US_DOLLARS_RE.sub(" usd ", text)
     text = re.sub(r"\s*/\s*", " / ", text)
+    words = _unit_words(text)
     scale = 1.0
     residue: List[str] = []
-    for word in text.split():
+    ambiguous_magnitude = after_denominator = False
+    for index, word in enumerate(words):
         folded = word.casefold()
-        if folded in _WORD_SCALE:
+        if word == "/" or folded == "per":
+            after_denominator = True
+            residue.append(word)
+            continue
+        if after_denominator and (_UNIT_NUMBER_RE.fullmatch(word) or _magnitude(word) is not None):
+            residue.append(word)
+            continue
+        after_denominator = False
+        if _UNIT_NUMBER_RE.fullmatch(word):
+            number = float(word.replace(",", ""))
+            if (not math.isfinite(number) or number <= 0 or index + 1 == len(words)
+                    or _magnitude(words[index + 1]) is None):
+                return None
+            scale *= number
+        elif folded in _WORD_SCALE:
             scale *= _WORD_SCALE[folded]
+            ambiguous_magnitude = ambiguous_magnitude or folded in _AMBIGUOUS_MAGNITUDES
         elif folded in _WORD_CURRENCY:
             currencies.append(_WORD_CURRENCY[folded])
         elif _CJK_RUN_RE.match(word):
@@ -213,10 +280,12 @@ def canonical_unit(unit: Any) -> Optional[Tuple[str, float]]:
                 residue.append(rest)
         else:
             residue.append(word)
-    if len(set(currencies)) > 1:
+    if len(set(currencies)) > 1 or not math.isfinite(scale):
         return None
     label = _residue_label(residue)
     if _RATE_TOKEN_RE.search(label):
+        return None
+    if ambiguous_magnitude and not currencies and label not in _COUNT_NOUN_UNITS:
         return None
     if label.startswith("/") and not currencies:
         return None
@@ -462,9 +531,14 @@ def validate_binary_target(target: Any, *, statement: Any = "",
 
     statement_text = statement if isinstance(statement, str) else ""
     criteria_text = criteria if isinstance(criteria, str) else ""
-    if (statistic is not None and statistic not in EXTREME_WINDOW_STATISTICS
-            and _PATH_DEPENDENT_RE.search(f"{statement_text}\n{criteria_text}")):
-        errors.append("path_dependent_requires_window_extreme")
+    if statistic is not None and _PATH_DEPENDENT_RE.search(f"{statement_text}\n{criteria_text}"):
+        expected = _PATH_EXTREME_FOR_COMPARATOR.get(comparator)
+        if statistic not in EXTREME_WINDOW_STATISTICS:
+            errors.append("path_dependent_requires_window_extreme")
+        elif expected and statistic != expected and any(
+                _PATH_DEPENDENT_RE.search(clause) and not _CLAUSE_NEGATION_RE.search(clause)
+                for clause in _CLAUSE_SPLIT_RE.split(f"{statement_text}\n{criteria_text}")):
+            errors.append(f"path_dependent_statistic_direction: {comparator} needs {expected}")
 
     if errors:
         return None, errors
@@ -543,6 +617,20 @@ def _ladder_rung(row: Any) -> Optional[Dict[str, Any]]:
                       f"{_magnitude_label(threshold, scale, target.get('unit'))})")}
 
 
+def _snap_bases(rungs: List[Dict[str, Any]]) -> None:
+    """Give rungs whose base-unit thresholds differ only by float noise from the scaling
+    (``> 2.3 亿元`` is 229999999.99999997, ``>= 230 百万元`` is 230000000.0) the first such
+    base seen, so one threshold sorts by strictness (non-strict first), not by noise."""
+    seen: List[float] = []
+    for rung in rungs:
+        for base in seen:
+            if math.isclose(rung["base"], base, rel_tol=_BASE_UNIT_REL_TOL, abs_tol=0.0):
+                rung["base"] = base
+                break
+        else:
+            seen.append(rung["base"])
+
+
 def threshold_ladder_audit(binaries: Any) -> Dict[str, Any]:
     """Monotonicity of same-target threshold ladders (warn only).
 
@@ -569,6 +657,7 @@ def threshold_ladder_audit(binaries: Any) -> Dict[str, Any]:
         if len(rungs) < 2:
             continue
         groups_checked += 1
+        _snap_bases(rungs)
         rungs.sort(key=lambda rung: (rung["base"], rung["strict"]))
         group = {"metric": key[0], "unit": key[1], "statistic": key[2],
                  "target_date": key[3], "window_start": key[4]}
@@ -615,8 +704,11 @@ def resolve_binary_by_target(target: Any, realized_value: Any, *,
     the target's PRE-REGISTERED ``resolution_tolerance`` of the threshold is AMBIGUOUS
     (an ``epsilon_abs`` is in the target's own unit and scale, like the threshold; a
     malformed tolerance is UNVERIFIABLE: tolerance is never chosen at resolution
-    time); otherwise the exact comparator decides (two base-unit values within
-    1e-12 relative of each other are equal: that is float noise from the scaling).
+    time).  A value exactly at the threshold of a ``consistent_bound_only`` target is
+    AMBIGUOUS: there the target's comparator and the binary's own criteria (which
+    differ only in strictness) give opposite answers.  Otherwise the exact comparator
+    decides (two base-unit values within 1e-12 relative of each other are equal: that
+    is float noise from the scaling).
     """
     if not isinstance(target, Mapping):
         return UNVERIFIABLE
@@ -640,4 +732,6 @@ def resolve_binary_by_target(target: Any, realized_value: Any, *,
             return UNVERIFIABLE
         if abs(value_base - threshold_base) <= _tolerance_epsilon(tolerance, threshold) * scale:
             return AMBIGUOUS
+    if value_base == threshold_base and target.get("criteria_check") == CRITERIA_BOUND_ONLY:
+        return AMBIGUOUS
     return YES if comparator_holds(value_base, comparator, threshold_base) else NO
