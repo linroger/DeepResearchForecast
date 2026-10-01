@@ -403,10 +403,13 @@ def test_backfill_failure_restores_entire_pre_replay_bundle(tmp_path, monkeypatc
     assert failure["restored"] is True and failure["error"] == "quality gate failed"
 
 
-def test_backfill_reaudit_keeps_measuring_the_verified_figures(tmp_path, monkeypatch):
-    """REPORT-9: the re-audit rebuilds the verified-figures block from the handoff and
-    reads the markets at the prices the previous figure_provenance.json recorded, so the
-    replay re-measures the run instead of deleting its shadow record."""
+_SHADOW_STATE = ("quantitative", "actors", "_prediction_markets", "_verified_figures")
+
+
+def _shadow_replay(tmp_path, monkeypatch, *, knob):
+    """REPORT-9: replay a report whose live run measured its verified figures; returns
+    the report directory and what the (stubbed) final audit saw: the figure check, the
+    RESEARCH-5 projection attribution and which shadow inputs the agent carried."""
     pipelines = tmp_path / "pipelines"
     reports = tmp_path / "reports"
     pipeline_id, report_id = "pipe_shadow_replay", "report_shadow_replay"
@@ -440,8 +443,8 @@ def test_backfill_reaudit_keeps_measuring_the_verified_figures(tmp_path, monkeyp
             "market_id": "m1", "implied_yes_prob": 0.45, "quoted_at": "2026-06-29T10:00:00+00:00",
             "price_at_research": 0.30, "snapshot_as_of": "2026-06-29T09:00:00+00:00"}]}), encoding="utf-8")
 
-    for name, value in (("REPORT_VERIFIED_FIGURES_CHECK", True), ("REPORT_VERIFIED_FACTS_BLOCK", True),
-                        ("MARKET_ANCHOR_PRICE_TIME", False)):
+    for name, value in (("REPORT_VERIFIED_FIGURES_CHECK", knob), ("REPORT_VERIFIED_FACTS_BLOCK", True),
+                        ("REPORT_PROJECTION_LINT", True), ("MARKET_ANCHOR_PRICE_TIME", False)):
         monkeypatch.setattr(Config, name, value, raising=False)
     monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(pipelines), raising=False)
     monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(reports))
@@ -452,7 +455,9 @@ def test_backfill_reaudit_keeps_measuring_the_verified_figures(tmp_path, monkeyp
     measured = []
 
     def _primary_audit(self, rid, report):
-        measured.append(self._verified_figures_check(report.markdown_content))
+        measured.append({"check": self._verified_figures_check(report.markdown_content),
+                         "projection": self._projection_attribution_audit(report.markdown_content),
+                         "state": [name for name in _SHADOW_STATE if hasattr(self, name)]})
         sha = hashlib.sha256(report.markdown_content.encode("utf-8")).hexdigest()
         return {"hard_passed": True, "markdown_sha256": sha, "publish_gate": {"passed": True}}
 
@@ -465,8 +470,17 @@ def test_backfill_reaudit_keeps_measuring_the_verified_figures(tmp_path, monkeyp
     monkeypatch.setattr(ReportManager, "export_pdf", classmethod(_export_pdf))
 
     backfill_one(pipeline_id, report_id, apply=True)
+    (seen,) = measured
+    return report_dir, seen
 
-    (check,) = measured
+
+def test_backfill_reaudit_keeps_measuring_the_verified_figures(tmp_path, monkeypatch):
+    """REPORT-9: the re-audit rebuilds the verified-figures block from the handoff and
+    reads the markets at the prices the previous figure_provenance.json recorded, so the
+    replay re-measures the run instead of deleting its shadow record."""
+    report_dir, seen = _shadow_replay(tmp_path, monkeypatch, knob=True)
+    check = seen["check"]
+    assert seen["state"] == list(_SHADOW_STATE) and seen["projection"] is not None
     # The level matches its block row; the quoted price agrees with the recorded re-quote.
     assert check["counts"]["matched"] == 1 and check["counts"]["market_conflict"] == 0
     final_md = (report_dir / "full_report.md").read_text(encoding="utf-8")
@@ -479,6 +493,20 @@ def test_backfill_reaudit_keeps_measuring_the_verified_figures(tmp_path, monkeyp
         "market_id": "m1", "implied_yes_prob": 0.45, "quoted_at": "2026-06-29T10:00:00+00:00",
         "price_at_research": 0.30, "snapshot_as_of": "2026-06-29T09:00:00+00:00", "price_time": None,
         "price_time_basis": None}]
+
+
+def test_backfill_with_the_check_off_rebuilds_no_shadow_inputs(tmp_path, monkeypatch):
+    """REPORT-9 off: the replayed agent carries none of the check's inputs, so the
+    re-audit is the one the backfill made before REPORT-9 rebuilt them (no figure check
+    and no RESEARCH-5 projection attribution, whose rows it would otherwise gain)."""
+    import scripts.backfill_report_visuals as backfill
+
+    _report_dir, off = _shadow_replay(tmp_path / "off", monkeypatch, knob=False)
+    assert off == {"check": None, "projection": None, "state": []}
+    # The same replay without the REPORT-9 input step (the backfill before it).
+    monkeypatch.setattr(backfill, "_attach_verified_figure_inputs", lambda *args: None)
+    _report_dir, before = _shadow_replay(tmp_path / "before", monkeypatch, knob=False)
+    assert off == before
 
 
 def test_recorded_market_rows_need_a_previous_record():

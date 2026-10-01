@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 from datetime import date
 from types import SimpleNamespace
 
@@ -377,6 +378,16 @@ def test_far_candidates_labels_and_fiscal_years_add_no_noise():
 
 def test_bare_small_numbers_and_years_are_no_figures():
     assert sum(_check("# T\n\nThree of the 3 scenarios start in 2025 and end in 2030.\n")["counts"].values()) == 0
+
+
+@pytest.mark.parametrize("run", ["_" * 50_000, "*" * 50_000, "*_" * 25_000, "- " + "_" * 50_000])
+def test_long_emphasis_runs_are_read_in_linear_time(run):
+    # The scenario-slot reading runs on the text before every figure: a long run of "*"
+    # or "_" (which the old pattern backtracked over quadratically, ~15 s here) is linear.
+    started = time.perf_counter()
+    result = _check(f"# T\n\n{run} 31%\n")
+    assert time.perf_counter() - started < 0.5
+    assert {k: v for k, v in result["counts"].items() if v} == {"unmatched": 1}
 
 
 def test_examples_and_matched_lines_are_capped():

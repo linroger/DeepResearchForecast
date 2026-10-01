@@ -425,8 +425,10 @@ _PROBABILITY_WINDOW = 40
 # A figure in a scenario's label slot, the text before it in its unit ("Scenario A (surge):
 # 55%", "**Scenario B** (25%", "1. 情景A（上升）：55%"): the scenario's probability, never
 # a level ("Scenario A: the share reaches 31%" has words between the label and the figure).
+# The leading run is possessive: it overlaps the emphasis class on "*" and "_", and a
+# backtracking run would make a long run of either quadratic.
 _SCENARIO_SLOT_RE = re.compile(
-    r"^[\s>*_•·-]*(?:\d+[.)]\s*)?[*_]*(?:scenarios?(?![A-Za-z])|情景|场景)[^:：\n]{0,80}?(?:[:：]|[(（])[\s*_]*$",
+    r"^[\s>*_•·-]*+(?:\d+[.)]\s*)?[*_]*(?:scenarios?(?![A-Za-z])|情景|场景)[^:：\n]{0,80}?(?:[:：]|[(（])[\s*_]*$",
     re.I)
 # A table column header or row label that makes every figure under it a probability
 # ("| Scenario | Probability |", "| Market P(yes) |", "| 情景 | 概率 |"), and a column
@@ -733,7 +735,9 @@ def check_verified_figures(md: Any, block_rows: Any, *, excluded_rows: Any = (),
     * ``states_unverified``: an uncited figure with no comparable candidate that equals an
       anchored ``excluded_rows`` row (research rows whose verification is unverified /
       snippet_only / none);
-    * ``unmatched``: anything else (no candidate, a range outside a row, a ratio beyond
+    * ``unmatched``: anything else (no candidate, a point within ``rel_tol`` of its one
+      comparable row that its own precision does not state — neither matched nor a
+      conflict, and never in the row's used_in —, a range outside a row, a ratio beyond
       10x).
 
     A candidate row shares the figure's class (percent, currency, plain; pp and bp only

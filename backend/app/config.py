@@ -624,7 +624,8 @@ class Config:
     # 与 final_audit.json 的 verified_figures，终审之后写 reports/<id>/figure_provenance.json（每条已核验
     # 数字的来源与引用行、比对样例）。默认开且安全：从不改成稿字节、从不加硬性或认识论问题、不提升
     # REPORT_FINAL_AUDIT_POLICY_VERSION；已核验指标块为空（旧引擎 / 复用研究 / 未核验）时不写任何字段
-    # 或文件（并去掉上一轮留下的旧值与旧文件）。REL_TOL 为判为冲突所需的最小相对差（低于它视为同一数字）。
+    # 或文件（并去掉上一轮留下的旧值与旧文件）。REL_TOL：与已核验值的相对差超过它才判为冲突；相差不超过它、
+    # 又未按数字自身精度对上的数字既不算匹配也不算冲突（计入 unmatched，不进 used_in）。
     REPORT_VERIFIED_FIGURES_CHECK = os.environ.get('REPORT_VERIFIED_FIGURES_CHECK', 'true').strip().lower() == 'true'
     REPORT_VERIFIED_FIGURE_REL_TOL = float(os.environ.get('REPORT_VERIFIED_FIGURE_REL_TOL', '0.02') or '0.02')
     # W9-8：KG 结构先验进报告——因果骨架的 chokepoint 支点优先取 graph_priors_structural.json 的

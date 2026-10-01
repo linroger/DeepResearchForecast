@@ -482,7 +482,12 @@ def _attach_verified_figure_inputs(agent: ReportAgent, artifacts: Dict[str, Any]
     record (a research-time price would read a re-quoted one as a market conflict).  Call
     it only after every Markdown repair: market rows change what the stabilizer's
     quantitative grounding keeps.  Never raises; with no block the re-audit records
-    nothing and the sidecar is removed, as before."""
+    nothing and the sidecar is removed, as before.  With REPORT_VERIFIED_FIGURES_CHECK
+    off it rebuilds nothing: the agent keeps the state the replay gave it, so the
+    re-audit (RESEARCH-5's projection attribution included) is the one it was before
+    REPORT-9."""
+    if not getattr(Config, "REPORT_VERIFIED_FIGURES_CHECK", True):
+        return
     try:
         quantitative = artifacts.get("quantitative")
         actors = artifacts.get("actors")
