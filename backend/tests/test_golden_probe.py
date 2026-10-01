@@ -601,11 +601,17 @@ def test_nothing_reaches_the_production_ledger(tmp_path, monkeypatch):
 
 def test_probe_report_schema_is_the_one_golden_eval_accepts():
     assert ge.PROBE_REPORT_SCHEMA == gp.REPORT_SCHEMA
+    assert ge.PROBE_SET_STATUSES == (gp.SET_FLAGGED, gp.SET_NONE_DETECTED, gp.SET_INCONCLUSIVE)
 
 
 def test_knobs_default_and_documented():
-    assert (Config.GOLDEN_PROBE_ENABLED, Config.GOLDEN_PROBE_MAX_CALLS, Config.GOLDEN_PROBE_CONFIDENT_P) == (
-        False, 120, 0.85)
+    """The config.py source defaults (read the way check_env_drift reads them, so a developer
+    .env that sets a GOLDEN_PROBE_* knob does not change the answer) and .env.example."""
+    import check_env_drift as ed
+
+    defaults = ed.config_defaults()
+    assert {k: defaults[k] for k in ("GOLDEN_PROBE_ENABLED", "GOLDEN_PROBE_MAX_CALLS", "GOLDEN_PROBE_CONFIDENT_P")} == {
+        "GOLDEN_PROBE_ENABLED": "false", "GOLDEN_PROBE_MAX_CALLS": "120", "GOLDEN_PROBE_CONFIDENT_P": "0.85"}
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     text = open(os.path.join(root, ".env.example"), encoding="utf-8").read()
     for line in ("# GOLDEN_PROBE_ENABLED=false", "# GOLDEN_PROBE_MAX_CALLS=120", "# GOLDEN_PROBE_CONFIDENT_P=0.85"):

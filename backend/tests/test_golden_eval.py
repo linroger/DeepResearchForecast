@@ -10,6 +10,7 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
 from types import SimpleNamespace
 
@@ -811,6 +812,36 @@ def test_probe_report_wrong_schema_fails_loud(tmp_path, over):
     bare = _write_json(tmp_path / "list.json", [1, 2])
     with pytest.raises(ValueError, match="schema None"):
         ge.load_probe_contamination(bare, gpath)
+
+
+@pytest.mark.usefixtures("isolated_ledgers")
+@pytest.mark.parametrize("summary,match", [
+    ({"status": "flagged", "flagged_ids": "q1"}, "flagged_ids of type str"),    # never split as ['1', 'q']
+    (None, "got status None"),
+    ({"flagged_ids": []}, "got status None"),
+    ({"status": "clean", "flagged_ids": []}, "got status 'clean'"),
+    ({"status": "inconclusive"}, "flagged_ids of type NoneType"),
+    ({"status": "flagged", "flagged_ids": [1]}, "a list of question ids"),
+    ({"status": "flagged", "flagged_ids": [" "]}, "a list of question ids"),
+    ({"status": "flagged", "flagged_ids": []}, "summary.status 'flagged' contradicts 0 flagged_ids"),
+    ({"status": "none_detected", "flagged_ids": ["q1"]}, "summary.status 'none_detected' contradicts 1 flagged_ids"),
+])
+def test_probe_report_malformed_summary_fails_loud(tmp_path, summary, match):
+    """Review round 2: a summary that is missing, has an unknown status, a flagged_ids that is
+    not a list of ids, or a status contradicting its flagged_ids fails loud, never splits."""
+    gpath, fpath = _legacy_fixture(tmp_path)
+    probe = _probe_report(tmp_path, gpath, [], summary=summary)
+    with pytest.raises(ValueError, match=re.escape(match)):
+        ge.cmd_score_forecast_file(_args(forecast=fpath, golden=gpath, out=str(tmp_path / "r.json"),
+                                         probe_report=probe))
+    assert not (tmp_path / "r.json").exists()
+
+
+@pytest.mark.parametrize("status", ["none_detected", "inconclusive"])
+def test_probe_report_without_flags_splits_nothing_out(tmp_path, status):
+    gpath, _fpath = _legacy_fixture(tmp_path)
+    contamination = ge.load_probe_contamination(_probe_report(tmp_path, gpath, [], status=status), str(gpath))
+    assert (contamination["status"], contamination["flagged_ids"]) == (status, [])
 
 
 @pytest.mark.usefixtures("isolated_ledgers")

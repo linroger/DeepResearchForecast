@@ -1555,11 +1555,13 @@ def _write_outputs(report: Dict[str, Any], out_path: Optional[str], md_path: Opt
 
 # =============================================================== CLI commands
 
-# EVAL-12: contamination status of a score with no (or a mismatched) probe report, and the
-# schema a probe report must carry (golden_probe.REPORT_SCHEMA; test_golden_probe pins both).
+# EVAL-12: contamination status of a score with no (or a mismatched) probe report, the
+# schema a probe report must carry and the set verdicts its summary may state
+# (golden_probe.REPORT_SCHEMA and SET_*; test_golden_probe pins both).
 PROBE_UNPROBED = "unprobed"
 PROBE_MISMATCH = "probe_mismatch"
 PROBE_REPORT_SCHEMA = "drf.golden_probe.v1"
+PROBE_SET_STATUSES = ("flagged", "none_detected", "inconclusive")
 
 
 def _file_sha256(path: str) -> str:
@@ -1574,7 +1576,10 @@ def load_probe_contamination(probe_report: Optional[str], golden_path: str) -> D
     (golden_sha256 differs) → ``{status: 'probe_mismatch', probe_run}`` and no split.
     Else ``{status, flagged_ids, probe_run, backbone, closed_book_attested}`` from the
     report, so a split always names the backbone whose recall it rests on. Fails loud
-    (ValueError) on an unreadable report or one that is not a PROBE_REPORT_SCHEMA report."""
+    (ValueError) on an unreadable report, one that is not a PROBE_REPORT_SCHEMA report, or
+    one whose summary is malformed: a status outside PROBE_SET_STATUSES, flagged_ids that
+    is not a list of question ids, or a status that contradicts flagged_ids (flagged iff
+    any id is flagged)."""
     if not probe_report:
         return {"status": PROBE_UNPROBED}
     with open(probe_report, encoding="utf-8") as f:
@@ -1583,11 +1588,20 @@ def load_probe_contamination(probe_report: Optional[str], golden_path: str) -> D
     if schema != PROBE_REPORT_SCHEMA:
         raise ValueError(f"--probe-report {probe_report}: schema {schema!r} is not {PROBE_REPORT_SCHEMA!r} "
                          "(pass the probe_report.json that golden_probe.py wrote)")
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    status, flagged_ids = summary.get("status"), summary.get("flagged_ids")
+    if (status not in PROBE_SET_STATUSES or not isinstance(flagged_ids, list)
+            or not all(isinstance(i, str) and i.strip() for i in flagged_ids)):
+        raise ValueError(f"--probe-report {probe_report}: summary.status must be one of "
+                         f"{list(PROBE_SET_STATUSES)} and summary.flagged_ids a list of question ids "
+                         f"(got status {status!r}, flagged_ids of type {type(flagged_ids).__name__})")
+    if (status == "flagged") != bool(flagged_ids):
+        raise ValueError(f"--probe-report {probe_report}: summary.status {status!r} contradicts "
+                         f"{len(flagged_ids)} flagged_ids (the status is flagged iff any id is flagged)")
     if report.get("golden_sha256") != _file_sha256(golden_path):
         return {"status": PROBE_MISMATCH, "probe_run": probe_report}
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-    return {"status": summary.get("status"),
-            "flagged_ids": sorted(str(i) for i in summary.get("flagged_ids") or []),
+    return {"status": status,
+            "flagged_ids": sorted(flagged_ids),
             "probe_run": probe_report,
             "backbone": report.get("backbone"),
             "closed_book_attested": report.get("closed_book_attested")}

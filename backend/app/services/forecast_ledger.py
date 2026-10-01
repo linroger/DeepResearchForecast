@@ -197,7 +197,8 @@ def append_golden_result(*, question_id: str, probability: Any, resolved_outcome
     is written only alongside ``golden_tier``.
 
     EVAL-12: ``contamination`` (the row's probe verdict from a matching
-    golden_probe report: ``{status, flagged, probe_run}``) is written only when given.
+    golden_probe report: ``{status, flagged, probe_run, backbone}``) is written only when
+    given.
     """
     try:
         p = float(probability)
