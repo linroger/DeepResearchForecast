@@ -250,10 +250,11 @@ EVIDENCE_UNCHECKED_SNIPPETS_CAPPED = "snippets_capped"
 # the KIQ task asks for a "(DERIVED: <formula>; a=<value> [S<n>], …)" clause on
 # every figure the agent calculated, and postprocess_notes recomputes it
 # (derived_numbers): every data operand from the one fetched, shown source the
-# finding cites, each operand's numbers on that page, and a number of the
-# finding that is no operand's equal to the result at its display precision
-# make the fact DERIVED — never VERIFIED (ADR-0002 I-11); anything else makes
-# it UNVERIFIED with a derivation_error, one of DERIVED_ERRORS.
+# finding cites, each operand's value exactly as the formula uses it on that
+# page, a number of the finding that is no operand's equal to the (signed)
+# result at its display precision, and every other number of the finding on
+# that page make the fact DERIVED — never VERIFIED (ADR-0002 I-11); anything
+# else makes it UNVERIFIED with a derivation_error, one of DERIVED_ERRORS.
 DERIVED_TAG = "DERIVED"
 DERIVED_ERRORS = ("operand_not_on_page", "unshown_source", "cross_source", "eval_error", "result_mismatch",
                   "no_result_token")

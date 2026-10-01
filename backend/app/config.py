@@ -1883,7 +1883,8 @@ class Config:
     # that states a figure the agent calculated (growth rate, ratio, share) to end with
     # "(DERIVED: <formula>; a=<value> [S<n>], ...)", and the notes postprocessor
     # recomputes it with zero model calls (hardened Decimal evaluator, operands checked
-    # on the one fetched page they cite, stated result within display precision): a
+    # at their full value on the one fetched page they cite, stated result within
+    # display precision, every other figure of the finding on that page too): a
     # passing finding is tagged DERIVED (never VERIFIED), a failing one UNVERIFIED with
     # a derivation_error.  The digest shows the calculation, the section rules say how
     # to state it, sources.json gains a separate derived_supports field (the report's

@@ -6,8 +6,9 @@ RESEARCH_DERIVED_FINDINGS (default false):
   sources.json and meta are exactly what they were;
 * on — the KIQ task asks for a "(DERIVED: <formula>; a=<value> [S<n>], …)"
   clause on every calculated figure and postprocess_notes recomputes it with
-  zero model calls: single-source operands on the fetched page they cite, a
-  stated number equal to the result.  Such a fact is DERIVED (never
+  zero model calls: single-source operands on the fetched page they cite at
+  the value the formula uses, a stated number equal to the result, every
+  other number on that page.  Such a fact is DERIVED (never
   VERIFIED); any failure is UNVERIFIED with a derivation_error.  The digest
   shows the calculation, fallback sections publish DERIVED facts, gap rounds
   and meta.kiqs.verified count VERIFIED only, sources.json gains a separate
