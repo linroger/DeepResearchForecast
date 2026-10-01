@@ -3420,6 +3420,31 @@ class ReportAgent:
         events = actors.get("key_events")
         return events if isinstance(events, list) else []
 
+    def _spine_key_metrics(self) -> Tuple[str, bool]:
+        """FU-4 (REPORT-8 open issue): the spine pack's key-metrics stream, and whether it is
+        REPORT-8's labelled verified-figures block.
+
+        With REPORT_VERIFIED_FACTS_BLOCK on, that block replaces the unlabelled key-metrics
+        table, as it does in the report context: the block ``__init__`` built (the text Part 2
+        injects). When ``__init__`` never reached the builder (RESEARCH_FORECAST_INPUTS off, or
+        no situation brief), the same builder runs here, and ``self._verified_figures`` is left
+        unset again so Part 2 and the section context stay as they were. No rendered block (no
+        labelled row, a failed build) or the knob off: the key-metrics table, as before."""
+        if not getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True):
+            return self._build_key_metrics_block(), False
+        if hasattr(self, "_verified_figures"):
+            verified = self._verified_figures
+        else:
+            try:
+                self._build_verified_figures_block()
+                verified = getattr(self, "_verified_figures", None)
+            finally:
+                vars(self).pop("_verified_figures", None)
+        rendered = str(verified.get("rendered") or "").strip() if isinstance(verified, dict) else ""
+        if rendered:
+            return rendered, True
+        return self._build_key_metrics_block(), False
+
     def _context_pack_result(self, kind: str, *, now: Optional[datetime] = None,
                              strip_market_table: bool = False) -> Tuple[Any, Dict[str, Any]]:
         """RESEARCH-13: build the ``kind`` ('binary' | 'spine') evidence pack, no IO.
@@ -3448,8 +3473,11 @@ class ReportAgent:
                 lang="en", window_days=window, retrospective=retrospective)
         elif kind == "spine":
             situation, provenance["situation_source"] = self._context_pack_situation()
+            metrics, verified = self._spine_key_metrics()
+            if verified:
+                provenance["key_metrics_source"] = "verified_figures"
             result = _cp.build_spine_pack(
-                report, situation, self._build_key_metrics_block(), timeline, as_of_raw, now,
+                report, situation, metrics, timeline, as_of_raw, now,
                 budget=int(getattr(Config, "FORECAST_CONTEXT_PACK_SPINE_BUDGET", 14000)),
                 lang="zh", window_days=window, retrospective=retrospective)
         else:
@@ -3487,6 +3515,15 @@ class ReportAgent:
         if not result.ok:
             logger.warning(f"证据包 {kind} 未启用（{result.status}），回退旧提示词")
             return None
+        # FU-4：已核验指标块（REPORT_VERIFIED_FACTS_MAX_CHARS，默认 6000 字）可能超出骨架证据包的
+        # key_metrics 配额（预算 20% 加余量）。截断已记入遥测并以 …[truncated] 标出，此处再告警，不静默。
+        if provenance.get("key_metrics_source") == "verified_figures":
+            stream = (result.telemetry.get("streams") or {}).get("key_metrics") or {}
+            if stream.get("truncated") or stream.get("sections_dropped"):
+                logger.warning(
+                    f"证据包 {kind}：已核验指标块 {stream.get('raw_chars')} 字超出 key_metrics 配额 "
+                    f"{stream.get('allocated_chars')} 字，保留 {stream.get('kept_chars')} 字"
+                    f"（{'末尾截断' if stream.get('truncated') else '整块未收录'}）")
         logger.info(f"证据包 {kind}: {len(result.text)} 字（as_of 来源 {provenance['as_of_source']}）")
         return result.text
 
