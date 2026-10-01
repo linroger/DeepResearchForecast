@@ -1,4 +1,4 @@
-"""EVAL-12 (P05): golden-set contamination probes (backend/scripts/golden_probe.py).
+"""EVAL-12 (P03): golden-set contamination probes (backend/scripts/golden_probe.py).
 
 Offline: a scripted client stands in for the backbone; no network, no ledger write.
 """
@@ -86,6 +86,61 @@ def test_meta_file_wellformed():
     assert any("hindsight" in e for e in gp.validate_meta(bad, QUESTIONS))
 
 
+def _meta_errors(qid, **row):
+    bad = json.loads(json.dumps(META))
+    bad[qid].update(row)
+    for key in [k for k, v in row.items() if v is None]:
+        del bad[qid][key]
+    return [e for e in gp.validate_meta(bad, QUESTIONS) if e.startswith(qid + ":")]
+
+
+def test_meta_needs_rationale_and_never_an_invented_marker():
+    assert all(META[q["id"]]["marker_rationale"].strip() for q in QUESTIONS)
+    uninformative = sorted(qid for qid, row in META.items() if row.get("recall_uninformative"))
+    assert uninformative == ["btc-spot-etf-2024", "fed-2024-11-cut", "fed-2025-01-cut"]
+    assert all(META[qid]["leak_markers"] == [] for qid in uninformative)
+    # an empty list needs the explicit flag; the flag forbids markers; the rationale is required
+    assert any("recall_uninformative: true" in e for e in _meta_errors("fed-2024-11-cut", recall_uninformative=None))
+    assert any("carries no leak_markers" in e for e in _meta_errors("us-senate-2024-gop", recall_uninformative=True))
+    assert any("true or false" in e for e in _meta_errors("fed-2024-11-cut", recall_uninformative="yes"))
+    assert any("marker_rationale" in e for e in _meta_errors("us-senate-2024-gop", marker_rationale=" "))
+    assert any("marker_rationale" in e for e in _meta_errors("us-senate-2024-gop", marker_rationale=None))
+    assert any("non-blank" in e for e in _meta_errors("us-senate-2024-gop", leak_markers=["53", " "]))
+
+
+@pytest.mark.parametrize("qid,outcome,details", [
+    # facts public at as_of, the standard 25bp step, players of the named team, a month the
+    # recall window gives away: a model that remembers nothing can say all of these
+    ("fed-2025-01-cut", "NO", "The FOMC held the target range at 4.25%-4.50%."),
+    ("fed-2024-11-cut", "YES", "The Fed cut by 25 basis points to 4.50%-4.75%."),
+    ("fed-2024-12-cut", "YES", "The Fed cut by 25bp to 4.25%-4.50%."),
+    ("fr-legis-2024-rn-majority", "NO", "The New Popular Front came first and RN fell short of a majority."),
+    ("ucl-2024-real-madrid", "YES", "Real Madrid won the final; Carvajal and Vinicius starred."),
+    ("sb-lviii-2024-chiefs", "YES", "Mahomes and Hardman led the Chiefs past the 49ers."),
+    ("mlb-2024-dodgers", "YES", "Freddie Freeman and Shohei Ohtani led the Dodgers to the title."),
+    ("euro-2024-spain", "YES", "Oyarzabal and Yamal helped Spain lift the trophy."),
+    ("nvidia-3t-2024", "YES", "Nvidia crossed $3 trillion in June 2024."),
+    ("btc-spot-etf-2024", "YES", "The SEC approved spot bitcoin ETFs on January 10, 2024, the ARK deadline."),
+    ("trump-ny-conviction-2024", "YES", "Trump was convicted on 34 felony counts of falsifying records."),
+    ("spacex-starship-catch-2024", "YES", "SpaceX caught the Super Heavy booster on Flight 5."),
+])
+def test_as_of_knowledge_is_never_a_marker(qid, outcome, details):
+    recall = {"knows": True, "stated_outcome": outcome, "details": details}
+    flags = gp.question_flags(BY_ID[qid], META[qid]["leak_markers"], None, recall, 0.85)
+    assert flags["likely_memorized"] is False and flags["recall_claimed"] is True
+
+
+@pytest.mark.parametrize("qid,details", [
+    ("fed-2024-12-cut", "Cut 25bp; Cleveland's Beth Hammack dissented."),
+    ("nvidia-3t-2024", "Nvidia closed above $3 trillion on June 5."),
+    ("fed-2024-09-cut", "The Fed opened with a half-point cut."),
+    ("ucl-2024-real-madrid", "Real Madrid beat Dortmund at Wembley."),
+])
+def test_realized_details_unknowable_at_as_of_still_flag(qid, details):
+    recall = {"knows": True, "stated_outcome": "YES", "details": details}
+    assert gp.question_flags(BY_ID[qid], META[qid]["leak_markers"], None, recall, 0.85)["likely_memorized"] is True
+
+
 def test_markers_match_whole_normalized_tokens():
     assert gp.contains_marker("Republicans won 53 seats.", ["53"]) == "53"
     assert gp.contains_marker("Planned for 2053.", ["53"]) is None
@@ -117,12 +172,50 @@ def test_parser_never_defaults(reply, expected):
     assert gp.parse_nd(reply) == expected
 
 
-def test_recall_parser_is_strict_and_caps_details():
-    assert gp.parse_recall({"knows": True, "stated_outcome": "yes", "details": "x " * 100}) == {
-        "knows": True, "stated_outcome": "YES", "details": " ".join(["x"] * gp.DETAILS_MAX_WORDS)}
+def test_recall_parser_is_strict_and_keeps_all_details():
+    assert gp.parse_recall({"knows": True, "stated_outcome": "yes", "details": " x\n" * 100}) == {
+        "knows": True, "stated_outcome": "YES", "details": " ".join(["x"] * 100)}
     assert gp.parse_recall({"knows": "maybe", "stated_outcome": "YES"}) is None
     assert gp.parse_recall({"knows": False, "stated_outcome": "PROBABLY"}) is None
     assert gp.parse_recall("UNKNOWN") is None
+
+
+def test_marker_after_the_word_limit_still_flags():
+    q = BY_ID["uk-ge-2024-labour"]
+    details = " ".join(["filler"] * gp.DETAILS_MAX_WORDS) + " Labour won 411 seats"
+    recall = gp.parse_recall({"knows": True, "stated_outcome": "YES", "details": details})
+    assert recall["details"] == details
+    assert gp.question_flags(q, META[q["id"]]["leak_markers"], None, recall, 0.85)["likely_memorized"] is True
+
+
+@pytest.mark.parametrize("repair_turn", [True, False])
+def test_refusal_through_the_real_client_is_parse_failed(tmp_path, monkeypatch, repair_turn):
+    from app.utils.llm_client import LLMClient
+    monkeypatch.setattr(Config, "LLM_JSON_REPAIR_TURN", repair_turn, raising=False)
+    client = LLMClient(provider="deepseek", api_key="x", pinned=True, use_cache=False)
+    sent = []
+
+    def refuse(*args, **kwargs):
+        sent.append(kwargs.get("messages"))
+        return "I cannot forecast this."
+    client.chat = refuse
+    report = gp.run_probe([BY_ID["uk-ge-2024-labour"]], META, client=client, provider="deepseek",
+                          model="deepseek-chat", out_dir=str(tmp_path), golden_sha256="g" * 64,
+                          closed_book_attested=True)
+    assert report["questions"][0]["arms"] == {"nd": "parse_failed", "recall": "parse_failed"}
+    assert report["cost"]["calls"] == 4 and len(sent) == 4          # the repair attempt counts per arm
+    arm = json.load(open(tmp_path / "arms" / "uk-ge-2024-labour" / "nd.json"))
+    assert arm["status"] == "parse_failed" and arm["raw_excerpt"] == "I cannot forecast this."
+    assert client.chat is refuse and "chat_json" not in vars(client)   # metering undone
+
+
+def test_transport_errors_stay_call_failed(tmp_path):
+    def boom(arm, qid):
+        raise (ConnectionError("reset") if arm == "nd" else ValueError("LLM_FALLBACK_REASONING_EFFORT must be"))
+    report, _ = _run(tmp_path, boom, questions=[BY_ID["uk-ge-2024-labour"]])
+    assert report["questions"][0]["arms"] == {"nd": "call_failed", "recall": "call_failed"}
+    arm = json.load(open(tmp_path / "probe" / "arms" / "uk-ge-2024-labour" / "nd.json"))
+    assert arm["raw_excerpt"] == "ConnectionError: reset"
 
 
 # ------------------------------------------------------------------ flags and verdicts
@@ -177,11 +270,105 @@ def test_constant_08_collapsed_inconclusive(tmp_path):
     assert abs(brier - clim) < 0.01
 
 
-def test_cli_provider_stamped_never_none_detected(tmp_path):
-    report, _ = _run(tmp_path, closed_book=False)
+def test_cli_provider_stamped_never_none_detected(tmp_path, monkeypatch):
+    from app.services import forecast_ledger
+    monkeypatch.setattr(forecast_ledger, "evaluation_ledger_dir", lambda: str(tmp_path / "eval"))
+    client = ScriptedClient(_honest)
+    client.model = "gpt-4o-mini"            # an inherited LLM_MODEL_NAME the Claude CLI drops
+    assert gp.cmd_probe(_cli_args(tmp_path, live=True, provider="claude-cli", model=None, out=None),
+                        client_factory=lambda p, m: client) == 0
+    sha8 = gp.golden_sha256_of(ge.GOLDEN_PATH)[:8]
+    report = json.load(open(tmp_path / "eval" / "probes" / f"claude-cli__cli-default__{sha8}" / "probe_report.json"))
     assert report["closed_book_attested"] is False
+    assert report["backbone"] == {"provider": "claude-cli", "model": "cli-default"}
     assert report["summary"]["status"] == "inconclusive"
     assert report["summary"]["inconclusive_reasons"] == ["not_closed_book_attested"]
+
+
+@pytest.mark.parametrize("provider,model,expected", [
+    ("claude-cli", "claude-sonnet-4-5", "claude-sonnet-4-5"),   # passed to the CLI via --model
+    ("claude-cli", "glm-4.6", "cli-default"),                   # dropped: the account default runs
+    ("codex-cli", "gpt-5", "cli-default"),                      # codex exec is never given a model
+    ("deepseek", "deepseek-chat", "deepseek-chat"),
+])
+def test_backbone_names_the_model_actually_requested(tmp_path, provider, model, expected):
+    client = ScriptedClient(_honest)
+    assert gp.cmd_probe(_cli_args(tmp_path, live=True, provider=provider, model=model),
+                        client_factory=lambda p, m: client) == 0
+    report = json.load(open(tmp_path / "cli" / "probe_report.json"))
+    assert report["backbone"] == {"provider": provider, "model": expected}
+    assert report["closed_book_attested"] is (provider == "deepseek")
+
+
+def test_client_build_error_exits_2(tmp_path, capsys):
+    def no_key(provider, model):
+        raise ValueError("no API key configured")
+    assert gp.cmd_probe(_cli_args(tmp_path, live=True, provider="kimi"), client_factory=no_key) == 2
+    assert "golden_probe: cannot build client for kimi: no API key configured" in capsys.readouterr().err
+    assert not (tmp_path / "cli").exists()
+
+
+def test_build_client_follows_the_critic_amendment(monkeypatch):
+    from app.services import forecast_extractor
+    from app.utils import llm_client
+    built, ensemble = [], []
+
+    class RecordingLLMClient:
+        def __init__(self, *args, **kwargs):
+            built.append((args, kwargs))
+
+    def ensemble_client(provider):
+        ensemble.append(provider)
+        return SimpleNamespace(model=f"{provider}-default", _pinned=False, use_cache=True)
+
+    monkeypatch.setattr(llm_client, "LLMClient", RecordingLLMClient)
+    monkeypatch.setattr(forecast_extractor, "_build_ensemble_client", ensemble_client)
+    monkeypatch.setattr(Config, "LLM_PROVIDER", "DeepSeek", raising=False)
+    gp.build_client(None, None)
+    gp.build_client("deepseek", "deepseek-reasoner")
+    # the default provider: keywords only, the configured key and endpoint, pinned, no cache
+    assert built == [((), {"model": None, "pinned": True, "use_cache": False}),
+                     ((), {"model": "deepseek-reasoner", "pinned": True, "use_cache": False})]
+    other = gp.build_client("kimi", None)
+    assert (other.model, other._pinned, other.use_cache) == ("kimi-default", True, False)
+    other = gp.build_client("kimi", "kimi-k2")
+    assert (other.model, other._pinned, other.use_cache) == ("kimi-k2", True, False)
+    assert ensemble == ["kimi", "kimi"] and len(built) == 2
+
+
+def test_run_context_restored(tmp_path):
+    from app.utils.telemetry import get_run_context, set_run_context
+    seen = []
+
+    def answer(arm, qid):
+        seen.append(get_run_context())
+        return _honest(arm, qid)
+    sha8 = gp.golden_sha256_of(ge.GOLDEN_PATH)[:8]
+    client = ScriptedClient(answer)
+    for outer in ((None, None), ("outer-run", "report")):
+        set_run_context(*outer)
+        try:
+            assert gp.cmd_probe(_cli_args(tmp_path, live=True, out=str(tmp_path / str(outer[0]))),
+                                client_factory=lambda p, m: client) == 0
+            assert set(seen) == {("golden_probe:" + sha8, "golden_probe")}
+            assert get_run_context() == outer
+        finally:
+            set_run_context(None, None)
+
+
+def test_uninformative_rows_are_reported_not_recall_checkable(tmp_path):
+    report, _ = _run(tmp_path)
+    ids = ["btc-spot-etf-2024", "fed-2024-11-cut", "fed-2025-01-cut"]
+    assert report["summary"]["recall_uninformative_ids"] == ids
+    assert {r["question_id"] for r in report["questions"] if not r["recall_checkable"]} == set(ids)
+    assert report["summary"]["arms"]["recall"]["checkable"] == len(QUESTIONS) - len(ids)
+    # mostly uninformative rows: a clean recall arm proves nothing -> inconclusive
+    few = [BY_ID[i] for i in ("fed-2024-11-cut", "fed-2025-01-cut", "us-pres-2024-trump",
+                              "us-pres-2024-harris", "uk-ge-2024-labour")]
+    report, _ = _run(tmp_path / "few", questions=few)
+    assert report["summary"]["arms"]["recall"]["checkable_share"] == 0.6
+    assert report["summary"]["status"] == "inconclusive"
+    assert report["summary"]["inconclusive_reasons"] == ["recall_checkable_below_0.8"]
 
 
 def test_low_coverage_is_inconclusive(tmp_path):
@@ -220,9 +407,20 @@ def test_repair_attempts_inside_chat_json_count(tmp_path):
     assert [s for row in report["questions"] for s in row["arms"].values()].count("ok") == 2
 
 
+def test_metering_is_undone_so_a_client_can_be_probed_twice(tmp_path):
+    client = ScriptedClient(_honest)
+    first = gp.run_probe(QUESTIONS[:2], META, client=client, provider="deepseek", model="m",
+                         out_dir=str(tmp_path / "a"), golden_sha256="g" * 64, max_calls=2, closed_book_attested=True)
+    assert first["cost"]["calls"] == 2 and "chat_json" not in vars(client)
+    second = gp.run_probe(QUESTIONS[:2], META, client=client, provider="deepseek", model="m",
+                          out_dir=str(tmp_path / "b"), golden_sha256="g" * 64, max_calls=4, closed_book_attested=True)
+    assert second["cost"]["calls"] == 4 and len(client.calls) == 6
+    assert "budget_exhausted" not in second["summary"]["inconclusive_reasons"]
+
+
 def _cli_args(tmp_path, **over):
-    args = dict(live=False, provider="deepseek", model="scripted-1", arms="nd,recall", out=str(tmp_path / "cli"),
-                golden=ge.GOLDEN_PATH, meta=gp.META_PATH)
+    args = {"live": False, "provider": "deepseek", "model": "scripted-1", "arms": "nd,recall",
+            "out": str(tmp_path / "cli"), "golden": ge.GOLDEN_PATH, "meta": gp.META_PATH}
     args.update(over)
     return SimpleNamespace(**args)
 
@@ -264,6 +462,10 @@ def test_nothing_reaches_the_production_ledger(tmp_path, monkeypatch):
     written = [os.path.relpath(os.path.join(root, f), tmp_path) for root, _d, files in os.walk(tmp_path)
                for f in files]
     assert written and all(w.startswith(os.path.join("_evaluation_ledger", "probes")) for w in written)
+
+
+def test_probe_report_schema_is_the_one_golden_eval_accepts():
+    assert ge.PROBE_REPORT_SCHEMA == gp.REPORT_SCHEMA
 
 
 def test_knobs_default_and_documented():

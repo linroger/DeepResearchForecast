@@ -1,4 +1,4 @@
-"""EVAL-12 (P05): contamination probes for the golden question set.
+"""EVAL-12 (P03): contamination probes for the golden question set.
 
 Every golden question resolved before current model cutoffs, so a backbone may simply
 remember the answer. Two closed-book arms per question measure that before a golden
@@ -14,20 +14,28 @@ score is trusted:
   resolved, never how; that is why a bare correct answer is only a weak signal.
 
 A question is ``likely_memorized`` when the recall arm states the correct outcome AND its
-details contain one of the row's curated ``leak_markers`` (realized details the question
-does not imply; ``backend/tests/eval/golden_probe_meta.json``). ``nd_confident_correct``
-(p on the realized side >= GOLDEN_PROBE_CONFIDENT_P) and ``recall_claimed`` are weak
-signals only. The set is ``flagged`` when any question is likely memorized;
-``none_detected`` only when both arms reach coverage >= 0.8, the nd probabilities are
-not collapsed (``eval_stats.dispersion``) and the run was closed-book (an
-OpenAI-compatible provider: CLI providers are agentic, so they are stamped
-``closed_book_attested: false``, run but never certified); otherwise ``inconclusive``
-with reasons.
+details (the whole reply field, whatever its length) contain one of the row's curated
+``leak_markers`` (``backend/tests/eval/golden_probe_meta.json``): realized details that
+were unknowable at as_of and follow neither from the question nor from the prompt, each
+row with a ``marker_rationale``. A row without such a detail (a hold at an unchanged
+rate) carries no markers and ``recall_uninformative: true``: it is reported as not
+recall-checkable instead of being given a weak marker. ``nd_confident_correct`` (p on
+the realized side >= GOLDEN_PROBE_CONFIDENT_P) and ``recall_claimed`` are weak signals
+only. The set is ``flagged`` when any question is likely memorized; ``none_detected``
+only when both arms reach coverage >= 0.8, at least 0.8 of the probed rows are
+recall-checkable, the nd probabilities are not collapsed (``eval_stats.dispersion``) and
+the run was closed-book (an OpenAI-compatible provider: CLI providers are agentic, so
+they are stamped ``closed_book_attested: false``, run but never certified); otherwise
+``inconclusive`` with reasons.
 
 Prompts are built from forecaster_view and the probe meta only; ``assert_answer_free``
 blocks any rendered prompt containing a leak marker (arm status
 ``prompt_leak_blocked``, no call). Parsers never default: a refusal, garbage or an
-out-of-range value is ``parse_failed`` ('85%' reads as 0.85). Calls are capped at
+out-of-range value is ``parse_failed`` ('85%' reads as 0.85), including a reply that
+LLMClient.chat_json rejects as non-JSON after its repair turn (a transport error stays
+``call_failed``). The backbone model is recorded as the transport requests it
+(``model_provenance.effective_model_label``: a CLI provider not given a model it accepts
+runs its account default, ``cli-default``). Calls are capped at
 GOLDEN_PROBE_MAX_CALLS (each chat attempt counts, the repair turn included); once the
 cap is reached the remaining arms are ``skipped_budget``, the status is inconclusive and
 the CLI exits 4. Nothing is written to any ledger: artifacts go under
@@ -46,6 +54,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import math
@@ -54,7 +63,7 @@ import re
 import sys
 import unicodedata
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence
 
 _SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 _BACKEND = os.path.dirname(_SCRIPTS)
@@ -93,6 +102,10 @@ DETAILS_MAX_WORDS = 60
 RAW_EXCERPT_MAX = 600
 MAX_TOKENS = 1024
 EXIT_BUDGET = 4
+# LLMClient.chat_json's final miss (the INFRA-2 repair path and the legacy loop raise a
+# ValueError with this prefix): the model answered, twice, but not with a JSON object. A
+# refusal or garbage is parse_failed, not a transport failure (call_failed).
+_JSON_MISS_PREFIX = "LLM返回的JSON格式无效"
 
 _DASHES = dict.fromkeys(map(ord, "‐‑‒–—―−﹘﹣－"), "-")
 _WS_RE = re.compile(r"\s+")
@@ -149,10 +162,17 @@ def probe_view(q: Dict[str, Any], meta_row: Optional[Dict[str, Any]]) -> Dict[st
     return view
 
 
+def recall_checkable(meta_row: Optional[Dict[str, Any]]) -> bool:
+    """Whether the row has leak markers, i.e. a recall answer can be checked at all."""
+    return bool((meta_row or {}).get("leak_markers"))
+
+
 def validate_meta(meta: Dict[str, Dict[str, Any]], questions: Sequence[Dict[str, Any]]) -> List[str]:
-    """Errors: every golden row needs an entry with a non-empty marker list; a
-    hindsight-framed row needs a probe_question; no marker may occur in the probe view
-    the model is shown (the forecaster view with any probe rewording)."""
+    """Errors: every golden row needs an entry with a ``marker_rationale`` and either a
+    non-empty marker list or ``recall_uninformative: true`` with an empty one (never a weak
+    marker invented to fill the list); a hindsight-framed row needs a probe_question; no
+    marker may occur in the probe view the model is shown (the forecaster view with any
+    probe rewording)."""
     errors: List[str] = []
     by_id = {q.get("id"): q for q in questions}
     for qid in sorted(set(meta) - set(by_id)):
@@ -162,11 +182,22 @@ def validate_meta(meta: Dict[str, Dict[str, Any]], questions: Sequence[Dict[str,
         if not isinstance(row, dict):
             errors.append(f"{qid}: no probe meta")
             continue
+        rationale = row.get("marker_rationale")
+        if not isinstance(rationale, str) or not rationale.strip():
+            errors.append(f"{qid}: marker_rationale must say why each marker was unknowable at as_of "
+                          "(or why the row has none)")
         markers = row.get("leak_markers")
-        if not isinstance(markers, list) or not markers or not all(
-                isinstance(m, str) and normalize(m) for m in markers):
-            errors.append(f"{qid}: leak_markers must be a non-empty list of strings")
+        if not isinstance(markers, list) or not all(isinstance(m, str) and normalize(m) for m in markers):
+            errors.append(f"{qid}: leak_markers must be a list of non-blank strings")
             continue
+        uninformative = row.get("recall_uninformative", False)
+        if not isinstance(uninformative, bool):
+            errors.append(f"{qid}: recall_uninformative must be true or false")
+        elif uninformative and markers:
+            errors.append(f"{qid}: a recall_uninformative row carries no leak_markers")
+        elif not uninformative and not markers:
+            errors.append(f"{qid}: no leak_markers; mark the row recall_uninformative: true when no "
+                          "realized detail was unknowable at as_of")
         if q.get("hindsight_framed") and not row.get("probe_question"):
             errors.append(f"{qid}: hindsight-framed row needs a probe_question")
         view = probe_view(q, row)
@@ -250,8 +281,10 @@ def parse_nd(reply: Any) -> Optional[float]:
 
 
 def parse_recall(reply: Any) -> Optional[Dict[str, Any]]:
-    """``{knows, stated_outcome, details}`` with stated_outcome YES|NO|UNKNOWN and details
-    cut to DETAILS_MAX_WORDS words, else None (parse_failed)."""
+    """``{knows, stated_outcome, details}`` with stated_outcome YES|NO|UNKNOWN, else None
+    (parse_failed). ``details`` keeps the whole reply field (whitespace collapsed): the
+    DETAILS_MAX_WORDS limit is only asked for in the prompt, and a marker after it must
+    still be found."""
     if not isinstance(reply, dict):
         return None
     stated = str(reply.get("stated_outcome") or "").strip().upper()
@@ -262,7 +295,7 @@ def parse_recall(reply: Any) -> Optional[Dict[str, Any]]:
         knows = {"true": True, "false": False}.get(knows.strip().lower())
     if not isinstance(knows, bool):
         return None
-    details = " ".join(str(reply.get("details") or "").split()[:DETAILS_MAX_WORDS])
+    details = " ".join(str(reply.get("details") or "").split())
     return {"knows": knows, "stated_outcome": stated, "details": details}
 
 
@@ -285,13 +318,21 @@ def question_flags(q: Dict[str, Any], markers: Sequence[str], nd: Optional[float
 
 
 # ------------------------------------------------------------------ budget
-def meter_calls(client: Any, max_calls: int) -> Dict[str, Any]:
+_METERED = ("chat", "chat_json")
+
+
+@contextlib.contextmanager
+def meter_calls(client: Any, max_calls: int) -> Iterator[Dict[str, Any]]:
     """Count every model attempt and refuse the one that would exceed ``max_calls``.
 
-    chat() is wrapped (LLMClient.chat_json delegates to it, its repair turn included);
-    a chat_json that never reached chat() (a test double) counts once. Returns the
-    shared state ``{calls, refused}``."""
-    state: Dict[str, Any] = {"calls": 0, "refused": False}
+    chat() is wrapped on the client itself (LLMClient.chat_json calls self.chat, so its
+    repair turn is counted; a proxy object would miss it); a chat_json that never reached
+    chat() (a test double) counts once. Yields the shared state ``{calls, refused,
+    max_calls, last_reply}`` (``last_reply``: the latest text chat() returned). On exit
+    the client's own attributes are restored, so a client probed twice is metered afresh."""
+    state: Dict[str, Any] = {"calls": 0, "refused": False, "max_calls": max_calls, "last_reply": None}
+    own = getattr(client, "__dict__", {})
+    saved = {name: own[name] for name in _METERED if name in own}
     inner_chat = getattr(client, "chat", None)
     inner_json = client.chat_json
 
@@ -300,7 +341,9 @@ def meter_calls(client: Any, max_calls: int) -> Dict[str, Any]:
             state["refused"] = True
             raise BudgetExhausted(f"GOLDEN_PROBE_MAX_CALLS={max_calls} reached")
         state["calls"] += 1
-        return inner_chat(*args, **kwargs)
+        reply = inner_chat(*args, **kwargs)
+        state["last_reply"] = reply
+        return reply
 
     def chat_json(*args: Any, **kwargs: Any) -> Any:
         if state["calls"] >= max_calls:
@@ -316,7 +359,14 @@ def meter_calls(client: Any, max_calls: int) -> Dict[str, Any]:
     if callable(inner_chat):
         client.chat = chat
     client.chat_json = chat_json
-    return state
+    try:
+        yield state
+    finally:
+        for name in _METERED:
+            if name in saved:
+                setattr(client, name, saved[name])
+            elif name in own:
+                delattr(client, name)
 
 
 # ------------------------------------------------------------------ run
@@ -363,14 +413,22 @@ def _run_arm(client: Any, state: Dict[str, Any], arm: str, q: Dict[str, Any],
         state["refused"] = True
         return dict(base, status=STATUS_SKIPPED_BUDGET, value=None, raw_excerpt="", created_at=_now())
     refused_before = state["refused"]
+    state["last_reply"] = None
     try:
         reply = client.chat_json(messages, temperature=0.0, max_tokens=MAX_TOKENS,
                                  label=f"golden_probe:{arm}")
     except BudgetExhausted:
         return dict(base, status=STATUS_SKIPPED_BUDGET, value=None, raw_excerpt="", created_at=_now())
     except Exception as exc:  # noqa: BLE001 — a failed call is recorded, never fatal
-        doc = dict(base, status=STATUS_CALL_FAILED, value=None,
-                   raw_excerpt=f"{type(exc).__name__}: {exc}"[:RAW_EXCERPT_MAX], created_at=_now())
+        if isinstance(exc, ValueError) and str(exc).startswith(_JSON_MISS_PREFIX):
+            # The model replied, but chat_json found no JSON object, its repair turn included.
+            replied = state["last_reply"]
+            doc = dict(base, status=STATUS_PARSE_FAILED, value=None,
+                       raw_excerpt=str(replied if replied is not None else exc)[:RAW_EXCERPT_MAX],
+                       created_at=_now())
+        else:
+            doc = dict(base, status=STATUS_CALL_FAILED, value=None,
+                       raw_excerpt=f"{type(exc).__name__}: {exc}"[:RAW_EXCERPT_MAX], created_at=_now())
         write_json_atomic(path, doc)
         return doc
     if state["refused"] and not refused_before:
@@ -390,27 +448,29 @@ def run_probe(questions: Sequence[Dict[str, Any]], meta: Dict[str, Dict[str, Any
     """Probe every labelled question on ``arms`` and write probe_report.json; returns it.
 
     ``client`` is any object with chat_json (an LLMClient in production); it is metered
-    by :func:`meter_calls`. Unlabelled (ambiguous) rows are skipped."""
-    state = meter_calls(client, max_calls)
-    state["max_calls"] = max_calls
+    by :func:`meter_calls` for the duration of the run. Unlabelled (ambiguous) rows are
+    skipped."""
     counters = {"reused": 0}
     rows: List[Dict[str, Any]] = []
-    for q in questions:
-        meta_row = meta.get(q.get("id")) or {}
-        label = golden_set.expected_label(q)
-        if label not in (golden_set.LABEL_YES, golden_set.LABEL_NO):
-            rows.append({"question_id": q.get("id"), "arms": {a: STATUS_SKIPPED_UNLABELLED for a in arms},
-                         "flags": None})
-            continue
-        results = {arm: _run_arm(client, state, arm, q, meta_row, provider=provider, model=model,
-                                 out_dir=out_dir, counters=counters) for arm in arms}
-        nd = results[ARM_ND]["value"] if ARM_ND in results and results[ARM_ND]["status"] == STATUS_OK else None
-        recall = (results[ARM_RECALL]["value"]
-                  if ARM_RECALL in results and results[ARM_RECALL]["status"] == STATUS_OK else None)
-        rows.append({"question_id": q["id"], "label": label,
-                     "arms": {arm: doc["status"] for arm, doc in results.items()},
-                     "nd_p_yes": nd, "recall": recall,
-                     "flags": question_flags(q, meta_row.get("leak_markers") or [], nd, recall, confident_p)})
+    with meter_calls(client, max_calls) as state:
+        for q in questions:
+            meta_row = meta.get(q.get("id")) or {}
+            label = golden_set.expected_label(q)
+            if label not in (golden_set.LABEL_YES, golden_set.LABEL_NO):
+                rows.append({"question_id": q.get("id"), "arms": dict.fromkeys(arms, STATUS_SKIPPED_UNLABELLED),
+                             "flags": None})
+                continue
+            results = {arm: _run_arm(client, state, arm, q, meta_row, provider=provider, model=model,
+                                     out_dir=out_dir, counters=counters) for arm in arms}
+            nd = (results[ARM_ND]["value"]
+                  if ARM_ND in results and results[ARM_ND]["status"] == STATUS_OK else None)
+            recall = (results[ARM_RECALL]["value"]
+                      if ARM_RECALL in results and results[ARM_RECALL]["status"] == STATUS_OK else None)
+            rows.append({"question_id": q["id"], "label": label,
+                         "arms": {arm: doc["status"] for arm, doc in results.items()},
+                         "nd_p_yes": nd, "recall": recall, "recall_checkable": recall_checkable(meta_row),
+                         "flags": question_flags(q, meta_row.get("leak_markers") or [], nd, recall,
+                                                 confident_p)})
     report = {
         "schema": REPORT_SCHEMA,
         "golden_sha256": golden_sha256,
@@ -442,6 +502,15 @@ def summarize(rows: Sequence[Dict[str, Any]], arms: Sequence[str], *, closed_boo
             reasons.append(f"{arm}_coverage_below_{COVERAGE_MIN}")
         if any(r["arms"].get(arm) == STATUS_PROMPT_LEAK for r in probed):
             reasons.append(f"{arm}_prompt_leak_blocked")
+    uninformative = sorted(r["question_id"] for r in probed if not r.get("recall_checkable"))
+    if ARM_RECALL in arms:
+        checkable = len(probed) - len(uninformative)
+        share = round(checkable / len(probed), 4) if probed else 0.0
+        arm_summary[ARM_RECALL].update(checkable=checkable, checkable_share=share)
+        if share < COVERAGE_MIN:
+            # Rows without markers can never be flagged: too many of them and a clean recall
+            # arm says nothing.
+            reasons.append(f"recall_checkable_below_{COVERAGE_MIN}")
     if ARM_ND in arms:
         nd_rows = [r for r in probed if r.get("nd_p_yes") is not None]
         disp = eval_stats.dispersion([r["nd_p_yes"] for r in nd_rows],
@@ -467,7 +536,7 @@ def summarize(rows: Sequence[Dict[str, Any]], arms: Sequence[str], *, closed_boo
         status = SET_INCONCLUSIVE
     return {"status": status, "flagged_ids": flagged,
             "inconclusive_reasons": [] if status == SET_NONE_DETECTED else reasons,
-            "arms": arm_summary, "weak_signals": weak}
+            "recall_uninformative_ids": uninformative, "arms": arm_summary, "weak_signals": weak}
 
 
 # ------------------------------------------------------------------ CLI
@@ -503,8 +572,9 @@ def cmd_probe(args: argparse.Namespace, *, client_factory: Callable[[Optional[st
               "--live to run them. No call was made.")
         return 0
     from app.utils.llm_client import OPENAI_COMPATIBLE_PROVIDERS
+    from app.utils.model_provenance import effective_model_label
     from app.services.forecast_ledger import evaluation_ledger_dir
-    from app.utils.telemetry import set_run_context
+    from app.utils.telemetry import get_run_context, set_run_context
     from golden_eval import load_golden_file
 
     _version, questions = load_golden_file(args.golden)
@@ -519,17 +589,30 @@ def cmd_probe(args: argparse.Namespace, *, client_factory: Callable[[Optional[st
         print(f"golden_probe: unknown arm(s) {unknown}; choose from {list(ARMS)}", file=sys.stderr)
         return 2
     provider = str(args.provider or Config.LLM_PROVIDER or "").strip().lower()
-    client = client_factory(provider, args.model)
-    model = str(args.model or getattr(client, "model", None) or "default")
+    try:
+        client = client_factory(provider, args.model)
+    except ValueError as exc:
+        # An unknown provider, or one without its API key (_build_ensemble_client / LLMClient).
+        print(f"golden_probe: cannot build client for {provider}: {exc}", file=sys.stderr)
+        return 2
+    # The model the transport requests: a CLI provider runs its account default unless given
+    # a model it accepts (claude_cli_model_arg), so client.model would name the wrong backbone.
+    model = effective_model_label(provider, args.model or getattr(client, "model", None))
     sha = golden_sha256_of(args.golden)
     out_dir = args.out or os.path.join(evaluation_ledger_dir(), "probes",
                                        f"{provider}__{_model_slug(model)}__{sha[:8]}")
+    previous_context = get_run_context()
     set_run_context("golden_probe:" + sha[:8], "golden_probe")
-    report = run_probe(questions, meta, client=client, provider=provider, model=model, out_dir=out_dir,
-                       golden_sha256=sha, arms=arms,
-                       max_calls=int(getattr(Config, "GOLDEN_PROBE_MAX_CALLS", 120)),
-                       confident_p=float(getattr(Config, "GOLDEN_PROBE_CONFIDENT_P", 0.85)),
-                       closed_book_attested=provider in OPENAI_COMPATIBLE_PROVIDERS)
+    try:
+        report = run_probe(questions, meta, client=client, provider=provider, model=model, out_dir=out_dir,
+                           golden_sha256=sha, arms=arms,
+                           max_calls=int(getattr(Config, "GOLDEN_PROBE_MAX_CALLS", 120)),
+                           confident_p=float(getattr(Config, "GOLDEN_PROBE_CONFIDENT_P", 0.85)),
+                           closed_book_attested=provider in OPENAI_COMPATIBLE_PROVIDERS)
+    finally:
+        set_run_context(None, None)
+        if previous_context[0]:
+            set_run_context(*previous_context)
     summary = report["summary"]
     print(json.dumps({"status": summary["status"], "flagged_ids": summary["flagged_ids"],
                       "inconclusive_reasons": summary["inconclusive_reasons"], "cost": report["cost"],

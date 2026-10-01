@@ -1314,6 +1314,23 @@ def _render_ledger_markdown(report: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _contamination_line(report: Dict[str, Any]) -> Optional[str]:
+    """EVAL-12: the markdown line for a score given --probe-report (status, probe backbone and
+    the flagged / unflagged n). None without one, so an unprobed report renders as before."""
+    c = report.get("contamination")
+    if not isinstance(c, dict) or c.get("status") in (None, PROBE_UNPROBED):
+        return None
+    if c.get("status") == PROBE_MISMATCH:
+        return (f"- contamination: **{PROBE_MISMATCH}** (probe `{c.get('probe_run')}` was run on another "
+                "golden file; metrics not split)")
+    backbone = c.get("backbone") if isinstance(c.get("backbone"), dict) else {}
+    closed = "" if c.get("closed_book_attested") else ", not closed-book attested"
+    return (f"- contamination: **{c.get('status')}** (probe `{c.get('probe_run')}`, backbone "
+            f"{backbone.get('provider') or '?'}/{backbone.get('model') or '?'}{closed}); "
+            f"flagged n={(report.get('metrics_flagged') or {}).get('n', 0)}, "
+            f"unflagged n={(report.get('metrics_unflagged') or {}).get('n', 0)}")
+
+
 def render_markdown(report: Dict[str, Any]) -> str:
     """Human-readable markdown summary of a score-forecast-file or score-ledger report.
 
@@ -1340,6 +1357,9 @@ def render_markdown(report: Dict[str, Any]) -> str:
     lines.append(f"- golden: `{report.get('golden_path', '')}` "
                  f"({report.get('golden_count', 0)} questions)")
     lines.append(f"- matched / scored: **{m.get('n', 0)}**")
+    contamination_line = _contamination_line(report)
+    if contamination_line:
+        lines.append(contamination_line)
     um = report.get("unmatched_golden_ids") or []
     if um:
         lines.append(f"- unmatched golden ids ({len(um)}): {', '.join(um)}")
@@ -1488,8 +1508,8 @@ def _append_matched_to_ledger(matched: List[Dict[str, Any]], ledger_dir: Optiona
     stays distinguishable in the ledger; untiered rows are appended exactly as before.
 
     EVAL-12: with a matching probe report (``contamination`` from
-    :func:`load_probe_contamination`) each row records ``{status, flagged, probe_run}``;
-    without one rows are appended exactly as before.
+    :func:`load_probe_contamination`) each row records ``{status, flagged, probe_run,
+    backbone}``; without one rows are appended exactly as before.
     """
     from app.services.forecast_ledger import append_golden_result
     appended = 0
@@ -1502,7 +1522,8 @@ def _append_matched_to_ledger(matched: List[Dict[str, Any]], ledger_dir: Optiona
             d=ledger_dir, golden_tier=r.get("tier"), golden_tier_source=tier_source,
             **({"contamination": {"status": contamination["status"],
                                   "flagged": r["id"] in contamination["flagged_ids"],
-                                  "probe_run": contamination["probe_run"]}}
+                                  "probe_run": contamination["probe_run"],
+                                  "backbone": contamination.get("backbone")}}
                if contamination and contamination.get("status") != PROBE_MISMATCH else {}),
         )
         if e:
@@ -1534,9 +1555,11 @@ def _write_outputs(report: Dict[str, Any], out_path: Optional[str], md_path: Opt
 
 # =============================================================== CLI commands
 
-# EVAL-12: contamination status of a score with no (or a mismatched) probe report.
+# EVAL-12: contamination status of a score with no (or a mismatched) probe report, and the
+# schema a probe report must carry (golden_probe.REPORT_SCHEMA; test_golden_probe pins both).
 PROBE_UNPROBED = "unprobed"
 PROBE_MISMATCH = "probe_mismatch"
+PROBE_REPORT_SCHEMA = "drf.golden_probe.v1"
 
 
 def _file_sha256(path: str) -> str:
@@ -1549,18 +1572,25 @@ def load_probe_contamination(probe_report: Optional[str], golden_path: str) -> D
 
     No report → ``{status: 'unprobed'}``. A report probed against another golden file
     (golden_sha256 differs) → ``{status: 'probe_mismatch', probe_run}`` and no split.
-    Else ``{status, flagged_ids, probe_run}`` from the report's summary. Fails loud on an
-    unreadable report."""
+    Else ``{status, flagged_ids, probe_run, backbone, closed_book_attested}`` from the
+    report, so a split always names the backbone whose recall it rests on. Fails loud
+    (ValueError) on an unreadable report or one that is not a PROBE_REPORT_SCHEMA report."""
     if not probe_report:
         return {"status": PROBE_UNPROBED}
     with open(probe_report, encoding="utf-8") as f:
         report = json.load(f)
-    if not isinstance(report, dict) or report.get("golden_sha256") != _file_sha256(golden_path):
+    schema = report.get("schema") if isinstance(report, dict) else None
+    if schema != PROBE_REPORT_SCHEMA:
+        raise ValueError(f"--probe-report {probe_report}: schema {schema!r} is not {PROBE_REPORT_SCHEMA!r} "
+                         "(pass the probe_report.json that golden_probe.py wrote)")
+    if report.get("golden_sha256") != _file_sha256(golden_path):
         return {"status": PROBE_MISMATCH, "probe_run": probe_report}
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return {"status": summary.get("status"),
             "flagged_ids": sorted(str(i) for i in summary.get("flagged_ids") or []),
-            "probe_run": probe_report}
+            "probe_run": probe_report,
+            "backbone": report.get("backbone"),
+            "closed_book_attested": report.get("closed_book_attested")}
 
 
 def cmd_score_forecast_file(args) -> int:
