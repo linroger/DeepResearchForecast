@@ -272,12 +272,18 @@ def _is_deterministic_invalid_request_error(exc: Exception) -> bool:
     )
 
 
-# INFRA-4: quota wording _is_quota does not know: balance exhaustion and the provider usage-cap
-# codes MiniMax 2056 (Token Plan cap) and GLM 1113 (account in arrears), matched as whole numbers
-# only. Both codes are in _STATUS_LIKE_CODES, so no max_tokens value or model id carries them
-# into a failure message.
-_QUOTA_EXTRA_MARKERS = ("insufficient balance", "usage limit")
-_QUOTA_CODE_RE = re.compile(r"\b(?:2056|1113)\b")
+# INFRA-4: quota wording of the status-first classifier: _is_quota's phrases plus balance
+# exhaustion, and 429 and the provider usage-cap codes MiniMax 2056 (Token Plan cap) and GLM 1113
+# (account in arrears) as whole numbers only (not inside a longer number or after a decimal
+# point): _is_quota's bare '429' substring also matches "duration_ms":1429 or a cost of 0.04291
+# inside a Claude CLI auth envelope. re.ASCII keeps a code right after CJK text ('错误码429')
+# whole. With the classifier on, the usage-cap codes are also kept out of failure messages
+# (_status_safe), so no max_tokens value or model id reads as one.
+_QUOTA_TEXT_MARKERS = ("rate_limit", "rate limit", "quota", "usage limit", "insufficient balance")
+_USAGE_CAP_CODES = ("1113", "2056")
+_QUOTA_CODE_RE = re.compile(r"(?<!\.)\b(?:429|2056|1113)\b", re.ASCII)
+# The HTTP status a Claude CLI result envelope reports for a failed API call (JSON or dict repr).
+_ENVELOPE_STATUS_RE = re.compile(r"api_error_status[\"']?\s*:\s*(\d{3})\b")
 
 
 def _classify_status_first() -> bool:
@@ -285,26 +291,28 @@ def _classify_status_first() -> bool:
 
 
 def _exc_status_code(exc: Any) -> Optional[int]:
-    """The HTTP status an SDK exception carries (``status_code`` or ``response.status_code``)."""
+    """The HTTP status a failed call carries: an SDK exception's ``status_code`` or
+    ``response.status_code``, else a Claude CLI envelope's ``api_error_status`` in its text."""
     for status in (getattr(exc, "status_code", None),
                    getattr(getattr(exc, "response", None), "status_code", None)):
         if isinstance(status, int) and not isinstance(status, bool):
             return status
-    return None
+    match = _ENVELOPE_STATUS_RE.search(str(exc or ""))
+    return int(match.group(1)) if match else None
 
 
 def _quota_text_error(exc: Any) -> bool:
-    """_is_quota's wording plus _QUOTA_EXTRA_MARKERS and the usage-cap codes."""
-    if _is_quota(exc):
-        return True
+    """Quota wording: _QUOTA_TEXT_MARKERS, or 429 / 2056 / 1113 as a whole number."""
     text = str(exc or "").lower()
-    return any(marker in text for marker in _QUOTA_EXTRA_MARKERS) or bool(_QUOTA_CODE_RE.search(text))
+    return any(marker in text for marker in _QUOTA_TEXT_MARKERS) or bool(_QUOTA_CODE_RE.search(text))
 
 
 def _llm_error_status_kind(exc: Any) -> Optional[str]:
     """Type / HTTP-status stage of _classify_llm_error: RateLimitError or 429 is quota,
-    AuthenticationError or 401 / 403 is auth, LLMContentFiltered or 422 is a content filter.
-    None when the exception carries neither (CLI errors, typed envelope failures, plain text)."""
+    AuthenticationError or 401 / 403 is auth, LLMContentFiltered or 422 is a content filter,
+    400 is an invalid request (MiniMax 2056 and GLM 1113 caps arrive as 429, so a 400 whose text
+    holds such a number is no quota). None when the exception carries no status (most CLI
+    errors, typed envelope failures, plain text)."""
     status = _exc_status_code(exc)
     if isinstance(exc, _RATE_LIMIT_API_ERRORS) or status == 429:
         return "quota"
@@ -312,6 +320,8 @@ def _llm_error_status_kind(exc: Any) -> Optional[str]:
         return "auth"
     if isinstance(exc, LLMContentFiltered) or status == 422:
         return "content_filter"
+    if status == 400:
+        return "invalid_request"
     return None
 
 
@@ -333,8 +343,9 @@ def _classify_llm_error(exc: Any) -> Optional[str]:
     INFRA-4 (LLM_ERROR_CLASSIFY_STATUS_FIRST, default on): the exception type and HTTP status
     decide first (_llm_error_status_kind), then the wording, quota before auth
     (_llm_error_text_kind). chat()'s retry loop, _is_deterministic_auth_error and the
-    orchestrator's outage classifier read it. Off: the legacy order, auth wording before quota
-    wording, and no status or content-filter reading.
+    orchestrator's outage classifier read it; chat_with_tools' 429 breaker reads
+    _is_quota_failure. Off: the legacy order, auth wording before quota wording, and no status
+    or content-filter reading.
     """
     if not _classify_status_first():
         if _auth_text_error(exc):
@@ -345,6 +356,14 @@ def _classify_llm_error(exc: Any) -> Optional[str]:
             return "invalid_request"
         return None
     return _llm_error_status_kind(exc) or _llm_error_text_kind(exc)
+
+
+def _is_quota_failure(exc: Any) -> bool:
+    """Whether a failed call counts toward the 429 breaker: _classify_llm_error says 'quota'
+    (LLM_ERROR_CLASSIFY_STATUS_FIRST on) or, off, the legacy _is_quota wording."""
+    if _classify_status_first():
+        return _classify_llm_error(exc) == "quota"
+    return _is_quota(exc)
 
 
 # 每个误配置的回退提供方只告警一次（进程级）；并发 chat() 失败转移时避免刷屏。
@@ -432,10 +451,10 @@ _THINKING_KNOBS = {
 }
 # Substrings that DRF's text classifiers read as HTTP status codes (_is_quota matches a bare
 # '429'; the auth / invalid-request checks match delimited 401 / 400; ' 422' marks a content
-# filter; INFRA-4's quota wording matches the usage-cap codes 1113 / 2056). A max_tokens value
-# or model id containing one is left out of failure messages (it stays on the exception's
-# attributes).
-_STATUS_LIKE_CODES = ("400", "401", "422", "429", "1113", "2056")
+# filter). A max_tokens value or model id containing one is left out of failure messages (it
+# stays on the exception's attributes); so are _USAGE_CAP_CODES while the status-first
+# classifier, which reads them as quota, is on.
+_STATUS_LIKE_CODES = ("400", "401", "422", "429")
 # MiniMax base_resp status codes that no retry can repair, each mapped to wording DRF's text
 # classifiers already recognise. The auth codes read as a 401, so _is_deterministic_auth_error
 # stops chat()'s retries, puts a failing fallback into its cooldown and gives the pipeline
@@ -499,9 +518,11 @@ def _is_json_response_format(response_format: Optional[Dict]) -> bool:
 
 
 def _status_safe(value: Any) -> bool:
-    """True when ``str(value)`` holds none of _STATUS_LIKE_CODES, so a failure message may show it."""
+    """True when ``str(value)`` holds none of _STATUS_LIKE_CODES (nor, with
+    LLM_ERROR_CLASSIFY_STATUS_FIRST on, _USAGE_CAP_CODES), so a failure message may show it."""
     text = str(value)
-    return not any(code in text for code in _STATUS_LIKE_CODES)
+    codes = _STATUS_LIKE_CODES + _USAGE_CAP_CODES if _classify_status_first() else _STATUS_LIKE_CODES
+    return not any(code in text for code in codes)
 
 
 def _field(obj: Any, name: str) -> Any:
@@ -1521,7 +1542,7 @@ class LLMClient:
                 break
             except (RuntimeError, *_RETRYABLE_API_ERRORS) as exc:
                 last_error = exc
-                if _is_quota(exc):
+                if _is_quota_failure(exc):  # INFRA-4: the same quota verdict as chat()
                     _cb_record_429(self.provider)
                 if isinstance(exc, LLMEmptyChoices) and exc.deterministic:
                     logger.warning(f"chat_with_tools 遇确定性错误信封，不再重试: {_err_brief(exc)}")

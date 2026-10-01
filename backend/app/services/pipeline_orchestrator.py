@@ -432,9 +432,10 @@ def _classify_provider_outage(exc: Any) -> Optional[str]:
     预算护栏（BudgetExceeded）、取消信号等都不是「提供方中断」——既不计数也不清零。
 
     INFRA-4（LLM_ERROR_CLASSIFY_STATUS_FIRST，默认开）：异常先按类型/HTTP 状态判定
-    （RateLimitError/429 → quota，AuthenticationError/401/403 → auth），其次是熔断快失败文本，
-    最后按文本「配额先于认证」判定（MiniMax 2056 / GLM 1113 用量上限消息可能带认证样措辞）；
-    纯文本输入只走文本判定。关闭时为旧顺序：认证文本 → 熔断 → 配额文本。
+    （RateLimitError/429 → quota，AuthenticationError/401/403 → auth；422/400 定论为非中断，
+    不再看文本），无状态时其次是熔断快失败文本，最后按文本「配额先于认证」判定（MiniMax 2056 /
+    GLM 1113 用量上限消息可能带认证样措辞）；纯文本输入只走文本判定。关闭时为旧顺序：
+    认证文本 → 熔断 → 配额文本。
     """
     if isinstance(exc, (PipelineCancelled, ProviderOutageHalt)):
         return None
@@ -467,8 +468,8 @@ def _classify_provider_outage(exc: Any) -> Optional[str]:
                        or "回退提供方不可用" in text)
     if _status_first is not None and _status_first():
         kind = _status_kind(exc) if isinstance(exc, BaseException) else None
-        if kind in ("quota", "auth"):
-            return kind
+        if kind is not None:  # 状态定论：429/401/403 计中断，422/400 不计
+            return kind if kind in ("quota", "auth") else None
         if circuit_breaker:
             return "circuit_breaker"
         kind = _text_kind(exc)

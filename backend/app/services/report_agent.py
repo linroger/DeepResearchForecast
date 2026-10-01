@@ -1341,32 +1341,40 @@ def _citation_display_title(source: Dict[str, Any], tag: str = "") -> str:
     return title or domain or tag
 
 
+def _nonfinite_nulled_artifact(obj: Any, *, record_quality: bool) -> Tuple[Any, List[str]]:
+    """INFRA-4：(副本, 路径)——NaN/±Infinity 叶子置 None（非有限的浮点键名改为 json 默认写出的
+    字符串），不改入参；record_quality=True 且确有叶子被置 null 时把路径并入副本的
+    quality.nonfinite_nulled。副本按 allow_nan=False 必能序列化（非有限数层面）。"""
+    cleaned, paths = _numeric.null_nonfinite(obj)
+    if record_quality and paths and isinstance(cleaned, dict):
+        quality = cleaned.get("quality")
+        if quality is None:
+            quality = cleaned["quality"] = {}
+        if isinstance(quality, dict):
+            prior = quality.get("nonfinite_nulled")
+            merged = [p for p in prior if isinstance(p, str)] if isinstance(prior, list) else []
+            merged.extend(p for p in paths if p not in merged)
+            quality["nonfinite_nulled"] = merged
+    return cleaned, paths
+
+
 def _forecast_artifact_json(obj: Any, artifact: str, *,
                             record_quality: bool = False) -> Tuple[str, Any]:
     """INFRA-4（ARTIFACT_STRICT_JSON，默认开）：把预测工件序列化为标准 JSON，返回 (text, written)。
 
     关闭：json.dumps 原样（NaN/Infinity 照写）。开启：有限数内容逐字节同旧输出；含 NaN/±Infinity
-    时记一条 error（列出 JSON 路径），在副本上把这些叶子置 None（不改入参），record_quality=True
-    时把路径并入副本的 quality.nonfinite_nulled，再按严格 JSON 写出——绝不写出 NaN。written 即
-    text 所序列化的对象，调用方留用它，使内存副本与落盘一致。
+    时改写副本（_nonfinite_nulled_artifact，不改入参），按严格 JSON 序列化成功后记一条 error（列出
+    JSON 路径）——绝不写出 NaN。written 即 text 所序列化的对象，调用方留用它，使内存副本与落盘一致。
     """
     if not getattr(Config, "ARTIFACT_STRICT_JSON", True):
         return json.dumps(obj, ensure_ascii=False, indent=2), obj
     try:
         return _numeric.dumps_strict(obj, ensure_ascii=False, indent=2), obj
     except _numeric.NonFiniteJSONError as exc:
-        cleaned, paths = _numeric.null_nonfinite(obj)
-        logger.error(f"{artifact}: {exc}；已把 {len(paths)} 处非有限数置 null 后落盘")
-        if record_quality and isinstance(cleaned, dict):
-            quality = cleaned.get("quality")
-            if quality is None:
-                quality = cleaned["quality"] = {}
-            if isinstance(quality, dict):
-                prior = quality.get("nonfinite_nulled")
-                merged = [p for p in prior if isinstance(p, str)] if isinstance(prior, list) else []
-                merged.extend(p for p in paths if p not in merged)
-                quality["nonfinite_nulled"] = merged
-        return _numeric.dumps_strict(cleaned, ensure_ascii=False, indent=2), cleaned
+        cleaned, paths = _nonfinite_nulled_artifact(obj, record_quality=record_quality)
+        text = _numeric.dumps_strict(cleaned, ensure_ascii=False, indent=2)
+        logger.error(f"{artifact}: {exc}；已改写为标准 JSON 后落盘（{len(paths)} 处非有限数置 null）")
+        return text, cleaned
 
 
 # ═══════════════════════════════════════════════════════════════

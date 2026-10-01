@@ -17,8 +17,9 @@ module is the shared vocabulary for both directions:
   still produce a standards-compliant artifact).
 
 Only floats can be non-finite: ints (arbitrary precision) are always finite and
-bools are not numbers here.  Dict keys are not inspected (a JSON object key is a
-string).  Pure and stdlib-only; no I/O.
+bools are not numbers here.  Paths name values, never dict keys: json writes a
+float key as a string, and only a non-finite one makes ``allow_nan=False`` fail
+(:func:`null_nonfinite` turns it into that string).  Pure and stdlib-only; no I/O.
 """
 
 from __future__ import annotations
@@ -48,9 +49,19 @@ def _is_nonfinite_float(x: Any) -> bool:
     return isinstance(x, float) and not math.isfinite(x)
 
 
+def _json_key(key: Any) -> Any:
+    """A non-finite float key as the string json writes for it by default ('NaN',
+    'Infinity', '-Infinity'); any other key unchanged."""
+    if not _is_nonfinite_float(key):
+        return key
+    if key != key:
+        return "NaN"
+    return "Infinity" if key > 0 else "-Infinity"
+
+
 def _child_path(path: str, key: Any) -> str:
     """``$.a`` for identifier-like keys, ``$["a b"]`` for any other key."""
-    text = str(key)
+    text = str(_json_key(key))
     if _IDENTIFIER_RE.match(text):
         return f"{path}.{text}"
     return f"{path}[{json.dumps(text, ensure_ascii=False)}]"
@@ -135,7 +146,7 @@ def _nulled(obj: Any, path: str, active: Set[int], found: List[str]) -> Any:
     active.add(id(obj))
     try:
         if isinstance(obj, dict):
-            return {key: _nulled(value, _child_path(path, key), active, found)
+            return {_json_key(key): _nulled(value, _child_path(path, key), active, found)
                     for key, value in obj.items()}
         items = [_nulled(value, f"{path}[{index}]", active, found)
                  for index, value in enumerate(obj)]
@@ -148,7 +159,10 @@ def null_nonfinite(obj: Any) -> Tuple[Any, List[str]]:
     """(copy, paths): a copy of the dict/list/tuple skeleton with every non-finite float
     replaced by ``None``, and the JSON paths replaced (as :func:`find_nonfinite` names them).
 
-    The input is never mutated; leaves other than non-finite floats are shared, not copied.
+    A non-finite float dict key becomes the string json writes for it by default, so the
+    copy's JSON text keeps that key as before and serializes under ``allow_nan=False``; it
+    is not a replaced value, so it adds no path.  The input is never mutated; leaves other
+    than non-finite floats are shared, not copied.
     """
     found: List[str] = []
     copy = _nulled(obj, "$", set(), found)

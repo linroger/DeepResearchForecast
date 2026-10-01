@@ -5,7 +5,8 @@ utils/atomic.write_json_atomic(allow_nan=False), llm_client's strict-number JSON
 chat_json repair turn it feeds (LLM_JSON_STRICT_NUMBERS), the v3 research gateway's strict decoder
 (RESEARCH_JSON_STRICT_NUMBERS) and its forwarding to the v3 child, report_agent's forecast.json /
 market_comparison.json writes and spine pinning (ARTIFACT_STRICT_JSON), _classify_llm_error and
-its three consumers (LLM_ERROR_CLASSIFY_STATUS_FIRST), and the Polymarket 200-body schema record.
+its consumers (LLM_ERROR_CLASSIFY_STATUS_FIRST), the Polymarket 200-body schema record, and the
+backfill_report_visuals rewrite of forecast.json / market_comparison.json.
 Every knob is also exercised off (legacy behaviour). No network, no real LLM.
 """
 
@@ -30,6 +31,7 @@ from app.utils import prediction_markets as pm
 from app.utils import telemetry as tel
 from app.utils.atomic import write_json_atomic
 from app.utils.numeric import NonFiniteJSONError
+from scripts import backfill_report_visuals as bf
 from tests.test_research_gateway import FakeModel, ai, gateway, msgs, rg
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -95,6 +97,19 @@ def test_null_nonfinite_copies_and_reports_paths():
     assert cleaned == {"scenarios": [{"p": 0.4}, {"p": None}], "q": (None, 2), "keep": "x"}
     assert math.isnan(original["scenarios"][1]["p"]) and original["q"][0] == _INF  # untouched
     assert numeric.null_nonfinite({"a": 1}) == ({"a": 1}, [])
+
+
+def test_null_nonfinite_turns_nonfinite_keys_into_their_json_text():
+    original = {_NAN: 1, "b": {-_INF: _NAN}}
+    cleaned, paths = numeric.null_nonfinite(original)
+    assert cleaned == {"NaN": 1, "b": {"-Infinity": None}}
+    assert paths == numeric.find_nonfinite(original) == ['$.b["-Infinity"]']
+    assert numeric.dumps_strict(cleaned) == '{"NaN": 1, "b": {"-Infinity": null}}'
+    key_only = {_INF: "x"}
+    with pytest.raises(NonFiniteJSONError):
+        numeric.dumps_strict(key_only)
+    # a key-only fix keeps the text json writes by default
+    assert numeric.dumps_strict(numeric.null_nonfinite(key_only)[0]) == json.dumps(key_only)
 
 
 def test_decode_hooks_reject_nonfinite_tokens():
@@ -299,6 +314,78 @@ def test_gateway_json_retry_names_the_nonfinite_number(monkeypatch):
         gw2.json(lambda note: msgs(f"task {note or ''}"), label="plan", required_keys=("kiqs",))
 
 
+_PLAN_KEYS = ("kiqs", "sections", "scenarios")
+# Realistic v3 replies nest objects; only one of them holds the NaN.
+_NESTED_NAN_PLAN = ('{"kiqs": [{"id": "K1", "question": "q"}], "sections": [{"t": "s"}], '
+                    '"scenarios": [{"name": "A", "probability": NaN}]}')
+_NONFINITE_REASON = "NaN or Infinity is not a JSON number"
+
+
+@pytest.mark.parametrize("text, keys", [
+    (_NESTED_NAN_PLAN, _PLAN_KEYS),
+    ('{"quantitative_facts": [{"value": 1.2}, {"value": NaN}]}', ("quantitative_facts",)),
+    ('Gaps: {"follow_ups": [{"q": "a", "w": 0.5}, {"q": "b", "w": Infinity}]}', ("follow_ups",)),
+])
+def test_gateway_names_the_nonfinite_number_in_nested_replies(monkeypatch, text, keys):
+    monkeypatch.delenv("RESEARCH_JSON_STRICT_NUMBERS", raising=False)
+    assert rg.parse_json_object(text, keys) is None
+    assert rg._describe_json_failure(text, keys, False) == _NONFINITE_REASON
+    monkeypatch.setenv("RESEARCH_JSON_STRICT_NUMBERS", "false")
+    assert set(keys) <= set(rg.parse_json_object(text, keys))  # legacy: the whole object
+
+
+def test_gateway_missing_keys_reason_also_names_the_nonfinite_number(monkeypatch):
+    monkeypatch.delenv("RESEARCH_JSON_STRICT_NUMBERS", raising=False)
+    text = '{"kiqs": [{"id": "K1"}], "scenarios": [{"p": NaN}]}'
+    assert rg._describe_json_failure(text, _PLAN_KEYS, False) \
+        == "missing keys: sections; " + _NONFINITE_REASON
+    assert rg._describe_json_failure('{"kiqs": [{"id": "K1"}]}', _PLAN_KEYS, False) \
+        == "missing keys: sections, scenarios"
+    monkeypatch.setenv("RESEARCH_JSON_STRICT_NUMBERS", "false")
+    assert rg._describe_json_failure(text, _PLAN_KEYS, False) == "missing keys: sections"
+
+
+def test_gateway_json_retry_names_nan_in_a_nested_plan(monkeypatch):
+    monkeypatch.delenv("RESEARCH_JSON_STRICT_NUMBERS", raising=False)
+    model = FakeModel([ai(_NESTED_NAN_PLAN), ai(_NESTED_NAN_PLAN.replace("NaN", "0.4"))])
+    gw, _plog = gateway(model)
+    notes = []
+    obj = gw.json(lambda note: notes.append(note) or msgs(f"task {note or ''}"),
+                  label="plan", required_keys=_PLAN_KEYS)
+    assert obj["scenarios"] == [{"name": "A", "probability": 0.4}]
+    assert notes[1] == (f"Your previous reply was not valid JSON ({_NONFINITE_REASON}). "
+                        "Reply with ONLY one JSON object with keys: kiqs, sections, scenarios.")
+    # the error detail and the progress log name the same cause
+    stubborn = FakeModel([ai(_NESTED_NAN_PLAN), ai(_NESTED_NAN_PLAN)])
+    gw2, plog2 = gateway(stubborn)
+    with pytest.raises(rg.JsonUnparseable) as info:
+        gw2.json(lambda note: msgs(f"task {note or ''}"), label="plan", required_keys=_PLAN_KEYS)
+    assert info.value.detail == f"plan: {_NONFINITE_REASON}"
+    warnings = [line for line in plog2.of("warn") if "JSON attempt" in line]
+    assert len(warnings) == 2 and all(f"({_NONFINITE_REASON})" in line for line in warnings)
+
+
+@pytest.mark.parametrize("text, keys, legacy_keys", [
+    ('{"meta": {"n": 1}, "p": NaN}', (), {"meta", "p"}),
+    ('{"scenarios": [{"p": NaN}, {"name": "B", "p": 0.5}]}', (), {"scenarios"}),
+    ('{"scenarios": [{"p": NaN}, {"name": "B", "p": 0.5}]}', ("name",), {"name", "p"}),
+    ('```json\n{"meta": {"n": 1}, "p": NaN}\n```', (), {"meta", "p"}),
+])
+def test_gateway_never_returns_a_fragment_of_a_rejected_object(monkeypatch, text, keys,
+                                                              legacy_keys):
+    monkeypatch.delenv("RESEARCH_JSON_STRICT_NUMBERS", raising=False)
+    assert rg.parse_json_object(text, keys) is None  # not {"n": 1} / {"name": "B", ...}
+    assert rg._describe_json_failure(text, keys, False) == _NONFINITE_REASON
+    monkeypatch.setenv("RESEARCH_JSON_STRICT_NUMBERS", "false")
+    assert set(rg.parse_json_object(text, keys)) == legacy_keys
+
+
+def test_gateway_reads_a_separate_object_after_a_rejected_one(monkeypatch):
+    monkeypatch.delenv("RESEARCH_JSON_STRICT_NUMBERS", raising=False)
+    text = 'Draft {"a": NaN, "m": {"a": 2}} Final {"a": 1}'
+    assert rg.parse_json_object(text, ("a",)) == {"a": 1}
+
+
 def test_research_json_knob_is_forwarded_to_the_v3_child(monkeypatch):
     assert ("RESEARCH_JSON_STRICT_NUMBERS", "bool") in po.RESEARCH_CHILD_V3_KNOBS
     assert ("RESEARCH_JSON_STRICT_NUMBERS", "bool") not in po.RESEARCH_CHILD_KNOBS
@@ -465,6 +552,18 @@ def test_forecast_artifact_json_is_byte_identical_for_finite_content(monkeypatch
     assert math.isnan(prior["x"]) and prior["quality"]["nonfinite_nulled"] == ["$.old"]
 
 
+def test_forecast_artifact_json_survives_a_nonfinite_dict_key(monkeypatch):
+    monkeypatch.setattr(Config, "ARTIFACT_STRICT_JSON", True, raising=False)
+    key_only = {_NAN: 1, "a": 1}
+    text, written = ra._forecast_artifact_json(key_only, "forecast.json", record_quality=True)
+    assert text == json.dumps(key_only, ensure_ascii=False, indent=2)  # the legacy text
+    assert _strict_load(text) == written == {"NaN": 1, "a": 1}
+    mixed = {"a": {_INF: _NAN}, "quality": {}}
+    text, written = ra._forecast_artifact_json(mixed, "forecast.json", record_quality=True)
+    assert _strict_load(text) == written == {
+        "a": {"Infinity": None}, "quality": {"nonfinite_nulled": ["$.a.Infinity"]}}
+
+
 # ------------------------------------------------------------------ error classification
 def _status_error(cls, status, message):
     response = httpx.Response(status, request=httpx.Request("POST", "http://127.0.0.1:1/v1"))
@@ -561,6 +660,61 @@ def test_classify_provider_outage_quota_before_auth(monkeypatch):
     assert po._classify_provider_outage(RuntimeError(_USAGE_CAP_401)) == "auth"
 
 
+# A Claude CLI credential failure: a 401 envelope whose duration and cost hold the digits 429.
+_CLI_AUTH_ENVELOPE = ('Claude CLI failed (rc=1): {"type":"result","subtype":"success",'
+                      '"is_error":true,"api_error_status":401,"duration_ms":1429,'
+                      '"total_cost_usd":0.04291,"result":"Failed to authenticate. API Error: 401"}')
+
+
+def test_status_first_reads_status_codes_as_whole_numbers(monkeypatch):
+    monkeypatch.setattr(Config, "LLM_ERROR_CLASSIFY_STATUS_FIRST", True, raising=False)
+    cli = RuntimeError(_CLI_AUTH_ENVELOPE)
+    assert lc._classify_llm_error(cli) == "auth"
+    assert lc._is_deterministic_auth_error(cli) is True
+    assert po._classify_provider_outage(cli) == "auth"
+    assert lc._classify_llm_error(RuntimeError(
+        "Failed to authenticate (duration_ms 1429, cost 0.0429)")) == "auth"
+    assert lc._classify_llm_error(RuntimeError(
+        'Claude CLI failed (rc=1): {"api_error_status":429,"result":"busy"}')) == "quota"
+    assert lc._classify_llm_error(RuntimeError("HTTP 429 Too Many Requests")) == "quota"
+    assert lc._classify_llm_error(RuntimeError("错误码429：请求过多")) == "quota"
+    # a 400 is an invalid request even when its text holds a usage-cap number
+    for bad in (_StatusExc("Error code: 400 - prompt is 2056 tokens over the limit", 400),
+                _status_error(openai.BadRequestError, 400, "prompt is 1113 tokens too long")):
+        assert lc._classify_llm_error(bad) == "invalid_request"
+        assert po._classify_provider_outage(bad) is None
+    # flag off: the legacy wording order and the bare '429' substring
+    monkeypatch.setattr(Config, "LLM_ERROR_CLASSIFY_STATUS_FIRST", False, raising=False)
+    assert lc._classify_llm_error(cli) == "auth"
+    assert lc._classify_llm_error(RuntimeError("duration_ms 1429")) == "quota"
+    assert lc._classify_llm_error(
+        _StatusExc("Error code: 400 - prompt is 2056 tokens over the limit", 400)) == "invalid_request"
+
+
+def test_usage_cap_codes_reach_failure_messages_with_the_flag_off(monkeypatch):
+    monkeypatch.setattr(Config, "LLM_ERROR_CLASSIFY_STATUS_FIRST", False, raising=False)
+    assert "max_tokens=2056," in str(lc._completion_failure("minimax", "length", "length", None, 2056))
+    assert "4290" not in str(lc._completion_failure("minimax", "length", "length", None, 4290))
+
+
+@pytest.mark.parametrize("flag, consec429", [(True, float(lc.MAX_RETRIES)), (False, 0.0)])
+def test_chat_with_tools_breaker_reads_the_same_quota_verdict(monkeypatch, minimax_client,
+                                                             flag, consec429):
+    monkeypatch.setattr(Config, "LLM_ERROR_CLASSIFY_STATUS_FIRST", flag, raising=False)
+    client, transport = minimax_client
+    calls = []
+
+    def rate_limited(**kwargs):
+        calls.append(kwargs)
+        raise _status_error(openai.RateLimitError, 429, "Too many requests")
+
+    transport.chat = SimpleNamespace(completions=SimpleNamespace(create=rate_limited))
+    with pytest.raises(openai.RateLimitError):
+        client.chat_with_tools([{"role": "user", "content": f"infra4-tools-{flag}"}], [])
+    assert len(calls) == lc.MAX_RETRIES
+    assert lc._CB_STATE.get("minimax", {}).get("consec429", 0.0) == consec429
+
+
 # ------------------------------------------------------------------ prediction markets
 class _FakeResponse:
     def __init__(self, payload=None, status_code=200):
@@ -599,6 +753,51 @@ def test_search_events_valid_or_failed_bodies_are_not_double_counted(monkeypatch
     monkeypatch.setattr(pm.httpx, "get", lambda *a, **k: _FakeResponse(status_code=404))
     assert client.search_events("tariff") == []
     assert client.transport_errors == {"HTTPStatusError:404": 1}
+
+
+# ------------------------------------------------------------------ backfill script
+def _anchored_forecast(implied):
+    return {"binary_forecasts": [{
+        "id": "F1", "statement": "Real outcome", "probability": 0.7,
+        "market_anchor": {"market_id": "m1", "question": "Will it happen?",
+                          "implied_yes_prob": implied}}]}
+
+
+def test_backfill_never_writes_nonfinite_artifacts(monkeypatch, tmp_path):
+    monkeypatch.setattr(Config, "ARTIFACT_STRICT_JSON", True, raising=False)
+    forecast = _anchored_forecast(_INF)
+    comparison = bf.synchronize_market_comparison(tmp_path, forecast)
+    standalone = _strict_load((tmp_path / "market_comparison.json").read_text(encoding="utf-8"))
+    row = standalone["comparisons"][0]
+    assert row["market_implied_yes_prob"] is None and row["divergence"] is None
+    assert row["model_probability"] == 0.7
+    assert numeric.find_nonfinite(comparison)  # memory keeps the value until forecast.json
+    written = bf._write_forecast_artifact(tmp_path / "forecast.json", forecast, record_quality=True)
+    on_disk = _strict_load((tmp_path / "forecast.json").read_text(encoding="utf-8"))
+    assert on_disk == written and on_disk["market_comparison"] == standalone
+    assert on_disk["quality"]["nonfinite_nulled"] == numeric.find_nonfinite(forecast)
+    assert forecast["binary_forecasts"][0]["market_anchor"]["implied_yes_prob"] == _INF
+
+
+@pytest.mark.parametrize("flag", [True, False])
+def test_backfill_finite_writes_are_byte_identical(monkeypatch, tmp_path, flag):
+    monkeypatch.setattr(Config, "ARTIFACT_STRICT_JSON", flag, raising=False)
+    forecast = _anchored_forecast(0.5)
+    comparison = bf.synchronize_market_comparison(tmp_path, forecast)
+    assert bf._write_forecast_artifact(tmp_path / "forecast.json", forecast,
+                                       record_quality=True) is forecast
+    for name, obj in (("market_comparison.json", comparison), ("forecast.json", forecast)):
+        assert (tmp_path / name).read_text(encoding="utf-8") \
+            == json.dumps(obj, ensure_ascii=False, indent=2, default=str)
+
+
+def test_backfill_flag_off_writes_nonfinite_as_before(monkeypatch, tmp_path):
+    monkeypatch.setattr(Config, "ARTIFACT_STRICT_JSON", False, raising=False)
+    forecast = _anchored_forecast(_INF)
+    bf._write_forecast_artifact(tmp_path / "forecast.json", forecast, record_quality=True)
+    text = (tmp_path / "forecast.json").read_text(encoding="utf-8")
+    assert text == json.dumps(forecast, ensure_ascii=False, indent=2, default=str)
+    assert "Infinity" in text and "nonfinite_nulled" not in text
 
 
 # ------------------------------------------------------------------ knobs

@@ -2078,6 +2078,8 @@ _FENCED_JSON_RE = re.compile(r"```(?:json|JSON)?[ \t]*\n?(.*?)```", re.DOTALL)
 _DECODER = json.JSONDecoder(strict=False)
 _MAX_TRUNCATION_REPAIRS = 16
 _NONFINITE_JSON_MSG = "non-finite constant"
+# The JSON retry note's reason for a reply rejected for its non-finite numbers.
+_NONFINITE_JSON_REASON = "NaN or Infinity is not a JSON number"
 
 
 def _reject_nonfinite_constant(name: str) -> Any:
@@ -2142,20 +2144,46 @@ def _strip_trailing_commas(text: str) -> str:
     return "".join(out)
 
 
-def _decode_at(text: str, index: int) -> Any:
-    """``raw_decode`` at ``index`` (strict=False; finite numbers only unless
-    RESEARCH_JSON_STRICT_NUMBERS=false), then with comma repair."""
+def _decode_at(text: str, index: int, decoder: json.JSONDecoder) -> Any:
+    """``raw_decode`` at ``index`` with ``decoder`` (_FINITE_DECODER or _DECODER,
+    both strict=False), then with comma repair."""
     try:
-        return _json_decoder().raw_decode(text, index)[0]
+        return decoder.raw_decode(text, index)[0]
     except ValueError:
         pass
     try:
-        return _json_decoder().raw_decode(_strip_trailing_commas(text[index:]), 0)[0]
+        return decoder.raw_decode(_strip_trailing_commas(text[index:]), 0)[0]
     except ValueError:
         return None
 
 
-def _repair_truncated(text: str, start: int) -> Any:
+def _object_end(text: str, start: int) -> int:
+    """Offset just past the bracket that closes the ``{`` at ``start`` (string-aware;
+    ``len(text)`` when it never closes)."""
+    depth = 0
+    in_string = False
+    escaped = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return len(text)
+
+
+def _repair_truncated(text: str, start: int, decoder: json.JSONDecoder) -> Any:
     """Close a truncated object: cut at the last complete value boundary and
     append closers for the bracket stack as it was AT that boundary."""
     stack: list[str] = []
@@ -2191,7 +2219,7 @@ def _repair_truncated(text: str, start: int) -> Any:
     closers = "".join("}" if opener == "{" else "]" for opener in reversed(open_stack))
     candidate = _strip_trailing_commas(text[start:cut] + closers)
     try:
-        return _json_decoder().raw_decode(candidate, 0)[0]
+        return decoder.raw_decode(candidate, 0)[0]
     except ValueError:
         return None
 
@@ -2210,7 +2238,7 @@ def _previous_char(text: str, index: int) -> str:
     return text[position] if position >= 0 else ""
 
 
-def _drop_malformed_element(text: str, start: int) -> Any:
+def _drop_malformed_element(text: str, start: int, decoder: json.JSONDecoder) -> Any:
     """Decode the object at ``start`` after dropping ONE malformed array element.
 
     Models occasionally emit a stray fragment such as ``{"},`` between two
@@ -2222,7 +2250,7 @@ def _drop_malformed_element(text: str, start: int) -> Any:
     repairs the object.
     """
     try:
-        _json_decoder().raw_decode(text, start)
+        decoder.raw_decode(text, start)
         return None
     except json.JSONDecodeError as exc:
         error_at = min(exc.pos, len(text) - 1)
@@ -2239,7 +2267,7 @@ def _drop_malformed_element(text: str, start: int) -> Any:
                 candidate = text[:element].rstrip().rstrip(",") + text[index:]
             else:
                 continue
-            value = _decode_at(candidate, start)
+            value = _decode_at(candidate, start, decoder)
             if isinstance(value, dict):
                 return value
             cuts += 1
@@ -2248,17 +2276,28 @@ def _drop_malformed_element(text: str, start: int) -> Any:
     return None
 
 
-def _iter_json_candidates(text: str) -> Iterator[tuple[int, Any]]:
+def _iter_json_candidates(text: str, decoder: json.JSONDecoder) -> Iterator[tuple[int, Any]]:
     """Yield ``(position, decoded value or None)`` lazily: fenced blocks first
-    (position ``-1``), then every ``{`` position of the whole text."""
+    (position ``-1``), then every ``{`` position of the whole text.
+
+    With the finite-numbers decoder, an object rejected only for a NaN / Infinity
+    (the permissive decoder reads it as a dict) yields ``None`` and the ``{``
+    positions nested inside it are skipped: a fragment of a rejected object is
+    not the reply, so the caller fails closed (the JSON retry asks again).
+    """
     for block in _FENCED_JSON_RE.findall(text):
         start = block.find("{")
         if start != -1:
-            yield -1, _decode_at(block, start)
+            yield -1, _decode_at(block, start, decoder)
     index = text.find("{")
     while index != -1:
-        yield index, _decode_at(text, index)
-        index = text.find("{", index + 1)
+        value = _decode_at(text, index, decoder)
+        resume = index + 1
+        if (value is None and decoder is _FINITE_DECODER
+                and isinstance(_decode_at(text, index, _DECODER), dict)):
+            resume = _object_end(text, index)
+        yield index, value
+        index = text.find("{", resume)
 
 
 def _has_keys(obj: Mapping[str, Any], keys: Sequence[str]) -> bool:
@@ -2276,14 +2315,24 @@ def parse_json_object(text: str | None, required_keys: Sequence[str] = ()) -> di
     element (``{"},``) is repaired by dropping that element, then a truncated
     object by cutting at its last complete value; returns ``None`` when still
     no dict has the required keys.
+
+    Unless RESEARCH_JSON_STRICT_NUMBERS=false, NaN, Infinity, -Infinity and
+    overflowing floats (``1e999``) are not JSON: an object carrying one is
+    unparseable, and so are the dicts nested inside it.
     """
+    return _parse_json_object(text, required_keys, _json_decoder())
+
+
+def _parse_json_object(text: str | None, required_keys: Sequence[str],
+                       decoder: json.JSONDecoder) -> dict | None:
+    """parse_json_object with an explicit decoder (_FINITE_DECODER or _DECODER)."""
     if not text:
         return None
     text = str(text)
     required = tuple(required_keys or ())
     first_dict: dict | None = None
     failed: list[int] = []
-    for position, value in _iter_json_candidates(text):
+    for position, value in _iter_json_candidates(text, decoder):
         if isinstance(value, dict):
             if _has_keys(value, required):
                 return value
@@ -2296,40 +2345,46 @@ def parse_json_object(text: str | None, required_keys: Sequence[str] = ()) -> di
     # Element drop first: on a glitched (not truncated) object the truncation
     # repair would "succeed" by discarding everything after the glitch.
     for index in failed[:_MAX_ELEMENT_DROP_OBJECTS]:
-        repaired = _drop_malformed_element(text, index)
+        repaired = _drop_malformed_element(text, index, decoder)
         if isinstance(repaired, dict) and _has_keys(repaired, required):
             return repaired
     for index in failed[:_MAX_TRUNCATION_REPAIRS]:
-        repaired = _repair_truncated(text, index)
+        repaired = _repair_truncated(text, index, decoder)
         if isinstance(repaired, dict) and _has_keys(repaired, required):
             return repaired
     return None
 
 
-def _has_nonfinite_object(text: str) -> bool:
-    """True when some ``{`` position decodes to a dict once NaN / Infinity are accepted."""
-    index = text.find("{")
-    while index != -1:
-        try:
-            if isinstance(_DECODER.raw_decode(text, index)[0], dict):
-                return True
-        except ValueError:
-            pass
-        index = text.find("{", index + 1)
+def _holds_nonfinite(value: Any) -> bool:
+    """True when a decoded JSON value holds a NaN or +/-Infinity float anywhere."""
+    if isinstance(value, float):
+        return not math.isfinite(value)
+    if isinstance(value, dict):
+        return any(_holds_nonfinite(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_holds_nonfinite(item) for item in value)
     return False
 
 
 def _describe_json_failure(text: str, required_keys: Sequence[str], truncated: bool) -> str:
+    """Why parse_json_object rejected ``text`` (for the JSON retry note and the logs)."""
     if not text.strip():
         return "empty reply"
-    candidates = [value for _, value in _iter_json_candidates(text) if isinstance(value, dict)]
-    if not candidates and _strict_json_numbers() and _has_nonfinite_object(text):
-        return "NaN or Infinity is not a JSON number"
+    strict_numbers = _strict_json_numbers()
+    # The strict parse failed; if the permissive one succeeds, the non-finite numbers
+    # are the whole reason, however the reply's nested dicts look.
+    if strict_numbers and _parse_json_object(text, required_keys, _DECODER) is not None:
+        return _NONFINITE_JSON_REASON
+    candidates = [value for _, value in _iter_json_candidates(text, _DECODER)
+                  if isinstance(value, dict)]
     if candidates and required_keys:
         best = max(candidates, key=lambda c: sum(1 for k in required_keys if k in c))
         missing = [k for k in required_keys if k not in best]
         if missing:
-            return "missing keys: " + ", ".join(missing)
+            reason = "missing keys: " + ", ".join(missing)
+            if strict_numbers and _holds_nonfinite(best):
+                reason += "; " + _NONFINITE_JSON_REASON
+            return reason
     if truncated:
         return "reply was truncated before the JSON object closed"
     return "no JSON object found"
