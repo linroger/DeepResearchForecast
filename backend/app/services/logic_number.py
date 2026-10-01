@@ -39,13 +39,16 @@ move).
 
 A slot whose number differs from the scenario's probability by more than ``tol_pt``
 points is a finding.  An unsignalled weak alias, REPORT-2's range, quantity, sum and
-market guards (``narrative_sync``), an inline quotation, a conditional opener ("若进入B
-情景，则有40%的概率…") and a history context ("此前…", "…已下调至35%", "…→ 35%",
-"trimmed the bull case (35%) to 30%") make it ``unresolved``: it is reported, never
-rewritten.  Everything else is ``fixable``, and ``substitute_probability_slots``
-rewrites exactly the number, keeping its format ("40%" → "35%", "0.40" → "0.35",
-"约40%" → "约35%").  The guards decide only whether a rewrite is safe: the 'numeric'
-gate's S11 strings (``s11_mismatches``) carry every finding, fixable or unresolved.
+market guards (``narrative_sync``), a size word right after the slot ("bear case (35%)
+drawdown"), an inline quotation, a conditional opener ("若进入B情景，则有40%的概率…",
+"电力受限情景下，…", "当电力受限时，…"), a history context ("此前…", "2025年…",
+"…已下调至35%", "…→ 35%", "trimmed the bull case (35%) to 30%") and an outside owner of
+the scenario ("McKinsey's base case (60%)", "中金的基准情景（50%）") make it
+``unresolved``: it is reported, never rewritten.  Everything else is ``fixable``, and
+``substitute_probability_slots`` rewrites exactly the number, keeping its format ("40%" →
+"35%", "0.40" → "0.35", "约40%" → "约35%").  The guards decide only whether a rewrite is
+safe: the 'numeric' gate's S11 strings (``s11_mismatches``) carry every finding, fixable
+or unresolved.
 ``audit_markdown`` scans a report, skipping fenced blocks, the References appendix,
 the deterministic Part-1 block and every blockquote except the system summary
 blockquote right after the H1.  No LLM, no IO.
@@ -230,46 +233,88 @@ _SCENARIO_WORD_RE = re.compile(_EMPHASIS + _WS + _SCENARIO_WORD)
 
 # ------------------------------------------------------------------ guards
 # Besides an unsignalled weak alias (``weak_alias``) and REPORT-2's range, quantity, sum
-# and market guards (narrative_sync), three contexts make a finding unresolved —
+# and market guards (narrative_sync), four contexts make a finding unresolved —
 # reported, never rewritten:
 # * quote: the number sits inside an inline quotation (“…”, "…", 「…」, 『…』, ‘…’);
 #   someone else's words are never edited;
-# * conditional: a conditional opener earlier in the slot's sentence ("若进入电力受限情景，
-#   则有40%的概率出现财务紧缩", "在B情景下，有60%的概率…", "given B, …") makes the number a
-#   conditional probability.  An opener whose condition is the slot's own alias ("若基准
-#   情景（40%）成立", "If the base case (40%) holds") keeps the slot: the bracket still
-#   gives that scenario's probability.  "在…情景下" governs only its own clause (and the
-#   one right after its comma): "在基准扩张（40%）路径下装机稳步兑现，仅10%概率超预期上行"
-#   gives D's own probability;
+# * conditional: a conditional opener earlier in the slot's sentence makes the number a
+#   conditional probability — 若 / 如果 / 一旦 / 假设 …, "当电力受限时", a clause ending in
+#   时 / 后 ("电力受限时，", "B情景成真后，"), a condition noun with a position ("在B情景下",
+#   "电力受限情景下", "电力受限情景中", "在电力受限的情况下", "电力受限条件下"), "if / given /
+#   assuming …".  An opener followed by its condition whose condition is the slot's own
+#   alias ("若基准情景（40%）成立", "If the base case (40%) holds") keeps the slot: the
+#   bracket still gives that scenario's probability; an opener that closes its condition
+#   ("电力受限时，下行情景（60%）…") never names the slot.  A condition noun with a position
+#   and a clause ending in 时 / 后 govern only their own clause (and the one right after
+#   its comma): "在基准扩张（40%）路径下装机稳步兑现，仅10%概率超预期上行" gives D's own
+#   probability, and so does "上行情景（约10%）" in "处理了基准与电力受限之后，本章转向两端：
+#   上行情景（约10%）…", where 之后 only orders the text.  After a count or a set word the
+#   condition noun is the set an enumeration ranks ("在四个情景中，基准情景（40%）概率最
+#   高"), which keeps an alias-first slot.  A number-first slot is also conditional when
+#   another scenario is named, outside a slot of its own, earlier in its sentence ("B情景
+#   成真，有40%的概率出现财务紧缩");
 # * history: the slot states an earlier value or a change ("此前基准情景（40%）", "上季度
-#   基准情景（40%）", "原预测的基准情景（40%）", "相比初版报告中基准情景（40%）的判断", "Before the
-#   red-team critique, the base case (40%)", "基准情景（40%）已下调至35%", "基准情景（40%）→ 35%",
-#   "基准情景（40%）较上一版下调5个百分点", "Last quarter's base case (55%)", "Base (40%), down
-#   from 45%", "from the baseline (18%) to 45%"), or a move verb governs it earlier in its
-#   clause ("The pre-mortem trimmed the bull case (35%)", "将基准情景（40%）的概率下调").  A
-#   "to / 至 / 到 N%" counts only right after the slot: "基准情景（40%）下电动车在2030年达到45%"
-#   gives the base case's own probability.
+#   基准情景（40%）", "历史上基准情景（40%）", "原预测的基准情景（40%）", "相比初版报告中基准情景
+#   （40%）的判断", "Before the red-team critique, the base case (40%)", "基准情景（40%）已下调
+#   至35%", "基准情景（40%）→ 35%", "基准情景（40%）较上一版下调5个百分点", "Last quarter's base
+#   case (55%)", "Base (40%), down from 45%", "from the baseline (18%) to 45%"), or a move
+#   verb governs it earlier in its clause ("The pre-mortem trimmed the bull case (35%)",
+#   "我们上调基准情景（40%）", "将基准情景（40%）的概率下调").  A "to / 至 / 到 N%" counts only
+#   right after the slot: "基准情景（40%）下电动车在2030年达到45%" gives the base case's own
+#   probability.  A year earlier in the slot's clause dates it ("2025年基准情景（40%）",
+#   "2025年我们的基准情景（40%）"): a past year cannot be told from the report's horizon, so
+#   "2030年基准情景（40%）" is reported, never rewritten, too.  A year in an earlier clause
+#   ("到2030年，基准情景（40%）下…") or after the slot ("基准情景（40%）下2030年…") dates nothing;
+# * attributed: an alias-first slot names someone else's scenario.  The possessor is read
+#   from the structure, so no list of forecasters has to be complete: an English
+#   possessive ("McKinsey's base case (60%)", "the Fed's", "analysts'", "their"), a
+#   Chinese 的 ("中金的基准情景（50%）", "国网能源研究院的基准情景（40%）"), or an organisation
+#   glued to the alias — a Latin name before a CJK alias ("McKinsey基准情景"), a CJK name
+#   with an organisation suffix ("国网能源研究院基准情景") or a research house
+#   ("麦肯锡基准情景").  Only the report itself keeps the slot as owner: first person ("我们
+#   的", "本报告的"; "our base case" has no possessive), the report, its forecast skeleton
+#   or a chapter ("this report's", "our model's", "the prediction skeleton's", "预测骨架中
+#   的", "第四章的"), a date ("Q3的", "today's") or a unit ("$2.5–3.2T的").  "the study's" or
+#   "the model's" may be a cited study's, and any other CJK words before 的 may name an
+#   owner, so "概率最高的基准情景（40%）" is reported, never rewritten, too.  It is checked
+#   last, so a named market keeps the label 'market' and "Last quarter's" the label 'history'.
 _QUOTE_RE = re.compile(
     r"“[^“”\n]{0,300}”|「[^「」\n]{0,300}」|『[^『』\n]{0,300}』|‘[^‘’\n]{0,300}’"
     r"|\"[^\"\n]{0,300}\"")
 _CONDITIONAL_LOOKBACK_CHARS = 60
 _SENTENCE_STOP_RE = re.compile(r"[。；;！？!?\n]|(?<![0-9])\.(?![0-9])")
+_CONDITION_NOUN = r"(?:情景|场景|路径|情形|情况|条件|假设|前提)"
+# 同时 ("meanwhile") and 最后 / 然后 / 随后 / 前后 / 今后 / 背后 / 稍后 open no condition; 当前 /
+# 当今 / 当下 / 当年 / 当地 / 当然 / 当中 / 当时 / 当期 / 当月 / 当日 / 当季 and 相当 / 应当 / 适当 /
+# 正当 / 恰当 / 妥当 / 充当 / 担当 are no "当…时".
+# The group ``ahead`` holds the openers whose condition follows them (若 …, "if …"), the
+# group ``clause`` those that close a clause after their condition (…时，, …情景下).
 _CONDITIONAL_RE = re.compile(
-    r"若(?!干)|如果|假如|倘若|一旦|假设|假定|条件于|以[^，,。；;！？!?\n]{1,16}?为条件"
-    r"|(?P<under>在[^，,。；;！？!?\n]{0,24}?(?:情景|场景|路径|情形|条件|假设)下)"
+    r"(?P<ahead>若(?!干)|如果|假如|倘若|一旦|假设|假定|条件于"
     r"|(?<![A-Za-z])(?:if|given|assuming|conditional[ \t]+(?:on|upon)|provided[ \t]+that"
-    r"|in[ \t]+the[ \t]+event)(?![A-Za-z])",
+    r"|in[ \t]+the[ \t]+event)(?![A-Za-z]))"
+    r"|以[^，,。；;！？!?\n]{1,16}?为条件"
+    r"|(?<![相应适正恰妥充担])当(?![前今下年地然中时期月日季])[^，,。；;！？!?\n]{0,24}?时"
+    r"|(?P<clause>(?:(?<!同)时|(?<![最然随前今背稍])后)[，,]"
+    r"|(?:在[^，,。；;！？!?\n]{0,24}?)?" + _CONDITION_NOUN + r"之?[下中里时])",
     re.I,
 )
-# Between an opener and an alias-first slot, only an occurrence verb or a determiner:
-# the opener's condition is that slot's own scenario.
+# Between an ``ahead`` opener and an alias-first slot, only an occurrence verb or a
+# determiner: the opener's condition is that slot's own scenario.
 _OWN_CONDITION_RE = re.compile(
     r"[ \t*_]*+(?:(?:进入|出现|走向|落入|实现|发生|处于|the|our|a)(?![A-Za-z])[ \t*_]*+)?", re.I)
 _CLAUSE_BREAK_RE = re.compile(r"[，,、：:]")
+# A condition noun after a count or a set word is the set of scenarios an enumeration ranks
+# ("在四个情景中，基准情景（40%）概率最高", "所有情景下"): it keeps an alias-first slot.  A
+# number-first slot stays guarded: "在两种下行情景下，有40%的概率…" is conditional on their union.
+_CONDITION_SET_RE = re.compile(
+    r"(?:[0-9二两三四五六七八九十几多数]+[个种类条]|各个?|诸|所有|全部|这些|那些)" + _CONDITION_NOUN
+    + r"之?[下中里时]$")
+_CONDITION_SET_LOOKBACK_CHARS = 8
 _HISTORY_LOOKBACK_CHARS = 48
 _HISTORY_BEFORE_RE = re.compile(
     r"(?:此前|之前|原先|原本|原来|先前|最初|初判|初始|初版|初稿|草稿|原预测|原判断|原版|上一版|前一版"
-    r"|旧版|前版|上一?期|上一?季度?|上次|上一轮|去年|上年|上月|批判前|评审前|修订前|调整前"
+    r"|旧版|前版|上一?期|上一?季度?|上次|上一轮|去年|上年|上月|批判前|评审前|修订前|调整前|历史上|以往|过往"
     r"|(?<![A-Za-z])(?:previously|previous|prior|earlier|initially|originally|formerly"
     r"|last[ \t]+(?:quarter|year|month|week|round|version|update|report|edition)"
     r"|(?:first|initial|original|earlier)[ \t]+draft"
@@ -293,17 +338,61 @@ _HISTORY_AFTER_RE = re.compile(
     re.I,
 )
 # A move verb earlier in the slot's clause: English past forms ("trimmed the bull case"),
-# or 把 / 将 right before the alias with a move verb after the slot in the same clause
-# ("将基准情景（40%）的概率下调"; "将基准情景（40%）作为主路径" moves nothing).
+# a Chinese move verb shortly before the alias ("我们上调基准情景（40%）", "上调基准情景（40%）
+# 的权重"), or 把 / 将 right before the alias with a move verb after the slot in the same
+# clause ("将基准情景（40%）的概率下调"; "将基准情景（40%）作为主路径" moves nothing).
 _HISTORY_MOVE_BEFORE_RE = re.compile(
-    r"(?<![A-Za-z])(?:trimmed|cut|raised|lowered|revised|reduced|increased|lifted|shaved|pared"
-    r"|downgraded|upgraded|nudged|marked[ \t]+(?:down|up))(?![A-Za-z])[^，,；;。.！？!?\n]{0,32}$",
+    r"(?:(?<![A-Za-z])(?:trimmed|cut|raised|lowered|revised|reduced|increased|lifted|shaved|pared"
+    r"|downgraded|upgraded|nudged|marked[ \t]+(?:down|up))(?![A-Za-z])[^，,；;。.！？!?\n]{0,32}"
+    r"|(?:上调|下调|调高|调低|上修|下修|调整)[^，,；;。！？!?\n]{0,8})$",
     re.I,
 )
 _HISTORY_HANDLE_BEFORE_RE = re.compile(r"(?:把|将)[^，,；;。！？!?\n]{0,8}$")
+# A year earlier in the slot's clause (see the history guard above).
+_HISTORY_YEAR_BEFORE_RE = re.compile(
+    r"(?<![0-9])(?:19|20)[0-9]{2}[ \t]*+年[^，,、；;。！？!?\n]{0,8}$")
 _HISTORY_MOVE_AFTER_RE = re.compile(
     r"[^，,；;。！？!?\n]{0,12}?(?:下调|上调|调低|调高|调降|调升|下修|上修|削减|压低|降低|提高|降|升"
     r"|调整|修正)")
+# The possessor of an alias-first slot (see the attributed guard above), read from the
+# text right before the alias with spaces and emphasis stripped.
+_ATTRIBUTION_LOOKBACK_CHARS = 40
+_EN_POSSESSIVE_RE = re.compile(
+    r"(?P<determiner>(?<![A-Za-z])(?:their|his|her))$|(?<=[A-Za-z.])['’]s$|(?<=s)['’]$", re.I)
+# An English owner that is the report itself: "this report's", "our model's", "the
+# prediction skeleton's" (lower-case words only in between: "our McKinsey model's" is
+# someone else's), "today's".  "the" owns only the skeleton or the pipeline: "the study's"
+# or "the model's" may be a cited study's.
+_EN_OWN_OWNER_RE = re.compile(
+    r"(?:(?<![A-Za-z])(?i:this|our)(?:[ \t]++[a-z-]++){0,2}?[ \t]++"
+    r"(?i:report|skeleton|forecast|analysis|model|pipeline|study|paper|note|chapter|section"
+    r"|framework|assessment)"
+    r"|(?<![A-Za-z])(?i:the)(?:[ \t]++[a-z-]++){0,2}?[ \t]++(?i:skeleton|pipeline)"
+    r"|(?<![A-Za-z])(?i:today))$")
+_OWNER_RUN_RE = re.compile(r"[㐀-鿿A-Za-z0-9]+$")
+_CJK_OWN_OWNER_RE = re.compile(
+    r"我们|我方|本报告|本文|本次|本轮|本研究|本预测|本章|本节|本版|本期|笔者|骨架|前文|上文|前述|上述"
+    r"|正文|当前|目前|今年|明年|第[一二三四五六七八九十百0-9]+[章节部]")
+# A date or a figure is no owner ("2030年的基准情景", "Q3的", "$2.5–3.2T的").
+_DATE_RUN_RE = re.compile(
+    r"[0-9]{2,4}年(?:代|初|中|底|末|内)?(?:[0-9]{1,2}月(?:份|初|中|底|末)?)?|[0-9]{1,2}月(?:份)?"
+    r"|Q[1-4]|H[12]|[0-9]+")
+# An organisation glued to a CJK alias: a CJK name with an organisation suffix, or a
+# research house, consultancy or agency the market guard's list does not name.
+_GLUED_ORGANISATION_RE = re.compile(
+    r"(?:研究院|研究所|研究中心|研究会|银行|证券|资本|基金|集团|公司|咨询|智库|协会|学会|商会|委员会|政府"
+    r"|央行|能源署|能源局|统计局|发改委|交易所|事务所|大学|实验室|机构"
+    r"|麦肯锡|贝恩|波士顿咨询|德勤|普华永道|安永|毕马威|埃森哲|罗兰贝格|高德纳|伍德麦肯兹|睿咨得|标普"
+    r"|穆迪|惠誉|晨星|麦格理|瑞信|巴克莱|美银|贝莱德|桥水|中金|中信|华泰|国泰君安|海通|广发|申万|国网"
+    r"|中电联|美联储|欧央行)$")
+_GLUED_LATIN_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z][A-Za-z&.'’-]*[A-Za-z]$")
+# A size word right after an alias-first slot: "a bear case (35%) drawdown" sizes a
+# drawdown, it gives no probability (REPORT-2's quantity guard reads only the token end).
+_QUANTITY_AFTER_SLOT_RE = re.compile(
+    r"[ \t*_]*+(?:(?:drawdowns?|declines?|falls?|rall(?:y|ies)|upside|downside|returns?|growth"
+    r"|shares?|penetration)(?![A-Za-z])|涨幅|跌幅|渗透率|份额|增速)",
+    re.I,
+)
 
 # ------------------------------------------------------------------ markdown scope
 # The heading text keeps its trailing spaces (callers strip it): a lazy text before an
@@ -595,11 +684,20 @@ class _Slot(NamedTuple):
     unsignalled: bool       # a free weak alias without a scenario signal (never rewritten)
 
 
-def _collect_slots(text: str, table: _AliasTable) -> Tuple[Dict[Tuple[int, int], _Slot], int]:
+class _Slots(NamedTuple):
+    """The strict slots of a text (see ``_collect_slots``)."""
+
+    by_span: Dict[Tuple[int, int], _Slot]    # number span -> slot
+    conflicted: int                          # numbers dropped: two slots, two scenarios
+    alias_starts: FrozenSet[int]             # start of every alias that heads a slot
+
+
+def _collect_slots(text: str, table: _AliasTable) -> _Slots:
     """Strict slots of ``text`` keyed by number span; a number two slots attribute to
     different scenarios is dropped and counted."""
     slots: Dict[Tuple[int, int], _Slot] = {}
     conflicted: Set[Tuple[int, int]] = set()
+    alias_starts: Set[int] = set()
 
     def record(number: "re.Match[str]", alias: "re.Match[str]", form: str,
                unsignalled: bool = False) -> None:
@@ -608,6 +706,7 @@ def _collect_slots(text: str, table: _AliasTable) -> Tuple[Dict[Tuple[int, int],
         slot = _Slot(table.group_index[alias.lastgroup], alias.group(0),
                      min(alias.start(), span[0]), max(alias.end(), number.end()), form, token_end,
                      alias.start() < span[0], unsignalled)
+        alias_starts.add(alias.start())
         previous = slots.get(span)
         if previous is None:
             slots[span] = slot
@@ -634,30 +733,80 @@ def _collect_slots(text: str, table: _AliasTable) -> Tuple[Dict[Tuple[int, int],
                 break
     for span in conflicted:
         del slots[span]
-    return slots, len(conflicted)
+    return _Slots(slots, len(conflicted), frozenset(alias_starts))
 
 
-def _conditional(text: str, slot: _Slot) -> bool:
-    """A conditional opener earlier in the sentence of ``slot`` governs it (see the
-    conditional guard above)."""
+def _conditional(text: str, slot: _Slot, table: _AliasTable, slot_aliases: FrozenSet[int]) -> bool:
+    """A conditional opener earlier in the sentence of ``slot`` governs it, or a
+    number-first slot follows another scenario's mention (see the conditional guard
+    above); ``slot_aliases`` are the alias starts of all slots of ``text``."""
     lower = max(0, slot.lo - _CONDITIONAL_LOOKBACK_CHARS)
     for stop in _SENTENCE_STOP_RE.finditer(text, lower, slot.lo):
         lower = stop.end()
     for opener in _CONDITIONAL_RE.finditer(text, lower, slot.lo):
-        if slot.alias_first and _OWN_CONDITION_RE.fullmatch(text, opener.end(), slot.lo):
+        if (slot.alias_first and opener.lastgroup == "ahead"
+                and _OWN_CONDITION_RE.fullmatch(text, opener.end(), slot.lo)):
             continue
-        if opener.lastgroup == "under":
+        if opener.lastgroup == "clause":
+            if slot.alias_first and _CONDITION_SET_RE.search(
+                    text, max(lower, opener.start() - _CONDITION_SET_LOOKBACK_CHARS), opener.end()):
+                continue
             clause = opener.end() + (text[opener.end():opener.end() + 1] in ("，", ","))
             if _CLAUSE_BREAK_RE.search(text, clause, slot.lo):
                 continue
         return True
+    if slot.alias_first:
+        return False
+    # An alias heading a slot of its own is a sibling in an enumeration ("基准情景（40%）…，
+    # 仅10%概率超预期上行"), not a condition; a weak alias counts only as a scenario
+    # ("上行情景"), as after "N%的概率".
+    for alias in table.regex.finditer(text, lower, slot.lo):
+        if (table.group_index[alias.lastgroup] != slot.index and alias.start() not in slot_aliases
+                and (alias.lastgroup not in table.weak_groups
+                     or _SCENARIO_WORD_RE.match(text, alias.end()))):
+            return True
     return False
+
+
+def _foreign_owner(run: str, before_run: str) -> bool:
+    """The token ``run`` before a 的 names an owner other than the report (see the
+    attributed guard above); ``before_run`` is the text before it."""
+    if _CJK_OWN_OWNER_RE.search(run) or _DATE_RUN_RE.fullmatch(run):
+        return False
+    if _CJK_CHAR_RE.search(run):
+        return True
+    # Latin only: a name, unless it is a unit or a figure ("210 GW的", "$2.5–3.2T的").
+    return (len(_LATIN_LETTER_RE.findall(run)) >= 2 and not run[0].isdigit()
+            and not before_run.rstrip(" \t")[-1:].isdigit())
+
+
+def _attributed(text: str, slot: _Slot) -> bool:
+    """An alias-first slot names someone else's scenario (see the attributed guard above)."""
+    if not slot.alias_first:
+        return False
+    lookback = max(0, slot.lo - _ATTRIBUTION_LOOKBACK_CHARS)
+    before = text[lookback:slot.lo].rstrip(" \t*_")
+    possessive = _EN_POSSESSIVE_RE.search(before)
+    if possessive:
+        return bool(possessive.group("determiner")
+                    or not _EN_OWN_OWNER_RE.search(before, 0, possessive.start()))
+    if before.endswith("的"):
+        run = _OWNER_RUN_RE.search(before, 0, len(before) - 1)
+        return bool(run) and _foreign_owner(run.group(0), before[:run.start()])
+    if not _CJK_CHAR_RE.match(slot.alias):
+        return False
+    if _GLUED_ORGANISATION_RE.search(before):
+        return True
+    latin = _GLUED_LATIN_RE.search(before)
+    return bool(latin and len(_LATIN_LETTER_RE.findall(latin.group(0))) >= 3
+                and not before[:latin.start()].rstrip(" \t")[-1:].isdigit())
 
 
 def _history(text: str, slot: _Slot) -> bool:
     """The slot states an earlier value or a change (see the history guard above)."""
     lookback = max(0, slot.lo - _HISTORY_LOOKBACK_CHARS)
     if (_HISTORY_BEFORE_RE.search(text, lookback, slot.lo)
+            or _HISTORY_YEAR_BEFORE_RE.search(text, lookback, slot.lo)
             or _HISTORY_AFTER_RE.match(text, slot.hi)
             or _HISTORY_MOVE_BEFORE_RE.search(text, lookback, slot.lo)):
         return True
@@ -670,8 +819,10 @@ class _Guards:
     first that fires, or None.  The sum, market and quotation checks are built once, on
     first use, and answer each slot by bisection, so a scan stays linear in its text."""
 
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, table: _AliasTable, slot_aliases: FrozenSet[int]) -> None:
         self._text = text
+        self._table = table
+        self._slot_aliases = slot_aliases
         self._sum: Optional[Callable[[int, int], bool]] = None
         self._market: Optional[Callable[[int, int], bool]] = None
         self._quotes: Optional[Tuple[List[int], List[int]]] = None
@@ -690,7 +841,8 @@ class _Guards:
             return "weak_alias"
         if range_guarded(text, start, slot.token_end):
             return "range"
-        if quantity_guarded(text, start, slot.token_end, (name,)):
+        if (quantity_guarded(text, start, slot.token_end, (name,))
+                or (slot.alias_first and _QUANTITY_AFTER_SLOT_RE.match(text, slot.hi))):
             return "quantity"
         if self._sum is None:
             self._sum = sum_guard_for(text)
@@ -703,10 +855,12 @@ class _Guards:
             return "market"
         if self._quoted(start):
             return "quote"
-        if _conditional(text, slot):
+        if _conditional(text, slot, self._table, self._slot_aliases):
             return "conditional"
         if _history(text, slot):
             return "history"
+        if _attributed(text, slot):
+            return "attributed"
         return None
 
 
@@ -714,10 +868,10 @@ def _scan(text: str, rows: List[Any], table: _AliasTable, tol_pt: float) -> Tupl
     """Findings of ``text`` (offsets local to it) and the count of conflicted slots."""
     if table.regex is None or not text:
         return [], 0
-    slots, conflicted = _collect_slots(text, table)
+    slots = _collect_slots(text, table)
     findings: List[Dict[str, Any]] = []
-    guards = _Guards(text)
-    for (start, end), slot in sorted(slots.items()):
+    guards = _Guards(text, table, slots.alias_starts)
+    for (start, end), slot in sorted(slots.by_span.items()):
         probability = _probability(rows[slot.index])
         if probability is None:
             continue
@@ -750,7 +904,7 @@ def _scan(text: str, rows: List[Any], table: _AliasTable, tol_pt: float) -> Tupl
         else:
             finding["replacement"] = _replacement(number_text, slot.form, probability, expected_pct)
         findings.append(finding)
-    return findings, conflicted
+    return findings, slots.conflicted
 
 
 def find_probability_slots(text: Any, scenarios: Sequence[Dict[str, Any]], *,
@@ -761,8 +915,8 @@ def find_probability_slots(text: Any, scenarios: Sequence[Dict[str, Any]], *,
     excerpt, status, number, unit}``: ``claimed`` in percent points, ``start`` /
     ``end`` the span of the number itself, ``status`` ``fixable`` (with its
     ``replacement``) or ``unresolved`` (with the ``guard`` that fired: weak_alias /
-    range / quantity / sum / market / quote / conditional / history).  Scenarios whose
-    probability is not a number in [0, 1] yield none.
+    range / quantity / sum / market / quote / conditional / history / attributed).
+    Scenarios whose probability is not a number in [0, 1] yield none.
     """
     if not isinstance(text, str) or not text:
         return []
@@ -807,13 +961,6 @@ def substitute_probability_slots(text: Any, findings: Sequence[Dict[str, Any]]) 
 
 
 # ------------------------------------------------------------------ markdown
-def _binary_block_end(lines: List[str], start: int) -> Optional[int]:
-    for index in range(start, len(lines)):
-        if lines[index].strip() == BINARY_FORECAST_END_MARKER:
-            return index
-    return None
-
-
 def _scannable_spans(md: str, skip_summary_blockquote: bool, skipped: Counter) -> List[Tuple[int, int]]:
     """Character spans of the lines ``audit_markdown`` scans, one per paragraph
     (contiguous non-blank lines merged), so every guard reads only its slot's paragraph.
@@ -825,6 +972,10 @@ def _scannable_spans(md: str, skip_summary_blockquote: bool, skipped: Counter) -
     lines (``_LAZY_BREAK_RE``) are part of it.
     """
     lines = md.split("\n")
+    # The end-marker lines, found once: each start marker finds its end by bisection, so
+    # many unterminated start markers cost no rescan of the rest of the report.
+    end_markers = [index for index, line in enumerate(lines)
+                   if line.strip() == BINARY_FORECAST_END_MARKER]
     spans: List[Tuple[int, int]] = []
     offset = 0
     fence = None
@@ -846,7 +997,8 @@ def _scannable_spans(md: str, skip_summary_blockquote: bool, skipped: Counter) -
             summary = "done" if summary in ("pending", "open") else summary
         elif binary_end is None and stripped == BINARY_FORECAST_START_MARKER:
             # An unterminated start marker opens nothing; the line is plain text then.
-            binary_end = _binary_block_end(lines, index + 1)
+            following = bisect_right(end_markers, index)
+            binary_end = end_markers[following] if following < len(end_markers) else None
             reason = "binary_block" if binary_end is not None else None
             summary = "done" if summary == "open" else summary
         elif binary_end is not None:

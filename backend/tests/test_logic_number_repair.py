@@ -355,6 +355,64 @@ def test_repair_failure_is_degrade_safe(reports_dir, monkeypatch):
     assert outline.summary == STALE_SUMMARY
 
 
+def test_repair_refreshes_the_draft_observation(reports_dir, monkeypatch):
+    """_finalize_structured_forecast observed the pre-repair draft.  When the repair rewrites
+    the report, forecast.json's quality.logic_number describes the repaired bytes and carries
+    the repair record (review round 3), so it holds without the final audit
+    (REPORT_FINAL_READ_ONLY_AUDIT=false).  Gate off, an unchanged report or no forecast.json
+    leave the files as they were."""
+    from app.services import logic_number as LN
+    draft = {"findings": [], "count": 9, "fixable": 9, "unresolved": 0, "skipped": {}}
+
+    def prepare(report_id, md):
+        folder = _prepare(reports_dir, report_id, md)
+        forecast = _spine()
+        forecast["quality"] = {"logic_number": draft, "lint": {"changed": False}}
+        (folder / "forecast.json").write_text(json.dumps(forecast, ensure_ascii=False),
+                                              encoding="utf-8")
+        a = _agent(_logic_number_summary_repair=[])
+        a._forecast_spine["quality"] = {"logic_number": draft}
+        return folder, a
+
+    md = _draft()
+    folder, a = prepare("r_refresh", md)
+    report = SimpleNamespace(markdown_content=md)
+    a._repair_logic_number("r_refresh", report)
+    assert report.markdown_content != md
+    saved = json.loads((folder / "forecast.json").read_text(encoding="utf-8"))
+    expected = LN.audit_markdown(report.markdown_content, FFE1_ROWS)
+    expected["repair"] = a._logic_number_repair
+    assert saved["quality"]["logic_number"] == expected
+    assert saved["quality"]["lint"] == {"changed": False}
+    assert a._forecast_spine["quality"]["logic_number"] == expected
+    # Left: the summary blockquote (repaired only with the outline) and the sum's addends.
+    body = report.markdown_content.index("## ")
+    assert (expected["fixable"], expected["unresolved"]) == (2, 2)
+    assert all(f["start"] < body for f in expected["findings"] if f["status"] == "fixable")
+
+    # The repaired report again: nothing changes, forecast.json stays byte-identical.
+    folder_same, b = prepare("r_refresh_same", report.markdown_content)
+    before = (folder_same / "forecast.json").read_bytes()
+    b._repair_logic_number("r_refresh_same", SimpleNamespace(markdown_content=report.markdown_content))
+    assert (folder_same / "forecast.json").read_bytes() == before
+
+    # Gate off: the repair still runs (REPORT_NARRATIVE_SYNC), the observation is not taken.
+    monkeypatch.setattr(Config, "REPORT_LOGIC_NUMBER_GATE", "off", raising=False)
+    folder_off, c = prepare("r_refresh_off", md)
+    before = (folder_off / "forecast.json").read_bytes()
+    report_off = SimpleNamespace(markdown_content=md)
+    c._repair_logic_number("r_refresh_off", report_off)
+    assert report_off.markdown_content == report.markdown_content
+    assert (folder_off / "forecast.json").read_bytes() == before
+
+    # No forecast.json: none is created.
+    monkeypatch.setattr(Config, "REPORT_LOGIC_NUMBER_GATE", "observe", raising=False)
+    folder_none = _prepare(reports_dir, "r_refresh_none", md)
+    d = _agent()
+    d._repair_logic_number("r_refresh_none", SimpleNamespace(markdown_content=md))
+    assert not (folder_none / "forecast.json").exists()
+
+
 # ------------------------------------------------------------------ acceptance fixture
 def test_ffe1_fixture_publishes_synced_numbers(report_env, monkeypatch):
     """The ffe1 reproduction: summary blockquote and prose carry 35% before the

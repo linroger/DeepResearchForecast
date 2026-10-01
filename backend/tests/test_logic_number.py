@@ -7,6 +7,7 @@ and S11 (anchored on the first occurrence of the full scenario name) passed it.
 
 import logging
 import time
+from collections import Counter
 
 import pytest
 
@@ -355,6 +356,47 @@ def test_scenario_word_may_follow_an_alias():
     ("在B情景下有60%的概率进入财务紧缩", FFE1_ROWS, "conditional"),
     ("若电力受限，财务紧缩（60%概率）随之而来", FFE1_ROWS, "conditional"),
     ("If the bull case fails, the bear case (60%) takes over.", EN_ROWS, "conditional"),
+    # Review round 3: a condition noun with a position but without 在, 情况, 当…时 and a
+    # clause ending in 时 / 后 open a condition too; an opener that closes its condition
+    # never names the slot after it.
+    ("电力受限情景下，有40%的概率出现财务紧缩", FFE1_ROWS, "conditional"),
+    ("在电力受限的情况下，有60%的可能性出现财务紧缩", FFE1_ROWS, "conditional"),
+    ("电力受限的情况下有60%的可能性出现财务紧缩", FFE1_ROWS, "conditional"),
+    ("B情景下，有40%的概率出现财务紧缩", FFE1_ROWS, "conditional"),
+    ("电力受限情景中，有40%的概率出现财务紧缩", FFE1_ROWS, "conditional"),
+    ("当电力受限时，有40%的概率出现财务紧缩", FFE1_ROWS, "conditional"),
+    ("电力受限条件下，有40%的概率出现财务紧缩", FFE1_ROWS, "conditional"),
+    ("B情景成真后，有40%的概率出现财务紧缩", FFE1_ROWS, "conditional"),
+    ("电力受限时，有40%的概率出现财务紧缩", FFE1_ROWS, "conditional"),
+    ("在这种情况下，有40%的概率出现财务紧缩", FFE1_ROWS, "conditional"),
+    ("在高利率情景下，财务紧缩（60%）成为主导。", FFE1_ROWS, "conditional"),
+    ("电力受限时，财务紧缩（60%）成为主导。", FFE1_ROWS, "conditional"),
+    # A number-first slot after another scenario's bare mention; a set of scenarios still
+    # conditions a number-first slot ("conditional on their union").
+    ("B情景成真，有40%的概率出现财务紧缩", FFE1_ROWS, "conditional"),
+    ("在两种情景下，有40%的概率出现财务紧缩", FFE1_ROWS, "conditional"),
+    # Someone else's scenario, read from the structure, not from a list of forecasters.
+    ("McKinsey's base case (60%)", EN_ROWS, "attributed"),
+    ("the Fed's base case (60%)", EN_ROWS, "attributed"),
+    ("Rystad's base case (60%)", EN_ROWS, "attributed"),
+    ("Wood Mackenzie's base case (60%)", EN_ROWS, "attributed"),
+    ("their base case (60%)", EN_ROWS, "attributed"),
+    ("the study's base case (60%)", EN_ROWS, "attributed"),
+    ("中金的基准情景（50%）偏乐观", FFE1_ROWS, "attributed"),
+    ("麦肯锡基准情景（40%）", FFE1_ROWS, "attributed"),
+    ("国网能源研究院的基准情景（40%）", FFE1_ROWS, "attributed"),
+    ("国网能源研究院基准情景（40%）", FFE1_ROWS, "attributed"),
+    ("McKinsey基准情景（40%）", FFE1_ROWS, "attributed"),
+    ("概率最高的基准情景（40%）", FFE1_ROWS, "attributed"),
+    # Chinese move verbs right before the alias, a year or 历史上 in the slot's clause.
+    ("我们上调基准情景（40%）", FFE1_ROWS, "history"),
+    ("上调基准情景（40%）的权重", FFE1_ROWS, "history"),
+    ("2025年基准情景（40%）", FFE1_ROWS, "history"),
+    ("2025年我们的基准情景（40%）", FFE1_ROWS, "history"),
+    ("历史上基准情景（40%）", FFE1_ROWS, "history"),
+    # A size word right after the slot.
+    ("a bear case (25%) drawdown", EN_ROWS, "quantity"),
+    ("Our bear case (25%) drawdown is shallow.", EN_ROWS, "quantity"),
 ])
 def test_guarded_contexts_are_reported_not_rewritten(text, rows, guard):
     findings = LN.find_probability_slots(text, rows)
@@ -370,6 +412,29 @@ def test_history_cues_stay_in_their_place():
                  "我们将基准情景（40%）作为主路径。", "The base case (40%) sees EVs rise to 45%."):
         rows = EN_ROWS if text.startswith("The") else FFE1_ROWS
         assert [f["status"] for f in LN.find_probability_slots(text, rows)] == ["fixable"], text
+
+
+def test_the_reports_own_scenario_stays_fixable():
+    """The attributed, conditional and history guards leave the report's own slots alone:
+    first person, the report or a chapter as owner, a set of scenarios an enumeration
+    ranks, a year outside the slot's clause, and 当 / 时 / 后 words that open nothing."""
+    for text, rows in (
+            ("our base case (40%)", EN_ROWS), ("Our base case (40%) holds.", EN_ROWS),
+            ("this report's base case (40%)", EN_ROWS), ("our model's base case (40%)", EN_ROWS),
+            ("today's base case (40%)", EN_ROWS),
+            ("我们的基准情景（40%）", FFE1_ROWS), ("本报告的基准情景（40%）", FFE1_ROWS),
+            ("预测骨架中的基准情景（40%）", FFE1_ROWS), ("第四章的基准情景（40%）", FFE1_ROWS),
+            ("Q3的基准情景（40%）", FFE1_ROWS),
+            ("在四个情景中，基准情景（40%）概率最高。", FFE1_ROWS),
+            ("所有情景中，基准情景（40%）概率最高。", FFE1_ROWS),
+            ("在三种情景下，基准情景（40%）概率最高。", FFE1_ROWS),
+            ("到2030年，基准情景（40%）下装机达到200 GW。", FFE1_ROWS),
+            ("相当于电力受限时的水平，基准情景（40%）仍占主导。", FFE1_ROWS),
+            ("同时，基准情景（40%）仍占主导。", FFE1_ROWS),
+            ("最后，基准情景（40%）仍占主导。", FFE1_ROWS),
+            ("当前基准情景（40%）仍占主导。", FFE1_ROWS)):
+        findings = LN.find_probability_slots(text, rows)
+        assert [f["status"] for f in findings] == ["fixable"], text
 
 
 def test_conditional_opener_governs_only_its_clause():
@@ -611,11 +676,33 @@ def test_s11_does_not_fail_open_on_a_generic_market_word(text, rows):
     "# T\n\n上行" + " " * 20000 + "情景" + " " * 20000 + "x",       # scenario word
     "# T\n\n> q\n" + "-" * 20000 + "x",                           # lazy continuation
     "# T\n\n" + "".join(f"> q{i}\n上行（10%）\n" for i in range(3000)),
+    "# T\n\n" + "".join(f"{BINARY_FORECAST_START_MARKER}\n上行（10%）\n" for i in range(2000)),
 ], ids=lambda md: f"{len(md)}-chars")
 def test_degenerate_model_text_stays_linear(md):
     started = time.perf_counter()
     LN.audit_markdown(md, FFE1_ROWS)
     assert time.perf_counter() - started < 1.0
+
+
+def test_unterminated_binary_markers_are_scanned_once():
+    """Each start marker finds its end marker by bisection (review round 3): 20 000
+    unterminated start markers took seconds when each one rescanned the rest of the
+    report.  An unterminated start marker stays plain text; a terminated block is skipped."""
+    lines = [BINARY_FORECAST_START_MARKER] * 20000
+    md = "# T\n\n" + "\n".join(lines) + "\n"
+    skipped = Counter()
+    started = time.perf_counter()
+    spans = LN._scannable_spans(md, False, skipped)
+    assert time.perf_counter() - started < 0.5
+    assert len(spans) == 2 and not skipped                 # the H1 and one paragraph
+    md = ("# T\n\n" + BINARY_FORECAST_START_MARKER + "\n\nA情景（40%）\n\n"
+          + BINARY_FORECAST_START_MARKER + "\n基准情景（40%）\n" + BINARY_FORECAST_END_MARKER
+          + "\n\n" + BINARY_FORECAST_START_MARKER + "\nA情景（40%）\n")
+    audit = LN.audit_markdown(md, FFE1_ROWS)
+    # The first start marker is closed by the later end marker: its 7 lines are the block;
+    # the last, unterminated one is plain text, so the slot after it is read.
+    assert audit["skipped"] == {"binary_block": 7}
+    assert [(f["alias"], f["status"]) for f in audit["findings"]] == [("A情景", "fixable")]
 
 
 def test_guards_are_built_once_per_paragraph(monkeypatch):

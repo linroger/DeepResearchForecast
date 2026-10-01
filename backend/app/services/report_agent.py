@@ -3984,7 +3984,8 @@ class ReportAgent:
         except Exception:  # noqa: BLE001
             pass
         # REPORT-3：别名感知概率槽观测（REPORT_LOGIC_NUMBER_GATE != off；off 时不加键）。此处是成稿
-        # 草稿（正文修复在其后），终审以最终字节上的 logic_number（含修复记录）覆盖本值；只记录，不进发布门。
+        # 草稿（正文修复在其后）：修复改写成稿时以修复后字节上的观测（含修复记录）替换本值，终审再以
+        # 最终字节上的 logic_number 覆盖；只记录，不进发布门。
         try:
             _ln_observation = self._logic_number_observation(report_markdown, forecast)
             if _ln_observation is not None:
@@ -6806,7 +6807,8 @@ class ReportAgent:
         条件/历史守卫命中的 unresolved 槽位只计数、绝不改写。全部算完后一次提交：
         report.markdown_content 与 full_report.md（放在语言纯度之后、编辑 lint 与
         _stabilize_publish_markdown 之前，稳定器与终审的 SHA 指纹因此覆盖修复后的字节），摘要补同步时
-        连同 outline.summary / self._outline_summary / outline.json。结果记
+        连同 outline.summary / self._outline_summary / outline.json；成稿有改写时再刷新 forecast.json
+        的 quality.logic_number（_refresh_logic_number_quality）。结果记
         self._logic_number_repair = {applied（截断明细）, applied_count / summary_count / body_count
         （未截断总数）, unresolved}。REPORT_NARRATIVE_SYNC 关或骨架无情景时不做任何事（成稿逐字节不变）；
         任何失败仅告警。"""
@@ -6848,8 +6850,32 @@ class ReportAgent:
                     ReportManager.save_outline(report_id, report.outline)
             except Exception as _we:  # noqa: BLE001
                 logger.warning(f"重写 full_report.md / outline.json（概率槽修复）失败（忽略）: {_we}")
+            self._refresh_logic_number_quality(report_id, new_md)
         logger.info(f"概率槽修复: {report_id} 正文改写 {len(applied)} 处｜摘要改写 "
                     f"{len(summary_rows)} 处｜未解决 {audit['unresolved']} 处")
+
+    def _refresh_logic_number_quality(self, report_id: str, md: str) -> None:
+        """REPORT-3：修复改写了成稿后，把 forecast.json（及内存骨架）的 quality.logic_number 换成
+        修复后字节上的观测（含修复记录）。_finalize_structured_forecast 记下的是修复前草稿上的观测，
+        REPORT_FINAL_READ_ONLY_AUDIT 关闭时没有终审再覆盖它，留着就会描述一份从未发布的文本。
+        gate=off、无 forecast.json 或无情景时不动；读-改-写，失败仅告警（只关乎可观测性）。"""
+        try:
+            fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
+            if not os.path.exists(fpath):
+                return
+            with open(fpath, "r", encoding="utf-8") as f:
+                fc = json.load(f)
+            if not isinstance(fc, dict):
+                return
+            observation = self._logic_number_observation(md, fc)
+            if observation is None:
+                return
+            fc.setdefault("quality", {})["logic_number"] = observation
+            write_text_atomic(fpath, json.dumps(fc, ensure_ascii=False, indent=2))
+            if isinstance(getattr(self, "_forecast_spine", None), dict):
+                self._forecast_spine.setdefault("quality", {})["logic_number"] = observation
+        except Exception as _fe:  # noqa: BLE001 — 观测性记录，绝不影响成稿
+            logger.warning(f"概率槽修复后刷新 forecast.json quality.logic_number 失败（忽略）: {_fe}")
 
     def _logic_number_observation(self, md: str,
                                   forecast: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
