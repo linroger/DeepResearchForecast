@@ -8,6 +8,7 @@ import contextlib
 import json
 import os
 import random
+import signal
 
 import pytest
 
@@ -24,6 +25,11 @@ BLOCK_TEXT = {"brief": "Demand is rising.", "forecast_inputs": "Base rate 30%.",
               "market": "| 1 | Will X? | 0.40 |"}
 MARKET_TITLE = "[Prediction-market signals]"
 OUTPUT_FILES = {"study.json", "elicitations.jsonl", "run_meter.jsonl", "scores.json", "report.md"}
+# Enough reports for a scored (not characterization-only) verdict on every block.
+SCORED_BUNDLES = vas.MIN_CLUSTERS
+CALLS_PER_BUNDLE = 2 * (8 + 3) * 3      # per model: 2 targets x (8 arms + floor_sc K=3) x 3 replicates
+SCORING = {"alpha": vas.ALPHA, "inert_margin": 0.02, "fidelity_max": 0.10, "resamples": 500,
+           "min_clusters": vas.MIN_CLUSTERS}
 KNOB_DEFAULTS = {"VALUE_ADD_EVAL_ENABLED": "false", "EVAL_ARM_REPLICATES": "3", "EVAL_STUDY_MAX_CALLS": "600",
                  "EVAL_TARGETS_PER_BUNDLE": "2", "EVAL_PROBE_FIDELITY_MAX": "0.10", "EVAL_INERT_MARGIN": "0.02",
                  "EVAL_BOOTSTRAP_RESAMPLES": "2000"}
@@ -214,6 +220,11 @@ def _verdicts(model):
     return {name: stats["verdict"] for name, stats in model["blocks"].items()}
 
 
+def _computed(model):
+    """Each block's computed verdict (the would-be one when a gate replaced it)."""
+    return {name: stats.get("would_be_verdict", stats["verdict"]) for name, stats in model["blocks"].items()}
+
+
 # ------------------------------------------------------------------ plan
 def test_plan_counts_and_zero_calls(tmp_path, monkeypatch, capsys):
     bundle = _bundle(tmp_path / "b", "r1")
@@ -227,7 +238,10 @@ def test_plan_counts_and_zero_calls(tmp_path, monkeypatch, capsys):
     assert printed["skipped_arms"] == []
     # the scoring parameters and seed the run will pre-register
     assert printed["seed"] == vas.BOOTSTRAP_SEED
-    assert printed["scoring"] == {"alpha": vas.ALPHA, "inert_margin": 0.02, "fidelity_max": 0.10, "resamples": 500}
+    assert printed["scoring"] == SCORING
+    # the clusters (bundles) each model gets per block, and which blocks that leaves under the minimum
+    assert printed["clusters_per_model"] == {spec: {"Q": 1, "G": 1, "S": 1, "M": 1} for spec in ("fake:x", "fake:y")}
+    assert printed["blocks_below_min_clusters"] == ["Q", "G", "S", "M"]
     assert not out.exists()
 
     # the same bundle given twice (directly and through --bundles-root) is planned once
@@ -438,49 +452,58 @@ def test_build_client_pinned_cache_free(monkeypatch):
 
 
 # ------------------------------------------------------------------ study scoring
-def test_aa_fixture_inert_or_inconclusive_ci_contains_zero(tmp_path):
-    bundles = [_bundle(tmp_path / "b", f"r{i}") for i in range(6)]
+def test_aa_fixture_inert_or_inconclusive_ci_contains_zero(tmp_path, capsys):
+    bundles = [_bundle(tmp_path / "b", f"r{i}") for i in range(SCORED_BUNDLES)]
     out = tmp_path / "out"
-    assert _run(bundles, out, Factory(), "--max-calls", "1000") == 0
+    assert _run(bundles, out, Factory(), "--max-calls", str(SCORED_BUNDLES * CALLS_PER_BUNDLE)) == 0
+    assert "characterization only" not in capsys.readouterr().err      # every block has enough clusters
     study_id = _study_id(out)
     assert _score(out, study_id) == 0
     scores = _scores(out, study_id)
     assert scores["valid"] is True and scores["characterization_only"] is False
-    assert scores["completeness"]["fake:x"] == {"expected": 6 * 2 * 9 * 3, "ok": 6 * 2 * 9 * 3, "missing": 0,
+    expected = SCORED_BUNDLES * 2 * 9 * 3
+    assert scores["completeness"]["fake:x"] == {"expected": expected, "ok": expected, "missing": 0,
                                                 "call_failed": 0, "parse_failed": 0, "stale_prompt": 0,
                                                 "model_keys": ["fake:x"], "served_models": ["x"],
                                                 "served_model_count": 1}
     assert scores["incomplete_models"] == [] and scores["served_model_drift"] == []
     # scored with the pre-registered parameters and seed, and says so
-    assert scores["scoring"] == {"alpha": vas.ALPHA, "inert_margin": 0.02, "fidelity_max": 0.10, "resamples": 500,
-                                 "seed": vas.BOOTSTRAP_SEED, "preregistered": True, "overrides": {}}
+    assert scores["scoring"] == dict(SCORING, seed=vas.BOOTSTRAP_SEED, preregistered=True, overrides={})
     model = scores["models"]["fake:x"]
     assert model["sampling_params_ignored"] is False and model["characterization_reasons"] == []
-    assert model["aa"]["n_targets"] == 12 and model["aa"]["ci_contains_zero"] is True
+    assert model["blocks_below_min_clusters"] == []
+    assert all(stats["n_clusters"] == SCORED_BUNDLES for stats in model["blocks"].values())
+    assert model["aa"]["n_targets"] == 2 * SCORED_BUNDLES and model["aa"]["ci_contains_zero"] is True
     assert set(_verdicts(model).values()) <= {vas.VERDICT_INERT, vas.VERDICT_INCONCLUSIVE}
     assert model["probe_fidelity_status"] == vas.FIDELITY_OK and model["advisory_reasons"] == []
     assert model["evidence"] == [vas.EVIDENCE_LABELS[b] for b in ("G", "S")
                                  if model["blocks"][b]["verdict"] == vas.VERDICT_INERT]
     assert model["withheld_evidence"] == []
     # the floor arms are reported (descriptive): R and the closed-book floors answer alike here
-    assert model["floor"][vas.ARM_FLOOR]["n_targets"] == model["floor"][vas.ARM_FLOOR_SC]["n_targets"] == 12
+    assert model["floor"][vas.ARM_FLOOR]["n_targets"] == model["floor"][vas.ARM_FLOOR_SC]["n_targets"] \
+        == 2 * SCORED_BUNDLES
     assert model["floor"][vas.ARM_FLOOR]["mean_abs_diff"] < 0.02
     report = _report(out, study_id)
     assert "fake:x" in report and "Movement, not accuracy" in report and "R vs floor_sc" in report
     assert "## Completeness" in report
     assert (f"Scoring: alpha {vas.ALPHA}, inert margin 0.02, probe-fidelity max 0.1, bootstrap resamples 500, "
-            f"seed {vas.BOOTSTRAP_SEED} (as pre-registered)") in report
+            f"minimum clusters per block {vas.MIN_CLUSTERS}, seed {vas.BOOTSTRAP_SEED} (as pre-registered)") in report
+    assert f"Blocks under the minimum of {vas.MIN_CLUSTERS} clusters (characterization only): none" in report
 
 
 def test_injected_market_movement_moves_only_for_model_x(tmp_path):
-    bundles = [_bundle(tmp_path / "b", f"r{i}", pre_market=(0.55, 0.75)) for i in range(6)]
+    # Fake seeds: a null block 'moves' by chance about 6% of the time at the cluster minimum
+    # (test_null_calibration_at_min_clusters); at fake:y seed 2 its G block does here.
+    bundles = [_bundle(tmp_path / "b", f"r{i}", pre_market=(0.55, 0.75)) for i in range(SCORED_BUNDLES)]
     out = tmp_path / "out"
-    factory = Factory(**{"fake:x": {"market_shift": 0.15, "seed": 1}, "fake:y": {"seed": 2}})
-    assert _run(bundles, out, factory, "--max-calls", "2000", models=("fake:x", "fake:y")) == 0
+    factory = Factory(**{"fake:x": {"market_shift": 0.15, "seed": 1}, "fake:y": {"seed": 3}})
+    assert _run(bundles, out, factory, "--max-calls", str(2 * SCORED_BUNDLES * CALLS_PER_BUNDLE),
+                models=("fake:x", "fake:y")) == 0
     study_id = _study_id(out)
     assert _score(out, study_id) == 0
     models = _scores(out, study_id)["models"]
     x, y = models["fake:x"], models["fake:y"]
+    assert x["advisory_reasons"] == [] and x["blocks_below_min_clusters"] == []
     assert x["blocks"]["M"]["verdict"] == vas.VERDICT_MOVES
     assert x["blocks"]["M"]["ci"][0] > 0 and x["blocks"]["M"]["p_holm"] < vas.ALPHA
     assert all(x["blocks"][b]["verdict"] != vas.VERDICT_MOVES for b in ("Q", "G", "S"))
@@ -581,6 +604,85 @@ def test_meter_must_vouch_for_every_answered_call(tmp_path):
     assert _scores(clean, clean_id)["invalid_reasons"] == ["meter_unavailable"]
 
 
+def test_killed_attempt_is_asked_again_and_the_study_recovers(tmp_path, capsys):
+    """An attempt killed before it wrote its meter record (SIGKILL, a power loss): score is
+    invalid while its rows are scored, a resume asks its cells again (and says so) but not the
+    cells of the attempt the meter vouches for, and the new rows supersede the killed ones."""
+    bundles = [_bundle(tmp_path / "b", f"r{i}") for i in range(3)]
+    out = tmp_path / "out"
+    # attempt 1 stops on the run budget at its 10th call: its meter record is written
+    assert _run(bundles, out, Factory(**{"fake:x": {"budget_on_call": 10}}), "--max-calls", "1000") \
+        == vae.EXIT_REFUSED
+    study_id = _study_id(out)
+    (first,) = _meters(out, study_id)
+    first_rows = _rows(out, study_id)
+    # attempt 2 answers more cells, then "dies" without a record (it is dropped from the file)
+    assert _run(bundles, out, Factory(**{"fake:x": {"budget_on_call": 20}}), "--max-calls", "1000") \
+        == vae.EXIT_REFUSED
+    killed = [r for r in _rows(out, study_id) if r["attempt"] != first["attempt"]]
+    assert killed and all(r["status"] == "ok" for r in killed)
+    with open(_path(out, study_id, "run_meter.jsonl"), "w", encoding="utf-8") as f:
+        f.write(json.dumps(first) + "\n")
+    capsys.readouterr()
+    assert _score(out, study_id) == vae.EXIT_INVALID
+    assert _scores(out, study_id)["invalid_reasons"] == ["meter_unavailable"]
+
+    resume = Factory()
+    assert _run(bundles, out, resume, "--max-calls", "1000") == 0
+    assert f"{len(killed)} answered cells come only from attempts the LLM meter cannot vouch for" \
+        in capsys.readouterr().err
+    assert resume.calls() == 198 - sum(3 if r["arm"] == vas.ARM_FLOOR_SC else 1 for r in first_rows)
+    assert _score(out, study_id) == 0
+    scores = _scores(out, study_id)
+    assert scores["valid"] is True and scores["completeness"]["fake:x"]["missing"] == 0
+    assert scores["rows"] == len(killed) + 162 and scores["rows_scored"] == 162
+    study = _load(out, study_id, "study.json")
+    vouched = vae.vouched_attempts(_meters(out, study_id))
+    assert first["attempt"] in vouched and not {r["attempt"] for r in killed} & vouched
+    kept = vae.select_rows(study, _rows(out, study_id), vouched)["rows"]
+    assert not {r["attempt"] for r in kept} & {r["attempt"] for r in killed}
+
+    # a vouched row is never replaced by a later row of an unvouched attempt (two runs at once)
+    before = scores["models"]
+    vae._append_row(_path(out, study_id, "elicitations.jsonl"), dict(kept[0], attempt="unrecorded", p=0.99))
+    assert _score(out, study_id) == 0
+    assert _scores(out, study_id)["models"] == before
+
+
+@pytest.mark.parametrize("signame", ["SIGTERM", "SIGHUP"])
+def test_termination_signal_still_writes_the_meter_record(tmp_path, signame):
+    """SIGTERM / SIGHUP during a run raise SystemExit, so the attempt's meter record is still
+    written and its rows stay vouched for; the previous handler is restored afterwards."""
+    signum = getattr(signal, signame)
+    previous = signal.getsignal(signum)
+    bundle = _bundle(tmp_path / "b", "r1")
+    out = tmp_path / "out"
+
+    class Terminated(FakeClient):
+        def chat(self, messages, **kwargs):
+            if self.calls == 4:
+                # cmd_run's handler is in place (otherwise the signal would end this test process)
+                assert signal.getsignal(signum) not in (previous, signal.SIG_DFL, signal.SIG_IGN)
+                os.kill(os.getpid(), signum)
+            return super().chat(messages, **kwargs)
+
+    with pytest.raises(SystemExit) as raised:
+        _run([bundle], out, Terminated)
+    assert raised.value.code == 128 + signum
+    assert signal.getsignal(signum) == previous
+    assert get_run_context() == (None, None)
+    study_id = _study_id(out)
+    (meter,) = _meters(out, study_id)
+    rows = _rows(out, study_id)
+    assert meter["calls_made"] == 5 and len(rows) == 3          # floor x 3; floor_sc died in its 2nd sample
+    assert vae.vouched_attempts([meter]) == {meter["attempt"]}
+    assert {r["attempt"] for r in rows} == {meter["attempt"]}
+    resume = Factory()
+    assert _run([bundle], out, resume) == 0
+    assert resume.calls() == 66 - 3
+    assert _score(out, study_id) == 0 and _scores(out, study_id)["valid"] is True
+
+
 def test_budget_exceeded_stops_the_run(tmp_path, capsys):
     bundle = _bundle(tmp_path / "b", "r1")
     out = tmp_path / "out"
@@ -659,15 +761,30 @@ def test_unavailable_block_arm_skipped_with_reason(tmp_path, capsys):
             return super().chat(messages, temperature, max_tokens, response_format, tier)
 
     assert _run([bundle], out, lambda spec: Recorder(spec)) == 0
-    rows = _rows(out, _study_id(out))
+    study_id = _study_id(out)
+    rows = _rows(out, study_id)
     assert "R+G" not in {r["arm"] for r in rows} and len(seen) == 60
     assert not any("[Knowledge-graph facts" in text for text in seen)
     assert any("[Quantitative facts]" in text for text in seen)   # FULL keeps every available block
+    # the scored artifacts say why G could not be judged
+    assert _score(out, study_id) == 0
+    scores = _scores(out, study_id)
+    assert scores["skipped_arms"] == printed["skipped_arms"]
+    assert scores["skipped_by_block"] == {"G": {"targets": 2, "reasons": ["unavailable:graph"]}}
+    graph = scores["models"]["fake:x"]["blocks"]["G"]
+    assert graph["verdict"] == vas.VERDICT_UNAVAILABLE and graph["n_targets"] == 0
+    assert "- Block G skipped: 2 targets (unavailable:graph)" in _report(out, study_id)
 
     no_research = _bundle(tmp_path / "c", "r2", unavailable=("dossier",))
-    plan = vae.planned_calls(vae.build_study(_args("plan", [no_research])))
+    study = vae.build_study(_args("plan", [no_research]))
+    plan = vae.planned_calls(study)
     assert {s["arm"] for s in plan["skipped_arms"]} == {"R", "R+Q", "R+G", "R+S", "R+M", "FULL", "FULL_AA"}
     assert {s["reason"] for s in plan["skipped_arms"]} == {"unavailable:dossier"}
+    assert vae.skipped_by_block(plan["skipped_arms"]) == {
+        block: {"targets": 2, "reasons": ["unavailable:dossier"]} for block in vas.BLOCKS}
+    assert vae.planned_clusters(study) == dict.fromkeys(vas.BLOCKS, 0)
+    assert vae.planned_clusters(vae.build_study(_args("plan", [bundle, no_research]))) == {
+        "Q": 1, "G": 0, "S": 1, "M": 1}
 
     assert vae.parse_probability({"probability": "not a number"}) is None
     assert vae.parse_probability({"probability": 1.4}) is None
@@ -683,6 +800,37 @@ def test_unavailable_block_arm_skipped_with_reason(tmp_path, capsys):
         rows = _rows(failed, _study_id(failed))
         assert {r["status"] for r in rows} == {"parse_failed"} and all(r["p"] is None for r in rows)
         assert factory.calls() == 60
+
+
+def test_malformed_replies_are_parse_failed_not_fatal(tmp_path):
+    """A reply the parser cannot take is a parse_failed row, never an aborted attempt: an
+    integer too large for a float, one over Python's int-string limit, nesting deeper than the
+    recursion limit. A lone surrogate (an emoji cut at max_tokens) is hashed and kept."""
+    assert vae.parse_probability({"probability": 10 ** 400}) is None
+    assert vae.parse_probability({"probability": -(10 ** 400)}) is None
+    assert vae.parse_probability({"probability": "1" * 400}) is None
+    assert vae.parse_probability({"probability": float("nan")}) is None
+    assert vae.parse_probability({"probability": float("inf")}) is None
+    assert vae.parse_probability({"probability": True}) is None
+    assert vae.parse_probability({"probability": 1}) == vae.P_MAX
+    over_limit = '{"probability": ' + "1" * 5000 + "}"
+    deep = '{"probability": ' + "[" * 100000 + "}"
+    assert vae.parse_reply(over_limit) is None and vae.parse_reply(deep) is None
+    assert vae.parse_reply('{"probability": ' + "1" * 400 + "}")["probability"] == int("1" * 400)
+
+    bundle = _bundle(tmp_path / "b", "r1")
+    cases = {"huge_int": ('{"probability": ' + "1" * 400 + "}", "parse_failed"),
+             "over_limit": (over_limit, "parse_failed"), "deep": (deep, "parse_failed"),
+             "surrogate": ('{"probability": 0.4, "rationale": "cut at \ud83d"}', "ok")}
+    for name, (reply, status) in cases.items():
+        out = tmp_path / name
+        factory = Factory(**{"fake:x": {"reply": reply}})
+        assert _run([bundle], out, factory) == 0, name
+        rows = _rows(out, _study_id(out))
+        assert factory.calls() == 66 and len(rows) == 2 * 9 * 3, name
+        assert {r["status"] for r in rows} == {status}, name
+        assert all(len(r["raw_sha256"]) == 64 for r in rows)
+    assert {r["p"] for r in _rows(tmp_path / "surrogate", _study_id(tmp_path / "surrogate"))} == {0.4}
 
 
 def test_probe_fidelity_over_threshold_advisory(tmp_path):
@@ -704,18 +852,30 @@ def test_probe_fidelity_over_threshold_advisory(tmp_path):
     assert _score(close, close_id) == 0
     model = _scores(close, close_id)["models"]["fake:x"]
     assert model["probe_fidelity"] <= Config.EVAL_PROBE_FIDELITY_MAX
-    assert model["probe_not_representative"] is False
-    assert not any("advisory" in stats for stats in model["blocks"].values())
+    assert model["probe_not_representative"] is False and model["advisory_reasons"] == []
+    # 3 reports are under the cluster minimum: each block is characterization only for that
+    # reason alone, its computed verdict kept and its evidence label withheld
+    assert model["blocks_below_min_clusters"] == list(vas.BLOCKS)
+    for stats in model["blocks"].values():
+        assert stats["n_clusters"] == 3 and stats["verdict"] == vas.VERDICT_CHARACTERIZATION
+        assert stats["characterization_reasons"] == [vas.REASON_TOO_FEW_CLUSTERS] and stats["advisory"] is True
+        assert stats["would_be_verdict"] in (vas.VERDICT_INERT, vas.VERDICT_INCONCLUSIVE)
+    assert model["evidence"] == []
+    assert model["withheld_evidence"] == [vas.EVIDENCE_LABELS[b] for b in ("G", "S")
+                                          if _computed(model)[b] == vas.VERDICT_INERT]
+    report = _report(close, close_id)
+    assert f"Blocks under the minimum of {vas.MIN_CLUSTERS} clusters (characterization only): Q, G, S, M" in report
+    assert "| G | 6 | 3 |" in report
 
 
 def test_probe_fidelity_unmeasured_fails_closed(tmp_path):
     """No market block anywhere: R+M is never asked, so fidelity cannot be measured and every
-    verdict is advisory with its evidence labels withheld. (Fake seed 8: this fixture's A/A CI
-    contains 0, so unmeasured fidelity is the only reason; at seed 7 it excludes 0 by chance.)"""
+    verdict is advisory with its evidence labels withheld. (Enough reports for the cluster
+    minimum, and this fixture's A/A CI contains 0, so unmeasured fidelity is the only reason.)"""
     bundles = [_bundle(tmp_path / "b", f"r{i}", unavailable=("market",), pre_market=(0.9, 0.1))
-               for i in range(6)]
+               for i in range(SCORED_BUNDLES)]
     out = tmp_path / "out"
-    assert _run(bundles, out, Factory(**{"fake:x": {"seed": 8}}), "--max-calls", "1000") == 0
+    assert _run(bundles, out, Factory(**{"fake:x": {"seed": 8}}), "--max-calls", "2000") == 0
     study_id = _study_id(out)
     assert _score(out, study_id) == 0
     scores = _scores(out, study_id)
@@ -725,6 +885,7 @@ def test_probe_fidelity_unmeasured_fails_closed(tmp_path):
     assert model["probe_fidelity"] is None and model["probe_fidelity_status"] == vas.FIDELITY_UNMEASURED
     assert model["probe_not_representative"] is True
     assert model["advisory_reasons"] == [vas.REASON_PROBE_FIDELITY_UNMEASURED]
+    assert model["blocks_below_min_clusters"] == []
     assert all(stats["advisory"] is True for stats in model["blocks"].values())
     assert model["blocks"]["M"]["verdict"] == vas.VERDICT_UNAVAILABLE
     inert = [vas.EVIDENCE_LABELS[b] for b in ("G", "S") if model["blocks"][b]["verdict"] == vas.VERDICT_INERT]
@@ -736,11 +897,12 @@ def test_probe_fidelity_unmeasured_fails_closed(tmp_path):
 def test_incomplete_model_is_characterization_only(tmp_path):
     """Completeness is judged per model: the model with unanswered cells is characterization
     only, the complete one keeps its verdicts."""
-    bundles = [_bundle(tmp_path / "b", f"r{i}") for i in range(3)]
+    bundles = [_bundle(tmp_path / "b", f"r{i}") for i in range(SCORED_BUNDLES)]
     out = tmp_path / "out"
     models = ("fake:x", "fake:y")
+    cap = str(2 * SCORED_BUNDLES * CALLS_PER_BUNDLE)
     factory = Factory(**{"fake:x": {"fail_every": 3}, "fake:y": {"seed": 3}})
-    assert _run(bundles, out, factory, "--max-calls", "1000", models=models) == 0
+    assert _run(bundles, out, factory, "--max-calls", cap, models=models) == 0
     study_id = _study_id(out)
     rows = _rows(out, study_id)
     x_rows = [r for r in rows if r["model_key_spec"] == "fake:x"]
@@ -753,7 +915,7 @@ def test_incomplete_model_is_characterization_only(tmp_path):
     assert scores["valid"] is True and scores["characterization_only"] is False
     assert scores["characterization_reasons"] == [] and scores["incomplete_models"] == ["fake:x"]
     entry = scores["completeness"]["fake:x"]
-    assert entry["expected"] == 3 * 2 * 9 * 3 and entry["ok"] == ok
+    assert entry["expected"] == SCORED_BUNDLES * 2 * 9 * 3 and entry["ok"] == ok
     assert entry["missing"] == entry["expected"] - ok and entry["call_failed"] == failed
     assert scores["completeness"]["fake:y"]["missing"] == 0
     x, y = scores["models"]["fake:x"], scores["models"]["fake:y"]
@@ -761,7 +923,7 @@ def test_incomplete_model_is_characterization_only(tmp_path):
     assert x["characterization_reasons"] == ["incomplete"]
     assert x["evidence"] == [] and vas.REASON_CHARACTERIZATION in x["advisory_reasons"]
     assert y["characterization_reasons"] == [] and vas.REASON_CHARACTERIZATION not in y["advisory_reasons"]
-    assert vas.VERDICT_CHARACTERIZATION not in _verdicts(y).values()
+    assert y["blocks_below_min_clusters"] == [] and vas.VERDICT_CHARACTERIZATION not in _verdicts(y).values()
     assert not any("would_be_verdict" in stats for stats in y["blocks"].values())
     report = _report(out, study_id)
     assert "Characterization only: False" in report
@@ -769,7 +931,7 @@ def test_incomplete_model_is_characterization_only(tmp_path):
 
     # resume asks only fake:x's missing cells, after which no model is incomplete
     resume = Factory()
-    assert _run(bundles, out, resume, "--max-calls", "1000", models=models) == 0
+    assert _run(bundles, out, resume, "--max-calls", cap, models=models) == 0
     assert resume.clients["fake:y"].calls == 0
     assert resume.calls() == sum(3 if r["arm"] == vas.ARM_FLOOR_SC else 1 for r in x_rows if r["status"] != "ok")
     assert _score(out, study_id) == 0
@@ -788,7 +950,7 @@ def test_scoring_parameters_preregistered_and_recorded(tmp_path, monkeypatch, ca
     study_id = _study_id(out)
     study = _load(out, study_id, "study.json")
     assert study["seed"] == vas.BOOTSTRAP_SEED
-    assert study["scoring"] == {"alpha": vas.ALPHA, "inert_margin": 0.02, "fidelity_max": 0.10, "resamples": 500}
+    assert study["scoring"] == SCORING
     assert _score(out, study_id) == 0
     registered = _scores(out, study_id)
     assert registered["scoring"]["inert_margin"] == 0.02 and registered["scoring"]["preregistered"] is True
@@ -804,7 +966,7 @@ def test_scoring_parameters_preregistered_and_recorded(tmp_path, monkeypatch, ca
     model = overridden["models"]["fake:x"]
     assert model["advisory_reasons"] == [vae.ADVISORY_SCORING_OVERRIDE]
     assert all(stats["advisory"] is True for stats in model["blocks"].values())
-    assert set(_verdicts(model).values()) == {vas.VERDICT_INERT}
+    assert set(_computed(model).values()) == {vas.VERDICT_INERT}
     assert model["evidence"] == [] and model["withheld_evidence"] == [vas.EVIDENCE_LABELS["G"],
                                                                       vas.EVIDENCE_LABELS["S"]]
     assert "NOT as pre-registered: inert_margin registered 0.02, used 0.5" in _report(out, study_id)
@@ -827,6 +989,13 @@ def test_scoring_parameters_preregistered_and_recorded(tmp_path, monkeypatch, ca
     assert cis(reseeded) != cis(registered)
     assert reseeded["models"]["fake:x"]["blocks"]["M"]["mean_d"] == registered["models"]["fake:x"]["blocks"]["M"][
         "mean_d"]
+    # the cluster minimum is pre-registered too: a study registered under another one is scored
+    # with the code's minimum, and the difference is an override (every verdict advisory)
+    _restamp(out, study_id, dict(study, scoring=dict(study["scoring"], min_clusters=4)))
+    assert _score(out, study_id) == 0
+    lowered = _scores(out, study_id)
+    assert lowered["scoring"]["overrides"] == {"min_clusters": {"registered": 4, "used": vas.MIN_CLUSTERS}}
+    assert lowered["models"]["fake:x"]["advisory_reasons"] == [vae.ADVISORY_SCORING_OVERRIDE]
     # a study.json without an integer seed cannot be scored
     _restamp(out, study_id, dict(study, seed="20261001"))
     assert _score(out, study_id) == vae.EXIT_REFUSED
@@ -876,12 +1045,12 @@ def test_served_model_change_makes_model_advisory(tmp_path):
     assert "| x, x-2026-09 |" in _report(out, study_id)
 
 
-def _synthetic_rows(aa_shift):
-    """6 reports x 2 targets x every arm x 3 replicates, p = 0.5 + noise; FULL_AA is shifted by
-    ``aa_shift`` (a systematic FULL vs FULL_AA difference: the A/A floor is not null)."""
+def _synthetic_rows(aa_shift, clusters=SCORED_BUNDLES):
+    """``clusters`` reports x 2 targets x every arm x 3 replicates, p = 0.5 + noise; FULL_AA is
+    shifted by ``aa_shift`` (a systematic FULL vs FULL_AA difference: the A/A floor is not null)."""
     rng = random.Random(11)
     rows = []
-    for cluster in range(6):
+    for cluster in range(clusters):
         for target in ("F1", "F2"):
             for arm in vae.ARMS:
                 for _ in range(3):
@@ -891,8 +1060,12 @@ def _synthetic_rows(aa_shift):
     return rows
 
 
+def _pre_market(clusters=SCORED_BUNDLES):
+    return {(f"c{cluster}", target): 0.5 for cluster in range(clusters) for target in ("F1", "F2")}
+
+
 def test_aa_floor_not_null_is_advisory():
-    pre_market = {(f"c{cluster}", target): 0.5 for cluster in range(6) for target in ("F1", "F2")}
+    pre_market = _pre_market()
     kwargs = {"pre_market": pre_market, "resamples": 300, "inert_margin": 0.02, "fidelity_max": 0.10}
     null = vas.score_study(_synthetic_rows(0.0), **kwargs)["m:1"]
     assert null["aa"]["ci_contains_zero"] is True and null["advisory_reasons"] == []
@@ -907,6 +1080,63 @@ def test_aa_floor_not_null_is_advisory():
     # informational only: a CLI model ignores temperature, yet nothing is made advisory by it
     cli = vas.score_study(_synthetic_rows(0.0), sampling_params_ignored={"m:1"}, **kwargs)["m:1"]
     assert cli["sampling_params_ignored"] is True and cli["advisory_reasons"] == []
+
+
+def test_block_under_min_clusters_is_characterization_only():
+    """MIN_CLUSTERS gates each block on its own clusters: under it the block is
+    characterization only (would_be_verdict kept, label withheld); the other blocks keep
+    their verdicts; at the minimum every block is scored."""
+    kwargs = {"resamples": 300, "inert_margin": 0.02, "fidelity_max": 0.10}
+    labels = [vas.EVIDENCE_LABELS["G"], vas.EVIDENCE_LABELS["S"]]
+    full = vas.score_study(_synthetic_rows(0.0), pre_market=_pre_market(), **kwargs)["m:1"]
+    assert full["blocks_below_min_clusters"] == [] and full["advisory_reasons"] == []
+    assert all(stats["n_clusters"] == vas.MIN_CLUSTERS for stats in full["blocks"].values())
+    assert not any("would_be_verdict" in stats or "advisory" in stats for stats in full["blocks"].values())
+    assert full["evidence"] == labels and full["withheld_evidence"] == []
+
+    short_n = vas.MIN_CLUSTERS - 1
+    short = vas.score_study(_synthetic_rows(0.0, clusters=short_n), pre_market=_pre_market(short_n),
+                            **kwargs)["m:1"]
+    assert short["blocks_below_min_clusters"] == list(vas.BLOCKS)
+    assert short["advisory_reasons"] == [] and short["characterization_reasons"] == []
+    for stats in short["blocks"].values():
+        assert stats["verdict"] == vas.VERDICT_CHARACTERIZATION and stats["would_be_verdict"] == vas.VERDICT_INERT
+        assert stats["characterization_reasons"] == [vas.REASON_TOO_FEW_CLUSTERS] and stats["advisory"] is True
+    assert short["evidence"] == [] and short["withheld_evidence"] == labels
+    # the study's registered minimum is what applies
+    assert vas.score_study(_synthetic_rows(0.0, clusters=short_n), pre_market=_pre_market(short_n),
+                           min_clusters=short_n, **kwargs)["m:1"]["evidence"] == labels
+
+    # only the block that is short: R+S missing in two reports
+    rows = [r for r in _synthetic_rows(0.0) if not (r["arm"] == "R+S" and r["cluster_id"] in ("c0", "c1"))]
+    mixed = vas.score_study(rows, pre_market=_pre_market(), **kwargs)["m:1"]
+    assert mixed["blocks_below_min_clusters"] == ["S"] and mixed["advisory_reasons"] == []
+    assert mixed["blocks"]["S"]["verdict"] == vas.VERDICT_CHARACTERIZATION
+    assert {name: stats["verdict"] for name, stats in mixed["blocks"].items() if name != "S"} == dict.fromkeys(
+        ("Q", "G", "M"), vas.VERDICT_INERT)
+    assert mixed["evidence"] == [vas.EVIDENCE_LABELS["G"]]
+    assert mixed["withheld_evidence"] == [vas.EVIDENCE_LABELS["S"]]
+
+
+def test_null_calibration_at_min_clusters():
+    """Seeded synthetic null data at MIN_CLUSTERS reports (every block null; 2 targets per
+    report, 3 replicates): the familywise rate of non-advisory 'moves' over the four blocks
+    stays at or below 0.08 (nominal 5%; under 8 reports it is 9-15%). 400 resamples instead
+    of the default 2000 make the percentile bootstrap a little more liberal, so the check is
+    pessimistic."""
+    n, sims = vas.MIN_CLUSTERS, 600
+    arms = (vas.ARM_R, *vas.BLOCK_ARMS.values(), vas.ARM_FULL, vas.ARM_FULL_AA)
+    rng = random.Random(20261002)
+    false_moves = 0
+    for sim in range(sims):
+        rows = [{"status": "ok", "p": 0.5 + rng.gauss(0, 0.03), "model_key": "m", "cluster_id": f"c{cluster}",
+                 "target_id": target, "arm": arm}
+                for cluster in range(n) for target in ("F1", "F2") for arm in arms for _ in range(3)]
+        model = vas.score_study(rows, pre_market=_pre_market(n), resamples=400, inert_margin=0.02,
+                                fidelity_max=1.0, seed=sim)["m"]
+        assert model["blocks_below_min_clusters"] == []
+        false_moves += not model["advisory_reasons"] and vas.VERDICT_MOVES in _verdicts(model).values()
+    assert false_moves / sims <= 0.08
 
 
 def test_score_uses_only_the_registered_design(tmp_path):

@@ -15,7 +15,10 @@ report's targets move together; eval_stats.cluster_bootstrap_replicates, fixed
 seed): one-sided p = share of bootstrap means <= 0, Holm-adjusted across the four
 blocks of a model. Verdict: ``moves`` iff Holm p < 0.05 and the CI lower bound > 0;
 ``inert`` iff the CI upper bound < EVAL_INERT_MARGIN; else ``inconclusive``.
-MDE = (1.96 + 0.84) * sd(cluster means of D) / sqrt(n_clusters).
+MDE = (1.96 + 0.84) * sd(cluster means of D) / sqrt(n_clusters). A block with fewer
+than MIN_CLUSTERS clusters gets no scored verdict: it is ``characterization_only``
+(reason ``too_few_clusters``), since with few clusters the percentile bootstrap does
+not hold its error rates.
 
 Movement is not accuracy: no label is used, and an ``inert`` verdict is evidence
 for an owner decision (``sim_signal_inert_for_model`` / ``graph_block_inert_for_model``),
@@ -29,7 +32,8 @@ FULL vs FULL_AA CI excludes 0, so the noise floor itself is suspect), when the c
 passes another reason (a scoring parameter that differs from the pre-registered one,
 a served-model change), or when the study is invalid (verdict ``invalid``) or
 characterization-only for that model (verdict ``characterization_only``); the computed
-verdict is then kept as ``would_be_verdict``. Pure (no I/O).
+verdict is then kept as ``would_be_verdict``. A block under MIN_CLUSTERS is advisory
+and withholds its own label only. Pure (no I/O).
 """
 
 from __future__ import annotations
@@ -51,6 +55,16 @@ ALPHA = 0.05
 Z_ALPHA = 1.96
 Z_POWER = 0.84
 BOOTSTRAP_SEED = 20261001
+# Fewest clusters (bundles) a block needs for a scored verdict. The percentile cluster
+# bootstrap is anti-conservative with few clusters: on seeded synthetic null data (2 targets
+# per cluster, 3 replicates, every block null, 400-2000 resamples, 1000-3500 studies per
+# size) the familywise rate of non-advisory 'moves' across the four blocks was about 15% at
+# 6 clusters, 9-11% at 8-10, 7% at 12, 6% at 16 and 5% at 20 (nominal 5%;
+# test_value_add_eval.py pins it at this minimum). Below it a block is characterization_only
+# and its evidence label withheld. Pre-registered with the scoring parameters (study.json
+# "scoring"): a study registered under another minimum is scored as an override, every
+# verdict advisory.
+MIN_CLUSTERS = 16
 EVIDENCE_LABELS = {"S": "sim_signal_inert_for_model", "G": "graph_block_inert_for_model"}
 
 VERDICT_MOVES = "moves"
@@ -71,6 +85,8 @@ REASON_PROBE_NOT_REPRESENTATIVE = "probe_not_representative"
 REASON_PROBE_FIDELITY_UNMEASURED = "probe_fidelity_unmeasured"
 REASON_MODEL_UNPINNED = "model_unpinned"
 REASON_AA_FLOOR_NOT_NULL = "aa_floor_not_null"
+# Why one block (not the model) is characterization-only.
+REASON_TOO_FEW_CLUSTERS = "too_few_clusters"
 
 
 def arm_means(rows: Iterable[Mapping[str, Any]]) -> Dict[Tuple[str, str, str], Dict[str, float]]:
@@ -208,13 +224,18 @@ def floor_movement(means: Mapping[Tuple[str, str, str], Mapping[str, float]], mo
 
 def score_study(rows: Sequence[Mapping[str, Any]], *, pre_market: Mapping[Tuple[str, str], Any],
                 resamples: int, inert_margin: float, fidelity_max: float, seed: int = BOOTSTRAP_SEED,
-                invalid: bool = False, characterization_only: bool = False,
+                min_clusters: int = MIN_CLUSTERS, invalid: bool = False, characterization_only: bool = False,
                 model_characterization: Optional[Mapping[str, Sequence[str]]] = None,
                 advisory: Sequence[str] = (), model_advisory: Optional[Mapping[str, Sequence[str]]] = None,
                 sampling_params_ignored: Iterable[str] = ()) -> Dict[str, Any]:
     """Per-model block verdicts, A/A check, floor movement, probe fidelity and evidence labels.
 
     ``seed`` is the study's registered bootstrap seed (every CI of every model uses it).
+    A block whose movement rows span fewer than ``min_clusters`` clusters is
+    'characterization_only' (reason 'too_few_clusters' in its own ``characterization_reasons``,
+    the computed verdict kept as ``would_be_verdict``), advisory, and its evidence label is
+    withheld; the model's other blocks are not affected (keeping it in the Holm family can
+    only raise their adjusted p-values).
     ``invalid`` / ``characterization_only`` are the study-level gates: every verdict becomes
     'invalid' / 'characterization_only' (the computed one kept as ``would_be_verdict``);
     ``model_characterization`` ({model_key: reasons}, e.g. 'incomplete') applies the second
@@ -255,18 +276,24 @@ def score_study(rows: Sequence[Mapping[str, Any]], *, pre_market: Mapping[Tuple[
         if aa["ci_contains_zero"] is False:
             reasons.append(REASON_AA_FLOOR_NOT_NULL)
         labels: List[str] = []
+        withheld: List[str] = []
+        below_min: List[str] = []
         for block, stats in blocks.items():
             stats["p_holm"] = eval_stats.round4(adjusted[block]) if adjusted[block] is not None else None
             computed = verdict(adjusted[block], stats["ci"], inert_margin)
-            if invalid or characterization:
+            too_few = stats["n_targets"] > 0 and stats["n_clusters"] < min_clusters
+            if too_few:
+                below_min.append(block)
+                stats["characterization_reasons"] = [REASON_TOO_FEW_CLUSTERS]
+            if invalid or characterization or too_few:
                 stats["verdict"] = VERDICT_INVALID if invalid else VERDICT_CHARACTERIZATION
                 stats["would_be_verdict"] = computed
             else:
                 stats["verdict"] = computed
-            if reasons:
+            if reasons or too_few:
                 stats["advisory"] = True
             if computed == VERDICT_INERT and block in EVIDENCE_LABELS:
-                labels.append(EVIDENCE_LABELS[block])
+                (withheld if reasons or too_few else labels).append(EVIDENCE_LABELS[block])
         out[model] = {
             "blocks": blocks,
             "aa": aa,
@@ -278,7 +305,8 @@ def score_study(rows: Sequence[Mapping[str, Any]], *, pre_market: Mapping[Tuple[
             "sampling_params_ignored": model in ignored,
             "characterization_reasons": characterization,
             "advisory_reasons": reasons,
-            "evidence": [] if reasons else labels,
-            "withheld_evidence": labels if reasons else [],
+            "blocks_below_min_clusters": below_min,
+            "evidence": labels,
+            "withheld_evidence": withheld,
         }
     return out

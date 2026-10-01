@@ -14,22 +14,27 @@ the bundle marks unavailable is skipped with the reason, never substituted.
 app/services/value_add_stats scores how far each block moves the forecast beyond the
 A/A noise floor; nothing is applied or promoted.
 
-plan prints the exact call count and makes no call. run needs VALUE_ADD_EVAL_ENABLED or
---live, refuses a plan over EVAL_STUDY_MAX_CALLS unless --max-calls covers it, refuses a
-CLI model the CLI would not be given (it would run the account default) unless
---allow-unpinned, disables the LLM cache and keeps the LLM meter on (this process only),
-pre-registers study.json before the first call (the sha of every probe prompt, the model
-each --model spec resolves to, the bootstrap seed and the scoring parameters
-EVAL_INERT_MARGIN / EVAL_PROBE_FIDELITY_MAX / EVAL_BOOTSTRAP_RESAMPLES), stamps its sha on
-every row, stops when the run budget (LLM_RUN_BUDGET_*) is spent and resumes ok rows with
-the same prompt hash; a resume whose registration would differ (another resolved model,
-other scoring knobs) is refused before any call. score refuses an edited study.json and
-scores only rows of the registered design with the registered seed. It marks the study
-invalid (exit 4) when any elicitation was served from a cache, the meter cannot vouch for
-every answered call, or a model changed identity mid-study; a model characterization-only
-when any of its registered elicitations has no ok row (every model when replicates are
-below 3); and a model's verdicts advisory when a scoring knob differs from its registered
-value (recorded as an override) or the provider reported more than one served model.
+plan prints the exact call count and the clusters (bundles) each model gets per block,
+and makes no call. run needs VALUE_ADD_EVAL_ENABLED or --live, refuses a plan over
+EVAL_STUDY_MAX_CALLS unless --max-calls covers it, refuses a CLI model the CLI would not
+be given (it would run the account default) unless --allow-unpinned, disables the LLM
+cache and keeps the LLM meter on (this process only), pre-registers study.json before the
+first call (the sha of every probe prompt, the model each --model spec resolves to, the
+bootstrap seed and the scoring parameters EVAL_INERT_MARGIN / EVAL_PROBE_FIDELITY_MAX /
+EVAL_BOOTSTRAP_RESAMPLES / MIN_CLUSTERS), stamps its sha on every row, stops when the run
+budget (LLM_RUN_BUDGET_*) is spent, writes each attempt's meter record even when SIGTERM
+or SIGHUP ends it, and resumes ok rows with the same prompt hash of attempts the meter
+vouches for (the cells of an attempt killed before its record are asked again); a resume
+whose registration would differ (another resolved model, other scoring knobs) is refused
+before any call. score refuses an edited study.json and scores only
+rows of the registered design with the registered seed. It marks the study invalid
+(exit 4) when any elicitation was served from a cache, the meter cannot vouch for a scored
+row, or a model changed identity mid-study; a model characterization-only when any of its
+registered elicitations has no ok row (every model when replicates are below 3), and a
+block when it has fewer than value_add_stats.MIN_CLUSTERS clusters (also pre-registered);
+and a model's verdicts advisory when a scoring knob differs from its registered value
+(recorded as an override) or the provider reported more than one served model. scores.json
+and report.md say which arms were skipped and why.
 Outputs only under evaluation_ledger_dir()/value_add/<study_id>/ (the id is one safe path
 component): study.json, elicitations.jsonl, run_meter.jsonl, scores.json, report.md.
 """
@@ -37,15 +42,18 @@ component): study.json, elicitations.jsonl, run_meter.jsonl, scores.json, report
 from __future__ import annotations
 
 import argparse
+import contextlib
 import fcntl
 import hashlib
 import json
+import math
 import os
 import re
+import signal
 import sys
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import AbstractSet, Any, Callable, Dict, Iterator, List, Mapping, Optional, Sequence, Set, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -251,6 +259,36 @@ def planned_calls(study: Dict[str, Any]) -> Dict[str, Any]:
     return {"calls": total, "skipped_arms": skipped}
 
 
+def planned_clusters(study: Mapping[str, Any]) -> Dict[str, int]:
+    """``{block: clusters}`` each model will get for a block's movement: the bundles with a
+    target whose statuses let R, R+X, FULL and FULL_AA all be asked (one cluster per bundle).
+    A block under value_add_stats.MIN_CLUSTERS gets no scored verdict."""
+    out: Dict[str, int] = {}
+    for block in vas.BLOCKS:
+        arms = (vas.ARM_R, vas.BLOCK_ARMS[block], vas.ARM_FULL, vas.ARM_FULL_AA)
+        out[block] = sum(1 for bundle in study["bundles"] if bundle["targets"]
+                         and all(arm_blocks(arm, bundle["statuses"])[0] is not None for arm in arms))
+    return out
+
+
+def _below_min_clusters(clusters: Mapping[str, int]) -> List[str]:
+    return [block for block, count in clusters.items() if count < vas.MIN_CLUSTERS]
+
+
+def skipped_by_block(skipped_arms: Sequence[Mapping[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """``{block: {"targets": n, "reasons": [...]}}`` for every block X some target cannot be
+    scored on because an arm its movement needs (R, R+X, FULL, FULL_AA) was skipped
+    (planned_calls' ``skipped_arms``)."""
+    out: Dict[str, Dict[str, Any]] = {}
+    for block in vas.BLOCKS:
+        needs = {vas.ARM_R, vas.BLOCK_ARMS[block], vas.ARM_FULL, vas.ARM_FULL_AA}
+        hits = [entry for entry in skipped_arms if entry["arm"] in needs]
+        targets = {(entry["bundle"], entry["target"]) for entry in hits}
+        if targets:
+            out[block] = {"targets": len(targets), "reasons": sorted({str(entry["reason"]) for entry in hits})}
+    return out
+
+
 def study_sha(study: Dict[str, Any]) -> str:
     return canonical_json_sha256({k: v for k, v in study.items() if k != "created_at"})
 
@@ -278,9 +316,14 @@ def prompt_sha256(messages: Sequence[Mapping[str, str]]) -> str:
 
 def parse_reply(text: Any) -> Optional[Dict[str, Any]]:
     """The reply's JSON object (LLMClient's own extraction: code fences, surrounding prose,
-    a cut-off tail), or None."""
+    a cut-off tail), or None. A reply the JSON decoder itself raises on (an integer of more
+    digits than Python converts, nesting deeper than the recursion limit) is None too: one
+    malformed reply is a parse_failed row, never an aborted attempt."""
     from app.utils.llm_client import LLMClient
-    value = LLMClient._parse_json_response(text if isinstance(text, str) else "")
+    try:
+        value = LLMClient._parse_json_response(text if isinstance(text, str) else "")
+    except (ValueError, RecursionError):
+        return None
     return value if isinstance(value, dict) else None
 
 
@@ -296,11 +339,15 @@ def parse_probability(reply: Any) -> Optional[float]:
             value = float(text.rstrip("%").strip()) / scale
         except ValueError:
             return None
-    if not isinstance(value, (int, float)) or value != value or value in (float("inf"), float("-inf")):
+    if not isinstance(value, (int, float)):
         return None
-    if not 0.0 <= float(value) <= 1.0:
+    try:
+        number = float(value)
+    except OverflowError:   # an integer too large for a float (JSON allows any number of digits)
         return None
-    return min(P_MAX, max(P_MIN, float(value)))
+    if not math.isfinite(number) or not 0.0 <= number <= 1.0:
+        return None
+    return min(P_MAX, max(P_MIN, number))
 
 
 # ------------------------------------------------------------------ clients
@@ -391,9 +438,12 @@ def _read_rows(path: str) -> List[Dict[str, Any]]:
 def cmd_plan(args: argparse.Namespace) -> int:
     study = build_study(args)
     plan = planned_calls(study)
+    clusters = planned_clusters(study)
     print(json.dumps({"study_id": study["study_id"], "planned_calls": plan["calls"],
                       "max_calls": int(Config.EVAL_STUDY_MAX_CALLS), "seed": study["seed"],
-                      "scoring": study["scoring"], "skipped_arms": plan["skipped_arms"]},
+                      "scoring": study["scoring"], "clusters_per_model": dict.fromkeys(study["models"], clusters),
+                      "blocks_below_min_clusters": _below_min_clusters(clusters),
+                      "skipped_arms": plan["skipped_arms"]},
                      ensure_ascii=False, indent=2))
     return 0
 
@@ -410,6 +460,11 @@ def cmd_run(args: argparse.Namespace, *, client_factory: Callable[[str], Any] = 
         print(f"value_add_eval: the plan needs {plan['calls']} calls, over the cap {cap}; pass --max-calls "
               f"{plan['calls']} to allow it.", file=sys.stderr)
         return EXIT_REFUSED
+    below = _below_min_clusters(planned_clusters(study))
+    if below:
+        print(f"value_add_eval: blocks {', '.join(below)} get fewer than {vas.MIN_CLUSTERS} clusters (bundles) per "
+              "model; their verdicts will be characterization only and their evidence labels withheld",
+              file=sys.stderr)
     clients: Dict[str, Any] = {}
     identities: Dict[str, Tuple[str, bool]] = {}
     for spec in study["models"]:
@@ -465,27 +520,80 @@ def cmd_run(args: argparse.Namespace, *, client_factory: Callable[[str], Any] = 
         write_json_atomic(study_path, study)
     attempt = uuid.uuid4().hex
     counters = {"made": 0, "answered": 0}
+    meter_path = os.path.join(out_dir, "run_meter.jsonl")
+    vouched = vouched_attempts(_read_rows(meter_path))
     LLMMeter.reset(run_id)   # this attempt's meter record counts this attempt's calls only
     set_run_context(run_id, "eval")
-    try:
-        code = _elicit(study, clients, identities, cap, os.path.join(out_dir, "elicitations.jsonl"),
-                       counters, attempt)
-    finally:
-        # Every attempt, finished or not, records what the meter saw: score invalidates the study
-        # on any call the meter counted as cached, even one whose row was never written, and on
-        # any attempt the meter cannot vouch for.
-        total = (LLMMeter.snapshot(run_id) or {}).get("total") or {}
-        _append_row(os.path.join(out_dir, "run_meter.jsonl"),
-                    {"run_id": run_id, "attempt": attempt, "at": datetime.now(timezone.utc).isoformat(),
-                     "calls_made": counters["made"], "calls_answered": counters["answered"],
-                     "meter_calls": int(total.get("calls") or 0),
-                     "meter_cached_calls": int(total.get("cached") or 0),
-                     "telemetry_enabled": bool(Config.LLM_TELEMETRY_ENABLED)})
-        set_run_context(None)
+    with _exit_on_termination():
+        try:
+            code = _elicit(study, clients, identities, cap, os.path.join(out_dir, "elicitations.jsonl"),
+                           counters, attempt, vouched)
+        finally:
+            # Every attempt, finished or not, records what the meter saw: score invalidates the
+            # study on any call the meter counted as cached, even one whose row was never written,
+            # and on any scored row of an attempt the meter cannot vouch for.
+            total = (LLMMeter.snapshot(run_id) or {}).get("total") or {}
+            _append_row(meter_path,
+                        {"run_id": run_id, "attempt": attempt, "at": datetime.now(timezone.utc).isoformat(),
+                         "calls_made": counters["made"], "calls_answered": counters["answered"],
+                         "meter_calls": int(total.get("calls") or 0),
+                         "meter_cached_calls": int(total.get("cached") or 0),
+                         "telemetry_enabled": bool(Config.LLM_TELEMETRY_ENABLED)})
+            set_run_context(None)
     if code == 0:
         print(json.dumps({"study_id": study["study_id"], "calls_made": counters["made"], "out_dir": out_dir},
                          indent=2))
     return code
+
+
+@contextlib.contextmanager
+def _exit_on_termination() -> Iterator[None]:
+    """SIGTERM and SIGHUP (a kill, a closed terminal, a dropped SSH session) raise SystemExit
+    while the block runs, so cmd_run's finally block still writes the attempt's meter record;
+    the previous handlers are restored afterwards. Outside the main thread no handler can be
+    installed and the block runs as is. SIGKILL cannot be caught: an attempt killed that way
+    leaves no record, and the next run asks its cells again (see _elicit)."""
+    def terminate(signum: int, _frame: Any) -> None:
+        raise SystemExit(128 + signum)
+
+    previous: Dict[int, Any] = {}
+    try:
+        for name in ("SIGTERM", "SIGHUP"):
+            number = getattr(signal, name, None)
+            if number is not None:
+                previous[number] = signal.signal(number, terminate)
+    except ValueError:   # not the main thread
+        pass
+    try:
+        yield
+    finally:
+        for number, handler in previous.items():
+            signal.signal(number, handler)
+
+
+def vouched_attempts(meters: Sequence[Mapping[str, Any]]) -> Set[str]:
+    """The run attempts the LLM meter vouches for: each has a run_meter.jsonl record, and every
+    record of it was taken with the meter on and counted at least as many calls as the attempt
+    answered. An attempt killed before it could write its record (SIGKILL, a power loss) is
+    not vouched for, nor is one whose meter missed calls."""
+    good, bad = set(), set()
+    for meter in meters:
+        attempt = meter.get("attempt")
+        if not isinstance(attempt, str):
+            continue
+        calls, answered = meter.get("meter_calls"), meter.get("calls_answered")
+        if (meter.get("telemetry_enabled") is True and isinstance(calls, int) and isinstance(answered, int)
+                and calls >= answered):
+            good.add(attempt)
+        else:
+            bad.add(attempt)
+    return good - bad
+
+
+def _cell(row: Mapping[str, Any]) -> Tuple[Any, ...]:
+    """The registered cell an elicitation row answers (with the prompt it answered)."""
+    return (row.get("model_key_spec"), row.get("bundle_sha256"), row.get("target_id"), row.get("arm"),
+            row.get("replicate"), row.get("prompt_sha256"))
 
 
 def _differing_keys(registered: Mapping[str, Any], planned: Mapping[str, Any]) -> List[str]:
@@ -495,18 +603,25 @@ def _differing_keys(registered: Mapping[str, Any], planned: Mapping[str, Any]) -
 
 
 def _elicit(study: Dict[str, Any], clients: Dict[str, Any], identities: Dict[str, Tuple[str, bool]], cap: int,
-            rows_path: str, counters: Dict[str, int], attempt: str) -> int:
+            rows_path: str, counters: Dict[str, int], attempt: str, vouched: AbstractSet[str]) -> int:
     """Ask every (bundle, target, available arm, model, replicate) not already answered ok
-    under this study's sha; one row per replicate (floor_sc pools its K samples, and is ok
-    only when every sample parsed), stamped with this run ``attempt``. One chat() call per
+    under this study's sha by an attempt the meter vouches for (``vouched``); one row per
+    replicate (floor_sc pools its K samples, and is ok only when every sample parsed), stamped
+    with this run ``attempt``. A cell answered only by an attempt the meter cannot vouch for
+    (killed before it wrote its meter record) is asked again, and select_rows prefers the new
+    row, so a killed attempt never leaves the study invalid for good. One chat() call per
     sample and no JSON repair turn, so the cap counts one call per sample (chat()'s own
     transient-error retries aside) and every p answers the registered prompt. A spent run
     budget (BudgetExceeded, raised after the call that crossed it) stops the attempt."""
     from app.utils.telemetry import BudgetExceeded
     sha = study_sha(study)
-    done = {(r.get("model_key_spec"), r.get("bundle_sha256"), r.get("target_id"), r.get("arm"),
-             r.get("replicate"), r.get("prompt_sha256"))
-            for r in _read_rows(rows_path) if r.get("status") == STATUS_OK and r.get("study_sha") == sha}
+    answered = [r for r in _read_rows(rows_path) if r.get("status") == STATUS_OK and r.get("study_sha") == sha]
+    done = {_cell(r) for r in answered if r.get("attempt") in vouched}
+    unvouched = {_cell(r) for r in answered} - done
+    if unvouched:
+        print(f"value_add_eval: {len(unvouched)} answered cells come only from attempts the LLM meter cannot "
+              "vouch for (no run_meter.jsonl record: killed before it could write one, or a meter that "
+              "missed calls); they are asked again", file=sys.stderr)
     for bundle in study["bundles"]:
         manifest, texts = eval_bundle.load_bundle(bundle["bundle_dir"])
         if manifest["bundle_sha256"] != bundle["bundle_sha256"]:
@@ -567,7 +682,9 @@ def _elicit(study: Dict[str, Any], clients: Dict[str, Any], identities: Dict[str
                             "model_key": model_key, "model_key_spec": spec, "served_models": sorted(served),
                             "arm": arm, "replicate": replicate,
                             "p": round(sum(ps) / len(ps), 6) if status == STATUS_OK else None,
-                            "raw_sha256": hashlib.sha256("\n".join(raw).encode("utf-8")).hexdigest(),
+                            # surrogatepass: a reply cut inside an emoji can end in a lone surrogate
+                            "raw_sha256": hashlib.sha256("\n".join(raw).encode("utf-8", "surrogatepass"))
+                            .hexdigest(),
                             "prompt_sha256": prompt_sha, "tokens_in": tokens_in, "tokens_out": tokens_out,
                             "cached": bool(cached), "status": status,
                         }
@@ -588,11 +705,14 @@ def _registered_model_keys(study: Mapping[str, Any]) -> Dict[str, str]:
             if isinstance(entry, dict) and entry.get("model_key")}
 
 
-def select_rows(study: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+def select_rows(study: Mapping[str, Any], rows: Sequence[Mapping[str, Any]],
+                vouched: AbstractSet[str] = frozenset()) -> Dict[str, Any]:
     """The rows score uses and how much of the registered design they cover.
 
     Kept: ok rows of a registered (model spec, bundle, target, arm, replicate) cell whose
-    prompt hash is the registered one; when a cell was answered twice the later row wins.
+    prompt hash is the registered one; when a cell was answered twice the later row wins,
+    except that a row of an attempt the meter vouches for (``vouched``) is never replaced by
+    one of an attempt it does not vouch for.
     Per model spec: expected cells, ok cells, missing cells, failed and parse-failed attempts
     (a later resume may have answered the cell), ok rows under another prompt
     (stale_prompt), the model keys the kept rows carry and the model ids the provider
@@ -630,7 +750,9 @@ def select_rows(study: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> 
         if row.get("prompt_sha256") != registered[cell]:
             counts[spec]["stale_prompt"] += 1
             continue
-        kept[(spec, *cell, replicate)] = row
+        previous = kept.get((spec, *cell, replicate))
+        if previous is None or row.get("attempt") in vouched or previous.get("attempt") not in vouched:
+            kept[(spec, *cell, replicate)] = row
     for key, row in kept.items():
         entry = counts[key[0]]
         entry["ok"] += 1
@@ -658,8 +780,9 @@ def select_rows(study: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> 
 
 
 def _score_knobs() -> Dict[str, Any]:
-    """The scoring parameters from Config: ``{alpha, inert_margin, fidelity_max, resamples}``
-    (alpha is value_add_stats.ALPHA, a code constant); StudyRefused when a knob is out of range."""
+    """The scoring parameters: ``{alpha, inert_margin, fidelity_max, resamples, min_clusters}``
+    (alpha and min_clusters are value_add_stats code constants, the rest Config knobs);
+    StudyRefused when a knob is out of range."""
     resamples = _positive_int(Config.EVAL_BOOTSTRAP_RESAMPLES, "EVAL_BOOTSTRAP_RESAMPLES")
     margins = {"EVAL_INERT_MARGIN": float(Config.EVAL_INERT_MARGIN),
                "EVAL_PROBE_FIDELITY_MAX": float(Config.EVAL_PROBE_FIDELITY_MAX)}
@@ -667,7 +790,8 @@ def _score_knobs() -> Dict[str, Any]:
         if not 0.0 <= value <= 1.0:
             raise StudyRefused(f"{name} must be within [0, 1], got {value}")
     return {"alpha": vas.ALPHA, "inert_margin": margins["EVAL_INERT_MARGIN"],
-            "fidelity_max": margins["EVAL_PROBE_FIDELITY_MAX"], "resamples": resamples}
+            "fidelity_max": margins["EVAL_PROBE_FIDELITY_MAX"], "resamples": resamples,
+            "min_clusters": vas.MIN_CLUSTERS}
 
 
 def scoring_parameters(study: Mapping[str, Any]) -> Dict[str, Any]:
@@ -685,19 +809,13 @@ def scoring_parameters(study: Mapping[str, Any]) -> Dict[str, Any]:
     return {**used, "seed": seed, "preregistered": not overrides, "overrides": overrides}
 
 
-def meter_unavailable(rows: Sequence[Mapping[str, Any]], meters: Sequence[Mapping[str, Any]]) -> bool:
-    """True when the LLM meter cannot vouch for every answered call: an attempt recorded with
-    the meter off, a meter that counted fewer calls than the attempt answered (or a record
-    without those counts), or elicitation rows of an attempt that left no meter record (a run
-    killed before its finally block)."""
-    metered = set()
-    for meter in meters:
-        calls, answered = meter.get("meter_calls"), meter.get("calls_answered")
-        if (meter.get("telemetry_enabled") is not True or not isinstance(calls, int)
-                or not isinstance(answered, int) or calls < answered):
-            return True
-        metered.add(meter.get("attempt"))
-    return any(row.get("attempt") not in metered for row in rows)
+def meter_unavailable(kept_rows: Sequence[Mapping[str, Any]], vouched: AbstractSet[str]) -> bool:
+    """True when a row score keeps (select_rows' ``rows``) comes from an attempt the LLM meter
+    cannot vouch for (vouched_attempts): one recorded with the meter off, one whose meter
+    counted fewer calls than it answered, or one that left no meter record. A superseded row
+    of such an attempt does not count (a resume asked its cell again); a cached row does,
+    wherever it is (cmd_score checks every row for that)."""
+    return any(row.get("attempt") not in vouched for row in kept_rows)
 
 
 def cmd_score(args: argparse.Namespace) -> int:
@@ -719,14 +837,15 @@ def cmd_score(args: argparse.Namespace) -> int:
               "rows); refusing to score.", file=sys.stderr)
         return EXIT_STUDY_MISMATCH
     scoring = scoring_parameters(study)
-    selection = select_rows(study, rows)
     meters = _read_rows(os.path.join(out_dir, "run_meter.jsonl"))
+    vouched = vouched_attempts(meters)
+    selection = select_rows(study, rows, vouched)
     reasons: List[str] = []
     if any(r.get("cached") for r in rows):
         reasons.append(INVALID_CACHED)
     if any(int(m.get("meter_cached_calls") or 0) > 0 for m in meters):
         reasons.append(INVALID_METER_CACHED)
-    if meter_unavailable(rows, meters):
+    if meter_unavailable(selection["rows"], vouched):
         reasons.append(INVALID_METER_UNAVAILABLE)
     if selection["identity_drift"]:
         reasons.append(INVALID_IDENTITY_DRIFT)
@@ -747,9 +866,11 @@ def cmd_score(args: argparse.Namespace) -> int:
         for target_id, p in (bundle.get("pre_market") or {}).items():
             pre_market[(cluster, target_id)] = p
     model_keys = {str(row.get("model_key")) for row in selection["rows"]}
+    # Why a block could not be judged on some targets (pure: from the registered statuses).
+    skipped = planned_calls(study)["skipped_arms"]
     models = vas.score_study(selection["rows"], pre_market=pre_market, resamples=scoring["resamples"],
                              inert_margin=scoring["inert_margin"], fidelity_max=scoring["fidelity_max"],
-                             seed=scoring["seed"], invalid=bool(reasons),
+                             seed=scoring["seed"], min_clusters=scoring["min_clusters"], invalid=bool(reasons),
                              characterization_only=bool(characterization),
                              model_characterization=model_characterization,
                              advisory=[] if scoring["preregistered"] else [ADVISORY_SCORING_OVERRIDE],
@@ -761,6 +882,7 @@ def cmd_score(args: argparse.Namespace) -> int:
         "characterization_only": bool(characterization), "characterization_reasons": characterization,
         "incomplete_models": incomplete, "served_model_drift": selection["served_model_drift"],
         "scoring": scoring, "completeness": selection["completeness"],
+        "skipped_arms": skipped, "skipped_by_block": skipped_by_block(skipped),
         "rows": len(rows), "rows_scored": len(selection["rows"]), "models": models,
         "note": "Movement, not accuracy: inert verdicts are evidence for an owner decision, never applied.",
     }
@@ -775,7 +897,8 @@ def cmd_score(args: argparse.Namespace) -> int:
 
 def _scoring_line(scoring: Mapping[str, Any]) -> str:
     text = (f"Scoring: alpha {scoring['alpha']}, inert margin {scoring['inert_margin']}, probe-fidelity max "
-            f"{scoring['fidelity_max']}, bootstrap resamples {scoring['resamples']}, seed {scoring['seed']}")
+            f"{scoring['fidelity_max']}, bootstrap resamples {scoring['resamples']}, minimum clusters per block "
+            f"{scoring['min_clusters']}, seed {scoring['seed']}")
     if scoring["preregistered"]:
         return text + " (as pre-registered)"
     changed = "; ".join(f"{name} registered {entry['registered']}, used {entry['used']}"
@@ -816,13 +939,19 @@ def render_report(scores: Dict[str, Any]) -> str:
         for floor_arm, stats in block["floor"].items():
             lines.append(f"R vs {floor_arm} (descriptive): mean |dp| {stats['mean_abs_diff']}, CI {stats['ci']}, "
                          f"n targets {stats['n_targets']}")
-        lines += ["", "| Block | n targets | mean D | CI | p (Holm) | MDE | verdict | would-be verdict |",
-                  "|---|---|---|---|---|---|---|---|"]
+        lines.append(f"Blocks under the minimum of {scores['scoring']['min_clusters']} clusters (characterization "
+                     "only): " + (", ".join(block["blocks_below_min_clusters"]) or "none"))
+        lines += ["", "| Block | n targets | n clusters | mean D | CI | p (Holm) | MDE | verdict | would-be verdict |",
+                  "|---|---|---|---|---|---|---|---|---|"]
         for name, stats in block["blocks"].items():
             verdict_text = stats["verdict"] + (" (advisory)" if stats.get("advisory") else "")
-            lines.append(f"| {name} | {stats['n_targets']} | {stats['mean_d']} | {stats['ci']} | "
-                         f"{stats['p_holm']} | {stats['mde']} | {verdict_text} | "
+            lines.append(f"| {name} | {stats['n_targets']} | {stats['n_clusters']} | {stats['mean_d']} | "
+                         f"{stats['ci']} | {stats['p_holm']} | {stats['mde']} | {verdict_text} | "
                          f"{stats.get('would_be_verdict', '')} |")
+        if scores["skipped_by_block"]:
+            lines.append("")
+        for name, skip in scores["skipped_by_block"].items():
+            lines.append(f"- Block {name} skipped: {skip['targets']} targets ({', '.join(skip['reasons'])})")
         if block["evidence"]:
             lines += ["", "Evidence: " + ", ".join(block["evidence"])]
         if block["withheld_evidence"]:
