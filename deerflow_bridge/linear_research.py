@@ -824,17 +824,18 @@ _DEPTH_PRESETS: Mapping[str, Mapping[str, Any]] = {
               "max_searches_total": 30, "max_fetches_total": 24, "gap_rounds": 0, "followups_per_round": 0,
               "sections_min": 6, "sections_max": 8, "target_units": 3000, "critique": False,
               "budget_units": 1_200_000.0, "time_budget_s": 1200.0, "workers": 4, "digest_cap": 30_000,
-              "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS},
+              "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS, "data_calls_per_kiq": 2, "max_data_calls_total": 12},
     "standard": {"max_kiqs": 7, "agent_max_steps": 7, "searches_per_kiq": 4, "fetches_per_kiq": 4,
                  "max_searches_total": 70, "max_fetches_total": 50, "gap_rounds": 1, "followups_per_round": 3,
                  "sections_min": 8, "sections_max": 12, "target_units": 6000, "critique": False,
                  "budget_units": 2_500_000.0, "time_budget_s": 2700.0, "workers": 4, "digest_cap": 60_000,
-                 "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS},
+                 "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS, "data_calls_per_kiq": 3,
+                 "max_data_calls_total": 30},
     "deep": {"max_kiqs": 10, "agent_max_steps": 9, "searches_per_kiq": 5, "fetches_per_kiq": 6,
              "max_searches_total": 140, "max_fetches_total": 110, "gap_rounds": 2, "followups_per_round": 4,
              "sections_min": 11, "sections_max": 16, "target_units": 11000, "critique": True,
              "budget_units": 5_000_000.0, "time_budget_s": 5400.0, "workers": 4, "digest_cap": 90_000,
-             "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS},
+             "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS, "data_calls_per_kiq": 4, "max_data_calls_total": 60},
 }
 
 # (minimum, maximum) accepted for each knob; out-of-range values are clamped.
@@ -845,6 +846,7 @@ _KNOB_BOUNDS: Mapping[str, tuple[float, float]] = {
     "sections_max": (3, 24), "target_units": (500, 60_000), "critique": (0, 1),
     "budget_units": (0, 1e10), "time_budget_s": (60, 7 * 86400), "workers": (1, 16),
     "digest_cap": (5000, 400_000), "max_tokens_extract": (1024, 128_000),
+    "data_calls_per_kiq": (0, 20), "max_data_calls_total": (0, 500),
 }
 
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
@@ -873,6 +875,10 @@ class Preset:
     workers: int
     digest_cap: int
     max_tokens_extract: int
+    # TIME-13: official-data tool calls per KIQ agent and per run (bound only
+    # when RESEARCH_DATA_TOOLS enables a tool; meta's v3_preset leaves them out).
+    data_calls_per_kiq: int
+    max_data_calls_total: int
     notes: tuple[str, ...] = ()
 
 
