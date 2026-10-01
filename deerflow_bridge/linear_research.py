@@ -214,6 +214,13 @@ PIT_COUNTS_FILENAME = "pit_counts.json"
 # each starts, so it survives a killed attempt): the audit's search and fetch
 # counts cover the whole run only when every earlier attempt saved its final ones.
 PIT_ATTEMPTS_KEY = "pit_attempts_started"
+# The state.json record of the citation-wall rule a gated hindcast's evidence
+# digest was built with (FU-2), saved before the digest is written.  The audit's
+# digest counters recount that rule and name it (wall.digest_rule), so a digest a
+# resumed attempt reuses from a build that wrote no such record (an earlier rule)
+# leaves them unknown (None, digest_rule "unknown").
+PIT_DIGEST_WALL_KEY = "pit_digest_wall"
+PIT_DIGEST_WALL_RULE = "any_inadmissible_marker"
 # Verbatim evidence spans (RESEARCH-7, RESEARCH_EVIDENCE_QUOTES = off | audit |
 # enforce; default off).  Not off: the KIQ task asks each finding for an
 # EVIDENCE clause quoting its source verbatim, the ledger keeps every distinct
@@ -1214,6 +1221,12 @@ class _RunState:
             self._data[key] = (before or 0) + 1
             self.save()
             return before
+
+    def put(self, key: str, value: Any) -> None:
+        """Record the JSON value ``value`` under the top-level ``key`` and save."""
+        with self._lock:
+            self._data[key] = value
+            self.save()
 
     def reset_kiqs(self) -> None:
         """Forget every KIQ completion (their notes belong to a discarded plan)."""
@@ -4504,10 +4517,15 @@ def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str, *,
     line is dropped; the line itself counts against ``cap``.  With
     ``relevance_drop`` (RESEARCH_TRUNCATION_FAIRNESS) the line dropped first
     among lines of equal priority is the one sharing the fewest query terms
-    with the KIQ question (then the later one); without it, the later one."""
+    with the KIQ question (then the later one); without it, the later one.  The
+    header is the KIQ id and its question, or the id alone when the citation
+    wall withheld the question (``question_withheld``, :func:`pit_wall_record`)."""
     if headers and ledger_get is None:
         raise ValueError("evidence headers need the source ledger (ledger_get)")
-    header = f"### {record.get('id')} — {_collapse(record.get('question'))}"
+    if record.get("question_withheld"):
+        header = f"### {record.get('id')}"
+    else:
+        header = f"### {record.get('id')} — {_collapse(record.get('question'))}"
     facts = sorted((f for f in record.get("facts") or [] if _is_sourced(f)),
                    key=lambda f: _TAG_ORDER.get(str(f.get("tag")), 3))
     entries: list[tuple[str, str]] = []  # (group, line)
@@ -4565,13 +4583,19 @@ def build_digest(records: Sequence[Mapping[str, Any]], ledger_get: Callable[[int
     lowest-priority lines first.  With ``dates`` (RESEARCH_SOURCE_DATES) a
     dated source's index entry ends ``, published X`` inside its parentheses.
     With ``admissible`` (a gated hindcast's citation wall, TIME-9) each record
-    is first walled (:func:`pit_wall_record`: failing markers stripped, a line
-    whose every marker failed left out) and the SOURCE INDEX lists only
-    admissible sources.  With ``evidence_headers`` (RESEARCH_EVIDENCE_HEADERS)
-    each block's second line is its evidence count (counting only admissible
-    sources when walled) and EVIDENCE_HEADER_LEGEND opens the digest; with
-    ``relevance_drop`` (RESEARCH_TRUNCATION_FAIRNESS) equal-priority lines are
-    dropped least KIQ-relevant first (:func:`_kiq_digest_block`).
+    is first walled (:func:`pit_wall_record`, FU-2): a finding, conflict or
+    open question carrying any marker of an inadmissible source is left out
+    whole, never shown with that marker stripped, so no writer sees a
+    withheld source's claim beside or under an admissible marker ("176 GW,
+    while a brief projects 250 GW by 2030 [S1][S2]" with S2 withheld); a KIQ
+    question carrying one (a gap follow-up can quote an open question's
+    markers) leaves the block's header with the KIQ id alone.  The SOURCE
+    INDEX lists only admissible sources.  With ``evidence_headers``
+    (RESEARCH_EVIDENCE_HEADERS) each block's second line is its evidence
+    count (counting only admissible sources when walled) and
+    EVIDENCE_HEADER_LEGEND opens the digest; with ``relevance_drop``
+    (RESEARCH_TRUNCATION_FAIRNESS) equal-priority lines are dropped least
+    KIQ-relevant first (:func:`_kiq_digest_block`).
     Returns ``(text, dropped_line_count)``; the count is of lines the caps dropped.
     """
     if admissible is not None:
@@ -5240,44 +5264,61 @@ def _citation_clusters(text: str) -> list[list[int]]:
 
 
 def _pit_wall_text(text: str, admissible: Callable[[int], bool], *,
-                   strict: bool = False) -> tuple[str | None, int]:
-    """``(text without its [S<n>] markers of inadmissible sources, markers
-    removed)``; the text is ``None`` when it cited sources and every one
-    failed, and unchanged when none did (a marker-less line is kept).  With
-    ``strict`` (text the report publishes) it is ``None`` too when stripping
-    would leave one of its claims uncited: a citation cluster
-    (:func:`_citation_clusters`) whose every marker failed, as in "176 GW
-    [S1], while a brief projects 250 GW [S2]" with S2 inadmissible."""
+                   per_claim: bool = False) -> tuple[str | None, int]:
+    """``(the text the citation wall keeps, the number of its [S<n>] markers
+    of inadmissible sources)``: unchanged when none failed (a marker-less
+    line is kept).  By default the text is ``None`` when any marker failed: the
+    markers do not say which part of the line each source backs, so
+    stripping one ("176 GW, while a brief projects 250 GW by 2030 [S1][S2]"
+    with S2 inadmissible) could leave the withheld source's claim under the
+    admissible marker.  With ``per_claim`` it is ``None`` only when one of
+    its claims, a citation cluster (:func:`_citation_clusters`), has no
+    admissible marker ("176 GW [S1], while a brief projects 250 GW [S2]");
+    otherwise the failing markers are stripped from it.  A cluster is one
+    claim to that rule, so the trailing "[S1][S2]" above keeps [S1] on all
+    the text before it, the withheld source's 250 GW included."""
     markers = [int(n) for n in _CITE_RE.findall(text)]
     failed = sum(1 for sid in markers if not admissible(sid))
     if not failed:
         return text, 0
-    if failed == len(markers) or (strict and any(
-            not any(admissible(sid) for sid in cluster) for cluster in _citation_clusters(text))):
+    if not per_claim or any(not any(admissible(sid) for sid in cluster) for cluster in _citation_clusters(text)):
         return None, failed
     kept = _CITE_RE.sub(lambda m: m.group(0) if admissible(int(m.group(1))) else "", text)
     return _tidy_spaces(kept).strip(), failed
 
 
 def pit_wall_record(record: Mapping[str, Any], admissible: Callable[[int], bool], *,
-                    strict: bool = False) -> tuple[dict, int, int]:
-    """A KIQ record as a gated hindcast's evidence digest shows it (TIME-9):
-    each sourced finding, conflict and open question loses its markers of
-    inadmissible sources, and one whose every marker failed is left out.
-    With ``strict`` (the records the report's deterministic sections
-    publish) a line is also left out when stripping would leave one of its
-    claims uncited (:func:`_pit_wall_text`).
+                    per_claim: bool = False) -> tuple[dict, int, int]:
+    """A KIQ record behind a gated hindcast's citation wall (TIME-9), line
+    by line (the question, each sourced finding, conflict and open question;
+    :func:`_pit_wall_text`).  By default, the rule of the evidence digest
+    the writers read and of the audit's digest counters (FU-2), a line
+    carrying any marker of an inadmissible source is left out whole, so no
+    marker is ever stripped.  With ``per_claim``, the rule of the records
+    the report's deterministic sections publish, a line is left out only
+    when one of its claims would be left without an admissible source, and
+    loses its markers of inadmissible sources otherwise.  A question left
+    out becomes ``""`` with ``question_withheld`` set (the digest header then
+    shows the KIQ id alone) and counts as one line left out.
     Returns ``(a copy of the record, lines left out, markers removed from
     the lines kept)``; the record's other fields (``sids``, evidence) are
     unchanged, as is ``record`` itself."""
     out = dict(record)
     dropped = stripped = 0
+    if record.get("question"):
+        text, failed = _pit_wall_text(str(record["question"]), admissible, per_claim=per_claim)
+        if text is None:
+            out.update(question="", question_withheld=True)
+            dropped += 1
+        elif failed:
+            out["question"] = text
+            stripped += failed
     facts: list[Any] = []
     for fact in record.get("facts") or []:
         if not _is_sourced(fact):
             facts.append(fact)
             continue
-        text, failed = _pit_wall_text(str(fact.get("text") or ""), admissible, strict=strict)
+        text, failed = _pit_wall_text(str(fact.get("text") or ""), admissible, per_claim=per_claim)
         if text is None:
             dropped += 1
             continue
@@ -5287,7 +5328,7 @@ def pit_wall_record(record: Mapping[str, Any], admissible: Callable[[int], bool]
     for key in ("conflicts", "open_questions"):
         kept: list[Any] = []
         for item in record.get(key) or []:
-            text, failed = _pit_wall_text(str(item), admissible, strict=strict)
+            text, failed = _pit_wall_text(str(item), admissible, per_claim=per_claim)
             if text is None:
                 dropped += 1
                 continue
@@ -5462,7 +5503,7 @@ def parametric_suspects(timeline: Sequence[Mapping[str, Any]], quant: Sequence[M
 
 
 def point_in_time_payload(pit: rg.PitPolicy, *, gate_counts: Mapping[str, Any] | None, sources: Sequence[Any],
-                          suspects: Mapping[str, int] | None, wall: Mapping[str, int],
+                          suspects: Mapping[str, int] | None, wall: Mapping[str, int | str | None],
                           attempts: int = 1, attempts_started: int | None = None,
                           counts_complete: bool = True) -> dict[str, Any]:
     """point_in_time.json (``drf-point-in-time/v1``): the as-of and policies,
@@ -7535,6 +7576,8 @@ class _Engine:
             self.meta["digest_dropped_lines"] = dropped
             if dropped:
                 self.log("warn", f"v3: evidence digest dropped {dropped} lower-priority lines to fit its caps")
+            if self.pit is not None:
+                self.state.put(PIT_DIGEST_WALL_KEY, PIT_DIGEST_WALL_RULE)
             self._write_internal(path, raw)
         self._synth_context_cache = self.delimit(LABEL_EVIDENCE, raw)
         return self._synth_context_cache
@@ -7831,16 +7874,19 @@ class _Engine:
 
     def _report_records(self) -> dict[str, dict]:
         """The KIQ records the report's deterministic sections draw on.  In a
-        gated hindcast (TIME-9) each is walled strictly
-        (:func:`pit_wall_record` with ``strict``: markers of inadmissible
+        gated hindcast (TIME-9) each is walled claim by claim
+        (:func:`pit_wall_record` with ``per_claim``: markers of inadmissible
         sources stripped, a finding left out when one of its claims would be
-        left without an admissible source), so a fallback bullet never states
-        a claim only an inadmissible source backs (which renumbering would
-        otherwise leave uncited); else :attr:`records`."""
+        left without an admissible source), so no fallback bullet states a
+        claim cited by inadmissible sources alone (which renumbering would
+        otherwise leave uncited); else :attr:`records`.  Unlike the evidence
+        digest's rule (:func:`build_digest`), a co-citation is one claim here:
+        a finding ending "[S1][S2]" with S2 withheld is published with [S1]
+        alone, even a part of it only S2 backs (:func:`_pit_wall_text`)."""
         if self.pit is None:
             return self.records
         admissible = _memoized_sid_check(self._pit_admissible)
-        return {kid: pit_wall_record(record, admissible, strict=True)[0] for kid, record in self.records.items()}
+        return {kid: pit_wall_record(record, admissible, per_claim=True)[0] for kid, record in self.records.items()}
 
     def _fallback_section(self, section: OutlineSection) -> str:
         """Bullets of the best findings routed to the section (citations kept);
@@ -8501,19 +8547,32 @@ class _Engine:
             except Exception as exc:  # noqa: BLE001 — a lost count is flagged later, never fatal
                 self.log("warn", f"v3: {PIT_COUNTS_FILENAME} not written ({type(exc).__name__}: {exc})")
 
-    def _pit_wall_counts(self) -> dict[str, int]:
+    def _pit_wall_counts(self) -> dict[str, int | str | None]:
         """What the citation wall kept out of the report (TIME-9): the
         evidence's sources that are not admissible (``sids_withheld``), and the
-        evidence digest's lines left out and markers stripped
-        (:func:`pit_wall_record` over the records the digest is built from)."""
+        evidence digest's lines left out and markers stripped, recounted with
+        the digest's rule (:func:`pit_wall_record`, FU-2) over the records the
+        digest is built from, so they are what the writers saw (a withheld KIQ
+        question counts as one line left out).  That rule strips no marker:
+        ``digest_markers_stripped`` stays 0 (the key is kept for readers).
+        ``digest_rule`` names the rule the counts are of: the one state.json
+        records (:data:`PIT_DIGEST_WALL_KEY`), else ``"unknown"`` with both
+        digest counts None, i.e. the digest is one a resumed attempt reused
+        from an earlier build."""
         admissible = _memoized_sid_check(self._pit_admissible)
+        withheld = sum(1 for sid in self._evidence_sids() if not admissible(sid))
+        if self.state.snapshot().get(PIT_DIGEST_WALL_KEY) != PIT_DIGEST_WALL_RULE:
+            self.log("warn", f"v3: state.json records no {PIT_DIGEST_WALL_RULE} wall for the reused evidence "
+                             f"digest (an earlier build's); {POINT_IN_TIME_FILENAME} leaves its digest counts unknown")
+            return {"sids_withheld": withheld, "digest_rule": "unknown", "digest_lines_dropped": None,
+                    "digest_markers_stripped": None}
         lines = markers = 0
         for record in (self.records[k.id] for k in self.kiqs if k.id in self.records):
             _, dropped, stripped = pit_wall_record(record, admissible)
             lines += dropped
             markers += stripped
-        withheld = sum(1 for sid in self._evidence_sids() if not admissible(sid))
-        return {"sids_withheld": withheld, "digest_lines_dropped": lines, "digest_markers_stripped": markers}
+        return {"sids_withheld": withheld, "digest_rule": PIT_DIGEST_WALL_RULE, "digest_lines_dropped": lines,
+                "digest_markers_stripped": markers}
 
     def _write_point_in_time(self, sources_name: str) -> None:
         """point_in_time.json (TIME-9, a gated hindcast): the research audit of
