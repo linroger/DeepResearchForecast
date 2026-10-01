@@ -19,6 +19,13 @@ orchestrator's health gate reads) and:
 
 The verdict is kept on the agent and written to forecast.json as
 quality.signal_pack_health. Offline: tmp run-state dir, stub tools, no LLM.
+
+FU-3 extends the same rule to the outline prompt's simulation sweeps, the ReACT
+tools (simulation_outcomes, coalition_map incl. faction_brief's fallback,
+opinion_shift, scenario_diff) and every consumer of a what-if report's baseline
+(signal-pack diff block, comparison table, scenario_diff tool, outline diff
+sweep); the baseline verdict is written as quality.baseline_signal_pack_health.
+The summary is read once per simulation per report.
 """
 
 import json
@@ -30,9 +37,12 @@ from pathlib import Path
 import pytest
 
 import app.config as cfgmod
+import app.services.graphiti_client.runtime as rt_mod
 from app.config import Config
-from app.services.report_agent import ReportAgent, ReportManager, salience_tiers_from_outcomes
+from app.services.report_agent import (
+    PLAN_USER_PROMPT_TEMPLATE, ReportAgent, ReportManager, salience_tiers_from_outcomes)
 from app.services.simulation_runner import SimulationRunner
+from app.services.zep_tools import ZepToolsService
 
 SIM_ID = "sim_report5"
 BASE_SIM_ID = "sim_report5_base"
@@ -65,6 +75,7 @@ _COALITIONS = "## 派系/联盟图（关注聚类）\n- 派系 1（3 人）：Or
 _SPINE = "【因果骨架（图谱派生）】\n- 出口管制 → 晶圆产能 → 终端价格"
 _DIFF = "## 情景对比 / 反事实差异\n- 基线 vs 情景：派系数 2 → 3"
 _EDGES = "【关系演化投影（模型先验，非证据）】\n- Orion Foundry ↔ Vega Semis：contingent"
+_SHIFT = "## Orion Foundry 逐轮行为轨迹\n- 第 1 轮：3 次动作"
 
 _NO_BEHAVIOUR = ("⚠️ 本次模拟未产出可用的行为数据（simulation_health={health}）——这不是「行为者无反应」"
                  "的发现；正文不得引用任何基于模拟行为量或派系聚类的推演结论。")
@@ -102,6 +113,10 @@ class _StubZep:
     def scenario_diff(self, base_simulation_id, simulation_id):
         self.calls.append("scenario_diff")
         return _DIFF
+
+    def opinion_shift(self, simulation_id, actor_name):
+        self.calls.append("opinion_shift")
+        return _SHIFT
 
 
 @pytest.fixture
@@ -458,70 +473,224 @@ def test_knob_defaults_on_and_is_documented():
         assert re.search(r"^# REPORT_SIGNAL_PACK_HEALTH_GATE=true\s+# REPORT-5", fh.read(), re.M)
 
 
+
+
 # ─────────────── FU-3: tools, outline and what-if baselines (REPORT-5 follow-up) ───────────────
 _BASE_NOTE = ("⚠️ 基线模拟未产出可用的行为数据（simulation_health={health}）——本报告不做基线与情景的"
               "行为对比；正文不得引用任何基线 vs 情景的行为差值。")
+_UNUSABLE = ["hollow", "errored"]
+# Baseline summaries the gate leaves alone: healthy, partial, unrecognised, absent, unreadable.
+_USABLE_BASELINES = ["ok", "truncated", "llm_degraded", "stalled", None, "{not json"]
+
+# The outline sweep and what-if strings as rendered before FU-3 (copied from plan_outline):
+# the golden legacy outline prompt is built from them, independently of the gate code path.
+_LEGACY_OUTCOMES_SWEEP = (
+    "【内部方法学材料——情景推演量化产出（仅供规划参考）】\n"
+    "使用规则：仅据此判断哪些现实世界行为者/议题值得设立章节深挖；"
+    "不得为推演本身单设章节，任何章节标题不得含"
+    "『模拟/Agent/智能体/行为轨迹/Simulation/Behavior』等方法学词汇。\n")
+_LEGACY_DIFF_HEAD = "【基线 vs 情景 结构化对比（必须据此撰写对比章节）】\n"
+_LEGACY_DIFF_MANDATE = (
+    "\n\n**强制要求**：本报告为情景（What-If）预测，大纲必须包含一节标题含"
+    "「情景对比」或「反事实」的章节，对比基线与本情景的关键差异（引用上面对比数据中的具体差值）。")
+_NO_DIFF_MANDATE = (
+    "\n\n**强制要求**：本报告为情景（What-If）预测，大纲必须包含一节标题含"
+    "「情景对比」或「反事实」的章节，说明基线与本情景之间没有可用的行为对比数据，"
+    "只依据研究材料讨论两者的差异。")
+_TABLE_HEAD = "**基线 vs 情景 结构化对比（确定性聚合，权威）**"
 
 
-def _write_summary(root, simulation_id, health):
-    sim_dir = root / simulation_id
+def _write_summary(simulation_id, health):
+    """Baseline (or any) run summary: a health value, None = no summary, '{…' = raw text."""
+    sim_dir = Path(SimulationRunner.RUN_STATE_DIR) / simulation_id
     sim_dir.mkdir(exist_ok=True)
-    (sim_dir / "run_summary.json").write_text(json.dumps(
-        {"simulation_id": simulation_id, "simulation_health": health}), encoding="utf-8")
+    path = sim_dir / "run_summary.json"
+    if health is None:
+        if path.exists():
+            path.unlink()
+        return
+    text = health if health.startswith("{") else json.dumps(
+        {"simulation_id": simulation_id, "simulation_health": health})
+    path.write_text(text, encoding="utf-8")
 
 
-def test_hollow_baseline_never_reaches_the_signal_pack(run_state):
+# ───────────── signal pack: the baseline's diff block ─────────────
+@pytest.mark.parametrize("base_health", _UNUSABLE)
+def test_unusable_baseline_never_reaches_the_signal_pack(run_state, base_health):
     run_state("ok")
-    _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, "hollow")
+    _write_summary(BASE_SIM_ID, base_health)
     agent = _agent()
+
     pack = agent._build_signal_pack()
-    assert pack == _pack(_WORLD_STATE, _TIERS, _COALITIONS, _SPINE, _BASE_NOTE.format(health="hollow"))
-    assert "scenario_diff" not in agent.zep_tools.calls
-    assert agent._signal_pack_health == {"health": "ok", "suppressed": ["scenario_diff"],
-                                         "baseline_health": "hollow"}
+
+    assert pack == _pack(_WORLD_STATE, _TIERS, _COALITIONS, _SPINE, _BASE_NOTE.format(health=base_health))
+    assert _DIFF not in pack
+    assert agent.zep_tools.calls == ["simulation_outcomes", "coalition_map"]
+    # the run's own verdict is untouched; the baseline's verdict is its own record
+    assert agent._signal_pack_health == {"health": "ok", "suppressed": []}
+    assert agent._baseline_health_record()["health"] == base_health
 
 
-def test_healthy_or_unknown_baseline_keeps_the_legacy_pack(run_state, monkeypatch):
+def test_usable_baseline_keeps_the_legacy_pack(run_state, monkeypatch):
     run_state("ok")
-    for base_health in ("ok", "truncated", None):
-        if base_health:
-            _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, base_health)
+    for base_health in _USABLE_BASELINES:
+        _write_summary(BASE_SIM_ID, base_health)
+        assert (Path(SimulationRunner.RUN_STATE_DIR) / BASE_SIM_ID / "run_summary.json").exists() \
+            is (base_health is not None)
         agent = _agent()
-        assert agent._build_signal_pack() == _LEGACY_FULL
-        assert "baseline_health" not in agent._signal_pack_health
-    _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, "errored")
+        assert agent._build_signal_pack() == _LEGACY_FULL, base_health
+        assert agent._signal_pack_health == {"health": "ok", "suppressed": []}, base_health
+        assert agent.zep_tools.calls == ["simulation_outcomes", "coalition_map", "scenario_diff"]
+    _write_summary(BASE_SIM_ID, "errored")
     monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
     assert _agent()._build_signal_pack() == _LEGACY_FULL
 
 
-def _tool_agent():
-    agent = _agent()
+# ───────────────────────────── ReACT tools ─────────────────────────────
+class _FactionZep(_StubZep):
+    """Runs the real ZepToolsService.faction_brief (its coalition_map fallback included)."""
+
+    faction_brief = ZepToolsService.faction_brief
+
+    def _inter_community_tension(self, graph_id, communities):
+        return []
+
+
+class _FakeRuntime:
+    def __init__(self, communities):
+        self._communities = communities
+
+    def list_communities(self, graph_id):
+        return list(self._communities)
+
+
+_COMMUNITY = {"name": "晶圆联盟", "summary": "图谱社区摘要", "members": ["Orion Foundry"]}
+
+
+def _tool_agent(**kw):
+    agent = _agent(**kw)
     agent.simulation_requirement = "q"
     return agent
 
 
-@pytest.mark.parametrize("tool", ["simulation_outcomes", "coalition_map", "scenario_diff"])
-def test_tools_return_the_no_behaviour_line_on_an_unusable_run(run_state, tool):
-    run_state("hollow")
+_ACTIVITY_TOOLS = ["simulation_outcomes", "coalition_map", "opinion_shift", "scenario_diff"]
+_LEGACY_TOOL_OUTPUT = {"simulation_outcomes": _OUTCOMES, "coalition_map": _COALITIONS,
+                       "opinion_shift": _SHIFT, "scenario_diff": _DIFF}
+
+
+@pytest.mark.parametrize("health", _UNUSABLE)
+@pytest.mark.parametrize("tool", _ACTIVITY_TOOLS)
+def test_tools_return_the_no_behaviour_line_on_an_unusable_run(run_state, tool, health):
+    run_state(health)
+    _write_summary(BASE_SIM_ID, "hollow")      # the run's own line wins over the baseline's
     agent = _tool_agent()
-    assert agent._execute_tool(tool, {}) == _NO_BEHAVIOUR.format(health="hollow")
+    assert agent._execute_tool(tool, {"actor_name": "Orion Foundry"}) == _NO_BEHAVIOUR.format(health=health)
     assert agent.zep_tools.calls == []
 
 
-def test_tools_unchanged_on_a_healthy_run_and_scenario_diff_checks_the_baseline(run_state, monkeypatch):
+@pytest.mark.parametrize("own_health", [None, "ok", "truncated", "stalled", "{not json"])
+def test_tools_byte_identical_on_a_usable_run_and_with_the_knob_off(run_state, monkeypatch, own_health):
+    if own_health is None:
+        os.makedirs(os.path.join(SimulationRunner.RUN_STATE_DIR, SIM_ID), exist_ok=True)
+    elif own_health.startswith("{"):
+        run_state(raw=own_health)
+    else:
+        run_state(own_health)
+    for tool in _ACTIVITY_TOOLS:
+        agent = _tool_agent()
+        assert agent._execute_tool(tool, {"actor_name": "Orion Foundry"}) == _LEGACY_TOOL_OUTPUT[tool]
+        assert agent.zep_tools.calls == [tool]
+    # knob off: legacy even on a hollow run with an errored baseline
+    run_state("hollow")
+    _write_summary(BASE_SIM_ID, "errored")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    for tool in _ACTIVITY_TOOLS:
+        agent = _tool_agent()
+        assert agent._execute_tool(tool, {"actor_name": "Orion Foundry"}) == _LEGACY_TOOL_OUTPUT[tool]
+        assert agent.zep_tools.calls == [tool]
+
+
+@pytest.mark.parametrize("base_health", _UNUSABLE)
+def test_scenario_diff_tool_gives_the_baseline_line_for_an_unusable_baseline(run_state, base_health):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, base_health)
+    agent = _tool_agent()
+    assert agent._execute_tool("scenario_diff", {}) == _BASE_NOTE.format(health=base_health)
+    assert agent.zep_tools.calls == []
+    # the run's own behaviour tools do not depend on the baseline
+    assert agent._execute_tool("simulation_outcomes", {}) == _OUTCOMES
+
+
+def test_scenario_diff_tool_unchanged_for_a_usable_baseline(run_state):
+    run_state("ok")
+    for base_health in _USABLE_BASELINES:
+        _write_summary(BASE_SIM_ID, base_health)
+        agent = _tool_agent()
+        assert agent._execute_tool("scenario_diff", {}) == _DIFF, base_health
+    assert _tool_agent(base=None)._execute_tool("scenario_diff", {}) == "（本报告非情景对比报告，无基线模拟可对比）"
+
+
+@pytest.mark.parametrize("health", _UNUSABLE)
+def test_faction_brief_cannot_fall_back_to_coalition_map_on_an_unusable_run(run_state, monkeypatch, health):
+    run_state(health)
+    # retrieval off, or on with no community nodes: the fallback would be coalition_map
+    for retrieval, communities in ((False, []), (True, [])):
+        monkeypatch.setattr(Config, "GRAPH_COMMUNITY_RETRIEVAL", retrieval, raising=False)
+        monkeypatch.setattr(rt_mod, "get_runtime", lambda c=communities: _FakeRuntime(c))
+        agent = _tool_agent()
+        agent.zep_tools = _FactionZep()
+        assert agent._execute_tool("faction_brief", {}) == _NO_BEHAVIOUR.format(health=health)
+        assert agent.zep_tools.calls == []
+    # graph-native communities do not depend on simulation behaviour: still given
+    monkeypatch.setattr(rt_mod, "get_runtime", lambda: _FakeRuntime([_COMMUNITY]))
+    agent = _tool_agent()
+    agent.zep_tools = _FactionZep()
+    brief = agent._execute_tool("faction_brief", {})
+    assert "晶圆联盟" in brief and "图谱社区摘要" in brief and _COALITIONS not in brief
+    assert agent.zep_tools.calls == []
+
+
+def test_faction_brief_unchanged_on_a_usable_run_and_with_the_knob_off(run_state, monkeypatch):
+    monkeypatch.setattr(Config, "GRAPH_COMMUNITY_RETRIEVAL", False, raising=False)
     run_state("ok")
     agent = _tool_agent()
-    assert agent._execute_tool("simulation_outcomes", {}) == _OUTCOMES
-    assert agent._execute_tool("coalition_map", {}) == _COALITIONS
-    assert agent._execute_tool("scenario_diff", {}) == _DIFF
-    _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, "errored")
-    assert agent._execute_tool("scenario_diff", {}) == _BASE_NOTE.format(health="errored")
-    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
-    assert agent._execute_tool("scenario_diff", {}) == _DIFF
+    agent.zep_tools = _FactionZep()
+    assert agent._execute_tool("faction_brief", {}) == _COALITIONS
+    assert agent.zep_tools.calls == ["coalition_map"]
     run_state("hollow")
-    assert agent._execute_tool("simulation_outcomes", {}) == _OUTCOMES   # knob off: legacy
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    agent = _tool_agent()
+    agent.zep_tools = _FactionZep()
+    assert agent._execute_tool("faction_brief", {}) == _COALITIONS
 
 
+# ───────────────────── one health verdict per simulation ─────────────────────
+def test_each_summary_is_read_once_per_report(run_state, monkeypatch, warnings_log):
+    run_state(raw="{not json")
+    _write_summary(BASE_SIM_ID, "{not json")
+    reads = []
+    real_read = ReportAgent._read_run_summary_health
+    monkeypatch.setattr(ReportAgent, "_read_run_summary_health",
+                        lambda self, sid: reads.append(sid) or real_read(self, sid))
+    agent = _tool_agent()
+
+    agent._build_signal_pack()
+    for _ in range(2):
+        for tool in _ACTIVITY_TOOLS:
+            agent._execute_tool(tool, {"actor_name": "Orion Foundry"})
+    agent._scenario_diff_structured()
+    agent._baseline_health_record()
+
+    assert sorted(reads) == sorted([SIM_ID, BASE_SIM_ID])
+    # one WARNING per unreadable summary, not one per consumer
+    warned = _gate_warnings(warnings_log)
+    assert len(warned) == 2 and all("run_summary.json 存在但不可读" in w for w in warned)
+    # every consumer shares the first verdict for the rest of the report
+    run_state("hollow")
+    assert agent._execute_tool("simulation_outcomes", {}) == _OUTCOMES
+
+
+# ───────────────────────────── plan_outline ─────────────────────────────
 class _OutlineLLM:
     def __init__(self):
         self.user_prompt = None
@@ -540,52 +709,236 @@ class _OutlineZep(_StubZep):
         raise RuntimeError("no forge in test")
 
 
-def _outline_prompt(base=BASE_SIM_ID):
+def _outline_agent(base=BASE_SIM_ID, *, with_pack=False):
     agent = _agent(base=base)
     agent.simulation_requirement = "q"
     agent.actors = None
     agent.sources = []
     agent._background_block = agent._sources_index = agent._forecast_spine_block = ""
-    agent._signal_pack = ""
     agent.zep_tools = _OutlineZep()
+    agent._signal_pack = agent._build_signal_pack() if with_pack else ""
+    agent.zep_tools.calls.clear()
     agent.llm = _OutlineLLM()
+    return agent
+
+
+def _outline_prompt(base=BASE_SIM_ID, *, with_pack=False):
+    agent = _outline_agent(base, with_pack=with_pack)
     agent.plan_outline()
-    return agent.llm.user_prompt, agent.zep_tools.calls
+    return agent.llm.user_prompt, agent.zep_tools.calls, agent
 
 
-def test_outline_gets_no_seed_echo_data_from_an_unusable_run(run_state):
+def _outline_head(agent):
+    """The outline prompt up to the simulation sweeps (code FU-3 does not touch)."""
+    return agent._prepend_research_background(PLAN_USER_PROMPT_TEMPLATE.format(
+        simulation_requirement="q", total_nodes=0, total_edges=0, entity_types=[],
+        total_entities=0, related_facts_json=json.dumps([], ensure_ascii=False, indent=2)))
+
+
+def _legacy_outline(agent):
+    """Golden outline prompt as plan_outline built it before FU-3."""
+    prompt = _outline_head(agent) + "\n\n" + _LEGACY_OUTCOMES_SWEEP + _OUTCOMES
+    if agent.base_simulation_id:
+        prompt += "\n\n" + _LEGACY_DIFF_HEAD + _DIFF + _LEGACY_DIFF_MANDATE
+    return prompt
+
+
+@pytest.mark.parametrize("base", [BASE_SIM_ID, None])
+@pytest.mark.parametrize("own_health", [None, "ok", "truncated", "llm_degraded", "stalled", "{not json"])
+def test_outline_byte_identical_for_a_usable_run(run_state, own_health, base):
+    if own_health is None:
+        os.makedirs(os.path.join(SimulationRunner.RUN_STATE_DIR, SIM_ID), exist_ok=True)
+    elif own_health.startswith("{"):
+        run_state(raw=own_health)
+    else:
+        run_state(own_health)
+    _write_summary(BASE_SIM_ID, "ok")
+    prompt, calls, agent = _outline_prompt(base)
+    assert prompt == _legacy_outline(agent)
+    assert calls == (["simulation_outcomes", "scenario_diff"] if base else ["simulation_outcomes"])
+
+
+@pytest.mark.parametrize("base_health", _USABLE_BASELINES)
+def test_outline_byte_identical_for_a_usable_baseline(run_state, base_health):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, base_health)
+    prompt, calls, agent = _outline_prompt()
+    assert prompt == _legacy_outline(agent)
+    assert calls == ["simulation_outcomes", "scenario_diff"]
+
+
+@pytest.mark.parametrize("with_pack", [False, True])
+def test_outline_byte_identical_with_the_knob_off(run_state, monkeypatch, with_pack):
     run_state("hollow")
-    prompt, calls = _outline_prompt()
-    assert _NO_BEHAVIOUR.format(health="hollow") in prompt
-    assert "Orion Foundry" not in prompt and _DIFF not in prompt
-    assert "引用上面对比数据中的具体差值" not in prompt and "没有可用的行为对比数据" in prompt
+    _write_summary(BASE_SIM_ID, "errored")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    prompt, calls, agent = _outline_prompt(with_pack=with_pack)
+    assert prompt == _legacy_outline(agent)
+    assert calls == ["simulation_outcomes", "scenario_diff"]
+    assert agent._baseline_health_record() is None
+
+
+@pytest.mark.parametrize("health", _UNUSABLE)
+def test_outline_gets_no_seed_echo_data_from_an_unusable_run(run_state, health):
+    run_state(health)
+    note = _NO_BEHAVIOUR.format(health=health)
+    # what-if report: the line once, then the comparison mandate without cited deltas
+    prompt, calls, agent = _outline_prompt()
+    assert prompt == _outline_head(agent) + "\n\n" + note + _NO_DIFF_MANDATE
+    assert calls == []
+    # plain report: just the line
+    prompt, calls, agent = _outline_prompt(base=None)
+    assert prompt == _outline_head(agent) + "\n\n" + note
+    assert calls == []
+    # the pinned signal pack already carries the line: it is not repeated
+    _write_summary(BASE_SIM_ID, "hollow")
+    prompt, calls, agent = _outline_prompt(with_pack=True)
+    assert note in agent._signal_pack
+    assert prompt == _outline_head(agent) + _NO_DIFF_MANDATE
+    assert prompt.count(note) == 1 and _BASE_NOTE.format(health="hollow") not in prompt
+    assert "Orion Foundry" not in prompt.replace(agent._signal_pack, "") and _DIFF not in prompt
     assert calls == []
 
 
-def test_outline_unchanged_for_a_healthy_run_and_gated_on_the_baseline(run_state):
+@pytest.mark.parametrize("base_health", _UNUSABLE)
+def test_outline_gated_on_an_unusable_baseline(run_state, base_health):
     run_state("ok")
-    prompt, calls = _outline_prompt()
-    assert "Orion Foundry" in prompt and _DIFF in prompt
-    assert "引用上面对比数据中的具体差值" in prompt and "基线模拟未产出" not in prompt
-    assert calls == ["simulation_outcomes", "scenario_diff"]
-    _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, "hollow")
-    prompt, calls = _outline_prompt()
-    assert "Orion Foundry" in prompt and _DIFF not in prompt
-    assert _BASE_NOTE.format(health="hollow") in prompt and calls == ["simulation_outcomes"]
+    _write_summary(BASE_SIM_ID, base_health)
+    note = _BASE_NOTE.format(health=base_health)
+    prompt, calls, agent = _outline_prompt()
+    assert prompt == (_outline_head(agent) + "\n\n" + _LEGACY_OUTCOMES_SWEEP + _OUTCOMES
+                      + "\n\n" + note + _NO_DIFF_MANDATE)
+    assert calls == ["simulation_outcomes"]
+    # with the pinned signal pack (which carries the baseline line) the line is not repeated
+    prompt, calls, agent = _outline_prompt(with_pack=True)
+    assert note in agent._signal_pack
+    assert prompt == (_outline_head(agent) + "\n\n" + _LEGACY_OUTCOMES_SWEEP + _OUTCOMES
+                      + _NO_DIFF_MANDATE)
+    assert prompt.count(note) == 1 and _DIFF not in prompt
+    assert calls == ["simulation_outcomes"]
 
 
-def test_comparison_table_needs_a_usable_world_state_on_both_sides(run_state, monkeypatch, tmp_path):
-    run_state("ok")
+# ───────────────────────────── comparison table ─────────────────────────────
+@pytest.fixture
+def table_data(run_state, monkeypatch, tmp_path):
+    """Valid world-state trajectories on both sides and a tmp reports dir."""
     data = tmp_path / "sims"
     monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(data), raising=False)
-    for sid in (SIM_ID, BASE_SIM_ID):
+    monkeypatch.setattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", True, raising=False)
+    monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path / "reports"), raising=False)
+    for sid, share in ((SIM_ID, 0.6), (BASE_SIM_ID, 0.4)):
         (data / sid).mkdir(parents=True)
         (data / sid / "world_state_trajectory.json").write_text(json.dumps(
-            {"outcome": {"shares": {"A": 0.6, "B": 0.4}}, "validity": "valid"}), encoding="utf-8")
+            {"outcome": {"shares": {"A": share, "B": 1 - share}}, "validity": "valid"}), encoding="utf-8")
+    return tmp_path / "reports"
+
+
+def _table_agent():
     agent = _agent()
     agent.scenario_label = "what-if"
-    assert agent._scenario_diff_structured() is not None
-    _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, "errored")
-    assert agent._scenario_diff_structured() is None
-    _write_summary(Path(SimulationRunner.RUN_STATE_DIR), BASE_SIM_ID, "hollow")   # keeps world state
-    assert agent._scenario_diff_structured() is not None
+    return agent
+
+
+@pytest.mark.parametrize("own_health,base_health", [(h, "ok") for h in _UNUSABLE]
+                         + [("ok", h) for h in _UNUSABLE])
+def test_no_comparison_table_when_either_side_is_unusable(run_state, table_data, own_health, base_health):
+    run_state(own_health)
+    _write_summary(BASE_SIM_ID, base_health)
+    assert _table_agent()._scenario_diff_structured() is None
+
+
+def test_comparison_table_unchanged_for_usable_runs_and_with_the_knob_off(run_state, table_data,
+                                                                           monkeypatch):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, "ok")
+    healthy = _table_agent()._scenario_diff_structured()
+    assert healthy and [d["name"] for d in healthy["dimensions"]]
+    for base_health in _USABLE_BASELINES:
+        _write_summary(BASE_SIM_ID, base_health)
+        assert _table_agent()._scenario_diff_structured() == healthy, base_health
+    run_state("hollow")
+    _write_summary(BASE_SIM_ID, "errored")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    assert _table_agent()._scenario_diff_structured() == healthy
+
+
+def test_comparison_chapter_gets_the_line_instead_of_the_table(run_state, table_data, monkeypatch):
+    body = "正文：两种情景的差异只依据研究材料讨论。"
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, "ok")
+    out = _table_agent()._prepend_comparison_table("r_fu3_ok", body)
+    assert out.startswith(_TABLE_HEAD) and out.endswith("\n\n" + body)
+    assert (table_data / "r_fu3_ok" / "comparison.json").exists()
+
+    # hollow baseline + healthy fork: the baseline line in the table's place, no comparison.json
+    _write_summary(BASE_SIM_ID, "hollow")
+    assert (_table_agent()._prepend_comparison_table("r_fu3_base", body)
+            == _BASE_NOTE.format(health="hollow") + "\n\n" + body)
+    assert not (table_data / "r_fu3_base").exists()
+
+    # the run itself unusable: REPORT-5's line (it wins over the baseline's)
+    run_state("errored")
+    assert (_table_agent()._prepend_comparison_table("r_fu3_own", body)
+            == _NO_BEHAVIOUR.format(health="errored") + "\n\n" + body)
+    assert not (table_data / "r_fu3_own").exists()
+
+    # no table for another reason (missing trajectory): the chapter stays as it was
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, "ok")
+    os.remove(os.path.join(Config.OASIS_SIMULATION_DATA_DIR, BASE_SIM_ID, "world_state_trajectory.json"))
+    assert _table_agent()._prepend_comparison_table("r_fu3_missing", body) == body
+
+
+# ───────────────────── baseline verdict in forecast.json quality ─────────────────────
+def _finalize_quality(tmp_path, monkeypatch, report_id, *, base=BASE_SIM_ID):
+    agent = _finalize_agent(tmp_path, monkeypatch)
+    agent.base_simulation_id = base
+    agent._signal_pack = agent._build_signal_pack()      # as generate_report does
+    return _finalize(agent, tmp_path, report_id).get("quality") or {}
+
+
+@pytest.mark.parametrize("base_health", _UNUSABLE)
+def test_baseline_verdict_is_persisted_next_to_signal_pack_health(run_state, monkeypatch, tmp_path,
+                                                                  base_health):
+    monkeypatch.setattr(Config, "REPORT_COMPARISON_TABLE", True, raising=False)
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, base_health)
+    quality = _finalize_quality(tmp_path, monkeypatch, f"r_fu3_{base_health}")
+    assert quality["signal_pack_health"] == {"health": "ok", "suppressed": []}
+    assert quality["baseline_signal_pack_health"] == {
+        "health": base_health, "suppressed": ["scenario_diff", "comparison_table"]}
+
+    # recorded whatever the run's own health (both sides unusable)
+    run_state("hollow")
+    quality = _finalize_quality(tmp_path, monkeypatch, f"r_fu3_both_{base_health}")
+    assert quality["signal_pack_health"] == {"health": "hollow", "suppressed": _ACTIVITY_SUPPRESSED}
+    assert quality["baseline_signal_pack_health"]["health"] == base_health
+
+    # the comparison table off: only the diff consumers are listed
+    monkeypatch.setattr(Config, "REPORT_COMPARISON_TABLE", False, raising=False)
+    quality = _finalize_quality(tmp_path, monkeypatch, f"r_fu3_notable_{base_health}")
+    assert quality["baseline_signal_pack_health"] == {"health": base_health, "suppressed": ["scenario_diff"]}
+
+
+def test_unreadable_baseline_summary_is_flagged(run_state, monkeypatch, tmp_path):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, "{not json")
+    quality = _finalize_quality(tmp_path, monkeypatch, "r_fu3_unreadable")
+    assert quality["baseline_signal_pack_health"] == {
+        "health": None, "suppressed": [], "summary_unreadable": True}
+
+
+def test_no_baseline_verdict_for_usable_baselines_plain_reports_or_the_knob_off(run_state, monkeypatch,
+                                                                                tmp_path):
+    run_state("ok")
+    for base_health in ("ok", "truncated", "llm_degraded", "stalled", None):
+        _write_summary(BASE_SIM_ID, base_health)
+        quality = _finalize_quality(tmp_path, monkeypatch, f"r_fu3_usable_{base_health}")
+        assert "baseline_signal_pack_health" not in quality, base_health
+        assert quality["signal_pack_health"] == {"health": "ok", "suppressed": []}
+    _write_summary(BASE_SIM_ID, "hollow")
+    assert "baseline_signal_pack_health" not in _finalize_quality(
+        tmp_path, monkeypatch, "r_fu3_plain", base=None)
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    quality = _finalize_quality(tmp_path, monkeypatch, "r_fu3_off")
+    assert "baseline_signal_pack_health" not in quality and "signal_pack_health" not in quality
