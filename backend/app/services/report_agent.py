@@ -25,6 +25,7 @@ from enum import Enum
 
 from ..config import Config
 from ..utils import absence as _absence
+from ..utils import numeric as _numeric
 from ..utils import numeric_guards as _numeric_guards
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient, llm_call_timeout
@@ -1124,6 +1125,21 @@ _SIGNAL_PACK_UNKNOWN_HEALTH_NOTE = (
 )
 
 
+def _prior_echo_caveat(trajectory: Any) -> str:
+    """SIM-4: the world-state block's qualitative caveat for a prior-echo or
+    prior-leader-herd trajectory (sim_prior_echo.prior_echo_diagnostics), else ""."""
+    from .sim_prior_echo import (
+        VERDICT_PRIOR_ECHO, VERDICT_PRIOR_LEADER_HERD, prior_echo_diagnostics,
+    )
+    diag = prior_echo_diagnostics(trajectory if isinstance(trajectory, dict) else {})
+    if diag["verdict"] == VERDICT_PRIOR_ECHO:
+        return "对照诊断：终局分布与种子先验几乎一致——决策通道没有在研究先验之外提供信息，不得作为独立佐证。"
+    if diag["verdict"] == VERDICT_PRIOR_LEADER_HERD:
+        return (f"对照诊断：承诺绝大多数集中于先验领先情景「{diag['prior_leader']}」——推演可能只是在复述先验，"
+                "不构成独立佐证。")
+    return ""
+
+
 REACT_CONTAMINATED_RETRY_MSG = (
     "【格式错误】你上一条输出不是合格的章节正文（疑似系统提示泄漏、工具调用残留或采访超时提示）。"
     '请立即以 "Final Answer:" 开头，只输出本章节的中文正文：用研究材料中的可验证事实与 [S#]，'
@@ -1340,6 +1356,42 @@ def _citation_display_title(source: Dict[str, Any], tag: str = "") -> str:
     return title or domain or tag
 
 
+def _nonfinite_nulled_artifact(obj: Any, *, record_quality: bool) -> Tuple[Any, List[str]]:
+    """INFRA-4：(副本, 路径)——NaN/±Infinity 叶子置 None（非有限的浮点键名改为 json 默认写出的
+    字符串），不改入参；record_quality=True 且确有叶子被置 null 时把路径并入副本的
+    quality.nonfinite_nulled。副本按 allow_nan=False 必能序列化（非有限数层面）。"""
+    cleaned, paths = _numeric.null_nonfinite(obj)
+    if record_quality and paths and isinstance(cleaned, dict):
+        quality = cleaned.get("quality")
+        if quality is None:
+            quality = cleaned["quality"] = {}
+        if isinstance(quality, dict):
+            prior = quality.get("nonfinite_nulled")
+            merged = [p for p in prior if isinstance(p, str)] if isinstance(prior, list) else []
+            merged.extend(p for p in paths if p not in merged)
+            quality["nonfinite_nulled"] = merged
+    return cleaned, paths
+
+
+def _forecast_artifact_json(obj: Any, artifact: str, *,
+                            record_quality: bool = False) -> Tuple[str, Any]:
+    """INFRA-4（ARTIFACT_STRICT_JSON，默认开）：把预测工件序列化为标准 JSON，返回 (text, written)。
+
+    关闭：json.dumps 原样（NaN/Infinity 照写）。开启：有限数内容逐字节同旧输出；含 NaN/±Infinity
+    时改写副本（_nonfinite_nulled_artifact，不改入参），按严格 JSON 序列化成功后记一条 error（列出
+    JSON 路径）——绝不写出 NaN。written 即 text 所序列化的对象，调用方留用它，使内存副本与落盘一致。
+    """
+    if not getattr(Config, "ARTIFACT_STRICT_JSON", True):
+        return json.dumps(obj, ensure_ascii=False, indent=2), obj
+    try:
+        return _numeric.dumps_strict(obj, ensure_ascii=False, indent=2), obj
+    except _numeric.NonFiniteJSONError as exc:
+        cleaned, paths = _nonfinite_nulled_artifact(obj, record_quality=record_quality)
+        text = _numeric.dumps_strict(cleaned, ensure_ascii=False, indent=2)
+        logger.error(f"{artifact}: {exc}；已改写为标准 JSON 后落盘（{len(paths)} 处非有限数置 null）")
+        return text, cleaned
+
+
 # ═══════════════════════════════════════════════════════════════
 # PM-2: 「Market Cross-Check」渲染块（预测 vs 市场隐含概率对照 + >10pp 判定 + 未匹配市场）
 # ═══════════════════════════════════════════════════════════════
@@ -1361,12 +1413,27 @@ def _mc_cell(x: Any) -> str:
     return str(x).replace("|", "／").replace("\n", " ").strip()
 
 
+def _mc_blend_work(blend: Any, zh: bool) -> str:
+    """REPORT-12：确定性市场混合（market_influence.blend）的代入数值算式（show-your-work），
+    追加在 Market Cross-Check 影响条目之后。四个值缺失或不在 [0, 1] → ""（degrade-safe，
+    不渲染半截算式）。"""
+    if not isinstance(blend, dict):
+        return ""
+    w, p, m, c = (_mc_float(blend.get(k)) for k in ("weight", "prior", "market", "computed"))
+    if not all(v is not None and 0.0 <= v <= 1.0 for v in (w, p, m, c)):
+        return ""
+    if zh:
+        return f"（混合 w={w:.2f}：{1 - w:.2f}·{p:.0%} + {w:.2f}·{m:.0%} = {c:.0%}）"
+    return f" (blend w={w:.2f}: {1 - w:.2f}·{p:.0%} + {w:.2f}·{m:.0%} = {c:.0%})"
+
+
 def _mc_comparisons_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, Any]]:
     """从 forecast 汇出对照行：优先 forecast['market_comparison']['comparisons']（PM-2 抽取器
     已算好的确定性负载），缺失时从 binary_forecasts[].market_anchor 现场推导（同字段口径）。
 
     统一为渲染用 schema：{forecast_id, statement, model_probability, market_id, market_question,
-    market_implied_yes_prob, divergence, exceeds_10pp, rationale_cites_market, url}。
+    market_implied_yes_prob, divergence, exceeds_10pp, rationale_cites_market, url, endDate}
+    （endDate 与抽取器负载同口径，供 FU-5 的截止日标注）。
     纯函数、无副作用；无可对照数据 → []。"""
     mc = forecast.get("market_comparison")
     if isinstance(mc, dict) and isinstance(mc.get("comparisons"), list):
@@ -1397,6 +1464,7 @@ def _mc_comparisons_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, An
             "exceeds_10pp": (abs(dv) > 0.10) if dv is not None else False,
             "rationale_cites_market": None,  # 无对照负载时无法判定，留空（渲染按未知处理）
             "url": anchor.get("url"),
+            "endDate": anchor.get("endDate"),
         })
     return out
 
@@ -1418,7 +1486,7 @@ def _mc_influences_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, Any
         inf = b.get("market_influence")
         if not isinstance(inf, dict) or not str(inf.get("market_id") or "").strip():
             continue
-        out.append({
+        row: Dict[str, Any] = {
             "forecast_id": b.get("id"),
             "market_id": inf.get("market_id"),
             "market_question": inf.get("market_question"),
@@ -1429,14 +1497,20 @@ def _mc_influences_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, Any
             "match_confidence": _mc_float(inf.get("match_confidence")),
             "anchor_removed": bool(inf.get("anchor_removed", False)),
             "probability_restored": bool(inf.get("probability_restored", False)),
-        })
+        }
+        # REPORT-12：确定性市场混合的算式记录（无 blend 时行形状不变）。
+        if isinstance(inf.get("blend"), dict):
+            row["blend"] = dict(inf["blend"])
+        out.append(row)
     return out
 
 
 def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                                    markets: Optional[List[Dict[str, Any]]] = None,
                                    lang: str = "en", *,
-                                   disclose_anchoring: bool = False) -> str:
+                                   disclose_anchoring: bool = False,
+                                   now: Optional[datetime] = None,
+                                   restamp: bool = True) -> str:
     """PM-2：渲染确定性「Market Cross-Check」块——预测 vs 市场隐含概率对照 + 未匹配市场清单。
 
     纯函数（无 LLM/无网络）：
@@ -1453,7 +1527,15 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
 
     REPORT-10 ``disclose_anchoring``（生产调用方传 REPORT_MARKET_XCHECK_DISCLOSURE，默认开）：
     说明句末尾追加一句披露——预测起草时已参考这些市场价格，Δ 是锚定之后的差值，而非对一个
-    独立于市场的估计的度量。缺省 False → 输出逐字节不变。"""
+    独立于市场的估计的度量。缺省 False → 输出逐字节不变。
+
+    REPORT-12：影响条目带确定性市场混合记录（blend）时，条目后追加代入数值的算式
+    （见 _mc_blend_work）；无 blend 的条目逐字节不变。
+
+    FU-5（PREDICTION_MARKETS_END_DATE_GATE 开时）：已过截止日、待结算的市场在对照行与未匹配
+    条目末尾标注。``now`` 钉住盖章时点（离线回放传报告自身的完成时刻，输出与回放当天无关）；
+    省略 = market_clock_now()，即实时最终化路径。``restamp=False`` → 不按任何时钟盖新章，只认
+    行上已保存的 window_ended 章（回放不知报告完成时刻时用，绝不退回墙钟）。"""
     if not isinstance(forecast, dict):
         return ""
     comps = _mc_comparisons_from_forecast(forecast)
@@ -1485,9 +1567,36 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             caption += (" Forecasts were drafted with these market prices in view, so Δ is "
                         "measured after anchoring, not against a market-independent estimate.")
         lines = ["### Market Cross-Check", "", f"_{caption}_", ""]
+    # FU-5（TIME-3 遗留）：PREDICTION_MARKETS_END_DATE_GATE 开时按 now（缺省
+    # market_clock_now()）盖 window_ended 章（浅拷贝，调用方的负载与快照不变）。已过截止日、
+    # 待结算的市场在对照行的「市场」单元格末尾、未匹配条目末尾标注，不再被当作实时对照。对照行
+    # 也要判定：抽取期（exclude_window_ended）只保证锚点在抽取那一刻未过期，本块在其后才渲染，
+    # 其间市场可能已过截止日。restamp=False 时不盖新章，只认已保存的章。未过期的行与旗标关时
+    # 的输出逐字节不变。
+    from ..utils.prediction_markets import (
+        end_date_gate_settings, market_clock_now, row_market_end, stamp_window_ended,
+        window_ended_label,
+    )
+    gate, grace = end_date_gate_settings()
+    stamping = gate and restamp
+    clock_now = (now if now is not None else market_clock_now()) if stamping else None
     if comps:
         comps_sorted = sorted(
             comps, key=lambda c: -(abs(_mc_float(c.get("divergence")) or 0.0)))
+        # 对照行无 endDate 时回退到快照中同 market_id 的行（含研究期已盖的 window_ended 章）；
+        # 不盖新章时对照行自身的 endDate 无从判定，快照行已保存的章即是最好的证据。
+        ended_snapshot: Dict[str, Dict[str, Any]] = {}
+        if gate:
+            matched_snapshot = [
+                m for m in snapshot if str(m.get("market_id") or "").strip() in anchored_ids]
+            if stamping:
+                comps_sorted, _ = stamp_window_ended(
+                    comps_sorted, now=clock_now, grace_hours=grace)
+                matched_snapshot, _ = stamp_window_ended(
+                    matched_snapshot, now=clock_now, grace_hours=grace)
+            for m in matched_snapshot:
+                if m.get("window_ended") is True:
+                    ended_snapshot.setdefault(str(m.get("market_id")).strip(), m)
         if zh:
             headers = ["#", "预测", "预测 P", "市场 P(yes)", "Δ（pp）", ">10pp 判定", "市场"]
         else:
@@ -1517,6 +1626,18 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             q = _mc_cell(str(c.get("market_question") or "")[:80])
             url = str(c.get("url") or "").strip()
             market_cell = f"[{q}]({_mc_cell(url)})" if (q and url) else (q or "—")
+            if gate:
+                ended = window_ended_label(c, zh)
+                if not ended and (not stamping or row_market_end(c) is None):
+                    ended = window_ended_label(
+                        ended_snapshot.get(str(c.get("market_id") or "").strip(), {}), zh)
+                if ended and not q:
+                    # 无问题文本时以 market_id 代替「—」占位符（不渲染成「— — window ended …」）；
+                    # 连 market_id 也没有 → 单元格只留标注本身。
+                    market_cell = _mc_cell(c.get("market_id") or "")
+                    if not market_cell:
+                        ended = ended.removeprefix(" — ")
+                market_cell += ended
             lines.append("| " + " | ".join(
                 [fid, stmt, mp_s, ip_s, dv_s, verdict, market_cell]) + " |")
     # LOOP-017 P0：市场实际移动过概率的记录——即使锚点其后被对账移除，影响溯源也必须
@@ -1545,7 +1666,8 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             if zh:
                 item = (f"- {fid} — {q or '—'}（{mid}）：{move}"
                         f"（修订时市场 P(yes) {_pct(inf.get('price_at_revision'))}，"
-                        f"匹配置信度 {conf_s}）")
+                        f"匹配置信度 {conf_s}）"
+                        + _mc_blend_work(inf.get("blend"), zh))
                 if inf.get("anchor_removed"):
                     if inf.get("probability_restored"):
                         item += (f"—— 锚点在对账中被移除；概率已恢复为 "
@@ -1554,7 +1676,8 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                         item += "—— 锚点在对账中被移除（修订其后已被取代，未回滚）"
             else:
                 item = (f"- {fid} — {q or '—'} ({mid}): {move} at market P(yes) "
-                        f"{_pct(inf.get('price_at_revision'))}, match confidence {conf_s}")
+                        f"{_pct(inf.get('price_at_revision'))}, match confidence {conf_s}"
+                        + _mc_blend_work(inf.get("blend"), zh))
                 if inf.get("anchor_removed"):
                     if inf.get("probability_restored"):
                         item += (" — anchor removed in reconciliation; probability restored "
@@ -1564,6 +1687,8 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                                  "superseded; not rolled back)")
             lines.append(item)
     if unmatched:
+        if stamping:
+            unmatched, _ = stamp_window_ended(unmatched, now=clock_now, grace_hours=grace)
         lines.append("")
         if zh:
             lines.append("**未匹配市场（快照中未被任何预测锚定，可补充对照）：**")
@@ -1576,10 +1701,11 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             q = _mc_cell(str(m.get("question") or "")[:120])
             url = str(m.get("url") or "").strip()
             label = f"[{q}]({_mc_cell(url)})" if (q and url) else (q or _mc_cell(m.get("market_id") or ""))
+            ended = window_ended_label(m, zh) if gate else ""
             if zh:
-                lines.append(f"- {label} — 隐含 P(yes) {ip_s}")
+                lines.append(f"- {label} — 隐含 P(yes) {ip_s}{ended}")
             else:
-                lines.append(f"- {label} — implied P(yes) {ip_s}")
+                lines.append(f"- {label} — implied P(yes) {ip_s}{ended}")
     return "\n".join(lines)
 
 
@@ -1668,6 +1794,7 @@ class ReportAgent:
         scenario_spine: Optional[List[Dict[str, Any]]] = None,
         hindcast: Optional[Dict[str, Any]] = None,
         numeric_guard_mode: Optional[str] = None,
+        interview_graph_feedback: Optional[bool] = None,
     ):
         """
         初始化Report Agent
@@ -1705,6 +1832,12 @@ class ReportAgent:
             种子报告传入准入时钉住的 safety_policy_v1.numeric_guard_mode；缺省 None（API 重生成 / 对话路径）
             读当前 Config.NUMERIC_GUARD_MODE。非法值按 shadow 运行并告警。检查本身不改任何产物内容；
             shadow 在二元提示词里多索取 latest_actual，模型起草的二元与概率可能因此与 off 不同。
+
+        FU-8 interview_graph_feedback: 采访回答能否写入观察图——有钉值的运行，编排器主报告 / 种子报告
+            传入该运行钉住的值（PipelineOrchestrator._interview_feedback_agent_kwargs），原样转交
+            zep_tools.interview_agents；只有 True 放行，其他非 None 值按 False（失败关闭）。缺省 None
+            （无钉值的运行、API 重生成 / 对话路径）时由 interview_agents 按模拟 id 查所属管线的钉
+            （共享模拟子管线跟随 base；无钉 → 环境值 Config.SIM_INTERVIEW_GRAPH_FEEDBACK）。
         """
         self.graph_id = graph_id
         self.simulation_id = simulation_id
@@ -1746,6 +1879,9 @@ class ReportAgent:
         self.hindcast: Optional[Dict[str, Any]] = as_hindcast_pin(hindcast)
         # TIME-5：数值一致性影子检查模式（见 docstring）。测试经 __new__ 构造时缺失，读取一律走 getattr。
         self._numeric_guard_mode = self._normalize_numeric_guard_mode(numeric_guard_mode)
+        # FU-8：采访事实写图的门（见 docstring）。测试经 __new__ 构造时缺失，读取一律走 getattr。
+        self.interview_graph_feedback: Optional[bool] = (
+            None if interview_graph_feedback is None else interview_graph_feedback is True)
         self._hindcast_pin_cache: Any = _HINDCAST_PIN_UNRESOLVED
         self._hindcast_lookup_failed = False
         # RESEARCH-12：(问题规范, 判定日是否采用) 懒缓存（_question_spec_for_run；None = 尚未核对）。
@@ -2289,34 +2425,207 @@ class ReportAgent:
             f"超限未列 {result['omitted']} 条、未收录 {result['excluded']}（sha256 {result['sha256'][:12]}）")
         return result["rendered"]
 
+    def _verified_figures_check(self, md: str) -> Optional[Dict[str, Any]]:
+        """REPORT-9（REPORT_VERIFIED_FIGURES_CHECK，默认开，只检测）：正文数字对照 REPORT-8 的已核验指标块
+        （verified_facts.check_verified_figures），结果另附 block_sha256。块行 = rows + projections；
+        states_unverified 的对照行取研究 quantitative 中 verification 为 unverified / snippet_only / none 的
+        行；市场行取 self._prediction_markets；来源支撑检查用 _semantic_citation_support。旗标关、块为空
+        （旧引擎 / 复用研究 / 未核验）或任何异常 → None（调用方什么都不写）。从不改任何状态。"""
+        if not getattr(Config, "REPORT_VERIFIED_FIGURES_CHECK", True):
+            return None
+        block = getattr(self, "_verified_figures", None)
+        if not isinstance(block, dict) or not block.get("rendered"):
+            return None
+        try:
+            from . import verified_facts as _vf
+            try:
+                rel_tol = float(getattr(Config, "REPORT_VERIFIED_FIGURE_REL_TOL", _vf.DEFAULT_REL_TOL))
+            except (TypeError, ValueError):
+                rel_tol = _vf.DEFAULT_REL_TOL
+            if not 0.0 <= rel_tol <= 1.0:  # also NaN
+                rel_tol = _vf.DEFAULT_REL_TOL
+            index = self._citation_index_or_fallback()
+
+            def support(unit: str, tag: str) -> Optional[bool]:
+                source = index.get(tag)
+                return self._semantic_citation_support(unit, source) if isinstance(source, dict) else None
+
+            quantitative = getattr(self, "quantitative", None)
+            excluded = [row for row in (quantitative if isinstance(quantitative, list) else [])
+                        if isinstance(row, dict)
+                        and str(row.get("verification") or "").strip().lower() in _vf.UNVERIFIED_LABELS]
+            result = _vf.check_verified_figures(
+                md, list(block.get("rows") or []) + list(block.get("projections") or []),
+                excluded_rows=excluded, market_rows=getattr(self, "_prediction_markets", None) or [],
+                rel_tol=rel_tol, support_fn=support)
+        except Exception as exc:  # noqa: BLE001 — 只检测的旁路，失败不留任何字段
+            logger.warning(f"已核验数字比对失败（忽略）: {exc}")
+            return None
+        result["block_sha256"] = block.get("sha256") or ""
+        return result
+
+    @staticmethod
+    def _verified_figures_summary(check: Dict[str, Any]) -> Dict[str, Any]:
+        """REPORT-9：forecast.quality / final_audit.json 里记录的比对摘要（计数 + 块指纹）。"""
+        return {"counts": dict(check["counts"]), "block_sha256": check["block_sha256"],
+                "source_discrepancies": len(check["source_discrepancies"])}
+
+    def _write_figure_provenance(self, report_id: str, report: "Report") -> None:
+        """REPORT-9：终审之后（主报告已定型）写 reports/<id>/figure_provenance.json——已核验指标块
+        每一行的来源（[S#] / URL）与正文里引用它的行，比对出的来源分歧，以及市场行的报价时间戳
+        （EVAL-6 的 quoted_at / snapshot_as_of）。影子工件：不登记阶段清单，从不改成稿，失败只告警。"""
+        check = self._verified_figures_check(getattr(report, "markdown_content", None) or "")
+        if check is None:
+            return
+        try:
+            block = self._verified_figures
+            block_rows = list(block.get("rows") or []) + list(block.get("projections") or [])
+            index = self._citation_index_or_fallback()
+            rows = []
+            for row_index, row in enumerate(block_rows):
+                tag = row.get("tag")
+                source = index.get(tag) if tag else None
+                rows.append({
+                    "row_index": row_index, "metric": row.get("metric"), "value": row.get("value"),
+                    "unit": row.get("unit"), "as_of": row.get("when"),
+                    "source_ref": tag or row.get("source"),
+                    "source_url": (str(source.get("url") or "").strip() or None)
+                    if isinstance(source, dict) else None,
+                    "verification": "verified",
+                    "used_in": check["matched_rows"].get(row_index, []),
+                })
+            markets = [
+                {key: market.get(key) for key in
+                 ("market_id", "implied_yes_prob", "quoted_at", "price_at_research", "snapshot_as_of")}
+                for market in (getattr(self, "_prediction_markets", None) or []) if isinstance(market, dict)
+            ]
+            payload = {
+                "schema": "drf.figure_provenance/v1",
+                "block_sha256": check["block_sha256"],
+                "rows": rows,
+                "source_discrepancies": check["source_discrepancies"],
+                "market_rows": markets,
+                "unmatched_numeric_claims": check["counts"]["unmatched"],
+            }
+            write_json_atomic(
+                os.path.join(ReportManager._get_report_folder(report_id), "figure_provenance.json"),
+                payload, allow_nan=False)
+        except Exception as exc:  # noqa: BLE001 — 影子工件，失败不影响报告
+            logger.warning(f"写 figure_provenance.json 失败（忽略）: {exc}")
+
+    # FU-9: contested-table slots reserved for TIME-4 quantitative reconcile rows, and the
+    # why_they_differ marker reconcile_quantitative writes on a probable unit-scale error.
+    _CONTESTED_QUANT_SLOTS = 3
+    _UNIT_SCALE_MARK = "probable unit-scale error"
+
+    def _contested_row_line(self, r: Any) -> Optional[str]:
+        """W9-8: contested.json 单条论断 → 块内一行；无论断或无可用立场返回 None（跳过）。"""
+        if not isinstance(r, dict) or not r.get("claim"):
+            return None
+        segs = []
+        for p in (r.get("positions") or [])[:3]:
+            if not isinstance(p, dict) or not p.get("stance"):
+                continue
+            src = "；".join(str(s) for s in (p.get("sources") or [])[:2])
+            tier = str(p.get("tier") or "").strip()
+            tag = f"（{tier}{'，' if tier and src else ''}{src}）" if (tier or src) else ""
+            segs.append(f"{self._md_cell(p['stance'], 160)}{tag}")
+        if not segs:
+            return None
+        return f"- **{self._md_cell(r['claim'], 120)}** — " + " ⇄ ".join(segs)
+
     def _build_contested_table_block(self, max_claims: int = 15) -> str:
         """W9-8: 争议性关键论断块（contested.json 全量，上限 15 条）。
 
         注入命中风险/不确定性关键词的章节提示词——报告必须正面处理证据分歧而非
-        单边引用。无数据返回空串（注入自动跳过）。"""
+        单边引用。无数据返回空串（注入自动跳过）。FU-9：上限截掉 TIME-4 数值对账行时
+        （RESEARCH_QUANT_RECONCILE 开启）见 _contested_quant_slots；未截断时逐字节不变。"""
         rows = self.contested if isinstance(getattr(self, "contested", None), list) else None
         if not rows:
             return ""
-        lines = ["## 争议性关键论断（证据分歧——本章须正面呈现两侧立场与依据，不得单边引用）"]
-        rendered = 0
-        for r in rows:
-            if not isinstance(r, dict) or not r.get("claim"):
+        # The plain cut: the first max_claims renderable rows (at least one), in order; the
+        # rows after it are never rendered here.
+        head: List[Tuple[Dict[str, Any], str]] = []
+        rest: List[Any] = []
+        for i, r in enumerate(rows):
+            line = self._contested_row_line(r)
+            if line is None:
                 continue
-            segs = []
-            for p in (r.get("positions") or [])[:3]:
-                if not isinstance(p, dict) or not p.get("stance"):
-                    continue
-                src = "；".join(str(s) for s in (p.get("sources") or [])[:2])
-                tier = str(p.get("tier") or "").strip()
-                tag = f"（{tier}{'，' if tier and src else ''}{src}）" if (tier or src) else ""
-                segs.append(f"{self._md_cell(p['stance'], 160)}{tag}")
-            if not segs:
-                continue
-            lines.append(f"- **{self._md_cell(r['claim'], 120)}** — " + " ⇄ ".join(segs))
-            rendered += 1
-            if rendered >= max_claims:
+            head.append((r, line))
+            if len(head) >= max_claims:
+                rest = rows[i + 1:]
                 break
-        return "\n".join(lines) if rendered else ""
+        if not head:
+            return ""
+        lines = ["## 争议性关键论断（证据分歧——本章须正面呈现两侧立场与依据，不得单边引用）"]
+        if rest and getattr(Config, "RESEARCH_QUANT_RECONCILE", True):
+            lines += self._contested_quant_slots(head, rest)
+        else:
+            lines += [line for _, line in head]
+        return "\n".join(lines)
+
+    def _contested_quant_slots(self, head: List[Tuple[Dict[str, Any], str]],
+                               rest: List[Any]) -> List[str]:
+        """FU-9 (TIME-4 open issue): the plain cut's rows with slots kept for quant rows.
+
+        Every engine appends its quantitative disagreements (origin quant_reconcile) after
+        the model's claims, and only v3 caps them and puts probable unit-scale errors first,
+        so the plain first-N cut drops them all.  A multi-track run's merged handoff joins the
+        tracks' contested.json files (pipeline_orchestrator.merge_list_dedup), so there the
+        quant rows sit after each track's claims, interleaved with the next track's.  When the
+        plain cut drops at least one renderable quant_reconcile row, the quant rows get
+        max(min(_CONTESTED_QUANT_SLOTS, N), quant rows inside the plain cut) of the N slots
+        (at most all of them), chosen by priority wherever they sit: probable unit-scale
+        errors first, stable, so each kind keeps contested.json order.  A plain quant row
+        inside the cut therefore never keeps its slot while a unit-scale error past it is
+        dropped.  The plain cut's other rows (the model's claims) fill the remaining slots in
+        order.  The kept rows keep contested.json order, except that the positions held by
+        kept quant rows take those rows in priority order (unit-scale errors first; v3's
+        order already is), and a closing note counts the quant rows still cut.  Otherwise the
+        plain cut is returned unchanged.  Only quant_reconcile rows of ``rest`` are rendered,
+        and a malformed one is skipped (the plain cut never rendered it)."""
+        def unit_scale(r: Dict[str, Any]) -> bool:
+            return self._UNIT_SCALE_MARK in str(r.get("why_they_differ") or "")
+
+        tail: List[Tuple[Dict[str, Any], str]] = []
+        for r in rest:
+            if not isinstance(r, dict) or r.get("origin") != "quant_reconcile":
+                continue
+            try:
+                line = self._contested_row_line(r)
+            except Exception:  # noqa: BLE001 — a malformed row past the cap is skipped, as before
+                continue
+            if line is not None:
+                tail.append((r, line))
+        if not tail:
+            return [line for _, line in head]
+        cap = len(head)
+        rendered = head + tail  # contested.json order
+        quant = [i for i, (r, _) in enumerate(rendered) if r.get("origin") == "quant_reconcile"]
+        quant.sort(key=lambda i: not unit_scale(rendered[i][0]))
+        quant_positions = set(quant)
+        # The quant rows' share never falls below what the plain cut already shows; tail is
+        # not empty, so there are more quant rows than that and the slice fills the share.
+        in_cut = sum(1 for i in quant if i < cap)
+        keep = set(quant[:max(min(self._CONTESTED_QUANT_SLOTS, cap), in_cut)])
+        # The plain cut's other rows, in order, fill the remaining slots (there are enough:
+        # cap - in_cut of them).
+        keep.update([i for i in range(cap) if i not in quant_positions][:cap - len(keep)])
+        # Kept rows in contested.json order; the positions held by quant rows take the kept
+        # quant rows in priority order (unit-scale errors first).
+        kept_quant_by_priority = iter([i for i in quant if i in keep])
+        lines = []
+        for i in sorted(keep):
+            row = next(kept_quant_by_priority) if i in quant_positions else i
+            lines.append(rendered[row][1])
+        cut = [rendered[i][0] for i in quant if i not in keep]
+        if cut:
+            n_unit = sum(1 for r in cut if unit_scale(r))
+            lines.append(f"（另有 {len(cut)} 条数值对账分歧超出上限未列出"
+                         + (f"，其中 {n_unit} 条疑似量纲错误" if n_unit else "") + "）")
+            logger.info(f"争议性论断块：数值对账分歧保留 {len(quant) - len(cut)} 条、"
+                        f"超出上限未列 {len(cut)} 条（疑似量纲错误 {n_unit} 条）")
+        return lines
 
     def _build_chronology_block(self, max_events: int = 25) -> str:
         """W9-8: 紧凑时间线块（timeline.json 取最近 max_events 条、按时间升序渲染）。
@@ -2905,6 +3214,13 @@ class ReportAgent:
                              f"（截至 {(data or {}).get('horizon_date') or ''}）")
         else:
             lines.append("稳定性诊断：已趋稳" if ca else "稳定性诊断：尚未趋稳（应降低信心）")
+        # SIM-4（SIM_PRIOR_ECHO_DIAGNOSTIC，默认开）：先验回声 / 领先扎堆时，在份额行之后、注释行
+        # 之前加一行不含机制数字的定性提示（forecast_extractor 的份额解析只读份额行，不受影响）；
+        # 其余裁定不加任何行，输出逐字节不变。
+        if getattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", True):
+            echo_line = _prior_echo_caveat(data)
+            if echo_line:
+                lines.append(echo_line)
         lines.append(note_line)
         return "\n".join(lines)
 
@@ -3397,6 +3713,31 @@ class ReportAgent:
         events = actors.get("key_events")
         return events if isinstance(events, list) else []
 
+    def _spine_key_metrics(self) -> Tuple[str, bool]:
+        """FU-4 (REPORT-8 open issue): the spine pack's key-metrics stream, and whether it is
+        REPORT-8's labelled verified-figures block.
+
+        With REPORT_VERIFIED_FACTS_BLOCK on, that block replaces the unlabelled key-metrics
+        table, as it does in the report context: the block ``__init__`` built (the text Part 2
+        injects). When ``__init__`` never reached the builder (RESEARCH_FORECAST_INPUTS off, or
+        no situation brief), the same builder runs here, and ``self._verified_figures`` is left
+        unset again so Part 2 and the section context stay as they were. No rendered block (no
+        labelled row, a failed build) or the knob off: the key-metrics table, as before."""
+        if not getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True):
+            return self._build_key_metrics_block(), False
+        if hasattr(self, "_verified_figures"):
+            verified = self._verified_figures
+        else:
+            try:
+                self._build_verified_figures_block()
+                verified = getattr(self, "_verified_figures", None)
+            finally:
+                vars(self).pop("_verified_figures", None)
+        rendered = str(verified.get("rendered") or "").strip() if isinstance(verified, dict) else ""
+        if rendered:
+            return rendered, True
+        return self._build_key_metrics_block(), False
+
     def _context_pack_result(self, kind: str, *, now: Optional[datetime] = None,
                              strip_market_table: bool = False) -> Tuple[Any, Dict[str, Any]]:
         """RESEARCH-13: build the ``kind`` ('binary' | 'spine') evidence pack, no IO.
@@ -3425,8 +3766,11 @@ class ReportAgent:
                 lang="en", window_days=window, retrospective=retrospective)
         elif kind == "spine":
             situation, provenance["situation_source"] = self._context_pack_situation()
+            metrics, verified = self._spine_key_metrics()
+            if verified:
+                provenance["key_metrics_source"] = "verified_figures"
             result = _cp.build_spine_pack(
-                report, situation, self._build_key_metrics_block(), timeline, as_of_raw, now,
+                report, situation, metrics, timeline, as_of_raw, now,
                 budget=int(getattr(Config, "FORECAST_CONTEXT_PACK_SPINE_BUDGET", 14000)),
                 lang="zh", window_days=window, retrospective=retrospective)
         else:
@@ -3464,6 +3808,15 @@ class ReportAgent:
         if not result.ok:
             logger.warning(f"证据包 {kind} 未启用（{result.status}），回退旧提示词")
             return None
+        # FU-4：已核验指标块（REPORT_VERIFIED_FACTS_MAX_CHARS，默认 6000 字）可能超出骨架证据包的
+        # key_metrics 配额（预算 20% 加余量）。截断已记入遥测并以 …[truncated] 标出，此处再告警，不静默。
+        if provenance.get("key_metrics_source") == "verified_figures":
+            stream = (result.telemetry.get("streams") or {}).get("key_metrics") or {}
+            if stream.get("truncated") or stream.get("sections_dropped"):
+                logger.warning(
+                    f"证据包 {kind}：已核验指标块 {stream.get('raw_chars')} 字超出 key_metrics 配额 "
+                    f"{stream.get('allocated_chars')} 字，保留 {stream.get('kept_chars')} 字"
+                    f"（{'末尾截断' if stream.get('truncated') else '整块未收录'}）")
         logger.info(f"证据包 {kind}: {len(result.text)} 字（as_of 来源 {provenance['as_of_source']}）")
         return result.text
 
@@ -3615,6 +3968,17 @@ class ReportAgent:
                         )
                 except Exception as _ce:  # noqa: BLE001 — 批判失败沿用未批判骨架
                     logger.warning(f"骨架前置自校准失败（忽略）: {_ce}")
+            # INFRA-4（ARTIFACT_STRICT_JSON，默认开）：含 NaN/Infinity 的骨架不钉进章节提示词、
+            # 不早落 forecast.json，回退成稿后抽取（与骨架未产出情景的回退同路径）。
+            _spine_nonfinite = (_numeric.find_nonfinite(spine)
+                                if getattr(Config, "ARTIFACT_STRICT_JSON", True) else [])
+            if _spine_nonfinite:
+                self._forecast_spine = None
+                self._forecast_spine_block = ""
+                self._mark_spine_pack_published(False)
+                logger.warning(f"预测骨架含非有限数 {_spine_nonfinite[:10]}，不钉骨架、不早落 "
+                               f"forecast.json（回退为成稿后抽取）")
+                return
             self._forecast_spine = spine
             self._forecast_spine_block = _fe.render_forecast_spine_block(spine)
             self._mark_spine_pack_published(True)
@@ -3639,7 +4003,8 @@ class ReportAgent:
                 _early_provenance = self._model_provenance_block()
                 if _early_provenance is not None:
                     _early = dict(_early, model_provenance=_early_provenance)
-                write_text_atomic(fpath, json.dumps(_early, ensure_ascii=False, indent=2))
+                write_text_atomic(fpath, _forecast_artifact_json(
+                    _early, "forecast.json（骨架版）", record_quality=True)[0])
             except Exception as _pe:  # noqa: BLE001 — 早落失败不影响主流程
                 logger.warning(f"预测骨架早落 forecast.json 失败（忽略）: {_pe}")
             logger.info(
@@ -3983,6 +4348,18 @@ class ReportAgent:
                                f"{_nc.get('scenario_prob_mismatches', [])[:3]}")
         except Exception:  # noqa: BLE001
             pass
+        # REPORT-3：别名感知概率槽观测（REPORT_LOGIC_NUMBER_GATE != off；off 时不加键）。此处是成稿
+        # 草稿（正文修复在其后）：修复改写成稿时以修复后字节上的观测（含修复记录）替换本值，终审再以
+        # 最终字节上的 logic_number 覆盖；只记录，不进发布门。
+        try:
+            _ln_observation = self._logic_number_observation(report_markdown, forecast)
+            if _ln_observation is not None:
+                forecast.setdefault("quality", {})["logic_number"] = _ln_observation
+                if _ln_observation.get("fixable"):
+                    logger.warning(f"概率槽观测：{_ln_observation['fixable']} 处别名概率槽与骨架不符"
+                                   f"（未解决 {_ln_observation['unresolved']} 处）")
+        except Exception as _ln_err:  # noqa: BLE001 — 观测性记录，绝不影响 forecast.json
+            logger.warning(f"记录概率槽观测失败（忽略）: {_ln_err}")
         # QUALITY-OPT S12: flag implausible headline growth stats (>100% YoY) that anchor reports.
         try:
             _sp = self._audit_stat_plausibility(report_markdown)
@@ -3992,6 +4369,12 @@ class ReportAgent:
                                f"{_sp.get('implausible_stats', [])[:3]}")
         except Exception:  # noqa: BLE001
             pass
+        # REPORT-9：正文数字对照已核验指标块（只检测；块为空 / 旗标关时不加键，绝不进发布门）。
+        _vf_check = self._verified_figures_check(report_markdown)
+        if _vf_check is not None:
+            forecast.setdefault("quality", {})["verified_figures"] = self._verified_figures_summary(_vf_check)
+            if _vf_check["counts"]["conflict"]:
+                logger.warning(f"已核验数字比对：{_vf_check['counts']['conflict']} 处正文数字与已核验指标不符")
         # QUALITY-OPT A1: emit >=N INDEPENDENT binary (yes/no) forecasts — the brief's headline
         # deliverable — ALONGSIDE the scenario spine. The research dossier usually already holds a
         # compliant F1..Fn table; we extract it (preserving its probabilities) and top up to the
@@ -4069,6 +4452,10 @@ class ReportAgent:
                 _ebf_guard_kwargs: Dict[str, Any] = (
                     {"numeric_guard_mode": _ng_mode}
                     if _ng_mode == _numeric_guards.MODE_SHADOW else {})
+                # FU-7：市场被扣下（回测钉，或钉查找失败时失败关闭，见 _markets_withheld_status）
+                # 时弹出模型自报的市场锚点（实时运行不传，调用逐字节不变）。
+                if self._markets_withheld_status() is not None:
+                    _ebf_guard_kwargs["withhold_market_anchors"] = True
                 # B2: 需求书解析出的 binary_min_count 参与生效——取 spec 与 Config 的较大者
                 # （需求书写明「15+ binary forecasts」时不被 Config 默认静默压低）。
                 _bres = _ebf(
@@ -4129,6 +4516,19 @@ class ReportAgent:
                     for _ext_issue in _ext_bq.get("issues") or []:
                         if _ext_issue not in _ext_base and _ext_issue not in _q_issues:
                             _q_issues.append(_ext_issue)
+                    # EVAL-14（FORECAST_BINARY_STRUCTURED_TARGET，默认关）：同目标阈值阶梯单调性审计，
+                    # 在 reconcile 定稿后的概率上做；只告警（不进 issues、不碰发布门与终审政策版本）。
+                    # 增强项：审计异常只记日志，不写键、不影响定稿（degrade-safe）。
+                    if getattr(Config, "FORECAST_BINARY_STRUCTURED_TARGET", False):
+                        try:
+                            from .binary_targets import threshold_ladder_audit as _ladder_audit
+                            _ladder = _ladder_audit(forecast["binary_forecasts"])
+                            _quality["threshold_ladder"] = _ladder
+                            if _ladder["violation_count"]:
+                                logger.warning(f"二元预测阈值阶梯不单调："
+                                               f"{_ladder['violation_count']} 处（仅告警）")
+                        except Exception as _lae:  # noqa: BLE001 — 只告警的增强审计
+                            logger.warning(f"二元预测阈值阶梯审计失败（忽略，不影响产物）: {_lae!r}")
                     forecast["binary_quality"] = _quality
                     # RQ-6：校验二元预测结算年份与真实判定期一致——目标年份集合（需求书 +
                     # 日历 horizon_date.year）与二元结算年份集合非空且无交集时，把
@@ -4155,8 +4555,10 @@ class ReportAgent:
                             _mcpath = os.path.join(
                                 ReportManager._get_report_folder(report_id),
                                 "market_comparison.json")
+                            # INFRA-4：非有限叶子置 null 后写出；内嵌副本由下方 forecast.json
+                            # 落盘记入 quality.nonfinite_nulled（$.market_comparison…）。
                             write_text_atomic(
-                                _mcpath, json.dumps(_mc, ensure_ascii=False, indent=2))
+                                _mcpath, _forecast_artifact_json(_mc, "market_comparison.json")[0])
                         except Exception as _mce:  # noqa: BLE001 — 落盘失败不影响主流程
                             logger.warning(f"落 market_comparison.json 失败（忽略）: {_mce}")
                     # XRUN-1(c): 与同图谱、不同模拟的上一份报告比对概率向量——
@@ -4216,12 +4618,19 @@ class ReportAgent:
         # REPORT-11：概率政策标记与概率形状遥测——置于二元块（含对账重算记分卡）之后，此后不再有步骤
         # 移动情景 / 二元概率。政策标记与形状旗标无关（形状关时开了护栏的运行仍可识别）；形状纯观测，
         # 任何门都不读，随下方 forecast.json 落盘（终审指纹覆盖它），发布提交时抄入账本行
-        # objective_signals。护栏关时不写 forecast_policy；形状关时不写 probability_shape（forecast.json
-        # 回到旧形态）。probability_shape 从不抛出（纯函数，失败返回空块）。
-        if getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False):
+        # objective_signals。护栏（与 EVAL-14 结构化 target）都关时不写 forecast_policy；形状关时不写
+        # probability_shape（forecast.json 回到旧形态）。probability_shape 从不抛出（纯函数，失败返回空块）。
+        # EVAL-14：结构化 target 开启时二元抽取提示词多一段 STRUCTURED TARGET 规则（可能改变起草），
+        # 同样记入 forecast_policy（护栏键照实写出，账本 shape_summary 按它分组不受影响）；两旗标都关
+        # → 不写（forecast.json 不变）。
+        _guard_on = bool(getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False))
+        _target_on = bool(getattr(Config, "FORECAST_BINARY_STRUCTURED_TARGET", False))
+        if _guard_on or _target_on:
             _fq0 = forecast.get("quality")
             _fq = dict(_fq0) if isinstance(_fq0, dict) else {}
-            _fq["forecast_policy"] = {"binary_symmetric_guard": True}
+            _fq["forecast_policy"] = {"binary_symmetric_guard": _guard_on}
+            if _target_on:
+                _fq["forecast_policy"]["binary_structured_target"] = True
             forecast["quality"] = _fq
         if getattr(Config, "FORECAST_PROBABILITY_SHAPE", True):
             _fq0 = forecast.get("quality")
@@ -4364,7 +4773,11 @@ class ReportAgent:
             except Exception as _cde:  # noqa: BLE001 — 影子诊断，绝不影响产物
                 logger.warning(f"跨来源预测离散度诊断失败（忽略）: {_cde}")
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
-        write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
+        # INFRA-4（ARTIFACT_STRICT_JSON）：绝不写出 NaN/Infinity——置 null 并记 quality.nonfinite_nulled，
+        # 其后的内存副本与账本追加都用落盘的这一份。
+        _forecast_text, forecast = _forecast_artifact_json(forecast, "forecast.json",
+                                                           record_quality=True)
+        write_text_atomic(fpath, _forecast_text)
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
         # P2-4: 追加进校准账本（loop-closer；resolution 经 /api/v1/resolve 或 forecast_tools backtest）。
         # EVAL-1: 仅 FORECAST_LEDGER_COMMIT_MODE=legacy 在此（终审之前）追加；默认 published 模式
@@ -6217,6 +6630,18 @@ class ReportAgent:
             if near:
                 pv = min(near, key=lambda x: abs(x - p))
                 issues.append(f"scenario '{name[:28]}': prose {pv}% vs forecast.json {p}%")
+        # REPORT-3：仅 REPORT_LOGIC_NUMBER_GATE=numeric 时并入别名槽不符（同一格式、去重），经既有
+        # S11 硬路径阻止发布；observe/off 输出不变。检测异常时失败即关闭（记一条不符）。
+        if self._logic_number_gate() == "numeric":
+            try:
+                from .logic_number import s11_mismatches
+                for message in s11_mismatches(md, forecast.get("scenarios") or [],
+                                              reference="forecast.json"):
+                    if message not in issues:
+                        issues.append(message)
+            except Exception as _ln_err:  # noqa: BLE001 — 硬规则检测失败 → fail closed
+                logger.warning(f"别名概率槽 S11 检测失败（按不符处理）: {_ln_err}")
+                issues.append(f"logic-number alias audit failed: {type(_ln_err).__name__}")
         return {"scenario_prob_mismatches": issues[:8], "mismatch_count": len(issues)}
 
     def _lang_override(self) -> str:
@@ -6680,7 +7105,9 @@ class ReportAgent:
         lang = getattr(self, "output_language", None) or "English"
         spine = self._forecast_spine if isinstance(getattr(self, "_forecast_spine", None),
                                                    dict) else None
-        cleaned, lint_rep = _rl.lint_report(md, lang, mode="final", spine=spine)
+        cleaned, lint_rep = _rl.lint_report(
+            md, lang, mode="final", spine=spine,
+            alias_aware_s11=self._logic_number_gate() == "numeric")
         if lint_rep.get("changed") and cleaned.strip():
             report.markdown_content = cleaned
             try:
@@ -6699,7 +7126,8 @@ class ReportAgent:
                     fc.setdefault("quality", {})["lint"] = lint_rep
                     if projection is not None:
                         fc["quality"]["projection_attribution"] = projection
-                    write_text_atomic(fpath, json.dumps(fc, ensure_ascii=False, indent=2))
+                    write_text_atomic(fpath, _forecast_artifact_json(
+                        fc, "forecast.json", record_quality=True)[0])
                     if isinstance(getattr(self, "_forecast_spine", None), dict):
                         self._forecast_spine.setdefault("quality", {})["lint"] = lint_rep
                         if projection is not None:
@@ -6713,6 +7141,181 @@ class ReportAgent:
             f"{lint_rep.get('dangling_attributions')}｜重复句 "
             f"{lint_rep.get('duplicate_sentences_removed')}｜泄漏残留 {lint_rep.get('leakage_flags')}"
         )
+
+    @staticmethod
+    def _logic_number_repair_enabled() -> bool:
+        """REPORT-3：零 token 槽位修复是否运行（REPORT_LOGIC_NUMBER_REPAIR 与 REPORT_NARRATIVE_SYNC 皆开）。"""
+        return bool(getattr(Config, "REPORT_LOGIC_NUMBER_REPAIR", False)
+                    and getattr(Config, "REPORT_NARRATIVE_SYNC", True))
+
+    @staticmethod
+    def _logic_number_gate() -> str:
+        """REPORT-3：生效的 REPORT_LOGIC_NUMBER_GATE（off / observe / numeric；未知值按 observe 并告警）。
+
+        每份报告（默认 observe）都会走到这里：审计模块导入失败绝不能让稳定器或终审抛出，故退回
+        原始取值（off / numeric 照用，其余按 observe）并告警；numeric 分支自身仍失败即关闭。"""
+        raw = getattr(Config, "REPORT_LOGIC_NUMBER_GATE", "observe")
+        try:
+            from .logic_number import resolve_gate
+        except Exception as exc:  # noqa: BLE001 — 只读观测的门值解析不得阻断发布
+            logger.warning(f"logic_number 模块导入失败，按原始取值解析 REPORT_LOGIC_NUMBER_GATE: {exc}")
+            value = str(raw or "").strip().lower()
+            return value if value in ("off", "numeric") else "observe"
+        return resolve_gate(raw)
+
+    def _spine_scenario_rows(self) -> List[Dict[str, Any]]:
+        """REPORT-3：当前预测骨架（成稿后即最终 forecast）的情景行；无骨架/无情景时为空列表。"""
+        spine = getattr(self, "_forecast_spine", None)
+        rows = spine.get("scenarios") if isinstance(spine, dict) else None
+        return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+    def _repair_outline_summary_numbers(self, outline: "ReportOutline") -> None:
+        """REPORT-3：把大纲摘要里与骨架不符的别名概率槽（「基准情景（40%）」对 A=0.35）确定性改成
+        骨架值（零 token）。调用方在 report.outline / self._outline_summary 赋值与 save_outline 之前
+        调用，故大纲、meta、引用溯源豁免文本与成稿摘要 blockquote 始终逐字节一致。改写记入
+        self._logic_number_summary_repair，由 _repair_logic_number 并入修复记录；失败仅告警。"""
+        try:
+            from . import logic_number as _ln
+            summary = getattr(outline, "summary", None)
+            findings = _ln.find_probability_slots(summary, self._spine_scenario_rows())
+            new_summary, applied = _ln.substitute_probability_slots(summary, findings)
+            if applied:
+                outline.summary = new_summary
+                self._logic_number_summary_repair = [
+                    {"where": "outline_summary", **row} for row in applied]
+                logger.info(f"大纲摘要概率槽已同步骨架: {applied}")
+        except Exception as _ln_err:  # noqa: BLE001 — 确定性修复为增强，失败保留原摘要
+            logger.warning(f"大纲摘要概率槽同步失败（忽略，保留原文）: {_ln_err}")
+
+    @staticmethod
+    def _resync_summary_blockquote(report: "Report", md: str, scenarios: List[Dict[str, Any]]
+                                   ) -> Tuple[str, Optional[str], List[Dict[str, str]]]:
+        """REPORT-3：成稿阶段的摘要补同步（只计算，不改任何状态）。规划时骨架尚无情景（成稿后
+        抽取的旧路径）或其后概率又被移动时，摘要仍可能与最终情景不符；仅当成稿里恰有一处整行块
+        等于 "> {outline.summary}"（摘要含换行时为多行：首行带 "> "，其后是 blockquote 的惰性续行）
+        时才改写该块，并返回改写后的摘要供调用方与 report.outline.summary / self._outline_summary
+        一并提交（四者保持逐字节一致）。找不到唯一的那一块则不改。
+        返回 (成稿, 新摘要或 None, 改写记录)。"""
+        from . import logic_number as _ln
+        summary = getattr(getattr(report, "outline", None), "summary", None)
+        new_summary, applied = _ln.substitute_probability_slots(
+            summary, _ln.find_probability_slots(summary, scenarios))
+        if not applied:
+            return md, None, []
+        block = f"> {summary}"
+        hits: List[int] = []
+        position = md.find(block)
+        while position >= 0 and len(hits) < 2:
+            end = position + len(block)
+            if (position == 0 or md[position - 1] == "\n") and (end == len(md) or md[end] == "\n"):
+                hits.append(position)
+            position = md.find(block, position + 1)
+        if len(hits) != 1:
+            return md, None, []
+        synced = md[:hits[0]] + f"> {new_summary}" + md[hits[0] + len(block):]
+        return synced, new_summary, [{"where": "outline_summary", **row} for row in applied]
+
+    def _repair_logic_number(self, report_id: str, report: "Report") -> None:
+        """REPORT-3：稳定器之前的确定性别名概率槽修复（零 token）。
+
+        对成稿（跳过摘要 blockquote——它只与大纲摘要一并改写，见 _repair_outline_summary_numbers /
+        _resync_summary_blockquote，单独改写会破坏与 self._outline_summary 的一致）做
+        logic_number.audit_markdown，把 fixable 槽位的数字换成骨架值；区间/数量/合计/市场/引语/
+        条件/历史守卫命中的 unresolved 槽位只计数、绝不改写。全部算完后一次提交：
+        report.markdown_content 与 full_report.md（放在语言纯度之后、编辑 lint 与
+        _stabilize_publish_markdown 之前，稳定器与终审的 SHA 指纹因此覆盖修复后的字节），摘要补同步时
+        连同 outline.summary / self._outline_summary / outline.json；成稿有改写时再刷新 forecast.json
+        的 quality.logic_number（_refresh_logic_number_quality）。结果记
+        self._logic_number_repair = {applied（截断明细）, applied_count / summary_count / body_count
+        （未截断总数）, unresolved}。REPORT_LOGIC_NUMBER_REPAIR（默认关）或 REPORT_NARRATIVE_SYNC 关、
+        或骨架无情景时不做任何事（成稿逐字节不变）；任何失败仅告警。"""
+        if not self._logic_number_repair_enabled():
+            return
+        scenarios = self._spine_scenario_rows()
+        if not scenarios:
+            return
+        try:
+            from . import logic_number as _ln
+            md = report.markdown_content or ""
+            synced_md, new_summary, summary_rows = self._resync_summary_blockquote(
+                report, md, scenarios)
+            audit = _ln.audit_markdown(synced_md, scenarios, skip_summary_blockquote=True,
+                                       max_findings=None)
+            new_md, applied = _ln.substitute_probability_slots(synced_md, audit["findings"])
+            applied_rows = list(getattr(self, "_logic_number_summary_repair", None) or [])
+            applied_rows += summary_rows + [{"where": "body", **row} for row in applied]
+        except Exception as _ln_err:  # noqa: BLE001 — 确定性修复为增强，失败保留原文
+            logger.warning(f"概率槽修复失败（忽略，保留原文）: {_ln_err}")
+            return
+        # applied 只留前 LOGIC_NUMBER_FINDINGS_CAP 条明细；*_count 为未截断的总数（摘要 + 正文）。
+        self._logic_number_repair = {
+            "applied": applied_rows[:_ln.LOGIC_NUMBER_FINDINGS_CAP],
+            "applied_count": len(applied_rows),
+            "summary_count": len(applied_rows) - len(applied),
+            "body_count": len(applied),
+            "unresolved": audit["unresolved"],
+        }
+        if new_summary is not None:
+            report.outline.summary = new_summary
+            self._outline_summary = new_summary
+        if new_md != md:
+            report.markdown_content = new_md
+            try:
+                folder = ReportManager._get_report_folder(report_id)
+                write_text_atomic(os.path.join(folder, "full_report.md"), new_md)
+                if new_summary is not None:
+                    ReportManager.save_outline(report_id, report.outline)
+            except Exception as _we:  # noqa: BLE001
+                logger.warning(f"重写 full_report.md / outline.json（概率槽修复）失败（忽略）: {_we}")
+        if new_md != md or applied_rows:
+            # 仅规划时摘要被修复、正文无需改写时，草稿观测里也还没有修复记录，同样刷新。
+            self._refresh_logic_number_quality(report_id, new_md)
+        logger.info(f"概率槽修复: {report_id} 正文改写 {len(applied)} 处｜摘要改写 "
+                    f"{len(summary_rows)} 处｜未解决 {audit['unresolved']} 处")
+
+    def _refresh_logic_number_quality(self, report_id: str, md: str) -> None:
+        """REPORT-3：修复改写了成稿后，把 forecast.json（及内存骨架）的 quality.logic_number 换成
+        修复后字节上的观测（含修复记录）。_finalize_structured_forecast 记下的是修复前草稿上的观测，
+        REPORT_FINAL_READ_ONLY_AUDIT 关闭时没有终审再覆盖它，留着就会描述一份从未发布的文本。
+        gate=off、无 forecast.json 或无情景时不动；读-改-写，失败仅告警（只关乎可观测性）。"""
+        try:
+            fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
+            if not os.path.exists(fpath):
+                return
+            with open(fpath, "r", encoding="utf-8") as f:
+                fc = json.load(f)
+            if not isinstance(fc, dict):
+                return
+            observation = self._logic_number_observation(md, fc)
+            if observation is None:
+                return
+            fc.setdefault("quality", {})["logic_number"] = observation
+            write_text_atomic(fpath, json.dumps(fc, ensure_ascii=False, indent=2))
+            if isinstance(getattr(self, "_forecast_spine", None), dict):
+                self._forecast_spine.setdefault("quality", {})["logic_number"] = observation
+        except Exception as _fe:  # noqa: BLE001 — 观测性记录，绝不影响成稿
+            logger.warning(f"概率槽修复后刷新 forecast.json quality.logic_number 失败（忽略）: {_fe}")
+
+    def _logic_number_observation(self, md: str,
+                                  forecast: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """REPORT-3：只读别名概率槽观测（REPORT_LOGIC_NUMBER_GATE != off）——含摘要 blockquote 的
+        logic_number.audit_markdown，再附上本次运行的修复记录（有则附）。从不进 hard_issues / 发布门。
+        gate=off 或无情景时返回 None（调用方不写字段）；失败仅告警并返回 None。"""
+        if self._logic_number_gate() == "off":
+            return None
+        scenarios = forecast.get("scenarios") if isinstance(forecast, dict) else None
+        if not isinstance(scenarios, list) or not scenarios:
+            return None
+        try:
+            from . import logic_number as _ln
+            observation = _ln.audit_markdown(md or "", scenarios)
+            repair = getattr(self, "_logic_number_repair", None)
+            if repair is not None:
+                observation["repair"] = repair
+            return observation
+        except Exception as _ln_err:  # noqa: BLE001 — 观测性记录，绝不影响产物
+            logger.warning(f"概率槽观测失败（忽略）: {_ln_err}")
+            return None
 
     def _projection_attribution_audit(self, md: str) -> Optional[Dict[str, Any]]:
         """RESEARCH-5：已报告 vs 预期的归因观测（report_lint.check_projection_attribution）——
@@ -9323,6 +9926,8 @@ class ReportAgent:
             if isinstance(getattr(self, "_forecast_spine", None), dict)
             else None
         )
+        # REPORT-3: numeric gate only adds alias mismatches to the detection report.
+        alias_aware = self._logic_number_gate() == "numeric"
         folder = ReportManager._get_report_folder(report_id)
         totals: Dict[str, Any] = {
             "passes": 0,
@@ -9380,6 +9985,7 @@ class ReportAgent:
                 lang,
                 mode="final",
                 spine=spine,
+                alias_aware_s11=alias_aware,
             )
             if not cleaned.strip():
                 raise RuntimeError(
@@ -9412,6 +10018,7 @@ class ReportAgent:
                 lang,
                 mode="final",
                 spine=spine,
+                alias_aware_s11=alias_aware,
             )
             unsupported = int(semantic.get("unsupported", 0) or 0)
             totals["semantic_unsupported"] = unsupported
@@ -9459,8 +10066,10 @@ class ReportAgent:
         ):
             try:
                 _current = report.markdown_content or ""
-                _once, _ = _rl.lint_report(_current, lang, mode="final", spine=spine)
-                _twice, _info2 = _rl.lint_report(_once, lang, mode="final", spine=spine)
+                _once, _ = _rl.lint_report(_current, lang, mode="final", spine=spine,
+                                           alias_aware_s11=alias_aware)
+                _twice, _info2 = _rl.lint_report(_once, lang, mode="final", spine=spine,
+                                                 alias_aware_s11=alias_aware)
                 if _once == _twice and _once.strip() and not _info2.get("changed"):
                     report.markdown_content = _once
                     write_text_atomic(
@@ -9858,6 +10467,7 @@ class ReportAgent:
             lang,
             mode="final",
             spine=forecast if isinstance(forecast, dict) else None,
+            alias_aware_s11=self._logic_number_gate() == "numeric",
         )
 
         audit: Dict[str, Any] = {
@@ -9898,6 +10508,16 @@ class ReportAgent:
         projection_audit = self._projection_attribution_audit(md)
         if projection_audit is not None:
             audit["projection_attribution"] = projection_audit
+        # REPORT-3: observe-only alias probability-slot audit of the final body (plus the
+        # run's repair record); _final_audit_integrity_issues never reads it.
+        logic_number_audit = self._logic_number_observation(body, forecast)
+        if logic_number_audit is not None:
+            audit["logic_number"] = logic_number_audit
+        # REPORT-9: read-only figure check on the final bytes; never read by
+        # _final_audit_integrity_issues or the publish gate.
+        verified_figures_check = self._verified_figures_check(md)
+        if verified_figures_check is not None:
+            audit["verified_figures"] = self._verified_figures_summary(verified_figures_check)
         # RESEARCH-9: what the publish stabilizer stripped / added before this
         # audit (telemetry: neither the integrity issues nor the gate read it).
         pre_audit_repairs = self._pre_audit_repairs(report_id, body_marker_audit)
@@ -9916,6 +10536,15 @@ class ReportAgent:
             quality["quote_provenance"] = quote_audit
             quality["numeric_consistency"] = numeric_audit
             quality["implausible_stats"] = stat_audit
+            # REPORT-3: the final-bytes alias-slot observation (with this run's repair record)
+            # replaces the draft one _finalize_structured_forecast took before the repair.
+            if logic_number_audit is not None:
+                quality["logic_number"] = logic_number_audit
+            else:
+                quality.pop("logic_number", None)
+            if "verified_figures" in audit:
+                # REPORT-9: the final bytes' figure check replaces the draft's.
+                quality["verified_figures"] = dict(audit["verified_figures"])
             if pre_audit_repairs is not None:
                 # Before serialization, so forecast_sha256 seals it.
                 quality["citation_finalization"] = pre_audit_repairs
@@ -10999,6 +11628,8 @@ class ReportAgent:
                     simulation_requirement=self.simulation_requirement,
                     max_agents=max_agents,
                     graph_id=self.graph_id,  # T3.14: 把采访回答持久化为 typed 图谱事实
+                    # FU-8：编排器交来的该运行钉值；None → interview_agents 按模拟 id 查钉。
+                    feedback_allowed=getattr(self, "interview_graph_feedback", None),
                 )
                 return result.to_text()
             
@@ -13144,6 +13775,13 @@ class ReportAgent:
                 forecast_spine_block=self._forecast_spine_block,
                 require_forecast_structure=_spine_ready,
             )
+            # REPORT-3：摘要 blockquote 由 outline.summary 组装，引用溯源审计只豁免
+            # self._outline_summary——在二者赋值与 save_outline 之前把摘要里的过期别名概率槽改成
+            # 骨架值，大纲 / meta / 豁免文本 / 成稿 blockquote 因此逐字节一致（零 token）。
+            self._logic_number_summary_repair = []
+            self._logic_number_repair = None
+            if _spine_ready and self._logic_number_repair_enabled():
+                self._repair_outline_summary_numbers(outline)
             report.outline = outline
             # RPT-5: 供引用溯源审计豁免系统注入的摘要 blockquote（"> {outline.summary}"）。
             self._outline_summary = outline.summary or ""
@@ -13435,6 +14073,11 @@ class ReportAgent:
                     except Exception as _lp_err:  # noqa: BLE001
                         logger.warning(f"语言纯度扫描失败（忽略，保留原文）: {_lp_err}")
 
+            # REPORT-3：确定性别名概率槽修复——所有注入与语言纯度之后、编辑 lint 与发布稳定器之前
+            # （SHA 指纹覆盖修复后的字节）。REPORT_LOGIC_NUMBER_REPAIR / REPORT_NARRATIVE_SYNC 关或
+            # 骨架无情景时不动成稿；失败仅告警。
+            self._repair_logic_number(report_id, report)
+
             # WAVE9：确定性编辑纪律 lint——所有修复/注入/纯度处理之后、双语翻译之前跑一遍
             # report_lint.lint_report（引用残留/边转储/旧模拟标签/孤悬归因行/重复句…），
             # lint 报告记入 forecast.json quality['lint']。放在 REPORT_STRUCTURED_FORECAST
@@ -13469,6 +14112,8 @@ class ReportAgent:
             # rewrites Markdown; it only persists final_audit.json + forecast fields.
             if getattr(Config, "REPORT_FINAL_READ_ONLY_AUDIT", True):
                 self._enforce_final_publish_audit(report_id, report)
+            # REPORT-9：主报告已定型，写影子工件 figure_provenance.json（块为空 / 旗标关时不写）。
+            self._write_figure_provenance(report_id, report)
 
             # BILINGUAL：在所有最终化/可视化/纯度处理之后（成稿已定型），自动生成另一语种版本
             # （英⇄中）。逐 H2 章节并发翻译，落 full_report.{en|zh}.md 并把 translations 条目写入

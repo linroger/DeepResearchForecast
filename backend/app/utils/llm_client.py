@@ -23,6 +23,7 @@ from ..config import Config
 from .llm_recovery import next_max_tokens
 from .llm_text import flatten_content, has_dangling_think, normalize_finish_reason, strip_think
 from .logger import get_logger
+from .numeric import parse_finite_float, reject_nonfinite_constant
 # INFRA-8: claude_cli_model_arg lives with the other model-provenance helpers; it stays
 # importable from here (backbone_sensitivity, eval_forecast_quality).
 from .model_provenance import (
@@ -72,8 +73,13 @@ try:
         _openai.APIConnectionError,
         _openai.InternalServerError,
     )
+    # INFRA-4: typed classes read before any wording by _classify_llm_error.
+    _RATE_LIMIT_API_ERRORS: tuple = (_openai.RateLimitError,)
+    _AUTH_API_ERRORS: tuple = (_openai.AuthenticationError,)
 except Exception:  # noqa: BLE001 — openai 不可导入时退化为仅重试 RuntimeError
     _RETRYABLE_API_ERRORS = ()
+    _RATE_LIMIT_API_ERRORS = ()
+    _AUTH_API_ERRORS = ()
 
 
 # Per-context request timeout (seconds) for chat()'s OpenAI-compatible calls.  The
@@ -225,8 +231,8 @@ _FB_AUTH_UNAVAILABLE_UNTIL: Dict[tuple, float] = {}
 _FB_AUTH_COOLDOWN_S = 900.0
 
 
-def _is_deterministic_auth_error(exc: Exception) -> bool:
-    """Return true for credential failures that retries cannot repair."""
+def _auth_text_error(exc: Any) -> bool:
+    """Credential-failure wording in ``str(exc)`` (the pre-INFRA-4 auth check)."""
     text = str(exc or "").lower()
     return bool(
         "authenticationerror" in text
@@ -236,6 +242,17 @@ def _is_deterministic_auth_error(exc: Exception) -> bool:
         or "api_error_status': 401" in text
         or re.search(r"(?:error|status|code)[^\n]{0,24}\b401\b", text)
     )
+
+
+def _is_deterministic_auth_error(exc: Exception) -> bool:
+    """Return true for credential failures that retries cannot repair.
+
+    INFRA-4 (LLM_ERROR_CLASSIFY_STATUS_FIRST, default on): true exactly when
+    _classify_llm_error says 'auth', so a usage-cap message that also reads like an auth
+    failure stays retryable quota. Off: the wording check alone (legacy)."""
+    if _classify_status_first():
+        return _classify_llm_error(exc) == "auth"
+    return _auth_text_error(exc)
 
 
 def _is_deterministic_invalid_request_error(exc: Exception) -> bool:
@@ -254,6 +271,111 @@ def _is_deterministic_invalid_request_error(exc: Exception) -> bool:
         or "invalid_request_error" in text
         or re.search(r"(?:error|status|code)[^\n]{0,24}\b400\b", text)
     )
+
+
+# INFRA-4: quota wording of the status-first classifier: _is_quota's phrases plus balance
+# exhaustion, and 429 and the provider usage-cap codes MiniMax 2056 (Token Plan cap) and GLM 1113
+# (account in arrears) only where an error code is reported: after code / status / error /
+# base_resp / 错误码 / 状态码 (within 24 non-digit characters, not glued to an identifier such
+# as "-2056-" or "req_20561"), or as "HTTP 429" / "HTTP429". _is_quota's bare '429' substring
+# also matches "duration_ms":1429 or a cost of 0.04291 inside a Claude CLI auth envelope, so the
+# envelope's numeric telemetry fields are blanked first (_ENVELOPE_TELEMETRY_RE): with a null
+# api_error_status, '"api_error_status":null,"duration_ms":2056' would otherwise read as a code.
+# re.ASCII keeps a code right after CJK text ('错误码429') whole. With the classifier on, the
+# usage-cap codes are also kept out of failure messages (_status_safe), so no max_tokens value or
+# model id reads as one.
+_QUOTA_TEXT_MARKERS = ("rate_limit", "rate limit", "quota", "usage limit", "insufficient balance")
+_USAGE_CAP_CODES = ("1113", "2056")
+_QUOTA_CODE_RE = re.compile(
+    r"\bhttp[ \t/]*429(?!\d)"
+    r"|(?:\b(?:code|status|error|base_resp)|错误码|错误代码|状态码)[^\n\d]{0,24}?(?<![\w.-])(?:429|2056|1113)(?!\d)",
+    re.ASCII)
+_ENVELOPE_TELEMETRY_RE = re.compile(
+    r"[\"']?(?:duration_ms|duration_api_ms|total_cost_usd|num_turns|[a-z_]*tokens)[\"']?\s*:\s*[-+.\deE]+")
+# The HTTP status a Claude CLI result envelope reports for a failed API call (JSON or dict repr).
+_ENVELOPE_STATUS_RE = re.compile(r"api_error_status[\"']?\s*:\s*(\d{3})\b")
+
+
+def _classify_status_first() -> bool:
+    return bool(getattr(Config, "LLM_ERROR_CLASSIFY_STATUS_FIRST", True))
+
+
+def _exc_status_code(exc: Any) -> Optional[int]:
+    """The HTTP status a failed call carries: an SDK exception's ``status_code`` or
+    ``response.status_code``, else a Claude CLI envelope's ``api_error_status`` in its text."""
+    for status in (getattr(exc, "status_code", None),
+                   getattr(getattr(exc, "response", None), "status_code", None)):
+        if isinstance(status, int) and not isinstance(status, bool):
+            return status
+    match = _ENVELOPE_STATUS_RE.search(str(exc or ""))
+    return int(match.group(1)) if match else None
+
+
+def _quota_text_error(exc: Any) -> bool:
+    """Quota wording: _QUOTA_TEXT_MARKERS, or 429 / 2056 / 1113 reported as an error code."""
+    text = str(exc or "").lower()
+    if any(marker in text for marker in _QUOTA_TEXT_MARKERS):
+        return True
+    return bool(_QUOTA_CODE_RE.search(_ENVELOPE_TELEMETRY_RE.sub("", text)))
+
+
+def _llm_error_status_kind(exc: Any) -> Optional[str]:
+    """Type / HTTP-status stage of _classify_llm_error: RateLimitError or 429 is quota,
+    AuthenticationError or 401 / 403 is auth, LLMContentFiltered or 422 is a content filter,
+    400 is an invalid request (MiniMax 2056 and GLM 1113 caps arrive as 429, so a 400 whose text
+    holds such a number is no quota). None when the exception carries no status (most CLI
+    errors, typed envelope failures, plain text)."""
+    status = _exc_status_code(exc)
+    if isinstance(exc, _RATE_LIMIT_API_ERRORS) or status == 429:
+        return "quota"
+    if isinstance(exc, _AUTH_API_ERRORS) or status in (401, 403):
+        return "auth"
+    if isinstance(exc, LLMContentFiltered) or status == 422:
+        return "content_filter"
+    if status == 400:
+        return "invalid_request"
+    return None
+
+
+def _llm_error_text_kind(exc: Any) -> Optional[str]:
+    """Wording stage of _classify_llm_error: quota before auth (a usage-cap notice can carry
+    auth-like words or a '401' in an id), then a deterministic invalid request."""
+    if _quota_text_error(exc):
+        return "quota"
+    if _auth_text_error(exc):
+        return "auth"
+    if _is_deterministic_invalid_request_error(exc):
+        return "invalid_request"
+    return None
+
+
+def _classify_llm_error(exc: Any) -> Optional[str]:
+    """'quota' | 'auth' | 'content_filter' | 'invalid_request' | None for a failed LLM call.
+
+    INFRA-4 (LLM_ERROR_CLASSIFY_STATUS_FIRST, default on): the exception type and HTTP status
+    decide first (_llm_error_status_kind), then the wording, quota before auth
+    (_llm_error_text_kind). chat()'s retry loop, _is_deterministic_auth_error and the
+    orchestrator's outage classifier read it; chat_with_tools' 429 breaker reads
+    _is_quota_failure. Off: the legacy order, auth wording before quota wording, and no status
+    or content-filter reading.
+    """
+    if not _classify_status_first():
+        if _auth_text_error(exc):
+            return "auth"
+        if _is_quota(exc):
+            return "quota"
+        if _is_deterministic_invalid_request_error(exc):
+            return "invalid_request"
+        return None
+    return _llm_error_status_kind(exc) or _llm_error_text_kind(exc)
+
+
+def _is_quota_failure(exc: Any) -> bool:
+    """Whether a failed call counts toward the 429 breaker: _classify_llm_error says 'quota'
+    (LLM_ERROR_CLASSIFY_STATUS_FIRST on) or, off, the legacy _is_quota wording."""
+    if _classify_status_first():
+        return _classify_llm_error(exc) == "quota"
+    return _is_quota(exc)
 
 
 # 每个误配置的回退提供方只告警一次（进程级）；并发 chat() 失败转移时避免刷屏。
@@ -375,8 +497,9 @@ _THINKING_KNOBS = {
 }
 # Substrings that DRF's text classifiers read as HTTP status codes (_is_quota matches a bare
 # '429'; the auth / invalid-request checks match delimited 401 / 400; ' 422' marks a content
-# filter). A max_tokens value or model id containing one is left out of failure messages
-# (it stays on the exception's attributes).
+# filter). A max_tokens value or model id containing one is left out of failure messages (it
+# stays on the exception's attributes); so are _USAGE_CAP_CODES while the status-first
+# classifier, which reads them as quota, is on.
 _STATUS_LIKE_CODES = ("400", "401", "422", "429")
 # MiniMax base_resp status codes that no retry can repair, each mapped to wording DRF's text
 # classifiers already recognise. The auth codes read as a 401, so _is_deterministic_auth_error
@@ -399,6 +522,8 @@ _CACHEABLE_FINISH_REASONS = frozenset({"stop", "tool_calls", "unknown"})
 # turn with empty content (400), and chat() can return '' when LLM_TRANSPORT_STRICT is off.
 _JSON_MISS_INVALID = "invalid JSON"
 _JSON_MISS_NOT_OBJECT = "not a JSON object"
+# INFRA-4: a reply that parses only when NaN / Infinity are accepted gets this sharper reason.
+_JSON_MISS_NONFINITE = "invalid JSON: NaN or Infinity is not a JSON number"
 _JSON_REPAIR_REPLY_CHARS = 4000
 _JSON_REPAIR_EMPTY_REPLY = "(empty reply)"
 # Passed as _parse_json_response_ex(unparsed=...) so a reply of JSON null (parsed, but not an
@@ -424,14 +549,33 @@ def _transport_strict() -> bool:
     return bool(getattr(Config, "LLM_TRANSPORT_STRICT", True))
 
 
+def _json_strict_numbers() -> bool:
+    return bool(getattr(Config, "LLM_JSON_STRICT_NUMBERS", True))
+
+
+# FU-12: what decoding untrusted model text can raise. json.JSONDecodeError is a ValueError;
+# a plain ValueError is an integer literal past Python's int-string digit limit (4300 by
+# default), and RecursionError is nesting deeper than the decoder's recursion limit. All
+# three mean "this reply does not parse", never a crash.
+_JSON_PARSE_ERRORS = (ValueError, RecursionError)
+
+
+def _loads_finite(text: str) -> Any:
+    """``json.loads`` that rejects NaN, Infinity, -Infinity and overflowing floats (INFRA-4)."""
+    return json.loads(text, parse_constant=reject_nonfinite_constant,
+                      parse_float=parse_finite_float)
+
+
 def _is_json_response_format(response_format: Optional[Dict]) -> bool:
     return isinstance(response_format, dict) and response_format.get("type") in ("json_object", "json_schema")
 
 
 def _status_safe(value: Any) -> bool:
-    """True when ``str(value)`` holds none of _STATUS_LIKE_CODES, so a failure message may show it."""
+    """True when ``str(value)`` holds none of _STATUS_LIKE_CODES (nor, with
+    LLM_ERROR_CLASSIFY_STATUS_FIRST on, _USAGE_CAP_CODES), so a failure message may show it."""
     text = str(value)
-    return not any(code in text for code in _STATUS_LIKE_CODES)
+    codes = _STATUS_LIKE_CODES + _USAGE_CAP_CODES if _classify_status_first() else _STATUS_LIKE_CODES
+    return not any(code in text for code in codes)
 
 
 def _field(obj: Any, name: str) -> Any:
@@ -1067,13 +1211,16 @@ class LLMClient:
                 raise
             except (RuntimeError, *_RETRYABLE_API_ERRORS) as exc:
                 last_error = exc
-                if _is_deterministic_auth_error(exc):
+                # INFRA-4: one classification, status first and quota before auth (the legacy
+                # auth-then-quota wording order when LLM_ERROR_CLASSIFY_STATUS_FIRST is off).
+                error_kind = _classify_llm_error(exc)
+                if error_kind == "auth":
                     logger.warning(
                         "LLM authentication failure is deterministic; skipping retries: %s",
                         _err_brief(exc),
                     )
                     break
-                if _is_quota(exc):
+                if error_kind == "quota":
                     _cb_record_429(self.provider)  # LLM-3: 连续配额失败达阈值 → 冷却直连回退
                 if isinstance(exc, LLMEmptyChoices) and exc.deterministic:
                     # INFRA-1: 确定性错误信封（余额不足/参数非法等）重试无益，直接转回退。
@@ -1329,6 +1476,12 @@ class LLMClient:
                 response, unparsed=_JSON_UNPARSED)
             if value is _JSON_UNPARSED:
                 reason = _JSON_MISS_INVALID
+                # INFRA-4: name the non-finite number when that is all that kept the reply out.
+                if (_json_strict_numbers()
+                        and self._parse_json_response_ex(response, unparsed=_JSON_UNPARSED,
+                                                         strict_numbers=False)[0]
+                        is not _JSON_UNPARSED):
+                    reason = _JSON_MISS_NONFINITE
             elif value is None or (not allow_non_dict and not isinstance(value, dict)):
                 reason = _JSON_MISS_NOT_OBJECT
             else:
@@ -1518,7 +1671,7 @@ class LLMClient:
                 break
             except (RuntimeError, *_RETRYABLE_API_ERRORS) as exc:
                 last_error = exc
-                if _is_quota(exc):
+                if _is_quota_failure(exc):  # INFRA-4: the same quota verdict as chat()
                     _cb_record_429(self.provider)
                 if isinstance(exc, LLMEmptyChoices) and exc.deterministic:
                     logger.warning(f"chat_with_tools 遇确定性错误信封，不再重试: {_err_brief(exc)}")
@@ -1565,7 +1718,7 @@ class LLMClient:
             args_error: Optional[str] = None
             try:
                 args = json.loads(raw_args) if raw_args else {}
-            except (json.JSONDecodeError, TypeError) as exc:
+            except (*_JSON_PARSE_ERRORS, TypeError) as exc:
                 args = {}
                 args_error = f"{type(exc).__name__}: {exc}"
             if args_error is None and not isinstance(args, dict):
@@ -1592,25 +1745,33 @@ class LLMClient:
         return LLMClient._parse_json_response_ex(response)[0]
 
     @staticmethod
-    def _parse_json_response_ex(response: str, *, unparsed: Any = None) -> Tuple[Any, bool]:
+    def _parse_json_response_ex(response: str, *, unparsed: Any = None,
+                                strict_numbers: Optional[bool] = None) -> Tuple[Any, bool]:
         """(value, repaired_truncation): the _parse_json_response value, plus whether the
         bracket-repair branch had to close an unterminated string / structure (or drop a
         dangling trailing comma) for it to parse. (unparsed, False) when nothing parses:
         (None, False) by default, the same as a reply of JSON null; chat_json passes a
-        sentinel to tell the two apart."""
+        sentinel to tell the two apart.
+
+        INFRA-4 (LLM_JSON_STRICT_NUMBERS, default on; ``strict_numbers`` overrides it): NaN,
+        Infinity, -Infinity and float literals that overflow (1e999) are not JSON, so a reply
+        carrying one does not parse (chat_json's repair turn then asks again)."""
         value, repaired, _partial_item = LLMClient._parse_json_response_detail(
-            response, unparsed=unparsed)
+            response, unparsed=unparsed, strict_numbers=strict_numbers)
         return value, repaired
 
     @staticmethod
-    def _parse_json_response_detail(response: str, *,
-                                    unparsed: Any = None) -> Tuple[Any, bool, bool]:
+    def _parse_json_response_detail(response: str, *, unparsed: Any = None,
+                                    strict_numbers: Optional[bool] = None) -> Tuple[Any, bool, bool]:
         """_parse_json_response_ex plus ``partial_item`` (INFRA-3): True when the repair closed
         a list element that the cut left open (the cut fell inside an element of a list), so
         that element's content is incomplete. False when every list element in the repaired
         value was closed by the reply itself: the cut then fell between elements or outside
         the lists, or the search for the last '}' had already dropped the incomplete element.
-        Always False when nothing was repaired."""
+        Always False when nothing was repaired. ``strict_numbers`` as in _parse_json_response_ex."""
+        if strict_numbers is None:
+            strict_numbers = _json_strict_numbers()
+        loads = _loads_finite if strict_numbers else json.loads
         cleaned = response.strip()
         # 清理 markdown 代码块标记
         cleaned = re.sub(r'^```(?:json)?\s*\n?', '', cleaned, flags=re.IGNORECASE)
@@ -1618,17 +1779,20 @@ class LLMClient:
         cleaned = cleaned.strip()
 
         try:
-            return json.loads(cleaned), False, False
-        except json.JSONDecodeError:
+            return loads(cleaned), False, False
+        except _JSON_PARSE_ERRORS:
             pass
 
         # 提取首个 JSON 对象（应对模型在 JSON 前后加说明文字）
-        match = re.search(r'\{[\s\S]*\}', cleaned)
-        if match:
+        # FU-12: the span from the first '{' to the last '}' -- what re.search(r'\{[\s\S]*\}')
+        # matched, found in linear time (the regex was quadratic on many '{' and no '}').
+        first, last = cleaned.find('{'), cleaned.rfind('}')
+        if 0 <= first < last:
+            span = cleaned[first:last + 1]
             try:
-                return json.loads(match.group()), False, False
-            except json.JSONDecodeError:
-                cleaned = match.group()
+                return loads(span), False, False
+            except _JSON_PARSE_ERRORS:
+                cleaned = span
         else:
             # 没有闭合的 '}'：截断式输出，从首个 '{' 起修复
             brace = cleaned.find('{')
@@ -1676,8 +1840,8 @@ class LLMClient:
             opener == '[' and (depth < len(stack) - 1 or in_string)
             for depth, opener in enumerate(stack))
         try:
-            return json.loads(repaired), repaired != cleaned, partial_item
-        except json.JSONDecodeError:
+            return loads(repaired), repaired != cleaned, partial_item
+        except _JSON_PARSE_ERRORS:
             return unparsed, False, False
 
     # ------------------------------------------------------------------
