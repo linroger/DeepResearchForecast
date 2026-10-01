@@ -647,6 +647,12 @@ def test_derived_supports_only_ever_add_report_support():
         before = ReportAgent._semantic_citation_support(line, source)
         assert ReportAgent._semantic_citation_support(line, dict(source, derived_supports=derived)) == before, line
     assert [ReportAgent._semantic_citation_support(line, source) for line, source, _ in cases] == [None, None, False]
+    # A numeric claim stays "unverifiable" (never "unsupported", whose precision may be deleted).
+    claim = "2024年全球储能投资达到500亿美元，装机容量达到37吉瓦。"
+    for derived in ([], cases[0][2]):
+        agent = ReportAgent.__new__(ReportAgent)
+        agent.sources = [dict(english, url="https://agency.gov/capacity", derived_supports=derived)]
+        assert agent._quantitative_semantic_decision(claim) == ("", "unverifiable")
     # Support the other spans give stays.
     supported = "Installed capacity reached 37 GW in 2024 [S1]."
     assert ReportAgent._semantic_citation_support(supported, english) is True
