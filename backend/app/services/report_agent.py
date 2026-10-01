@@ -1125,6 +1125,21 @@ _SIGNAL_PACK_UNKNOWN_HEALTH_NOTE = (
 )
 
 
+def _prior_echo_caveat(trajectory: Any) -> str:
+    """SIM-4: the world-state block's qualitative caveat for a prior-echo or
+    prior-leader-herd trajectory (sim_prior_echo.prior_echo_diagnostics), else ""."""
+    from .sim_prior_echo import (
+        VERDICT_PRIOR_ECHO, VERDICT_PRIOR_LEADER_HERD, prior_echo_diagnostics,
+    )
+    diag = prior_echo_diagnostics(trajectory if isinstance(trajectory, dict) else {})
+    if diag["verdict"] == VERDICT_PRIOR_ECHO:
+        return "对照诊断：终局分布与种子先验几乎一致——决策通道没有在研究先验之外提供信息，不得作为独立佐证。"
+    if diag["verdict"] == VERDICT_PRIOR_LEADER_HERD:
+        return (f"对照诊断：承诺绝大多数集中于先验领先情景「{diag['prior_leader']}」——推演可能只是在复述先验，"
+                "不构成独立佐证。")
+    return ""
+
+
 REACT_CONTAMINATED_RETRY_MSG = (
     "【格式错误】你上一条输出不是合格的章节正文（疑似系统提示泄漏、工具调用残留或采访超时提示）。"
     '请立即以 "Final Answer:" 开头，只输出本章节的中文正文：用研究材料中的可验证事实与 [S#]，'
@@ -3148,6 +3163,13 @@ class ReportAgent:
                              f"（截至 {(data or {}).get('horizon_date') or ''}）")
         else:
             lines.append("稳定性诊断：已趋稳" if ca else "稳定性诊断：尚未趋稳（应降低信心）")
+        # SIM-4（SIM_PRIOR_ECHO_DIAGNOSTIC，默认开）：先验回声 / 领先扎堆时，在份额行之后、注释行
+        # 之前加一行不含机制数字的定性提示（forecast_extractor 的份额解析只读份额行，不受影响）；
+        # 其余裁定不加任何行，输出逐字节不变。
+        if getattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", True):
+            echo_line = _prior_echo_caveat(data)
+            if echo_line:
+                lines.append(echo_line)
         lines.append(note_line)
         return "\n".join(lines)
 
@@ -4379,6 +4401,10 @@ class ReportAgent:
                 _ebf_guard_kwargs: Dict[str, Any] = (
                     {"numeric_guard_mode": _ng_mode}
                     if _ng_mode == _numeric_guards.MODE_SHADOW else {})
+                # FU-7：市场被扣下（回测钉，或钉查找失败时失败关闭，见 _markets_withheld_status）
+                # 时弹出模型自报的市场锚点（实时运行不传，调用逐字节不变）。
+                if self._markets_withheld_status() is not None:
+                    _ebf_guard_kwargs["withhold_market_anchors"] = True
                 # B2: 需求书解析出的 binary_min_count 参与生效——取 spec 与 Config 的较大者
                 # （需求书写明「15+ binary forecasts」时不被 Config 默认静默压低）。
                 _bres = _ebf(
@@ -4439,6 +4465,19 @@ class ReportAgent:
                     for _ext_issue in _ext_bq.get("issues") or []:
                         if _ext_issue not in _ext_base and _ext_issue not in _q_issues:
                             _q_issues.append(_ext_issue)
+                    # EVAL-14（FORECAST_BINARY_STRUCTURED_TARGET，默认关）：同目标阈值阶梯单调性审计，
+                    # 在 reconcile 定稿后的概率上做；只告警（不进 issues、不碰发布门与终审政策版本）。
+                    # 增强项：审计异常只记日志，不写键、不影响定稿（degrade-safe）。
+                    if getattr(Config, "FORECAST_BINARY_STRUCTURED_TARGET", False):
+                        try:
+                            from .binary_targets import threshold_ladder_audit as _ladder_audit
+                            _ladder = _ladder_audit(forecast["binary_forecasts"])
+                            _quality["threshold_ladder"] = _ladder
+                            if _ladder["violation_count"]:
+                                logger.warning(f"二元预测阈值阶梯不单调："
+                                               f"{_ladder['violation_count']} 处（仅告警）")
+                        except Exception as _lae:  # noqa: BLE001 — 只告警的增强审计
+                            logger.warning(f"二元预测阈值阶梯审计失败（忽略，不影响产物）: {_lae!r}")
                     forecast["binary_quality"] = _quality
                     # RQ-6：校验二元预测结算年份与真实判定期一致——目标年份集合（需求书 +
                     # 日历 horizon_date.year）与二元结算年份集合非空且无交集时，把
@@ -4528,12 +4567,19 @@ class ReportAgent:
         # REPORT-11：概率政策标记与概率形状遥测——置于二元块（含对账重算记分卡）之后，此后不再有步骤
         # 移动情景 / 二元概率。政策标记与形状旗标无关（形状关时开了护栏的运行仍可识别）；形状纯观测，
         # 任何门都不读，随下方 forecast.json 落盘（终审指纹覆盖它），发布提交时抄入账本行
-        # objective_signals。护栏关时不写 forecast_policy；形状关时不写 probability_shape（forecast.json
-        # 回到旧形态）。probability_shape 从不抛出（纯函数，失败返回空块）。
-        if getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False):
+        # objective_signals。护栏（与 EVAL-14 结构化 target）都关时不写 forecast_policy；形状关时不写
+        # probability_shape（forecast.json 回到旧形态）。probability_shape 从不抛出（纯函数，失败返回空块）。
+        # EVAL-14：结构化 target 开启时二元抽取提示词多一段 STRUCTURED TARGET 规则（可能改变起草），
+        # 同样记入 forecast_policy（护栏键照实写出，账本 shape_summary 按它分组不受影响）；两旗标都关
+        # → 不写（forecast.json 不变）。
+        _guard_on = bool(getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False))
+        _target_on = bool(getattr(Config, "FORECAST_BINARY_STRUCTURED_TARGET", False))
+        if _guard_on or _target_on:
             _fq0 = forecast.get("quality")
             _fq = dict(_fq0) if isinstance(_fq0, dict) else {}
-            _fq["forecast_policy"] = {"binary_symmetric_guard": True}
+            _fq["forecast_policy"] = {"binary_symmetric_guard": _guard_on}
+            if _target_on:
+                _fq["forecast_policy"]["binary_structured_target"] = True
             forecast["quality"] = _fq
         if getattr(Config, "FORECAST_PROBABILITY_SHAPE", True):
             _fq0 = forecast.get("quality")

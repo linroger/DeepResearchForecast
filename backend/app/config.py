@@ -1026,6 +1026,19 @@ class Config:
     # forecast.quality.forecast_policy（与形状遥测旗标无关）与准入钉 safety_policy_v1。默认关是安全的：
     # 二元抽取提示词逐字节不变。
     FORECAST_BINARY_SYMMETRIC_GUARD = os.environ.get('FORECAST_BINARY_SYMMETRIC_GUARD', 'false').strip().lower() == 'true'
+    # EVAL-14（P14）：数值阈值型二元的结构化 target——二元抽取提示词追加 STRUCTURED TARGET 规则，
+    # 模型给出的 target 经 binary_targets.validate_binary_target 校验后存 row['target']（不合格存
+    # target_rejected 及原因），报告在定稿概率上做同目标阈值阶梯单调性审计
+    # （binary_quality.threshold_ladder，只告警，不影响发布门与终审政策版本），并记入
+    # quality.forecast_policy.binary_structured_target。默认关：二元抽取提示词、max_tokens 与二元行
+    # 逐字节不变，forecast.json 不多任何键（开启会改变提示词，从而可能改变起草）。不随此旗标的改动
+    # 只有判定标准解析器 _extract_comparable_numeric_range 的两处修复：(1) RESEARCH-15(c) 要求的
+    # 否定修复（否定比较词如 "does not exceed"/"no more than"/不超过 按正确方向读；指标吞入否定词
+    # 或反向判词——"Fails if"、"Resolves negatively/false if"、"Falsified if"——的子句不解析）；
+    # (2) 解析前把水平空白串（制表符、全角空格 U+3000 等）折叠为一个空格以保持线性时间，原先被
+    # 制表符或全角空格截断的子句现在可读。情景分区审计据此读到真实指标，可能新报或不再报
+    # overlapping_numeric_ranges——这是正确行为，不是旗标泄漏。
+    FORECAST_BINARY_STRUCTURED_TARGET = os.environ.get('FORECAST_BINARY_STRUCTURED_TARGET', 'false').strip().lower() == 'true'
     # REPORT-11 概率形状遥测（默认开）：确定性计算情景形状（峰值 max_probability、归一化熵、距均匀分布的
     # TV 距离，叙事前 / 成稿后批判成功时另算批判前后差值）与二元预测形状（0.40-0.60 中间带 / 0.45-0.55
     # 近半 / ≤0.05 或 ≥0.95 极端占比、十分位直方图、市场重述与分区对账向 / 远离 0.5 的移动计数），记入
@@ -1798,8 +1811,9 @@ class Config:
     # noun ("40 economists"); a value written as a range becomes low/high (range_kind
     # stated_range); meta.forecaster_attribution counts kept and dropped fields.  Default
     # false: the fields add ~5-10% extraction output and the forecaster names change which
-    # quant rows match an actor in PREPARE context packs (a row that matched still matches,
-    # but at the 32-row pack cap forecaster matches can displace later rows); off =
+    # quant rows match an actor in PREPARE context packs (a row that matched still matches
+    # and, at the 32-row pack cap, keeps its place: forecaster-only matches fill spare
+    # slots only, FU-10); off =
     # byte-identical facts prompt, quantitative.json and meta.  The parent forwards it to
     # the v3 child.
     RESEARCH_FORECASTER_ATTRIBUTION = os.environ.get(
@@ -2379,6 +2393,12 @@ class Config:
         in ('diagnostic_only', 'no_update', 'validated_update', 'legacy_prompt')
         else 'diagnostic_only'
     )
+    # SIM-4（C30）：零 LLM 的决策通道先验回声诊断（services/sim_prior_echo.py，策略
+    # drf-sim-control/v1）：终局份额与种子先验几乎一致（prior_echo）或承诺扎堆先验领先情景
+    # （prior_leader_herd）时，编排器在 decision_channel_summary.prior_echo 记录并告警，报告
+    # 世界态块追加一行不含数字的定性提示。纯诊断：不动任何概率、不影响运行健康门，其余裁定
+    # 下报告逐字节不变，故默认开；false = 不计算、不记录、不加提示。
+    SIM_PRIOR_ECHO_DIAGNOSTIC = os.environ.get('SIM_PRIOR_ECHO_DIAGNOSTIC', 'true').strip().lower() == 'true'
     # SIM-1：报告世界态块/世界态图表/fork 情景对比表遵从决策通道的显式非 valid 裁定
     # （world_state_trajectory.json 顶层 validity 存在且 != valid）——隐藏结果份额与演化
     # 航点、跳过图表（trajectory_not_valid）、对比表返回 None。默认开：诚实检查 fail-closed，

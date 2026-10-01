@@ -13,9 +13,11 @@ Config fingerprint
     the report stage, never read from run.json: INFRA-7 restamps ``resolved.report`` only
     when the stage completes), the run options max_rounds / research_language, and the
     three forecast knobs no pin covers (FORECAST_ENSEMBLE_MODELS, FORECAST_MARKET_ANCHORING,
-    PREDICTION_MARKETS_ENABLED). FORECAST_ENSEMBLE_MODELS is recorded as the model list the
-    forecast extractor applies (split on commas, stripped, lower-cased, empties and repeats
-    dropped), so spellings of one ensemble share a hash. The order is kept deliberately: the
+    PREDICTION_MARKETS_ENABLED; EVAL-14 adds ``binary_structured_target: true`` only while
+    FORECAST_BINARY_STRUCTURED_TARGET is on, so every flag-off fingerprint is unchanged).
+    FORECAST_ENSEMBLE_MODELS is recorded as the model list the forecast extractor applies
+    (split on commas, stripped, lower-cased, empties and repeats dropped), so spellings of
+    one ensemble share a hash. The order is kept deliberately: the
     extractor draws the models in that order, and each binary's ``ensemble`` record
     (models / probs) and its pooling follow it; only the ``pooled_models`` summary is sorted.
     ``config_hash = 'sha256:' + canonical_json_sha256(fp)``.
@@ -269,6 +271,11 @@ def config_fingerprint(options: Any, run_manifest: Any, *, report_producer: Any 
         forecast = {key: _plain(getattr(cfg, attr, None)) for key, attr in FORECAST_KNOBS}
         # The model list the extractor applies: spellings of one ensemble share a hash.
         forecast["ensemble_models"] = _model_list(getattr(cfg, "FORECAST_ENSEMBLE_MODELS", None))
+        # EVAL-14: FORECAST_BINARY_STRUCTURED_TARGET changes the binary prompt and
+        # max_tokens, so on and off runs must not share a config_hash. Recorded only when
+        # on, so every flag-off fingerprint (and its hash) stays byte-identical.
+        if getattr(cfg, "FORECAST_BINARY_STRUCTURED_TARGET", False):
+            forecast["binary_structured_target"] = True
     return {
         "version": CONFIG_FINGERPRINT_VERSION,
         "run_shape_sha256": _plain(shape.get("sha256")),
