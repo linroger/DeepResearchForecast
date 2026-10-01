@@ -1026,6 +1026,19 @@ class Config:
     # forecast.quality.forecast_policy（与形状遥测旗标无关）与准入钉 safety_policy_v1。默认关是安全的：
     # 二元抽取提示词逐字节不变。
     FORECAST_BINARY_SYMMETRIC_GUARD = os.environ.get('FORECAST_BINARY_SYMMETRIC_GUARD', 'false').strip().lower() == 'true'
+    # EVAL-14（P14）：数值阈值型二元的结构化 target——二元抽取提示词追加 STRUCTURED TARGET 规则，
+    # 模型给出的 target 经 binary_targets.validate_binary_target 校验后存 row['target']（不合格存
+    # target_rejected 及原因），报告在定稿概率上做同目标阈值阶梯单调性审计
+    # （binary_quality.threshold_ladder，只告警，不影响发布门与终审政策版本），并记入
+    # quality.forecast_policy.binary_structured_target。默认关：二元抽取提示词、max_tokens 与二元行
+    # 逐字节不变，forecast.json 不多任何键（开启会改变提示词，从而可能改变起草）。不随此旗标的改动
+    # 只有判定标准解析器 _extract_comparable_numeric_range 的两处修复：(1) RESEARCH-15(c) 要求的
+    # 否定修复（否定比较词如 "does not exceed"/"no more than"/不超过 按正确方向读；指标吞入否定词
+    # 或反向判词——"Fails if"、"Resolves negatively/false if"、"Falsified if"——的子句不解析）；
+    # (2) 解析前把水平空白串（制表符、全角空格 U+3000 等）折叠为一个空格以保持线性时间，原先被
+    # 制表符或全角空格截断的子句现在可读。情景分区审计据此读到真实指标，可能新报或不再报
+    # overlapping_numeric_ranges——这是正确行为，不是旗标泄漏。
+    FORECAST_BINARY_STRUCTURED_TARGET = os.environ.get('FORECAST_BINARY_STRUCTURED_TARGET', 'false').strip().lower() == 'true'
     # REPORT-11 概率形状遥测（默认开）：确定性计算情景形状（峰值 max_probability、归一化熵、距均匀分布的
     # TV 距离，叙事前 / 成稿后批判成功时另算批判前后差值）与二元预测形状（0.40-0.60 中间带 / 0.45-0.55
     # 近半 / ≤0.05 或 ≥0.95 极端占比、十分位直方图、市场重述与分区对账向 / 远离 0.5 的移动计数），记入
