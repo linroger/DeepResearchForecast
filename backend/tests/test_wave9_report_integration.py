@@ -74,49 +74,121 @@ class TestContestedBlock:
         assert sum(1 for l in out.split("\n") if l.startswith("- **")) == 15
 
 
-def _contested(n_model, n_quant, *, unit_scale=0):
+# reconcile_quantitative's why_they_differ on a ~1000x gap (deerflow_research.py).
+_UNIT_SCALE_WHY = ("quantitative disagreement on 'q' reconciled by (metric,unit); high/low ratio=1000.0"
+                   "; ~1000x apart — probable unit-scale error")
+
+
+def _contested(n_model, n_quant, *, unit_scale=()):
+    """n_model model claims, then n_quant quant_reconcile rows (contested.json order of every
+    engine); the quant rows whose index is in unit_scale carry the unit-scale marker."""
     model = [{"claim": f"m{i}", "positions": [{"stance": "s", "sources": [], "tier": "S2"}]}
              for i in range(n_model)]
     quant = [{"claim": f"q{i}", "origin": "quant_reconcile",
-              "why_they_differ": "probable unit-scale error" if i < unit_scale else "different sources",
+              "why_they_differ": _UNIT_SCALE_WHY if i in unit_scale else "high/low ratio=1.5",
               "positions": [{"stance": "a", "sources": [], "tier": ""}, {"stance": "b", "sources": [], "tier": ""}]}
              for i in range(n_quant)]
     return model + quant
 
 
-def _claims(out):
-    return [line[4:].split("**", 1)[0] for line in out.split("\n") if line.startswith("- **")]
+# Golden bytes of the block as W9-8 renders it (header, then one line per claim; a model row
+# here is "s" tagged with its tier, a quant row is "a ⇄ b" with no tag).
+_HEADER = "## 争议性关键论断（证据分歧——本章须正面呈现两侧立场与依据，不得单边引用）"
+
+
+def _golden(model, quant=()):
+    return "\n".join([_HEADER] + [f"- **m{i}** — s（S2）" for i in model]
+                     + [f"- **q{i}** — a ⇄ b" for i in quant])
+
+
+@pytest.fixture(params=[True, False], ids=["knob_on", "knob_off"])
+def reconcile_knob(request, monkeypatch):
+    monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", request.param, raising=False)
+    return request.param
 
 
 class TestContestedQuantSlots:
-    """FU-9 (TIME-4 open issue): the research engine appends its quantitative
-    disagreements after the model's claims, so a plain cut at 15 dropped them all."""
+    """FU-9 (TIME-4 open issue): every engine appends its quantitative disagreements after
+    the model's claims, so a plain cut at 15 dropped them all."""
 
-    def test_reserves_up_to_three_slots_unit_scale_first(self, monkeypatch):
+    @pytest.mark.parametrize("unit_scale, kept", [
+        ((0, 1), (0, 1, 2)),  # v3 order: the producer already lists unit-scale errors first
+        ((2, 3), (2, 3, 0)),  # legacy / extract-only order: metric-group order, so they can come last
+        ((1, 3), (1, 3, 0)),
+    ], ids=["v3_order", "legacy_order", "mixed_order"])
+    def test_reserves_up_to_three_slots_unit_scale_first(self, monkeypatch, unit_scale, kept):
         monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
-        out = _bare_agent(contested=_contested(20, 4, unit_scale=2))._build_contested_table_block()
-        assert _claims(out) == [f"m{i}" for i in range(12)] + ["q0", "q1", "q2"]
+        out = _bare_agent(contested=_contested(20, 4, unit_scale=unit_scale))._build_contested_table_block()
+        assert out == _golden(range(12), kept) + "\n（另有 1 条数值对账分歧超出上限未列出）"
 
-    def test_unchanged_when_nothing_is_cut(self, monkeypatch):
+    def test_unit_scale_rows_listed_last_still_win_the_slots(self, monkeypatch):
+        # Review round 1 probe: picking by position kept q0..q2 and cut both unit-scale errors.
         monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
-        rows = _contested(10, 2)
+        out = _bare_agent(contested=_contested(20, 5, unit_scale=(3, 4)))._build_contested_table_block()
+        assert out == _golden(range(12), (3, 4, 0)) + "\n（另有 2 条数值对账分歧超出上限未列出）"
+
+    def test_note_counts_unit_scale_errors_still_cut(self, monkeypatch):
+        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
+        out = _bare_agent(contested=_contested(20, 6, unit_scale=(1, 2, 3, 4, 5)))._build_contested_table_block()
+        assert out == (_golden(range(12), (1, 2, 3))
+                       + "\n（另有 3 条数值对账分歧超出上限未列出，其中 2 条疑似量纲错误）")
+
+    def test_unit_scale_row_displaces_a_quant_row_inside_the_plain_cut(self, monkeypatch):
+        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
+        out = _bare_agent(contested=_contested(12, 4, unit_scale=(3,)))._build_contested_table_block()
+        assert out == _golden(range(12), (3, 0, 1)) + "\n（另有 1 条数值对账分歧超出上限未列出）"
+
+    def test_one_slot_goes_to_the_top_quant_row(self, monkeypatch):
+        # min(_CONTESTED_QUANT_SLOTS, max_claims) slots are reserved, so a single slot is a
+        # quant row's when one is cut (with the knob off it stays the first row, m0).
+        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
+        out = _bare_agent(contested=_contested(20, 4, unit_scale=(2, 3)))._build_contested_table_block(max_claims=1)
+        assert out == _golden((), (2,)) + "\n（另有 3 条数值对账分歧超出上限未列出，其中 1 条疑似量纲错误）"
+
+    def test_nothing_cut_is_byte_identical(self, reconcile_knob):
+        out = _bare_agent(contested=_contested(10, 2, unit_scale=(1,)))._build_contested_table_block()
+        assert out == _golden(range(10), (0, 1))
+        assert _bare_agent(contested=_contested(13, 2))._build_contested_table_block() == _golden(
+            range(13), (0, 1))
+
+    def test_no_quant_rows_is_byte_identical(self, reconcile_knob):
+        assert _bare_agent(contested=_contested(20, 0))._build_contested_table_block() == _golden(range(15))
+
+    def test_quant_rows_inside_the_plain_cut_is_byte_identical(self, reconcile_knob):
+        # Only model claims are cut: no quant row is lost, so no slot moves and no note.
+        rows = _contested(5, 3) + _contested(10, 0)
+        assert _bare_agent(contested=rows)._build_contested_table_block() == "\n".join(
+            [_HEADER] + [f"- **m{i}** — s（S2）" for i in range(5)] + [f"- **q{i}** — a ⇄ b" for i in range(3)]
+            + [f"- **m{i}** — s（S2）" for i in range(7)])
+
+    def test_knob_off_is_the_plain_cut(self, monkeypatch):
+        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", False, raising=False)
+        assert _bare_agent(contested=_contested(20, 4, unit_scale=(0, 1)))._build_contested_table_block() == (
+            _golden(range(15)))
+        assert _bare_agent(contested=_contested(20, 4))._build_contested_table_block(max_claims=0) == (
+            _golden([0]))
+
+    @pytest.mark.parametrize("bad", [
+        {"claim": "bad", "positions": 5},
+        {"claim": "bad", "positions": {"bull": "x", "bear": "y"}},
+        {"claim": "bad", "positions": [{"stance": "x", "sources": 7}]},
+        {"claim": "bad", "origin": "quant_reconcile", "positions": 5},
+        {"claim": "bad", "origin": "quant_reconcile", "positions": {"bull": "x", "bear": "y"}},
+    ], ids=["int", "dict", "int_sources", "quant_int", "quant_dict"])
+    def test_malformed_row_past_the_cap_keeps_the_plain_cut(self, reconcile_knob, bad):
+        rows = _contested(16, 0) + [bad]
+        assert _bare_agent(contested=rows)._build_contested_table_block() == _golden(range(15))
+
+    def test_malformed_quant_row_past_the_cap_is_skipped(self, monkeypatch):
+        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
+        rows = _contested(20, 0) + [{"claim": "bad", "origin": "quant_reconcile", "positions": 5}] + _contested(0, 1)
         out = _bare_agent(contested=rows)._build_contested_table_block()
-        assert _claims(out) == [f"m{i}" for i in range(10)] + ["q0", "q1"]
-        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", False, raising=False)
-        assert _bare_agent(contested=rows)._build_contested_table_block() == out
-
-    def test_no_quant_rows_or_knob_off_is_the_plain_cut(self, monkeypatch):
-        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
-        assert _claims(_bare_agent(contested=_contested(20, 0))._build_contested_table_block()) == [
-            f"m{i}" for i in range(15)]
-        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", False, raising=False)
-        assert _claims(_bare_agent(contested=_contested(20, 4))._build_contested_table_block()) == [
-            f"m{i}" for i in range(15)]
+        assert out == _golden(range(14), (0,))
 
     def test_few_model_claims_leave_more_room_for_quant_rows(self, monkeypatch):
         monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
         out = _bare_agent(contested=_contested(3, 20))._build_contested_table_block()
-        assert _claims(out) == ["m0", "m1", "m2"] + [f"q{i}" for i in range(12)]
+        assert out == _golden(range(3), range(12)) + "\n（另有 8 条数值对账分歧超出上限未列出）"
 
 
 class TestChronologyBlock:

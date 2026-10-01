@@ -181,9 +181,10 @@ MAX_CONTESTED_ROWS = 15
 # first), and meta keeps at most QUANT_SANITY_MAX_FLAGS unit-scale warnings
 # and implausible-fact flags (meta.quant_sanity_truncated then holds the
 # totals before the cut).  In contested.json the reconciled claims follow
-# the model's (at most MAX_CONTESTED_ROWS), and report_agent's contested
-# block renders only its first 15 claims, so after 15 model claims no
-# reconciled claim reaches the report prompt (a report-side limit).
+# the model's (at most MAX_CONTESTED_ROWS); report_agent's contested block
+# renders at most 15 claims, and with RESEARCH_QUANT_RECONCILE on it keeps
+# up to 3 of them for reconciled claims (probable unit-scale errors first)
+# and notes how many it still cuts (FU-9).
 QUANT_RECONCILE_MAX_CONTESTED = 10
 QUANT_SANITY_MAX_FLAGS = 20
 # forecast_inputs rows the facts task asks for (RESEARCH_V3_FORECAST_INPUTS).
