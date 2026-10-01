@@ -1366,7 +1366,8 @@ def _mc_comparisons_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, An
     已算好的确定性负载），缺失时从 binary_forecasts[].market_anchor 现场推导（同字段口径）。
 
     统一为渲染用 schema：{forecast_id, statement, model_probability, market_id, market_question,
-    market_implied_yes_prob, divergence, exceeds_10pp, rationale_cites_market, url}。
+    market_implied_yes_prob, divergence, exceeds_10pp, rationale_cites_market, url, endDate}
+    （endDate 与抽取器负载同口径，供 FU-5 的截止日标注）。
     纯函数、无副作用；无可对照数据 → []。"""
     mc = forecast.get("market_comparison")
     if isinstance(mc, dict) and isinstance(mc.get("comparisons"), list):
@@ -1397,6 +1398,7 @@ def _mc_comparisons_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, An
             "exceeds_10pp": (abs(dv) > 0.10) if dv is not None else False,
             "rationale_cites_market": None,  # 无对照负载时无法判定，留空（渲染按未知处理）
             "url": anchor.get("url"),
+            "endDate": anchor.get("endDate"),
         })
     return out
 
@@ -1485,9 +1487,30 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             caption += (" Forecasts were drafted with these market prices in view, so Δ is "
                         "measured after anchoring, not against a market-independent estimate.")
         lines = ["### Market Cross-Check", "", f"_{caption}_", ""]
+    # FU-5（TIME-3 遗留）：PREDICTION_MARKETS_END_DATE_GATE 开时按 market_clock_now() 盖
+    # window_ended 章（浅拷贝，调用方的负载与快照不变）。已过截止日、待结算的市场在对照行的
+    # 「市场」单元格末尾、未匹配条目末尾标注，不再被当作实时对照。对照行也要判定：抽取期
+    # （exclude_window_ended）只保证锚点在抽取那一刻未过期，本块在其后才渲染，其间市场可能
+    # 已过截止日。未过期的行与旗标关时的输出逐字节不变。
+    from ..utils.prediction_markets import (
+        _row_market_end, _window_ended_label, end_date_gate_settings, market_clock_now,
+        stamp_window_ended,
+    )
+    gate, grace = end_date_gate_settings()
+    clock_now = market_clock_now() if gate else None
     if comps:
         comps_sorted = sorted(
             comps, key=lambda c: -(abs(_mc_float(c.get("divergence")) or 0.0)))
+        # 对照行无 endDate 时回退到快照中同 market_id 的行（含研究期已盖的 window_ended 章）。
+        ended_snapshot: Dict[str, Dict[str, Any]] = {}
+        if gate:
+            comps_sorted, _ = stamp_window_ended(comps_sorted, now=clock_now, grace_hours=grace)
+            matched_snapshot, _ = stamp_window_ended(
+                [m for m in snapshot if str(m.get("market_id") or "").strip() in anchored_ids],
+                now=clock_now, grace_hours=grace)
+            for m in matched_snapshot:
+                if m.get("window_ended") is True:
+                    ended_snapshot.setdefault(str(m.get("market_id")).strip(), m)
         if zh:
             headers = ["#", "预测", "预测 P", "市场 P(yes)", "Δ（pp）", ">10pp 判定", "市场"]
         else:
@@ -1517,6 +1540,12 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             q = _mc_cell(str(c.get("market_question") or "")[:80])
             url = str(c.get("url") or "").strip()
             market_cell = f"[{q}]({_mc_cell(url)})" if (q and url) else (q or "—")
+            if gate:
+                ended = _window_ended_label(c, zh)
+                if not ended and _row_market_end(c) is None:
+                    ended = _window_ended_label(
+                        ended_snapshot.get(str(c.get("market_id") or "").strip(), {}), zh)
+                market_cell += ended
             lines.append("| " + " | ".join(
                 [fid, stmt, mp_s, ip_s, dv_s, verdict, market_cell]) + " |")
     # LOOP-017 P0：市场实际移动过概率的记录——即使锚点其后被对账移除，影响溯源也必须
@@ -1564,15 +1593,8 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                                  "superseded; not rolled back)")
             lines.append(item)
     if unmatched:
-        # FU-5（TIME-3 遗留）：PREDICTION_MARKETS_END_DATE_GATE 开时按 market_clock_now() 盖
-        # window_ended 章（浅拷贝，调用方的快照不变），已过截止日、待结算的市场在条目末尾标注，
-        # 不再被当作实时的候选对照；未过期的条目与旗标关时的输出逐字节不变。
-        from ..utils.prediction_markets import (
-            _window_ended_label, end_date_gate_settings, market_clock_now, stamp_window_ended,
-        )
-        gate, grace = end_date_gate_settings()
         if gate:
-            unmatched, _ = stamp_window_ended(unmatched, now=market_clock_now(), grace_hours=grace)
+            unmatched, _ = stamp_window_ended(unmatched, now=clock_now, grace_hours=grace)
         lines.append("")
         if zh:
             lines.append("**未匹配市场（快照中未被任何预测锚定，可补充对照）：**")

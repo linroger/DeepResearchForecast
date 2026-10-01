@@ -2167,9 +2167,11 @@ class Config:
     # while it awaits UMA resolution. With the gate on, such a market never anchors a binary
     # forecast and never seeds SIM priors (world brief / persona hints); it still appears in
     # the market pack and research section, labelled "window ended ... awaiting settlement",
-    # because its price remains evidence. Default on (honesty fix); false restores the exact
-    # pre-gate prompts, anchors, snapshot and market-pack bytes. The research child receives
-    # both knobs from Config.
+    # because its price remains evidence. FU-5: the report's Market Cross-Check block applies
+    # the same label to such markets, both in the unmatched-markets list and on matched
+    # comparison rows whose window ended by the time the report is rendered. Default on
+    # (honesty fix); false restores the exact pre-gate prompts, anchors, snapshot, market-pack
+    # and Market Cross-Check bytes. The research child receives both knobs from Config.
     PREDICTION_MARKETS_END_DATE_GATE = os.environ.get('PREDICTION_MARKETS_END_DATE_GATE', 'true').strip().lower() == 'true'
     # Hours after endDate before a market counts as ended (absorbs Gamma endDate quirks on
     # extended events); clamped to [0, 168] where it is used. 0 = strictly after endDate.
