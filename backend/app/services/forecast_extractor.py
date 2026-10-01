@@ -4691,8 +4691,8 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
     逐字节不变。question_spec_horizon_applied=False（规范判定日不是本次运行的判定日）时判定日
     一行标注未采用。
 
-    REPORT-13：source=='counter_case' 的指标行（反证审查触发器）在指标单元格后加
-    「（反证审查 [S#]）」/「 (counter-case review [S#])」后缀；其余行逐字节不变。
+    REPORT-13：观察指标表由 resolution_indicator_table 渲染（反证审查触发器行的格式见该函数）；
+    无反证行时逐字节不变。
     """
     if not isinstance(forecast, dict):
         return ""
@@ -4732,28 +4732,75 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
             else "(no explicit resolution criteria — needs completion)")
         sep = "：" if zh else ": "
         lines.append(f"- **[{pct}] {name}**{sep}{crit}")
-    inds = [i for i in (indicators or []) if isinstance(i, dict)]
-    if inds:
+    table = resolution_indicator_table(indicators, language)
+    if table:
         lines.append("")
-        if zh:
-            lines.append("### 观察指标（到期/触发即核对）")
-            lines.append("| 指标 | 到期/触发 | 关联情景 |")
-        else:
-            lines.append("### Indicators to Watch (check at expiry/trigger)")
-            lines.append("| Indicator | Due / trigger | Discriminates scenario |")
-        lines.append("|---|---|---|")
-        for i in inds[:20]:
-            name = _esc_cell(i.get("indicator") or i.get("name") or i.get("metric") or "—")
-            if i.get("source") == "counter_case":
-                # REPORT-13：反证审查触发器与研究指标可见地区分，并带其 [S#]（研究行逐字节不变）。
-                tags = "".join(f"[{t}]" for t in (i.get("sources") or [])
-                               if re.fullmatch(r"S\d+", str(t)))
-                label = ("反证审查" if zh else "counter-case review") + (f" {tags}" if tags else "")
-                name = f"{name}（{label}）" if zh else f"{name} ({label})"
-            trig = _esc_cell(i.get("date_or_trigger") or i.get("date") or i.get("trigger") or "—")
-            disc = _esc_cell(i.get("discriminates") or i.get("scenario") or "—")
-            lines.append(f"| {name or '—'} | {trig or '—'} | {disc or '—'} |")
+        lines.append("### 观察指标（到期/触发即核对）" if zh
+                     else "### Indicators to Watch (check at expiry/trigger)")
+        lines += table
     return "\n".join(lines)
+
+
+_COUNTER_CASE_DIRECTION_LABELS = {
+    "raises": ("上调", "raises"),
+    "lowers": ("下调", "lowers"),
+}
+
+
+def _counter_case_indicator_cells(i: Dict[str, Any], zh: bool) -> Tuple[str, str]:
+    """REPORT-13：反证审查触发器行的（指标单元格, 到期/触发单元格）。
+
+    指标单元格 = 信号 + [S#] + 独立括注「（反证审查）」/「(counter-case review)」：记号不在括注里，
+    成稿引用收尾（_repair_semantic_citations / 集中度修复等）剥掉任一记号都不会留下
+    「(counter-case review )」式残片。到期/触发单元格同时给出日期、阈值与方向（上调/下调该情景），
+    例如「2027-12-31: above 25 million units (raises)」。
+    """
+    name = _esc_cell(i.get("indicator") or i.get("name") or i.get("metric") or "—")
+    tags = "".join(f"[{t}]" for t in (i.get("sources") or []) if re.fullmatch(r"S\d+", str(t)))
+    if zh:
+        name = f"{name}{tags}（反证审查）"
+    else:
+        name = f"{name} {tags} (counter-case review)" if tags else f"{name} (counter-case review)"
+    by = str(i.get("by") or "").strip()
+    threshold = str(i.get("threshold_or_event") or "").strip()
+    if by and threshold:
+        due = f"{by}{'：' if zh else ': '}{threshold}"
+    else:
+        due = by or threshold or str(i.get("date_or_trigger") or "").strip() or "—"
+    direction = _COUNTER_CASE_DIRECTION_LABELS.get(str(i.get("direction") or "").strip().lower())
+    if direction:
+        due = f"{due}（{direction[0]}）" if zh else f"{due} ({direction[1]})"
+    return name, _esc_cell(due)
+
+
+def resolution_indicator_table(indicators: Optional[List[Any]],
+                               language: str = "Chinese") -> List[str]:
+    """NEXTSTEPS P2-2：「如何验证本预测」观察指标表的 Markdown 行（表头、分隔行、指标行）；无指标 → []。
+
+    研究指标取前 20 行。REPORT-13：source=='counter_case' 的反证审查触发器（上游已限 ≤10 条）
+    全部排在研究指标之后，不占研究指标的 20 行额度，因此研究指标再多也不会把它们挤出表格；
+    其单元格格式见 _counter_case_indicator_cells。无反证行时与此前逐字节一致。ReportAgent 用
+    同一函数渲染单行，以复现成稿引用收尾对该行 [S#] 的判定。
+    """
+    zh = not str(language or "").strip().lower().startswith("en")
+    inds = [i for i in (indicators or []) if isinstance(i, dict)]
+    research = [i for i in inds if i.get("source") != "counter_case"]
+    counter = [i for i in inds if i.get("source") == "counter_case"]
+    rows = research[:20] + counter
+    if not rows:
+        return []
+    lines = (["| 指标 | 到期/触发 | 关联情景 |"] if zh
+             else ["| Indicator | Due / trigger | Discriminates scenario |"])
+    lines.append("|---|---|---|")
+    for i in rows:
+        if i.get("source") == "counter_case":
+            name, trig = _counter_case_indicator_cells(i, zh)
+        else:
+            name = _esc_cell(i.get("indicator") or i.get("name") or i.get("metric") or "—")
+            trig = _esc_cell(i.get("date_or_trigger") or i.get("date") or i.get("trigger") or "—")
+        disc = _esc_cell(i.get("discriminates") or i.get("scenario") or "—")
+        lines.append(f"| {name or '—'} | {trig or '—'} | {disc or '—'} |")
+    return lines
 
 
 _CRITIQUE_INSTRUCTIONS = """你是预测红队评审。下面是一个结构化预测对象（JSON）。请审查并修正它，重点检查：

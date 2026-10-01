@@ -3882,7 +3882,11 @@ class ReportAgent:
         simulation signal pack). Validated output lands in reports/<id>/counter_case.json
         (canonical JSON) and in ``self._counter_case`` / ``self._counter_case_sha256``, which
         feed forecast.indicators, forecast.counter_case, the How-to-Verify table and the Part-2
-        prompt. Probabilities are never touched. Off, or no spine: no call, nothing set. Any
+        prompt. A trigger keeps only the markers the support check does not reject, both for
+        its signal and for the claim the publish-time citation finalizer reads in its
+        How-to-Verify row (_counter_case_published_claim), so the finalizer never strips its
+        last marker; a ``by`` date before the run's as-of counts as no date. Probabilities
+        are never touched. Off, or no spine: no call, nothing set. Any
         failure (including the artifact write) leaves both attributes None and the report
         unchanged; PipelineCancelled / ProviderOutageHalt (BaseException) propagate.
         """
@@ -3912,10 +3916,15 @@ class ReportAgent:
                 spine=spine, question=question, cap=cap,
                 numbers_fn=self._semantic_numbers,
             )
+            # 触发器的 by 早于本次运行的 as-of（回测钉 > actors.as_of_date > 今天）视为无日期。
+            from ..utils.dates import parse_as_of
+            _as_of = parse_as_of(self._context_pack_as_of()[0])
             result = _cc.run_counter_case(
                 spine, llm=self.llm, packet=packet, tag_map=tag_map,
                 support_fn=self._semantic_citation_support, numbers_fn=self._semantic_numbers,
                 question=question, lang=getattr(self, "output_language", None) or "English",
+                published_claim_fn=self._counter_case_published_claim,
+                as_of=(_as_of or datetime.now(timezone.utc)).date(),
             )
             text = _cc.artifact_text(result)
             write_text_atomic(
@@ -3928,6 +3937,26 @@ class ReportAgent:
         logger.info(
             f"反证审查 {result.get('status')}: {report_id}（证据包 {packet['sha256'][:12]}，"
             f"丢弃论据 {sum((result.get('dropped') or {}).values())} 条）")
+
+    def _counter_case_published_claim(self, indicator: Dict[str, Any]) -> str:
+        """REPORT-13: the claim the publish-time citation check reads for the [S#] markers of
+        this counter-case indicator's How-to-Verify row.
+
+        The row is rendered by the same helper as the section (forecast_extractor.
+        resolution_indicator_table, in the section's language) and the claim is built exactly
+        as _repair_semantic_citations / _audit_semantic_citations build it (marker clause plus
+        the row label and header numbers). Every marker of the row sits in the same clause, so
+        one claim serves them all. Without a marker in the row: the indicator text.
+        """
+        from .forecast_extractor import markdown_table_cells, resolution_indicator_table
+        header, _delimiter, row = resolution_indicator_table(
+            [dict(indicator)], getattr(self, "output_language", None) or "Chinese")[:3]
+        match = self._S_CITATION_RE.search(row)
+        if match is None:
+            return str(indicator.get("indicator") or "")
+        clause = self._citation_claim_clause(row, match.start(), match.end())
+        return self._citation_semantic_claim(
+            row, match.start(), clause, markdown_table_cells(header))
 
     def _with_counter_case_indicators(self, indicators: List[Any]) -> List[Any]:
         """REPORT-13: research indicators followed by the counter-case triggers (source
@@ -6264,8 +6293,8 @@ class ReportAgent:
             indicators = _actors.extract_forecast_inputs(self.actors).get("indicators") or []
         except Exception:  # noqa: BLE001
             indicators = []
-        # REPORT-13：与 forecast.indicators 同一份合并（研究指标 + 反证审查触发器）；反证行在表中带
-        # 「反证审查 [S#]」后缀。无反证结果时原样返回，章节逐字节不变。
+        # REPORT-13：与 forecast.indicators 同一份合并（研究指标 + 反证审查触发器）；反证行在表中为
+        # 「信号 [S#]（反证审查）」+「日期: 阈值（上调/下调）」。无反证结果时原样返回，章节逐字节不变。
         indicators = self._with_counter_case_indicators(indicators)
         # WAVE9：判定章节跟随报告输出语言（此前硬编码中文标题，英文报告里出现整段中文章节）。
         # RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：有已复核的研究问题规范时披露操作化定义与每条

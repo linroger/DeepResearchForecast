@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 from collections import Counter
+from datetime import date, datetime
 
 import pytest
 
@@ -38,6 +39,9 @@ STUB_TAGS = {
     "S3": {"title": "c", "url": "https://c.example/3", "verdict": None},
     "S4": {"title": "d", "url": "https://d.example/4", "verdict": True},
     "S5": {"title": "e", "url": "https://e.example/5", "verdict": True},
+    "S6": {"title": "f", "url": "https://f.example/6", "verdict": None},
+    "S7": {"title": "g", "url": "https://g.example/7", "verdict": None},
+    "S8": {"title": "h", "url": "https://h.example/8", "verdict": None},
 }
 
 REAL_TAGS = {
@@ -72,6 +76,7 @@ def test_claim_walls():
     kept, dropped = _claims([
         {"text": "Sales hit a record high [S99]"},                                  # unknown_source
         {"text": "Sales hit a record high", "sources": ["S1", "S99"]},              # unknown_source
+        {"text": "Sales hit a record high", "sources": ["S1", "S4", "S5", "S6", "S99"]},  # 5th place
         {"text": "Sales are clearly accelerating"},                                 # uncited
         {"text": "The share should be 35% by then", "sources": ["S1"]},             # percent
         {"text": "Adoption should rise by 35 percent", "sources": ["S1"]},          # percent words
@@ -81,20 +86,65 @@ def test_claim_walls():
         {"text": "Pack prices are not falling as claimed", "sources": ["S2"]},      # all False
         {"text": "Mixed support stays undecided", "sources": ["S2", "S3"]},         # False + None
     ])
-    assert dropped == Counter({"unknown_source": 2, "uncited": 1, "unverified_number": 5,
-                               "source_mismatch": 1})
+    assert dropped == Counter({"unknown_source": 3, "uncited": 1, "unverified_number": 5,
+                               "source_mismatch": 1, fc.TAG_DROP_KEY: 1})
+    # The contradicted S2 is removed; the undecided S3 keeps the claim as unverifiable.
     assert [(c["id"], c["verdict"], c["sources"]) for c in kept] == [
-        ("T1.H1", "unverifiable", ["S2", "S3"])]
+        ("T1.H1", "unverifiable", ["S3"])]
 
     kept, dropped = _claims([
         {"text": "Sales reached 17 million units in 2030 after 3 good years", "sources": ["S1"]},
         {"text": "Undecidable cross-language support [S3]"},                         # None -> kept
         {"text": "One supporting source is enough", "sources": ["S2", "S4"]},
     ], side="lower")
-    assert not dropped
-    assert [(c["id"], c["verdict"]) for c in kept] == [
-        ("T1.L1", "valid"), ("T1.L2", "unverifiable"), ("T1.L3", "valid")]
-    assert kept[1]["text"] == "Undecidable cross-language support" and kept[1]["sources"] == ["S3"]
+    assert dropped == Counter({fc.TAG_DROP_KEY: 1})
+    assert [(c["id"], c["verdict"], c["sources"]) for c in kept] == [
+        ("T1.L1", "valid", ["S1"]), ("T1.L2", "unverifiable", ["S3"]), ("T1.L3", "valid", ["S4"])]
+    assert kept[1]["text"] == "Undecidable cross-language support"
+
+
+def test_probabilities_in_words_are_unverified_numbers():
+    """A probability or proportion written in words, Chinese tenths or odds never passes, even
+    with a supporting source and no digit at all."""
+    texts = [
+        "Global electric car sales reached 17 million units in 2024, led by China, so a thirty "
+        "percent chance is too low.",
+        "Thirty per cent of buyers already chose an electric car.",
+        "七成概率电动车销量会增长",
+        "中国占全球电动车销量的七成以上",
+        "三分之一的新车是电动车",
+        "Roughly one in three new cars sold was electric.",
+        "Nine out of ten analysts expect growth.",
+        "The outcome is a coin flip at best.",
+        "增长与否是五五开",
+    ]
+    kept, dropped = _claims([{"text": t, "sources": ["S1"]} for t in texts])
+    assert kept == [] and dropped == Counter({"unverified_number": len(texts)})
+    # Ordinary words that contain 成 or "in" are not proportions.
+    kept, dropped = _claims([
+        {"text": "电池成本持续下降，成员国政策一成不变", "sources": ["S1"]},
+        {"text": "One in the region expanded capacity in 2024", "sources": ["S1"]},
+        {"text": "The new data are at odds with the earlier survey", "sources": ["S1"]},
+    ])
+    assert len(kept) == 3 and not dropped
+
+
+def test_valid_claims_never_carry_a_rejected_source():
+    claims = [
+        {"text": "Supported by one, contradicted by another", "sources": ["S1", "S2"]},
+        {"text": "Contradicted first, supported later", "sources": ["S2", "S5", "S2"]},
+        {"text": "Undecided plus contradicted", "sources": ["S3", "S2"]},
+        # More than four candidates: supporting sources are kept before undecided ones.
+        {"text": "Many sources", "sources": ["S3", "S6", "S7", "S8", "S1"]},
+    ]
+    kept, dropped = _claims(claims[:3])
+    kept_more, _ = _claims(claims[3:])
+    for claim in kept + kept_more:
+        assert all(STUB_TAGS[tag]["verdict"] is not False for tag in claim["sources"])
+    assert [(c["verdict"], c["sources"]) for c in kept] == [
+        ("valid", ["S1"]), ("valid", ["S5"]), ("unverifiable", ["S3"])]
+    assert dropped == Counter({fc.TAG_DROP_KEY: 3})
+    assert [(c["verdict"], c["sources"]) for c in kept_more] == [("valid", ["S3", "S6", "S7", "S1"])]
 
 
 def test_claim_caps():
@@ -106,9 +156,9 @@ def test_claim_caps():
         {"text": "Fourth valid claim", "sources": ["S1"]},
         {"text": "Fifth valid claim", "sources": ["S1"]},
     ])
-    assert len(kept) == 3 and dropped == Counter({"over_cap": 2})
+    assert len(kept) == 3 and dropped == Counter({"over_cap": 2, fc.TAG_DROP_KEY: 1})
     assert len(kept[0]["text"]) <= fc.MAX_CLAIM_CHARS and kept[0]["text"].endswith("…")
-    assert kept[0]["sources"] == ["S1", "S2", "S3", "S4"]          # at most four sources
+    assert kept[0]["sources"] == ["S1", "S3", "S4", "S5"]          # S2 rejected; at most four
     assert [c["sources"] for c in kept[1:]] == [["S4"], ["S5"]]    # markers normalised
     # Malformed and empty items are counted, never kept.
     kept, dropped = _claims([42, {"text": "  "}, None])
@@ -122,9 +172,14 @@ def test_claim_walls_with_the_report_support_check():
          "sources": ["S1"]},
         {"text": "Interconnection queues across regional grids keep the rollout slow.",
          "sources": ["S1"]},
+        {"text": "Global electric car sales reached 17 million units in 2024, led by China, so a "
+                 "thirty percent chance is too low.", "sources": ["S1"]},
+        {"text": "Global electric car sales reached 17 million units in 2024, led by China.",
+         "sources": ["S1", "S2"]},
     ], tags=REAL_TAGS, support=support)
-    assert [(c["id"], c["verdict"]) for c in kept] == [("T1.H1", "valid")]
-    assert dropped == Counter({"source_mismatch": 1})
+    assert [(c["id"], c["verdict"], c["sources"]) for c in kept] == [
+        ("T1.H1", "valid", ["S1"]), ("T1.H2", "valid", ["S1"])]
+    assert dropped == Counter({"source_mismatch": 1, "unverified_number": 1, fc.TAG_DROP_KEY: 1})
 
 
 # ---------------------------------------------------------------- targets, ids, names
@@ -166,7 +221,8 @@ REPLY = {"targets": [
          {"text": "Interconnection queues lengthened across most regional grids.", "sources": ["S3"],
           "id": "bear-7"}],
      "what_would_change": [
-         {"signal": "Annual EV sales", "direction": "raises", "threshold_or_event": "above 25 million",
+         {"signal": "Global electric car sales", "direction": "raises",
+          "threshold_or_event": "above 25 million",
           "by": "2027-12-31", "sources": ["S1"]}]},
     {"scenario": "Imaginary path",
      "case_for_higher": [{"text": "Global electric car sales reached 17 million units in 2024.",
@@ -237,6 +293,29 @@ def test_packet():
     assert fc.ABSENT_CONTESTED not in with_blocks and fc.ABSENT_MARKET not in with_blocks
 
 
+def test_packet_numbers_leave_out_market_anchors_and_urls():
+    """Only the evidence sections feed the known-number set: a market-implied figure or a URL
+    digit run never lets a claim number through, while the same figure in evidence does."""
+    packet = _packet(
+        sources_index="[S1] Global EV Outlook — https://iea.example/reports/884412\n"
+                      "[S2] Battery price survey ｜supports: pack prices fell to 115 dollars",
+        market_pack="Polymarket: EV sales above 20 million — implied 0.42 (volume 31000)")
+    assert "0.42" in packet["text"] and "884412" in packet["text"]
+    numbers = packet["numbers"]
+    assert {"17", "115"} <= numbers
+    assert not numbers & {"0.42", "31000", "884412"}
+    kept, dropped = _claims([
+        {"text": "Traders put it at 0.42, so the case is weak", "sources": ["S1"]},
+        {"text": "Report 884412 shows growth", "sources": ["S1"]},
+        {"text": "Pack prices fell to 115 dollars", "sources": ["S1"]},
+    ], numbers=numbers)
+    assert [c["text"] for c in kept] == ["Pack prices fell to 115 dollars"]
+    assert dropped == Counter({"unverified_number": 2})
+    # The contested table is evidence: its numbers count.
+    contested = _packet(contested_block="- Claim A: 31000 chargers [S2]")
+    assert "31000" in contested["numbers"]
+
+
 def test_packet_excerpts_only_admissible_cited_paragraphs():
     report = "\n\n".join([
         "# Dossier",
@@ -274,7 +353,7 @@ def test_packet_excerpts_only_admissible_cited_paragraphs():
 # ---------------------------------------------------------------- triggers
 
 def _trigger(**over):
-    row = {"signal": "Annual EV sales", "direction": "raises",
+    row = {"signal": "Global electric car sales", "direction": "raises",
            "threshold_or_event": "above 25 million", "by": "", "sources": ["S1"]}
     row.update(over)
     return row
@@ -293,10 +372,10 @@ def test_triggers():
         "not a trigger",
     ], REAL_TAGS)
     assert kept == [
-        {"signal": "Annual EV sales", "direction": "raises", "threshold_or_event": "a policy shift",
-         "by": "2027-06-30", "sources": ["S1"]},
-        {"signal": "Annual EV sales", "direction": "raises", "threshold_or_event": "above 25 million",
-         "by": "", "sources": ["S2"]},
+        {"signal": "Global electric car sales", "direction": "raises",
+         "threshold_or_event": "a policy shift", "by": "2027-06-30", "sources": ["S1"]},
+        {"signal": "Global electric car sales", "direction": "raises",
+         "threshold_or_event": "above 25 million", "by": "", "sources": ["S2"]},
     ]
     # At most three per target.
     assert len(fc.validate_triggers([_trigger() for _ in range(5)], REAL_TAGS)) == 3
@@ -315,9 +394,68 @@ def test_triggers_total_cap(monkeypatch):
     assert result["triggers_dropped"] == 20 - 10
     rows = fc.triggers_to_indicators(result)
     assert len(rows) == 10
-    assert rows[0] == {"indicator": "Annual EV sales", "date_or_trigger": "above 25 million",
-                       "discriminates": "Path A", "source": "counter_case", "sources": ["S1"],
-                       "direction": "raises", "threshold_or_event": "above 25 million"}
+    assert rows[0] == {"indicator": "Global electric car sales", "date_or_trigger": "above 25 million",
+                       "by": "", "discriminates": "Path A", "source": "counter_case",
+                       "sources": ["S1"], "direction": "raises",
+                       "threshold_or_event": "above 25 million"}
+
+
+def test_trigger_support_wall():
+    """Triggers pass the claim wall: a marker the support check rejects (for the signal, or
+    for the claim the publish-time citation check reads in the How-to-Verify row) is removed,
+    and a trigger left without a marker is dropped."""
+    support = ReportAgent._semantic_citation_support
+    stats = Counter()
+    kept = fc.validate_triggers([
+        _trigger(signal="Annual electric car sales"),                    # S1 rejects it -> dropped
+        _trigger(sources=["S2", "S1"]),                                   # S2 rejects -> ["S1"]
+        _trigger(signal="全球电动车年销量"),                                  # cross-language: None
+    ], REAL_TAGS, support_fn=support, stats=stats)
+    assert [(t["signal"], t["sources"]) for t in kept] == [
+        ("Global electric car sales", ["S1"]), ("全球电动车年销量", ["S1"])]
+    assert stats == Counter({fc.TAG_DROP_KEY: 2})
+
+    # The published-row claim is checked too, with the row the trigger publishes as.
+    seen = []
+
+    def _published(row):
+        seen.append(row)
+        return "Interconnection queues lengthened across most regional grids."
+
+    kept = fc.validate_triggers([_trigger(by="2027-12-31")], REAL_TAGS, scenario="Upside path",
+                                support_fn=support, published_claim_fn=_published)
+    assert kept == []
+    assert seen == [{"indicator": "Global electric car sales", "date_or_trigger": "2027-12-31",
+                     "by": "2027-12-31", "discriminates": "Upside path", "source": "counter_case",
+                     "sources": ["S1"], "direction": "raises",
+                     "threshold_or_event": "above 25 million"}]
+    # A published claim the check cannot decide keeps the marker; a failing claim builder
+    # falls back to the signal check alone.
+    assert fc.validate_triggers([_trigger()], REAL_TAGS, support_fn=support,
+                                published_claim_fn=lambda row: "全球电动车")[0]["sources"] == ["S1"]
+
+    def _broken(row):
+        raise RuntimeError("no table")
+
+    assert fc.validate_triggers([_trigger()], REAL_TAGS, support_fn=support,
+                                published_claim_fn=_broken)[0]["sources"] == ["S1"]
+
+
+def test_triggers_dated_before_as_of_lose_the_date():
+    triggers = [
+        _trigger(by="2026-08-31"),                                        # past -> '' (threshold)
+        _trigger(by="2026-09-01"),                                        # the as-of day is kept
+        _trigger(by="2025-01-01", threshold_or_event="a policy shift"),   # past, no digit -> dropped
+        _trigger(by="2027-06-30", threshold_or_event="a policy shift"),   # future date -> kept
+    ]
+    for as_of in ("2026-09-01", date(2026, 9, 1), datetime(2026, 9, 1, 12, 0)):
+        kept = fc.validate_triggers(triggers, REAL_TAGS, as_of=as_of)
+        assert [(t["by"], t["threshold_or_event"]) for t in kept] == [
+            ("", "above 25 million"), ("2026-09-01", "above 25 million"),
+            ("2027-06-30", "a policy shift")]
+    # Without an as-of every real date stands.
+    assert [t["by"] for t in fc.validate_triggers(triggers, REAL_TAGS)] == [
+        "2026-08-31", "2026-09-01", "2025-01-01"]
 
 
 # ---------------------------------------------------------------- failure
@@ -389,6 +527,7 @@ def test_render_block_and_summary():
     custom = fc.render_counter_case_block({"status": "complete", "targets": [target]}, "English")
     assert custom == ('- T1 "A"\n  - Case for higher: V [S1]\n'
                       "  - Case for lower: W [S3] (source support not machine-verified)")
+    assert result["tags_removed"] == {"claims": 0, "triggers": 0}
     summary = fc.forecast_summary(result, "abc")
     assert summary == {"schema": "drf.counter_case/v1", "status": "complete",
                        "artifact": "counter_case.json", "artifact_sha256": "abc",
@@ -397,6 +536,59 @@ def test_render_block_and_summary():
     text = fc.artifact_text(result)
     assert json.loads(text) == result and text == json.dumps(result, ensure_ascii=False,
                                                              sort_keys=True, indent=2)
+
+
+def test_render_block_logs_targets_left_out(caplog):
+    result, _, _ = _run()
+    full = fc.render_counter_case_block(result, "English")
+    first = full.split('\n- T2 ')[0]
+    with caplog.at_level("WARNING", logger=fc.__name__):
+        cut = fc.render_counter_case_block(result, "English", max_chars=len(first))
+    assert cut == first
+    assert any("T2" in r.getMessage() and "counter_case.json" in r.getMessage()
+               for r in caplog.records)
+    caplog.clear()
+    with caplog.at_level("WARNING", logger=fc.__name__):
+        assert fc.render_counter_case_block(result, "English") == full
+    assert not caplog.records
+
+
+def test_how_to_verify_rows():
+    """Counter-case rows: signal, its [S#] and a separate counter-case label (so a stripped
+    marker leaves no orphan), date plus threshold plus direction; they never compete with the
+    first 20 research rows for table space."""
+    from app.services.forecast_extractor import render_resolution_block, resolution_indicator_table
+    research = [{"indicator": f"Research indicator {n}", "date_or_trigger": f"2027-01-{n:02d}",
+                 "discriminates": "Upside path"} for n in range(1, 26)]
+    counter = [
+        {"indicator": "Global electric car sales", "date_or_trigger": "2027-12-31", "by": "2027-12-31",
+         "discriminates": "Upside path", "source": "counter_case", "sources": ["S1", "S3"],
+         "direction": "raises", "threshold_or_event": "above 25 million units"},
+        {"indicator": "Battery pack prices", "date_or_trigger": "back above 140 dollars", "by": "",
+         "discriminates": "Downside path", "source": "counter_case", "sources": ["S2"],
+         "direction": "lowers", "threshold_or_event": "back above 140 dollars"},
+    ]
+    en = resolution_indicator_table(research + counter, "English")
+    assert en[:2] == ["| Indicator | Due / trigger | Discriminates scenario |", "|---|---|---|"]
+    assert len(en) == 2 + 20 + 2
+    assert en[2] == "| Research indicator 1 | 2027-01-01 | Upside path |"
+    assert en[21] == "| Research indicator 20 | 2027-01-20 | Upside path |"
+    assert en[22:] == [
+        "| Global electric car sales [S1][S3] (counter-case review) | 2027-12-31: above 25 million "
+        "units (raises) | Upside path |",
+        "| Battery pack prices [S2] (counter-case review) | back above 140 dollars (lowers) | "
+        "Downside path |"]
+    zh = resolution_indicator_table(counter, "Chinese")
+    assert zh == ["| 指标 | 到期/触发 | 关联情景 |", "|---|---|---|",
+                  "| Global electric car sales[S1][S3]（反证审查） | 2027-12-31：above 25 million units"
+                  "（上调） | Upside path |",
+                  "| Battery pack prices[S2]（反证审查） | back above 140 dollars（下调） | Downside path |"]
+    # Research rows alone: exactly the first 20, as before.
+    assert resolution_indicator_table(research, "English") == en[:22]
+    assert resolution_indicator_table([], "English") == [] and resolution_indicator_table(None) == []
+    block = render_resolution_block({"scenarios": [{"name": "Upside path", "probability": 0.5}]},
+                                    research + counter, language="English")
+    assert block.endswith("\n".join(["### Indicators to Watch (check at expiry/trigger)", *en]))
 
 
 def test_merge_indicators_dedupes_by_casefolded_text():

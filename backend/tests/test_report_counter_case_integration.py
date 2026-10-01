@@ -2,9 +2,12 @@
 
 ``_run_counter_case`` (called in generate_report right after the spine is pinned) makes one
 strong-tier call over the [S#] evidence packet and writes reports/<id>/counter_case.json; its
-validated triggers join forecast.indicators and the How-to-Verify table (suffixed
-"counter-case review [S#]"), forecast.counter_case records the artifact sha256, and the
-strongest cited claims reach the Part-2 synthesis prompt. Probabilities never move. With
+validated triggers join forecast.indicators and the How-to-Verify table (as "signal [S#]
+(counter-case review)" with date, threshold and direction), forecast.counter_case records the
+artifact sha256, and the strongest cited claims reach the Part-2 synthesis prompt. Trigger
+markers pass the same support check the publish-time citation finalizer applies, so the real
+_finalize_citations keeps every counter-case row cited, and a marker stripped anyway leaves
+no orphan text. Probabilities never move. With
 REPORT_COUNTER_CASE off there is no extra call and forecast.json, the Part-2 prompt and the
 resolution section are byte-identical to a run without the hook.
 
@@ -19,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -71,14 +75,16 @@ COUNTER_REPLY = {"targets": [
          {"signal": "Annual electric car sales", "direction": "raises",
           "threshold_or_event": "above 25 million units", "by": "2027-12-31", "sources": ["S1"]},
          {"signal": "Vague sentiment shift", "direction": "lowers",
-          "threshold_or_event": "the mood sours", "by": "", "sources": ["S1"]}]},
+          "threshold_or_event": "the mood sours", "by": "", "sources": ["S1"]},
+         {"signal": "Global electric car sales", "direction": "raises",
+          "threshold_or_event": "above 25 million units", "by": "2027-12-31", "sources": ["S1"]}]},
     {"scenario": "Downside path",
      "case_for_lower": [
          {"text": "Average lithium-ion pack prices fell to 115 dollars per kilowatt-hour.",
           "sources": ["S2"]}],
      "what_would_change": [
          {"signal": "Battery pack prices", "direction": "raises",
-          "threshold_or_event": "back above 140 dollars per kilowatt-hour", "by": "",
+          "threshold_or_event": "back above 140 dollars per kilowatt-hour", "by": "2025-06-30",
           "sources": ["[S2]", "S77"]}]},
 ]}
 
@@ -99,14 +105,14 @@ class _RouterLLM(FakeLLMClient):
         return json.loads(json.dumps(SPINE_REPLY))
 
 
-def _agent(llm):
+def _agent(llm, *, sources=SOURCES, language="English"):
     agent = ReportAgent.__new__(ReportAgent)
     for key, value in {
         "llm": llm, "graph_id": "g1", "simulation_id": "sim_counter_case",
         "simulation_requirement": QUESTION, "situation_brief": "Sales are growing quickly.",
-        "actors": json.loads(json.dumps(ACTORS)), "sources": json.loads(json.dumps(SOURCES)),
+        "actors": json.loads(json.dumps(ACTORS)), "sources": json.loads(json.dumps(sources)),
         "research_report": RESEARCH, "timeline_events": [], "quantitative": [],
-        "output_language": "English", "scenario_label": "", "base_simulation_id": None,
+        "output_language": language, "scenario_label": "", "base_simulation_id": None,
         "_background_block": "", "_signal_pack": SIM_SENTINEL, "_market_pack": "",
         "_contested_table_block": "", "_forecast_spine": None, "_forecast_spine_block": "",
         "_retrieval_query": None, "_outline_degraded": False, "_outline_summary": "",
@@ -153,6 +159,19 @@ def _read(root, report_id, name):
 
 
 BODY = "# T\n\n## Demand outlook\n\nElectric car sales keep rising across major markets.\n"
+COUNTER_TABLE_ROWS = (
+    "| Global electric car sales [S1] (counter-case review) | 2027-12-31: above 25 million units "
+    "(raises) | Upside path |",
+    "| Battery pack prices [S2] (counter-case review) | back above 140 dollars per kilowatt-hour "
+    "(raises) | Downside path |",
+)
+# What a stripped marker used to leave behind ("(counter-case review )"), in either language.
+ORPHANS = ("review )", "( )", "()", "[]", "审查 ）", "（ ）", "（）")
+
+
+def _assert_no_orphans(markdown):
+    for orphan in ORPHANS:
+        assert orphan not in markdown, orphan
 
 
 def _report(root, monkeypatch, report_id, *, flag, hook=True):
@@ -233,37 +252,52 @@ def test_on_outputs(report_env, monkeypatch):
         "artifact_sha256": hashlib.sha256(artifact_bytes).hexdigest(),
         "claims_valid": 3, "claims_unverifiable": 0, "claims_dropped": 2, "triggers": 2}
     assert artifact["dropped"] == {"unknown_source": 1, "unverified_number": 1}
+    # "Annual electric car sales" lost its only marker to the support check (S1 does not
+    # support it) and was dropped with the undated, unthresholded "Vague sentiment shift".
+    assert artifact["tags_removed"] == {"claims": 0, "triggers": 1}
+    assert artifact["triggers_dropped"] == 2
     assert artifact_bytes.decode("utf-8") == fc.artifact_text(artifact)
 
     # Only validated claims anywhere downstream.
     claims = [c for t in artifact["targets"] for side in ("higher", "lower") for c in t["claims"][side]]
     assert [c["id"] for c in claims] == ["T1.H1", "T1.L1", "T2.L1"]
-    for rejected in ("65%", "regulator memo", "S42", "Vague sentiment", "S77"):
+    for rejected in ("65%", "regulator memo", "S42", "Vague sentiment", "S77",
+                     "Annual electric car sales", "2025-06-30"):
         assert rejected not in on.part2 and rejected not in on.full
         assert rejected not in json.dumps(on.forecast)
 
     # Triggers join forecast.indicators after the research indicators, each dated or thresholded
-    # and citing an admissible [S#].
+    # and citing an admissible [S#]. The battery trigger's 2025-06-30 deadline precedes the
+    # run's as-of (2026-09-01), so it stands on its threshold alone.
     indicators = on.forecast["indicators"]
     assert indicators[0] == off.forecast["indicators"][0] == ACTORS["forecast_inputs"]["indicators"][0]
     counter_rows = [row for row in indicators if row.get("source") == "counter_case"]
-    assert [(r["indicator"], r["date_or_trigger"], r["discriminates"], r["sources"])
+    assert [(r["indicator"], r["date_or_trigger"], r["by"], r["discriminates"], r["sources"])
             for r in counter_rows] == [
-        ("Annual electric car sales", "2027-12-31", "Upside path", ["S1"]),
-        ("Battery pack prices", "back above 140 dollars per kilowatt-hour", "Downside path", ["S2"])]
+        ("Global electric car sales", "2027-12-31", "2027-12-31", "Upside path", ["S1"]),
+        ("Battery pack prices", "back above 140 dollars per kilowatt-hour", "", "Downside path",
+         ["S2"])]
     for row in counter_rows:
         assert row["sources"] and set(row["sources"]) <= set(on.agent._citation_index)
 
-    # How-to-Verify table: research row unchanged, counter-case rows suffixed with their [S#].
+    # How-to-Verify table: research row unchanged; each counter-case row carries its [S#], a
+    # separate counter-case label, and its date, threshold and direction.
     assert "| Quarterly EV registrations | 2027-03-31 | Upside path |" in on.full
-    assert ("| Annual electric car sales (counter-case review [S1]) | 2027-12-31 | Upside path |"
-            in on.full)
-    assert ("| Battery pack prices (counter-case review [S2]) | back above 140 dollars per "
-            "kilowatt-hour | Downside path |") in on.full
-    assert on.full.replace(
-        "| Annual electric car sales (counter-case review [S1]) | 2027-12-31 | Upside path |\n", ""
-    ).replace("\n| Battery pack prices (counter-case review [S2]) | back above 140 dollars per "
-              "kilowatt-hour | Downside path |", "") == off.full
+    assert all(row in on.full for row in COUNTER_TABLE_ROWS)
+    assert on.full.replace("\n" + COUNTER_TABLE_ROWS[0], "").replace(
+        "\n" + COUNTER_TABLE_ROWS[1], "") == off.full
+
+    # The real publish-time citation finalizer keeps every counter-case marker: no row loses
+    # its last [S#] and no orphan label text appears.
+    section = on.full[on.full.index("## How to Verify"):]
+    assert on.agent._audit_semantic_citations(section)["unsupported"] == 0
+    report = SimpleNamespace(markdown_content=on.full)
+    on.agent._finalize_citations("r_on", report)
+    final_rows = [line for line in report.markdown_content.splitlines()
+                  if "(counter-case review)" in line]
+    assert final_rows == list(COUNTER_TABLE_ROWS)
+    assert all(re.search(r"\[S\d+\]", row) for row in final_rows)
+    _assert_no_orphans(report.markdown_content)
 
     # Part-2 prompt carries the strongest cited claims and the rule.
     header = "[Counter-case: strongest cited arguments against the leading scenarios]\n"
@@ -272,6 +306,67 @@ def test_on_outputs(report_env, monkeypatch):
     assert ("Case for higher: Global electric car sales reached 17 million units in 2024, "
             "led by China. [S1]") in on.part2
     assert header not in off.part2 and "counter-case" not in off.part2
+
+
+def _forced_counter_case(triggers):
+    """A completed counter-case result whose triggers bypass validation (to force the
+    publish-time finalizer to strip markers)."""
+    return {"schema": fc.SCHEMA, "status": "complete", "packet_sha256": "0" * 64,
+            "targets": [{"target_id": "T1", "scenario": "Upside path", "probability": 0.5,
+                         "claims": {"higher": [], "lower": []}, "triggers": triggers}],
+            "dropped": {}, "triggers_dropped": 0, "tags_removed": {"claims": 0, "triggers": 0}}
+
+
+def _trigger(signal, sources):
+    return {"signal": signal, "direction": "raises", "threshold_or_event": "above 25 million units",
+            "by": "2027-12-31", "sources": sources}
+
+
+ZH_SOURCES = SOURCES + [
+    {"title": "全球电动车展望", "url": "https://www.iea.org/reports/global-ev-outlook-2026-zh",
+     "supports": ["2024年全球电动车销量达到1700万辆。"]},
+    {"title": "电池价格调查", "url": "https://about.bnef.com/blog/battery-pack-prices-2025-zh",
+     "supports": ["电池组价格回升至每千瓦时140美元以上。"]},
+]
+
+
+@pytest.mark.parametrize("language, triggers, stripped_rows", [
+    ("English",
+     [_trigger("Annual electric car sales", ["S1"]), _trigger("Battery pack prices", ["S1", "S2"])],
+     ["| Annual electric car sales (counter-case review) | 2027-12-31: above 25 million units "
+      "(raises) | Upside path |",
+      "| Battery pack prices [S2] (counter-case review) | 2027-12-31: above 25 million units "
+      "(raises) | Upside path |"]),
+    ("Chinese",
+     [_trigger("全球电动车年销量达到2500万辆", ["S4"]),
+      _trigger("电池组价格回升至每千瓦时140美元", ["S4", "S5"])],
+     ["| 全球电动车年销量达到2500万辆（反证审查） | 2027-12-31：above 25 million units（上调） | "
+      "Upside path |",
+      "| 电池组价格回升至每千瓦时140美元[S5]（反证审查） | 2027-12-31：above 25 million units"
+      "（上调） | Upside path |"]),
+])
+def test_a_stripped_trigger_marker_leaves_no_orphan(report_env, monkeypatch, language, triggers,
+                                                    stripped_rows):
+    """Even a marker the finalizer strips (validation bypassed here) leaves a clean row: the
+    counter-case label never encloses the markers."""
+    monkeypatch.setattr(Config, "REPORT_COUNTER_CASE", True, raising=False)
+    agent = _agent(_RouterLLM(), sources=ZH_SOURCES, language=language)
+    report_id = f"r_orphan_{language}"
+    os.makedirs(os.path.join(str(report_env), "reports", report_id), exist_ok=True)
+    agent._derive_and_pin_forecast_spine(report_id)
+    agent._counter_case = _forced_counter_case(triggers)
+    agent._counter_case_sha256 = "0" * 64
+    report = SimpleNamespace(markdown_content=BODY)
+    agent._append_resolution_section(report_id, report)
+    before = report.markdown_content
+    for trig in triggers:
+        assert trig["signal"] + ("" if language == "Chinese" else " ") in before
+        assert "".join(f"[{t}]" for t in trig["sources"]) in before
+    agent._finalize_citations(report_id, report)
+    final_rows = [line for line in report.markdown_content.splitlines()
+                  if "counter-case review" in line or "反证审查" in line]
+    assert final_rows == stripped_rows
+    _assert_no_orphans(report.markdown_content)
 
 
 def test_failed_pass_degrades_to_the_off_outputs(report_env, monkeypatch):
