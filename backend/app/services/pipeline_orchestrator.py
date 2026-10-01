@@ -131,6 +131,11 @@ SIM_METER_MARKERS_OPTION = "sim_llm_telemetry_recorded_by_sim"
 # read, migrated into the map, and still mirrored for the main run's recordings.
 SIM_METER_LEGACY_MARKER_OPTION = "sim_llm_telemetry_recorded"
 
+# SIM-7: a scenario overlay may declare a human-authored, whole-run outcome power per actor
+# in [0, SCENARIO_OUTCOME_POWER_MAX]; each applied value is labelled with this basis.
+SCENARIO_OUTCOME_POWER_MAX = 10.0
+SCENARIO_OUTCOME_POWER_BASIS = "scenario_overlay"
+
 ACTOR_INTELLIGENCE_SCHEMA_VERSION = "actor-intelligence/v1"
 ACTOR_INTELLIGENCE_POLICY_VERSION = "actor-intelligence-policy/v1"
 ACTOR_INTELLIGENCE_LINEAGE_FILENAME = "actor_intelligence_lineage.json"
@@ -9391,7 +9396,10 @@ class PipelineOrchestrator:
         """T4.6: 在 PREPARE 处分叉一个 what-if 情景管线（复用 base 的研究/本体/图谱）。
 
         overlay = {label, max_rounds?, influence_overrides{name:weight}, stance_overrides{name:stance},
-                   injected_events[{round,poster_name,content}], as_of_shift?}。新管线复用 base 的
+                   outcome_power_overrides{name:power in [0,10]}?,
+                   injected_events[{round,poster_name,content}], as_of_shift?}
+        （SIM-7：outcome_power_overrides 是人工声明、全程生效的结果权力，见
+        apply_scenario_overlay_to_config）。新管线复用 base 的
         project_id/graph_id/handoff（研究+本体+图谱直接命中复用守卫），仅重跑 prepare/run/report。
         要求 base 已完成图谱阶段。返回新建管线状态。
         """
@@ -9487,6 +9495,18 @@ class PipelineOrchestrator:
         influence_overrides{name:weight} / stance_overrides{name:stance} 按 agent 名匹配覆盖
         （两路都覆盖，闭合 T3.6 旁路）；injected_events 追加为 scheduled_events（解析 poster_name
         → agent_id）；不破坏缺省字段。
+
+        SIM-7 (C31): outcome_power_overrides{name: power in [0, 10]} is a human-authored,
+        whole-run outcome power — the counterfactual lever ("what if the regulator loses
+        authority") that influence_overrides cannot express, because visibility never becomes
+        power (I-15). A valid entry sets ``outcome_power`` (rounded to 6 places) and
+        ``outcome_power_basis="scenario_overlay"`` on the matched agent; the decision channel
+        (both producers) reads it through ``_outcome_power_map`` and its decisions rows carry
+        it. 0 keeps the actor in the roster with zero outcome weight. Entries that name no
+        agent, are not a number (bools included), are non-finite or fall outside [0, 10] are
+        skipped with a warning; a non-dict value is ignored with a warning. Assignment is
+        idempotent, so the corrupt-RUN reapply stays stable; an overlay without the key leaves
+        the config untouched.
         """
         from ..utils.actors import normalize_name
         agents = config.get("agent_configs") or []
@@ -9505,6 +9525,37 @@ class PipelineOrchestrator:
             a = by_name.get(normalize_name(str(name)))
             if a is not None:
                 a["stance"] = str(stance)
+
+        # SIM-7: human-authored outcome power. Every entry is validated on its own and a bad
+        # one is skipped with a warning (fail closed per entry, never a PREPARE crash).
+        pw = (overlay or {}).get("outcome_power_overrides") or {}
+        if not isinstance(pw, dict):
+            logger.warning("outcome_power_overrides ignored: expected {name: power}, got %s",
+                           type(pw).__name__)
+            pw = {}
+        power_names: dict[str, Any] = {}
+        for name, value in pw.items():
+            key = normalize_name(str(name))
+            a = by_name.get(key) if key else None
+            if a is None:
+                logger.warning("outcome_power_overrides: no agent named %r", name)
+                continue
+            try:
+                # A JSON bool is not a power level (float(True) would read it as 1.0); an
+                # oversized JSON integer raises OverflowError instead of becoming inf.
+                p = float("nan") if isinstance(value, bool) else float(value)
+            except (TypeError, ValueError, OverflowError):
+                p = float("nan")
+            if not (math.isfinite(p) and 0.0 <= p <= SCENARIO_OUTCOME_POWER_MAX):
+                logger.warning("outcome_power_overrides: skipped %r for %r (need a finite number "
+                               "in [0, %g])", value, name, SCENARIO_OUTCOME_POWER_MAX)
+                continue
+            if key in power_names:
+                logger.warning("outcome_power_overrides: %r and %r name the same agent; "
+                               "the later value %r wins", power_names[key], name, value)
+            power_names[key] = name
+            a["outcome_power"] = round(p, 6) or 0.0  # `or 0.0` folds -0.0 into 0.0
+            a["outcome_power_basis"] = SCENARIO_OUTCOME_POWER_BASIS
 
         injected = (overlay or {}).get("injected_events") or []
         if injected:
