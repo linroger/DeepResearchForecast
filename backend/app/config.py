@@ -1172,7 +1172,9 @@ class Config:
     # REPORT-12: the largest market_weight accepted (a larger one rejects the whole revision).
     # Default 0.8: markets are calibration anchors, not truth, so a blend never fully adopts the
     # market price.  Read only while FORECAST_MARKET_BLEND_ARITHMETIC is on; clamped to [0, 1]
-    # so a blend always stays on the segment between the forecast and the market price.
+    # so a blend always stays on the segment between the forecast and the market price, then
+    # floored to two decimals (the 0.01 grid the model's weight is rounded to), so the cap the
+    # prompt states is exactly the cap that is enforced.
     FORECAST_MARKET_BLEND_WEIGHT_MAX = float(os.environ.get('FORECAST_MARKET_BLEND_WEIGHT_MAX', '0.8') or '0.8')
     # REPORT-10（信息墙）：注入实时市场包时，二元抽取的 dossier 视图删掉研究桥追加的机器市场表
     # （"## Prediction Market Signals" H2 节，研究期价格、可能过时），市场价只经实时市场包一个

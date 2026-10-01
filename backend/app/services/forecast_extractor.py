@@ -19,6 +19,7 @@ import math
 import re
 import unicodedata
 from datetime import datetime, timezone
+from decimal import ROUND_FLOOR, Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils.numeric_guards import sanitize_latest_actual
@@ -2209,7 +2210,8 @@ _MARKET_DIVERGENCE_INSTRUCTIONS = (
 # REPORT-12（FORECAST_MARKET_BLEND_ARITHMETIC，默认关）：同一 10pp 重述，但模型只给判断输入——
 # 有界的 market_weight + 引用市场的理由（二者全有或全无），修订概率由代码按 (1-w)·p + w·m
 # 计算（m 恒为我们的快照价），见 _apply_market_blend。思路来自 FinanceHarness「模型选输入、
-# 代码做算术」（措辞重写，未复制任何代码）。{weight_max} 在调用时填入 FORECAST_MARKET_BLEND_WEIGHT_MAX。
+# 代码做算术」（措辞重写，未复制任何代码）。{weight_max} 在调用时填入 FORECAST_MARKET_BLEND_WEIGHT_MAX
+# （_market_blend_weight_max，0.01 网格）。
 _MARKET_BLEND_INSTRUCTIONS = (
     "You are reconciling forecasts against live prediction-market prices. Each item below is a "
     "binary forecast whose probability diverges from a matched market's implied probability by "
@@ -2444,11 +2446,14 @@ def _stamp_market_influence(binary: Dict[str, Any], anchor: Dict[str, Any], *,
 
 def _market_blend_weight_max() -> float:
     """REPORT-12：FORECAST_MARKET_BLEND_WEIGHT_MAX 钳到 [0, 1]（非法/非有限 → 0.8），
-    保证混合结果始终落在预测概率与市场价之间的线段上。"""
+    保证混合结果始终落在预测概率与市场价之间的线段上；再向下取整到 0.01 网格（绝不放宽
+    设定的上限）——与量化后的权重同一网格，且提示词里以 :g 写出的上限就是验收比较的上限
+    （0.123456789 → 0.12，而非提示 0.123457、验收却拒收 0.123457）。"""
     w_max = _coerce_float(_cfg("FORECAST_MARKET_BLEND_WEIGHT_MAX", 0.8))
     if w_max is None or not math.isfinite(w_max):
         return 0.8
-    return max(0.0, min(1.0, w_max))
+    w_max = max(0.0, min(1.0, w_max))
+    return float(Decimal(repr(w_max)).quantize(Decimal("0.01"), rounding=ROUND_FLOOR))
 
 
 def _apply_market_blend(binary: Dict[str, Any], anchor: Dict[str, Any], raw_weight: Any,
@@ -2456,19 +2461,24 @@ def _apply_market_blend(binary: Dict[str, Any], anchor: Dict[str, Any], raw_weig
     """REPORT-12：把一条「market_weight + 引用市场的理由」重述确定性地落到 binary 上（就地）。
 
     调用方已确认 ``rationale`` 引用了市场；本函数只接受二者齐全的一组（全有或全无）：
-    权重经 parse_probability_field 解析（0.4 / '40%' 可读；缺失、bool、区间、>1 不可读）且须
-    <= ``weight_max``，否则整条重述作废（理由/概率/印章都不动），返回 False。
+    权重经 parse_probability_field 解析（0.4 / '40%' 可读；缺失、bool、区间、>1 不可读），
+    量化到 0.01 网格（理由算式与 Market Cross-Check 都以两位小数印出权重，印出的就是参与计算
+    并记入 blend 的那个数），且模型给出的原值与量化值都须 <= ``weight_max``（调用方传入的
+    _market_blend_weight_max 已在同一网格上），否则整条重述作废（理由/概率/印章都不动），
+    返回 False。
 
-    w == 0 → 仅改理由的「保留分歧」（不盖章）。否则 p（现概率）与 m（锚点上的快照价
-    implied_yes_prob，绝不取模型转录值）须是 [0, 1] 内的数（否则同样整条作废），
-    p2 = round(clamp((1-w)·p + w·m, 0.02, 0.98), 2)，且 p2 须仍在 p 与 m 之间的线段上（舍入出界
-    → 整条作废）：写回概率、重算锚点 divergence、理由末尾追加确定性算式；概率确实移动时盖
-    market_influence 印章并附 blend 记录（四舍五入后未动 → 与旧路径一致不盖章）。"""
+    w == 0（含量化后为 0 的 < 0.005）→ 仅改理由的「保留分歧」（不盖章）。否则 p（现概率）与
+    m（锚点上的快照价 implied_yes_prob，绝不取模型转录值）须是 [0, 1] 内的数（否则同样整条
+    作废），p2 = round(clamp((1-w)·p + w·m, 0.02, 0.98), 2)；钳位改变了结果（p2 不等于未钳位
+    算式的两位小数）或 p2 不在 p 与 m 之间的线段上（舍入出界）→ 整条作废，因此发布的 p2 总能由
+    记录的 formula 原样复算：写回概率、重算锚点 divergence、理由末尾追加确定性算式；概率确实
+    移动时盖 market_influence 印章并附 blend 记录（四舍五入后未动 → 与旧路径一致不盖章）。"""
     parsed_w = parse_probability_field(raw_weight)
     if parsed_w.status != PROB_OK or parsed_w.value is None:
         return False
-    w = float(parsed_w.value)
-    if w > weight_max:
+    stated_w = float(parsed_w.value)
+    w = round(stated_w, 2)
+    if max(stated_w, w) > weight_max:
         return False
     if w == 0.0:
         binary["adjustment_rationale"] = rationale
@@ -2477,9 +2487,14 @@ def _apply_market_blend(binary: Dict[str, Any], anchor: Dict[str, Any], raw_weig
     m = _coerce_float(anchor.get("implied_yes_prob"))
     if p is None or m is None or not (0.0 <= p <= 1.0) or not (0.0 <= m <= 1.0):
         return False
-    p2 = round(min(0.98, max(0.02, (1.0 - w) * p + w * m)), 2)
+    raw_p2 = (1.0 - w) * p + w * m
+    p2 = round(min(0.98, max(0.02, raw_p2)), 2)
+    if p2 != round(raw_p2, 2):
+        # [0.02, 0.98] 钳位改变了结果（上限调到 0.8 以上时 w·m 越界，或 p 本身在发布区间外）→
+        # 印出的算式 (1-w)·p + w·m 复算不出 p2，这是一条假算术：整条作废（fail closed）。
+        return False
     if not (min(p, m) - 1e-9 <= p2 <= max(p, m) + 1e-9):
-        # 两位小数舍入把结果推出 p..m 线段（非网格的 p 配极小 w → 背离市场；非网格的 m 配近 1
+        # 两位小数舍入把结果推出 p..m 线段（非网格的 p 配小 w → 背离市场；非网格的 m 配近 1
         # 的 w → 越过市场，仅当上限调高到 0.8 以上时可能）→ 这一权重无法表示为合法混合，
         # 整条作废（fail closed），绝不发布一个不在线段上的「市场驱动」修订。
         return False

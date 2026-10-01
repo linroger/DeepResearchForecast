@@ -98,13 +98,15 @@ def test_blend_toward_lower_market_and_bounds(blend_on):
         [b], _reply({"id": "F1", "market_weight": 0.8, "adjustment_rationale": CITING})) == 1
     assert b["probability"] == 0.32                       # 0.2*0.80 + 0.8*0.20, max weight
     assert b["adjustment_rationale"].endswith("[blend: (1-0.80)x0.80 + 0.80x0.20 = 0.32]")
-    # The [0.02, 0.98] publication bounds still apply to the computed value.
+    # The [0.02, 0.98] publication bounds still apply, but a clamp that would change the
+    # result rejects the revision: publishing 0.02 under "(1-0.50)x0.02 + 0.50x0.00" would be
+    # false arithmetic (the formula gives 0.01).
     low = _divergent(prob=0.02, implied=0.0)
     low["market_anchor"]["divergence"] = 0.12             # force candidacy
+    before = copy.deepcopy(low)
     assert enforce_market_divergence(
-        [low], _reply({"id": "F1", "market_weight": 0.5, "adjustment_rationale": CITING})) == 1
-    assert low["probability"] == 0.02                     # 0.01 clamped up, equals p
-    assert "market_influence" not in low                  # the probability did not move
+        [low], _reply({"id": "F1", "market_weight": 0.5, "adjustment_rationale": CITING})) == 0
+    assert low == before                                  # rationale, probability untouched
 
 
 @pytest.mark.parametrize("p", [0.05, 0.2, 0.3, 0.47, 0.65, 0.9, 0.98])
@@ -125,14 +127,15 @@ def test_every_blend_lies_on_segment_and_is_reproducible(blend_on, p, m, w):
     blend = inf["blend"]
     assert blend["weight"] <= Config.FORECAST_MARKET_BLEND_WEIGHT_MAX
     assert blend["market"] == b["market_anchor"]["implied_yes_prob"]
-    recomputed = round(min(0.98, max(0.02, (1 - blend["weight"]) * blend["prior"]
-                                     + blend["weight"] * blend["market"])), 2)
+    # Reproducible from the stamped formula itself: no hidden clamp.
+    recomputed = round((1 - blend["weight"]) * blend["prior"]
+                       + blend["weight"] * blend["market"], 2)
     assert recomputed == blend["computed"] == p2 == inf["revised_probability"]
 
 
 @pytest.mark.parametrize("p,m,w,weight_max", [
-    (0.314, 0.6, 0.001, 0.8),     # 0.314286 rounds to 0.31: away from the market
-    (0.316, 0.0, 0.001, 0.8),     # 0.315684 rounds to 0.32: away from the market
+    (0.301, 0.5, 0.01, 0.8),      # 0.30299 rounds to 0.30: away from the market
+    (0.309, 0.0, 0.01, 0.8),      # 0.30591 rounds to 0.31: away from the market
     (0.5, 0.1234, 1.0, 1.0),      # 0.1234 rounds to 0.12: past the market (cap raised to 1)
 ])
 def test_rounding_off_the_segment_rejects_the_revision(blend_on, monkeypatch,
@@ -166,8 +169,9 @@ def test_off_grid_inputs_never_leave_the_segment(blend_on, monkeypatch, p, m, w)
     inf = b.get("market_influence")
     if inf is not None:
         blend = inf["blend"]
-        assert round(min(0.98, max(0.02, (1 - blend["weight"]) * blend["prior"]
-                                   + blend["weight"] * blend["market"])), 2) == p2
+        assert blend["weight"] == round(w, 2)            # the printed weight is the one used
+        assert round((1 - blend["weight"]) * blend["prior"]
+                     + blend["weight"] * blend["market"], 2) == p2
 
 
 # ---------------------------------------------------- all-or-none group and the caps
@@ -193,6 +197,67 @@ def test_all_or_none_and_caps(blend_on, revision):
     assert b == before                                    # rationale, probability, stamp untouched
 
 
+def test_weight_quantized_to_the_printed_grid(blend_on):
+    """The weight is rounded to two decimals before the arithmetic, so the rationale clause
+    and the Cross-Check print exactly the weight that was used (0.66 + 0.34 = 1.00, never
+    0.67 + 0.34 for an unrounded 0.335)."""
+    b = _divergent(prob=0.30, implied=0.60)
+    assert enforce_market_divergence(
+        [b], _reply({"id": "F1", "market_weight": 0.335, "adjustment_rationale": CITING})) == 1
+    blend = b["market_influence"]["blend"]
+    assert blend["weight"] == 0.34
+    assert b["probability"] == blend["computed"] == 0.40  # round(0.66*0.30 + 0.34*0.60, 2)
+    assert b["adjustment_rationale"].endswith("[blend: (1-0.34)x0.30 + 0.34x0.60 = 0.40]")
+    line = render_market_comparison_block({"binary_forecasts": [b]}, None, "en")
+    work = line[line.index("(blend w="):].split(")")[0]
+    assert work == "(blend w=0.34: 0.66·30% + 0.34·60% = 40%"
+    shown = [float(t.split("·")[0]) for t in work.split(": ")[1].split(" = ")[0].split(" + ")]
+    assert round(sum(shown), 2) == 1.00
+    # Below half a point the weight rounds to 0: the keep-divergence path (rationale only).
+    rationale = "The market implies 60% but misses the regulatory tail."
+    keep = _divergent(prob=0.30, implied=0.60)
+    assert enforce_market_divergence(
+        [keep], _reply({"id": "F1", "market_weight": 0.004,
+                        "adjustment_rationale": rationale})) == 1
+    assert keep["probability"] == 0.30 and keep["adjustment_rationale"] == rationale
+    assert "market_influence" not in keep
+    # The cap is checked against the stated weight as well as the rounded one.
+    near = _divergent(prob=0.30, implied=0.60)
+    assert enforce_market_divergence(
+        [near], _reply({"id": "F1", "market_weight": 0.795, "adjustment_rationale": CITING})) == 1
+    assert near["market_influence"]["blend"]["weight"] == 0.8 and near["probability"] == 0.54
+    over = _divergent(prob=0.30, implied=0.60)
+    before = copy.deepcopy(over)
+    assert enforce_market_divergence(
+        [over], _reply({"id": "F1", "market_weight": 0.8004, "adjustment_rationale": CITING})) == 0
+    assert over == before
+
+
+@pytest.mark.parametrize("p,m,w,accepted", [
+    (0.5, 1.0, 0.99, False),      # 0.995: the clamp to 0.98 would change the result
+    (0.5, 1.0, 1.0, False),       # 1.0 -> 0.98
+    (0.6, 0.0, 1.0, False),       # 0.0 -> 0.02
+    (0.5, 1.0, 0.96, True),       # 0.98: inside the bounds, no clamp needed
+    (0.5, 0.9, 1.0, True),        # full deference to an in-bounds market
+])
+def test_clamp_that_changes_the_result_rejects(blend_on, monkeypatch, p, m, w, accepted):
+    """With the cap raised above 0.8 a blend can leave [0.02, 0.98]; publishing the clamped
+    value under the unclamped formula would be false arithmetic, so the revision is rejected."""
+    monkeypatch.setattr(Config, "FORECAST_MARKET_BLEND_WEIGHT_MAX", 1.0, raising=False)
+    b = _divergent(prob=p, implied=m)
+    before = copy.deepcopy(b)
+    n = enforce_market_divergence(
+        [b], _reply({"id": "F1", "market_weight": w, "adjustment_rationale": CITING}))
+    if not accepted:
+        assert n == 0 and b == before
+        return
+    assert n == 1
+    blend = b["market_influence"]["blend"]
+    assert b["probability"] == blend["computed"] == round((1 - w) * p + w * m, 2)
+    line = render_market_comparison_block({"binary_forecasts": [b]}, None, "en")
+    assert f"= {blend['computed']:.0%})" in line
+
+
 def test_percent_weight_accepted(blend_on):
     b = _divergent(prob=0.30, implied=0.60)
     assert enforce_market_divergence(
@@ -216,6 +281,28 @@ def test_weight_max_knob_bounds_prompt_and_acceptance(blend_on, monkeypatch):
     assert fe._market_blend_weight_max() == 1.0
     monkeypatch.setattr(Config, "FORECAST_MARKET_BLEND_WEIGHT_MAX", float("nan"), raising=False)
     assert fe._market_blend_weight_max() == 0.8
+
+
+@pytest.mark.parametrize("setting,cap", [
+    (0.8, 0.8), (0.75, 0.75), (0.29, 0.29), (0.123456789, 0.12), (0.333333333, 0.33),
+    (0.999, 0.99), (0.855, 0.85), (1e-5, 0.0), (1.0, 1.0), (0.0, 0.0),
+])
+def test_stated_cap_is_the_enforced_cap(blend_on, monkeypatch, setting, cap):
+    """The cap is floored to the 0.01 weight grid (never loosened), so the maximum the prompt
+    states is exactly the maximum the acceptance check enforces."""
+    monkeypatch.setattr(Config, "FORECAST_MARKET_BLEND_WEIGHT_MAX", setting, raising=False)
+    assert fe._market_blend_weight_max() == cap
+    b = _divergent(prob=0.30, implied=0.60)
+    fake = _reply({"id": "F1", "market_weight": cap, "adjustment_rationale": CITING})
+    assert enforce_market_divergence([b], fake) == 1      # answering the stated cap is accepted
+    stated = _prompt(fake).split("the maximum is ", 1)[1].split(". ", 1)[0]
+    assert float(stated) == cap
+    above = _divergent(prob=0.30, implied=0.60)
+    before = copy.deepcopy(above)
+    assert enforce_market_divergence(
+        [above], _reply({"id": "F1", "market_weight": cap + 0.001,
+                         "adjustment_rationale": CITING})) == 0
+    assert above == before
 
 
 def test_one_blend_per_forecast(blend_on):
