@@ -2289,6 +2289,9 @@ class ReportAgent:
             f"超限未列 {result['omitted']} 条、未收录 {result['excluded']}（sha256 {result['sha256'][:12]}）")
         return result["rendered"]
 
+    # FU-9: contested-table slots reserved for TIME-4 quantitative reconcile rows.
+    _CONTESTED_QUANT_SLOTS = 3
+
     def _build_contested_table_block(self, max_claims: int = 15) -> str:
         """W9-8: 争议性关键论断块（contested.json 全量，上限 15 条）。
 
@@ -2297,8 +2300,8 @@ class ReportAgent:
         rows = self.contested if isinstance(getattr(self, "contested", None), list) else None
         if not rows:
             return ""
-        lines = ["## 争议性关键论断（证据分歧——本章须正面呈现两侧立场与依据，不得单边引用）"]
-        rendered = 0
+        # (TIME-4 quant_reconcile row?, rendered line) for every renderable row, in order.
+        rendered: List[Tuple[bool, str]] = []
         for r in rows:
             if not isinstance(r, dict) or not r.get("claim"):
                 continue
@@ -2312,11 +2315,26 @@ class ReportAgent:
                 segs.append(f"{self._md_cell(p['stance'], 160)}{tag}")
             if not segs:
                 continue
-            lines.append(f"- **{self._md_cell(r['claim'], 120)}** — " + " ⇄ ".join(segs))
-            rendered += 1
-            if rendered >= max_claims:
-                break
-        return "\n".join(lines) if rendered else ""
+            rendered.append((r.get("origin") == "quant_reconcile",
+                             f"- **{self._md_cell(r['claim'], 120)}** — " + " ⇄ ".join(segs)))
+        if not rendered:
+            return ""
+        cap = max(1, max_claims)  # the loop this replaces always kept the first row
+        keep = set(range(min(cap, len(rendered))))
+        if len(rendered) > cap and getattr(Config, "RESEARCH_QUANT_RECONCILE", True):
+            # FU-9 (TIME-4 open issue): the research engine appends its quantitative
+            # disagreements after the model's claims (probable unit-scale errors first), so a
+            # plain cut drops them all.  Up to _CONTESTED_QUANT_SLOTS of them keep a slot;
+            # the model's claims fill the rest in order.  Byte-identical when nothing is cut.
+            quant = [i for i, (is_quant, _) in enumerate(rendered) if is_quant]
+            keep = set(quant[:min(self._CONTESTED_QUANT_SLOTS, cap)])
+            for i in range(len(rendered)):
+                if len(keep) >= cap:
+                    break
+                keep.add(i)
+        lines = ["## 争议性关键论断（证据分歧——本章须正面呈现两侧立场与依据，不得单边引用）"]
+        lines += [line for i, (_, line) in enumerate(rendered) if i in keep]
+        return "\n".join(lines)
 
     def _build_chronology_block(self, max_events: int = 25) -> str:
         """W9-8: 紧凑时间线块（timeline.json 取最近 max_events 条、按时间升序渲染）。

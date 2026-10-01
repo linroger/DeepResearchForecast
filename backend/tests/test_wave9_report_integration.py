@@ -10,6 +10,7 @@
 """
 import pytest
 
+from app.config import Config
 from app.services.report_agent import ReportAgent
 
 
@@ -71,6 +72,51 @@ class TestContestedBlock:
                 for i in range(30)]
         out = _bare_agent(contested=rows)._build_contested_table_block(max_claims=15)
         assert sum(1 for l in out.split("\n") if l.startswith("- **")) == 15
+
+
+def _contested(n_model, n_quant, *, unit_scale=0):
+    model = [{"claim": f"m{i}", "positions": [{"stance": "s", "sources": [], "tier": "S2"}]}
+             for i in range(n_model)]
+    quant = [{"claim": f"q{i}", "origin": "quant_reconcile",
+              "why_they_differ": "probable unit-scale error" if i < unit_scale else "different sources",
+              "positions": [{"stance": "a", "sources": [], "tier": ""}, {"stance": "b", "sources": [], "tier": ""}]}
+             for i in range(n_quant)]
+    return model + quant
+
+
+def _claims(out):
+    return [line[4:].split("**", 1)[0] for line in out.split("\n") if line.startswith("- **")]
+
+
+class TestContestedQuantSlots:
+    """FU-9 (TIME-4 open issue): the research engine appends its quantitative
+    disagreements after the model's claims, so a plain cut at 15 dropped them all."""
+
+    def test_reserves_up_to_three_slots_unit_scale_first(self, monkeypatch):
+        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
+        out = _bare_agent(contested=_contested(20, 4, unit_scale=2))._build_contested_table_block()
+        assert _claims(out) == [f"m{i}" for i in range(12)] + ["q0", "q1", "q2"]
+
+    def test_unchanged_when_nothing_is_cut(self, monkeypatch):
+        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
+        rows = _contested(10, 2)
+        out = _bare_agent(contested=rows)._build_contested_table_block()
+        assert _claims(out) == [f"m{i}" for i in range(10)] + ["q0", "q1"]
+        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", False, raising=False)
+        assert _bare_agent(contested=rows)._build_contested_table_block() == out
+
+    def test_no_quant_rows_or_knob_off_is_the_plain_cut(self, monkeypatch):
+        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
+        assert _claims(_bare_agent(contested=_contested(20, 0))._build_contested_table_block()) == [
+            f"m{i}" for i in range(15)]
+        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", False, raising=False)
+        assert _claims(_bare_agent(contested=_contested(20, 4))._build_contested_table_block()) == [
+            f"m{i}" for i in range(15)]
+
+    def test_few_model_claims_leave_more_room_for_quant_rows(self, monkeypatch):
+        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
+        out = _bare_agent(contested=_contested(3, 20))._build_contested_table_block()
+        assert _claims(out) == ["m0", "m1", "m2"] + [f"q{i}" for i in range(12)]
 
 
 class TestChronologyBlock:
