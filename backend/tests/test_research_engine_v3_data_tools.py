@@ -747,3 +747,70 @@ def test_quant_rows_cap_and_the_off_switch_of_the_contradiction_check(tmp_path, 
     assert [row["value"] for row in quant if row["metric"] == "Consumer price index"] == ["323.5"]
     assert meta["data_tools"]["quant_rows_added"] == 1
     assert [row["value"] for row in meta["data_tools"]["quant_rows_rejected"]] == ["329.7"]
+
+
+def test_a_gated_hindcast_citing_only_data_rows_is_not_a_leak(tmp_path, bridge, monkeypatch, vendors):
+    """TIME-8/9: excluding same-day sources, every data call asks for the day before the as-of, so
+    the data rows are admitted, dated strictly before it, and the independent re-check of the cited
+    sources finds no late one (the undated web pages are withheld under PIT_UNDATED_POLICY=drop)."""
+    _gated_env(monkeypatch)
+    rc, meta, plog, _, out = run_engine(tmp_path, bridge, monkeypatch, DataWorld)
+    assert rc == 0, plog.text()
+    cutoff = dt.date(2024, 6, 2)
+    assert [(call["as_of"], call["pit"]) for call in vendors["fred"]] == [(cutoff, cutoff)]
+    assert [call["as_of"] for call in vendors["edgar"]] == [cutoff]
+    sources = _read(out / "sources.json")
+    data_rows = [row for row in sources if "data" in row]
+    assert len(data_rows) == 2 == len(sources)
+    assert all(row["pit_status"] == "admitted" and dt.date.fromisoformat(row["date"]) < dt.date(2024, 6, 3)
+               for row in data_rows)
+    audit = _read(out / lr.POINT_IN_TIME_FILENAME)
+    assert audit["status"] != lr.PIT_STATUS_VIOLATED
+    assert (audit["streams"]["cited"]["late"], audit["streams"]["cited"]["admitted"]) == (0, 2)
+    assert meta["data_tools"]["pit"] == "2024-06-02"
+
+
+def test_data_calls_use_the_run_language(tmp_path, vendors):
+    """A Chinese run asks the vendors for Chinese sentences (sources.json supports in the report's language)."""
+    args = types.SimpleNamespace(model="fake-model", depth="standard", target_language="Chinese", no_actors=False)
+
+    def tools_factory(ledger, pages_dir, bridge_arg, reporter, limits):
+        holder = {}
+        fns = lr.official_data_fns(ALL_ON, ("fred", "sec_edgar"), lambda: holder["tools"].data_context())
+        holder["tools"] = rg.ResearchTools(ledger, pages_dir, search_fn=v3.fake_search, fetch_fn=v3.page_text,
+                                           limits=limits, data_fns=fns)
+        return holder["tools"]
+
+    def gateway_factory(args_, reporter, bridge_arg, preset):
+        return rg.ModelGateway(v3.ScriptedModel(lambda call: v3.ai("OK")), reporter, sleep=lambda s: None)
+
+    engine = lr._Engine(QUESTION, tmp_path / "out", args, {"status": "running"}, lr._Reporter(v3.FakePlog()),
+                        lambda: None, v3.dr, gateway_factory, tools_factory, ALL_ON)
+    engine.plan = _plan(_today().isoformat())
+    engine.tools.data("macro_series", {"series": "cpi"}, agent_id="K1")
+    engine.tools.data("company_filings", {"company": "AAPL", "freq": "quarterly"}, agent_id="K1")
+    assert [call["language"] for call in (*vendors["fred"], *vendors["edgar"])] == ["Chinese", "Chinese"]
+    assert vendors["edgar"][0]["freq"] == "quarterly" and vendors["fred"][0]["key"] == KEY
+
+
+def test_without_a_plan_a_data_call_answers_unavailable_without_a_request(tmp_path, vendors):
+    fns = lr.official_data_fns(ALL_ON, ("fred", "sec_edgar"), lambda: None)
+    assert [fns[name](**args).status for name, args in (("macro_series", {"series": "cpi"}),
+                                                        ("company_filings", {"company": "AAPL"}))] == [
+        dtools.STATUS_UNAVAILABLE, dtools.STATUS_UNAVAILABLE]
+    assert vendors == {"fred": [], "edgar": []}
+    assert lr.official_data_fns(ALL_ON, ("sec_edgar",), lambda: None).keys() == {"company_filings"}
+
+
+@pytest.mark.parametrize("answers, expected", [
+    ((failed_result(), failed_result()), True),
+    ((failed_result(), fred_result("GDP"), fred_result("UNRATE")), False),
+])
+def test_a_data_failure_rate_of_half_or_more_is_a_research_event(tmp_path, answers, expected):
+    queue = list(answers)
+    fns = data_fns(macro_series=DataFn(lambda series: queue.pop(0)))
+    engine, _ = make_engine(tmp_path, ALL_ON, fns=fns)
+    for series in ("cpi", "gdp", "unrate")[:len(answers)]:
+        engine.tools.data("macro_series", {"series": series}, agent_id="K1")
+    events = [event for event in engine._research_events() if event.startswith("official-data")]
+    assert events == (["official-data tool failure rate >= 50%: 2 of 2 data calls failed"] if expected else [])
