@@ -7666,32 +7666,82 @@ def hindcast_pin_for_simulation(simulation_id: Optional[str]) -> Optional[dict[s
     return pin
 
 
+def pinned_interview_graph_feedback(options: Any) -> Optional[bool]:
+    """FU-8: the ``sim_interview_graph_feedback`` a run's ``safety_policy_v1`` pins, or None.
+
+    None when ``options`` carries no pin, or a pin without the key (a run pinned before
+    the key existed): the ambient Config then decides. Only a real bool counts. A pin
+    that is not a dict, or a value that is not a bool (a hand-edited or damaged state,
+    where ``bool('false')`` would be True), reads False with a warning: interview text
+    is a simulation artifact and is never written to the graph because the pin could
+    not be read.
+    """
+    policy = options.get("safety_policy_v1") if isinstance(options, dict) else None
+    if policy is None:
+        return None
+    if not isinstance(policy, dict):
+        logger.warning("safety_policy_v1 不是对象（%s），采访事实不写入图谱（失败关闭）",
+                       type(policy).__name__)
+        return False
+    value = policy.get("sim_interview_graph_feedback")
+    if value is None or isinstance(value, bool):
+        return value
+    logger.warning("safety_policy_v1.sim_interview_graph_feedback=%r 不是布尔值，"
+                   "采访事实不写入图谱（失败关闭）", value)
+    return False
+
+
 def interview_graph_feedback_for_simulation(simulation_id: Optional[str]) -> bool:
     """FU-8 (INFRA-9 open issue): whether interview answers of ``simulation_id`` may be
     written to the observation graph.
 
-    The pinned ``safety_policy_v1['sim_interview_graph_feedback']`` of the pipeline that
-    ran the simulation decides (same owner scan as :func:`hindcast_pin_for_simulation`),
-    so a run, and a fork that inherited its pin, keeps the semantics it was admitted
-    with after a config change. Without a pin, or without the key (a legacy run), the
-    ambient ``Config.SIM_INTERVIEW_GRAPH_FEEDBACK`` decides, as before. A lookup that
-    raises fails closed (False, logged): interview text is a simulation artifact and is
-    never written to the graph because the pin could not be read.
+    The fallback for report entry points without orchestrator context (``/api/report``
+    regenerate and chat): orchestrator reports get the gate through the
+    ``interview_graph_feedback`` ReportAgent kwarg (``PipelineOrchestrator.
+    _interview_feedback_gate``), because a seed-ensemble member's simulation has no
+    persisted owner while its report runs. Here the pinned value
+    (:func:`pinned_interview_graph_feedback`) of the pipeline that ran the simulation
+    decides, found by the same owner scan as :func:`hindcast_pin_for_simulation`: newest
+    pipeline first, and a shared-simulation batch child without a pinned value defers to
+    the pipeline it borrowed the simulation from, provided that pipeline still names the
+    same simulation. So a run, and a fork that inherited its pin, keeps the semantics it
+    was admitted with after a config change. Without a pinned value anywhere on that
+    chain (legacy runs, unpinned forks, unowned simulations) the ambient
+    ``Config.SIM_INTERVIEW_GRAPH_FEEDBACK`` decides, as before. Fails closed (False,
+    logged) when the scan raises or a named origin pipeline cannot be read.
     """
     ambient = bool(getattr(Config, "SIM_INTERVIEW_GRAPH_FEEDBACK", False))
     if not simulation_id:
         return ambient
+    simulation_id = str(simulation_id)
     try:
-        owner = _ledger_owner_of_simulation(str(simulation_id))
+        owner = _ledger_owner_of_simulation(simulation_id)
+        if owner is None:
+            return ambient
+        pipeline_id, data, _is_member, _seed = owner
+        pinned = pinned_interview_graph_feedback(data.get("options"))
+        seen = {pipeline_id}
+        while pinned is None and len(seen) <= _SHARED_SIMULATION_MAX_HOPS:
+            if data.get("simulation_id") != simulation_id:
+                break  # a seed-ensemble member's simulation is its own pipeline's, never borrowed
+            options = data.get("options") if isinstance(data.get("options"), dict) else {}
+            origin_id = options.get("shared_simulation_from")
+            if not isinstance(origin_id, str) or not origin_id or origin_id in seen:
+                break
+            seen.add(origin_id)
+            origin = PipelineManager.load(origin_id)
+            if not isinstance(origin, dict) or PipelineManager.is_incompatible(origin) is not None:
+                logger.warning("[%s] 共享模拟来源管线 %s 不可读，采访事实不写入图谱（失败关闭）",
+                               simulation_id, origin_id)
+                return False
+            if origin.get("simulation_id") != simulation_id:
+                break
+            pinned = pinned_interview_graph_feedback(origin.get("options"))
+            data = origin
     except Exception as exc:  # noqa: BLE001 — fail closed: no graph write without the pin
         logger.warning("[%s] 安全政策钉查找失败，采访事实不写入图谱（失败关闭）: %s", simulation_id, exc)
         return False
-    if owner is None:
-        return ambient
-    options = owner[1].get("options") if isinstance(owner[1], dict) else None
-    policy = options.get("safety_policy_v1") if isinstance(options, dict) else None
-    pinned = policy.get("sim_interview_graph_feedback") if isinstance(policy, dict) else None
-    return ambient if pinned is None else bool(pinned)
+    return ambient if pinned is None else pinned
 
 
 def preflight_pipeline(mode: str = "full", model: Optional[str] = None) -> list[str]:
@@ -10546,6 +10596,21 @@ class PipelineOrchestrator:
         pin = hindcast_policy(state.options)
         return {"hindcast": pin} if pin is not None else {}
 
+    @staticmethod
+    def _interview_feedback_gate(state: "PipelineState") -> bool:
+        """FU-8: whether this run's reports may write interview answers to the graph.
+
+        The run's pinned ``sim_interview_graph_feedback`` (only a real bool counts, see
+        :func:`pinned_interview_graph_feedback`), else the ambient Config. Passed to the
+        main and seed ReportAgents as ``interview_graph_feedback``: a seed's simulation is
+        recorded only in the in-memory ``ensemble_member_simulations`` map while its report
+        runs, so the by-simulation lookup would find no owner and read the ambient value.
+        """
+        pinned = pinned_interview_graph_feedback(state.options)
+        if pinned is None:
+            return bool(getattr(Config, "SIM_INTERVIEW_GRAPH_FEEDBACK", False))
+        return pinned
+
     def _record_research_audit(self, state: "PipelineState", handoff_dir: str) -> None:
         """TIME-9: stamp the gated research's audit into the hindcast pin before any report reads it.
 
@@ -10908,6 +10973,9 @@ class PipelineOrchestrator:
             # TIME-5：数值一致性影子检查模式读准入钉（服务重载不改变已准入运行）。
             "numeric_guard_mode": self._pinned_safety(
                 state, "numeric_guard_mode", Config.NUMERIC_GUARD_MODE),
+            # FU-8：采访事实写图的门读准入钉，随构造参数交给报告——种子模拟的所属管线在报告期间
+            # 尚未落盘（ensemble_member_simulations 只在内存），按模拟 id 查找会落回环境值。
+            "interview_graph_feedback": self._interview_feedback_gate(state),
         }
         # TIME-6：回测运行的种子报告同样扣下市场——钉随构造参数直接交给报告，不依赖报告侧
         # 按模拟 id 的所属管线查找（种子模拟不是任何管线自己的 simulation_id）。
@@ -15841,6 +15909,8 @@ class PipelineOrchestrator:
                     # TIME-5：数值一致性影子检查模式读准入钉（API 重生成路径读当前 Config）。
                     "numeric_guard_mode": cls._pinned_safety(
                         state, "numeric_guard_mode", Config.NUMERIC_GUARD_MODE),
+                    # FU-8：采访事实写图的门读准入钉（API 重生成/对话按模拟 id 查所属管线的钉）。
+                    "interview_graph_feedback": cls._interview_feedback_gate(state),
                 }
                 # TIME-6：回测运行把钉交给报告（不读/不重报价/不现抓预测市场，盖 hindcast 章）；
                 # 实时运行不加该参数，构造调用逐字节不变。

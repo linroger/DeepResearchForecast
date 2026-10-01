@@ -574,12 +574,16 @@ class ZepGraphMemoryUpdater:
         拒绝写入观察图——合成的终局反思不得变成可检索「事实」。采访全文仍保留在 run 产物里。
 
         FU-8：``feedback_allowed`` 是调用方按该运行钉住的安全政策解析出的门
-        （zep_tools.interview_agents 传入）；None → 环境值 Config.SIM_INTERVIEW_GRAPH_FEEDBACK（旧行为）。
+        （zep_tools.interview_agents 传入；只有 True 放行）；None → 环境值
+        Config.SIM_INTERVIEW_GRAPH_FEEDBACK（旧行为）。
         """
-        allowed = (getattr(Config, "SIM_INTERVIEW_GRAPH_FEEDBACK", False)
-                   if feedback_allowed is None else feedback_allowed)
-        if not allowed:
-            logger.debug("采访事实写入被 SIM_INTERVIEW_GRAPH_FEEDBACK=false 拒绝（Foglamp 1A/I-11）")
+        if feedback_allowed is None:
+            if not getattr(Config, "SIM_INTERVIEW_GRAPH_FEEDBACK", False):
+                logger.debug("采访事实写入被 SIM_INTERVIEW_GRAPH_FEEDBACK=false 拒绝（Foglamp 1A/I-11）")
+                return False
+        elif feedback_allowed is not True:
+            logger.debug(f"采访事实写入被该运行钉住的安全政策拒绝（feedback_allowed={feedback_allowed!r}，"
+                         "FU-8）")
             return False
         agent_name = (agent_name or "").strip()
         statement = (statement or "").strip()

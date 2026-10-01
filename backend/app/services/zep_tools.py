@@ -34,10 +34,18 @@ from ..utils.dates import parse_as_of
 logger = get_logger('mirofish.zep_tools')
 
 
-def _interview_feedback_allowed(simulation_id: Optional[str]) -> bool:
-    """FU-8: the run's pinned SIM_INTERVIEW_GRAPH_FEEDBACK (pipeline_orchestrator.
-    interview_graph_feedback_for_simulation); imported lazily (the orchestrator imports
-    this module). An import failure fails closed."""
+def _interview_feedback_allowed(simulation_id: Optional[str],
+                                feedback_allowed: Optional[bool] = None) -> bool:
+    """FU-8: whether interview answers of ``simulation_id`` may be written to the graph.
+
+    ``feedback_allowed`` is the gate the orchestrator resolved from the run's pin (main
+    and seed reports, through ReportAgent) and wins; only True allows. Without it (None:
+    /api/report regenerate and chat) the pinned value of the pipeline that ran the
+    simulation decides (pipeline_orchestrator.interview_graph_feedback_for_simulation,
+    imported lazily: the orchestrator imports this module). An import failure fails
+    closed."""
+    if feedback_allowed is not None:
+        return feedback_allowed is True
     try:
         from .pipeline_orchestrator import interview_graph_feedback_for_simulation
     except Exception as exc:  # noqa: BLE001 — fail closed: no graph write without the pin
@@ -1991,6 +1999,7 @@ class ZepToolsService:
         max_agents: int = 5,
         custom_questions: List[str] = None,
         graph_id: Optional[str] = None,
+        feedback_allowed: Optional[bool] = None,
     ) -> InterviewResult:
         """
         【InterviewAgents - 深度采访】
@@ -2015,6 +2024,9 @@ class ZepToolsService:
             simulation_requirement: 模拟需求背景（可选）
             max_agents: 最多采访的Agent数量
             custom_questions: 自定义采访问题（可选，若不提供则自动生成）
+            graph_id: 采访回答写入的图谱（可选；门允许时才写，见下）
+            feedback_allowed: FU-8 编排器按该运行准入钉解析出的写图门（ReportAgent 转交；只有 True 放行）；
+                None（API 重生成 / 对话）→ 按模拟 id 查所属管线的钉（无钉 → 环境值；查找失败 → 不写）
 
         Returns:
             InterviewResult: 采访结果
@@ -2181,9 +2193,10 @@ class ZepToolsService:
             # 让最丰富的收尾反思可被后续检索；key-free 走本地 shim。best-effort，失败不影响采访结果。
             # Foglamp WP1 (1A, I-11)：采访是模拟产物，默认不得写入观察图（门默认 false）；
             # 采访全文仍完整保留在 result.interviews（run 产物）。
-            # FU-8：门由该模拟所属管线钉住的安全政策决定（无钉 → 环境值；查找失败 → 不写）。
+            # FU-8：门由该运行钉住的安全政策决定——编排器传入的 feedback_allowed 优先；未传入时按模拟 id
+            # 查所属管线的钉（无钉 → 环境值；查找失败 → 不写）。
             if (graph_id and result.interviews
-                    and _interview_feedback_allowed(simulation_id)):
+                    and _interview_feedback_allowed(simulation_id, feedback_allowed)):
                 try:
                     from .zep_graph_memory_updater import ZepGraphMemoryUpdater
                     _updater = ZepGraphMemoryUpdater(graph_id)
