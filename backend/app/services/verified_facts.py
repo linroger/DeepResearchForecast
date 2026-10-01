@@ -195,6 +195,12 @@ def _admissible_tag(tag: Any) -> Optional[str]:
     return text if _TAG_RE.fullmatch(text) else None
 
 
+def _text_or_none(value: Any) -> Optional[str]:
+    """A string field with its whitespace collapsed, or None (blank, or not a string)."""
+    text = re.sub(r"\s+", " ", value).strip() if isinstance(value, str) else ""
+    return text or None
+
+
 def _display(row: Mapping[str, Any], group: str, tag_for: TagFor, zh: bool,
              texts: Mapping[str, Any]) -> Dict[str, Any]:
     """The rendered cells of an admitted row (plus its sort keys)."""
@@ -214,6 +220,9 @@ def _display(row: Mapping[str, Any], group: str, tag_for: TagFor, zh: bool,
         "tier": _cell(_tier(row)),
         "source": f"[{tag}]" if tag else _cell(row.get("source")),
         "tag": tag,
+        # Not rendered: the provenance REPORT-9's figure_provenance.json records.
+        "source_title": _text_or_none(row.get("source")),
+        "source_url": _text_or_none(row.get("source_url")),
         "stale": stale,
         "group": group,
         "tier_rank": _tier_rank(row),
@@ -231,13 +240,15 @@ def _cells(shown: Mapping[str, Any]) -> Tuple[str, ...]:
     return cells + (shown["label"],) if "label" in shown else cells
 
 
-def _preference(shown: Mapping[str, Any]) -> Tuple[str, int, bool]:
+def _preference(shown: Mapping[str, Any]) -> Tuple[str, int, bool, str, str]:
     """Which of two admitted rows with the same cells the block keeps (the
     larger): the newest as-of date (a projection quoted on two pages, or a
     reported row whose date is only in period_end), then the better tier, then
-    the current one.  With the cells, this covers every field a kept row
-    carries, so the choice never depends on input order."""
-    return shown["as_of_key"], -shown["tier_rank"], not shown["stale"]
+    the current one, then the source title and URL (which only the public rows
+    carry).  With the cells, this covers every field a kept row carries, so the
+    choice never depends on input order."""
+    return (shown["as_of_key"], -shown["tier_rank"], not shown["stale"], shown["source_title"] or "",
+            shown["source_url"] or "")
 
 
 def _render_order(rows: Sequence[Mapping[str, Any]]) -> List[Mapping[str, Any]]:
@@ -292,7 +303,8 @@ def _render(texts: Mapping[str, Any], kept: Sequence[Mapping[str, Any]], omitted
 
 
 def _public(shown: Mapping[str, Any]) -> Dict[str, Any]:
-    keys = ("metric", "value", "unit", "when", "tier", "source", "tag", "stale", "label")
+    keys = ("metric", "value", "unit", "when", "tier", "source", "tag", "source_title", "source_url", "stale",
+            "label")
     return {key: shown[key] for key in keys if key in shown}
 
 
@@ -318,10 +330,11 @@ def build_verified_figures_block(quantitative: Any, *, tag_for: TagFor, lang: An
     future_dated and unclassified rows as a third count.
 
     Returns ``{"rendered", "sha256", "rows", "projections", "excluded",
-    "omitted"}``: ``rows`` / ``projections`` are the rendered rows' cells,
-    ``excluded`` counts every EXCLUDED_BUCKETS reason and ``omitted`` the
-    admitted rows the caps left out.  ``sha256`` is the digest of ``rendered``
-    ("" when nothing is rendered)."""
+    "omitted"}``: ``rows`` / ``projections`` are the rendered rows' cells (plus
+    each row's unrendered ``source_title`` and ``source_url``), ``excluded``
+    counts every EXCLUDED_BUCKETS reason and ``omitted`` the admitted rows the
+    caps left out.  ``sha256`` is the digest of ``rendered`` ("" when nothing
+    is rendered)."""
     rows = [row for row in (quantitative if isinstance(quantitative, list) else [])
             if isinstance(row, Mapping) and (row.get("metric") or row.get("definition"))]
     result: Dict[str, Any] = {"rendered": "", "sha256": "", "rows": [], "projections": [],
@@ -364,7 +377,8 @@ def build_verified_figures_block(quantitative: Any, *, tag_for: TagFor, lang: An
 # REPORT-9: shadow check of the report's figures against the block (detection only)
 # ---------------------------------------------------------------------------
 
-CHECK_KINDS = ("matched", "conflict", "ambiguous", "states_unverified", "market_conflict", "unmatched")
+CHECK_KINDS = ("matched", "conflict", "ambiguous", "states_unverified", "market_conflict",
+               "threshold_or_probability", "unmatched")
 DEFAULT_REL_TOL = 0.02
 CHECK_EXAMPLES_MAX = 24
 EXCERPT_CHARS = 180
@@ -378,8 +392,21 @@ UNVERIFIED_LABELS = ("unverified", "snippet_only", "none")
 _CHECK_CLASS = {"percent": "percent", "currency": "currency", "count": "plain", "unknown": "plain",
                 "pp": "pp", "bp": "bp"}
 _REFERENCES_HEADINGS = ("## references", "## 参考来源", "## 参考文献")
-_MARKET_CONTEXT_RE = re.compile(r"polymarket|kalshi|manifold|prediction[ -]?markets?|预测市场|隐含概率|implied",
-                                re.I)
+# The spec's market words.  A bare "implied" ("the implied growth rate") is no market, so
+# it counts only before a probability, odds, chance or price.
+_MARKET_CONTEXT_RE = re.compile(
+    r"polymarket|prediction[ -]?markets?|预测市场|隐含概率"
+    r"|implied[ -](?:yes[ -])?(?:probabilit(?:y|ies)|odds|chances?|prices?)", re.I)
+# A figure stated as a probability ("a 40% chance", "40% implied probability", "odds of
+# 45%", "40%的概率", "概率为40%"): like a threshold, it states no level of a metric.
+_PROBABILITY_WORDS = r"(?<![A-Za-z])(?:chances?|probabilit(?:y|ies)|likelihood|odds)"
+_PROBABILITY_AFTER_RE = re.compile(
+    r"^\s*(?:(?:implied|estimated|subjective|assessed|market|model|forecast|yes)[- ]+)?"
+    + _PROBABILITY_WORDS + r"(?![A-Za-z])|^\s*的?(?:概率|可能性|几率|机率)", re.I)
+_PROBABILITY_BEFORE_RE = re.compile(
+    _PROBABILITY_WORDS + r"\s*(?:(?:of|at|is|are|was|were|stands\s+at|=|:)\s*)?(?:(?:about|around|roughly"
+    r"|approximately|~|≈)\s*)?$|(?:概率|可能性|几率|机率)(?:为|是|约为|约|达|在|仅|高达)?\s*$", re.I)
+_PROBABILITY_WINDOW = 40
 _ANCHOR_LATIN_RE = re.compile(r"[a-z]{4,}")
 _ANCHOR_CJK_RE = re.compile(r"[㐀-䶿一-鿿]+")
 _ANCHOR_STOPWORDS = frozenset({
@@ -389,7 +416,9 @@ _ANCHOR_STOPWORDS = frozenset({
     "year", "years", "total", "level", "levels", "value", "values", "figure", "figures"})
 _YEAR_RE = re.compile(r"(?<!\d)(19\d{2}|20\d{2}|2100)(?!\d)")
 _FIRST_NUMBER_RE = re.compile(r"\d[\d,]*(?:\.(\d+))?")
-_UNIT_TAG_RE = re.compile(r"[\[【]\s*(S\d+)\s*[\]】]", re.I)
+# The report's citation grammar (forecast_extractor._CITATION_TAG_RE): positional S<n> and
+# the legacy tiered S<n>-a, in square or CJK brackets.
+_UNIT_TAG_RE = re.compile(r"[\[【]\s*(S\d+(?:-[A-Za-z])?)\s*[\]】]", re.I)
 
 
 def _anchor_tokens(text: Any) -> Tuple[frozenset, frozenset]:
@@ -434,12 +463,25 @@ def _figure_row(index: int, row: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
                 value_text=str(row.get("value") or ""))
 
 
-def _claim_units(md: str) -> Iterable[Tuple[int, str, str]]:
-    """``(line number, unit, context)`` for every claim unit of ``md`` with the scan
-    discipline of forecast_extractor.audit_citation_grounding (fences, headings, the
+def _unit_columns(cells: Sequence[str], units: Sequence[str]) -> List[Optional[int]]:
+    """The column of each claim unit of a table body row.  split_markdown_claim_units
+    splits a row cell by cell, in order, so splitting each cell alone gives the same units
+    column by column; when the counts disagree (a cell with an escaped pipe or a leading
+    list marker) no unit gets a column."""
+    from .forecast_extractor import split_markdown_claim_units
+    columns: List[Optional[int]] = [column for column, cell in enumerate(cells)
+                                    for _unit in split_markdown_claim_units(cell)]
+    return columns if len(columns) == len(units) else [None] * len(units)
+
+
+def _claim_units(md: str) -> Iterable[Tuple[int, str, str, frozenset]]:
+    """``(line number, unit, context, years)`` for every claim unit of ``md`` with the
+    scan discipline of forecast_extractor.audit_citation_grounding (fences, headings, the
     Part-1 marker block and authored forecast sections skipped) plus the References
-    section.  ``context`` is the whole table row for a table cell (the metric of a
-    figure in a table is in another cell), else the unit itself."""
+    section.  ``context`` is the whole table row for a table cell (the metric of a figure
+    in a table is in another cell), else the unit itself.  ``years`` are the unit's own;
+    a table cell without one takes its column header's ("| Metric | 2025 | 2030E |"),
+    else its row's ("| Metric | Year | Value |")."""
     from .forecast_extractor import (
         BINARY_FORECAST_END_MARKER, BINARY_FORECAST_START_MARKER, authored_forecast_markers_balanced,
         is_authored_forecast_heading, is_markdown_table_delimiter, is_markdown_table_header,
@@ -448,13 +490,21 @@ def _claim_units(md: str) -> Iterable[Tuple[int, str, str]]:
     lines = str(md or "").splitlines()
     markers_valid = authored_forecast_markers_balanced(lines)
     fence = None
+    header: Optional[List[str]] = None
     in_block = in_authored = in_references = False
     for index, raw in enumerate(lines):
         stripped = raw.strip()
         was_in_fence = fence is not None
         fence, is_fence_line = markdown_fence_transition(raw, fence)
         if is_fence_line or was_in_fence:
+            header = None
             continue
+        cells = markdown_table_cells(raw)
+        is_header = is_markdown_table_header(lines, index)
+        if not cells:
+            header = None
+        elif is_header:
+            header = cells
         if stripped == BINARY_FORECAST_START_MARKER:
             in_block, in_authored = markers_valid, False
             continue
@@ -466,17 +516,26 @@ def _claim_units(md: str) -> Iterable[Tuple[int, str, str]]:
             in_references = stripped.casefold().rstrip("：: ") in _REFERENCES_HEADINGS
         if not stripped or stripped.startswith("#") or in_block or in_authored or in_references:
             continue
-        units = split_markdown_claim_units(raw, table_header=is_markdown_table_header(lines, index),
+        units = split_markdown_claim_units(raw, table_header=is_header,
                                            table_delimiter=is_markdown_table_delimiter(raw))
-        context_row = raw if markdown_table_cells(raw) else None
-        for unit in units:
-            yield index + 1, unit, context_row or unit
+        if not cells:
+            for unit in units:
+                yield index + 1, unit, unit, _years(unit)
+            continue
+        row_years = _years(raw)
+        for unit, column in zip(units, _unit_columns(cells, units), strict=True):
+            column_years = _years(header[column]) if header and column is not None and column < len(header) \
+                else frozenset()
+            yield index + 1, unit, raw, _years(unit) or column_years or row_years
 
 
 def _claim_figures(unit: str) -> List[Dict[str, Any]]:
     """The figures of a unit worth checking: no dates or bare years, and a unit mark or at
-    least two digits (a bare "3 scenarios" is no figure)."""
-    from ..utils.numeric_guards import scan_quantities
+    least two digits (a bare "3 scenarios" is no figure).  ``threshold`` marks a figure a
+    comparator governs ("exceeds 30%"), ``probability`` one the unit states as a
+    probability ("a 40% chance", "概率为40%")."""
+    from ..utils.numeric_guards import scan_quantities, threshold_spans
+    thresholds = threshold_spans(unit)
     out = []
     for hit in scan_quantities(unit):
         if hit.get("date") or hit.get("year_like"):
@@ -494,10 +553,15 @@ def _claim_figures(unit: str) -> List[Dict[str, Any]]:
         lo = float(hit["lo"])
         scale = abs(lo / stated) if stated else 1.0
         decimals = len(token.group(1) or "")
+        start, end = int(hit["start"]), int(hit["end"])
+        probability = bool(_PROBABILITY_AFTER_RE.search(unit[end:end + _PROBABILITY_WINDOW])
+                           or _PROBABILITY_BEFORE_RE.search(unit[max(0, start - _PROBABILITY_WINDOW):start]))
         out.append({"lo": lo, "hi": float(hit["hi"]), "raw": str(hit.get("raw") or ""),
                     "cls": _CHECK_CLASS.get(hit.get("unit_class"), "plain"),
                     "currency": hit.get("currency"),
-                    "tol": 0.5 * (10 ** -decimals) * (scale or 1.0)})
+                    "tol": 0.5 * (10 ** -decimals) * (scale or 1.0),
+                    "threshold": any(lo_span <= start < hi_span for lo_span, hi_span in thresholds),
+                    "probability": probability})
     return out
 
 
@@ -547,9 +611,28 @@ def _market_row(row: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
     return {"anchor": _anchor_tokens(row.get("question")), "prices": prices}
 
 
-def _cited_tag(unit: str) -> Optional[str]:
-    match = _UNIT_TAG_RE.search(unit)
-    return match.group(1).upper() if match else None
+def _cited_tags(unit: str) -> List[str]:
+    """The unit's [S#] tags in reading order, normalised as
+    forecast_extractor._norm_citation_tag does ("[s12]" -> "S12", "[S1-A]" -> "S1-a")."""
+    tags: List[str] = []
+    for match in _UNIT_TAG_RE.finditer(unit):
+        tag = "S" + match.group(1)[1:].lower()
+        if tag not in tags:
+            tags.append(tag)
+    return tags
+
+
+def _supporting_tag(unit: str, tags: Sequence[str],
+                    support_fn: Callable[[str, str], Optional[bool]]) -> Optional[str]:
+    """The first of ``tags`` whose source supports the unit; an undecidable check (None,
+    an exception) supports nothing."""
+    for tag in tags:
+        try:
+            if support_fn(unit, tag) is True:
+                return tag
+        except Exception:  # noqa: BLE001 — undecidable is not a discrepancy
+            continue
+    return None
 
 
 def check_verified_figures(md: Any, block_rows: Any, *, excluded_rows: Any = (), market_rows: Any = (),
@@ -557,30 +640,41 @@ def check_verified_figures(md: Any, block_rows: Any, *, excluded_rows: Any = (),
                            support_fn: Optional[Callable[[str, str], Optional[bool]]] = None) -> Dict[str, Any]:
     """Shadow check of the report's figures against the verified-figures block (REPORT-9).
 
-    Every figure of every claim unit (:func:`_claim_units`) is classified once:
+    Every figure of every claim unit (:func:`_claim_units`) is classified once, in this
+    order:
 
+    * ``threshold_or_probability``: a figure a comparator governs ("exceeds 30%", "below
+      $100", numeric_guards.threshold_spans) or, outside a market reading, one stated as a
+      probability ("a 40% chance", "概率为40%"): neither states a level of the metric;
+    * a percentage in a market context (Polymarket, prediction market, 预测市场, 隐含概率,
+      implied probability / odds / chance / price) is read against the markets, never
+      against the block's conflict branches: ``unmatched`` when it agrees with the current
+      or the research-time price of an anchored market, else ``matched`` when it is no
+      probability and states a candidate block row's value (a level quoted beside the
+      market), else ``market_conflict`` when a market is anchored, else
+      ``threshold_or_probability`` (a probability) or ``unmatched``;
     * ``matched``: a candidate block row states the same value (across scales, or the
       row's value rounded to the claim's precision);
+    * ``ambiguous``: candidates with different values (never a conflict);
     * ``conflict``: exactly one candidate value, a point on both sides, within a 10x
       ratio and more than ``rel_tol`` apart;
-    * ``ambiguous``: candidates with different values (never a conflict);
-    * ``states_unverified``: an uncited figure equal to an anchored ``excluded_rows``
-      row (research rows whose verification is unverified / snippet_only / none);
-    * ``market_conflict``: a percentage in a market context (Polymarket, prediction
-      market, 预测市场, 隐含概率, implied) that agrees with neither the current nor the
-      research-time price of an anchored market;
-    * ``unmatched``: anything else (no candidate, a range outside a row, a market
-      percentage that agrees, a ratio beyond 10x).
+    * ``states_unverified``: an uncited figure with no candidate that equals an anchored
+      ``excluded_rows`` row (research rows whose verification is unverified /
+      snippet_only / none);
+    * ``unmatched``: anything else (no candidate, a range outside a row, a ratio beyond
+      10x).
 
     A candidate row shares the figure's class (percent, currency, plain; pp and bp only
     with themselves), its anchor (two Latin words of four or more letters or four CJK
     bigrams from the row's metric with the unit, or the whole table row for a cell) and
-    at least one year when both name years.  Read-only and deterministic.
+    at least one year when both name years (:func:`_claim_units` gives a table cell its
+    column's or row's year).  Read-only and deterministic.
 
-    Returns ``{'counts', 'examples' (<= 24: conflict, ambiguous, states_unverified,
-    market_conflict), 'matched_rows' ({block row index: [{'line', 'excerpt'}]}),
-    'source_discrepancies'}``: the cited conflicts whose own [S#] supports the claim
-    (``support_fn(unit, tag)`` is True), i.e. two sources that disagree."""
+    Returns ``{'counts' (every CHECK_KINDS key), 'examples' (<= 24: conflict, ambiguous,
+    states_unverified, market_conflict), 'matched_rows' ({block row index: [{'line',
+    'excerpt'}]}), 'source_discrepancies'}``: the conflicts whose own [S#] supports the
+    claim (``support_fn(unit, tag)`` is True for one of the unit's tags, the first such
+    tag recorded), i.e. two sources that disagree."""
     rows = [r for r in (_figure_row(i, row) for i, row in enumerate(block_rows or [])
                         if isinstance(row, Mapping)) if r is not None]
     excluded = [r for r in (_figure_row(i, row) for i, row in enumerate(excluded_rows or [])
@@ -592,63 +686,76 @@ def check_verified_figures(md: Any, block_rows: Any, *, excluded_rows: Any = (),
     matched_rows: Dict[int, List[Dict[str, Any]]] = {}
     discrepancies: List[Dict[str, Any]] = []
 
-    def example(kind: str, line: int, unit: str, figure: Mapping[str, Any], row_index: Optional[int]) -> None:
+    def example(kind: str, line: int, unit: str, figure: Mapping[str, Any], row_index: Optional[int],
+                tags: Sequence[str]) -> None:
         if len(examples) < CHECK_EXAMPLES_MAX:
             examples.append({"kind": kind, "line": line, "excerpt": unit.strip()[:EXCERPT_CHARS],
-                             "figure": figure["raw"][:60], "cited": _cited_tag(unit), "row_index": row_index})
+                             "figure": figure["raw"][:60], "cited": tags[0] if tags else None,
+                             "row_index": row_index})
 
-    for line, unit, context in _claim_units(str(md or "")):
+    def matched(line: int, unit: str, agreeing: Sequence[Mapping[str, Any]]) -> None:
+        counts["matched"] += 1
+        for row in agreeing:
+            used = matched_rows.setdefault(row["index"], [])
+            if len(used) < MATCHED_LINES_PER_ROW:
+                used.append({"line": line, "excerpt": unit.strip()[:EXCERPT_CHARS]})
+
+    for line, unit, context, years in _claim_units(str(md or "")):
         figures = _claim_figures(unit)
         if not figures:
             continue
         anchor = _anchor_tokens(context)
-        years = _years(unit)
-        cited = _cited_tag(unit)
+        tags = _cited_tags(unit)
         in_market_context = bool(_MARKET_CONTEXT_RE.search(unit))
         for figure in figures:
+            if figure["threshold"]:
+                counts["threshold_or_probability"] += 1
+                continue
             candidates = _candidates(figure, anchor, years, rows)
             agreeing = [row for row in candidates if _agrees(figure, row["lo"], row["hi"])]
+            if in_market_context and figure["cls"] == "percent":
+                anchored = [m for m in markets if _anchored(anchor, m["anchor"])]
+                if any(_agrees(figure, price, price) for m in anchored for price in m["prices"]):
+                    counts["unmatched"] += 1
+                elif agreeing and not figure["probability"]:
+                    matched(line, unit, agreeing)
+                elif anchored:
+                    counts["market_conflict"] += 1
+                    example("market_conflict", line, unit, figure, None, tags)
+                elif figure["probability"]:
+                    counts["threshold_or_probability"] += 1
+                else:
+                    counts["unmatched"] += 1
+                continue
+            if figure["probability"]:
+                counts["threshold_or_probability"] += 1
+                continue
             if agreeing:
-                counts["matched"] += 1
-                for row in agreeing:
-                    used = matched_rows.setdefault(row["index"], [])
-                    if len(used) < MATCHED_LINES_PER_ROW:
-                        used.append({"line": line, "excerpt": unit.strip()[:EXCERPT_CHARS]})
+                matched(line, unit, agreeing)
                 continue
             values = {(row["lo"], row["hi"]) for row in candidates}
             if len(values) > 1:
                 counts["ambiguous"] += 1
-                example("ambiguous", line, unit, figure, None)
+                example("ambiguous", line, unit, figure, None, tags)
                 continue
             if candidates:
                 row = candidates[0]
                 if _conflicts(figure, row, rel_tol):
                     counts["conflict"] += 1
-                    example("conflict", line, unit, figure, row["index"])
-                    if cited and support_fn is not None:
-                        try:
-                            supported = support_fn(unit, cited)
-                        except Exception:  # noqa: BLE001 — undecidable is not a discrepancy
-                            supported = None
-                        if supported is True:
-                            discrepancies.append({"line": line, "excerpt": unit.strip()[:EXCERPT_CHARS],
-                                                  "tag": cited, "row_index": row["index"],
-                                                  "claim": figure["raw"][:60], "row_value": row["value_text"]})
+                    example("conflict", line, unit, figure, row["index"], tags)
+                    supporting = _supporting_tag(unit, tags, support_fn) if support_fn is not None else None
+                    if supporting:
+                        discrepancies.append({"line": line, "excerpt": unit.strip()[:EXCERPT_CHARS],
+                                              "tag": supporting, "row_index": row["index"],
+                                              "claim": figure["raw"][:60], "row_value": row["value_text"]})
                     continue
                 counts["unmatched"] += 1
                 continue
-            if not cited and any(_agrees(figure, row["lo"], row["hi"])
-                                 for row in _candidates(figure, anchor, years, excluded)):
+            if not tags and any(_agrees(figure, row["lo"], row["hi"])
+                                for row in _candidates(figure, anchor, years, excluded)):
                 counts["states_unverified"] += 1
-                example("states_unverified", line, unit, figure, None)
+                example("states_unverified", line, unit, figure, None, tags)
                 continue
-            if in_market_context and figure["cls"] == "percent":
-                anchored = [m for m in markets if _anchored(anchor, m["anchor"])]
-                if anchored and not any(_agrees(figure, price, price)
-                                        for m in anchored for price in m["prices"]):
-                    counts["market_conflict"] += 1
-                    example("market_conflict", line, unit, figure, None)
-                    continue
             counts["unmatched"] += 1
     return {"counts": counts, "examples": examples,
             "matched_rows": {index: matched_rows[index] for index in sorted(matched_rows)},

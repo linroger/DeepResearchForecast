@@ -398,7 +398,7 @@ def _backup(report_dir: Path) -> Path:
         shutil.copy2(path, backup / path.name)
     for name in (
             "meta.json", "forecast.json", "market_comparison.json",
-            "viz_manifest.json", "pdf_export.json"):
+            "viz_manifest.json", "pdf_export.json", "figure_provenance.json"):
         path = report_dir / name
         if path.exists():
             shutil.copy2(path, backup / name)
@@ -422,7 +422,7 @@ def _restore_from_backup(report_dir: Path, backup: Path) -> None:
                 path.unlink()
     for name in (
         "meta.json", "forecast.json", "market_comparison.json",
-        "viz_manifest.json", "pdf_export.json",
+        "viz_manifest.json", "pdf_export.json", "figure_provenance.json",
     ):
         path = report_dir / name
         if path.exists() or path.is_symlink():
@@ -576,6 +576,9 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
             forecast if isinstance(forecast, dict) else forecast_obj)
         final_audit = main_agent._enforce_final_publish_audit(
             report_id, _Report(main_markdown))
+        # REPORT-9: the shadow figure_provenance.json describes the re-audited bytes,
+        # or is removed when this agent measured nothing (no verified-figures block).
+        main_agent._write_figure_provenance(report_id, _Report(main_markdown))
 
     primary_citations = _read_json(report_dir / "citations.json")
     primary_citations = primary_citations if isinstance(primary_citations, dict) else {}

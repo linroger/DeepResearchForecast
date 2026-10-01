@@ -252,6 +252,8 @@ def test_backfill_quarantines_invalid_legacy_translation_without_deleting_backup
     (report_dir / "full_report.md").write_text(primary, encoding="utf-8")
     (report_dir / "full_report.zh.md").write_text(legacy, encoding="utf-8")
     (report_dir / "full_report.zh.pdf").write_bytes(b"%PDF-1.4 stale")
+    stale_provenance = '{"schema": "drf.figure_provenance/v1", "block_sha256": "old"}'
+    (report_dir / "figure_provenance.json").write_text(stale_provenance, encoding="utf-8")
     (report_dir / "meta.json").write_text(json.dumps({
         "report_id": report_id,
         "translations": [{
@@ -309,6 +311,10 @@ def test_backfill_quarantines_invalid_legacy_translation_without_deleting_backup
     backup = Path(result["backup"])
     assert (backup / "full_report.zh.md").read_text(encoding="utf-8") == legacy
     assert (backup / "full_report.zh.pdf").read_bytes() == b"%PDF-1.4 stale"
+    # REPORT-9: the re-audit measured no verified-figures block, so the old sidecar,
+    # which describes the pre-replay bytes, is gone (and kept in the backup).
+    assert (backup / "figure_provenance.json").read_text(encoding="utf-8") == stale_provenance
+    assert not (report_dir / "figure_provenance.json").exists()
     assert not (report_dir / "full_report.zh.md").exists()
     assert not (report_dir / "full_report.zh.pdf").exists()
     assert len(calls) == 1 and calls[0][1] == "English"  # primary only
@@ -341,6 +347,8 @@ def test_backfill_failure_restores_entire_pre_replay_bundle(tmp_path, monkeypatc
     (report_dir / "full_report.md").write_text(original_md, encoding="utf-8")
     (report_dir / "meta.json").write_text(json.dumps(original_meta), encoding="utf-8")
     (charts / "original.png").write_bytes(b"original-chart")
+    original_provenance = '{"schema": "drf.figure_provenance/v1", "block_sha256": "original"}'
+    (report_dir / "figure_provenance.json").write_text(original_provenance, encoding="utf-8")
 
     monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(pipelines), raising=False)
     monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(reports))
@@ -370,6 +378,7 @@ def test_backfill_failure_restores_entire_pre_replay_bundle(tmp_path, monkeypatc
     assert (report_dir / "full_report.md").read_text(encoding="utf-8") == original_md
     assert json.loads((report_dir / "meta.json").read_text(encoding="utf-8")) == original_meta
     assert (charts / "original.png").read_bytes() == b"original-chart"
+    assert (report_dir / "figure_provenance.json").read_text(encoding="utf-8") == original_provenance
     assert not (charts / "new.png").exists()
     assert not (report_dir / "viz_manifest.json").exists()
     backups = list(report_dir.glob(".codex-backup-*"))
