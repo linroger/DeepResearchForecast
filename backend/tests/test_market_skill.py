@@ -32,6 +32,7 @@ from tests.conftest import FakeLLMClient
 STATEMENT = "The EU AI liability directive is adopted by 2026-06-30."
 CRITERIA = "Resolves YES if the Official Journal publishes the directive by 2026-06-30."
 QUOTED_AT = "2026-04-30T10:00:00+00:00"
+OBSERVED_AT = "2026-04-30T09:15:00+00:00"
 CLOSED_AT = "2026-07-02T15:30:00+00:00"
 PROCESSED = "2026-09-29T12:00:00+00:00"
 META = {"as_of": "2026-05-01", "created_at": "2026-05-02T08:00:00+00:00", "commit_id": "c-r1",
@@ -54,7 +55,8 @@ def _row(model_p, market_p, y, *, report_id=None, equivalence="exact", mc=0.9,
 
 
 def _binary(fid="F1", *, market_id="m-1", equivalence="exact", price=0.40, probability=0.30,
-            quoted=True, mc=0.9, rationale=RATIONALE, end_date="2026-06-30T12:00:00Z"):
+            quoted=True, mc=0.9, rationale=RATIONALE, end_date="2026-06-30T12:00:00Z",
+            observed_at=None):
     """A binary whose anchor is built by the real producer (complete, byte-bound, dated)."""
     binary = {"id": fid, "proposition_id": f"prop-{fid}", "statement": STATEMENT,
               "probability": probability, "resolution_criteria": CRITERIA,
@@ -65,6 +67,8 @@ def _binary(fid="F1", *, market_id="m-1", equivalence="exact", price=0.40, proba
               "end_date": end_date}
     if quoted:
         market["quoted_at"] = QUOTED_AT
+    if observed_at is not None:
+        market["observed_at"] = observed_at
     binary["market_anchor"] = _build_market_anchor(
         probability, market, equivalence=equivalence, match_confidence=mc, binary=binary)
     return binary
@@ -145,7 +149,7 @@ def test_known_values():
     assert head["mean_brier_delta"] == 0.14
     # Per-report deltas 0.12 and 0.16: mean 0.14, sd 0.0283, half-width 1.96*sd/sqrt(2) = 0.0392.
     assert head["brier_delta_ci95"] == [0.1008, 0.1792]
-    assert head["price_time_basis"] == {"requote": 2, "snapshot": 0, "none": 0}
+    assert head["price_time_basis"] == {"requote": 2, "observed": 0, "snapshot": 0, "none": 0}
     edge = head["divergence"]["edge"]
     # Both moved away from the market by 0.2 and the outcome landed on their side.
     assert edge["n"] == 2 and edge["hits"] == 2 and edge["hit_rate"] == 1.0
@@ -223,7 +227,7 @@ def test_near_rows_in_proxy_not_headline():
     assert proxy["headline"] is False and proxy["n_scored"] == 5
     assert proxy["proxy_reasons"] == {"equivalence_missing": 1, "equivalence_near": 2,
                                       "no_price_time_basis": 2}
-    assert proxy["price_time_basis"] == {"requote": 3, "snapshot": 0, "none": 2}
+    assert proxy["price_time_basis"] == {"requote": 3, "observed": 0, "snapshot": 0, "none": 2}
     # Proxy rows are never pooled into all_produced either.
     assert produced["n_scored"] == 1
     assert report["unscored"] == {}
@@ -360,6 +364,34 @@ def test_enrichment_rows_from_the_fold():
     assert proxy["proxy_reasons"] == {"equivalence_near": 1, "no_price_time_basis": 1}
     assert head["divergence"]["n_no_edge_claimed"] == 3
     assert report["unscored"] == {}
+
+
+def test_price_time_bases_mirror_prediction_markets():
+    """The scorer's dated bases are exactly prediction_markets' PRICE_TIME_BASIS_* values, in
+    market_price_time's precedence, so a basis the producer adds can never fall to 'none'."""
+    from app.utils import prediction_markets as pm
+    declared = [value for name, value in vars(pm).items() if name.startswith("PRICE_TIME_BASIS_")]
+    assert sorted(bt.PRICE_TIME_BASES) == sorted(declared)
+    assert bt.PRICE_TIME_BASES == (pm.PRICE_TIME_BASIS_REQUOTE, pm.PRICE_TIME_BASIS_OBSERVED,
+                                   pm.PRICE_TIME_BASIS_SNAPSHOT)
+
+
+def test_observed_price_time_basis_lands_in_the_headline():
+    """FU-11: an exact anchor the real producer dates by the row's observed_at is headline."""
+    binary = _binary("F1", probability=0.30, quoted=False, observed_at=OBSERVED_AT)
+    anchor = binary["market_anchor"]
+    assert (anchor["price_time"], anchor["price_time_basis"]) == (OBSERVED_AT, "observed")
+    rows = _enrich([_event("F1")], binary)
+    assert rows["F1"]["price_time_basis"] == "observed" and rows["F1"]["gate_reason"] is None
+    report = bt.market_skill_report(list(rows.values()))
+    head, proxy = _strata(report)["headline"], _strata(report)["proxy"]
+    assert head["n_scored"] == 1 and proxy["n_scored"] == 0 and report["unscored"] == {}
+    assert head["price_time_basis"] == {"requote": 0, "observed": 1, "snapshot": 0, "none": 0}
+    assert "no_price_time_basis" not in (proxy.get("proxy_reasons") or {})
+    assert any("'observed'" in caveat for caveat in bt.MARKET_SKILL_CAVEATS)
+    md = "\n".join(mon._render_market_skill(report))
+    assert "| requote 0, observed 1, snapshot 0, none 0 |" in md
+    assert "'observed' = the research bridge's fetch of that market row" in md
 
 
 def test_proxy_demotion_rechecks_the_market_end_date():

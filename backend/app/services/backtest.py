@@ -263,8 +263,11 @@ MARKET_SKILL_SCHEMA = "market-skill/v1"
 MARKET_DIVERGENCE_DEADBAND = 0.10
 # Only an exact-equivalence anchor resolves the same proposition as the forecast it prices.
 HEADLINE_EQUIVALENCE = "exact"
-# EVAL-6 anchor price_time_basis values: a market price without one is undated.
-PRICE_TIME_BASES = ("requote", "snapshot")
+# Anchor price_time_basis values (EVAL-6, FU-11), in prediction_markets.market_price_time's
+# precedence: its PRICE_TIME_BASIS_REQUOTE / _OBSERVED / _SNAPSHOT, mirrored so the scorer
+# stays free of that module's network client (a parity test pins the two). A market price
+# without one of them is undated.
+PRICE_TIME_BASES = ("requote", "observed", "snapshot")
 # Gate reasons that only demote a row to the proxy stratum (its anchor prices a related, not the
 # same, proposition); every other gate reason keeps a row out of all strata.
 PROXY_GATE_REASONS = ("equivalence_near", "equivalence_loose", "equivalence_missing")
@@ -277,9 +280,10 @@ MARKET_SKILL_CAVEATS = (
     "proxy rows are scored against a near/loose-equivalence market (a related, not the same, "
     "proposition) or an exact market whose price has no time basis; they are proxy labels and "
     "never pooled with the headline.",
-    "market_p is the anchor price the extractor saw (price_at_research): a report-time requote "
-    "when the anchor's price_time_basis is 'requote', a research snapshot (an upper bound on its "
-    "time) when 'snapshot'; it is not a research-time price.",
+    "market_p is the anchor price the extractor saw (price_at_research), dated by the anchor's "
+    "price_time_basis: a report-time requote, not a research-time price, when 'requote'; the "
+    "research bridge's fetch of that market row when 'observed'; a snapshot (research or "
+    "report-time) whose as_of only bounds the price's time from above when 'snapshot'.",
     "This measures the published, market-aware forecast (the market price is in the extraction "
     "prompt), not information the pipeline holds independently of the market.",
     "all_produced adds rows of reports not publishable at issue to the headline criteria for "

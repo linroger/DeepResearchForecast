@@ -616,8 +616,10 @@ def _render_market_skill(skill: Dict[str, Any]) -> List[str]:
         f"indicative = fewer than {skill.get('min_n', '—')} scored rows. An edge is "
         f"|model − market| > {_pct(skill.get('divergence_deadband'))} at match confidence ≥ "
         f"{skill.get('min_match_confidence', '—')} (the revision rule).",
-        "- The market price is the anchor price the forecast saw (a report-time requote when its "
-        "basis is 'requote'), so this measures the published market-aware forecast, not "
+        "- The market price is the anchor price the forecast saw, dated by its price time basis: "
+        "'requote' = a report-time requote, 'observed' = the research bridge's fetch of that "
+        "market row, 'snapshot' = a snapshot's as_of (an upper bound on the price's time), "
+        "none = undated; so this measures the published market-aware forecast, not "
         "information independent of the market.",
     ]
     return lines
