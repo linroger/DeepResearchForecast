@@ -75,6 +75,9 @@ from ..services.research_progress import (
     aggregate_parallel_progress,
 )
 from ..services import backbone_sensitivity, run_shape
+from ..services.sim_prior_echo import (
+    VERDICT_PRIOR_ECHO, VERDICT_PRIOR_LEADER_HERD, prior_echo_diagnostics,
+)
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import RunnerStatus, SimulationRunner
 from ..services.text_processor import TextProcessor
@@ -130,6 +133,13 @@ SIM_METER_MARKERS_OPTION = "sim_llm_telemetry_recorded_by_sim"
 # Pre-EVAL-17 single-slot marker {simulation_id, meter_run_token, recorded_at}: honoured on
 # read, migrated into the map, and still mirrored for the main run's recordings.
 SIM_METER_LEGACY_MARKER_OPTION = "sim_llm_telemetry_recorded"
+
+# SIM-7: a scenario overlay may declare a human-authored, whole-run outcome power per actor
+# in [0, SCENARIO_OUTCOME_POWER_MAX], stored rounded to SCENARIO_OUTCOME_POWER_DECIMALS
+# places; each applied value is labelled with this basis.
+SCENARIO_OUTCOME_POWER_MAX = 10.0
+SCENARIO_OUTCOME_POWER_DECIMALS = 6
+SCENARIO_OUTCOME_POWER_BASIS = "scenario_overlay"
 
 ACTOR_INTELLIGENCE_SCHEMA_VERSION = "actor-intelligence/v1"
 ACTOR_INTELLIGENCE_POLICY_VERSION = "actor-intelligence-policy/v1"
@@ -430,6 +440,12 @@ def _classify_provider_outage(exc: Any) -> Optional[str]:
     （llm_client._is_deterministic_auth_error）、连接/传输失败、以及 llm_client 的
     双通道快失败（主提供方熔断冷却 + 回退不可用）。内容审查（422）、JSON 解析、
     预算护栏（BudgetExceeded）、取消信号等都不是「提供方中断」——既不计数也不清零。
+
+    INFRA-4（LLM_ERROR_CLASSIFY_STATUS_FIRST，默认开）：异常先按类型/HTTP 状态判定
+    （RateLimitError/429 → quota，AuthenticationError/401/403 → auth；422/400 定论为非中断，
+    不再看文本），无状态时其次是熔断快失败文本，最后按文本「配额先于认证」判定（MiniMax 2056 /
+    GLM 1113 用量上限消息可能带认证样措辞）；纯文本输入只走文本判定。关闭时为旧顺序：
+    认证文本 → 熔断 → 配额文本。
     """
     if isinstance(exc, (PipelineCancelled, ProviderOutageHalt)):
         return None
@@ -444,23 +460,38 @@ def _classify_provider_outage(exc: Any) -> Optional[str]:
         return None
     if text.startswith(_PROVIDER_OUTAGE_FAST_FAIL_PREFIX):
         return None  # 本熔断器自己的快失败信号，不得自我喂养
-    _is_quota = _is_auth = None
+    _is_quota = _is_auth = _status_first = _status_kind = _text_kind = None
     try:
         from ..utils.llm_client import (
+            _classify_status_first as _status_first,
             _is_deterministic_auth_error as _is_auth,
             _is_quota,
+            _llm_error_status_kind as _status_kind,
+            _llm_error_text_kind as _text_kind,
         )
     except Exception:  # noqa: BLE001 — 帮手不可导入时退化为本地指纹
         pass
-    if _is_auth is not None and _is_auth(exc):
-        return "auth"
     # llm_client 双通道中断快失败（消息含 '422/429 熔断冷却' → _is_quota 也会命中，
     # 但显式归类更可读）。
     low = text.casefold()
-    if "熔断冷却" in text or "circuit-breaker" in low or "回退提供方不可用" in text:
-        return "circuit_breaker"
-    if _is_quota is not None and _is_quota(exc):
-        return "quota"
+    circuit_breaker = ("熔断冷却" in text or "circuit-breaker" in low
+                       or "回退提供方不可用" in text)
+    if _status_first is not None and _status_first():
+        kind = _status_kind(exc) if isinstance(exc, BaseException) else None
+        if kind is not None:  # 状态定论：429/401/403 计中断，422/400 不计
+            return kind if kind in ("quota", "auth") else None
+        if circuit_breaker:
+            return "circuit_breaker"
+        kind = _text_kind(exc)
+        if kind in ("quota", "auth"):
+            return kind
+    else:
+        if _is_auth is not None and _is_auth(exc):
+            return "auth"
+        if circuit_breaker:
+            return "circuit_breaker"
+        if _is_quota is not None and _is_quota(exc):
+            return "quota"
     if isinstance(exc, BaseException):
         tname = type(exc).__name__.casefold()
         if "connection" in tname or "timeout" in tname:
@@ -1673,7 +1704,7 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 # evidence_spans.py verbatim evidence-span matching), plus source_dates.py (the
 # source publication-date parser cached_fetch and research_gateway import) and
 # data_tools.py (TIME-10 official-data vendor tools: FRED/ALFRED vintage-pinned
-# macro series).
+# macro series; SEC EDGAR as-filed company statements, TIME-11).
 # setup.sh deploys the same set; test_deerflow_bridge_sync_guard pins the parity.
 _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
@@ -2324,13 +2355,16 @@ RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
     ("RECORD_MODEL_PROVENANCE", "bool"),
     ("RESEARCH_ABSENCE_DISCIPLINE", "bool"),
     ("RESEARCH_AS_OF_PIN", "bool"),
+    ("RESEARCH_EVIDENCE_HEADERS", "bool"),
     ("RESEARCH_EVIDENCE_QUOTES", "str"),
     ("RESEARCH_EVIDENCE_SUPPORTS", "bool"),
     ("RESEARCH_FORECASTER_ATTRIBUTION", "bool"),
+    ("RESEARCH_JSON_STRICT_NUMBERS", "bool"),
     ("RESEARCH_QUANT_TYPING", "bool"),
     ("RESEARCH_QUESTION_SPEC", "bool"),
     ("RESEARCH_SOURCE_DATES", "bool"),
     ("RESEARCH_SOURCE_DATE_TEXT_FALLBACK", "bool"),
+    ("RESEARCH_TRUNCATION_FAIRNESS", "bool"),
     ("RESEARCH_V3_CITATION_STATS", "bool"),
     ("RESEARCH_V3_FORECAST_INPUTS", "bool"),
     ("RESEARCH_VERIFIED_FACTS", "bool"),
@@ -7254,7 +7288,10 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
     elif (status_totals["inflight_timeout_count"] > 0
           and status_totals["successful_query_count"] == 0):
         evidence_state = "inflight_timeout"
-    elif status_totals["transport_failure_count"] > 0 or deadline_exhausted:
+    elif (status_totals["transport_failure_count"] > 0 or deadline_exhausted
+          or status_totals["inflight_timeout_count"] > 0):
+        # FU-6: a timed-out (unanswered) query leaves coverage unknown, like an
+        # exhausted deadline: never a verified empty search.
         evidence_state = "partial_transport_failure"
     else:
         evidence_state = "verified_empty"
@@ -7272,12 +7309,20 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
         "attempted_query_count": status_totals["query_count"],
         # A failed or unanswered query with no candidate means coverage is unknown:
         # never the generic 'no_equivalent_market' (the bridge collector's rule, RESEARCH-3).
+        # FU-6: with no transport failure and no exhausted deadline, an in-flight
+        # timeout is unanswered too: 'inflight_timeout' when no query succeeded (it
+        # used to sit beside state 'inflight_timeout' as 'no_equivalent_market'),
+        # 'partial_transport_failure' next to an answered empty query.
         "empty_reason": None if selected else (
             "all_candidates_irrelevant" if candidate_count else (
                 "transport_failure" if all_network_attempts_failed else (
                     "partial_transport_failure"
                     if status_totals["transport_failure_count"] > 0 or deadline_exhausted
-                    else "no_equivalent_market"
+                    else (
+                        "no_equivalent_market" if status_totals["inflight_timeout_count"] == 0
+                        else "inflight_timeout" if status_totals["successful_query_count"] == 0
+                        else "partial_transport_failure"
+                    )
                 )
             )
         ),
@@ -7664,6 +7709,92 @@ def hindcast_pin_for_simulation(simulation_id: Optional[str]) -> Optional[dict[s
         pin = hindcast_policy(origin.get("options"))
         data = origin
     return pin
+
+
+def pinned_interview_graph_feedback(options: Any) -> Optional[bool]:
+    """FU-8: the ``sim_interview_graph_feedback`` a run's ``safety_policy_v1`` pins, or None.
+
+    None when ``options`` carries no pin, or a pin without the key (a run pinned before
+    the key existed): the ambient Config then decides. Only a real bool counts. A pin
+    that is not a dict, or a value that is not a bool (a hand-edited or damaged state,
+    where ``bool('false')`` would be True), reads False with a warning: interview text
+    is a simulation artifact and is never written to the graph because the pin could
+    not be read.
+    """
+    policy = options.get("safety_policy_v1") if isinstance(options, dict) else None
+    if policy is None:
+        return None
+    if not isinstance(policy, dict):
+        logger.warning("safety_policy_v1 不是对象（%s），采访事实不写入图谱（失败关闭）",
+                       type(policy).__name__)
+        return False
+    value = policy.get("sim_interview_graph_feedback")
+    if value is None or isinstance(value, bool):
+        return value
+    logger.warning("safety_policy_v1.sim_interview_graph_feedback=%r 不是布尔值，"
+                   "采访事实不写入图谱（失败关闭）", value)
+    return False
+
+
+def interview_graph_feedback_for_simulation(simulation_id: Optional[str]) -> bool:
+    """FU-8 (INFRA-9 open issue): whether interview answers of ``simulation_id`` may be
+    written to the observation graph.
+
+    The fallback for reports that were not handed a pinned value: ``/api/report``
+    regenerate and chat, and orchestrator reports of an unpinned run. An orchestrator
+    report of a pinned run gets the value through the ``interview_graph_feedback``
+    ReportAgent kwarg (``PipelineOrchestrator._interview_feedback_agent_kwargs``),
+    because a seed-ensemble member's simulation has no persisted owner while its report
+    runs. Here the pinned value (:func:`pinned_interview_graph_feedback`) of the pipeline
+    that ran the simulation decides, found by the same owner scan as
+    :func:`hindcast_pin_for_simulation`: newest pipeline first, and a shared-simulation
+    batch child without a pinned value defers to the pipeline it borrowed the simulation
+    from, provided that pipeline still names the same simulation. So a run, and a fork
+    that inherited its pin, keeps the semantics it was admitted with after a config
+    change. Without a pinned value anywhere on that chain (legacy runs, unpinned forks,
+    unowned simulations, an origin pipeline that was deleted) the ambient
+    ``Config.SIM_INTERVIEW_GRAPH_FEEDBACK`` decides, as before. Fails closed (False,
+    logged) when the scan raises or a named origin pipeline's state file exists but
+    cannot be read (corrupt, or written by a newer schema).
+    """
+    ambient = bool(getattr(Config, "SIM_INTERVIEW_GRAPH_FEEDBACK", False))
+    if not simulation_id:
+        return ambient
+    simulation_id = str(simulation_id)
+    try:
+        owner = _ledger_owner_of_simulation(simulation_id)
+        if owner is None:
+            return ambient
+        pipeline_id, data, _is_member, _seed = owner
+        pinned = pinned_interview_graph_feedback(data.get("options"))
+        seen = {pipeline_id}
+        while pinned is None and len(seen) <= _SHARED_SIMULATION_MAX_HOPS:
+            if data.get("simulation_id") != simulation_id:
+                break  # a seed-ensemble member's simulation is its own pipeline's, never borrowed
+            options = data.get("options") if isinstance(data.get("options"), dict) else {}
+            origin_id = options.get("shared_simulation_from")
+            if not isinstance(origin_id, str) or not origin_id or origin_id in seen:
+                break
+            seen.add(origin_id)
+            try:
+                origin_path = PipelineManager.state_path(origin_id)
+            except ValueError:
+                break  # a malformed id names no pipeline (PipelineManager.load: not found)
+            if not os.path.exists(origin_path):
+                break  # the origin was deleted: it has no pin left to honour
+            origin = PipelineManager.load(origin_id)
+            if not isinstance(origin, dict) or PipelineManager.is_incompatible(origin) is not None:
+                logger.warning("[%s] 共享模拟来源管线 %s 的状态文件不可读，采访事实不写入图谱（失败关闭）",
+                               simulation_id, origin_id)
+                return False
+            if origin.get("simulation_id") != simulation_id:
+                break
+            pinned = pinned_interview_graph_feedback(origin.get("options"))
+            data = origin
+    except Exception as exc:  # noqa: BLE001 — fail closed: no graph write without the pin
+        logger.warning("[%s] 安全政策钉查找失败，采访事实不写入图谱（失败关闭）: %s", simulation_id, exc)
+        return False
+    return ambient if pinned is None else pinned
 
 
 def preflight_pipeline(mode: str = "full", model: Optional[str] = None) -> list[str]:
@@ -8440,6 +8571,80 @@ def seed_scenario_pin(primary_fc: Any) -> Optional[list]:
         ] or None
     except Exception:  # noqa: BLE001 — 脊柱纯增强，坏数据回退自由起名
         return None
+
+
+def _apply_outcome_power_overrides(agents: list[dict[str, Any]], overrides: Any) -> None:
+    """SIM-7: apply an overlay's ``outcome_power_overrides`` to ``agents`` in place.
+
+    Every entry is validated on its own and a bad one is skipped with a warning (fail
+    closed per entry, never a PREPARE crash). The result never depends on the key order
+    of ``overrides``, so the EVAL-1 ``scenario_key`` (a sorted-key fingerprint of the
+    overlay) names exactly one effective config:
+
+    * a name reaches every agent whose ``entity_name`` normalizes to the same key, so
+      duplicate graph nodes of one actor all lose (or gain) authority together; a
+      warning names the agent count;
+    * spellings of one name that declare different powers (after rounding) are all
+      skipped; spellings that agree apply once;
+    * a positive power that rounds to 0 is skipped, because the stored 0 would read as
+      "loses all authority", which the author did not declare.
+
+    An absent or empty value changes nothing; a non-dict one is ignored with a warning.
+    """
+    if not overrides:
+        return
+    if not isinstance(overrides, dict):
+        logger.warning("outcome_power_overrides ignored: expected {name: power}, got %s",
+                       type(overrides).__name__)
+        return
+    agents_by_key: dict[str, list[dict[str, Any]]] = {}
+    for agent in agents:
+        entity_name = agent.get("entity_name")
+        key = normalize_name(entity_name) if entity_name else ""
+        if key:  # a name that normalizes to "" (punctuation only) is never matchable
+            agents_by_key.setdefault(key, []).append(agent)
+
+    resolution = 10.0 ** -SCENARIO_OUTCOME_POWER_DECIMALS
+    declared: dict[str, list[tuple[str, float]]] = {}  # normalized key → [(spelling, power)]
+    for name, value in overrides.items():
+        key = normalize_name(str(name))
+        if key not in agents_by_key:
+            logger.warning("outcome_power_overrides: no agent named %r", name)
+            continue
+        try:
+            # A JSON bool is not a power level (float(True) would read it as 1.0); an
+            # oversized JSON integer raises OverflowError instead of becoming inf.
+            p = float("nan") if isinstance(value, bool) else float(value)
+        except (TypeError, ValueError, OverflowError):
+            p = float("nan")
+        if not (math.isfinite(p) and 0.0 <= p <= SCENARIO_OUTCOME_POWER_MAX):
+            logger.warning("outcome_power_overrides: skipped %r for %r (need a finite number "
+                           "in [0, %g])", value, name, SCENARIO_OUTCOME_POWER_MAX)
+            continue
+        power = round(p, SCENARIO_OUTCOME_POWER_DECIMALS) or 0.0  # `or 0.0` folds -0.0 into 0.0
+        if p > 0.0 and power == 0.0:
+            logger.warning("outcome_power_overrides: skipped %r for %r (positive, but it rounds "
+                           "to 0 at %d decimals and a stored 0 means no authority; declare 0 or "
+                           "at least %g)", value, name, SCENARIO_OUTCOME_POWER_DECIMALS,
+                           resolution)
+            continue
+        declared.setdefault(key, []).append((str(name), power))
+
+    for key, entries in declared.items():
+        spellings = sorted(spelling for spelling, _ in entries)
+        powers = sorted({power for _, power in entries})
+        if len(powers) > 1:
+            logger.warning("outcome_power_overrides: %s name the same actor with different "
+                           "powers %s; all of them skipped", spellings, powers)
+            continue
+        targets = agents_by_key[key]
+        if len(targets) > 1:
+            logger.warning("outcome_power_overrides: %s reaches %d agents with the same "
+                           "normalized name; each gets power %g",
+                           spellings, len(targets), powers[0])
+        for agent in targets:
+            agent["outcome_power"] = powers[0]
+            agent["outcome_power_basis"] = SCENARIO_OUTCOME_POWER_BASIS
 
 
 # ---------------------------------------------------------------------------
@@ -9391,7 +9596,10 @@ class PipelineOrchestrator:
         """T4.6: 在 PREPARE 处分叉一个 what-if 情景管线（复用 base 的研究/本体/图谱）。
 
         overlay = {label, max_rounds?, influence_overrides{name:weight}, stance_overrides{name:stance},
-                   injected_events[{round,poster_name,content}], as_of_shift?}。新管线复用 base 的
+                   outcome_power_overrides{name:power in [0,10]}?,
+                   injected_events[{round,poster_name,content}], as_of_shift?}
+        （SIM-7：outcome_power_overrides 是人工声明、全程生效的结果权力，见
+        apply_scenario_overlay_to_config）。新管线复用 base 的
         project_id/graph_id/handoff（研究+本体+图谱直接命中复用守卫），仅重跑 prepare/run/report。
         要求 base 已完成图谱阶段。返回新建管线状态。
         """
@@ -9487,6 +9695,20 @@ class PipelineOrchestrator:
         influence_overrides{name:weight} / stance_overrides{name:stance} 按 agent 名匹配覆盖
         （两路都覆盖，闭合 T3.6 旁路）；injected_events 追加为 scheduled_events（解析 poster_name
         → agent_id）；不破坏缺省字段。
+
+        SIM-7 (C31): outcome_power_overrides{name: power in [0, 10]} is a human-authored,
+        whole-run outcome power — the counterfactual lever ("what if the regulator loses
+        authority") that influence_overrides cannot express, because visibility never becomes
+        power (I-15). A valid entry sets ``outcome_power`` (rounded to 6 places) and
+        ``outcome_power_basis="scenario_overlay"`` on every agent whose name normalizes to the
+        entry's; the decision channel (both producers) reads it through ``_outcome_power_map``
+        and its decisions rows carry it. 0 keeps the actor in the roster with zero outcome
+        weight. Entries that name no agent, are not a number (bools included), are non-finite,
+        fall outside [0, 10] or are positive but round to 0 are skipped with a warning; spellings
+        of one name that declare different powers are all skipped, so the result never depends
+        on key order; a non-dict value is ignored with a warning. Assignment is idempotent, so
+        the corrupt-RUN reapply stays stable; an overlay without the key leaves the config
+        untouched. See ``_apply_outcome_power_overrides``.
         """
         from ..utils.actors import normalize_name
         agents = config.get("agent_configs") or []
@@ -9505,6 +9727,9 @@ class PipelineOrchestrator:
             a = by_name.get(normalize_name(str(name)))
             if a is not None:
                 a["stance"] = str(stance)
+
+        # SIM-7: human-authored outcome power (validation and resolution rules in the helper).
+        _apply_outcome_power_overrides(agents, (overlay or {}).get("outcome_power_overrides"))
 
         injected = (overlay or {}).get("injected_events") or []
         if injected:
@@ -10207,6 +10432,15 @@ class PipelineOrchestrator:
         except Exception as exc:  # noqa: BLE001 — 出处是观测增益，绝不阻断报告
             logger.debug("[%s] run_provenance 跳过: %s", state.pipeline_id, exc)
 
+    @staticmethod
+    def _derive_extra_seeds(base_seed: int, n_seeds: int) -> list[tuple[int, int]]:
+        """SIM-4 (C30): the extra ensemble members' (index, seed) pairs, members 2..n_seeds.
+
+        ``(base_seed or 0) + k * 7919``: distinct and deterministic even for base 0 (7919 is
+        prime). The primary run keeps its own SIM_SEED; seeding it differently is an owner
+        decision, so it is not done here."""
+        return [(k, (base_seed or 0) + k * 7919) for k in range(2, n_seeds + 1)]
+
     def _maybe_run_seed_ensemble(self, state: "PipelineState", project: Any, graph_id: Optional[str],
                                  actors: Any, research: dict, report_md: str) -> None:
         """NEXTSTEPS P0-3: 同问多种子集成。
@@ -10254,7 +10488,7 @@ class PipelineOrchestrator:
         max_rounds = int(_mr) if _mr else None
         handoff_dir = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
         # 派生互异种子（base=0 时也确定性互异）；每个种子跑一次独立 (prepare→run→report)。
-        seed_jobs = [(k, (base_seed or 0) + k * 7919) for k in range(2, n_seeds + 1)]
+        seed_jobs = self._derive_extra_seeds(base_seed, n_seeds)
         cancel_ev0 = type(self)._cancel_events.get(state.pipeline_id)
         if cancel_ev0 is not None and cancel_ev0.is_set():
             raise PipelineCancelled("多种子集成期间被取消")
@@ -10517,6 +10751,24 @@ class PipelineOrchestrator:
         """TIME-6: ``{'hindcast': pin}`` for a pinned hindcast run's ReportAgent, else {}."""
         pin = hindcast_policy(state.options)
         return {"hindcast": pin} if pin is not None else {}
+
+    @staticmethod
+    def _interview_feedback_agent_kwargs(state: "PipelineState") -> dict[str, Any]:
+        """FU-8: ``{'interview_graph_feedback': pinned}`` for a run with a pinned value, else {}.
+
+        The run's pinned ``sim_interview_graph_feedback`` (only a real bool counts, see
+        :func:`pinned_interview_graph_feedback`) goes to the main and seed ReportAgents
+        directly: a seed's simulation is recorded only in the in-memory
+        ``ensemble_member_simulations`` map while its report runs, so the by-simulation
+        lookup would find no owner and read the ambient value. Without a pinned value the
+        kwarg is left out, as ``_hindcast_agent_kwargs`` does, and the report falls back to
+        :func:`interview_graph_feedback_for_simulation`, the lookup ``/api/report``
+        regenerate and chat use: an unpinned shared-simulation child then follows the base
+        whose simulation it interviews on both paths, and every other unpinned run (no
+        owner, or the run itself) reads the ambient Config as before.
+        """
+        pinned = pinned_interview_graph_feedback(state.options)
+        return {"interview_graph_feedback": pinned} if pinned is not None else {}
 
     def _record_research_audit(self, state: "PipelineState", handoff_dir: str) -> None:
         """TIME-9: stamp the gated research's audit into the hindcast pin before any report reads it.
@@ -10884,6 +11136,9 @@ class PipelineOrchestrator:
         # TIME-6：回测运行的种子报告同样扣下市场——钉随构造参数直接交给报告，不依赖报告侧
         # 按模拟 id 的所属管线查找（种子模拟不是任何管线自己的 simulation_id）。
         _agent_kwargs.update(self._hindcast_agent_kwargs(state))
+        # FU-8：采访事实写图的门同理——有钉值时随构造参数交给报告（种子模拟的所属管线在报告期间
+        # 尚未落盘，ensemble_member_simulations 只在内存）；无钉值不加参数，报告按模拟 id 查找。
+        _agent_kwargs.update(self._interview_feedback_agent_kwargs(state))
         # W9-5：把主跑情景脊柱钉给种子报告（scenario_spine 参数由报告链工作流并行落地；
         # 尚未支持时 TypeError → 回退旧签名，落地顺序无关）。
         try:
@@ -13075,6 +13330,11 @@ class PipelineOrchestrator:
             "fallback_share": validation.get("fallback_share"),
             "decision_validation_measured_rounds": validation.get("measured_rounds"),
         }
+        # SIM-4（SIM_PRIOR_ECHO_DIAGNOSTIC，默认开）：零 LLM 的先验回声诊断——终局份额是否只是
+        # 种子先验的复述、承诺是否扎堆先验领先情景。纯观测：只写摘要、只告警，不进
+        # _assess_run_health，不动任何概率（通道本就 diagnostic_only）。
+        if getattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", True) and isinstance(traj, dict):
+            summary["prior_echo"] = prior_echo_diagnostics(traj)
         state.options["decision_channel_summary"] = summary
         try:
             PipelineManager.save(state)
@@ -13105,6 +13365,19 @@ class PipelineOrchestrator:
                 "任何依据（REPORT_WORLDSTATE_HIDE_INVALID 开时报告隐藏份额/图表/对比表）",
                 state.pipeline_id, validity_norm, summary["validity_reasons"],
                 summary["forecast_effect"])
+        # 回声＝终局≈先验，可断言「没有提供信息」；扎堆＝终局已离开先验（TV≥echo_tv），只能
+        # 审慎地说「可能只是在复述先验」（与报告提示行同口径）。
+        _echo = summary.get("prior_echo") or {}
+        _echo_finding = {
+            VERDICT_PRIOR_ECHO: "终局分布与种子先验几乎一致，推演没有在研究先验之外提供信息，不得作为独立佐证",
+            VERDICT_PRIOR_LEADER_HERD: "承诺扎堆先验领先情景，推演可能只是在复述先验，不构成独立佐证",
+        }.get(_echo.get("verdict"))
+        if _echo_finding:
+            logger.warning(
+                "[%s] 决策通道先验回声诊断=%s（tv_to_prior=%s，先验领先=%s，领先承诺占比=%s；%s）——%s",
+                state.pipeline_id, _echo.get("verdict"), _echo.get("tv_to_prior"),
+                _echo.get("prior_leader"), _echo.get("prior_leader_commit_rate"),
+                _echo.get("policy_version"), _echo_finding)
 
     # -- 内部：研究 as_of 锚校验 (R2-RES-7) -------------------------------
 
@@ -15817,6 +16090,9 @@ class PipelineOrchestrator:
                 # TIME-6：回测运行把钉交给报告（不读/不重报价/不现抓预测市场，盖 hindcast 章）；
                 # 实时运行不加该参数，构造调用逐字节不变。
                 _ra_kwargs.update(self._hindcast_agent_kwargs(state))
+                # FU-8：采访事实写图的门有钉值时交给报告；无钉值不加参数，报告与 API 重生成/对话
+                # 同走按模拟 id 的查找（共享模拟子管线跟随 base 的钉），两条路径结论一致。
+                _ra_kwargs.update(self._interview_feedback_agent_kwargs(state))
                 # W9-8: 研究昂贵产物直通报告链——quantitative(339 行)/contested(29 条)/
                 # timeline(101 事件)/graph_priors(_structural) 此前落盘后零下游读者。
                 # 构造参数由报告链工作流并行落地（None 默认）；尚未支持时 TypeError →
