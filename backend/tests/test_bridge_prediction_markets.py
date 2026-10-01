@@ -1316,6 +1316,72 @@ def test_collector_preserves_report_vetted_tool_market_when_refresh_has_no_queri
     assert "Prediction Market Signals" in (tmp_path / d.REPORT_FILENAME).read_text(encoding="utf-8")
 
 
+def _collect_with_tool_and_refresh(tmp_path, monkeypatch, *, price_time, refresh=True):
+    """A tool call priced two markets at 00:00; the deterministic refresh at 06:00 re-priced
+    one of them. Returns prediction_markets.json's rows by market id."""
+    tool_only = {"market_id": "691340", "question": "AI bubble burst in 2026?",
+                 "implied_yes_prob": 0.1545, "volume": 2_310_000.0,
+                 "url": "https://polymarket.com/event/ai-bubble-burst-in-2026",
+                 "end_date": "2026-12-31T00:00:00Z"}
+    both = {"market_id": "777", "question": "AI capex cut in 2026?", "implied_yes_prob": 0.30,
+            "volume": 900_000.0, "url": "https://polymarket.com/event/ai-capex-cut",
+            "end_date": "2026-12-31T00:00:00Z"}
+    (tmp_path / d.PREDICTION_MARKET_CANDIDATES_FILENAME).write_text(json.dumps({
+        "captured_at": "2026-07-11T00:00:00Z", "queries": ["AI bubble 2026"],
+        "markets": [tool_only, both]}) + "\n", encoding="utf-8")
+
+    def _refresh_snapshot(queries, **kwargs):
+        kwargs["diagnostics"].update({"attempted_query_count": 1, "successful_query_count": 1,
+                                      "transport_failure_count": 0})
+        return [dict(both, implied_yes_prob=0.42)]
+
+    monkeypatch.setattr(d, "_pm_resolve_queries", lambda *_a, **_k: ["AI capex 2026"])
+    monkeypatch.setattr(d, "_pm_snapshot", _refresh_snapshot)
+    monkeypatch.setattr(d, "score_market_relevance", lambda *_a, **_k: {})
+    monkeypatch.setattr(d, "_pm_now", lambda: datetime(2026, 7, 11, tzinfo=timezone.utc))
+    monkeypatch.setattr(d, "_utcnow", lambda: "2026-07-11T06:00:00+00:00")
+    monkeypatch.setenv("PREDICTION_MARKETS_ENABLED", "true")
+    monkeypatch.setenv("PREDICTION_MARKETS_PRICE_HISTORY", "false")
+    monkeypatch.setenv("MARKET_ANCHOR_PRICE_TIME", "true" if price_time else "false")
+    monkeypatch.setenv("PREDICTION_MARKETS_REFRESH_WITH_TOOL_CANDIDATES", "true" if refresh else "false")
+
+    class Log:
+        def write(self, level, message):
+            pass
+
+    report = ("Polymarket market 691340 trades at 15.45%; see also "
+              "https://polymarket.com/event/ai-capex-cut.")
+    d._collect_prediction_markets(tmp_path, "Will the AI boom unwind in 2026?", report, {}, Log(),
+                                  model_name="test")
+    payload = json.loads((tmp_path / d.PREDICTION_MARKETS_FILENAME).read_text(encoding="utf-8"))
+    return {row["market_id"]: row for row in payload["markets"]}, payload
+
+
+def test_collector_records_each_rows_own_price_observation_time(tmp_path, monkeypatch):
+    """FU-11 (EVAL-6 open issue): a row the refresh re-priced is dated by the refresh, a
+    tool-only row by its tool call; both kept captured_at before, so they could not be told
+    apart and an anchor was dated only by the snapshot's later as_of."""
+    rows, payload = _collect_with_tool_and_refresh(tmp_path, monkeypatch, price_time=True)
+    assert rows["777"]["implied_yes_prob"] == 0.42
+    assert rows["777"]["observed_at"] == "2026-07-11T06:00:00+00:00"
+    assert rows["691340"]["observed_at"] == "2026-07-11T00:00:00Z"
+    assert rows["691340"]["captured_at"] == "2026-07-11T00:00:00Z"   # provenance unchanged
+    assert payload["as_of"] == "2026-07-11T06:00:00+00:00"
+
+
+def test_collector_without_refresh_dates_tool_rows_by_their_capture(tmp_path, monkeypatch):
+    """The default (no refresh beside tool candidates): every row is a tool row."""
+    rows, _ = _collect_with_tool_and_refresh(tmp_path, monkeypatch, price_time=True, refresh=False)
+    assert rows["777"]["implied_yes_prob"] == 0.30
+    assert {row["observed_at"] for row in rows.values()} == {"2026-07-11T00:00:00Z"}
+
+
+def test_collector_price_time_off_writes_no_observation_time(tmp_path, monkeypatch):
+    rows, _ = _collect_with_tool_and_refresh(tmp_path, monkeypatch, price_time=False)
+    assert set(rows) == {"777", "691340"}
+    assert not any("observed_at" in row for row in rows.values())
+
+
 def test_bridge_fanout_suppressed_when_harness_delegation_is_active(monkeypatch):
     monkeypatch.setattr(d, "_AGENTIC_DELEGATION", True)
     monkeypatch.setenv("RESEARCH_AGENTIC_SEARCH", "true")

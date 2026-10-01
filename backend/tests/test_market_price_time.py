@@ -3,8 +3,9 @@
 A requote stamps ``quoted_at`` on every row that received a fresh price, and a later failed
 requote keeps it (the retained price is still that quote). Rows from the research handoff
 snapshot carry the payload's ``as_of`` as ``snapshot_as_of``; rows from the report-time live
-fetch carry the fetch time. ``_build_market_anchor`` turns these into ``price_time`` +
-``price_time_basis`` ('requote' | 'snapshot'), and ``resolution_monitor`` carries them into
+fetch carry the fetch time; FU-11: research rows also carry their own ``observed_at``.
+``_build_market_anchor`` turns these into ``price_time`` + ``price_time_basis``
+('requote' | 'observed' | 'snapshot'), and ``resolution_monitor`` carries them into
 price_track. Flag off → market rows and forecast.json anchors keep the pre-change shape
 byte for byte. Offline: httpx, PipelineManager and the matcher LLM are faked, and the
 market clock is pinned.
@@ -326,6 +327,14 @@ def test_live_fallback_flag_off_rows_unchanged(enabled, flag, monkeypatch):
     ({"snapshot_as_of": "2026-09-28T06:00:00"}, None),      # naive: the zone is a guess
     # a requoted price with an unusable quote time is unknown, never the snapshot time
     ({"quoted_at": "yesterday", "snapshot_as_of": SNAPSHOT_AS_OF}, None),
+    # FU-11: the bridge's per-row fetch time beats the snapshot's upper bound ...
+    ({"observed_at": "2026-09-27T21:00:00Z", "snapshot_as_of": SNAPSHOT_AS_OF},
+     ("2026-09-27T21:00:00Z", "observed")),
+    # ... a report-time requote beats both ...
+    ({"quoted_at": T1.isoformat(), "observed_at": "2026-09-27T21:00:00Z",
+      "snapshot_as_of": SNAPSHOT_AS_OF}, (T1.isoformat(), "requote")),
+    # ... and an unusable one is unknown, never the later snapshot time
+    ({"observed_at": "2026-09-27", "snapshot_as_of": SNAPSHOT_AS_OF}, None),
 ])
 def test_build_market_anchor_price_time_basis(flag, extra, expected):
     anchor = _anchor(_market(**extra))

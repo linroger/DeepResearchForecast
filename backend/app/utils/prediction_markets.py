@@ -287,6 +287,8 @@ def drop_window_ended_rows(rows: Any) -> Tuple[List[Any], int]:
 # which dates the price by the snapshot's as_of: an upper bound on when it was observed.
 PRICE_TIME_BASIS_REQUOTE = "requote"
 PRICE_TIME_BASIS_SNAPSHOT = "snapshot"
+# FU-11: the research bridge's per-row ``observed_at`` (when that row's price was fetched).
+PRICE_TIME_BASIS_OBSERVED = "observed"
 
 
 def price_time_enabled() -> bool:
@@ -320,14 +322,16 @@ def market_price_time(row: Any) -> Optional[Tuple[str, str]]:
 
     ``quoted_at`` (stamped by requote_markets on a fresh price and kept through a later
     failed requote, whose retained price is still that quote) → basis 'requote'; otherwise
-    ``snapshot_as_of`` (the research snapshot's as_of or the report-time fetch time) →
-    basis 'snapshot'. A 'snapshot' time is an upper bound on when the price was observed,
-    not the exact moment: the research bridge takes its as_of when it writes the snapshot,
-    after merging agent-tool rows that may have been priced hours earlier, and rows carry
-    no per-row observation time yet. Only a zone-aware ISO date-time counts
-    (parse_stamp_strict, no bare dates) and it is returned exactly as stored. A row whose
-    quoted_at is present but unusable is unknown, never 'snapshot': its price came from a
-    requote, so the snapshot time would misdate it. Never raises."""
+    ``observed_at`` (FU-11: the research bridge's per-row fetch time of the price the row
+    carries; written when MARKET_ANCHOR_PRICE_TIME was on in the research child) → basis
+    'observed'; otherwise ``snapshot_as_of`` (the research snapshot's as_of or the
+    report-time fetch time) → basis 'snapshot'. A 'snapshot' time is an upper bound on when
+    the price was observed, not the exact moment: the research bridge takes its as_of when
+    it writes the snapshot, after merging agent-tool rows that may have been priced hours
+    earlier. Only a zone-aware ISO date-time counts (parse_stamp_strict, no bare dates) and
+    it is returned exactly as stored. A row whose quoted_at (or observed_at) is present but
+    unusable is unknown, never a later basis: its price was fetched then, so a later time
+    would misdate it. Never raises."""
     if not isinstance(row, dict):
         return None
     quoted_at = row.get("quoted_at")
@@ -335,6 +339,11 @@ def market_price_time(row: Any) -> Optional[Tuple[str, str]]:
         if parse_stamp_strict(quoted_at, allow_date=False) is None:
             return None
         return quoted_at, PRICE_TIME_BASIS_REQUOTE
+    observed_at = row.get("observed_at")
+    if observed_at is not None:
+        if parse_stamp_strict(observed_at, allow_date=False) is None:
+            return None
+        return observed_at, PRICE_TIME_BASIS_OBSERVED
     snapshot_as_of = row.get("snapshot_as_of")
     if parse_stamp_strict(snapshot_as_of, allow_date=False) is None:
         return None

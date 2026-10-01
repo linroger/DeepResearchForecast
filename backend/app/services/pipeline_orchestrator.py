@@ -2313,6 +2313,7 @@ def _synthesis_provider_unavailable(error: Any) -> bool:
 # keeping each table alphabetical; every name must exist on Config and be
 # documented in .env.example (test_orchestrator_research_wiring checks both).
 RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
+    ("MARKET_ANCHOR_PRICE_TIME", "bool"),
     ("PREDICTION_MARKETS_END_DATE_GATE", "bool"),
     ("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", "float"),
     ("RESEARCH_EVIDENCE_GRADING", "bool"),
