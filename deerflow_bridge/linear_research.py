@@ -4463,7 +4463,10 @@ def evidence_header_line(profile: Mapping[str, Any], omitted: int = 0) -> str:
     """The evidence line of a KIQ digest block (its second line): the counts of
     :func:`evidence_profile` and, when ``omitted`` lines were dropped for
     length, how many.  It carries no [S<n>] marker, so the SOURCE INDEX is
-    the same with or without it."""
+    the same with or without it.  A profile with DERIVED findings adds
+    ", {d} DERIVED" to the tag counts, so they still sum to the sourced
+    findings; no digest finding is DERIVED today (_TAG_RE reads VERIFIED,
+    REPORTED and UNVERIFIED only), so the line is exactly the pinned format."""
     tags = (f"{profile['verified']} VERIFIED, {profile['reported']} REPORTED, "
             f"{profile['unverified']} UNVERIFIED")
     if profile.get("derived"):
@@ -4474,6 +4477,19 @@ def evidence_header_line(profile: Mapping[str, Any], omitted: int = 0) -> str:
     if omitted:
         line += f"; {omitted} lines omitted for length"
     return line
+
+
+def insufficient_evidence_event(profiles: Mapping[str, Mapping[str, Any]]) -> str | None:
+    """The research event RESEARCH_EVIDENCE_HEADERS raises when at least half
+    of the researched KIQs (``profiles``: ``{kiq id: evidence profile}``, one
+    per researched KIQ) have insufficient evidence, naming each with its
+    reason; ``None`` below half or with none insufficient."""
+    insufficient = [f"{kid} ({profile.get('reason')})" for kid, profile in profiles.items()
+                    if profile.get("sufficiency") == "insufficient"]
+    if not insufficient or 2 * len(insufficient) < len(profiles):
+        return None
+    return (f"{len(insufficient)} of {len(profiles)} researched KIQs have insufficient evidence: "
+            f"{'; '.join(insufficient)}")
 
 
 def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str, *,
@@ -4599,11 +4615,17 @@ _SCOUT_RESULT_RE = re.compile(r"^\[S\d+\]")
 def _fit_scout_part(part: str, allowance: int) -> str:
     """One scout part within ``allowance`` chars, cut only between results.
 
-    Its head (the lines before the first result) is always kept.  Whole
-    results are then taken in rank order, each one only if it still fits
-    together with the closing "(k results omitted for length)" note, so one
-    oversized result is left out without taking the shorter results after
-    it along."""
+    Whole results are taken in rank order, each one only if it still fits
+    together with the head (the lines before the first result) and the
+    closing "(k results omitted for length)" note, so one oversized result
+    is left out without taking the shorter results after it along.  The head
+    is kept whole unless it does not fit even with every result left out:
+    then its tool-note lines are cut from the end, its first line (the
+    query) always kept, with a "(k search note lines omitted for length)"
+    note.  So the part is over ``allowance`` only when its query line and
+    the two omission notes alone are; in :meth:`_Engine._scout` a query line
+    has at most 7 + 300 chars (:func:`_as_str_list`) and an allowance at
+    least 998."""
     if len(part) <= allowance:
         return part
     head: list[str] = []
@@ -4616,12 +4638,19 @@ def _fit_scout_part(part: str, allowance: int) -> str:
         else:
             head.append(line)
 
+    cut = 0  # tool-note lines cut from the end of the head
+
     def render(kept: list[str], omitted: int) -> str:
-        pieces = (["\n".join(head)] if head else []) + kept
+        pieces = head[:len(head) - cut]
+        if cut:
+            pieces.append(f"({cut} search note lines omitted for length)")
+        pieces += kept
         if omitted:
             pieces.append(f"({omitted} results omitted for length)")
         return "\n".join(pieces)
 
+    while cut < len(head) - 1 and len(render([], len(results))) > allowance:
+        cut += 1
     kept: list[str] = []
     omitted = len(results)
     for result in results:
@@ -4641,7 +4670,9 @@ def fair_scout_digest(parts: Sequence[str], limit: int) -> str:
     it, and the rest split the remainder equally, so every part gets at
     least ``(limit - separators) // n`` chars and a digest within ``limit``
     is unchanged.  A part over its allowance is cut between results
-    (:func:`_fit_scout_part`), its head always kept."""
+    (:func:`_fit_scout_part`), its query line always kept.  The digest is
+    within ``limit`` whenever each query line and the omission notes fit
+    their part's allowance, as they always do in :meth:`_Engine._scout`."""
     parts = list(parts)
     budget = limit - 2 * max(0, len(parts) - 1)
     allowance: dict[int, int] = {}
@@ -6928,7 +6959,10 @@ class _Engine:
         Off RESEARCH_TRUNCATION_FAIRNESS the joined digest is cut at its last
         line within the cap, which can silently lose the last queries; on,
         every query keeps a fair share cut between results
-        (:func:`fair_scout_digest`)."""
+        (:func:`fair_scout_digest`), within the cap because a query line (at
+        most 7 + 300 chars) and the omission notes fit the smallest share
+        (998 chars for SCOUT_QUERIES_MAX queries); an oversized tool note is
+        cut by whole lines with a note."""
         queries = list(queries)[:SCOUT_QUERIES_MAX]
         jobs = [(lambda q=q: self.tools.search(q, agent_id="planner")) for q in queries]
         results = self.gateway.fan_out(jobs, warm_first=False, workers=self.preset.workers)
@@ -9474,11 +9508,9 @@ class _Engine:
             events.append(f"{len(stubbed)} of {len(self.records)} KIQ investigations ended in deterministic "
                           f"notes: {', '.join(stubbed)}")
         if self.evidence_headers:
-            insufficient = [f"{kid} ({profile['reason']})" for kid, profile in self._evidence_profiles().items()
-                            if profile["sufficiency"] == "insufficient"]
-            if insufficient and 2 * len(insufficient) >= len(self.records):
-                events.append(f"{len(insufficient)} of {len(self.records)} researched KIQs have insufficient "
-                              f"evidence: {'; '.join(insufficient)}")
+            event = insufficient_evidence_event(self._evidence_profiles())
+            if event:
+                events.append(event)
         gap = self.state.phase("gap")
         detail = str(gap.get("detail") or "")
         if gap.get("status") == "partial" or detail.startswith("stopped:"):
