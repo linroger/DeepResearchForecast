@@ -518,12 +518,18 @@ class PolymarketClient:
         # TRANSPORT-DIAG: 记录具体错误类名 + HTTP 状态（重试耗尽的瞬时状态码沿用 last_status）。
         error_class = ("HTTPStatusError" if isinstance(last_err, str)
                        else type(last_err).__name__ if last_err is not None else "UnknownError")
-        label = f"{error_class}:{last_status}" if last_status is not None else error_class
-        self.last_error = {"error_class": error_class, "http_status": last_status, "url": url}
+        self._record_failure(url, error_class, last_status, last_err)
+        return None
+
+    def _record_failure(self, url: str, error_class: str, http_status: Optional[int],
+                        detail: Any) -> None:
+        """TRANSPORT-DIAG accounting of one failed request: self.last_error + the
+        "类名[:状态]" counter in self.transport_errors, plus a warning."""
+        label = f"{error_class}:{http_status}" if http_status is not None else error_class
+        self.last_error = {"error_class": error_class, "http_status": http_status, "url": url}
         self.transport_errors[label] = self.transport_errors.get(label, 0) + 1
         logger.warning(f"Polymarket GET {url} 失败（降级为空结果；error_class={error_class}, "
-                       f"http_status={last_status}）: {last_err}")
-        return None
+                       f"http_status={http_status}）: {detail}")
 
     def _get(self, path: str, params: Dict[str, Any]) -> Any:
         """相对 Gamma 端点（self.base_url + path）的 GET；复用 _request 的降级纪律。"""
@@ -531,16 +537,27 @@ class PolymarketClient:
 
     # ------------------------------------------------------------- endpoints
     def search_events(self, query: str, limit: int = 15) -> List[Dict[str, Any]]:
-        """全文检索活跃事件（每个事件下挂多个市场）；失败/未启用返回 []。"""
+        """全文检索活跃事件（每个事件下挂多个市场）；失败/未启用返回 []。
+
+        INFRA-4：HTTP 200 但响应体不是 {"events": [...]}（含 JSON null 体）时照旧返回 []，
+        但按 _request 的同一口径记一次失败（InvalidSchema:200），不再静默当作「零命中」。
+        """
         if not self.enabled or not str(query or "").strip():
             return []
+        failures_before = sum(self.transport_errors.values())
         data = self._get("/public-search", {"q": str(query).strip(),
                                             "limit_per_type": limit,
                                             "events_status": "active"})
-        if not isinstance(data, dict):
-            return []
-        events = data.get("events")
-        return [e for e in events if isinstance(e, dict)] if isinstance(events, list) else []
+        events = data.get("events") if isinstance(data, dict) else None
+        if isinstance(events, list):
+            return [e for e in events if isinstance(e, dict)]
+        # None with a new failure recorded = _request already accounted a transport/HTTP error.
+        if data is not None or sum(self.transport_errors.values()) == failures_before:
+            shape = (f"events is {type(events).__name__}" if isinstance(data, dict)
+                     else f"body is {type(data).__name__}")
+            self._record_failure(self.base_url + "/public-search", "InvalidSchema", 200,
+                                 f"response is not {{'events': [...]}} ({shape})")
+        return []
 
     # -------------------------------------------------------------- snapshot
     def snapshot_for_queries(self, queries: List[str], per_query: Optional[int] = None,
@@ -919,7 +936,8 @@ def _window_ended_label(m: Dict[str, Any], zh: bool) -> str:
             else " — window ended, awaiting settlement")
 
 
-def render_markets_block(markets: List[Dict[str, Any]], lang: str = "en") -> str:
+def render_markets_block(markets: List[Dict[str, Any]], lang: str = "en", *,
+                         now: Optional[datetime] = None) -> str:
     """把市场快照渲染为确定性的 markdown 表（无 LLM；空列表 → ""，注入自动跳过）。
 
     若任一行经过重报价（有 price_at_research 且现价与之不同）→ 追加一列 Δ 展示
@@ -928,13 +946,16 @@ def render_markets_block(markets: List[Dict[str, Any]], lang: str = "en") -> str
     （浅拷贝，调用方不变）；已盖章的行在问题单元格后追加「window ended YYYY-MM-DD, awaiting
     settlement」——行仍保留（其价格仍是证据），未盖章的输出逐字节不变。旗标关 → 不盖章也
     不标注（即便输入行带研究期的 window_ended 章），与旧渲染逐字节一致。
+    ``now`` 把盖章时点钉在给定时刻（EVAL-19 回填按快照时刻渲染，与回填当天无关）；
+    省略 = market_clock_now()，与旧渲染逐字节一致。
     """
     rows = [m for m in (markets or []) if isinstance(m, dict)]
     if not rows:
         return ""
     gate, grace = end_date_gate_settings()
     if gate:
-        rows, _ = stamp_window_ended(rows, now=market_clock_now(), grace_hours=grace)
+        rows, _ = stamp_window_ended(rows, now=now if now is not None else market_clock_now(),
+                                     grace_hours=grace)
     zh = str(lang or "").lower().startswith("zh")
     show_delta = any(_requote_move(m) for m in rows)  # 有价格移动才加 Δ 列
     title = "### Prediction Market Signals (Polymarket)"

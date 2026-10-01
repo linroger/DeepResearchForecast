@@ -134,7 +134,8 @@ def test_evidence_profile_counts_only_admissible_sources_when_walled():
     record = _record([_fact("a [S1]"), _fact("b [S2]"), _fact("c [S1][S2]", "REPORTED")])
     walled = lr.evidence_profile(record, LEDGER.get, admissible=lambda sid: sid == 1)
     assert walled["sources"] == 1 and walled["fetched"] == 1 and walled["domains"] == 1
-    assert walled["sourced_findings"] == 2      # the [S2]-only line is walled off entirely
+    # FU-2's digest rule: the [S2]-only line and the co-cited [S1][S2] line are both walled off.
+    assert walled["sourced_findings"] == 1
     assert lr.evidence_profile(record, LEDGER.get)["sources"] == 2
 
 

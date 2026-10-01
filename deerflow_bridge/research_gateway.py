@@ -2085,6 +2085,37 @@ def _json_retry_note(error: str, required_keys: Sequence[str]) -> str:
 _FENCED_JSON_RE = re.compile(r"```(?:json|JSON)?[ \t]*\n?(.*?)```", re.DOTALL)
 _DECODER = json.JSONDecoder(strict=False)
 _MAX_TRUNCATION_REPAIRS = 16
+_NONFINITE_JSON_MSG = "non-finite constant"
+# The JSON retry note's reason for a reply rejected for its non-finite numbers.
+_NONFINITE_JSON_REASON = "NaN or Infinity is not a JSON number"
+
+
+def _reject_nonfinite_constant(name: str) -> Any:
+    raise json.JSONDecodeError(_NONFINITE_JSON_MSG, "", 0)
+
+
+def _parse_finite_float(text: str) -> float:
+    value = float(text)
+    if not math.isfinite(value):  # an overflowing literal such as 1e999
+        raise json.JSONDecodeError(_NONFINITE_JSON_MSG, "", 0)
+    return value
+
+
+# INFRA-4: NaN, Infinity, -Infinity and overflowing floats are not JSON; a model reply
+# carrying one is unparseable (the JSON retry asks again) instead of decoding to a float
+# that poisons downstream arithmetic and artifacts.  Control characters stay tolerated.
+_FINITE_DECODER = json.JSONDecoder(strict=False, parse_constant=_reject_nonfinite_constant,
+                                   parse_float=_parse_finite_float)
+
+
+def _strict_json_numbers() -> bool:
+    """RESEARCH_JSON_STRICT_NUMBERS (default true; the parent forwards its Config value)."""
+    raw = os.environ.get("RESEARCH_JSON_STRICT_NUMBERS", "true")
+    return str(raw or "").strip().lower() == "true"
+
+
+def _json_decoder() -> json.JSONDecoder:
+    return _FINITE_DECODER if _strict_json_numbers() else _DECODER
 
 
 def _strip_trailing_commas(text: str) -> str:
@@ -2121,19 +2152,46 @@ def _strip_trailing_commas(text: str) -> str:
     return "".join(out)
 
 
-def _decode_at(text: str, index: int) -> Any:
-    """``raw_decode`` at ``index`` (strict=False), then with comma repair."""
+def _decode_at(text: str, index: int, decoder: json.JSONDecoder) -> Any:
+    """``raw_decode`` at ``index`` with ``decoder`` (_FINITE_DECODER or _DECODER,
+    both strict=False), then with comma repair."""
     try:
-        return _DECODER.raw_decode(text, index)[0]
+        return decoder.raw_decode(text, index)[0]
     except ValueError:
         pass
     try:
-        return _DECODER.raw_decode(_strip_trailing_commas(text[index:]), 0)[0]
+        return decoder.raw_decode(_strip_trailing_commas(text[index:]), 0)[0]
     except ValueError:
         return None
 
 
-def _repair_truncated(text: str, start: int) -> Any:
+def _object_end(text: str, start: int) -> int:
+    """Offset just past the bracket that closes the ``{`` at ``start`` (string-aware;
+    ``len(text)`` when it never closes)."""
+    depth = 0
+    in_string = False
+    escaped = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return len(text)
+
+
+def _repair_truncated(text: str, start: int, decoder: json.JSONDecoder) -> Any:
     """Close a truncated object: cut at the last complete value boundary and
     append closers for the bracket stack as it was AT that boundary."""
     stack: list[str] = []
@@ -2169,7 +2227,7 @@ def _repair_truncated(text: str, start: int) -> Any:
     closers = "".join("}" if opener == "{" else "]" for opener in reversed(open_stack))
     candidate = _strip_trailing_commas(text[start:cut] + closers)
     try:
-        return _DECODER.raw_decode(candidate, 0)[0]
+        return decoder.raw_decode(candidate, 0)[0]
     except ValueError:
         return None
 
@@ -2188,7 +2246,7 @@ def _previous_char(text: str, index: int) -> str:
     return text[position] if position >= 0 else ""
 
 
-def _drop_malformed_element(text: str, start: int) -> Any:
+def _drop_malformed_element(text: str, start: int, decoder: json.JSONDecoder) -> Any:
     """Decode the object at ``start`` after dropping ONE malformed array element.
 
     Models occasionally emit a stray fragment such as ``{"},`` between two
@@ -2200,7 +2258,7 @@ def _drop_malformed_element(text: str, start: int) -> Any:
     repairs the object.
     """
     try:
-        _DECODER.raw_decode(text, start)
+        decoder.raw_decode(text, start)
         return None
     except json.JSONDecodeError as exc:
         error_at = min(exc.pos, len(text) - 1)
@@ -2217,7 +2275,7 @@ def _drop_malformed_element(text: str, start: int) -> Any:
                 candidate = text[:element].rstrip().rstrip(",") + text[index:]
             else:
                 continue
-            value = _decode_at(candidate, start)
+            value = _decode_at(candidate, start, decoder)
             if isinstance(value, dict):
                 return value
             cuts += 1
@@ -2226,17 +2284,28 @@ def _drop_malformed_element(text: str, start: int) -> Any:
     return None
 
 
-def _iter_json_candidates(text: str) -> Iterator[tuple[int, Any]]:
+def _iter_json_candidates(text: str, decoder: json.JSONDecoder) -> Iterator[tuple[int, Any]]:
     """Yield ``(position, decoded value or None)`` lazily: fenced blocks first
-    (position ``-1``), then every ``{`` position of the whole text."""
+    (position ``-1``), then every ``{`` position of the whole text.
+
+    With the finite-numbers decoder, an object rejected only for a NaN / Infinity
+    (the permissive decoder reads it as a dict) yields ``None`` and the ``{``
+    positions nested inside it are skipped: a fragment of a rejected object is
+    not the reply, so the caller fails closed (the JSON retry asks again).
+    """
     for block in _FENCED_JSON_RE.findall(text):
         start = block.find("{")
         if start != -1:
-            yield -1, _decode_at(block, start)
+            yield -1, _decode_at(block, start, decoder)
     index = text.find("{")
     while index != -1:
-        yield index, _decode_at(text, index)
-        index = text.find("{", index + 1)
+        value = _decode_at(text, index, decoder)
+        resume = index + 1
+        if (value is None and decoder is _FINITE_DECODER
+                and isinstance(_decode_at(text, index, _DECODER), dict)):
+            resume = _object_end(text, index)
+        yield index, value
+        index = text.find("{", resume)
 
 
 def _has_keys(obj: Mapping[str, Any], keys: Sequence[str]) -> bool:
@@ -2254,14 +2323,24 @@ def parse_json_object(text: str | None, required_keys: Sequence[str] = ()) -> di
     element (``{"},``) is repaired by dropping that element, then a truncated
     object by cutting at its last complete value; returns ``None`` when still
     no dict has the required keys.
+
+    Unless RESEARCH_JSON_STRICT_NUMBERS=false, NaN, Infinity, -Infinity and
+    overflowing floats (``1e999``) are not JSON: an object carrying one is
+    unparseable, and so are the dicts nested inside it.
     """
+    return _parse_json_object(text, required_keys, _json_decoder())
+
+
+def _parse_json_object(text: str | None, required_keys: Sequence[str],
+                       decoder: json.JSONDecoder) -> dict | None:
+    """parse_json_object with an explicit decoder (_FINITE_DECODER or _DECODER)."""
     if not text:
         return None
     text = str(text)
     required = tuple(required_keys or ())
     first_dict: dict | None = None
     failed: list[int] = []
-    for position, value in _iter_json_candidates(text):
+    for position, value in _iter_json_candidates(text, decoder):
         if isinstance(value, dict):
             if _has_keys(value, required):
                 return value
@@ -2274,25 +2353,46 @@ def parse_json_object(text: str | None, required_keys: Sequence[str] = ()) -> di
     # Element drop first: on a glitched (not truncated) object the truncation
     # repair would "succeed" by discarding everything after the glitch.
     for index in failed[:_MAX_ELEMENT_DROP_OBJECTS]:
-        repaired = _drop_malformed_element(text, index)
+        repaired = _drop_malformed_element(text, index, decoder)
         if isinstance(repaired, dict) and _has_keys(repaired, required):
             return repaired
     for index in failed[:_MAX_TRUNCATION_REPAIRS]:
-        repaired = _repair_truncated(text, index)
+        repaired = _repair_truncated(text, index, decoder)
         if isinstance(repaired, dict) and _has_keys(repaired, required):
             return repaired
     return None
 
 
+def _holds_nonfinite(value: Any) -> bool:
+    """True when a decoded JSON value holds a NaN or +/-Infinity float anywhere."""
+    if isinstance(value, float):
+        return not math.isfinite(value)
+    if isinstance(value, dict):
+        return any(_holds_nonfinite(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_holds_nonfinite(item) for item in value)
+    return False
+
+
 def _describe_json_failure(text: str, required_keys: Sequence[str], truncated: bool) -> str:
+    """Why parse_json_object rejected ``text`` (for the JSON retry note and the logs)."""
     if not text.strip():
         return "empty reply"
-    candidates = [value for _, value in _iter_json_candidates(text) if isinstance(value, dict)]
+    strict_numbers = _strict_json_numbers()
+    # The strict parse failed; if the permissive one succeeds, the non-finite numbers
+    # are the whole reason, however the reply's nested dicts look.
+    if strict_numbers and _parse_json_object(text, required_keys, _DECODER) is not None:
+        return _NONFINITE_JSON_REASON
+    candidates = [value for _, value in _iter_json_candidates(text, _DECODER)
+                  if isinstance(value, dict)]
     if candidates and required_keys:
         best = max(candidates, key=lambda c: sum(1 for k in required_keys if k in c))
         missing = [k for k in required_keys if k not in best]
         if missing:
-            return "missing keys: " + ", ".join(missing)
+            reason = "missing keys: " + ", ".join(missing)
+            if strict_numbers and _holds_nonfinite(best):
+                reason += "; " + _NONFINITE_JSON_REASON
+            return reason
     if truncated:
         return "reply was truncated before the JSON object closed"
     return "no JSON object found"
@@ -2627,29 +2727,36 @@ class SourceLedger:
                 if changed:
                     self._touch()
                 return dict(row)
-            sid = self._next_sid
-            self._next_sid += 1
-            domain = _display_domain(url)
-            row = {
-                "sid": sid,
-                "url": url,
-                "canonical": canonical,
-                "title": clean_title or domain,
-                "domain": domain,
-                "tier": tier or self._tier(url),
-                "via": via if via in ("fetch", "data") else "search",
-                "fetched": False,
-                "content_sha256": None,
-                "chars": 0,
-                "page_path": None,
-                "snippet": clean_snippet,
-                "first_seen_by": str(by or ""),
-            }
-            self._keep_snippet(row, clean_snippet)
-            self._rows[sid] = row
-            self._by_canonical[canonical] = sid
+            row = self._add_row_locked(url, canonical, clean_title, clean_snippet, via, by, tier)
             self._touch()
             return dict(row)
+
+    def _add_row_locked(self, url: str, canonical: str, title: str, snippet: str, via: str, by: Any,
+                        tier: str | None) -> dict[str, Any]:
+        """Create the unfetched row of a URL the ledger does not hold yet (the
+        lock held; the caller marks the ledger dirty)."""
+        sid = self._next_sid
+        self._next_sid += 1
+        domain = _display_domain(url)
+        row = {
+            "sid": sid,
+            "url": url,
+            "canonical": canonical,
+            "title": title or domain,
+            "domain": domain,
+            "tier": tier or self._tier(url),
+            "via": via if via in ("fetch", "data") else "search",
+            "fetched": False,
+            "content_sha256": None,
+            "chars": 0,
+            "page_path": None,
+            "snippet": snippet,
+            "first_seen_by": str(by or ""),
+        }
+        self._keep_snippet(row, snippet)
+        self._rows[sid] = row
+        self._by_canonical[canonical] = sid
+        return row
 
     def _keep_snippet(self, row: dict[str, Any], snippet: str) -> bool:
         """Append a new distinct snippet sighting to ``row["snippets"]`` (a
@@ -2694,27 +2801,79 @@ class SourceLedger:
         ``same_day``, the data gate's verdict) its point-in-time verdict; a
         recorded ``late`` never changes.  These are the only writes of a data
         row's dates and verdict (:meth:`set_dates` and :meth:`set_pit` leave
-        it unchanged).  Invalid values raise ValueError before anything is
-        written."""
+        it unchanged; :meth:`record_data` writes them with a result's page).
+        Invalid values raise ValueError before anything is written."""
+        plain = self._data_block(data, published, pit_status)
+        with self._lock:
+            row = self._rows.get(_as_int(sid) or 0)
+            if row is None:
+                return None
+            self._write_data_locked(row, plain, published, pit_status)
+            self._touch()
+            return dict(row)
+
+    def record_data(self, url: Any, title: Any, by: str, *, content_sha256: str, chars: int, page_path: str,
+                    data: Mapping[str, Any], published: str | None = None,
+                    pit_status: str | None = None) -> dict | None:
+        """Record an ok official-data result (TIME-12) as a fetched S1 ``data``
+        row in one locked update: the row (registered as ``via`` ``"data"``
+        when the URL is new), its stored page (as :meth:`mark_fetched`) and
+        its provenance, date and verdict (as :meth:`set_data`), so the ledger
+        never holds, or persists, a fetched data row without them.  Returns a
+        copy of the row, or ``None`` when nothing is recorded: an invalid URL,
+        a URL a search/fetch row holds (a web row is never adopted or
+        overwritten), or a URL whose data row already holds a different page
+        (the first record wins, so the numbers of an answer already given stay
+        on its row's page).  A data row that already holds this page is
+        returned unchanged, its provenance kept.  Invalid values raise as
+        :meth:`set_data` does, before anything is written."""
+        plain = self._data_block(data, published, pit_status)
+        digest, size, path = str(content_sha256), int(chars), str(page_path)
+        url = str(url or "").strip()
+        if not url or not self.valid_url(url):
+            return None
+        canonical = canonical_url(url)
+        clean_title = _clean_title(title)
+        with self._lock:
+            sid = self._by_canonical.get(canonical)
+            if sid is None:
+                row = self._add_row_locked(url, canonical, clean_title, "", "data", by, "S1")
+            else:
+                row = self._rows[sid]
+                if row.get("via") != "data":
+                    return None
+                if row.get("fetched"):
+                    return dict(row) if row.get("content_sha256") == digest else None
+                # A data row registered without its page (register(via="data")): completed here.
+                if clean_title and (not row.get("title") or row.get("title") == row.get("domain")):
+                    row["title"] = clean_title
+            row.update(fetched=True, content_sha256=digest, chars=size, page_path=path)
+            self._write_data_locked(row, plain, published, pit_status)
+            self._touch()
+            return dict(row)
+
+    @staticmethod
+    def _data_block(data: Mapping[str, Any], published: str | None, pit_status: str | None) -> Any:
+        """``data`` as the plain JSON a data row stores, once the values of a
+        data write are checked (TypeError / ValueError otherwise)."""
         if not isinstance(data, Mapping):
             raise TypeError("data must be a mapping")
         if published is not None and not (isinstance(published, str) and _DATE_VALUE_RE.fullmatch(published)):
             raise ValueError(f"published must be YYYY, YYYY-MM or YYYY-MM-DD, not {published!r}")
         if pit_status is not None and pit_status not in (PIT_ADMITTED, PIT_SAME_DAY):
             raise ValueError(f"a data row is admitted or same_day, not {pit_status!r}")
-        plain = _plain_json(data)
-        with self._lock:
-            row = self._rows.get(_as_int(sid) or 0)
-            if row is None:
-                return None
-            row["data"] = plain
-            if published is not None:
-                row.update(published=published, date_precision=_DATE_PRECISIONS[len(published)],
-                           date_source=DATA_DATE_SOURCE, date_rank=DATA_DATE_RANK)
-            if pit_status is not None and row.get("pit_status") != PIT_LATE:
-                row["pit_status"] = pit_status
-            self._touch()
-            return dict(row)
+        return _plain_json(data)
+
+    @staticmethod
+    def _write_data_locked(row: dict[str, Any], plain: Any, published: str | None,
+                           pit_status: str | None) -> None:
+        """Write a checked data block, date and verdict into ``row`` (the lock held)."""
+        row["data"] = plain
+        if published is not None:
+            row.update(published=published, date_precision=_DATE_PRECISIONS[len(published)],
+                       date_source=DATA_DATE_SOURCE, date_rank=DATA_DATE_RANK)
+        if pit_status is not None and row.get("pit_status") != PIT_LATE:
+            row["pit_status"] = pit_status
 
     def set_dates(self, sid: int, *, published: str | None, precision: str | None,
                   date_source: str | None, rank: int, modified: str | None = None,
@@ -2790,10 +2949,13 @@ class SourceLedger:
     def unmark_fetched(self, sid: int) -> dict | None:
         """Return a fetched row to the unfetched state (its stored page is not
         evidence: an extraction shell stored before the tool-layer check);
-        returns a copy, or ``None`` for an unknown sid."""
+        returns a copy, or ``None`` when nothing changed: an unknown sid, or an
+        official-data row (TIME-12), kept as it is because its stored page is
+        the vendor's record (short by nature, never an extraction shell) and
+        the evidence its facts were verified against."""
         with self._lock:
             row = self._rows.get(_as_int(sid) or 0)
-            if row is None:
+            if row is None or row.get("via") == "data":
                 return None
             row.update(fetched=False, content_sha256=None, chars=0, page_path=None)
             self._touch()
@@ -5161,7 +5323,10 @@ class ResearchTools:
     def fetch(self, url: Any, *, focus: str = "", agent_id: str, kiq_text: str = "") -> str:
         """Model-visible, query-focused excerpt of one page.  The URL of an
         official-data row (TIME-12) is answered from its stored page only,
-        never fetched live (:meth:`_data_row_page`)."""
+        never fetched live (:meth:`_data_row_page`), and ahead of the
+        point-in-time refusals: the data gate judged that row by its vintage
+        date, which a web sighting's date (a row-less late record) does not
+        describe, so web_fetch never contradicts the data answer."""
         agent_id = str(agent_id or "agent")
         url = str(url or "").strip()
         self._log("tool", f"web_fetch {url[:160]}")
@@ -5175,6 +5340,9 @@ class ResearchTools:
         context_terms = [term for term in query_terms(kiq_text or "") if term not in set(terms)]
         key = canonical_url(url)
         for _ in range(2):
+            official = self._data_row_fetch(url, terms, context_terms, agent_id)
+            if official is not None:
+                return official
             # TIME-8: checked first, so a refused URL never reaches a stored copy,
             # the failure memory or the budget.
             refused = self._pit_refusal(url, key) if self.pit is not None else None
@@ -5192,6 +5360,9 @@ class ResearchTools:
             with self._singleflight(self._inflight_fetch, key) as owner:
                 if owner:
                     return self._fetch_uncached(url, key, terms, context_terms, agent_id)
+        official = self._data_row_fetch(url, terms, context_terms, agent_id)
+        if official is not None:
+            return official
         refused = self._pit_refusal(url, key) if self.pit is not None else None
         if refused is not None:
             return refused
@@ -5248,6 +5419,14 @@ class ResearchTools:
         except (OSError, KeyError, TypeError):
             return None
 
+    def _data_row_fetch(self, url: str, terms: list[str], context_terms: list[str], agent_id: str) -> str | None:
+        """The web_fetch answer for ``url`` when an official-data row holds it
+        (:meth:`_data_row_page`), else ``None``."""
+        known = self.ledger.find(url)
+        if known is None or known.get("via") != "data":
+            return None
+        return self._data_row_page(url, terms, context_terms, agent_id)
+
     def _data_row_page(self, url: str, terms: list[str], context_terms: list[str], agent_id: str) -> str:
         """The web_fetch answer for the URL of an official-data row: its
         stored page (the vendor's record, a free stored copy), else
@@ -5263,10 +5442,10 @@ class ResearchTools:
 
     def _fetch_uncached(self, url: str, key: str, terms: list[str], context_terms: list[str],
                         agent_id: str) -> str:
-        known = self.ledger.find(url)
-        if known is not None and known.get("via") == "data":
-            # An official-data row whose page could not be read (or that is being recorded).
-            return self._data_row_page(url, terms, context_terms, agent_id)
+        official = self._data_row_fetch(url, terms, context_terms, agent_id)
+        if official is not None:
+            # An official-data row recorded while this call waited for a flight.
+            return official
         if not self._reserve(agent_id, "fetch"):
             self._outcome("fetch_budget")
             self._log("result", "web_fetch → FETCH_BUDGET_EXHAUSTED")
@@ -5585,21 +5764,32 @@ class ResearchTools:
         return self._data_register(tool, result, key, agent_id)
 
     def _data_register(self, tool: str, result: Any, key: str, agent_id: str) -> str:
-        """Store an ``ok`` result's page, register it as a fetched S1 data row
+        """Store an ``ok`` result's page, record it as a fetched S1 data row
         and return its answer (or the failure when it cannot be recorded).
 
-        Every refusal is decided before the page is stored or a row
-        registered, so a refused result leaves nothing behind (all final): an
-        incomplete result, an invalid URL, a URL a search/fetch row holds (a
-        data row never adopts one), a data block that is not plain JSON
-        (:func:`_data_payload`) and, gated (TIME-8), a result whose date is not
-        in the window: ``source_dates.gate`` of that date for the as-of date
+        Every refusal is final and decided before the page is stored or a row
+        recorded: an incomplete result, an invalid URL, a URL a search/fetch
+        row holds (a data row never adopts one) or whose data row holds a
+        different page (another request resolved to the same URL: the first
+        record wins, so the numbers of an answer already given stay on its
+        page), a data block that is not plain JSON (:func:`_data_payload`)
+        and, gated (TIME-8), a result whose date is not in the window:
+        ``source_dates.gate`` of that date for the as-of date
         (:meth:`_pit_verdict`) must admit it, or admit it same-day, else it is
         refused as ``out_of_window`` or ``undated``.  The gate reads the
         vendor's date alone: a web sighting of the URL dates the live page,
-        not the stored vintage.  The date (a real TIME-2 value, when source
-        dates are on) and the verdict are recorded with the provenance
-        (:meth:`SourceLedger.set_data`), so the citation wall admits the row."""
+        not the stored vintage.  The row, its page, provenance, date (a real
+        TIME-2 value, when source dates are on) and verdict are recorded in one
+        ledger update (:meth:`SourceLedger.record_data`), so the citation wall
+        admits the row and no kill leaves a fetched data row without them; a
+        URL whose data row holds this very page is answered from that row,
+        unchanged.  Only a recording that races this one (the ledger then
+        refuses this one as a collision) can leave the stored page
+        unreferenced, which is harmless: pages are content-addressed.
+
+        The answer's header is the row's, labelled like a fetched page's
+        (:meth:`_render_page`): its date and, gated, a same-day verdict, then
+        ``official data``."""
         url, page = getattr(result, "url", None), getattr(result, "page_text", None)
         model_text = getattr(result, "model_text", None)
         if not (isinstance(url, str) and url.strip() and isinstance(page, str) and page.strip()
@@ -5608,9 +5798,13 @@ class ResearchTools:
         url = url.strip()
         if not self.ledger.valid_url(url):
             return self._data_failed(tool, key, agent_id, "invalid_url", transient=False)
+        stripped = page.strip()
+        digest = hashlib.sha256(stripped.encode("utf-8")).hexdigest()
         known = self.ledger.find(url)
-        if known is not None and known.get("via") != "data":
-            # A search/fetch row holds the URL: a data row never adopts or overwrites one.
+        if known is not None and (known.get("via") != "data"
+                                  or (known.get("fetched") and known.get("content_sha256") != digest)):
+            # A search/fetch row holds the URL (never adopted or overwritten), or another
+            # request recorded a different page under it (the first record wins).
             return self._data_failed(tool, key, agent_id, "collision", transient=False)
         date = getattr(result, "date", None)
         payload = _data_payload(result, date)
@@ -5625,8 +5819,6 @@ class ResearchTools:
                 return self._data_failed(tool, key, agent_id, "out_of_window" if late else "undated",
                                          transient=False)
             pit_status, pit_counter = _DATA_PIT_ADMISSIONS[verdict]
-        stripped = page.strip()
-        digest = hashlib.sha256(stripped.encode("utf-8")).hexdigest()
         page_path = f"{self.pages_dir.name}/{digest[:16]}.txt"
         target = self._page_file(page_path)
         try:
@@ -5634,17 +5826,22 @@ class ResearchTools:
                 _atomic_write_text(target, stripped)
         except OSError as exc:
             return self._data_failed(tool, key, agent_id, f"storage_{type(exc).__name__}", transient=True)
-        row = self.ledger.register(url, getattr(result, "title", ""), "", "data", agent_id, tier="S1")
+        row = self.ledger.record_data(
+            url, getattr(result, "title", ""), agent_id, content_sha256=digest, chars=len(stripped),
+            page_path=page_path, data=payload, pit_status=pit_status,
+            published=_calendar_date_value(date) if self.source_dates else None)
         if row is None:
-            # A search/fetch row registered the URL since the check above: never adopted.
+            # A search/fetch row, or another page of this URL, was recorded since the check above.
             return self._data_failed(tool, key, agent_id, "collision", transient=False)
-        row = self.ledger.mark_fetched(row["sid"], content_sha256=digest, chars=len(stripped),
-                                       page_path=page_path) or row
-        published = _calendar_date_value(date) if self.source_dates else None
-        row = self.ledger.set_data(row["sid"], payload, published=published, pit_status=pit_status) or row
         if pit_counter is not None:
             self._pit_count(pit_counter)
-        head = f"[S{row['sid']}] {row['title']} — {row['domain']} ({tier_label(row['tier'])}) — {_DATA_LABEL}"
+        # Trusted engine labels in the header, as a fetched page's: the date and the
+        # verdict the agent must know when it reads the value (never in the untrusted block).
+        head = (f"[S{row['sid']}] {row['title']} — {row['domain']} ({tier_label(row['tier'])})"
+                f"{self._date_label(row, with_modified=False)}")
+        if self.pit is not None:
+            head += _PIT_STATUS_LABELS.get(row.get("pit_status"), "")
+        head += f" — {_DATA_LABEL}"
         body = (delimit_untrusted(_DATA_LABEL, neutralize_citation_markers(model_text))
                 or "(no readable text in this result)")
         self._data_answered(key, head, body)

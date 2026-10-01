@@ -559,6 +559,22 @@ def parse_quantity(text: Any, unit: Any = "") -> Optional[Dict[str, Any]]:
         return None
 
 
+def scan_quantities(text: Any) -> List[Dict[str, Any]]:
+    """Every figure in ``text`` in reading order, as the guard's own scanner reads
+    it: ``{'start', 'end', 'raw', 'date', 'year_like'}`` for a calendar date or a
+    bare year, else also ``{'lo', 'hi', 'unit_class', 'currency', 'range',
+    'has_marks', 'scale_explicit', 'duration'}`` in base units (see
+    :func:`parse_quantity` for the classes).  [] for anything unreadable; never
+    raises (REPORT-9 reads report prose with it)."""
+    source = _readable(text)
+    if source is None:
+        return []
+    try:
+        return _scan(source)
+    except Exception:  # noqa: BLE001 — pure reader: never raises
+        return []
+
+
 # A trajectory marker in a latest-actual value: an arrow ("2.6 → 13.0", "2.6% ->
 # 13.0%") or "from ... to" / 从(由)...至(到).
 _TRAJECTORY_MARK_RE = re.compile(r"→|->|⇒|⟶|➔|➝|\bfrom\b.{0,80}?\bto\b|[从由].{0,80}?[至到]", re.I | re.S)
