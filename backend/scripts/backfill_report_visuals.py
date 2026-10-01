@@ -339,6 +339,20 @@ def synchronize_market_comparison(
     return None
 
 
+def _report_completed_at(meta: Any) -> Optional[datetime]:
+    """When the report completed (meta.json ``completed_at``), in UTC; None when unknown.
+
+    A naive stamp is local time, as generate_report writes it (scripts/eval_bundle.py reads
+    it the same way)."""
+    stamp = meta.get("completed_at") if isinstance(meta, dict) else None
+    if not isinstance(stamp, str) or not stamp.strip():
+        return None
+    try:
+        return datetime.fromisoformat(stamp.strip()).astimezone(timezone.utc)
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
 def _language(markdown: str, filename: str) -> str:
     if filename.endswith(".zh.md"):
         return "Chinese"
@@ -640,10 +654,16 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
     if isinstance(forecast_obj, dict):
         binary_block = render_binary_forecasts_block(
             forecast_obj, language=primary_language)
+        # FU-5: window-ended labels are judged at the report's own completion time, never
+        # the replay day; when that time is unknown only the stamps saved with the report
+        # count, so replaying the same artifacts always writes the same bytes.
+        completed_at = _report_completed_at(_read_json(report_dir / "meta.json"))
         market_block = render_market_comparison_block(
             forecast_obj,
             markets=artifacts.get("prediction_markets") or [],
             lang=primary_language,
+            now=completed_at,
+            restamp=completed_at is not None,
         )
         if market_block:
             binary_block = binary_block + "\n\n" + market_block

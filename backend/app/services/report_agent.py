@@ -1493,7 +1493,9 @@ def _mc_influences_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, Any
 def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                                    markets: Optional[List[Dict[str, Any]]] = None,
                                    lang: str = "en", *,
-                                   disclose_anchoring: bool = False) -> str:
+                                   disclose_anchoring: bool = False,
+                                   now: Optional[datetime] = None,
+                                   restamp: bool = True) -> str:
     """PM-2：渲染确定性「Market Cross-Check」块——预测 vs 市场隐含概率对照 + 未匹配市场清单。
 
     纯函数（无 LLM/无网络）：
@@ -1513,7 +1515,12 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
     独立于市场的估计的度量。缺省 False → 输出逐字节不变。
 
     REPORT-12：影响条目带确定性市场混合记录（blend）时，条目后追加代入数值的算式
-    （见 _mc_blend_work）；无 blend 的条目逐字节不变。"""
+    （见 _mc_blend_work）；无 blend 的条目逐字节不变。
+
+    FU-5（PREDICTION_MARKETS_END_DATE_GATE 开时）：已过截止日、待结算的市场在对照行与未匹配
+    条目末尾标注。``now`` 钉住盖章时点（离线回放传报告自身的完成时刻，输出与回放当天无关）；
+    省略 = market_clock_now()，即实时最终化路径。``restamp=False`` → 不按任何时钟盖新章，只认
+    行上已保存的 window_ended 章（回放不知报告完成时刻时用，绝不退回墙钟）。"""
     if not isinstance(forecast, dict):
         return ""
     comps = _mc_comparisons_from_forecast(forecast)
@@ -1545,27 +1552,33 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             caption += (" Forecasts were drafted with these market prices in view, so Δ is "
                         "measured after anchoring, not against a market-independent estimate.")
         lines = ["### Market Cross-Check", "", f"_{caption}_", ""]
-    # FU-5（TIME-3 遗留）：PREDICTION_MARKETS_END_DATE_GATE 开时按 market_clock_now() 盖
-    # window_ended 章（浅拷贝，调用方的负载与快照不变）。已过截止日、待结算的市场在对照行的
-    # 「市场」单元格末尾、未匹配条目末尾标注，不再被当作实时对照。对照行也要判定：抽取期
-    # （exclude_window_ended）只保证锚点在抽取那一刻未过期，本块在其后才渲染，其间市场可能
-    # 已过截止日。未过期的行与旗标关时的输出逐字节不变。
+    # FU-5（TIME-3 遗留）：PREDICTION_MARKETS_END_DATE_GATE 开时按 now（缺省
+    # market_clock_now()）盖 window_ended 章（浅拷贝，调用方的负载与快照不变）。已过截止日、
+    # 待结算的市场在对照行的「市场」单元格末尾、未匹配条目末尾标注，不再被当作实时对照。对照行
+    # 也要判定：抽取期（exclude_window_ended）只保证锚点在抽取那一刻未过期，本块在其后才渲染，
+    # 其间市场可能已过截止日。restamp=False 时不盖新章，只认已保存的章。未过期的行与旗标关时
+    # 的输出逐字节不变。
     from ..utils.prediction_markets import (
-        _row_market_end, _window_ended_label, end_date_gate_settings, market_clock_now,
-        stamp_window_ended,
+        end_date_gate_settings, market_clock_now, row_market_end, stamp_window_ended,
+        window_ended_label,
     )
     gate, grace = end_date_gate_settings()
-    clock_now = market_clock_now() if gate else None
+    stamping = gate and restamp
+    clock_now = (now if now is not None else market_clock_now()) if stamping else None
     if comps:
         comps_sorted = sorted(
             comps, key=lambda c: -(abs(_mc_float(c.get("divergence")) or 0.0)))
-        # 对照行无 endDate 时回退到快照中同 market_id 的行（含研究期已盖的 window_ended 章）。
+        # 对照行无 endDate 时回退到快照中同 market_id 的行（含研究期已盖的 window_ended 章）；
+        # 不盖新章时对照行自身的 endDate 无从判定，快照行已保存的章即是最好的证据。
         ended_snapshot: Dict[str, Dict[str, Any]] = {}
         if gate:
-            comps_sorted, _ = stamp_window_ended(comps_sorted, now=clock_now, grace_hours=grace)
-            matched_snapshot, _ = stamp_window_ended(
-                [m for m in snapshot if str(m.get("market_id") or "").strip() in anchored_ids],
-                now=clock_now, grace_hours=grace)
+            matched_snapshot = [
+                m for m in snapshot if str(m.get("market_id") or "").strip() in anchored_ids]
+            if stamping:
+                comps_sorted, _ = stamp_window_ended(
+                    comps_sorted, now=clock_now, grace_hours=grace)
+                matched_snapshot, _ = stamp_window_ended(
+                    matched_snapshot, now=clock_now, grace_hours=grace)
             for m in matched_snapshot:
                 if m.get("window_ended") is True:
                     ended_snapshot.setdefault(str(m.get("market_id")).strip(), m)
@@ -1599,10 +1612,16 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             url = str(c.get("url") or "").strip()
             market_cell = f"[{q}]({_mc_cell(url)})" if (q and url) else (q or "—")
             if gate:
-                ended = _window_ended_label(c, zh)
-                if not ended and _row_market_end(c) is None:
-                    ended = _window_ended_label(
+                ended = window_ended_label(c, zh)
+                if not ended and (not stamping or row_market_end(c) is None):
+                    ended = window_ended_label(
                         ended_snapshot.get(str(c.get("market_id") or "").strip(), {}), zh)
+                if ended and not q:
+                    # 无问题文本时以 market_id 代替「—」占位符（不渲染成「— — window ended …」）；
+                    # 连 market_id 也没有 → 单元格只留标注本身。
+                    market_cell = _mc_cell(c.get("market_id") or "")
+                    if not market_cell:
+                        ended = ended.removeprefix(" — ")
                 market_cell += ended
             lines.append("| " + " | ".join(
                 [fid, stmt, mp_s, ip_s, dv_s, verdict, market_cell]) + " |")
@@ -1653,7 +1672,7 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                                  "superseded; not rolled back)")
             lines.append(item)
     if unmatched:
-        if gate:
+        if stamping:
             unmatched, _ = stamp_window_ended(unmatched, now=clock_now, grace_hours=grace)
         lines.append("")
         if zh:
@@ -1667,7 +1686,7 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             q = _mc_cell(str(m.get("question") or "")[:120])
             url = str(m.get("url") or "").strip()
             label = f"[{q}]({_mc_cell(url)})" if (q and url) else (q or _mc_cell(m.get("market_id") or ""))
-            ended = _window_ended_label(m, zh) if gate else ""
+            ended = window_ended_label(m, zh) if gate else ""
             if zh:
                 lines.append(f"- {label} — 隐含 P(yes) {ip_s}{ended}")
             else:
