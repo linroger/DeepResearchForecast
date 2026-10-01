@@ -10,6 +10,7 @@ Offline: no LLM (FakeLLMClient / stubs), no network (the Polymarket client and
 query helpers are patched to record and raise), per-test data directories.
 """
 
+import copy
 import inspect
 import json
 import os
@@ -18,10 +19,11 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 
 from app.config import Config
+from app.services import exec_brief
 from app.services import forecast_extractor as fe
 from app.services import hindcast_policy as hp
 from app.services import pipeline_orchestrator as po
-from app.services.report_agent import ReportAgent, ReportManager
+from app.services.report_agent import ReportAgent, ReportManager, render_market_comparison_block
 from app.utils import absence
 from app.utils import prediction_markets as pm
 from tests.conftest import FakeLLMClient
@@ -370,13 +372,16 @@ def test_pin_lookup_failure_withholds_markets_only(env, market_calls, monkeypatc
     assert market_calls == []
     # Finalization: the market slot says why it is empty; no hindcast block, today's year.
     _finalize_env(monkeypatch)
-    monkeypatch.setattr(fe, "extract_binary_forecasts", _fake_extract([]))
+    extract_calls = []
+    monkeypatch.setattr(fe, "extract_binary_forecasts", _fake_extract(extract_calls))
     horizon_calls = _horizon_spy(monkeypatch)
     os.makedirs(ReportManager._get_report_folder("r_lookup_failed"), exist_ok=True)
     _bare_agent()._finalize_structured_forecast("r_lookup_failed", MARKDOWN)
     forecast = _read_forecast("r_lookup_failed")
     assert "hindcast" not in forecast
     assert horizon_calls == [{"horizon_date": None}]
+    # FU-7: markets are withheld, so a volunteered market anchor is dropped as under a pin.
+    assert extract_calls[0]["withhold_market_anchors"] is True
     assert forecast["quality"]["prompt_slot_states"]["market"] == lookup_failed.to_dict()
     assert market_calls == []
     # The kwarg wins without any scan, so no lookup can fail.
@@ -601,23 +606,59 @@ _VOLUNTEERED = {"binary_forecasts": [
      "resolution_criteria": "Eurostat flash estimate", "theme": "inflation", "horizon_year": 2024,
      "adjustment_rationale": "base rate"},
 ]}
+_SNAPSHOT = [{"market_id": "pm-ecb", "question": "Will the ECB cut rates in June 2024?",
+              "implied_yes_prob": 0.55, "url": "https://polymarket.com/event/ecb-june-2024"}]
+_SNAPSHOT_PACK = "- pm-ecb: Will the ECB cut rates in June 2024? P(yes)=55%"
+_MARKET_SIGNALS = "[Prediction market signals]"
 
 
-def _extract_volunteered(monkeypatch, **kwargs):
-    from tests.conftest import FakeLLMClient
+def _extract_volunteered(monkeypatch, reply=None, **kwargs):
+    """The real extractor on one scripted reply; returns the result and the draw prompt."""
     monkeypatch.setattr(Config, "FORECAST_BINARY_CONTRARIAN", False, raising=False)
     monkeypatch.setattr(Config, "FORECAST_ENSEMBLE_MODELS", "", raising=False)
-    return fe.extract_binary_forecasts("dossier", FakeLLMClient(json_responses=[_VOLUNTEERED]),
-                                       min_count=2, language="English", **kwargs)
+    llm = FakeLLMClient(json_responses=[copy.deepcopy(reply or _VOLUNTEERED)])
+    out = fe.extract_binary_forecasts("dossier", llm, min_count=2, language="English", **kwargs)
+    return out, llm.calls[0]["messages"][0]["content"]
+
+
+def _market_passes(monkeypatch):
+    """Record the PM-2 market passes instead of running them: the deterministic anchoring and
+    the 10pp divergence restatement (home of REPORT-12's market blend), which stamps a move."""
+    calls = []
+
+    def anchor(binaries, markets, llm, **kwargs):
+        calls.append("anchor")
+        return 0
+
+    def diverge(binaries, llm, **kwargs):
+        calls.append("diverge")
+        for b in binaries:
+            if isinstance(b.get("market_anchor"), dict):
+                b["market_influence"] = {"market_id": b["market_anchor"]["market_id"],
+                                         "prior_probability": b["probability"],
+                                         "revised_probability": 0.6, "price_at_revision": 0.55}
+        return 0
+
+    monkeypatch.setattr(fe, "anchor_binaries_to_markets", anchor)
+    monkeypatch.setattr(fe, "enforce_market_divergence", diverge)
+    return calls
+
+
+def _market_numbers(binaries):
+    """What the report, the Market Cross-Check and the exec brief render from these binaries."""
+    forecast = {"binary_forecasts": binaries}
+    return {"cross_check": render_market_comparison_block(forecast, markets=None, lang="en"),
+            "table": fe.render_binary_forecasts_block(forecast, language="English"),
+            "brief_cells": [exec_brief._market_delta_cell(b) for b in binaries]}
 
 
 def test_pinned_extraction_drops_model_volunteered_market_anchors(monkeypatch):
     """FU-7 (TIME-6 open issue): markets are withheld for a whole hindcast, so an anchor on
     a binary is the model's own (possibly post-as-of) knowledge; it is dropped and counted."""
-    live = _extract_volunteered(monkeypatch)
+    live, _ = _extract_volunteered(monkeypatch)
     assert live["binary_forecasts"][0]["market_anchor"]["market_id"] == "pm-ecb"
     assert "hindcast_market_anchor_dropped" not in live["binary_quality"]
-    pinned = _extract_volunteered(monkeypatch, withhold_market_anchors=True)
+    pinned, _ = _extract_volunteered(monkeypatch, withhold_market_anchors=True)
     assert all("market_anchor" not in b for b in pinned["binary_forecasts"])
     assert pinned["binary_quality"]["hindcast_market_anchor_dropped"] == 1
     assert "market_comparison" not in pinned
@@ -625,3 +666,79 @@ def test_pinned_extraction_drops_model_volunteered_market_anchors(monkeypatch):
     strip = [{k: v for k, v in b.items() if k != "market_anchor"} for b in live["binary_forecasts"]]
     assert pinned["binary_forecasts"] == strip
 
+
+def test_withheld_markets_never_reach_the_market_passes_or_the_rendered_report(monkeypatch):
+    """Market inputs passed with the flag are ignored: no market prices in the draw prompt, no
+    snapshot backfill, no PM-2 anchoring, no divergence restatement or blend, no market source
+    label, and nothing market-priced is rendered. Without the flag the same inputs drive all
+    of it, so each pinned assertion below is one a regression would break."""
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_ENABLED", True, raising=False)
+    reply = copy.deepcopy(_VOLUNTEERED)
+    reply["binary_forecasts"][1]["source"] = "Polymarket odds"
+    calls = _market_passes(monkeypatch)
+
+    live, live_prompt = _extract_volunteered(
+        monkeypatch, reply, markets=copy.deepcopy(_SNAPSHOT), market_pack=_SNAPSHOT_PACK)
+    assert calls == ["anchor", "diverge"]
+    assert _MARKET_SIGNALS in live_prompt
+    f1, f2 = live["binary_forecasts"]
+    assert f1["market_anchor"]["implied_yes_prob"] == 0.55       # backfilled from the snapshot
+    assert f1["market_influence"]["market_id"] == "pm-ecb"
+    assert f2["source"] == "Polymarket odds"
+    assert live["market_comparison"]["comparisons"][0]["market_id"] == "pm-ecb"
+    rendered = _market_numbers(live["binary_forecasts"])
+    assert "Market Cross-Check" in rendered["cross_check"]
+    assert "Market P(yes)" in rendered["table"]
+    assert rendered["brief_cells"][0] == "+15pt (mkt 55%)"
+
+    calls.clear()
+    pinned, pinned_prompt = _extract_volunteered(
+        monkeypatch, reply, markets=copy.deepcopy(_SNAPSHOT), market_pack=_SNAPSHOT_PACK,
+        withhold_market_anchors=True)
+    assert calls == []
+    assert _MARKET_SIGNALS not in pinned_prompt and "pm-ecb" not in pinned_prompt
+    assert not any("market_anchor" in b or "market_influence" in b
+                   for b in pinned["binary_forecasts"])
+    assert "market_comparison" not in pinned
+    bq = pinned["binary_quality"]
+    assert bq["hindcast_market_anchor_dropped"] == 1
+    assert "market_window_ended_excluded" not in bq
+    # A market source the run never injected is downgraded, as for any uninjected signal.
+    f2 = pinned["binary_forecasts"][1]
+    assert (f2["source"], f2["source_claimed"]) == ("research-prior", "Polymarket odds")
+    assert bq["provenance_downgrades"] == 1
+    rendered = _market_numbers(pinned["binary_forecasts"])
+    assert rendered["cross_check"] == ""
+    assert "Market P(yes)" not in rendered["table"] and "Polymarket" not in rendered["table"]
+    assert rendered["brief_cells"] == ["—", "—"]
+
+
+@pytest.mark.parametrize("case", ["pinned", "lookup_failed", "live"])
+def test_finalized_forecast_has_no_volunteered_anchor_when_markets_are_withheld(
+        env, market_calls, monkeypatch, case):
+    """End to end through finalize with the real extractor: the drop count reaches
+    forecast.json and no binary there carries a market anchor; live, the extractor keeps the
+    volunteered anchor and hands it to reconciliation, and no drop is counted."""
+    _finalize_env(monkeypatch)
+    monkeypatch.setattr(Config, "FORECAST_BINARY_CONTRARIAN", False, raising=False)
+    monkeypatch.setattr(Config, "FORECAST_ENSEMBLE_MODELS", "", raising=False)
+    if case == "lookup_failed":
+        def boom(simulation_id):
+            raise OSError("pipeline dir unreadable")
+
+        monkeypatch.setattr(po, "_ledger_owner_of_simulation", boom)
+    report_id = f"r_fu7_{case}"
+    os.makedirs(ReportManager._get_report_folder(report_id), exist_ok=True)
+    agent = _bare_agent(hindcast=PIN if case == "pinned" else None,
+                        llm=FakeLLMClient(json_responses=[copy.deepcopy(_VOLUNTEERED)]))
+    agent._finalize_structured_forecast(report_id, MARKDOWN)
+    forecast = _read_forecast(report_id)
+    bq = forecast["binary_quality"]
+    assert [b["id"] for b in forecast["binary_forecasts"]] == ["F1", "F2"]
+    assert not any("market_anchor" in b for b in forecast["binary_forecasts"])
+    if case == "live":
+        assert "hindcast_market_anchor_dropped" not in bq
+        assert bq["proposition_consistency"]["removed_market_anchors"] == ["F1"]
+    else:
+        assert bq["hindcast_market_anchor_dropped"] == 1
+        assert bq["proposition_consistency"]["removed_market_anchors"] == []

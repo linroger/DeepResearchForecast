@@ -3331,13 +3331,20 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     （_binary_draw_max_tokens，免得多出的字段截断回复），_normalize_binaries 保留净化后的
     latest_actual（供 utils.numeric_guards 影子检查）；该规则会改变起草（二元与概率可能与 off
     不同）。None / 'off' → 提示词、max_tokens 与行逐字节不变。
-    FU-7 ``withhold_market_anchors``（ReportAgent 在回测钉下传 True）：回测全程扣下市场数据，
-    此时二元上的 market_anchor 只能是模型凭自身（可能晚于 as_of 的）知识自报的——全部弹出、
-    不做确定性锚定，条数记 binary_quality.hindcast_market_anchor_dropped（仅 >0 时写）。
-    False（实时运行）→ 行为逐字节不变。
+    FU-7 ``withhold_market_anchors``（ReportAgent 在市场被扣下——回测钉或钉查找失败——时传
+    True）：回测全程扣下市场数据，此时二元上的 market_anchor 只能是模型凭自身（可能晚于 as_of
+    的）知识自报的——全部弹出，条数记 binary_quality.hindcast_market_anchor_dropped（仅 >0 时
+    写）。函数内同样失败关闭：调用方误传的 market_pack / markets 一律忽略（不注入提示词、不回填
+    锚点、不做 PM-2 锚定与分歧重述、不放行市场来源标签）。False（实时运行）→ 行为逐字节不变。
     """
     target_rows = _clean_target_propositions(target_propositions)
     latest_actual_rule = str(numeric_guard_mode or "").strip().lower() == "shadow"
+    # FU-7：市场被扣下时入口处即置空市场输入（失败关闭）——即便调用方误传，市场价也不进
+    # _draw 提示词、不经 market_lookup 回填，PM-2 无市场可锚，市场来源标签不放行。
+    if withhold_market_anchors:
+        if str(market_pack or "").strip() or markets:
+            logger.warning("回测钉：忽略调用方传入的市场数据（本次运行扣下市场）")
+        market_pack, markets = None, None
     market_aware = (bool(_cfg("PREDICTION_MARKETS_ENABLED", True))
                     and bool((market_pack or "").strip()))
     content = (report_markdown or "")
@@ -3592,7 +3599,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         if _dropped:
             logger.info("二元预测锚定：弹出 %d 条指向已过截止日市场的模型自报锚点", _dropped)
     # FU-7（TIME-6 遗留）：回测钉下市场全程扣下，模型自报的锚点是参数化知识（可能晚于 as_of），
-    # 一律弹出且不做确定性锚定（失败关闭）。
+    # 一律弹出（失败关闭）；市场输入已在入口置空，下方 PM-2 锚定与分歧重述不会运行。
     hindcast_anchors_dropped = 0
     if withhold_market_anchors:
         for b in binaries:
@@ -3606,7 +3613,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     market_comparison: Optional[Dict[str, Any]] = None
     # INFRA-3: truncated replies of the market passes, by pass (see _count_truncation).
     market_truncation: Dict[str, int] = {}
-    if binaries and (anchor_markets or []) and not withhold_market_anchors:
+    if binaries and (anchor_markets or []):
         try:
             anchor_binaries_to_markets(binaries, anchor_markets, llm, language=language,
                                        now=anchor_now, truncation_counts=market_truncation)

@@ -4069,8 +4069,9 @@ class ReportAgent:
                 _ebf_guard_kwargs: Dict[str, Any] = (
                     {"numeric_guard_mode": _ng_mode}
                     if _ng_mode == _numeric_guards.MODE_SHADOW else {})
-                # FU-7：回测钉下扣下模型自报的市场锚点（实时运行不传，调用逐字节不变）。
-                if _hindcast is not None:
+                # FU-7：市场被扣下（回测钉，或钉查找失败时失败关闭，见 _markets_withheld_status）
+                # 时弹出模型自报的市场锚点（实时运行不传，调用逐字节不变）。
+                if self._markets_withheld_status() is not None:
                     _ebf_guard_kwargs["withhold_market_anchors"] = True
                 # B2: 需求书解析出的 binary_min_count 参与生效——取 spec 与 Config 的较大者
                 # （需求书写明「15+ binary forecasts」时不被 Config 默认静默压低）。
