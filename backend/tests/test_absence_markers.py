@@ -93,8 +93,8 @@ def test_market_status_rows_present():
     ("all_candidates_irrelevant", ("empty", "all_candidates_irrelevant")),
 ])
 def test_market_status_reads_merged_state_first(state, expected):
-    # The multi-track merge folds partial outages into empty_reason=no_equivalent_market;
-    # status.state carries the real label and must win.
+    # Legacy multi-track merges could pair an infrastructure state with
+    # empty_reason=no_equivalent_market; status.state carries the real label and must win.
     payload = {"markets": [], "status": {"state": state, "empty_reason": "no_equivalent_market"}}
     assert _st(payload) == expected
 

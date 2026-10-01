@@ -447,3 +447,43 @@ def test_timed_out_request_is_never_a_verified_empty_search(monkeypatch):
     assert completed["status"]["state"] == "verified_empty"
     assert completed["status"]["empty_reason"] == "no_equivalent_market"
     assert "No active, liquid markets matched" in completed["note"]
+
+
+def test_completed_search_with_a_liquid_market_stays_success(monkeypatch):
+    """FU-6 leaves the tool's success status unchanged: a finished search that found a
+    liquid market reports state 'success', no empty_reason and no absence or
+    incomplete-search note."""
+    import requests
+
+    module = _load_module()
+    event = {
+        "title": "Optimus deliveries",
+        "slug": "optimus-deliveries",
+        "markets": [{
+            "id": "m-1",
+            "question": "Will Optimus ship to customers in 2027?",
+            "closed": False,
+            "outcomes": ["Yes", "No"],
+            "outcomePrices": ["0.4", "0.6"],
+            "volume": "5000",
+            "slug": "optimus-ship-2027",
+        }],
+    }
+
+    def fake_get(url, params=None, timeout=None, headers=None):
+        return _Resp(200, payload={"events": [event]})
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.delenv("DEERFLOW_RUN_ARTIFACT_DIR", raising=False)
+    monkeypatch.delenv("PREDICTION_MARKETS_MIN_VOLUME", raising=False)
+    module._reset_market_query_cache()
+
+    found = json.loads(module.prediction_market_search_impl("optimus 2027"))
+    assert [m["market_id"] for m in found["markets"]] == ["m-1"]
+    assert found["status"]["state"] == "success"
+    assert found["status"]["empty_reason"] is None
+    assert found["status"]["successful_query_count"] == 1
+    assert found["status"]["transport_failure_count"] == 0
+    assert "No active, liquid markets matched" not in found["note"]
+    assert "incomplete" not in found["note"]
+    assert "no absence conclusion" not in found["note"]
