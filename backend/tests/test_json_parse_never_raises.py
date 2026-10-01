@@ -12,7 +12,10 @@ No network, no real LLM.
 
 import random
 import re
+import sys
 import time
+from contextlib import contextmanager
+from types import SimpleNamespace
 
 import pytest
 
@@ -26,6 +29,8 @@ _DEEP = 100_000                # far past the decoder's recursion limit
 # argument test in test_llm_transport_normalization.py, next to their fixtures.
 
 HOSTILE = {
+    "bare_huge_int": _DIGITS,
+    "bare_deep_array": "[" * _DEEP + "]" * _DEEP,
     "huge_int": '{"a": ' + _DIGITS + "}",
     "huge_int_in_prose": "Here it is: {\"a\": " + _DIGITS + "} done",
     "huge_int_fenced": "```json\n{\"a\": [1, " + _DIGITS + "]}\n```",
@@ -35,6 +40,24 @@ HOSTILE = {
     "deep_objects": '{"a":' * 30_000,
     "deep_objects_closed": '{"a":' * 30_000 + "1" + "}" * 30_000,
 }
+
+
+@contextmanager
+def default_int_digit_limit():
+    """Python's default int-string limit (4300 digits) while the block runs: the hostile
+    integers above assume it, and PYTHONINTMAXSTRDIGITS may change it."""
+    previous = sys.get_int_max_str_digits()
+    sys.set_int_max_str_digits(4300)
+    try:
+        yield
+    finally:
+        sys.set_int_max_str_digits(previous)
+
+
+@pytest.fixture(autouse=True)
+def _int_digit_limit():
+    with default_int_digit_limit():
+        yield
 
 
 # ------------------------------------------------------------------ llm_client parser
@@ -110,6 +133,25 @@ def test_gateway_names_the_nesting_as_the_reason():
     for name in ("deep_array", "deep_array_truncated", "deep_objects", "deep_objects_closed"):
         assert rg._describe_json_failure(HOSTILE[name], ("a",), False) \
             == "JSON is nested too deeply to parse"
+
+
+def test_gateway_names_an_overlong_integer_as_the_reason():
+    for name in ("huge_int", "huge_int_in_prose", "bare_huge_int"):
+        assert rg._describe_json_failure(HOSTILE[name], ("a",), False) \
+            == "a number has more digits than JSON parsing allows"
+    # at the limit the number decodes, so the reason is the missing key, not the digits
+    assert rg._describe_json_failure('{"b": ' + "9" * 4300 + "}", ("a",), False) == "missing keys: a"
+
+
+def test_gateway_tool_arguments_and_page_json_never_raise():
+    deep = '{"q": ' + "[" * _DEEP + "]" * _DEEP + "}"
+    message = SimpleNamespace(tool_calls=[{"name": "web_search", "args": deep, "id": "c1"},
+                                          {"name": "web_search", "args": '{"q": "ok"}', "id": "c2"}],
+                              invalid_tool_calls=[])
+    bad, good = rg._normalize_tool_calls(message)
+    assert bad["args"] == {} and bad["error"] == "tool arguments were not a JSON object"
+    assert good["args"] == {"q": "ok"} and "error" not in good
+    assert rg._json_object(deep) is None and rg._json_object('{"a": 1}') == {"a": 1}
 
 
 def test_gateway_parse_unchanged_for_parseable_replies(monkeypatch):

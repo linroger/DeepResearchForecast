@@ -58,6 +58,7 @@ import math
 import os
 import random
 import re
+import sys
 import tempfile
 import threading
 import time
@@ -1441,7 +1442,7 @@ def _normalize_tool_calls(message: Any) -> list[dict]:
         if isinstance(args, str):
             try:
                 args = json.loads(args)
-            except ValueError:
+            except (ValueError, RecursionError):  # FU-12: deep nesting is unparseable too
                 args = None
         if isinstance(args, Mapping):
             entry["args"] = dict(args)
@@ -2090,6 +2091,8 @@ _NONFINITE_JSON_MSG = "non-finite constant"
 _NONFINITE_JSON_REASON = "NaN or Infinity is not a JSON number"
 # FU-12: the reason for a reply nested deeper than the decoder can follow.
 _DEEP_JSON_REASON = "JSON is nested too deeply to parse"
+# FU-12: the reason for a reply whose integer literal is past Python's int-string limit.
+_LONG_INT_JSON_REASON = "a number has more digits than JSON parsing allows"
 
 
 def _reject_nonfinite_constant(name: str) -> Any:
@@ -2414,7 +2417,16 @@ def _describe_json_failure(text: str, required_keys: Sequence[str], truncated: b
             return reason
     if truncated:
         return "reply was truncated before the JSON object closed"
+    if _has_overlong_integer(text):
+        return _LONG_INT_JSON_REASON
     return "no JSON object found"
+
+
+def _has_overlong_integer(text: str) -> bool:
+    """True when ``text`` holds a digit run longer than the int-string limit
+    (``sys.get_int_max_str_digits``; 0 = unlimited), which json cannot decode."""
+    limit = getattr(sys, "get_int_max_str_digits", lambda: 0)()  # Python 3.11+
+    return bool(limit) and re.search(r"\d{%d}" % (limit + 1), text) is not None
 
 
 # ===========================================================================
@@ -4310,7 +4322,7 @@ def _json_object(text: str) -> dict | None:
         return None
     try:
         value = json.loads(stripped)
-    except ValueError:
+    except (ValueError, RecursionError):  # FU-12: page text may nest past the decoder's limit
         return None
     return value if isinstance(value, dict) else None
 
