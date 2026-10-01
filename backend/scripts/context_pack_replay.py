@@ -92,6 +92,7 @@ def load_handoff(path: str) -> Dict[str, Any]:
     actors = _read_json(os.path.join(directory, "actors.json"))
     timeline = _read_json(os.path.join(directory, "timeline.json"))
     quantitative = _read_json(os.path.join(directory, "quantitative.json"))
+    sources = _read_json(os.path.join(directory, "sources.json"))
     state = _read_json(os.path.join(os.path.dirname(os.path.abspath(directory)),
                                     "pipeline_state.json"))
     options = state.get("options") if isinstance(state, dict) else None
@@ -101,6 +102,7 @@ def load_handoff(path: str) -> Dict[str, Any]:
         "actors": actors if isinstance(actors, dict) else None,
         "timeline": timeline if isinstance(timeline, list) else None,
         "quantitative": quantitative if isinstance(quantitative, list) else None,
+        "sources": sources if isinstance(sources, list) else [],
         "hindcast": hindcast_policy(options),
     }
 
@@ -114,6 +116,12 @@ def _agent(handoff: Dict[str, Any]) -> ReportAgent:
     agent.quantitative = handoff["quantitative"] or None
     agent.hindcast = handoff["hindcast"]
     agent.simulation_id = None
+    # FU-4: the spine pack takes REPORT-8's verified-figures block when the report has one;
+    # build it under the same knobs ReportAgent.__init__ does, so the replay packs the same.
+    agent.sources = handoff.get("sources") or []
+    if (getattr(Config, "RESEARCH_FORECAST_INPUTS", True)
+            and getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True)):
+        agent._build_verified_figures_block()
     return agent
 
 

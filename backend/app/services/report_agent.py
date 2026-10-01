@@ -3425,8 +3425,19 @@ class ReportAgent:
                 lang="en", window_days=window, retrospective=retrospective)
         elif kind == "spine":
             situation, provenance["situation_source"] = self._context_pack_situation()
+            # FU-4 (REPORT-8 open issue): the labelled verified-figures block REPORT-8 built for
+            # this report (the one Part 2 gets) replaces the unlabelled key-metrics table, as it
+            # does in the report context; without it the table is packed as before.
+            metrics = ""
+            verified = getattr(self, "_verified_figures", None)
+            if getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True) and isinstance(verified, dict):
+                metrics = str(verified.get("rendered") or "").strip()
+            if metrics:
+                provenance["key_metrics_source"] = "verified_figures"
+            else:
+                metrics = self._build_key_metrics_block()
             result = _cp.build_spine_pack(
-                report, situation, self._build_key_metrics_block(), timeline, as_of_raw, now,
+                report, situation, metrics, timeline, as_of_raw, now,
                 budget=int(getattr(Config, "FORECAST_CONTEXT_PACK_SPINE_BUDGET", 14000)),
                 lang="zh", window_days=window, retrospective=retrospective)
         else:

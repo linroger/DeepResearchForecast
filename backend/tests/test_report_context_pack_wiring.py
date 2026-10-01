@@ -335,6 +335,29 @@ def test_spine_situation_falls_back_to_the_legacy_brief_without_its_timeline(rep
     assert provenance["situation_source"] == "none"
 
 
+def test_spine_pack_uses_the_verified_figures_block_when_the_report_has_one(report_env, monkeypatch):
+    """FU-4 (REPORT-8 open issue): the spine pack gets REPORT-8's labelled verified-figures
+    block (the block Part 2 gets) instead of the unlabelled key-metrics table."""
+    monkeypatch.setattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True, raising=False)
+    agent = _agent(_RouterLLM())
+    baseline, provenance = agent._context_pack_result("spine")
+    assert "| Approval rate | 61 |" in baseline.text and "key_metrics_source" not in provenance
+    verified = "## Verified figures\n| Metric | Value |\n|---|---|\n| Approval rate (verified) | 61% [S1] |"
+    agent._verified_figures = {"rendered": verified}
+    packed, provenance = agent._context_pack_result("spine")
+    assert "Approval rate (verified)" in packed.text and "| Approval rate | 61 |" not in packed.text
+    assert provenance["key_metrics_source"] == "verified_figures"
+    # No rendered block, a failed build (None) or the knob off: the table, byte-identical.
+    for state in ({"rendered": ""}, None):
+        agent._verified_figures = state
+        again, provenance = agent._context_pack_result("spine")
+        assert again.text == baseline.text and "key_metrics_source" not in provenance
+    agent._verified_figures = {"rendered": verified}
+    monkeypatch.setattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", False, raising=False)
+    off, provenance = agent._context_pack_result("spine")
+    assert off.text == baseline.text and "key_metrics_source" not in provenance
+
+
 def test_invalid_as_of_falls_back_with_a_recorded_digest(report_env, monkeypatch):
     _flags(monkeypatch)
     agent = _agent(_RouterLLM())
@@ -570,6 +593,32 @@ def test_replay_script_emits_metrics_with_zero_llm_calls(tmp_path, monkeypatch, 
 
     assert replay.main(["--handoff", str(tmp_path / "missing"), "--json"]) == 1
     assert json.loads(capsys.readouterr().out)["errors"][0]["handoff"].endswith("missing")
+
+
+def test_replay_packs_the_verified_figures_block_like_a_report(tmp_path, monkeypatch):
+    """FU-4: a handoff with page-verified rows gives the replayed spine pack the same
+    verified-figures block ReportAgent.__init__ builds (sources.json resolves its [S#])."""
+    import scripts.context_pack_replay as replay
+
+    monkeypatch.setattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True, raising=False)
+    monkeypatch.setattr(Config, "RESEARCH_FORECAST_INPUTS", True, raising=False)
+    handoff = _write_handoff(tmp_path)
+    (handoff / "quantitative.json").write_text(json.dumps([
+        {"metric": "Approval rate", "value": "61", "unit": "%", "as_of_date": _day(-3),
+         "value_type": "actual", "tier": "S1", "source": "Survey", "url": "https://survey.example/a",
+         "verification": "verified", "verified": True}]), encoding="utf-8")
+    (handoff / "sources.json").write_text(json.dumps([
+        {"title": "Survey", "url": "https://survey.example/a", "tier": "S1"}]), encoding="utf-8")
+    agent = replay._agent(replay.load_handoff(str(handoff)))
+    rendered = agent._verified_figures["rendered"]
+    assert rendered
+    spine, provenance = agent._context_pack_result("spine")
+    assert provenance["key_metrics_source"] == "verified_figures"
+    assert rendered.splitlines()[0] in spine.text
+    # Without labelled rows the replay packs the key-metrics table, as before.
+    plain = replay._agent(replay.load_handoff(str(_write_handoff(tmp_path / "plain"))))
+    _, provenance = plain._context_pack_result("spine")
+    assert "key_metrics_source" not in provenance
 
 
 def test_replay_defaults_to_each_handoffs_as_of_day(tmp_path, capsys):
