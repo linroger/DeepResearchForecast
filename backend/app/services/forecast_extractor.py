@@ -4690,6 +4690,9 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
     插入「操作化定义与默认假设」小节（question_spec.render_resolution_disclosure）；None 时输出
     逐字节不变。question_spec_horizon_applied=False（规范判定日不是本次运行的判定日）时判定日
     一行标注未采用。
+
+    REPORT-13：source=='counter_case' 的指标行（反证审查触发器）在指标单元格后加
+    「（反证审查 [S#]）」/「 (counter-case review [S#])」后缀；其余行逐字节不变。
     """
     if not isinstance(forecast, dict):
         return ""
@@ -4741,6 +4744,12 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
         lines.append("|---|---|---|")
         for i in inds[:20]:
             name = _esc_cell(i.get("indicator") or i.get("name") or i.get("metric") or "—")
+            if i.get("source") == "counter_case":
+                # REPORT-13：反证审查触发器与研究指标可见地区分，并带其 [S#]（研究行逐字节不变）。
+                tags = "".join(f"[{t}]" for t in (i.get("sources") or [])
+                               if re.fullmatch(r"S\d+", str(t)))
+                label = ("反证审查" if zh else "counter-case review") + (f" {tags}" if tags else "")
+                name = f"{name}（{label}）" if zh else f"{name} ({label})"
             trig = _esc_cell(i.get("date_or_trigger") or i.get("date") or i.get("trigger") or "—")
             disc = _esc_cell(i.get("discriminates") or i.get("scenario") or "—")
             lines.append(f"| {name or '—'} | {trig or '—'} | {disc or '—'} |")
