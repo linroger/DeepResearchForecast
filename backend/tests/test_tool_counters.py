@@ -13,7 +13,8 @@
 * ``scripts/stage_scorecard.py aggregate``: grouping by code sha and backbone
   (partial backbones of runs that stopped early), per-run distributions, pooled
   Wilson regression flags against the same backbone gated on a minimum run
-  count, and the exit codes judged on the current code.
+  count, and the exit codes judged on the current code (inconclusive when the
+  newest run's sha is unknown); runs are dated by their last attempt.
 
 Offline: fake search/fetch/LLM doubles, fixtures under tmp_path, no network.
 """
@@ -521,8 +522,8 @@ def _run(base, pid, day, *, sha="aaa", backbone="glm", verified=(8, 10), failure
         card["checks"][stage] = {"passed": verdict,
                                  "failed": ["stage_status"] if verdict is False else [],
                                  "unevaluable": ["kiq_completion"] if verdict is None else []}
-    created = dt.datetime(2026, 9, day, 12, tzinfo=UTC) if day else None
-    return {"pipeline_id": pid, "created_at": created, "card": card}
+    run_at = dt.datetime(2026, 9, day, 12, tzinfo=UTC) if day else None
+    return {"pipeline_id": pid, "run_at": run_at, "card": card}
 
 
 def _flags(group):
@@ -543,10 +544,11 @@ def test_aggregate_grouping_wilson_min_runs_and_exit_codes(base_card):
     assert [(g["repo_git_sha"], g["backbone"]["report"]["provider"], g["runs"]) for g in groups] == [
         ("aaa", "glm", 4), ("aaa", "kimi", 1), ("bbb", "glm", 2)]
     assert groups[0]["pipelines"] == [f"pipe_old{i}" for i in range(4)]
-    assert groups[0]["first_created_at"].startswith("2026-09-01T12:00")
+    assert groups[0]["first_run_at"].startswith("2026-09-01T12:00")
     # Compared with the same backbone at an earlier sha (aaa/glm), never with aaa/kimi.
     assert [g["compared_to"] for g in groups] == [None, None, 0] and result["latest_group"] == 2
-    assert result["current"] == {"repo_git_sha": "bbb", "groups": [2], "unevaluable_share": 0.0}
+    assert result["current"] == {"repo_git_sha": "bbb", "groups": [2], "unevaluable_share": 0.0,
+                                 "reason": None}
     research = groups[0]["stages"]["research"]
     assert research["runs"] == 4
     assert research["contract"] == {"passed": 4, "failed": 0, "unevaluable": 0, "evaluable_runs": 4,
@@ -614,12 +616,13 @@ def test_aggregate_grouping_wilson_min_runs_and_exit_codes(base_card):
     # No run at all, or a pipeline that could not be scored, is never clean.
     assert cli.aggregate([])["exit_code"] == cli.EXIT_INCONCLUSIVE
     assert cli.aggregate([])["latest_group"] is None
+    assert cli.aggregate([])["current"]["reason"] == "no run"
     errors = [{"pipeline_id": "pipe_broken", "error": "ValueError: unreadable"}]
     assert cli.aggregate(old, errors=errors)["exit_code"] == cli.EXIT_INCONCLUSIVE
-    # A run without created_at sorts as the oldest.
+    # An undated run sorts as the oldest.
     result = cli.aggregate(old + [_run(base_card, "pipe_undated", None, sha="zzz")])
     assert result["groups"][0]["repo_git_sha"] == "zzz"
-    assert result["groups"][0]["first_created_at"] is None
+    assert result["groups"][0]["first_run_at"] is None
 
 
 def _stopped_at_graph(base, pid, day, sha):
@@ -672,7 +675,8 @@ def test_aggregate_baseline_current_code_and_partial_backbones(base_card):
     clean = _run(base_card, "pipe_x_glm", 3, sha="xxx")
     result = cli.aggregate([older, _run(base_card, "pipe_x_kimi", 2, sha="xxx", backbone="kimi",
                                         passed={"report": False}), clean])
-    assert result["current"] == {"repo_git_sha": "xxx", "groups": [1, 2], "unevaluable_share": 0.0}
+    assert result["current"] == {"repo_git_sha": "xxx", "groups": [1, 2], "unevaluable_share": 0.0,
+                                 "reason": None}
     assert result["exit_code"] == cli.EXIT_CONTRACT_FAILURES
     assert cli.aggregate([older, clean])["exit_code"] == cli.EXIT_CLEAN
 
@@ -702,13 +706,70 @@ def test_aggregate_baseline_current_code_and_partial_backbones(base_card):
     assert result["exit_code"] == cli.EXIT_CONTRACT_FAILURES
 
 
-def _pipeline(pid, created, sha, *, status="completed", **pipeline):
+def test_aggregate_unknown_current_code_is_inconclusive(base_card):
+    """Without the newest run's repo_git_sha the current code is unknown: no group is
+    judged and the verdict is inconclusive, never clean."""
+    # aaa/glm fails on day 1; a run without a sha (git missing or timed out, no
+    # run.json) is the newest, on day 2.
+    failing = _run(base_card, "pipe_aaa_fail", 1, passed={"report": False})
+    unknown = _run(base_card, "pipe_nosha", 2, sha=None)
+    result = cli.aggregate([failing, unknown])
+    assert [g["repo_git_sha"] for g in result["groups"]] == ["aaa", None]
+    assert result["current"] == {
+        "repo_git_sha": None, "groups": [], "unevaluable_share": None,
+        "reason": "the newest run has no repo_git_sha: the current code is unknown"}
+    assert (result["verdict"], result["exit_code"]) == ("inconclusive", cli.EXIT_INCONCLUSIVE)
+    # A failure of the sha-less run itself stays listed in its group, but it is not
+    # the current code's (inconclusive, not contract_failures).
+    result = cli.aggregate([_run(base_card, "pipe_aaa", 1),
+                            _run(base_card, "pipe_nosha_fail", 2, sha=None, passed={"report": False})])
+    assert result["exit_code"] == cli.EXIT_INCONCLUSIVE
+    assert [row["pipeline_id"] for row in result["groups"][-1]["contract_failures"]] == ["pipe_nosha_fail"]
+    # A newer run of known code is judged again.
+    result = cli.aggregate([failing, unknown, _run(base_card, "pipe_bbb", 3, sha="bbb")])
+    assert (result["current"]["groups"], result["current"]["reason"]) == ([2], None)
+    assert result["exit_code"] == cli.EXIT_CLEAN
+
+
+def _pipeline(pid, created, sha, *, status="completed", updated_at=None, **pipeline):
     state = ts._make_pipeline(pid, status=status, **pipeline)
     state.created_at = created
     po.PipelineManager.save(state)
-    ts._write(po.PipelineManager.manifest_path(pid), {
-        "repo_git_sha": sha, "resolved": {"research": {"model": "glm"},
-                                          "report": {"provider": "glm", "model_name": "glm-5.3"}}})
+    manifest = {"repo_git_sha": sha, "resolved": {"research": {"model": "glm"},
+                                                  "report": {"provider": "glm", "model_name": "glm-5.3"}}}
+    if updated_at is not None:
+        manifest["updated_at"] = updated_at
+    ts._write(po.PipelineManager.manifest_path(pid), manifest)
+
+
+def test_aggregate_dates_runs_by_their_last_attempt(roots, capsys):
+    """run.json's updated_at, restamped with repo_git_sha at every attempt, dates a run:
+    a pipeline created long ago but resumed under newer code is the newest run."""
+    _pipeline("pipe_eval16old", "2026-09-01T08:00:00+00:00", "sha_old")
+    # An updated_at that cannot be parsed falls back to the state's created_at.
+    _pipeline("pipe_eval16garbled", "2026-09-02T08:00:00+00:00", "sha_old", updated_at="yesterday")
+    _pipeline("pipe_eval16new", "2026-09-20T08:00:00+00:00", "sha_new",
+              updated_at="2026-09-20T09:15:00.250000+00:00")
+    # Created on 2026-08-30, resumed on 2026-09-25 under sha_resumed.
+    _pipeline("pipe_eval16resumed", "2026-08-30T08:00:00+00:00", "sha_resumed",
+              updated_at="2026-09-25T07:00:00.500000+00:00")
+
+    assert cli.main(["aggregate"]) == cli.EXIT_CLEAN
+    result = json.loads(capsys.readouterr().out)
+    assert [(g["repo_git_sha"], g["pipelines"]) for g in result["groups"]] == [
+        ("sha_old", ["pipe_eval16old", "pipe_eval16garbled"]), ("sha_new", ["pipe_eval16new"]),
+        ("sha_resumed", ["pipe_eval16resumed"])]
+    assert result["groups"][0]["last_run_at"] == "2026-09-02T08:00:00+00:00"
+    assert result["groups"][2]["first_run_at"] == "2026-09-25T07:00:00.500000+00:00"
+    assert result["current"]["repo_git_sha"] == "sha_resumed" and result["groups"][2]["compared_to"] == 1
+
+    # --since filters by the last attempt too: the resumed run is kept.
+    assert cli.main(["aggregate", "--since", "2026-09-21"]) == cli.EXIT_CLEAN
+    result = json.loads(capsys.readouterr().out)
+    assert [g["pipelines"] for g in result["groups"]] == [["pipe_eval16resumed"]]
+    assert [row["pipeline_id"] for row in result["skipped"]] == [
+        "pipe_eval16garbled", "pipe_eval16new", "pipe_eval16old"]
+    assert {row["reason"] for row in result["skipped"]} == {"last attempt before --since"}
 
 
 def test_aggregate_cli_groups_existing_runs_offline(roots, capsys, monkeypatch):
@@ -733,7 +794,7 @@ def test_aggregate_cli_groups_existing_runs_offline(roots, capsys, monkeypatch):
     assert result["skipped"] == [{"pipeline_id": "pipe_eval16cancel", "reason": "cancelled"},
                                  {"pipeline_id": "pipe_eval16run", "reason": "status 'running'"}]
     assert result["groups"][1]["compared_to"] == 0 and result["verdict"] == "clean"
-    assert result["groups"][1]["last_created_at"] == "2026-09-21T09:30:00+00:00"
+    assert result["groups"][1]["last_run_at"] == "2026-09-21T09:30:00+00:00"
     assert not os.path.exists(cli.aggregate_path())
     assert not os.path.exists(sc.sidecar_path("pipe_eval16a"))  # the aggregate writes no sidecar
 
@@ -742,7 +803,7 @@ def test_aggregate_cli_groups_existing_runs_offline(roots, capsys, monkeypatch):
     result = json.loads(out.out)
     assert result["since"] == "2026-09-20" and result["count"] == 2
     assert [g["repo_git_sha"] for g in result["groups"]] == ["sha_new"]
-    assert {"pipeline_id": "pipe_eval16a", "reason": "created before --since"} in result["skipped"]
+    assert {"pipeline_id": "pipe_eval16a", "reason": "last attempt before --since"} in result["skipped"]
     with open(cli.aggregate_path(), encoding="utf-8") as handle:
         assert json.load(handle) == result
     assert "wrote" in out.err
