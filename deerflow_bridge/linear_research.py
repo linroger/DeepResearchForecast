@@ -324,6 +324,9 @@ DEFAULT_DATA_QUANT_ROWS = 12
 DATA_SUPPORTS_MAX = 40
 # meta.data_tools.quant_rows_rejected lists at most this many dropped model rows.
 DATA_QUANT_REJECTED_MAX = 20
+# The form data_tools accepts a FRED API key in (its _FRED_KEY_RE): any other key
+# makes every FRED call unavailable, so such a key never binds macro_series.
+_FRED_API_KEY_RE = re.compile(r"[a-z0-9]{32}")
 # The KIQ task's description of each bound data tool (a data-kind KIQ only).
 _KIQ_DATA_TOOL_TEXT: Mapping[str, str] = {
     "macro_series": "macro_series(series) returns an official FRED series as published on the run's vintage date",
@@ -6033,9 +6036,9 @@ class KiqAgent:
         investigation as ``notes_truncated``, which a resumed attempt
         researches again."""
         gateway = self.engine.gateway
-        tools = getattr(self, "agent_tools", AGENT_TOOLS)  # stand-ins built without __init__ bind AGENT_TOOLS
         try:
-            result = gateway.invoke(messages, kind="agent", label=label, tools=tools, deadline=self.deadline)
+            result = gateway.invoke(messages, kind="agent", label=label, tools=self.agent_tools,
+                                    deadline=self.deadline)
         except rg.EmptyResponse as exc:
             if getattr(exc, "truncated", False):
                 raise _NotesCut(str(exc)) from exc
@@ -6049,7 +6052,7 @@ class KiqAgent:
         self.engine.log("stage", f"v3: {label} reply hit its output cap; asking once more with a "
                                  f"{wider}-token cap")
         try:
-            again = gateway.invoke(messages, kind="agent", label=f"{label}:wide", tools=tools,
+            again = gateway.invoke(messages, kind="agent", label=f"{label}:wide", tools=self.agent_tools,
                                    deadline=self.deadline, max_tokens=wider)
         except _PROVIDER_ERRORS:
             raise
@@ -6501,7 +6504,9 @@ class _Engine:
         self._data_lock = threading.Lock()
         self._data_pins: dict | None = None
         self._data_quant_added = 0
+        self._data_quant_trimmed = 0
         self._data_quant_rejected: list[dict] = []
+        self._data_quant_rejected_total = 0
         identity = {"question_sha256": _sha256(" ".join(self.question.split())),
                     "depth": self.preset.depth, "model": self.model_name,
                     "language": self.language, "engine_version": ENGINE_VERSION}
@@ -9199,14 +9204,17 @@ class _Engine:
         ref_date = _parse_iso_date(plan.as_of) or _dt.datetime.now(_dt.timezone.utc).date()
         stale_days = _positive_int(self.env.get("RESEARCH_STALE_DAYS"), DEFAULT_STALE_DAYS)
         typing = _env_flag(self.env, "RESEARCH_QUANT_TYPING", False)
+        # TIME-13: model rows an official-data page contradicts are dropped right after verification.
+        drop = (functools.partial(self._drop_data_contradictions, verify=verify) if self.data_tool_names else None)
         if verify or typing:
             # Typing tests dates against the day after the plan's as-of: plan.as_of
             # is the UTC date fixed at plan time, and a run that crosses UTC midnight
             # can cite a source published the next day (no target date, no
             # future-dated actual).
-            self._quant_provenance(quant, ref_date + _dt.timedelta(days=1), verify=verify, typing=typing)
-        if self.data_tool_names:
-            quant = self._drop_data_contradictions(quant, verify=verify)
+            self._quant_provenance(quant, ref_date + _dt.timedelta(days=1), verify=verify, typing=typing,
+                                   drop=drop)
+        elif drop is not None:
+            drop(quant)
         if self.pit is not None:
             self._count_parametric_suspects(timeline, quant, typing=typing)
         # After typing (the claimed-actual test reads its epistemic_class).  The
@@ -9279,7 +9287,8 @@ class _Engine:
         """``quant`` headed by the structured values of the cited official-data
         sources (TIME-13, :func:`data_quant_row`), in citation order and each
         source's fact order, at most DATA_QUANT_ROWS_MAX; the model rows are
-        trimmed from the end so the whole stays within MAX_QUANT_ROWS.  The
+        trimmed from the end so the whole stays within MAX_QUANT_ROWS (logged
+        and counted in ``meta.data_tools.quant_rows_trimmed``).  The
         facts are the ledger row's (the vendor's record), never the model's."""
         rows: list[dict] = []
         for position, entry in enumerate(sources, 1):
@@ -9294,19 +9303,26 @@ class _Engine:
                 row = data_quant_row(fact, entry, position)
                 if row is not None and len(rows) < self.data_quant_rows_max:
                     rows.append(row)
+        kept = quant[:MAX_QUANT_ROWS - len(rows)]
         self._data_quant_added = len(rows)
+        self._data_quant_trimmed = len(quant) - len(kept)
         if rows:
             self.log("ok", f"v3: {len(rows)} quantitative row(s) copied from cited official-data sources")
-        return rows + quant[:MAX_QUANT_ROWS - len(rows)]
+        if self._data_quant_trimmed:
+            self.log("warn", f"v3: {self._data_quant_trimmed} model quantitative row(s) trimmed from the end to keep "
+                             f"{MAX_QUANT_ROWS} rows")
+        return rows + kept
 
-    def _drop_data_contradictions(self, quant: list[dict], *, verify: bool) -> list[dict]:
-        """``quant`` without the model rows citing an official-data source
-        whose number is not on that source's page (TIME-13): RESEARCH-4's
-        ``verification`` ``unverified`` (RESEARCH_VERIFIED_FACTS), else the
-        same check (:func:`verify_quant_row`) without stamping anything.  A
+    def _drop_data_contradictions(self, quant: list[dict], *, verify: bool) -> None:
+        """Remove from ``quant``, in place, the model rows citing an
+        official-data source whose number is not on that source's page
+        (TIME-13): RESEARCH-4's ``verification`` ``unverified``
+        (RESEARCH_VERIFIED_FACTS), else the same check
+        (:func:`verify_quant_row`) without stamping anything.  A
         deterministic row, a row without a checkable number and a row whose
         data page is unavailable are kept.  The dropped rows are listed (at
-        most DATA_QUANT_REJECTED_MAX) in ``meta.data_tools.quant_rows_rejected``."""
+        most DATA_QUANT_REJECTED_MAX) in ``meta.data_tools.quant_rows_rejected``
+        and counted in ``quant_rows_rejected_total``."""
         kept: list[dict] = []
         dropped: list[dict] = []
         for row in quant:
@@ -9320,13 +9336,14 @@ class _Engine:
                 pages = self.page_numbers(source["sid"]) if source.get("fetched") else None
                 contradicted = pages is not None and verify_quant_row(row, pages, "")[1] == "none"
             (dropped if contradicted else kept).append(row)
+        quant[:] = kept
+        self._data_quant_rejected_total = len(dropped)
+        self._data_quant_rejected = [
+            {key: row.get(key) for key in ("metric", "value", "unit", "source_ref", "source_url")}
+            for row in dropped[:DATA_QUANT_REJECTED_MAX]]
         if dropped:
-            self._data_quant_rejected = [
-                {key: row.get(key) for key in ("metric", "value", "unit", "source_ref", "source_url")}
-                for row in dropped[:DATA_QUANT_REJECTED_MAX]]
             self.log("warn", f"v3: dropped {len(dropped)} quantitative row(s) whose number is not on the "
                              "official-data source they cite")
-        return kept
 
     def _quant_sanity(self, quant: Sequence[Mapping[str, Any]], as_of: _dt.date) -> list[dict]:
         """The legacy engine's quantitative sanity checks (RESEARCH_QUANT_RECONCILE).
@@ -9473,7 +9490,8 @@ class _Engine:
             self.log("warn", f"v3: {flagged} quantitative row(s) dated after their source's latest date "
                              "(as_of_after_source)")
 
-    def _quant_provenance(self, quant: list[dict], as_of: _dt.date, *, verify: bool, typing: bool) -> None:
+    def _quant_provenance(self, quant: list[dict], as_of: _dt.date, *, verify: bool, typing: bool,
+                          drop: Callable[[list[dict]], None] | None = None) -> None:
         """Page verification (RESEARCH_VERIFIED_FACTS) and reported/projected
         typing (RESEARCH_QUANT_TYPING) of the quant rows, in place, summarised
         in ``meta.quant_provenance`` with only the enabled parts: ``rows``;
@@ -9488,7 +9506,11 @@ class _Engine:
         ``analytics_errors`` (``quant_provenance:verify`` / ``:typing``) and
         left out of the summary, stamps no row (each part computes every row's
         keys before it stamps any; a row without ``verification`` counts as
-        unchecked, never as verified), and the other part and the run go on."""
+        unchecked, never as verified), and the other part and the run go on.
+
+        ``drop`` (TIME-13, official-data tools bound) removes rows from
+        ``quant`` in place right after verification, so typing and the summary
+        describe only the rows quantitative.json keeps."""
         def part(name: str, step: Callable[[], None]) -> bool:
             try:
                 step()
@@ -9499,8 +9521,12 @@ class _Engine:
                 return False
             return True
 
+        verified = verify and part("verify", lambda: self._verify_quant_rows(quant))
+        if drop is not None:
+            # TIME-13: the rows an official-data page contradicts leave before typing and the summary.
+            drop(quant)
         summary: dict[str, Any] = {"rows": len(quant)}
-        if verify and part("verify", lambda: self._verify_quant_rows(quant)):
+        if verified:
             labels = Counter(row.get("verification", "unchecked") for row in quant)
             checked = len(quant) - labels["unchecked"]
             summary["verification_hist"] = dict(sorted(labels.items()))
@@ -9911,7 +9937,7 @@ class _Engine:
         if self.source_taxonomy:
             events.extend(_source_health_events(tools, _bridge_provider_events("search_tools"),
                                                 _bridge_provider_events("cached_fetch")))
-        if getattr(self, "data_tool_names", ()):
+        if self.data_tool_names:
             # TIME-13: official-data calls that failed (never counted as fetch failures above).
             data = self.tools.stats().get("data") or {}
             calls, failed = int(data.get("data_calls") or 0), int(data.get("data_failures") or 0)
@@ -9967,8 +9993,9 @@ class _Engine:
         vendors, the requested ones left unbound with why, the run's vintage
         pin (None until a data call fixed one), this attempt's data calls,
         answers from run memory, invalid requests and failures, and the
-        quantitative rows finalize copied from data sources and dropped
-        against them."""
+        quantitative rows finalize copied from data sources, trimmed to make
+        room for them and dropped against them (listed up to
+        DATA_QUANT_REJECTED_MAX, with their total)."""
         counts = self.meta.get("tools", {}).get("data") if isinstance(self.meta.get("tools"), Mapping) else None
         counts = counts if isinstance(counts, Mapping) else {}
         try:
@@ -9980,7 +10007,9 @@ class _Engine:
                 **{name: int(counts.get(key) or 0) for name, key in (
                     ("calls", "data_calls"), ("cached", "cached_data"), ("invalid", "data_invalid"),
                     ("failures", "data_failures"))},
-                "quant_rows_added": self._data_quant_added, "quant_rows_rejected": list(self._data_quant_rejected)}
+                "quant_rows_added": self._data_quant_added, "quant_rows_trimmed": self._data_quant_trimmed,
+                "quant_rows_rejected": list(self._data_quant_rejected),
+                "quant_rows_rejected_total": self._data_quant_rejected_total}
 
     def attach_telemetry(self) -> None:
         """Usage, tools, phase and KIQ summaries into meta (called on every exit)."""
@@ -9996,7 +10025,7 @@ class _Engine:
             self.meta["model_resolution"] = {"model": self.model_name or None, "model_id": self.model_id,
                                              "models": ledger.get("models") or {}}
         self.meta["tools"] = self.tools.stats()
-        if getattr(self, "data_tools_requested", False):
+        if self.data_tools_requested:
             self.meta["data_tools"] = self._data_tools_meta()
         if self.pit is not None:
             # This attempt's final gate counts (a resumed audit's run scope needs them).
@@ -10349,8 +10378,9 @@ def data_quant_row(fact: Any, source: Mapping[str, Any], position: int) -> dict 
     the metric, ``value_type`` actual, tier S1 and ``provenance`` (``kind``
     ``structured`` for a vendor value, ``derived`` for a DRF computation, with
     the vendor and the fact's identity).  None for a fact without a metric or
-    a value."""
-    if not isinstance(fact, Mapping):
+    a value, or without one of those two provenance labels (an unlabelled
+    value is never published as the vendor's)."""
+    if not isinstance(fact, Mapping) or fact.get("provenance_kind") not in ("structured", "derived"):
         return None
     metric, value = _collapse(fact.get("metric"), 200), _collapse(fact.get("value"), 80)
     if not metric or not value:
@@ -10365,10 +10395,8 @@ def data_quant_row(fact: Any, source: Mapping[str, Any], position: int) -> dict 
         if text:
             row[key] = text
     data = source.get("data") if isinstance(source.get("data"), Mapping) else {}
-    kind = fact.get("provenance_kind")
     row.update(value_type="actual", source_ref=f"S{position}", source_url=source.get("url"), tier="S1",
-               provenance={"kind": kind if kind in ("structured", "derived") else "structured",
-                           "vendor": data.get("vendor"),
+               provenance={"kind": fact["provenance_kind"], "vendor": data.get("vendor"),
                            **{key: fact[key] for key in _DATA_FACT_PROVENANCE_KEYS
                               if fact.get(key) not in (None, "")}})
     return row
@@ -11242,8 +11270,10 @@ def data_tools_availability(env: Mapping[str, Any] | None) -> tuple[tuple[str, .
     """``(enabled, disabled, unknown)`` of RESEARCH_DATA_TOOLS (TIME-13): the
     requested vendors (a comma list of DATA_VENDORS names, or ``all``) that have
     their credential, in DATA_VENDORS order; the requested ones that do not,
-    with why (``no_api_key``: FRED_API_KEY is empty; ``no_user_agent``:
-    SEC_EDGAR_USER_AGENT names no contact address, so SEC would refuse it);
+    with why (``no_api_key``: FRED_API_KEY is empty; ``invalid_api_key``: it
+    is not the 32 lower-case letters or digits FRED issues, which data_tools
+    would never send; ``no_user_agent``: SEC_EDGAR_USER_AGENT names no contact
+    address, so SEC would refuse it);
     and the names that are no vendor.  Empty or unset: nothing is requested."""
     env = env or {}
     requested: list[str] = []
@@ -11257,8 +11287,9 @@ def data_tools_availability(env: Mapping[str, Any] | None) -> tuple[tuple[str, .
             elif (shown := _collapse(name, 40)) not in unknown:
                 unknown.append(shown)
     disabled: dict[str, str] = {}
-    if "fred" in requested and not str(env.get("FRED_API_KEY", "") or "").strip():
-        disabled["fred"] = "no_api_key"
+    fred_key = str(env.get("FRED_API_KEY", "") or "").strip()
+    if "fred" in requested and not _FRED_API_KEY_RE.fullmatch(fred_key):
+        disabled["fred"] = "invalid_api_key" if fred_key else "no_api_key"
     if "sec_edgar" in requested and "@" not in str(env.get("SEC_EDGAR_USER_AGENT", "") or ""):
         disabled["sec_edgar"] = "no_user_agent"
     enabled = tuple(vendor for vendor in DATA_VENDORS if vendor in requested and vendor not in disabled)

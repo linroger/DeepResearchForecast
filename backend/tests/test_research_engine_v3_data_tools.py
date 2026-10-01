@@ -18,6 +18,7 @@ is dated strictly before the as-of.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -238,6 +239,14 @@ def test_requested_without_credentials_binds_nothing_and_says_why(tmp_path):
     # A user agent without a contact address is not one SEC accepts.
     engine, _ = make_engine(tmp_path, {**ALL_ON, "SEC_EDGAR_USER_AGENT": "DRF desk"}, fns=data_fns(), name="o2")
     assert engine.data_tool_names == ("macro_series",) and engine.data_disabled == {"sec_edgar": "no_user_agent"}
+    # A key data_tools would never send (not 32 lower-case letters or digits) binds nothing.
+    assert lr._FRED_API_KEY_RE.pattern == dtools._FRED_KEY_RE.pattern
+    for bad in ("not-a-fred-key", KEY.upper(), KEY + "0"):
+        engine, plog = make_engine(tmp_path, {**ALL_ON, "FRED_API_KEY": bad}, fns=data_fns(), name="o3")
+        assert engine.data_tool_names == ("company_filings",)
+        assert engine.data_disabled == {"fred": "invalid_api_key"}
+        assert "macro_series (fred) not bound: invalid_api_key" in plog.text() and bad not in plog.text()
+    assert lr.data_tools_availability({**ALL_ON, "FRED_API_KEY": f" {KEY} "})[0] == ("fred", "sec_edgar")
 
 
 def test_flag_on_binds_one_tools_list_with_budgets_and_identity(tmp_path):
@@ -635,12 +644,35 @@ def _agent_tasks(model) -> dict[str, str]:
             for call in model.calls if v3.role_of(call) == "agent"}
 
 
+# The pre-TIME-13 engine's flag-off artifacts of this fake run (World, workers=1, UTC date
+# 2026-10-01), captured from feat/finharness-transplants b3c6fd3 (and b275c63, the same bytes).
+_PRE_TIME13_SHA256 = {
+    "sources.json": "d904dfe1d051e087715af049fbb5aa3cca3b6fa0a2a747989662c0859f7043b6",
+    "quantitative.json": "a6aeb7145cfee4027aaf52e63eb2da0883350dbed228cab912c8bb99a5df864f",
+    "verified_facts.json": "76b49824fd6738af37271b8fce982e83bfce94ef240337a53eed99cc2df0b37c",
+    "kiq_tasks": "68deb6f0bfdc0811a62a54e45044167484fc33874dad107724e55a7b2b606041",
+}
+_PRE_TIME13_AGENT = {"cached_fetches": 0, "cached_searches": 0, "failures": 0, "fetches": 1, "searches": 1}
+_PRE_TIME13_META_TOOLS = {
+    "cached_fetches": 0, "cached_searches": 0, "failures": 0, "fetches": 4, "searches": 12,
+    "per_agent": {**dict.fromkeys(("K1", "K2", "K3", "K4"), _PRE_TIME13_AGENT),
+                  "planner": {**_PRE_TIME13_AGENT, "fetches": 0, "searches": 4},
+                  "seeder": {**_PRE_TIME13_AGENT, "fetches": 0, "searches": 4}}}
+
+
 def test_flag_off_run_artifacts_do_not_depend_on_an_unbound_request(tmp_path, bridge, monkeypatch):
-    """RESEARCH_DATA_TOOLS unset: one AGENT_TOOLS binding, no data counters or meta.data_tools.  A
-    request no credential can serve binds nothing either: sources.json, quantitative.json,
-    meta['tools'] and the KIQ tasks are byte-identical to the unset run."""
+    """RESEARCH_DATA_TOOLS unset: one AGENT_TOOLS binding, no data counters or meta.data_tools, and
+    sources.json, quantitative.json, verified_facts.json, the KIQ tasks and meta['tools'] are the
+    pre-TIME-13 engine's (pinned).  A request no credential can serve binds nothing either: its
+    artifacts are byte-identical to the unset run's."""
+    monkeypatch.setattr(lr, "_utc_date", lambda: "2026-10-01")
     rc_off, meta_off, _, model_off, out_off = run_engine(tmp_path, bridge, monkeypatch, lambda out: v3.World(),
                                                          name="off")
+    tasks = "\n".join(sorted(call["messages"][2][1] for call in model_off.calls if v3.role_of(call) == "agent"))
+    assert {**{name: hashlib.sha256((out_off / name).read_bytes()).hexdigest()
+               for name in ("sources.json", "quantitative.json", "verified_facts.json")},
+            "kiq_tasks": hashlib.sha256(tasks.encode("utf-8")).hexdigest()} == _PRE_TIME13_SHA256
+    assert meta_off["tools"] == _PRE_TIME13_META_TOOLS
     monkeypatch.setenv("RESEARCH_DATA_TOOLS", "all")
     rc_req, meta_req, plog_req, model_req, out_req = run_engine(tmp_path, bridge, monkeypatch,
                                                                 lambda out: v3.World(), name="requested")
@@ -651,7 +683,8 @@ def test_flag_off_run_artifacts_do_not_depend_on_an_unbound_request(tmp_path, br
     assert "data_tools" not in meta_off
     assert meta_req["data_tools"] == {"enabled": [], "disabled": {"fred": "no_api_key", "sec_edgar": "no_user_agent"},
                                       "pit": None, "calls": 0, "cached": 0, "invalid": 0, "failures": 0,
-                                      "quant_rows_added": 0, "quant_rows_rejected": []}
+                                      "quant_rows_added": 0, "quant_rows_trimmed": 0, "quant_rows_rejected": [],
+                                      "quant_rows_rejected_total": 0}
     for model in (model_off, model_req):
         assert model.binds and all(tools is rg.AGENT_TOOLS_SCHEMA for tools in model.binds)
         assert all(call["tools"] is rg.AGENT_TOOLS_SCHEMA for call in model.calls if v3.role_of(call) == "agent")
@@ -722,9 +755,14 @@ def test_flag_on_run_cites_verifies_and_publishes_the_data(tmp_path, bridge, mon
     assert model_cpi == ["323.5"]
     assert meta["data_tools"] == {
         "enabled": ["fred", "sec_edgar"], "disabled": {}, "pit": pit.isoformat(), "calls": 2, "cached": 0,
-        "invalid": 0, "failures": 0, "quant_rows_added": 3,
+        "invalid": 0, "failures": 0, "quant_rows_added": 3, "quant_rows_trimmed": 0,
         "quant_rows_rejected": [{"metric": "Consumer price index", "value": "329.7", "unit": "index",
-                                 "source_ref": f"S{data_rows[0][0]}", "source_url": fred_row["url"]}]}
+                                 "source_ref": f"S{data_rows[0][0]}", "source_url": fred_row["url"]}],
+        "quant_rows_rejected_total": 1}
+    # meta.quant_provenance describes the rows quantitative.json keeps (after the drop).
+    assert meta["quant_provenance"]["rows"] == len(quant)
+    assert meta["quant_provenance"]["verification_hist"].get("unverified", 0) == sum(
+        1 for row in quant if row.get("verification") == "unverified")
     assert meta["tools"]["data"]["data_calls"] == 2
     assert not any("official-data" in event for event in meta.get("degradation_events") or [])
     # TIME-1: the graph anchor stays the plan's as-of whatever the data rows' dates.
@@ -747,6 +785,8 @@ def test_quant_rows_cap_and_the_off_switch_of_the_contradiction_check(tmp_path, 
     assert [row["value"] for row in quant if row["metric"] == "Consumer price index"] == ["323.5"]
     assert meta["data_tools"]["quant_rows_added"] == 1
     assert [row["value"] for row in meta["data_tools"]["quant_rows_rejected"]] == ["329.7"]
+    assert meta["data_tools"]["quant_rows_rejected_total"] == 1
+    assert "quant_provenance" not in meta  # neither verification nor typing ran
 
 
 def test_a_gated_hindcast_citing_only_data_rows_is_not_a_leak(tmp_path, bridge, monkeypatch, vendors):
@@ -825,3 +865,62 @@ def test_empty_forwarded_vendor_knobs_read_as_unset(monkeypatch):
     assert dtools._cache_root() == os.path.join(os.path.dirname(dtools.__file__), ".cache", "data_cache")
     assert (dtools._open_vintage_ttl_s(), dtools._edgar_ttl_s(), dtools._timeout_s(), dtools._window_years(None)) == (
         6 * 3600.0, 24 * 3600.0, 20.0, 10)
+
+
+
+# =============================================================== review round 1
+
+def test_only_labelled_vendor_or_derived_facts_become_rows():
+    source = {"url": "https://alfred.stlouisfed.org/series?seid=X", "title": "X",
+              "data": {"vendor": "fred", "series_id": "X"}}
+    fact = dict(fred_result().facts[0])
+    assert lr.data_quant_row(fact, source, 2)["provenance"]["kind"] == "structured"
+    for kind in (None, "", "estimated"):
+        unlabelled = {**fact, "provenance_kind": kind} if kind is not None else {
+            key: value for key, value in fact.items() if key != "provenance_kind"}
+        assert lr.data_quant_row(unlabelled, source, 2) is None
+
+
+def test_model_rows_trimmed_for_the_data_rows_are_logged_and_counted(tmp_path):
+    engine, plog = make_engine(tmp_path, ALL_ON, fns=data_fns())
+    engine.tools.data("macro_series", {"series": "cpi"}, agent_id="K1")
+    engine.tools.data("company_filings", {"company": "AAPL"}, agent_id="K1")
+    sources = engine._source_rows([1, 2])
+    model_rows = [{"metric": f"m{index}", "value": str(index)} for index in range(lr.MAX_QUANT_ROWS)]
+    quant = engine._with_data_quant_rows(model_rows, sources)
+    assert len(quant) == lr.MAX_QUANT_ROWS and quant[3:] == model_rows[:lr.MAX_QUANT_ROWS - 3]
+    assert (engine._data_quant_added, engine._data_quant_trimmed) == (3, 3)
+    assert "3 model quantitative row(s) trimmed from the end" in plog.text()
+    engine.meta["tools"] = engine.tools.stats()
+    assert engine._data_tools_meta()["quant_rows_trimmed"] == 3
+    # The cap of DATA_QUANT_ROWS_MAX, and no trim while the model rows fit.
+    capped, _ = make_engine(tmp_path, {**ALL_ON, "DATA_QUANT_ROWS_MAX": "2"}, fns=data_fns(), name="capped")
+    capped.tools.data("macro_series", {"series": "cpi"}, agent_id="K1")
+    capped.tools.data("company_filings", {"company": "AAPL"}, agent_id="K1")
+    rows = capped._with_data_quant_rows(model_rows[:5], capped._source_rows([1, 2]))
+    assert [lr.is_data_quant_row(row) for row in rows] == [True, True] + [False] * 5
+    assert capped._data_quant_trimmed == 0
+
+
+def test_extract_only_salvage_keeps_no_data_quant_row_counts(tmp_path, monkeypatch):
+    """A salvage rewrites quantitative.json, so meta.data_tools keeps only its binding and call counts."""
+    (tmp_path / v3.dr.REPORT_FILENAME).write_text("x" * 1000, encoding="utf-8")
+    data_tools = {"enabled": ["fred"], "disabled": {}, "pit": "2026-09-30", "calls": 2, "cached": 0, "invalid": 0,
+                  "failures": 0, "quant_rows_added": 2, "quant_rows_trimmed": 1,
+                  "quant_rows_rejected": [{"metric": "m"}], "quant_rows_rejected_total": 1}
+    (tmp_path / "meta.json").write_text(json.dumps({"status": "running", "research_engine": "v3",
+                                                    "data_tools": data_tools}), encoding="utf-8")
+    monkeypatch.setenv("MINIMAX_API_KEY", "test-key-not-used")
+    seen = {}
+
+    def fake_extract_only(question, out_dir, args, meta, plog, write_meta):
+        seen["meta"] = dict(meta)
+        plog.close()
+        return 0
+
+    monkeypatch.setattr(v3.dr, "run_extract_only", fake_extract_only)
+    monkeypatch.setattr(sys, "argv", ["deerflow_research.py", "--extract-only", "--model", "minimax",
+                                      "--out-dir", str(tmp_path), "--prompt", "Q"])
+    assert v3.dr.main() == 0
+    assert seen["meta"]["data_tools"] == {"enabled": ["fred"], "disabled": {}, "pit": "2026-09-30", "calls": 2,
+                                          "cached": 0, "invalid": 0, "failures": 0}
