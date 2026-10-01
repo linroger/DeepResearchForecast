@@ -660,6 +660,11 @@ def _tool_unknown_rows(paths: Mapping[str, Any], digests: dict) -> dict:
     INFRA-5, with report telemetry off, or stopped before it completed without
     a single rejected call) the count is not_instrumented, never a vacuous pass.
 
+    Those totals also count the unknown calls of one attempt
+    (``tool_dispatch.rejected_unknown``), each of which wrote one row.  ReportAgent
+    swallows a failed log write, so a row can be lost: the count is never below
+    the largest such total, and a total that is not a count is unreadable.
+
     ReportLogger writes each row whole under a lock, so a line that is not a
     JSON object is a torn write (a killed process, possibly with a resumed
     attempt's row appended to it; bytes that are not UTF-8 are replaced).  Such
@@ -675,6 +680,7 @@ def _tool_unknown_rows(paths: Mapping[str, Any], digests: dict) -> dict:
         return _unavailable(ARTIFACT_MISSING, src)
     count = skipped = hiding = 0
     instrumented = False
+    dispatch_totals: list[dict] = []  # the telemetry totals that carry tool_dispatch
     try:
         with open(path, encoding="utf-8", errors="replace") as handle:
             for line in handle:
@@ -690,20 +696,26 @@ def _tool_unknown_rows(paths: Mapping[str, Any], digests: dict) -> dict:
                     else:
                         skipped += 1
                     continue
+                # ReportLogger writes a string; any other action (a hand-edited
+                # row) is no marker and never fails the other report metrics.
                 action = row.get("action")
+                action = action if isinstance(action, str) else None
                 if action == _TOOL_UNKNOWN:
                     count += 1
+                instrumented = instrumented or action in _TOOL_LOG_MARKER_ACTIONS
                 details = row.get("details")
-                instrumented = instrumented or action in _TOOL_LOG_MARKER_ACTIONS or (
-                    action == "report_complete" and isinstance(details, dict)
-                    and _has_tool_dispatch(details.get("telemetry_totals")))
+                if action == "report_complete" and isinstance(details, dict) and _has_tool_dispatch(
+                        details.get("telemetry_totals")):
+                    dispatch_totals.append(details["telemetry_totals"])
     except OSError:
         return _unavailable(UNREADABLE, src)
     digests["agent_log"] = _sha256(path)
     telemetry_status, telemetry = _read_json_object(paths.get("report_telemetry"))
     if telemetry_status == MEASURED:
         digests["report_telemetry"] = _sha256(paths.get("report_telemetry"))
-        instrumented = instrumented or _has_tool_dispatch(telemetry.get("totals"))
+        if _has_tool_dispatch(telemetry.get("totals")):
+            dispatch_totals.append(telemetry["totals"])
+    instrumented = instrumented or bool(dispatch_totals)
     if hiding:
         return _unavailable(UNREADABLE, src,
                             f"{hiding} line(s) that are not JSON objects may hide a {_TOOL_UNKNOWN} row")
@@ -712,8 +724,18 @@ def _tool_unknown_rows(paths: Mapping[str, Any], digests: dict) -> dict:
                             "no INFRA-5 marker (tool_unknown / tool_rejected row or telemetry "
                             "totals.tool_dispatch): written before tool_unknown logging, with "
                             "report telemetry off or before the report completed")
-    detail = f"{skipped} torn row(s) of other actions skipped" if skipped else None
-    return _metric(count, source=src, detail=detail)
+    reported = [totals["tool_dispatch"].get("rejected_unknown", 0) for totals in dispatch_totals]
+    if any(_as_count(value) is None for value in reported):
+        return _unavailable(UNREADABLE, src,
+                            "telemetry totals.tool_dispatch.rejected_unknown is not a count")
+    notes = [f"{skipped} torn row(s) of other actions skipped"] if skipped else []
+    telemetry_count = max(reported, default=0)
+    if telemetry_count > count:
+        notes.append(f"telemetry totals.tool_dispatch.rejected_unknown counts {telemetry_count} "
+                     f"unknown call(s) but the log holds {count} {_TOOL_UNKNOWN} row(s): rows "
+                     "were lost, the telemetry count is used")
+        count = telemetry_count
+    return _metric(count, source=src, detail="; ".join(notes) or None)
 
 
 def _may_hide_tool_unknown(line: str) -> bool:

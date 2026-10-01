@@ -390,6 +390,62 @@ def test_scorecard_counts_tool_unknown(roots):
     assert {"invalid_tool_calls", "unknown_tool_calls"} <= set(card["checks"]["research"]["failed"])
 
 
+def test_report_unknown_count_cross_checks_telemetry_and_odd_actions(roots):
+    """INFRA-5's telemetry counts the unknown calls too: a lost tool_unknown row never
+    reads as a measured 0.  A row whose action is not a string stays local to the log."""
+    ts._make_pipeline()
+    telemetry = os.path.join(po.ReportManager._get_report_folder(ts.REPORT_ID), "telemetry.json")
+
+    def dispatch(rejected_unknown):
+        return {"dispatched": 4, "rejected_parse": 0, "rejected_params": 0,
+                "rejected_unknown": rejected_unknown, "repaired": 0}
+
+    # ReportAgent swallows a failed log write: no row, but telemetry.json counts 2.
+    ts._write(telemetry, {"totals": {"tool_calls": 4, "tool_dispatch": dispatch(2)}})
+    _write_agent_log([_log_row("report_start"), _log_row("tool_call")])
+    card = ts._score()
+    record = ts._metric(card, "report", "unknown_tool_calls")
+    assert (record["status"], record["value"]) == ("measured", 2)
+    assert record["detail"] == ("telemetry totals.tool_dispatch.rejected_unknown counts 2 unknown "
+                                "call(s) but the log holds 0 tool_unknown row(s): rows were lost, "
+                                "the telemetry count is used")
+    assert card["checks"]["report"]["failed"] == ["unknown_tool_calls"]
+    # The largest total of any attempt (each report_complete row and telemetry.json) is
+    # the floor; rows beyond it (earlier attempts, the dispatch fallback) still count.
+    ts._write(telemetry, {"totals": {"tool_calls": 4, "tool_dispatch": dispatch(1)}})
+    _write_agent_log([_log_row("tool_unknown", tool_name="a", path="react"),
+                      _log_row("report_complete", telemetry_totals={"tool_dispatch": dispatch(3)})])
+    assert ts._metric(ts._score(), "report", "unknown_tool_calls")["value"] == 3
+    _write_agent_log([_log_row("tool_unknown", tool_name="a", path="react"),
+                      _log_row("tool_unknown", tool_name="b", path="dispatch")])
+    record = ts._metric(ts._score(), "report", "unknown_tool_calls")
+    assert (record["value"], "detail" in record) == (2, False)
+    # A total that is not a count fails closed.
+    for bad in ("2", -1, True, None):
+        ts._write(telemetry, {"totals": {"tool_dispatch": dispatch(bad)}})
+        _write_agent_log([_log_row("report_start")])
+        card = ts._score()
+        record = ts._metric(card, "report", "unknown_tool_calls")
+        assert (record["status"], record["detail"]) == (
+            "unreadable", "telemetry totals.tool_dispatch.rejected_unknown is not a count"), bad
+        assert card["checks"]["report"]["failed"] == ["unknown_tool_calls"]
+
+    # A valid JSON row with an unhashable action (a hand-edited log) is no marker and no
+    # row: only this metric reads the log, every other report metric is still measured.
+    ts._write(telemetry, {"totals": {"tool_dispatch": dispatch(0)}})
+    for rows, expected in (([], 0), ([_log_row("tool_unknown", tool_name="a", path="native")], 1)):
+        _write_agent_log([dict(_log_row("report_start"), action=["tool_unknown"]),
+                          dict(_log_row("tool_call"), action={"name": "tool_unknown"})] + rows)
+        card = ts._score()
+        record = ts._metric(card, "report", "unknown_tool_calls")
+        assert (record["status"], record["value"]) == ("measured", expected)
+        assert all(metric["status"] == "measured" for metric in card["stages"]["report"]["metrics"].values())
+        assert card["checks"]["report"]["failed"] == ([] if expected == 0 else ["unknown_tool_calls"])
+    os.remove(telemetry)
+    _write_agent_log([dict(_log_row("tool_rejected"), action=["tool_rejected"])])
+    assert ts._metric(ts._score(), "report", "unknown_tool_calls")["status"] == "not_instrumented"
+
+
 def test_rate_metrics_cover_every_num_den_metric(roots):
     """RATE_METRICS names exactly the metrics the projection records as num/den rates."""
     ts._make_pipeline()
