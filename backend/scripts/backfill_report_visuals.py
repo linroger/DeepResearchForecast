@@ -20,8 +20,9 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from app.config import Config
+from app.services.binary_targets import threshold_ladder_audit
 from app.services.report_agent import (
-    ReportAgent, ReportManager, render_market_comparison_block,
+    ReportAgent, ReportManager, _nonfinite_nulled_artifact, render_market_comparison_block,
 )
 from app.services.forecast_extractor import (
     _binary_quality,
@@ -35,7 +36,10 @@ from app.services.forecast_extractor import (
 from app.services.report_lint import lint_report
 from app.services.report_visualizer import ReportVisualizer
 from app.utils.atomic import write_json_atomic, write_text_atomic
+from app.utils.logger import get_logger
+from app.utils.numeric import NonFiniteJSONError
 
+logger = get_logger("mirofish.backfill_report_visuals")
 
 DEFAULT_TARGETS = (
     ("pipe_f23527f7d903", "report_a03be154febc"),
@@ -76,6 +80,28 @@ def _read_json(path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError):
         return None
+
+
+def _write_forecast_artifact(path: Path, obj: Any, *, record_quality: bool = False) -> Any:
+    """Write forecast.json or market_comparison.json; returns the object written.
+
+    INFRA-4 (ARTIFACT_STRICT_JSON, default on): like the live report writer, never write NaN or
+    Infinity. A non-finite leaf is logged and set to null in a copy (``obj`` is not mutated);
+    with ``record_quality`` (forecast.json) its JSON path joins quality.nonfinite_nulled.
+    Finite content is written byte for byte as before; off, the legacy write.
+    """
+    if not getattr(Config, "ARTIFACT_STRICT_JSON", True):
+        write_json_atomic(str(path), obj)
+        return obj
+    try:
+        write_json_atomic(str(path), obj, allow_nan=False)
+        return obj
+    except NonFiniteJSONError as exc:
+        cleaned, paths = _nonfinite_nulled_artifact(obj, record_quality=record_quality)
+        write_json_atomic(str(path), cleaned, allow_nan=False)
+        logger.error(f"{path.name}: {exc}; written as standard JSON "
+                     f"({len(paths)} non-finite value(s) set to null)")
+        return cleaned
 
 
 def _read_text(path: Path) -> str:
@@ -302,7 +328,9 @@ def synchronize_market_comparison(
     standalone = report_dir / "market_comparison.json"
     if comparison.get("comparisons"):
         forecast["market_comparison"] = comparison
-        write_json_atomic(str(standalone), comparison)
+        # INFRA-4: the embedded copy keeps a non-finite value until forecast.json is written,
+        # which nulls it and records its path.
+        _write_forecast_artifact(standalone, comparison)
         return comparison
     forecast.pop("market_comparison", None)
     try:
@@ -310,6 +338,26 @@ def synchronize_market_comparison(
     except FileNotFoundError:
         pass
     return None
+
+
+def rebuild_binary_quality(
+        binaries: List[Dict[str, Any]], contract: Any, old_quality: Any) -> Dict[str, Any]:
+    """The binary_quality of a replayed forecast, rebuilt over the retained rows.
+
+    The scorecard is recomputed and carries the reconcile result; the extractor's
+    ensemble block is kept. A report written with FORECAST_BINARY_STRUCTURED_TARGET
+    (EVAL-14: its old block has ``threshold_ladder``, or a retained row still has a
+    validated ``target``) gets the threshold-ladder audit recomputed over the retained
+    rows, so a replay neither drops the audit nor keeps a removed rung in it.
+    """
+    old = old_quality if isinstance(old_quality, dict) else {}
+    quality = _binary_quality(binaries, min_count=10)
+    quality["proposition_consistency"] = contract
+    if isinstance(old.get("ensemble"), dict):
+        quality["ensemble"] = old["ensemble"]
+    if "threshold_ladder" in old or any(isinstance(row.get("target"), dict) for row in binaries):
+        quality["threshold_ladder"] = threshold_ladder_audit(binaries)
+    return quality
 
 
 def _language(markdown: str, filename: str) -> str:
@@ -576,17 +624,19 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
         ]
         old_quality = forecast_obj.get("binary_quality") if isinstance(
             forecast_obj.get("binary_quality"), dict) else {}
-        quality = _binary_quality(retained, min_count=10)
-        quality["proposition_consistency"] = contract
-        if isinstance(old_quality.get("ensemble"), dict):
-            quality["ensemble"] = old_quality["ensemble"]
+        # The rebuild recomputes the scorecard and (EVAL-14) the threshold-ladder audit;
+        # carry only fills the keys the rebuild did not produce (FU-1), so a stale
+        # stored ladder never overrides the recomputed one.
+        quality = rebuild_binary_quality(retained, contract, old_quality)
         forecast_obj["binary_quality"] = carry_binary_quality(old_quality, quality, retained)
         # Always rebuild/remove both comparison copies. This repairs a stale
         # partial backfill even after the offending circular binary was already
         # removed by an earlier attempt.
         synchronize_market_comparison(report_dir, forecast_obj)
         scenario_label_change = ensure_baseline_scenario_label(forecast_obj)
-        write_json_atomic(str(report_dir / "forecast.json"), forecast_obj)
+        # INFRA-4: keep rendering what was written (non-finite leaves nulled).
+        forecast_obj = artifacts["forecast"] = _write_forecast_artifact(
+            report_dir / "forecast.json", forecast_obj, record_quality=True)
     manifest = ReportVisualizer().build_all(report_id, str(report_dir), artifacts)
     sources = artifacts.get("sources") or []
     main_lint: Optional[Dict[str, Any]] = None
@@ -645,7 +695,7 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
     forecast = _read_json(forecast_path)
     if isinstance(forecast, dict) and main_lint:
         forecast.setdefault("quality", {})["lint"] = main_lint
-        write_json_atomic(str(forecast_path), forecast)
+        forecast = _write_forecast_artifact(forecast_path, forecast, record_quality=True)
     meta_path = report_dir / "meta.json"
     meta = _read_json(meta_path)
     if not isinstance(meta, dict):

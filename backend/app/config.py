@@ -144,6 +144,22 @@ class Config:
     # 重放它。默认开是安全的：只影响被截断的回复，完整回复逐字节不变。false 恢复旧行为（截断内容
     # 照常采纳、不标注）。
     LLM_JSON_TRUNCATION_FAIL_CLOSED = os.environ.get('LLM_JSON_TRUNCATION_FAIL_CLOSED', 'true').strip().lower() == 'true'
+    # INFRA-4：LLM JSON 严格数值（默认开）。_parse_json_response_ex 把 NaN / Infinity / -Infinity 与
+    # 溢出的浮点字面量（1e999）当作非法 JSON（它们不是 RFC 8259 JSON，Python json 却默认接受），
+    # chat_json 于是走修复轮重问一次（原因点名 NaN/Infinity），而不是把 NaN 概率带进骨架与产物。
+    # 默认开是安全的：只含有限数的回复解析结果逐字节不变。false 恢复旧的宽松解析。
+    LLM_JSON_STRICT_NUMBERS = os.environ.get('LLM_JSON_STRICT_NUMBERS', 'true').strip().lower() == 'true'
+    # INFRA-4：LLM 错误分类先看状态（默认开）。_classify_llm_error 先按异常类型 / HTTP 状态判定
+    # （RateLimitError/429 → 配额，AuthenticationError/401/403 → 认证，422 → 内容审查，400 → 非法请求；
+    # Claude CLI 信封的 api_error_status 亦算状态），其次按文本「配额先于认证」（_is_quota 的措辞 +
+    # insufficient balance；429 / 2056 / 1113 只按整数匹配，不再误中 duration_ms:1429 之类），最后才是
+    # 确定性非法请求。chat() 重试环、chat()/chat_with_tools 的 429 熔断计数、_is_deterministic_auth_error
+    # 与编排器 _classify_provider_outage 都读它：带认证样措辞的 MiniMax 2056 用量上限消息不再被判成
+    # 确定性认证失败（跳过重试、回退进 900s 冷却）。开启时 2056 / 1113 也和状态码一样不进失败消息
+    # （max_tokens / 模型名）。默认开是安全的：只改变同时命中配额与认证文本、或带状态码的异常的归类。
+    # false 恢复旧顺序（认证文本 → 配额文本）。
+    LLM_ERROR_CLASSIFY_STATUS_FIRST = os.environ.get(
+        'LLM_ERROR_CLASSIFY_STATUS_FIRST', 'true').strip().lower() == 'true'
     # 每个 run 的 token / 成本上限（0=不限）。超限后下一次 LLM 调用抛 BudgetExceeded，止血式中止。
     LLM_RUN_BUDGET_TOKENS = int(os.environ.get('LLM_RUN_BUDGET_TOKENS', '0') or '0')
     LLM_RUN_BUDGET_USD = float(os.environ.get('LLM_RUN_BUDGET_USD', '0') or '0')
@@ -384,6 +400,12 @@ class Config:
     # 双语（随成稿语言，另按 meta.translations[] 生成 exec_brief.<lang>.md）。PDF 复用 pandoc 引擎选择/
     # PyMuPDF 回退但去 --toc 收紧边距做单页。默认开；关闭=三端点 404（degrade-safe）。
     REPORT_EXEC_BRIEF = os.environ.get('REPORT_EXEC_BRIEF', 'True').strip().lower() == 'true'
+    # INFRA-4：预测工件严格 JSON（默认开）。forecast.json（骨架早落版 / 成稿版 / lint 回写 /
+    # scripts/backfill_report_visuals.py 回填）与 market_comparison.json 按 allow_nan=False 序列化：
+    # 含 NaN/±Infinity 的骨架不钉、不早落（回退成稿后抽取）；成稿工件里的非有限叶子记 error 后置 null，
+    # 路径记入 forecast.quality.nonfinite_nulled。浏览器 JSON.parse 拒绝 NaN，默认开是安全的：
+    # 有限数内容逐字节不变。false 恢复旧的照写 NaN。
+    ARTIFACT_STRICT_JSON = os.environ.get('ARTIFACT_STRICT_JSON', 'true').strip().lower() == 'true'
     # NEXTSTEPS P2-4：把每份 forecast.json 追加进校准账本（horizon/resolution date 为键），已解析
     # 预测的历史 Brier/ECE surfacing 进新预测 confidence_rationale——让信心由 track record 赚得而非
     # 自评。默认开（仅 jsonl 追加/读取，无 LLM）；初期无已解析样本时对信心无影响（degrade-safe）。
@@ -630,6 +652,34 @@ class Config:
     # 的观测侧车先例）：只读投影、独立 try/except，绝不改 status/pipeline_health、绝不写报告目录。
     # 关闭 = 不写文件、不加 options 键。孤儿/旧跑用 scripts/stage_scorecard.py score 回填。
     STAGE_SCORECARD_ENABLED = os.environ.get('STAGE_SCORECARD_ENABLED', 'true').strip().lower() == 'true'
+    # EVAL-19（P07 第 1 部分）：可发布报告在账本提交之后冻结评估包 reports/<id>/eval_bundle/
+    # （brief / forecast_inputs / dossier / quant / graph / sim / market 七个输入块的逐字节副本 +
+    # manifest：逐块 sha256、研究目标、上游模型与发布指纹），供 EVAL-20 的块移动研究复用同一输入。
+    # 纯旁路：不改报告字节、发布状态与账本；默认关（不写任何文件）。EVAL_DOSSIER_CHARS 为 dossier
+    # 块的头尾切片字符预算（forecast_extractor.slice_head_tail；≤0 视为默认 16000，回填同规则）。
+    EVAL_BUNDLE_CAPTURE = os.environ.get('EVAL_BUNDLE_CAPTURE', 'false').strip().lower() == 'true'
+    EVAL_DOSSIER_CHARS = int(os.environ.get('EVAL_DOSSIER_CHARS', '16000') or '16000')
+    # EVAL-20（P07 第 2 部分）：scripts/value_add_eval.py 在冻结评估包上做无标签的块移动研究
+    # （floor / floor_sc / R / R+Q/G/S/M / FULL / FULL_AA，按服务模型给 moves/inert/inconclusive 判定，
+    # 以 A/A 重复臂为噪声底）。只是证据，绝不自动改任何默认值；输出只落在评估账本 value_add/<study_id>/。
+    # VALUE_ADD_EVAL_ENABLED 关 = run 子命令不发任何调用（plan/score 不调用模型）；EVAL_STUDY_MAX_CALLS
+    # 为计划调用数上限（超出须 --max-calls）。注意：计分判定每块至少需 value_add_stats.MIN_CLUSTERS=16
+    # 个评估包；默认设计每包每模型 66 次调用（2 目标 ×（8 个单次臂 + floor_sc 的 K=3）× 3 重复），
+    # 单模型计分研究至少 1056 次，故默认上限 600 只够特征刻画（单模型 ≤9 包），计分研究须显式
+    # --max-calls；任何块都达不到 16 包（或重复 <3）的研究 run 默认拒绝，须 --allow-characterization
+    # 才花这笔钱。
+    # EVAL_ARM_REPLICATES 每臂重复次数（<3 只算特征刻画）；EVAL_TARGETS_PER_BUNDLE 每个评估包取的目标数；
+    # EVAL_PROBE_FIDELITY_MAX 为探针保真度门槛（R+M 与去市场影响前概率的平均绝对差超出则全部判定只作
+    # 参考）；EVAL_INERT_MARGIN 为 inert 判定的 CI 上界；EVAL_BOOTSTRAP_RESAMPLES 为聚类自助重采样次数。
+    # 这三个评分参数与自助种子在 run 时预注册进 study.json，score 时取值与注册值不同则记为 override，
+    # 且该次判定全部只作参考。
+    VALUE_ADD_EVAL_ENABLED = os.environ.get('VALUE_ADD_EVAL_ENABLED', 'false').strip().lower() == 'true'
+    EVAL_ARM_REPLICATES = int(os.environ.get('EVAL_ARM_REPLICATES', '3') or '3')
+    EVAL_STUDY_MAX_CALLS = int(os.environ.get('EVAL_STUDY_MAX_CALLS', '600') or '600')
+    EVAL_TARGETS_PER_BUNDLE = int(os.environ.get('EVAL_TARGETS_PER_BUNDLE', '2') or '2')
+    EVAL_PROBE_FIDELITY_MAX = float(os.environ.get('EVAL_PROBE_FIDELITY_MAX', '0.10') or '0.10')
+    EVAL_INERT_MARGIN = float(os.environ.get('EVAL_INERT_MARGIN', '0.02') or '0.02')
+    EVAL_BOOTSTRAP_RESAMPLES = int(os.environ.get('EVAL_BOOTSTRAP_RESAMPLES', '2000') or '2000')
     # EVAL-18: slim per-pipeline cost card. On: the _run finally block writes
     # <pipeline_dir>/cost_card.json (drf-cost-card/v1: per-stage calls/tokens/wall first, USD
     # secondary, completeness reasons), and the report stage pins the run's config fingerprint
@@ -1007,6 +1057,19 @@ class Config:
     # forecast.quality.forecast_policy（与形状遥测旗标无关）与准入钉 safety_policy_v1。默认关是安全的：
     # 二元抽取提示词逐字节不变。
     FORECAST_BINARY_SYMMETRIC_GUARD = os.environ.get('FORECAST_BINARY_SYMMETRIC_GUARD', 'false').strip().lower() == 'true'
+    # EVAL-14（P14）：数值阈值型二元的结构化 target——二元抽取提示词追加 STRUCTURED TARGET 规则，
+    # 模型给出的 target 经 binary_targets.validate_binary_target 校验后存 row['target']（不合格存
+    # target_rejected 及原因），报告在定稿概率上做同目标阈值阶梯单调性审计
+    # （binary_quality.threshold_ladder，只告警，不影响发布门与终审政策版本），并记入
+    # quality.forecast_policy.binary_structured_target。默认关：二元抽取提示词、max_tokens 与二元行
+    # 逐字节不变，forecast.json 不多任何键（开启会改变提示词，从而可能改变起草）。不随此旗标的改动
+    # 只有判定标准解析器 _extract_comparable_numeric_range 的两处修复：(1) RESEARCH-15(c) 要求的
+    # 否定修复（否定比较词如 "does not exceed"/"no more than"/不超过 按正确方向读；指标吞入否定词
+    # 或反向判词——"Fails if"、"Resolves negatively/false if"、"Falsified if"——的子句不解析）；
+    # (2) 解析前把水平空白串（制表符、全角空格 U+3000 等）折叠为一个空格以保持线性时间，原先被
+    # 制表符或全角空格截断的子句现在可读。情景分区审计据此读到真实指标，可能新报或不再报
+    # overlapping_numeric_ranges——这是正确行为，不是旗标泄漏。
+    FORECAST_BINARY_STRUCTURED_TARGET = os.environ.get('FORECAST_BINARY_STRUCTURED_TARGET', 'false').strip().lower() == 'true'
     # REPORT-11 概率形状遥测（默认开）：确定性计算情景形状（峰值 max_probability、归一化熵、距均匀分布的
     # TV 距离，叙事前 / 成稿后批判成功时另算批判前后差值）与二元预测形状（0.40-0.60 中间带 / 0.45-0.55
     # 近半 / ≤0.05 或 ≥0.95 极端占比、十分位直方图、市场重述与分区对账向 / 远离 0.5 的移动计数），记入
@@ -1779,8 +1842,9 @@ class Config:
     # noun ("40 economists"); a value written as a range becomes low/high (range_kind
     # stated_range); meta.forecaster_attribution counts kept and dropped fields.  Default
     # false: the fields add ~5-10% extraction output and the forecaster names change which
-    # quant rows match an actor in PREPARE context packs (a row that matched still matches,
-    # but at the 32-row pack cap forecaster matches can displace later rows); off =
+    # quant rows match an actor in PREPARE context packs (a row that matched still matches
+    # and, at the 32-row pack cap, keeps its place: forecaster-only matches fill spare
+    # slots only, FU-10); off =
     # byte-identical facts prompt, quantitative.json and meta.  The parent forwards it to
     # the v3 child.
     RESEARCH_FORECASTER_ATTRIBUTION = os.environ.get(
@@ -1898,7 +1962,11 @@ class Config:
     # TIME-4 restores them in v3 and the extract-only salvage.  Parsed like the bridge
     # (blank = true, else 1/true/yes/on), so the default keeps the legacy engine as it
     # was; false = v3 and extract-only artifacts and meta byte-identical to before.
-    # Forwarded to every research child.
+    # Forwarded to every research child.  The report agent reads it too (FU-9): when its
+    # contested-claims block (at most 15 claims) would cut quant_reconcile rows, up to 3
+    # slots (more when the plain cut already shows more) go to them, probable unit-scale
+    # errors first, and a note counts those still cut; nothing changes when nothing is
+    # cut, and false = the plain first-15 cut.
     RESEARCH_QUANT_RECONCILE = (os.environ.get('RESEARCH_QUANT_RECONCILE', 'true').strip().lower()
                                 or 'true') in ('1', 'true', 'yes', 'on')
     # RESEARCH-11 v3 forecast inputs: the facts extraction also asks for the drivers
@@ -1918,6 +1986,15 @@ class Config:
     # either way; off = no key.  Forwarded to the v3 child.
     RESEARCH_V3_CITATION_STATS = os.environ.get(
         'RESEARCH_V3_CITATION_STATS', 'true').strip().lower() == 'true'
+    # INFRA-4: v3 research-gateway JSON parsing (parse_json_object) rejects NaN, Infinity,
+    # -Infinity and overflowing float literals (1e999): a model reply carrying one is unparseable
+    # (a dict nested inside it is not taken for the reply either), so the gateway's JSON retry
+    # asks again (naming the non-finite number) instead of handing a NaN to the plan, facts and
+    # handoff artifacts.  Control characters stay tolerated.  Default true is safe: replies with
+    # finite numbers parse byte-identically; false = the previous permissive decoder.  The bridge
+    # reads it from its env; the parent forwards it to the v3 child.
+    RESEARCH_JSON_STRICT_NUMBERS = os.environ.get(
+        'RESEARCH_JSON_STRICT_NUMBERS', 'true').strip().lower() == 'true'
     # RESEARCH-7: verbatim evidence-span contract for v3 findings (off | audit | enforce).
     # Not off: the KIQ task asks each finding for an EVIDENCE: "<verbatim passage>" clause,
     # the source ledger keeps every distinct search snippet of a row, and each quote is
@@ -2333,6 +2410,12 @@ class Config:
         in ('diagnostic_only', 'no_update', 'validated_update', 'legacy_prompt')
         else 'diagnostic_only'
     )
+    # SIM-4（C30）：零 LLM 的决策通道先验回声诊断（services/sim_prior_echo.py，策略
+    # drf-sim-control/v1）：终局份额与种子先验几乎一致（prior_echo）或承诺扎堆先验领先情景
+    # （prior_leader_herd）时，编排器在 decision_channel_summary.prior_echo 记录并告警，报告
+    # 世界态块追加一行不含数字的定性提示。纯诊断：不动任何概率、不影响运行健康门，其余裁定
+    # 下报告逐字节不变，故默认开；false = 不计算、不记录、不加提示。
+    SIM_PRIOR_ECHO_DIAGNOSTIC = os.environ.get('SIM_PRIOR_ECHO_DIAGNOSTIC', 'true').strip().lower() == 'true'
     # SIM-1：报告世界态块/世界态图表/fork 情景对比表遵从决策通道的显式非 valid 裁定
     # （world_state_trajectory.json 顶层 validity 存在且 != valid）——隐藏结果份额与演化
     # 航点、跳过图表（trajectory_not_valid）、对比表返回 None。默认开：诚实检查 fail-closed，

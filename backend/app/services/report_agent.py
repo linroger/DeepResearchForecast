@@ -25,6 +25,7 @@ from enum import Enum
 
 from ..config import Config
 from ..utils import absence as _absence
+from ..utils import numeric as _numeric
 from ..utils import numeric_guards as _numeric_guards
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient, llm_call_timeout
@@ -1124,6 +1125,21 @@ _SIGNAL_PACK_UNKNOWN_HEALTH_NOTE = (
 )
 
 
+def _prior_echo_caveat(trajectory: Any) -> str:
+    """SIM-4: the world-state block's qualitative caveat for a prior-echo or
+    prior-leader-herd trajectory (sim_prior_echo.prior_echo_diagnostics), else ""."""
+    from .sim_prior_echo import (
+        VERDICT_PRIOR_ECHO, VERDICT_PRIOR_LEADER_HERD, prior_echo_diagnostics,
+    )
+    diag = prior_echo_diagnostics(trajectory if isinstance(trajectory, dict) else {})
+    if diag["verdict"] == VERDICT_PRIOR_ECHO:
+        return "对照诊断：终局分布与种子先验几乎一致——决策通道没有在研究先验之外提供信息，不得作为独立佐证。"
+    if diag["verdict"] == VERDICT_PRIOR_LEADER_HERD:
+        return (f"对照诊断：承诺绝大多数集中于先验领先情景「{diag['prior_leader']}」——推演可能只是在复述先验，"
+                "不构成独立佐证。")
+    return ""
+
+
 REACT_CONTAMINATED_RETRY_MSG = (
     "【格式错误】你上一条输出不是合格的章节正文（疑似系统提示泄漏、工具调用残留或采访超时提示）。"
     '请立即以 "Final Answer:" 开头，只输出本章节的中文正文：用研究材料中的可验证事实与 [S#]，'
@@ -1338,6 +1354,42 @@ def _citation_display_title(source: Dict[str, Any], tag: str = "") -> str:
         except Exception:  # noqa: BLE001 — display fallback only
             pass
     return title or domain or tag
+
+
+def _nonfinite_nulled_artifact(obj: Any, *, record_quality: bool) -> Tuple[Any, List[str]]:
+    """INFRA-4：(副本, 路径)——NaN/±Infinity 叶子置 None（非有限的浮点键名改为 json 默认写出的
+    字符串），不改入参；record_quality=True 且确有叶子被置 null 时把路径并入副本的
+    quality.nonfinite_nulled。副本按 allow_nan=False 必能序列化（非有限数层面）。"""
+    cleaned, paths = _numeric.null_nonfinite(obj)
+    if record_quality and paths and isinstance(cleaned, dict):
+        quality = cleaned.get("quality")
+        if quality is None:
+            quality = cleaned["quality"] = {}
+        if isinstance(quality, dict):
+            prior = quality.get("nonfinite_nulled")
+            merged = [p for p in prior if isinstance(p, str)] if isinstance(prior, list) else []
+            merged.extend(p for p in paths if p not in merged)
+            quality["nonfinite_nulled"] = merged
+    return cleaned, paths
+
+
+def _forecast_artifact_json(obj: Any, artifact: str, *,
+                            record_quality: bool = False) -> Tuple[str, Any]:
+    """INFRA-4（ARTIFACT_STRICT_JSON，默认开）：把预测工件序列化为标准 JSON，返回 (text, written)。
+
+    关闭：json.dumps 原样（NaN/Infinity 照写）。开启：有限数内容逐字节同旧输出；含 NaN/±Infinity
+    时改写副本（_nonfinite_nulled_artifact，不改入参），按严格 JSON 序列化成功后记一条 error（列出
+    JSON 路径）——绝不写出 NaN。written 即 text 所序列化的对象，调用方留用它，使内存副本与落盘一致。
+    """
+    if not getattr(Config, "ARTIFACT_STRICT_JSON", True):
+        return json.dumps(obj, ensure_ascii=False, indent=2), obj
+    try:
+        return _numeric.dumps_strict(obj, ensure_ascii=False, indent=2), obj
+    except _numeric.NonFiniteJSONError as exc:
+        cleaned, paths = _nonfinite_nulled_artifact(obj, record_quality=record_quality)
+        text = _numeric.dumps_strict(cleaned, ensure_ascii=False, indent=2)
+        logger.error(f"{artifact}: {exc}；已改写为标准 JSON 后落盘（{len(paths)} 处非有限数置 null）")
+        return text, cleaned
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -2414,34 +2466,119 @@ class ReportAgent:
         except Exception as exc:  # noqa: BLE001 — 影子工件，失败不影响报告
             logger.warning(f"写 figure_provenance.json 失败（忽略）: {exc}")
 
+    # FU-9: contested-table slots reserved for TIME-4 quantitative reconcile rows, and the
+    # why_they_differ marker reconcile_quantitative writes on a probable unit-scale error.
+    _CONTESTED_QUANT_SLOTS = 3
+    _UNIT_SCALE_MARK = "probable unit-scale error"
+
+    def _contested_row_line(self, r: Any) -> Optional[str]:
+        """W9-8: contested.json 单条论断 → 块内一行；无论断或无可用立场返回 None（跳过）。"""
+        if not isinstance(r, dict) or not r.get("claim"):
+            return None
+        segs = []
+        for p in (r.get("positions") or [])[:3]:
+            if not isinstance(p, dict) or not p.get("stance"):
+                continue
+            src = "；".join(str(s) for s in (p.get("sources") or [])[:2])
+            tier = str(p.get("tier") or "").strip()
+            tag = f"（{tier}{'，' if tier and src else ''}{src}）" if (tier or src) else ""
+            segs.append(f"{self._md_cell(p['stance'], 160)}{tag}")
+        if not segs:
+            return None
+        return f"- **{self._md_cell(r['claim'], 120)}** — " + " ⇄ ".join(segs)
+
     def _build_contested_table_block(self, max_claims: int = 15) -> str:
         """W9-8: 争议性关键论断块（contested.json 全量，上限 15 条）。
 
         注入命中风险/不确定性关键词的章节提示词——报告必须正面处理证据分歧而非
-        单边引用。无数据返回空串（注入自动跳过）。"""
+        单边引用。无数据返回空串（注入自动跳过）。FU-9：上限截掉 TIME-4 数值对账行时
+        （RESEARCH_QUANT_RECONCILE 开启）见 _contested_quant_slots；未截断时逐字节不变。"""
         rows = self.contested if isinstance(getattr(self, "contested", None), list) else None
         if not rows:
             return ""
-        lines = ["## 争议性关键论断（证据分歧——本章须正面呈现两侧立场与依据，不得单边引用）"]
-        rendered = 0
-        for r in rows:
-            if not isinstance(r, dict) or not r.get("claim"):
+        # The plain cut: the first max_claims renderable rows (at least one), in order; the
+        # rows after it are never rendered here.
+        head: List[Tuple[Dict[str, Any], str]] = []
+        rest: List[Any] = []
+        for i, r in enumerate(rows):
+            line = self._contested_row_line(r)
+            if line is None:
                 continue
-            segs = []
-            for p in (r.get("positions") or [])[:3]:
-                if not isinstance(p, dict) or not p.get("stance"):
-                    continue
-                src = "；".join(str(s) for s in (p.get("sources") or [])[:2])
-                tier = str(p.get("tier") or "").strip()
-                tag = f"（{tier}{'，' if tier and src else ''}{src}）" if (tier or src) else ""
-                segs.append(f"{self._md_cell(p['stance'], 160)}{tag}")
-            if not segs:
-                continue
-            lines.append(f"- **{self._md_cell(r['claim'], 120)}** — " + " ⇄ ".join(segs))
-            rendered += 1
-            if rendered >= max_claims:
+            head.append((r, line))
+            if len(head) >= max_claims:
+                rest = rows[i + 1:]
                 break
-        return "\n".join(lines) if rendered else ""
+        if not head:
+            return ""
+        lines = ["## 争议性关键论断（证据分歧——本章须正面呈现两侧立场与依据，不得单边引用）"]
+        if rest and getattr(Config, "RESEARCH_QUANT_RECONCILE", True):
+            lines += self._contested_quant_slots(head, rest)
+        else:
+            lines += [line for _, line in head]
+        return "\n".join(lines)
+
+    def _contested_quant_slots(self, head: List[Tuple[Dict[str, Any], str]],
+                               rest: List[Any]) -> List[str]:
+        """FU-9 (TIME-4 open issue): the plain cut's rows with slots kept for quant rows.
+
+        Every engine appends its quantitative disagreements (origin quant_reconcile) after
+        the model's claims, and only v3 caps them and puts probable unit-scale errors first,
+        so the plain first-N cut drops them all.  A multi-track run's merged handoff joins the
+        tracks' contested.json files (pipeline_orchestrator.merge_list_dedup), so there the
+        quant rows sit after each track's claims, interleaved with the next track's.  When the
+        plain cut drops at least one renderable quant_reconcile row, the quant rows get
+        max(min(_CONTESTED_QUANT_SLOTS, N), quant rows inside the plain cut) of the N slots
+        (at most all of them), chosen by priority wherever they sit: probable unit-scale
+        errors first, stable, so each kind keeps contested.json order.  A plain quant row
+        inside the cut therefore never keeps its slot while a unit-scale error past it is
+        dropped.  The plain cut's other rows (the model's claims) fill the remaining slots in
+        order.  The kept rows keep contested.json order, except that the positions held by
+        kept quant rows take those rows in priority order (unit-scale errors first; v3's
+        order already is), and a closing note counts the quant rows still cut.  Otherwise the
+        plain cut is returned unchanged.  Only quant_reconcile rows of ``rest`` are rendered,
+        and a malformed one is skipped (the plain cut never rendered it)."""
+        def unit_scale(r: Dict[str, Any]) -> bool:
+            return self._UNIT_SCALE_MARK in str(r.get("why_they_differ") or "")
+
+        tail: List[Tuple[Dict[str, Any], str]] = []
+        for r in rest:
+            if not isinstance(r, dict) or r.get("origin") != "quant_reconcile":
+                continue
+            try:
+                line = self._contested_row_line(r)
+            except Exception:  # noqa: BLE001 — a malformed row past the cap is skipped, as before
+                continue
+            if line is not None:
+                tail.append((r, line))
+        if not tail:
+            return [line for _, line in head]
+        cap = len(head)
+        rendered = head + tail  # contested.json order
+        quant = [i for i, (r, _) in enumerate(rendered) if r.get("origin") == "quant_reconcile"]
+        quant.sort(key=lambda i: not unit_scale(rendered[i][0]))
+        quant_positions = set(quant)
+        # The quant rows' share never falls below what the plain cut already shows; tail is
+        # not empty, so there are more quant rows than that and the slice fills the share.
+        in_cut = sum(1 for i in quant if i < cap)
+        keep = set(quant[:max(min(self._CONTESTED_QUANT_SLOTS, cap), in_cut)])
+        # The plain cut's other rows, in order, fill the remaining slots (there are enough:
+        # cap - in_cut of them).
+        keep.update([i for i in range(cap) if i not in quant_positions][:cap - len(keep)])
+        # Kept rows in contested.json order; the positions held by quant rows take the kept
+        # quant rows in priority order (unit-scale errors first).
+        kept_quant_by_priority = iter([i for i in quant if i in keep])
+        lines = []
+        for i in sorted(keep):
+            row = next(kept_quant_by_priority) if i in quant_positions else i
+            lines.append(rendered[row][1])
+        cut = [rendered[i][0] for i in quant if i not in keep]
+        if cut:
+            n_unit = sum(1 for r in cut if unit_scale(r))
+            lines.append(f"（另有 {len(cut)} 条数值对账分歧超出上限未列出"
+                         + (f"，其中 {n_unit} 条疑似量纲错误" if n_unit else "") + "）")
+            logger.info(f"争议性论断块：数值对账分歧保留 {len(quant) - len(cut)} 条、"
+                        f"超出上限未列 {len(cut)} 条（疑似量纲错误 {n_unit} 条）")
+        return lines
 
     def _build_chronology_block(self, max_events: int = 25) -> str:
         """W9-8: 紧凑时间线块（timeline.json 取最近 max_events 条、按时间升序渲染）。
@@ -3030,6 +3167,13 @@ class ReportAgent:
                              f"（截至 {(data or {}).get('horizon_date') or ''}）")
         else:
             lines.append("稳定性诊断：已趋稳" if ca else "稳定性诊断：尚未趋稳（应降低信心）")
+        # SIM-4（SIM_PRIOR_ECHO_DIAGNOSTIC，默认开）：先验回声 / 领先扎堆时，在份额行之后、注释行
+        # 之前加一行不含机制数字的定性提示（forecast_extractor 的份额解析只读份额行，不受影响）；
+        # 其余裁定不加任何行，输出逐字节不变。
+        if getattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", True):
+            echo_line = _prior_echo_caveat(data)
+            if echo_line:
+                lines.append(echo_line)
         lines.append(note_line)
         return "\n".join(lines)
 
@@ -3777,6 +3921,17 @@ class ReportAgent:
                         )
                 except Exception as _ce:  # noqa: BLE001 — 批判失败沿用未批判骨架
                     logger.warning(f"骨架前置自校准失败（忽略）: {_ce}")
+            # INFRA-4（ARTIFACT_STRICT_JSON，默认开）：含 NaN/Infinity 的骨架不钉进章节提示词、
+            # 不早落 forecast.json，回退成稿后抽取（与骨架未产出情景的回退同路径）。
+            _spine_nonfinite = (_numeric.find_nonfinite(spine)
+                                if getattr(Config, "ARTIFACT_STRICT_JSON", True) else [])
+            if _spine_nonfinite:
+                self._forecast_spine = None
+                self._forecast_spine_block = ""
+                self._mark_spine_pack_published(False)
+                logger.warning(f"预测骨架含非有限数 {_spine_nonfinite[:10]}，不钉骨架、不早落 "
+                               f"forecast.json（回退为成稿后抽取）")
+                return
             self._forecast_spine = spine
             self._forecast_spine_block = _fe.render_forecast_spine_block(spine)
             self._mark_spine_pack_published(True)
@@ -3801,7 +3956,8 @@ class ReportAgent:
                 _early_provenance = self._model_provenance_block()
                 if _early_provenance is not None:
                     _early = dict(_early, model_provenance=_early_provenance)
-                write_text_atomic(fpath, json.dumps(_early, ensure_ascii=False, indent=2))
+                write_text_atomic(fpath, _forecast_artifact_json(
+                    _early, "forecast.json（骨架版）", record_quality=True)[0])
             except Exception as _pe:  # noqa: BLE001 — 早落失败不影响主流程
                 logger.warning(f"预测骨架早落 forecast.json 失败（忽略）: {_pe}")
             logger.info(
@@ -4349,6 +4505,10 @@ class ReportAgent:
                 _ebf_guard_kwargs: Dict[str, Any] = (
                     {"numeric_guard_mode": _ng_mode}
                     if _ng_mode == _numeric_guards.MODE_SHADOW else {})
+                # FU-7：市场被扣下（回测钉，或钉查找失败时失败关闭，见 _markets_withheld_status）
+                # 时弹出模型自报的市场锚点（实时运行不传，调用逐字节不变）。
+                if self._markets_withheld_status() is not None:
+                    _ebf_guard_kwargs["withhold_market_anchors"] = True
                 # B2: 需求书解析出的 binary_min_count 参与生效——取 spec 与 Config 的较大者
                 # （需求书写明「15+ binary forecasts」时不被 Config 默认静默压低）。
                 _bres = _ebf(
@@ -4409,6 +4569,19 @@ class ReportAgent:
                     for _ext_issue in _ext_bq.get("issues") or []:
                         if _ext_issue not in _ext_base and _ext_issue not in _q_issues:
                             _q_issues.append(_ext_issue)
+                    # EVAL-14（FORECAST_BINARY_STRUCTURED_TARGET，默认关）：同目标阈值阶梯单调性审计，
+                    # 在 reconcile 定稿后的概率上做；只告警（不进 issues、不碰发布门与终审政策版本）。
+                    # 增强项：审计异常只记日志，不写键、不影响定稿（degrade-safe）。
+                    if getattr(Config, "FORECAST_BINARY_STRUCTURED_TARGET", False):
+                        try:
+                            from .binary_targets import threshold_ladder_audit as _ladder_audit
+                            _ladder = _ladder_audit(forecast["binary_forecasts"])
+                            _quality["threshold_ladder"] = _ladder
+                            if _ladder["violation_count"]:
+                                logger.warning(f"二元预测阈值阶梯不单调："
+                                               f"{_ladder['violation_count']} 处（仅告警）")
+                        except Exception as _lae:  # noqa: BLE001 — 只告警的增强审计
+                            logger.warning(f"二元预测阈值阶梯审计失败（忽略，不影响产物）: {_lae!r}")
                     forecast["binary_quality"] = _quality
                     # RQ-6：校验二元预测结算年份与真实判定期一致——目标年份集合（需求书 +
                     # 日历 horizon_date.year）与二元结算年份集合非空且无交集时，把
@@ -4435,8 +4608,10 @@ class ReportAgent:
                             _mcpath = os.path.join(
                                 ReportManager._get_report_folder(report_id),
                                 "market_comparison.json")
+                            # INFRA-4：非有限叶子置 null 后写出；内嵌副本由下方 forecast.json
+                            # 落盘记入 quality.nonfinite_nulled（$.market_comparison…）。
                             write_text_atomic(
-                                _mcpath, json.dumps(_mc, ensure_ascii=False, indent=2))
+                                _mcpath, _forecast_artifact_json(_mc, "market_comparison.json")[0])
                         except Exception as _mce:  # noqa: BLE001 — 落盘失败不影响主流程
                             logger.warning(f"落 market_comparison.json 失败（忽略）: {_mce}")
                     # XRUN-1(c): 与同图谱、不同模拟的上一份报告比对概率向量——
@@ -4496,12 +4671,19 @@ class ReportAgent:
         # REPORT-11：概率政策标记与概率形状遥测——置于二元块（含对账重算记分卡）之后，此后不再有步骤
         # 移动情景 / 二元概率。政策标记与形状旗标无关（形状关时开了护栏的运行仍可识别）；形状纯观测，
         # 任何门都不读，随下方 forecast.json 落盘（终审指纹覆盖它），发布提交时抄入账本行
-        # objective_signals。护栏关时不写 forecast_policy；形状关时不写 probability_shape（forecast.json
-        # 回到旧形态）。probability_shape 从不抛出（纯函数，失败返回空块）。
-        if getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False):
+        # objective_signals。护栏（与 EVAL-14 结构化 target）都关时不写 forecast_policy；形状关时不写
+        # probability_shape（forecast.json 回到旧形态）。probability_shape 从不抛出（纯函数，失败返回空块）。
+        # EVAL-14：结构化 target 开启时二元抽取提示词多一段 STRUCTURED TARGET 规则（可能改变起草），
+        # 同样记入 forecast_policy（护栏键照实写出，账本 shape_summary 按它分组不受影响）；两旗标都关
+        # → 不写（forecast.json 不变）。
+        _guard_on = bool(getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False))
+        _target_on = bool(getattr(Config, "FORECAST_BINARY_STRUCTURED_TARGET", False))
+        if _guard_on or _target_on:
             _fq0 = forecast.get("quality")
             _fq = dict(_fq0) if isinstance(_fq0, dict) else {}
-            _fq["forecast_policy"] = {"binary_symmetric_guard": True}
+            _fq["forecast_policy"] = {"binary_symmetric_guard": _guard_on}
+            if _target_on:
+                _fq["forecast_policy"]["binary_structured_target"] = True
             forecast["quality"] = _fq
         if getattr(Config, "FORECAST_PROBABILITY_SHAPE", True):
             _fq0 = forecast.get("quality")
@@ -4658,7 +4840,11 @@ class ReportAgent:
             except Exception as _cde:  # noqa: BLE001 — 影子诊断，绝不影响产物
                 logger.warning(f"跨来源预测离散度诊断失败（忽略）: {_cde}")
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
-        write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
+        # INFRA-4（ARTIFACT_STRICT_JSON）：绝不写出 NaN/Infinity——置 null 并记 quality.nonfinite_nulled，
+        # 其后的内存副本与账本追加都用落盘的这一份。
+        _forecast_text, forecast = _forecast_artifact_json(forecast, "forecast.json",
+                                                           record_quality=True)
+        write_text_atomic(fpath, _forecast_text)
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
         # P2-4: 追加进校准账本（loop-closer；resolution 经 /api/v1/resolve 或 forecast_tools backtest）。
         # EVAL-1: 仅 FORECAST_LEDGER_COMMIT_MODE=legacy 在此（终审之前）追加；默认 published 模式
@@ -7010,7 +7196,8 @@ class ReportAgent:
                     fc.setdefault("quality", {})["lint"] = lint_rep
                     if projection is not None:
                         fc["quality"]["projection_attribution"] = projection
-                    write_text_atomic(fpath, json.dumps(fc, ensure_ascii=False, indent=2))
+                    write_text_atomic(fpath, _forecast_artifact_json(
+                        fc, "forecast.json", record_quality=True)[0])
                     if isinstance(getattr(self, "_forecast_spine", None), dict):
                         self._forecast_spine.setdefault("quality", {})["lint"] = lint_rep
                         if projection is not None:

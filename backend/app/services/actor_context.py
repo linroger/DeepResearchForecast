@@ -828,7 +828,36 @@ def _incident_relationships(
     ))[:24]
 
 
+# RESEARCH-6 forecaster attribution adds these fields to quantitative rows (none of them
+# existed on a row before it; the bridge's _CONSENSUS_KEYS) and sets ``analyst`` to the
+# forecaster, where it used to be the source (the bridge's enrich_quantitative_rows
+# fallback).  A row the actor matches only through attribution must not push a row it
+# matched without it out of a capped pack (FU-10).
+_ATTRIBUTION_FIELDS = ("forecaster", "low", "high", "n_forecasters", "range_kind")
+
+
+def _unattributed_view(row: Mapping[str, Any]) -> Dict[str, Any]:
+    """``row`` as it read before RESEARCH-6 attribution (see _ATTRIBUTION_FIELDS)."""
+    view = {key: value for key, value in row.items() if key not in _ATTRIBUTION_FIELDS}
+    forecaster = row.get("forecaster")
+    if forecaster is not None and view.get("analyst") == forecaster:
+        source = re.sub(r"\s+", " ", str(row.get("source") or "")).strip()
+        if source:
+            view["analyst"] = source
+        else:
+            view.pop("analyst", None)
+    return view
+
+
 def _relevant_rows(rows: Any, actor: Mapping[str, Any], limit: int) -> List[Dict[str, Any]]:
+    """The first ``limit`` rows (in row order) that match ``actor``.
+
+    When the cap binds and RESEARCH-6 attribution fields are present, the rows
+    that match without those fields are kept first and rows matching only
+    through them fill the remaining slots, so attribution never displaces a
+    previously matched row; the result keeps row order.  Rows without the
+    fields (attribution off) give exactly ``matched[:limit]``.
+    """
     if not isinstance(rows, list):
         return []
     intelligence = actor.get("intelligence")
@@ -848,7 +877,19 @@ def _relevant_rows(rows: Any, actor: Mapping[str, Any], limit: int) -> List[Dict
         )
         and _matches_structured_row(row, actor)
     ]
-    return matched[:limit]
+    if len(matched) <= limit or not any(
+            field in row for row in matched for field in _ATTRIBUTION_FIELDS):
+        return matched[:limit]
+    base = [
+        index for index, row in enumerate(matched)
+        if _matches_structured_row(_unattributed_view(row), actor)
+    ]
+    keep = set(base[:limit])
+    for index in range(len(matched)):
+        if len(keep) >= limit:
+            break
+        keep.add(index)
+    return [row for index, row in enumerate(matched) if index in keep]
 
 
 def _shared_context(actors: Mapping[str, Any]) -> Dict[str, Any]:

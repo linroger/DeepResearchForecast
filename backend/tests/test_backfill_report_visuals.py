@@ -740,3 +740,51 @@ def test_replay_of_a_report1_era_forecast_json_keeps_the_withheld_disclosure(tmp
         "proposition_consistency", "needs_review_count", "needs_review_reasons"}
     assert "only 4 binaries (< 10)" in stored["issues"]
     assert quality["issues"] == [_binary_withheld_issue(2)] + rebuilt["issues"]
+
+
+def test_replay_recomputes_the_threshold_ladder_and_keeps_the_extractor_keys(
+        tmp_path, monkeypatch):
+    """End to end through backfill_one (EVAL-14 + FU-1): the stored ladder audit flagged
+    F1 against F2; F1 is dropped as a circular market forecast, so the replay recomputes
+    the ladder over F2 and F4 (now monotone) instead of carrying the stale stored audit,
+    while the extractor-only keys FU-1 carries survive."""
+    from app.services import binary_targets as bt
+
+    def rung(rid, comparator, threshold, p):
+        statement = f"US data-centre grid demand {comparator} {threshold} GW at end-2030"
+        criteria = f"YES if EIA reports demand {comparator} {threshold} GW for 2030-12-31."
+        target, errors = bt.validate_binary_target(
+            {"metric": "US data-centre grid demand", "unit": "GW", "comparator": comparator,
+             "threshold": threshold, "statistic": "value_on", "target_date": "2030-12-31",
+             "resolution_source": "EIA Electric Power Monthly"},
+            statement=statement, criteria=criteria)
+        assert errors == []
+        return {"id": rid, "statement": statement, "resolution_criteria": criteria,
+                "probability": p, "theme": "grid", "criteria_sharp": True, "target": target}
+
+    stored = [rung("F1", ">=", 170, 0.12), rung("F2", ">", 230, 0.57),
+              {"id": "F3", "statement": "Congress passes a permitting reform by 2027",
+               "resolution_criteria": "YES if signed into law by 2027-12-31.",
+               "probability": 0.35, "theme": "policy", "criteria_sharp": True},
+              rung("F4", ">=", 100, 0.80)]
+    stored[0].update(_CIRCULAR)
+    old = _binary_quality(stored, min_count=10)
+    old.update(proposition_consistency={"status": "ok"},
+               world_state_outcome={"scenario_shares": {"A": 0.6, "B": 0.4}},
+               threshold_ladder=bt.threshold_ladder_audit(stored))
+    assert old["threshold_ladder"]["violation_count"] >= 1
+    pipeline_id, report_id, report_dir = _replay_harness(
+        tmp_path, monkeypatch, "ladder",
+        {"binary_forecasts": stored, "binary_quality": old, "scenarios": []})
+
+    backfill_one(pipeline_id, report_id, apply=True)
+
+    forecast = json.loads((report_dir / "forecast.json").read_text(encoding="utf-8"))
+    retained = forecast["binary_forecasts"]
+    quality = forecast["binary_quality"]
+    assert [row["id"] for row in retained] == ["F2", "F3", "F4"]
+    assert quality["threshold_ladder"] == bt.threshold_ladder_audit(retained)
+    assert quality["threshold_ladder"]["groups_checked"] == 1
+    assert quality["threshold_ladder"]["violation_count"] == 0
+    assert quality["world_state_outcome"] == old["world_state_outcome"]
+    assert quality["count"] == 3
