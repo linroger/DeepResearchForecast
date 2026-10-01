@@ -26,8 +26,10 @@ and no agent tool is involved.  This module is the pure, stdlib-only part:
   at its own display precision (one reading: the result as it is, or a ratio
   as a percentage; :func:`scales_to_percent` tells whether a formula yields
   a percentage already, :func:`is_additive` whether it only adds and
-  subtracts, so percentages give percentage points); :func:`format_exact`
-  writes a result with 12 significant digits and no exponent notation.
+  subtracts, so percentages give percentage points, and :func:`keeps_unit`
+  whether its result is in the unit of its data operands);
+  :func:`format_exact` writes a result with 12 significant digits and no
+  exponent notation.
 
 Every failure is a :class:`CalcError`.  Idea credit: FinanceHarness's
 AST-whitelisted calculator (no licence); only the whitelist idea is used, the
@@ -43,7 +45,7 @@ import re
 import unicodedata
 from decimal import (ROUND_HALF_EVEN, Context, Decimal, DecimalException, DivisionByZero, InvalidOperation,
                      Overflow, localcontext)
-from typing import Callable, Mapping
+from typing import Callable, Collection, Mapping
 
 __all__ = [
     "CLAUSE_OPEN_RE",
@@ -53,6 +55,7 @@ __all__ = [
     "evaluate",
     "format_exact",
     "is_additive",
+    "keeps_unit",
     "parse_derivation",
     "period_value",
     "period_years",
@@ -361,6 +364,56 @@ def is_additive(expr: str) -> bool:
         if not additive:
             return False
     return True
+
+
+# The two dimensions keeps_unit tells apart: a bare literal and a value in the data operands' unit.
+_LITERAL, _UNIT = "literal", "unit"
+
+
+def keeps_unit(expr: str, data_names: Collection[str]) -> bool:
+    """Whether formula ``expr`` gives a result in the unit of its data
+    operands (``data_names``): sums and differences of data operands and
+    literals (as :func:`is_additive` reads them: "a-b", "max(a,b)-c"), times
+    or divided by literals ("a*1000": 2.5 GW is 2,500 MW; "(a-b)/1000").  A
+    ratio, product or power of operands ("a/b", "a*b"), a literal divided by
+    one, any other call, a name that is no data operand (a ``years()``
+    period: "(a-b)/n" is a rate per year) and a formula of literals only keep
+    no unit.  Never raises: an unreadable formula keeps no unit."""
+    if not isinstance(expr, str) or len(expr) > MAX_EXPR_CHARS:
+        return False
+    try:
+        tree = ast.parse(expr.strip(), mode="eval")
+        return _dimension(tree.body, frozenset(data_names)) == _UNIT
+    except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError):
+        return False
+
+
+def _dimension(node: ast.AST, data_names: frozenset[str]) -> str | None:
+    """_LITERAL, _UNIT or None (no unit-keeping reading) of one formula node."""
+    if isinstance(node, ast.Constant):
+        return _LITERAL if type(node.value) in (int, float) else None
+    if isinstance(node, ast.Name):
+        return _UNIT if node.id in data_names else None
+    if isinstance(node, ast.UnaryOp):
+        return _dimension(node.operand, data_names) if isinstance(node.op, ast.USub) else None
+    if isinstance(node, ast.Call):
+        if (not isinstance(node.func, ast.Name) or node.func.id not in _UNIT_KEEPING_CALLS or node.keywords
+                or not node.args):
+            return None
+        parts = {_dimension(arg, data_names) for arg in node.args}
+        return None if None in parts else (_UNIT if _UNIT in parts else _LITERAL)
+    if not isinstance(node, ast.BinOp):
+        return None
+    left, right = _dimension(node.left, data_names), _dimension(node.right, data_names)
+    if left is None or right is None:
+        return None
+    if isinstance(node.op, (ast.Add, ast.Sub)):
+        return _UNIT if _UNIT in (left, right) else _LITERAL
+    if isinstance(node.op, ast.Mult):
+        return None if left == right == _UNIT else (_UNIT if _UNIT in (left, right) else _LITERAL)
+    if isinstance(node.op, ast.Div):
+        return left if right == _LITERAL else None
+    return None
 
 
 def _is_hundred(node: ast.AST) -> bool:

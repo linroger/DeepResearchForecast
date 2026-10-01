@@ -243,6 +243,18 @@ def test_is_additive_reads_sums_and_differences_only():
         assert not dn.is_additive(expr), expr
 
 
+def test_keeps_unit_reads_sums_of_data_operands_scaled_by_literals():
+    names = {"a", "b", "c"}
+    for expr in ("a-b", "a+b-c", "100-a", "-a", "abs(a-b)", "max(a,b)-c", "min(a, b)", "a", "a*1000", "1000*a",
+                 "a/1000", "-a*100", "(a-b)/1000", "abs(a)*1000", "a*1000*1000", "(a-b)*1000/1000"):
+        assert dn.keeps_unit(expr, names), expr
+    for expr in ("a/b", "a*b", "(a-b)/b", "(a-b)/b*100", "1000/a", "a**2", "a**1", "sqrt(a)", "ln(a)", "a-n",
+                 "a/n", "(a-b)/n", "100", "1000*100", "abs(1000)", "a*True", "+a", "max(a, key=b)", "max(*a)",
+                 "", "a +* b", None, "a" * 400, "a.b - c", "f(a)"):
+        assert not dn.keeps_unit(expr, names), expr
+    assert not dn.keeps_unit("a-b", set()) and not dn.keeps_unit("a-b", {"a"})
+
+
 def test_format_exact_has_twelve_significant_digits_and_no_exponent():
     assert dn.format_exact(Decimal(24) / Decimal(13) * 100) == "184.615384615"
     assert dn.format_exact(Decimal("1.2e12")) == "1200000000000"

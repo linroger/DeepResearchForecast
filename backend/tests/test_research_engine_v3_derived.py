@@ -65,8 +65,11 @@ ROWS = {
     13: {"sid": 13, "fetched": True, "title": "Annual review", "snippet": ""},
     14: {"sid": 14, "fetched": False, "title": "Outlook note", "snippet": "Capacity of 37 GW and 13 GW."},
 }
-PAGES = {12: S12_PAGE, 13: S13_PAGE, 15: "Renewables supplied 68% of demand in 2024, against 42% in 2019."}
-ROWS_WITH_SHARES = {**ROWS, 15: {"sid": 15, "fetched": True, "title": "Energy mix", "snippet": ""}}
+PAGES = {12: S12_PAGE, 13: S13_PAGE, 15: "Renewables supplied 68% of demand in 2024, against 42% in 2019.",
+         16: "Sales reached 107 units in 2024, against 100 units in 2023. Storage grew from 2.5 GW to 7.5 GW, "
+             "and investment from $13 billion to $37 billion."}
+ROWS_WITH_SHARES = {**ROWS, 15: {"sid": 15, "fetched": True, "title": "Energy mix", "snippet": ""},
+                    16: {"sid": 16, "fetched": True, "title": "Sales report", "snippet": ""}}
 FINDING = "Capacity grew about 185% [S12] (DERIVED: (a-b)/b*100; a=37 [S12], b=13 [S12])"
 
 
@@ -115,12 +118,15 @@ def assert_recomputable(fact: dict, rows, pages) -> None:
         values[name] = reading[0]
     result = dn.evaluate(derivation["expr"], values)
     assert dn.format_exact(result) == derivation["result"]
-    data_values = [operand["value"] for operand in derivation["operands"].values() if operand["sid"] is not None]
-    percent = lr._result_is_percent(derivation["expr"], data_values)
-    numbers = [number for number in lr._number_occurrences(fact["text"]) if number.checkable]
-    stating = [number for number in numbers if lr._states_result(number, result, percent)]
+    form = lr._result_form(derivation["expr"], {name: operand["value"]
+                                                for name, operand in derivation["operands"].items()
+                                                if operand["sid"] is not None})
+    numbers = lr._number_occurrences(fact["text"])
+    stating = [index for index, number in enumerate(numbers)
+               if number.can_state and lr._states_result(number, result, form)]
     assert stating, fact["text"]
-    assert not lr._numbers_off_page([number for number in numbers if number not in stating], page), fact["text"]
+    others = [number for index, number in enumerate(numbers) if number.checkable and index not in stating]
+    assert not lr._numbers_off_page(others, page), fact["text"]
 
 
 # ================================================================== postprocess
@@ -241,6 +247,26 @@ FAILURE_CASES = [
     ("Combined about 2856% [S15] (DERIVED: a*b; a=68% [S15], b=42% [S15])", "result_mismatch"),
     ("Capacity grew strongly to 37 GW [S12] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])",
      "no_result_token"),
+    # A percentage result is stated by a percentage only: no bare count, no "times".
+    ("The plant employs 185 workers [S12] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
+    ("Capacity grew 185 times [S12] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
+    ("The gap is about 26 [S15] (DERIVED: a-b; a=68% [S15], b=42% [S15])", "result_mismatch"),
+    # A figure written with a unit class states a result only in the unit class of every
+    # data operand, through a formula that keeps it: no other class, no ratio or product
+    # of unit figures, no unit the operands do not state, and never as a percentage.
+    ("Annual generation rose by 24 TWh [S12] (DERIVED: a-b; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
+    ("Grid spending rose by €24 per household [S12] (DERIVED: a-b; a=37 GW [S12], b=13 GW [S12])",
+     "result_mismatch"),
+    ("Capacity rose 2.85 GW [S12] (DERIVED: a/b; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
+    ("Capacity is $2.85 [S12] (DERIVED: a/b; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
+    ("Capacity rose by 24 GW [S12] (DERIVED: a-b; a=37 [S12], b=13 [S12])", "result_mismatch"),
+    ("Capacity rose by 4.8 GW a year [S12] (DERIVED: (a-b)/n; a=37 GW [S12], b=13 GW [S12], n=years(2019,2024))",
+     "result_mismatch"),
+    ("Capacity rose about 2,400% [S12] (DERIVED: a-b; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
+    ("Storage grew by 5 GWh [S16] (DERIVED: a-b; a=7.5 GW [S16], b=2.5 GW [S16])", "result_mismatch"),
+    # A single digit states a result only as a percentage or with a unit, at its precision.
+    ("Sales grew 8% [S16] (DERIVED: (a-b)/b*100; a=107 units [S16], b=100 units [S16])", "result_mismatch"),
+    ("Sales grew by 7 [S16] (DERIVED: a-b; a=107 units [S16], b=100 units [S16])", "no_result_token"),
 ]
 
 
@@ -320,6 +346,40 @@ def test_a_laundered_figure_never_reaches_derived_supports_or_report_support():
         assert ReportAgent._semantic_citation_support(line, source) is False, line
 
 
+def test_a_figure_in_another_unit_or_form_never_reaches_derived_supports_or_report_support():
+    """A clause never certifies a figure in a unit its operands do not state
+    or a percentage written as a bare count: such a finding is UNVERIFIED,
+    publishes no derived support and supports no report line."""
+    laundered = {
+        "Annual generation rose by 24 TWh [S12] (DERIVED: a-b; a=37 GW [S12], b=13 GW [S12])":
+            "Annual generation rose by 24 TWh in 2024 [S1].",
+        "Grid spending rose by €24 per household [S12] (DERIVED: a-b; a=37 GW [S12], b=13 GW [S12])":
+            "Grid spending rose by €24 per household [S1].",
+        "Capacity rose 2.85 GW [S12] (DERIVED: a/b; a=37 GW [S12], b=13 GW [S12])": "Capacity rose 2.85 GW [S1].",
+        "The plant employs 185 workers [S12] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])":
+            "The plant employs 185 workers [S1].",
+    }
+    facts = post(*laundered, FINDING)
+    assert [fact["tag"] for fact in facts] == ["UNVERIFIED"] * 4 + ["DERIVED"]
+    assert {fact.get("derivation_error") for fact in facts[:4]} == {"result_mismatch"}
+    engine = types.SimpleNamespace(records={"K1": _record(facts)})
+    engine._derived_facts = functools.partial(lr._Engine._derived_facts, engine)
+    supports = lr._Engine._derived_supports(engine)
+    assert supports == {12: ["Capacity grew about 185% [calculated: (a-b)/b*100; a=37, b=13]"]}
+    source = {"title": "Capacity statistics", "supports": [],
+              "excerpt": "Installed capacity reached 37 GW in 2024, up from 13 GW in 2019.",
+              "derived_supports": supports[12]}
+    for line in laundered.values():
+        assert ReportAgent._semantic_citation_support(line, source) is False, line
+    # The same statement in the operands' unit is DERIVED and supports its report line.
+    kept = post("Capacity rose by 24 GW [S12] (DERIVED: a-b; a=37 GW [S12], b=13 GW [S12])")
+    engine.records = {"K1": _record(kept)}
+    supports = lr._Engine._derived_supports(engine)
+    assert supports == {12: ["Capacity rose by 24 GW [calculated: a-b; a=37 GW, b=13 GW]"]}
+    assert ReportAgent._semantic_citation_support("Capacity rose by 24 GW since 2019 [S1].",
+                                                  {**source, "derived_supports": supports[12]}) is True
+
+
 def test_prose_in_lower_case_is_no_derivation_clause():
     line = "Revenue (derived: from licensing) reached 37 GW [S12] (VERIFIED)"
     fact = only(line)
@@ -366,14 +426,14 @@ def test_audit_keeps_the_tag_evidence_off_gives_a_derivation_bullet():
 
 # Every clause form of this section, pinned flag off by FLAG_OFF_SHA256: the
 # _flag_off_snapshot of linear_research.py at 30ab072 (feat/finharness-transplants,
-# the base of wp/RESEARCH-8), the engine before this package; the base merged
-# later (9b65135) gives the same snapshot.
+# the base of wp/RESEARCH-8), the engine before this package; the bases merged
+# later (9b65135, 13d0bbe) give the same snapshot.
 PINNED_LINES = [*CORPUS, *(line for line, _ in FAILURE_CASES), LAUNDERING, *PARITY_LINES,
                 "Revenue (derived: from licensing) reached 37 GW [S12] (VERIFIED)",
                 "Capacity grew about 185% [S12] while renewables supplied 68% of demand [S15] "
                 "(DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])",
                 "The gap is about 26 percentage points [S15] (DERIVED: a-b; a=68% [S15], b=42% [S15])"]
-FLAG_OFF_SHA256 = "605c7cefcc055ce8a6e92ded9ee970250d0f872b0d71465be654c21e7191e096"
+FLAG_OFF_SHA256 = "1086a98eaf090a547a4f0ce2131d06465a6bcc038b0816a37299affcba0ed7b9"
 
 
 def test_the_clause_replaces_the_tag_the_agent_wrote():
@@ -409,6 +469,16 @@ def test_the_derivation_forms_the_engine_reads():
         "Renewables supplied about 162% of their 2019 share [S15] (DERIVED: a/b; a=68% [S15], b=42% [S15])":
             "1.61904761905",
         "Capacity changed by -64.9% [S12] (DERIVED: (b-a)/a*100; a=37 GW [S12], b=13 GW [S12])": "-64.8648648649",
+        # A unit figure from a formula that keeps the operands' unit, at the scale written.
+        "Capacity rose by 24 GW [S12] (DERIVED: a-b; a=37 GW [S12], b=13 GW [S12])": "24",
+        "Investment rose by $24 billion [S16] (DERIVED: a-b; a=$37 billion [S16], b=$13 billion [S16])":
+            "24000000000",
+        "Capacity rose 2.85 times [S12] (DERIVED: a/b; a=37 GW [S12], b=13 GW [S12])": "2.84615384615",
+        # A single digit written as a percentage or with a unit.
+        "Sales grew 7% [S16] (DERIVED: (a-b)/b*100; a=107 units [S16], b=100 units [S16])": "7",
+        "Sales grew 7.0% [S16] (DERIVED: (a-b)/b*100; a=107 units [S16], b=100 units [S16])": "7",
+        "Sales grew 7 percent [S16] (DERIVED: (a-b)/b*100; a=107 units [S16], b=100 units [S16])": "7",
+        "Storage grew by 5 GW [S16] (DERIVED: a-b; a=7.5 GW [S16], b=2.5 GW [S16])": "5",
     }
     for line, result in cases.items():
         fact = only(line, rows=ROWS_WITH_SHARES)
@@ -669,13 +739,15 @@ def test_derived_quant_match_keeps_the_sign_and_one_percentage_scale():
               "operands": {"a": {"value": "68%", "sid": 1}, "b": {"value": "42%", "sid": 1}}}
     assert lr.derived_quant_match({"value": "26", "unit": "percentage points"}, [points]) is points
     assert lr.derived_quant_match({"value": "2600", "unit": "%"}, [points]) is None
-    # A percentage result is never stated with a unit class or a scale word.
+    # A percentage result is stated by a percentage only: never a bare number, a unit class
+    # or a scale word.
     growth = {"sid": 1, "expr": "(a-b)/b*100", "result": "184.615384615",
               "operands": {"a": {"value": "37 GW", "sid": 1}, "b": {"value": "13 GW", "sid": 1}}}
     assert lr.derived_quant_match({"value": "185", "unit": "%"}, [growth]) is growth
-    assert lr.derived_quant_match({"value": "185", "unit": ""}, [growth]) is growth
+    assert lr.derived_quant_match({"value": "185", "unit": "percent"}, [growth]) is growth
     for row in ({"value": "185", "unit": "billion USD"}, {"value": "185", "unit": "GW"},
-                {"value": "-185", "unit": "%"}, {"value": "$185", "unit": ""}):
+                {"value": "-185", "unit": "%"}, {"value": "$185", "unit": ""}, {"value": "185", "unit": ""},
+                {"value": "185", "unit": "workers"}):
         assert lr.derived_quant_match(row, [growth]) is None, row
     # A ratio of percentages is a ratio: x 100 as a percentage.
     share_ratio = {"sid": 1, "expr": "a/b", "result": "1.61904761905",
@@ -684,12 +756,45 @@ def test_derived_quant_match_keeps_the_sign_and_one_percentage_scale():
     assert lr.derived_quant_match({"value": "1.6", "unit": "%"}, [share_ratio]) is None
 
 
+def test_derived_quant_match_reads_a_unit_figure_in_the_unit_of_its_operands_only():
+    """A row written with a unit class states a result that is no percentage
+    only in the unit class of every data operand, through a formula that keeps
+    it (sums and differences, one operand scaled by literals)."""
+    difference = {"sid": 1, "expr": "a-b", "result": "24",
+                  "operands": {"a": {"value": "37 GW", "sid": 1}, "b": {"value": "13 GW", "sid": 1}}}
+    for row in ({"value": "24", "unit": "GW"}, {"value": "24", "unit": ""}, {"value": "24", "unit": "gigawatts"}):
+        assert lr.derived_quant_match(row, [difference]) is difference, row
+    for row in ({"value": "24", "unit": "GWh"}, {"value": "24", "unit": "USD"}, {"value": "€24", "unit": ""},
+                {"value": "24", "unit": "TWh"}, {"value": "2400", "unit": "%"}):
+        assert lr.derived_quant_match(row, [difference]) is None, row
+    ratio = {"sid": 1, "expr": "a/b", "result": "2.84615384615",
+             "operands": {"a": {"value": "37 GW", "sid": 1}, "b": {"value": "13 GW", "sid": 1}}}
+    for row in ({"value": "2.85", "unit": "GW"}, {"value": "2.85", "unit": "USD"}):
+        assert lr.derived_quant_match(row, [ratio]) is None, row
+    assert lr.derived_quant_match({"value": "2.85", "unit": "x"}, [ratio]) is ratio
+    scaled = {"sid": 1, "expr": "a*1000", "result": "2500", "operands": {"a": {"value": "2.5 GW", "sid": 1}}}
+    assert lr.derived_quant_match({"value": "2,500", "unit": "MW"}, [scaled]) is scaled
+    assert lr.derived_quant_match({"value": "2,500", "unit": "MWh"}, [scaled]) is None
+    bare = {"sid": 1, "expr": "a-b", "result": "24",
+            "operands": {"a": {"value": "37", "sid": 1}, "b": {"value": "13", "sid": 1}}}
+    assert lr.derived_quant_match({"value": "24", "unit": "GW"}, [bare]) is None
+    period = {"sid": 1, "expr": "(a-b)/n", "result": "4.8",
+              "operands": {"a": {"value": "37 GW", "sid": 1}, "b": {"value": "13 GW", "sid": 1},
+                           "n": {"value": "years(2019,2024)", "sid": None}}}
+    assert lr.derived_quant_match({"value": "4.8", "unit": "GW"}, [period]) is None
+
+
 def test_derived_quant_match_reads_one_number_at_its_precision_and_scale():
-    derivation = {"sid": 1, "expr": "a*b", "result": "1200000000000"}
+    derivation = {"sid": 1, "expr": "a+b", "result": "1200000000000",
+                  "operands": {"a": {"value": "$700 billion", "sid": 1}, "b": {"value": "$500 billion", "sid": 1}}}
     assert lr.derived_quant_match({"value": "1.2", "unit": "trillion USD"}, [derivation]) is derivation
     assert lr.derived_quant_match({"value": "1,200", "unit": "billion USD"}, [derivation]) is derivation
     assert lr.derived_quant_match({"value": "1.3", "unit": "trillion USD"}, [derivation]) is None
     assert lr.derived_quant_match({"value": "1.2E12", "unit": "USD"}, [derivation]) is None
+    # A product of currency figures is no currency figure.
+    product = {"sid": 1, "expr": "a*b", "result": "1200000000000",
+               "operands": {"a": {"value": "$1.2 million", "sid": 1}, "b": {"value": "$1 million", "sid": 1}}}
+    assert lr.derived_quant_match({"value": "1.2", "unit": "trillion USD"}, [product]) is None
     assert lr.derived_quant_match({"value": "185", "unit": "%"}, [{"result": "bogus"}, {"result": "1.846"}]) == {
         "result": "1.846"}
 

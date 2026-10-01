@@ -4083,6 +4083,13 @@ class _NumberOccurrence:
         """A number the number rules read (:func:`fact_number_tokens`: >= 2 digits or a decimal)."""
         return sum(ch.isdigit() for ch in self.token) >= 2 or "." in self.token
 
+    @property
+    def can_state(self) -> bool:
+        """A number that may state a derivation's result: a checkable one, or a
+        single digit written as a percentage or with a unit class ("7%", "5 GW";
+        a bare "7" never)."""
+        return self.checkable or self.percent or bool(self.units)
+
 
 def _number_occurrences(text: str) -> list[_NumberOccurrence]:
     """Every number of a finding ``text`` in order (dates and year ranges out,
@@ -4113,6 +4120,14 @@ def _numbers_off_page(numbers: Iterable[_NumberOccurrence], available: frozenset
                                                     available)))
 
 
+def _operand_units(value: str) -> frozenset[str]:
+    """The unit classes a derivation operand's value is written in: those of
+    its one number, as :func:`_operand_reading` reads it (none when the value
+    holds no single number)."""
+    found = _number_values_at(_join_digit_groups(_number_text(value, strip_dates=True)))
+    return fact_unit_tokens(value).get(found[0][1], frozenset()) if len(found) == 1 else frozenset()
+
+
 def _result_is_percent(expr: str, data_values: Sequence[str]) -> bool:
     """Whether a derivation's result is a percentage as it is: its formula
     multiplies by the literal 100 (:func:`derived_numbers.scales_to_percent`),
@@ -4124,25 +4139,60 @@ def _result_is_percent(expr: str, data_values: Sequence[str]) -> bool:
                                           and all(fact_percent_tokens(value) for value in data_values))
 
 
-def _states_result(number: _NumberOccurrence, result: Decimal, result_percent: bool) -> bool:
+@dataclass(frozen=True)
+class _ResultForm:
+    """How a derivation's result may be written (:func:`_result_form`)."""
+
+    percent: bool            # a percentage already (:func:`_result_is_percent`)
+    units: frozenset[str]    # the unit classes a number stating it may be written with
+    quantity: bool           # in a unit a data operand is written with: no ratio, never a percentage
+
+
+def _result_form(expr: str, data_operands: Mapping[str, str]) -> _ResultForm:
+    """The form of the result of formula ``expr`` over its data operands
+    (``data_operands``, name → value as the clause writes it): a percentage
+    (:func:`_result_is_percent`), and, when the formula keeps their unit
+    (:func:`derived_numbers.keeps_unit`: sums and differences, one operand
+    or a sum scaled by literals), the unit classes every data operand is
+    written in (:func:`_operand_units`) and whether one is written with a
+    unit class at all.  A ratio, product or power of operands, a rate per
+    ``years()`` period and a clause without data operands keep no unit."""
+    values = list(data_operands.values())
+    keeps = bool(values) and dn.keeps_unit(expr, data_operands)
+    units = [_operand_units(value) for value in values] if keeps else []
+    return _ResultForm(percent=_result_is_percent(expr, values),
+                       units=frozenset.intersection(*units) if units else frozenset(),
+                       quantity=any(units))
+
+
+def _states_result(number: _NumberOccurrence, result: Decimal, form: _ResultForm) -> bool:
     """Whether one number of a finding, as it is written there
-    (:func:`_number_occurrences`), states a derivation ``result`` at its
-    display precision (:func:`derived_numbers.token_matches`).  One reading:
+    (:func:`_number_occurrences`), states a derivation ``result`` of the form
+    ``form`` (:func:`_result_form`) at its display precision
+    (:func:`derived_numbers.token_matches`).  One reading:
 
     * its sign is the result's: a number with a minus sign or dash right
       before it states a negative result only, any other a non-negative one;
-    * a result that is a percentage already (``result_percent``,
-      :func:`_result_is_percent`) is stated by a percentage or a bare number,
-      never by one written with a unit class or a scale word ("$185 billion"
-      and "185 GW" state no 184.6%);
-    * a ratio is stated by a percentage at result x 100 only, and by any
-      other number at its full value only ("2.85 trillion" is
-      2850000000000, never 2.85)."""
+    * a result that is a percentage already is stated by a percentage only
+      ("185%", "185 percent", "26 percentage points"), never by a bare number
+      ("185 workers", "185 times"), one written with a unit class or a
+      scale word ("185 GW", "$185 billion");
+    * any other result is stated by a number written with a unit class only
+      in a unit class of every data operand through a formula that keeps it
+      (``form.units``: "24 TWh" and "€24" state no difference of GW figures,
+      "2.85 GW" no ratio of them, "24 GW" no difference of bare numbers);
+    * a ratio is stated by a percentage at result x 100 only, a result in an
+      operand's unit (``form.quantity``) never by a percentage ("2,400%" is
+      no 24 GW difference), and any other number states the result at its
+      full value only ("2.85 trillion" is 2850000000000, never 2.85)."""
     result = -result if number.signed else result
-    if result_percent:
-        return not number.scaled and not number.units and dn.token_matches(number.token, result)
+    if form.percent:
+        return (number.percent and not number.scaled and not number.units
+                and dn.token_matches(number.token, result))
+    if not number.units <= form.units:
+        return False
     if number.percent:
-        return not number.scaled and dn.token_matches(number.token, result, percent=True)
+        return not form.quantity and not number.scaled and dn.token_matches(number.token, result, percent=True)
     if not number.scaled:
         return dn.token_matches(number.token, result)
     stated, value = Decimal(number.token), Decimal(number.full[1:])
@@ -4175,15 +4225,17 @@ def _derived_rules(text: str, cited: Sequence[int], clause: str,
       ``years(Y1,Y2)`` — else operand_not_on_page;
     * the formula evaluates over those values (``years(Y1,Y2)`` is Y2 - Y1)
       — else eval_error;
-    * one of the finding's checkable numbers (:func:`fact_number_tokens`)
-      whose token is no operand's states the result as it is written there
-      (:func:`_states_result`: its sign, unit and scale word count; read as
-      a percentage or a ratio by :func:`_result_is_percent`) — else
+    * one of the finding's numbers that may state a result (checkable ones,
+      :func:`fact_number_tokens`, and single digits written as a percentage
+      or with a unit class: :attr:`_NumberOccurrence.can_state`) whose token
+      is no operand's states the result as it is written there
+      (:func:`_states_result`: its sign, percent form, unit class and scale
+      word count, against the result's form, :func:`_result_form`) — else
       no_result_token when the finding has no such number, result_mismatch
       when none states it;
-    * every other occurrence of a number in the finding (operands' numbers
-      and other occurrences of the stating digits included) is on the
-      derivation source's page at the value the finding writes it with
+    * every other checkable occurrence of a number in the finding (operands'
+      numbers and other occurrences of the stating digits included) is on
+      the derivation source's page at the value the finding writes it with
       (:func:`_numbers_off_page`), so a clause never carries an unchecked
       figure into a DERIVED fact — else result_mismatch with
       ``missing_numbers``."""
@@ -4222,16 +4274,17 @@ def _derived_rules(text: str, cited: Sequence[int], clause: str,
         result = dn.evaluate(expr, values)
     except dn.CalcError:
         return rejected("eval_error")
-    numbers = [number for number in _number_occurrences(text) if number.checkable]
-    candidates = [index for index, number in enumerate(numbers) if number.token not in operand_tokens]
+    numbers = _number_occurrences(text)
+    candidates = [index for index, number in enumerate(numbers)
+                  if number.can_state and number.token not in operand_tokens]
     if not candidates:
         return rejected("no_result_token")
-    data_values = [value for _, value, _, kind in operands if kind == dn.KIND_DATA]
-    result_percent = _result_is_percent(expr, data_values)
-    stating = {index for index in candidates if _states_result(numbers[index], result, result_percent)}
+    form = _result_form(expr, {name: value for name, value, _, kind in operands if kind == dn.KIND_DATA})
+    stating = {index for index in candidates if _states_result(numbers[index], result, form)}
     if not stating:
         return rejected("result_mismatch")
-    missing = _numbers_off_page((number for index, number in enumerate(numbers) if index not in stating), available)
+    missing = _numbers_off_page((number for index, number in enumerate(numbers)
+                                 if number.checkable and index not in stating), available)
     if missing:
         return {**rejected("result_mismatch"), "missing_numbers": missing}
     return {"tag": DERIVED_TAG, "derivation": {
@@ -11585,10 +11638,12 @@ def derived_quant_match(row: Mapping[str, Any],
     whose result a quantitative row's value states: ``"{value} {unit}"`` has
     exactly one checkable number (:func:`_number_occurrences`, no exponent
     notation) and it states the result as a finding's number would
-    (:func:`_states_result`: display precision, the result's sign, a
-    percentage result never with a unit class or scale word, a ratio's
-    percentage x 100 only and any other number at its full value;
-    :func:`_result_is_percent`).  None when no derivation matches."""
+    (:func:`_states_result` against :func:`_result_form` of the derivation's
+    formula and data operands: display precision, the result's sign, a
+    percentage result by a percentage only, a unit class only in the unit
+    class of every data operand through a formula that keeps it, a ratio's
+    percentage x 100 only and any other number at its full value).  None
+    when no derivation matches."""
     text = _quant_number_text(row)
     numbers = [number for number in _number_occurrences(text) if number.checkable]
     if len(numbers) != 1 or _EXPONENT_RE.search(text):
@@ -11601,9 +11656,10 @@ def derived_quant_match(row: Mapping[str, Any],
         if not result.is_finite():
             continue
         operands = derivation.get("operands")
-        data_values = [str(item.get("value")) for item in (operands.values() if isinstance(operands, dict) else ())
-                       if isinstance(item, dict) and item.get("sid") is not None]
-        if _states_result(numbers[0], result, _result_is_percent(str(derivation.get("expr") or ""), data_values)):
+        data_operands = {str(name): str(item.get("value"))
+                         for name, item in (operands.items() if isinstance(operands, dict) else ())
+                         if isinstance(item, dict) and item.get("sid") is not None}
+        if _states_result(numbers[0], result, _result_form(str(derivation.get("expr") or ""), data_operands)):
             return derivation
     return None
 
