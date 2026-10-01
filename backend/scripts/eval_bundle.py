@@ -7,12 +7,14 @@
 backfill rebuilds a published report's bundle from its stored handoff (no LLM, no
 network; manifest ``capture: backfill``): brief / forecast_inputs / quant from
 actors.json, dossier from research_report.md, market from prediction_markets.json
-rendered as the research table at the snapshot time (block note
-``backfill_research_snapshot``: the exact report-time market pack is not persisted), sim
-and graph ``unavailable:not_persisted``, targets from the audit-sealed forecast only
-(``ReportManager.load_structured_forecast``; none when unsealed). as_of is resolved as
-the ledger commit resolved it (``ledger_commit.resolve_as_of`` at the report's
-completion time), and run.record_class as the orchestrator keys the pipeline's own report
+rendered as the research table at the snapshot time, in the report's table language
+(block note ``backfill_research_snapshot``: the exact report-time market pack is not
+persisted), sim and graph ``unavailable:not_persisted``, targets from the audit-sealed
+forecast only (``ReportManager.load_structured_forecast``; none when unsealed). as_of is
+resolved as the ledger commit resolved it (``ledger_commit.resolve_as_of`` at the
+report's completion time; when that fell back to the commit date and meta.json has no
+usable ``completed_at``, as_of is None with as_of_source ``unknown``, never the backfill
+day), and run.record_class as the orchestrator keys the pipeline's own report
 (evaluation / conditional_scenario / production). The handoff is the state's
 containment-checked one (``PipelineManager.resolve_handoff_dir``: a what-if fork reads
 its base's). Only publishable reports are bundled. An existing bundle is kept
@@ -38,6 +40,9 @@ from app.services import eval_bundle  # noqa: E402
 
 EXIT_BACKFILL_ERROR = 1
 EXIT_INTEGRITY = 4
+# as_of_source of a backfilled bundle whose ledger as-of was the commit date, when the
+# report's completion time (meta.json completed_at) is unknown: as_of is then None.
+AS_OF_UNKNOWN = "unknown"
 
 
 def _read_json(path: str) -> Any:
@@ -68,6 +73,18 @@ def _report_completed_at(report_id: str) -> Optional[datetime]:
         return datetime.fromisoformat(stamp.strip()).astimezone(timezone.utc)
     except (ValueError, OverflowError, OSError):
         return None
+
+
+def _report_market_lang(state: Dict[str, Any], actors: Any, research_report: Optional[str]) -> str:
+    """The market table language of the pipeline's report: its output language resolved
+    from the inputs the orchestrator built the report agent with (prompt, research report,
+    situation brief; ``ReportAgent.resolve_output_language``, REPORT_OUTPUT_LANGUAGE
+    included), mapped as report_agent._render_market_pack maps it."""
+    from app.services.report_agent import ReportAgent
+    from app.utils.actors import situation_brief
+    language = ReportAgent.resolve_output_language(
+        str(state.get("prompt") or ""), research_report or "", situation_brief(actors) or "")
+    return eval_bundle.market_table_lang(language)
 
 
 def _record_class(pipeline_id: str, state: Dict[str, Any], handoff: str) -> str:
@@ -113,14 +130,20 @@ def backfill_pipeline(pipeline_id: str, *, force: bool = False,
                     "reason": "in_pipeline_bundle_exists"}
     handoff = PipelineManager.resolve_handoff_dir(pipeline_id)
     actors = _read_json(os.path.join(handoff, "actors.json"))
-    built = eval_bundle.research_blocks(
-        actors, _read_text(os.path.join(handoff, "research_report.md")), eval_bundle.dossier_chars())
+    research_report = _read_text(os.path.join(handoff, "research_report.md"))
+    built = eval_bundle.research_blocks(actors, research_report, eval_bundle.dossier_chars())
     options = state.get("options") if isinstance(state.get("options"), dict) else {}
+    completed_at = _report_completed_at(report_id)
     as_of, as_of_source = resolve_as_of({"as_of_date": validated_as_of_from_options(options)}, actors,
-                                        _report_completed_at(report_id))
+                                        completed_at)
+    if as_of_source == "commit_date" and completed_at is None:
+        # The ledger fell back to its commit date, which is unknown here: never stamp the
+        # backfill day in its place.
+        as_of, as_of_source = None, AS_OF_UNKNOWN
     built["market"] = eval_bundle.research_market_block(
         _read_json(os.path.join(handoff, "prediction_markets.json")),
-        fallback_as_of=as_of if as_of_source != "commit_date" else None)
+        fallback_as_of=as_of if as_of_source in ("validated", "actors") else None,
+        lang=_report_market_lang(state, actors, research_report))
     built["sim"] = (None, eval_bundle.unavailable("not_persisted"))
     built["graph"] = (None, eval_bundle.unavailable("not_persisted"))
     forecast = ReportManager.load_structured_forecast(report_id)
