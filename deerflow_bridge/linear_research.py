@@ -181,9 +181,11 @@ MAX_CONTESTED_ROWS = 15
 # first), and meta keeps at most QUANT_SANITY_MAX_FLAGS unit-scale warnings
 # and implausible-fact flags (meta.quant_sanity_truncated then holds the
 # totals before the cut).  In contested.json the reconciled claims follow
-# the model's (at most MAX_CONTESTED_ROWS), and report_agent's contested
-# block renders only its first 15 claims, so after 15 model claims no
-# reconciled claim reaches the report prompt (a report-side limit).
+# the model's (at most MAX_CONTESTED_ROWS); report_agent's contested block
+# renders at most 15 claims, and with RESEARCH_QUANT_RECONCILE on it keeps
+# up to 3 of them (more when its plain cut already shows more) for
+# reconciled claims, probable unit-scale errors first, and notes how many
+# it still cuts (FU-9).
 QUANT_RECONCILE_MAX_CONTESTED = 10
 QUANT_SANITY_MAX_FLAGS = 20
 # forecast_inputs rows the facts task asks for (RESEARCH_V3_FORECAST_INPUTS).
@@ -278,6 +280,15 @@ DUPLICATE_CALL_TEXT = ("DUPLICATE: another call of this step already reads this 
                        "(or runs this search); use its result.")
 STORED_READS_EXHAUSTED_TEXT = ("READ_BUDGET_EXHAUSTED: stop re-reading stored pages; write your notes "
                                "from what you have.")
+# EVAL-16: per-agent counts of the calls KiqAgent._call_tool answered with an
+# INVALID_TOOL_CALL, UNKNOWN_TOOL or TOOL_ERROR string (the strings the model
+# sees are unchanged); each KIQ record's stats and meta.kiqs carry them.  Like
+# the other meta.kiqs sums they describe the KIQ records kept: an attempt that
+# leaves no record (a provider failure before any page was read, a cancelled
+# run) or whose record a resumed run rewrote is not counted.  A record without
+# them (kept by a resumed run from before the counters) adds 0 to the sums and
+# is counted in meta.kiqs.tool_counters_missing (written only when non-zero).
+TOOL_CALL_COUNTERS = ("invalid_tool_calls", "unknown_tool_calls", "tool_exceptions")
 LABEL_EVIDENCE = "research evidence"
 LABEL_SCOUT = "scout search results"
 LABEL_SEEDS = "seed search results"
@@ -784,6 +795,24 @@ def _read_text(path: Path) -> str | None:
         return path.read_text("utf-8")
     except OSError:
         return None
+
+
+def _record_stat_count(record: Mapping[str, Any], name: str) -> int:
+    """A KIQ record's ``stats[name]`` count; 0 when the record predates the
+    field (EVAL-16 TOOL_CALL_COUNTERS) or holds anything but a count."""
+    stats = record.get("stats")
+    value = stats.get(name, 0) if isinstance(stats, Mapping) else 0
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def _record_lacks_tool_counters(record: Mapping[str, Any]) -> bool:
+    """True when a KIQ record's stats miss one of the EVAL-16 TOOL_CALL_COUNTERS
+    (the record predates them) or hold anything but a count there."""
+    stats = record.get("stats")
+    if not isinstance(stats, Mapping):
+        return True
+    values = [stats.get(name) for name in TOOL_CALL_COUNTERS]
+    return any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in values)
 
 
 # ===========================================================================
@@ -5808,6 +5837,10 @@ class AgentOutcome:
     # The notes were cut by the output cap (even after one wider try) and
     # only their complete part was kept.
     truncated: bool = False
+    # EVAL-16: see TOOL_CALL_COUNTERS.
+    invalid_tool_calls: int = 0
+    unknown_tool_calls: int = 0
+    tool_exceptions: int = 0
 
 
 class KiqAgent:
@@ -5856,6 +5889,12 @@ class KiqAgent:
         # Focus term sets this agent read each page with, and its stored reads.
         self._reads: dict[int, list[frozenset[str]]] = {}
         self._stored_reads = 0
+        # EVAL-16 TOOL_CALL_COUNTERS.  The calls of one step may run on a thread
+        # pool (see _execute), so _call_tool counts under this lock.
+        self.invalid_tool_calls = 0
+        self.unknown_tool_calls = 0
+        self.tool_exceptions = 0
+        self._counts_lock = threading.Lock()
         _, self._human, _, self._tool = rg._msg_classes()
 
     # ------------------------------------------------------------------ run
@@ -5881,7 +5920,12 @@ class KiqAgent:
             notes = self.fallback_notes(fallback)
         return AgentOutcome(notes=notes or "", fallback=fallback, steps=self.steps,
                             forced=self.forced, fetched=list(self.fetched), seen=list(self.seen),
-                            truncated=self.truncated)
+                            truncated=self.truncated, **self.call_counts())
+
+    def call_counts(self) -> dict[str, int]:
+        """EVAL-16: this agent's TOOL_CALL_COUNTERS so far."""
+        with self._counts_lock:
+            return {name: getattr(self, name) for name in TOOL_CALL_COUNTERS}
 
     def _cites_shown_source(self, notes: str) -> bool:
         """True when the notes carry at least one finding that cites a source
@@ -6166,10 +6210,16 @@ class KiqAgent:
         if terms is not None and terms not in self._reads.setdefault(sid, []):
             self._reads[sid].append(terms)
 
+    def _count_call(self, counter: str) -> None:
+        """EVAL-16: one more call answered with the error kind ``counter`` (TOOL_CALL_COUNTERS)."""
+        with self._counts_lock:
+            setattr(self, counter, getattr(self, counter) + 1)
+
     def _call_tool(self, call: Mapping[str, Any]) -> str:
         tools = self.engine.tools
         try:
             if call.get("error"):
+                self._count_call("invalid_tool_calls")
                 return (f"INVALID_TOOL_CALL: {call['error']}. Call web_search with a query string "
                         "or web_fetch with a url (and optionally a focus).")
             args = call.get("args") or {}
@@ -6177,11 +6227,13 @@ class KiqAgent:
             if name == "web_search":
                 query = args.get("query")
                 if not isinstance(query, str):
+                    self._count_call("invalid_tool_calls")
                     return "INVALID_TOOL_CALL: web_search needs a 'query' string."
                 return tools.search(query, agent_id=self.kiq.id)
             if name == "web_fetch":
                 url = args.get("url")
                 if not isinstance(url, str):
+                    self._count_call("invalid_tool_calls")
                     return "INVALID_TOOL_CALL: web_fetch needs a 'url' string."
                 marker = _MARKER_URL_RE.match(url)
                 if marker:
@@ -6190,8 +6242,10 @@ class KiqAgent:
                 focus = args.get("focus")
                 return tools.fetch(url, focus=focus if isinstance(focus, str) else "",
                                    agent_id=self.kiq.id, kiq_text=self.kiq.question)
+            self._count_call("unknown_tool_calls")
             return "UNKNOWN_TOOL: only web_search and web_fetch are available."
         except Exception as exc:  # noqa: BLE001 — a tool failure is text for the model
+            self._count_call("tool_exceptions")
             return f"TOOL_ERROR({type(exc).__name__}): try another source."
 
     # ------------------------------------------------------------- fallback
@@ -7223,7 +7277,7 @@ class _Engine:
                     self._finish_kiq(kiq, AgentOutcome(
                         notes=agent.fallback_notes("provider"), fallback="provider", steps=agent.steps,
                         forced=agent.forced, fetched=list(agent.fetched), seen=list(agent.seen),
-                        truncated=agent.truncated))
+                        truncated=agent.truncated, **agent.call_counts()))
                 except Exception as exc:  # noqa: BLE001 — the provider failure is what the phase decides on
                     self.log("warn", f"v3: {kiq.id} reads not kept ({type(exc).__name__}: {exc})")
             raise
@@ -7275,7 +7329,8 @@ class _Engine:
             "sources": sources,
             "stats": {"steps": outcome.steps, "forced": outcome.forced, "fallback": outcome.fallback,
                       "truncated": outcome.truncated, "fetched": outcome.fetched, "seen": len(outcome.seen),
-                      "tools": self.tools.stats()["per_agent"].get(kiq.id, {})},
+                      "tools": self.tools.stats()["per_agent"].get(kiq.id, {}),
+                      **{name: getattr(outcome, name) for name in TOOL_CALL_COUNTERS}},
             "finished_at": _iso_now(),
         }
         if contract is not None:
@@ -9672,7 +9727,13 @@ class _Engine:
             "fallback": sum(1 for r in records if (r.get("stats") or {}).get("fallback")),
             "facts": sum(len(r.get("facts") or []) for r in records),
             "verified": sum(1 for r in records for f in r.get("facts") or [] if f.get("tag") == "VERIFIED"),
+            # EVAL-16: a KIQ record a resumed run kept from before the counters existed counts 0.
+            **{name: sum(_record_stat_count(r, name) for r in records) for name in TOOL_CALL_COUNTERS},
         }
+        # ...and is counted, so that a zero sum over such records is not read as evidence.
+        counters_missing = sum(1 for r in records if _record_lacks_tool_counters(r))
+        if counters_missing:
+            self.meta["kiqs"]["tool_counters_missing"] = counters_missing
         if self.evidence_headers:
             # The profiles behind the digest's evidence lines, recounted from the records.
             profiles = self._evidence_profiles()
