@@ -5,17 +5,19 @@ inherit the pin). End-of-simulation interview answers reach the observed graph o
 through ``ZepToolsService.interview_agents`` -> ``ZepGraphMemoryUpdater.write_interview_fact``,
 and both follow the run's pin rather than the ambient ``Config.SIM_INTERVIEW_GRAPH_FEEDBACK``:
 
-- the orchestrator's main and seed reports get the resolved gate as the
+- a pinned run's main and seed reports get the pinned value as the
   ``interview_graph_feedback`` ReportAgent kwarg (a seed's simulation has no persisted
   owner while its report runs, so a by-simulation lookup would read the ambient value);
-- report entry points without orchestrator context (``/api/report`` regenerate and chat)
-  look the pin up by simulation id, following a shared-simulation child to its base;
-- no pin -> the ambient value (unpinned runs unchanged); a failed lookup or a damaged
-  pin -> no feedback, with a warning.
+- every other report (an unpinned run's, ``/api/report`` regenerate and chat) looks the
+  pin up by simulation id, following a shared-simulation child to its base, so the
+  pipeline and regenerate paths agree;
+- no pin -> the ambient value (unpinned runs unchanged); a failed lookup, an origin state
+  that exists but cannot be read, or a damaged pin -> no feedback, with a warning.
 
 Offline: temp pipeline states, stubbed services, no network, no LLM.
 """
 
+import json
 import sys
 
 import pytest
@@ -181,7 +183,8 @@ def test_lookup_reads_persisted_states_and_follows_a_shared_simulation(env, monk
     without a pinned value defers to the base it borrowed the simulation from (so a
     regeneration of the pinned base's report keeps the base's semantics); a child with
     its own pinned value keeps it; a base that re-ran its simulation no longer answers;
-    an origin that cannot be read fails closed."""
+    a deleted (or malformed) origin leaves no pin, so the ambient value decides, while an
+    origin whose state file exists but cannot be read fails closed."""
     warnings = _recorded(monkeypatch, po.logger, "warning")
     _save_pipeline("pipe_off", "sim_off", created_at="2026-09-30T10:00:00+00:00",
                    safety_policy_v1=_policy(sim_interview_graph_feedback=False),
@@ -201,18 +204,36 @@ def test_lookup_reads_persisted_states_and_follows_a_shared_simulation(env, monk
                    shared_simulation=True, shared_simulation_from="pipe_rerun")
     _save_pipeline("pipe_orphan", "sim_orphan", created_at="2026-09-30T11:00:03+00:00",
                    shared_simulation=True, shared_simulation_from="pipe_deleted")
+    _save_pipeline("pipe_malformed_child", "sim_malformed", created_at="2026-09-30T11:00:04+00:00",
+                   shared_simulation=True, shared_simulation_from="../pipe_escape")
+    # Origins whose state file exists but cannot be read: corrupt JSON, a newer schema.
+    _save_pipeline("pipe_corrupt_child", "sim_corrupt", created_at="2026-09-30T11:00:05+00:00",
+                   shared_simulation=True, shared_simulation_from="pipe_corrupt")
+    _save_pipeline("pipe_newer_child", "sim_newer", created_at="2026-09-30T11:00:06+00:00",
+                   shared_simulation=True, shared_simulation_from="pipe_newer")
+    _save_pipeline("pipe_corrupt", "sim_corrupt", created_at="2026-09-30T10:00:05+00:00",
+                   safety_policy_v1=_policy(sim_interview_graph_feedback=True))
+    with open(po.PipelineManager.state_path("pipe_corrupt"), "w", encoding="utf-8") as fh:
+        fh.write("{not json")
+    _save_pipeline("pipe_newer", "sim_newer", created_at="2026-09-30T10:00:06+00:00",
+                   safety_policy_v1=_policy(sim_interview_graph_feedback=True))
+    with open(po.PipelineManager.state_path("pipe_newer"), "w", encoding="utf-8") as fh:
+        json.dump({"pipeline_id": "pipe_newer", "simulation_id": "sim_newer",
+                   "schema_version": po.PIPELINE_SCHEMA_VERSION + 1}, fh)
 
-    _ambient(monkeypatch, True)
-    assert po.interview_graph_feedback_for_simulation("sim_off") is False        # the base's pin
-    assert po.interview_graph_feedback_for_simulation("sim_off_seed") is False   # member map
-    assert po.interview_graph_feedback_for_simulation("sim_on") is False         # child's own pin
-    assert po.interview_graph_feedback_for_simulation("sim_rerun_old") is True   # no pin -> ambient
+    for ambient in (True, False):
+        _ambient(monkeypatch, ambient)
+        assert po.interview_graph_feedback_for_simulation("sim_off") is False      # the base's pin
+        assert po.interview_graph_feedback_for_simulation("sim_off_seed") is False  # member map
+        assert po.interview_graph_feedback_for_simulation("sim_on") is False       # child's own pin
+        for unpinned in ("sim_rerun_old", "sim_orphan", "sim_malformed", "sim_unknown"):
+            assert po.interview_graph_feedback_for_simulation(unpinned) is ambient, unpinned
     assert warnings == []
-    assert po.interview_graph_feedback_for_simulation("sim_orphan") is False     # fail closed
-    assert len(warnings) == 1 and "pipe_deleted" in warnings[0]
-    _ambient(monkeypatch, False)
-    assert po.interview_graph_feedback_for_simulation("sim_rerun_old") is False
-    assert po.interview_graph_feedback_for_simulation("sim_unknown") is False
+    _ambient(monkeypatch, True)
+    for simulation_id, origin_id in (("sim_corrupt", "pipe_corrupt"), ("sim_newer", "pipe_newer")):
+        del warnings[:]
+        assert po.interview_graph_feedback_for_simulation(simulation_id) is False  # fail closed
+        assert len(warnings) == 1 and origin_id in warnings[0] and "失败关闭" in warnings[0]
 
 
 # ─────────────────────────────── zep_tools wiring ───────────────────────────────
@@ -317,8 +338,9 @@ def test_report_agent_stores_and_forwards_the_gate(env, monkeypatch):
 
 
 def test_seed_reports_get_the_pinned_gate(env, monkeypatch):
-    """_run_one_seed hands its ReportAgent the run's pinned gate: the seed simulation's
-    owner is only in the in-memory member map while the report runs."""
+    """_run_one_seed hands its ReportAgent the run's pinned value: the seed simulation's
+    owner is only in the in-memory member map while the report runs. Without a pinned
+    value the kwarg is left out (the report's lookup finds no owner: ambient)."""
     constructed = []
 
     class _Sim:
@@ -353,12 +375,13 @@ def test_seed_reports_get_the_pinned_gate(env, monkeypatch):
     monkeypatch.setattr(po, "SimulationManager", _SimManager)
     monkeypatch.setattr(po, "SimulationRunner", _Runner)
     monkeypatch.setattr(po, "ReportAgent", _FakeAgent)
+    absent = object()
     cases = [
         (_policy(sim_interview_graph_feedback=False), True, False),
         (_policy(sim_interview_graph_feedback=True), False, True),
         (_policy(sim_interview_graph_feedback="false"), True, False),   # damaged: fail closed
-        (_policy(), True, True),                                         # no key -> ambient
-        (None, False, False),                                            # no pin -> ambient
+        (_policy(), True, absent),                                       # no key -> lookup
+        (None, False, absent),                                           # no pin -> lookup
     ]
     for policy, ambient, expected in cases:
         _ambient(monkeypatch, ambient)
@@ -368,14 +391,19 @@ def test_seed_reports_get_the_pinned_gate(env, monkeypatch):
         po.PipelineOrchestrator()._run_one_seed(
             state, type("P", (), {"project_id": "proj"})(), "graph_1", None, {}, "report md",
             seed=11, max_rounds=None)
-        assert constructed[-1]["interview_graph_feedback"] is expected, (policy, ambient)
+        assert constructed[-1].get("interview_graph_feedback", absent) is expected, (policy, ambient)
         assert state.options["ensemble_member_simulations"] == {"sim_seed": 11}
         assert po.PipelineManager.load("pipe_ens") is None   # the member map is not on disk
+        if expected is absent:
+            # The seed's lookup finds no persisted owner and reads the ambient value, as before.
+            assert po.interview_graph_feedback_for_simulation("sim_seed") is ambient
 
 
-def test_main_report_gets_the_pinned_gate(monkeypatch, tmp_path):
+@pytest.mark.parametrize("pinned", [False, True, None])
+def test_main_report_gets_the_pinned_gate(monkeypatch, tmp_path, pinned):
     """The real _run state machine (every service faked) builds the main report agent with
-    the run's pinned gate even when the ambient Config says otherwise."""
+    the run's pinned value even when the ambient Config says otherwise; an unpinned run's
+    agent gets no kwarg and decides through the by-simulation lookup."""
     from tests.test_orchestrator_research_wiring import _exercise_prepare_run_resume
 
     created = []
@@ -387,10 +415,56 @@ def test_main_report_gets_the_pinned_gate(monkeypatch, tmp_path):
             return agent
 
     monkeypatch.setattr(po, "ReportAgent", _Recording)
-    _ambient(monkeypatch, True)
-    policy = dict(po.capture_safety_policy_v1("admission"), sim_interview_graph_feedback=False)
+    _ambient(monkeypatch, pinned is not True)
+    extra_options = {}
+    if pinned is not None:
+        extra_options["safety_policy_v1"] = dict(
+            po.capture_safety_policy_v1("admission"), sim_interview_graph_feedback=pinned)
     result = _exercise_prepare_run_resume(
         monkeypatch, tmp_path, rebuild_prepare=True, real_run_manifest=True,
-        extra_options={"safety_policy_v1": policy})
+        extra_options=extra_options)
     assert result.report_generations, "the stage must build a fresh report"
-    assert created[-1].kwargs["interview_graph_feedback"] is False
+    if pinned is None:
+        assert "interview_graph_feedback" not in created[-1].kwargs
+    else:
+        assert created[-1].kwargs["interview_graph_feedback"] is pinned
+
+
+def test_unpinned_shared_child_report_agrees_with_the_regenerate_lookup(env, monkeypatch):
+    """An unpinned shared-simulation batch child (FORK_INHERIT_SAFETY_POLICY=false) reports
+    on its base's simulation. Its in-pipeline report (built with the orchestrator's kwargs)
+    and an /api/report regenerate on that simulation (the lookup) reach the same decision:
+    the base's pin, both ways. An unpinned run on its own simulation reads the ambient value
+    on both paths."""
+    written = []
+    service = _interview_service(monkeypatch, written)
+    _save_pipeline("pipe_base_off", "sim_base_off", created_at="2026-09-30T10:00:00+00:00",
+                   safety_policy_v1=_policy(sim_interview_graph_feedback=False))
+    _save_pipeline("pipe_base_on", "sim_base_on", created_at="2026-09-30T10:00:01+00:00",
+                   safety_policy_v1=_policy(sim_interview_graph_feedback=True))
+    child_off = _save_pipeline("pipe_child_off", "sim_base_off",
+                               created_at="2026-09-30T11:00:00+00:00", shared_simulation=True,
+                               shared_simulation_from="pipe_base_off")
+    child_on = _save_pipeline("pipe_child_on", "sim_base_on",
+                              created_at="2026-09-30T11:00:01+00:00", shared_simulation=True,
+                              shared_simulation_from="pipe_base_on")
+    own = _save_pipeline("pipe_own", "sim_own", created_at="2026-09-30T11:00:02+00:00")
+
+    def interviewed_facts(state):
+        agent = ReportAgent(graph_id="g1", simulation_id=state.simulation_id,
+                            simulation_requirement="Q?", llm_client=FakeLLMClient(),
+                            zep_tools=service,
+                            **po.PipelineOrchestrator._interview_feedback_agent_kwargs(state))
+        agent.tools = {"interview_agents": {"name": "interview_agents"}}
+        del written[:]
+        agent._execute_tool("interview_agents", {"interview_topic": "t"})
+        return list(written)
+
+    cases = [(child_off, True, False), (child_on, False, True),
+             (own, True, True), (own, False, False)]
+    for state, ambient, expected in cases:
+        _ambient(monkeypatch, ambient)
+        assert po.PipelineOrchestrator._interview_feedback_agent_kwargs(state) == {}
+        assert po.interview_graph_feedback_for_simulation(state.simulation_id) is expected
+        assert interviewed_facts(state) == ([("ActorA", True)] if expected else []), (
+            state.pipeline_id, ambient)

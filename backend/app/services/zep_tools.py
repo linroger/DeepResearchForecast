@@ -38,12 +38,12 @@ def _interview_feedback_allowed(simulation_id: Optional[str],
                                 feedback_allowed: Optional[bool] = None) -> bool:
     """FU-8: whether interview answers of ``simulation_id`` may be written to the graph.
 
-    ``feedback_allowed`` is the gate the orchestrator resolved from the run's pin (main
-    and seed reports, through ReportAgent) and wins; only True allows. Without it (None:
-    /api/report regenerate and chat) the pinned value of the pipeline that ran the
-    simulation decides (pipeline_orchestrator.interview_graph_feedback_for_simulation,
-    imported lazily: the orchestrator imports this module). An import failure fails
-    closed."""
+    ``feedback_allowed`` is the run's pinned value the orchestrator hands over (main and
+    seed reports of a pinned run, through ReportAgent) and wins; only True allows.
+    Without it (None: an unpinned run's reports, /api/report regenerate and chat) the
+    pinned value of the pipeline that ran the simulation decides
+    (pipeline_orchestrator.interview_graph_feedback_for_simulation, imported lazily: the
+    orchestrator imports this module). An import failure fails closed."""
     if feedback_allowed is not None:
         return feedback_allowed is True
     try:
@@ -2025,8 +2025,9 @@ class ZepToolsService:
             max_agents: 最多采访的Agent数量
             custom_questions: 自定义采访问题（可选，若不提供则自动生成）
             graph_id: 采访回答写入的图谱（可选；门允许时才写，见下）
-            feedback_allowed: FU-8 编排器按该运行准入钉解析出的写图门（ReportAgent 转交；只有 True 放行）；
-                None（API 重生成 / 对话）→ 按模拟 id 查所属管线的钉（无钉 → 环境值；查找失败 → 不写）
+            feedback_allowed: FU-8 编排器交来的该运行钉值（有钉值运行的主/种子报告，ReportAgent 转交；
+                只有 True 放行）；None（无钉值的运行、API 重生成 / 对话）→ 按模拟 id 查所属管线的钉
+                （无钉 → 环境值；查找失败 → 不写）
 
         Returns:
             InterviewResult: 采访结果

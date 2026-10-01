@@ -1707,10 +1707,11 @@ class ReportAgent:
             读当前 Config.NUMERIC_GUARD_MODE。非法值按 shadow 运行并告警。检查本身不改任何产物内容；
             shadow 在二元提示词里多索取 latest_actual，模型起草的二元与概率可能因此与 off 不同。
 
-        FU-8 interview_graph_feedback: 采访回答能否写入观察图——编排器主报告 / 种子报告传入按准入钉
-            解析出的门（PipelineOrchestrator._interview_feedback_gate），原样转交 zep_tools.interview_agents；
-            只有 True 放行，其他非 None 值按 False（失败关闭）。缺省 None（API 重生成 / 对话路径）时由
-            interview_agents 按模拟 id 查所属管线的钉（无钉 → 环境值 Config.SIM_INTERVIEW_GRAPH_FEEDBACK）。
+        FU-8 interview_graph_feedback: 采访回答能否写入观察图——有钉值的运行，编排器主报告 / 种子报告
+            传入该运行钉住的值（PipelineOrchestrator._interview_feedback_agent_kwargs），原样转交
+            zep_tools.interview_agents；只有 True 放行，其他非 None 值按 False（失败关闭）。缺省 None
+            （无钉值的运行、API 重生成 / 对话路径）时由 interview_agents 按模拟 id 查所属管线的钉
+            （共享模拟子管线跟随 base；无钉 → 环境值 Config.SIM_INTERVIEW_GRAPH_FEEDBACK）。
         """
         self.graph_id = graph_id
         self.simulation_id = simulation_id
@@ -11008,7 +11009,7 @@ class ReportAgent:
                     simulation_requirement=self.simulation_requirement,
                     max_agents=max_agents,
                     graph_id=self.graph_id,  # T3.14: 把采访回答持久化为 typed 图谱事实
-                    # FU-8：编排器按准入钉解析的写图门；None → interview_agents 按模拟 id 查钉。
+                    # FU-8：编排器交来的该运行钉值；None → interview_agents 按模拟 id 查钉。
                     feedback_allowed=getattr(self, "interview_graph_feedback", None),
                 )
                 return result.to_text()
