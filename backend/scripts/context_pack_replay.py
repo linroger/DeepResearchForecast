@@ -19,8 +19,14 @@ before as_of, found by parse_dated_period alone rather than the lane code, is in
 None without one), the pack's per-stream sizes, its temporal-audit violations and the
 scheduled-lane guard state. The packs are built by ``ReportAgent._context_pack_result``, the
 method a report uses, with the handoff's actors, timeline.json and quantitative.json; a
-hindcast pin in ``<pipeline>/pipeline_state.json`` is honoured as in a report. No live market
-pack exists offline, so the REPORT-10 market-table strip is not applied.
+hindcast pin in ``<pipeline>/pipeline_state.json`` is honoured as in a report. As in a live
+report, the spine's key-metrics slot carries REPORT-8's verified-figures block instead of the
+key-metrics table when quantitative.json rows carry page-verification labels and
+REPORT_VERIFIED_FACTS_BLOCK is on (FU-4): sources.json resolves its [S#] tags, and the block is
+rendered in the run's output language, resolved as a report resolves it from the pipeline
+prompt (pipeline_state.json), the dossier and the situation brief (REPORT_OUTPUT_LANGUAGE
+overrides). No live market pack exists offline, so the REPORT-10 market-table strip is not
+applied.
 
 The replay date defaults to each handoff's own as_of day (``--now as_of``): a live report runs
 close to its research as_of, so its scheduled lane is open, and replaying an older run with
@@ -33,7 +39,8 @@ of five packed prompts (``--json`` carries each pack's text sha; the text itself
 ``--show-text``); a golden Brier comparison is informational only (ADR-0002 I-21).
 
 Offline: no LLM client is constructed and nothing touches the network; handoff files are only
-read.
+read. Log lines go to stderr, so stdout carries only the replay's output (``--json`` stays
+parseable).
 
 Usage:
     python backend/scripts/context_pack_replay.py --handoff DIR [DIR ...] [--json]
@@ -46,13 +53,15 @@ under handoff/. Exit status 1 when any handoff could not be replayed.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import logging
 import os
 import re
 import sys
 import unicodedata
 from datetime import date, datetime, time, timezone
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 # scripts/ -> backend/ on sys.path (mirror of scripts/model_comparison.py)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -96,8 +105,10 @@ def load_handoff(path: str) -> Dict[str, Any]:
     state = _read_json(os.path.join(os.path.dirname(os.path.abspath(directory)),
                                     "pipeline_state.json"))
     options = state.get("options") if isinstance(state, dict) else None
+    prompt = state.get("prompt") if isinstance(state, dict) else None
     return {
         "handoff": directory,
+        "prompt": prompt if isinstance(prompt, str) else "",
         "research_report": report,
         "actors": actors if isinstance(actors, dict) else None,
         "timeline": timeline if isinstance(timeline, list) else None,
@@ -116,12 +127,13 @@ def _agent(handoff: Dict[str, Any]) -> ReportAgent:
     agent.quantitative = handoff["quantitative"] or None
     agent.hindcast = handoff["hindcast"]
     agent.simulation_id = None
-    # FU-4: the spine pack takes REPORT-8's verified-figures block when the report has one;
-    # build it under the same knobs ReportAgent.__init__ does, so the replay packs the same.
+    # FU-4: the spine pack builds REPORT-8's verified-figures block from these, as a report
+    # does: sources.json resolves its [S#] tags, and it is rendered in the language
+    # ReportAgent.__init__ resolves from the pipeline prompt, the dossier and the brief.
     agent.sources = handoff.get("sources") or []
-    if (getattr(Config, "RESEARCH_FORECAST_INPUTS", True)
-            and getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True)):
-        agent._build_verified_figures_block()
+    agent.output_language = ReportAgent.resolve_output_language(
+        handoff.get("prompt") or "", handoff["research_report"],
+        actors_utils.situation_brief(handoff["actors"]))
     return agent
 
 
@@ -348,6 +360,30 @@ def _print_text(rows: Sequence[Dict[str, Any]], summary: Dict[str, Any], show_te
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
+@contextlib.contextmanager
+def _stdout_reserved() -> Iterator[None]:
+    """Keep stdout for the replay's own output while the replay runs: console log handlers
+    bound to stdout (app/utils/logger.py's, e.g. the INFO line REPORT-8's verified-figures
+    builder logs for the spine pack) write to stderr, as does anything printed, so ``--json``
+    stays one parseable document. The handlers get their stream back afterwards."""
+    stdout = [stream for stream in (sys.stdout, sys.__stdout__) if stream is not None]
+    loggers = [logging.getLogger(), *(lg for lg in logging.Logger.manager.loggerDict.values()
+                                      if isinstance(lg, logging.Logger))]
+    moved: List[Tuple[logging.StreamHandler, Any]] = []
+    for lg in loggers:
+        for handler in lg.handlers:
+            if (isinstance(handler, logging.StreamHandler)
+                    and any(handler.stream is stream for stream in stdout)):
+                moved.append((handler, handler.stream))
+                handler.setStream(sys.stderr)
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            yield
+    finally:
+        for handler, stream in moved:
+            handler.setStream(stream)
+
+
 def _now_arg(value: str) -> Optional[datetime]:
     """``--now``: None for the per-handoff as_of mode, else the fixed replay day (noon UTC);
     anything else is a usage error."""
@@ -376,11 +412,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     now = args.now
     rows: List[Dict[str, Any]] = []
     errors: List[Dict[str, str]] = []
-    for path in args.handoff:
-        try:
-            rows.append(replay_handoff(load_handoff(path), now))
-        except Exception as exc:  # noqa: BLE001 — one unreadable handoff must not hide the rest
-            errors.append({"handoff": path, "error": f"{type(exc).__name__}: {exc}"})
+    with _stdout_reserved():
+        for path in args.handoff:
+            try:
+                rows.append(replay_handoff(load_handoff(path), now))
+            except Exception as exc:  # noqa: BLE001 — one unreadable handoff must not hide the rest
+                errors.append({"handoff": path, "error": f"{type(exc).__name__}: {exc}"})
     summary = summarize(rows)
     if args.json:
         payload_rows = [{k: v for k, v in row.items() if k != "_texts"} for row in rows]

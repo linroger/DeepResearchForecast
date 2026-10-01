@@ -3397,6 +3397,31 @@ class ReportAgent:
         events = actors.get("key_events")
         return events if isinstance(events, list) else []
 
+    def _spine_key_metrics(self) -> Tuple[str, bool]:
+        """FU-4 (REPORT-8 open issue): the spine pack's key-metrics stream, and whether it is
+        REPORT-8's labelled verified-figures block.
+
+        With REPORT_VERIFIED_FACTS_BLOCK on, that block replaces the unlabelled key-metrics
+        table, as it does in the report context: the block ``__init__`` built (the text Part 2
+        injects). When ``__init__`` never reached the builder (RESEARCH_FORECAST_INPUTS off, or
+        no situation brief), the same builder runs here, and ``self._verified_figures`` is left
+        unset again so Part 2 and the section context stay as they were. No rendered block (no
+        labelled row, a failed build) or the knob off: the key-metrics table, as before."""
+        if not getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True):
+            return self._build_key_metrics_block(), False
+        if hasattr(self, "_verified_figures"):
+            verified = self._verified_figures
+        else:
+            try:
+                self._build_verified_figures_block()
+                verified = getattr(self, "_verified_figures", None)
+            finally:
+                vars(self).pop("_verified_figures", None)
+        rendered = str(verified.get("rendered") or "").strip() if isinstance(verified, dict) else ""
+        if rendered:
+            return rendered, True
+        return self._build_key_metrics_block(), False
+
     def _context_pack_result(self, kind: str, *, now: Optional[datetime] = None,
                              strip_market_table: bool = False) -> Tuple[Any, Dict[str, Any]]:
         """RESEARCH-13: build the ``kind`` ('binary' | 'spine') evidence pack, no IO.
@@ -3425,17 +3450,9 @@ class ReportAgent:
                 lang="en", window_days=window, retrospective=retrospective)
         elif kind == "spine":
             situation, provenance["situation_source"] = self._context_pack_situation()
-            # FU-4 (REPORT-8 open issue): the labelled verified-figures block REPORT-8 built for
-            # this report (the one Part 2 gets) replaces the unlabelled key-metrics table, as it
-            # does in the report context; without it the table is packed as before.
-            metrics = ""
-            verified = getattr(self, "_verified_figures", None)
-            if getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True) and isinstance(verified, dict):
-                metrics = str(verified.get("rendered") or "").strip()
-            if metrics:
+            metrics, verified = self._spine_key_metrics()
+            if verified:
                 provenance["key_metrics_source"] = "verified_figures"
-            else:
-                metrics = self._build_key_metrics_block()
             result = _cp.build_spine_pack(
                 report, situation, metrics, timeline, as_of_raw, now,
                 budget=int(getattr(Config, "FORECAST_CONTEXT_PACK_SPINE_BUDGET", 14000)),
