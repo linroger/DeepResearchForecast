@@ -2,12 +2,13 @@
 
 Under TIME-8's gates (``tools.pit``) the report cites only sources admissible as
 of the as-of date: ``_citable_sids`` (hence renumbering, References and
-sources.json), the evidence digest (markers stripped, a line built only on
-inadmissible sources left out, SOURCE INDEX filtered) and the deterministic
-fallback sections apply the same wall.  Finalize writes ``point_in_time.json``
-(the gates' search/fetch streams summed over the run's attempts, an independent
-re-check of the published sources.json dates, the wall's counts, the
-parametric suspects and the verdict) and mirrors it into
+sources.json), the evidence digest (FU-2: a line carrying any marker of an
+inadmissible source left out whole, SOURCE INDEX filtered) and the deterministic
+fallback sections (a finding left out when one of its claims keeps no admissible
+source, else stripped of its inadmissible markers) apply the wall.  Finalize
+writes ``point_in_time.json`` (the gates' search/fetch streams summed over the
+run's attempts, an independent re-check of the published sources.json dates,
+the wall's counts, the parametric suspects and the verdict) and mirrors it into
 ``meta.point_in_time.audit``.  A live run writes no audit and builds its digest
 exactly as before.  Offline: scripted model, injected search/fetch, zero network.
 """
@@ -253,15 +254,18 @@ def test_gated_hindcast_report_cites_only_admissible_sources(tmp_path, bridge, m
     assert all(lr.pit_date_verdict(row.get("date"), row.get("modified_at"), row["url"], POLICY) == "admit"
                for row in sources)
 
-    # The digest: the brief-only finding is gone, the mixed finding and the conflict
-    # keep only the survey, and the SOURCE INDEX lists no brief.
+    # The digest (FU-2): the brief-only finding, and the mixed finding and conflict that
+    # cite the brief and the survey together ("[brief][survey]"), are left out whole; the
+    # survey-only finding is kept as it is, and the SOURCE INDEX lists no brief.
     (args, kwargs, (digest_text, _dropped)), = calls
     assert kwargs["admissible"] is not None
     digest = (out / "v3" / "digest.md").read_text(encoding="utf-8")
     assert digest == digest_text
     assert "250 GW of capacity by 2030" not in digest
-    assert digest.count("Analysts expect 12% annual demand growth") == len(world.briefs)
-    assert digest.count("Sources differ on 2030 capacity") == len(world.briefs)
+    assert "Analysts expect 12% annual demand growth" not in digest
+    assert "Sources differ on 2030 capacity" not in digest
+    assert len(re.findall(r"^- Installed capacity reached 176 GW in 2023 per the survey \[S\d+\] \(REPORTED\)$",
+                          digest, re.M)) == len(world.briefs)
     assert not any(f"[S{sid}]" in digest for sid in world.briefs)
     index = digest.split("SOURCE INDEX", 1)[1]
     assert re.findall(r"^\[S(\d+)\]", index, re.M)
@@ -334,10 +338,12 @@ def test_point_in_time_json_records_the_exact_counters_of_the_run(tmp_path, brid
     # Cited: an independent re-check of sources.json; every cited survey predates the as-of.
     assert audit["streams"]["cited"] == _independent_cited(sources) == {
         "checked": len(sources), "admitted": len(sources), "same_day": 0, "unverifiable": 0, "late": 0}
-    # The wall: each KIQ's brief cited by its findings was kept out; one brief-only
-    # finding per KIQ left the digest; the mixed finding and conflict lost the brief.
-    assert audit["wall"] == {"sids_withheld": kiqs, "digest_lines_dropped": kiqs,
-                             "digest_markers_stripped": 2 * kiqs}
+    # The wall: each KIQ's brief cited by its findings was kept out; per KIQ the
+    # brief-only finding, the mixed finding and the conflict (each carries the brief's
+    # marker) left the digest whole, so no marker was stripped (FU-2).
+    assert audit["wall"] == {"sids_withheld": kiqs, "digest_lines_dropped": 3 * kiqs,
+                             "digest_markers_stripped": 0}
+    assert _load(out / "v3" / "state.json")[lr.PIT_DIGEST_WALL_KEY] == lr.PIT_DIGEST_WALL_RULE
     assert audit["status"] == "date_verified"
     assert meta["point_in_time"]["audit"] == {key: value for key, value in audit.items()
                                               if key not in ("schema", "as_of")}
@@ -451,10 +457,35 @@ def test_a_resumed_attempt_audits_the_gate_counts_of_the_whole_run(tmp_path, bri
         assert second["streams"][stream] == dict(first["streams"][stream], attempts_counted=2, attempts_started=2)
         assert second["streams"][stream]["scope"] == "run"
     assert second["streams"]["cited"] == first["streams"]["cited"]
+    assert second["wall"] == first["wall"]
     assert second["status"] == first["status"] == "date_verified"
     assert _load(out / "v3" / lr.PIT_COUNTS_FILENAME) == {"attempts": 2, "attempts_closed": 2,
                                                           "counts_complete": True, "counts": saved["counts"]}
     assert not any("counts are partial" in message for kind, message in plog.lines)
+
+
+def test_a_digest_reused_from_an_earlier_build_leaves_its_wall_counts_unknown(tmp_path, bridge, monkeypatch):
+    """A resumed attempt reuses digest.md byte for byte; when state.json does not record
+    that it was built with the current wall rule (an earlier build wrote it), the audit
+    reports its digest counts as unknown instead of recounting a rule the writers did not
+    see, and its verdict is unaffected."""
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    first = _load(out / lr.POINT_IN_TIME_FILENAME)
+    digest = (out / "v3" / "digest.md").read_bytes()
+    state_path = out / "v3" / "state.json"
+    state = _load(state_path)
+    del state[lr.PIT_DIGEST_WALL_KEY]
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch)
+    assert rc == 0, meta.get("error")
+    second = _load(out / lr.POINT_IN_TIME_FILENAME)
+    assert (out / "v3" / "digest.md").read_bytes() == digest
+    assert second["wall"] == {"sids_withheld": first["wall"]["sids_withheld"], "digest_lines_dropped": None,
+                              "digest_markers_stripped": None}
+    assert meta["point_in_time"]["audit"]["wall"] == second["wall"]
+    assert second["status"] == first["status"] == "date_verified"
+    assert any("leaves its digest counts unknown" in message for kind, message in plog.lines if kind == "warn")
 
 
 class _Killed(BaseException):
@@ -594,7 +625,8 @@ def test_live_run_writes_no_audit_and_an_unwalled_digest(tmp_path, bridge, monke
     assert rc == 0, meta.get("error")
     assert not (out / lr.POINT_IN_TIME_FILENAME).exists()
     assert not (out / "v3" / lr.PIT_COUNTS_FILENAME).exists()
-    assert lr.PIT_ATTEMPTS_KEY not in _load(out / "v3" / "state.json")
+    state = _load(out / "v3" / "state.json")
+    assert lr.PIT_ATTEMPTS_KEY not in state and lr.PIT_DIGEST_WALL_KEY not in state
     assert "point_in_time" not in meta and "pit" not in meta["tools"]
     sources = _load(out / "sources.json")
     assert sources and all("pit_status" not in row for row in sources)
@@ -605,6 +637,29 @@ def test_live_run_writes_no_audit_and_an_unwalled_digest(tmp_path, bridge, monke
     assert (out / "v3" / "digest.md").read_text(encoding="utf-8") == digest_text
     # Live, the briefs and the late releases are ordinary sources.
     assert "undated-" in digest_text and "//late-" in json.dumps(_load(out / "v3" / "sources_ledger.json"))
+
+
+@pytest.mark.parametrize("gates", [None, "false"])
+def test_pinned_run_without_gates_builds_an_unwalled_digest(tmp_path, bridge, monkeypatch, gates):
+    """A hindcast pin (RESEARCH_AS_OF) with RESEARCH_PIT_GATES unset or false has no
+    citation wall: the digest is the unwalled call's bytes and no audit is written."""
+    monkeypatch.setenv("RESEARCH_AS_OF", AS_OF)
+    if gates is not None:
+        monkeypatch.setenv("RESEARCH_PIT_GATES", gates)
+    calls, real_digest = _spy_digest(monkeypatch)
+    rc, meta, plog, world, out = run_pit_engine(tmp_path, bridge, monkeypatch, gated=False)
+    assert rc == 0, meta.get("error")
+    assert meta["point_in_time"]["as_of"] == AS_OF and "audit" not in meta["point_in_time"]
+    assert not (out / lr.POINT_IN_TIME_FILENAME).exists()
+    state = _load(out / "v3" / "state.json")
+    assert lr.PIT_ATTEMPTS_KEY not in state and lr.PIT_DIGEST_WALL_KEY not in state
+    (args, kwargs, (digest_text, dropped)), = calls
+    assert kwargs == {"dates": False, "admissible": None}
+    assert real_digest(*args, dates=False) == (digest_text, dropped)
+    assert (out / "v3" / "digest.md").read_text(encoding="utf-8") == digest_text
+    # Unwalled, the briefs' findings reach the digest with their markers.
+    assert "undated-" in digest_text and "250 GW of capacity by 2030" in digest_text
+    assert "Analysts expect 12% annual demand growth" in digest_text
 
 
 # =============================================================== pure helpers
@@ -652,55 +707,85 @@ def test_pit_audit_status():
     assert lr.pit_audit_status({}, "drop") == "date_verified_with_unverifiable"
 
 
-def test_build_digest_wall_strips_and_drops_markers():
+def test_build_digest_wall_leaves_out_every_line_with_an_inadmissible_marker():
+    """FU-2: a line carrying a withheld source's marker is left out of the digest whole, even
+    beside an admissible marker: the markers do not say which part of it each source backs."""
     ledger = {1: {"sid": 1, "title": "Survey", "domain": "a.example", "tier": "S2", "fetched": True},
               2: {"sid": 2, "title": "Brief", "domain": "b.example", "tier": "S3", "fetched": False}}
     record = {"id": "K1", "question": "What is capacity?",
               "facts": [{"text": "Capacity reached 176 GW [S1][S2]", "tag": "VERIFIED", "sids": [1, 2]},
                         {"text": "A brief claims 250 GW [S2]", "tag": "REPORTED", "sids": [2]},
+                        {"text": "Imports fell 5% [S1]", "tag": "VERIFIED", "sids": [1]},
                         {"text": "No marker here", "tag": "REPORTED"}],
               "conflicts": ["Sources differ [S2]", "Scope differs [S1] and [S2]"],
               "open_questions": ["Grid timelines?"]}
     text, dropped = lr.build_digest([record], ledger.get, 20000, "English", admissible=lambda sid: sid == 1)
     assert dropped == 0
-    assert "- Capacity reached 176 GW [S1] (VERIFIED)" in text
-    assert "250 GW" not in text and "Sources differ" not in text
-    # FU-2: the digest walls with the strict rule, so a line with a claim only the
-    # withheld S2 backs ("and [S2]") is left out rather than shown with S1 alone.
-    assert "Scope differs" not in text and "Grid timelines?" in text
+    assert "- Imports fell 5% [S1] (VERIFIED)" in text and "Grid timelines?" in text
+    assert "176 GW" not in text and "250 GW" not in text and "[S2]" not in text
+    assert "Sources differ" not in text and "Scope differs" not in text
     assert text.split("SOURCE INDEX\n", 1)[1] == "[S1] Survey — a.example (" + rg.tier_label("S2") + ", fetched)"
     assert record["facts"][0]["text"] == "Capacity reached 176 GW [S1][S2]"   # the record is unchanged
     # Everything admissible: byte-identical to the digest without the wall.
     assert lr.build_digest([record], ledger.get, 20000, "English", admissible=lambda sid: True) == \
         lr.build_digest([record], ledger.get, 20000, "English")
     walled, lines, markers = lr.pit_wall_record(record, lambda sid: sid == 1)
-    assert (lines, markers) == (2, 2) and walled["open_questions"] == ["Grid timelines?"]
-    walled, lines, markers = lr.pit_wall_record(record, lambda sid: sid == 1, strict=True)
-    assert (lines, markers) == (3, 1) and walled["conflicts"] == []
+    assert (lines, markers) == (4, 0)
+    assert [fact["text"] for fact in walled["facts"]] == ["Imports fell 5% [S1]", "No marker here"]
+    assert walled["conflicts"] == [] and walled["open_questions"] == ["Grid timelines?"]
+    # Claim by claim (the deterministic sections' rule) the co-cited finding keeps S1.
+    walled, lines, markers = lr.pit_wall_record(record, lambda sid: sid == 1, per_claim=True)
+    assert (lines, markers) == (3, 1) and walled["facts"][0]["text"] == "Capacity reached 176 GW [S1]"
 
 
-def test_digest_never_shows_a_withheld_claim_beside_an_admissible_marker():
-    """FU-2 (TIME-9 open issue): with S2 withheld, the interleaved line would reach the
-    writers as "... [S1], while a brief projects 250 GW" under the old digest rule, and a
-    writer restating that sub-claim with [S1] would publish it looking properly cited."""
+def _wall_counts_engine(record, admissible, state):
+    """The attributes :meth:`_Engine._pit_wall_counts` reads; ``state`` is state.json's data."""
+    logs = []
+    engine = types.SimpleNamespace(
+        _pit_admissible=admissible, records={"K1": record}, kiqs=[types.SimpleNamespace(id="K1")],
+        _evidence_sids=lambda: [1, 2, 3], state=lr._RunState(None, state, lambda path, text: None),
+        log=lambda kind, message: logs.append((kind, message)))
+    return engine, logs
+
+
+def test_digest_never_shows_a_withheld_claim_beside_or_under_an_admissible_marker():
+    """FU-2 (TIME-9 open issue): with S2 withheld, stripping its marker would show the brief's
+    250 GW under [S1] or beside it uncited, and a writer restating it with [S1] would publish
+    a withheld source's claim looking properly cited."""
     ledger = {1: {"sid": 1, "title": "Survey", "domain": "a.example", "tier": "S2", "fetched": True},
               2: {"sid": 2, "title": "Brief", "domain": "b.example", "tier": "S3", "fetched": False},
               3: {"sid": 3, "title": "Census", "domain": "c.example", "tier": "S1", "fetched": True}}
-    record = {"id": "K1", "facts": [
-        {"text": "Capacity reached 176 GW [S1], while a brief projects 250 GW [S2]", "tag": "REPORTED",
-         "sids": [1, 2]},
-        {"text": "Demand grew 12% [S3][S2]", "tag": "VERIFIED", "sids": [2, 3]},
-        {"text": "Imports fell 5% [S3]", "tag": "VERIFIED", "sids": [3]}]}
+    mixed = ["Capacity reached 176 GW [S1], while a brief projects 250 GW [S2]",       # interleaved
+             "Capacity reached 176 GW, while a brief projects 250 GW by 2030 [S1][S2]",  # trailing co-citation
+             "Capacity reached 176 GW and operators plan 250 GW by 2030 [S1], [S2]",
+             "Capacity 176 GW [S1] - [S2]: 250 GW planned",
+             "装机容量达176GW[S1]，简报预测250GW[S2]",
+             "Demand grew 12% [S3][S2]"]
+    record = {"id": "K1", "facts": [{"text": text, "tag": "REPORTED", "sids": [1, 2, 3]} for text in mixed]
+              + [{"text": "Imports fell 5% [S3]", "tag": "VERIFIED", "sids": [3]}],
+              "conflicts": ["Census and brief differ on 2030 [S3][S2]"]}
     text, _ = lr.build_digest([record], ledger.get, 20000, "English", admissible=lambda sid: sid != 2)
-    assert "250 GW" not in text and "176 GW" not in text
-    assert "- Demand grew 12% [S3] (VERIFIED)" in text and "- Imports fell 5% [S3] (VERIFIED)" in text
-    assert "[S2]" not in text
-    # The wall counters count with the same rule the digest used.
-    engine = types.SimpleNamespace(
-        _pit_admissible=lambda sid: sid != 2, records={"K1": record},
-        kiqs=[types.SimpleNamespace(id="K1")], _evidence_sids=lambda: [1, 2, 3])
+    assert "250" not in text and "176" not in text and "Demand grew" not in text and "differ" not in text
+    assert "- Imports fell 5% [S3] (VERIFIED)" in text and "[S2]" not in text
+    # The wall counters recount the rule the digest was built with (state.json records it).
+    engine, logs = _wall_counts_engine(record, lambda sid: sid != 2,
+                                       {lr.PIT_DIGEST_WALL_KEY: lr.PIT_DIGEST_WALL_RULE})
     assert lr._Engine._pit_wall_counts(engine) == {
-        "sids_withheld": 1, "digest_lines_dropped": 1, "digest_markers_stripped": 1}
+        "sids_withheld": 1, "digest_lines_dropped": 7, "digest_markers_stripped": 0}
+    assert logs == []
+
+
+@pytest.mark.parametrize("state", [{}, {lr.PIT_DIGEST_WALL_KEY: "per_claim"}])
+def test_wall_counts_are_unknown_for_a_digest_built_under_another_rule(state):
+    """A resumed attempt reuses digest.md as written (the writers' shared prefix); when
+    state.json does not record that it was built with the current rule, the digest counts
+    in point_in_time.json are unknown rather than recounted with a rule the writers did
+    not see."""
+    record = {"id": "K1", "facts": [{"text": "Capacity reached 176 GW [S1][S2]", "tag": "VERIFIED"}]}
+    engine, logs = _wall_counts_engine(record, lambda sid: sid != 2, state)
+    assert lr._Engine._pit_wall_counts(engine) == {
+        "sids_withheld": 1, "digest_lines_dropped": None, "digest_markers_stripped": None}
+    assert [kind for kind, message in logs if "leaves its digest counts unknown" in message] == ["warn"]
 
 
 def _walled_fallback_engine(records, admissible):
@@ -746,11 +831,11 @@ def test_citation_clusters_group_the_markers_of_one_claim():
 
 
 def test_published_findings_keep_no_claim_only_an_inadmissible_source_backs():
-    """Without ``strict`` the wall strips a failing marker wherever it stands (TIME-9's
-    original digest rule); with it (the deterministic sections and, since FU-2, the
-    digest) a finding is kept only when each of its claims keeps an admissible source,
-    so a sub-claim only a withheld source backs is never shown uncited next to an
-    admissible marker."""
+    """Claim by claim (``per_claim``, the deterministic sections) a finding is kept only
+    when each of its claims keeps an admissible source, so a sub-claim only a withheld
+    source backs is never published uncited next to an admissible marker; by default
+    (the digest and its counters, FU-2) every finding carrying a withheld marker is left
+    out whole."""
     interleaved = {"text": "Capacity reached 176 GW [S1], while a brief projects 250 GW [S2]", "tag": "REPORTED",
                    "sids": [1, 2]}
     leading = {"text": "A brief projects 250 GW [S2]; capacity reached 176 GW [S1]", "tag": "REPORTED",
@@ -762,22 +847,19 @@ def test_published_findings_keep_no_claim_only_an_inadmissible_source_backs():
     def admissible(sid):
         return sid != 2
 
-    walled, dropped, stripped = lr.pit_wall_record(record, admissible, strict=True)
+    walled, dropped, stripped = lr.pit_wall_record(record, admissible, per_claim=True)
     assert [fact["text"] for fact in walled["facts"]] == ["Capacity reached 176 GW [S1] and demand grew 12% [S3]"]
     assert (dropped, stripped) == (2, 1)
     digest, dropped, stripped = lr.pit_wall_record(record, admissible)
-    assert [fact["text"] for fact in digest["facts"]] == [
-        "Capacity reached 176 GW [S1], while a brief projects 250 GW",
-        "A brief projects 250 GW; capacity reached 176 GW [S1]",
-        "Capacity reached 176 GW [S1] and demand grew 12% [S3]"]
-    assert (dropped, stripped) == (0, 3)
+    assert (digest["facts"], dropped, stripped) == ([], 3, 0)
     engine = _walled_fallback_engine({"K1": record}, admissible)
     body = engine._fallback_section(engine._outline(1))
     assert body == "- Capacity reached 176 GW [S1] and demand grew 12% [S3]"
     assert "250 GW" not in body
-    # Everything admissible: the strict wall changes nothing.
-    unchanged, dropped, stripped = lr.pit_wall_record(record, lambda sid: True, strict=True)
-    assert (unchanged["facts"], dropped, stripped) == (record["facts"], 0, 0)
+    # Everything admissible: neither rule changes anything.
+    for per_claim in (False, True):
+        unchanged, dropped, stripped = lr.pit_wall_record(record, lambda sid: True, per_claim=per_claim)
+        assert (unchanged["facts"], dropped, stripped) == (record["facts"], 0, 0)
 
 
 @pytest.mark.parametrize("typing", [False, True])
