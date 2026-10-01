@@ -94,6 +94,8 @@ RANGE_RULES: dict[str, Range] = {
     # Days; golden_eval._check_tolerance refuses a value outside 0..MAX_LEAD_TOLERANCE_DAYS
     # (3650) when it runs, so preflight names it first.
     "GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS": Range(0, True, 3650, True),
+    # A relative difference; the reader falls back to 0.02 outside [0, 1].
+    "REPORT_VERIFIED_FIGURE_REL_TOL": _UNIT_INTERVAL,
 }
 
 # Accepted values (compared after .strip().lower(), as Config reads them).
