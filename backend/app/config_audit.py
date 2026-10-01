@@ -89,6 +89,9 @@ RANGE_RULES: dict[str, Range] = {
     # Seconds; llm_client._build_openai_client reads 0 as 600 but passes a negative value
     # through as the client's timeout.
     "LLM_HTTP_TIMEOUT_S": _NON_NEGATIVE,
+    # Days; golden_eval._check_tolerance refuses a value outside 0..MAX_LEAD_TOLERANCE_DAYS
+    # (3650) when it runs, so preflight names it first.
+    "GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS": Range(0, True, 3650, True),
 }
 
 # Accepted values (compared after .strip().lower(), as Config reads them).

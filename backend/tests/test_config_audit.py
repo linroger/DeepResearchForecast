@@ -336,6 +336,10 @@ def test_malformed_numeric_env_never_crashes_the_config_import():
     ("LLM_RUN_BUDGET_TOKENS", "0", True),
     ("LLM_HTTP_TIMEOUT_S", "-5", False),
     ("LLM_HTTP_TIMEOUT_S", "0", True),         # the client reads 0 as 600
+    ("GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS", "5000", False),
+    ("GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS", "-1", False),
+    ("GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS", "3650", True),
+    ("GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS", "0", True),
 ])
 def test_range_rules(name, value, ok):
     issues = ca.audit_env({name: value}, KNOBS)

@@ -35,6 +35,7 @@ import json
 import math
 import os
 import re
+import statistics
 import threading
 import unicodedata
 from collections import Counter
@@ -169,7 +170,9 @@ def append_golden_result(*, question_id: str, probability: Any, resolved_outcome
                          resolution_date: Optional[str] = None, as_of_date: Optional[str] = None,
                          resolution_criteria: Optional[str] = None,
                          report_id: Optional[str] = None, d: Optional[str] = None,
-                         objective_signals: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+                         objective_signals: Optional[Dict[str, Any]] = None,
+                         golden_tier: Optional[str] = None,
+                         golden_tier_source: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """EVAL-1: append ONE already-resolved golden binary question to the ledger.
 
     黄金题是「已判定」的二元(YES/NO)问题；把它建模成两情景（YES=p、NO=1-p）的 *已解析*
@@ -183,6 +186,14 @@ def append_golden_result(*, question_id: str, probability: Any, resolved_outcome
     Best-effort → 失败或输入非法时返回 None（degrade-safe）。
 
     ``golden=True`` + ``question_id`` 提供溯源，便于日后从账本里挑出/剔除黄金题条目。
+
+    EVAL-8: ``golden_tier`` (golden_eval.classify_tier: prospective / late_origin /
+    hindcast_retrieval_exposed / hindcast_pit / unknown) is written only when given, so
+    rows appended without it stay byte-identical; ``record_class`` and
+    ``characterization_only`` are unchanged either way. score-ledger counts only
+    ``golden_tier == 'prospective'`` rows toward its headline. ``golden_tier_source``
+    (what the tier rests on: pipeline_dir / --run-created-at / forecast_hindcast / none)
+    is written only alongside ``golden_tier``.
     """
     try:
         p = float(probability)
@@ -220,6 +231,10 @@ def append_golden_result(*, question_id: str, probability: Any, resolved_outcome
         "record_class": "evaluation",
         "characterization_only": True,
     }
+    if golden_tier is not None:
+        entry["golden_tier"] = str(golden_tier)
+        if golden_tier_source is not None:
+            entry["golden_tier_source"] = str(golden_tier_source)
     if isinstance(objective_signals, dict) and objective_signals:
         entry["objective_signals"] = objective_signals
     try:
@@ -399,6 +414,109 @@ def calibration_summary(d: Optional[str] = None, entries: Optional[List[Dict[str
     except Exception:  # noqa: BLE001
         return {"n_resolved": len(resolved), "mean_brier": None, "calibration_error": None,
                 **counts}
+
+
+SHAPE_SUMMARY_VERSION = "prob-shape-summary/v1"
+# REPORT-11: (label, path inside objective_signals.probability_shape) of each stat
+# shape_summary aggregates per policy group.
+_SHAPE_SUMMARY_METRICS = (
+    ("scenarios.normalized_entropy", ("scenarios", "normalized_entropy")),
+    ("scenarios.max_probability", ("scenarios", "max_probability")),
+    ("scenarios.critique_delta.normalized_entropy",
+     ("scenarios", "critique_delta", "normalized_entropy")),
+    ("binaries.midband_share", ("binaries", "midband_share")),
+    ("binaries.extreme_share", ("binaries", "extreme_share")),
+)
+# Group order in the summary: guard off, guard on, policy unknown.
+_SHAPE_GROUP_ORDER = {False: 0, True: 1, None: 2}
+
+
+def _dig(obj: Any, path: Tuple[str, ...]) -> Any:
+    for key in path:
+        if not isinstance(obj, dict):
+            return None
+        obj = obj.get(key)
+    return obj
+
+
+def _finite_number(value: Any) -> Optional[float]:
+    """``value`` as a finite float, else None (bool, non-numbers, NaN/inf and ints too
+    large for a float: a hand-edited or corrupt row must not abort the summary)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _distribution(values: List[float]) -> Dict[str, Any]:
+    if not values:
+        return {"n": 0, "mean": None, "median": None}
+    # "+ 0.0" turns -0.0 (e.g. a small negative mean of critique deltas rounded to
+    # zero) into 0.0, so the summary never prints "-0.0".
+    return {"n": len(values), "mean": round(statistics.fmean(values), 4) + 0.0,
+            "median": round(statistics.median(values), 4) + 0.0}
+
+
+def shape_summary(d: Optional[str] = None, entries: Optional[List[Dict[str, Any]]] = None,
+                  *, include_evaluation: bool = False) -> Dict[str, Any]:
+    """REPORT-11: per-policy distribution of the probability-shape telemetry.
+
+    Reads each row's ``objective_signals.probability_shape`` (written by
+    ``commit_published_forecast`` from the sealed forecast's
+    ``quality.probability_shape``) and groups rows by its
+    ``policy.binary_symmetric_guard``: False, True, or None when the row carries no
+    shape or its policy does not name the flag. Each group reports ``n`` (rows),
+    ``n_with_shape`` and, per stat, ``{n, mean, median}`` over the rows carrying it
+    (``scenarios.critique_delta.*`` exists only when a critique ran).
+
+    Rows are selected like calibration: by default production rows only
+    (``is_production_calibration_row`` — golden, characterization, evaluation and
+    other non-production classes, revisions and unpublished terminals excluded);
+    ``include_evaluation=True`` relaxes only the record-class rule. ``entries``
+    replaces reading the ledger in ``d``. Rows without ``objective_signals`` are
+    tolerated: rows committed before REPORT-11 or with FORECAST_PROBABILITY_SHAPE
+    off, and every row of FORECAST_LEDGER_COMMIT_MODE=legacy (``append_forecast``
+    appends the pre-audit draft and never carries signals), count in the None
+    group's ``n`` only. Observability: no gate or calibration reads this.
+    """
+    led = entries if entries is not None else read_ledger(d)
+    groups: Dict[Optional[bool], Dict[str, Any]] = {}
+    n_rows = n_with_shape = 0
+    for e in led:
+        if not (_is_scorable_row(e) if include_evaluation else is_production_calibration_row(e)):
+            continue
+        n_rows += 1
+        shape = _dig(e, ("objective_signals", "probability_shape"))
+        shape = shape if isinstance(shape, dict) else None
+        flag = _dig(shape, ("policy", "binary_symmetric_guard"))
+        group = groups.setdefault(flag if isinstance(flag, bool) else None, {
+            "n": 0, "n_with_shape": 0,
+            "values": {label: [] for label, _path in _SHAPE_SUMMARY_METRICS}})
+        group["n"] += 1
+        if shape is None:
+            continue
+        n_with_shape += 1
+        group["n_with_shape"] += 1
+        for label, path in _SHAPE_SUMMARY_METRICS:
+            value = _finite_number(_dig(shape, path))
+            if value is not None:
+                group["values"][label].append(value)
+    return {
+        "version": SHAPE_SUMMARY_VERSION,
+        "include_evaluation": bool(include_evaluation),
+        "n_rows": n_rows,
+        "n_with_shape": n_with_shape,
+        "groups": [
+            {"binary_symmetric_guard": flag, "n": group["n"],
+             "n_with_shape": group["n_with_shape"],
+             "metrics": {label: _distribution(values)
+                         for label, values in group["values"].items()}}
+            for flag, group in sorted(groups.items(), key=lambda kv: _SHAPE_GROUP_ORDER[kv[0]])
+        ],
+    }
 
 
 def due_for_resolution(as_of: str, d: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -842,7 +960,7 @@ def binary_resolution_date(binary: Dict[str, Any]) -> Optional[str]:
     hy = binary.get("horizon_year")
     try:
         y = int(float(hy)) if hy not in (None, "") else None
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):  # OverflowError: horizon_year 'inf'
         y = None
     if y and 2000 <= y <= 2100:
         return f"{y}-12-31"
@@ -935,6 +1053,7 @@ def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: 
                               committed_at: Optional[str] = None,
                               target_variant: Optional[Dict[str, Any]] = None,
                               characterization_only: bool = False,
+                              objective_signals: Optional[Dict[str, Any]] = None,
                               ) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Append one publication-sealed forecast; returns ``(status, row)``.
 
@@ -948,6 +1067,13 @@ def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: 
     and is stored on the row as ``target_variant``. ``characterization_only=True``
     (EVAL-13 evaluation runs) stamps the row so no production reader ever scores
     it; the default leaves the row shape unchanged.
+
+    REPORT-11: a non-empty ``objective_signals`` dict (deterministic telemetry of
+    the sealed forecast, e.g. ``{'probability_shape': ...}``) is stored as a copy
+    under ``objective_signals``; it never joins the commit id or the target key.
+    Signals that are not strict JSON are dropped (the row then carries
+    ``objective_signals_dropped: true``) rather than failing the commit. None (the
+    default) leaves the row shape unchanged.
     """
     rid = str(report_id or "").strip()
     pub = publication if isinstance(publication, dict) else {}
@@ -1024,6 +1150,13 @@ def commit_published_forecast(forecast: Optional[Dict[str, Any]], *, report_id: 
         row["target_variant"] = variant
     if characterization_only:
         row["characterization_only"] = True
+    if isinstance(objective_signals, dict) and objective_signals:
+        try:
+            json.dumps(objective_signals, ensure_ascii=False, allow_nan=False)
+            row["objective_signals"] = copy.deepcopy(objective_signals)
+        except (TypeError, ValueError):
+            # Telemetry is optional: the scored row still lands, and says what it lost.
+            row["objective_signals_dropped"] = True
     row.update(_provenance_fields(provenance))
     try:
         # Reject non-JSON / NaN rows before touching the ledger file at all.

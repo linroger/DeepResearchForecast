@@ -25,10 +25,19 @@ Examples:
     python backend/scripts/forecast_tools.py resolve --report-id R --scenario --retract \
         --supersedes manual:r1 --evidence "The cited result was later annulled by the court."
 
+    # REPORT-11: probability-shape telemetry — per-policy distributions over the production
+    # ledger rows (--include-evaluation relaxes the record-class rule), or the shape of
+    # individual forecast.json files
+    python backend/scripts/forecast_tools.py shape --ledger-dir uploads/pipelines/_forecast_ledger
+    python backend/scripts/forecast_tools.py shape --forecasts run1/forecast.json run2/forecast.json
+
 resolve exit codes: 0 appended, identical repeat or retried revision (no-op) or --dry-run;
 1 resolutions.jsonl could not be written; 2 invalid attestation, or a different one already
 recorded (nothing written); 4 no settleable target (no production primary ledger row and no
 report publishable at issue with a sealed forecast).
+
+shape exit codes: 0 printed; 1 a --forecasts file could not be read as a forecast object (the
+others are still printed).
 """
 
 from __future__ import annotations
@@ -44,6 +53,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.services.ensemble import aggregate_forecasts  # noqa: E402
 from app.services.backtest import calibration_report, score_forecast  # noqa: E402
 from app.services import forecast_ledger, forecast_resolution  # noqa: E402
+from app.services.probability_shape import probability_shape  # noqa: E402
 
 # resolve exit codes beyond 0 (see the module docstring).
 EXIT_NOT_APPENDED = 1
@@ -82,6 +92,51 @@ def cmd_backtest(args) -> int:
 
 def _print_json(payload) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def _forecast_file_shape(forecast):
+    """probability_shape of one forecast.json, recomputed from its published numbers.
+
+    The policy is the forecast's own quality.forecast_policy, else the one its stored
+    shape records; a forecast older than REPORT-11 carries neither, so its policy stays
+    unknown ({}) rather than being guessed.
+    """
+    quality = forecast.get("quality") if isinstance(forecast.get("quality"), dict) else {}
+    stored = quality.get("probability_shape")
+    policy = quality.get("forecast_policy")
+    if not isinstance(policy, dict) and isinstance(stored, dict):
+        policy = stored.get("policy")
+    return probability_shape(forecast.get("scenarios"), forecast.get("binary_forecasts"),
+                             pre_critique_scenarios=quality.get("pre_critique_scenarios"),
+                             policy=policy if isinstance(policy, dict) else None)
+
+
+def cmd_shape(args) -> int:
+    """REPORT-11: print probability-shape telemetry (observability; no gate reads it).
+
+    --forecasts: one {file, probability_shape} per forecast.json, recomputed from its
+    numbers. Otherwise forecast_ledger.shape_summary over the ledger in --ledger-dir
+    (default: the production forecast ledger).
+    """
+    if not args.forecasts:
+        _print_json(forecast_ledger.shape_summary(
+            args.ledger_dir, include_evaluation=args.include_evaluation))
+        return 0
+    results, failed = [], False
+    for path in args.forecasts:
+        try:
+            forecast = _load(path)
+        except (OSError, ValueError) as exc:
+            print(f"error: {path}: {exc}", file=sys.stderr)
+            failed = True
+            continue
+        if not isinstance(forecast, dict):
+            print(f"error: {path}: not a forecast object", file=sys.stderr)
+            failed = True
+            continue
+        results.append({"file": path, "probability_shape": _forecast_file_shape(forecast)})
+    _print_json(results)
+    return 1 if failed else 0
 
 
 def _plan_resolve(args, target, item, outcome):
@@ -208,6 +263,18 @@ def main(argv=None) -> int:
                    help="ledger directory (default: the production forecast ledger)")
     r.add_argument("--dry-run", action="store_true", help="validate and print, write nothing")
     r.set_defaults(func=cmd_resolve)
+    s = sub.add_parser("shape", help="probability-shape telemetry: per-policy ledger summary, "
+                                     "or the shape of forecast.json files")
+    source = s.add_mutually_exclusive_group()
+    source.add_argument("--ledger-dir", default=None,
+                        help="ledger directory to summarise (default: the production forecast "
+                             "ledger)")
+    source.add_argument("--forecasts", nargs="+", metavar="FILE",
+                        help="forecast.json files to compute the shape of")
+    s.add_argument("--include-evaluation", action="store_true",
+                   help="summarise non-production record classes too (revisions and "
+                        "unpublished terminals stay excluded)")
+    s.set_defaults(func=cmd_shape)
     args = ap.parse_args(argv)
     return args.func(args)
 

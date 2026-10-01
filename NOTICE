@@ -1,0 +1,37 @@
+DeepResearchForecast
+Third-party notices
+
+This repository is licensed under the GNU Affero General Public License v3.0
+(see LICENSE). It includes portions of third-party code under the licences
+named below.
+
+------------------------------------------------------------------------------
+TradingAgents (Tauric Research)
+https://github.com/TauricResearch/TradingAgents
+Licensed under the Apache License, Version 2.0; a copy of the licence is in
+LICENSES/Apache-2.0.txt (also at http://www.apache.org/licenses/LICENSE-2.0).
+
+Adapted and modified from TradingAgents 0.5.1:
+
+  deerflow_bridge/data_tools.py
+    Portions adapted from tradingagents/dataflows/vendors/fred.py: the curated
+    FRED alias table with a descriptive phrase rejected before any API call,
+    and both realtime bounds of every FRED request pinned to the earlier of
+    the as-of date and the vendor's own date in America/Chicago. DRF modified
+    the alias set, the id validation, the date handling (dates compared as
+    date objects), the error classification, caching, rendering and
+    secrecy rules.
+
+Files marked "Idea credit: TradingAgents (Apache-2.0)" reimplement an idea in
+DRF's own code; no TradingAgents code is copied into them.
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the Apache License, Version 2.0 is distributed on an "AS IS"
+BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+implied. See the License for the specific language governing permissions and
+limitations under the License.
+
+------------------------------------------------------------------------------
+FinanceHarness and StockAgent
+
+Ideas only: no code from either project is copied into this repository.

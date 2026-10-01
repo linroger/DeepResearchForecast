@@ -38,6 +38,37 @@ def test_new_and_dropped_scenarios_are_drift():
     assert "B" in d["new_scenarios"] and "A" in d["dropped_scenarios"]
 
 
+def test_null_probability_is_unscoreable_never_zero():
+    """A needs_review forecast's null probability is not read as 0.0 (a fabricated shift)."""
+    prev = _fc([{"name": "A", "probability": 0.6}, {"name": "B", "probability": 0.4}])
+    curr = _fc([{"name": "A", "probability": None}, {"name": "B", "probability": 0.45}])
+    d = sr.forecast_diff(prev, curr, threshold=0.15)
+    assert d["drift"] is False
+    assert d["scenario_changes"] == []
+    assert d["max_prob_delta"] == 0.05
+    assert d["unscoreable_scenarios"] == ["A"]
+    assert "概率待复核" in d["summary"]
+    # Unscoreable on the previous side, unparseable or non-finite values: same treatment.
+    for bad in (None, "", "n/a", float("nan"), "inf"):
+        d = sr.forecast_diff(_fc([{"name": "A", "probability": bad}]),
+                             _fc([{"name": "A", "probability": 0.9}]), threshold=0.15)
+        assert d["scenario_changes"] == [] and d["unscoreable_scenarios"] == ["A"], bad
+
+
+def test_null_probability_new_and_dropped_scenarios():
+    d = sr.forecast_diff(_fc([{"name": "A", "probability": None}]),
+                         _fc([{"name": "B", "probability": None}]), threshold=0.5)
+    assert d["drift"] is True
+    assert d["new_scenarios"] == ["B"] and d["dropped_scenarios"] == ["A"]
+    assert d["max_prob_delta"] == 0.0
+
+
+def test_all_scoreable_diff_has_no_unscoreable_key():
+    d = sr.forecast_diff(_fc([{"name": "A", "probability": 0.5}]),
+                         _fc([{"name": "A", "probability": 0.5}]), threshold=0.15)
+    assert "unscoreable_scenarios" not in d
+
+
 def test_name_matching_is_normalized():
     prev = _fc([{"name": "Samsung leads", "probability": 0.5}, {"name": "其它", "probability": 0.5}])
     curr = _fc([{"name": "samsung  leads.", "probability": 0.52}, {"name": "其它", "probability": 0.48}])

@@ -487,7 +487,7 @@ def _flatten_content(content: Any) -> str:
 
 _THINK_TAG_RE = re.compile(r"<(/?)think>", re.IGNORECASE)
 _DANGLING_THINK_RE = re.compile(r"<think>.*\Z", re.DOTALL | re.IGNORECASE)
-_ORPHAN_THINK_CLOSE = "</think>"
+_THINK_CLOSE_RE = re.compile(r"</think>", re.IGNORECASE)
 
 
 def _remove_think_blocks(text: str) -> str:
@@ -517,9 +517,13 @@ def _strip_think(text: str) -> str:
     if not text:
         return ""
     cleaned = _remove_think_blocks(text)
-    orphan = cleaned.lower().rfind(_ORPHAN_THINK_CLOSE)
-    if orphan != -1:
-        cleaned = cleaned[orphan + len(_ORPHAN_THINK_CLOSE):]
+    # The last closer is found on the text itself: an index into text.lower() is
+    # wrong once a character lower-cases to two (U+0130), which cut into the answer.
+    last_close = None
+    for last_close in _THINK_CLOSE_RE.finditer(cleaned):
+        pass
+    if last_close is not None:
+        cleaned = cleaned[last_close.end():]
     cleaned = _DANGLING_THINK_RE.sub("", cleaned)
     return cleaned.strip()
 

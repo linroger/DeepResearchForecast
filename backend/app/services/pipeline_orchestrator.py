@@ -91,6 +91,7 @@ from ..utils.canonical_json import canonical_json_sha256
 from ..utils.dates import date_period, parse_as_of
 from ..utils.logger import get_logger
 from ..utils import model_provenance
+from ..utils.numeric_guards import normalize_mode as _numeric_guard_mode
 
 logger = get_logger('mirofish.pipeline')
 
@@ -816,6 +817,11 @@ def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
     check. Only an ``admission`` or ``fork_admission`` capture snapshots the
     ambient BACKBONE_CHECK_* knobs; any other origin (a legacy resume) records it
     disabled, so a resume never turns the check on from the current environment.
+
+    ``numeric_guard_mode`` (TIME-5) is the normalised NUMERIC_GUARD_MODE (off |
+    shadow) of the shadow numeric-coherence guard, so a reload never changes the
+    shape of an admitted run's forecast.json. A run pinned before the key existed
+    reads the ambient value (``_pinned_safety`` default).
     """
     return {
         "version": SAFETY_POLICY_VERSION,
@@ -832,11 +838,27 @@ def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
         "simulation_forecast_effect": str(
             getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
             or "diagnostic_only"),
+        # REPORT-11: probability-moving binary prompt policy. Recorded for audit like the
+        # other report-stage keys; the report stage reads the ambient Config.
+        "forecast_binary_symmetric_guard": bool(
+            getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False)),
         "backbone_check": (
             backbone_sensitivity.capture_policy(Config)
             if origin in ("admission", "fork_admission")
             else dict(backbone_sensitivity.DISABLED_POLICY)),
+        "numeric_guard_mode": _pinned_numeric_guard_mode(),
     }
+
+
+def _pinned_numeric_guard_mode() -> str:
+    """TIME-5: the NUMERIC_GUARD_MODE a capture pins (off | shadow). An invalid
+    ambient value is pinned as shadow with a warning here: ReportAgent only ever
+    sees the normalised pin, so its own invalid-mode warning cannot fire."""
+    raw = getattr(Config, "NUMERIC_GUARD_MODE", "shadow")
+    mode, valid = _numeric_guard_mode(raw)
+    if not valid:
+        logger.warning("NUMERIC_GUARD_MODE=%r 不是 off|shadow，按 shadow 钉住", raw)
+    return mode
 
 
 def fork_safety_policy_v1(base_options: Any) -> Optional[dict[str, Any]]:
@@ -1649,12 +1671,14 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 # LOOP-007 budget control plane they share, and the deep-research engine v3
 # (linear_research.py phases + research_gateway.py LLM gateway/research tools +
 # evidence_spans.py verbatim evidence-span matching), plus source_dates.py (the
-# source publication-date parser cached_fetch and research_gateway import).
+# source publication-date parser cached_fetch and research_gateway import) and
+# data_tools.py (TIME-10 official-data vendor tools: FRED/ALFRED vintage-pinned
+# macro series).
 # setup.sh deploys the same set; test_deerflow_bridge_sync_guard pins the parity.
 _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
     "research_budget.py", "linear_research.py", "research_gateway.py", "evidence_spans.py",
-    "source_dates.py",
+    "source_dates.py", "data_tools.py",
 )
 
 
@@ -2293,6 +2317,7 @@ RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
     ("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", "float"),
     ("RESEARCH_EVIDENCE_GRADING", "bool"),
     ("RESEARCH_FORECAST_INPUTS", "bool"),
+    ("RESEARCH_QUANT_RECONCILE", "bool"),
     ("RESEARCH_SOURCE_TAXONOMY", "bool"),
 )
 RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
@@ -2301,10 +2326,12 @@ RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
     ("RESEARCH_AS_OF_PIN", "bool"),
     ("RESEARCH_EVIDENCE_QUOTES", "str"),
     ("RESEARCH_EVIDENCE_SUPPORTS", "bool"),
+    ("RESEARCH_FORECASTER_ATTRIBUTION", "bool"),
     ("RESEARCH_QUANT_TYPING", "bool"),
     ("RESEARCH_QUESTION_SPEC", "bool"),
     ("RESEARCH_SOURCE_DATES", "bool"),
     ("RESEARCH_SOURCE_DATE_TEXT_FALLBACK", "bool"),
+    ("RESEARCH_V3_CITATION_STATS", "bool"),
     ("RESEARCH_V3_FORECAST_INPUTS", "bool"),
     ("RESEARCH_VERIFIED_FACTS", "bool"),
 )
@@ -10850,6 +10877,9 @@ class PipelineOrchestrator:
             "actors": actors,
             "sources": research.get("sources"),
             "research_report": report_md,
+            # TIME-5：数值一致性影子检查模式读准入钉（服务重载不改变已准入运行）。
+            "numeric_guard_mode": self._pinned_safety(
+                state, "numeric_guard_mode", Config.NUMERIC_GUARD_MODE),
         }
         # TIME-6：回测运行的种子报告同样扣下市场——钉随构造参数直接交给报告，不依赖报告侧
         # 按模拟 id 的所属管线查找（种子模拟不是任何管线自己的 simulation_id）。
@@ -11384,6 +11414,7 @@ class PipelineOrchestrator:
         organic = db_rows
         organic_source = "db_rows"
         summary_health = None
+        schedule_issue = None
         try:
             _sum_path = os.path.join(SimulationRunner.RUN_STATE_DIR, sim_id, "run_summary.json")
             if os.path.exists(_sum_path):
@@ -11397,6 +11428,11 @@ class PipelineOrchestrator:
                     _sh = _summary.get("simulation_health")
                     if isinstance(_sh, str) and _sh:
                         summary_health = _sh
+                    # SIM-3（SIM_SCHEDULE_AUDIT）：run_summary 记下的永不触发的定时事件 → degraded
+                    # issue（绝不判失败）；无该键 / 计数为 0 → 不加 issue。
+                    if getattr(Config, "SIM_SCHEDULE_AUDIT", True):
+                        from .sim_schedule_audit import unreachable_issue
+                        schedule_issue = unreachable_issue(_summary.get("schedule_audit"))
         except Exception:  # noqa: BLE001 — 老 run 无 summary → 沿用 db 口径
             pass
         err = None
@@ -11442,6 +11478,9 @@ class PipelineOrchestrator:
             issues.append(
                 f"{dead_letters} graph-feedback episode(s) in the dead-letter queue — "
                 "report may read an episode-starved graph (replay via replay_zep_dead_letters.py)")
+        if schedule_issue:
+            meta["schedule_audit_unreachable"] = schedule_issue[0]
+            issues.append(schedule_issue[1])
         health = "degraded" if issues else "ok"
         return health, issues, meta
 
@@ -15712,10 +15751,20 @@ class PipelineOrchestrator:
                             temperature=0.0, max_tokens=64,
                         )
                     except Exception as _pf_err:  # noqa: BLE001
-                        raise RuntimeError(
-                            "报告前置探测失败：主/回退 LLM 提供方均不可用 —— 中止报告阶段以免"
-                            f"烧掉全部章节成本（稍后 resume 可从 REPORT 续跑）: {str(_pf_err)[:200]}"
-                        ) from _pf_err
+                        from ..utils.llm_client import EmptyCompletion as _PreflightEmpty
+                        if not (bool(getattr(Config, "LLM_LENGTH_ESCALATION", True))
+                                and isinstance(_pf_err, _PreflightEmpty)
+                                and _pf_err.finish_reason == "length"):
+                            raise RuntimeError(
+                                "报告前置探测失败：主/回退 LLM 提供方均不可用 —— 中止报告阶段以免"
+                                f"烧掉全部章节成本（稍后 resume 可从 REPORT 续跑）: {str(_pf_err)[:200]}"
+                            ) from _pf_err
+                        # INFRA-3 (LLM_LENGTH_ESCALATION): an empty reply cut by the probe's output
+                        # cap (a reasoning model thinking past it, even after escalation) proves the
+                        # provider answered, so the probe passes. A model that never produces text
+                        # still fails the report stage loudly. Off: legacy (the probe fails).
+                        logger.info("[%s] 报告前置探测：提供方可达（空回复被 max_tokens 截断，"
+                                    "finish_reason=length），继续报告阶段", state.pipeline_id)
                 if bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
                     # INFRA-7：一次性 force 标记所要求的重生成此刻开始——血统守卫（或其它复用否决）
                     # 先于上方的 pop 拒绝了复用时标记会残留，下次普通 resume 会丢弃这份新报告再重生成。
@@ -15761,6 +15810,9 @@ class PipelineOrchestrator:
                     "research_report": report_md,
                     "scenario_label": _scenario_label,
                     "base_simulation_id": _base_sim_id,
+                    # TIME-5：数值一致性影子检查模式读准入钉（API 重生成路径读当前 Config）。
+                    "numeric_guard_mode": cls._pinned_safety(
+                        state, "numeric_guard_mode", Config.NUMERIC_GUARD_MODE),
                 }
                 # TIME-6：回测运行把钉交给报告（不读/不重报价/不现抓预测市场，盖 hindcast 章）；
                 # 实时运行不加该参数，构造调用逐字节不变。

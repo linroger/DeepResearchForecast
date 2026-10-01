@@ -207,6 +207,18 @@ ALLOW = (
                   "(run submission and status polling).",
         "ledger": "no model spend of its own: the harness meters the model calls of each run",
     },
+    # --- official-data vendors -----------------------------------------------------------------
+    {
+        "file": "deerflow_bridge/data_tools.py",
+        "capability": "http_client",
+        "reason": "TIME-10 official-data vendor tools: the default transport's GET of the FRED/ALFRED "
+                  "API (vintage-pinned macro series).",
+        "ledger": "not metered: official-data vendor HTTP bounded by DATA_TOOL_TIMEOUT_S and a "
+                  "0.5 s per-process throttle; ok fetches cached (DATA_TOOLS_CACHE_DIR); no LLM "
+                  "egress",
+        "scopes": ("_httpx_transport",),
+        "symbols": ("httpx",),
+    },
     # --- research fetch and search transports ----------------------------------------------------
     {
         "file": "deerflow_bridge/cached_fetch.py",

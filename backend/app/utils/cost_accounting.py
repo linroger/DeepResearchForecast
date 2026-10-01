@@ -135,8 +135,13 @@ CONFIG_SOURCE_PINNED = "report_stage"
 CONFIG_SOURCE_RECOMPUTED = "recomputed"
 
 # safety_policy_v1 fields that change a forecast (origin / pinned_at are provenance).
+# numeric_guard_mode (TIME-5): shadow adds a latest_actual request to the binary prompt, so
+# off and shadow runs draft differently; a run pinned before the key existed reads None.
+# forecast_binary_symmetric_guard (REPORT-11): a probability-moving binary prompt policy, so
+# guard-on and guard-off runs must never share a config_hash (the premise of any A/B of it).
 SAFETY_POLICY_FIELDS = ("n_forecast_seeds", "report_spine_selfconsistency_k",
-                        "ensemble_extremize_a", "simulation_forecast_effect")
+                        "ensemble_extremize_a", "simulation_forecast_effect", "numeric_guard_mode",
+                        "forecast_binary_symmetric_guard")
 # (fingerprint key, Config attribute): forecast knobs neither admission pin covers.
 FORECAST_KNOBS = (("ensemble_models", "FORECAST_ENSEMBLE_MODELS"),
                   ("market_anchoring", "FORECAST_MARKET_ANCHORING"),

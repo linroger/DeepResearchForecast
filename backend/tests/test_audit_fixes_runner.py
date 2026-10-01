@@ -290,6 +290,23 @@ def test_run_summary_simulated_hours_defaults_minutes_60(sim_env):
     assert summary["simulated_hours"] == 3.0    # 3 × 60 / 60
 
 
+def test_run_summary_list_shaped_config_keeps_defaults(sim_env):
+    """A simulation_config.json that is a JSON list (not an object) is read as absent:
+    the summary is still written with the 60-minute default (it raised AttributeError)."""
+    sim_id = "sim_list_config"
+    _write_actions(sim_env / sim_id, "twitter", [
+        {"round": 1, "timestamp": "2026-07-02T00:01:00", "agent_id": 5,
+         "agent_name": "O", "action_type": "CREATE_POST", "action_args": {"content": "p"}},
+    ])
+    _write_run_state(sim_env / sim_id, current_round=2, total_rounds=4)
+    with open(os.path.join(str(sim_env / sim_id), "simulation_config.json"), "w", encoding="utf-8") as f:
+        json.dump([{"time_config": {"minutes_per_round": 30}}], f)
+    summary = SimulationRunner.write_run_summary(sim_id)
+    assert summary is not None
+    assert summary["simulated_hours"] == 2.0    # 2 × 60 / 60
+    assert "schedule_audit" not in summary
+
+
 # ---------------------------------------------------------------- ITEM 20 (2) ratio detector
 def test_run_summary_flags_organic_ratio_collapse(sim_env, monkeypatch):
     """ITEM20(2): 连续 ≥K 轮 posts>0 而 comments+likes==0 → organic_ratio_warnings。"""
@@ -344,6 +361,187 @@ def test_run_summary_ratio_detector_disabled(sim_env, monkeypatch):
     assert "organic_ratio_warnings" not in summary
 
 
+# ---------------------------------------------------------------- SIM-3 engagement samples
+def _sampled_likes_and_scheduled_posts():
+    """Round>0 activity that no agent chose: sampled likes and timeline replays."""
+    entries = [{"round": 0, "timestamp": "2026-07-02T00:00:01", "agent_id": 0,
+                "agent_name": "Seed", "action_type": "CREATE_POST",
+                "action_args": {"content": "seed post"}}]
+    for rnd in (1, 2, 3):
+        entries.append({"round": rnd, "timestamp": f"2026-07-02T00:0{rnd}:00",
+                        "agent_id": 0, "agent_name": "Seed", "action_type": "CREATE_POST",
+                        "action_args": {"content": f"event {rnd}", "is_scheduled_event": True}})
+        entries.append({"round": rnd, "timestamp": f"2026-07-02T00:0{rnd}:30",
+                        "agent_id": 10 + rnd, "agent_name": f"S{rnd}",
+                        "action_type": "LIKE_POST",
+                        "action_args": {"post_id": rnd, "is_engagement_sample": True}})
+    return entries
+
+
+def test_engagement_samples_not_organic(sim_env, monkeypatch):
+    """SIM-3: sampled likes are the engine's, not an agent's — a run whose only activity is
+    sampled likes and scheduled posts is hollow; the knob off restores the old count."""
+    monkeypatch.setattr(Config, "SIM_ORGANIC_EXCLUDES_ENGAGEMENT_SAMPLES", True, raising=False)
+    sim_id = "sim_sim3_samples"
+    _write_actions(sim_env / sim_id, "twitter", _sampled_likes_and_scheduled_posts())
+    _write_run_state(sim_env / sim_id, current_round=3, total_rounds=3)
+
+    summary = SimulationRunner.write_run_summary(sim_id)
+    assert summary["organic_action_count"] == 0
+    assert summary["rounds_with_organic_actions"] == 0
+    assert summary["simulation_health"] == "hollow"
+    assert summary["engagement_sample_count"] == 3
+    assert summary["seed_action_count"] == 7      # seed + 3 replays + 3 sampled likes
+
+    monkeypatch.setattr(Config, "SIM_ORGANIC_EXCLUDES_ENGAGEMENT_SAMPLES", False, raising=False)
+    legacy = SimulationRunner.write_run_summary(sim_id)
+    assert legacy["organic_action_count"] == 3
+    assert legacy["rounds_with_organic_actions"] == 3
+    assert legacy["simulation_health"] == "ok"
+    assert "engagement_sample_count" not in legacy
+
+
+def test_engagement_samples_do_not_hide_agent_actions(sim_env, monkeypatch):
+    """Agent-chosen actions still count; only the sampled likes leave the organic tally."""
+    monkeypatch.setattr(Config, "SIM_ORGANIC_EXCLUDES_ENGAGEMENT_SAMPLES", True, raising=False)
+    sim_id = "sim_sim3_mixed"
+    entries = _sampled_likes_and_scheduled_posts() + [
+        {"round": 2, "timestamp": "2026-07-02T00:02:45", "agent_id": 7, "agent_name": "A",
+         "action_type": "LIKE_POST", "action_args": {"post_id": 1}},
+        {"round": 3, "timestamp": "2026-07-02T00:03:45", "agent_id": 8, "agent_name": "B",
+         "action_type": "CREATE_COMMENT", "action_args": {"content": "reply"}},
+    ]
+    _write_actions(sim_env / sim_id, "twitter", entries)
+    _write_run_state(sim_env / sim_id, current_round=3, total_rounds=3)
+    summary = SimulationRunner.write_run_summary(sim_id)
+    assert summary["organic_action_count"] == 2
+    assert summary["rounds_with_organic_actions"] == 2
+    assert summary["engagement_sample_count"] == 3
+    assert summary["simulation_health"] == "ok"
+
+
+# ---------------------------------------------------------------- SIM-3 schedule audit
+def _write_schedule(sim_dir, events, **extra):
+    os.makedirs(str(sim_dir), exist_ok=True)
+    cfg = {"time_config": {"minutes_per_round": 60},
+           "event_config": {"scheduled_events": events}}
+    cfg.update(extra)
+    with open(os.path.join(str(sim_dir), "simulation_config.json"), "w", encoding="utf-8") as f:
+        json.dump(cfg, f)
+
+
+def _one_organic_post(sim_dir):
+    _write_actions(sim_dir, "twitter", [
+        {"round": 1, "timestamp": "2026-07-02T00:01:00", "agent_id": 5,
+         "agent_name": "O", "action_type": "CREATE_POST", "action_args": {"content": "p"}},
+    ])
+
+
+def test_run_summary_schedule_audit_only_when_unreachable(sim_env, monkeypatch):
+    monkeypatch.setattr(Config, "SIM_SCHEDULE_AUDIT", True, raising=False)
+    sim_id = "sim_sim3_sched"
+    _one_organic_post(sim_env / sim_id)
+    _write_run_state(sim_env / sim_id, current_round=36, total_rounds=36)
+    _write_schedule(sim_env / sim_id, [
+        {"round": 3, "date": "2026-08-01", "content": "reachable", "poster_agent_id": 1},
+        {"round": 40, "date": "2027-06-01", "content": "late", "poster_agent_id": 1,
+         "is_scenario_injection": True},
+    ])
+    summary = SimulationRunner.write_run_summary(sim_id)
+    audit = summary["schedule_audit"]
+    assert audit["scheduled"] == 2
+    assert audit["unreachable"] == 1
+    assert audit["by_reason"] == {"beyond_total_rounds": 1}
+    assert audit["samples"] == [{"round": 40, "date": "2027-06-01",
+                                 "reason": "beyond_total_rounds",
+                                 "is_scenario_injection": True}]
+    with open(os.path.join(str(sim_env / sim_id), "run_summary.json"), encoding="utf-8") as f:
+        assert json.load(f)["schedule_audit"] == audit
+    # the audit never touches simulation health: truncation/hollowness keep their meaning
+    assert summary["simulation_health"] == "ok"
+
+    _write_schedule(sim_env / sim_id, [
+        {"round": 0, "date": "2026-07-01", "content": "a", "poster_agent_id": 1},
+        {"round": 35, "date": "2027-03-01", "content": "b", "poster_agent_id": 2},
+    ])
+    assert "schedule_audit" not in SimulationRunner.write_run_summary(sim_id)
+
+
+def test_run_summary_schedule_audit_disabled(sim_env, monkeypatch):
+    monkeypatch.setattr(Config, "SIM_SCHEDULE_AUDIT", False, raising=False)
+    sim_id = "sim_sim3_sched_off"
+    _one_organic_post(sim_env / sim_id)
+    _write_run_state(sim_env / sim_id, current_round=36, total_rounds=36)
+    _write_schedule(sim_env / sim_id, [
+        {"round": 40, "date": "2027-06-01", "content": "late", "poster_agent_id": 1},
+        {"round": 2, "date": "2026-07-15", "content": "", "poster_agent_id": None},
+    ])
+    assert "schedule_audit" not in SimulationRunner.write_run_summary(sim_id)
+
+
+def test_run_summary_bytes_unchanged_by_sim3_knobs_when_nothing_to_report(sim_env, monkeypatch):
+    """Knobs at default with every event reachable and no sampled like → the same bytes as
+    both knobs off (no new key, no changed count)."""
+    sim_id = "sim_sim3_bytes"
+    _one_organic_post(sim_env / sim_id)
+    _write_run_state(sim_env / sim_id, current_round=3, total_rounds=3)
+    _write_schedule(sim_env / sim_id, [
+        {"round": 1, "date": "2026-07-02", "content": "a", "poster_agent_id": 1}])
+    path = os.path.join(str(sim_env / sim_id), "run_summary.json")
+
+    def _bytes(on):
+        monkeypatch.setattr(Config, "SIM_SCHEDULE_AUDIT", on, raising=False)
+        monkeypatch.setattr(Config, "SIM_ORGANIC_EXCLUDES_ENGAGEMENT_SAMPLES", on, raising=False)
+        SimulationRunner.write_run_summary(sim_id)
+        with open(path, "rb") as f:
+            return f.read()
+
+    assert _bytes(True) == _bytes(False)
+
+
+def _health_env(tmp_path, monkeypatch, summary):
+    from app.services import pipeline_orchestrator as po
+    sim_id = "sim_sim3_health"
+    monkeypatch.setattr(po.PipelineOrchestrator, "_sim_dir",
+                        staticmethod(lambda s: str(tmp_path / "simdir")))
+    monkeypatch.setattr(po.SimulationRunner, "RUN_STATE_DIR", str(tmp_path / "runstate"),
+                        raising=False)
+    os.makedirs(tmp_path / "runstate" / sim_id, exist_ok=True)
+    (tmp_path / "runstate" / sim_id / "run_summary.json").write_text(
+        json.dumps(summary), encoding="utf-8")
+    return po.PipelineOrchestrator()._assess_run_health(sim_id)
+
+
+def test_assess_run_health_flags_unreachable_events(tmp_path, monkeypatch):
+    monkeypatch.setattr(Config, "SIM_SCHEDULE_AUDIT", True, raising=False)
+    health, issues, meta = _health_env(tmp_path, monkeypatch, {
+        "organic_action_count": 40, "simulation_health": "ok",
+        "schedule_audit": {"scheduled": 5, "unreachable": 2,
+                           "by_reason": {"beyond_total_rounds": 1, "missing_poster": 1},
+                           "samples": []}})
+    assert health == "degraded"
+    assert meta["schedule_audit_unreachable"] == 2
+    assert len(issues) == 1 and "could never fire" in issues[0]
+    assert "beyond_total_rounds=1, missing_poster=1" in issues[0]
+
+
+@pytest.mark.parametrize("knob, audit", [
+    (True, None),
+    (True, {"scheduled": 3, "unreachable": 0, "by_reason": {}, "samples": []}),
+    (False, {"scheduled": 3, "unreachable": 2, "by_reason": {"missing_poster": 2},
+             "samples": []}),
+])
+def test_assess_run_health_ignores_absent_zero_or_disabled_audit(tmp_path, monkeypatch,
+                                                                 knob, audit):
+    monkeypatch.setattr(Config, "SIM_SCHEDULE_AUDIT", knob, raising=False)
+    summary = {"organic_action_count": 40, "simulation_health": "ok"}
+    if audit is not None:
+        summary["schedule_audit"] = audit
+    health, issues, meta = _health_env(tmp_path, monkeypatch, summary)
+    assert health == "ok" and issues == []
+    assert "schedule_audit_unreachable" not in meta
+
+
 # ---------------------------------------------------------------- RUN-15
 def test_rotate_stale_logs_rotates_derived_artifacts(sim_env):
     sim_id = "sim_run15"
@@ -354,6 +552,7 @@ def test_rotate_stale_logs_rotates_derived_artifacts(sim_env):
     (sim_dir / "run_summary.json").write_text("{}", encoding="utf-8")
     (sim_dir / "world_state_trajectory.json").write_text("{}", encoding="utf-8")
     (sim_dir / "decisions.jsonl").write_text("{}\n", encoding="utf-8")
+    (sim_dir / "world_digest.jsonl").write_text('{"round": 1}\n', encoding="utf-8")
 
     SimulationRunner._rotate_stale_action_logs(str(sim_dir))
 
@@ -361,6 +560,10 @@ def test_rotate_stale_logs_rotates_derived_artifacts(sim_env):
     assert (sim_dir / "run_summary.json.prev").exists()
     assert not (sim_dir / "world_state_trajectory.json").exists()
     assert (sim_dir / "world_state_trajectory.json.prev").exists()
+    # SIM-3: the in-band evolver appends to world_digest.jsonl; a fresh rerun must not
+    # continue the previous run's digest.
+    assert not (sim_dir / "world_digest.jsonl").exists()
+    assert (sim_dir / "world_digest.jsonl.prev").read_text(encoding="utf-8") == '{"round": 1}\n'
     assert not (sim_dir / "twitter" / "actions.jsonl").exists()
     assert (sim_dir / "twitter" / "actions.prev.jsonl").exists()
     assert (sim_dir / "twitter" / "checkpoint.prev.json").exists()
@@ -374,12 +577,16 @@ def test_cleanup_simulation_logs_removes_derived_artifacts(sim_env):
     (sim_dir / "run_summary.json.prev").write_text("{}", encoding="utf-8")
     (sim_dir / "llm_health.json").write_text("{}", encoding="utf-8")
     (sim_dir / "reddit" / "checkpoint.json").write_text("{}", encoding="utf-8")
+    (sim_dir / "world_digest.jsonl").write_text("{}\n", encoding="utf-8")
+    (sim_dir / "world_digest.jsonl.prev").write_text("{}\n", encoding="utf-8")
 
     result = SimulationRunner.cleanup_simulation_logs(sim_id)
     assert result["success"] is True
     assert not (sim_dir / "run_summary.json").exists()
     assert not (sim_dir / "run_summary.json.prev").exists()
     assert not (sim_dir / "llm_health.json").exists()
+    assert not (sim_dir / "world_digest.jsonl").exists()        # SIM-3
+    assert not (sim_dir / "world_digest.jsonl.prev").exists()
     assert not (sim_dir / "reddit" / "checkpoint.json").exists()
 
 

@@ -25,6 +25,7 @@ from enum import Enum
 
 from ..config import Config
 from ..utils import absence as _absence
+from ..utils import numeric_guards as _numeric_guards
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient, llm_call_timeout
 from ..utils.logger import get_logger
@@ -38,9 +39,12 @@ from ..utils.security import UnsafeIdError, contained_child, is_safe_id, safe_id
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
 from .hindcast_policy import as_hindcast_pin, hindcast_forecast_block
+from . import citation_finalization_telemetry as _cftel
+from . import probability_shape as _pshape
 from . import question_spec as _qspec
 from . import translation_dates as _tdates
 from . import translation_quantities as _tq
+from . import report_tool_args as _rta
 from .zep_tools import (
     ZepToolsService, 
     SearchResult, 
@@ -53,6 +57,11 @@ logger = get_logger('mirofish.report_agent')
 
 # TIME-6: ReportAgent._hindcast_pin 的「尚未查找」哨兵（区分未查找与查到 None = 非回测运行）。
 _HINDCAST_PIN_UNRESOLVED = object()
+
+# INFRA-5: 工具调用计数（_section_tool_calls / _report_tool_calls_total / _tool_outcomes）的锁。
+# 并发章节（REPORT_SECTION_CONCURRENCY>1）在线程池里共享同一 agent 实例递增这些计数；取模块级锁
+# 而非实例锁，使测试经 __new__ 构造、未跑 __init__ 的 agent 同样安全。
+_TOOL_COUNTER_LOCK = threading.Lock()
 
 # EXECPLAN2 F-7-1: 并发报告生成时，每份报告的 console_log.txt 此前都挂在进程级共享 logger
 # （'mirofish.report_agent' / 'mirofish.zep_tools'）上，导致两份报告的日志互相串扰，且 handler
@@ -281,7 +290,37 @@ class ReportLogger:
                 "message": f"工具 {tool_name} 返回结果"
             }
         )
-    
+
+    def log_tool_rejection(
+        self,
+        section_title: str,
+        tool_name: Optional[str],
+        reason: str,
+        raw_excerpt: Optional[str],
+        section_index: int = None
+    ):
+        """INFRA-5: 记录一次派发前被拒绝的工具调用（参数非 JSON / 缺工具名 / 参数无效）。
+
+        只记事件骨架（工具名、拒绝原因、调用原文摘录），不含任何章节草稿正文，故不在
+        api/report.py 的 _AGENT_LOG_DRAFT_FIELDS 草稿闸门之列。未闭合的 <tool_call> 块会一直延伸到
+        回复末尾、可能带上章节正文，故摘录经 report_tool_args.rejection_excerpt fail-closed 收窄：先在首个
+        'Final Answer' 或空行处截断，再从首个调用开头（{"name": / {"tool":，否则首个 {）起只保留调用语法
+        记号（括号、键、字符串、数字等），遇到中文正文、Markdown 标题等其他字符即止，至多 300 字符，
+        止于首个完整 JSON 对象；没有 { 时为空串。
+        """
+        self.log(
+            action="tool_rejected",
+            stage="generating",
+            section_title=section_title,
+            section_index=section_index,
+            details={
+                "tool_name": tool_name or "",
+                "reason": reason,
+                "raw_excerpt": _rta.rejection_excerpt(raw_excerpt),
+                "message": f"拒绝工具调用: {tool_name or '(无工具名)'}"
+            }
+        )
+
     def log_llm_response(
         self,
         section_title: str,
@@ -928,6 +967,10 @@ CONTAMINATION_MARKERS = (
     "等待命令响应超时",
 )
 
+# INFRA-5：推理残留标记。LLMClient 在 LLM_TRANSPORT_STRICT 下已剥离 <think> 块，仍出现在正文里即
+# 说明剥离失败（悬空/嵌套标签）；仅在该开关开启时计入 _looks_contaminated。
+_REASONING_LEAK_MARKERS = ("<think>", "</think>")
+
 # 合格章节正文的最小长度（远低于此通常意味着模型并未真正撰写正文）
 # RQ-1：200→800——展开后的章节目标 3000-6000 字，几百字的残段应判为未真正撰写。
 # 但含图表标记（一张 Mermaid/内嵌图 + 简短图注）的短章节是合法产出，见 _looks_contaminated
@@ -1130,13 +1173,21 @@ def _looks_truncated(text: Optional[str]) -> bool:
     return False
 
 
+def _has_contamination_marker(text: str) -> bool:
+    """正文含污染标记：系统提示泄漏 / 工具框架残留（CONTAMINATION_MARKERS），以及
+    INFRA-5（LLM_TRANSPORT_STRICT，默认开）下的 <think> 推理残留（_REASONING_LEAK_MARKERS）。"""
+    for marker in CONTAMINATION_MARKERS:
+        if marker in text:
+            return True
+    return bool(getattr(Config, "LLM_TRANSPORT_STRICT", True)) and any(m in text for m in _REASONING_LEAK_MARKERS)
+
+
 def _looks_contaminated(text: Optional[str]) -> bool:
     """判断一段拟用作章节正文的文本是否被污染 / 无效。"""
     if not text or not text.strip():
         return True
-    for marker in CONTAMINATION_MARKERS:
-        if marker in text:
-            return True
+    if _has_contamination_marker(text):
+        return True
     # RQ-1：短于下限判无效，但含图表标记（Mermaid/内嵌图 + 简短图注）的短章节是合法产出，
     # 豁免长度门（与 pipeline_orchestrator 健康门的图表豁免同源，避免两侧判定漂移）。
     if len(text.strip()) < MIN_VALID_SECTION_CHARS:
@@ -1616,6 +1667,7 @@ class ReportAgent:
         graph_priors_structural: Optional[Dict[str, Any]] = None,
         scenario_spine: Optional[List[Dict[str, Any]]] = None,
         hindcast: Optional[Dict[str, Any]] = None,
+        numeric_guard_mode: Optional[str] = None,
     ):
         """
         初始化Report Agent
@@ -1648,6 +1700,11 @@ class ReportAgent:
             由 _hindcast_pin 按模拟 id 查回所属管线的钉（覆盖 API 重生成/对话）；两者皆无 = 实时运行，
             行为逐字节不变。有钉时报告阶段不读/不重报价/不现抓预测市场，forecast.json 盖 hindcast 章。
             只有真正的回测钉（本版本且 hindcast 为真）才算数：as_of 等于今天的实时钉、{} 或其他值一律视为未传入。
+
+        TIME-5 numeric_guard_mode: 已发布二元阈值数值一致性影子检查的模式（off | shadow）。编排器主报告 /
+            种子报告传入准入时钉住的 safety_policy_v1.numeric_guard_mode；缺省 None（API 重生成 / 对话路径）
+            读当前 Config.NUMERIC_GUARD_MODE。非法值按 shadow 运行并告警。检查本身不改任何产物内容；
+            shadow 在二元提示词里多索取 latest_actual，模型起草的二元与概率可能因此与 off 不同。
         """
         self.graph_id = graph_id
         self.simulation_id = simulation_id
@@ -1687,6 +1744,8 @@ class ReportAgent:
         # 懒缓存一次；查找抛错时记下，市场据此失败即扣下。测试经 __new__ 构造时三者缺失，读取一律走 getattr。
         # 须在下方各块构建之前赋值：REPORT_CHRONOLOGY_ASOF_SPLIT 的时间线块按回测钉的 as_of 切分（RESEARCH-13）。
         self.hindcast: Optional[Dict[str, Any]] = as_hindcast_pin(hindcast)
+        # TIME-5：数值一致性影子检查模式（见 docstring）。测试经 __new__ 构造时缺失，读取一律走 getattr。
+        self._numeric_guard_mode = self._normalize_numeric_guard_mode(numeric_guard_mode)
         self._hindcast_pin_cache: Any = _HINDCAST_PIN_UNRESOLVED
         self._hindcast_lookup_failed = False
         # RESEARCH-12：(问题规范, 判定日是否采用) 懒缓存（_question_spec_for_run；None = 尚未核对）。
@@ -1734,6 +1793,8 @@ class ReportAgent:
         self._forecast_spine_block = ""
         # REPORT-1：骨架因概率不可读被弃用时的复核摘要（并入 forecast.quality.probability_parse）。
         self._spine_probability_review: Optional[Dict[str, Any]] = None
+        # INFRA-3：骨架因截断 draw 全部被丢弃而弃用时的计数（并入 forecast.quality.llm_truncation）。
+        self._spine_llm_truncation: Optional[Dict[str, Any]] = None
         # XRUN-5/RPT-8: 报告级紧凑检索查询（懒派生一次后缓存）；None=未派生。
         self._retrieval_query: Optional[str] = None
         # RQ-1(4): 报告形状（章节数区间 / 每章字数 / 每章工具预算），从需求书 page_budget 懒派生
@@ -1769,7 +1830,12 @@ class ReportAgent:
 
         self.llm = llm_client or LLMClient()
         self.zep_tools = zep_tools or ZepToolsService()
-        
+        # INFRA-11: opinion_shift / trace_cascade resolve actor names against the research roster
+        # (aliases included) under ACTOR_NAME_MATCH_STRICT. Only a tools object that declares the
+        # slot (ZepToolsService.__init__) receives it; without actors it matches graph/log names.
+        if actors and hasattr(self.zep_tools, "actor_roster"):
+            self.zep_tools.actor_roster = actors
+
         # 工具定义
         self.tools = self._define_tools()
         # interview_agents 需要 OASIS 模拟环境在线（IPC）。报告阶段几乎总在模拟结束、环境关闭之后运行，
@@ -1791,6 +1857,8 @@ class ReportAgent:
         # EXECPLAN2 I-5-4: 当前章节的工具调用计数器（_execute_tool 单一汇聚点累加），
         # 用于 per-section 遥测；未开遥测时该计数依旧无害地维护，开销可忽略。
         self._section_tool_calls = 0
+        # INFRA-5: 报告级工具调用计数与派发结局（并发章节下 per-section 汇总为空时的 tool_calls 来源）。
+        self._reset_tool_counters()
 
         # RQ-1(4): 依据需求书 page_budget 收敛/展开本次报告的每章工具预算——小 page_budget 报告回到
         # 紧凑 8 次，无/大预算用展开默认（Config.REPORT_AGENT_MAX_TOOL_CALLS=12）。以实例属性覆盖类
@@ -2787,9 +2855,10 @@ class ReportAgent:
             if getattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", True):
                 # SIM-1（fail-closed）：显式非 valid 裁定 → 只留警示与裁定原因，隐藏结果份额与
                 # 演化航点，正文无数字可引。注意：信号包解析器
-                # （forecast_extractor._WS_OUTCOME_HEADER_RE / _SIM_SIGNAL_TAXONOMY）至今仍锚定旧头
-                # 「【预测结果分布」，本来就不识别本块的「【推演结果分布」头；隐藏份额行保证即便该头部
-                # 漂移日后被修复，非 valid 块里也没有可被解析成 sim 结果分布的数字。
+                # （forecast_extractor._WS_OUTCOME_HEADER_RE / _SIM_SIGNAL_TAXONOMY）自 SIM-3 起识别
+                # 本块的「【推演结果分布」头（以本渲染器标题为准），并对上面的「⚠️ 有效性裁定」行
+                # fail-closed（不计入可引用信号、不解析份额，本开关关闭时同样如此）；隐藏份额行
+                # 再保证正文无数字可引。
                 if _reasons:
                     lines.append("裁定原因：" + "、".join(_reasons))
                 lines.append("（有效性未达标：已隐藏结果份额与演化航点——正文不得引用本块任何数字或趋势）")
@@ -3419,6 +3488,7 @@ class ReportAgent:
         from . import backbone_sensitivity as _bs
         from . import forecast_extractor as _fe
         self._spine_probability_review = None
+        self._spine_llm_truncation = None
         # EVAL-11：影子跨底座检查的输入——骨架实际所用的参数与批判前骨架（检查在下方 try 之外运行）。
         # 开启时骨架推导经观察器调用主客户端，逐次记下每次骨架调用的服务方（主 / 回退 / 缓存）；
         # 未开启时照旧直接传 self.llm（调用与提示词逐字节不变）。
@@ -3507,6 +3577,10 @@ class ReportAgent:
                 # forecast.quality.probability_parse（回退成稿后抽取的原因可审计）。
                 if isinstance(spine, dict) and spine.get("probability_review"):
                     self._spine_probability_review = spine["probability_review"]
+                # INFRA-3：截断 draw 全被丢弃导致骨架为空时同样留下计数（仅截断失败即关闭时存在）。
+                _spine_quality = spine.get("quality") if isinstance(spine, dict) else None
+                if isinstance(_spine_quality, dict) and _spine_quality.get("llm_truncation"):
+                    self._spine_llm_truncation = dict(_spine_quality["llm_truncation"])
                 self._mark_spine_pack_published(False)
                 logger.info("预测骨架推导未产出情景，跳过（回退为成稿后抽取）")
                 return
@@ -3521,6 +3595,11 @@ class ReportAgent:
                     and getattr(Config, "REPORT_FORECAST_SELF_CRITIQUE", False)):
                 try:
                     _forecast_language = getattr(self, "output_language", None) or ""
+                    # REPORT-11（FORECAST_PROBABILITY_SHAPE）：批判前快照情景概率——未批判骨架此前从不
+                    # 落盘，批判对概率形状的影响无从度量。评审成功（critiqued）时在评审 / 验尸调用之后
+                    # 记入 quality.pre_critique_scenarios（两者提示词不变）；旗标关不快照、不加键。
+                    _pre_critique = (_pshape.scenario_snapshot(spine.get("scenarios"))
+                                     if getattr(Config, "FORECAST_PROBABILITY_SHAPE", True) else None)
                     _critiqued = _fe.self_critique_forecast(
                         spine, self.llm, language=_forecast_language
                     )
@@ -3529,6 +3608,8 @@ class ReportAgent:
                     )
                     if _critiqued.get("scenarios"):
                         spine = _critiqued
+                        if _pre_critique is not None:
+                            _pshape.stamp_pre_critique(spine, _pre_critique)
                         logger.info(
                             f"预测骨架已先于叙事完成红队自校准（{len(spine['scenarios'])} 情景）"
                         )
@@ -3798,6 +3879,16 @@ class ReportAgent:
             logger.debug(f"model_provenance 构建失败（忽略）: {exc}")
             return None
 
+    @staticmethod
+    def _normalize_numeric_guard_mode(value: Optional[str] = None) -> str:
+        """TIME-5：off | shadow。None → 当前 Config.NUMERIC_GUARD_MODE；非法值 → shadow 并告警。"""
+        raw = value if value is not None else getattr(
+            Config, "NUMERIC_GUARD_MODE", _numeric_guards.MODE_SHADOW)
+        mode, valid = _numeric_guards.normalize_mode(raw)
+        if not valid:
+            logger.warning(f"NUMERIC_GUARD_MODE={raw!r} 不是 off|shadow，按 shadow 运行")
+        return mode
+
     def _finalize_structured_forecast(self, report_id: str, report_markdown: str,
                                       report: Optional["Report"] = None) -> None:
         """Persist the final forecast.json.
@@ -3825,6 +3916,9 @@ class ReportAgent:
         # TIME-6：回测钉——时间范围一致性校验以 as_of 年为「今年」，落盘前盖 forecast['hindcast'] 章；
         # 实时运行为 None，行为逐字节不变。
         _hindcast = self._hindcast_pin()
+        # TIME-5：本次运行的数值一致性检查模式（编排器钉住值；__new__ 构造的 agent 读当前 Config）。
+        _ng_mode = (getattr(self, "_numeric_guard_mode", None)
+                    or self._normalize_numeric_guard_mode())
         if self._forecast_spine and self._forecast_spine.get("scenarios"):
             forecast = dict(self._forecast_spine)        # 骨架已由信号驱动且 MECE
         else:
@@ -3838,10 +3932,15 @@ class ReportAgent:
         # 如骨架推导失败的 91f5 型运行）保留原有的成稿后批判。
         if (getattr(Config, "REPORT_FORECAST_SELF_CRITIQUE", False)
                 and not forecast.get("critiqued")):
+            # REPORT-11：成稿后批判同样快照批判前情景概率，评审成功时记入 quality.pre_critique_scenarios。
+            _pre_critique = (_pshape.scenario_snapshot(forecast.get("scenarios"))
+                             if getattr(Config, "FORECAST_PROBABILITY_SHAPE", True) else None)
             forecast = self_critique_forecast(
                 forecast, self.llm,
                 language=getattr(self, "output_language", None) or "",
             )
+            if _pre_critique is not None:
+                _pshape.stamp_pre_critique(forecast, _pre_critique)
         # XRUN-16(1): 骨架情景数与最终情景数漂移检测（正文按骨架 N 情景撰写、交付却是
         # M 情景 ⇒ 必然矛盾）；随 forecast.json quality 落盘供健康门消费。
         try:
@@ -3977,6 +4076,10 @@ class ReportAgent:
                         report_id, "binary", strip_market_table=_strip_market)
                     if _binary_pack:
                         _ebf_pack_kwargs["context_pack"] = _binary_pack
+                # TIME-5：shadow 时二元抽取顺带索取 latest_actual；off 时不传此参数（调用形状逐字节不变）。
+                _ebf_guard_kwargs: Dict[str, Any] = (
+                    {"numeric_guard_mode": _ng_mode}
+                    if _ng_mode == _numeric_guards.MODE_SHADOW else {})
                 # B2: 需求书解析出的 binary_min_count 参与生效——取 spec 与 Config 的较大者
                 # （需求书写明「15+ binary forecasts」时不被 Config 默认静默压低）。
                 _bres = _ebf(
@@ -3992,6 +4095,7 @@ class ReportAgent:
                     horizon_date=_hz_date,
                     **_ebf_eval_kwargs,
                     **_ebf_pack_kwargs,
+                    **_ebf_guard_kwargs,
                 )
                 if isinstance(_bres.get("target_binding"), dict):
                     _target_binding = _bres["target_binding"]
@@ -4084,6 +4188,60 @@ class ReportAgent:
             except Exception as _be:  # noqa: BLE001 — additive; never break finalization
                 logger.warning(f"二元预测抽取失败（忽略，不影响情景预测）: {_be}")
                 _binary_extraction_failed = True
+        # TIME-5（NUMERIC_GUARD_MODE，默认 shadow）：已发布二元阈值的数值一致性影子检查——每条二元盖
+        # binary['numeric_guard'] 章（阈值 vs 同指标最新实际值：status_quo_contradiction / scale_mismatch /
+        # inverted_interval），汇总并入 forecast.quality.numeric_guards（无二元 → not_run，情景区间照查）。
+        # 只合并进既有 dict，绝不重赋 forecast['binary_quality']；检查本身不改概率、正文、发布门、终审与
+        # 政策版本，不发 LLM 调用（shadow 追加在二元提示词里的 latest_actual 规则属于抽取，可能改变起草）。
+        # 回测运行以钉住的 as_of 为「今天」且要求日期可读（所述期间结束晚于 as_of、或无可读日期的实际值
+        # 都不绑定）；as_of 读不出时不回落系统日期（那会把 as_of 之后的信息当作已知）→ status 'error'。
+        # 失败 → status 'error'。
+        if _ng_mode == _numeric_guards.MODE_SHADOW:
+            _ng_today = None
+            _ng_error = None
+            if _hindcast is not None:
+                try:
+                    _ng_today = datetime.strptime(str(_hindcast.get("as_of"))[:10], "%Y-%m-%d").date()
+                except (TypeError, ValueError):
+                    _ng_error = "hindcast_as_of_unreadable"
+            try:
+                if _ng_error is not None:
+                    logger.warning(f"数值一致性影子检查跳过：回测钉 as_of 不可读（{_hindcast.get('as_of')!r}）")
+                    forecast.setdefault("quality", {})["numeric_guards"] = {
+                        "mode": _ng_mode, "status": "error", "error": _ng_error}
+                else:
+                    forecast.setdefault("quality", {})["numeric_guards"] = _numeric_guards.stamp_forecast(
+                        forecast, quant_rows=getattr(self, "quantitative", None) or [], mode=_ng_mode,
+                        scale_ratio=getattr(Config, "NUMERIC_GUARD_SCALE_RATIO",
+                                            _numeric_guards.DEFAULT_SCALE_RATIO),
+                        margin=getattr(Config, "NUMERIC_GUARD_STATUS_QUO_MARGIN",
+                                       _numeric_guards.DEFAULT_STATUS_QUO_MARGIN),
+                        today=_ng_today, require_as_of=_hindcast is not None)
+            except Exception as _nge:  # noqa: BLE001 — 影子诊断，绝不阻断定稿
+                logger.warning(f"数值一致性影子检查失败（忽略，不影响产物）: {_nge}")
+                try:
+                    forecast.setdefault("quality", {})["numeric_guards"] = {
+                        "mode": _ng_mode, "status": "error", "error": type(_nge).__name__}
+                except Exception:  # noqa: BLE001 — quality 形状异常时放弃记录
+                    pass
+        # REPORT-11：概率政策标记与概率形状遥测——置于二元块（含对账重算记分卡）之后，此后不再有步骤
+        # 移动情景 / 二元概率。政策标记与形状旗标无关（形状关时开了护栏的运行仍可识别）；形状纯观测，
+        # 任何门都不读，随下方 forecast.json 落盘（终审指纹覆盖它），发布提交时抄入账本行
+        # objective_signals。护栏关时不写 forecast_policy；形状关时不写 probability_shape（forecast.json
+        # 回到旧形态）。probability_shape 从不抛出（纯函数，失败返回空块）。
+        if getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False):
+            _fq0 = forecast.get("quality")
+            _fq = dict(_fq0) if isinstance(_fq0, dict) else {}
+            _fq["forecast_policy"] = {"binary_symmetric_guard": True}
+            forecast["quality"] = _fq
+        if getattr(Config, "FORECAST_PROBABILITY_SHAPE", True):
+            _fq0 = forecast.get("quality")
+            _fq = dict(_fq0) if isinstance(_fq0, dict) else {}
+            _fq["probability_shape"] = _pshape.probability_shape(
+                forecast.get("scenarios"), forecast.get("binary_forecasts"),
+                pre_critique_scenarios=_fq.get("pre_critique_scenarios"),
+                policy=_fq.get("forecast_policy") or {"binary_symmetric_guard": False})
+            forecast["quality"] = _fq
         # RQ-2：质量门失败 → 按维度单次定向修复（引用回填 / 引文接地 / 占位符解析），
         # 重跑受影响审计一次并把 before/after 记进 forecast['quality']['repair']（合并，不覆盖）。
         # 置于发布门之前 ⇒ 发布门只对修复后的审计结果打分一次，避免二次降级。任何失败仅告警。
@@ -4149,6 +4307,16 @@ class ReportAgent:
             _pparse["spine"] = _spine_review
             _pq["probability_parse"] = _pparse
             forecast["quality"] = _pq
+        # INFRA-3：骨架因截断 draw 全被丢弃而回退成稿后抽取时，把丢弃计数并入 quality.llm_truncation
+        # （与成稿后抽取自己的截断标注并存）；骨架可用时计数已随骨架带入，此处为 None。
+        _spine_truncation = getattr(self, "_spine_llm_truncation", None)
+        if _spine_truncation:
+            _tq0 = forecast.get("quality")
+            _tq = dict(_tq0) if isinstance(_tq0, dict) else {}
+            _truncation = dict(_tq.get("llm_truncation") or {})
+            _truncation.update(_spine_truncation)
+            _tq["llm_truncation"] = _truncation
+            forecast["quality"] = _tq
         if _evaluation is not None:
             forecast["evaluation"] = self._evaluation_stamp(
                 _evaluation, _eval_targets, _target_binding,
@@ -4186,6 +4354,26 @@ class ReportAgent:
         _question_spec, _qspec_applied = self._question_spec_for_run()
         if _question_spec is not None:
             forecast["question_spec"] = _qspec.summary(_question_spec, horizon_applied=_qspec_applied)
+        # RESEARCH-6（REPORT_CONSENSUS_DIAGNOSTICS=shadow）：研究定量行的跨来源预测离散度诊断（确定性、
+        # 零模型调用），全文落 consensus_evidence.json（先落盘），摘要记 forecast.quality.consensus。只记录：
+        # 不改概率 / 提示词 / 发布门；off（默认）或无效值时不加键、不写文件（forecast.json 逐字节不变）。
+        # as-of 取 actors.as_of_date；它缺失或不是整日（旧版/抢救研究）时退回回测钉的 as_of；两者皆无则
+        # 泄漏守卫与陈旧度不运行，摘要记 leakage_guard=false。
+        if getattr(Config, "REPORT_CONSENSUS_DIAGNOSTICS", "off") == "shadow" and getattr(self, "quantitative", None):
+            try:
+                from . import consensus_evidence as _consensus
+                _consensus_actors = self.actors if isinstance(getattr(self, "actors", None), dict) else {}
+                _consensus_as_of = _consensus_actors.get("as_of_date")
+                if _consensus.as_of_full_day(_consensus_as_of) is None:
+                    _consensus_as_of = (self._hindcast_pin() or {}).get("as_of")
+                _consensus_diag = _consensus.build_dispersion_diagnostics(
+                    self.quantitative, getattr(self, "timeline_events", None), _consensus_as_of)
+                write_json_atomic(
+                    os.path.join(ReportManager._get_report_folder(report_id), _consensus.FILENAME),
+                    _consensus_diag)
+                forecast.setdefault("quality", {})["consensus"] = _consensus.quality_summary(_consensus_diag)
+            except Exception as _cde:  # noqa: BLE001 — 影子诊断，绝不影响产物
+                logger.warning(f"跨来源预测离散度诊断失败（忽略）: {_cde}")
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
@@ -9072,6 +9260,7 @@ class ReportAgent:
             body, repair_info = self._repair_dangling_citations(
                 body, list(v["dangling"])
             )
+            self._log_citation_finalization("dangling", repair_info)
             imap = self._citation_index_or_fallback()
             v = validate_citation_markers(body, imap)
             logger.info(
@@ -9089,6 +9278,11 @@ class ReportAgent:
             imap = self._citation_index_or_fallback()
             if self._audit_semantic_citations(body, imap)["unsupported"] == 0:
                 break
+        # RESEARCH-9: every pass re-checks the surviving markers, so the log sums
+        # only remaps / strips and keeps kept / unverifiable of the last pass.
+        self._log_citation_finalization(
+            "semantic", semantic_totals, state=semantic_info
+        )
         v = validate_citation_markers(body, imap)
         if semantic_totals["remapped"] or semantic_totals["stripped"]:
             logger.info(
@@ -9181,6 +9375,79 @@ class ReportAgent:
                 ) from exc
             logger.warning(f"引用最终化失败（正文无引用记号，降级继续）: {exc}")
 
+    def _new_citation_finalization_log(
+        self, report_id: str, report: "Report"
+    ) -> Optional[Dict[str, Any]]:
+        """RESEARCH-9: a fresh citation-finalization log for one stabilizer run.
+
+        ``markers_before`` is the body-marker total (References excluded) before
+        the first citation finalization.  None when REPORT_FINALIZATION_TELEMETRY
+        is off or the measurement fails (telemetry never blocks publication).
+        """
+        if not getattr(Config, "REPORT_FINALIZATION_TELEMETRY", True):
+            return None
+        try:
+            from .forecast_extractor import validate_citation_markers
+
+            body = "\n".join(
+                chunk for chunk in self._split_markdown_h2_sections(
+                    report.markdown_content or ""
+                )
+                if chunk.split("\n", 1)[0].strip() not in _REFS_HEADINGS
+            )
+            markers = validate_citation_markers(
+                body, self._citation_index_or_fallback()
+            )["total_markers"]
+            return _cftel.new_log(report_id, markers)
+        except Exception as exc:  # noqa: BLE001 — telemetry never blocks publication
+            logger.warning(f"引用最终化遥测初始化失败（忽略）: {exc}")
+            return None
+
+    def _log_citation_finalization(
+        self, event: str, info: Any, *, first_pass: bool = False, state: Any = None
+    ) -> None:
+        """RESEARCH-9: add one repair event to the current citation-finalization
+        log (no-op without one: flag off, or a caller outside the stabilizer)."""
+        log = getattr(self, "_finalization_log", None)
+        if not isinstance(log, dict):
+            return
+        try:
+            _cftel.record(log, event, info, first_pass=first_pass, state=state)
+        except Exception as exc:  # noqa: BLE001 — telemetry never blocks publication
+            logger.warning(f"引用最终化遥测记录失败（忽略）: {event}: {exc}")
+
+    def _pre_audit_repairs(
+        self, report_id: str, body_marker_audit: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """RESEARCH-9: the report-citation-finalization/1 record of this report's
+        stabilizer run for the final audit; None when the flag is off or no log
+        of this report exists.  Warns when most markers were stripped."""
+        if not getattr(Config, "REPORT_FINALIZATION_TELEMETRY", True):
+            return None
+        log = getattr(self, "_finalization_log", None)
+        if not isinstance(log, dict) or log.get("report_id") != str(report_id):
+            return None
+        try:
+            record = _cftel.pre_audit_repairs(
+                log, (body_marker_audit or {}).get("total_markers", 0)
+            )
+        except Exception as exc:  # noqa: BLE001 — telemetry never blocks publication
+            logger.warning(f"引用最终化遥测汇总失败（忽略）: {exc}")
+            return None
+        if record["marker_strip_ratio"] >= _cftel.STRIP_RATIO_WARNING:
+            logger.warning(
+                "citation finalization stripped most markers before the audit: "
+                "%s ratio=%.3f before=%s final=%s machine_added=%s "
+                "lost_with_removed_text=%s",
+                report_id,
+                record["marker_strip_ratio"],
+                record["markers_before"],
+                record["markers_final"],
+                record["machine_added_citations"],
+                record["markers_lost_with_removed_text"],
+            )
+        return record
+
     def _stabilize_publish_markdown(
         self,
         report_id: str,
@@ -9228,6 +9495,12 @@ class ReportAgent:
             "stable": False,
             "lint": {},
         }
+        # RESEARCH-9: this run's citation-finalization log (None with
+        # REPORT_FINALIZATION_TELEMETRY off); _finalize_citations and the loop
+        # below add to it and the read-only audit persists it.
+        self._finalization_log = self._new_citation_finalization_log(
+            report_id, report
+        )
 
         for pass_no in range(1, limit + 1):
             totals["passes"] = pass_no
@@ -9249,6 +9522,11 @@ class ReportAgent:
                 )
             )
             totals["quantitative_grounding"] = quantitative_info
+            # The repairing call's diagnostics: the probe below re-runs on the
+            # repaired text and overwrites totals with zeros.
+            self._log_citation_finalization(
+                "quantitative", quantitative_info, first_pass=pass_no == 1
+            )
             if quantitatively_grounded != (report.markdown_content or ""):
                 totals["quantitative_rewrites"] += 1
                 report.markdown_content = quantitatively_grounded
@@ -9303,6 +9581,7 @@ class ReportAgent:
             totals["_quote_stable"] = (quote_probe == current)
             totals["_quant_stable"] = (quantitative_probe == current)
             totals["_semantic"] = semantic
+            self._log_citation_finalization("totals", totals)
             if (
                 quote_probe == current
                 and quantitative_probe == current
@@ -9789,6 +10068,11 @@ class ReportAgent:
         logic_number_audit = self._logic_number_observation(body, forecast)
         if logic_number_audit is not None:
             audit["logic_number"] = logic_number_audit
+        # RESEARCH-9: what the publish stabilizer stripped / added before this
+        # audit (telemetry: neither the integrity issues nor the gate read it).
+        pre_audit_repairs = self._pre_audit_repairs(report_id, body_marker_audit)
+        if pre_audit_repairs is not None:
+            audit["pre_audit_repairs"] = pre_audit_repairs
         audit["hard_issues"] = self._final_audit_integrity_issues(audit)
         audit["hard_passed"] = not audit["hard_issues"]
 
@@ -9808,6 +10092,13 @@ class ReportAgent:
                 quality["logic_number"] = logic_number_audit
             else:
                 quality.pop("logic_number", None)
+            if pre_audit_repairs is not None:
+                # Before serialization, so forecast_sha256 seals it.
+                quality["citation_finalization"] = pre_audit_repairs
+            else:
+                # No record of this run (flag off, no log, or the log of another
+                # report): an earlier audit's record must not survive re-sealed.
+                quality.pop("citation_finalization", None)
             quality["final_audit"] = audit
             forecast["quality"] = quality
             if getattr(Config, "REPORT_PUBLISH_GATE", False):
@@ -10956,6 +11247,8 @@ class ReportAgent:
             else:
                 # RPT-7: 提示可用工具时列出 live 工具集（此前硬编码 3 个，遗漏了
                 # simulation_outcomes/coalition_map/opinion_shift/trace_cascade 等）。
+                # INFRA-5 / EVAL-16: 未经名单校验直达此处的未知工具名（chat() 等）记一行 tool_unknown。
+                self._log_tool_unknown(tool_name, "dispatch")
                 return f"未知工具: {tool_name}。请使用以下工具之一: {', '.join(sorted(self.tools.keys()))}"
                 
         except Exception as e:
@@ -10981,6 +11274,192 @@ class ReportAgent:
         """
         return set(self.tools.keys()) | self._LEGACY_TOOL_ALIASES
 
+    # ── INFRA-5: 工具调用边界的计数 / 日志 / 拒绝 ──
+
+    def _reset_tool_counters(self) -> None:
+        """INFRA-5: 归零报告级工具调用计数与派发结局（__init__ 与每次 generate_report 开始时）。"""
+        with _TOOL_COUNTER_LOCK:
+            self._report_tool_calls_total = 0
+            self._tool_outcomes = _rta.new_tool_outcomes()
+
+    def _count_tool_event(self, outcome: Optional[str] = None, *, charged: bool = False,
+                          repaired: bool = False) -> None:
+        """INFRA-5: 持锁记一次工具调用事件（并发章节线程共享本实例，裸 += 会丢计数）。
+
+        outcome 为 report_tool_args.TOOL_OUTCOME_KEYS 之一；charged=True 表示本次计入工具预算
+        （成功派发，或超出免费额度的被拒调用），同时递增 per-section 的 _section_tool_calls 与
+        报告级的 _report_tool_calls_total。两者同口径，故串行汇总与并发兜底的 tool_calls 一致。
+        """
+        with _TOOL_COUNTER_LOCK:
+            outcomes = getattr(self, "_tool_outcomes", None)
+            if not isinstance(outcomes, dict):
+                outcomes = self._tool_outcomes = _rta.new_tool_outcomes()
+            if outcome:
+                outcomes[outcome] = outcomes.get(outcome, 0) + 1
+            if repaired:
+                outcomes["repaired"] = outcomes.get("repaired", 0) + 1
+            if charged:
+                self._section_tool_calls = int(getattr(self, "_section_tool_calls", 0) or 0) + 1
+                self._report_tool_calls_total = int(getattr(self, "_report_tool_calls_total", 0) or 0) + 1
+
+    def _tool_counters_snapshot(self) -> Tuple[int, Dict[str, int]]:
+        """INFRA-5: (报告级计费工具调用数, 派发结局计数副本)，持锁读取。"""
+        with _TOOL_COUNTER_LOCK:
+            outcomes = getattr(self, "_tool_outcomes", None)
+            merged = _rta.new_tool_outcomes()
+            if isinstance(outcomes, dict):
+                merged.update(outcomes)
+            return int(getattr(self, "_report_tool_calls_total", 0) or 0), merged
+
+    @staticmethod
+    def _free_tool_rejections() -> int:
+        """INFRA-5: 每章免费（不计预算）被拒调用数 REPORT_TOOL_MAX_REJECTED_PER_SECTION（非法值回退 6）。"""
+        try:
+            return max(0, int(getattr(Config, "REPORT_TOOL_MAX_REJECTED_PER_SECTION", 6)))
+        except (TypeError, ValueError):
+            return 6
+
+    def _safe_report_log(self, method: str, *args, **kwargs) -> None:
+        """INFRA-5: 调用 report_logger 的某个记录方法；无记录器 / 替身缺方法 / 写入失败均静默跳过。"""
+        report_logger = getattr(self, "report_logger", None)
+        fn = getattr(report_logger, method, None) if report_logger is not None else None
+        if fn is None:
+            return
+        try:
+            fn(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001 — 日志为旁路，绝不影响章节生成
+            logger.debug(f"report_logger.{method} 失败（忽略）: {exc}")
+
+    def _log_tool_unknown(self, tool_name: Any, path: str, section_title: Optional[str] = None,
+                          section_index: Optional[int] = None) -> None:
+        """INFRA-5 / EVAL-16 契约：模型点名不存在的工具时写一行 action='tool_unknown'。
+
+        path: 'react'（ReAct 循环拒绝）| 'native'（原生循环拒绝）| 'dispatch'（_execute_tool 兜底分支）。
+        每次未知调用只经过其中一处，故一次调用恰好一行。
+        """
+        self._safe_report_log(
+            "log", action="tool_unknown", stage="generating",
+            details={"tool_name": tool_name, "path": path},
+            section_title=section_title, section_index=section_index,
+        )
+
+    def _reject_tool_call(self, kind: str, budget: "_rta.RejectionBudget", tool_name: Optional[str],
+                          reason: str, raw: Optional[str], *, section_title: Optional[str] = None,
+                          section_index: Optional[int] = None, track: bool = True) -> bool:
+        """INFRA-5: 记一次派发前拒绝（计数 + agent_log 骨架行）；返回本次是否计入工具预算。
+
+        budget 为本章（或本次对话）的 RejectionBudget：前 REPORT_TOOL_MAX_REJECTED_PER_SECTION 次
+        免费，之后每次计费。track=False（chat 对话）时不动报告级计数。
+        """
+        charged = budget.register()
+        if track:
+            self._count_tool_event(_rta.OUTCOME_FOR_KIND.get(kind, "rejected_params"), charged=charged)
+        self._safe_report_log("log_tool_rejection", section_title, tool_name, f"{kind}: {reason}", raw,
+                              section_index=section_index)
+        logger.warning(
+            f"工具调用被拒绝（{'计入' if charged else '不计入'}工具预算）: "
+            f"{tool_name or '(无工具名)'} — {kind}: {reason}"
+        )
+        return charged
+
+    def _note_skipped_parse_errors(self, tool_calls: List[Dict[str, Any]], selected: Dict[str, Any], *,
+                                   section_title: Optional[str] = None, section_index: Optional[int] = None,
+                                   track: bool = True) -> str:
+        """INFRA-5: 同一回复里未被处理的无法解析块（_select_tool_call 选了别的调用）留痕并告知模型。
+
+        前 SKIPPED_BLOCKS_ITEMIZED 个这样的块各记一次不计费的被拒调用（track=False 的 chat 对话不动
+        报告级计数）与一行 tool_rejected，其余块只合记一行汇总（退化回复里成百上千个块不会变成成百上千次
+        加锁追加写与虚高的 rejected_parse）；都不占本章免费额度（本轮已处理选中的调用）。返回拼在本轮
+        Observation 前的说明。没有这样的块时（含宽容解析关闭：列表里没有错误条目）返回空串，
+        Observation 逐字节不变。
+        """
+        skipped = [c for c in tool_calls if c is not selected and "_parse_error" in c]
+        itemized = skipped[:_rta.SKIPPED_BLOCKS_ITEMIZED]
+        for entry in itemized:
+            kind = entry.get("_kind") or _rta.KIND_ARGS_NOT_JSON
+            if track:
+                self._count_tool_event(_rta.OUTCOME_FOR_KIND.get(kind, "rejected_parse"))
+            self._safe_report_log("log_tool_rejection", section_title, None,
+                                  f"{kind}: {entry['_parse_error']}（同一回复另有被处理的调用，本块未执行）",
+                                  entry.get("raw"), section_index=section_index)
+        if len(skipped) > len(itemized):
+            self._safe_report_log("log_tool_rejection", section_title, None,
+                                  f"skipped_blocks: 同一回复另有 {len(skipped) - len(itemized)} 个无法解析的"
+                                  f"工具调用块未逐条记录（共 {len(skipped)} 个，均未执行）",
+                                  None, section_index=section_index)
+        if skipped:
+            logger.warning(f"同一回复中 {len(skipped)} 个无法解析的工具调用块未执行（不计工具预算）")
+        return _rta.skipped_blocks_note([str(c["_parse_error"]) for c in skipped])
+
+    @staticmethod
+    def _select_tool_call(tool_calls: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """INFRA-5: 取首个格式良好的调用；全部解析失败时取第一个错误条目（非空列表）。
+
+        宽容解析关闭时列表里没有错误条目，恒等于 tool_calls[0]（历史「只执行第一个」）。
+        """
+        for call in tool_calls:
+            if "_parse_error" not in call:
+                return call
+        return tool_calls[0]
+
+    @staticmethod
+    def _public_tool_call(call: Dict[str, Any]) -> Dict[str, Any]:
+        """INFRA-5: 去掉解析层的私有键（'_repairs' 等），供 chat() 对外返回。"""
+        return {k: v for k, v in call.items() if not str(k).startswith("_")}
+
+    def _screen_native_unknown_tool(self, call: Dict[str, Any]) -> Optional[Tuple[str, str, str]]:
+        """INFRA-5 / RESEARCH-15(b): 原生工具调用的工具名名单校验；合法时返回 None，否则 (结局, 类型, 原因)。
+
+        fail-closed、不受 REPORT_TOOL_ARG_REPAIR 控制：调用方在降级安全的参数校验之外调用它，
+        自身异常照常抛出（_generate_section 回退 ReAct），绝不按可派发处理。
+        self.tools 为空（仅测试替身）时与 ReAct 路径一致跳过名单校验。
+        """
+        name = call.get("name")
+        if self.tools and name not in self._valid_tool_names():
+            return ("rejected_unknown", "unknown_tool",
+                    f"'{name}' 不是可用工具。请从以下工具中选择：{', '.join(sorted(self.tools.keys()))}")
+        return None
+
+    @staticmethod
+    def _screen_native_tool_args(call: Dict[str, Any], repair_on: bool) -> Optional[Tuple[str, str, str]]:
+        """INFRA-5（REPORT_TOOL_ARG_REPAIR）: 原生工具调用的参数检查；可派发时返回 None，否则 (结局, 类型, 原因)。
+
+        INFRA-1 的 arguments_error（参数不是 JSON 对象）与 validate_call（必填/as_of/limit）。
+        """
+        if not repair_on:
+            return None
+        name = call.get("name")
+        if call.get("arguments_error"):
+            return ("rejected_parse", _rta.KIND_ARGS_NOT_JSON,
+                    f"工具参数不是有效的 JSON 对象（{call['arguments_error']}）。"
+                    "请重新发起该工具调用，arguments 必须是一个 JSON 对象")
+        error = _rta.validate_call(name, call.get("arguments"))
+        if error:
+            return ("rejected_params", _rta.KIND_INVALID_PARAMS,
+                    f"工具 {name} 的参数无效：{error}。请修正参数后重新调用")
+        return None
+
+    @staticmethod
+    def _native_arguments_text(call: Dict[str, Any], prefer_raw: bool) -> str:
+        """回填 assistant.tool_calls 的 arguments 文本。
+
+        INFRA-5（prefer_raw）：有模型原文 raw_arguments 时原样回填——arguments 解析失败时为 {}，
+        json.dumps({}) 会向模型谎报它发出的内容；否则（及开关关闭时）沿用历史 json.dumps。
+        """
+        raw = call.get("raw_arguments")
+        if prefer_raw and isinstance(raw, str) and raw.strip():
+            return raw
+        return json.dumps(call.get("arguments", {}), ensure_ascii=False)
+
+    @staticmethod
+    def _native_final_evidence_chars() -> int:
+        """INFRA-5: 原生兜底收尾的证据摘要字符预算 REPORT_NATIVE_FINAL_EVIDENCE_CHARS（非正/非法回退 12000）。"""
+        try:
+            chars = int(getattr(Config, "REPORT_NATIVE_FINAL_EVIDENCE_CHARS", 12000))
+        except (TypeError, ValueError):
+            return 12000
+        return chars if chars > 0 else 12000
+
     def _parse_tool_calls(self, response: str) -> List[Dict[str, Any]]:
         """
         从LLM响应中解析工具调用
@@ -10988,7 +11467,77 @@ class ReportAgent:
         支持的格式（按优先级）：
         1. <tool_call>{"name": "tool_name", "parameters": {...}}</tool_call>
         2. 裸 JSON（响应整体或单行就是一个工具调用 JSON）
+
+        INFRA-5（REPORT_TOOL_ARG_REPAIR，默认开）走宽容解析 _parse_tool_calls_tolerant；
+        关闭时为下方的历史严格解析（逐字节不变）。
         """
+        if getattr(Config, "REPORT_TOOL_ARG_REPAIR", True):
+            return self._parse_tool_calls_tolerant(response)
+        return self._parse_tool_calls_legacy(response)
+
+    def _parse_tool_calls_tolerant(self, response: str) -> List[Dict[str, Any]]:
+        """INFRA-5: 宽容解析工具调用。
+
+        <tool_call> 块由 report_tool_args.split_tool_call_blocks 线性切分（块内任意内容都交给解析，
+        不再要求是一个完整的 {...}；旧正则匹配不上的块会被静默丢弃）。每个块经
+        parse_tool_call_block_repairs（整体 JSON → 首个对象 → 补齐括号）与 normalize_envelope
+        （键名归一、扁平参数上提、字符串化 parameters 解码）。
+        无法恢复的块不再丢弃，而是产出 {'_parse_error': 原因, 'raw': 原文[:500], '_kind': 类型}
+        条目，由调用方回给模型一条纠正性 Observation。成功条目的 '_repairs' 列出所做修复。
+        最后一个闭合块之后仍有未闭合的 <tool_call>（回复被 max_tokens 截断，或误用 </invoke> 等
+        闭合标签）时，其后全文按同一流程作为一个块处理（修复标记 unterminated_block）。
+        裸 JSON 兜底（无 <tool_call> 块）沿用历史的两种候选与「工具名须合法」约束，只把
+        json.loads 换成同一套修复；裸 JSON 解析失败一般不产出错误条目（可能只是正文里的花括号），
+        唯一例外是整个回复以 {"name": "<可用工具>" 开头却解码不了（report_tool_args.broken_bare_call）。
+        切分与候选定位都不用回溯正则：模型文本上的 <tool_call>\\s*(.*?)\\s*</tool_call> 在未闭合开标签
+        + 长空白串时是三次方回溯，且 _sre 匹配期间不释放 GIL（并发章节线程全被卡住）。
+        """
+        tool_calls: List[Dict[str, Any]] = []
+        for block, block_repair in _rta.split_tool_call_blocks(response):
+            obj, repairs, error = _rta.parse_tool_call_block_repairs(block)
+            if obj is None:
+                tool_calls.append({"_parse_error": error, "raw": block[:500],
+                                   "_kind": _rta.KIND_ARGS_NOT_JSON})
+                continue
+            call, envelope_repairs = _rta.normalize_envelope(obj)
+            name = call.get("name")
+            if not isinstance(name, str) or not name:
+                tool_calls.append({"_parse_error": "missing tool name", "raw": block[:500],
+                                   "_kind": _rta.KIND_MISSING_NAME})
+                continue
+            call["_repairs"] = ([block_repair] if block_repair else []) + repairs + envelope_repairs
+            tool_calls.append(call)
+        if tool_calls:
+            return tool_calls
+
+        for candidate in _rta.bare_tool_call_candidates(response):
+            obj, repairs, _error = _rta.parse_tool_call_block_repairs(candidate)
+            if obj is None:
+                continue
+            call, envelope_repairs = _rta.normalize_envelope(obj)
+            name = call.get("name")
+            if isinstance(name, str) and name in self._valid_tool_names():
+                call["_repairs"] = repairs + envelope_repairs
+                return [call]
+
+        # 整个回复以 {"name": "<可用工具>" 开头、但那个对象解码不了（多为缺外层右括号，
+        # 上面的候选只看以 } 结尾的回复）：能补齐就派发，补不齐就产出错误条目回给模型，不再静默丢弃。
+        broken = _rta.broken_bare_call(response)
+        if broken is None or broken[1] not in self._valid_tool_names():
+            return []
+        candidate, _declared = broken
+        obj, repairs, error = _rta.parse_tool_call_block_repairs(candidate)
+        if obj is None:
+            return [{"_parse_error": error, "raw": candidate[:500], "_kind": _rta.KIND_ARGS_NOT_JSON}]
+        call, envelope_repairs = _rta.normalize_envelope(obj)
+        name = call.get("name")
+        if not isinstance(name, str) or name not in self._valid_tool_names():
+            return []
+        call["_repairs"] = repairs + envelope_repairs
+        return [call]
+
+    def _parse_tool_calls_legacy(self, response: str) -> List[Dict[str, Any]]:
+        """历史严格解析（REPORT_TOOL_ARG_REPAIR=false）：JSON 解析失败的块被静默丢弃。"""
         tool_calls = []
 
         # 格式1: XML风格（标准格式）
@@ -11860,7 +12409,11 @@ class ReportAgent:
         progress_callback: Optional[Callable] = None,
         section_index: int = 0,
     ) -> str:
-        """T4.5: 用原生 tool calling 生成章节（无正则解析/无 conflict_retries/无污染检测）。"""
+        """T4.5: 用原生 tool calling 生成章节（无正则解析/无 conflict_retries）。
+
+        INFRA-5: 被拒的工具调用（未知工具名 / 参数非 JSON / 参数无效）以 role=tool 'ERROR: …'
+        回包、不派发；LLM_TRANSPORT_STRICT 下含污染标记的正文抛出，由 _generate_section 回退 ReAct。
+        """
         logger.info(f"原生 tool calling 生成章节: {section.title}")
         if self.report_logger:
             self.report_logger.log_section_start(section.title, section_index)
@@ -11913,15 +12466,21 @@ class ReportAgent:
         max_iterations = 14  # RQ-1: 10→14，支撑更多工具轮次 + 更长章节的收尾
         max_tool_calls = self.MAX_TOOL_CALLS_PER_SECTION
         tool_calls_count = 0
+        # INFRA-5: 成功派发的调用数，工具下限 _eff_min 只认它（计费的被拒调用只占上限预算）。
+        dispatched_count = 0
+        # INFRA-5: 派发前校验开关、本章被拒调用的免费额度、已派发工具结果（兜底收尾的证据摘要）。
+        _repair_on = bool(getattr(Config, "REPORT_TOOL_ARG_REPAIR", True))
+        _rejections = _rta.RejectionBudget(self._free_tool_rejections())
+        _evidence: List[str] = []
 
         for _ in range(max_iterations):
             # REPORT-9: 工具调用未达下限时，本回合的正文会被拒绝（强制继续检索）→ 必为「工具决策回合」，
             # 用较小的 REPORT_AGENT_TOOL_TURN_MAX_TOKENS 抑制长链推理；达到下限后本回合可能直接产出正文，
             # 回到完整 SECTION_MAX_TOKENS 预算以免截断。（原生路径此前用 chat_with_tools 的 4096 默认值。）
             _turn_max_tokens = (
-                Config.REPORT_AGENT_SECTION_MAX_TOKENS
-                if tool_calls_count >= _eff_min
-                else getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
+                getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
+                if _rta.evidence_floor_unmet(dispatched_count, tool_calls_count, _eff_min, max_tool_calls)
+                else Config.REPORT_AGENT_SECTION_MAX_TOKENS
             )
             resp = self.llm.chat_with_tools(
                 messages, schemas, temperature=Config.REPORT_AGENT_TEMPERATURE,
@@ -11940,23 +12499,54 @@ class ReportAgent:
                     logger.info(
                         f"章节 {section.title}: 工具批次超出剩余预算，裁掉 {len(_dropped)} 个调用"
                     )
-                # 回填 assistant 工具调用消息
+                # 回填 assistant 工具调用消息（INFRA-5: 开关开时 arguments 用模型原文 raw_arguments）
                 messages.append({
                     "role": "assistant",
                     "content": content or None,
                     "tool_calls": [
                         {"id": c["id"], "type": "function",
-                         "function": {"name": c["name"], "arguments": json.dumps(c["arguments"], ensure_ascii=False)}}
+                         "function": {"name": c["name"], "arguments": self._native_arguments_text(c, _repair_on)}}
                         for c in calls
                     ],
                 })
                 for c in calls:
-                    tool_calls_count += 1
-                    self._section_tool_calls += 1  # EXECPLAN2 I-5-4: per-section 工具调用计数
+                    # INFRA-5: 派发前检查。被拒调用不执行，以 role=tool 'ERROR: …' 回包（assistant 消息里
+                    # 的每个 tool_call_id 都必须有回包）；未知工具与免费额度内的被拒调用不计预算。
+                    screened = self._screen_native_unknown_tool(c)
+                    if screened is None:
+                        try:
+                            screened = self._screen_native_tool_args(c, _repair_on)
+                        except Exception as se:  # noqa: BLE001 — 参数校验为增强，自身失败按可派发处理
+                            logger.debug(f"原生工具调用参数校验失败（按可派发处理）: {se}")
+                            screened = None
+                    if screened is not None:
+                        _outcome, _kind, _reason = screened
+                        _charged = False
+                        if _outcome == "rejected_unknown":
+                            self._count_tool_event(_outcome)
+                            self._log_tool_unknown(c.get("name"), "native", section.title, section_index)
+                            logger.warning(f"章节 {section.title}: 原生调用了未知工具 '{c.get('name')}'，已拒绝（不计预算）")
+                        else:
+                            _charged = self._reject_tool_call(
+                                _kind, _rejections, c.get("name"), _reason, c.get("raw_arguments"),
+                                section_title=section.title, section_index=section_index,
+                            )
+                            if _charged:
+                                tool_calls_count += 1
+                        messages.append({
+                            "role": "tool", "tool_call_id": c["id"],
+                            "content": f"ERROR: {_reason}" + (_rta.CHARGED_NOTE if _charged else ""),
+                        })
+                        continue
                     try:
                         result = self._execute_tool(c["name"], c["arguments"], report_context=section.title)
                     except Exception as te:  # noqa: BLE001
                         result = f"（工具 {c['name']} 执行失败：{te}）"
+                    # INFRA-5: 派发之后才计费（此前先计费后派发）；EXECPLAN2 I-5-4 per-section 计数同步递增。
+                    tool_calls_count += 1
+                    dispatched_count += 1
+                    self._count_tool_event("dispatched", charged=True)
+                    _evidence.append(f"【{c['name']}】\n{str(result)[:8000]}")
                     if self.report_logger:
                         try:
                             self.report_logger.log_tool_call(
@@ -11980,18 +12570,20 @@ class ReportAgent:
 
             # 无更多工具调用（或已达上限）→ 收尾出正文
             if content.strip():
-                # EXECPLAN2 F-7-2 工具调用不足且仍可继续检索 → 拒绝过早出正文，强制补足实证（对齐 ReAct 路径）
-                if tool_calls_count < _eff_min and tool_calls_count < max_tool_calls:
+                # EXECPLAN2 F-7-2 工具调用不足且仍可继续检索 → 拒绝过早出正文，强制补足实证（对齐 ReAct 路径；
+                # INFRA-5: 下限只数成功派发的调用）
+                if dispatched_count < _eff_min and tool_calls_count < max_tool_calls:
                     messages.append({"role": "assistant", "content": content})
                     messages.append({
                         "role": "user",
                         "content": (
-                            f"你只调用了 {tool_calls_count} 次工具，少于本章要求的至少 "
+                            f"你只调用了 {dispatched_count} 次工具，少于本章要求的至少 "
                             f"{_eff_min} 次。请勿现在输出正文，"
                             "继续发起工具调用以补足实证后再撰写本章。"
                         ),
                     })
                     continue
+                self._raise_if_native_contaminated(content, section.title)
                 return content
             # 达到工具上限但模型还没出正文：显式要求收尾
             messages.append({"role": "user", "content": "请基于以上工具结果直接输出本章完整 Markdown 正文。"})
@@ -11999,9 +12591,40 @@ class ReportAgent:
         # 兜底：迭代用尽仍无正文 → 末次无工具强制出文
         final = self.llm.chat(messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt + "\n\n请直接输出本章 Markdown 正文。"},
+            {"role": "user", "content": self._native_final_user_prompt(user_prompt, _evidence)},
         ], temperature=Config.REPORT_AGENT_TEMPERATURE, max_tokens=Config.REPORT_AGENT_SECTION_MAX_TOKENS)
+        self._raise_if_native_contaminated(final, section.title)
         return final
+
+    def _native_final_user_prompt(self, user_prompt: str, evidence: List[str]) -> str:
+        """原生循环迭代用尽时兜底收尾的用户提示。
+
+        INFRA-5（REPORT_NATIVE_FINAL_WITH_EVIDENCE，默认开）：兜底回合只带 system + 原始用户提示，
+        此前已检索的工具结果全部丢弃、模型凭空成文。开关开且有已派发结果时，附上结果拼接后按
+        forecast_extractor.slice_head_tail 首尾截取到 REPORT_NATIVE_FINAL_EVIDENCE_CHARS 的证据摘要。
+        无结果、开关关闭或构建失败时为历史提示（逐字节不变）。
+        """
+        legacy = user_prompt + "\n\n请直接输出本章 Markdown 正文。"
+        if not evidence or not getattr(Config, "REPORT_NATIVE_FINAL_WITH_EVIDENCE", True):
+            return legacy
+        try:
+            from .forecast_extractor import slice_head_tail
+            digest = slice_head_tail("\n\n".join(evidence), self._native_final_evidence_chars())
+        except Exception as exc:  # noqa: BLE001 — 证据摘要为增强，失败回退历史提示
+            logger.warning(f"原生兜底收尾证据摘要构建失败（回退原始提示）: {exc}")
+            return legacy
+        return (user_prompt + "\n\n【已检索到的工具结果（证据摘要）】\n" + digest
+                + "\n\n请基于以上工具结果直接输出本章 Markdown 正文。")
+
+    @staticmethod
+    def _raise_if_native_contaminated(text: Optional[str], section_title: str) -> None:
+        """INFRA-5（LLM_TRANSPORT_STRICT，默认开）：原生路径的章节正文含污染标记（系统提示泄漏 /
+        工具框架残留 / <think> 推理残留，_has_contamination_marker）即抛出，由 _generate_section 按其它
+        原生失败一样回退 ReAct（ReAct 自带纠正重试与占位符兜底）。只看标记、不套 _looks_contaminated 的
+        MIN_VALID_SECTION_CHARS 长度门：短而干净的原生正文照旧采纳，不因篇幅整章重跑 ReAct。
+        开关关闭时不检测（历史行为）。"""
+        if getattr(Config, "LLM_TRANSPORT_STRICT", True) and text and _has_contamination_marker(text):
+            raise RuntimeError(f"原生 tool calling 章节正文含污染标记（{section_title}），回退 ReAct")
 
     def _generate_section_react(
         self,
@@ -12088,11 +12711,17 @@ class ReportAgent:
         # ReACT循环（min_tool_calls 在提示词构建前经 _effective_min_tool_calls 计算，
         # T4.4 配置下限 + LOOP-015 padding/证据预注入下调）
         tool_calls_count = 0
+        # INFRA-5: 成功派发的调用数。工具下限只认它——超出免费额度后计费的被拒调用只占上限预算，
+        # 没有取回任何证据（宽容解析关闭时没有被拒调用，两者恒等）。
+        dispatched_count = 0
         max_iterations = 14  # RQ-1: 10→14，最大迭代轮数（更高以支撑更深入的检索与更长的章节）
         conflict_retries = 0  # 工具调用与Final Answer同时出现的连续冲突次数
         contamination_retries = 0  # 输出被污染（系统提示泄漏/工具调用残留）的连续重试次数
         MAX_CONTAMINATION_RETRIES = 2  # 污染输出最多纠正重试次数
         used_tools = set()  # 记录已调用过的工具名
+        # INFRA-5: 派发前校验开关与本章被拒调用的免费额度（超出后被拒调用照常计费）。
+        _repair_on = bool(getattr(Config, "REPORT_TOOL_ARG_REPAIR", True))
+        _rejections = _rta.RejectionBudget(self._free_tool_rejections())
         # REPORT-8: interview_agents 仍可用（保留在 self.tools / 提示词中），但不再进入
         # 「未使用工具」推荐集——采访依赖 OASIS 在线、延迟高且易超时，不应被反复 nudge 去尝试。
         all_tools = {"insight_forge", "panorama_search", "quick_search",
@@ -12118,9 +12747,10 @@ class ReportAgent:
             # 到下限，本回合可能直接产出最终正文，回到完整 SECTION_MAX_TOKENS 预算以免截断正文。
             # REPORT-10: 温度统一读 Config.REPORT_AGENT_TEMPERATURE（默认 0.5，行为不变、可运维调）。
             _turn_max_tokens = (
-                Config.REPORT_AGENT_SECTION_MAX_TOKENS
-                if tool_calls_count >= min_tool_calls
-                else getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
+                getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
+                if _rta.evidence_floor_unmet(dispatched_count, tool_calls_count, min_tool_calls,
+                                             self.MAX_TOOL_CALLS_PER_SECTION)
+                else Config.REPORT_AGENT_SECTION_MAX_TOKENS
             )
             response = self.llm.chat(
                 messages=messages,
@@ -12195,15 +12825,16 @@ class ReportAgent:
 
             # ── 情况1：LLM 输出了 Final Answer ──
             if has_final_answer:
-                # 工具调用次数不足，拒绝并要求继续调工具
-                if tool_calls_count < min_tool_calls:
+                # 工具调用次数不足，拒绝并要求继续调工具（INFRA-5: 只数成功派发的调用）
+                if _rta.evidence_floor_unmet(dispatched_count, tool_calls_count, min_tool_calls,
+                                             self.MAX_TOOL_CALLS_PER_SECTION):
                     messages.append({"role": "assistant", "content": response})
                     unused_tools = all_tools - used_tools
                     unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
                     messages.append({
                         "role": "user",
                         "content": REACT_INSUFFICIENT_TOOLS_MSG.format(
-                            tool_calls_count=tool_calls_count,
+                            tool_calls_count=dispatched_count,
                             min_tool_calls=min_tool_calls,
                             unused_hint=unused_hint,
                         ),
@@ -12255,8 +12886,30 @@ class ReportAgent:
                     })
                     continue
 
-                # 只执行第一个工具调用
-                call = tool_calls[0]
+                # 只执行第一个工具调用（INFRA-5: 首个格式良好的调用优先；宽容解析关闭时即 tool_calls[0]）
+                call = self._select_tool_call(tool_calls)
+                # INFRA-5: 同一回复里其余无法解析的块不计预算、留痕，并在本轮 Observation 前告知模型。
+                _skipped_note = self._note_skipped_parse_errors(
+                    tool_calls, call, section_title=section.title, section_index=section_index)
+
+                # INFRA-5: 无法恢复的 <tool_call> 块（参数非 JSON / 缺工具名）不再被静默丢弃——
+                # 回给模型纠正性 Observation；免费额度内不计入工具调用预算。
+                if "_parse_error" in call:
+                    _kind = call.get("_kind") or _rta.KIND_ARGS_NOT_JSON
+                    _charged = self._reject_tool_call(
+                        _kind, _rejections, None, str(call["_parse_error"]), call.get("raw"),
+                        section_title=section.title, section_index=section_index,
+                    )
+                    if _charged:
+                        tool_calls_count += 1
+                    messages.append({"role": "assistant", "content": response})
+                    messages.append({
+                        "role": "user",
+                        "content": _skipped_note + _rta.rejection_observation(
+                            _kind, str(call["_parse_error"]), charged=_charged),
+                    })
+                    continue
+
                 if len(tool_calls) > 1:
                     logger.info(f"LLM 尝试调用 {len(tool_calls)} 个工具，只执行第一个: {call['name']}")
 
@@ -12265,15 +12918,38 @@ class ReportAgent:
                 # self.tools 为空（仅测试替身场景）时跳过校验，保持旧直通行为。
                 if self.tools and call["name"] not in self._valid_tool_names():
                     logger.warning(f"章节 {section.title}: 模型调用了未知工具 '{call['name']}'，已纠正（不计预算）")
+                    # INFRA-5 / EVAL-16: 未知工具计数 + agent_log 的 tool_unknown 行。
+                    self._count_tool_event("rejected_unknown")
+                    self._log_tool_unknown(call["name"], "react", section.title, section_index)
                     messages.append({"role": "assistant", "content": response})
                     messages.append({
                         "role": "user",
-                        "content": (
+                        "content": _skipped_note + (
                             f"【工具错误】'{call['name']}' 不是可用工具。请从以下工具中选择重新调用："
                             f"{', '.join(sorted(self.tools.keys()))}"
                         ),
                     })
                     continue
+
+                # INFRA-5: 派发前参数校验（必填参数 / as_of / limit），无效调用给出纠正性 Observation、
+                # 免费额度内不计预算（例如空 query 的 insight_forge 仍会白烧一次子问题分解 + 多次检索）。
+                if _repair_on:
+                    _param_error = _rta.validate_call(call["name"], call.get("parameters"))
+                    if _param_error:
+                        _charged = self._reject_tool_call(
+                            _rta.KIND_INVALID_PARAMS, _rejections, call["name"], _param_error,
+                            json.dumps(call.get("parameters"), ensure_ascii=False, default=str),
+                            section_title=section.title, section_index=section_index,
+                        )
+                        if _charged:
+                            tool_calls_count += 1
+                        messages.append({"role": "assistant", "content": response})
+                        messages.append({
+                            "role": "user",
+                            "content": _skipped_note + _rta.rejection_observation(
+                                _rta.KIND_INVALID_PARAMS, _param_error, tool_name=call["name"], charged=_charged),
+                        })
+                        continue
 
                 if self.report_logger:
                     self.report_logger.log_tool_call(
@@ -12300,8 +12976,10 @@ class ReportAgent:
                     )
 
                 tool_calls_count += 1
+                dispatched_count += 1
                 used_tools.add(call['name'])
-                self._section_tool_calls += 1  # EXECPLAN2 I-5-4: per-section 工具调用计数
+                # EXECPLAN2 I-5-4: per-section 工具调用计数（INFRA-5: 持锁递增，附报告级计数与派发结局）
+                self._count_tool_event("dispatched", charged=True, repaired=bool(call.get("_repairs")))
 
                 # 构建未使用工具提示
                 unused_tools = all_tools - used_tools
@@ -12312,7 +12990,7 @@ class ReportAgent:
                 messages.append({"role": "assistant", "content": response})
                 messages.append({
                     "role": "user",
-                    "content": REACT_OBSERVATION_TEMPLATE.format(
+                    "content": _skipped_note + REACT_OBSERVATION_TEMPLATE.format(
                         tool_name=call["name"],
                         result=result,
                         tool_calls_count=tool_calls_count,
@@ -12326,15 +13004,16 @@ class ReportAgent:
             # ── 情况3：既没有工具调用，也没有 Final Answer ──
             messages.append({"role": "assistant", "content": response})
 
-            if tool_calls_count < min_tool_calls:
-                # 工具调用次数不足，推荐未用过的工具
+            if _rta.evidence_floor_unmet(dispatched_count, tool_calls_count, min_tool_calls,
+                                         self.MAX_TOOL_CALLS_PER_SECTION):
+                # 工具调用次数不足，推荐未用过的工具（INFRA-5: 只数成功派发的调用）
                 unused_tools = all_tools - used_tools
                 unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
 
                 messages.append({
                     "role": "user",
                     "content": REACT_INSUFFICIENT_TOOLS_MSG_ALT.format(
-                        tool_calls_count=tool_calls_count,
+                        tool_calls_count=dispatched_count,
                         min_tool_calls=min_tool_calls,
                         unused_hint=unused_hint,
                     ),
@@ -12527,6 +13206,7 @@ class ReportAgent:
         if not report_id:
             report_id = f"report_{uuid.uuid4().hex[:12]}"
         self._active_report_id = report_id
+        self._reset_tool_counters()  # INFRA-5: 报告级工具调用计数按本次生成归零
         start_time = datetime.now()
         
         report = Report(
@@ -13012,6 +13692,9 @@ class ReportAgent:
                         except (TypeError, ValueError):
                             return 0.0
                     snap_after = self._meter_stage_total(_telemetry_run_id, "report")
+                    # INFRA-5: 并发章节模式跳过逐章汇总（section_rollup 为空），此前 tool_calls 恒为 0；
+                    # 此时改读持锁维护的报告级计数（与逐章计数同口径：计入工具预算的调用）。
+                    _report_tool_calls, _tool_dispatch = self._tool_counters_snapshot()
                     telemetry_totals = {
                         "report_id": report_id,
                         "run_id": _telemetry_run_id,
@@ -13024,7 +13707,9 @@ class ReportAgent:
                         "completion_tokens": max(0, int(_diff(snap_after, _report_stage_before, "completion_tokens"))),
                         "est_cost_usd": round(max(0.0, _diff(snap_after, _report_stage_before, "cost_usd")), 6),
                         "latency_ms": round(max(0.0, _diff(snap_after, _report_stage_before, "latency_ms")), 1),
-                        "tool_calls": sum(int(s.get("tool_calls", 0) or 0) for s in section_rollup),
+                        "tool_calls": (sum(int(s.get("tool_calls", 0) or 0) for s in section_rollup)
+                                       if section_rollup else _report_tool_calls),
+                        "tool_dispatch": _tool_dispatch,
                     }
                     report.telemetry = {"totals": telemetry_totals, "sections": section_rollup}
                     try:
@@ -13197,6 +13882,10 @@ class ReportAgent:
         # ReACT循环（简化版）
         tool_calls_made = []
         max_iterations = 2  # 减少迭代轮数
+        # INFRA-5: 与 ReAct 同一套派发前校验；被拒调用不计入对话工具额度（超出免费额度后才计）。
+        _repair_on = bool(getattr(Config, "REPORT_TOOL_ARG_REPAIR", True))
+        _rejections = _rta.RejectionBudget(self._free_tool_rejections())
+        _charged_rejections = 0
         
         for _iteration in range(max_iterations):
             response = self.llm.chat(
@@ -13220,19 +13909,43 @@ class ReportAgent:
             
             # 执行工具调用（限制数量）
             tool_results = []
-            for call in tool_calls[:1]:  # 每轮最多执行1次工具调用
-                if len(tool_calls_made) >= self.MAX_TOOL_CALLS_PER_CHAT:
-                    break
-                result = self._execute_tool(call["name"], call.get("parameters", {}))
-                tool_results.append({
-                    "tool": call["name"],
-                    "result": result[:1500]  # 限制结果长度
-                })
-                tool_calls_made.append(call)
+            rejection_note = ""  # INFRA-5: 本轮被拒调用的纠正性说明（取代工具结果）
+            skipped_note = ""  # INFRA-5: 同一回复里未执行的无法解析块的说明（拼在 Observation 前）
+            # 每轮最多执行1次工具调用（INFRA-5: 首个格式良好的调用优先；关闭宽容解析时即 tool_calls[0]）
+            call = self._select_tool_call(tool_calls)
+            if len(tool_calls_made) + _charged_rejections < self.MAX_TOOL_CALLS_PER_CHAT:
+                # INFRA-5: 同一回复里其余无法解析的块留痕并告知模型（对话不动报告级计数）。
+                skipped_note = self._note_skipped_parse_errors(tool_calls, call, track=False)
+                _param_error = None
+                if _repair_on and "_parse_error" not in call:
+                    _param_error = _rta.validate_call(call["name"], call.get("parameters"))
+                if "_parse_error" in call:
+                    _kind = call.get("_kind") or _rta.KIND_ARGS_NOT_JSON
+                    _charged = self._reject_tool_call(
+                        _kind, _rejections, None, str(call["_parse_error"]), call.get("raw"), track=False)
+                    rejection_note = _rta.rejection_observation(
+                        _kind, str(call["_parse_error"]), charged=_charged)
+                elif _param_error:
+                    _charged = self._reject_tool_call(
+                        _rta.KIND_INVALID_PARAMS, _rejections, call["name"], _param_error,
+                        json.dumps(call.get("parameters"), ensure_ascii=False, default=str), track=False)
+                    rejection_note = _rta.rejection_observation(
+                        _rta.KIND_INVALID_PARAMS, _param_error, tool_name=call["name"], charged=_charged)
+                else:
+                    _charged = False
+                    result = self._execute_tool(call["name"], call.get("parameters", {}))
+                    tool_results.append({
+                        "tool": call["name"],
+                        "result": result[:1500]  # 限制结果长度
+                    })
+                    tool_calls_made.append(self._public_tool_call(call))
+                if _charged:
+                    _charged_rejections += 1
             
             # 将结果添加到消息
             messages.append({"role": "assistant", "content": response})
-            observation = "\n".join([f"[{r['tool']}结果]\n{r['result']}" for r in tool_results])
+            observation = skipped_note + (
+                rejection_note or "\n".join([f"[{r['tool']}结果]\n{r['result']}" for r in tool_results]))
             messages.append({
                 "role": "user",
                 "content": observation + CHAT_OBSERVATION_SUFFIX
