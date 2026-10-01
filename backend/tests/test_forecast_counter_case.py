@@ -120,16 +120,103 @@ def test_probabilities_in_words_are_unverified_numbers():
         "Nine out of ten analysts expect growth.",
         "The outcome is a coin flip at best.",
         "增长与否是五五开",
+        # N in M, hyphenated or spaced, words or digits.
+        "Upside deserves more than a one-in-three chance.",
+        "Only a 1-in-4 buyer charges at home.",
+        "Growth is a one in a hundred shot.",
+        "One in every three buyers chose an electric car.",
+        # N to M odds.
+        "Analysts give growth three-to-one odds.",
+        "Growth is a 3-1 shot.",
+        # A fraction word next to a chance word, either order.
+        "Upside has roughly a third chance.",
+        "Upside has a two-thirds chance.",
+        "Upside has a nine-tenths likelihood.",
+        "The chance is about a third.",
+        "The probability is roughly two-thirds, given demand.",
+        # Even-odds idioms.
+        "Growth is a toss-up.",
+        "Growth is a better-than-even bet.",
+        "Growth has an even chance.",
+        "Growth is more likely than not.",
+        "The odds favour growth.",
+        "Growth is the odds-on outcome.",
+        # Chinese idioms and a half next to a probability word.
+        "销量增长十有八九",
+        "销量增长八九不离十",
+        "增长概率不足一半",
+        "增长的可能性超过一半",
     ]
     kept, dropped = _claims([{"text": t, "sources": ["S1"]} for t in texts])
     assert kept == [] and dropped == Counter({"unverified_number": len(texts)})
-    # Ordinary words that contain 成 or "in" are not proportions.
+    # Ordinary words that contain 成 or "in", ranges, ordinals and magnitudes are not
+    # proportions or odds.
+    allowed = [
+        "电池成本持续下降，成员国政策一成不变",
+        "One in the region expanded capacity in 2024",
+        "The new data are at odds with the earlier survey",
+        "Capacity doubled from two to four plants in 2024",
+        "Chances of a third term are fading",
+        "Approval chances improved in the second half of 2024",
+        "A third-party audit confirmed the record sales",
+        "电池价格可能下降一半",
+        "2024年完成了一成年人调查",
+        "全省统一成形工艺",
+        "单一成像技术已经成熟",
+        "四成都市场",
+    ]
+    for text in allowed:                       # one call each: a side keeps at most three claims
+        kept, dropped = _claims([{"text": text, "sources": ["S1"]}])
+        assert [c["text"] for c in kept] == [text] and not dropped, text
+    # Tenths proportions next to those word tails still count.
+    tenths = ["七成都来自中国", "四成年轻人选择电动车", "占据七成份额", "七成批发商看好",
+              "七成对此表示乐观"]
+    kept, dropped = _claims([{"text": t, "sources": ["S1"]} for t in tenths])
+    assert kept == [] and dropped == Counter({"unverified_number": len(tenths)})
+
+
+def test_worded_odds_never_reach_part2_with_the_report_support_check():
+    """The review probe: a supported evidence sentence with a hyphenated worded probability
+    appended is rejected, so it can never become the strongest Part-2 claim."""
+    claim = ("Global electric car sales reached 17 million units in 2024, led by China, so a "
+             "one-in-three chance is too low.")
+    kept, dropped = _claims([{"text": claim, "sources": ["S1"]}], tags=REAL_TAGS,
+                            support=ReportAgent._semantic_citation_support)
+    assert kept == [] and dropped == Counter({"unverified_number": 1})
+    result = {"status": "complete", "targets": [{"target_id": "T1", "scenario": "Upside path",
+                                                 "claims": {"higher": kept, "lower": []}}]}
+    assert fc.render_counter_case_block(result, "English") == ""
+
+
+def test_non_canonical_markers_are_checked_or_rejected():
+    """Marker lists are read marker by marker; a marker form the index cannot resolve is
+    never kept in published claim or trigger text."""
     kept, dropped = _claims([
-        {"text": "电池成本持续下降，成员国政策一成不变", "sources": ["S1"]},
-        {"text": "One in the region expanded capacity in 2024", "sources": ["S1"]},
-        {"text": "The new data are at odds with the earlier survey", "sources": ["S1"]},
+        {"text": "Sales hit a record high [S1, S99]."},                     # list: S99 unknown
+        {"text": "Sales hit a record high [S99-a].", "sources": ["S1"]},    # stray form
+        {"text": "Sales hit a record high (S99).", "sources": ["S1"]},      # parenthesised
+        {"text": "Sales hit a record high （见S4）。", "sources": ["S1"]},    # full-width, prefixed
+        {"text": "Sales hit a record high (Source: S1).", "sources": ["S1"]},  # prefixed
+        {"text": "Sales hit a record high.", "sources": ["S1, S99"]},       # malformed entry
+        {"text": "Sales hit a record high [S1, S4]."},                      # list: both indexed
+        {"text": "Sales hit a record high 【S1；S5】。"},                     # full-width list
     ])
-    assert len(kept) == 3 and not dropped
+    assert dropped == Counter({"unknown_source": 6})
+    assert [(c["text"], c["sources"]) for c in kept] == [
+        ("Sales hit a record high .", ["S1", "S4"]), ("Sales hit a record high 。", ["S1", "S5"])]
+    # A product name that merely looks like a marker inside parentheses is ordinary text.
+    galaxy = "Sales of the Galaxy (Samsung S24) hit a record high."
+    kept, dropped = _claims([{"text": galaxy, "sources": ["S1"]}], numbers=("17", "24"))
+    assert [c["text"] for c in kept] == [galaxy] and not dropped
+    kept = fc.validate_triggers([
+        _trigger(signal="Global electric car sales [S1, S99]"),           # S99 dropped, S1 kept
+        _trigger(signal="Global electric car sales (S1)"),                # stray in signal
+        _trigger(threshold_or_event="above 25 million [S2-b]"),           # stray in threshold
+        _trigger(signal="Global electric car sales [S2, S3]", sources=[]),
+    ], REAL_TAGS)
+    assert [(t["signal"], t["threshold_or_event"], t["sources"]) for t in kept] == [
+        ("Global electric car sales", "above 25 million", ["S1"]),
+        ("Global electric car sales", "above 25 million", ["S2", "S3"])]
 
 
 def test_valid_claims_never_carry_a_rejected_source():
@@ -535,7 +622,7 @@ def test_render_block_and_summary():
     assert summary == {"schema": "drf.counter_case/v1", "status": "complete",
                        "artifact": "counter_case.json", "artifact_sha256": "abc",
                        "claims_valid": 3, "claims_unverifiable": 0, "claims_dropped": 0,
-                       "triggers": 1}
+                       "triggers": 1, "triggers_published": 1}
     text = fc.artifact_text(result)
     assert json.loads(text) == result and text == json.dumps(result, ensure_ascii=False,
                                                              sort_keys=True, indent=2)
@@ -602,6 +689,38 @@ def test_merge_indicators_dedupes_by_casefolded_text():
     merged = fc.merge_indicators(research, counter)
     assert merged == research + [{"indicator": "Pack prices", "source": "counter_case"}]
     assert fc.merge_indicators(research, []) == research
+
+
+def test_triggers_on_one_signal_for_different_scenarios_all_publish(caplog):
+    """Counter-case rows are deduped against research indicators by indicator text, but among
+    themselves only exact repeats go; every left-out row is logged, and forecast.counter_case
+    counts the rows that actually publish."""
+    upside = {"signal": "Global electric car sales", "direction": "raises",
+              "threshold_or_event": "above 25 million", "by": "2027-12-31", "sources": ["S1"]}
+    downside = {"signal": "Global electric car sales", "direction": "lowers",
+                "threshold_or_event": "below 15 million", "by": "", "sources": ["S1"]}
+    result = {"schema": fc.SCHEMA, "status": "complete", "dropped": {}, "targets": [
+        {"target_id": "T1", "scenario": "Upside path", "claims": {}, "triggers": [upside, dict(upside)]},
+        {"target_id": "T2", "scenario": "Downside path", "claims": {}, "triggers": [downside]}]}
+    rows = fc.triggers_to_indicators(result)
+    with caplog.at_level("INFO", logger=fc.__name__):
+        merged = fc.merge_indicators([], rows)
+    assert [(r["discriminates"], r["direction"], r["threshold_or_event"]) for r in merged] == [
+        ("Upside path", "raises", "above 25 million"), ("Downside path", "lowers", "below 15 million")]
+    assert [r.getMessage() for r in caplog.records] == [
+        "counter-case: trigger 'global electric car sales' not published as an indicator "
+        "(trigger_duplicate)"]
+    summary = fc.forecast_summary(result, "abc")
+    assert (summary["triggers"], summary["triggers_published"]) == (3, 2)
+
+    research = [{"indicator": "Global Electric Car Sales", "date_or_trigger": "2027-06-30"}]
+    caplog.clear()
+    with caplog.at_level("INFO", logger=fc.__name__):
+        assert fc.merge_indicators(research, rows) == research
+    assert len(caplog.records) == 3
+    assert all(r.getMessage().endswith("(research_duplicate)") for r in caplog.records)
+    summary = fc.forecast_summary(result, "abc", research_indicators=research)
+    assert (summary["triggers"], summary["triggers_published"]) == (3, 0)
 
 
 # ---------------------------------------------------------------- knobs

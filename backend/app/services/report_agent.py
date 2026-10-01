@@ -3960,8 +3960,9 @@ class ReportAgent:
 
     def _with_counter_case_indicators(self, indicators: List[Any]) -> List[Any]:
         """REPORT-13: research indicators followed by the counter-case triggers (source
-        'counter_case'; deduped by casefolded indicator text). Without a counter-case result
-        (flag off, not run, failed) the given list is returned unchanged."""
+        'counter_case'; forecast_counter_case.merge_indicators: a trigger repeating a research
+        indicator's text or an earlier trigger row is left out and logged). Without a
+        counter-case result (flag off, not run, failed) the given list is returned unchanged."""
         result = getattr(self, "_counter_case", None)
         if not result:
             return indicators
@@ -4554,13 +4555,15 @@ class ReportAgent:
             except Exception as _sphe:  # noqa: BLE001 — 观测性记录，绝不影响产物
                 logger.debug(f"记录 signal_pack_health 失败（忽略）: {_sphe}")
         # P2-2: 把观察指标随 forecast.json 落盘（供解析调度器对照判别情景）。
-        # REPORT-13：反证审查的已校验触发器（source='counter_case'）排在研究指标之后并入（按指标文本去重），
-        # forecast.counter_case 记工件 sha256 与计数；无反证结果时两者皆不变（逐字节一致）。
+        # REPORT-13：反证审查的已校验触发器（source='counter_case'）排在研究指标之后并入（与研究指标按指标
+        # 文本去重，触发器之间仅去完全重复），forecast.counter_case 记工件 sha256 与计数（含实际发布数
+        # triggers_published）；无反证结果时两者皆不变（逐字节一致）。
         try:
             from ..utils import actors as _actors
             _inds = _actors.extract_forecast_inputs(self.actors).get("indicators") or []
         except Exception:  # noqa: BLE001
             _inds = []
+        _research_inds = _inds
         _inds = self._with_counter_case_indicators(_inds)
         if _inds:
             forecast["indicators"] = _inds
@@ -4569,7 +4572,8 @@ class ReportAgent:
         if _cc_result and _cc_sha:
             try:
                 from . import forecast_counter_case as _cc
-                forecast["counter_case"] = _cc.forecast_summary(_cc_result, _cc_sha)
+                forecast["counter_case"] = _cc.forecast_summary(
+                    _cc_result, _cc_sha, research_indicators=_research_inds)
             except Exception as _ccs:  # noqa: BLE001 — 观测性记录，绝不影响产物
                 logger.warning(f"记录 forecast.counter_case 失败（忽略）: {_ccs}")
         # NEXTSTEPS P2-4: 把历史校准（已解析预测的 Brier/ECE）surfacing 进 confidence_rationale，

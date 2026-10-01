@@ -250,7 +250,8 @@ def test_on_outputs(report_env, monkeypatch):
     assert summary == {
         "schema": "drf.counter_case/v1", "status": "complete", "artifact": "counter_case.json",
         "artifact_sha256": hashlib.sha256(artifact_bytes).hexdigest(),
-        "claims_valid": 3, "claims_unverifiable": 0, "claims_dropped": 2, "triggers": 2}
+        "claims_valid": 3, "claims_unverifiable": 0, "claims_dropped": 2, "triggers": 2,
+        "triggers_published": 2}
     assert artifact["dropped"] == {"unknown_source": 1, "unverified_number": 1}
     # "Annual electric car sales" lost its only marker to the support check (S1 does not
     # support it) and was dropped with the undated, unthresholded "Vague sentiment shift".
@@ -390,7 +391,8 @@ def test_failed_pass_degrades_to_the_off_outputs(report_env, monkeypatch):
     assert artifact["status"] == "failed" and "RuntimeError" in artifact["error"]
     agent._finalize_structured_forecast("r_fail", BODY)
     forecast = json.loads(_read(report_env, "r_fail", "forecast.json"))
-    assert forecast["counter_case"]["status"] == "failed" and forecast["counter_case"]["triggers"] == 0
+    assert forecast["counter_case"]["status"] == "failed"
+    assert (forecast["counter_case"]["triggers"], forecast["counter_case"]["triggers_published"]) == (0, 0)
     assert forecast["indicators"] == off.forecast["indicators"]
     assert forecast["scenarios"] == off.forecast["scenarios"]
     report = SimpleNamespace(markdown_content=BODY)

@@ -8,12 +8,15 @@ dated or thresholded "what would change it" triggers. Every claim then passes
 deterministic walls before anything is published:
 
 * ``unknown_source``: it cites a marker outside the report's citation index (fabricated),
-  wherever the marker sits in its source list;
+  wherever the marker sits in its source list or in a marker list ("[S1, S99]"), or its text
+  keeps a marker in a form the index cannot resolve ("[S99-a]", "(S3)");
 * ``uncited``: it carries no [S#] marker at all;
 * ``unverified_number``: it states any percentage or odds, in symbols or in words ("35%",
-  "thirty percent", "七成概率", "one in three"), so no probability can be smuggled in, or a
-  discriminative number (two or more digits, or a decimal; years 1900-2100 excepted) that
-  the packet's evidence sections do not contain (market anchors and URLs do not count);
+  "thirty percent", "七成概率", "a one-in-three chance", "three-to-one odds", "a third
+  chance", "a toss-up", "十有八九"; see ``_ODDS_RE`` for the forms), so no probability can
+  be smuggled in, or a discriminative number (two or more digits, or a decimal; years
+  1900-2100 excepted) that the packet's evidence sections do not contain (market anchors and
+  URLs do not count);
 * ``source_mismatch``: the report's own lexical support check
   (``ReportAgent._semantic_citation_support``) rejects it against every cited source.
 
@@ -86,28 +89,78 @@ _DIRECTIONS = frozenset({"raises", "lowers"})
 # An [S#] marker in prose (half- or full-width brackets); the bare tag form 'S12' is what
 # the report's citation index uses as keys.
 _INLINE_TAG_RE = re.compile(r"[\[【]\s*[Ss]\s*(\d+)\s*[\]】]")
+# In claim and trigger text, one bracket may also hold a list ("[S1, S2]", "【S1；S2】"): every
+# marker of the list is read (and checked) like a single one, and the list is removed.
+_TAG_GROUP_RE = re.compile(r"[\[【]\s*[Ss]\s*\d+(?:\s*[,，;；、]\s*[Ss]\s*\d+)*\s*[\]】]")
+_S_TOKEN_RE = re.compile(r"\b[Ss]\s*(\d+)")
+# A source marker left in claim or trigger text once the forms above are removed ("[S99-a]",
+# "(S3)", "（S3）", "[see S2]"): the citation index cannot resolve it, so the item is rejected
+# (claims as unknown_source) instead of publishing an unchecked source as literal text.
+_STRAY_TAG_RE = re.compile(
+    r"[\[【(（]\s*(?:(?:see|source|sources|cf\.?|via|per|来源|参见|见)\s*[:：]?\s*)?S\s*\d",
+    re.I)
 _SOURCE_ENTRY_RE = re.compile(r"^[\[【]?\s*[Ss]\s*(\d+)\s*[\]】]?$")
 _TAG_KEY_RE = re.compile(r"^S[1-9]\d*$")
 # Any percentage or stated odds, in symbols or in words, with or without a digit: claims
 # argue direction, never a probability, and an evidence percentage or ratio cannot be told
-# apart from a stated probability. Chinese tenths ("七成", "3成以上") count as percentages;
-# the lookarounds keep ordinary words that merely contain 成 (成本, 成员, 成为, 一成不变,
-# 三五成群 ...) out of the match.
+# apart from a stated probability. Chinese tenths ("七成", "3成以上") count as percentages.
+# A bare tenths form is not matched where 成 starts an ordinary word: the lookbehind skips a
+# numeral that ends a word (统一, 唯一, 单一, 同一, 第三, 逐一, 划一, 专一), the lookahead skips
+# 成本, 成员, 成为, 一成不变, 成年人, 成都市场 ... A tail is listed only when the proportion
+# reading of the same characters is implausible: adverbial 都 ("七成都来自中国"), 年轻
+# ("四成年轻人"), 份额 ("七成份额"), 批发 ("七成批发商") and 对 ("七成对此表示乐观") keep matching.
 _PERCENT_RE = re.compile(
     r"[%％‰]|\bper\s*cent|\bpct\b|\d\s*pp\b|百分|千分之"
     r"|[一二两三四五六七八九十百千万几\d]+\s*分之\s*[一二两三四五六七八九十百千万几\d]"
     r"|(?:[半几]|\d+(?:\.\d+)?)\s*成\s*(?:以上|以下|左右|上下|多)?\s*的?\s*"
     r"(?:概率|几率|机率|可能|机会|把握|胜算|希望)"
-    r"|(?<![一二两三四五六七八九十百千万几])(?:[一二两三四五六七八九十几]|\d+(?:\.\d+)?)\s*成"
-    r"(?!本|员|为|立|功|长|交|果|品|型|就|绩|分|熟|不变|群)",
+    r"|(?<![一二两三四五六七八九十百千万几])(?<![统唯单同第逐划专])"
+    r"(?:[一二两三四五六七八九十几]|\d+(?:\.\d+)?)\s*成"
+    r"(?!本|员|为|立|功|长|交|果|品|型|就|绩|分|熟|不变|群|年人|都市场|像|效|色|套"
+    r"|份(?!额)|批(?!发))",
     re.I)
-_NUMBER_WORD = (r"(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|"
-                r"fifty|hundred|thousand|\d{1,3}(?:,\d{3})*)")
+# Odds and probabilities written in words. Principled forms, each pinned by a test row:
+# * N in M / N out of M, words or digits, joined by spaces or hyphens ("a one-in-three
+#   chance", "1-in-4", "one in every three", "one in a hundred");
+# * N to M / N-M / N:M followed by an odds noun ("three-to-one odds", "a 3-1 shot"); a bare
+#   "from two to four" is a range, not odds;
+# * a fraction word next to a chance word, either order ("a third chance", "two-thirds
+#   chance", "the chance is about a third", "probability of roughly two-thirds"); after the
+#   chance word only linking words may intervene and the fraction may not run on into a noun,
+#   so "chances of a third term" and "chances improved in the second half" are not matched;
+# * even-odds idioms (toss-up, coin flip, fifty-fifty, better than even, even chance, more /
+#   less / as likely as not, the odds of / are / on / favour / against ...);
+# * Chinese idioms and a half next to a probability word (五五开, 十有八九, 八九不离十,
+#   十拿九稳, 一半的概率, 概率不足一半, 可能性超过一半). Bare 可能 ("may") is not a
+#   probability word after the noun: "电池价格可能下降一半" is a magnitude.
+_SEP = r"[\s\-‐‑–]+"
+_NUMBER_WORD = (r"(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+                r"(?:thir|four|fif|six|seven|eigh|nine)teen|twenty|thirty|forty|fifty|sixty|"
+                r"seventy|eighty|ninety|hundred|thousand|million|\d{1,3}(?:,\d{3})*)")
+_FRACTION_WORD = r"(?:halves|half|thirds?|quarters?|fifths?|tenths?)"
+_CHANCE_WORD = r"(?:chances?|probabilit(?:y|ies)|likelihoods?|odds)"
+_CHANCE_LINK = (r"(?:is|are|was|were|be|of|at|about|around|roughly|approximately|nearly|almost|"
+                r"near|only|just|barely|perhaps|maybe|probably|likely|no|closer?\s+to|"
+                r"(?:more|less|fewer)\s+than|under|over|below|above|at\s+(?:most|least)|"
+                r"put\s+at|stands?\s+at|sits?\s+at)")
 _ODDS_RE = re.compile(
-    rf"\b{_NUMBER_WORD}\s+(?:in|out\s+of)\s+{_NUMBER_WORD}\b"
-    r"|\bcoin[\s-]?(?:flip|toss)|\bfifty[\s-]fifty\b|\b50\s*[-/]\s*50\b"
-    r"|\b(?:even|long|short)\s+odds\b|\bodds\s+(?:of|are|that|on|in\s+favou?r)\b"
-    r"|五五开|对半开|一半的?(?:概率|几率|机率|可能|机会)",
+    rf"\b{_NUMBER_WORD}{_SEP}(?:in|out{_SEP}of){_SEP}(?:(?:an?|every){_SEP})?{_NUMBER_WORD}\b"
+    rf"|\b{_NUMBER_WORD}(?:{_SEP}to{_SEP}|\s*[:\-–]\s*){_NUMBER_WORD}{_SEP}"
+    r"(?:odds|shot|bet|favou?rites?|underdogs?)\b"
+    rf"|\b{_FRACTION_WORD}\b[^.,;:!?，。；：！？\n]{{0,12}}?\b{_CHANCE_WORD}\b"
+    rf"|\b{_CHANCE_WORD}(?:{_SEP}{_CHANCE_LINK})*{_SEP}"
+    rf"(?:(?:an?|one|two|three|four|nine){_SEP})?{_FRACTION_WORD}\b"
+    rf"(?!{_SEP}(?!(?:or|and|for|than|to|in|at|by|on|of|if|given|while|with)\b)[a-z])"
+    rf"|\bcoin(?:{_SEP})?(?:flip|toss)|\bfifty{_SEP}fifty\b|\b50\s*[-/]\s*50\b"
+    rf"|\btoss(?:{_SEP})?ups?\b|\bbetter{_SEP}than{_SEP}even\b"
+    rf"|\b(?:even|evens){_SEP}(?:chances?|money|bet)\b"
+    rf"|\b(?:more|less|as){_SEP}likely{_SEP}(?:than|as){_SEP}not\b"
+    rf"|\b(?:even|long|short){_SEP}odds\b"
+    rf"|\bodds{_SEP}(?:of|are|were|is|that|on|at|against|in{_SEP}favou?r|favou?r\w*"
+    r"|lengthen\w*|shorten\w*)\b"
+    r"|五五开|对半开|十有八九|十之八九|八九不离十|十拿九稳"
+    r"|一半的?(?:概率|几率|机率|可能|机会)"
+    r"|(?:概率|几率|机率|可能性|胜算)\S{0,3}?(?:一半|过半|大半|小半|半数|各半)",
     re.I)
 _URL_RE = re.compile(r"https?://[^\s)\]）>]+|www\.[^\s)\]）>]+", re.I)
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -159,18 +212,31 @@ def _norm_marker(value: Any) -> Optional[str]:
     return f"S{int(match.group(1))}"
 
 
+def _entry_markers(entry: Any) -> List[Any]:
+    """One 'sources' entry as marker candidates: the entry itself when it is a marker, else
+    every S<n> token written in it ('S1, S99', 'S99-a'), so a fabricated source listed in a
+    malformed entry is still checked against the index."""
+    if _norm_marker(entry) is not None or not isinstance(entry, str):
+        return [entry]
+    return [int(n) for n in _S_TOKEN_RE.findall(entry)]
+
+
 def _markers(sources: Any, *texts: str) -> List[str]:
-    """Normalised markers from a model 'sources' field plus inline [S#] in ``texts``,
-    de-duplicated in first-seen order. Entries that are not markers at all are ignored."""
-    entries: List[Any]
+    """Normalised markers from a model 'sources' field plus the inline [S#] markers and
+    marker lists in ``texts``, de-duplicated in first-seen order. Entries that hold no marker
+    at all are ignored."""
+    entries: List[Any] = []
     if isinstance(sources, (list, tuple)):
-        entries = list(sources)
+        raw_entries = list(sources)
     elif sources is None:
-        entries = []
+        raw_entries = []
     else:
-        entries = [sources]
+        raw_entries = [sources]
+    for entry in raw_entries:
+        entries.extend(_entry_markers(entry))
     for text in texts:
-        entries.extend(int(n) for n in _INLINE_TAG_RE.findall(str(text or "")))
+        for group in _TAG_GROUP_RE.findall(str(text or "")):
+            entries.extend(int(n) for n in _S_TOKEN_RE.findall(group))
     out: List[str] = []
     for entry in entries:
         tag = _norm_marker(entry)
@@ -180,7 +246,13 @@ def _markers(sources: Any, *texts: str) -> List[str]:
 
 
 def _strip_tags(text: Any) -> str:
-    return _clean(_INLINE_TAG_RE.sub(" ", str(text or "")))
+    return _clean(_TAG_GROUP_RE.sub(" ", str(text or "")))
+
+
+def _has_stray_marker(*texts: str) -> bool:
+    """True when a source marker the citation index cannot resolve is left in ``texts``
+    (already stripped of their [S#] markers and marker lists)."""
+    return any(_STRAY_TAG_RE.search(text) for text in texts)
 
 
 def _iso_date(value: Any) -> str:
@@ -376,9 +448,11 @@ def validate_claims(raw: Any, *, target_id: str, side: str, tag_map: Mapping[str
                     numbers_fn: NumbersFn) -> Tuple[List[Dict[str, Any]], Counter]:
     """Validated claims of one side of one target -> ``(claims, dropped)``.
 
-    Each item is ``{'text', 'sources'}`` (or a bare string); inline [S#] markers are moved
-    into ``sources``; text is cut to 400 characters. Walls in order: unknown_source (any
-    cited marker outside ``tag_map``, wherever it sits in the list), uncited (no marker),
+    Each item is ``{'text', 'sources'}`` (or a bare string); inline [S#] markers and marker
+    lists ("[S1, S2]") are moved into ``sources``; text is cut to 400 characters. Walls in
+    order: unknown_source (any cited marker outside ``tag_map``, wherever it sits in the
+    list, or a marker left in the text in a form the index cannot resolve, such as "[S9-a]"
+    or "(S3)"), uncited (no marker),
     unverified_number (a percentage or odds in any form, or a discriminative number outside
     ``packet_numbers``), then the support check per cited source. A source whose check
     returns False is removed from the claim (counted under ``TAG_DROP_KEY``, a tag count);
@@ -402,10 +476,11 @@ def validate_claims(raw: Any, *, target_id: str, side: str, tag_map: Mapping[str
             continue
         raw_text = str(item.get("text") or "")
         cited = _markers(item.get("sources"), raw_text)
-        text = _cap(_strip_tags(raw_text), MAX_CLAIM_CHARS)
+        stripped = _strip_tags(raw_text)
+        text = _cap(stripped, MAX_CLAIM_CHARS)
         if not text:
             dropped["empty"] += 1
-        elif any(tag not in tag_map for tag in cited):
+        elif any(tag not in tag_map for tag in cited) or _has_stray_marker(stripped):
             dropped["unknown_source"] += 1
         elif not cited:
             dropped["uncited"] += 1
@@ -468,9 +543,11 @@ def validate_triggers(raw: Any, tag_map: Mapping[str, Any], *, scenario: Any = "
 
     Kept only with a non-empty signal, direction 'raises' or 'lowers', a threshold/event
     containing a digit or a real YYYY-MM-DD ``by`` date, and at least one cited marker that
-    is in ``tag_map`` (markers outside it are dropped). ``by`` is '' unless it is such a
-    date on or after ``as_of`` (a deadline already past is no deadline, so such a trigger
-    then needs a numeric threshold).
+    is in ``tag_map`` (markers outside it are dropped). A signal or threshold that keeps a
+    marker in a form the index cannot resolve ("[S9-a]", "(S3)") drops the trigger, since
+    that text is published as written. ``by`` is '' unless it is such a date on or after
+    ``as_of`` (a deadline already past is no deadline, so such a trigger then needs a
+    numeric threshold).
 
     With ``support_fn`` the claim wall runs on triggers too: a marker is kept only when the
     check does not reject the signal against its source, nor (with ``published_claim_fn``)
@@ -489,8 +566,12 @@ def validate_triggers(raw: Any, tag_map: Mapping[str, Any], *, scenario: Any = "
             continue
         raw_signal = str(item.get("signal") or "")
         raw_threshold = str(item.get("threshold_or_event") or "")
-        signal = _cap(_strip_tags(raw_signal), MAX_TRIGGER_FIELD_CHARS)
-        threshold = _cap(_strip_tags(raw_threshold), MAX_TRIGGER_FIELD_CHARS)
+        stripped_signal = _strip_tags(raw_signal)
+        stripped_threshold = _strip_tags(raw_threshold)
+        if _has_stray_marker(stripped_signal, stripped_threshold):
+            continue
+        signal = _cap(stripped_signal, MAX_TRIGGER_FIELD_CHARS)
+        threshold = _cap(stripped_threshold, MAX_TRIGGER_FIELD_CHARS)
         direction = str(item.get("direction") or "").strip().lower()
         by = _iso_date(item.get("by"))
         if by and as_of_day is not None and date.fromisoformat(by) < as_of_day:
@@ -672,9 +753,14 @@ def _all_claims(result: Mapping[str, Any]) -> List[Mapping[str, Any]]:
     return out
 
 
-def forecast_summary(result: Mapping[str, Any], sha256: str) -> Dict[str, Any]:
-    """forecast.json ``counter_case``: status, artifact pointer + sha256 and counts."""
+def forecast_summary(result: Mapping[str, Any], sha256: str,
+                     research_indicators: Sequence[Any] = ()) -> Dict[str, Any]:
+    """forecast.json ``counter_case``: status, artifact pointer + sha256 and counts.
+    ``triggers`` counts the validated triggers, ``triggers_published`` those that become
+    indicator rows after ``research_indicators`` (see merge_indicators)."""
     claims = _all_claims(result)
+    published, _left_out = _publishable_counter_rows(research_indicators,
+                                                     triggers_to_indicators(result))
     return {
         "schema": result.get("schema", SCHEMA),
         "status": result.get("status"),
@@ -684,6 +770,7 @@ def forecast_summary(result: Mapping[str, Any], sha256: str) -> Dict[str, Any]:
         "claims_unverifiable": sum(1 for c in claims if c.get("verdict") == VERDICT_UNVERIFIABLE),
         "claims_dropped": sum(int(n) for n in (result.get("dropped") or {}).values()),
         "triggers": sum(len(t.get("triggers") or []) for t in result.get("targets") or []),
+        "triggers_published": len(published),
     }
 
 
@@ -747,18 +834,49 @@ def triggers_to_indicators(result: Optional[Mapping[str, Any]]) -> List[Dict[str
             for trig in target.get("triggers") or []]
 
 
-def merge_indicators(research: Sequence[Any], counter: Sequence[Mapping[str, Any]]) -> List[Any]:
-    """Research indicators first, then counter-case ones whose casefolded indicator text is new."""
-    def _key(row: Any) -> str:
-        if not isinstance(row, Mapping):
-            return ""
-        return _clean(row.get("indicator") or row.get("name") or row.get("metric")).casefold()
+def _indicator_text(row: Any) -> str:
+    if not isinstance(row, Mapping):
+        return ""
+    return _clean(row.get("indicator") or row.get("name") or row.get("metric")).casefold()
 
-    seen = {_key(row) for row in research}
-    merged = list(research)
+
+# The fields that make a counter-case row a distinct trigger (casefolded): two triggers on one
+# signal for different scenarios, directions, dates or thresholds are both published.
+_TRIGGER_ROW_FIELDS = ("indicator", "discriminates", "direction", "by", "threshold_or_event")
+
+
+def _publishable_counter_rows(research: Sequence[Any], counter: Sequence[Any]
+                              ) -> Tuple[List[Dict[str, Any]], List[Tuple[str, str]]]:
+    """The counter-case rows that publish after ``research`` -> ``(rows, left_out)``.
+
+    A row whose casefolded indicator text repeats a research indicator is left out (the
+    research row stands), and so is an exact repeat of an earlier counter-case row (every
+    field of ``_TRIGGER_ROW_FIELDS`` equal). ``left_out`` pairs each such row's indicator
+    text with the reason ('research_duplicate' / 'trigger_duplicate')."""
+    research_texts = {_indicator_text(row) for row in research}
+    seen: Set[Tuple[str, ...]] = set()
+    rows: List[Dict[str, Any]] = []
+    left_out: List[Tuple[str, str]] = []
     for row in counter:
-        key = _key(row)
-        if key and key not in seen:
-            seen.add(key)
-            merged.append(dict(row))
-    return merged
+        text = _indicator_text(row)
+        if not text:
+            continue
+        if text in research_texts:
+            left_out.append((text, "research_duplicate"))
+            continue
+        key = tuple(_clean(row.get(field)).casefold() for field in _TRIGGER_ROW_FIELDS)
+        if key in seen:
+            left_out.append((text, "trigger_duplicate"))
+            continue
+        seen.add(key)
+        rows.append(dict(row))
+    return rows, left_out
+
+
+def merge_indicators(research: Sequence[Any], counter: Sequence[Mapping[str, Any]]) -> List[Any]:
+    """Research indicators first (all of them, unchanged), then the counter-case rows that
+    ``_publishable_counter_rows`` keeps; each row left out is logged."""
+    rows, left_out = _publishable_counter_rows(research, counter)
+    for text, reason in left_out:
+        logger.info("counter-case: trigger %r not published as an indicator (%s)", text, reason)
+    return list(research) + rows
