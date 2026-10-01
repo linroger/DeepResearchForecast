@@ -2461,9 +2461,9 @@ def _apply_market_blend(binary: Dict[str, Any], anchor: Dict[str, Any], raw_weig
 
     w == 0 → 仅改理由的「保留分歧」（不盖章）。否则 p（现概率）与 m（锚点上的快照价
     implied_yes_prob，绝不取模型转录值）须是 [0, 1] 内的数（否则同样整条作废），
-    p2 = round(clamp((1-w)·p + w·m, 0.02, 0.98), 2)：写回概率、重算锚点 divergence、理由末尾
-    追加确定性算式；概率确实移动时盖 market_influence 印章并附 blend 记录（四舍五入后未动 →
-    与旧路径一致不盖章）。"""
+    p2 = round(clamp((1-w)·p + w·m, 0.02, 0.98), 2)，且 p2 须仍在 p 与 m 之间的线段上（舍入出界
+    → 整条作废）：写回概率、重算锚点 divergence、理由末尾追加确定性算式；概率确实移动时盖
+    market_influence 印章并附 blend 记录（四舍五入后未动 → 与旧路径一致不盖章）。"""
     parsed_w = parse_probability_field(raw_weight)
     if parsed_w.status != PROB_OK or parsed_w.value is None:
         return False
@@ -2478,6 +2478,11 @@ def _apply_market_blend(binary: Dict[str, Any], anchor: Dict[str, Any], raw_weig
     if p is None or m is None or not (0.0 <= p <= 1.0) or not (0.0 <= m <= 1.0):
         return False
     p2 = round(min(0.98, max(0.02, (1.0 - w) * p + w * m)), 2)
+    if not (min(p, m) - 1e-9 <= p2 <= max(p, m) + 1e-9):
+        # 两位小数舍入把结果推出 p..m 线段（非网格的 p 配极小 w → 背离市场；非网格的 m 配近 1
+        # 的 w → 越过市场，仅当上限调高到 0.8 以上时可能）→ 这一权重无法表示为合法混合，
+        # 整条作废（fail closed），绝不发布一个不在线段上的「市场驱动」修订。
+        return False
     binary["probability"] = p2
     anchor["divergence"] = round(p2 - m, 4)
     binary["adjustment_rationale"] = (

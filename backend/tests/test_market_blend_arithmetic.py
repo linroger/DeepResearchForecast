@@ -130,6 +130,46 @@ def test_every_blend_lies_on_segment_and_is_reproducible(blend_on, p, m, w):
     assert recomputed == blend["computed"] == p2 == inf["revised_probability"]
 
 
+@pytest.mark.parametrize("p,m,w,weight_max", [
+    (0.314, 0.6, 0.001, 0.8),     # 0.314286 rounds to 0.31: away from the market
+    (0.316, 0.0, 0.001, 0.8),     # 0.315684 rounds to 0.32: away from the market
+    (0.5, 0.1234, 1.0, 1.0),      # 0.1234 rounds to 0.12: past the market (cap raised to 1)
+])
+def test_rounding_off_the_segment_rejects_the_revision(blend_on, monkeypatch,
+                                                       p, m, w, weight_max):
+    """Two-decimal rounding of an off-grid prior or market price must never publish a
+    'market-driven' probability outside the segment p..m: the revision is rejected whole."""
+    monkeypatch.setattr(Config, "FORECAST_MARKET_BLEND_WEIGHT_MAX", weight_max, raising=False)
+    b = _divergent(prob=p, implied=m)
+    before = copy.deepcopy(b)
+    assert enforce_market_divergence(
+        [b], _reply({"id": "F1", "market_weight": w, "adjustment_rationale": CITING})) == 0
+    assert b == before
+
+
+@pytest.mark.parametrize("p", [0.314, 0.316, 0.5049, 0.875])
+@pytest.mark.parametrize("m", [0.0, 0.1234, 0.6, 1.0])
+@pytest.mark.parametrize("w", [0.0005, 0.001, 0.01, 0.3, 0.8, 1.0])
+def test_off_grid_inputs_never_leave_the_segment(blend_on, monkeypatch, p, m, w):
+    monkeypatch.setattr(Config, "FORECAST_MARKET_BLEND_WEIGHT_MAX", 1.0, raising=False)
+    if abs(p - m) <= 0.10:
+        pytest.skip("within the 10pp band: not a revision candidate")
+    b = _divergent(prob=p, implied=m)
+    before = copy.deepcopy(b)
+    accepted = enforce_market_divergence(
+        [b], _reply({"id": "F1", "market_weight": w, "adjustment_rationale": CITING}))
+    if not accepted:
+        assert b == before                                # rejected whole, nothing touched
+        return
+    p2 = b["probability"]
+    assert min(p, m) - 1e-9 <= p2 <= max(p, m) + 1e-9
+    inf = b.get("market_influence")
+    if inf is not None:
+        blend = inf["blend"]
+        assert round(min(0.98, max(0.02, (1 - blend["weight"]) * blend["prior"]
+                                   + blend["weight"] * blend["market"])), 2) == p2
+
+
 # ---------------------------------------------------- all-or-none group and the caps
 @pytest.mark.parametrize("revision", [
     {"id": "F1", "market_weight": 0.4, "adjustment_rationale": "base rates dominate"},
