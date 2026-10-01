@@ -762,6 +762,13 @@ class Config:
     # refuses a value it cannot read (the import audit's default 7) instead of scoring with it.
     GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS = int(
         os.environ.get('GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS', '7') or '7')
+    # EVAL-12：黄金集污染探针（scripts/golden_probe.py）——闭卷无档案预测 + 结局回忆两臂，回忆说对
+    # 结局且细节含策展泄漏标记的题判为 likely_memorized。会产生付费调用，故默认关（CLI 另可 --live
+    # 显式放行）；GOLDEN_PROBE_MAX_CALLS 为单次探针的硬上限（修复回合也计数，超限 → 退出码 4）；
+    # GOLDEN_PROBE_CONFIDENT_P 是弱信号 nd_confident_correct 的置信阈值（实现侧概率 ≥ 此值）。
+    GOLDEN_PROBE_ENABLED = os.environ.get('GOLDEN_PROBE_ENABLED', 'false').strip().lower() == 'true'
+    GOLDEN_PROBE_MAX_CALLS = int(os.environ.get('GOLDEN_PROBE_MAX_CALLS', '120') or '120')
+    GOLDEN_PROBE_CONFIDENT_P = float(os.environ.get('GOLDEN_PROBE_CONFIDENT_P', '0.85') or '0.85')
     # EVAL-13: under an evaluation run whose pin carries a target proposition, a target the binary
     # extraction did not produce verbatim gets exactly one bounded repair draw that asks only for
     # that statement; the row is kept only on a normalized match, never fabricated. Default on is

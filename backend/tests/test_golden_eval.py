@@ -10,6 +10,7 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
 from types import SimpleNamespace
 
@@ -317,6 +318,9 @@ EVAL7_ROW_KEYS = {"cluster", "horizon_days", "horizon_bucket"}
 # EVAL-8 (GOLDEN_HEADLINE_GATE, default on) adds these, additively as well.
 EVAL8_REPORT_KEYS = {"headline", "metrics_scope", "characterization"}
 EVAL8_ROW_KEYS = {"tier", "tier_reasons"}
+# EVAL-12 adds the contamination block (unprobed without --probe-report) and, with a
+# matching probe report, the flagged/unflagged metric split.
+EVAL12_REPORT_KEYS = {"contamination", "metrics_flagged", "metrics_unflagged"}
 
 
 @pytest.fixture
@@ -390,7 +394,8 @@ def test_rigor_block_additive_legacy_unchanged(tmp_path):
     report = json.loads(out.read_text(encoding="utf-8"))
 
     legacy = {k: v for k, v in report.items()
-              if k not in EVAL7_REPORT_KEYS | EVAL8_REPORT_KEYS | {"forecast_path", "golden_path"}}
+              if k not in EVAL7_REPORT_KEYS | EVAL8_REPORT_KEYS | EVAL12_REPORT_KEYS
+              | {"forecast_path", "golden_path"}}
     legacy["metrics"] = {k: v for k, v in report["metrics"].items() if k != "rigor"}
     legacy["matched"] = [{k: v for k, v in r.items() if k not in EVAL7_ROW_KEYS | EVAL8_ROW_KEYS}
                          for r in report["matched"]]
@@ -753,3 +758,128 @@ def test_outputs_written_atomically(tmp_path, monkeypatch):
     assert os.replace is not _boom
     assert out.read_text(encoding="utf-8") == "PREVIOUS"
     assert not [p for p in os.listdir(tmp_path) if p.startswith(".tmp-")]
+
+
+# ------------------------------------------------------------------ EVAL-12 probe report
+PROBE_BACKBONE = {"provider": "deepseek", "model": "deepseek-chat"}
+
+
+def _probe_report(tmp_path, golden_path, flagged, status="flagged", **over):
+    report = {"schema": "drf.golden_probe.v1", "golden_sha256": ge._file_sha256(str(golden_path)),
+              "backbone": PROBE_BACKBONE, "closed_book_attested": True,
+              "summary": {"status": status, "flagged_ids": flagged, "inconclusive_reasons": []}}
+    report.update(over)
+    return _write_json(tmp_path / "probe_report.json", report)
+
+
+@pytest.mark.usefixtures("isolated_ledgers")
+def test_probe_report_split_sums_and_mismatch(tmp_path):
+    gpath, fpath = _legacy_fixture(tmp_path)
+    out, md = tmp_path / "r.json", tmp_path / "r.md"
+    probe = _probe_report(tmp_path, gpath, ["q1", "q3"])
+    assert ge.cmd_score_forecast_file(_args(forecast=fpath, golden=gpath, out=str(out), markdown=str(md),
+                                            probe_report=probe)) == 0
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["contamination"] == {"status": "flagged", "flagged_ids": ["q1", "q3"], "probe_run": probe,
+                                       "backbone": PROBE_BACKBONE, "closed_book_attested": True}
+    assert report["metrics_flagged"]["n"] + report["metrics_unflagged"]["n"] == report["metrics"]["n"]
+    assert report["metrics_flagged"]["n"] == 2
+    # The markdown names the status, the probe backbone and the split.
+    line = (f"- contamination: **flagged** (probe `{probe}`, backbone deepseek/deepseek-chat); "
+            f"flagged n=2, unflagged n={report['metrics']['n'] - 2}")
+    assert line in md.read_text(encoding="utf-8").splitlines()
+    # A probe report for another golden file: recorded, no split.
+    other = _write_json(tmp_path / "other_golden.json", {"questions": []})
+    mismatch = _probe_report(tmp_path, other, ["q1"])
+    assert ge.cmd_score_forecast_file(_args(forecast=fpath, golden=gpath, out=str(out), markdown=str(md),
+                                            probe_report=mismatch)) == 0
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["contamination"] == {"status": "probe_mismatch", "probe_run": mismatch}
+    assert "metrics_flagged" not in report and "metrics_unflagged" not in report
+    assert any(ln.startswith("- contamination: **probe_mismatch**") for ln in md.read_text(encoding="utf-8").splitlines())
+
+
+@pytest.mark.usefixtures("isolated_ledgers")
+@pytest.mark.parametrize("over", [{"schema": "drf.golden_probe.v0"}, {"schema": None}])
+def test_probe_report_wrong_schema_fails_loud(tmp_path, over):
+    gpath, fpath = _legacy_fixture(tmp_path)
+    probe = _probe_report(tmp_path, gpath, ["q1"], **over)
+    with pytest.raises(ValueError, match="drf.golden_probe.v1"):
+        ge.cmd_score_forecast_file(_args(forecast=fpath, golden=gpath, out=str(tmp_path / "r.json"),
+                                         probe_report=probe))
+    assert not (tmp_path / "r.json").exists()
+    # not a JSON object at all
+    bare = _write_json(tmp_path / "list.json", [1, 2])
+    with pytest.raises(ValueError, match="schema None"):
+        ge.load_probe_contamination(bare, gpath)
+
+
+@pytest.mark.parametrize("name,content", [("missing.json", None), ("broken.json", "{not json"), ("dir", "")])
+def test_unreadable_probe_report_raises_value_error(tmp_path, name, content):
+    """Review round 3: a missing, invalid or unreadable --probe-report raises the documented
+    ValueError, not a bare OSError or JSONDecodeError message."""
+    gpath, _fpath = _legacy_fixture(tmp_path)
+    path = tmp_path / name
+    if name == "dir":
+        path.mkdir()
+    elif content is not None:
+        path.write_text(content, encoding="utf-8")
+    with pytest.raises(ValueError, match=re.escape(f"--probe-report {path}: cannot read: ")):
+        ge.load_probe_contamination(str(path), str(gpath))
+
+
+@pytest.mark.usefixtures("isolated_ledgers")
+@pytest.mark.parametrize("summary,match", [
+    ({"status": "flagged", "flagged_ids": "q1"}, "flagged_ids of type str"),    # never split as ['1', 'q']
+    (None, "got status None"),
+    ({"flagged_ids": []}, "got status None"),
+    ({"status": "clean", "flagged_ids": []}, "got status 'clean'"),
+    ({"status": "inconclusive"}, "flagged_ids of type NoneType"),
+    ({"status": "flagged", "flagged_ids": [1]}, "a list of question ids"),
+    ({"status": "flagged", "flagged_ids": [" "]}, "a list of question ids"),
+    ({"status": "flagged", "flagged_ids": []}, "summary.status 'flagged' contradicts 0 flagged_ids"),
+    ({"status": "none_detected", "flagged_ids": ["q1"]}, "summary.status 'none_detected' contradicts 1 flagged_ids"),
+])
+def test_probe_report_malformed_summary_fails_loud(tmp_path, summary, match):
+    """Review round 2: a summary that is missing, has an unknown status, a flagged_ids that is
+    not a list of ids, or a status contradicting its flagged_ids fails loud, never splits."""
+    gpath, fpath = _legacy_fixture(tmp_path)
+    probe = _probe_report(tmp_path, gpath, [], summary=summary)
+    with pytest.raises(ValueError, match=re.escape(match)):
+        ge.cmd_score_forecast_file(_args(forecast=fpath, golden=gpath, out=str(tmp_path / "r.json"),
+                                         probe_report=probe))
+    assert not (tmp_path / "r.json").exists()
+
+
+@pytest.mark.parametrize("status", ["none_detected", "inconclusive"])
+def test_probe_report_without_flags_splits_nothing_out(tmp_path, status):
+    gpath, _fpath = _legacy_fixture(tmp_path)
+    contamination = ge.load_probe_contamination(_probe_report(tmp_path, gpath, [], status=status), str(gpath))
+    assert (contamination["status"], contamination["flagged_ids"]) == (status, [])
+
+
+@pytest.mark.usefixtures("isolated_ledgers")
+def test_unprobed_status_additive(tmp_path):
+    gpath, fpath = _legacy_fixture(tmp_path)
+    out, md = tmp_path / "r.json", tmp_path / "r.md"
+    assert ge.cmd_score_forecast_file(_args(forecast=fpath, golden=gpath, out=str(out), markdown=str(md))) == 0
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["contamination"] == {"status": "unprobed"}
+    assert "metrics_flagged" not in report
+    # no contamination line: an unprobed markdown renders exactly as before EVAL-12
+    assert "contamination" not in md.read_text(encoding="utf-8")
+
+
+def test_ledger_rows_record_the_probe_verdict_only_when_probed(tmp_path):
+    gpath, fpath = _legacy_fixture(tmp_path)
+    ldir = str(tmp_path / "eval_ledger")
+    probe = _probe_report(tmp_path, gpath, ["q1"])
+    assert ge.cmd_score_forecast_file(_args(forecast=fpath, golden=gpath, to_ledger=True, ledger_dir=ldir,
+                                            probe_report=probe)) == 0
+    rows = {r["question_id"]: r for r in read_ledger(ldir)}
+    assert rows["q1"]["contamination"] == {"status": "flagged", "flagged": True, "probe_run": probe,
+                                           "backbone": PROBE_BACKBONE}
+    assert rows["q2"]["contamination"]["flagged"] is False
+    plain = str(tmp_path / "plain_ledger")
+    assert ge.cmd_score_forecast_file(_args(forecast=fpath, golden=gpath, to_ledger=True, ledger_dir=plain)) == 0
+    assert all("contamination" not in r for r in read_ledger(plain))
