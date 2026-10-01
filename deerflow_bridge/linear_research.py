@@ -276,7 +276,9 @@ STORED_READS_EXHAUSTED_TEXT = ("READ_BUDGET_EXHAUSTED: stop re-reading stored pa
 # sees are unchanged); each KIQ record's stats and meta.kiqs carry them.  Like
 # the other meta.kiqs sums they describe the KIQ records kept: an attempt that
 # leaves no record (a provider failure before any page was read, a cancelled
-# run) or whose record a resumed run rewrote is not counted.
+# run) or whose record a resumed run rewrote is not counted.  A record without
+# them (kept by a resumed run from before the counters) adds 0 to the sums and
+# is counted in meta.kiqs.tool_counters_missing (written only when non-zero).
 TOOL_CALL_COUNTERS = ("invalid_tool_calls", "unknown_tool_calls", "tool_exceptions")
 LABEL_EVIDENCE = "research evidence"
 LABEL_SCOUT = "scout search results"
@@ -779,6 +781,16 @@ def _record_stat_count(record: Mapping[str, Any], name: str) -> int:
     stats = record.get("stats")
     value = stats.get(name, 0) if isinstance(stats, Mapping) else 0
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def _record_lacks_tool_counters(record: Mapping[str, Any]) -> bool:
+    """True when a KIQ record's stats miss one of the EVAL-16 TOOL_CALL_COUNTERS
+    (the record predates them) or hold anything but a count there."""
+    stats = record.get("stats")
+    if not isinstance(stats, Mapping):
+        return True
+    values = [stats.get(name) for name in TOOL_CALL_COUNTERS]
+    return any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in values)
 
 
 # ===========================================================================
@@ -9293,6 +9305,10 @@ class _Engine:
             # EVAL-16: a KIQ record a resumed run kept from before the counters existed counts 0.
             **{name: sum(_record_stat_count(r, name) for r in records) for name in TOOL_CALL_COUNTERS},
         }
+        # ...and is counted, so that a zero sum over such records is not read as evidence.
+        counters_missing = sum(1 for r in records if _record_lacks_tool_counters(r))
+        if counters_missing:
+            self.meta["kiqs"]["tool_counters_missing"] = counters_missing
         if self.evidence_mode != EVIDENCE_OFF:
             self.meta["evidence"] = evidence_summary(records, self.evidence_mode)
         if self.absence_discipline:

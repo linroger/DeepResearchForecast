@@ -3,11 +3,13 @@
 * the v3 KIQ agents count the calls answered with INVALID_TOOL_CALL /
   UNKNOWN_TOOL / TOOL_ERROR (the strings the model sees are unchanged), each KIQ
   record's stats carry them and meta.kiqs sums them (a record written before the
-  counters counts 0);
+  counters counts 0 and is counted in tool_counters_missing, so the scorecard
+  never reads a zero sum over it as evidence);
 * ReportAgent's tool_unknown agent_log rows (INFRA-5) on every path, and the
   scorecard contracts research invalid/unknown_tool_calls and report
-  unknown_tool_calls (== 0; not instrumented without an INFRA-5 marker, torn
-  log lines fail closed only when they may hide a row);
+  unknown_tool_calls (== 0; not instrumented without an INFRA-5 marker, never
+  below INFRA-5's telemetry count, torn log lines fail closed only when they
+  may hide a row);
 * ``scripts/stage_scorecard.py aggregate``: grouping by code sha and backbone
   (partial backbones of runs that stopped early), per-run distributions, pooled
   Wilson regression flags against the same backbone gated on a minimum run
@@ -156,11 +158,12 @@ def test_meta_kiqs_sums(tmp_path, bridge, monkeypatch):
     kiqs = meta["kiqs"]
     assert kiqs["invalid_tool_calls"] == kiqs["unknown_tool_calls"] == len(records)
     assert kiqs["tool_exceptions"] == 0
+    assert "tool_counters_missing" not in kiqs  # written only when a record lacks the counters
     disk = json.loads((out / "meta.json").read_text(encoding="utf-8"))
     assert disk["kiqs"]["unknown_tool_calls"] == disk["kiqs"]["invalid_tool_calls"] == len(records)
 
     # A record kept by a resumed run that predates the counters counts 0 (every
-    # phase is reused, so no model call is made).
+    # phase is reused, so no model call is made) and is counted as missing them.
     first = sorted(records)[0]
     path = out / "v3" / "kiq" / f"{first}.json"
     stale = records[first]
@@ -172,9 +175,20 @@ def test_meta_kiqs_sums(tmp_path, bridge, monkeypatch):
                                                out_dir=out, model=silent)
     assert rc == 0 and model.calls == []
     assert meta["kiqs"]["unknown_tool_calls"] == meta["kiqs"]["invalid_tool_calls"] == len(records) - 1
+    assert meta["kiqs"]["tool_counters_missing"] == 1
+    # The scorecard reads the sums as a lower bound then.
+    record = sc._kiq_tool_call_counts(sc.MEASURED, meta)["unknown_tool_calls"]
+    assert (record["status"], record["value"]) == ("measured", len(records) - 1)
+    assert record["detail"] == "a lower bound: 1 KIQ record(s) predate the counters"
     assert lr._record_stat_count({"stats": {"unknown_tool_calls": True}}, "unknown_tool_calls") == 0
     assert lr._record_stat_count({"stats": "garbage"}, "unknown_tool_calls") == 0
     assert lr._record_stat_count({}, "unknown_tool_calls") == 0
+    complete = dict.fromkeys(lr.TOOL_CALL_COUNTERS, 0)
+    assert not lr._record_lacks_tool_counters({"stats": complete})
+    for stats in ("garbage", {}, dict(complete, tool_exceptions=True), dict(complete, unknown_tool_calls=-1),
+                  {k: v for k, v in complete.items() if k != "invalid_tool_calls"}):
+        assert lr._record_lacks_tool_counters({"stats": stats}), stats
+    assert lr._record_lacks_tool_counters({})
 
 
 # ====================================================== report tool_unknown rows
@@ -364,12 +378,30 @@ def test_scorecard_counts_tool_unknown(roots):
     assert card["checks"]["research"] == {"passed": None, "failed": [],
                                           "unevaluable": ["invalid_tool_calls", "unknown_tool_calls"]}
 
-    # A counter that is not a count is unreadable (fails closed).
-    ts._make_pipeline(meta=_kiqs(unknown_tool_calls=True, invalid_tool_calls="0"))
+    # A resumed v3 run that kept KIQ records from before EVAL-16 (tool_counters_missing):
+    # a zero sum is not evidence, a positive one is a lower bound and still fails.
+    ts._make_pipeline(meta=_kiqs(tool_counters_missing=2))
     card = ts._score()
-    for name in ("invalid_tool_calls", "unknown_tool_calls"):
-        assert ts._metric(card, "research", name)["status"] == "unreadable"
-    assert card["checks"]["research"]["failed"] == ["invalid_tool_calls", "unknown_tool_calls"]
+    record = ts._metric(card, "research", "unknown_tool_calls")
+    assert (record["status"], record["value"]) == ("not_instrumented", None)
+    assert record["detail"] == "2 KIQ record(s) predate the counters: a zero sum is not evidence"
+    assert card["checks"]["research"] == {"passed": None, "failed": [],
+                                          "unevaluable": ["invalid_tool_calls", "unknown_tool_calls"]}
+    ts._make_pipeline(meta=_kiqs(tool_counters_missing=1, unknown_tool_calls=3))
+    card = ts._score()
+    record = ts._metric(card, "research", "unknown_tool_calls")
+    assert (record["status"], record["value"]) == ("measured", 3)
+    assert record["detail"] == "a lower bound: 1 KIQ record(s) predate the counters"
+    assert card["checks"]["research"]["failed"] == ["unknown_tool_calls"]
+    assert card["checks"]["research"]["unevaluable"] == ["invalid_tool_calls"]
+
+    # A counter that is not a count is unreadable (fails closed).
+    for meta in (_kiqs(unknown_tool_calls=True, invalid_tool_calls="0"), _kiqs(tool_counters_missing="1")):
+        ts._make_pipeline(meta=meta)
+        card = ts._score()
+        for name in ("invalid_tool_calls", "unknown_tool_calls"):
+            assert ts._metric(card, "research", name)["status"] == "unreadable"
+        assert card["checks"]["research"]["failed"] == ["invalid_tool_calls", "unknown_tool_calls"]
 
     # Research only for v3: another engine has no KIQ agents (not applicable, skipped).
     for meta in ({"research_engine": "legacy", "actors_count": 3},

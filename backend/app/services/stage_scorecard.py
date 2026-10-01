@@ -307,6 +307,10 @@ def _kiq_tool_call_counts(meta_status: str, meta: Optional[dict]) -> dict:
     UNKNOWN_TOOL, so the counts are not applicable to a meta that names another
     engine (or names none and has no ``kiqs`` block, the pre-v3 engines).  A v3
     meta without them (a run before EVAL-16) is not_instrumented, never a pass.
+
+    ``kiqs.tool_counters_missing`` counts the KIQ records a resumed run kept
+    from before the counters (each adds 0 to the sums): a zero sum is then
+    not_instrumented, and a positive one is measured as a lower bound.
     """
     metrics: dict[str, dict] = {}
     for name in ("invalid_tool_calls", "unknown_tool_calls"):
@@ -324,8 +328,18 @@ def _kiq_tool_call_counts(meta_status: str, meta: Optional[dict]) -> dict:
             metrics[name] = _unavailable(NOT_INSTRUMENTED, src, f"kiqs has no '{name}' field")
         else:
             count = _as_count(kiqs[name])
-            metrics[name] = _metric(count, source=src) if count is not None else _unavailable(
-                UNREADABLE, src, f"{name} is not a count")
+            missing = _as_count(kiqs.get("tool_counters_missing", 0))
+            if count is None:
+                metrics[name] = _unavailable(UNREADABLE, src, f"{name} is not a count")
+            elif missing is None:
+                metrics[name] = _unavailable(UNREADABLE, src, "tool_counters_missing is not a count")
+            elif missing and not count:
+                metrics[name] = _unavailable(
+                    NOT_INSTRUMENTED, src,
+                    f"{missing} KIQ record(s) predate the counters: a zero sum is not evidence")
+            else:
+                metrics[name] = _metric(count, source=src, detail=(
+                    f"a lower bound: {missing} KIQ record(s) predate the counters" if missing else None))
     return metrics
 
 
