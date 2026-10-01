@@ -172,7 +172,8 @@ def append_golden_result(*, question_id: str, probability: Any, resolved_outcome
                          report_id: Optional[str] = None, d: Optional[str] = None,
                          objective_signals: Optional[Dict[str, Any]] = None,
                          golden_tier: Optional[str] = None,
-                         golden_tier_source: Optional[str] = None) -> Optional[Dict[str, Any]]:
+                         golden_tier_source: Optional[str] = None,
+                         contamination: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """EVAL-1: append ONE already-resolved golden binary question to the ledger.
 
     黄金题是「已判定」的二元(YES/NO)问题；把它建模成两情景（YES=p、NO=1-p）的 *已解析*
@@ -194,6 +195,9 @@ def append_golden_result(*, question_id: str, probability: Any, resolved_outcome
     ``golden_tier == 'prospective'`` rows toward its headline. ``golden_tier_source``
     (what the tier rests on: pipeline_dir / --run-created-at / forecast_hindcast / none)
     is written only alongside ``golden_tier``.
+
+    EVAL-12: ``contamination`` (the row's probe verdict from a matching
+    golden_probe report: ``{status, flagged, probe_run}``) is written only when given.
     """
     try:
         p = float(probability)
@@ -237,6 +241,8 @@ def append_golden_result(*, question_id: str, probability: Any, resolved_outcome
             entry["golden_tier_source"] = str(golden_tier_source)
     if isinstance(objective_signals, dict) and objective_signals:
         entry["objective_signals"] = objective_signals
+    if isinstance(contamination, dict):
+        entry["contamination"] = dict(contamination)
     try:
         # Foglamp WP1 (1E)：黄金题写入被路由到隔离的评估账本。目标目录解析为生产
         # 账本目录（显式传入或默认）时一律改写到 evaluation_ledger_dir()，绝不落进

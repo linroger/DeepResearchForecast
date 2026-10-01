@@ -1,0 +1,206 @@
+{
+  "_meta": {
+    "schema": "drf.golden_probe_meta.v1",
+    "description": "EVAL-12 contamination probes: per golden id, leak_markers are realized details that the question does not imply (curated from resolution_note and the public record); a recall answer that states the correct outcome AND one of them counts as likely memorized. probe_question (and, where the criteria name the answer, probe_resolution_criteria) reword hindsight-framed rows outcome-free. Markers are matched normalized (NFKC, casefold, dashes unified, whitespace collapsed) and only as whole tokens; none may occur in the row's forecaster-visible text (golden_probe.validate_meta)."
+  },
+  "us-pres-2024-trump": {
+    "leak_markers": [
+      "312",
+      "226"
+    ]
+  },
+  "us-pres-2024-harris": {
+    "leak_markers": [
+      "226",
+      "312"
+    ]
+  },
+  "us-senate-2024-gop": {
+    "leak_markers": [
+      "53"
+    ]
+  },
+  "us-senate-2024-dem-hold": {
+    "leak_markers": [
+      "47",
+      "53"
+    ]
+  },
+  "uk-ge-2024-labour": {
+    "leak_markers": [
+      "411"
+    ]
+  },
+  "uk-ge-2024-tory": {
+    "leak_markers": [
+      "121",
+      "411"
+    ]
+  },
+  "fr-legis-2024-rn-majority": {
+    "leak_markers": [
+      "182",
+      "143",
+      "new popular front"
+    ]
+  },
+  "mx-pres-2024-sheinbaum": {
+    "leak_markers": [
+      "59.75",
+      "59.8",
+      "27.45"
+    ]
+  },
+  "id-pres-2024-prabowo": {
+    "leak_markers": [
+      "58.59",
+      "58.6"
+    ]
+  },
+  "in-ge-2024-bjp-alone": {
+    "leak_markers": [
+      "240"
+    ]
+  },
+  "in-ge-2024-nda-majority": {
+    "leak_markers": [
+      "293",
+      "240"
+    ]
+  },
+  "fed-2024-09-cut": {
+    "leak_markers": [
+      "50 basis",
+      "50bp",
+      "50bps",
+      "half point",
+      "half-point",
+      "4.75"
+    ]
+  },
+  "fed-2024-11-cut": {
+    "leak_markers": [
+      "4.50"
+    ]
+  },
+  "fed-2024-12-cut": {
+    "leak_markers": [
+      "4.25"
+    ]
+  },
+  "fed-2025-01-cut": {
+    "leak_markers": [
+      "4.25",
+      "4.50"
+    ]
+  },
+  "apple-iphone16-2024": {
+    "leak_markers": [
+      "glowtime",
+      "september 9",
+      "sept 9",
+      "sept. 9"
+    ]
+  },
+  "openai-gpt4o-2024": {
+    "probe_question": "Will OpenAI publicly release a new flagship model succeeding GPT-4 Turbo in 2024?",
+    "probe_resolution_criteria": "YES if OpenAI announces and makes available, during 2024, a new flagship model that succeeds GPT-4 Turbo.",
+    "leak_markers": [
+      "gpt-4o",
+      "4o",
+      "omni",
+      "may 13",
+      "spring update"
+    ]
+  },
+  "apple-vision-pro-2024": {
+    "leak_markers": [
+      "february 2",
+      "feb 2",
+      "feb. 2"
+    ]
+  },
+  "nvidia-3t-2024": {
+    "leak_markers": [
+      "june 5",
+      "june 2024"
+    ]
+  },
+  "spacex-starship-catch-2024": {
+    "leak_markers": [
+      "flight 5",
+      "october 13",
+      "oct 13",
+      "oct. 13"
+    ]
+  },
+  "btc-100k-2024": {
+    "leak_markers": [
+      "december 4",
+      "december 5",
+      "dec 4",
+      "dec 5"
+    ]
+  },
+  "btc-spot-etf-2024": {
+    "leak_markers": [
+      "january 10",
+      "jan 10",
+      "jan. 10"
+    ]
+  },
+  "trump-ny-conviction-2024": {
+    "leak_markers": [
+      "34 counts",
+      "34 felony",
+      "may 30"
+    ]
+  },
+  "ucl-2024-real-madrid": {
+    "leak_markers": [
+      "2-0",
+      "dortmund",
+      "carvajal"
+    ]
+  },
+  "sb-lviii-2024-chiefs": {
+    "leak_markers": [
+      "25-22",
+      "overtime",
+      "hardman"
+    ]
+  },
+  "sb-lix-2025-eagles": {
+    "leak_markers": [
+      "40-22"
+    ]
+  },
+  "mlb-2024-dodgers": {
+    "leak_markers": [
+      "4-1",
+      "yankees",
+      "freeman"
+    ]
+  },
+  "euro-2024-spain": {
+    "leak_markers": [
+      "2-1",
+      "oyarzabal"
+    ]
+  },
+  "nba-2024-celtics": {
+    "leak_markers": [
+      "4-1",
+      "mavericks",
+      "june 17"
+    ]
+  },
+  "oscars-2024-oppenheimer": {
+    "leak_markers": [
+      "seven oscars",
+      "7 oscars",
+      "seven awards",
+      "7 awards"
+    ]
+  }
+}
