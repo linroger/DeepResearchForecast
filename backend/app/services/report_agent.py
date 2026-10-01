@@ -1564,6 +1564,15 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                                  "superseded; not rolled back)")
             lines.append(item)
     if unmatched:
+        # FU-5（TIME-3 遗留）：PREDICTION_MARKETS_END_DATE_GATE 开时按 market_clock_now() 盖
+        # window_ended 章（浅拷贝，调用方的快照不变），已过截止日、待结算的市场在条目末尾标注，
+        # 不再被当作实时的候选对照；未过期的条目与旗标关时的输出逐字节不变。
+        from ..utils.prediction_markets import (
+            _window_ended_label, end_date_gate_settings, market_clock_now, stamp_window_ended,
+        )
+        gate, grace = end_date_gate_settings()
+        if gate:
+            unmatched, _ = stamp_window_ended(unmatched, now=market_clock_now(), grace_hours=grace)
         lines.append("")
         if zh:
             lines.append("**未匹配市场（快照中未被任何预测锚定，可补充对照）：**")
@@ -1576,10 +1585,11 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             q = _mc_cell(str(m.get("question") or "")[:120])
             url = str(m.get("url") or "").strip()
             label = f"[{q}]({_mc_cell(url)})" if (q and url) else (q or _mc_cell(m.get("market_id") or ""))
+            ended = _window_ended_label(m, zh) if gate else ""
             if zh:
-                lines.append(f"- {label} — 隐含 P(yes) {ip_s}")
+                lines.append(f"- {label} — 隐含 P(yes) {ip_s}{ended}")
             else:
-                lines.append(f"- {label} — implied P(yes) {ip_s}")
+                lines.append(f"- {label} — implied P(yes) {ip_s}{ended}")
     return "\n".join(lines)
 
 

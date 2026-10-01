@@ -260,6 +260,39 @@ def test_crosscheck_render_only_unmatched_when_no_anchors():
     assert "Model P" not in block          # 无对照表头
 
 
+def test_crosscheck_labels_window_ended_unmatched_markets(monkeypatch):
+    """FU-5 (TIME-3 open issue): an expired-but-open market in the snapshot is labelled,
+    never listed as a live candidate cross-check; open rows and gate-off output are
+    unchanged, and the caller's snapshot is not mutated."""
+    from datetime import datetime, timezone
+    now = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
+    monkeypatch.setattr(pm, "market_clock_now", lambda: now)
+    snapshot = [
+        {"market_id": "m-ended", "question": "Will X happen by August?", "implied_yes_prob": 0.03,
+         "volume": 9000, "end_date": "2026-08-31T00:00:00Z"},
+        {"market_id": "m-open", "question": "Will Y happen by December?", "implied_yes_prob": 0.4,
+         "volume": 100, "end_date": "2026-12-31T00:00:00Z"},
+    ]
+    before = json.dumps(snapshot, sort_keys=True)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GATE", True, raising=False)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GRACE_HOURS", 0.0, raising=False)
+    en = render_market_comparison_block({}, markets=snapshot, lang="en")
+    zh = render_market_comparison_block({}, markets=snapshot, lang="zh")
+    assert "- Will X happen by August? — implied P(yes) 3% — window ended 2026-08-31, awaiting settlement" in en
+    assert "- Will Y happen by December? — implied P(yes) 40%\n" in en + "\n"
+    assert "已过截止日 2026-08-31，待结算" in zh and zh.count("待结算") == 1
+    assert json.dumps(snapshot, sort_keys=True) == before
+    # Within the grace period the market is still open.
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GRACE_HOURS", 48.0, raising=False)
+    assert "awaiting settlement" not in render_market_comparison_block({}, markets=snapshot, lang="en")
+    # Gate off: the old rendering, even for a row the research snapshot already stamped.
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GATE", False, raising=False)
+    stamped = [dict(snapshot[0], window_ended=True, window_ended_at="2026-08-31T00:00:00+00:00"), snapshot[1]]
+    off = render_market_comparison_block({}, markets=stamped, lang="en")
+    assert "awaiting settlement" not in off
+    assert off == render_market_comparison_block({}, markets=snapshot, lang="en")
+
+
 # ---------------------------------- _prepend_binary_forecasts_section (PM-2)
 
 _H1_MD = "# Grand Forecast\n\n> Executive summary\n\n## Section A\n\nBody.\n"
