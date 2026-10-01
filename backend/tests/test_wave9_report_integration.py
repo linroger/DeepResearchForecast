@@ -185,6 +185,27 @@ class TestContestedQuantSlots:
         out = _bare_agent(contested=rows)._build_contested_table_block()
         assert out == _golden(range(14), (0,))
 
+    def test_interleaved_tracks_rank_every_quant_slot_by_priority(self, monkeypatch):
+        """Review round 2: a multi-track handoff interleaves the tracks' quant rows with the
+        next track's claims (merge_list_dedup). With 5 plain quant rows inside the plain cut
+        and a unit-scale error past it, every quant slot is chosen by priority: the unit-scale
+        row takes the first quant position, the lowest-priority plain row is the one cut, and
+        no model claim gives up its slot."""
+        monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
+        claim = lambda name: {"claim": name, "positions": [{"stance": "s", "sources": [], "tier": "S2"}]}
+        quant = lambda name, why: {"claim": name, "origin": "quant_reconcile", "why_they_differ": why,
+                                   "positions": [{"stance": "a", "sources": [], "tier": ""},
+                                                 {"stance": "b", "sources": [], "tier": ""}]}
+        rows = ([claim(f"m{i}") for i in range(5)] + [quant(f"q{i}", "high/low ratio=1.5") for i in range(5)]
+                + [claim(f"m{i}") for i in range(5, 10)] + [quant("u0", _UNIT_SCALE_WHY)])
+        out = _bare_agent(contested=rows)._build_contested_table_block()
+        model = lambda i: f"- **m{i}** — s（S2）"
+        q = lambda name: f"- **{name}** — a ⇄ b"
+        assert out == "\n".join([_HEADER] + [model(i) for i in range(5)]
+                                 + [q("u0"), q("q0"), q("q1"), q("q2")] + [model(i) for i in range(5, 10)]
+                                 + [q("q3"), "（另有 1 条数值对账分歧超出上限未列出）"])
+
+
     def test_few_model_claims_leave_more_room_for_quant_rows(self, monkeypatch):
         monkeypatch.setattr(Config, "RESEARCH_QUANT_RECONCILE", True, raising=False)
         out = _bare_agent(contested=_contested(3, 20))._build_contested_table_block()

@@ -2346,15 +2346,20 @@ class ReportAgent:
 
         Every engine appends its quantitative disagreements (origin quant_reconcile) after
         the model's claims, and only v3 caps them and puts probable unit-scale errors first,
-        so the plain first-N cut drops them all.  When it cuts at least one renderable
-        quant_reconcile row, up to _CONTESTED_QUANT_SLOTS of the N slots go to those rows,
-        probable unit-scale errors first (stable, so each kind keeps contested.json order),
-        and the plain cut's rows fill the rest in order.  The kept rows keep contested.json
-        order, except that the kept quant rows list the unit-scale errors first within their
-        own slots (v3's order already does), and a closing note counts the quant rows still
-        cut.  Otherwise the plain cut is returned unchanged.  Only quant_reconcile rows of
-        ``rest`` are rendered, and a malformed one is skipped (the plain cut never rendered
-        it)."""
+        so the plain first-N cut drops them all.  A multi-track run's merged handoff joins the
+        tracks' contested.json files (pipeline_orchestrator.merge_list_dedup), so there the
+        quant rows sit after each track's claims, interleaved with the next track's.  When the
+        plain cut drops at least one renderable quant_reconcile row, the quant rows get
+        max(min(_CONTESTED_QUANT_SLOTS, N), quant rows inside the plain cut) of the N slots
+        (at most all of them), chosen by priority wherever they sit: probable unit-scale
+        errors first, stable, so each kind keeps contested.json order.  A plain quant row
+        inside the cut therefore never keeps its slot while a unit-scale error past it is
+        dropped.  The plain cut's other rows (the model's claims) fill the remaining slots in
+        order.  The kept rows keep contested.json order, except that the positions held by
+        kept quant rows take those rows in priority order (unit-scale errors first; v3's
+        order already is), and a closing note counts the quant rows still cut.  Otherwise the
+        plain cut is returned unchanged.  Only quant_reconcile rows of ``rest`` are rendered,
+        and a malformed one is skipped (the plain cut never rendered it)."""
         def unit_scale(r: Dict[str, Any]) -> bool:
             return self._UNIT_SCALE_MARK in str(r.get("why_they_differ") or "")
 
@@ -2374,14 +2379,16 @@ class ReportAgent:
         rendered = head + tail  # contested.json order
         quant = [i for i, (r, _) in enumerate(rendered) if r.get("origin") == "quant_reconcile"]
         quant.sort(key=lambda i: not unit_scale(rendered[i][0]))
-        keep = set(quant[:min(self._CONTESTED_QUANT_SLOTS, cap)])
-        for i in range(cap):  # the plain cut's rows, in order, fill the other slots
-            if len(keep) >= cap:
-                break
-            keep.add(i)
+        quant_positions = set(quant)
+        # The quant rows' share never falls below what the plain cut already shows; tail is
+        # not empty, so there are more quant rows than that and the slice fills the share.
+        in_cut = sum(1 for i in quant if i < cap)
+        keep = set(quant[:max(min(self._CONTESTED_QUANT_SLOTS, cap), in_cut)])
+        # The plain cut's other rows, in order, fill the remaining slots (there are enough:
+        # cap - in_cut of them).
+        keep.update([i for i in range(cap) if i not in quant_positions][:cap - len(keep)])
         # Kept rows in contested.json order; the positions held by quant rows take the kept
         # quant rows in priority order (unit-scale errors first).
-        quant_positions = set(quant)
         kept_quant_by_priority = iter([i for i in quant if i in keep])
         lines = []
         for i in sorted(keep):

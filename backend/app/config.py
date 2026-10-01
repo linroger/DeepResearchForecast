@@ -1827,8 +1827,9 @@ class Config:
     # was; false = v3 and extract-only artifacts and meta byte-identical to before.
     # Forwarded to every research child.  The report agent reads it too (FU-9): when its
     # contested-claims block (at most 15 claims) would cut quant_reconcile rows, up to 3
-    # slots go to them (probable unit-scale errors first) and a note counts those still
-    # cut; nothing changes when nothing is cut, and false = the plain first-15 cut.
+    # slots (more when the plain cut already shows more) go to them, probable unit-scale
+    # errors first, and a note counts those still cut; nothing changes when nothing is
+    # cut, and false = the plain first-15 cut.
     RESEARCH_QUANT_RECONCILE = (os.environ.get('RESEARCH_QUANT_RECONCILE', 'true').strip().lower()
                                 or 'true') in ('1', 'true', 'yes', 'on')
     # RESEARCH-11 v3 forecast inputs: the facts extraction also asks for the drivers
