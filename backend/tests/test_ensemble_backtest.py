@@ -51,6 +51,32 @@ def test_calibration_report_bins():
     assert rep["mean_brier"] is not None
     assert rep["calibration_error"] is not None
     assert sum(b["count"] for b in rep["bins"]) == 6  # 3 forecasts x 2 scenarios
+    assert rep["n_unmatched_outcome"] == 0
+
+
+def test_calibration_report_counts_unmatched_outcomes_additively():
+    """EVAL-5: n_unmatched_outcome is additive; an unmatched outcome still scores as an
+    all-miss in every legacy number exactly as before."""
+    resolved = [
+        {"forecast": _fc([("A", 0.9), ("B", 0.1)]), "outcome": "A"},
+        {"forecast": _fc([("A", 0.6), ("B", 0.4)]), "outcome": "Neither"},
+    ]
+    rep = calibration_report(resolved, bins=5)
+    assert rep["n_unmatched_outcome"] == 1
+    assert set(rep) == {"n", "mean_brier", "calibration_error", "brier_decomposition",
+                        "resolution", "insufficient_data", "bins", "n_unmatched_outcome"}
+    # Legacy numbers by hand: Brier 0.02 and 0.36 + 0.16; bins hold 0.1/0, 0.4/0, 0.6/0, 0.9/1.
+    assert rep["n"] == 2 and rep["mean_brier"] == 0.27
+    assert rep["calibration_error"] == 0.3
+    assert [(b["count"], b["observed_hit_rate"]) for b in rep["bins"]] == [
+        (1, 0.0), (0, None), (1, 0.0), (1, 0.0), (1, 1.0)]
+    assert rep["brier_decomposition"] == {"reliability": 0.135, "resolution": 0.1875,
+                                          "uncertainty": 0.1875, "brier_pooled": 0.135}
+    # Items without a forecast or without scenarios are not unmatched outcomes.
+    assert calibration_report([{"forecast": {"scenarios": []}, "outcome": "A"}])[
+        "n_unmatched_outcome"] == 0
+    assert calibration_report([]) == {"n": 0, "mean_brier": None, "bins": [],
+                                      "calibration_error": None, "n_unmatched_outcome": 0}
 
 
 def test_self_critique_degrades_safely_on_error():
