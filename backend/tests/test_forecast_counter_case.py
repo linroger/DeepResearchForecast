@@ -317,16 +317,15 @@ def test_valid_claims_never_carry_a_rejected_source():
 
 
 def test_claim_caps():
-    long_text = "Sales keep growing across every major market " * 20
     kept, dropped = _claims([
-        {"text": long_text, "sources": ["S1", "S2", "S3", "S4", "S5"]},
+        {"text": "Sales keep growing across every major market",
+         "sources": ["S1", "S2", "S3", "S4", "S5"]},
         {"text": "Second valid claim", "sources": ["[S4]"]},
         {"text": "Third valid claim", "sources": [5]},
         {"text": "Fourth valid claim", "sources": ["S1"]},
         {"text": "Fifth valid claim", "sources": ["S1"]},
     ])
     assert len(kept) == 3 and dropped == Counter({"over_cap": 2, fc.TAG_DROP_KEY: 1})
-    assert len(kept[0]["text"]) <= fc.MAX_CLAIM_CHARS and kept[0]["text"].endswith("…")
     assert kept[0]["sources"] == ["S1", "S3", "S4", "S5"]          # S2 rejected; at most four
     assert [c["sources"] for c in kept[1:]] == [["S4"], ["S5"]]    # markers normalised
     # Malformed and empty items are counted, never kept.
@@ -334,42 +333,63 @@ def test_claim_caps():
     assert kept == [] and dropped == Counter({"malformed": 2, "empty": 1})
 
 
-def test_cuts_never_publish_a_different_number():
-    """The review probe: a number straddling the 400-character cut never becomes another
-    number ('175 million' is not published as '17'); a number left at the end of a cut, which
-    may have lost its scale ('175' of '175 million', '1.75' of '1.75亿'), is dropped too."""
-    lead = ("Global electric car sales reached 17 million units in 2024, led by China."
-            + " Charging networks keep expanding across every major market." * 5)
-    straddling = lead + " the total fleet reaches 175 million cumulative units."
-    at_the_cut = lead + " the fleet stands near 175 million cumulative units."
-    assert straddling.index("175") == fc.MAX_CLAIM_CHARS - 2       # the cut falls inside it
-    assert at_the_cut.index("175") + 3 == fc.MAX_CLAIM_CHARS - 1   # it ends right at the cut
-    kept, dropped = _claims([{"text": straddling, "sources": ["S1"]},
-                             {"text": at_the_cut, "sources": ["S1"]}], numbers=("17", "175"))
-    assert not dropped
-    assert kept[0]["text"].endswith("the total fleet reaches…")
-    assert kept[1]["text"].endswith("the fleet stands near…")
-    for claim in kept:
-        assert len(claim["text"]) <= fc.MAX_CLAIM_CHARS
-        assert fc.discriminative_numbers(claim["text"], NUMBERS) == {"17"}
-    # Chinese: a scale attached to the number, and a decimal straddling the cut.
-    scale = "累计" * 195 + "预计将达到1.75亿辆。"
-    decimal = "累计" * 197 + "已达到1.75亿辆。"
-    assert scale.index("亿") == decimal.index(".") + 1 == fc.MAX_CLAIM_CHARS - 1
-    assert fc._cap(scale, fc.MAX_CLAIM_CHARS).endswith("预计将达到…")
-    assert fc._cap(decimal, fc.MAX_CLAIM_CHARS).endswith("已达到…")
-    # Trigger fields (300 characters): a threshold whose number straddles the cut keeps no
-    # partial number, so without a date it no longer has a numeric threshold.
+def test_over_length_claims_and_triggers_are_dropped_never_cut():
+    """The review probes: published claim and trigger text is never cut, so a cut can never
+    publish a different number ('between 2.5 and 3 million' as 'between 2.5 and', '1 250 000'
+    as '1 250', '一百七十五万辆' as '一百七', 'two hundred million' as 'two hundred'). Text over
+    the limit (markers removed) is dropped as too_long; text at the limit is kept whole."""
+    filler = " ".join(["Charging networks keep expanding across every major market."] * 8)
+    tails = ["Sales of between 2.5 and 3 million units followed.",
+             "The fleet is 1 250 000 units.",
+             "累计销量达到一百七十五万辆。",
+             "The fleet could reach two hundred million units.",
+             "The total fleet reaches 175 million cumulative units."]
+    texts = []
+    for tail in tails:
+        text = filler[:fc.MAX_CLAIM_CHARS - len(tail) // 2].rstrip() + " " + tail
+        assert len(text) - len(tail) < fc.MAX_CLAIM_CHARS < len(text)   # the tail straddles it
+        texts.append(text)
+    known = set().union(*(fc.discriminative_numbers(t, NUMBERS) for t in texts))
+    kept, dropped = _claims([{"text": t, "sources": ["S1"]} for t in texts], numbers=known)
+    assert kept == [] and dropped == Counter({"too_long": len(texts)})
+    # At the limit the claim is kept whole; inline markers do not count toward the limit.
+    exact = " ".join(["Sales keep growing across every major market."] * 9)
+    exact = exact[:fc.MAX_CLAIM_CHARS - 1] + "."
+    assert len(exact) == fc.MAX_CLAIM_CHARS
+    kept, dropped = _claims([{"text": exact + " [S1]"}])
+    assert [c["text"] for c in kept] == [exact] and not dropped
+    # Trigger fields (300 characters): over the limit drops the trigger even with a date; at
+    # the limit both fields are kept whole.
     threshold = "sales climb " * 24 + "far above 25 million units"
     assert threshold.index("25") == fc.MAX_TRIGGER_FIELD_CHARS - 2
-    assert fc.validate_triggers([_trigger(threshold_or_event=threshold)], REAL_TAGS) == []
-    [kept_trigger] = fc.validate_triggers([_trigger(threshold_or_event=threshold,
-                                                    by="2027-06-30")], REAL_TAGS)
-    assert kept_trigger["threshold_or_event"].endswith("far above…")
-    # Words are never split either, and nothing whole left means nothing published.
-    text = "Sales keep growing across every major market " * 20
-    words = fc._cap(text, fc.MAX_CLAIM_CHARS)
-    assert words.endswith("every major…") and text.startswith(words[:-1])
+    long_signal = "Global electric car sales " * 12
+    assert min(len(threshold), len(long_signal.strip())) > fc.MAX_TRIGGER_FIELD_CHARS
+    assert fc.validate_triggers([_trigger(threshold_or_event=threshold, by="2027-06-30"),
+                                 _trigger(signal=long_signal)], REAL_TAGS) == []
+    at_limit = "above 25 million units" + " and rising" * 25 + " up"
+    signal = "Global electric car sales" + " and fleet growth" * 16 + " up"
+    assert len(at_limit) == len(signal) == fc.MAX_TRIGGER_FIELD_CHARS
+    [kept_trigger] = fc.validate_triggers([_trigger(signal=signal, threshold_or_event=at_limit)],
+                                          REAL_TAGS)
+    assert (kept_trigger["signal"], kept_trigger["threshold_or_event"]) == (signal, at_limit)
+
+
+def test_unpublished_cuts_never_split_a_token_and_stay_linear():
+    """_cap only cuts text that is never published (packet paragraphs, the prompt, the
+    failure note). The trailing-number pass and its backtracking pattern are gone, so a
+    paragraph holding a 1,150-character digit-bearing run with no spaces is cut once, at a
+    word boundary after the run."""
+    assert not hasattr(fc, "_CAP_TRAILING_NUMBER_RE")
+    run = "data:image/png;base64," + "iVBOR0w0KGgo1234" * 72
+    assert 1150 <= len(run) < fc.PARAGRAPH_CHARS
+    paragraph = run + " Electric car sales grew [S1]." * 10
+    cut = fc._cap(paragraph, fc.PARAGRAPH_CHARS)
+    assert cut.startswith(run) and cut.endswith("…") and len(cut) <= fc.PARAGRAPH_CHARS
+    assert paragraph.startswith(cut[:-1])
+    # A word or a number at the cut is never split, and nothing whole left gives ''.
+    assert fc._cap("Sales reached 175 million", 17) == "Sales reached…"
+    words = "Sales keep growing across every major market " * 20
+    assert fc._cap(words, fc.MAX_CLAIM_CHARS).endswith("every major…")
     assert fc._cap("x" * 500, fc.MAX_CLAIM_CHARS) == ""
 
 
