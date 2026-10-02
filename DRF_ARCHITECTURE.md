@@ -1804,7 +1804,7 @@ the pipeline.
 **Invariants every package follows.**
 
 - New behaviour sits behind a `Config` knob, and every knob is documented in `.env.example`.
-- At its default a knob keeps output byte-identical to before. The exceptions are fail-closed honesty fixes, which the package's spec explicitly turns on by default.
+- At its default a knob keeps output byte-identical to before, unless the package's spec explicitly turns it on by default. Most of those default-on knobs are fail-closed honesty fixes, but some are enhancements, provenance or shadow diagnostics (for example `NUMERIC_GUARD_MODE=shadow`, `MARKET_ANCHOR_PRICE_TIME=true`, `SIM_PERIOD_CONTEXT_V2=true`, `SIM_DECISION_EVENTS=true`). Each one's `.env.example` entry gives its default and what turning it off restores.
 - Honesty checks fail closed (block, demote or flag). Enhancements degrade safely (log and continue).
 - Artifacts are written atomically (`utils/atomic.py`).
 - New bridge modules are registered in both `setup.sh` and `_DEPLOYED_BRIDGE_MODULES`, and a parity test pins the two lists.
@@ -1819,12 +1819,12 @@ the pipeline.
 
 **Hindcast admission and the pin.**
 
-- `PipelineManager.start` validates a requested `as_of` and fails closed for any research engine other than v3 (TIME-7, `HINDCAST_ENABLED=false`).
+- `PipelineOrchestrator.start` (and the run API routes, through `admit_hindcast_as_of`) validates a requested `as_of` and fails closed for any research engine other than v3 (TIME-7, `HINDCAST_ENABLED=false`).
 - On admission it pins `options['hindcast_policy_v1']` (`services/hindcast_policy.py`, TIME-6).
 - Under the pin the research child runs with `PREDICTION_MARKETS_ENABLED=false`, so no live odds reach the research, the simulation priors or the report. Reports are routed to the evaluation ledger.
 - Forks carry the pin and never re-capture it.
 
-**Point-in-time evidence gates** (`utils/point_in_time.py`, TIME-8, `PIT_*` knobs).
+**Point-in-time evidence gates** (`deerflow_bridge/source_dates.py` availability/gate rule, applied to search and fetch in `deerflow_bridge/research_gateway.py` (`PitPolicy`); pinned at admission by `services/hindcast_policy.py`; TIME-8, `PIT_*` knobs).
 
 - One availability rule decides whether a source is admissible. It applies to search and fetch results, to provider date bounds and to undated sources.
 - TIME-9 adds a citation wall: only admissible `[S#]` markers stay citable.
@@ -1838,7 +1838,7 @@ the pipeline.
 **Markets.**
 
 - Expired Polymarket markets never anchor a binary or seed a simulation prior (TIME-3, `PREDICTION_MARKETS_END_DATE_GATE=true`).
-- Anchors carry price-time provenance (`quoted_at`, `snapshot_as_of`, `price_time` plus a basis), so a scorer knows which price the forecast saw (EVAL-6, `MARKET_ANCHOR_PRICE_TIME=true`).
+- Market rows record when their price was taken (`quoted_at` on a requote, `observed_at` from the research bridge, `snapshot_as_of` as an upper bound), and each anchor records `price_time` plus `price_time_basis` (requote|observed|snapshot), so a scorer knows which price the forecast saw (EVAL-6, `MARKET_ANCHOR_PRICE_TIME=true`; per-row `observed_at` from FU-11).
 
 **Official data, vintage-pinned** (`deerflow_bridge/data_tools.py`).
 
@@ -1866,7 +1866,7 @@ the pipeline.
 **Evidence handling.**
 
 - Absence of evidence is reported with discipline: no-result text is coverage-aware, absence rules apply, and market-coverage states are explicit (RESEARCH-3, `RESEARCH_ABSENCE_DISCIPLINE`; frontend `utils/marketStatus.js`).
-- Quantitative rows are typed as reported or projected, with target-date repair and page verification (RESEARCH-4, `RESEARCH_QUANT_TYPING`; `utils/quant_typing.py`, RESEARCH-5).
+- Quantitative rows are typed as reported or projected, with target-date repair (RESEARCH-4, `RESEARCH_QUANT_TYPING=false`), and are checked against the fetched page of their cited source (RESEARCH-4, `RESEARCH_VERIFIED_FACTS=true`). The report side reads the typing in `utils/quant_typing.py` (RESEARCH-5).
 - Findings carry verbatim evidence spans (`deerflow_bridge/evidence_spans.py`, RESEARCH-7, audit-first).
 
 **Forecaster attribution** (RESEARCH-6, shadow only).
@@ -1915,7 +1915,7 @@ the pipeline.
 
 - Prompt slots get typed absence markers (`utils/absence.py`, REPORT-4).
 - When a probability moves, a deterministic sync refreshes the stale numbers in the narrative (`services/narrative_sync.py`, REPORT-2, `REPORT_NARRATIVE_SYNC=true`).
-- An alias-aware probability-slot audit runs over the outline summary and the final prose (`services/logic_number.py`, REPORT-3, `REPORT_LOGIC_NUMBER_GATE=observe`). Its zero-token slot repair stays off until a live run has measured it (`REPORT_LOGIC_NUMBER_REPAIR=false`; it also needs `REPORT_NARRATIVE_SYNC`).
+- An alias-aware probability-slot audit runs over the outline summary and the final prose (`services/logic_number.py`, REPORT-3, `REPORT_LOGIC_NUMBER_GATE=observe`). Its zero-token slot repair stays off because known cases remain where it would rewrite a percentage that is not the scenario's probability; the guards must be extended before it is turned on (`REPORT_LOGIC_NUMBER_REPAIR=false`; it also needs `REPORT_NARRATIVE_SYNC`).
 
 **Gates and walls.**
 
@@ -1931,10 +1931,10 @@ the pipeline.
 **Probability shape and markets.**
 
 - Probability-shape telemetry is recorded (`services/probability_shape.py`, REPORT-11). An optional symmetric binary guard is behind `FORECAST_BINARY_SYMMETRIC_GUARD=false`.
-- The market-blend arithmetic for the divergence restatement is computed deterministically (REPORT-12).
-- An evidence-cited counter-case pass runs before the final draft (`services/forecast_counter_case.py`, REPORT-13, `REPORT_COUNTER_CASE`).
+- When switched on, the market-blend arithmetic for the divergence restatement is computed deterministically (REPORT-12, `FORECAST_MARKET_BLEND_ARITHMETIC=false`).
+- When switched on, an evidence-cited counter-case pass runs before the final draft (`services/forecast_counter_case.py`, REPORT-13, `REPORT_COUNTER_CASE=false`).
 
-**Agent tool calls.** The report agent's tool-call boundary tolerates malformed arguments: they are parsed leniently and validated, and rejected calls are not charged (`services/report_tool_args.py`, INFRA-5).
+**Agent tool calls.** The report agent's tool-call boundary tolerates malformed arguments: they are parsed leniently and validated, and up to six rejected calls per section are not charged against the tool budget (`REPORT_TOOL_MAX_REJECTED_PER_SECTION=6`; unknown-tool rejections are never charged) (`services/report_tool_args.py`, INFRA-5).
 
 ### 20.5 Evaluation, ledger and settlement
 
@@ -1942,7 +1942,7 @@ the pipeline.
 
 - A ledger commit happens after publication. It is sealed, idempotent and self-contained (`services/ledger_commit.py`, EVAL-1, `FORECAST_LEDGER_COMMIT_MODE=published`).
 - Market settlement events are deterministic (`services/forecast_resolution.py`, `utils/deadline_dates.py`, EVAL-2).
-- A settlement fold and a single point-in-time `admissible()` gate apply to calibration (EVAL-3).
+- A settlement fold and a single point-in-time `admissible()` gate apply to the resolution monitor's calibration, and to the report's historical calibration only when switched on (EVAL-3, `FORECAST_LEDGER_SETTLEMENT_FOLD=false`).
 - There is a manual settlement path with supersede and retract (EVAL-4).
 
 **Golden set and scoring.**
@@ -1956,7 +1956,7 @@ the pipeline.
 **Run honesty and backbones.**
 
 - `LLMClient` instances are isolated from each other (EVAL-10).
-- A shadow cross-backbone sensitivity check runs on the spine (`services/backbone_sensitivity.py`, EVAL-11).
+- An opt-in shadow cross-backbone sensitivity check can run on the spine (`services/backbone_sensitivity.py`, EVAL-11, `BACKBONE_CHECK_ENABLED=false`).
 - Evaluation runs are kept honest: an admission pin, ledger routing and exclusion from the resolution monitor (EVAL-13).
 
 **Scorecards and metering.**
@@ -2001,4 +2001,4 @@ the pipeline.
 
 ### 20.7 Follow-ups
 
-Some fixes came from triaging the merged packages' open issues. They landed as integration commits and as the follow-up packages FU-1 to FU-11. Owner decisions, the live checks still owed, and defects that predate this program are listed in the research document under "Open issues after implementation".
+Some fixes came from triaging the merged packages' open issues. They landed as integration commits and as the follow-up packages FU-1 to FU-12. Owner decisions, the live checks still owed, and defects that predate this program are listed in the research document under "Open issues after implementation".

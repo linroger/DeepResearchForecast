@@ -1200,13 +1200,13 @@ These guarantees come from the finharness transplant program. Its research recor
 - **Markets are dated.** A market past its end date never anchors a forecast or seeds a simulation prior. Every anchor records the time of the price it used.
 - **Published figures are checked.** Research verification labels reach the report as a labelled verified-figures block. A shadow check compares the published figures with the verified rows and writes `figure_provenance.json`.
 - **The ledger records what was published.** A forecast is committed to the ledger only after publication, sealed and idempotently. Settlement is deterministic, and a manual settlement can be superseded or retracted, never edited in place.
-- **Evaluation is measured, not assumed.** The evaluation tools run offline unless they are switched on:
-  - a golden set with small-sample statistics and contamination probes;
-  - a per-stage scorecard and a cost card with a config fingerprint;
-  - a market-relative skill scorer;
-  - a label-free value-add study that compares each block against an A/A noise floor.
+- **Evaluation is measured, not assumed.** Every run writes a per-stage scorecard and a cost card with a config fingerprint (on by default; `scripts/stage_scorecard.py` and `scripts/cost_card.py` backfill older runs). The other evaluation tools run offline:
+  - a golden set with small-sample statistics;
+  - contamination probes (off until `GOLDEN_PROBE_ENABLED=true` or `--live`);
+  - a market-relative skill scorer in the resolution monitor;
+  - a label-free value-add study that compares each block against an A/A noise floor (off until `VALUE_ADD_EVAL_ENABLED=true` or `--live`).
 - **The configuration is audited.** With `CONFIG_STRICT_VALIDATION=true`, a pipeline run is refused while the environment holds a value `Config` would misread or reject:
-  - a non-canonical boolean (`X=1` used to read as false);
+  - a non-canonical boolean (most knobs still read `X=1` as false);
   - an unparseable or out-of-range number;
   - an unknown enum value;
   - a contradictory pair of knobs.
