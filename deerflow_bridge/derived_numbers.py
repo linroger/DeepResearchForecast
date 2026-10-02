@@ -46,7 +46,7 @@ import re
 import unicodedata
 from decimal import (ROUND_HALF_EVEN, Context, Decimal, DecimalException, DivisionByZero, InvalidOperation,
                      Overflow, localcontext)
-from typing import Callable, Collection, Mapping
+from typing import Callable, Collection, Mapping, Sequence
 
 __all__ = [
     "CLAUSE_OPEN_RE",
@@ -374,13 +374,16 @@ _LITERAL, _UNIT = "literal", "unit"
 
 def keeps_unit(expr: str, data_names: Collection[str]) -> bool:
     """Whether formula ``expr`` gives a result in the unit of its data
-    operands (``data_names``): sums and differences of data operands and
-    literals (as :func:`is_additive` reads them: "a-b", "max(a,b)-c"), times
-    or divided by literals ("a*1000": 2.5 GW is 2,500 MW; "(a-b)/1000").  A
-    ratio, product or power of operands ("a/b", "a*b"), a literal divided by
-    one, any other call, a name that is no data operand (a ``years()``
-    period: "(a-b)/n" is a rate per year) and a formula of literals only keep
-    no unit.  Never raises: an unreadable formula keeps no unit."""
+    operands (``data_names``): sums and differences of data operands (as
+    :func:`is_additive` reads them: "a-b", "max(a,b)-c"), times or divided
+    by literals ("a*1000": 2.5 GW is 2,500 MW; "(a-b)/1000").  A ratio,
+    product or power of operands ("a/b", "a*b"), a literal divided by one, a
+    unitless literal other than 0 added to, subtracted from or compared
+    with one ("a+100", "100-a", "min(a, 1000)": no figure in the operand's
+    unit; "max(a-b, 0)" keeps it), any other call, a name that is no data
+    operand (a ``years()`` period: "(a-b)/n" is a rate per year) and a
+    formula of literals only keep no unit.  Never raises: an unreadable
+    formula keeps no unit."""
     if not isinstance(expr, str) or len(expr) > MAX_EXPR_CHARS:
         return False
     try:
@@ -402,20 +405,35 @@ def _dimension(node: ast.AST, data_names: frozenset[str]) -> str | None:
         if (not isinstance(node.func, ast.Name) or node.func.id not in _UNIT_KEEPING_CALLS or node.keywords
                 or not node.args):
             return None
-        parts = {_dimension(arg, data_names) for arg in node.args}
-        return None if None in parts else (_UNIT if _UNIT in parts else _LITERAL)
+        return _same_dimension(node.args, [_dimension(arg, data_names) for arg in node.args])
     if not isinstance(node, ast.BinOp):
         return None
     left, right = _dimension(node.left, data_names), _dimension(node.right, data_names)
     if left is None or right is None:
         return None
     if isinstance(node.op, (ast.Add, ast.Sub)):
-        return _UNIT if _UNIT in (left, right) else _LITERAL
+        return _same_dimension((node.left, node.right), (left, right))
     if isinstance(node.op, ast.Mult):
         return None if left == right == _UNIT else (_UNIT if _UNIT in (left, right) else _LITERAL)
     if isinstance(node.op, ast.Div):
         return left if right == _LITERAL else None
     return None
+
+
+def _same_dimension(nodes: Sequence[ast.AST], dimensions: Sequence[str | None]) -> str | None:
+    """The dimension of terms that are added, subtracted or compared (abs,
+    min, max): _LITERAL when all are literals, _UNIT when all are in the
+    data operands' unit but for the literal 0 ("a-0", "max(a-b, 0)"), else
+    None (a unitless literal next to a quantity: "a+100", "min(a, 1000)")."""
+    if None in dimensions:
+        return None
+    if all(dimension == _LITERAL for dimension in dimensions):
+        return _LITERAL
+    return _UNIT if all(dimension == _UNIT or _is_zero(node) for node, dimension in zip(nodes, dimensions)) else None
+
+
+def _is_zero(node: ast.AST) -> bool:
+    return isinstance(node, ast.Constant) and type(node.value) in (int, float) and node.value == 0
 
 
 def is_quotient(expr: str, data_names: Collection[str]) -> bool:

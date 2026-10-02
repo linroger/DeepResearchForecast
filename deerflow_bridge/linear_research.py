@@ -11641,16 +11641,19 @@ def derived_quant_match(row: Mapping[str, Any],
                         derivations: Iterable[Mapping[str, Any]]) -> Mapping[str, Any] | None:
     """The first of ``derivations`` (DERIVED facts' ``derivation``, RESEARCH-8)
     whose result a quantitative row's value states: ``"{value} {unit}"`` has
-    exactly one checkable number (:func:`_number_occurrences`, no exponent
-    notation) and it states the result as a finding's number would
-    (:func:`_states_result` against :func:`_result_form` of the derivation's
-    formula and data operands: display precision, the result's sign, a
-    percentage result by a percentage only, a unit class only in the unit
-    class of every data operand through a formula that keeps it, a ratio's
-    percentage x 100 only and any other number at its full value).  None
-    when no derivation matches."""
+    exactly one number that may state a result, as a finding's numbers may
+    (:func:`_number_occurrences`, :attr:`_NumberOccurrence.can_state`: a
+    checkable one, or a single digit written as a percentage or with a unit
+    class), no exponent notation, and that number states the result as a
+    finding's number would (:func:`_states_result` against
+    :func:`_result_form` of the derivation's formula and data operands:
+    display precision, the result's sign, a percentage result by a
+    percentage only, a unit class only in the unit class of every data
+    operand through a formula that keeps it, a ratio's percentage x 100 only
+    and any other number at its full value).  None when no derivation
+    matches."""
     text = _quant_number_text(row)
-    numbers = [number for number in _number_occurrences(text) if number.checkable]
+    numbers = [number for number in _number_occurrences(text) if number.can_state]
     if len(numbers) != 1 or _EXPONENT_RE.search(text):
         return None
     for derivation in derivations:

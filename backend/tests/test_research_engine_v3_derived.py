@@ -264,6 +264,12 @@ FAILURE_CASES = [
      "result_mismatch"),
     ("Capacity rose about 2,400% [S12] (DERIVED: a-b; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
     ("Storage grew by 5 GWh [S16] (DERIVED: a-b; a=7.5 GW [S16], b=2.5 GW [S16])", "result_mismatch"),
+    # A unitless literal added to, subtracted from or compared with a quantity gives no
+    # figure in its unit (0 aside).
+    ("Capacity will reach 137 GW [S12] (DERIVED: a+100; a=37 GW [S12])", "result_mismatch"),
+    ("Capacity will reach 1,037 GW [S12] (DERIVED: a+1000; a=37 GW [S12])", "result_mismatch"),
+    ("The remaining potential is 63 GW [S12] (DERIVED: 100-a; a=37 GW [S12])", "result_mismatch"),
+    ("Spending is capped at $1,000 [S16] (DERIVED: min(a, 1000); a=$37 billion [S16])", "result_mismatch"),
     # A result in the operands' unit is never a percentage, whether or not that unit is a
     # unit class: a count, a bare number or a percentage scaled by a literal.
     ("Sales grew about 700% [S16] (DERIVED: a-b; a=107 units [S16], b=100 units [S16])", "result_mismatch"),
@@ -448,7 +454,7 @@ PINNED_LINES = [*CORPUS, *(line for line, _ in FAILURE_CASES), LAUNDERING, *PARI
                 "Capacity grew about 185% [S12] while renewables supplied 68% of demand [S15] "
                 "(DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])",
                 "The gap is about 26 percentage points [S15] (DERIVED: a-b; a=68% [S15], b=42% [S15])"]
-FLAG_OFF_SHA256 = "fc9ae589d13a5b79d2772e0b94bd4f184f2e775f3f3c398bd61106e7381ea706"
+FLAG_OFF_SHA256 = "2595935f6884b1ade4925c0bffffe262940260de6778c27b9c3e223ad6c278d8"
 
 
 def test_the_clause_replaces_the_tag_the_agent_wrote():
@@ -494,6 +500,8 @@ def test_the_derivation_forms_the_engine_reads():
         "Sales grew 7.0% [S16] (DERIVED: (a-b)/b*100; a=107 units [S16], b=100 units [S16])": "7",
         "Sales grew 7 percent [S16] (DERIVED: (a-b)/b*100; a=107 units [S16], b=100 units [S16])": "7",
         "Storage grew by 5 GW [S16] (DERIVED: a-b; a=7.5 GW [S16], b=2.5 GW [S16])": "5",
+        # The literal 0 keeps the operands' unit.
+        "Capacity rose by 24 GW [S12] (DERIVED: max(a-b, 0); a=37 GW [S12], b=13 GW [S12])": "24",
     }
     for line, result in cases.items():
         fact = only(line, rows=ROWS_WITH_SHARES)
@@ -807,6 +815,19 @@ def test_derived_quant_match_reads_a_unit_figure_in_the_unit_of_its_operands_onl
 
 
 def test_derived_quant_match_reads_one_number_at_its_precision_and_scale():
+    # A single digit states a result as a percentage or with a unit class only, as in a finding.
+    growth = {"sid": 1, "expr": "(a-b)/b*100", "result": "7",
+              "operands": {"a": {"value": "107 units", "sid": 1}, "b": {"value": "100 units", "sid": 1}}}
+    for row in ({"value": "7", "unit": "%"}, {"value": 7, "unit": "percent"}, {"value": 7.0, "unit": "%"},
+                {"value": "7.0", "unit": "%"}):
+        assert lr.derived_quant_match(row, [growth]) is growth, row
+    for row in ({"value": "7", "unit": ""}, {"value": "7", "unit": "units"}, {"value": "8", "unit": "%"},
+                {"value": "7", "unit": "% and 5 GW"}):
+        assert lr.derived_quant_match(row, [growth]) is None, row
+    storage = {"sid": 1, "expr": "a-b", "result": "5",
+               "operands": {"a": {"value": "7.5 GW", "sid": 1}, "b": {"value": "2.5 GW", "sid": 1}}}
+    assert lr.derived_quant_match({"value": "5", "unit": "GW"}, [storage]) is storage
+    assert lr.derived_quant_match({"value": "5", "unit": "GWh"}, [storage]) is None
     derivation = {"sid": 1, "expr": "a+b", "result": "1200000000000",
                   "operands": {"a": {"value": "$700 billion", "sid": 1}, "b": {"value": "$500 billion", "sid": 1}}}
     assert lr.derived_quant_match({"value": "1.2", "unit": "trillion USD"}, [derivation]) is derivation
