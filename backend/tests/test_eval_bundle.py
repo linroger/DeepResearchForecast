@@ -327,6 +327,10 @@ def test_capture_reads_the_real_report_agent_contract(report_dir, pipelines, tmp
     run_dir = tmp_path / "sims" / "sim1"
     run_dir.mkdir(parents=True)
     (run_dir / "run_summary.json").write_text(json.dumps({"simulation_health": "Hollow"}), encoding="utf-8")
+    # FU-3: an agent reads each run's health once and caches it (one verdict per report; a
+    # real report's summary exists before generation starts), so a summary written after the
+    # first read is seen by a fresh read, as by the next report's agent.
+    agent._run_summary_health_cache.clear()
     manifest = eb.capture_from_agent(agent, "r1", report_dir=report_dir, forecast=FORECAST, now=NOW)
     assert manifest["blocks"]["sim"]["status"] == "unavailable:hollow"
     eb.load_bundle(eb.bundle_dir_for(report_dir))

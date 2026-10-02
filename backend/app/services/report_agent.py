@@ -1112,6 +1112,27 @@ _SIGNAL_PACK_NO_BEHAVIOUR_NOTE = (
     "⚠️ 本次模拟未产出可用的行为数据（simulation_health={health}）——这不是「行为者无反应」的发现；"
     "正文不得引用任何基于模拟行为量或派系聚类的推演结论。"
 )
+# FU-3：情景报告的基线模拟非健康（_SIGNAL_PACK_HEALTH_SKIPS 里的状态）时，基线的提示词侧消费方
+# （信号包的情景差异块、scenario_diff 工具、大纲的差异预取）改给这一行，不给基线数据；对比表
+# 的表位（成稿正文）改给下面的读者可见说明行。
+_BASELINE_NO_BEHAVIOUR_NOTE = (
+    "⚠️ 基线模拟未产出可用的行为数据（simulation_health={health}）——本报告不做基线与情景的行为对比；"
+    "正文不得引用任何基线 vs 情景的行为差值。"
+)
+# FU-3：对比章节正文里替代对比表的读者可见说明行（按成稿语言取一行）。上面两行写给撰写模型
+# （带健康字段、方法学词汇与对正文的指令），进成稿会被泄漏 lint 改写或删除、或把内部字段带给
+# 读者；这里只陈述「没有可用的对比数据，本章依据研究材料」。健康裁定只记在
+# quality.signal_pack_health / quality.baseline_signal_pack_health，不进正文。
+_COMPARISON_NO_SCENARIO_DATA_LINE = {
+    "zh": "> 本情景没有可用的对比数据，本章仅依据研究材料讨论本情景与基线的差异。",
+    "en": ("> No usable comparison data is available for this scenario, so this chapter compares it "
+           "with the baseline using the research sources only."),
+}
+_COMPARISON_NO_BASELINE_DATA_LINE = {
+    "zh": "> 基线没有可用的对比数据，本章仅依据研究材料讨论本情景与基线的差异。",
+    "en": ("> No usable comparison data is available for the baseline, so this chapter compares this "
+           "scenario with it using the research sources only."),
+}
 # 部分 / 降级完成的运行：块全部保留，包头后附审慎提示。
 _SIGNAL_PACK_PARTIAL_HEALTHS = ("truncated", "llm_degraded")
 _SIGNAL_PACK_PARTIAL_NOTE = (
@@ -1912,6 +1933,9 @@ class ReportAgent:
         self._signal_pack = ""
         # REPORT-5：最近一次构建信号包时的健康门裁定 {'health', 'suppressed'}；门关闭或尚未构建时为 None。
         self._signal_pack_health: Optional[Dict[str, Any]] = None
+        # FU-3：run_summary.json 健康度读取结果按模拟 id 缓存（_run_summary_health）——一份报告内
+        # 本模拟与基线各只读一次，信号包、大纲、ReACT 工具与对比表共用同一裁定。
+        self._run_summary_health_cache: Dict[str, Tuple[Optional[str], bool]] = {}
         # 预测市场信号包（Polymarket 公开 Gamma API，keyless）：市场隐含概率作为**校准锚点**
         # 注入章节/骨架/二元预测提示词。优先读研究 handoff 的 prediction_markets.json，
         # 缺失时经 PolymarketClient 现抓。懒构建一次后缓存；无数据/关闭
@@ -2428,9 +2452,10 @@ class ReportAgent:
     def _verified_figures_check(self, md: str) -> Optional[Dict[str, Any]]:
         """REPORT-9（REPORT_VERIFIED_FIGURES_CHECK，默认开，只检测）：正文数字对照 REPORT-8 的已核验指标块
         （verified_facts.check_verified_figures），结果另附 block_sha256。块行 = rows + projections；
-        states_unverified 的对照行取研究 quantitative 中 verification 为 unverified / snippet_only / none 的
-        行；市场行取 self._prediction_markets；来源支撑检查用 _semantic_citation_support。旗标关、块为空
-        （旧引擎 / 复用研究 / 未核验）或任何异常 → None（调用方什么都不写）。从不改任何状态。"""
+        states_unverified 的对照行取研究 quantitative 中 quant_typing.is_unverified 的行（verification 为
+        unverified / snippet_only / none）；市场行取 self._prediction_markets；来源支撑检查用 _semantic_citation_support。旗标关、块为空
+        （旧引擎 / 复用研究 / 未核验）或任何异常 → None：不记录计数（终审据此去掉草稿期的
+        quality.verified_figures，_write_figure_provenance 据此删除旧 sidecar）。本方法从不改任何状态。"""
         if not getattr(Config, "REPORT_VERIFIED_FIGURES_CHECK", True):
             return None
         block = getattr(self, "_verified_figures", None)
@@ -2438,6 +2463,7 @@ class ReportAgent:
             return None
         try:
             from . import verified_facts as _vf
+            from ..utils.quant_typing import is_unverified
             try:
                 rel_tol = float(getattr(Config, "REPORT_VERIFIED_FIGURE_REL_TOL", _vf.DEFAULT_REL_TOL))
             except (TypeError, ValueError):
@@ -2452,8 +2478,7 @@ class ReportAgent:
 
             quantitative = getattr(self, "quantitative", None)
             excluded = [row for row in (quantitative if isinstance(quantitative, list) else [])
-                        if isinstance(row, dict)
-                        and str(row.get("verification") or "").strip().lower() in _vf.UNVERIFIED_LABELS]
+                        if isinstance(row, dict) and is_unverified(row)]
             result = _vf.check_verified_figures(
                 md, list(block.get("rows") or []) + list(block.get("projections") or []),
                 excluded_rows=excluded, market_rows=getattr(self, "_prediction_markets", None) or [],
@@ -2472,46 +2497,78 @@ class ReportAgent:
 
     def _write_figure_provenance(self, report_id: str, report: "Report") -> None:
         """REPORT-9：终审之后（主报告已定型）写 reports/<id>/figure_provenance.json——已核验指标块
-        每一行的来源（[S#] / URL）与正文里引用它的行，比对出的来源分歧，以及市场行的报价时间戳
-        （EVAL-6 的 quoted_at / snapshot_as_of）。影子工件：不登记阶段清单，从不改成稿，失败只告警。"""
-        check = self._verified_figures_check(getattr(report, "markdown_content", None) or "")
-        if check is None:
+        每一行的来源（[S#] 记号 / 来源标题 / URL）与正文里引用它的行、比对计数与样例（供人工复核
+        冲突精度）、比对出的来源分歧，以及市场行的报价时间戳（EVAL-6 的 quoted_at / snapshot_as_of
+        与 market_price_time 推出的 price_time / price_time_basis）；markdown_sha256 标明所描述的
+        成稿字节。本次未比对（旗标关 / 块为空 / 比对失败）→ 删除上一轮留下的旧文件，绝不让它描述
+        别的字节。影子工件：不登记阶段清单，从不改成稿，失败只告警（并删除旧文件）。"""
+        try:
+            path = os.path.join(ReportManager._get_report_folder(report_id), "figure_provenance.json")
+        except Exception as exc:  # noqa: BLE001 — 影子工件，失败不影响报告
+            logger.warning(f"figure_provenance.json 路径不可用（忽略）: {exc}")
             return
         try:
-            block = self._verified_figures
-            block_rows = list(block.get("rows") or []) + list(block.get("projections") or [])
-            index = self._citation_index_or_fallback()
-            rows = []
-            for row_index, row in enumerate(block_rows):
-                tag = row.get("tag")
-                source = index.get(tag) if tag else None
-                rows.append({
-                    "row_index": row_index, "metric": row.get("metric"), "value": row.get("value"),
-                    "unit": row.get("unit"), "as_of": row.get("when"),
-                    "source_ref": tag or row.get("source"),
-                    "source_url": (str(source.get("url") or "").strip() or None)
-                    if isinstance(source, dict) else None,
-                    "verification": "verified",
-                    "used_in": check["matched_rows"].get(row_index, []),
-                })
-            markets = [
-                {key: market.get(key) for key in
-                 ("market_id", "implied_yes_prob", "quoted_at", "price_at_research", "snapshot_as_of")}
-                for market in (getattr(self, "_prediction_markets", None) or []) if isinstance(market, dict)
-            ]
-            payload = {
-                "schema": "drf.figure_provenance/v1",
-                "block_sha256": check["block_sha256"],
-                "rows": rows,
-                "source_discrepancies": check["source_discrepancies"],
-                "market_rows": markets,
-                "unmatched_numeric_claims": check["counts"]["unmatched"],
-            }
-            write_json_atomic(
-                os.path.join(ReportManager._get_report_folder(report_id), "figure_provenance.json"),
-                payload, allow_nan=False)
+            md = getattr(report, "markdown_content", None) or ""
+            check = self._verified_figures_check(md)
+            if check is not None:
+                write_json_atomic(path, self._figure_provenance_payload(md, check), allow_nan=False)
+                return
         except Exception as exc:  # noqa: BLE001 — 影子工件，失败不影响报告
             logger.warning(f"写 figure_provenance.json 失败（忽略）: {exc}")
+        # 本次未比对或写入失败：上一轮的旧文件描述的是别的字节，删除。
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError as exc:
+            logger.warning(f"删除旧 figure_provenance.json 失败（忽略）: {exc}")
+
+    def _figure_provenance_payload(self, md: str, check: Dict[str, Any]) -> Dict[str, Any]:
+        """REPORT-9：figure_provenance.json 的内容（drf.figure_provenance/v1，见 _write_figure_provenance）。"""
+        from ..utils.prediction_markets import market_price_time, price_time_enabled
+        block = self._verified_figures
+        block_rows = list(block.get("rows") or []) + list(block.get("projections") or [])
+        index = self._citation_index_or_fallback()
+        rows = []
+        for row_index, row in enumerate(block_rows):
+            tag = row.get("tag") or None
+            source = index.get(tag) if tag else None
+            indexed_url = source.get("url") if isinstance(source, dict) else None
+            rows.append({
+                "row_index": row_index, "metric": row.get("metric"), "value": row.get("value"),
+                "unit": row.get("unit"), "as_of": row.get("when"),
+                # The date or period the value is about (the year the check compares).
+                "period": row.get("period"),
+                "source_ref": tag,
+                "source_title": row.get("source_title"),
+                # The research row's own page, else the page its [S#] resolves to.
+                "source_url": row.get("source_url")
+                or (indexed_url.strip() if isinstance(indexed_url, str) else "") or None,
+                "verification": "verified",
+                # used_in lists at most MATCHED_LINES_PER_ROW lines; used_in_count is every use.
+                "used_in": check["matched_rows"].get(row_index, []),
+                "used_in_count": check["matched_counts"].get(row_index, 0),
+            })
+        markets = []
+        for market in getattr(self, "_prediction_markets", None) or []:
+            if not isinstance(market, dict):
+                continue
+            entry = {key: market.get(key) for key in
+                     ("market_id", "implied_yes_prob", "quoted_at", "price_at_research", "snapshot_as_of")}
+            # The anchor's own price time (EVAL-6): none when MARKET_ANCHOR_PRICE_TIME is off.
+            price_time = market_price_time(market) if price_time_enabled() else None
+            entry["price_time"], entry["price_time_basis"] = price_time or (None, None)
+            markets.append(entry)
+        return {
+            "schema": "drf.figure_provenance/v1",
+            "block_sha256": check["block_sha256"],
+            "markdown_sha256": hashlib.sha256(md.encode("utf-8")).hexdigest(),
+            "rows": rows,
+            "source_discrepancies": check["source_discrepancies"],
+            "market_rows": markets,
+            "unmatched_numeric_claims": check["counts"]["unmatched"],
+            "counts": dict(check["counts"]),
+            "examples": check["examples"],
+        }
 
     # FU-9: contested-table slots reserved for TIME-4 quantitative reconcile rows, and the
     # why_they_differ marker reconcile_quantitative writes on a probable unit-scale error.
@@ -3051,13 +3108,19 @@ class ReportAgent:
             except Exception as e:  # noqa: BLE001
                 logger.warning(f"信号包 causal_spine 计算失败（忽略）: {e}")
         # 3) 反事实差异（仅情景报告有基线时）——RQ-4：截断到 ~2400 字
+        # FU-3：基线模拟不可用（REPORT-5 规则）时不给差异，给基线说明行（基线裁定由
+        # _finalize_structured_forecast 落 quality.baseline_signal_pack_health）。
         if self.base_simulation_id and "scenario_diff" not in _skip:
-            try:
-                diff = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
-                if diff and not diff.strip().startswith("（"):
-                    parts.append(diff[:2400])
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"信号包 scenario_diff 计算失败（忽略）: {e}")
+            _base_note = self._baseline_behaviour_note()
+            if _base_note:
+                parts.append(_base_note)
+            else:
+                try:
+                    diff = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
+                    if diff and not diff.strip().startswith("（"):
+                        parts.append(diff[:2400])
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(f"信号包 scenario_diff 计算失败（忽略）: {e}")
 
         if not parts:
             return ""
@@ -3086,8 +3149,107 @@ class ReportAgent:
             header += "\n\n" + _SIGNAL_PACK_UNKNOWN_HEALTH_NOTE.format(health=_health[:40])
         return header + "\n\n" + "\n\n".join(parts)
 
-    def _run_summary_health(self) -> Tuple[Optional[str], bool]:
+    def _behaviour_skips(self, simulation_id: Optional[str] = None
+                         ) -> Tuple[Optional[str], Tuple[str, ...]]:
+        """FU-3：``simulation_id``（缺省本报告的模拟）的 (health, 须跳过的行为块)，规则同 REPORT-5
+        信号包（_SIGNAL_PACK_HEALTH_SKIPS）。门关 / 无 summary / ok / 部分完成 / 未识别 → 无跳过。
+        供大纲预取、ReACT 工具与基线消费方复用同一裁定。"""
+        if not getattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", True):
+            return None, ()
+        health, _unreadable = self._run_summary_health(simulation_id)
+        return health, _SIGNAL_PACK_HEALTH_SKIPS.get(health or "", ())
+
+    def _baseline_behaviour_note(self) -> str:
+        """FU-3：情景报告的基线模拟按 REPORT-5 规则不可用（hollow / errored）时的基线说明行；
+        门关 / 非情景报告 / 基线可用（含无 summary、部分完成、未识别、summary 不可读）→ ""。"""
+        if not self.base_simulation_id:
+            return ""
+        health, skip = self._behaviour_skips(self.base_simulation_id)
+        return _BASELINE_NO_BEHAVIOUR_NOTE.format(health=health) if "scenario_diff" in skip else ""
+
+    def _scenario_diff_note(self) -> str:
+        """FU-3：基线 vs 情景行为对比（scenario_diff 工具 / 大纲差异预取）在任一侧模拟不可用时给的
+        说明行：本报告模拟不可用 → REPORT-5 的同一说明行；否则基线不可用 → 基线说明行；否则 ""。"""
+        if not self.base_simulation_id:
+            return ""
+        health, skip = self._behaviour_skips()
+        if "scenario_diff" in skip:
+            return _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=health)
+        return self._baseline_behaviour_note()
+
+    def _comparison_body_note(self) -> str:
+        """FU-3：对比章节正文里替代对比表的读者可见说明行。裁定同 _scenario_diff_note（本报告模拟
+        不可用优先，其次基线不可用），措辞按成稿语言取 _COMPARISON_NO_*_DATA_LINE——不带健康字段、
+        方法学词汇或写作指令。非情景报告 / 门关 / 两侧都可用 → ""。"""
+        if not self.base_simulation_id:
+            return ""
+        zh = not str(getattr(self, "output_language", "") or "English").lower().startswith("en")
+        lang = "zh" if zh else "en"
+        _health, skip = self._behaviour_skips()
+        if "scenario_diff" in skip:
+            return _COMPARISON_NO_SCENARIO_DATA_LINE[lang]
+        if self._baseline_behaviour_note():
+            return _COMPARISON_NO_BASELINE_DATA_LINE[lang]
+        return ""
+
+    def _gated_behaviour_tools(self) -> frozenset[str]:
+        """FU-3：本报告里只会返回说明行的行为类工具（与 _execute_tool 的门同一裁定）。它们不进
+        ReACT 的「未使用工具」推荐集，也不进工具描述、使用建议与原生 tool schema——否则模型被推去
+        调用只给说明行的工具，白占工具调用预算。工具仍留在 self.tools：模型照旧调用时派发给说明行。
+        门关 / 健康运行且基线可用 → 空集（工具集与提示词逐字节不变）。读不到裁定 → 空集（只是增强）。"""
+        try:
+            _health, skip = self._behaviour_skips()
+            gated = set()
+            if "simulation_outcomes" in skip:
+                gated.update(("simulation_outcomes", "opinion_shift"))
+            if "coalition_map" in skip:
+                gated.add("coalition_map")
+            if getattr(self, "base_simulation_id", None) and self._scenario_diff_note():
+                gated.add("scenario_diff")
+            return frozenset(gated)
+        except Exception as e:  # noqa: BLE001 — 工具宣传过滤为增强，失败按旧工具集
+            logger.warning(f"行为类工具门裁定失败（按完整工具集宣传）: {e}")
+            return frozenset()
+
+    def _baseline_health_record(self) -> Optional[Dict[str, Any]]:
+        """FU-3：情景报告基线模拟的健康裁定，与 quality.signal_pack_health 同形。
+        - 基线不可用（hollow / errored）→ {'health', 'suppressed'}；suppressed = 基线门挡下的基线
+          消费方（scenario_diff 指信号包差异块、scenario_diff 工具与大纲差异预取；comparison_table
+          仅在 REPORT_COMPARISON_TABLE 开时列入）。与 REPORT-5 同义：列入表示门挡下了它，不代表它
+          本会非空；与本报告模拟自身的裁定无关（两侧都不可用时照样记）。
+        - 基线 summary 存在却不可读 → {'health': None, 'suppressed': [], 'summary_unreadable': True}
+          （同 REPORT-5：门对基线未生效，须与「无 summary」可区分）。
+        - 门关 / 非情景报告 / 基线可用（ok / 部分完成 / 未识别 / 无 summary）→ None（不写）。"""
+        if not self.base_simulation_id or not getattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", True):
+            return None
+        health, unreadable = self._run_summary_health(self.base_simulation_id)
+        if "scenario_diff" in _SIGNAL_PACK_HEALTH_SKIPS.get(health or "", ()):
+            suppressed = ["scenario_diff"]
+            if getattr(Config, "REPORT_COMPARISON_TABLE", False):
+                suppressed.append("comparison_table")
+            return {"health": health, "suppressed": suppressed}
+        if unreadable:
+            return {"health": None, "suppressed": [], "summary_unreadable": True}
+        return None
+
+    def _run_summary_health(self, simulation_id: Optional[str] = None) -> Tuple[Optional[str], bool]:
         """REPORT-5：读本模拟 run_summary.json 的 simulation_health（小写），返回 (health, unreadable)。
+        FU-3：``simulation_id`` 给出时读该模拟（情景报告的基线），缺省读本报告的模拟。结果按模拟 id
+        缓存在 agent 上：一份报告内每个模拟只读一次 summary（不可读告警也只打一次），所有消费方
+        共用同一裁定。读取规则见 _read_run_summary_health。"""
+        sid = getattr(self, "simulation_id", None) if simulation_id is None else simulation_id
+        if not isinstance(sid, str):
+            return self._read_run_summary_health(sid)
+        cache = getattr(self, "_run_summary_health_cache", None)
+        if cache is None:  # __new__ 构造（未走 __init__）的离线 agent
+            cache = self._run_summary_health_cache = {}
+        if sid not in cache:
+            cache[sid] = self._read_run_summary_health(sid)
+        return cache[sid]
+
+    def _read_run_summary_health(self, simulation_id: Any) -> Tuple[Optional[str], bool]:
+        """REPORT-5：读 ``simulation_id`` 的 run_summary.json 的 simulation_health（小写），
+        返回 (health, unreadable)。
 
         路径与编排器模拟健康门相同（SimulationRunner.RUN_STATE_DIR/<simulation_id>/run_summary.json，
         经 contained_child 校验 id）。
@@ -3098,8 +3260,7 @@ class ReportAgent:
         try:
             from .simulation_runner import SimulationRunner
             path = os.path.join(
-                contained_child(SimulationRunner.RUN_STATE_DIR,
-                                getattr(self, "simulation_id", None), "simulation"),
+                contained_child(SimulationRunner.RUN_STATE_DIR, simulation_id, "simulation"),
                 "run_summary.json")
         except Exception as e:  # noqa: BLE001 — 非法 / 缺失 id：没有可读的 summary
             logger.debug(f"信号包健康门无法定位 run_summary.json（按无 summary 处理）: {e}")
@@ -4370,11 +4531,17 @@ class ReportAgent:
         except Exception:  # noqa: BLE001
             pass
         # REPORT-9：正文数字对照已核验指标块（只检测；块为空 / 旗标关时不加键，绝不进发布门）。
-        _vf_check = self._verified_figures_check(report_markdown)
-        if _vf_check is not None:
-            forecast.setdefault("quality", {})["verified_figures"] = self._verified_figures_summary(_vf_check)
-            if _vf_check["counts"]["conflict"]:
-                logger.warning(f"已核验数字比对：{_vf_check['counts']['conflict']} 处正文数字与已核验指标不符")
+        try:
+            _vf_check = self._verified_figures_check(report_markdown)
+            if _vf_check is not None:
+                _vf_summary = self._verified_figures_summary(_vf_check)
+                _vf_quality = forecast.setdefault("quality", {})
+                if isinstance(_vf_quality, dict):
+                    _vf_quality["verified_figures"] = _vf_summary
+                if _vf_summary["counts"]["conflict"]:
+                    logger.warning(f"已核验数字比对：{_vf_summary['counts']['conflict']} 处正文数字与已核验指标不符")
+        except Exception as _vf_err:  # noqa: BLE001 — 只检测的旁路，失败不影响 forecast.json
+            logger.warning(f"已核验数字比对记录失败（忽略）: {_vf_err}")
         # QUALITY-OPT A1: emit >=N INDEPENDENT binary (yes/no) forecasts — the brief's headline
         # deliverable — ALONGSIDE the scenario spine. The research dossier usually already holds a
         # compliant F1..Fn table; we extract it (preserving its probabilities) and top up to the
@@ -4683,6 +4850,15 @@ class ReportAgent:
                 forecast.setdefault("quality", {})["signal_pack_health"] = _sp_record
             except Exception as _sphe:  # noqa: BLE001 — 观测性记录，绝不影响产物
                 logger.debug(f"记录 signal_pack_health 失败（忽略）: {_sphe}")
+        # FU-3：情景报告的基线模拟不可用（或其 summary 不可读）时，基线裁定（同形，见
+        # _baseline_health_record）落在 signal_pack_health 旁边，与本报告模拟自身的裁定无关。
+        # 门关 / 非情景报告 / 基线可用 → 不写（forecast.json 逐字节不变）。
+        try:
+            _base_record = self._baseline_health_record()
+            if _base_record:
+                forecast.setdefault("quality", {})["baseline_signal_pack_health"] = _base_record
+        except Exception as _bhe:  # noqa: BLE001 — 观测性记录，绝不影响产物
+            logger.debug(f"记录 baseline_signal_pack_health 失败（忽略）: {_bhe}")
         # P2-2: 把观察指标随 forecast.json 落盘（供解析调度器对照判别情景）。
         try:
             from ..utils import actors as _actors
@@ -10514,10 +10690,14 @@ class ReportAgent:
         if logic_number_audit is not None:
             audit["logic_number"] = logic_number_audit
         # REPORT-9: read-only figure check on the final bytes; never read by
-        # _final_audit_integrity_issues or the publish gate.
-        verified_figures_check = self._verified_figures_check(md)
-        if verified_figures_check is not None:
-            audit["verified_figures"] = self._verified_figures_summary(verified_figures_check)
+        # _final_audit_integrity_issues or the publish gate, and a failure records
+        # nothing rather than failing the audit.
+        try:
+            verified_figures_check = self._verified_figures_check(md)
+            if verified_figures_check is not None:
+                audit["verified_figures"] = self._verified_figures_summary(verified_figures_check)
+        except Exception as exc:  # noqa: BLE001 — detection-only telemetry
+            logger.warning(f"Verified-figure check of the final report failed (ignored): {exc}")
         # RESEARCH-9: what the publish stabilizer stripped / added before this
         # audit (telemetry: neither the integrity issues nor the gate read it).
         pre_audit_repairs = self._pre_audit_repairs(report_id, body_marker_audit)
@@ -10545,6 +10725,10 @@ class ReportAgent:
             if "verified_figures" in audit:
                 # REPORT-9: the final bytes' figure check replaces the draft's.
                 quality["verified_figures"] = dict(audit["verified_figures"])
+            else:
+                # Not measured on these bytes (knob off, no block, a failed check):
+                # the draft's or an earlier audit's counts must not survive re-sealed.
+                quality.pop("verified_figures", None)
             if pre_audit_repairs is not None:
                 # Before serialization, so forecast_sha256 seals it.
                 quality["citation_finalization"] = pre_audit_repairs
@@ -11313,9 +11497,18 @@ class ReportAgent:
         返回 {dimensions:[{name, baseline, scenario, delta, verdict}]}；任一侧缺少
         world_state_trajectory.json / outcome.shares，或（REPORT_WORLDSTATE_HIDE_INVALID 开时）
         任一侧带显式非 valid 有效性裁定时返回 None（后者记一条 info 日志，便于与缺轨迹区分）。
+        FU-3：任一侧模拟按 REPORT-5 规则不可用（hollow / errored，REPORT_SIGNAL_PACK_HEALTH_GATE）
+        时同样返回 None 并记 info 日志——调用方（_prepend_comparison_table）在表位给说明行。
         """
         if not self.base_simulation_id:
             return None
+        # FU-3：任一侧模拟不可用 → 不出「权威」对比表（与信号包 / 工具 / 大纲的差异门一致）。
+        for _sid in (self.base_simulation_id, self.simulation_id):
+            _health, _skip = self._behaviour_skips(_sid)
+            if "scenario_diff" in _skip:
+                logger.info("情景对比表跳过：%s 的 simulation_health=%s（REPORT_SIGNAL_PACK_HEALTH_GATE）",
+                            _sid, _health)
+                return None
         hide_invalid = bool(getattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", True))
 
         def _shares(simulation_id: str) -> Dict[str, float]:
@@ -11411,6 +11604,35 @@ class ReportAgent:
         lines.append("")
         lines.append("> 上表为确定性聚合结果，正文请围绕这些权威差值展开解读，勿自行复算或反转方向。")
         return "\n".join(lines)
+
+    def _prepend_comparison_table(self, report_id: str, section_content: str) -> str:
+        """EXECPLAN2 I-3-4: 把确定性结构化对比表前置到情景对比章节正文，并落盘 comparison.json
+        （供 UI / diff 工具消费）。对比表为可选增强：任何失败只告警，返回已拼好的正文。
+
+        FU-3：任一侧模拟按 REPORT-5 规则不可用时 _scenario_diff_structured 返回 None——表位改给
+        读者可见的说明行（_comparison_body_note：本报告模拟不可用优先，其次基线不可用；不用写给
+        撰写模型的提示词说明行），不落 comparison.json。其余无表情形（缺轨迹 / 有效性裁定非 valid
+        / 门关）正文逐字节不变。"""
+        try:
+            diff_dict = self._scenario_diff_structured()
+            if diff_dict:
+                table_md = self._render_comparison_table(diff_dict)
+                if table_md:
+                    section_content = table_md + "\n\n" + section_content
+                    cpath = os.path.join(
+                        ReportManager._get_report_folder(report_id), "comparison.json"
+                    )
+                    write_text_atomic(
+                        cpath, json.dumps(diff_dict, ensure_ascii=False, indent=2)
+                    )
+                    logger.info(f"已注入结构化对比表并写入 comparison.json: {report_id}")
+            else:
+                _body_note = self._comparison_body_note()
+                if _body_note:
+                    section_content = _body_note + "\n\n" + section_content
+        except Exception as _ct_err:  # noqa: BLE001 — 对比表为可选增强，失败不影响主流程
+            logger.warning(f"注入结构化对比表失败（忽略）: {_ct_err}")
+        return section_content
 
     # ──────────────────────────────────────────────────────────────
     # EXECPLAN2 I-5-4: 报告级 LLM 成本/时延遥测（per-section + totals）
@@ -11634,19 +11856,37 @@ class ReportAgent:
                 return result.to_text()
             
             elif tool_name == "simulation_outcomes":
+                # FU-3：非健康运行（REPORT-5 规则）不给种子回声数据，给同一说明行。
+                _health, _skip = self._behaviour_skips()
+                if "simulation_outcomes" in _skip:
+                    return _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
                 top_n = parameters.get("top_n", 15)
                 if isinstance(top_n, str):
                     top_n = int(top_n) if top_n.isdigit() else 15
                 return self.zep_tools.simulation_outcomes(self.simulation_id, top_n=top_n)
 
             elif tool_name == "coalition_map":
+                _health, _skip = self._behaviour_skips()
+                if "coalition_map" in _skip:
+                    return _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
                 return self.zep_tools.coalition_map(self.graph_id, self.simulation_id)
 
             elif tool_name == "faction_brief":  # EXECPLAN2 I-1-2
+                # FU-3：非健康运行不许经 faction_brief 的降级路径回退到 coalition_map（种子回声）：
+                # 不给 simulation_id；图谱原生社区简报不依赖模拟行为，照常给，降级串换成同一说明行。
+                _health, _skip = self._behaviour_skips()
+                if "coalition_map" in _skip:
+                    brief = self.zep_tools.faction_brief(self.graph_id, parameters.get("query", ""), "")
+                    return (_SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
+                            if not brief or brief.strip().startswith("（") else brief)
                 return self.zep_tools.faction_brief(
                     self.graph_id, parameters.get("query", ""), self.simulation_id)
 
             elif tool_name == "opinion_shift":
+                # FU-3：逐轮动作轨迹与 simulation_outcomes 同源（动作日志），非健康运行同样只给说明行。
+                _health, _skip = self._behaviour_skips()
+                if "simulation_outcomes" in _skip:
+                    return _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
                 actor_name = parameters.get("actor_name", parameters.get("query", ""))
                 return self.zep_tools.opinion_shift(self.simulation_id, actor_name)
 
@@ -11662,6 +11902,10 @@ class ReportAgent:
                 # T4.7: 反事实对比 base vs 当前情景模拟
                 if not self.base_simulation_id:
                     return "（本报告非情景对比报告，无基线模拟可对比）"
+                # FU-3：任一侧模拟不可用 → 说明行（本报告模拟优先），不调用工具。
+                _diff_note = self._scenario_diff_note()
+                if _diff_note:
+                    return _diff_note
                 return self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
 
             # ========== 向后兼容的旧工具（内部重定向到新工具） ==========
@@ -12056,9 +12300,12 @@ class ReportAgent:
         return False
     
     def _get_tools_description(self) -> str:
-        """生成工具描述文本"""
+        """生成工具描述文本（FU-3：本报告只给说明行的行为类工具不列出）"""
         desc_parts = ["可用工具："]
+        gated = self._gated_behaviour_tools()
         for name, tool in self.tools.items():
+            if name in gated:
+                continue
             params_desc = ", ".join([f"{k}: {v}" for k, v in tool["parameters"].items()])
             desc_parts.append(f"- {name}: {tool['description']}")
             if params_desc:
@@ -12082,9 +12329,11 @@ class ReportAgent:
     }
 
     def _tool_usage_hints(self) -> str:
-        """RPT-7: 从 live self.tools 渲染工具使用建议 bullets（工具被移除即不再出现）。"""
+        """RPT-7: 从 live self.tools 渲染工具使用建议 bullets（工具被移除即不再出现）。
+        FU-3：本报告只给说明行的行为类工具同样不列出。"""
+        gated = self._gated_behaviour_tools()
         lines = [f"- {name}: {self._TOOL_HINT_SUMMARIES[name]}"
-                 for name in self.tools if name in self._TOOL_HINT_SUMMARIES]
+                 for name in self.tools if name in self._TOOL_HINT_SUMMARIES and name not in gated]
         return "\n".join(lines) if lines else "（按上方工具描述使用）"
 
     def _lint_outline_titles(self, sections: List["ReportSection"]) -> int:
@@ -12181,34 +12430,54 @@ class ReportAgent:
                 sweeps.append("【图谱深挖摘要】\n" + forge_text[:6000])  # RQ-4: 3000→6000
         except Exception as e:
             logger.warning(f"plan_outline insight_forge 扫描失败（忽略）: {e}")
-        try:
-            outcomes = self.zep_tools.simulation_outcomes(self.simulation_id, top_n=10)
-            if outcomes:
-                # WAVE9：包成内部方法学材料——它只用于判断哪些行为者/议题值得设章深挖，
-                # 绝不能催生「Agent 行为分析」型章节（940-actor 章节即此前的泄漏产物）。
-                sweeps.append(
-                    "【内部方法学材料——情景推演量化产出（仅供规划参考）】\n"
-                    "使用规则：仅据此判断哪些现实世界行为者/议题值得设立章节深挖；"
-                    "不得为推演本身单设章节，任何章节标题不得含"
-                    "『模拟/Agent/智能体/行为轨迹/Simulation/Behavior』等方法学词汇。\n"
-                    + outcomes[:5000])  # RQ-4: 2500→5000
-        except Exception as e:
-            logger.warning(f"plan_outline simulation_outcomes 扫描失败（忽略）: {e}")
+        # FU-3：非健康运行（REPORT-5 规则）不把种子回声数据给大纲（工具不调用），只给同一说明行；
+        # 信号包（上面已钉入）包头已带这一行时不再重复。
+        _health, _skip = self._behaviour_skips()
+        if "simulation_outcomes" in _skip:
+            _no_behaviour = _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
+            if _no_behaviour not in user_prompt:
+                sweeps.append(_no_behaviour)
+        else:
+            try:
+                outcomes = self.zep_tools.simulation_outcomes(self.simulation_id, top_n=10)
+                if outcomes:
+                    # WAVE9：包成内部方法学材料——它只用于判断哪些行为者/议题值得设章深挖，
+                    # 绝不能催生「Agent 行为分析」型章节（940-actor 章节即此前的泄漏产物）。
+                    sweeps.append(
+                        "【内部方法学材料——情景推演量化产出（仅供规划参考）】\n"
+                        "使用规则：仅据此判断哪些现实世界行为者/议题值得设立章节深挖；"
+                        "不得为推演本身单设章节，任何章节标题不得含"
+                        "『模拟/Agent/智能体/行为轨迹/Simulation/Behavior』等方法学词汇。\n"
+                        + outcomes[:5000])  # RQ-4: 2500→5000
+            except Exception as e:
+                logger.warning(f"plan_outline simulation_outcomes 扫描失败（忽略）: {e}")
         if sweeps:
             user_prompt = user_prompt + "\n\n" + "\n\n".join(sweeps)
 
         # T4.7: 情景对比报告 —— 强制大纲包含「情景对比 / 反事实」章节，并预取 scenario_diff 摘要
         if self.base_simulation_id:
-            try:
-                diff_text = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
-                if diff_text:
-                    user_prompt += "\n\n【基线 vs 情景 结构化对比（必须据此撰写对比章节）】\n" + diff_text[:2500]
-            except Exception as e:
-                logger.warning(f"plan_outline scenario_diff 扫描失败（忽略）: {e}")
-            user_prompt += (
-                "\n\n**强制要求**：本报告为情景（What-If）预测，大纲必须包含一节标题含"
-                "「情景对比」或「反事实」的章节，对比基线与本情景的关键差异（引用上面对比数据中的具体差值）。"
-            )
+            _diff_note = self._scenario_diff_note()
+            if _diff_note:
+                # FU-3：任一侧模拟不可用 → 不预取差异（说明行已在提示词里时不重复）；
+                # 对比章节只说明为何不做行为对比。
+                if _diff_note not in user_prompt:
+                    user_prompt += "\n\n" + _diff_note
+                user_prompt += (
+                    "\n\n**强制要求**：本报告为情景（What-If）预测，大纲必须包含一节标题含"
+                    "「情景对比」或「反事实」的章节，说明基线与本情景之间没有可用的行为对比数据，"
+                    "只依据研究材料讨论两者的差异。"
+                )
+            else:
+                try:
+                    diff_text = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
+                    if diff_text:
+                        user_prompt += "\n\n【基线 vs 情景 结构化对比（必须据此撰写对比章节）】\n" + diff_text[:2500]
+                except Exception as e:
+                    logger.warning(f"plan_outline scenario_diff 扫描失败（忽略）: {e}")
+                user_prompt += (
+                    "\n\n**强制要求**：本报告为情景（What-If）预测，大纲必须包含一节标题含"
+                    "「情景对比」或「反事实」的章节，对比基线与本情景的关键差异（引用上面对比数据中的具体差值）。"
+                )
 
         # R2-DETAIL-2: 把先于大纲推导出的预测骨架钉入提示词，并（在有骨架时）强制大纲围绕预测组织。
         # forecast_spine_block 为空 / require_forecast_structure 为 False 时本段为 no-op（提示词与历史一致）。
@@ -12837,11 +13106,13 @@ class ReportAgent:
         faction_brief / scenario_diff 等条件工具在被定义时即原生暴露，杜绝「prompt 中
         宣告但 tools= schema 缺失」的漂移。旧工具别名是 _execute_tool 的内部重定向，
         本就不应原生暴露，故不纳入。默认（条件工具关）时输出与历史静态名单逐字节一致。
+        FU-3：本报告只给说明行的行为类工具（_gated_behaviour_tools）不暴露。
         """
         schemas = []
+        gated = self._gated_behaviour_tools()
         for tname in sorted(self.tools.keys()):
             spec = self.tools.get(tname)
-            if not spec:
+            if not spec or tname in gated:
                 continue
             props = {}
             for pname, pdesc in (spec.get("parameters") or {}).items():
@@ -13183,6 +13454,8 @@ class ReportAgent:
                      "simulation_outcomes", "coalition_map", "opinion_shift"}
         if self.base_simulation_id:
             all_tools.add("scenario_diff")  # T4.7
+        # FU-3：本报告只给说明行的行为类工具不推荐（健康运行 / 门关时为空集，推荐集不变）。
+        all_tools -= self._gated_behaviour_tools()
 
         # 报告上下文，用于InsightForge的子问题生成
         report_context = f"章节标题: {section.title}\n模拟需求: {self.simulation_requirement}"
@@ -13905,22 +14178,7 @@ class ReportAgent:
                     and section_content != SECTION_FAILURE_PLACEHOLDER
                     and self._is_comparison_section(section.title)
                 ):
-                    try:
-                        diff_dict = self._scenario_diff_structured()
-                        if diff_dict:
-                            table_md = self._render_comparison_table(diff_dict)
-                            if table_md:
-                                section_content = table_md + "\n\n" + section_content
-                                # 落盘结构化对比工件，供 UI / diff 工具消费
-                                cpath = os.path.join(
-                                    ReportManager._get_report_folder(report_id), "comparison.json"
-                                )
-                                write_text_atomic(
-                                    cpath, json.dumps(diff_dict, ensure_ascii=False, indent=2)
-                                )
-                                logger.info(f"已注入结构化对比表并写入 comparison.json: {report_id}")
-                    except Exception as _ct_err:  # noqa: BLE001 — 对比表为可选增强，失败不影响主流程
-                        logger.warning(f"注入结构化对比表失败（忽略）: {_ct_err}")
+                    section_content = self._prepend_comparison_table(report_id, section_content)
 
                 section.content = section_content
                 if section_content == SECTION_FAILURE_PLACEHOLDER:
@@ -14112,7 +14370,7 @@ class ReportAgent:
             # rewrites Markdown; it only persists final_audit.json + forecast fields.
             if getattr(Config, "REPORT_FINAL_READ_ONLY_AUDIT", True):
                 self._enforce_final_publish_audit(report_id, report)
-            # REPORT-9：主报告已定型，写影子工件 figure_provenance.json（块为空 / 旗标关时不写）。
+            # REPORT-9：主报告已定型，写影子工件 figure_provenance.json（块为空 / 旗标关时不写，并删除旧文件）。
             self._write_figure_provenance(report_id, report)
 
             # BILINGUAL：在所有最终化/可视化/纯度处理之后（成稿已定型），自动生成另一语种版本
