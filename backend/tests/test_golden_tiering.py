@@ -713,6 +713,9 @@ def test_gate_disabled_legacy_keys(tmp_path, monkeypatch):
     assert ge.cmd_score_ledger(SimpleNamespace(ledger_dir=ldir, bins=10, out=str(lout), markdown=str(lmd))) == 0
     lrep = json.loads(lout.read_text(encoding="utf-8"))
     assert "headline" not in lrep and "characterization" not in lrep
+    # EVAL-5's additive calibration_report key (its spec: legacy numbers unchanged) is not
+    # part of the pre-EVAL-8 bytes either.
+    assert lrep["calibration_report"].pop("n_unmatched_outcome") == 0
     lrep["ledger_dir"] = lrep["eval_ledger_dir"] = "<ledger>"
     canon = json.dumps(lrep, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     assert hashlib.sha256(canon.encode("utf-8")).hexdigest() == PRE_EVAL8_LEDGER_REPORT_SHA256
